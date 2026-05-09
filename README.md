@@ -32,6 +32,10 @@
 
 <br/>
 
+## Changelog
+
+See **[CHANGELOG.md](CHANGELOG.md)** for image-oriented release notes (e.g. **v2.1**: AutoDL hashed safetensors, xformers/SDPA boot patch, and the **port 6008** training monitor refresh in `train_status_server.py`).
+
 ## At a glance
 
 | | |

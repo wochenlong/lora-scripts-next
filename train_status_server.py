@@ -579,9 +579,28 @@ def render_page(status: dict) -> bytes:
     .pill {{ display:inline-flex; align-items:center; border:1px solid var(--line); border-radius:999px; padding:3px 8px; background:#0b1224; color:var(--text); }}
     .pill.good {{ color:#86efac; border-color:#166534; background:#052e1a; }}
     .loss-chart {{ width:100%; height:96px; border:1px solid var(--line); border-radius:12px; background:#050816; }}
-    .trend-chart {{ width:100%; height:138px; border:1px solid var(--line); border-radius:12px; background:#050816; }}
-    .loss-line {{ fill:none; stroke:#34d399; stroke-width:2.5; vector-effect:non-scaling-stroke; }}
-    .loss-area {{ fill:rgba(52,211,153,.12); }}
+    .trend-chart {{ width:100%; aspect-ratio:16/10; height:auto; display:block; border:1px solid var(--line); border-radius:12px; background:#050816; }}
+    .loss-line {{ fill:none; stroke:#34d399; stroke-width:2; vector-effect:non-scaling-stroke; stroke-linejoin:round; stroke-linecap:round; }}
+    .loss-area {{ fill:rgba(52,211,153,.14); }}
+    .loss-grid {{ stroke:#1e2a44; stroke-width:1; stroke-dasharray:3 4; }}
+    .loss-baseline {{ stroke:#3a486a; stroke-width:1; stroke-dasharray:6 6; }}
+    .loss-axis-text {{ fill:#7286a3; font:11px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }}
+    .loss-axis-text.right {{ text-anchor:end; }}
+    .loss-axis-text.center {{ text-anchor:middle; }}
+    .loss-current-dot {{ fill:#34d399; stroke:#0b1224; stroke-width:2; }}
+    .loss-current-label-bg {{ fill:rgba(11,18,36,.92); stroke:#34d399; stroke-width:1; }}
+    .loss-current-label-text {{ fill:#bbf7d0; font:600 12px ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif; }}
+    .trend-layout {{ display:grid; grid-template-columns:minmax(0,1fr) 240px; gap:14px; align-items:end; max-width:1080px; }}
+    @media (max-width: 820px) {{ .trend-layout {{ grid-template-columns:1fr; max-width:none; }} }}
+    .trend-stats {{ display:grid; grid-template-columns:1fr; gap:8px; align-content:start; }}
+    .trend-stat {{ background:#0b1224; border:1px solid var(--line); border-radius:10px; padding:9px 12px; display:flex; align-items:baseline; justify-content:space-between; gap:10px; }}
+    .trend-stat .label {{ color:var(--muted); font-size:11px; letter-spacing:.4px; text-transform:uppercase; flex:0 0 auto; }}
+    .trend-stat .value {{ font-size:16px; font-weight:700; color:var(--text); line-height:1.2; font-variant-numeric:tabular-nums; text-align:right; }}
+    .trend-stat .sub {{ display:none; }}
+    .trend-stat.delta-down .value {{ color:#86efac; }}
+    .trend-stat.delta-up .value {{ color:#fbbf24; }}
+    .trend-stat .pill {{ font-size:12px; padding:2px 8px; }}
+    @media (max-width: 820px) {{ .trend-stats {{ grid-template-columns:repeat(2,1fr); }} }}
     .card {{ padding:14px; }}
     .label {{ color:var(--muted); font-size:12px; margin-bottom:6px; }}
     .value {{ font-size:18px; font-weight:650; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }}
@@ -663,7 +682,17 @@ def render_page(status: dict) -> bytes:
       </div>
       <div class="trend-headline" id="lossTrendHeadline">等待 Loss 数据</div>
       <div class="trend-copy" id="lossTrendCopy">开始训练后会显示相对初始值的下降趋势。</div>
-      <svg class="trend-chart" id="lossTrendChart" viewBox="0 0 600 138" preserveAspectRatio="none" aria-label="Loss 相对趋势"></svg>
+      <div class="trend-layout">
+        <svg class="trend-chart" id="lossTrendChart" viewBox="0 0 720 450" preserveAspectRatio="xMidYMid meet" aria-label="Loss 相对趋势"></svg>
+        <div class="trend-stats" id="lossTrendStats">
+          <div class="trend-stat"><span class="label">当前</span><span class="value" id="statLossCurrent">-</span></div>
+          <div class="trend-stat"><span class="label">最低</span><span class="value" id="statLossMin">-</span></div>
+          <div class="trend-stat"><span class="label">初始</span><span class="value" id="statLossBaseline">-</span></div>
+          <div class="trend-stat"><span class="label">下降</span><span class="value" id="statLossDrop">-</span></div>
+          <div class="trend-stat" id="statDeltaCard"><span class="label">最近 Δ</span><span class="value" id="statLossDelta">-</span></div>
+          <div class="trend-stat"><span class="label">趋势</span><span class="pill" id="statLossTrendPill">等待数据</span></div>
+        </div>
+      </div>
     </section>
     <details class="panel" id="logDetails">
       <summary id="logSummary">训练日志</summary>
@@ -823,6 +852,15 @@ def render_page(status: dict) -> bytes:
       text.textContent = "预览图生成中" + atStep + "：" + sampling.step + "/" + sampling.total_steps + "（" + pct + "%）" + (sampling.eta ? "，预计 " + sampling.eta : "");
     }}
 
+    function fmtLoss(v) {{
+      const n = Number(v);
+      if (!Number.isFinite(n)) return "-";
+      const abs = Math.abs(n);
+      if (abs >= 1) return n.toFixed(3);
+      if (abs >= 0.01) return n.toFixed(4);
+      return n.toExponential(2);
+    }}
+
     function renderLossChart(metrics) {{
       const trendChart = document.getElementById("lossTrendChart");
       const trendHeadline = document.getElementById("lossTrendHeadline");
@@ -839,6 +877,45 @@ def render_page(status: dict) -> bytes:
         '<span class="' + trendClass + '">' + escapeHtml(trend) + '</span>' +
         '<span class="muted">用于截图说明训练是否稳定</span>';
 
+      const statBaseline = document.getElementById("statLossBaseline");
+      const statCurrent = document.getElementById("statLossCurrent");
+      const statMin = document.getElementById("statLossMin");
+      const statDelta = document.getElementById("statLossDelta");
+      const statDeltaCard = document.getElementById("statDeltaCard");
+      const statDrop = document.getElementById("statLossDrop");
+      const statTrendPill = document.getElementById("statLossTrendPill");
+
+      const baseline = Number(metrics && metrics.loss_baseline);
+      const current = Number(metrics && metrics.loss_current);
+      const lossDelta = Number(metrics && metrics.loss_delta);
+      let minLoss = NaN, minStep = null;
+      for (const p of points) {{
+        const v = Number(p && p.loss);
+        if (Number.isFinite(v) && (!Number.isFinite(minLoss) || v < minLoss)) {{
+          minLoss = v;
+          minStep = Number(p.step);
+        }}
+      }}
+
+      statBaseline.textContent = Number.isFinite(baseline) ? fmtLoss(baseline) : "-";
+      statCurrent.textContent = Number.isFinite(current) ? fmtLoss(current) : (loss !== "-" ? loss : "-");
+      statMin.textContent = Number.isFinite(minLoss) ? fmtLoss(minLoss) : "-";
+      statMin.title = (Number.isFinite(minLoss) && minStep != null) ? ("出现在 step " + minStep) : "";
+
+      statDeltaCard.classList.remove("delta-down", "delta-up");
+      if (Number.isFinite(lossDelta)) {{
+        const sign = lossDelta > 0 ? "+" : (lossDelta < 0 ? "−" : "");
+        statDelta.textContent = sign + fmtLoss(Math.abs(lossDelta));
+        if (lossDelta < -1e-9) statDeltaCard.classList.add("delta-down");
+        else if (lossDelta > 1e-9) statDeltaCard.classList.add("delta-up");
+      }} else {{
+        statDelta.textContent = "-";
+      }}
+
+      statDrop.textContent = Number.isFinite(drop) ? (Math.max(0, drop).toFixed(1) + "%") : "-";
+      statTrendPill.className = trendClass;
+      statTrendPill.textContent = trend;
+
       if (points.length < 2) {{
         trendChart.innerHTML = '<text x="20" y="74" fill="#91a0b8" font-size="13">等待更多 loss 数据...</text>';
         trendHeadline.textContent = "等待 Loss 数据";
@@ -852,32 +929,88 @@ def render_page(status: dict) -> bytes:
         const relativeDrop = Math.max(0, 100 - currentRel);
         trendHeadline.textContent = "当前 Loss " + loss + " · 较初始下降 " + relativeDrop.toFixed(1) + "% · " + trend;
         trendCopy.textContent = "以训练初期 Loss 为 100%，曲线越往下说明相对初始值下降越明显。";
-        const tw = 600;
-        const th = 138;
-        const tpad = 14;
+
+        const tw = 720;
+        const th = 450;
+        const padTop = 26;
+        const padRight = 28;
+        const padBottom = 44;
+        const padLeft = 60;
+        const plotW = tw - padLeft - padRight;
+        const plotH = th - padTop - padBottom;
+
         const minRelActual = Math.min.apply(null, relValues);
-        const maxRelActual = Math.max.apply(null, relValues);
-        const minRel = Math.max(0, minRelActual - 4);
-        const maxRel = Math.min(110, Math.max(100, maxRelActual + 2));
-        const txStep = (tw - tpad * 2) / Math.max(1, relativePoints.length - 1);
-        const tcoords = relativePoints.map(function(p, i) {{
-          const value = Number(p.relative);
-          const yRatio = (value - minRel) / Math.max(1, maxRel - minRel);
-          const x = tpad + i * txStep;
-          const y = th - tpad - yRatio * (th - tpad * 2);
-          return [x, y];
+        const yMax = 100;
+        let yMin = Math.max(0, Math.floor((minRelActual - 4) / 5) * 5);
+        if (yMin >= yMax) yMin = yMax - 5;
+        const yTicks = 5;
+        const yStep = (yMax - yMin) / (yTicks - 1);
+
+        const stepValues = relativePoints.map(function(p) {{ return Number(p.step) || 0; }});
+        const xMin = stepValues[0];
+        const xMax = stepValues[stepValues.length - 1];
+        const xRange = Math.max(1, xMax - xMin);
+        const xTicks = Math.min(6, Math.max(2, relativePoints.length));
+
+        function xToPx(step) {{
+          return padLeft + ((step - xMin) / xRange) * plotW;
+        }}
+        function yToPx(rel) {{
+          return padTop + (1 - (rel - yMin) / Math.max(1, yMax - yMin)) * plotH;
+        }}
+
+        let gridSvg = "";
+        for (let i = 0; i < yTicks; i++) {{
+          const v = yMin + i * yStep;
+          const y = yToPx(v).toFixed(1);
+          const cls = Math.abs(v - 100) < 0.01 ? "loss-baseline" : "loss-grid";
+          gridSvg += '<line class="' + cls + '" x1="' + padLeft + '" y1="' + y +
+                     '" x2="' + (padLeft + plotW) + '" y2="' + y + '"></line>';
+          gridSvg += '<text class="loss-axis-text right" x="' + (padLeft - 8) + '" y="' + (Number(y) + 4) +
+                     '">' + v.toFixed(0) + '%</text>';
+        }}
+        for (let i = 0; i < xTicks; i++) {{
+          const stepVal = xMin + (xRange * i) / Math.max(1, xTicks - 1);
+          const x = xToPx(stepVal).toFixed(1);
+          gridSvg += '<line class="loss-grid" x1="' + x + '" y1="' + padTop + '" x2="' + x +
+                     '" y2="' + (padTop + plotH) + '"></line>';
+          gridSvg += '<text class="loss-axis-text center" x="' + x + '" y="' + (padTop + plotH + 22) +
+                     '">' + Math.round(stepVal) + '</text>';
+        }}
+
+        const tcoords = relativePoints.map(function(p) {{
+          return [xToPx(Number(p.step) || 0), yToPx(Number(p.relative))];
         }});
         const tline = tcoords.map(function(pt, i) {{
           return (i === 0 ? "M" : "L") + pt[0].toFixed(1) + " " + pt[1].toFixed(1);
         }}).join(" ");
-        const tarea = tline + " L " + tcoords[tcoords.length - 1][0].toFixed(1) + " " + (th - tpad) +
-          " L " + tcoords[0][0].toFixed(1) + " " + (th - tpad) + " Z";
+        const lastX = tcoords[tcoords.length - 1][0].toFixed(1);
+        const firstX = tcoords[0][0].toFixed(1);
+        const baseY = (padTop + plotH).toFixed(1);
+        const tarea = tline + " L " + lastX + " " + baseY + " L " + firstX + " " + baseY + " Z";
+
+        const cx = tcoords[tcoords.length - 1][0];
+        const cy = tcoords[tcoords.length - 1][1];
+        const labelText = currentRel.toFixed(1) + "%";
+        const labelW = labelText.length * 7 + 14;
+        let labelX = cx + 10;
+        if (labelX + labelW > padLeft + plotW) labelX = cx - labelW - 10;
+        const labelY = Math.min(Math.max(cy - 12, padTop + 4), padTop + plotH - 24);
+
+        const axisTitleSvg =
+          '<text class="loss-axis-text" x="' + padLeft + '" y="' + (padTop - 10) + '">相对初始 Loss</text>' +
+          '<text class="loss-axis-text right" x="' + (padLeft + plotW) + '" y="' + (th - 8) + '">step</text>';
+
         trendChart.innerHTML =
+          gridSvg +
           '<path class="loss-area" d="' + tarea + '"></path>' +
           '<path class="loss-line" d="' + tline + '"></path>' +
-          '<text x="14" y="22" fill="#91a0b8" font-size="12">初始 100%</text>' +
-          '<text x="14" y="124" fill="#91a0b8" font-size="12">当前 ' + currentRel.toFixed(1) + '%</text>' +
-          '<text x="430" y="124" fill="#91a0b8" font-size="12">相对初始 Loss</text>';
+          '<circle class="loss-current-dot" cx="' + cx.toFixed(1) + '" cy="' + cy.toFixed(1) + '" r="4.5"></circle>' +
+          '<rect class="loss-current-label-bg" x="' + labelX.toFixed(1) + '" y="' + labelY.toFixed(1) +
+          '" width="' + labelW + '" height="20" rx="4" ry="4"></rect>' +
+          '<text class="loss-current-label-text" x="' + (labelX + labelW / 2).toFixed(1) + '" y="' + (labelY + 14).toFixed(1) +
+          '" text-anchor="middle">' + labelText + '</text>' +
+          axisTitleSvg;
       }}
 
     }}

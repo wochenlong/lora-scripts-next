@@ -32,6 +32,10 @@
 
 <br/>
 
+## 版本与更新日志
+
+当前发行说明见 **[CHANGELOG.md](CHANGELOG.md)**。**v2.1** 起包含：AutoDL 共享盘模型加载修复、无 xformers 时默认 SDPA、以及 **6008 训练监控页**（`train_status_server.py`）的 Loss 曲线与指标面板改版。
+
 ## 一览
 
 | | |
