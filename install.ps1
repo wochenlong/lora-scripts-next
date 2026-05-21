@@ -22,8 +22,9 @@ pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --extra-index-url https
 pip install -U -I --no-deps xformers==0.0.30 --extra-index-url https://download.pytorch.org/whl/cu128
 pip install --upgrade -r requirements.txt
 
-Write-Output "Installing Flash Attention 2 (prebuilt wheel)..."
+Write-Output "Installing Flash Attention 2 stack (triton-windows + prebuilt wheel)..."
 $pyver = python -c "import sys; print(f'cp{sys.version_info.major}{sys.version_info.minor}')" 2>$null
+pip install "triton-windows<3.4"
 if ($pyver -match "^cp3(10|11|12)$") {
     $whl = "flash_attn-2.7.4.post1+cu128torch2.7.0cxx11abiFALSE-$pyver-$pyver-win_amd64.whl"
     $url = "https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/$whl"
@@ -31,10 +32,11 @@ if ($pyver -match "^cp3(10|11|12)$") {
 } else {
     pip install flash-attn --no-build-isolation 2>$null
 }
+python -c "import triton; import flash_attn; from flash_attn.ops.triton.rotary import apply_rotary" 2>$null
 if ($LASTEXITCODE -eq 0) {
-    Write-Output "Flash Attention 2 installed successfully"
+    Write-Output "Flash Attention 2 installed and verified successfully"
 } else {
-    Write-Output "Flash Attention 2 install failed (non-fatal, will use PyTorch SDPA instead)"
+    Write-Output "Flash Attention 2 install/self-check failed (non-fatal, will use xformers or PyTorch SDPA instead)"
 }
 
 Write-Output "Install completed"

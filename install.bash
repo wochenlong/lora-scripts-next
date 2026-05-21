@@ -73,8 +73,16 @@ cd "$script_dir" || exit
 pip install --upgrade -r requirements.txt
 
 echo "Installing Flash Attention 2 (optional, for training acceleration)..."
-pip install flash-attn --no-build-isolation 2>/dev/null && \
-    echo "Flash Attention 2 installed successfully" || \
-    echo "Flash Attention 2 install failed (non-fatal, will use PyTorch SDPA)"
+export MAX_JOBS="${MAX_JOBS:-4}"
+if pip install "flash-attn==2.7.4.post1" --no-build-isolation; then
+    if python -c "import triton; import flash_attn; from flash_attn.ops.triton.rotary import apply_rotary" 2>/dev/null; then
+        echo "Flash Attention 2 installed and verified successfully"
+    else
+        echo "Flash Attention 2 self-check failed (non-fatal, will use xformers or PyTorch SDPA)"
+        pip uninstall flash-attn flash_attn triton -y >/dev/null 2>&1 || true
+    fi
+else
+    echo "Flash Attention 2 install failed (non-fatal, will use xformers or PyTorch SDPA)"
+fi
 
 echo "Install completed"

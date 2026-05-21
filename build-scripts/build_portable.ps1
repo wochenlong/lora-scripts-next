@@ -355,6 +355,9 @@ $updateDepsBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`ncd /d `"%~dp0..`"`r`n"
 $updateDepsBat += "echo Updating Python dependencies...`r`n"
 $updateDepsBat += "`"python_embeded\python.exe`" -s -m pip install --upgrade torch torchvision --index-url https://download.pytorch.org/whl/cu128`r`n"
 $updateDepsBat += "`"python_embeded\python.exe`" -s -m pip install --upgrade -r `"SD-Trainer\requirements.txt`"`r`n"
+$updateDepsBat += "`"python_embeded\python.exe`" -s -m pip install `"triton-windows<3.4`" --no-warn-script-location`r`n"
+$updateDepsBat += "`"python_embeded\python.exe`" -s -m pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1+cu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl --no-warn-script-location`r`n"
+$updateDepsBat += "`"python_embeded\python.exe`" -s -c `"import triton; import flash_attn; from flash_attn.ops.triton.rotary import apply_rotary; print('Flash Attention 2 OK')`"`r`n"
 $updateDepsBat += "echo Done.`r`npause`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $updateDir "update_dependencies.bat"),
@@ -381,6 +384,28 @@ $xformersBat += "echo.`r`necho  Done! You can now use attn_mode = xformers.`r`ne
     (New-Object System.Text.UTF8Encoding $false)
 )
 Write-Host "  Created install_xformers.bat"
+
+# install_flash_attn.bat — one-click Flash Attention 2 installer for portable users
+$flashAttnBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`ntitle Install Flash Attention 2`r`ncd /d `"%~dp0`"`r`n"
+$flashAttnBat += "set `"PYTHON_EXE=%~dp0python_embeded\python.exe`"`r`n"
+$flashAttnBat += "if not exist `"%PYTHON_EXE%`" (`r`n"
+$flashAttnBat += "    echo [ERROR] python_embeded\python.exe not found!`r`n"
+$flashAttnBat += "    pause`r`n    exit /b 1`r`n)`r`n"
+$flashAttnBat += "echo.`r`necho  Installing Flash Attention 2 for Torch 2.7.0 + CUDA 12.8 ...`r`necho.`r`n"
+$flashAttnBat += "`"%PYTHON_EXE%`" -s -m pip install `"triton-windows<3.4`" --no-warn-script-location`r`n"
+$flashAttnBat += "if errorlevel 1 (`r`n    echo [ERROR] triton-windows installation failed.`r`n    pause`r`n    exit /b 1`r`n)`r`n"
+$flashAttnBat += "`"%PYTHON_EXE%`" -s -m pip install https://huggingface.co/lldacing/flash-attention-windows-wheel/resolve/main/flash_attn-2.7.4.post1+cu128torch2.7.0cxx11abiFALSE-cp310-cp310-win_amd64.whl --no-warn-script-location`r`n"
+$flashAttnBat += "if errorlevel 1 (`r`n    echo [ERROR] flash-attn wheel installation failed.`r`n    pause`r`n    exit /b 1`r`n)`r`n"
+$flashAttnBat += "echo.`r`necho  Verifying...`r`n"
+$flashAttnBat += "`"%PYTHON_EXE%`" -s -c `"import triton; import flash_attn; from flash_attn.ops.triton.rotary import apply_rotary; print('  Flash Attention 2 OK')`"`r`n"
+$flashAttnBat += "if errorlevel 1 (`r`n    echo [ERROR] Flash Attention 2 self-check failed. Training will fall back to xformers or PyTorch SDPA.`r`n    `"%PYTHON_EXE%`" -s -m pip uninstall flash-attn flash_attn triton-windows triton -y >nul 2>&1`r`n    pause`r`n    exit /b 1`r`n)`r`n"
+$flashAttnBat += "echo.`r`necho  Done! Anima training can now use attn_mode = flash.`r`necho.`r`npause`r`n"
+[System.IO.File]::WriteAllText(
+    (Join-Path $portableDir "install_flash_attn.bat"),
+    $flashAttnBat,
+    (New-Object System.Text.UTF8Encoding $false)
+)
+Write-Host "  Created install_flash_attn.bat"
 
 # Root-level utility bat files
 $templateDir = Join-Path $PSScriptRoot "templates"
@@ -428,8 +453,9 @@ $readme += "xformers (recommended):`r`n"
 $readme += "  If xformers is missing, double-click install_xformers.bat to install.`r`n"
 $readme += "  xformers provides faster attention than PyTorch SDPA on most GPUs.`r`n`r`n"
 $readme += "Flash Attention 2:`r`n"
-$readme += "  This portable package does NOT use flash-attn (uses xformers / PyTorch SDPA).`r`n"
-$readme += "  Do not pip install flash-attn into python_embeded. See README in SD-Trainer/.`r`n"
+$readme += "  First launch installs the pinned flash-attn + triton-windows stack when available.`r`n"
+$readme += "  If the self-check fails, startup removes the broken stack and falls back to xformers / PyTorch SDPA.`r`n"
+$readme += "  You can rerun install_flash_attn.bat after updating GPU drivers or dependencies.`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $portableDir "README.txt"),
     $readme,

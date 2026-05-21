@@ -56,18 +56,16 @@ Measured on RTX 4090, batch=1, bf16, standard LoRA (dim=16):
 
 > 512 resolution saves roughly 2–3 GB; lowering `network_dim` (e.g. to 8) also helps marginally.
 
-#### Portable package: Flash Attention 2 not supported (for now)
-
-The **Windows portable package** (`SD-Trainer-v*.7z`) **does not install Flash Attention 2**; training uses **xformers** or **PyTorch SDPA**. This is intentional, not a failed install.
+#### Portable package: Flash Attention 2
 
 | Point | Why |
 |-------|-----|
 | **flash-attn needs triton** | Prebuilt `flash-attn` wheels install, but many kernels still run via **Triton** (`flash_attn.ops.triton`). |
-| **Embedded Python + triton** | The portable bundle uses Python Embeddable (`python_embeded\`) without a full toolchain; `triton` / `triton-windows` often fail at JIT compile time. |
-| **Cannot keep flash-attn without triton** | Flash-attn-only installs hit `No module named 'triton'`; `transformers` may still probe `flash_attn` if the package is present. |
-| **What we do** | Skip flash-attn on first setup; on launch, remove broken flash-attn/triton pairs and set `TRANSFORMERS_ATTN_IMPLEMENTATION=sdpa`. |
+| **Embedded Python + triton** | The portable bundle uses Python Embeddable (`python_embeded\`), so the package pins `triton-windows<3.4` and the matching Flash Attention 2 wheel. |
+| **Self-check first** | First setup and `install_flash_attn.bat` verify `import triton; import flash_attn; from flash_attn.ops.triton.rotary import apply_rotary`. |
+| **Fallback** | If the self-check fails, startup removes the broken flash-attn/triton pair and training falls back to **xformers** or **PyTorch SDPA**. |
 
-For Flash Attention 2, use **[install from source](#install-from-source)** and follow **[Flash Attention 2 (source / venv)](#flash-attention-2-source--venv-installs)**. Portable flash-attn support may come later when embed Python + triton is reliable.
+When the self-check passes, Anima / SD3 LoRA auto-selects `attn_mode=flash`; otherwise logs explain the fallback.
 
 ### Install from Source
 
@@ -96,7 +94,7 @@ python gui.py --browser edge
 
 #### Flash Attention 2 (source / venv installs)
 
-**Portable users:** see the section above — do not `pip install flash-attn` into `python_embeded`.
+Portable users get the same pinned stack through first-run setup or `install_flash_attn.bat`; source users can also install it manually.
 
 This section is for **`git clone` + `venv`** (or a full Python under `python\`), with **PyTorch 2.7.0 + CUDA 12.8** installed.
 
@@ -177,7 +175,7 @@ Then run `python gui.py` and start **Anima LoRA** training — logs should show 
 | Wheel installs but training uses xformers | Run the verify command above; flash-attn without working triton is ignored |
 | Long compile or build errors | On Windows use the **prebuilt wheel** URLs, not `pip install flash-attn` from source |
 | PyTorch not 2.7+cu128 | Align torch with `install.ps1` before installing flash-attn |
-| Installed into portable `python_embeded` | **Unsupported** — use source + venv instead |
+| Portable self-check fails | Rerun `install_flash_attn.bat` after updating GPU drivers/dependencies; broken stacks are removed automatically |
 
 ---
 
@@ -185,7 +183,7 @@ Then run `python gui.py` and start **Anima LoRA** training — logs should show 
 
 - **Multi-model** — SD 1.5 / SDXL / Flux / **Anima** all work out of the box
 - **Anima LoRA training** — One-click sidebar entry, supports LoRA / LoKr (LyCORIS) / **T-LoRA**
-- **Attention backends** — Source/venv: Flash Attention 2 when available (Windows prebuilt wheels). **Portable package:** xformers / PyTorch SDPA only ([flash-attn not supported yet](#portable-package-flash-attention-2-not-supported-for-now))
+- **Attention backends** — Source/venv, portable package, and Docker all prefer Flash Attention 2 when the stack self-checks OK, then fall back to xformers / PyTorch SDPA
 - **T-LoRA** — Timestep-Dependent LoRA with dynamic rank and orthogonal init ([paper](https://github.com/ControlGenAI/T-LoRA))
 - **Train Monitor** — Auto-opens with GUI, TensorBoard-backed Loss / LR scalar cards, key training parameter checks, real-time progress, terminal log echo, and preview samples
 - **Built-in TensorBoard** — Accessible from the sidebar, no extra setup

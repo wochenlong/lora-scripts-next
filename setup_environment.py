@@ -14,6 +14,12 @@ import sys
 import time
 import urllib.request
 
+from mikazuki.portable_utils import (
+    TRITON_WINDOWS_SPEC,
+    flash_attn_probe,
+    flash_attn_wheel_url,
+)
+
 # ──────────────────── Configuration ────────────────────
 
 TORCH_VERSION = "2.7.0"
@@ -178,7 +184,7 @@ def install_torch(region):
 
 
 def _filter_requirements(req_file):
-    """Read requirements.txt, filtering out packages incompatible with embedded Python."""
+    """Read requirements.txt, filtering packages handled by the controlled FA2 setup step."""
     skip_packages = {"triton-windows", "triton"}
     filtered_path = req_file + ".filtered"
     with open(req_file, "r", encoding="utf-8") as f:
@@ -212,38 +218,24 @@ def install_requirements(region):
     return ok
 
 
-_FLASH_ATTN_WHEEL = (
-    "flash_attn-2.7.4.post1+cu128torch2.7.0cxx11abiFALSE"
-    "-cp310-cp310-win_amd64.whl"
-)
-_FLASH_ATTN_WHEEL_URLS = {
-    "global": (
-        "https://huggingface.co/lldacing/flash-attention-windows-wheel"
-        f"/resolve/main/{_FLASH_ATTN_WHEEL}"
-    ),
-    "china": (
-        "https://hf-mirror.com/lldacing/flash-attention-windows-wheel"
-        f"/resolve/main/{_FLASH_ATTN_WHEEL}"
-    ),
-}
-
-
-def _is_embedded_portable():
-    exe = _python_exe().replace("\\", "/").lower()
-    return "python_embeded" in exe or "python_embedded" in exe
-
-
 def install_flash_attn(region):
-    """Install flash-attn from prebuilt wheel. Non-fatal on failure.
-
-    Skipped on embedded portable Python: prebuilt flash-attn still imports triton
-    kernels at runtime, but triton cannot compile on embedded Python (no dev headers).
-    """
-    if _is_embedded_portable():
+    """Install and verify the pinned flash-attn + Triton stack. Non-fatal on failure."""
+    if sys.platform == "win32" and not _run_pip(
+        ["install", TRITON_WINDOWS_SPEC, "--no-warn-script-location"]
+    ):
         return False
-    url = _FLASH_ATTN_WHEEL_URLS.get(region, _FLASH_ATTN_WHEEL_URLS["global"])
-    args = ["install", url, "--no-warn-script-location"]
-    return _run_pip(args)
+
+    url = flash_attn_wheel_url(region)
+    if not _run_pip(["install", url, "--no-warn-script-location"]):
+        return False
+
+    usable, reason = flash_attn_probe()
+    if usable:
+        return True
+
+    print(f"  >>> Flash Attention 2 self-check failed: {reason}")
+    _run_pip(["uninstall", "flash-attn", "flash_attn", "triton-windows", "triton", "-y"])
+    return False
 
 
 def write_mirror_env(region):
@@ -338,16 +330,14 @@ def main():
         return 1
     _ok("训练组件安装完成")
 
-    # 5 — flash-attn (optional acceleration; skipped on embedded portable)
+    # 5 — flash-attn (optional acceleration; falls back cleanly on failure)
     _separator()
     _step(5, "安装 Flash Attention 2 训练加速 (可选)...")
     print()
-    if _is_embedded_portable():
-        print("  >>> 便携包跳过 Flash Attention 2（使用 xformers / PyTorch SDPA，避免 triton 依赖）")
-    elif install_flash_attn(region):
+    if install_flash_attn(region):
         _ok("Flash Attention 2 安装成功，训练将自动启用加速")
     else:
-        print("  >>> Flash Attention 2 安装失败（不影响训练，将使用 PyTorch SDPA）")
+        print("  >>> Flash Attention 2 安装/自检失败（不影响训练，将使用 xformers / PyTorch SDPA）")
 
     # Verify
     _separator()
