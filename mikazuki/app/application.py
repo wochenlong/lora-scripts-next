@@ -157,7 +157,7 @@ async def add_cache_control_header(request, call_next):
     return response
 
 
-_TAGGER_PROGRESS_SCRIPT_TAG = b'<script src="/assets/tagger_progress.js" defer></script>'
+_TAGGER_PROGRESS_SCRIPT_TAG = b'<script src="/assets/tagger_progress.js"></script>'
 
 
 @app.middleware("http")
@@ -170,8 +170,17 @@ async def inject_tagger_progress_script(request, call_next):
     body = b""
     async for chunk in response.body_iterator:
         body += chunk
-    if _TAGGER_PROGRESS_SCRIPT_TAG not in body and b"</body>" in body:
-        body = body.replace(b"</body>", _TAGGER_PROGRESS_SCRIPT_TAG + b"\n</body>", 1)
+    if _TAGGER_PROGRESS_SCRIPT_TAG not in body:
+        import re
+        if re.search(rb"<body[^>]*>", body):
+            body = re.sub(
+                rb"(<body[^>]*>)",
+                rb"\1\n" + _TAGGER_PROGRESS_SCRIPT_TAG,
+                body,
+                count=1,
+            )
+        elif b"</body>" in body:
+            body = body.replace(b"</body>", _TAGGER_PROGRESS_SCRIPT_TAG + b"\n</body>", 1)
     headers = dict(response.headers)
     headers.pop("content-length", None)
     return Response(content=body, status_code=response.status_code, headers=headers, media_type="text/html")
