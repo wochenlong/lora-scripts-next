@@ -652,12 +652,12 @@ html.dark .example-container > .right-container section .params-section pre {
 
 /* Tagger run zone — scheme B: thin bar + 12px caption above Start */
 .tagger-run-zone {
-  display: block;
+  display: none;
   margin: 10px 20px 6px;
   min-height: 20px;
 }
-.tagger-run-zone[hidden] {
-  display: none !important;
+.tagger-run-zone.is-active {
+  display: block;
 }
 .tagger-run-zone__bar {
   height: 3px;
