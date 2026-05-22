@@ -17,6 +17,7 @@ from mikazuki.tagger import dbimutils, format
 from mikazuki.tagger.interrogators.base import Interrogator
 from mikazuki.tagger.interrogators.wd14 import WaifuDiffusionInterrogator
 from mikazuki.tagger.interrogators.cl import CLTaggerInterrogator
+from mikazuki.tagger.progress import tagger_progress
 
 tag_escape_pattern = re.compile(r'([\\()])')
 
@@ -100,6 +101,58 @@ def on_interrogate(
 
         unload_model_after_running: bool
 ):
+    try:
+        return _run_interrogate(
+            image=image,
+            batch_input_glob=batch_input_glob,
+            batch_input_recursive=batch_input_recursive,
+            batch_output_dir=batch_output_dir,
+            batch_output_filename_format=batch_output_filename_format,
+            batch_output_action_on_conflict=batch_output_action_on_conflict,
+            batch_remove_duplicated_tag=batch_remove_duplicated_tag,
+            batch_output_save_json=batch_output_save_json,
+            interrogator=interrogator,
+            threshold=threshold,
+            character_threshold=character_threshold,
+            add_rating_tag=add_rating_tag,
+            add_model_tag=add_model_tag,
+            additional_tags=additional_tags,
+            exclude_tags=exclude_tags,
+            sort_by_alphabetical_order=sort_by_alphabetical_order,
+            add_confident_as_weight=add_confident_as_weight,
+            replace_underscore=replace_underscore,
+            replace_underscore_excludes=replace_underscore_excludes,
+            escape_tag=escape_tag,
+            unload_model_after_running=unload_model_after_running,
+        )
+    except Exception as exc:
+        tagger_progress.finish_error(str(exc))
+        raise
+
+
+def _run_interrogate(
+        image: Image,
+        batch_input_glob: str,
+        batch_input_recursive: bool,
+        batch_output_dir: str,
+        batch_output_filename_format: str,
+        batch_output_action_on_conflict: str,
+        batch_remove_duplicated_tag: bool,
+        batch_output_save_json: bool,
+        interrogator: Interrogator,
+        threshold: float,
+        character_threshold: float,
+        add_rating_tag: bool,
+        add_model_tag: bool,
+        additional_tags: str,
+        exclude_tags: str,
+        sort_by_alphabetical_order: bool,
+        add_confident_as_weight: bool,
+        replace_underscore: bool,
+        replace_underscore_excludes: str,
+        escape_tag: bool,
+        unload_model_after_running: bool
+):
     postprocess_opts = (
         threshold,
         character_threshold,
@@ -136,6 +189,7 @@ def on_interrogate(
         # check the input directory path
         if not os.path.isdir(base_dir):
             print('input path is not a directory / 输入的路径不是文件夹，终止识别')
+            tagger_progress.finish_error('输入的路径不是文件夹')
             return 'input path is not a directory'
 
         # this line is moved here because some reason
@@ -153,8 +207,13 @@ def on_interrogate(
         ]
 
         print(f'found {len(paths)} image(s)')
+        tagger_progress.begin_tagging(len(paths))
+        if not paths:
+            tagger_progress.finish_ok('未找到可识别的图片')
+            return 'Succeed'
 
-        for path in paths:
+        for idx, path in enumerate(paths, start=1):
+            tagger_progress.update_tagging(idx, len(paths), path.name)
             try:
                 image = Image.open(path)
             except UnidentifiedImageError:
@@ -181,6 +240,7 @@ def on_interrogate(
                     batch_output_filename_format
                 )
             except (TypeError, ValueError) as error:
+                tagger_progress.finish_error(str(error))
                 return str(error)
 
             output_path = output_dir.joinpath(
@@ -237,6 +297,9 @@ def on_interrogate(
                 )
 
         print('all done / 识别完成')
+        tagger_progress.finish_ok()
+    elif batch_input_glob.strip() == '':
+        tagger_progress.finish_error('未指定数据集路径')
 
     if unload_model_after_running:
         interrogator.unload()

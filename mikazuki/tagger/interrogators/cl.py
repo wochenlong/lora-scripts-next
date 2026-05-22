@@ -14,6 +14,7 @@ from huggingface_hub import hf_hub_download
 from dataclasses import dataclass
 from mikazuki.tagger import dbimutils, format
 from mikazuki.tagger.interrogators.base import Interrogator
+from mikazuki.tagger.progress import tagger_progress
 
 
 @dataclass
@@ -141,10 +142,14 @@ class CLTaggerInterrogator(Interrogator):
     def download(self) -> Tuple[os.PathLike, os.PathLike]:
         print(f"Loading {self.name} model file from {self.kwargs['repo_id']}")
 
-        model_path = Path(hf_hub_download(
-            **self.kwargs, filename=self.model_path))
-        tag_mapping_path = Path(hf_hub_download(
-            **self.kwargs, filename=self.tag_mapping_path))
+        tagger_progress.begin_download(self.name)
+        try:
+            model_path = Path(hf_hub_download(
+                **self.kwargs, filename=self.model_path))
+            tag_mapping_path = Path(hf_hub_download(
+                **self.kwargs, filename=self.tag_mapping_path))
+        finally:
+            tagger_progress.end_download()
         return model_path, tag_mapping_path
 
     def load(self) -> None:

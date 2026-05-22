@@ -159,6 +159,14 @@ app.include_router(api_router, prefix="/api")
 # app.include_router(ipc_router, prefix="/ipc")
 
 _TRAIN_LOG_HTML = Path(__file__).resolve().parent.parent / "static" / "train_log.html"
+_TAGGER_PROGRESS_JS = Path(__file__).resolve().parent.parent / "static" / "tagger_progress.js"
+
+
+@app.get("/assets/tagger_progress.js")
+async def tagger_progress_script():
+    if not _TAGGER_PROGRESS_JS.is_file():
+        raise HTTPException(status_code=404, detail="tagger_progress.js not found")
+    return FileResponse(str(_TAGGER_PROGRESS_JS), media_type="application/javascript")
 
 
 @app.get("/train-log")

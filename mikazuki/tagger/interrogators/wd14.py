@@ -14,6 +14,7 @@ from PIL import UnidentifiedImageError
 from huggingface_hub import hf_hub_download
 from mikazuki.tagger.interrogators.base import Interrogator
 from mikazuki.tagger import dbimutils, format
+from mikazuki.tagger.progress import tagger_progress
 
 
 class WaifuDiffusionInterrogator(Interrogator):
@@ -33,10 +34,14 @@ class WaifuDiffusionInterrogator(Interrogator):
         repo_id = self.kwargs["repo_id"]
         print(f"Loading {self.name} model from {repo_id} (first run may download ~400MB, see console log)")
 
-        model_path = Path(hf_hub_download(
-            **self.kwargs, filename=self.model_path))
-        tags_path = Path(hf_hub_download(
-            **self.kwargs, filename=self.tags_path))
+        tagger_progress.begin_download(self.name)
+        try:
+            model_path = Path(hf_hub_download(
+                **self.kwargs, filename=self.model_path))
+            tags_path = Path(hf_hub_download(
+                **self.kwargs, filename=self.tags_path))
+        finally:
+            tagger_progress.end_download()
         return model_path, tags_path
 
     def load(self) -> None:

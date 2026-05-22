@@ -24,6 +24,7 @@ from mikazuki.app.models import (APIResponse, APIResponseFail,
 from mikazuki.log import log
 from mikazuki.tagger.interrogator import (available_interrogators,
                                           on_interrogate)
+from mikazuki.tagger.progress import tagger_progress
 from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
 from mikazuki.utils import train_utils
@@ -400,8 +401,15 @@ async def run_script(request: Request, background_tasks: BackgroundTasks):
     return APIResponseSuccess()
 
 
+@router.get("/tagger/status")
+async def tagger_status():
+    return APIResponseSuccess(data=tagger_progress.snapshot())
+
+
 @router.post("/interrogate")
 async def run_interrogate(req: TaggerInterrogateRequest, background_tasks: BackgroundTasks):
+    tagger_progress.reset()
+    tagger_progress.start_job()
     interrogator = available_interrogators.get(req.interrogator_model, available_interrogators["wd14-convnextv2-v2"])
     background_tasks.add_task(
         on_interrogate,

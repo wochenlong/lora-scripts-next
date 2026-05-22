@@ -649,3 +649,38 @@ html.dark .example-container > .right-container section .params-section .shiki,
 html.dark .example-container > .right-container section .params-section pre {
   background: var(--c-bg-mute) !important;
 }
+
+/* Tagger run zone — scheme B: 2px bar + 12px caption above Start */
+.tagger-run-zone {
+  margin: 8px 20px 0;
+}
+.tagger-run-zone__bar {
+  height: 2px;
+  border-radius: 1px;
+  background: var(--el-fill-color-light, #e4e7ed);
+  overflow: hidden;
+}
+.tagger-run-zone__bar-fill {
+  height: 100%;
+  border-radius: 1px;
+  background: var(--el-color-primary);
+  width: 0%;
+  transition: width 0.25s ease;
+}
+.tagger-run-zone__bar-fill.is-indeterminate {
+  width: 36%;
+  animation: tagger-run-indeterminate 1.15s ease-in-out infinite;
+}
+@keyframes tagger-run-indeterminate {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(320%); }
+}
+.tagger-run-zone__text {
+  margin: 6px 0 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: var(--el-text-color-secondary, #909399);
+}
+html.dark .tagger-run-zone__bar {
+  background: var(--c-bg-mute, #2d333b);
+}
