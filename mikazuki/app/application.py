@@ -9,6 +9,7 @@ from pathlib import Path
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
+from starlette.responses import Response
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException
 
@@ -154,6 +155,26 @@ async def add_cache_control_header(request, call_next):
     response = await call_next(request)
     response.headers["Cache-Control"] = "max-age=0"
     return response
+
+
+_TAGGER_PROGRESS_SCRIPT_TAG = b'<script src="/assets/tagger_progress.js" defer></script>'
+
+
+@app.middleware("http")
+async def inject_tagger_progress_script(request, call_next):
+    """Inject progress UI script into all HTML shells (VuePress SPA entry pages)."""
+    response = await call_next(request)
+    content_type = response.headers.get("content-type", "")
+    if response.status_code != 200 or "text/html" not in content_type:
+        return response
+    body = b""
+    async for chunk in response.body_iterator:
+        body += chunk
+    if _TAGGER_PROGRESS_SCRIPT_TAG not in body and b"</body>" in body:
+        body = body.replace(b"</body>", _TAGGER_PROGRESS_SCRIPT_TAG + b"\n</body>", 1)
+    headers = dict(response.headers)
+    headers.pop("content-length", None)
+    return Response(content=body, status_code=response.status_code, headers=headers, media_type="text/html")
 
 app.include_router(api_router, prefix="/api")
 # app.include_router(ipc_router, prefix="/ipc")

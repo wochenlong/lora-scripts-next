@@ -1,5 +1,5 @@
 (function () {
-  if (!/\/tagger(?:\.html)?$/i.test(location.pathname)) return;
+  "use strict";
 
   var zone = document.createElement("div");
   zone.className = "tagger-run-zone";
@@ -15,6 +15,19 @@
   var startLabel = "启动";
   var pollTimer = null;
   var hideTimer = null;
+  var jobPending = false;
+  var mounted = false;
+
+  function isTaggerPage() {
+    var path = (location.pathname || "").toLowerCase();
+    if (/\/tagger(?:\.html|\.md)?$/i.test(path)) return true;
+    var h1 = document.querySelector(".right-container h1, .example-container h1");
+    if (h1 && /tagger/i.test(h1.textContent)) return true;
+    var form = document.querySelector(".schema-container form");
+    if (!form) return false;
+    var text = form.textContent || "";
+    return text.indexOf("interrogator_model") >= 0;
+  }
 
   function findStartButton() {
     var right = document.querySelector(".example-container .right-container");
@@ -26,22 +39,6 @@
       if (label === "启动") return buttons[i];
     }
     return null;
-  }
-
-  function mountZone() {
-    var btn = findStartButton();
-    if (!btn) return false;
-    startBtn = btn;
-    if (!zone.isConnected) {
-      btn.parentElement.insertBefore(zone, btn);
-    }
-    if (!btn.dataset.taggerProgressBound) {
-      btn.dataset.taggerProgressBound = "1";
-      var span = btn.querySelector("span");
-      startLabel = (span ? span.textContent : btn.textContent).trim() || "启动";
-      btn.addEventListener("click", onStartClick);
-    }
-    return true;
   }
 
   function setButtonBusy(busy) {
@@ -56,7 +53,8 @@
   function applySnapshot(data) {
     var phase = data.phase || "idle";
     var pct = data.percent;
-    var indeterminate = pct == null && (phase === "download" || phase === "preparing");
+    var indeterminate =
+      pct == null && (phase === "download" || phase === "preparing" || phase === "idle");
 
     barFill.classList.toggle("is-indeterminate", indeterminate);
     if (indeterminate) {
@@ -74,6 +72,7 @@
   }
 
   function stopPoll(hideZone) {
+    jobPending = false;
     if (pollTimer) {
       clearInterval(pollTimer);
       pollTimer = null;
@@ -98,9 +97,11 @@
       var body = await res.json();
       var data = body.data || body;
       if (!data.active && data.phase === "idle") {
+        if (jobPending) return;
         stopPoll(true);
         return;
       }
+      jobPending = false;
       applySnapshot(data);
       if (data.phase === "done" || data.phase === "error") {
         if (!hideTimer) {
@@ -114,15 +115,18 @@
         }
       }
     } catch (e) {
-      /* keep polling; request may fail briefly while server starts job */
+      /* server may be momentarily unavailable */
     }
   }
 
-  function onStartClick() {
+  function beginJobUI() {
+    if (!isTaggerPage()) return;
+    mountZone();
     if (hideTimer) {
       clearTimeout(hideTimer);
       hideTimer = null;
     }
+    jobPending = true;
     zone.hidden = false;
     textEl.textContent = "准备中…";
     barFill.classList.add("is-indeterminate");
@@ -133,6 +137,49 @@
     pollOnce();
   }
 
-  mountZone();
-  setInterval(mountZone, 800);
+  function mountZone() {
+    if (!isTaggerPage()) return false;
+    var btn = findStartButton();
+    if (!btn) return false;
+    startBtn = btn;
+    if (!zone.isConnected) {
+      btn.parentElement.insertBefore(zone, btn);
+      mounted = true;
+    }
+    if (!btn.dataset.taggerProgressBound) {
+      btn.dataset.taggerProgressBound = "1";
+      var span = btn.querySelector("span");
+      startLabel = (span ? span.textContent : btn.textContent).trim() || "启动";
+      btn.addEventListener("click", beginJobUI);
+    }
+    return true;
+  }
+
+  function teardown() {
+    if (zone.isConnected) zone.remove();
+    mounted = false;
+    startBtn = null;
+    stopPoll(true);
+  }
+
+  function tick() {
+    if (!isTaggerPage()) {
+      if (mounted) teardown();
+      return;
+    }
+    mountZone();
+  }
+
+  var origFetch = window.fetch;
+  window.fetch = function (input, init) {
+    var url = typeof input === "string" ? input : input && input.url ? input.url : "";
+    var method = ((init && init.method) || "GET").toUpperCase();
+    if (url.indexOf("/api/interrogate") >= 0 && method === "POST") {
+      beginJobUI();
+    }
+    return origFetch.apply(this, arguments);
+  };
+
+  tick();
+  setInterval(tick, 500);
 })();
