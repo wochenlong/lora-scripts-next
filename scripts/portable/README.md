@@ -37,3 +37,7 @@
 | 入口 | `run_gui.bat` → `launch_portable.bat` | `run_gui.bat` → `run_gui_source.bat` |
 | 首次依赖 | `setup_environment.py` | `install-cn.ps1` |
 | 默认打标模型 | 7z 内置 `huggingface/hub/`（wd14-convnextv2-v2） | `install-cn.ps1` + 每次启动 `prefetch_default_tagger.py --if-missing` |
+
+## 打包与更新方案
+
+保留 `.git` 的新版整合包更新方案见 [`docs/portable-packaging-git-update.md`](../../docs/portable-packaging-git-update.md)。
