@@ -40,7 +40,7 @@
 
 整合包已内置默认 WD 打标模型 **wd14-convnextv2-v2**（约 400 MB，位于 `huggingface/`），WebUI「打标」页开箱即用。
 
-> **旧版提醒：** 不推荐下载或继续使用 **v2.3.0 及更早整合包**。这些版本可能把 Anima 官方底模误判为“不属于 Stable Diffusion / Flux / Lumina 模型”，导致无法从 WebUI 启动 Anima 训练。请下载最新 Release，或运行整合包内的 `Update-SD-Trainer.bat` 更新。详见 [Anima 旧版整合包模型校验问题](docs/troubleshooting/anima-v230-model-validation.md)。
+> **旧版提醒：** 不推荐下载或继续使用 **v2.3.0 及更早整合包**。这些版本可能把 Anima 官方底模误判为“不属于 Stable Diffusion / Flux / Lumina 模型”，导致无法从 WebUI 启动 Anima 训练。请下载最新 Release；发布版 7z 通常不包含 `.git`，不能依赖 `Update-SD-Trainer.bat` 原地更新。详见 [Anima 旧版整合包模型校验问题](docs/troubleshooting/anima-v230-model-validation.md)。
 
 > **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
 
@@ -202,7 +202,7 @@ powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 <details>
 <summary><b>Anima 官方模型提示“底模不是 Stable Diffusion / Flux / Lumina 模型”</b></summary>
 
-这是 **v2.3.0 及更早整合包**的旧版模型校验问题，不是 Anima 模型下载错误。请运行 `Update-SD-Trainer.bat` 更新；如果仍显示旧版本，请下载最新 Release 整合包。详见 [常见问题说明](docs/troubleshooting/anima-v230-model-validation.md)。
+这是 **v2.3.0 及更早整合包**的旧版模型校验问题，不是 Anima 模型下载错误。请下载最新 Release 整合包，保留 `sd-models/`、`output/`、`logs/` 后替换旧版。发布版 7z 通常没有 `.git`，`Update-SD-Trainer.bat` 不能完成原地更新。详见 [常见问题说明](docs/troubleshooting/anima-v230-model-validation.md)。
 
 </details>
 
@@ -211,7 +211,8 @@ powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 
 整合包布局固定为：根目录 `run_gui.bat` + `python_embeded/` + `SD-Trainer/`。
 
-- **用 `Update-SD-Trainer.bat` 拉代码后**：脚本会尝试刷新根目录 `run_gui.bat`；若仍失败，从新 Release 解压覆盖，或手动运行 `SD-Trainer\scripts\portable\sync_portable_root_launchers.bat`。
+- **发布版 7z 没有 `.git`**：不能通过 `Update-SD-Trainer.bat` 做 `git pull` 原地更新；请下载新版 7z，保留 `sd-models/`、`output/`、`logs/` 后替换旧版。
+- **SD-Trainer 是 git 仓库**：`Update-SD-Trainer.bat` 才能拉代码；脚本会尝试刷新根目录 `run_gui.bat`，若仍失败可手动运行 `SD-Trainer\scripts\portable\sync_portable_root_launchers.bat`。
 - **只解压过旧 7z、没有 `SD-Trainer\scripts\portable\`**：需下载新版 7z，或至少用新版替换整个 `SD-Trainer` 文件夹与根目录 `run_gui.bat`。
 - 实际启动逻辑在 `SD-Trainer\scripts\portable\launch_portable.bat`，随项目更新，不要删改 `python_embeded` / `SD-Trainer` 文件夹名。
 

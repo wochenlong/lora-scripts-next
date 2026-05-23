@@ -38,7 +38,7 @@
 3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
 ```
 
-> **Old package notice:** Avoid **v2.3.0 and earlier portable packages** for Anima training. Those versions may misclassify official Anima checkpoints as “not a Stable Diffusion / Flux / Lumina checkpoint” before the Anima trainer starts. Download the latest Release, or run `Update-SD-Trainer.bat` inside the portable package. See [Anima old portable model validation issue](docs/troubleshooting/anima-v230-model-validation.md).
+> **Old package notice:** Avoid **v2.3.0 and earlier portable packages** for Anima training. Those versions may misclassify official Anima checkpoints as “not a Stable Diffusion / Flux / Lumina checkpoint” before the Anima trainer starts. Download the latest Release; release 7z packages usually do not include `.git`, so `Update-SD-Trainer.bat` cannot be used for in-place git updates. See [Anima old portable model validation issue](docs/troubleshooting/anima-v230-model-validation.md).
 
 > **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
 

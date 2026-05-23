@@ -23,14 +23,21 @@ Anima 主模型本来就不是 Stable Diffusion / Flux / Lumina checkpoint。旧
 
 ## 解决办法
 
-推荐按顺序尝试：
+推荐处理方式：
 
 1. 关闭 WebUI。
-2. 双击整合包目录里的 `Update-SD-Trainer.bat` 更新。
-3. 更新完成后重新双击 `run_gui.bat` 启动。
-4. 浏览器按 `Ctrl+F5` 强刷页面，再重新提交训练。
+2. 下载最新 Release 整合包。
+3. 保留旧整合包里的 `sd-models/`、`output/`、`logs/`，如需保留历史配置也备份 `SD-Trainer/config/autosave/`。
+4. 用新版整合包替换旧版后，重新双击 `run_gui.bat` 启动。
+5. 浏览器按 `Ctrl+F5` 强刷页面，再重新提交训练。
 
-如果更新后终端仍显示 `SD-Trainer Version: 2.3.0`，或仍出现同样的模型校验错误，请下载最新 Release 整合包，保留自己的 `sd-models/`、`output/`、`logs/` 数据后替换旧版本。
+`Update-SD-Trainer.bat` 只适用于 `SD-Trainer/` 本身是 git 仓库的安装方式。发布版 7z 通常不包含 `.git` 元数据，运行该脚本会出现：
+
+```text
+fatal: not a git repository (or any of the parent directories): .git
+```
+
+这种情况下不是用户操作错误，而是该整合包不能通过 `git pull` 原地更新，请改为下载最新 Release 整合包。
 
 ## 如何确认已修复
 

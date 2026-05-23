@@ -26,8 +26,8 @@
 
 | 方式 | 操作 |
 |------|------|
-| **SD-Trainer 为 git 仓库** | 运行根目录 `Update-SD-Trainer.bat` 或 `update\update_sd_trainer.bat`，然后可选运行 `SD-Trainer\scripts\portable\sync_portable_root_launchers.bat` 刷新根目录 `run_gui.bat` |
-| **仅解压 7z、无 git** | 下载新版 7z，保留 `sd-models`/`output`/`logs`，替换 `SD-Trainer` 与根目录 bat（或整包覆盖后拷回数据） |
+| **SD-Trainer 为 git 仓库** | 运行根目录 `Update-SD-Trainer.bat`，然后可选运行 `SD-Trainer\scripts\portable\sync_portable_root_launchers.bat` 刷新根目录 `run_gui.bat` |
+| **仅解压 7z、无 git** | `Update-SD-Trainer.bat` 不能工作；下载新版 7z，保留 `sd-models`/`output`/`logs`，替换 `SD-Trainer` 与根目录 bat（或整包覆盖后拷回数据） |
 
 ## 与源码安装的区别
 
