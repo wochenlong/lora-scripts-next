@@ -33,7 +33,7 @@
 ## Get Started in 3 Steps
 
 ```
-1. Download  →  SD-Trainer-v2.5.1.7z (~480 MB, includes offline tagger + git metadata) from Releases, extract
+1. Download  →  SD-Trainer-v2.5.1.7z (~380 MB, includes offline tagger + git metadata) from Releases, extract
 2. Launch    →  Double-click run_gui.bat (auto-installs deps on first run, ~3 GB)
 3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
 ```

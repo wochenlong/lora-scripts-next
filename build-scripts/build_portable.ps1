@@ -6,6 +6,7 @@ param(
     [string]$GitBranch   = "",
     [int]$GitDepth       = 1,
     [string]$GitRemoteUrl = "https://github.com/wochenlong/lora-scripts-next.git",
+    [string]$OutputDirName = "SD-Trainer-Portable",
     [switch]$Clean,
     [switch]$Skip7z
 )
@@ -14,7 +15,7 @@ $ErrorActionPreference = "Stop"
 $startTime = Get-Date
 
 $buildDir    = Join-Path $ProjectRoot "build"
-$portableDir = Join-Path $buildDir "SD-Trainer-Portable"
+$portableDir = Join-Path $buildDir $OutputDirName
 $pythonDir   = Join-Path $portableDir "python_embeded"
 $sdtDir      = Join-Path $portableDir "SD-Trainer"
 
