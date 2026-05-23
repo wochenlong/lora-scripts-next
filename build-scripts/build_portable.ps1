@@ -3,6 +3,8 @@ param(
     [string]$Version     = "2.5.1",
     [string]$PythonVer   = "3.10.11",
     [string]$GitRef      = "HEAD",
+    [string]$GitBranch   = "",
+    [int]$GitDepth       = 1,
     [string]$GitRemoteUrl = "https://github.com/wochenlong/lora-scripts-next.git",
     [switch]$Clean,
     [switch]$Skip7z
@@ -173,15 +175,39 @@ if (Test-Path $sdtDir) {
     Remove-Item $sdtDir -Recurse -Force
 }
 
-Write-Host "  Cloning clean source at $resolvedRef"
-& git clone --no-local $ProjectRoot $sdtDir | Out-Host
+$branchName = $GitBranch.Trim()
+if (-not $branchName) {
+    $branchName = (& git -C $ProjectRoot rev-parse --abbrev-ref HEAD 2>$null).Trim()
+    if (-not $branchName -or $branchName -eq "HEAD") {
+        $branchName = "main"
+    }
+}
+
+if ($GitDepth -gt 0) {
+    Write-Host "  Shallow cloning branch '$branchName' (depth=$GitDepth) at $resolvedRef"
+    & git clone --depth $GitDepth --single-branch --branch $branchName --no-local $ProjectRoot $sdtDir | Out-Host
+} else {
+    Write-Host "  Cloning full history on branch '$branchName' at $resolvedRef"
+    & git clone --single-branch --branch $branchName --no-local $ProjectRoot $sdtDir | Out-Host
+}
 if ($LASTEXITCODE -ne 0) {
     throw "git clone failed"
 }
 
-& git -C $sdtDir checkout --detach $resolvedRef | Out-Host
-if ($LASTEXITCODE -ne 0) {
-    throw "git checkout $resolvedRef failed"
+$clonedHead = (& git -C $sdtDir rev-parse HEAD 2>$null).Trim()
+if ($clonedHead -ne $resolvedRef) {
+    if ($GitDepth -gt 0) {
+        & git -C $sdtDir fetch --depth $GitDepth origin $resolvedRef | Out-Host
+    } else {
+        & git -C $sdtDir fetch origin $resolvedRef | Out-Host
+    }
+    if ($LASTEXITCODE -ne 0) {
+        throw "git fetch $resolvedRef failed"
+    }
+    & git -C $sdtDir checkout --detach $resolvedRef | Out-Host
+    if ($LASTEXITCODE -ne 0) {
+        throw "git checkout $resolvedRef failed"
+    }
 }
 
 & git -C $sdtDir remote set-url origin $GitRemoteUrl | Out-Host
