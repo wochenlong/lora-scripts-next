@@ -8,7 +8,7 @@ title SD-Trainer
 ::   SD-Trainer\gui.py
 ::   SD-Trainer\setup_environment.py
 
-set "PORTABLE_ROOT=%~dp0..\.."
+set "PORTABLE_ROOT=%~dp0..\..\..\"
 set "BASE_DIR=%PORTABLE_ROOT%"
 set "HF_HOME=%PORTABLE_ROOT%huggingface"
 set "PYTHONUTF8=1"

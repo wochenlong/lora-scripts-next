@@ -81,9 +81,12 @@ function Install-EmbeddedTkinter {
         [string]$ExpectedVersion = "3.10"
     )
     $fullRoot = $null
+    # Prefer a real Windows CPython install with tcl/tk. Conda/mamba bases often
+    # lack the tcl tree even when tkinter imports in that environment.
     $candidates = @(
-        { & py "-$ExpectedVersion" -c "import sys; print(sys.base_prefix)" },
-        { & "C:\Program Files\Python310\python.exe" -c "import sys; print(sys.base_prefix)" }
+        { & "C:\Program Files\Python310\python.exe" -c "import sys; print(sys.base_prefix)" },
+        { & "C:\Users\$env:USERNAME\AppData\Local\Programs\Python\Python310\python.exe" -c "import sys; print(sys.base_prefix)" },
+        { & py "-$ExpectedVersion" -c "import sys; print(sys.base_prefix)" }
     )
     foreach ($candidate in $candidates) {
         try {
