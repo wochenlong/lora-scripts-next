@@ -50,6 +50,16 @@ ANIMA_DEFAULT_SAMPLE_NEGATIVE = (
 )
 ANIMA_DEFAULT_UNET_LR = 5e-5
 ANIMA_LEGACY_UNET_LR = {"0.0001", "1e-4", "1E-4"}
+ANIMA_CONFIG_MARKERS = {
+    "qwen3",
+    "llm_adapter_path",
+    "t5_tokenizer_path",
+    "qwen3_max_token_length",
+    "t5_max_token_length",
+    "vae_chunk_size",
+    "vae_disable_cache",
+    "unsloth_offload_checkpointing",
+}
 
 avaliable_scripts = [
     "networks/extract_lora_from_models.py",
@@ -156,6 +166,26 @@ def sanitize_config(config: dict) -> None:
     for key in _PATH_FIELDS:
         if isinstance(config.get(key), str):
             config[key] = config[key].replace("\\", "/")
+
+
+def resolve_model_train_type(config: dict) -> str:
+    """Resolve train type, tolerating stale frontend schema caches.
+
+    Some portable users keep old browser-local schema data after updating the
+    package. In that case Anima-only fields may be submitted without the hidden
+    model_train_type, which would otherwise fall back to SD1.5 and fail model
+    validation before the Anima wrapper can run.
+    """
+    model_train_type = config.pop("model_train_type", None)
+    if model_train_type:
+        return str(model_train_type)
+
+    network_module = str(config.get("network_module", ""))
+    if network_module == "networks.lora_anima" or any(key in config for key in ANIMA_CONFIG_MARKERS):
+        log.warning("Missing model_train_type; inferred anima-lora from Anima-specific config fields")
+        return "anima-lora"
+
+    return "sd-lora"
 
 
 async def load_schemas():
@@ -329,7 +359,9 @@ async def create_toml_file(request: Request):
     gpu_ids = config.pop("gpu_ids", None)
 
     suggest_cpu_threads = 8 if len(train_utils.get_total_images(config["train_data_dir"])) > 200 else 2
-    model_train_type = config.pop("model_train_type", "sd-lora")
+    model_train_type = resolve_model_train_type(config)
+    if model_train_type not in trainer_mapping:
+        return APIResponseFail(message=f"未知训练类型：{model_train_type}")
     trainer_file = trainer_mapping[model_train_type]
     apply_sdxl_prediction_type(config, model_train_type)
     apply_anima_training_defaults(config, model_train_type)
