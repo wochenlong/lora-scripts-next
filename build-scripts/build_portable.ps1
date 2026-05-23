@@ -1,7 +1,9 @@
 param(
     [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent),
-    [string]$Version     = "2.5.0",
+    [string]$Version     = "2.5.1",
     [string]$PythonVer   = "3.10.11",
+    [string]$GitRef      = "HEAD",
+    [string]$GitRemoteUrl = "https://github.com/wochenlong/lora-scripts-next.git",
     [switch]$Clean,
     [switch]$Skip7z
 )
@@ -152,72 +154,52 @@ if (-not (Test-Path $getPipPath)) {
 # ==== Step 2: Copy project files ====
 
 Write-Host ""
-Write-Host "[2/6] Copying project files..." -ForegroundColor Cyan
+Write-Host "[2/6] Preparing git-backed project files..." -ForegroundColor Cyan
 
-Push-Location $ProjectRoot
-Pop-Location
+if (-not (Get-Command git -ErrorAction SilentlyContinue)) {
+    throw "Git is required to build a git-backed portable package."
+}
 
-$copyDirs = @(
-    @{ Src = "assets";  Dst = "assets" },
-    @{ Src = "mikazuki"; Dst = "mikazuki" },
-    @{ Src = "frontend"; Dst = "frontend" },
-    @{ Src = "config";   Dst = "config" },
-    @{ Src = "scripts";  Dst = "scripts" },
-    @{ Src = "vendor";   Dst = "vendor" },
-    @{ Src = "train_monitor"; Dst = "train_monitor" }
-)
+$resolvedRef = (& git -C $ProjectRoot rev-parse --verify $GitRef 2>$null)
+if ($LASTEXITCODE -ne 0 -or -not $resolvedRef) {
+    throw "Cannot resolve GitRef '$GitRef' under $ProjectRoot."
+}
+$resolvedRef = $resolvedRef.Trim()
 
-$copyFiles = @(
-    "gui.py",
-    "requirements.txt",
-    "setup_environment.py",
-    "VERSION",
-    "LICENSE",
-    "NOTICE.md",
-    "CHANGELOG.md",
-    "README.md",
-    "README-zh.md"
-)
+if (Test-Path $sdtDir) {
+    Remove-Item $sdtDir -Recurse -Force
+}
 
-$excludeDirs = @(
-    ".git", "__pycache__", ".vscode", ".idea",
-    "node_modules", ".sisyphus", ".playwright-mcp", ".tmp",
-    "anima_lora", "drafts"
-)
+Write-Host "  Cloning clean source at $resolvedRef"
+& git clone --no-local $ProjectRoot $sdtDir | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    throw "git clone failed"
+}
 
-foreach ($dir in $copyDirs) {
-    $src = Join-Path $ProjectRoot $dir.Src
-    $dst = Join-Path $sdtDir $dir.Dst
-    if (Test-Path $src) {
-        $xdArgs = @()
-        foreach ($xd in $excludeDirs) { $xdArgs += "/XD"; $xdArgs += $xd }
-        $null = robocopy $src $dst /E /NFL /NDL /NJH /NJS /NC /NS $xdArgs
-        Write-Host "  Copied $($dir.Src)/"
-    } else {
-        Write-Host "  [skip] $($dir.Src)/ not found" -ForegroundColor Yellow
+& git -C $sdtDir checkout --detach $resolvedRef | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    throw "git checkout $resolvedRef failed"
+}
+
+& git -C $sdtDir remote set-url origin $GitRemoteUrl | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    throw "git remote set-url failed"
+}
+
+Write-Host "  Initializing optional submodules..."
+& git -C $sdtDir submodule update --init --recursive | Out-Host
+if ($LASTEXITCODE -ne 0) {
+    Write-Host "  WARNING: submodule update failed; continuing because dataset-tag-editor is optional." -ForegroundColor Yellow
+}
+
+foreach ($exclude in @("doc", "data", "benchmark", ".vscode", ".idea", ".cursor", ".tmp", ".sisyphus", ".playwright-mcp")) {
+    $path = Join-Path $sdtDir $exclude
+    if (Test-Path $path) {
+        Remove-Item $path -Recurse -Force -ErrorAction SilentlyContinue
     }
 }
 
-# robocopy /XD can miss nested git metadata or local test directories when
-# names are matched relative to the copied subtree, so run a deterministic
-# cleanup pass before archiving.
-foreach ($exclude in $excludeDirs) {
-    Get-ChildItem -Path $sdtDir -Force -Recurse -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq $exclude } |
-        Sort-Object FullName -Descending |
-        ForEach-Object {
-            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-        }
-}
-
-New-Item -ItemType Directory -Path $sdtDir -Force | Out-Null
-foreach ($file in $copyFiles) {
-    $src = Join-Path $ProjectRoot $file
-    if (Test-Path $src) {
-        Copy-Item $src -Destination (Join-Path $sdtDir $file)
-    }
-}
-Write-Host "  Copied root files"
+Write-Host "  Git-backed SD-Trainer copy ready"
 Write-Host "  Done" -ForegroundColor Green
 
 # ==== Step 3: Bundle default WD tagger (offline batch tagging) ====
@@ -272,8 +254,8 @@ if (Test-Path $repoRunGui) {
 $updateDir = Join-Path $portableDir "update"
 New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
 
-$updateBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`ncd /d `"%~dp0..\SD-Trainer`"`r`n"
-$updateBat += "echo Updating SD-Trainer...`r`ngit pull`r`necho Done.`r`npause`r`n"
+$updateBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`n"
+$updateBat += "call `"%~dp0..\Update-SD-Trainer.bat`"`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $updateDir "update_sd_trainer.bat"),
     $updateBat,
@@ -350,7 +332,8 @@ $readme += "  sd-models/       - Put your models here`r`n"
 $readme += "  output/          - Training output`r`n"
 $readme += "  logs/            - Logs`r`n`r`n"
 $readme += "Update:`r`n"
-$readme += "  update\update_sd_trainer.bat       - Update project code`r`n"
+$readme += "  Update-SD-Trainer.bat              - Update project code with git`r`n"
+$readme += "  update\update_sd_trainer.bat       - Compatibility wrapper`r`n"
 $readme += "  update\update_dependencies.bat     - Update Python packages`r`n`r`n"
 $readme += "Requirements:`r`n"
 $readme += "  - Windows 10/11 64-bit`r`n"

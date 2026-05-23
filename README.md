@@ -33,12 +33,12 @@
 ## Get Started in 3 Steps
 
 ```
-1. Download  →  SD-Trainer-v2.5.0.7z (~20 MB) from Releases, extract
+1. Download  →  SD-Trainer-v2.5.1.7z (~20 MB) from Releases, extract
 2. Launch    →  Double-click run_gui.bat (auto-installs deps on first run, ~3 GB)
 3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
 ```
 
-> **Old package notice:** Avoid **v2.3.0 and earlier portable packages** for Anima training. Those versions may misclassify official Anima checkpoints as “not a Stable Diffusion / Flux / Lumina checkpoint” before the Anima trainer starts. Download the latest Release; release 7z packages usually do not include `.git`, so `Update-SD-Trainer.bat` cannot be used for in-place git updates. See [Anima old portable model validation issue](docs/troubleshooting/anima-v230-model-validation.md).
+> **Old package notice:** Avoid **v2.3.0 and earlier portable packages** for Anima training. Those versions may misclassify official Anima checkpoints as “not a Stable Diffusion / Flux / Lumina checkpoint” before the Anima trainer starts. Download the latest Release; **v2.5.1 and newer portable packages keep `.git`** so `Update-SD-Trainer.bat` can update in place, while older 7z packages usually cannot. See [Anima old portable model validation issue](docs/troubleshooting/anima-v230-model-validation.md).
 
 > **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
 
@@ -134,6 +134,7 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 
 | Date | Version |
 |------|---------|
+| 2026-05-24 | **v2.5.1** — Portable packages now keep `.git` metadata for `Update-SD-Trainer.bat` updates; fixes Anima legacy config routing and Tagger progress visibility |
 | 2026-05-21 | **v2.5.0** — UI refresh: new sidebar navigation, home portal page, training monitor dashboard with GPU metrics; CSS cleanup |
 | 2026-05-21 | **v2.4.0** — Training stability: env isolation, NaN filter, sample guard, attn_mode fallback, path normalization; Portable tkinter fix |
 | 2026-05-20 | **v2.3.0** — Train Monitor: TensorBoard-backed curves, parameter checks, log sync |

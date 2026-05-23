@@ -33,14 +33,14 @@
 ## 三步开始训练
 
 ```
-1. 下载  →  从 Releases 下载 SD-Trainer-v2.5.0.7z（~20 MB），解压
+1. 下载  →  从 Releases 下载 SD-Trainer-v2.5.1.7z（~20 MB），解压
 2. 启动  →  双击 run_gui.bat（首次自动安装依赖 ~3 GB）
 3. 训练  →  浏览器打开 http://127.0.0.1:28000，选模型、填参数、开练
 ```
 
 整合包已内置默认 WD 打标模型 **wd14-convnextv2-v2**（约 400 MB，位于 `huggingface/`），WebUI「打标」页开箱即用。
 
-> **旧版提醒：** 不推荐下载或继续使用 **v2.3.0 及更早整合包**。这些版本可能把 Anima 官方底模误判为“不属于 Stable Diffusion / Flux / Lumina 模型”，导致无法从 WebUI 启动 Anima 训练。请下载最新 Release；发布版 7z 通常不包含 `.git`，不能依赖 `Update-SD-Trainer.bat` 原地更新。详见 [Anima 旧版整合包模型校验问题](docs/troubleshooting/anima-v230-model-validation.md)。
+> **旧版提醒：** 不推荐下载或继续使用 **v2.3.0 及更早整合包**。这些版本可能把 Anima 官方底模误判为“不属于 Stable Diffusion / Flux / Lumina 模型”，导致无法从 WebUI 启动 Anima 训练。请下载最新 Release；**v2.5.1 起整合包保留 `.git`**，可使用 `Update-SD-Trainer.bat` 原地更新；更早 7z 通常无法原地 git 更新。详见 [Anima 旧版整合包模型校验问题](docs/troubleshooting/anima-v230-model-validation.md)。
 
 > **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
 
@@ -163,7 +163,7 @@ powershell -ExecutionPolicy Bypass -File .\run_gui_source.ps1
 <details>
 <summary><b>解压后路径嵌套两层</b></summary>
 
-若路径出现 `...\lora-scripts-next-2.5.0\lora-scripts-next-2.5.0\`，请进入内层含 `run_gui.bat` 的目录。
+若路径出现 `...\lora-scripts-next-2.5.1\lora-scripts-next-2.5.1\`，请进入内层含 `run_gui.bat` 的目录。
 
 </details>
 
@@ -202,7 +202,7 @@ powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 <details>
 <summary><b>Anima 官方模型提示“底模不是 Stable Diffusion / Flux / Lumina 模型”</b></summary>
 
-这是 **v2.3.0 及更早整合包**的旧版模型校验问题，不是 Anima 模型下载错误。请下载最新 Release 整合包，保留 `sd-models/`、`output/`、`logs/` 后替换旧版。发布版 7z 通常没有 `.git`，`Update-SD-Trainer.bat` 不能完成原地更新。详见 [常见问题说明](docs/troubleshooting/anima-v230-model-validation.md)。
+这是 **v2.3.0 及更早整合包**的旧版模型校验问题，不是 Anima 模型下载错误。请下载最新 Release 整合包，保留 `sd-models/`、`output/`、`logs/` 后替换旧版。**v2.5.1 起整合包保留 `.git`**，可用 `Update-SD-Trainer.bat` 原地更新；更早 7z 通常需要下载新版替换。详见 [常见问题说明](docs/troubleshooting/anima-v230-model-validation.md)。
 
 </details>
 
@@ -225,6 +225,7 @@ powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 
 | 日期 | 版本 |
 |------|------|
+| 2026-05-24 | **v2.5.1** — 整合包保留 `.git`，支持后续通过 `Update-SD-Trainer.bat` 拉取更新；修复 Anima 旧配置训练类型识别与打标进度显示 |
 | 2026-05-21 | **v2.5.0** — UI 焕新：侧栏导航重构、首页传送门、训练监控仪表盘新增 GPU 指标；CSS 去重清理 |
 | 2026-05-21 | **v2.4.0** — 训练稳定性：环境隔离、NaN 过滤、采样保护、attn_mode 降级、路径规范化；整合包 tkinter 修复 |
 | 2026-05-20 | **v2.3.0** — 训练监控升级：TensorBoard 同源曲线、参数速查、日志同步 |

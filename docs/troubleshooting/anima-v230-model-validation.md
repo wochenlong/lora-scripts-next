@@ -31,13 +31,13 @@ Anima 主模型本来就不是 Stable Diffusion / Flux / Lumina checkpoint。旧
 4. 用新版整合包替换旧版后，重新双击 `run_gui.bat` 启动。
 5. 浏览器按 `Ctrl+F5` 强刷页面，再重新提交训练。
 
-`Update-SD-Trainer.bat` 只适用于 `SD-Trainer/` 本身是 git 仓库的安装方式。发布版 7z 通常不包含 `.git` 元数据，运行该脚本会出现：
+`Update-SD-Trainer.bat` 只适用于 `SD-Trainer/` 本身是 git 仓库的安装方式。**v2.5.1 起新版整合包会保留 `.git` 元数据**，可以使用该脚本原地更新；更早发布版 7z 通常不包含 `.git`，运行该脚本会出现：
 
 ```text
 fatal: not a git repository (or any of the parent directories): .git
 ```
 
-这种情况下不是用户操作错误，而是该整合包不能通过 `git pull` 原地更新，请改为下载最新 Release 整合包。
+这种情况下不是用户操作错误，而是该旧整合包不能通过 `git pull` 原地更新，请改为下载最新 Release 整合包。
 
 ## 如何确认已修复
 

@@ -38,7 +38,7 @@ Anima 主模型本来就不是 Stable Diffusion / Flux / Lumina checkpoint。
 4. 用新版整合包替换旧版后重新运行 `run_gui.bat`。
 5. 浏览器按 `Ctrl+F5` 强刷页面后重试训练。
 
-注意：发布版 7z 通常不包含 `.git` 元数据，`Update-SD-Trainer.bat` 不能通过 `git pull` 原地更新。如果运行时出现 `fatal: not a git repository`，请直接下载最新整合包替换旧版。
+注意：v2.5.1 起新版整合包会保留 `.git` 元数据，可使用 `Update-SD-Trainer.bat` 原地更新；更早发布版 7z 通常不包含 `.git`。如果运行时出现 `fatal: not a git repository`，请直接下载最新整合包替换旧版。
 
 维护侧：
 
@@ -55,5 +55,5 @@ Anima 主模型本来就不是 Stable Diffusion / Flux / Lumina checkpoint。
 >
 > v2.3.0 及更早版本存在 Anima 训练入口的模型校验问题：官方 Anima 底模可能会被误判为“不属于 Stable Diffusion / Flux / Lumina 模型”，导致无法从 WebUI 启动训练。
 >
-> 请下载最新版本整合包后再使用。发布版 7z 通常不包含 `.git` 元数据，无法依赖 `Update-SD-Trainer.bat` 原地更新。
+> 请下载最新版本整合包后再使用。v2.5.1 起新版整合包保留 `.git` 元数据，可使用 `Update-SD-Trainer.bat` 原地更新；更早 7z 通常需要下载新版替换。
 ```

@@ -1,5 +1,6 @@
 @echo off
 chcp 65001 >nul 2>&1
+setlocal
 title Update SD-Trainer
 set "PORTABLE_ROOT=%~dp0"
 set "PROJECT_DIR=%PORTABLE_ROOT%SD-Trainer"
@@ -47,9 +48,49 @@ if errorlevel 1 (
     exit /b 1
 )
 
-echo Pulling latest code / 拉取最新代码...
+echo Please close SD-Trainer WebUI before updating.
+echo 请先关闭正在运行的 SD-Trainer WebUI，再继续更新。
 echo.
-git pull
+
+echo Fetching latest code / 获取最新代码...
+git fetch origin main --tags
+if errorlevel 1 (
+    echo.
+    echo [Error] git fetch failed / 获取代码失败
+    pause
+    exit /b 1
+)
+echo.
+
+set "DIRTY="
+for /f "tokens=*" %%i in ('git status --porcelain') do set "DIRTY=1"
+if defined DIRTY (
+    set "STASH_NAME=portable-updater-%date:/=-%-%time::=-%"
+    set "STASH_NAME=%STASH_NAME: =0%"
+    echo Local changes detected; creating git stash backup...
+    echo 检测到本地改动，正在创建 git stash 备份...
+    git stash push -u -m "%STASH_NAME%"
+    if errorlevel 1 (
+        echo.
+        echo [Error] Could not stash local changes / 无法备份本地改动
+        pause
+        exit /b 1
+    )
+    echo Stashed as: %STASH_NAME%
+    echo.
+)
+
+echo Switching to main / 切换到 main...
+git checkout -B main origin/main
+if errorlevel 1 (
+    echo.
+    echo [Error] checkout main failed / 切换 main 失败
+    pause
+    exit /b 1
+)
+
+echo Pulling latest code / 拉取最新代码...
+git pull --ff-only origin main
 if errorlevel 1 (
     echo.
     echo [Error] git pull failed / 拉取代码失败
@@ -62,9 +103,9 @@ echo Updating submodules / 更新子模块...
 git submodule update --init --recursive
 if errorlevel 1 (
     echo.
-    echo [Error] submodule update failed / 子模块更新失败
-    pause
-    exit /b 1
+    echo [Warning] Optional submodule update failed / 可选子模块更新失败
+    echo dataset-tag-editor is not required for the main training workflow.
+    echo dataset-tag-editor 不影响主要训练流程，继续更新。
 )
 echo.
 
