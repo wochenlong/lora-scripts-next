@@ -40,6 +40,8 @@
 
 整合包已内置默认 WD 打标模型 **wd14-convnextv2-v2**（约 400 MB，位于 `huggingface/`），WebUI「打标」页开箱即用。
 
+> **旧版提醒：** 不推荐下载或继续使用 **v2.3.0 及更早整合包**。这些版本可能把 Anima 官方底模误判为“不属于 Stable Diffusion / Flux / Lumina 模型”，导致无法从 WebUI 启动 Anima 训练。请下载最新 Release，或运行整合包内的 `Update-SD-Trainer.bat` 更新。详见 [Anima 旧版整合包模型校验问题](docs/troubleshooting/anima-v230-model-validation.md)。
+
 > **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
 
 <details>
@@ -121,6 +123,7 @@ bash install_flash_attn.sh
 | 主题 | 链接 |
 |------|------|
 | Anima LoRA 训练指南 | [docs/anima-training.md](docs/anima-training.md) |
+| Anima 旧版整合包模型校验问题 | [docs/troubleshooting/anima-v230-model-validation.md](docs/troubleshooting/anima-v230-model-validation.md) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
 | 训练监控 & SSE 接口 | [docs/train-monitor.md](docs/train-monitor.md) |
 | Docker 部署 | [docs/docker.md](docs/docker.md) |
@@ -193,6 +196,13 @@ powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 - **缓存路径**：项目根目录 `huggingface/hub/`（环境变量 `HF_HOME=huggingface`）
 - **整合包**：发布 7z 已内置，一般无需再下
 - **源码**：首次 `install-cn.ps1` 会预下载；之后每次 `run_gui.bat` 启动前若缺失会自动补下。手动：`python scripts/prefetch_default_tagger.py`
+
+</details>
+
+<details>
+<summary><b>Anima 官方模型提示“底模不是 Stable Diffusion / Flux / Lumina 模型”</b></summary>
+
+这是 **v2.3.0 及更早整合包**的旧版模型校验问题，不是 Anima 模型下载错误。请运行 `Update-SD-Trainer.bat` 更新；如果仍显示旧版本，请下载最新 Release 整合包。详见 [常见问题说明](docs/troubleshooting/anima-v230-model-validation.md)。
 
 </details>
 
