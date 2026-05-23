@@ -217,9 +217,18 @@ if (-not (Test-Path $prefetchScript)) {
     Write-Host "  WARNING: python not in PATH; tagger will download on first tag run" -ForegroundColor Yellow
 } else {
     $env:HF_HOME = $hfHome
+    $oldPrefetchEAP = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
     & python -m pip install -q huggingface_hub 2>$null
-    & python $prefetchScript --hf-home $hfHome --if-missing
-    if ($LASTEXITCODE -ne 0) {
+    $pipExit = $LASTEXITCODE
+    if ($pipExit -eq 0) {
+        & python $prefetchScript --hf-home $hfHome --if-missing
+        $prefetchExit = $LASTEXITCODE
+    } else {
+        $prefetchExit = $pipExit
+    }
+    $ErrorActionPreference = $oldPrefetchEAP
+    if ($prefetchExit -ne 0) {
         Write-Host "  WARNING: tagger prefetch failed; 7z may ship without offline tagger" -ForegroundColor Yellow
     } else {
         Write-Host "  Cached under huggingface/hub/" -ForegroundColor Green
