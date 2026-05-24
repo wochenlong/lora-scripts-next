@@ -185,11 +185,11 @@ if (-not $branchName) {
 }
 
 if ($GitDepth -gt 0) {
-    Write-Host "  Shallow cloning branch '$branchName' (depth=$GitDepth) at $resolvedRef"
-    & git clone --depth $GitDepth --single-branch --branch $branchName --no-local $ProjectRoot $sdtDir | Out-Host
+    Write-Host "  Shallow cloning branch '$branchName' (depth=$GitDepth) from $GitRemoteUrl"
+    & git clone --depth $GitDepth --single-branch --branch $branchName $GitRemoteUrl $sdtDir | Out-Host
 } else {
-    Write-Host "  Cloning full history on branch '$branchName' at $resolvedRef"
-    & git clone --single-branch --branch $branchName --no-local $ProjectRoot $sdtDir | Out-Host
+    Write-Host "  Cloning full history on branch '$branchName' from $GitRemoteUrl"
+    & git clone --single-branch --branch $branchName $GitRemoteUrl $sdtDir | Out-Host
 }
 if ($LASTEXITCODE -ne 0) {
     throw "git clone failed"
@@ -197,13 +197,14 @@ if ($LASTEXITCODE -ne 0) {
 
 $clonedHead = (& git -C $sdtDir rev-parse HEAD 2>$null).Trim()
 if ($clonedHead -ne $resolvedRef) {
+    Write-Host "  Checking out build ref $resolvedRef"
     if ($GitDepth -gt 0) {
         & git -C $sdtDir fetch --depth $GitDepth origin $resolvedRef | Out-Host
     } else {
         & git -C $sdtDir fetch origin $resolvedRef | Out-Host
     }
     if ($LASTEXITCODE -ne 0) {
-        throw "git fetch $resolvedRef failed"
+        throw "git fetch $resolvedRef failed — push the commit to $GitRemoteUrl before building a release package"
     }
     & git -C $sdtDir checkout --detach $resolvedRef | Out-Host
     if ($LASTEXITCODE -ne 0) {
@@ -215,6 +216,9 @@ if ($clonedHead -ne $resolvedRef) {
 if ($LASTEXITCODE -ne 0) {
     throw "git remote set-url failed"
 }
+
+# Ensure upstream tracking branch exists for portable updater (shallow clone).
+& git -C $sdtDir branch -u "origin/$branchName" $branchName 2>$null | Out-Null
 
 Write-Host "  Initializing optional submodules..."
 & git -C $sdtDir submodule update --init --recursive | Out-Host
