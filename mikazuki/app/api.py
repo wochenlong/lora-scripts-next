@@ -22,8 +22,7 @@ from mikazuki.app.config import app_config
 from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  APIResponseSuccess, TaggerInterrogateRequest)
 from mikazuki.log import log
-from mikazuki.tagger.interrogator import (available_interrogators,
-                                          on_interrogate)
+from mikazuki.tagger.service import run_local_tagger
 from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
 from mikazuki.utils import train_utils
@@ -402,29 +401,21 @@ async def run_script(request: Request, background_tasks: BackgroundTasks):
 
 @router.post("/interrogate")
 async def run_interrogate(req: TaggerInterrogateRequest, background_tasks: BackgroundTasks):
-    interrogator = available_interrogators.get(req.interrogator_model, available_interrogators["wd14-convnextv2-v2"])
     background_tasks.add_task(
-        on_interrogate,
-        image=None,
-        batch_input_glob=req.path,
-        batch_input_recursive=req.batch_input_recursive,
-        batch_output_dir="",
-        batch_output_filename_format="[name].[output_extension]",
-        batch_output_action_on_conflict=req.batch_output_action_on_conflict,
-        batch_remove_duplicated_tag=True,
-        batch_output_save_json=False,
-        interrogator=interrogator,
+        run_local_tagger,
+        input_path=req.path,
+        model=req.interrogator_model,
         threshold=req.threshold,
         character_threshold=req.character_threshold,
-        add_rating_tag=req.add_rating_tag,
-        add_model_tag=req.add_model_tag,
+        recursive=req.batch_input_recursive,
         additional_tags=req.additional_tags,
         exclude_tags=req.exclude_tags,
-        sort_by_alphabetical_order=False,
-        add_confident_as_weight=False,
+        on_conflict=req.batch_output_action_on_conflict,
         replace_underscore=req.replace_underscore,
         replace_underscore_excludes=req.replace_underscore_excludes,
         escape_tag=req.escape_tag,
+        add_rating_tag=req.add_rating_tag,
+        add_model_tag=req.add_model_tag,
         unload_model_after_running=True
     )
     return APIResponseSuccess()
