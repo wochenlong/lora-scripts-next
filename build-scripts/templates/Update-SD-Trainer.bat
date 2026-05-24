@@ -91,10 +91,12 @@ if defined DIRTY (
 )
 
 echo Updating code / 更新代码...
-git merge --ff-only FETCH_HEAD
+git merge --ff-only "origin/%UPDATE_BRANCH%" 2>nul
 if errorlevel 1 (
-    git pull --ff-only --depth=1 origin %UPDATE_BRANCH%
+    git merge --ff-only FETCH_HEAD
     if errorlevel 1 (
+        git pull --ff-only --depth=1 origin %UPDATE_BRANCH%
+        if errorlevel 1 (
         echo.
         echo [Error] fast-forward update failed / 快进更新失败
         echo If you edited SD-Trainer files locally, restore from stash or re-download the release.
