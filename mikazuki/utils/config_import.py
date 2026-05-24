@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import copy
+import re
+from dataclasses import dataclass, field
 from typing import Any
 
 ANIMA_TRAIN_TYPES = frozenset({"anima-lora", "sd3-lora"})
@@ -11,6 +13,8 @@ LUMINA_TRAIN_TYPES = frozenset({"lumina-lora"})
 SDXL_TRAIN_TYPES = frozenset({"sdxl-lora", "sdxl-finetune"})
 SD_TRAIN_TYPES = frozenset({"sd-lora", "sd-dreambooth"})
 DREAMBOOTH_TRAIN_TYPES = frozenset({"sd-dreambooth", "sdxl-finetune"})
+
+ANIMA_NETWORK_MODULES = frozenset({"networks.lora_anima", "networks.tlora_anima"})
 
 ANIMA_CONFIG_MARKERS = frozenset({
     "qwen3",
@@ -44,6 +48,47 @@ SDXL_CONFIG_MARKERS = frozenset({
     "learning_rate_te1",
     "learning_rate_te2",
 })
+
+MODEL_PATH_KEYS = (
+    "pretrained_model_name_or_path",
+    "vae",
+    "qwen3",
+    "llm_adapter_path",
+    "t5_tokenizer_path",
+    "ae",
+    "clip_l",
+    "t5xxl",
+    "gemma2",
+    "network_weights",
+    "resume",
+)
+
+ANIMA_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"/anima/", re.I), "模型路径含 /anima/"),
+    (re.compile(r"anima[-_]?base", re.I), "主模型路径含 anima-base"),
+    (re.compile(r"qwen_image_vae", re.I), "VAE 路径含 qwen_image_vae"),
+    (re.compile(r"qwen_3_06b", re.I), "文本模型路径含 qwen_3_06b"),
+    (re.compile(r"qwen3", re.I), "文本模型路径含 qwen3"),
+)
+
+FLUX_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"/flux/", re.I), "模型路径含 /flux/"),
+    (re.compile(r"flux[-_]?dev", re.I), "主模型路径含 flux"),
+    (re.compile(r"t5xxl", re.I), "路径含 t5xxl"),
+    (re.compile(r"clip_l", re.I), "路径含 clip_l"),
+    (re.compile(r"/ae/", re.I), "路径含 ae 模型"),
+)
+
+SDXL_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"/sdxl/", re.I), "模型路径含 /sdxl/"),
+    (re.compile(r"sdxl[-_]", re.I), "主模型路径含 sdxl"),
+    (re.compile(r"noobxl|pony|illustrious", re.I), "主模型路径为常见 SDXL 模型"),
+)
+
+LUMINA_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"/lumina/", re.I), "模型路径含 /lumina/"),
+    (re.compile(r"gemma2", re.I), "路径含 gemma2"),
+)
 
 TRAIN_TYPE_ALIASES = {
     "sd3-lora": "anima-lora",
@@ -107,6 +152,13 @@ TRAIN_TYPE_TARGETS: dict[str, dict[str, str]] = {
 }
 
 
+@dataclass
+class TrainTypeAnalysis:
+    train_type: str | None
+    reasons: list[str] = field(default_factory=list)
+    scores: dict[str, int] = field(default_factory=dict)
+
+
 def _is_present(config: dict, key: str) -> bool:
     if key not in config:
         return False
@@ -120,6 +172,130 @@ def _is_present(config: dict, key: str) -> bool:
 
 def _has_markers(config: dict, markers: frozenset[str]) -> bool:
     return any(_is_present(config, key) for key in markers)
+
+
+def _normalize_path_value(value: Any) -> str:
+    if not isinstance(value, str):
+        return ""
+    return value.replace("\\", "/").lower()
+
+
+def _collect_path_reasons(
+    config: dict,
+    rules: tuple[tuple[re.Pattern[str], str], ...],
+) -> list[str]:
+    reasons: list[str] = []
+    seen: set[str] = set()
+    for key in MODEL_PATH_KEYS:
+        path = _normalize_path_value(config.get(key))
+        if not path:
+            continue
+        for pattern, label in rules:
+            if not pattern.search(path):
+                continue
+            detail = f"{key} → {label}"
+            if detail in seen:
+                break
+            seen.add(detail)
+            reasons.append(detail)
+            break
+    return reasons
+
+
+def _collect_prefix_key_reasons(config: dict, prefix: str, label: str) -> list[str]:
+    return [
+        f"字段 {key}"
+        for key in sorted(config)
+        if key.startswith(prefix) and _is_present(config, key)
+    ]
+
+
+def _score_family(
+    config: dict,
+    *,
+    marker_keys: frozenset[str],
+    path_rules: tuple[tuple[re.Pattern[str], str], ...],
+    prefix: str | None = None,
+    prefix_label: str | None = None,
+    network_modules: frozenset[str] | None = None,
+    marker_weight: int = 3,
+    path_weight: int = 4,
+    prefix_weight: int = 3,
+    network_weight: int = 10,
+) -> tuple[int, list[str]]:
+    score = 0
+    reasons: list[str] = []
+
+    if network_modules:
+        network_module = str(config.get("network_module", ""))
+        if network_module in network_modules:
+            score += network_weight
+            reasons.append(f"network_module={network_module}")
+
+    for key in marker_keys:
+        if _is_present(config, key):
+            score += marker_weight
+            reasons.append(f"字段 {key}")
+
+    for reason in _collect_path_reasons(config, path_rules):
+        score += path_weight
+        reasons.append(reason)
+
+    if prefix and prefix_label:
+        for reason in _collect_prefix_key_reasons(config, prefix, prefix_label):
+            score += prefix_weight
+            reasons.append(reason)
+
+    return score, reasons
+
+
+def analyze_train_type(config: dict) -> TrainTypeAnalysis:
+    """Score config content across training families and return the best match."""
+    families: list[tuple[str, int, list[str]]] = []
+
+    anima_score, anima_reasons = _score_family(
+        config,
+        marker_keys=ANIMA_CONFIG_MARKERS,
+        path_rules=ANIMA_PATH_RULES,
+        prefix="anima_",
+        prefix_label="Anima",
+        network_modules=ANIMA_NETWORK_MODULES,
+    )
+    families.append(("anima-lora", anima_score, anima_reasons))
+
+    flux_score, flux_reasons = _score_family(
+        config,
+        marker_keys=FLUX_CONFIG_MARKERS,
+        path_rules=FLUX_PATH_RULES,
+    )
+    families.append(("flux-lora", flux_score, flux_reasons))
+
+    lumina_score, lumina_reasons = _score_family(
+        config,
+        marker_keys=LUMINA_CONFIG_MARKERS,
+        path_rules=LUMINA_PATH_RULES,
+    )
+    families.append(("lumina-lora", lumina_score, lumina_reasons))
+
+    sdxl_score, sdxl_reasons = _score_family(
+        config,
+        marker_keys=SDXL_CONFIG_MARKERS,
+        path_rules=SDXL_PATH_RULES,
+    )
+    families.append(("sdxl-lora", sdxl_score, sdxl_reasons))
+
+    families.sort(key=lambda item: item[1], reverse=True)
+    scores = {name: score for name, score, _ in families}
+    best_name, best_score, best_reasons = families[0]
+
+    if best_score >= 2:
+        return TrainTypeAnalysis(train_type=best_name, reasons=best_reasons, scores=scores)
+
+    explicit = _normalize_train_type(config.get("model_train_type"))
+    if explicit:
+        return TrainTypeAnalysis(train_type=explicit, reasons=[], scores=scores)
+
+    return TrainTypeAnalysis(train_type=None, reasons=[], scores=scores)
 
 
 def _normalize_train_type(raw: str | None) -> str | None:
@@ -151,34 +327,7 @@ def _family_of(train_type: str | None) -> str | None:
 
 def infer_train_type(config: dict) -> str | None:
     """Infer training type from explicit field and model-specific markers."""
-    network_module = str(config.get("network_module", ""))
-    if network_module == "networks.lora_anima":
-        return "anima-lora"
-
-    explicit = _normalize_train_type(config.get("model_train_type"))
-    has_anima = _has_markers(config, ANIMA_CONFIG_MARKERS)
-    has_flux = _has_markers(config, FLUX_CONFIG_MARKERS)
-    has_lumina = _has_markers(config, LUMINA_CONFIG_MARKERS)
-    has_sdxl = _has_markers(config, SDXL_CONFIG_MARKERS)
-
-    if has_anima:
-        return "anima-lora"
-    if has_flux and not has_lumina:
-        return "flux-lora"
-    if has_lumina:
-        return "lumina-lora"
-
-    if explicit:
-        if explicit in SDXL_TRAIN_TYPES and has_sdxl:
-            return explicit
-        if explicit in ANIMA_TRAIN_TYPES:
-            return "anima-lora"
-        return explicit
-
-    if has_sdxl:
-        return "sdxl-lora"
-
-    return None
+    return analyze_train_type(config).train_type
 
 
 def _resolve_page_spec(page_train_type: str) -> dict[str, Any] | None:
@@ -201,6 +350,72 @@ def _normalize_for_page(config: dict, page_spec: dict[str, Any], config_type: st
     return normalized
 
 
+def _format_reasons(reasons: list[str], limit: int = 4) -> str:
+    if not reasons:
+        return ""
+    shown = reasons[:limit]
+    text = "、".join(shown)
+    if len(reasons) > limit:
+        text += f" 等 {len(reasons)} 项"
+    return text
+
+
+def _build_type_notice(
+    *,
+    explicit: str | None,
+    explicit_raw: str | None,
+    normalized_type: str | None,
+    inferred: str | None,
+    reasons: list[str],
+) -> str | None:
+    if not normalized_type:
+        return None
+
+    target_label = TRAIN_TYPE_TARGETS.get(normalized_type, {}).get("label", normalized_type)
+    reason_text = _format_reasons(reasons)
+    reason_part = f"（依据：{reason_text}）" if reason_text else ""
+
+    should_notify = False
+    if isinstance(explicit_raw, str) and explicit_raw != normalized_type:
+        should_notify = True
+    elif explicit is None and reason_text:
+        should_notify = True
+    elif inferred and explicit and explicit != inferred:
+        should_notify = True
+
+    if not should_notify:
+        return None
+
+    if isinstance(explicit_raw, str) and explicit_raw != normalized_type:
+        return (
+            f"检测到配置为 {target_label} 内容{reason_part}，"
+            f"已自动将 model_train_type 从 {explicit_raw!r} 切换为 {normalized_type!r}"
+        )
+
+    return (
+        f"检测到 {target_label} 训练内容{reason_part}，"
+        f"已自动切换为 {normalized_type!r}"
+    )
+
+
+def _build_redirect_message(
+    *,
+    page_label: str,
+    target_label: str,
+    explicit_raw: str | None,
+    config_type: str,
+    reasons: list[str],
+) -> str:
+    reason_text = _format_reasons(reasons)
+    reason_part = f"（依据：{reason_text}）" if reason_text else ""
+    explicit_part = explicit_raw if explicit_raw is not None else config_type
+    return (
+        f"检测到这是「{target_label}」配置{reason_part}，"
+        f"model_train_type={explicit_part!r} 与当前「{page_label}」页面不匹配。"
+        f"是否跳转到 {target_label} 页面并导入？"
+    )
+
+
 def validate_config_import(page_train_type: str, config: dict) -> dict[str, Any]:
     """
     Validate imported config against the current page.
@@ -221,37 +436,72 @@ def validate_config_import(page_train_type: str, config: dict) -> dict[str, Any]
             "message": "当前页面未配置导入校验规则，已允许导入",
         }
 
-    inferred = infer_train_type(config)
+    analysis = analyze_train_type(config)
+    inferred = analysis.train_type
     explicit = _normalize_train_type(config.get("model_train_type"))
+    explicit_raw = config.get("model_train_type")
     config_type = inferred or explicit
     accepted = page_spec["accepted"]
+    detection_reasons = analysis.reasons
 
     if config_type is None:
         normalized = _normalize_for_page(config, page_spec, None)
+        notice = _build_type_notice(
+            explicit=explicit,
+            explicit_raw=explicit_raw if isinstance(explicit_raw, str) else None,
+            normalized_type=normalized.get("model_train_type"),
+            inferred=inferred,
+            reasons=detection_reasons,
+        )
         return {
             "result": "ok",
             "config": normalized,
             "forced_train_type": normalized.get("model_train_type"),
-            "message": "已按当前页面补全训练类型",
+            "inferred_train_type": inferred,
+            "detection_reasons": detection_reasons,
+            "notice": notice,
+            "message": notice or "已按当前页面补全训练类型",
         }
 
     if config_type in accepted:
         normalized = _normalize_for_page(config, page_spec, config_type)
+        normalized_type = normalized.get("model_train_type")
+        notice = _build_type_notice(
+            explicit=explicit,
+            explicit_raw=explicit_raw if isinstance(explicit_raw, str) else None,
+            normalized_type=normalized_type,
+            inferred=inferred,
+            reasons=detection_reasons,
+        )
         return {
             "result": "ok",
             "config": normalized,
-            "forced_train_type": normalized.get("model_train_type"),
-            "message": "配置与当前训练页面匹配",
+            "forced_train_type": normalized_type,
+            "inferred_train_type": inferred,
+            "detection_reasons": detection_reasons,
+            "notice": notice,
+            "message": notice or "配置与当前训练页面匹配",
         }
 
     # Stale explicit type on the correct page family (e.g. sd3-lora on Anima page).
     if explicit and _normalize_train_type(explicit) in accepted and inferred in accepted:
         normalized = _normalize_for_page(config, page_spec, inferred)
+        normalized_type = normalized.get("model_train_type")
+        notice = _build_type_notice(
+            explicit=explicit,
+            explicit_raw=explicit_raw if isinstance(explicit_raw, str) else None,
+            normalized_type=normalized_type,
+            inferred=inferred,
+            reasons=detection_reasons,
+        )
         return {
             "result": "ok",
             "config": normalized,
-            "forced_train_type": normalized.get("model_train_type"),
-            "message": "已兼容旧版训练类型命名并规范化",
+            "forced_train_type": normalized_type,
+            "inferred_train_type": inferred,
+            "detection_reasons": detection_reasons,
+            "notice": notice,
+            "message": notice or "已兼容旧版训练类型命名并规范化",
         }
 
     target = TRAIN_TYPE_TARGETS.get(config_type)
@@ -272,9 +522,13 @@ def validate_config_import(page_train_type: str, config: dict) -> dict[str, Any]
         "target_path": target["path"],
         "target_label": target_label,
         "config_train_type": config_type,
-        "message": (
-            f"检测到这是「{target_label}」配置（model_train_type={config.get('model_train_type')!r}），"
-            f"与当前「{page_label}」页面不匹配。"
-            f"是否跳转到 {target_label} 页面并导入？"
+        "inferred_train_type": inferred,
+        "detection_reasons": detection_reasons,
+        "message": _build_redirect_message(
+            page_label=page_label,
+            target_label=target_label,
+            explicit_raw=explicit_raw if isinstance(explicit_raw, str) else None,
+            config_type=config_type,
+            reasons=detection_reasons,
         ),
     }
