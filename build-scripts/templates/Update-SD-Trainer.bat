@@ -48,12 +48,22 @@ if errorlevel 1 (
     exit /b 1
 )
 
+set "UPDATE_BRANCH="
+for /f "tokens=*" %%b in ('git branch --show-current 2^>nul') do set "UPDATE_BRANCH=%%b"
+if not defined UPDATE_BRANCH (
+    for /f "tokens=*" %%b in ('git symbolic-ref --short refs/remotes/origin/HEAD 2^>nul') do set "UPDATE_BRANCH=%%b"
+    set "UPDATE_BRANCH=%UPDATE_BRANCH:origin/=%"
+)
+if not defined UPDATE_BRANCH set "UPDATE_BRANCH=main"
+
 echo Please close SD-Trainer WebUI before updating.
 echo 请先关闭正在运行的 SD-Trainer WebUI，再继续更新。
 echo.
+echo Update branch / 更新分支: %UPDATE_BRANCH%
+echo.
 
 echo Fetching latest code / 获取最新代码...
-git fetch origin main --tags
+git fetch origin %UPDATE_BRANCH% --tags --depth=1
 if errorlevel 1 (
     echo.
     echo [Error] git fetch failed / 获取代码失败
@@ -80,22 +90,18 @@ if defined DIRTY (
     echo.
 )
 
-echo Switching to main / 切换到 main...
-git checkout -B main origin/main
+echo Updating code / 更新代码...
+git merge --ff-only FETCH_HEAD
 if errorlevel 1 (
-    echo.
-    echo [Error] checkout main failed / 切换 main 失败
-    pause
-    exit /b 1
-)
-
-echo Pulling latest code / 拉取最新代码...
-git pull --ff-only origin main
-if errorlevel 1 (
-    echo.
-    echo [Error] git pull failed / 拉取代码失败
-    pause
-    exit /b 1
+    git pull --ff-only --depth=1 origin %UPDATE_BRANCH%
+    if errorlevel 1 (
+        echo.
+        echo [Error] fast-forward update failed / 快进更新失败
+        echo If you edited SD-Trainer files locally, restore from stash or re-download the release.
+        echo 若修改过 SD-Trainer 内文件，请用 git stash pop 恢复，或重新下载整合包。
+        pause
+        exit /b 1
+    )
 )
 echo.
 
