@@ -1,6 +1,6 @@
 # 整合包打包注意事项与 Git 更新方案
 
-本文记录 Windows 便携整合包的打包契约，以及将整合包改为“保留 `.git`、支持一键 Git 更新”后的实现方案。
+本文记录 Windows 便携整合包的打包契约，以及将整合包改为"保留 `.git`、支持一键 Git 更新"后的实现方案。
 
 ## 目标
 
@@ -53,7 +53,7 @@ mikazuki/dataset-tag-editor
 它已很久不更新，后续计划移除。现阶段更新脚本可继续尝试：
 
 ```bat
-git submodule update --init --recursive
+git submodule update --init --recursive --depth=1
 ```
 
 但该子模块更新失败只能作为 warning，不应阻断主仓更新。用户训练主流程不应因为标签编辑器子模块失败而无法完成代码更新。
@@ -86,27 +86,41 @@ sd-trainer-log.txt
 2. 如果不存在 SD-Trainer/.git：
    - 说明旧版发布包不能 git pull
    - 引导下载最新 Release
-   - 不显示“更新完成”
+   - 不显示"更新完成"
 3. 检查 git 是否可用
 4. 提示用户先关闭 WebUI
-5. git fetch origin
+5. git fetch（带镜像回退）：
+   - 先直连 origin → 失败后依次尝试 ghfast.top / ghproxy / gitmirror
+   - 每个镜像之间等待 2 秒
+   - 全部失败则输出排障建议并退出
 6. 备份本地改动：
    - git stash push -u -m "portable-updater-<timestamp>"
    - 若无改动则跳过
-7. 切换到 main：
-   - git checkout main
-8. 快进更新：
-   - git pull --ff-only origin main
-9. 更新子模块：
-   - dataset-tag-editor 失败只 warning
-10. 刷新根目录启动器：
+7. 快进更新（三级 fallback）：
+   - git merge --ff-only "origin/<branch>"
+   - git merge --ff-only FETCH_HEAD
+   - git pull --ff-only --depth=1 origin <branch>
+8. 更新子模块：
+   - dataset-tag-editor 失败只 warning，加 --depth=1 减少传输量
+9. 刷新根目录启动器：
    - scripts/portable/sync_portable_root_launchers.bat --nopause
-11. 同步依赖：
-   - 运行 setup_environment.py 或专门的依赖同步脚本
-12. 输出当前版本和成功提示
+10. 输出当前版本和成功提示
 ```
 
 不要只执行裸 `git pull`。裸 `git pull` 会依赖当前分支、当前 remote 和用户本地状态，失败时对小白不友好。
+
+### GitHub 镜像回退策略
+
+国内直连 GitHub 高概率 `Connection was reset`，因此 fetch 阶段采用镜像自动回退：
+
+| 顺序 | 方式 | URL 模式 |
+|------|------|----------|
+| 1 | 直连 | `git fetch origin <branch>` |
+| 2 | ghfast.top | `git fetch https://ghfast.top/<origin_url> <branch>` |
+| 3 | ghproxy | `git fetch https://mirror.ghproxy.com/<origin_url> <branch>` |
+| 4 | gitmirror | `git fetch https://hub.gitmirror.com/<origin_url> <branch>` |
+
+镜像站点为公益服务，可能不定期下线。后续维护时如发现某站不可用，替换为当前可用的镜像即可。备用域名汇总站：<https://ghproxy.link/>
 
 ## 依赖同步
 
@@ -126,6 +140,7 @@ sd-trainer-log.txt
 - 旧版本仍可继续使用。
 - 如果创建了 stash，告诉用户 stash 名称。
 - 如果需要手动处理，提示下载最新 Release 并保留用户数据目录。
+- **全部镜像 fetch 失败时**：打印具体排障建议（检查网络、配置代理、手动下载）。
 
 不要在失败后显示 `Done / 更新完成`。
 
@@ -135,6 +150,7 @@ sd-trainer-log.txt
 
 - 纯旧 7z、无 `.git`：更新脚本给出下载新版提示并失败退出。
 - 新 7z、有 `.git`：更新脚本能拉取 `origin/main`。
+- **国内无代理网络**：直连失败后自动通过镜像成功拉取。
 - 工作区有用户数据：`sd-models/`、`output/`、`logs/`、`config/` 更新后不丢失。
 - 工作区有本地改动：更新脚本能 stash 或给出明确提示。
 - `dataset-tag-editor` 子模块更新失败：只 warning，不阻断主更新。
@@ -145,4 +161,4 @@ sd-trainer-log.txt
 
 - 移除 `mikazuki/dataset-tag-editor` 子模块，降低更新复杂度。
 - 将官方默认配置与用户配置分离，避免 `config/` 参与 Git 冲突。
-- 给 `Update-SD-Trainer.bat` 增加更清晰的进度和错误码。
+- 镜像列表可考虑从远程配置文件动态获取，避免硬编码过期。
