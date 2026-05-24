@@ -168,6 +168,11 @@ def sanitize_config(config: dict) -> None:
             config[key] = config[key].replace("\\", "/")
 
 
+def _config_has_anima_markers(config: dict) -> bool:
+    network_module = str(config.get("network_module", ""))
+    return network_module == "networks.lora_anima" or any(key in config for key in ANIMA_CONFIG_MARKERS)
+
+
 def resolve_model_train_type(config: dict) -> str:
     """Resolve train type, tolerating stale frontend schema caches.
 
@@ -175,15 +180,25 @@ def resolve_model_train_type(config: dict) -> str:
     package. In that case Anima-only fields may be submitted without the hidden
     model_train_type, which would otherwise fall back to SD1.5 and fail model
     validation before the Anima wrapper can run.
+
+    Saved expert-mode presets may also carry a stale ``model_train_type`` such as
+    ``sdxl-lora`` while still including Anima-only fields like ``qwen3``; treat
+    those as Anima training instead of routing to SDXL validators.
     """
     model_train_type = config.pop("model_train_type", None)
+
+    if _config_has_anima_markers(config):
+        if model_train_type and model_train_type not in ANIMA_TRAIN_TYPES:
+            log.warning(
+                "Config has Anima-specific fields but model_train_type=%r; using anima-lora",
+                model_train_type,
+            )
+        elif not model_train_type:
+            log.warning("Missing model_train_type; inferred anima-lora from Anima-specific config fields")
+        return "anima-lora"
+
     if model_train_type:
         return str(model_train_type)
-
-    network_module = str(config.get("network_module", ""))
-    if network_module == "networks.lora_anima" or any(key in config for key in ANIMA_CONFIG_MARKERS):
-        log.warning("Missing model_train_type; inferred anima-lora from Anima-specific config fields")
-        return "anima-lora"
 
     return "sd-lora"
 

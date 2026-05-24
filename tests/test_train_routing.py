@@ -52,6 +52,19 @@ class TrainRoutingTests(unittest.TestCase):
 
         self.assertEqual(api.resolve_model_train_type(config), "sd-lora")
 
+    def test_stale_sdxl_train_type_with_anima_fields_overrides_to_anima(self):
+        api = importlib.import_module("mikazuki.app.api")
+        config = {
+            "model_train_type": "sdxl-lora",
+            "pretrained_model_name_or_path": "anima-base-v1.0.safetensors",
+            "qwen3": "qwen_3_06b_base.safetensors",
+            "vae": "qwen_image_vae.safetensors",
+            "network_module": "lycoris.kohya",
+        }
+
+        self.assertEqual(api.resolve_model_train_type(config), "anima-lora")
+        self.assertNotIn("model_train_type", config)
+
 
 if __name__ == "__main__":
     unittest.main()
