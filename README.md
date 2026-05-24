@@ -134,7 +134,7 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 
 | Date | Version |
 |------|---------|
-| 2026-05-24 | **v2.5.1** — Portable packages now keep `.git` metadata for `Update-SD-Trainer.bat` updates; fixes Anima legacy config routing and Tagger progress visibility |
+| 2026-05-24 | **v2.5.1** — Portable `.git` + offline tagger (~380 MB); config import guards, layered Anima type detection, JSON history fix, legacy config routing |
 | 2026-05-21 | **v2.5.0** — UI refresh: new sidebar navigation, home portal page, training monitor dashboard with GPU metrics; CSS cleanup |
 | 2026-05-21 | **v2.4.0** — Training stability: env isolation, NaN filter, sample guard, attn_mode fallback, path normalization; Portable tkinter fix |
 | 2026-05-20 | **v2.3.0** — Train Monitor: TensorBoard-backed curves, parameter checks, log sync |

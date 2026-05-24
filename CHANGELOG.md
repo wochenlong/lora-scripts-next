@@ -4,6 +4,25 @@
 
 ---
 
+## v2.5.1 — 2026-05-24
+
+### 整合包
+
+- **保留 `.git` 元数据**：浅克隆（depth=1）打进 7z（约 18 MB），支持 `Update-SD-Trainer.bat` 原地 `git pull` 更新；禁止 robocopy 删 `.git` 的旧方案。
+- **离线打标模型**：默认 WD tagger（wd14-convnextv2-v2）预置于 `huggingface/hub/`，发布包约 **380 MB**。
+- **更新脚本跟随打包分支**（如 `dev/builtin-services`），不再硬编码 `main`。
+
+### WebUI / 训练
+
+- **配置导入防呆 ([#43](https://github.com/wochenlong/lora-scripts-next/issues/43))**：跨页 TOML/JSON 导入校验；错误训练页引导跳转；Anima 页 JSON 历史参数全量应用。
+- **多层训练类型识别**：除 `model_train_type` 外，依据 `qwen3` 等 Anima 字段、模型路径（`anima-base`、`qwen_image_vae` 等）推断类型；自动修正旧版误标 `sdxl-lora` 并提示用户。
+- **JSON 历史参数**：修复字符串学习率导致 `toExponential is not a function`；支持 `.json` 配置文件导入。
+- **Anima 旧配置路由**：提交训练时若含 Anima 专属字段但 `model_train_type` 为 `sdxl-lora`，后端推断为 `anima-lora`（[#16](https://github.com/wochenlong/lora-scripts-next/issues/16) / [#524](https://github.com/wochenlong/lora-scripts-next/issues/524) 场景）。
+- **打标进度可见**：修复 Tagger 进度条不更新；数据集路径改用 filepicker。
+- **Tag Editor 端口**：28001 被占用时自动选择空闲端口。
+
+---
+
 ## v2.5.0 — 2026-05-21
 
 ### UI 焕新
