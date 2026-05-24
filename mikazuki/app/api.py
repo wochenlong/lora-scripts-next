@@ -29,6 +29,7 @@ from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
 from mikazuki.utils import train_utils
 from mikazuki.utils.devices import printable_devices
+from mikazuki.utils.config_import import validate_config_import
 from mikazuki.portable_utils import flash_attn_stack_usable, is_embedded_python
 from mikazuki.utils.tk_window import (open_directory_selector,
                                       open_file_selector,
@@ -359,6 +360,25 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
                 f"attn_mode='flash' requested but flash-attn is not available, "
                 f"falling back to '{best}'"
             )
+
+
+@router.post("/config/validate-import")
+async def validate_import_config(request: Request):
+    """Validate imported TOML/JSON config against the current training page."""
+    try:
+        payload = json.loads(await request.body())
+    except json.JSONDecodeError:
+        return APIResponseFail(message="请求体必须是 JSON")
+
+    page_train_type = payload.get("page_train_type")
+    config = payload.get("config")
+    if not page_train_type or not isinstance(page_train_type, str):
+        return APIResponseFail(message="缺少 page_train_type")
+    if not isinstance(config, dict):
+        return APIResponseFail(message="缺少 config 对象")
+
+    result = validate_config_import(page_train_type, config)
+    return APIResponseSuccess(data=result)
 
 
 @router.post("/run")

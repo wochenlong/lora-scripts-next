@@ -1,6 +1,6 @@
 Schema.intersect([
     Schema.object({
-        model_train_type: Schema.string().default("anima-lora").hidden().description("训练种类"),
+        model_train_type: Schema.string().default("anima-lora").disabled().description("训练种类"),
         lora_type: Schema.union(["lora", "lokr", "tlora", "lora_fa", "vera", "loha"]).default("lora").description("适配器类型。常规训练建议选择 LoRA"),
         pretrained_model_name_or_path: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/anima-base-v1.0.safetensors").description("Anima 主 DiT / transformer 权重路径，例如 anima-base-v1.0.safetensors"),
         vae: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/qwen_image_vae.safetensors").description("Qwen Image VAE 模型路径（Anima 训练必填）"),
