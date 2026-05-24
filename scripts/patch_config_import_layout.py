@@ -5,9 +5,9 @@ from pathlib import Path
 
 LAYOUT = Path("frontend/dist/assets/layout.96d49288.js")
 
-HELPER_MARKER = "async function mikazukiApplyImportedConfig("
+HELPER_MARKER = "mikazukiApplyImportedConfig=async("
 HELPER = (
-    "async function mikazukiApplyImportedConfig(k,t,schemaFn,a,successMsg,merge){"
+    "mikazukiApplyImportedConfig=async(k,t,schemaFn,a,successMsg,merge)=>{"
     'const resp=await fetch("/api/config/validate-import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({page_train_type:t,config:k})});'
     'if(!resp.ok)throw new Error("\\u5bfc\\u5165\\u5931\\u8d25\\uff1a\\u7f51\\u7edc\\u9519\\u8bef");'
     "const payload=await resp.json();"
