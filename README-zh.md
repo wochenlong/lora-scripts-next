@@ -83,6 +83,34 @@ bash install_flash_attn.sh
 
 ---
 
+## Anima 图像编辑（实验功能）
+
+`anima-edit` 分支加入了 Anima 条件训练 / 图像编辑训练的第一版前端入口。在 Anima 页面开启 **图像编辑（实验功能）** 后，可以配置成对数据集：
+
+- **目标图目录 Target**：放置希望模型学习生成的目标图片，以及同名 `.txt` / `.json` 标签。
+- **参考图目录 Reference / Conditioning**：放置输入参考图，文件名和尺寸需与目标图一致。
+- **图像编辑预览**：使用专属编辑 Prompt + 固定或随机抽取的 Control Image；宽高、CFG、步数、采样器和预览频率复用普通训练预览图设置。
+
+<p align="center">
+  <img src="assets/readme/anima-edit-ui.jpg" alt="Anima 图像编辑控件" width="920" />
+</p>
+
+<p align="center"><sub>Anima 图像编辑控件：Target / Reference 数据集路径，以及 Control Image 预览输入。</sub></p>
+
+<p align="center">
+  <img src="assets/readme/anima-edit-sample.jpg" alt="Anima 图像编辑示例" width="760" />
+</p>
+
+<p align="center"><sub>Anima 图像编辑的参考图驱动预览流程示例。</sub></p>
+
+<p align="center">
+  <img src="assets/readme/anima-edit-sample-1.jpg" alt="Anima 图像编辑示例补充" width="760" />
+</p>
+
+> 当前为实验分支 UI。实际训练启动还需要接入 [docs/anima-training.md](docs/anima-training.md) 中说明的 Anima conditioning 后端。
+
+---
+
 ## 训练监控
 
 训练启动后自动打开监控页（默认端口 6008，可自动回退），GPU 状态、训练参数、Loss 曲线、预览图、日志一站式查看。

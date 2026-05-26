@@ -32,6 +32,53 @@
 - Seed：42
 - 自动填入 Anima 风格的正反向提示词
 
+## 图像编辑 / 条件训练（实验）
+
+`anima-edit` 分支在 Anima 训练页增加了 **图像编辑（实验功能）** 分组，用于准备 Anima conditioning / image editing 训练入口。
+
+条件训练使用成对图片：
+
+| 字段 | 含义 |
+|------|------|
+| `target_data_dir` | 目标图目录（Target）。放置希望模型学习生成的目标图片，以及同名 `.txt` / `.json` 标签 |
+| `conditioning_data_dir` | 参考图目录（Reference / Conditioning）。放置输入参考图，文件名和尺寸需与目标图一致 |
+| `conditioning` | 开启图像编辑 / 条件训练模式 |
+
+目录结构示例：
+
+```text
+dataset_root/
+├── ref/
+│   ├── imageA.jpg
+│   └── imageB.jpg
+└── target/
+    ├── imageA.jpg
+    ├── imageA.txt
+    ├── imageB.jpg
+    └── imageB.txt
+```
+
+图像编辑预览是普通训练预览的一个切换模式：
+
+- 宽高、CFG、采样步数、采样器、预览频率复用 **训练预览图设置**。
+- 开启 `enable_conditioning_preview` 后，普通预览 Prompt 会被 `conditioning_preview_prompt` 替代。
+- `sample_conditioning_image` 可指定固定 Control Image。
+- `random_conditioning_preview_image` 开启后，可通过 `sample_conditioning_image_data_dir` 每次从目录随机抽取 Control Image。
+
+<p align="center">
+  <img src="../assets/readme/anima-edit-ui.jpg" alt="Anima 图像编辑控件" width="920" />
+</p>
+
+<p align="center">
+  <img src="../assets/readme/anima-edit-sample.jpg" alt="Anima 图像编辑示例" width="760" />
+</p>
+
+<p align="center">
+  <img src="../assets/readme/anima-edit-sample-1.jpg" alt="Anima 图像编辑示例补充" width="760" />
+</p>
+
+> 当前分支先提供前端入口与参数结构。训练启动仍需接入 Mirumo fork 中的 Anima conditioning 后端逻辑：`conditioning = true`、`dataset_config` 中的 `conditioning_data_dir`，以及 sample prompt 的 `--cn <control image>`。
+
 ## 训练步数经验值
 
 在同一套数据与分辨率下，**约 1000–3000 次优化步** 往往已能呈现可用的角色外观。实际所需步数随素材量、repeat、网络维度、学习率变化很大，请以验证图为准。

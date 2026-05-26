@@ -81,6 +81,34 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 
 ---
 
+## Anima Image Editing (Experimental)
+
+The `anima-edit` branch adds the first UI pass for Anima conditioning / image-editing training. Enable **Image Editing (Experimental)** on the Anima page to configure paired datasets:
+
+- **Target directory**: final images and their `.txt` / `.json` captions.
+- **Reference / Conditioning directory**: input reference images with the same filenames and dimensions.
+- **Image editing preview**: uses a dedicated edit prompt plus a fixed or randomly sampled Control Image, while reusing the normal preview width, CFG, steps, sampler, and schedule.
+
+<p align="center">
+  <img src="assets/readme/anima-edit-ui.jpg" alt="Anima image editing controls" width="920" />
+</p>
+
+<p align="center"><sub>Anima image-editing controls: Target / Reference dataset paths and Control Image preview inputs.</sub></p>
+
+<p align="center">
+  <img src="assets/readme/anima-edit-sample.jpg" alt="Anima image editing sample" width="760" />
+</p>
+
+<p align="center"><sub>Example reference-driven preview workflow for Anima image editing.</sub></p>
+
+<p align="center">
+  <img src="assets/readme/anima-edit-sample-1.jpg" alt="Anima image editing sample variant" width="760" />
+</p>
+
+> This is an experimental branch UI. Training execution requires the Anima conditioning backend integration described in [docs/anima-training.md](docs/anima-training.md).
+
+---
+
 ## Train Monitor
 
 Automatically opens a monitor page (port 6008) when training starts — GPU stats, training parameters, Loss curves, preview samples, and logs all in one dashboard.
