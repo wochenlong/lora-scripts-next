@@ -82,6 +82,32 @@ dataset_root/
 
 支持 **1 目标 + 2 参考**：`reference/<target_stem>/` 子目录内按文件名排序取前 2 张，训练时沿 latent 时间维拼接（`T=3`）。WebUI 勾选「双参考图模式」；CLI 见 `docs/examples/anima-edit-dual-ref-dataset.toml` 与冒烟配置 `docs/examples/anima-edit-dual-ref-smoke.toml`。设计说明：[docs/design/anima-edit-multi-reference.md](design/anima-edit-multi-reference.md)。
 
+### 图像编辑独立训练类型（`anima-edit-lora`）
+
+入口：侧栏 **Anima 图像编辑** → `/lora/anima-edit.html`。Schema：`mikazuki/schema/anima-edit-lora.ts`。
+
+- **训练**：固定双参考（`reference/<stem>/` 下 2 张图），P0 默认分辨率 **512×512**。
+- **预览**：仅 **方案 B manifest**（`sample-prompts.toml`），不再使用 `--cn` 单图。
+- **自动生成**：开预览且未填 `prompt_file` 时，写入 `config/autosave/*-sample-prompts.toml`；可用「额外预览 Prompt」一行一条生成多条 `[[prompts]]`。
+- **手写 manifest**：在预览区填写 `prompt_file` 指向已有 TOML（见下方示例）。
+
+预览 manifest 示例：
+
+- 单条：[docs/examples/anima-edit-sample-prompts.toml](examples/anima-edit-sample-prompts.toml)
+- 多条：[docs/examples/anima-edit-sample-prompts-multi.toml](examples/anima-edit-sample-prompts-multi.toml)
+
+训练监控会展示 **参考图1 / 参考图2**（来自 manifest 或自动生成 metadata）。
+
+```toml
+[[prompts]]
+prompt = "..."
+negative_prompt = "..."
+width = 512
+height = 512
+references = ["./data/edit3/reference/sample1/1.png", "./data/edit3/reference/sample1/2.png"]
+# 或 reference_dir = "./data/edit3/reference/sample1"
+```
+
 ### 实验限制与质量预期
 
 Anima Edit 当前是 **Anima 文生图基座 + conditioning LoRA** 的实验训练链路，不等同于 Qwen Image Edit 这类专门的图像编辑模型。专用编辑模型通常经过大规模编辑对、局部一致性和指令保持训练；本分支更适合验证特定 paired dataset 的映射能力，局部边界和复杂遮挡的稳定性会弱一些。

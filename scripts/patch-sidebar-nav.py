@@ -51,6 +51,7 @@ NEW_SIDEBAR_JSON = (
     '{"text":"训练","children":['
     '{"text":"LoRA 训练","link":"/lora/index.md","collapsible":false,"children":['
     '{"text":"Anima","link":"/lora/sd3.md"},'
+    '{"text":"Anima \\u56FE\\u50CF\\u7F16\\u8F91","link":"/lora/anima-edit.md"},'
     '{"text":"Flux","link":"/lora/flux.md"},'
     '{"text":"Stable Diffusion","link":"/lora/master.md"}]},'
     '{"text":"Dreambooth 训练","link":"/dreambooth/index.md"}]},'
@@ -112,6 +113,7 @@ def build_sidebar_html(rel_path: str) -> str:
     train_expanded = (
         lora_heading_active
         or active("/lora/sd3.md")
+        or active("/lora/anima-edit.md")
         or active("/lora/flux.md")
         or active("/lora/master.md")
         or active("/lora/basic.md")

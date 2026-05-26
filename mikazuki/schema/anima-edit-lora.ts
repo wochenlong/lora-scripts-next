@@ -1,6 +1,6 @@
 Schema.intersect([
     Schema.object({
-        model_train_type: Schema.string().default("anima-lora").hidden().description("训练种类"),
+        model_train_type: Schema.string().default("anima-edit-lora").description("训练种类：Anima 图像编辑（Target + Reference）"),
         lora_type: Schema.union(["lora", "lokr", "tlora", "lora_fa", "vera", "loha"]).default("lora").description("适配器类型。常规训练建议选择 LoRA"),
         pretrained_model_name_or_path: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/anima-base-v1.0.safetensors").description("Anima 主 DiT / transformer 权重路径，例如 anima-base-v1.0.safetensors"),
         vae: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/qwen_image_vae.safetensors").description("Qwen Image VAE 模型路径（Anima 训练必填）"),
@@ -29,13 +29,21 @@ Schema.intersect([
 
     Schema.object(
         UpdateSchema(SHARED_SCHEMAS.RAW.DATASET_SETTINGS, {
-            resolution: Schema.string().default("1024,1024").description("训练图片分辨率，宽x高。支持非正方形，但必须是 64 倍数。"),
+            resolution: Schema.string().default("512,512").description("训练图片分辨率，宽x高。P0 冒烟推荐 512；正式训练可改为 1024,1024"),
             enable_bucket: Schema.boolean().default(true).description("启用 arb 桶以允许非固定宽高比的图片"),
             min_bucket_reso: Schema.number().default(256).description("arb 桶最小分辨率"),
             max_bucket_reso: Schema.number().default(2048).description("arb 桶最大分辨率"),
             bucket_reso_steps: Schema.number().default(64).description("arb 桶分辨率划分单位"),
         })
     ).description("数据集设置"),
+
+    Schema.object({
+        target_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("目标图目录（Target）。放目标图片和同名 txt / json 标签"),
+        conditioning_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("参考图根目录（Reference）。每样本在 reference/<target文件名>/ 下放 2 张参考图（按文件名排序取前 2 张）"),
+        sample_conditioning_reference_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("预览参考：固定 reference/<stem>/ 子目录（内含 2 张图）"),
+        random_conditioning_preview_image: Schema.boolean().default(false).description("随机预览参考：从 conditioning 根目录随机选一个 reference/<stem>/ 子目录"),
+        sample_conditioning_image_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("随机预览根目录（通常与 conditioning_data_dir 相同）"),
+    }).description("图像编辑数据集与预览"),
 
     SHARED_SCHEMAS.SAVE_SETTINGS,
 
@@ -151,21 +159,23 @@ Schema.intersect([
 
     Schema.intersect([
         Schema.object({
-            enable_preview: Schema.boolean().default(false).description("启用训练预览图"),
+            enable_preview: Schema.boolean().default(true).description("启用训练预览（方案 B：写入 sample-prompts.toml manifest，支持双参考）"),
         }).description("训练预览图设置"),
         Schema.union([
             Schema.object({
                 enable_preview: Schema.const(true).required(),
-                positive_prompts: Schema.string().role('textarea').default("1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looking at viewer, hair ornament, long hair, yellow kimono, black hair, anime coloring, yukata, choker, split mouth, side ponytail, bow, brown hair").description("预览 Prompt。默认使用偏保守的人物半身预览；用户自定义后以后端实际提交值为准"),
-                negative_prompts: Schema.string().role('textarea').default("nsfw, explicit, sexual content, nude, naked, nipples, areola, genitals, cleavage, breasts, ass, buttocks, thighs, underwear, lingerie, bikini, swimsuit, erotic, suggestive, lewd, spread legs, close-up body, transparent clothes, worst quality, low quality, score_1, score_2, score_3, artist name, jpeg artifacts").description("Negative Prompt / 负面提示词。默认压制 NSFW、裸露和身体特写，适合公开预览页"),
-                sample_width: Schema.number().default(1024).description("预览图宽"),
-                sample_height: Schema.number().default(1024).description("预览图高"),
+                prompt_file: Schema.string().role('filepicker', { type: "file" }).description("高级：直接指定 sample-prompts.toml manifest。填写后跳过自动生成，下方预览 Prompt 仅作参考"),
+                conditioning_preview_prompt: Schema.string().role('textarea').default("把参考图转换成高质量 Anima 风格插画，保持主体结构与构图").description("主预览 Prompt（manifest 第一条；与上方「图像编辑数据集」中的主 Prompt 同步）"),
+                additional_preview_prompts: Schema.string().role('textarea').description("额外预览 Prompt，一行一条。与主 Prompt 共用同一组参考图与采样参数，生成多条 [[prompts]]"),
+                negative_prompts: Schema.string().role('textarea').default("low quality, blurry, noisy, bad anatomy, worst quality").description("Negative Prompt"),
+                sample_width: Schema.number().default(512).description("预览图宽（P0 推荐 512）"),
+                sample_height: Schema.number().default(512).description("预览图高（P0 推荐 512）"),
                 sample_cfg: Schema.number().min(1).max(30).default(4.5).description("CFG Scale。Anima 官方建议 4-5"),
                 sample_seed: Schema.number().default(42).description("预览图种子"),
-                sample_steps: Schema.number().min(1).max(300).default(40).description("推理步数。Anima 官方建议 30-50"),
-                sample_sampler: Schema.union(["euler", "k_euler"]).default("euler").description("Anima 训练预览采样器（当前为内置 Rectified Flow Euler 预览）"),
+                sample_steps: Schema.number().min(1).max(300).default(40).description("推理步数"),
+                sample_sampler: Schema.union(["euler", "k_euler"]).default("euler").description("Anima 训练预览采样器"),
                 sample_scheduler: Schema.union(["simple"]).default("simple").description("Anima 预览调度器"),
-            sample_at_first: Schema.boolean().default(true).description("训练开始前生成 step 0 预览图，用作未训练基线对照。图像编辑模式会由后端自动关闭"),
+                sample_at_first: Schema.boolean().default(false).description("训练开始前生成 step 0 预览（图像编辑建议关闭）"),
                 sample_every_n_epochs: Schema.number().default(2).description("每 N 个 epoch 生成一次预览图"),
             }),
             Schema.object({}),

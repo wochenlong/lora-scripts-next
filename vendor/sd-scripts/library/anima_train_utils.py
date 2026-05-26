@@ -5,7 +5,7 @@ import gc
 import math
 import os
 import time
-from typing import Optional
+from typing import List, Optional
 
 import numpy as np
 import torch
@@ -488,6 +488,66 @@ def sample_images(
     clean_memory_on_device(accelerator.device)
 
 
+def _resolve_controlnet_image_paths(prompt_dict: dict) -> List[str]:
+    images = prompt_dict.get("controlnet_images")
+    if images:
+        return [path for path in images if path and os.path.isfile(path)]
+
+    controlnet_image = prompt_dict.get("controlnet_image")
+    if controlnet_image and os.path.isfile(controlnet_image):
+        return [controlnet_image]
+    return []
+
+
+def encode_sample_control_latents(
+    prompt_dict: dict,
+    vae: qwen_image_autoencoder_kl.AutoencoderKLQwenImage,
+    width: int,
+    height: int,
+    accelerator: Accelerator,
+) -> Optional[torch.Tensor]:
+    """Encode one or more control images to [1, C, N, H, W] latents for Anima Edit sampling."""
+    image_paths = _resolve_controlnet_image_paths(prompt_dict)
+    if not image_paths:
+        return None
+
+    logger.info(f"  loading controlnet image(s): {image_paths}")
+    latents_list = []
+    org_vae_device = vae.device
+    try:
+        vae.to(accelerator.device)
+        for controlnet_image in image_paths:
+            ctrl_img = Image.open(controlnet_image).convert("RGB")
+            if ctrl_img.size != (width, height):
+                logger.info(f"    resizing controlnet image from {ctrl_img.size} to {(width, height)}")
+                ctrl_img = ctrl_img.resize((width, height), Image.Resampling.LANCZOS)
+
+            ctrl_img_np = np.array(ctrl_img)
+            ctrl_img_tensor = torch.from_numpy(ctrl_img_np).permute(2, 0, 1).float() / 255.0
+            ctrl_img_tensor = (ctrl_img_tensor * 2.0 - 1.0).clamp(-1.0, 1.0)
+            ctrl_img_tensor = ctrl_img_tensor.unsqueeze(0).to(accelerator.device, dtype=vae.dtype)
+
+            with torch.no_grad(), accelerator.autocast():
+                encoded = vae.encode_pixels_to_latents(ctrl_img_tensor)
+
+            while encoded.ndim > 3 and encoded.shape[0] == 1:
+                encoded = encoded.squeeze(0)
+            latents_list.append(encoded)
+
+        if len(latents_list) == 1:
+            control_latents = latents_list[0].unsqueeze(0).unsqueeze(2)
+        else:
+            control_latents = torch.stack(latents_list, dim=1).unsqueeze(0)
+
+        logger.info(f"    control_latents shape: {control_latents.shape}")
+        return control_latents
+    except Exception as e:
+        logger.error(f"  Error loading/encoding controlnet image(s): {e}")
+        return None
+    finally:
+        vae.to(org_vae_device)
+
+
 def _sample_image_inference(
     accelerator,
     args,
@@ -598,35 +658,7 @@ def _sample_image_inference(
             else:
                 neg_crossattn_emb = neg_pe
 
-    # Encode conditioning image if the sample prompt contains `--cn`.
-    control_latents = None
-    controlnet_image = prompt_dict.get("controlnet_image")
-    if controlnet_image is not None and os.path.isfile(controlnet_image):
-        logger.info(f"  loading controlnet image: {controlnet_image}")
-        try:
-            ctrl_img = Image.open(controlnet_image).convert("RGB")
-            if ctrl_img.size != (width, height):
-                logger.info(f"    resizing controlnet image from {ctrl_img.size} to {(width, height)}")
-                ctrl_img = ctrl_img.resize((width, height), Image.Resampling.LANCZOS)
-
-            ctrl_img_np = np.array(ctrl_img)
-            ctrl_img_tensor = torch.from_numpy(ctrl_img_np).permute(2, 0, 1).float() / 255.0
-            ctrl_img_tensor = (ctrl_img_tensor * 2.0 - 1.0).clamp(-1.0, 1.0)
-
-            org_vae_device = vae.device
-            vae.to(accelerator.device)
-            ctrl_img_tensor = ctrl_img_tensor.unsqueeze(0).to(accelerator.device, dtype=vae.dtype)
-
-            with torch.no_grad(), accelerator.autocast():
-                control_latents = vae.encode_pixels_to_latents(ctrl_img_tensor)
-
-            vae.to(org_vae_device)
-            if control_latents.ndim == 4:
-                control_latents = control_latents.unsqueeze(2)
-            logger.info(f"    control_latents shape: {control_latents.shape}")
-        except Exception as e:
-            logger.error(f"  Error loading/encoding controlnet image: {e}")
-            control_latents = None
+    control_latents = encode_sample_control_latents(prompt_dict, vae, width, height, accelerator)
 
     # Generate sample
     clean_memory_on_device(accelerator.device)

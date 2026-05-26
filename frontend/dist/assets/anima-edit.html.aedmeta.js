@@ -1,0 +1,1 @@
+const e=JSON.parse('{"key":"v-aed1t0ra","path":"/lora/anima-edit.html","title":"Anima \u56FE\u50CF\u7F16\u8F91 LoRA \u8BAD\u7EC3 \u4E13\u5BB6\u6A21\u5F0F","lang":"en-US","frontmatter":{"example":true,"trainType":"anima-edit-lora"},"excerpt":"","headers":[],"filePathRelative":"lora/anima-edit.md"}');export{e as data};

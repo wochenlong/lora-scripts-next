@@ -1,6 +1,6 @@
 # Anima Edit 双参考图 Conditioning（方案 2）设计草案
 
-> **状态**：草案（P0 范围锁定，待实现）  
+> **状态**：P0 训练与 WebUI（`anima-edit-lora` + manifest 预览）已实现；推理多参考仍 defer  
 > **分支**：`anima-edit`  
 > **关联**：单参考图能力见 [docs/anima-training.md](../anima-training.md#图像编辑--条件训练实验)
 

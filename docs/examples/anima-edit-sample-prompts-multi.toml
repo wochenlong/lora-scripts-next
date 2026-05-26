@@ -1,0 +1,26 @@
+# Anima Edit：多条预览 manifest（方案 B+）
+# 每条 [[prompts]] 可共用 reference_dir，也可单独指定 references
+
+[[prompts]]
+prompt = "high quality Anima style illustration, clean color, detailed character"
+negative_prompt = "low quality, blurry, noisy, bad anatomy"
+width = 512
+height = 512
+scale = 4.5
+seed = 42
+sample_steps = 40
+flow_shift = 3.0
+reference_dir = "../../data/edit3/reference/sample1"
+reference_count = 2
+
+[[prompts]]
+prompt = "same composition, warmer lighting, soft sunset tones"
+negative_prompt = "low quality, blurry, noisy, bad anatomy"
+width = 512
+height = 512
+scale = 4.5
+seed = 43
+sample_steps = 40
+flow_shift = 3.0
+reference_dir = "../../data/edit3/reference/sample1"
+reference_count = 2

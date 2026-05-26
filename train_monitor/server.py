@@ -254,8 +254,8 @@ def build_model_outputs(train_out: Path | None) -> dict:
 
 def newest_preview_images(limit: int = 6) -> list[dict]:
     config = latest_training_config()
-    reference_image = conditioning_reference_image_path(config)
-    output_limit = max(1, limit - 1) if reference_image is not None else limit
+    reference_images = conditioning_reference_images_paths(config)
+    output_limit = max(1, limit - len(reference_images)) if reference_images else limit
     output_dir = resolve_repo_path(str(config.get("output_dir", "")))
     output_name = str(config.get("output_name", "")).strip()
     try:
@@ -295,8 +295,9 @@ def newest_preview_images(limit: int = 6) -> list[dict]:
 
     unique_files = selected
     out = []
-    if reference_image is not None:
-        out.append(preview_item_for_path(reference_image, "参考图"))
+    for index, reference_image in enumerate(reference_images):
+        role = "参考图" if len(reference_images) == 1 else f"参考图{index + 1}"
+        out.append(preview_item_for_path(reference_image, role))
     for index, p in enumerate(unique_files):
         st = p.stat()
         try:
@@ -465,14 +466,29 @@ def _sample_prompt_control_image(config: dict) -> str:
 
 
 def conditioning_reference_image_path(config: dict) -> Path | None:
+    refs = conditioning_reference_images_paths(config)
+    return refs[0] if refs else None
+
+
+def conditioning_reference_images_paths(config: dict) -> list[Path]:
     metadata = _config_monitor_metadata(config)
+    raw_list = metadata.get("conditioning_reference_images")
+    if isinstance(raw_list, list):
+        paths: list[Path] = []
+        for raw in raw_list:
+            path = resolve_repo_path(str(raw).strip())
+            if path is not None and path.is_file() and path.suffix.lower() in IMAGE_EXTENSIONS:
+                paths.append(path)
+        if paths:
+            return paths
+
     raw_path = str(metadata.get("conditioning_reference_image") or "").strip()
     if not raw_path:
         raw_path = _sample_prompt_control_image(config)
     path = resolve_repo_path(raw_path)
     if path is None or not path.is_file() or path.suffix.lower() not in IMAGE_EXTENSIONS:
-        return None
-    return path
+        return []
+    return [path]
 
 
 def preview_item_for_path(path: Path, role: str) -> dict:

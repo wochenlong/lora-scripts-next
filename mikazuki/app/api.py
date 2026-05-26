@@ -36,6 +36,7 @@ from mikazuki.utils.tk_window import (open_directory_selector,
 router = APIRouter()
 
 ANIMA_TRAIN_TYPES = {"anima-lora", "sd3-lora"}
+ANIMA_EDIT_TRAIN_TYPES = {"anima-edit-lora"}
 ANIMA_DEFAULT_SAMPLE_POSITIVE = (
     "1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looki"
     "ng at viewer, hair ornament, long hair, yellow kimono, black hair, anime coloring, yukat"
@@ -71,6 +72,7 @@ trainer_mapping = {
 
     "sd3-lora": "./scripts/dev/anima_train_network.py",
     "anima-lora": "./scripts/dev/anima_train_network.py",
+    "anima-edit-lora": "./scripts/dev/anima_train_network.py",
     "flux-lora": "./scripts/dev/flux_train_network.py",
     "flux-finetune": "./scripts/dev/flux_train.py",
 }
@@ -201,20 +203,25 @@ async def load_presets():
             avaliable_presets.append(toml.loads(content))
 
 
-def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple[Optional[str], str, Optional[str]]:
+def get_sample_prompts(
+    config: dict, model_train_type: str = "sd-lora"
+) -> Tuple[Optional[str], str, Optional[str], Optional[dict]]:
     # backward compatibility
     if "sample_prompts" in config and "positive_prompts" not in config:
-        return None, config["sample_prompts"], None
+        return None, config["sample_prompts"], None, None
 
     train_data_dir = config["train_data_dir"]
     sub_dir = [dir for dir in glob(os.path.join(train_data_dir, '*')) if os.path.isdir(dir)]
 
-    use_anima_defaults = model_train_type in ANIMA_TRAIN_TYPES and is_preview_enabled(config)
+    use_anima_defaults = (
+        model_train_type in ANIMA_TRAIN_TYPES or is_anima_edit_train_type(model_train_type)
+    ) and is_preview_enabled(config)
     use_conditioning_preview = is_conditioning_preview_enabled(config, model_train_type)
+    edit_preview = is_anima_edit_train_type(model_train_type) and is_preview_enabled(config)
     default_positive = ANIMA_DEFAULT_SAMPLE_POSITIVE if use_anima_defaults else None
     default_negative = ANIMA_DEFAULT_SAMPLE_NEGATIVE if use_anima_defaults else ''
-    default_width = 1024 if use_anima_defaults else 512
-    default_height = 1024 if use_anima_defaults else 512
+    default_width = 512 if edit_preview else (1024 if use_anima_defaults else 512)
+    default_height = 512 if edit_preview else (1024 if use_anima_defaults else 512)
     default_cfg = 4.5 if use_anima_defaults else 7
     default_seed = 42 if use_anima_defaults else 2333
     default_steps = 40 if use_anima_defaults else 24
@@ -229,8 +236,31 @@ def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple
     randomly_choice_prompt = config.pop('randomly_choice_prompt', False)
     conditioning_preview_prompt = config.pop("conditioning_preview_prompt", None)
     sample_conditioning_image = config.pop("sample_conditioning_image", None)
+    sample_conditioning_reference_dir = config.pop("sample_conditioning_reference_dir", None)
     random_conditioning_preview_image = config.pop("random_conditioning_preview_image", False)
     sample_conditioning_image_data_dir = config.pop("sample_conditioning_image_data_dir", None)
+    additional_preview_prompts = config.pop("additional_preview_prompts", None)
+    extra_prompt_lines: list[str] = []
+    if isinstance(additional_preview_prompts, str) and additional_preview_prompts.strip():
+        extra_prompt_lines = additional_preview_prompts.splitlines()
+    preview_settings = {
+        "positive_prompts": positive_prompts,
+        "negative_prompts": negative_prompts,
+        "sample_width": sample_width,
+        "sample_height": sample_height,
+        "sample_cfg": sample_cfg,
+        "sample_seed": sample_seed,
+        "sample_steps": sample_steps,
+        "sample_conditioning_image": sample_conditioning_image,
+        "sample_conditioning_reference_dir": sample_conditioning_reference_dir,
+        "random_conditioning_preview_image": random_conditioning_preview_image,
+        "sample_conditioning_image_data_dir": sample_conditioning_image_data_dir,
+        "multi_reference_mode": config.get("multi_reference_mode"),
+        "conditioning_reference_count": config.get("conditioning_reference_count"),
+        "conditioning_data_dir": config.get("conditioning_data_dir"),
+        "discrete_flow_shift": config.get("discrete_flow_shift", 3.0),
+        "extra_preview_prompts": extra_prompt_lines,
+    }
 
     if randomly_choice_prompt:
         if len(sub_dir) != 1:
@@ -248,23 +278,35 @@ def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple
 
     control_image_arg = ""
     selected_control_image = None
+    use_manifest_preview = is_anima_edit_train_type(model_train_type)
     if use_conditioning_preview:
         positive_prompts = conditioning_preview_prompt or positive_prompts
-        control_image = None
-        if _truthy(random_conditioning_preview_image):
-            random_images = _image_files(str(sample_conditioning_image_data_dir or ""))
-            if not random_images:
-                raise ValueError("已启用随机 Control Image，但随机目录没有可用图片。")
-            control_image = random.choice(random_images)
-        elif sample_conditioning_image:
-            control_image = str(sample_conditioning_image)
+        if use_manifest_preview:
+            references = _resolve_preview_reference_paths(
+                {**config, **preview_settings}, model_train_type
+            )
+            selected_control_image = references[0] if references else None
+        else:
+            control_image = None
+            if _truthy(random_conditioning_preview_image):
+                random_images = _image_files(str(sample_conditioning_image_data_dir or ""))
+                if not random_images:
+                    raise ValueError("已启用随机 Control Image，但随机目录没有可用图片。")
+                control_image = random.choice(random_images)
+            elif sample_conditioning_image:
+                control_image = str(sample_conditioning_image)
 
-        if not control_image or not os.path.isfile(control_image):
-            raise ValueError("已启用图像编辑预览，请选择固定 Control Image 或配置随机目录。")
-        selected_control_image = _normalize_path(control_image)
-        control_image_arg = f" --cn {_normalize_path(control_image)}"
+            if not control_image or not os.path.isfile(control_image):
+                raise ValueError("已启用图像编辑预览，请选择固定 Control Image 或配置随机目录。")
+            selected_control_image = _normalize_path(control_image)
+            control_image_arg = f" --cn {_normalize_path(control_image)}"
 
-    return positive_prompts, f'{positive_prompts} --n {negative_prompts}  --w {sample_width} --h {sample_height} --l {sample_cfg}  --s {sample_steps}  --d {sample_seed}{control_image_arg}', selected_control_image
+    return (
+        positive_prompts,
+        f'{positive_prompts} --n {negative_prompts}  --w {sample_width} --h {sample_height} --l {sample_cfg}  --s {sample_steps}  --d {sample_seed}{control_image_arg}',
+        selected_control_image,
+        preview_settings,
+    )
 
 
 def apply_sdxl_prediction_type(config: dict, model_train_type: str):
@@ -300,12 +342,131 @@ def _truthy(value) -> bool:
     return value in (True, "true", "True", "1", 1)
 
 
+def is_anima_edit_train_type(model_train_type: str) -> bool:
+    return model_train_type in ANIMA_EDIT_TRAIN_TYPES
+
+
 def is_conditioning_enabled(config: dict, model_train_type: str) -> bool:
+    if is_anima_edit_train_type(model_train_type):
+        return True
     return model_train_type in ANIMA_TRAIN_TYPES and _truthy(config.get("conditioning"))
 
 
 def is_conditioning_preview_enabled(config: dict, model_train_type: str) -> bool:
-    return is_conditioning_enabled(config, model_train_type) and _truthy(config.get("enable_conditioning_preview"))
+    if is_anima_edit_train_type(model_train_type):
+        return is_preview_enabled(config)
+    return is_conditioning_enabled(config, model_train_type) and _truthy(
+        config.get("enable_conditioning_preview")
+    )
+
+
+def _list_conditioning_subdirs(conditioning_data_dir: str) -> list[str]:
+    if not conditioning_data_dir or not os.path.isdir(conditioning_data_dir):
+        return []
+    return sorted(
+        entry
+        for entry in os.listdir(conditioning_data_dir)
+        if os.path.isdir(os.path.join(conditioning_data_dir, entry))
+    )
+
+
+def _resolve_preview_reference_paths(
+    config: dict, model_train_type: str = ""
+) -> list[str]:
+    multi_reference_mode = is_anima_edit_train_type(model_train_type) or _truthy(
+        config.get("multi_reference_mode")
+    )
+    reference_count = int(config.get("conditioning_reference_count", 2) or 2)
+    conditioning_data_dir = str(config.get("conditioning_data_dir") or "").strip()
+
+    if multi_reference_mode:
+        ref_dir = str(config.get("sample_conditioning_reference_dir") or "").strip()
+        if _truthy(config.get("random_conditioning_preview_image")):
+            parent = str(config.get("sample_conditioning_image_data_dir") or conditioning_data_dir).strip()
+            subdirs = _list_conditioning_subdirs(parent)
+            if not subdirs:
+                raise ValueError("已启用随机参考预览，但目录下没有 reference/<stem> 子目录。")
+            ref_dir = os.path.join(parent, random.choice(subdirs))
+        if not ref_dir or not os.path.isdir(ref_dir):
+            raise ValueError("双参考预览请填写 sample_conditioning_reference_dir（reference/<stem>/ 目录）或配置随机子目录。")
+        paths = sorted(_image_files(ref_dir))
+        if len(paths) < reference_count:
+            raise ValueError(f"预览参考目录至少需要 {reference_count} 张图: {ref_dir}")
+        return [_normalize_path(path) for path in paths[:reference_count]]
+
+    control_image = str(config.get("sample_conditioning_image") or "").strip()
+    if _truthy(config.get("random_conditioning_preview_image")):
+        random_images = _image_files(str(config.get("sample_conditioning_image_data_dir") or ""))
+        if not random_images:
+            raise ValueError("已启用随机 Control Image，但随机目录没有可用图片。")
+        control_image = random.choice(random_images)
+    if not control_image or not os.path.isfile(control_image):
+        raise ValueError("请为预览选择一张参考图（sample_conditioning_image）。")
+    return [_normalize_path(control_image)]
+
+
+def _manifest_entry(
+    prompt: str,
+    negative_prompt: str,
+    preview_settings: dict,
+    references: list[str],
+    reference_count: int = 2,
+) -> dict:
+    entry = {
+        "prompt": prompt,
+        "negative_prompt": negative_prompt,
+        "width": int(preview_settings.get("sample_width", 512)),
+        "height": int(preview_settings.get("sample_height", 512)),
+        "scale": float(preview_settings.get("sample_cfg", 4.5)),
+        "seed": int(preview_settings.get("sample_seed", 42)),
+        "sample_steps": int(preview_settings.get("sample_steps", 40)),
+        "flow_shift": float(preview_settings.get("discrete_flow_shift", 3.0)),
+        "references": references,
+        "reference_count": reference_count,
+    }
+    return entry
+
+
+def _validate_anima_edit_manifest(path: str) -> None:
+    try:
+        with open(path, encoding="utf-8") as f:
+            data = toml.load(f)
+    except OSError as exc:
+        raise ValueError(f"无法读取预览 manifest: {path}") from exc
+    prompts = data.get("prompts")
+    if not isinstance(prompts, list) or not prompts:
+        raise ValueError("Anima Edit 预览 manifest 需包含至少一条 [[prompts]]。")
+
+
+def _write_anima_edit_sample_prompts_toml(
+    config: dict,
+    autosave_dir: str,
+    timestamp: str,
+    positive_prompt: str,
+    negative_prompt: str,
+    preview_settings: dict,
+    model_train_type: str,
+    extra_prompts: Optional[list[str]] = None,
+) -> str:
+    merged = {**config, **preview_settings}
+    references = _resolve_preview_reference_paths(merged, model_train_type)
+    reference_count = int(config.get("conditioning_reference_count", 2) or 2)
+    entries = [
+        _manifest_entry(positive_prompt, negative_prompt, preview_settings, references, reference_count)
+    ]
+    for line in extra_prompts or []:
+        text = line.strip()
+        if text:
+            entries.append(
+                _manifest_entry(text, negative_prompt, preview_settings, references, reference_count)
+            )
+
+    manifest = {"prompts": entries}
+    sample_prompts_file = os.path.join(autosave_dir, f"{timestamp}-sample-prompts.toml")
+    with open(sample_prompts_file, "w", encoding="utf-8") as f:
+        f.write(toml.dumps(manifest))
+    log.info(f"Wrote Anima Edit sample manifest ({len(entries)} prompts) to {sample_prompts_file}")
+    return sample_prompts_file
 
 
 def _image_files(path: str, recursive: bool = False) -> list[str]:
@@ -359,11 +520,19 @@ def _validate_multi_reference_dataset(
         )
 
 
-def _prepare_conditioning_dataset_config(config: dict, autosave_dir: str, timestamp: str) -> Optional[str]:
+def _prepare_conditioning_dataset_config(
+    config: dict, autosave_dir: str, timestamp: str, model_train_type: str = ""
+) -> Optional[str]:
     target_data_dir = str(config.pop("target_data_dir", "") or "").strip()
-    conditioning_data_dir = str(config.pop("conditioning_data_dir", "") or "").strip()
-    multi_reference_mode = _truthy(config.pop("multi_reference_mode", False))
-    reference_count = int(config.pop("conditioning_reference_count", 2) or 2)
+    conditioning_data_dir = str(config.get("conditioning_data_dir", "") or "").strip()
+    multi_reference_mode = is_anima_edit_train_type(model_train_type) or _truthy(
+        config.get("multi_reference_mode", False)
+    )
+    reference_count = int(config.get("conditioning_reference_count", 2) or 2)
+    if is_anima_edit_train_type(model_train_type):
+        config["multi_reference_mode"] = True
+        config["conditioning_reference_count"] = 2
+        reference_count = 2
 
     if not target_data_dir:
         raise ValueError("启用图像编辑训练后，请填写目标图目录 Target。")
@@ -383,6 +552,7 @@ def _prepare_conditioning_dataset_config(config: dict, autosave_dir: str, timest
         raise ValueError("参考图目录没有可用图片，请检查 Reference / Conditioning。")
 
     config["train_data_dir"] = target_data_dir
+    config["conditioning_data_dir"] = conditioning_data_dir
     subset_entry = {
         "image_dir": _normalize_path(target_data_dir),
         "conditioning_data_dir": _normalize_path(conditioning_data_dir),
@@ -440,8 +610,16 @@ def _cuda_bf16_supported() -> bool:
 
 
 def apply_anima_training_defaults(config: dict, model_train_type: str):
-    if model_train_type not in ANIMA_TRAIN_TYPES:
+    if model_train_type not in ANIMA_TRAIN_TYPES and model_train_type not in ANIMA_EDIT_TRAIN_TYPES:
         return
+
+    if is_anima_edit_train_type(model_train_type):
+        config["conditioning"] = True
+        config["multi_reference_mode"] = True
+        config["conditioning_reference_count"] = 2
+        config["network_module"] = config.get("network_module") or "networks.lora_anima"
+        if not str(config.get("resolution", "")).strip():
+            config["resolution"] = "512,512"
 
     if str(config.get("unet_lr", "")).strip() in ANIMA_LEGACY_UNET_LR:
         config["unet_lr"] = ANIMA_DEFAULT_UNET_LR
@@ -518,7 +696,7 @@ async def create_toml_file(request: Request):
     trainer_file = trainer_mapping[model_train_type]
     try:
         if is_conditioning_enabled(config, model_train_type):
-            _prepare_conditioning_dataset_config(config, autosave_dir, timestamp)
+            _prepare_conditioning_dataset_config(config, autosave_dir, timestamp, model_train_type)
     except ValueError as e:
         log.error(f"Error while processing conditioning dataset: {e}")
         return APIResponseFail(message=str(e))
@@ -543,17 +721,38 @@ async def create_toml_file(request: Request):
         prompt_file = config["prompt_file"].strip()
         if not os.path.exists(prompt_file):
             return APIResponseFail(message=f"Prompt 文件 {prompt_file} 不存在，请检查路径。")
+        if is_anima_edit_train_type(model_train_type):
+            try:
+                _validate_anima_edit_manifest(prompt_file)
+            except ValueError as e:
+                return APIResponseFail(message=str(e))
         config["sample_prompts"] = prompt_file
     else:
         try:
-            positive_prompt, sample_prompts_arg, selected_conditioning_preview_image = get_sample_prompts(config=config, model_train_type=model_train_type)
+            positive_prompt, sample_prompts_arg, selected_conditioning_preview_image, preview_settings = (
+                get_sample_prompts(config=config, model_train_type=model_train_type)
+            )
 
-            if positive_prompt is not None and train_utils.is_promopt_like(sample_prompts_arg):
-                sample_prompts_file = os.path.join(autosave_dir, f"{timestamp}-promopt.txt")
-                with open(sample_prompts_file, "w", encoding="utf-8") as f:
-                    f.write(sample_prompts_arg)
-                config["sample_prompts"] = sample_prompts_file
-                log.info(f"Wrote prompts to file {sample_prompts_file}")
+            if positive_prompt is not None:
+                use_manifest_preview = is_anima_edit_train_type(model_train_type)
+                if use_manifest_preview and is_preview_enabled(config) and preview_settings:
+                    sample_prompts_file = _write_anima_edit_sample_prompts_toml(
+                        config,
+                        autosave_dir,
+                        timestamp,
+                        positive_prompt,
+                        preview_settings.get("negative_prompts") or ANIMA_DEFAULT_SAMPLE_NEGATIVE,
+                        preview_settings,
+                        model_train_type,
+                        preview_settings.get("extra_preview_prompts"),
+                    )
+                    config["sample_prompts"] = sample_prompts_file
+                elif train_utils.is_promopt_like(sample_prompts_arg):
+                    sample_prompts_file = os.path.join(autosave_dir, f"{timestamp}-promopt.txt")
+                    with open(sample_prompts_file, "w", encoding="utf-8") as f:
+                        f.write(sample_prompts_arg)
+                    config["sample_prompts"] = sample_prompts_file
+                    log.info(f"Wrote prompts to file {sample_prompts_file}")
 
         except ValueError as e:
             log.error(f"Error while processing prompts: {e}")
@@ -570,15 +769,31 @@ async def create_toml_file(request: Request):
     with open(toml_file, "w", encoding="utf-8") as f:
         f.write(toml.dumps(config))
 
-    if selected_conditioning_preview_image:
+    if selected_conditioning_preview_image or is_anima_edit_train_type(model_train_type):
         monitor_metadata_file = f"{toml_file}.monitor.json"
-        with open(monitor_metadata_file, "w", encoding="utf-8") as f:
-            json.dump(
-                {"conditioning_reference_image": selected_conditioning_preview_image},
-                f,
-                ensure_ascii=False,
-                indent=2,
-            )
+        monitor_payload = {}
+        manifest_refs: list[str] = []
+        if is_anima_edit_train_type(model_train_type) and str(config.get("sample_prompts", "")).endswith(".toml"):
+            try:
+                with open(config["sample_prompts"], encoding="utf-8") as manifest_file:
+                    manifest_data = toml.load(manifest_file)
+                for entry in manifest_data.get("prompts", []):
+                    if not isinstance(entry, dict):
+                        continue
+                    refs = entry.get("references") or []
+                    if refs:
+                        manifest_refs = [str(r) for r in refs]
+                        break
+            except (OSError, KeyError, IndexError, TypeError):
+                pass
+        if manifest_refs:
+            monitor_payload["conditioning_reference_images"] = manifest_refs
+            monitor_payload["conditioning_reference_image"] = manifest_refs[0]
+        elif selected_conditioning_preview_image:
+            monitor_payload["conditioning_reference_image"] = selected_conditioning_preview_image
+        if monitor_payload:
+            with open(monitor_metadata_file, "w", encoding="utf-8") as f:
+                json.dump(monitor_payload, f, ensure_ascii=False, indent=2)
 
     result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads)
 

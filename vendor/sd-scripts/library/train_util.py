@@ -6866,6 +6866,32 @@ def line_to_prompt_dict(line: str) -> dict:
     return prompt_dict
 
 
+def normalize_anima_edit_prompt_entry(entry: dict, base_dir: str) -> None:
+    """Resolve structured reference fields into controlnet_images for Anima Edit sampling."""
+    if entry.get("controlnet_images"):
+        entry["controlnet_images"] = [
+            p if os.path.isabs(p) else os.path.normpath(os.path.join(base_dir, p)) for p in entry["controlnet_images"]
+        ]
+        return
+
+    reference_dir = entry.get("reference_dir")
+    if reference_dir:
+        ref_dir = reference_dir if os.path.isabs(reference_dir) else os.path.normpath(os.path.join(base_dir, reference_dir))
+        need = max(1, int(entry.get("reference_count", 2)))
+        paths = glob_images(ref_dir, "*")
+        if len(paths) < need:
+            raise ValueError(
+                f"reference_dir needs at least {need} images / reference_dir 内图片不足 {need} 张: {ref_dir}"
+            )
+        entry["controlnet_images"] = [os.path.abspath(p) for p in paths[:need]]
+        return
+
+    references = entry.get("references")
+    if references:
+        paths = [p if os.path.isabs(p) else os.path.normpath(os.path.join(base_dir, p)) for p in references]
+        entry["controlnet_images"] = paths
+
+
 def load_prompts(prompt_file: str) -> List[Dict]:
     # read prompts
     if prompt_file.endswith(".txt"):
@@ -6875,7 +6901,18 @@ def load_prompts(prompt_file: str) -> List[Dict]:
     elif prompt_file.endswith(".toml"):
         with open(prompt_file, "r", encoding="utf-8") as f:
             data = toml.load(f)
-        prompts = [dict(**data["prompt"], **subset) for subset in data["prompt"]["subset"]]
+        base_dir = os.path.dirname(os.path.abspath(prompt_file))
+        if "prompts" in data and isinstance(data["prompts"], list):
+            prompts = [dict(entry) for entry in data["prompts"]]
+            for entry in prompts:
+                normalize_anima_edit_prompt_entry(entry, base_dir)
+        elif "prompt" in data and isinstance(data.get("prompt"), dict) and "subset" in data["prompt"]:
+            prompts = [dict(**data["prompt"], **subset) for subset in data["prompt"]["subset"]]
+        else:
+            raise ValueError(
+                f"Unsupported TOML sample prompt format / 不支持的 TOML 预览格式: {prompt_file}. "
+                "Use [[prompts]] (Anima Edit) or legacy [prompt].subset."
+            )
     elif prompt_file.endswith(".json"):
         with open(prompt_file, "r", encoding="utf-8") as f:
             prompts = json.load(f)
