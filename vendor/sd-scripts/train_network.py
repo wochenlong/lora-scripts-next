@@ -58,6 +58,9 @@ class NetworkTrainer:
         self.vae_scale_factor = 0.18215
         self.is_sdxl = False
 
+    def get_dataset_sanitizer_args(self, args):
+        return True, True, args.masked_loss, True
+
     # TODO 他のスクリプトと共通化する
     def generate_step_logs(
         self,
@@ -512,7 +515,7 @@ class NetworkTrainer:
 
         # データセットを準備する
         if args.dataset_class is None:
-            blueprint_generator = BlueprintGenerator(ConfigSanitizer(True, True, args.masked_loss, True))
+            blueprint_generator = BlueprintGenerator(ConfigSanitizer(*self.get_dataset_sanitizer_args(args)))
             if use_user_config:
                 logger.info(f"Loading dataset config from {args.dataset_config}")
                 user_config = config_util.load_user_config(args.dataset_config)

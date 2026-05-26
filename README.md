@@ -83,7 +83,7 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 
 ## Anima Image Editing (Experimental)
 
-The `anima-edit` branch adds the first UI pass for Anima conditioning / image-editing training. Enable **Image Editing (Experimental)** on the Anima page to configure paired datasets:
+The `anima-edit` branch adds Anima conditioning / image-editing training. Enable **Image Editing (Experimental)** on the Anima page to configure paired datasets:
 
 - **Target directory**: final images and their `.txt` / `.json` captions.
 - **Reference / Conditioning directory**: input reference images with the same filenames and dimensions.
@@ -107,8 +107,8 @@ The `anima-edit` branch adds the first UI pass for Anima conditioning / image-ed
 
 <p align="center"><sub>Sample images courtesy of <b>古柯C17H21NO4</b>. Thank you for providing the reference images used here.</sub></p>
 
-> This is an experimental branch UI. Training execution requires the Anima conditioning backend integration described in [docs/anima-training.md](docs/anima-training.md).
-> The planned backend work references [Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts), an Apache-2.0 fork of kohya-ss/sd-scripts; any integration should preserve its license notices and source attribution.
+> WebUI training now writes the conditioning dataset TOML and `--cn <control image>` sample prompt automatically. See [docs/anima-training.md](docs/anima-training.md) for details.
+> The backend conditioning work references [Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts), an Apache-2.0 fork of kohya-ss/sd-scripts; this project preserves its license notices and source attribution.
 
 ---
 

@@ -35,6 +35,9 @@ class AnimaNetworkTrainer(train_network.NetworkTrainer):
         super().__init__()
         self.sample_prompts_te_outputs = None
 
+    def get_dataset_sanitizer_args(self, args):
+        return True, True, args.conditioning or args.masked_loss, True
+
     def assert_extra_args(
         self,
         args,
@@ -304,6 +307,13 @@ class AnimaNetworkTrainer(train_network.NetworkTrainer):
 
         # Call model
         noisy_model_input = noisy_model_input.unsqueeze(2)  # 4D to 5D, [B, C, H, W] -> [B, C, 1, H, W]
+        conditioning_latents = batch.get("conditioning_images", None)
+        if conditioning_latents is not None:
+            conditioning_latents = conditioning_latents.to(accelerator.device, dtype=weight_dtype)
+            if conditioning_latents.ndim == 4:
+                conditioning_latents = conditioning_latents.unsqueeze(2)
+            noisy_model_input = torch.cat([noisy_model_input, conditioning_latents], dim=2)
+
         with torch.set_grad_enabled(is_train), accelerator.autocast():
             model_pred = anima(
                 noisy_model_input,
@@ -314,6 +324,8 @@ class AnimaNetworkTrainer(train_network.NetworkTrainer):
                 target_attention_mask=t5_attn_mask,
                 source_attention_mask=attn_mask,
             )
+        if conditioning_latents is not None and model_pred.shape[2] > 1:
+            model_pred = model_pred[:, :, :1, :, :]
         model_pred = model_pred.squeeze(2)  # 5D to 4D, [B, C, 1, H, W] -> [B, C, H, W]
 
         # Rectified flow target: noise - latents

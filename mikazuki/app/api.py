@@ -50,6 +50,7 @@ ANIMA_DEFAULT_SAMPLE_NEGATIVE = (
 ANIMA_DEFAULT_UNET_LR = 5e-5
 ANIMA_LEGACY_UNET_LR = {"0.0001", "1e-4", "1E-4"}
 ANIMA_FULL_PRECISION_UNSAFE_OPTIMIZERS = {"automagic", "pytorch_optimizer.came"}
+IMAGE_EXTENSIONS = (".jpg", ".jpeg", ".png", ".webp", ".bmp")
 
 avaliable_scripts = [
     "networks/extract_lora_from_models.py",
@@ -141,7 +142,9 @@ def _is_invalid_value(value) -> bool:
 _PATH_FIELDS = {
     "pretrained_model_name_or_path", "vae", "qwen3", "llm_adapter_path",
     "t5_tokenizer_path", "resume", "train_data_dir", "reg_data_dir",
+    "target_data_dir", "conditioning_data_dir", "dataset_config",
     "output_dir", "logging_dir", "network_weights", "sample_prompts",
+    "sample_conditioning_image", "sample_conditioning_image_data_dir",
 }
 
 
@@ -207,6 +210,7 @@ def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple
     sub_dir = [dir for dir in glob(os.path.join(train_data_dir, '*')) if os.path.isdir(dir)]
 
     use_anima_defaults = model_train_type in ANIMA_TRAIN_TYPES and is_preview_enabled(config)
+    use_conditioning_preview = is_conditioning_preview_enabled(config, model_train_type)
     default_positive = ANIMA_DEFAULT_SAMPLE_POSITIVE if use_anima_defaults else None
     default_negative = ANIMA_DEFAULT_SAMPLE_NEGATIVE if use_anima_defaults else ''
     default_width = 1024 if use_anima_defaults else 512
@@ -223,6 +227,10 @@ def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple
     sample_seed = config.pop('sample_seed', default_seed)
     sample_steps = config.pop('sample_steps', default_steps)
     randomly_choice_prompt = config.pop('randomly_choice_prompt', False)
+    conditioning_preview_prompt = config.pop("conditioning_preview_prompt", None)
+    sample_conditioning_image = config.pop("sample_conditioning_image", None)
+    random_conditioning_preview_image = config.pop("random_conditioning_preview_image", False)
+    sample_conditioning_image_data_dir = config.pop("sample_conditioning_image_data_dir", None)
 
     if randomly_choice_prompt:
         if len(sub_dir) != 1:
@@ -238,7 +246,23 @@ def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple
         except IOError:
             log.error(f"读取 {sample_prompt_file} 文件失败")
 
-    return positive_prompts, f'{positive_prompts} --n {negative_prompts}  --w {sample_width} --h {sample_height} --l {sample_cfg}  --s {sample_steps}  --d {sample_seed}'
+    control_image_arg = ""
+    if use_conditioning_preview:
+        positive_prompts = conditioning_preview_prompt or positive_prompts
+        control_image = None
+        if _truthy(random_conditioning_preview_image):
+            random_images = _image_files(str(sample_conditioning_image_data_dir or ""))
+            if not random_images:
+                raise ValueError("已启用随机 Control Image，但随机目录没有可用图片。")
+            control_image = random.choice(random_images)
+        elif sample_conditioning_image:
+            control_image = str(sample_conditioning_image)
+
+        if not control_image or not os.path.isfile(control_image):
+            raise ValueError("已启用图像编辑预览，请选择固定 Control Image 或配置随机目录。")
+        control_image_arg = f" --cn {_normalize_path(control_image)}"
+
+    return positive_prompts, f'{positive_prompts} --n {negative_prompts}  --w {sample_width} --h {sample_height} --l {sample_cfg}  --s {sample_steps}  --d {sample_seed}{control_image_arg}'
 
 
 def apply_sdxl_prediction_type(config: dict, model_train_type: str):
@@ -270,6 +294,101 @@ def is_preview_enabled(config: dict) -> bool:
     return config.get("enable_preview") in (True, "true", "True", "1", 1)
 
 
+def _truthy(value) -> bool:
+    return value in (True, "true", "True", "1", 1)
+
+
+def is_conditioning_enabled(config: dict, model_train_type: str) -> bool:
+    return model_train_type in ANIMA_TRAIN_TYPES and _truthy(config.get("conditioning"))
+
+
+def is_conditioning_preview_enabled(config: dict, model_train_type: str) -> bool:
+    return is_conditioning_enabled(config, model_train_type) and _truthy(config.get("enable_conditioning_preview"))
+
+
+def _image_files(path: str, recursive: bool = False) -> list[str]:
+    if not path or not os.path.isdir(path):
+        return []
+    pattern = "**/*" if recursive else "*"
+    return [
+        file
+        for file in glob(os.path.join(path, pattern), recursive=recursive)
+        if os.path.isfile(file) and file.lower().endswith(IMAGE_EXTENSIONS)
+    ]
+
+
+def _normalize_path(path: str) -> str:
+    return path.replace("\\", "/")
+
+
+def _dataset_resolution(value):
+    if isinstance(value, int):
+        return value
+    if isinstance(value, (list, tuple)):
+        return [int(item) for item in value]
+
+    text = str(value or "").strip()
+    if not text:
+        return [1024, 1024]
+    for separator in (",", "x", "X", "*"):
+        if separator in text:
+            parts = [part.strip() for part in text.split(separator) if part.strip()]
+            if len(parts) == 2:
+                return [int(parts[0]), int(parts[1])]
+    return int(text)
+
+
+def _prepare_conditioning_dataset_config(config: dict, autosave_dir: str, timestamp: str) -> Optional[str]:
+    target_data_dir = str(config.pop("target_data_dir", "") or "").strip()
+    conditioning_data_dir = str(config.pop("conditioning_data_dir", "") or "").strip()
+
+    if not target_data_dir:
+        raise ValueError("启用图像编辑训练后，请填写目标图目录 Target。")
+    if not conditioning_data_dir:
+        raise ValueError("启用图像编辑训练后，请填写参考图目录 Reference / Conditioning。")
+    if not os.path.isdir(target_data_dir):
+        raise ValueError(f"目标图目录不存在: {target_data_dir}")
+    if not os.path.isdir(conditioning_data_dir):
+        raise ValueError(f"参考图目录不存在: {conditioning_data_dir}")
+    if not _image_files(target_data_dir):
+        raise ValueError("目标图目录没有可训练图片，请检查 Target。")
+    if not _image_files(conditioning_data_dir):
+        raise ValueError("参考图目录没有可用图片，请检查 Reference / Conditioning。")
+
+    config["train_data_dir"] = target_data_dir
+    dataset_config = {
+        "general": {
+            "caption_extension": config.get("caption_extension", ".txt"),
+        },
+        "datasets": [
+            {
+                "resolution": _dataset_resolution(config.get("resolution", "1024,1024")),
+                "batch_size": int(config.get("train_batch_size", 1)),
+                "enable_bucket": bool(config.get("enable_bucket", True)),
+                "subsets": [
+                    {
+                        "image_dir": _normalize_path(target_data_dir),
+                        "conditioning_data_dir": _normalize_path(conditioning_data_dir),
+                    }
+                ],
+            }
+        ],
+    }
+
+    for key in ("min_bucket_reso", "max_bucket_reso", "bucket_reso_steps"):
+        if config.get(key) is not None:
+            dataset_config["datasets"][0][key] = int(config[key])
+
+    dataset_config_file = os.path.join(autosave_dir, f"{timestamp}-dataset.toml")
+    with open(dataset_config_file, "w", encoding="utf-8") as f:
+        f.write(toml.dumps(dataset_config))
+
+    config["conditioning"] = True
+    config["dataset_config"] = dataset_config_file
+    log.info(f"Wrote conditioning dataset config to {dataset_config_file}")
+    return dataset_config_file
+
+
 def _detect_best_attn_mode() -> str:
     """Auto-detect the best available attention backend for Anima training."""
     if not is_embedded_python() and flash_attn_stack_usable():
@@ -299,7 +418,11 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
     elif isinstance(config.get("unet_lr"), str):
         config["unet_lr"] = float(config["unet_lr"])
 
-    if is_preview_enabled(config) or config.get("sample_prompts"):
+    if is_conditioning_enabled(config, model_train_type):
+        config["sample_at_first"] = False
+        config["cache_latents"] = True
+        config["cache_text_encoder_outputs"] = True
+    elif is_preview_enabled(config) or config.get("sample_prompts"):
         config["sample_at_first"] = True
 
     optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
@@ -361,14 +484,24 @@ async def create_toml_file(request: Request):
 
     gpu_ids = config.pop("gpu_ids", None)
 
-    suggest_cpu_threads = 8 if len(train_utils.get_total_images(config["train_data_dir"])) > 200 else 2
     model_train_type = config.pop("model_train_type", "sd-lora")
     trainer_file = trainer_mapping[model_train_type]
+    try:
+        if is_conditioning_enabled(config, model_train_type):
+            _prepare_conditioning_dataset_config(config, autosave_dir, timestamp)
+    except ValueError as e:
+        log.error(f"Error while processing conditioning dataset: {e}")
+        return APIResponseFail(message=str(e))
+
+    suggest_cpu_threads = 8 if len(train_utils.get_total_images(config["train_data_dir"])) > 200 else 2
     apply_sdxl_prediction_type(config, model_train_type)
     apply_anima_training_defaults(config, model_train_type)
 
     if model_train_type != "sdxl-finetune":
-        if not train_utils.validate_data_dir(config["train_data_dir"]):
+        if is_conditioning_enabled(config, model_train_type):
+            if not _image_files(config["train_data_dir"]):
+                return APIResponseFail(message="目标图目录没有可训练图片，请检查 Target。")
+        elif not train_utils.validate_data_dir(config["train_data_dir"]):
             return APIResponseFail(message="训练数据集路径不存在或没有图片，请检查目录。")
 
     validated, message = train_utils.validate_model(config["pretrained_model_name_or_path"], model_train_type)

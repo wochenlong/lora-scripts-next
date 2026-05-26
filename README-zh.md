@@ -85,7 +85,7 @@ bash install_flash_attn.sh
 
 ## Anima 图像编辑（实验功能）
 
-`anima-edit` 分支加入了 Anima 条件训练 / 图像编辑训练的第一版前端入口。在 Anima 页面开启 **图像编辑（实验功能）** 后，可以配置成对数据集：
+`anima-edit` 分支加入了 Anima 条件训练 / 图像编辑训练入口和后端支持。在 Anima 页面开启 **图像编辑（实验功能）** 后，可以配置成对数据集：
 
 - **目标图目录 Target**：放置希望模型学习生成的目标图片，以及同名 `.txt` / `.json` 标签。
 - **参考图目录 Reference / Conditioning**：放置输入参考图，文件名和尺寸需与目标图一致。
@@ -109,8 +109,8 @@ bash install_flash_attn.sh
 
 <p align="center"><sub>示例图片由 <b>古柯C17H21NO4</b> 提供，感谢他提供用于说明图像编辑流程的图片素材。</sub></p>
 
-> 当前为实验分支 UI。实际训练启动还需要接入 [docs/anima-training.md](docs/anima-training.md) 中说明的 Anima conditioning 后端。
-> 后端方案参考 [Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts)（kohya-ss/sd-scripts 的 Apache-2.0 fork）；后续集成需保留其许可证文本、来源说明与必要致谢。
+> WebUI 训练会自动生成 conditioning dataset TOML，并在图像编辑预览 prompt 中写入 `--cn <control image>`。详细说明见 [docs/anima-training.md](docs/anima-training.md)。
+> 后端 conditioning 实现参考 [Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts)（kohya-ss/sd-scripts 的 Apache-2.0 fork）；本项目保留其许可证文本、来源说明与必要致谢。
 
 ---
 
@@ -175,7 +175,8 @@ bash install_flash_attn.sh
 | `scripts/autodl/` | 云 GPU 运维（根目录同名文件为转发） |
 | `scripts/cli/` | 旧式命令行训练（Anima 请用 WebUI） |
 | `legacy/` | 打标 / notebook 等，日常可忽略 |
-| `doc/local/` | 本地交接与 Issue 草稿（不上传 GitHub） |
+| `doc/local/` | 本地交接、Issue 草稿、`AGENT_INTERNAL.md`（不上传 GitHub） |
+| `script/` | 本地一次性脚本（不上传 GitHub）；正式脚本在 `scripts/` |
 | `docs/` | 公开文档（含 AutoDL 部署等） |
 
 ---

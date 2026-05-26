@@ -34,7 +34,7 @@
 
 ## 图像编辑 / 条件训练（实验）
 
-`anima-edit` 分支在 Anima 训练页增加了 **图像编辑（实验功能）** 分组，用于准备 Anima conditioning / image editing 训练入口。
+`anima-edit` 分支在 Anima 训练页增加了 **图像编辑（实验功能）** 分组，并已接入 Anima conditioning / image editing 训练后端。
 
 条件训练使用成对图片：
 
@@ -79,9 +79,9 @@ dataset_root/
 
 <p align="center"><sub>示例图片由 <b>古柯C17H21NO4</b> 提供。感谢他提供用于说明 Anima 图像编辑流程的图片素材。</sub></p>
 
-> 当前分支先提供前端入口与参数结构。训练启动仍需接入 Mirumo fork 中的 Anima conditioning 后端逻辑：`conditioning = true`、`dataset_config` 中的 `conditioning_data_dir`，以及 sample prompt 的 `--cn <control image>`。
+> WebUI 开启 `conditioning` 后，会自动生成包含 `conditioning_data_dir` 的 `dataset_config`，并在图像编辑预览 prompt 中写入 `--cn <control image>`。
 >
-> 参考实现来源：[Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts)。该仓库是 `kohya-ss/sd-scripts` 的 Apache-2.0 fork；后续合入代码时应保留许可证文本、修改说明和来源致谢。
+> 后端 conditioning 实现参考：[Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts)。该仓库是 `kohya-ss/sd-scripts` 的 Apache-2.0 fork；本项目保留其许可证文本、修改说明和来源致谢。
 
 ## 训练步数经验值
 

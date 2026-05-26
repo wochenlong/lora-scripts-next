@@ -213,6 +213,11 @@ class ImageInfo:
         self.alpha_mask: Optional[torch.Tensor] = None  # alpha mask can be flipped in runtime
         self.resize_interpolation: Optional[str] = None
 
+        # conditioning
+        self.cond_latents: Optional[torch.Tensor] = None
+        self.cond_latents_flipped: Optional[torch.Tensor] = None
+        self.cond_latents_npz: Optional[str] = None
+
 
 class BucketManager:
     def __init__(self, no_upscale, max_reso, min_size, max_size, reso_steps) -> None:
@@ -2616,10 +2621,142 @@ class ControlNetDataset(BaseDataset):
         self.buckets_indices = self.dreambooth_dataset_delegate.buckets_indices
 
     def cache_latents(self, vae, vae_batch_size=1, cache_to_disk=False, is_main_process=True):
-        return self.dreambooth_dataset_delegate.cache_latents(vae, vae_batch_size, cache_to_disk, is_main_process)
+        self.dreambooth_dataset_delegate.cache_latents(vae, vae_batch_size, cache_to_disk, is_main_process)
+
+        # Cache conditioning images as latents so Anima can concatenate them
+        # with target latents in the temporal dimension.
+        if is_main_process:
+            logger.info("caching conditioning latents.")
+
+        image_infos = [info for info in self.dreambooth_dataset_delegate.image_data.values() if info.cond_img_path is not None]
+        if len(image_infos) == 0:
+            return
+
+        batches = []
+        batch = []
+        for info in image_infos:
+            if cache_to_disk:
+                suffix = os.path.splitext(info.latents_npz)[1] if info.latents_npz else ".npz"
+                info.cond_latents_npz = os.path.splitext(info.cond_img_path)[0] + suffix
+                if not is_main_process:
+                    continue
+
+                if is_disk_cached_latents_is_expected(
+                    info.bucket_reso,
+                    info.cond_latents_npz,
+                    self.dreambooth_dataset_delegate.subsets[0].flip_aug,
+                    False,
+                ):
+                    continue
+
+            batch.append(info)
+            if len(batch) >= vae_batch_size:
+                batches.append(batch)
+                batch = []
+        if len(batch) > 0:
+            batches.append(batch)
+
+        if cache_to_disk and not is_main_process:
+            return
+
+        for batch in tqdm(batches, desc="caching conditioning latents", disable=not is_main_process):
+            orig_paths = [info.absolute_path for info in batch]
+            orig_npz_paths = [info.latents_npz for info in batch]
+            orig_latents = [info.latents for info in batch]
+            orig_latents_flipped = [info.latents_flipped for info in batch]
+
+            for info in batch:
+                info.absolute_path = info.cond_img_path
+                info.latents_npz = info.cond_latents_npz
+                info.latents = None
+                info.latents_flipped = None
+
+            cache_batch_latents(vae, cache_to_disk, batch, self.dreambooth_dataset_delegate.subsets[0].flip_aug, False, False)
+
+            for i, info in enumerate(batch):
+                info.cond_latents = info.latents
+                info.cond_latents_flipped = info.latents_flipped
+                info.absolute_path = orig_paths[i]
+                info.latents_npz = orig_npz_paths[i]
+                info.latents = orig_latents[i]
+                info.latents_flipped = orig_latents_flipped[i]
 
     def new_cache_latents(self, model: Any, accelerator: Accelerator):
-        return self.dreambooth_dataset_delegate.new_cache_latents(model, accelerator)
+        self.dreambooth_dataset_delegate.new_cache_latents(model, accelerator)
+
+        if accelerator.is_main_process:
+            logger.info("caching conditioning latents with caching strategy.")
+
+        caching_strategy = LatentsCachingStrategy.get_strategy()
+        image_infos = [info for info in self.dreambooth_dataset_delegate.image_data.values() if info.cond_img_path is not None]
+        if len(image_infos) == 0:
+            return
+
+        image_infos.sort(key=lambda info: info.bucket_reso[0] * info.bucket_reso[1])
+
+        num_processes = accelerator.num_processes
+        process_index = accelerator.process_index
+
+        batch = []
+        for i, info in enumerate(tqdm(image_infos, desc="caching conditioning latents", disable=not accelerator.is_main_process)):
+            if caching_strategy.cache_to_disk:
+                orig_path = info.absolute_path
+                info.absolute_path = info.cond_img_path
+                info.cond_latents_npz = caching_strategy.get_latents_npz_path(info.cond_img_path, info.image_size)
+                info.absolute_path = orig_path
+
+                if i % num_processes != process_index:
+                    continue
+
+                if caching_strategy.is_disk_cached_latents_expected(
+                    info.bucket_reso,
+                    info.cond_latents_npz,
+                    self.dreambooth_dataset_delegate.subsets[0].flip_aug,
+                    False,
+                ):
+                    continue
+
+            batch.append(info)
+            if len(batch) >= caching_strategy.batch_size:
+                self._cache_conditioning_batch_new(
+                    model,
+                    batch,
+                    caching_strategy,
+                    self.dreambooth_dataset_delegate.subsets[0].flip_aug,
+                )
+                batch = []
+
+        if len(batch) > 0:
+            self._cache_conditioning_batch_new(
+                model,
+                batch,
+                caching_strategy,
+                self.dreambooth_dataset_delegate.subsets[0].flip_aug,
+            )
+
+        accelerator.wait_for_everyone()
+
+    def _cache_conditioning_batch_new(self, model, batch, caching_strategy, flip_aug):
+        orig_paths = [info.absolute_path for info in batch]
+        orig_npz_paths = [info.latents_npz for info in batch]
+        orig_latents = [info.latents for info in batch]
+        orig_latents_flipped = [info.latents_flipped for info in batch]
+
+        for info in batch:
+            info.absolute_path = info.cond_img_path
+            info.latents_npz = info.cond_latents_npz
+            info.latents = None
+            info.latents_flipped = None
+
+        caching_strategy.cache_batch_latents(model, batch, flip_aug, False, False)
+
+        for i, info in enumerate(batch):
+            info.cond_latents = info.latents
+            info.cond_latents_flipped = info.latents_flipped
+            info.absolute_path = orig_paths[i]
+            info.latents_npz = orig_npz_paths[i]
+            info.latents = orig_latents[i]
+            info.latents_flipped = orig_latents_flipped[i]
 
     def new_cache_text_encoder_outputs(self, models: List[Any], is_main_process: bool):
         return self.dreambooth_dataset_delegate.new_cache_text_encoder_outputs(models, is_main_process)
@@ -2645,6 +2782,27 @@ class ControlNetDataset(BaseDataset):
             original_size_hw = example["original_sizes_hw"][i]
             crop_top_left = example["crop_top_lefts"][i]
             flipped = example["flippeds"][i]
+
+            if image_info.cond_latents is not None:
+                cond_latents = image_info.cond_latents_flipped if flipped and image_info.cond_latents_flipped is not None else image_info.cond_latents
+                conditioning_images.append(cond_latents)
+                continue
+
+            if image_info.cond_latents_npz is not None:
+                caching_strategy = LatentsCachingStrategy.get_strategy()
+                if caching_strategy is not None:
+                    latents, _, _, flipped_latents, _ = caching_strategy.load_latents_from_disk(
+                        image_info.cond_latents_npz,
+                        image_info.bucket_reso,
+                    )
+                    image_info.cond_latents = torch.FloatTensor(latents)
+                    if flipped_latents is not None:
+                        image_info.cond_latents_flipped = torch.FloatTensor(flipped_latents)
+
+                    cond_latents = image_info.cond_latents_flipped if flipped and image_info.cond_latents_flipped is not None else image_info.cond_latents
+                    conditioning_images.append(cond_latents)
+                    continue
+
             cond_img = load_image(image_info.cond_img_path)
 
             if self.dreambooth_dataset_delegate.enable_bucket:
@@ -2688,7 +2846,12 @@ class ControlNetDataset(BaseDataset):
             cond_img = self.conditioning_image_transforms(cond_img)
             conditioning_images.append(cond_img)
 
-        example["conditioning_images"] = torch.stack(conditioning_images).to(memory_format=torch.contiguous_format).float()
+        if len(conditioning_images) > 0 and isinstance(conditioning_images[0], torch.Tensor) and conditioning_images[0].ndim == 4:
+            example["conditioning_images"] = torch.cat(conditioning_images).to(memory_format=torch.contiguous_format).float()
+        elif len(conditioning_images) > 0:
+            example["conditioning_images"] = torch.stack(conditioning_images).to(memory_format=torch.contiguous_format).float()
+        else:
+            example["conditioning_images"] = None
 
         return example
 

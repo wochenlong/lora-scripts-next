@@ -9,9 +9,12 @@
     <td align="center"><a href="https://github.com/wochenlong"><img src="https://github.com/wochenlong.png" width="80" /><br /><sub><b>wochenlong</b></sub></a><br /><sub>项目负责人</sub></td>
     <td align="center"><a href="https://github.com/ageless-h"><img src="https://github.com/ageless-h.png" width="80" /><br /><sub><b>ageless-h</b></sub></a><br /><sub>后端开发</sub></td>
     <td align="center"><a href="https://github.com/SupermarKleet"><img src="https://github.com/SupermarKleet.png" width="80" /><br /><sub><b>SupermarKleet</b></sub></a><br /><sub>UI 设计</sub></td>
-    <td align="center"><a href="https://github.com/niangao2331"><img src="https://github.com/niangao2331.png" width="80" /><br /><sub><b>niangao2331</b></sub></a><br /><sub>社区贡献</sub></td>
+    <td align="center"><a href="https://github.com/niangao2331"><img src="https://github.com/niangao2331.png" width="80" /><br /><sub><b>niangao2331</b></sub></a><br /><sub>打标与标签编辑器</sub></td>
+    <td align="center"><a href="https://github.com/MikumikuDAIFans"><img src="https://github.com/MikumikuDAIFans.png" width="80" /><br /><sub><b>MikumikuDAIFans</b></sub></a><br /><sub>训练引擎与端口治理</sub></td>
   </tr>
 </table>
+
+分工与协作约定（维护者文档，不上主页导航）：[`docs/team/README.md`](docs/team/README.md)。
 
 ## Contributions
 
