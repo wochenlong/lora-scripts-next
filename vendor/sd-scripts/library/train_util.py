@@ -2954,7 +2954,11 @@ class ControlNetDataset(BaseDataset):
             first = conditioning_images[0]
             if isinstance(first, torch.Tensor) and first.ndim == 4:
                 if len(conditioning_images) == 1:
-                    example["conditioning_images"] = first.to(memory_format=torch.contiguous_format).float()
+                    cond_tensor = first.to(memory_format=torch.contiguous_format).float()
+                    # [C, N, H, W] multi-reference (collator returns examples[0] without batch dim)
+                    if 2 <= cond_tensor.shape[1] <= 8 and cond_tensor.shape[0] > cond_tensor.shape[1]:
+                        cond_tensor = cond_tensor.unsqueeze(0)
+                    example["conditioning_images"] = cond_tensor
                 else:
                     example["conditioning_images"] = torch.stack(conditioning_images).to(
                         memory_format=torch.contiguous_format

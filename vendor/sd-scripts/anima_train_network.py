@@ -311,8 +311,15 @@ class AnimaNetworkTrainer(train_network.NetworkTrainer):
         if conditioning_latents is not None:
             conditioning_latents = conditioning_latents.to(accelerator.device, dtype=weight_dtype)
             if conditioning_latents.ndim == 4:
-                # [B, C, H, W] single reference per sample
-                conditioning_latents = conditioning_latents.unsqueeze(2)
+                # [C, N, H, W] without batch (collator returns examples[0])
+                if (
+                    2 <= conditioning_latents.shape[1] <= 8
+                    and conditioning_latents.shape[0] > conditioning_latents.shape[1]
+                ):
+                    conditioning_latents = conditioning_latents.unsqueeze(0)
+                else:
+                    # [B, C, H, W] single reference per sample
+                    conditioning_latents = conditioning_latents.unsqueeze(2)
             # [B, C, N, H, W] with N>=2: multi-reference, concat on temporal dim as-is
             noisy_model_input = torch.cat([noisy_model_input, conditioning_latents], dim=2)
 
