@@ -98,6 +98,22 @@ dataset_root/
 
 训练监控会展示 **参考图1 / 参考图2**（来自 manifest 或自动生成 metadata）。
 
+CLI 验证配置：`anima-edit-dual-ref-smoke.toml`（2 step）、`anima-edit-dual-ref-10epoch.toml`（10 epoch）、`anima-edit-dual-ref-multi-preview.toml`（多 `[[prompts]]` 预览）。
+
+### 外部数据集选型（几十对规模）
+
+魔搭/SEED 全量 Part1（约 350 万对）过大，建议 **HF 上按条数可控** 的数据集，再抽 30–80 对转成 `target/` + `reference/<stem>/`：
+
+| 数据集 | 规模 | 双参考适配 | 说明 |
+|--------|------|------------|------|
+| [BryanW/HumanEdit](https://huggingface.co/datasets/BryanW/HumanEdit) | ~5.7k 对 | 单参考为主 | 质量高、带 mask；`INPUT`→`reference/1.png`，`OUTPUT`→`target`，第二张可用 `MASK` 或同源裁剪 |
+| [osunlp/MagicBrush](https://huggingface.co/datasets/osunlp/MagicBrush) | ~8.8k train | 单参考 | 经典指令编辑；`source_img`→ref1，`target_img`→target，ref2 可用 `mask_img` 或 source 副本 |
+| [ONE-Lab/MultiRef-benchmark](https://huggingface.co/datasets/ONE-Lab/MultiRef-benchmark) | 1990（评测） | **天然多图** | `real_world` 子集常含 2+ 输入图 + 合成结果，最接近 P0 双参考协议 |
+| [ONE-Lab/MultiRef-dataset](https://huggingface.co/datasets/ONE-Lab/MultiRef-dataset) | 38k 合成 | **多参考** | 可只下 JSONL + 按需拉 `input_images`，抽几十条即可 |
+| [AILab-CVC/SEED-Data-Edit-Part2-3](https://huggingface.co/datasets/AILab-CVC/SEED-Data-Edit-Part2-3) Part2 | ~52k | 单参考 | 比 Part1 小很多，适合随机抽子集 |
+
+**推荐优先试**：`MultiRef-benchmark` 的 `real_world`（多输入图）或 `HumanEdit` 抽 50 对（质量稳定）。转换脚本可放 `script/ops/`，输出到 `data/anima-edit-<name>/`。
+
 ```toml
 [[prompts]]
 prompt = "..."
