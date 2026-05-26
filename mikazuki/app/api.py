@@ -201,10 +201,10 @@ async def load_presets():
             avaliable_presets.append(toml.loads(content))
 
 
-def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple[Optional[str], str]:
+def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple[Optional[str], str, Optional[str]]:
     # backward compatibility
     if "sample_prompts" in config and "positive_prompts" not in config:
-        return None, config["sample_prompts"]
+        return None, config["sample_prompts"], None
 
     train_data_dir = config["train_data_dir"]
     sub_dir = [dir for dir in glob(os.path.join(train_data_dir, '*')) if os.path.isdir(dir)]
@@ -247,6 +247,7 @@ def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple
             log.error(f"读取 {sample_prompt_file} 文件失败")
 
     control_image_arg = ""
+    selected_control_image = None
     if use_conditioning_preview:
         positive_prompts = conditioning_preview_prompt or positive_prompts
         control_image = None
@@ -260,9 +261,10 @@ def get_sample_prompts(config: dict, model_train_type: str = "sd-lora") -> Tuple
 
         if not control_image or not os.path.isfile(control_image):
             raise ValueError("已启用图像编辑预览，请选择固定 Control Image 或配置随机目录。")
+        selected_control_image = _normalize_path(control_image)
         control_image_arg = f" --cn {_normalize_path(control_image)}"
 
-    return positive_prompts, f'{positive_prompts} --n {negative_prompts}  --w {sample_width} --h {sample_height} --l {sample_cfg}  --s {sample_steps}  --d {sample_seed}{control_image_arg}'
+    return positive_prompts, f'{positive_prompts} --n {negative_prompts}  --w {sample_width} --h {sample_height} --l {sample_cfg}  --s {sample_steps}  --d {sample_seed}{control_image_arg}', selected_control_image
 
 
 def apply_sdxl_prediction_type(config: dict, model_train_type: str):
@@ -508,6 +510,7 @@ async def create_toml_file(request: Request):
     if not validated:
         return APIResponseFail(message=message)
 
+    selected_conditioning_preview_image = None
     if "prompt_file" in config and config["prompt_file"].strip() != "":
         prompt_file = config["prompt_file"].strip()
         if not os.path.exists(prompt_file):
@@ -515,7 +518,7 @@ async def create_toml_file(request: Request):
         config["sample_prompts"] = prompt_file
     else:
         try:
-            positive_prompt, sample_prompts_arg = get_sample_prompts(config=config, model_train_type=model_train_type)
+            positive_prompt, sample_prompts_arg, selected_conditioning_preview_image = get_sample_prompts(config=config, model_train_type=model_train_type)
 
             if positive_prompt is not None and train_utils.is_promopt_like(sample_prompts_arg):
                 sample_prompts_file = os.path.join(autosave_dir, f"{timestamp}-promopt.txt")
@@ -538,6 +541,16 @@ async def create_toml_file(request: Request):
 
     with open(toml_file, "w", encoding="utf-8") as f:
         f.write(toml.dumps(config))
+
+    if selected_conditioning_preview_image:
+        monitor_metadata_file = f"{toml_file}.monitor.json"
+        with open(monitor_metadata_file, "w", encoding="utf-8") as f:
+            json.dump(
+                {"conditioning_reference_image": selected_conditioning_preview_image},
+                f,
+                ensure_ascii=False,
+                indent=2,
+            )
 
     result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads)
 

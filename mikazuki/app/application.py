@@ -1,10 +1,13 @@
 import asyncio
+import json
 import mimetypes
 import os
 import sys
 import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.error import URLError
+from urllib.request import urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -77,6 +80,43 @@ def _start_url() -> str:
     return f'http://{os.environ["MIKAZUKI_HOST"]}:{os.environ["MIKAZUKI_PORT"]}{page}'
 
 
+def _current_gui_port() -> int:
+    return int(os.environ.get("MIKAZUKI_PORT", "28000"))
+
+
+def _monitor_port_candidates() -> list[int]:
+    ports: list[int] = []
+    for value in (os.environ.get("TRAIN_MONITOR_PORT"), "6008"):
+        try:
+            port = int(str(value).strip())
+        except (TypeError, ValueError):
+            continue
+        if port not in ports:
+            ports.append(port)
+    for port in range(6008, 6025):
+        if port not in ports:
+            ports.append(port)
+    return ports
+
+
+def _monitor_matches_gui(port: int, gui_port: int) -> bool:
+    try:
+        with urlopen(f"http://127.0.0.1:{port}/api/identity", timeout=0.4) as resp:
+            data = json.loads(resp.read().decode("utf-8", errors="replace"))
+        return int(data.get("gui_port", -1)) == gui_port
+    except (OSError, ValueError, json.JSONDecodeError, URLError):
+        return False
+
+
+def _train_monitor_url() -> str:
+    gui_port = _current_gui_port()
+    for port in _monitor_port_candidates():
+        if _monitor_matches_gui(port, gui_port):
+            return f"http://127.0.0.1:{port}"
+    fallback = os.environ.get("TRAIN_MONITOR_PORT", "6008")
+    return f"http://127.0.0.1:{fallback}"
+
+
 async def _async_update_check():
     from mikazuki.update_check import check_update, log_update_notice
     try:
@@ -104,10 +144,10 @@ async def app_startup():
             app_log.info(f"Using browser: {os.environ.get('MIKAZUKI_BROWSER', 'default')}")
 
         browser.open(_start_url())
-        monitor_port = os.environ.get("TRAIN_MONITOR_PORT", "6008")
         time.sleep(1)
-        app_log.info(f"Opening train monitor in browser: http://127.0.0.1:{monitor_port}")
-        browser.open(f'http://127.0.0.1:{monitor_port}')
+        monitor_url = _train_monitor_url()
+        app_log.info(f"Opening train monitor in browser: {monitor_url}")
+        browser.open(monitor_url)
 
 
 @asynccontextmanager
@@ -152,7 +192,9 @@ async def redirect_vuepress_md_to_html(request, call_next):
 @app.middleware("http")
 async def add_cache_control_header(request, call_next):
     response = await call_next(request)
-    response.headers["Cache-Control"] = "max-age=0"
+    response.headers["Cache-Control"] = "no-store, max-age=0, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
     return response
 
 app.include_router(api_router, prefix="/api")
@@ -171,9 +213,8 @@ async def train_log_viewer():
 
 @app.get("/train-monitor")
 async def train_monitor_redirect():
-    """Open the lightweight monitor on the actual runtime port."""
-    monitor_port = os.environ.get("TRAIN_MONITOR_PORT", "6008")
-    return RedirectResponse(url=f"http://127.0.0.1:{monitor_port}", status_code=302)
+    """Open the lightweight monitor that belongs to this GUI process."""
+    return RedirectResponse(url=_train_monitor_url(), status_code=302)
 
 
 @app.get("/lora/sdxl.html")

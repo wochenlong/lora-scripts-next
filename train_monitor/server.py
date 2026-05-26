@@ -254,6 +254,8 @@ def build_model_outputs(train_out: Path | None) -> dict:
 
 def newest_preview_images(limit: int = 6) -> list[dict]:
     config = latest_training_config()
+    reference_image = conditioning_reference_image_path(config)
+    output_limit = max(1, limit - 1) if reference_image is not None else limit
     output_dir = resolve_repo_path(str(config.get("output_dir", "")))
     output_name = str(config.get("output_name", "")).strip()
     try:
@@ -284,15 +286,17 @@ def newest_preview_images(limit: int = 6) -> list[dict]:
     selected: list[Path] = []
     if all_files:
         selected.append(all_files[0])
-    recent_files = all_files[-(limit - 1):] if limit > 1 else []
+    recent_files = all_files[-(output_limit - 1):] if output_limit > 1 else []
     for p in recent_files:
         if p not in selected:
             selected.append(p)
-        if len(selected) >= limit:
+        if len(selected) >= output_limit:
             break
 
     unique_files = selected
     out = []
+    if reference_image is not None:
+        out.append(preview_item_for_path(reference_image, "参考图"))
     for index, p in enumerate(unique_files):
         st = p.stat()
         try:
@@ -397,7 +401,7 @@ def tensorboard_loss_scalars(limit: int = TENSORBOARD_LOSS_LIMIT) -> list[dict]:
 
 _TOML_STR_KEYS = ("output_dir", "output_name", "optimizer_type", "lr_scheduler",
                    "network_module", "network_args", "train_data_dir", "reg_data_dir",
-                   "resolution", "mixed_precision")
+                   "resolution", "mixed_precision", "sample_prompts")
 _TOML_NUM_KEYS = ("max_train_epochs", "max_train_steps", "learning_rate", "unet_lr",
                    "text_encoder_lr", "network_dim", "network_alpha", "train_batch_size",
                    "gradient_accumulation_steps", "save_every_n_epochs", "save_every_n_steps",
@@ -433,6 +437,60 @@ def latest_training_config() -> dict:
             config["_config_path"] = str(config_path)
             return config
     return {}
+
+
+def _config_monitor_metadata(config: dict) -> dict:
+    config_path = config.get("_config_path")
+    if not config_path:
+        return {}
+    metadata_path = Path(f"{config_path}.monitor.json")
+    if not metadata_path.is_file():
+        return {}
+    try:
+        return json.loads(metadata_path.read_text(encoding="utf-8", errors="replace"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+
+
+def _sample_prompt_control_image(config: dict) -> str:
+    sample_prompts = resolve_repo_path(str(config.get("sample_prompts", "")))
+    if sample_prompts is None or not sample_prompts.is_file():
+        return ""
+    try:
+        text = sample_prompts.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return ""
+    match = re.search(r"(?:^|\s)--cn\s+(?P<path>\S+)", text)
+    return match.group("path") if match else ""
+
+
+def conditioning_reference_image_path(config: dict) -> Path | None:
+    metadata = _config_monitor_metadata(config)
+    raw_path = str(metadata.get("conditioning_reference_image") or "").strip()
+    if not raw_path:
+        raw_path = _sample_prompt_control_image(config)
+    path = resolve_repo_path(raw_path)
+    if path is None or not path.is_file() or path.suffix.lower() not in IMAGE_EXTENSIONS:
+        return None
+    return path
+
+
+def preview_item_for_path(path: Path, role: str) -> dict:
+    st = path.stat()
+    try:
+        url_path = str(path.relative_to(REPO))
+    except ValueError:
+        url_path = str(path.resolve())
+    return {
+        "name": path.name,
+        "path": str(path),
+        "size": human_size(st.st_size),
+        "mtime": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
+        "url": f"/preview-image?path={quote(url_path)}",
+        "role": role,
+        "epoch": None,
+        "max_epoch": 0,
+    }
 
 
 def _count_dataset_images(train_data_dir: str, reg_data_dir: str | None) -> dict:
@@ -970,7 +1028,9 @@ def preview_image_path(raw_path: str) -> Path | None:
         train_out = _training_output_dir()
         if train_out is not None:
             allowed_roots.append(train_out.resolve())
-        if not any(candidate == root or root in candidate.parents for root in allowed_roots):
+        reference_image = conditioning_reference_image_path(latest_training_config())
+        allowed_files = [reference_image.resolve()] if reference_image is not None else []
+        if candidate not in allowed_files and not any(candidate == root or root in candidate.parents for root in allowed_roots):
             return None
         if not candidate.is_file() or candidate.suffix.lower() not in IMAGE_EXTENSIONS:
             return None
@@ -1037,6 +1097,20 @@ class Handler(BaseHTTPRequestHandler):
             return
 
         # API endpoint
+        if self.path.startswith("/api/identity"):
+            payload = json.dumps({
+                "monitor_port": PORT,
+                "gui_api": GUI_API,
+                "gui_port": _GUI_API_PORT,
+            }, ensure_ascii=False).encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Content-Length", str(len(payload)))
+            self.end_headers()
+            self.wfile.write(payload)
+            return
+
         if self.path.startswith("/api/status"):
             payload = json.dumps(collect_status(), ensure_ascii=False).encode("utf-8")
             self.send_response(200)
