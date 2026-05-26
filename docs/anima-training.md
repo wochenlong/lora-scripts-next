@@ -78,6 +78,23 @@ dataset_root/
 
 参考配置：[`docs/examples/anima-edit-reference.toml`](examples/anima-edit-reference.toml)。这是基于一次真实 50 epoch 图像编辑训练探针脱敏后的 TOML，已去掉本机路径和数据集名称，可作为参数参考；使用前请替换模型、数据集、输出目录和预览 prompt 路径。
 
+### 实验限制与质量预期
+
+Anima Edit 当前是 **Anima 文生图基座 + conditioning LoRA** 的实验训练链路，不等同于 Qwen Image Edit 这类专门的图像编辑模型。专用编辑模型通常经过大规模编辑对、局部一致性和指令保持训练；本分支更适合验证特定 paired dataset 的映射能力，局部边界和复杂遮挡的稳定性会弱一些。
+
+如果同一位置在后续 epoch 里反复出现黑块、污渍、错误色块或结构漂移，通常说明 LoRA 开始把小数据集里的局部错误学进去。可优先尝试：
+
+- 选择更早的 checkpoint，例如预览图开始变脏之前的 epoch。
+- 将 `unet_lr` 从 `5e-5` 降到 `2e-5` / `3e-5`。
+- 降低 `network_dim` 或减少总 epoch。
+- 增加更干净、更多样的 Target / Reference 配对图，减少单一构图导致的固定伪影。
+
+<p align="center">
+  <img src="../assets/readme/anima-edit-limitations.png" alt="Anima Edit 过拟合伪影示例" width="920" />
+</p>
+
+<p align="center"><sub>示例：小数据集在有效学习后继续训练，局部色块伪影会逐渐固定，通常应回退到更早 checkpoint。</sub></p>
+
 ### 命令行 / TOML 训练
 
 如果你不想通过 WebUI 表单启动，也可以直接使用本仓库的 sd-scripts 入口跑 Anima Edit。参考文件：

@@ -68,6 +68,18 @@
 
 <p align="center"><sub>示例图片由 <b>古柯C17H21NO4</b> 提供，感谢他提供用于说明图像编辑流程的图片素材。</sub></p>
 
+### 实验限制说明
+
+本分支的 Anima Edit 是在 **Anima 文生图基座上进行 conditioning LoRA 训练**，不是 Qwen Image Edit 这类专门训练过的图像编辑基础模型。因此它能验证“参考图到目标图”的训练链路，但在局部边界、遮挡关系和细节稳定性上，精度上限通常会低一些。
+
+如果预览图在后期反复出现固定位置的黑块、污渍、色块或结构漂移，通常应优先视为小数据集过拟合信号，而不是 WebUI 显示问题。建议选择更早的 checkpoint，降低 `unet_lr`，减少 epoch，或准备更干净、更多样的成对数据集。
+
+<p align="center">
+  <img src="assets/readme/anima-edit-limitations.png" alt="Anima Edit 过拟合伪影示例" width="920" />
+</p>
+
+<p align="center"><sub>小数据集训练中的过拟合示例：有效学习阶段之后，局部色块伪影会逐渐固定并加重。</sub></p>
+
 > WebUI 训练会自动生成 conditioning dataset TOML，并在图像编辑预览 prompt 中写入 `--cn <control image>`。详细说明见 [docs/anima-training.md](docs/anima-training.md)。
 > 后端 conditioning 实现参考 [Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts)（kohya-ss/sd-scripts 的 Apache-2.0 fork）；本项目保留其许可证文本、来源说明与必要致谢。
 

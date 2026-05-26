@@ -68,6 +68,18 @@ Quick links:
 
 <p align="center"><sub>Sample images courtesy of <b>古柯C17H21NO4</b>. Thank you for providing the reference images used here.</sub></p>
 
+### Experimental quality note
+
+Anima Edit in this branch is **conditioning LoRA training on top of an Anima text-to-image base model**, not a dedicated image-editing foundation model. Compared with specialized editors such as Qwen Image Edit, it can be less precise around local boundaries and may learn fixed artifacts from small paired datasets, especially at later epochs.
+
+If previews start showing repeated dark stains, color blocks, or structure drift, treat that as an overfitting signal rather than a WebUI display issue. Prefer an earlier checkpoint, lower `unet_lr`, fewer epochs, or a cleaner / more diverse paired dataset.
+
+<p align="center">
+  <img src="assets/readme/anima-edit-limitations.png" alt="Anima Edit overfitting artifact example" width="920" />
+</p>
+
+<p align="center"><sub>Example of a small edit dataset overfitting over epochs: local color artifacts become more stable after the useful learning phase.</sub></p>
+
 > WebUI training now writes the conditioning dataset TOML and `--cn <control image>` sample prompt automatically. See [docs/anima-training.md](docs/anima-training.md) for details.
 > The backend conditioning work references [Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts), an Apache-2.0 fork of kohya-ss/sd-scripts; this project preserves its license notices and source attribution.
 
