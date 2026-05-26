@@ -708,7 +708,7 @@ function renderStatus(status) {
 
 async function pollStatus() {
   try {
-    const resp = await fetch("/api/status?ts=" + Date.now(), { cache: "no-store" });
+    const resp = await fetch("api/status?ts=" + Date.now(), { cache: "no-store" });
     if (!resp.ok) throw new Error("HTTP " + resp.status);
     renderStatus(await resp.json());
   } catch (err) {

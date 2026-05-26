@@ -315,7 +315,7 @@ def newest_preview_images(limit: int = 6) -> list[dict]:
             "path": str(p),
             "size": human_size(st.st_size),
             "mtime": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-            "url": f"/preview-image?path={quote(url_path)}",
+            "url": f"preview-image?path={quote(url_path)}",
             "role": role,
             "epoch": epoch,
             "max_epoch": max_epochs,
@@ -486,7 +486,7 @@ def preview_item_for_path(path: Path, role: str) -> dict:
         "path": str(path),
         "size": human_size(st.st_size),
         "mtime": datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M:%S"),
-        "url": f"/preview-image?path={quote(url_path)}",
+        "url": f"preview-image?path={quote(url_path)}",
         "role": role,
         "epoch": None,
         "max_epoch": 0,
@@ -1096,9 +1096,10 @@ class Handler(BaseHTTPRequestHandler):
             self._serve_file(image_path, content_type, cache=False)
             return
 
-        # API endpoint
-        if self.path.startswith("/api/identity"):
+        # Identity/health endpoints used by the WebUI registry and proxy.
+        if self.path.startswith("/api/identity") or self.path.startswith("/__lora_service_health"):
             payload = json.dumps({
+                "service": "train-monitor",
                 "monitor_port": PORT,
                 "gui_api": GUI_API,
                 "gui_port": _GUI_API_PORT,

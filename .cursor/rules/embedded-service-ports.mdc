@@ -1,6 +1,6 @@
 ---
 description: Keep embedded service ports dynamic and avoid monitor/TensorBoard regressions
-globs: "{gui.py,mikazuki/app/application.py,mikazuki/app/proxy.py,frontend/dist/**/*,build-scripts/**/*,scripts/portable/**/*,build/**/*.md,AGENT_INTERNAL.md}"
+globs: "{gui.py,mikazuki/app/application.py,mikazuki/app/proxy.py,frontend/dist/**/*,build-scripts/**/*,scripts/portable/**/*,build/**/*.md,doc/local/AGENT_INTERNAL.md}"
 alwaysApply: false
 ---
 
@@ -16,10 +16,12 @@ The WebUI starts several local services. Their default ports are not stable URLs
 Rules:
 
 - Do not hardcode `http://127.0.0.1:6008` as a train monitor entry in frontend files, docs, launchers, or packaging patches.
-- Use `/train-monitor` for train monitor links. The backend redirects using `TRAIN_MONITOR_PORT`.
-- Read TensorBoard from `MIKAZUKI_TENSORBOARD_PORT`, train monitor from `TRAIN_MONITOR_PORT`, and tag editor from `MIKAZUKI_TAGEDITOR_PORT`.
+- Use `/monitor/` for train monitor links; keep `/train-monitor` only as a compatibility alias.
+- Read child service addresses from `.runtime/services.json`, falling back to `MIKAZUKI_TENSORBOARD_PORT`, `TRAIN_MONITOR_PORT`, and `MIKAZUKI_TAGEDITOR_PORT` only when the registry is unavailable.
 - Port allocation must protect every enabled service's default port before fallback scanning. TensorBoard must not be allowed to claim `6008` as a fallback while the train monitor is enabled.
 - In `gui.py`, after selecting fallback ports, write env vars before starting child services or the main WebUI.
 - The train monitor must validate its GUI API target. If inherited `MIKAZUKI_PORT` points at TensorBoard or another stale service, it should fall back to the main WebUI default (`28000`) rather than reporting a misleading port-specific error.
-- Frontend should target stable backend routes (`/train-monitor`, `/tensorboard.html`, `/proxy/tensorboard`) rather than guessing child-service ports.
+- Frontend should target stable backend routes (`/monitor/`, `/tensorboard/`, `/tagger/`) rather than guessing child-service ports.
 - Portable release validation must cover a port-collision case: when `6006` or `6008` is occupied, the train monitor link still opens the train monitor, not TensorBoard.
+
+Target architecture (not fully implemented): `docs/design/ports/` — do not link from user-facing README home.

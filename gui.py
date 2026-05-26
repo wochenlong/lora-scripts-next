@@ -1,6 +1,6 @@
 import argparse
-import locale
 import os
+import locale
 import platform
 import subprocess
 import sys
@@ -8,6 +8,7 @@ import sys
 from mikazuki.launch_utils import (base_dir_path, catch_exception, git_tag,
                                    prepare_environment, check_port_avaliable)
 from mikazuki.log import log
+from mikazuki.app.services import internal_url, public_base_url, write_services
 from mikazuki.portable_utils import sanitize_embedded_deps, train_env_overrides
 
 parser = argparse.ArgumentParser(description="GUI for stable diffusion training")
@@ -57,14 +58,15 @@ def ensure_port_available(
 @catch_exception
 def run_train_monitor():
     env = os.environ.copy()
-    subprocess.Popen([sys.executable, str(base_dir_path() / "train_monitor" / "server.py")], env=env)
+    return subprocess.Popen([sys.executable, str(base_dir_path() / "train_monitor" / "server.py")], env=env)
 
 
 @catch_exception
 def run_tensorboard():
     log.info("Starting tensorboard...")
-    subprocess.Popen([sys.executable, "-m", "tensorboard.main", "--logdir", "logs",
-                     "--host", args.tensorboard_host, "--port", str(args.tensorboard_port)])
+    return subprocess.Popen([sys.executable, "-m", "tensorboard.main", "--logdir", "logs",
+                            "--host", args.tensorboard_host, "--port", str(args.tensorboard_port),
+                            "--path_prefix", "/tensorboard"])
 
 
 @catch_exception
@@ -95,7 +97,7 @@ def run_tag_editor(port: int):
     tag_args = [
         "--port", str(port),
         "--shadow-gradio-output",
-        "--root-path", "/proxy/tageditor"
+        "--root-path", "/tagger"
     ]
     if args.localization:
         tag_args.extend(["--localization", args.localization])
@@ -109,7 +111,61 @@ def run_tag_editor(port: int):
         f"sys.argv = [{str(launch_script)!r}] + {tag_args!r};"
         f"exec(compile(open({str(launch_script)!r}).read(), {str(launch_script)!r}, 'exec'))"
     )
-    subprocess.Popen([sys.executable, "-s", "-c", bootstrap])
+    return subprocess.Popen([sys.executable, "-s", "-c", bootstrap])
+
+
+def write_runtime_services(
+    tageditor_port: int,
+    tageditor_process: subprocess.Popen | None,
+    tensorboard_process: subprocess.Popen | None,
+    train_monitor_process: subprocess.Popen | None,
+) -> None:
+    base_url = public_base_url()
+    services = {
+        "webui": {
+            "service": "webui",
+            "pid": os.getpid(),
+            "host": args.host,
+            "port": args.port,
+            "internal_url": internal_url(args.host, args.port),
+            "public_url": base_url,
+        }
+    }
+    if not args.disable_tensorboard:
+        tb_url = internal_url(args.tensorboard_host, args.tensorboard_port)
+        services["tensorboard"] = {
+            "service": "tensorboard",
+            "pid": tensorboard_process.pid if tensorboard_process else None,
+            "host": args.tensorboard_host,
+            "port": args.tensorboard_port,
+            "internal_url": tb_url,
+            "public_url": f"{base_url}/tensorboard/",
+        }
+    if not args.disable_train_monitor:
+        tm_url = internal_url("127.0.0.1", args.train_monitor_port)
+        services["train-monitor"] = {
+            "service": "train-monitor",
+            "pid": train_monitor_process.pid if train_monitor_process else None,
+            "host": "127.0.0.1",
+            "port": args.train_monitor_port,
+            "internal_url": tm_url,
+            "public_url": f"{base_url}/monitor/",
+            "webui_port": args.port,
+        }
+    if not args.disable_tageditor:
+        tag_url = internal_url("127.0.0.1", tageditor_port)
+        services["tag-editor"] = {
+            "service": "tag-editor",
+            "pid": tageditor_process.pid if tageditor_process else None,
+            "host": "127.0.0.1",
+            "port": tageditor_port,
+            "internal_url": tag_url,
+            "public_url": f"{base_url}/tagger/",
+        }
+    try:
+        write_services(services)
+    except OSError as exc:
+        log.warning(f"Failed to write runtime service registry: {exc}")
 
 
 def launch():
@@ -137,7 +193,7 @@ def launch():
     tageditor_port = 28001
     if not args.disable_tageditor:
         tageditor_port = ensure_port_available(
-            28001, 28001, 28020, "Tag editor", reserved_ports, preferred_reserved_port=28001
+            28001, 28130, 28140, "Tag editor", reserved_ports, preferred_reserved_port=28001
         )
     args.port = ensure_port_available(
         args.port, args.port, args.port + 20, "GUI", reserved_ports, preferred_reserved_port=args.port
@@ -145,8 +201,8 @@ def launch():
     if not args.disable_tensorboard:
         args.tensorboard_port = ensure_port_available(
             args.tensorboard_port,
-            args.tensorboard_port,
-            args.tensorboard_port + 20,
+            28110,
+            28120,
             "TensorBoard",
             reserved_ports,
             preferred_reserved_port=args.tensorboard_port,
@@ -154,8 +210,8 @@ def launch():
     if not args.disable_train_monitor:
         args.train_monitor_port = ensure_port_available(
             args.train_monitor_port,
-            args.train_monitor_port,
-            args.train_monitor_port + 20,
+            28120,
+            28130,
             "Train monitor",
             reserved_ports,
             preferred_reserved_port=args.train_monitor_port,
@@ -163,6 +219,10 @@ def launch():
 
     from mikazuki.update_check import local_version
     log.info(f"SD-Trainer Version: {local_version()}")
+
+    if args.listen:
+        args.host = "0.0.0.0"
+        args.tensorboard_host = "0.0.0.0"
 
     os.environ["MIKAZUKI_HOST"] = args.host
     os.environ["MIKAZUKI_PORT"] = str(args.port)
@@ -174,18 +234,20 @@ def launch():
     if args.browser:
         os.environ["MIKAZUKI_BROWSER"] = args.browser
 
-    if args.listen:
-        args.host = "0.0.0.0"
-        args.tensorboard_host = "0.0.0.0"
+    tageditor_process = None
+    tensorboard_process = None
+    train_monitor_process = None
 
     if not args.disable_tageditor:
-        run_tag_editor(tageditor_port)
+        tageditor_process = run_tag_editor(tageditor_port)
 
     if not args.disable_tensorboard:
-        run_tensorboard()
+        tensorboard_process = run_tensorboard()
 
     if not args.disable_train_monitor:
-        run_train_monitor()
+        train_monitor_process = run_train_monitor()
+
+    write_runtime_services(tageditor_port, tageditor_process, tensorboard_process, train_monitor_process)
 
     import uvicorn
     log.info(f"Server started at http://{args.host}:{args.port}")

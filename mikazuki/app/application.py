@@ -1,13 +1,10 @@
 import asyncio
-import json
 import mimetypes
 import os
 import sys
 import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
-from urllib.error import URLError
-from urllib.request import urlopen
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,6 +17,7 @@ from mikazuki.app.api import load_schemas, load_presets
 from mikazuki.app.api import router as api_router
 # from mikazuki.app.ipc import router as ipc_router
 from mikazuki.app.proxy import router as proxy_router
+from mikazuki.app.services import public_base_url, read_services, service_public_url
 from mikazuki.utils.devices import check_torch_gpu
 
 mimetypes.add_type("application/javascript", ".js")
@@ -80,41 +78,8 @@ def _start_url() -> str:
     return f'http://{os.environ["MIKAZUKI_HOST"]}:{os.environ["MIKAZUKI_PORT"]}{page}'
 
 
-def _current_gui_port() -> int:
-    return int(os.environ.get("MIKAZUKI_PORT", "28000"))
-
-
-def _monitor_port_candidates() -> list[int]:
-    ports: list[int] = []
-    for value in (os.environ.get("TRAIN_MONITOR_PORT"), "6008"):
-        try:
-            port = int(str(value).strip())
-        except (TypeError, ValueError):
-            continue
-        if port not in ports:
-            ports.append(port)
-    for port in range(6008, 6025):
-        if port not in ports:
-            ports.append(port)
-    return ports
-
-
-def _monitor_matches_gui(port: int, gui_port: int) -> bool:
-    try:
-        with urlopen(f"http://127.0.0.1:{port}/api/identity", timeout=0.4) as resp:
-            data = json.loads(resp.read().decode("utf-8", errors="replace"))
-        return int(data.get("gui_port", -1)) == gui_port
-    except (OSError, ValueError, json.JSONDecodeError, URLError):
-        return False
-
-
 def _train_monitor_url() -> str:
-    gui_port = _current_gui_port()
-    for port in _monitor_port_candidates():
-        if _monitor_matches_gui(port, gui_port):
-            return f"http://127.0.0.1:{port}"
-    fallback = os.environ.get("TRAIN_MONITOR_PORT", "6008")
-    return f"http://127.0.0.1:{fallback}"
+    return service_public_url("train-monitor", f"{public_base_url()}/monitor/")
 
 
 async def _async_update_check():
@@ -214,7 +179,42 @@ async def train_log_viewer():
 @app.get("/train-monitor")
 async def train_monitor_redirect():
     """Open the lightweight monitor that belongs to this GUI process."""
-    return RedirectResponse(url=_train_monitor_url(), status_code=302)
+    return RedirectResponse(url="/monitor/", status_code=302)
+
+
+@app.get("/monitor")
+async def monitor_redirect():
+    return RedirectResponse(url="/monitor/", status_code=302)
+
+
+@app.get("/tensorboard")
+async def tensorboard_redirect():
+    return RedirectResponse(url="/tensorboard/", status_code=302)
+
+
+@app.get("/tensorboard.html")
+async def tensorboard_html_redirect():
+    return RedirectResponse(url="/tensorboard/", status_code=302)
+
+
+@app.get("/tagger")
+async def tagger_redirect():
+    return RedirectResponse(url="/tagger/", status_code=302)
+
+
+@app.get("/tageditor.html")
+async def tageditor_html_redirect():
+    return RedirectResponse(url="/tagger/", status_code=302)
+
+
+@app.get("/__lora_service_health")
+async def webui_service_health():
+    return {
+        "service": "webui",
+        "port": int(os.environ.get("MIKAZUKI_PORT", "28000")),
+        "public_url": public_base_url(),
+        "registry": read_services().get("services", {}),
+    }
 
 
 @app.get("/lora/sdxl.html")
