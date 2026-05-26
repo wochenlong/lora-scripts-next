@@ -36,6 +36,8 @@
 
 `anima-edit` 分支在 Anima 训练页增加了 **图像编辑（实验功能）** 分组，并已接入 Anima conditioning / image editing 训练后端。
 
+> 当前 Release 整合包还不包含该分支能力。要测试图像编辑训练，请从源码切到 `anima-edit` 分支运行：`git checkout anima-edit`。
+
 条件训练使用成对图片：
 
 | 字段 | 含义 |
@@ -64,6 +66,15 @@ dataset_root/
 - 开启 `enable_conditioning_preview` 后，普通预览 Prompt 会被 `conditioning_preview_prompt` 替代。
 - `sample_conditioning_image` 可指定固定 Control Image。
 - `random_conditioning_preview_image` 开启后，可通过 `sample_conditioning_image_data_dir` 每次从目录随机抽取 Control Image。
+
+### 快速训练教学
+
+1. 准备 Target / Reference 两个目录，同名图片一一配对，且图片尺寸必须一致。标签文件放在 Target 目录，例如 `imageA.txt`。
+2. 在 **Anima LoRA** 页面填好 Anima 主模型、VAE、Qwen3、T5 等基础模型路径。
+3. 打开 **图像编辑（实验功能）**，填写 `target_data_dir` 和 `conditioning_data_dir`。开启后普通 `train_data_dir` 不再作为主数据入口。
+4. 打开训练预览，并按需要启用 **图像编辑预览**：固定 `sample_conditioning_image`，或用 `sample_conditioning_image_data_dir` 随机抽参考图。
+5. 直接开始训练。WebUI 会自动生成带 `conditioning_data_dir` 的 `dataset_config.toml`，自动启用 latent / text encoder 缓存，并关闭 `sample_at_first`，避免 step 0 噪声预览误导判断。
+6. 建议训练若干 epoch 后再看预览图。小数据集可以先用较低学习率和较短 epoch 试跑，观察是否出现黑块、结构偏移等过拟合迹象。
 
 <p align="center">
   <img src="../assets/readme/anima-edit-ui.jpg" alt="Anima 图像编辑控件" width="920" />

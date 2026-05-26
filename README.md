@@ -43,6 +43,8 @@
 3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
 ```
 
+> **Anima image editing note:** the current portable Release package does not include the `anima-edit` branch yet. To test image-editing training, run from source after switching to `anima-edit`; wait for a later portable package before using the one-click bundle for this feature.
+
 > **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
 
 <details>
@@ -51,6 +53,7 @@
 ```sh
 git clone https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
+git checkout anima-edit
 
 # Windows
 run_gui.bat
@@ -88,6 +91,12 @@ The `anima-edit` branch adds Anima conditioning / image-editing training. Enable
 - **Target directory**: final images and their `.txt` / `.json` captions.
 - **Reference / Conditioning directory**: input reference images with the same filenames and dimensions.
 - **Image editing preview**: uses a dedicated edit prompt plus a fixed or randomly sampled Control Image, while reusing the normal preview width, CFG, steps, sampler, and schedule.
+
+Quick links:
+
+- Branch: switch to `anima-edit`; `main` and the current portable Release package do not include this backend yet.
+- Training guide: [Anima image editing / conditioning training](docs/anima-training.md#图像编辑--条件训练实验).
+- Key constraints: paired Target / Reference images must have identical filenames and dimensions; image-editing mode automatically enables latent / text encoder caching and disables step 0 preview.
 
 <p align="center">
   <img src="assets/readme/anima-edit-ui.jpg" alt="Anima image editing controls" width="920" />

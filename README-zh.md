@@ -43,6 +43,8 @@
 3. 训练  →  浏览器打开 http://127.0.0.1:28000，选模型、填参数、开练
 ```
 
+> **Anima 图像编辑注意：** 当前 Release 整合包还不包含 `anima-edit` 分支的图像编辑训练能力，不能直接用整合包验证该功能。请从源码切到 `anima-edit` 分支运行，等待后续整合包发布后再使用一键包。
+
 整合包已内置默认 WD 打标模型 **wd14-convnextv2-v2**（约 400 MB，位于 `huggingface/`），WebUI「打标」页开箱即用。
 
 > **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
@@ -53,6 +55,7 @@
 ```sh
 git clone https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
+git checkout anima-edit
 
 # Windows
 run_gui.bat
@@ -90,6 +93,12 @@ bash install_flash_attn.sh
 - **目标图目录 Target**：放置希望模型学习生成的目标图片，以及同名 `.txt` / `.json` 标签。
 - **参考图目录 Reference / Conditioning**：放置输入参考图，文件名和尺寸需与目标图一致。
 - **图像编辑预览**：使用专属编辑 Prompt + 固定或随机抽取的 Control Image；宽高、CFG、步数、采样器和预览频率复用普通训练预览图设置。
+
+快速入口：
+
+- 代码分支：需要切到 `anima-edit`，普通 `main` 分支和当前 Release 整合包没有这套后端。
+- 训练教程：见 [Anima 图像编辑 / 条件训练教程](docs/anima-training.md#图像编辑--条件训练实验)。
+- 关键约束：Target 与 Reference 的同名图片必须尺寸一致；图像编辑模式会自动启用 latent / text encoder 缓存，并关闭 step 0 预览。
 
 <p align="center">
   <img src="assets/readme/anima-edit-ui.jpg" alt="Anima 图像编辑控件" width="920" />
