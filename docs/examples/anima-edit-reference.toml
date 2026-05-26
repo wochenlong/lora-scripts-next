@@ -15,9 +15,9 @@ vae = "./sd-models/anima/qwen_image_vae.safetensors"
 qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
 
 # WebUI users should fill Target / Reference folders in the form.
-# CLI users should point dataset_config to a file containing conditioning_data_dir.
+# CLI users should edit docs/examples/anima-edit-dataset.toml first.
 train_data_dir = "./data/anima-edit/target"
-dataset_config = "./config/examples/anima-edit-dataset.toml"
+dataset_config = "./docs/examples/anima-edit-dataset.toml"
 
 conditioning = true
 resolution = "1024,1024"
@@ -60,6 +60,6 @@ attn_mode = "torch"
 # Avoid misleading step 0 previews in conditioning mode.
 sample_at_first = false
 sample_every_n_epochs = 5
-sample_prompts = "./config/examples/anima-edit-sample-prompts.txt"
+sample_prompts = "./docs/examples/anima-edit-sample-prompts.txt"
 
 caption_extension = ".txt"

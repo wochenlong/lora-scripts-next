@@ -1,0 +1,4 @@
+# Replace the prompt text and --cn image path before training.
+# Important: do not wrap the --cn path in quotes.
+
+high quality Anima style illustration, clean color, detailed character --n low quality, blurry, noisy, bad anatomy --w 1024 --h 1024 --l 4.5 --s 40 --cn ./data/anima-edit/reference/imageA.png

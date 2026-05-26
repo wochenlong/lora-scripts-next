@@ -1,0 +1,15 @@
+# Anima Edit dataset_config reference.
+# Replace image_dir and conditioning_data_dir with your own paired dataset paths.
+
+[general]
+resolution = "1024,1024"
+caption_extension = ".txt"
+enable_bucket = true
+bucket_reso_steps = 64
+
+[[datasets]]
+num_repeats = 1
+
+[[datasets.subsets]]
+image_dir = "./data/anima-edit/target"
+conditioning_data_dir = "./data/anima-edit/reference"

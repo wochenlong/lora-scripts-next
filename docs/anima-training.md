@@ -78,6 +78,85 @@ dataset_root/
 
 参考配置：[`docs/examples/anima-edit-reference.toml`](examples/anima-edit-reference.toml)。这是基于一次真实 50 epoch 图像编辑训练探针脱敏后的 TOML，已去掉本机路径和数据集名称，可作为参数参考；使用前请替换模型、数据集、输出目录和预览 prompt 路径。
 
+### 命令行 / TOML 训练
+
+如果你不想通过 WebUI 表单启动，也可以直接使用本仓库的 sd-scripts 入口跑 Anima Edit。参考文件：
+
+- 主训练配置：[`docs/examples/anima-edit-reference.toml`](examples/anima-edit-reference.toml)
+- 数据集配置：[`docs/examples/anima-edit-dataset.toml`](examples/anima-edit-dataset.toml)
+- 预览 prompt：[`docs/examples/anima-edit-sample-prompts.txt`](examples/anima-edit-sample-prompts.txt)
+
+1. 准备成对数据集：
+
+```text
+data/anima-edit/
+├── reference/
+│   ├── imageA.png
+│   └── imageB.png
+└── target/
+    ├── imageA.png
+    ├── imageA.txt
+    ├── imageB.png
+    └── imageB.txt
+```
+
+`reference/` 与 `target/` 中的图片必须同名、同尺寸；标签文件放在 `target/` 目录。
+
+2. 修改 `docs/examples/anima-edit-dataset.toml`：
+
+```toml
+[general]
+resolution = "1024,1024"
+caption_extension = ".txt"
+enable_bucket = true
+bucket_reso_steps = 64
+
+[[datasets]]
+num_repeats = 1
+
+[[datasets.subsets]]
+image_dir = "./data/anima-edit/target"
+conditioning_data_dir = "./data/anima-edit/reference"
+```
+
+`conditioning_data_dir` 是参考图目录，`image_dir` 是目标图目录。
+
+3. 修改 `docs/examples/anima-edit-reference.toml` 里的模型路径、输出目录和训练参数。关键项如下：
+
+```toml
+pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
+vae = "./sd-models/anima/qwen_image_vae.safetensors"
+qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
+dataset_config = "./docs/examples/anima-edit-dataset.toml"
+
+conditioning = true
+network_module = "networks.lora_anima"
+network_train_unet_only = true
+
+cache_latents = true
+cache_text_encoder_outputs = true
+sample_at_first = false
+sample_prompts = "./docs/examples/anima-edit-sample-prompts.txt"
+```
+
+条件训练依赖缓存后的 Target / Reference latents，建议保留 `cache_latents = true` 和 `cache_text_encoder_outputs = true`。`sample_at_first = false` 用来避免 step 0 的噪声预览误导判断。
+
+4. 修改 `docs/examples/anima-edit-sample-prompts.txt`：
+
+```text
+high quality Anima style illustration, clean color, detailed character --n low quality, blurry, noisy, bad anatomy --w 1024 --h 1024 --l 4.5 --s 40 --cn ./data/anima-edit/reference/imageA.png
+```
+
+`--cn` 后面填写 Control Image / 参考图路径，路径不要加双引号。训练时看到日志中出现 `loading controlnet image`，说明预览图正在使用参考图。
+
+5. 启动训练：
+
+```powershell
+accelerate launch --num_cpu_threads_per_process 1 scripts/dev/anima_train_network.py --config_file docs/examples/anima-edit-reference.toml
+```
+
+如果你已经在 `vendor/sd-scripts` 目录内直接运行，也可以改为调用该目录下的 `anima_train_network.py`。本仓库推荐使用 `scripts/dev/anima_train_network.py`，它会适配 WebUI/仓库内的 Anima 后端约定。
+
 ### 推理使用
 
 训练得到的 LoRA 可以在 ComfyUI 中配合 [Mirumo0u0/ComfyUI-Cosmos-Reference](https://github.com/Mirumo0u0/ComfyUI-Cosmos-Reference) 节点使用。该节点为 Cosmos 及其衍生模型（包括 Anima）添加参考图输入能力，适合作为 Anima Edit LoRA 的推理入口。
