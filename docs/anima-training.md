@@ -76,6 +76,10 @@ dataset_root/
 5. 直接开始训练。WebUI 会自动生成带 `conditioning_data_dir` 的 `dataset_config.toml`，自动启用 latent / text encoder 缓存，并关闭 `sample_at_first`，避免 step 0 噪声预览误导判断。
 6. 建议训练若干 epoch 后再看预览图。小数据集可以先用较低学习率和较短 epoch 试跑，观察是否出现黑块、结构偏移等过拟合迹象。
 
+### 推理使用
+
+训练得到的 LoRA 可以在 ComfyUI 中配合 [Mirumo0u0/ComfyUI-Cosmos-Reference](https://github.com/Mirumo0u0/ComfyUI-Cosmos-Reference) 节点使用。该节点为 Cosmos 及其衍生模型（包括 Anima）添加参考图输入能力，适合作为 Anima Edit LoRA 的推理入口。
+
 <p align="center">
   <img src="../assets/readme/anima-edit-ui.jpg" alt="Anima 图像编辑控件" width="920" />
 </p>

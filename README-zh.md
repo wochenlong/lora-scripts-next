@@ -2,16 +2,16 @@
   <img src="assets/readme/next-trainer-cover.png" alt="Next Trainer" width="880" />
 </p>
 
-<h1 align="center">Next Trainer</h1>
+<h1 align="center">Next Trainer: Anima Edit 分支</h1>
 
 <p align="center">
-  <b>Windows 一键 LoRA 训练工具</b> — 支持 <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
-  解压即用，无需配环境，12 GB 显存即可稳定训练 Anima LoRA。<br/>
-  <sub>基于 <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>，秋叶系 GUI 体验。</sub>
+  <b>Anima 图像编辑 / 条件训练实验分支</b><br/>
+  在 WebUI 中训练成对 Target / Reference 数据集，并用 Control Image 预览编辑效果。<br/>
+  <sub>基于 Next Trainer、kohya-ss/sd-scripts，以及 <a href="https://github.com/Mirumo0u0/sd-scripts">Mirumo0u0/sd-scripts</a> 的 conditioning 实现。</sub>
 </p>
 
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?include_prereleases&style=for-the-badge&color=a78bfa&label=%E4%B8%8B%E8%BD%BD%E6%95%B4%E5%90%88%E5%8C%85" alt="下载整合包"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/tree/anima-edit"><img src="https://img.shields.io/badge/branch-anima--edit-a78bfa?style=for-the-badge" alt="anima-edit 分支"/></a>
 </p>
 
 <p align="center">
@@ -19,10 +19,10 @@
   <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/LICENSE"><img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next?style=flat-square&color=ec4899" alt="license"/></a>
 </p>
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README.md"><b>English (README)</b></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/anima-edit/README.md"><b>English (README)</b></a>
 </p>
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>致谢 & 许可</b></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/anima-edit/NOTICE.md"><b>致谢 & 许可</b></a>
 </p>
 
 ---
@@ -32,57 +32,6 @@
 </p>
 
 <p align="center"><sub>全新 UI — 左侧栏导航，中栏模型 & 参数表单，右栏实时配置预览</sub></p>
-
----
-
-## 三步开始训练
-
-```
-1. 下载  →  从 Releases 下载 SD-Trainer-v2.5.2.7z（约 380 MB），解压
-2. 启动  →  双击 run_gui.bat（首次自动安装依赖 ~3 GB）
-3. 训练  →  浏览器打开 http://127.0.0.1:28000，选模型、填参数、开练
-```
-
-> **Anima 图像编辑注意：** 当前 Release 整合包还不包含 `anima-edit` 分支的图像编辑训练能力，不能直接用整合包验证该功能。请从源码切到 `anima-edit` 分支运行，等待后续整合包发布后再使用一键包。
-
-整合包已内置默认 WD 打标模型 **wd14-convnextv2-v2**（约 400 MB，位于 `huggingface/`），WebUI「打标」页开箱即用。
-
-> **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
-
-<details>
-<summary><b>从源码安装（Linux / 高级用户）</b></summary>
-
-```sh
-git clone https://github.com/wochenlong/lora-scripts-next.git
-cd lora-scripts-next
-git checkout anima-edit
-
-# Windows
-run_gui.bat
-
-# Linux
-bash install.bash && bash run_gui.sh
-
-# 可选：安装 Flash Attention 2 加速 Anima 训练
-# Windows
-install_flash_attn.bat
-# Linux
-bash install_flash_attn.sh
-```
-
-推荐 Python **3.10**。详见 [Flash Attention 2 文档](docs/flash-attention.md)。
-
-</details>
-
----
-
-## 支持什么
-
-| 模型 | 网络类型 | 注意力后端 |
-|------|----------|------------|
-| **Anima** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA |
-| SD 1.5 / SDXL | LoRA · LoHa · LoKr | xformers / SDPA |
-| Flux | LoRA | xformers / SDPA |
 
 ---
 
@@ -98,6 +47,7 @@ bash install_flash_attn.sh
 
 - 代码分支：需要切到 `anima-edit`，普通 `main` 分支和当前 Release 整合包没有这套后端。
 - 训练教程：见 [Anima 图像编辑 / 条件训练教程](docs/anima-training.md#图像编辑--条件训练实验)。
+- 推理使用：训练出的 LoRA 可在 ComfyUI 中配合 [Mirumo0u0/ComfyUI-Cosmos-Reference](https://github.com/Mirumo0u0/ComfyUI-Cosmos-Reference) 节点使用，为 Anima / Cosmos 系模型添加参考图输入。
 - 关键约束：Target 与 Reference 的同名图片必须尺寸一致；图像编辑模式会自动启用 latent / text encoder 缓存，并关闭 step 0 预览。
 
 <p align="center">
@@ -123,9 +73,62 @@ bash install_flash_attn.sh
 
 ---
 
-## 训练监控
+## 运行这个分支
 
-训练启动后自动打开监控页（默认端口 6008，可自动回退），GPU 状态、训练参数、Loss 曲线、预览图、日志一站式查看。
+```
+1. 克隆  →  git clone https://github.com/wochenlong/lora-scripts-next.git
+2. 切分支 →  cd lora-scripts-next && git checkout anima-edit
+3. 启动  →  Windows 运行 run_gui.bat；Linux 运行 bash install.bash && bash run_gui.sh
+4. 训练  →  打开 http://127.0.0.1:28000，进入 Anima LoRA，开启图像编辑
+```
+
+> 当前 Release 整合包还不包含 Anima Edit，不能直接用整合包验证该功能。请先使用 `anima-edit` 源码分支；一键包仅代表已发布的主线功能。
+
+补充：WebUI「打标」页仍继承 Next Trainer 的 WD 打标模型支持；这与 Anima Edit 训练链路相互独立。
+
+> **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
+
+<details>
+<summary><b>完整源码命令</b></summary>
+
+```sh
+git clone https://github.com/wochenlong/lora-scripts-next.git
+cd lora-scripts-next
+git checkout anima-edit
+
+# Windows
+run_gui.bat
+
+# Linux
+bash install.bash && bash run_gui.sh
+
+# 可选：安装 Flash Attention 2 加速 Anima 训练
+# Windows
+install_flash_attn.bat
+# Linux
+bash install_flash_attn.sh
+```
+
+推荐 Python **3.10**。详见 [Flash Attention 2 文档](docs/flash-attention.md)。
+
+</details>
+
+---
+
+## 本分支关注什么
+
+| 范围 | 状态 |
+|------|------|
+| **Anima 图像编辑** | 本分支主目标：Target / Reference 成对训练、Control Image 预览 |
+| **Anima LoRA / LoKr / T-LoRA** | 继承自 Next Trainer，可在同一页面使用 |
+| SD 1.5 / SDXL / Flux | 继承主线训练页面，但不是本实验分支重点 |
+| Release 整合包 | 暂未包含 Anima Edit，请使用源码分支 |
+
+---
+
+## 图像编辑训练监控
+
+Anima Edit 训练启动后，监控页可以帮助判断 conditioning 链路是否在有效学习：GPU 状态、训练参数、Loss 曲线、预览图、日志一站式查看。
 
 <p align="center">
   <img src="assets/readme/screenshot-train-monitor.png" alt="训练监控仪表盘" width="920" />
@@ -165,6 +168,7 @@ bash install_flash_attn.sh
 
 | 主题 | 链接 |
 |------|------|
+| **Anima 图像编辑 / 条件训练教程** | [docs/anima-training.md#图像编辑--条件训练实验](docs/anima-training.md#图像编辑--条件训练实验) |
 | Anima LoRA 训练指南 | [docs/anima-training.md](docs/anima-training.md) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
 | 训练监控 & SSE 接口 | [docs/train-monitor.md](docs/train-monitor.md) |
@@ -175,7 +179,7 @@ bash install_flash_attn.sh
 
 ---
 
-## 仓库目录说明
+## Next Trainer 通用仓库信息
 
 | 位置 | 用途 |
 |------|------|
@@ -190,7 +194,7 @@ bash install_flash_attn.sh
 
 ---
 
-## 常见问题
+## 通用问题（非 Anima Edit 专属）
 
 <details>
 <summary><b>无法运行 run_gui.ps1 / 未数字签名</b></summary>

@@ -2,16 +2,16 @@
   <img src="assets/readme/next-trainer-cover.png" alt="Next Trainer" width="880" />
 </p>
 
-<h1 align="center">Next Trainer</h1>
+<h1 align="center">Next Trainer: Anima Edit Branch</h1>
 
 <p align="center">
-  <b>One-click LoRA training GUI for Windows</b> — supports <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
-  Extract and run. No environment setup needed. 12 GB VRAM is enough for Anima LoRA.<br/>
-  <sub>Powered by <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>, Akegarasu-style GUI.</sub>
+  <b>Experimental Anima image-editing / conditioning training branch</b><br/>
+  Train paired Target / Reference datasets from the WebUI and preview edits with Control Images.<br/>
+  <sub>Based on Next Trainer, kohya-ss/sd-scripts, and conditioning work from <a href="https://github.com/Mirumo0u0/sd-scripts">Mirumo0u0/sd-scripts</a>.</sub>
 </p>
 
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?include_prereleases&style=for-the-badge&color=a78bfa&label=Download" alt="Download"/></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/tree/anima-edit"><img src="https://img.shields.io/badge/branch-anima--edit-a78bfa?style=for-the-badge" alt="anima-edit branch"/></a>
 </p>
 
 <p align="center">
@@ -19,10 +19,10 @@
   <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/LICENSE"><img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next?style=flat-square&color=ec4899" alt="license"/></a>
 </p>
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md"><b>中文</b></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/anima-edit/README-zh.md"><b>中文</b></a>
 </p>
 <p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>Credits</b></a>
+  <a href="https://github.com/wochenlong/lora-scripts-next/blob/anima-edit/NOTICE.md"><b>Credits</b></a>
 </p>
 
 ---
@@ -32,55 +32,6 @@
 </p>
 
 <p align="center"><sub>New UI — sidebar navigation, model & parameter form in the center, real-time config preview on the right</sub></p>
-
----
-
-## Get Started in 3 Steps
-
-```
-1. Download  →  SD-Trainer-v2.5.2.7z (~380 MB) from Releases, extract
-2. Launch    →  Double-click run_gui.bat (auto-installs deps on first run, ~3 GB)
-3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
-```
-
-> **Anima image editing note:** the current portable Release package does not include the `anima-edit` branch yet. To test image-editing training, run from source after switching to `anima-edit`; wait for a later portable package before using the one-click bundle for this feature.
-
-> **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
-
-<details>
-<summary><b>Install from source (Linux / advanced users)</b></summary>
-
-```sh
-git clone https://github.com/wochenlong/lora-scripts-next.git
-cd lora-scripts-next
-git checkout anima-edit
-
-# Windows
-run_gui.bat
-
-# Linux
-bash install.bash && bash run_gui.sh
-
-# Optional: install Flash Attention 2 for faster Anima training
-# Windows
-install_flash_attn.bat
-# Linux
-bash install_flash_attn.sh
-```
-
-Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.md) for details.
-
-</details>
-
----
-
-## What's Supported
-
-| Model | Network Types | Attention Backend |
-|-------|---------------|-------------------|
-| **Anima** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA |
-| SD 1.5 / SDXL | LoRA · LoHa · LoKr | xformers / SDPA |
-| Flux | LoRA | xformers / SDPA |
 
 ---
 
@@ -96,6 +47,7 @@ Quick links:
 
 - Branch: switch to `anima-edit`; `main` and the current portable Release package do not include this backend yet.
 - Training guide: [Anima image editing / conditioning training](docs/anima-training.md#图像编辑--条件训练实验).
+- Inference: LoRA models trained here can be used in ComfyUI with [Mirumo0u0/ComfyUI-Cosmos-Reference](https://github.com/Mirumo0u0/ComfyUI-Cosmos-Reference), which adds reference-image input for Anima / Cosmos-family models.
 - Key constraints: paired Target / Reference images must have identical filenames and dimensions; image-editing mode automatically enables latent / text encoder caching and disables step 0 preview.
 
 <p align="center">
@@ -121,9 +73,60 @@ Quick links:
 
 ---
 
-## Train Monitor
+## Run This Branch
 
-Automatically opens a monitor page (port 6008) when training starts — GPU stats, training parameters, Loss curves, preview samples, and logs all in one dashboard.
+```
+1. Clone     →  git clone https://github.com/wochenlong/lora-scripts-next.git
+2. Switch    →  cd lora-scripts-next && git checkout anima-edit
+3. Launch    →  run_gui.bat on Windows, or bash install.bash && bash run_gui.sh on Linux
+4. Train     →  Open http://127.0.0.1:28000, enter Anima LoRA, enable Image Editing
+```
+
+> The current portable Release package does **not** include Anima Edit yet. Use the `anima-edit` source branch for now; the one-click bundle is only for released mainline features.
+
+> **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
+
+<details>
+<summary><b>Full source commands</b></summary>
+
+```sh
+git clone https://github.com/wochenlong/lora-scripts-next.git
+cd lora-scripts-next
+git checkout anima-edit
+
+# Windows
+run_gui.bat
+
+# Linux
+bash install.bash && bash run_gui.sh
+
+# Optional: install Flash Attention 2 for faster Anima training
+# Windows
+install_flash_attn.bat
+# Linux
+bash install_flash_attn.sh
+```
+
+Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.md) for details.
+
+</details>
+
+---
+
+## Branch Scope
+
+| Area | Status |
+|------|--------|
+| **Anima image editing** | Primary focus of this branch: paired Target / Reference training and Control Image previews |
+| **Anima LoRA / LoKr / T-LoRA** | Inherited from Next Trainer and available on the same page |
+| SD 1.5 / SDXL / Flux | Inherited mainline training pages; not the focus of this experimental branch |
+| Portable Release package | Not ready for Anima Edit yet; use source checkout |
+
+---
+
+## Training Monitor for Edit Runs
+
+When an Anima Edit run starts, the monitor page helps judge whether the conditioning path is learning: GPU stats, training parameters, Loss curves, preview samples, and logs in one dashboard.
 
 <p align="center">
   <img src="assets/readme/screenshot-train-monitor.png" alt="Train Monitor Dashboard" width="920" />
@@ -163,6 +166,7 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 
 | Topic | Link |
 |-------|------|
+| **Anima Image Editing / Conditioning Guide** | [docs/anima-training.md#图像编辑--条件训练实验](docs/anima-training.md#图像编辑--条件训练实验) |
 | Anima LoRA Training Guide | [docs/anima-training.md](docs/anima-training.md) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
 | Train Monitor & SSE API | [docs/train-monitor.md](docs/train-monitor.md) |
@@ -172,7 +176,7 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 </details>
 
 <details>
-<summary><b>Changelog</b></summary>
+<summary><b>Mainline Changelog</b></summary>
 
 | Date | Version |
 |------|---------|
