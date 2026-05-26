@@ -1,0 +1,21 @@
+# Dual-reference Anima Edit dataset_config (P0: 2 refs per target stem).
+# Layout:
+#   target/<stem>.png + <stem>.txt
+#   reference/<stem>/1.png, 2.png (sorted by filename, first 2 used)
+
+[general]
+caption_extension = ".txt"
+
+[[datasets]]
+resolution = [512, 512]
+batch_size = 1
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 1024
+bucket_reso_steps = 64
+
+[[datasets.subsets]]
+image_dir = "./data/edit3/target"
+conditioning_data_dir = "./data/edit3/reference"
+conditioning_multi_reference = true
+conditioning_reference_count = 2

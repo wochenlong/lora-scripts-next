@@ -340,9 +340,30 @@ def _dataset_resolution(value):
     return int(text)
 
 
+def _validate_multi_reference_dataset(
+    target_data_dir: str,
+    conditioning_data_dir: str,
+    reference_count: int,
+) -> None:
+    missing = []
+    for target_path in _image_files(target_data_dir):
+        stem = os.path.splitext(os.path.basename(target_path))[0]
+        ref_dir = os.path.join(conditioning_data_dir, stem)
+        ref_images = _image_files(ref_dir) if os.path.isdir(ref_dir) else []
+        if len(ref_images) < reference_count:
+            missing.append(stem)
+    if missing:
+        raise ValueError(
+            f"双参考模式下，每个 target 样本需在 reference/<文件名>/ 下放置 {reference_count} 张参考图。"
+            f"缺少或不足: {', '.join(missing)}"
+        )
+
+
 def _prepare_conditioning_dataset_config(config: dict, autosave_dir: str, timestamp: str) -> Optional[str]:
     target_data_dir = str(config.pop("target_data_dir", "") or "").strip()
     conditioning_data_dir = str(config.pop("conditioning_data_dir", "") or "").strip()
+    multi_reference_mode = _truthy(config.pop("multi_reference_mode", False))
+    reference_count = int(config.pop("conditioning_reference_count", 2) or 2)
 
     if not target_data_dir:
         raise ValueError("启用图像编辑训练后，请填写目标图目录 Target。")
@@ -354,10 +375,22 @@ def _prepare_conditioning_dataset_config(config: dict, autosave_dir: str, timest
         raise ValueError(f"参考图目录不存在: {conditioning_data_dir}")
     if not _image_files(target_data_dir):
         raise ValueError("目标图目录没有可训练图片，请检查 Target。")
-    if not _image_files(conditioning_data_dir):
+    if multi_reference_mode:
+        if reference_count < 2:
+            raise ValueError("双参考模式要求 conditioning_reference_count >= 2。")
+        _validate_multi_reference_dataset(target_data_dir, conditioning_data_dir, reference_count)
+    elif not _image_files(conditioning_data_dir):
         raise ValueError("参考图目录没有可用图片，请检查 Reference / Conditioning。")
 
     config["train_data_dir"] = target_data_dir
+    subset_entry = {
+        "image_dir": _normalize_path(target_data_dir),
+        "conditioning_data_dir": _normalize_path(conditioning_data_dir),
+    }
+    if multi_reference_mode:
+        subset_entry["conditioning_multi_reference"] = True
+        subset_entry["conditioning_reference_count"] = reference_count
+
     dataset_config = {
         "general": {
             "caption_extension": config.get("caption_extension", ".txt"),
@@ -367,12 +400,7 @@ def _prepare_conditioning_dataset_config(config: dict, autosave_dir: str, timest
                 "resolution": _dataset_resolution(config.get("resolution", "1024,1024")),
                 "batch_size": int(config.get("train_batch_size", 1)),
                 "enable_bucket": bool(config.get("enable_bucket", True)),
-                "subsets": [
-                    {
-                        "image_dir": _normalize_path(target_data_dir),
-                        "conditioning_data_dir": _normalize_path(conditioning_data_dir),
-                    }
-                ],
+                "subsets": [subset_entry],
             }
         ],
     }

@@ -311,7 +311,9 @@ class AnimaNetworkTrainer(train_network.NetworkTrainer):
         if conditioning_latents is not None:
             conditioning_latents = conditioning_latents.to(accelerator.device, dtype=weight_dtype)
             if conditioning_latents.ndim == 4:
+                # [B, C, H, W] single reference per sample
                 conditioning_latents = conditioning_latents.unsqueeze(2)
+            # [B, C, N, H, W] with N>=2: multi-reference, concat on temporal dim as-is
             noisy_model_input = torch.cat([noisy_model_input, conditioning_latents], dim=2)
 
         with torch.set_grad_enabled(is_train), accelerator.autocast():

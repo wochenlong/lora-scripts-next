@@ -96,6 +96,8 @@ class FineTuningSubsetParams(BaseSubsetParams):
 @dataclass
 class ControlNetSubsetParams(BaseSubsetParams):
     conditioning_data_dir: str = None
+    conditioning_multi_reference: bool = False
+    conditioning_reference_count: int = 2
     caption_extension: str = ".caption"
     cache_info: bool = False
 
@@ -227,6 +229,8 @@ class ConfigSanitizer:
     CN_SUBSET_ASCENDABLE_SCHEMA = {
         "caption_extension": str,
         "cache_info": bool,
+        "conditioning_multi_reference": bool,
+        "conditioning_reference_count": int,
     }
     CN_SUBSET_DISTINCT_SCHEMA = {
         Required("image_dir"): str,

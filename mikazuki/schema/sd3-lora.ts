@@ -45,7 +45,9 @@ Schema.intersect([
             Schema.object({
                 conditioning: Schema.const(true).required(),
                 target_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("目标图目录（Target）。放目标图片和同名 txt / json 标签"),
-                conditioning_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("参考图目录（Reference / Conditioning）。与目标图同名同尺寸"),
+                conditioning_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("参考图目录（Reference）。单参考：与 target 同名平级图片；双参考：指向 reference/ 父目录，每样本在 reference/<stem>/ 下放 2 张图"),
+                multi_reference_mode: Schema.boolean().default(false).description("双参考图模式（实验）。开启后按 reference/<target文件名>/ 子目录放置 2 张参考图，按文件名排序取前 2 张"),
+                conditioning_reference_count: Schema.number().min(2).max(2).default(2).description("参考图数量。P0 固定为 2"),
                 enable_conditioning_preview: Schema.boolean().default(false).description("启用图像编辑预览。训练预览将切换为图像编辑模式：宽高、CFG、步数、采样器等复用“训练预览图设置”，本节只配置 Prompt + Control Image"),
             }),
             Schema.object({}),

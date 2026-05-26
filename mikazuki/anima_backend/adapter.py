@@ -119,6 +119,8 @@ UI_ONLY_FIELDS = {
     "prompt_file",
     "target_data_dir",
     "conditioning_data_dir",
+    "multi_reference_mode",
+    "conditioning_reference_count",
     "conditioning_runtime_hint",
     "enable_conditioning_preview",
     "conditioning_preview_prompt",

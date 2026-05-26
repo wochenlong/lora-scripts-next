@@ -78,6 +78,10 @@ dataset_root/
 
 参考配置：[`docs/examples/anima-edit-reference.toml`](examples/anima-edit-reference.toml)。这是基于一次真实 50 epoch 图像编辑训练探针脱敏后的 TOML，已去掉本机路径和数据集名称，可作为参数参考；使用前请替换模型、数据集、输出目录和预览 prompt 路径。
 
+### 双参考图（方案 2，P0）
+
+支持 **1 目标 + 2 参考**：`reference/<target_stem>/` 子目录内按文件名排序取前 2 张，训练时沿 latent 时间维拼接（`T=3`）。WebUI 勾选「双参考图模式」；CLI 见 `docs/examples/anima-edit-dual-ref-dataset.toml` 与冒烟配置 `docs/examples/anima-edit-dual-ref-smoke.toml`。设计说明：[docs/design/anima-edit-multi-reference.md](design/anima-edit-multi-reference.md)。
+
 ### 实验限制与质量预期
 
 Anima Edit 当前是 **Anima 文生图基座 + conditioning LoRA** 的实验训练链路，不等同于 Qwen Image Edit 这类专门的图像编辑模型。专用编辑模型通常经过大规模编辑对、局部一致性和指令保持训练；本分支更适合验证特定 paired dataset 的映射能力，局部边界和复杂遮挡的稳定性会弱一些。
