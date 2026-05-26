@@ -1,0 +1,65 @@
+# Anima Edit / conditioning training reference TOML
+#
+# This file is a sanitized reference based on a real 50-epoch Anima Edit probe.
+# Replace all paths with your own files before training.
+#
+# Notes for beginners:
+# - Target images and Reference / Conditioning images must use matching filenames.
+# - Paired images must have identical dimensions.
+# - The WebUI can generate dataset_config and sample_prompts automatically.
+# - If you run sd-scripts directly, create dataset_config and sample_prompts files
+#   that point to your own dataset and control image.
+
+pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
+vae = "./sd-models/anima/qwen_image_vae.safetensors"
+qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
+
+# WebUI users should fill Target / Reference folders in the form.
+# CLI users should point dataset_config to a file containing conditioning_data_dir.
+train_data_dir = "./data/anima-edit/target"
+dataset_config = "./config/examples/anima-edit-dataset.toml"
+
+conditioning = true
+resolution = "1024,1024"
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 2048
+bucket_reso_steps = 64
+
+output_dir = "./output/anima-edit-reference"
+output_name = "anima-edit-reference"
+save_model_as = "safetensors"
+save_precision = "bf16"
+save_every_n_epochs = 10
+
+network_module = "networks.lora_anima"
+network_dim = 4
+network_alpha = 4
+network_train_unet_only = true
+
+max_train_epochs = 50
+train_batch_size = 1
+gradient_checkpointing = true
+learning_rate = 5e-5
+unet_lr = 5e-5
+optimizer_type = "AdamW8bit"
+lr_scheduler = "constant"
+mixed_precision = "bf16"
+seed = 42
+
+# Anima Edit relies on cached target/reference latents.
+cache_latents = true
+cache_latents_to_disk = false
+cache_text_encoder_outputs = true
+cache_text_encoder_outputs_to_disk = false
+vae_chunk_size = 64
+vae_disable_cache = true
+max_data_loader_n_workers = 0
+attn_mode = "torch"
+
+# Avoid misleading step 0 previews in conditioning mode.
+sample_at_first = false
+sample_every_n_epochs = 5
+sample_prompts = "./config/examples/anima-edit-sample-prompts.txt"
+
+caption_extension = ".txt"
