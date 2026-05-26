@@ -44,7 +44,6 @@ Schema.intersect([
         Schema.union([
             Schema.object({
                 conditioning: Schema.const(true).required(),
-                conditioning_runtime_hint: Schema.string().role('textarea').default("图像编辑模式会自动启用 latent 缓存和文本编码器输出缓存，并关闭训练开始前的 step 0 预览；第一次有效预览建议在训练若干 epoch 后查看。").disabled().description("自动配置说明"),
                 target_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("目标图目录（Target）。放目标图片和同名 txt / json 标签"),
                 conditioning_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("参考图目录（Reference / Conditioning）。与目标图同名同尺寸"),
                 enable_conditioning_preview: Schema.boolean().default(false).description("启用图像编辑预览。训练预览将切换为图像编辑模式：宽高、CFG、步数、采样器等复用“训练预览图设置”，本节只配置 Prompt + Control Image"),
