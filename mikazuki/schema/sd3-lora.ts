@@ -37,6 +37,40 @@ Schema.intersect([
         })
     ).description("数据集设置"),
 
+    Schema.intersect([
+        Schema.object({
+            conditioning: Schema.boolean().default(false).description("启用 Anima 图像编辑 / 条件训练（实验）。开启后使用 Target + Reference 成对数据集训练"),
+        }).description("图像编辑（实验功能）"),
+        Schema.union([
+            Schema.object({
+                conditioning: Schema.const(true).required(),
+                target_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("目标图目录（Target）。放目标图片和同名 txt / json 标签"),
+                conditioning_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("参考图目录（Reference / Conditioning）。与目标图同名同尺寸"),
+                enable_conditioning_preview: Schema.boolean().default(false).description("启用图像编辑预览。训练预览将切换为图像编辑模式：宽高、CFG、步数、采样器等复用“训练预览图设置”，本节只配置 Prompt + Control Image"),
+            }),
+            Schema.object({}),
+        ]),
+        Schema.union([
+            Schema.object({
+                conditioning: Schema.const(true).required(),
+                enable_conditioning_preview: Schema.const(true).required(),
+                conditioning_preview_prompt: Schema.string().role('textarea').default("把参考图转换成高质量 Anima 风格插画，保持主体结构与构图").description("图像编辑预览 Prompt。开启图像编辑预览后，将替代普通预览 Prompt"),
+                sample_conditioning_image: Schema.string().role('filepicker', { type: "image-file", internal: "image-file" }).description("Control Image / 固定预览参考图。选择一张 png / jpg / jpeg / webp 图片，后端会把它写入 sample prompt 的 --cn 参数"),
+                random_conditioning_preview_image: Schema.boolean().default(false).description("随机抽取 Control Image。开启后每次生成预览图时从指定目录随机选择参考图"),
+            }),
+            Schema.object({}),
+        ]),
+        Schema.union([
+            Schema.object({
+                conditioning: Schema.const(true).required(),
+                enable_conditioning_preview: Schema.const(true).required(),
+                random_conditioning_preview_image: Schema.const(true).required(),
+                sample_conditioning_image_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("Control Image 随机目录。开启随机抽取后，从该目录随机选择参考图；优先级高于固定预览参考图"),
+            }),
+            Schema.object({}),
+        ]),
+    ]),
+
     SHARED_SCHEMAS.SAVE_SETTINGS,
 
     Schema.object({

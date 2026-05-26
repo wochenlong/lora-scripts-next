@@ -476,6 +476,9 @@ async def pick_file(picker_type: str):
     elif picker_type == "model-file":
         file_types = [("checkpoints", "*.safetensors;*.ckpt;*.pt"), ("all files", "*.*")]
         coro = asyncio.to_thread(open_file_selector, "", "Select file", file_types)
+    elif picker_type == "image-file":
+        file_types = [("images", "*.png;*.jpg;*.jpeg;*.webp;*.bmp"), ("all files", "*.*")]
+        coro = asyncio.to_thread(open_file_selector, "", "Select image", file_types)
     else:
         return APIResponseFail(message=f"不支持的 picker_type: {picker_type}")
 
@@ -500,6 +503,11 @@ async def get_files(pick_type) -> APIResponse:
             "type": "file",
             "path": "./output",
             "filter": "(.safetensors|.ckpt|.pt)"
+        },
+        "image-file": {
+            "type": "file",
+            "path": "./train",
+            "filter": "(.png|.jpg|.jpeg|.webp|.bmp)"
         },
         "train-dir": {
             "type": "folder",
