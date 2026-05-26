@@ -105,7 +105,10 @@ The `anima-edit` branch adds the first UI pass for Anima conditioning / image-ed
   <img src="assets/readme/anima-edit-sample-1.jpg" alt="Anima image editing sample variant" width="760" />
 </p>
 
+<p align="center"><sub>Sample images courtesy of <b>古柯C17H21NO4</b>. Thank you for providing the reference images used here.</sub></p>
+
 > This is an experimental branch UI. Training execution requires the Anima conditioning backend integration described in [docs/anima-training.md](docs/anima-training.md).
+> The planned backend work references [Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts), an Apache-2.0 fork of kohya-ss/sd-scripts; any integration should preserve its license notices and source attribution.
 
 ---
 

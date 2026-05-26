@@ -77,7 +77,11 @@ dataset_root/
   <img src="../assets/readme/anima-edit-sample-1.jpg" alt="Anima 图像编辑示例补充" width="760" />
 </p>
 
+<p align="center"><sub>示例图片由 <b>古柯C17H21NO4</b> 提供。感谢他提供用于说明 Anima 图像编辑流程的图片素材。</sub></p>
+
 > 当前分支先提供前端入口与参数结构。训练启动仍需接入 Mirumo fork 中的 Anima conditioning 后端逻辑：`conditioning = true`、`dataset_config` 中的 `conditioning_data_dir`，以及 sample prompt 的 `--cn <control image>`。
+>
+> 参考实现来源：[Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts)。该仓库是 `kohya-ss/sd-scripts` 的 Apache-2.0 fork；后续合入代码时应保留许可证文本、修改说明和来源致谢。
 
 ## 训练步数经验值
 

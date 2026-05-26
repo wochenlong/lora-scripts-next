@@ -18,6 +18,14 @@ Active Anima backend maintenance is based on:
 
 - `kohya-ss/sd-scripts`: https://github.com/kohya-ss/sd-scripts
 
+Experimental Anima conditioning / image-editing backend planning references:
+
+- `Mirumo0u0/sd-scripts`: https://github.com/Mirumo0u0/sd-scripts
+
+`Mirumo0u0/sd-scripts` is a fork of `kohya-ss/sd-scripts` and is licensed under the **Apache License 2.0**. Any local integration of its conditioning changes should preserve the upstream license text, source attribution, and prominent notices for modified files.
+
+Example images used in the Anima image-editing documentation were provided by **古柯C17H21NO4**. We thank him for contributing the images used to illustrate the experimental workflow.
+
 Earlier Anima integration work also referenced:
 
 - `WhitecrowAurora/lora-rescripts` (**SD-reScripts** — historical fork / continuation of the LoRA-scripts line): https://github.com/WhitecrowAurora/lora-rescripts

@@ -107,7 +107,10 @@ bash install_flash_attn.sh
   <img src="assets/readme/anima-edit-sample-1.jpg" alt="Anima 图像编辑示例补充" width="760" />
 </p>
 
+<p align="center"><sub>示例图片由 <b>古柯C17H21NO4</b> 提供，感谢他提供用于说明图像编辑流程的图片素材。</sub></p>
+
 > 当前为实验分支 UI。实际训练启动还需要接入 [docs/anima-training.md](docs/anima-training.md) 中说明的 Anima conditioning 后端。
+> 后端方案参考 [Mirumo0u0/sd-scripts](https://github.com/Mirumo0u0/sd-scripts)（kohya-ss/sd-scripts 的 Apache-2.0 fork）；后续集成需保留其许可证文本、来源说明与必要致谢。
 
 ---
 
