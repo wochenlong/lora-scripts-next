@@ -2647,6 +2647,12 @@ class ControlNetDataset(BaseDataset):
             return [info.cond_img_path]
         return []
 
+    @staticmethod
+    def _squeeze_cond_latent_tensor(tensor: torch.Tensor) -> torch.Tensor:
+        while tensor.ndim > 3 and tensor.shape[0] == 1:
+            tensor = tensor.squeeze(0)
+        return tensor
+
     def set_current_strategies(self):
         return self.dreambooth_dataset_delegate.set_current_strategies()
 
@@ -2704,9 +2710,11 @@ class ControlNetDataset(BaseDataset):
 
                 cache_batch_latents(vae, cache_to_disk, mini_batch, flip_aug, False, False)
 
-                stacked.append(info.latents)
+                stacked.append(ControlNetDataset._squeeze_cond_latent_tensor(info.latents))
                 if info.latents_flipped is not None:
-                    stacked_flipped.append(info.latents_flipped)
+                    stacked_flipped.append(
+                        ControlNetDataset._squeeze_cond_latent_tensor(info.latents_flipped)
+                    )
 
                 info.absolute_path = orig_path
                 info.latents_npz = orig_npz
@@ -2759,13 +2767,24 @@ class ControlNetDataset(BaseDataset):
                         flip_aug,
                         False,
                     ):
+                        latents, _, _, flipped_latents, _ = caching_strategy.load_latents_from_disk(
+                            cond_latents_npz,
+                            info.bucket_reso,
+                        )
+                        stacked.append(
+                            self._squeeze_cond_latent_tensor(torch.FloatTensor(latents))
+                        )
+                        if flipped_latents is not None:
+                            stacked_flipped.append(
+                                self._squeeze_cond_latent_tensor(torch.FloatTensor(flipped_latents))
+                            )
                         continue
 
                 mini_batch = [info]
                 self._cache_conditioning_batch_new(model, mini_batch, caching_strategy, flip_aug, cond_path=cond_path)
-                stacked.append(info.cond_latents)
+                stacked.append(self._squeeze_cond_latent_tensor(info.cond_latents))
                 if info.cond_latents_flipped is not None:
-                    stacked_flipped.append(info.cond_latents_flipped)
+                    stacked_flipped.append(self._squeeze_cond_latent_tensor(info.cond_latents_flipped))
 
             if len(stacked) > 0:
                 info.cond_latents = torch.stack(stacked, dim=1)
@@ -2829,6 +2848,19 @@ class ControlNetDataset(BaseDataset):
             flipped = example["flippeds"][i]
             cond_paths = self._conditioning_paths_for_info(image_info)
 
+            if image_info.cond_latents is not None:
+                cond_latents = image_info.cond_latents_flipped if flipped and image_info.cond_latents_flipped is not None else image_info.cond_latents
+                cond_latents = self._squeeze_cond_latent_tensor(cond_latents)
+                if (
+                    cond_latents.ndim == 4
+                    and cond_latents.shape[0] >= 8
+                    and 2 <= cond_latents.shape[1] <= 8
+                ):
+                    conditioning_images.append(cond_latents.unsqueeze(0))
+                else:
+                    conditioning_images.append(cond_latents)
+                continue
+
             if len(cond_paths) > 1:
                 refs = []
                 caching_strategy = LatentsCachingStrategy.get_strategy()
@@ -2883,13 +2915,10 @@ class ControlNetDataset(BaseDataset):
 
                     refs.append(ref_latents)
 
-                image_info.cond_latents = torch.stack(refs, dim=1)
-                conditioning_images.append(image_info.cond_latents)
-                continue
-
-            if image_info.cond_latents is not None:
-                cond_latents = image_info.cond_latents_flipped if flipped and image_info.cond_latents_flipped is not None else image_info.cond_latents
-                conditioning_images.append(cond_latents)
+                image_info.cond_latents = torch.stack(
+                    [self._squeeze_cond_latent_tensor(ref) for ref in refs], dim=1
+                )
+                conditioning_images.append(image_info.cond_latents.unsqueeze(0))
                 continue
 
             if image_info.cond_latents_npz is not None:
@@ -2956,7 +2985,11 @@ class ControlNetDataset(BaseDataset):
                 if len(conditioning_images) == 1:
                     cond_tensor = first.to(memory_format=torch.contiguous_format).float()
                     # [C, N, H, W] multi-reference (collator returns examples[0] without batch dim)
-                    if 2 <= cond_tensor.shape[1] <= 8 and cond_tensor.shape[0] > cond_tensor.shape[1]:
+                    if (
+                        cond_tensor.ndim == 4
+                        and cond_tensor.shape[0] >= 8
+                        and 2 <= cond_tensor.shape[1] <= 8
+                    ):
                         cond_tensor = cond_tensor.unsqueeze(0)
                     example["conditioning_images"] = cond_tensor
                 else:

@@ -313,8 +313,8 @@ class AnimaNetworkTrainer(train_network.NetworkTrainer):
             if conditioning_latents.ndim == 4:
                 # [C, N, H, W] without batch (collator returns examples[0])
                 if (
-                    2 <= conditioning_latents.shape[1] <= 8
-                    and conditioning_latents.shape[0] > conditioning_latents.shape[1]
+                    conditioning_latents.shape[0] >= 8
+                    and 2 <= conditioning_latents.shape[1] <= 8
                 ):
                     conditioning_latents = conditioning_latents.unsqueeze(0)
                 else:
