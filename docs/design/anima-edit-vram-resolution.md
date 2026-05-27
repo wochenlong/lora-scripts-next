@@ -14,8 +14,9 @@
 4. [仓库内配置对照](#4-仓库内配置对照)
 5. [其它观测记录](#5-其它观测记录)
 6. [显存优化手段](#6-显存优化手段)
-7. [分辨率策略与补测](#7-分辨率策略与补测)
+7. [补测清单与优先级](#7-补测清单与优先级)
 8. [引用索引](#8-引用索引)
+9. [附录：Benchmark TOML 一览](#9-附录benchmark-toml-一览)
 
 ---
 
@@ -203,23 +204,32 @@ README-zh 文生图 @ 1024 的 4090 分级**不含** conditioning 多参考，�
 
 ---
 
-## 7. 分辨率策略与补测
+## 7. 补测清单与优先级
 
 ```text
            单参考                    双参考（4090 bench）
-  冒烟     512                       512  ✅ ~13.3 GB
-  中间档   —                         768  ✅ ~14.4 GB
-  正式     1024（探针/会话）          1024 ✅ ~16.0 GB（edit3 smoke）
-  预览     可与训练分辨率不同（manifest）
+  512      ✅ ~13.0 GB               ✅ ~13.3 GB
+  768      TOML 已备，待跑           ✅ ~14.4 GB
+  1024     TOML 已备，待跑           ✅ ~16.0 GB
 ```
 
-| 状态 | 项目 |
-|:----:|------|
-| ✅ | 512 单/双对照 · 768/1024 双参考（§2） |
-| 可选 | 单参考 @ 768/1024 同脚本对照 |
-| 可选 | 开启 `sample_every_n_epochs` 时的峰值 |
+### 7.1 建议补测（按优先级）
 
-**落盘建议**：`resolution` · `conditioning_multi_reference` · `gpu_memory_peak_mib` · **commit**
+| 优先级 | 项目 | 目的 | 训练 TOML | Dataset |
+|:------:|------|------|-----------|---------|
+| **P1** | 单参考 @ **768** | 与双参考 768 同分辨率对照 | [single-768-2e.toml](../examples/anima-edit-vram-bench-single-768-2e.toml) | [single-dataset-768.toml](../examples/anima-edit-vram-bench-single-dataset-768.toml) |
+| **P1** | 单参考 @ **1024** | 对齐/反驳 §5.1 的 ~22.9GB 会话记录 | [single-1024-2e.toml](../examples/anima-edit-vram-bench-single-1024-2e.toml) | [single-dataset-1024.toml](../examples/anima-edit-vram-bench-single-dataset-1024.toml) |
+| **P2** | 双参考 512 + **预览** | epoch 末 `sample` 峰值（常高于纯训练步） | [dual-512-2e-preview.toml](../examples/anima-edit-vram-bench-dual-512-2e-preview.toml) | [dual-ref-dataset.toml](../examples/anima-edit-dual-ref-dataset.toml) |
+| **P2** | 双参考 512 + **`network_dim=16`** | UI 默认 rank vs bench 用的 4 | [dual-512-2e-dim16.toml](../examples/anima-edit-vram-bench-dual-512-2e-dim16.toml) | 同上 |
+| **P3** | **16GB** 卡同 TOML | 验证 512/768 是否 OOM（需另机） | §9 任选 | §9 任选 |
+| **P3** | **多样本** 数据集（非 edit3 单条） | 排除「仅 1 step/epoch」偏乐观 | 可 fork `anima-edit-dual-ref-10epoch.toml` | [dual-ref-dataset.toml](../examples/anima-edit-dual-ref-dataset.toml) + 扩数据 |
+| **P3** | `blocks_to_swap` / `split_attn` | 16GB 降显存曲线 | 在任一 bench TOML 上加参 | — |
+
+**不必急测**：换 conditioning 实现后整表重跑；正式长训直接看 [anima-edit-dual-ref-10epoch.toml](../examples/anima-edit-dual-ref-10epoch.toml) / [anima-edit-reference.toml](../examples/anima-edit-reference.toml) 即可。
+
+### 7.2 落盘字段
+
+`resolution` · `conditioning_multi_reference` · `network_dim` · `sample_every_n_epochs` · `gpu_memory_peak_mib` · **commit** → 回写 §2 表格。
 
 ---
 
@@ -229,14 +239,50 @@ README-zh 文生图 @ 1024 的 4090 分级**不含** conditioning 多参考，�
 |------|------|
 | [anima-edit-multi-reference.md](anima-edit-multi-reference.md) | 双参考 P0 设计 |
 | [anima-training.md](../anima-training.md) | Edit 训练入口 |
-| `script/ops/bench_anima_edit_vram.py` | 512 单/双 bench |
-| `docs/examples/anima-edit-vram-bench-*.toml` | 各分辨率 bench |
-| `docs/examples/anima-edit-dual-ref-dataset*.toml` | 512/768/1024 dataset |
-| `mikazuki/schema/anima-edit-lora.ts` | UI 默认 |
+| [§9 TOML 一览](#9-附录benchmark-toml-一览) | 全部 bench / 正式配置路径 |
+| `script/ops/bench_anima_edit_vram.py` | 一键 512 单/双 |
+| `mikazuki/schema/anima-edit-lora.ts` | UI 默认 512、rank 16 |
+
+---
+
+## 9. 附录：Benchmark TOML 一览
+
+> 训练入口统一为：`python -m accelerate.commands.launch --num_cpu_threads_per_process 1 scripts/dev/anima_train_network.py --config_file <下表训练 TOML>`  
+> 适配器会生成同名的 `*-sd-scripts.toml`（勿手改，以训练 TOML 为准）。
+
+### 9.1 显存 Benchmark（2 epoch · edit3 · 关预览）
+
+| 场景 | 训练 TOML | Dataset TOML | 4090 峰值 |
+|------|-----------|--------------|-----------|
+| 双参考 512 | [anima-edit-vram-bench-dual-2e.toml](../examples/anima-edit-vram-bench-dual-2e.toml) | [anima-edit-dual-ref-dataset.toml](../examples/anima-edit-dual-ref-dataset.toml) | ✅ 13.3 GB |
+| 双参考 768 | [anima-edit-vram-bench-dual-768-2e.toml](../examples/anima-edit-vram-bench-dual-768-2e.toml) | [anima-edit-dual-ref-dataset-768.toml](../examples/anima-edit-dual-ref-dataset-768.toml) | ✅ 14.4 GB |
+| 双参考 1024 | [anima-edit-vram-bench-dual-1024-2e.toml](../examples/anima-edit-vram-bench-dual-1024-2e.toml) | [anima-edit-dual-ref-dataset-1024.toml](../examples/anima-edit-dual-ref-dataset-1024.toml) | ✅ 16.0 GB |
+| 单参考 512 | [anima-edit-vram-bench-single-2e.toml](../examples/anima-edit-vram-bench-single-2e.toml) | [anima-edit-vram-bench-single-dataset.toml](../examples/anima-edit-vram-bench-single-dataset.toml) | ✅ 13.0 GB |
+| 单参考 768 | [anima-edit-vram-bench-single-768-2e.toml](../examples/anima-edit-vram-bench-single-768-2e.toml) | [anima-edit-vram-bench-single-dataset-768.toml](../examples/anima-edit-vram-bench-single-dataset-768.toml) | 待测 |
+| 单参考 1024 | [anima-edit-vram-bench-single-1024-2e.toml](../examples/anima-edit-vram-bench-single-1024-2e.toml) | [anima-edit-vram-bench-single-dataset-1024.toml](../examples/anima-edit-vram-bench-single-dataset-1024.toml) | 待测 |
+
+单参考数据准备：`data/edit3/reference_bench_single/sample1.png`（由 `script/ops/bench_anima_edit_vram.py` 从 `reference/sample1/1.png` 复制）。
+
+### 9.2 变体 Benchmark（待测）
+
+| 场景 | 训练 TOML | 说明 |
+|------|-----------|------|
+| 双参考 512 + 预览 | [anima-edit-vram-bench-dual-512-2e-preview.toml](../examples/anima-edit-vram-bench-dual-512-2e-preview.toml) | `sample_every_n_epochs=1` |
+| 双参考 512 + dim16 | [anima-edit-vram-bench-dual-512-2e-dim16.toml](../examples/anima-edit-vram-bench-dual-512-2e-dim16.toml) | 对齐 WebUI 默认 rank |
+
+### 9.3 正式训练示例（非显存 bench）
+
+| 用途 | 训练 TOML | Dataset |
+|------|-----------|---------|
+| 双参考 512 · 10 epoch | [anima-edit-dual-ref-10epoch.toml](../examples/anima-edit-dual-ref-10epoch.toml) | [anima-edit-dual-ref-dataset.toml](../examples/anima-edit-dual-ref-dataset.toml) |
+| 双参考 2 step 冒烟 | [anima-edit-dual-ref-smoke.toml](../examples/anima-edit-dual-ref-smoke.toml) | 同上 |
+| 单参考 showcase 12 epoch | [anima-edit-single-ref-12epoch.toml](../examples/anima-edit-single-ref-12epoch.toml) | [anima-edit-single-ref-dataset.toml](../examples/anima-edit-single-ref-dataset.toml) |
+| 单参考 1024 长训探针 | [anima-edit-reference.toml](../examples/anima-edit-reference.toml) | [anima-edit-dataset.toml](../examples/anima-edit-dataset.toml) |
 
 ---
 
 | 日期 | 说明 |
 |------|------|
 | 2026-05-27 | 初版与 512 单/双对照 |
-| 2026-05-27 | 768 / 1024 双参考 benchmark；文档结构重组为 §2 矩阵 |
+| 2026-05-27 | 768 / 1024 双参考 benchmark；§2 矩阵 |
+| 2026-05-27 | §7 补测清单；§9 附全量 TOML；补齐单参考 768/1024 与 preview/dim16 配置 |
