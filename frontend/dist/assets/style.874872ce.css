@@ -800,3 +800,29 @@ html.dark .example-container > .right-container section .params-section .shiki,
 html.dark .example-container > .right-container section .params-section pre {
   background: var(--c-bg-mute) !important;
 }
+
+/* 版本号：贴在「Next Trainer」标题右侧 */
+.sd-brand-version-chip {
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 20;
+  padding: 0.12rem 0.5rem;
+  border-radius: var(--sd-radius-pill, 999px);
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--sd-nav-secondary-label, #909399);
+  background: color-mix(in srgb, var(--c-bg, #fff) 92%, transparent);
+  border: 1px solid var(--c-border, #e4e7ed);
+  pointer-events: none;
+  user-select: none;
+  white-space: nowrap;
+}
+html.dark .sd-brand-version-chip {
+  color: var(--c-text-lighter, #a3a6ad);
+  background: color-mix(in srgb, var(--c-bg, #22272e) 92%, transparent);
+  border-color: var(--c-border, #3d444d);
+}

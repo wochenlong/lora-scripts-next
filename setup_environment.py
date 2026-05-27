@@ -120,11 +120,22 @@ def _separator():
 
 
 def check_already_installed():
-    """Return True if torch is installed in the embedded site-packages."""
+    """Return True only when core runtime deps are importable."""
     torch_dir = os.path.join(
         _base_dir(), "python_embeded", "Lib", "site-packages", "torch"
     )
-    return os.path.isdir(torch_dir)
+    if not os.path.isdir(torch_dir):
+        return False
+
+    core_modules = ("torch", "torchvision", "accelerate", "diffusers", "gradio")
+    for module in core_modules:
+        try:
+            __import__(module)
+        except Exception as exc:
+            print(f"  检测到依赖不完整，将执行修复安装：{module} ({exc})")
+            return False
+
+    return True
 
 
 def check_disk_space():

@@ -26,12 +26,24 @@ echo. >> "%LOG_FILE%"
 if not exist "%PYTHON_EXE%" goto :no_python
 
 if not exist "%PORTABLE_ROOT%python_embeded\Lib\site-packages\torch" goto :first_run
+echo [setup] Verifying embedded dependencies >> "%LOG_FILE%"
+"%PYTHON_EXE%" -s -c "import torch, torchvision, accelerate, diffusers, gradio" >nul 2>> "%LOG_FILE%"
+if errorlevel 1 goto :repair_run
 goto :launch
 
 :first_run
 echo.
 echo  [First Run] Installing dependencies, please keep network connected...
 echo.
+goto :run_setup
+
+:repair_run
+echo.
+echo  [Repair] Incomplete dependencies detected, running setup...
+echo.
+echo [setup] Dependency check failed, running setup_environment.py >> "%LOG_FILE%"
+
+:run_setup
 echo [setup] Starting setup_environment.py >> "%LOG_FILE%"
 "%PYTHON_EXE%" -s "%PORTABLE_ROOT%SD-Trainer\setup_environment.py" 2>> "%LOG_FILE%"
 if errorlevel 1 (

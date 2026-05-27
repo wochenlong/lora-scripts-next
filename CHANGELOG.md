@@ -4,6 +4,19 @@
 
 ---
 
+## v2.5.3 — 2026-05-27
+
+### 整合包热修复（[#54](https://github.com/wochenlong/lora-scripts-next/issues/54)）
+
+- **依赖健康检查**：便携启动不再仅以 `torch` 目录是否存在判断「已安装」；启动前会探测 `torch`、`torchvision`、`accelerate`、`diffusers`、`gradio` 等关键包，不完整时自动执行 `setup_environment.py` 修复安装，缓解「网页能开、点开始训练提示无法连接训练端」。
+- **侧栏版本号**：WebUI 侧栏「Next Trainer」旁显示当前版本（读取 `/api/version`），便于确认是否已升级到 2.5.3。
+
+### 升级说明
+
+- **v2.5.2 整合包用户请整包升级到 v2.5.3**（不要覆盖 `sd-models/`、`output/`、`config/` 等用户目录）。详见 [`docs/portable-upgrade-2.5.2-to-2.5.3.md`](docs/portable-upgrade-2.5.2-to-2.5.3.md)。
+
+---
+
 ## v2.5.2 — 2026-05-25
 
 ### 整合包修复

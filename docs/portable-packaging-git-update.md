@@ -2,6 +2,8 @@
 
 本文记录 Windows 便携整合包的打包契约，以及将整合包改为"保留 `.git`、支持一键 Git 更新"后的实现方案。
 
+> **v2.5.2 用户**：若出现「能开网页但无法开始训练」，请升级到 **v2.5.3**（见 [`portable-upgrade-2.5.2-to-2.5.3.md`](portable-upgrade-2.5.2-to-2.5.3.md)，[Issue #54](https://github.com/wochenlong/lora-scripts-next/issues/54)）。
+
 ## 目标
 
 - 整合包仍保持双击 `run_gui.bat` 即可启动。
@@ -38,7 +40,7 @@
 2. 确认没有未提交改动。
 3. 保留主仓 `.git`。
 4. 确保 remote 指向 `https://github.com/wochenlong/lora-scripts-next.git`。
-5. 不要带入本机 `doc/`、`data/`、`benchmark/`、`.vscode/`、`.cursor/`、临时草稿等目录。
+5. 不要带入本机 `doc/`、`script/`、`data/`、`benchmark/`、`.vscode/`、`.cursor/`、临时草稿等目录。
 
 `vendor/sd-scripts` 已经是主仓 tracked 普通目录，不是子模块，会随主仓更新。
 

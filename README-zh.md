@@ -259,6 +259,13 @@ powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 </details>
 
 <details>
+<summary><b>整合包：能开网页但无法开始训练（v2.5.2）</b></summary>
+
+请升级到 **v2.5.3** 整合包，不要继续用 v2.5.2。说明与保留用户数据步骤见 [`docs/portable-upgrade-2.5.2-to-2.5.3.md`](docs/portable-upgrade-2.5.2-to-2.5.3.md)（[Issue #54](https://github.com/wochenlong/lora-scripts-next/issues/54)）。
+
+</details>
+
+<details>
 <summary><b>整合包更新后打不开 / 启动脚本过时</b></summary>
 
 整合包布局固定为：根目录 `run_gui.bat` + `python_embeded/` + `SD-Trainer/`。
