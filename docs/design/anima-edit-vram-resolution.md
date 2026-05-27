@@ -1,7 +1,6 @@
 # Anima Edit 显存与训练分辨率参考
 
-> **读者**：Anima **训练器 / conditioning 实现** 开发者——在尝试其它拼接方式、分辨率策略或缓存方案前，用本文对齐仓库现状与数据缺口。  
-> **状态**：汇总已有设计、配置与开发记录；**含** `data/edit3` @ 512 单/双参考 2 epoch 对照（§4.2，RTX 4090）。1024 双参考仍待测。  
+> **读者**：Anima **训练器 / conditioning 实现** 开发者——在尝试其它拼接方式、分辨率策略或缓存方案前，用本文对齐仓库现状与可复现 benchmark。  
 > **分支**：`anima-edit`  
 > **关联**：[anima-edit-multi-reference.md](anima-edit-multi-reference.md) · [anima-training.md](../anima-training.md#图像编辑--条件训练实验)
 
@@ -9,44 +8,112 @@
 
 ## 目录
 
-| § | 内容 |
-|---|------|
-| [1](#1-结论速览) | 结论速览（分辨率 / 显存） |
-| [2](#2-机制双参考为何更吃显存) | DiT 时间维 `T` 与显存 scaling |
-| [3](#3-仓库内配置对照) | 单/双参考 TOML 与 UI 默认值 |
-| [4](#4-已有观测非正式-benchmark) | 开发会话记录 |
-| [5](#5-显存优化手段) | 可调旋钮（与实现无关） |
-| [6](#6-分辨率策略) | 冒烟 → 正式训练路径 |
-| [7](#7-建议补测) | 换实现前后应记录的指标 |
-| [8](#8-引用索引) | 相关文件 |
+1. [结论速览](#1-结论速览)
+2. [Benchmark 矩阵（RTX 4090）](#2-benchmark-矩阵rtx-4090)
+3. [机制：双参考为何更吃显存](#3-机制双参考为何更吃显存)
+4. [仓库内配置对照](#4-仓库内配置对照)
+5. [其它观测记录](#5-其它观测记录)
+6. [显存优化手段](#6-显存优化手段)
+7. [分辨率策略与补测](#7-分辨率策略与补测)
+8. [引用索引](#8-引用索引)
 
 ---
 
 ## 1. 结论速览
 
-### 1.1 一张表看完
+### 1.1 双参考 · 分辨率 vs 显存（4090，可复现）
 
-| 模式 | DiT 输入时间维 `T` | 仓库内**训练分辨率**主流 | 显存数据现状 |
-|:----:|:-------------------:|:------------------------|:-------------|
-| **单张参考** | `T=2`<br>噪声 1 + 参考 1 | **512** — 展示 / 表情 / ImagePulse 示例<br>**1024** — `anima-edit-reference.toml` 50 epoch 探针 | **512**：RTX 4090 峰值 **~13.0GB**（§4.2）<br>**1024**：24GB 卡首 step **~22.9GB**（§4.1） |
-| **双张参考** | `T=3`<br>噪声 1 + 参考 2 | **512** — P0 冒烟、全部 `*-dual-*` / `edit3`<br>**768** — 中间档位试探 | **512**：RTX 4090 **~13.3GB**（§4.2）<br>**768**：同机双参考 **~14.4GB**（§4.2.1）<br>**1024**：待测 |
+同机、`data/edit3` 单样本、**2 epoch**、关预览、`network_dim=4`、梯度检查点 + latent/TE 缓存。详见 [§2](#2-benchmark-矩阵rtx-4090)。
 
-### 1.2 选型建议
+| 训练分辨率 | `T` | 峰值显存 | 相对 512 双参考 |
+|:----------:|:---:|---------:|----------------:|
+| **512** | 3 | **~13.3 GB** | — |
+| **768** | 3 | **~14.4 GB** | +~1.1 GB |
+| **1024** | 3 | **~16.0 GB** | +~2.9 GB |
 
-| GPU 档位 | 单参考 | 双参考 |
-|----------|--------|--------|
-| **≥ 24GB** | 可试 **1024**（`gradient_checkpointing` + `cache_latents` + `cache_text_encoder_outputs`） | **512** 已验；**768** 双参考约 **14.4GB**（4090，§4.2.1），可作 512→1024 中间档；1024 仍待测 |
-| **≤ 16GB** | 优先 **512** + 检查点 + TE/VAE 缓存；必要时 `blocks_to_swap`（§5） | 同上，**不要**直接上 1024 |
-| **预览分辨率** | 可与训练不同；manifest `width`/`height` 可 512 训 + 1024 预览（见 `anima-training.md` ImagePulse） | 同左 |
+**24GB 卡（4090）上双参考 1024 可跑通**（本对照无 OOM）；仍建议大数据集正式训练前用目标集再 smoke 一次。
 
-> **给实现者的提示**  
-> 若你改 conditioning 拼接（例如不沿 `dim=2` 叠参考、或改为 cross-attn 注入），下表 scaling 规律需重新推导；本文 §2 仅描述 **当前 sd-scripts 路径**。
+### 1.2 单参考 vs 双参考（512）
+
+| 模式 | `T` | 峰值（4090） |
+|:----:|:---:|-------------:|
+| 单参考 | 2 | **~13.0 GB** |
+| 双参考 | 3 | **~13.3 GB**（+~0.2 GB） |
+
+同一分辨率下，`T=2→T=3` 增量很小；**分辨率**才是显存主因。
+
+### 1.3 选型建议
+
+| GPU | 单参考 | 双参考 |
+|-----|--------|--------|
+| **≥ 24 GB** | 可试 1024（注意 §5.1 旧会话 ~22.9GB 为另一语境） | 512 / 768 / **1024** 均已在本机 4090 跑通（§2） |
+| **16 GB** | 优先 512 + §6 优化项 | 优先 512；768 需自测；1024 风险高 |
+| **≤ 12 GB** | 512 + `blocks_to_swap` 等 | 仅 512，勿直接 1024 |
+
+> **换实现者**：若不再沿 `dim=2` 拼接参考 latent，§2–§3 数字需重测。
 
 ---
 
-## 2. 机制：双参考为何更吃显存
+## 2. Benchmark 矩阵（RTX 4090）
 
-当前实现（`vendor/sd-scripts/anima_train_network.py`）在 conditioning 模式下，把参考图 **VAE latent** 与噪声 latent 沿 **时间维 `dim=2`** 拼接后送入 DiT：
+**环境**：NVIDIA GeForce RTX 4090（24GB） · Windows · `C:\Program Files\Python310\python.exe`  
+**数据**：`data/edit3` · `sample1`（target + `reference/sample1/{1,2}.png`）  
+**训练**：2 epoch = 2 steps · `train_batch_size=1` · 无 `sample_every_n_epochs`  
+**公共参数**：`gradient_checkpointing=true` · `cache_latents` + `cache_text_encoder_outputs` · `network_dim/alpha=4` · `AdamW8bit` · `bf16`
+
+### 2.1 双参考（`conditioning_multi_reference=true`）
+
+| 分辨率 | `nvidia-smi` 峰值 | 约合 | 较 512 双参考 |
+|:------:|------------------:|-----:|--------------:|
+| 512×512 | 13 584 MiB | 13.3 GB | — |
+| 768×768 | 14 746 MiB | 14.4 GB | +1.16 GB |
+| 1024×1024 | 16 434 MiB | 16.0 GB | +2.85 GB |
+
+```text
+显存 (GB, 双参考 T=3, 4090)
+16.0 |                              * 1024
+14.4 |                    * 768
+13.3 |          * 512
+     +----------------------------------
+        512        768       1024   分辨率
+```
+
+**复现**
+
+| 分辨率 | 训练 TOML | Dataset TOML |
+|:------:|-----------|--------------|
+| 512 | [anima-edit-vram-bench-dual-2e.toml](../examples/anima-edit-vram-bench-dual-2e.toml) | [anima-edit-dual-ref-dataset.toml](../examples/anima-edit-dual-ref-dataset.toml) |
+| 768 | [anima-edit-vram-bench-dual-768-2e.toml](../examples/anima-edit-vram-bench-dual-768-2e.toml) | [anima-edit-dual-ref-dataset-768.toml](../examples/anima-edit-dual-ref-dataset-768.toml) |
+| 1024 | [anima-edit-vram-bench-dual-1024-2e.toml](../examples/anima-edit-vram-bench-dual-1024-2e.toml) | [anima-edit-dual-ref-dataset-1024.toml](../examples/anima-edit-dual-ref-dataset-1024.toml) |
+
+```powershell
+# 512 单/双对照
+python script/ops/bench_anima_edit_vram.py
+
+# 768 / 1024 仅双参考（示例）
+python -m accelerate.commands.launch --num_cpu_threads_per_process 1 `
+  scripts/dev/anima_train_network.py --config_file docs/examples/anima-edit-vram-bench-dual-1024-2e.toml
+```
+
+日志与 JSON：`output/anima-edit-vram-bench/`（`summary.json` · `summary-dual-768.json` · `summary-dual-1024.json`）。
+
+> 峰值为进程全程 `memory.used` 采样最大值（含加载与建缓存），非仅 forward 瞬时值。
+
+### 2.2 单参考（512，同数据 ref1）
+
+| 模式 | `T` | 峰值 |
+|:----:|:---:|-----:|
+| 单参考 | 2 | 13 349 MiB（~13.0 GB） |
+| 双参考 | 3 | 13 584 MiB（~13.3 GB） |
+| **Δ** | — | **+235 MiB（+1.8%）** |
+
+配置：[anima-edit-vram-bench-single-2e.toml](../examples/anima-edit-vram-bench-single-2e.toml) · dataset 见 [anima-edit-vram-bench-single-dataset.toml](../examples/anima-edit-vram-bench-single-dataset.toml)（`reference_bench_single/sample1.png`）。
+
+---
+
+## 3. 机制：双参考为何更吃显存
+
+`vendor/sd-scripts/anima_train_network.py`：参考图 VAE latent 与噪声沿 **时间维 `dim=2`** 拼接后送入 DiT。
 
 ```text
 单参考：  [B, C, T=2, H, W]  =  noisy(1) + ref1(1)
@@ -66,213 +133,110 @@ flowchart LR
   end
 ```
 
-**相对单参考、同一 `resolution` 时，双参考额外成本：**
-
-| 因素 | 影响 |
-|------|------|
-| 前向激活 | 多 1 帧参考 latent → DiT 序列长度约 **+50%**（仅拼接维，≠ 整卡显存 +50%） |
-| `cache_latents` | 每样本多缓存 1 份参考 latent |
-| 预览 | manifest 可带 ref1/ref2；训练步显存与单参考相近，采样仍按 manifest 分辨率 |
-
-**Scaling 直觉（换实现前可作 baseline）：**
-
-- 分辨率：`512 → 1024` 边长 ×2 → 单帧 latent 面积约 **×4**
-- 条件帧数：`T=2 → T=3` → 条件侧输入约 **×1.5**
+| 因素 | 单→双（同分辨率） |
+|------|-------------------|
+| DiT 序列长度（拼接维） | 约 +50% 条件帧（≠ 整卡 +50%） |
+| `cache_latents` | 多缓存 1 份参考 latent |
+| 分辨率缩放 | 边长 ×2 → latent 面积约 **×4**（主因，见 §2.1） |
 
 ---
 
-## 3. 仓库内配置对照
+## 4. 仓库内配置对照
 
-### 3.1 单张参考图
+### 4.1 单张参考
 
-| 来源 | `resolution` | `max_bucket_reso` | 备注 |
-|------|:------------:|:-----------------:|------|
-| WebUI `anima-edit-lora.ts` | `512,512` | 2048 | 文案：P0 推荐 512，正式可改 1024 |
-| `apply_anima_training_defaults` | 空 → `512,512` | — | `mikazuki/app/api.py` |
-| `anima-edit-single-ref-12epoch.toml` | 512 | 1024 | 32 对 showcase，12 epoch |
-| `anima-edit-expression-*-epoch.toml` | 512 | 1024 | ImagePulse 表情子集 |
-| `anima-edit-reference.toml` | **1024** | 2048 | 脱敏 50 epoch 探针 |
-| `anima-edit-dataset.toml` | **1024** | — | 通用 dataset 模板 |
-| 预览 manifest 示例 | — | — | `width`/`height` 多为 **512** |
+| 来源 | `resolution` | 备注 |
+|------|:------------:|------|
+| WebUI `anima-edit-lora.ts` | 512（默认） | 文案可改 1024 |
+| `anima-edit-single-ref-12epoch.toml` | 512 | showcase |
+| `anima-edit-reference.toml` | **1024** | 50 epoch 探针 |
 
-### 3.2 双张参考图
+### 4.2 双张参考
 
-| 来源 | `resolution` | `conditioning_multi_reference` | 备注 |
-|------|:------------:|:------------------------------:|------|
-| [multi-reference §2.2](anima-edit-multi-reference.md) | **512**（P0） | true | 正式 1024 **延后** |
-| `anima-edit-dual-ref-smoke.toml` | 512 | dataset TOML | 2 step 冒烟 |
-| `anima-edit-dual-ref-10epoch.toml` | 512 | true | |
-| `anima-edit-showcase-dual-*.toml` | 512 | true | 文档例图 |
-| `data/edit3` 冒烟 | 512 | true | `script/ops/prepare_edit3_multi_ref.py` |
+| 来源 | `resolution` | 备注 |
+|------|:------------:|------|
+| [multi-reference §2.2](anima-edit-multi-reference.md) | 512（P0） | 1024 现已有 bench（§2.1） |
+| `anima-edit-dual-ref-10epoch.toml` | 512 | `data/edit3` |
+| `anima-edit-vram-bench-dual-*-2e.toml` | 512 / 768 / 1024 | 显存对照 |
 
-### 3.3 公共训练参数（影响显存基线）
+### 4.3 公共训练参数（显存相关）
 
-单/双参考示例 TOML 中反复出现：
-
-| 参数 | 典型值 | 显存 |
-|------|--------|------|
-| `train_batch_size` | 1 | 基线 |
-| `gradient_checkpointing` | true | ↓ 激活 |
-| `cache_latents` | true | 训练步释放 VAE |
-| `cache_text_encoder_outputs` | true | 训练步释放 Qwen3 |
-| `network_train_unet_only` | true | 不训 TE |
-| `mixed_precision` | bf16 | |
-| `optimizer_type` | AdamW8bit | |
-| `network_dim` / `alpha` | 4/4（示例）或 16/16（schema） | rank ↑ 略增显存 |
-| `vae_chunk_size` | 64 | ↓ VAE 峰值 |
-| `vae_disable_cache` | true | ↓ VAE 峰值 |
-| `sample_at_first` | false | conditioning 强制，避免 step 0 双份采样 |
-
-conditioning 模式下 WebUI/API 会强制 `cache_latents` + `cache_text_encoder_outputs`（`api.py` → `apply_anima_training_defaults`）。
+| 参数 | 典型值 |
+|------|--------|
+| `train_batch_size` | 1 |
+| `gradient_checkpointing` | true |
+| `cache_latents` / `cache_text_encoder_outputs` | true（Edit 默认强制） |
+| `network_dim` / `alpha` | 4（示例）或 16（UI 默认） |
+| `vae_chunk_size` / `vae_disable_cache` | 64 / true |
+| `sample_at_first` | false |
 
 ---
 
-## 4. 已有观测（非正式 benchmark）
+## 5. 其它观测记录
 
-### 4.1 单参考 · 1024 · 24GB
-
-conditioning 接入阶段，**单参考**、latent + TE 缓存开启后，首 training step 曾观测：
+### 5.1 单参考 · 1024 · 开发会话（未脚本化）
 
 | 指标 | 值 |
 |------|-----|
-| GPU 利用率 | ~100% |
-| 显存 | **~22.9GB / 24GB** |
-| 首 step | 部分配置极慢或看似卡住（缓存冷启动 + 显存压力） |
+| 显存 | **~22.9 GB / 24 GB**（首 training step） |
+| 语境 | 单参考、1024、缓存路径修复前后均有尝试 |
 
-语境：`resolution` 1024、`train_batch_size=1`、`gradient_checkpointing=true`。  
-**未**落盘为可复现 benchmark 脚本或日志。
+与 §2.1 **双参考 1024 ~16.0 GB** 不可直接对比：本条为早期单参考会话、可能含更重的冷启动/不同 rank；**以 §2 可复现 TOML 为准**做实现对照。
 
-### 4.2 单/双参考 · 512 · RTX 4090（可复现，2026-05-27）
+### 5.2 文生图 Anima LoRA（非 Edit）
 
-同机、同超参、同 `data/edit3` 仅 1 条样本（`sample1`），**2 epoch = 2 training steps**，关闭训练预览；`network_dim=4`、`gradient_checkpointing` + latent/TE 缓存（与 `anima-edit-dual-ref-10epoch.toml` 一致）。
-
-| 模式 | `T` | `nvidia-smi` 峰值（全程） | 约合 |
-|:----:|:---:|--------------------------:|-----:|
-| 单参考（`reference_bench_single/sample1.png` = ref1） | 2 | **13349 MiB** | ~13.0 GB |
-| 双参考（`reference/sample1/{1,2}.png`） | 3 | **13584 MiB** | ~13.3 GB |
-| **差值** | — | **+235 MiB** | **+~1.8%** |
-
-**解读（给换实现的开发者）：**
-
-- 在 **512 + 全缓存已命中** 时，DiT 权重仍占显存大头，`T=2→T=3` 在本对照里只抬高约 **0.2GB** 量级，**远小于** 分辨率 `512→1024` 的跳跃（见 §4.1 单参考 1024 ~22.9GB）。
-- 测得峰值为 **进程全程** `memory.used` 采样最大值，含模型加载与缓存构建；**不是**仅 forward 瞬时值。
-- 复现：`python script/ops/bench_anima_edit_vram.py` → `output/anima-edit-vram-bench/summary.json`（`output/` 已 gitignore）。
-
-配置：`docs/examples/anima-edit-vram-bench-dual-2e.toml`、`anima-edit-vram-bench-single-2e.toml`。
-
-### 4.2.1 双参考 · 768 · RTX 4090（2026-05-27）
-
-同 §4.2 条件（`edit3` / 2 epoch / 关预览 / 全缓存），仅将训练与 dataset 分辨率改为 **768×768**（`max_bucket_reso=1536`）。
-
-| 分辨率 | `T` | `nvidia-smi` 峰值 | 约合 | 相对双参考 512 |
-|:------:|:---:|------------------:|-----:|---------------:|
-| 512 | 3 | 13584 MiB | ~13.3 GB | — |
-| **768** | 3 | **14746 MiB** | **~14.4 GB** | **+1162 MiB（+~8.6%）** |
-
-- 768 仍 **无 OOM**（4090 24GB）；较 512 双参考多约 **1.1GB**，明显低于单参考 1024 会话里的 ~22.9GB 量级。
-- 复现：`docs/examples/anima-edit-vram-bench-dual-768-2e.toml` + `anima-edit-dual-ref-dataset-768.toml`；日志 `output/anima-edit-vram-bench/summary-dual-768.json`。
-
-### 4.3 双参考 · 512 冒烟（验收）
-
-[multi-reference P0](anima-edit-multi-reference.md)：512、极小集 → 跑通 1～2 epoch，无 shape/OOM。显存数字见 §4.2。
-
-### 4.4 文生图 Anima LoRA（非 Edit，仅供参考）
-
-README-zh 中 **文生图 @ 1024**、RTX 4090 分级（**非** conditioning / Edit）：
-
-| 显存 | 建议 |
-|:----:|------|
-| ≥ 24 GB | 默认 |
-| ≥ 16 GB | `gradient_checkpointing` |
-| ≥ 12 GB | 梯度检查点 |
-| ≥ 10 GB | + `blocks_to_swap=16` |
-| ≥ 8 GB | swap 24 + 缓存 TE + LoKr |
-
-> Edit 同分辨率应 **≥ 文生图**（多 1～2 帧参考 latent + 缓存）。**不可**直接当 Edit 保证值。
+README-zh 文生图 @ 1024 的 4090 分级**不含** conditioning 多参考，勿当作 Edit 保证值。
 
 ---
 
-## 5. 显存优化手段
-
-来自 `vendor/sd-scripts/docs/anima_train_network.md` 与 WebUI schema；**换实现时**下列仍大多适用（除与 `T` 拼接强绑定的项）：
+## 6. 显存优化手段
 
 | 手段 | 说明 |
 |------|------|
-| 降低 `resolution` | **影响最大** |
+| 降低 `resolution` | 影响最大（§2.1） |
 | `gradient_checkpointing` | 默认已开 |
-| `cache_latents` / `cache_text_encoder_outputs` | Edit 默认强制 |
+| `cache_latents` / `cache_text_encoder_outputs` | Edit 强制 |
 | `split_attn` | ↓ attention 显存，变慢 |
-| `blocks_to_swap` | DiT 块 CPU 交换 |
-| `unsloth_offload_checkpointing` | 与 swap 互斥 |
-| Adafactor | 略省于 AdamW8bit |
+| `blocks_to_swap` | DiT CPU 交换（16GB 可考虑） |
 | 降低 `network_dim` | 示例 4，UI 默认 16 |
-| 关闭 / 降低预览分辨率 | ↓ epoch 末采样峰值 |
-| `gradient_accumulation_steps` | 模拟大 batch |
-
-双参考 **1024 OOM** 时：先记录 OOM，再降分辨率或减参（[multi-reference 验收表](anima-edit-multi-reference.md)）。
+| 关闭训练预览 | ↓ epoch 末采样峰值 |
 
 ---
 
-## 6. 分辨率策略
+## 7. 分辨率策略与补测
 
 ```text
-                 单参考                          双参考
-           ┌─────────────────┐           ┌─────────────────┐
- 探索/冒烟  │ 512（示例默认）  │           │ 512（P0 强制）   │
-           ├─────────────────┤           ├─────────────────┤
- 正式训练   │ 1024（探针验证） │           │ 1024（待验证）   │
-           │ 需 ≥24GB 或优化  │           │ 512 稳定后再试   │
-           └─────────────────┘           └─────────────────┘
- 预览       │ 可与训练不同（manifest 512 或 1024）          │
-           └──────────────────────────────────────────────┘
+           单参考                    双参考（4090 bench）
+  冒烟     512                       512  ✅ ~13.3 GB
+  中间档   —                         768  ✅ ~14.4 GB
+  正式     1024（探针/会话）          1024 ✅ ~16.0 GB（edit3 smoke）
+  预览     可与训练分辨率不同（manifest）
 ```
 
-- **数据准备**：AISP/出图常用 **1024** 方图；训练前需 resize 或依赖 bucket。
-- **Bucket**：示例 `enable_bucket=true`；`max_bucket_reso` 1024（512 训）或 2048（1024 训）。
+| 状态 | 项目 |
+|:----:|------|
+| ✅ | 512 单/双对照 · 768/1024 双参考（§2） |
+| 可选 | 单参考 @ 768/1024 同脚本对照 |
+| 可选 | 开启 `sample_every_n_epochs` 时的峰值 |
 
----
-
-## 7. 建议补测
-
-换 conditioning 实现或分辨率策略前后，建议在同机记录：
-
-| 待测项 | 方法 |
-|--------|------|
-| ~~单/双参考 @ 512 峰值~~ | ✅ `script/ops/bench_anima_edit_vram.py`（§4.2） |
-| ~~双参考 @ 768~~ | ✅ §4.2.1（4090 ~14.4GB） |
-| 双参考 @ 1024 | 仅 24GB+；记录 OOM 与否 |
-| 单参考 @ 768 | 与双参考 768 对照（可选） |
-| 单参考 @ 1024 可复现脚本 | 与 §4.1 会话记录对齐的固定 TOML + 日志 |
-| 预览开启峰值 | `sample_every_n_epochs=1` vs 关闭 |
-
-**建议落盘字段**（写回 `output/<run>/` 或监控）：
-
-`resolution` · `edit_reference_layout` / `conditioning_multi_reference` · `gpu_memory_peak_mb` · **实现版本 / commit**
+**落盘建议**：`resolution` · `conditioning_multi_reference` · `gpu_memory_peak_mib` · **commit**
 
 ---
 
 ## 8. 引用索引
 
-| 文档 / 路径 | 内容 |
-|-------------|------|
-| [anima-edit-multi-reference.md](anima-edit-multi-reference.md) | 双参考 P0、512 冒烟 |
-| [anima-training.md](../anima-training.md) | Edit 入口、示例索引 |
-| [anima-edit-reference.toml](../examples/anima-edit-reference.toml) | 1024 单参考长训 |
-| [anima-edit-dual-ref-smoke.toml](../examples/anima-edit-dual-ref-smoke.toml) | 512 双参考冒烟 |
-| [anima-edit-vram-bench-dual-2e.toml](../examples/anima-edit-vram-bench-dual-2e.toml) | 512 双参考 2 epoch 显存 bench |
-| [anima-edit-vram-bench-single-2e.toml](../examples/anima-edit-vram-bench-single-2e.toml) | 512 单参考 2 epoch 显存 bench |
-| `script/ops/bench_anima_edit_vram.py` | 跑 bench 并写 `summary.json` |
-| [anima-edit-vram-bench-dual-768-2e.toml](../examples/anima-edit-vram-bench-dual-768-2e.toml) | 768 双参考 2 epoch bench |
-| [anima-edit-dual-ref-dataset-768.toml](../examples/anima-edit-dual-ref-dataset-768.toml) | 768 dataset 子配置 |
-| [anima-edit-single-ref-12epoch.toml](../examples/anima-edit-single-ref-12epoch.toml) | 512 单参考 showcase |
-| `mikazuki/schema/anima-edit-lora.ts` | UI 默认 512、参考布局 |
-| `README-zh.md` | 文生图 Anima LoRA 分级（非 Edit） |
+| 路径 | 用途 |
+|------|------|
+| [anima-edit-multi-reference.md](anima-edit-multi-reference.md) | 双参考 P0 设计 |
+| [anima-training.md](../anima-training.md) | Edit 训练入口 |
+| `script/ops/bench_anima_edit_vram.py` | 512 单/双 bench |
+| `docs/examples/anima-edit-vram-bench-*.toml` | 各分辨率 bench |
+| `docs/examples/anima-edit-dual-ref-dataset*.toml` | 512/768/1024 dataset |
+| `mikazuki/schema/anima-edit-lora.ts` | UI 默认 |
 
 ---
 
 | 日期 | 说明 |
 |------|------|
-| 2026-05-27 | 初版：汇总配置与开发观测 |
-| 2026-05-27 | 排版优化；面向训练器实现者补充目录、mermaid、补测字段 |
-| 2026-05-27 | §4.2：`edit3` @ 512 单/双 2 epoch 显存对照（4090）；bench 脚本与 TOML |
-| 2026-05-27 | §4.2.1：双参考 @ 768 峰值 ~14.4GB（4090，+1.1GB vs 512 双参考） |
+| 2026-05-27 | 初版与 512 单/双对照 |
+| 2026-05-27 | 768 / 1024 双参考 benchmark；文档结构重组为 §2 矩阵 |

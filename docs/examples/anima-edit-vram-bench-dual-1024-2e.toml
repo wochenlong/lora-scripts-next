@@ -1,0 +1,49 @@
+# VRAM benchmark: dual-reference @ 1024, 2 epochs, edit3 (1 sample).
+#   python -m accelerate.commands.launch --num_cpu_threads_per_process 1 ^
+#     scripts/dev/anima_train_network.py --config_file docs/examples/anima-edit-vram-bench-dual-1024-2e.toml
+
+pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
+vae = "./sd-models/anima/qwen_image_vae.safetensors"
+qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
+
+dataset_config = "./docs/examples/anima-edit-dual-ref-dataset-1024.toml"
+conditioning = true
+
+resolution = "1024,1024"
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 2048
+bucket_reso_steps = 64
+
+output_dir = "./output/anima-edit-vram-bench-dual-1024-2e"
+output_name = "dual-ref-1024-2e"
+save_model_as = "safetensors"
+save_precision = "bf16"
+save_every_n_epochs = 99
+
+network_module = "networks.lora_anima"
+network_dim = 4
+network_alpha = 4
+network_train_unet_only = true
+
+max_train_epochs = 2
+train_batch_size = 1
+gradient_checkpointing = true
+learning_rate = 5e-5
+unet_lr = 5e-5
+optimizer_type = "AdamW8bit"
+lr_scheduler = "constant"
+mixed_precision = "bf16"
+seed = 42
+
+cache_latents = true
+cache_latents_to_disk = false
+cache_text_encoder_outputs = true
+cache_text_encoder_outputs_to_disk = false
+vae_chunk_size = 64
+vae_disable_cache = true
+max_data_loader_n_workers = 0
+attn_mode = "torch"
+
+sample_at_first = false
+caption_extension = ".txt"

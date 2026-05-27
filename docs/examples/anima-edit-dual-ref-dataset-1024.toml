@@ -1,0 +1,17 @@
+# Dual-reference dataset @ 1024 for VRAM bench (same edit3 layout).
+[general]
+caption_extension = ".txt"
+
+[[datasets]]
+resolution = [1024, 1024]
+batch_size = 1
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 2048
+bucket_reso_steps = 64
+
+[[datasets.subsets]]
+image_dir = "./data/edit3/target"
+conditioning_data_dir = "./data/edit3/reference"
+conditioning_multi_reference = true
+conditioning_reference_count = 2
