@@ -1,0 +1,17 @@
+# Dummy dataset for dual-ref showcase sample-only (prompts carry reference_dir).
+[general]
+caption_extension = ".txt"
+
+[[datasets]]
+resolution = [512, 512]
+batch_size = 1
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 1024
+bucket_reso_steps = 64
+
+[[datasets.subsets]]
+image_dir = "./data/anima-edit-showcase-dual-curated/target"
+conditioning_data_dir = "./data/anima-edit-showcase-dual-curated/reference"
+conditioning_multi_reference = true
+conditioning_reference_count = 2

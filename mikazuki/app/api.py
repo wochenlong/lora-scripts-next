@@ -373,9 +373,7 @@ def _list_conditioning_subdirs(conditioning_data_dir: str) -> list[str]:
 def _resolve_preview_reference_paths(
     config: dict, model_train_type: str = ""
 ) -> list[str]:
-    multi_reference_mode = is_anima_edit_train_type(model_train_type) or _truthy(
-        config.get("multi_reference_mode")
-    )
+    multi_reference_mode = _truthy(config.get("multi_reference_mode"))
     reference_count = int(config.get("conditioning_reference_count", 2) or 2)
     conditioning_data_dir = str(config.get("conditioning_data_dir") or "").strip()
 
@@ -501,6 +499,26 @@ def _dataset_resolution(value):
     return int(text)
 
 
+def _validate_single_reference_dataset(target_data_dir: str, conditioning_data_dir: str) -> None:
+    """Each target stem must have at least one conditioning image in ref root (e.g. foo.png for foo.png target)."""
+    missing = []
+    for target_path in _image_files(target_data_dir):
+        stem = os.path.splitext(os.path.basename(target_path))[0]
+        found = False
+        for ext in (".png", ".jpg", ".jpeg", ".webp", ".PNG", ".JPG", ".JPEG", ".WEBP"):
+            candidate = os.path.join(conditioning_data_dir, stem + ext)
+            if os.path.isfile(candidate):
+                found = True
+                break
+        if not found:
+            missing.append(stem)
+    if missing:
+        raise ValueError(
+            "单参考模式下，每个 target 需在参考根目录下提供同名图片（如 target/foo.png → reference/foo.png）。"
+            f"缺少: {', '.join(missing)}"
+        )
+
+
 def _validate_multi_reference_dataset(
     target_data_dir: str,
     conditioning_data_dir: str,
@@ -520,19 +538,34 @@ def _validate_multi_reference_dataset(
         )
 
 
+def _edit_layout_is_single_reference(layout: str) -> bool:
+    """True = 单张参考图；兼容旧版英文枚举与新版中文选项。"""
+    layout = str(layout or "").strip()
+    if layout in ("单张参考图", "single_one_ref", "single_ref"):
+        return True
+    if layout in ("双张参考图", "dual_two_refs", "dual_ref"):
+        return False
+    return True
+
+
 def _prepare_conditioning_dataset_config(
     config: dict, autosave_dir: str, timestamp: str, model_train_type: str = ""
 ) -> Optional[str]:
     target_data_dir = str(config.pop("target_data_dir", "") or "").strip()
     conditioning_data_dir = str(config.get("conditioning_data_dir", "") or "").strip()
-    multi_reference_mode = is_anima_edit_train_type(model_train_type) or _truthy(
-        config.get("multi_reference_mode", False)
-    )
-    reference_count = int(config.get("conditioning_reference_count", 2) or 2)
+    layout = str(config.pop("edit_reference_layout", "") or "").strip()
     if is_anima_edit_train_type(model_train_type):
-        config["multi_reference_mode"] = True
-        config["conditioning_reference_count"] = 2
-        reference_count = 2
+        if _edit_layout_is_single_reference(layout):
+            multi_reference_mode = False
+            reference_count = 1
+        else:
+            multi_reference_mode = True
+            reference_count = 2
+        config["multi_reference_mode"] = multi_reference_mode
+        config["conditioning_reference_count"] = reference_count
+    else:
+        multi_reference_mode = _truthy(config.get("multi_reference_mode", False))
+        reference_count = int(config.get("conditioning_reference_count", 2) or 2)
 
     if not target_data_dir:
         raise ValueError("启用图像编辑训练后，请填写目标图目录 Target。")
@@ -548,8 +581,8 @@ def _prepare_conditioning_dataset_config(
         if reference_count < 2:
             raise ValueError("双参考模式要求 conditioning_reference_count >= 2。")
         _validate_multi_reference_dataset(target_data_dir, conditioning_data_dir, reference_count)
-    elif not _image_files(conditioning_data_dir):
-        raise ValueError("参考图目录没有可用图片，请检查 Reference / Conditioning。")
+    else:
+        _validate_single_reference_dataset(target_data_dir, conditioning_data_dir)
 
     config["train_data_dir"] = target_data_dir
     config["conditioning_data_dir"] = conditioning_data_dir
@@ -615,8 +648,6 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
 
     if is_anima_edit_train_type(model_train_type):
         config["conditioning"] = True
-        config["multi_reference_mode"] = True
-        config["conditioning_reference_count"] = 2
         config["network_module"] = config.get("network_module") or "networks.lora_anima"
         if not str(config.get("resolution", "")).strip():
             config["resolution"] = "512,512"

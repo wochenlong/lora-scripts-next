@@ -7,6 +7,10 @@
 
 
 
+
+
+
+
 /* ========== SD-Trainer UI polish (2026-05-21) ========== */
 /* 秋叶原版色系：白/浅灰两层 + 圆角与按钮层次打磨 */
 /* See frontend/DESIGN-training-params-ui.md */
@@ -565,6 +569,669 @@ main.page .theme-default-content .sd-changelog > p[align="center"] {
   margin-bottom: 1rem;
 }
 
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+/* 新手上路 · 翻页 */
+main.page .theme-default-content .sd-guide-pager__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+main.page .theme-default-content .sd-guide-pager__nav {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  flex-wrap: wrap;
+}
+main.page .theme-default-content .sd-guide-pager__tab {
+  flex: 1;
+  min-width: 8rem;
+  padding: 0.45rem 0.75rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--c-border, #e4e7ed);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--c-text, #303133);
+  background: var(--c-bg-soft, #f5f7fa);
+  transition: border-color 0.15s, background 0.15s;
+}
+main.page .theme-default-content .sd-guide-pager__tab:hover {
+  border-color: var(--el-color-primary, #409eff);
+}
+main.page .theme-default-content #sd-guide-p1:checked ~ .sd-guide-pager__nav label[for="sd-guide-p1"],
+main.page .theme-default-content #sd-guide-p2:checked ~ .sd-guide-pager__nav label[for="sd-guide-p2"] {
+  border-color: var(--el-color-primary, #409eff);
+  background: color-mix(in srgb, var(--el-color-primary, #409eff) 12%, transparent);
+  color: var(--el-color-primary, #409eff);
+}
+main.page .theme-default-content .sd-guide-pager__panel {
+  display: none;
+}
+main.page .theme-default-content #sd-guide-p1:checked ~ .sd-guide-pager__panels .sd-guide-pager__panel--1,
+main.page .theme-default-content #sd-guide-p2:checked ~ .sd-guide-pager__panels .sd-guide-pager__panel--2 {
+  display: block;
+}
+/* 数据集示意图 */
+main.page .theme-default-content .sd-guide-dataset__block {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--c-border, #e4e7ed);
+  border-radius: 10px;
+  background: var(--c-bg-soft, #fafafa);
+}
+main.page .theme-default-content .sd-guide-dataset__block h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+main.page .theme-default-content .sd-guide-dataset__hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #606266);
+}
+main.page .theme-default-content .sd-guide-dataset__tree {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  border-radius: 6px;
+  background: var(--c-bg, #fff);
+  border: 1px dashed var(--c-border, #dcdfe6);
+  overflow-x: auto;
+  white-space: pre;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+main.page .theme-default-content .sd-guide-dataset__foot {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+}
+main.page .theme-default-content .sd-guide-dataset .sd-home-portal {
+  display: block;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+/* 新手上路 · 翻页 */
+main.page .theme-default-content .sd-guide-pager__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+main.page .theme-default-content .sd-guide-pager__nav {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  flex-wrap: wrap;
+}
+main.page .theme-default-content .sd-guide-pager__tab {
+  flex: 1;
+  min-width: 8rem;
+  padding: 0.45rem 0.75rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--c-border, #e4e7ed);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--c-text, #303133);
+  background: var(--c-bg-soft, #f5f7fa);
+  transition: border-color 0.15s, background 0.15s;
+}
+main.page .theme-default-content .sd-guide-pager__tab:hover {
+  border-color: var(--el-color-primary, #409eff);
+}
+main.page .theme-default-content #sd-guide-p1:checked ~ .sd-guide-pager__nav label[for="sd-guide-p1"],
+main.page .theme-default-content #sd-guide-p2:checked ~ .sd-guide-pager__nav label[for="sd-guide-p2"] {
+  border-color: var(--el-color-primary, #409eff);
+  background: color-mix(in srgb, var(--el-color-primary, #409eff) 12%, transparent);
+  color: var(--el-color-primary, #409eff);
+}
+main.page .theme-default-content .sd-guide-pager__panel {
+  display: none;
+}
+main.page .theme-default-content #sd-guide-p1:checked ~ .sd-guide-pager__panels .sd-guide-pager__panel--1,
+main.page .theme-default-content #sd-guide-p2:checked ~ .sd-guide-pager__panels .sd-guide-pager__panel--2 {
+  display: block;
+}
+/* 数据集示意图 */
+main.page .theme-default-content .sd-guide-dataset__block {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--c-border, #e4e7ed);
+  border-radius: 10px;
+  background: var(--c-bg-soft, #fafafa);
+}
+main.page .theme-default-content .sd-guide-dataset__block h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+main.page .theme-default-content .sd-guide-dataset__hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #606266);
+}
+main.page .theme-default-content .sd-guide-dataset__tree {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  border-radius: 6px;
+  background: var(--c-bg, #fff);
+  border: 1px dashed var(--c-border, #dcdfe6);
+  overflow-x: auto;
+  white-space: pre;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+main.page .theme-default-content .sd-guide-dataset__foot {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+}
+main.page .theme-default-content .sd-guide-dataset .sd-home-portal {
+  display: block;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+/* 新手上路 · 翻页 */
+main.page .theme-default-content .sd-guide-pager__input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+main.page .theme-default-content .sd-guide-pager__nav {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 0 1rem;
+  flex-wrap: wrap;
+}
+main.page .theme-default-content .sd-guide-pager__tab {
+  flex: 1;
+  min-width: 8rem;
+  padding: 0.45rem 0.75rem;
+  text-align: center;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid var(--c-border, #e4e7ed);
+  border-radius: 8px;
+  cursor: pointer;
+  color: var(--c-text, #303133);
+  background: var(--c-bg-soft, #f5f7fa);
+  transition: border-color 0.15s, background 0.15s;
+}
+main.page .theme-default-content .sd-guide-pager__tab:hover {
+  border-color: var(--el-color-primary, #409eff);
+}
+main.page .theme-default-content #sd-guide-p1:checked ~ .sd-guide-pager__nav label[for="sd-guide-p1"],
+main.page .theme-default-content #sd-guide-p2:checked ~ .sd-guide-pager__nav label[for="sd-guide-p2"] {
+  border-color: var(--el-color-primary, #409eff);
+  background: color-mix(in srgb, var(--el-color-primary, #409eff) 12%, transparent);
+  color: var(--el-color-primary, #409eff);
+}
+main.page .theme-default-content .sd-guide-pager__panel {
+  display: none;
+}
+main.page .theme-default-content #sd-guide-p1:checked ~ .sd-guide-pager__panels .sd-guide-pager__panel--1,
+main.page .theme-default-content #sd-guide-p2:checked ~ .sd-guide-pager__panels .sd-guide-pager__panel--2 {
+  display: block;
+}
+/* 数据集示意图 */
+main.page .theme-default-content .sd-guide-dataset__block {
+  margin: 1rem 0;
+  padding: 0.75rem 1rem;
+  border: 1px solid var(--c-border, #e4e7ed);
+  border-radius: 10px;
+  background: var(--c-bg-soft, #fafafa);
+}
+main.page .theme-default-content .sd-guide-dataset__block h3 {
+  margin: 0 0 0.35rem;
+  font-size: 1rem;
+}
+main.page .theme-default-content .sd-guide-dataset__hint {
+  margin: 0 0 0.5rem;
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #606266);
+}
+main.page .theme-default-content .sd-guide-dataset__tree {
+  margin: 0;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  border-radius: 6px;
+  background: var(--c-bg, #fff);
+  border: 1px dashed var(--c-border, #dcdfe6);
+  overflow-x: auto;
+  white-space: pre;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+}
+main.page .theme-default-content .sd-guide-dataset__foot {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+}
+main.page .theme-default-content .sd-guide-dataset .sd-home-portal {
+  display: block;
+  margin-top: 1rem;
+  text-decoration: none;
+}
+
 /* ----- 中栏：秋叶白表单区（沿用 --c-bg-mute = 白） ----- */
 .example-container .schema-container {
   background-color: var(--c-bg-mute);
@@ -801,28 +1468,29 @@ html.dark .example-container > .right-container section .params-section pre {
   background: var(--c-bg-mute) !important;
 }
 
-/* 版本号：贴在「Next Trainer」标题右侧 */
-.sd-brand-version-chip {
-  position: fixed;
-  top: 0;
-  left: 0;
-  z-index: 20;
-  padding: 0.12rem 0.5rem;
-  border-radius: var(--sd-radius-pill, 999px);
-  font-size: 0.72rem;
-  font-weight: 600;
-  line-height: 1.2;
-  letter-spacing: 0.04em;
-  font-variant-numeric: tabular-nums;
-  color: var(--sd-nav-secondary-label, #909399);
-  background: color-mix(in srgb, var(--c-bg, #fff) 92%, transparent);
-  border: 1px solid var(--c-border, #e4e7ed);
-  pointer-events: none;
-  user-select: none;
-  white-space: nowrap;
+/* Anima Edit 专家区 → 帮助页数据集说明 */
+main.page .theme-default-content .sd-edit-guide-portal-wrap {
+  margin: 0.75rem 0 0;
+  padding: 0.65rem 0.85rem;
+  border-radius: 10px;
+  border: 1px solid color-mix(in srgb, var(--el-color-primary, #409eff) 35%, transparent);
+  background: color-mix(in srgb, var(--el-color-primary, #409eff) 8%, var(--c-bg, #fff));
 }
-html.dark .sd-brand-version-chip {
-  color: var(--c-text-lighter, #a3a6ad);
-  background: color-mix(in srgb, var(--c-bg, #22272e) 92%, transparent);
-  border-color: var(--c-border, #3d444d);
+main.page .theme-default-content a.sd-edit-guide-portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-weight: 600;
+  font-size: 0.9375rem;
+  color: var(--el-color-primary, #409eff);
+  text-decoration: none;
+}
+main.page .theme-default-content a.sd-edit-guide-portal:hover {
+  text-decoration: underline;
+}
+main.page .theme-default-content .sd-edit-guide-portal__hint {
+  margin: 0.35rem 0 0;
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.5;
 }

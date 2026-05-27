@@ -1,7 +1,8 @@
 Schema.intersect([
     Schema.object({
-        model_train_type: Schema.string().default("anima-edit-lora").description("训练种类：Anima 图像编辑（Target + Reference）"),
-        lora_type: Schema.union(["lora", "lokr", "tlora", "lora_fa", "vera", "loha"]).default("lora").description("适配器类型。常规训练建议选择 LoRA"),
+        model_train_type: Schema.string().default("anima-edit-lora").hidden().description("训练种类：Anima Edit（Target + Reference）"),
+        lora_type: Schema.const("lora").default("lora").hidden().description("图像编辑当前仅支持 LoRA"),
+        network_module: Schema.const("networks.lora_anima").default("networks.lora_anima").hidden(),
         pretrained_model_name_or_path: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/anima-base-v1.0.safetensors").description("Anima 主 DiT / transformer 权重路径，例如 anima-base-v1.0.safetensors"),
         vae: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/qwen_image_vae.safetensors").description("Qwen Image VAE 模型路径（Anima 训练必填）"),
         qwen3: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/anima/qwen_3_06b_base.safetensors").description("Qwen3 文本模型路径。可填写 safetensors / pt 文件，或完整本地模型目录"),
@@ -9,6 +10,28 @@ Schema.intersect([
         t5_tokenizer_path: Schema.string().role('filepicker', { type: "folder" }).description("T5 tokenizer 目录路径（可选，留空使用内置 configs/t5_old）"),
         resume: Schema.string().role('filepicker', { type: "folder" }).description("从某个 `save_state` 保存的中断状态继续训练，填写文件路径"),
     }).description("训练用模型"),
+
+    Schema.intersect([
+        Schema.object({
+            edit_reference_layout: Schema.union(["单张参考图", "双张参考图"]).default("单张参考图").description("参考图布局。单张：reference/ 下与 target 同名一张（如 target/foo.png → reference/foo.png）；双张：reference/<文件名>/ 下放 2 张"),
+            target_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("目标图目录（Target）。放目标图片和同名 txt / json 标签"),
+            conditioning_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("参考图根目录（Reference）"),
+        }).description("图像编辑数据集与预览"),
+        Schema.union([
+            Schema.object({
+                edit_reference_layout: Schema.const("单张参考图").required(),
+                sample_conditioning_image: Schema.string().role('filepicker', { type: "file" }).description("预览参考：固定选择一张参考图"),
+                random_conditioning_preview_image: Schema.boolean().default(false).description("随机预览：从参考根目录随机选一张图片"),
+                sample_conditioning_image_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("随机预览根目录（通常与 conditioning_data_dir 相同）"),
+            }),
+            Schema.object({
+                edit_reference_layout: Schema.const("双张参考图").required(),
+                sample_conditioning_reference_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("预览参考：固定 reference/<stem>/ 子目录（内含 2 张图，按文件名排序取前 2 张）"),
+                random_conditioning_preview_image: Schema.boolean().default(false).description("随机预览：从 conditioning 根目录随机选一个 reference/<stem>/ 子目录"),
+                sample_conditioning_image_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("随机预览根目录（通常与 conditioning_data_dir 相同）"),
+            }),
+        ]),
+    ]),
 
     Schema.object({
         qwen3_max_token_length: Schema.number().step(1).default(512).description("Qwen3 最大 token 长度"),
@@ -34,16 +57,8 @@ Schema.intersect([
             min_bucket_reso: Schema.number().default(256).description("arb 桶最小分辨率"),
             max_bucket_reso: Schema.number().default(2048).description("arb 桶最大分辨率"),
             bucket_reso_steps: Schema.number().default(64).description("arb 桶分辨率划分单位"),
-        })
-    ).description("数据集设置"),
-
-    Schema.object({
-        target_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("目标图目录（Target）。放目标图片和同名 txt / json 标签"),
-        conditioning_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("参考图根目录（Reference）。每样本在 reference/<target文件名>/ 下放 2 张参考图（按文件名排序取前 2 张）"),
-        sample_conditioning_reference_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("预览参考：固定 reference/<stem>/ 子目录（内含 2 张图）"),
-        random_conditioning_preview_image: Schema.boolean().default(false).description("随机预览参考：从 conditioning 根目录随机选一个 reference/<stem>/ 子目录"),
-        sample_conditioning_image_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("随机预览根目录（通常与 conditioning_data_dir 相同）"),
-    }).description("图像编辑数据集与预览"),
+        }, ["train_data_dir"])
+    ).description("分辨率与分桶"),
 
     SHARED_SCHEMAS.SAVE_SETTINGS,
 
@@ -60,91 +75,19 @@ Schema.intersect([
 
     Schema.intersect([
         Schema.object({
-            network_weights: Schema.string().role('filepicker').description("从已有 LoRA / LoKr 模型继续训练，填写路径"),
-            network_dim: Schema.number().min(1).default(16).description("网络维度，常用 4~128，不是越大越好。T-LoRA 建议 32（动态 rank 需要更大基础维度）"),
-            network_alpha: Schema.number().min(1).default(16).description("常用值：等于 network_dim 或 network_dim/2 或 1。T-LoRA 建议等于 network_dim"),
+            network_weights: Schema.string().role('filepicker').description("从已有 LoRA 模型继续训练，填写路径"),
+            network_dim: Schema.number().min(1).default(16).description("网络维度，常用 4~128，不是越大越好"),
+            network_alpha: Schema.number().min(1).default(16).description("常用值：等于 network_dim 或 network_dim/2 或 1"),
             dim_from_weights: Schema.boolean().default(false).description("从已有 network_weights 自动推断 rank / dim"),
             scale_weight_norms: Schema.number().step(0.01).min(0).description("最大范数正则化。如果使用，推荐为 1"),
             train_norm: Schema.boolean().default(false).description("额外训练带可学习权重的 Norm 层"),
-            conv_dim: Schema.number().hidden(),
-            conv_alpha: Schema.number().hidden(),
             network_args_custom: Schema.array(String).role('table').description("自定义 network_args，一行一个"),
             enable_base_weight: Schema.boolean().default(false).description("启用基础权重（差异炼丹）"),
-        }).description("网络设置"),
-
+            network_dropout: Schema.number().step(0.01).default(0).description("LoRA dropout 概率"),
+            pissa_init: Schema.boolean().default(false).description("启用 PiSSA 初始化（实验性）"),
+        }).description("网络设置（LoRA）"),
         Schema.union([
             Schema.object({
-                lora_type: Schema.const("lora").default("lora"),
-                network_module: Schema.const("networks.lora_anima").default("networks.lora_anima").hidden(),
-                network_dropout: Schema.number().step(0.01).default(0).description("LoRA dropout 概率"),
-                pissa_init: Schema.boolean().default(false).description("启用 PiSSA 初始化（实验性，仅 LoRA 生效）"),
-                lycoris_algo: Schema.string().hidden(),
-                lokr_factor: Schema.number().hidden(),
-                dropout: Schema.number().hidden(),
-            }),
-            Schema.object({
-                lora_type: Schema.const("lokr").required(),
-                network_module: Schema.const("lycoris.kohya").default("lycoris.kohya").hidden(),
-                lycoris_algo: Schema.const("lokr").default("lokr").hidden(),
-                lokr_factor: Schema.number().min(-1).default(-1).description("LoKr 分解因子。常用 4~无穷，填写 -1 为无穷"),
-                full_matrix: Schema.boolean().default(false).description("使用全矩阵模式（替代大 dim），开启后 LoKr 使用完整 Kronecker 乘积而非低秩近似"),
-                use_cp: Schema.boolean().default(false).description("使用 CP 分解"),
-                use_scalar: Schema.boolean().default(false).description("使用可学习缩放系数"),
-                decompose_both: Schema.boolean().default(false).description("同时分解输入与输出维度"),
-                bypass_mode: Schema.boolean().default(false).description("启用 QLyCORIS bypass 模式"),
-                dora_wd: Schema.boolean().default(false).description("启用 DoRA 权重分解"),
-                rank_dropout: Schema.number().step(0.01).min(0).max(1).description("rank dropout 概率"),
-                module_dropout: Schema.number().step(0.01).min(0).max(1).description("module dropout 概率"),
-                rank_dropout_scale: Schema.boolean().default(false).description("对 rank dropout 进行缩放补偿"),
-                conv_dim: Schema.number().min(1).description("卷积层维度。不填则跳过卷积层训练"),
-                conv_alpha: Schema.number().min(1).description("卷积层 Alpha。通常等于 conv_dim 或 conv_dim/2"),
-                dropout: Schema.number().step(0.01).min(0).max(1).description("Dropout 概率"),
-                pissa_init: Schema.boolean().hidden(),
-                network_dropout: Schema.number().hidden(),
-            }),
-            Schema.object({
-                lora_type: Schema.const("tlora").required(),
-                network_module: Schema.const("networks.tlora_anima").default("networks.tlora_anima").hidden(),
-                network_dropout: Schema.number().step(0.01).default(0).description("T-LoRA dropout 概率。T-LoRA 自带 rank masking 正则化，一般保持 0 即可"),
-                tlora_min_rank: Schema.number().min(1).default(4).description("T-LoRA 最小动态 rank。决定高噪声 timestep 下的最低有效维度，建议 ≥ network_dim/8"),
-                tlora_rank_schedule: Schema.union(["cosine", "linear"]).default("cosine").description("T-LoRA 动态 rank 调度。cosine 更平滑（推荐），linear 更激进"),
-                tlora_orthogonal_init: Schema.boolean().default(true).description("T-LoRA 对 lora_down 使用正交初始化，加速收敛"),
-                pissa_init: Schema.boolean().hidden(),
-                lycoris_algo: Schema.string().hidden(),
-                lokr_factor: Schema.number().hidden(),
-                dropout: Schema.number().hidden(),
-            }),
-            Schema.object({
-                lora_type: Schema.const("lora_fa").required(),
-                network_module: Schema.const("networks.lora_anima").default("networks.lora_anima").hidden(),
-                network_dropout: Schema.number().step(0.01).default(0).description("LoRA-FA dropout 概率"),
-                pissa_init: Schema.boolean().hidden(),
-                lycoris_algo: Schema.string().hidden(),
-                lokr_factor: Schema.number().hidden(),
-                dropout: Schema.number().hidden(),
-            }),
-            Schema.object({
-                lora_type: Schema.const("vera").required(),
-                network_module: Schema.const("networks.lora_anima").default("networks.lora_anima").hidden(),
-                network_dropout: Schema.number().step(0.01).default(0).description("VeRA dropout 概率"),
-                pissa_init: Schema.boolean().hidden(),
-                lycoris_algo: Schema.string().hidden(),
-                lokr_factor: Schema.number().hidden(),
-                dropout: Schema.number().hidden(),
-            }),
-            Schema.object({
-                lora_type: Schema.const("loha").required(),
-                network_module: Schema.const("networks.loha").default("networks.loha").hidden(),
-                network_dropout: Schema.number().step(0.01).default(0).description("LoHa dropout 概率"),
-                pissa_init: Schema.boolean().hidden(),
-                lycoris_algo: Schema.string().hidden(),
-                lokr_factor: Schema.number().hidden(),
-                dropout: Schema.number().hidden(),
-            }),
-        ]),
-        Schema.union([
-            Schema.object({
-                lora_type: Schema.const("lora").required(),
                 pissa_init: Schema.const(true).required(),
                 pissa_method: Schema.union(["rsvd", "svd"]).default("rsvd").description("PiSSA 分解方式，推荐保持 rSVD 默认值"),
                 pissa_niter: Schema.number().min(0).step(1).default(2).description("PiSSA rSVD 幂迭代次数"),
@@ -159,14 +102,14 @@ Schema.intersect([
 
     Schema.intersect([
         Schema.object({
-            enable_preview: Schema.boolean().default(true).description("启用训练预览（方案 B：写入 sample-prompts.toml manifest，支持双参考）"),
+            enable_preview: Schema.boolean().default(true).description("启用训练预览（写入 sample-prompts.toml manifest，参考图数量随「参考图模式」）"),
         }).description("训练预览图设置"),
         Schema.union([
             Schema.object({
                 enable_preview: Schema.const(true).required(),
                 prompt_file: Schema.string().role('filepicker', { type: "file" }).description("高级：直接指定 sample-prompts.toml manifest。填写后跳过自动生成，下方预览 Prompt 仅作参考"),
-                conditioning_preview_prompt: Schema.string().role('textarea').default("把参考图转换成高质量 Anima 风格插画，保持主体结构与构图").description("主预览 Prompt（manifest 第一条；与上方「图像编辑数据集」中的主 Prompt 同步）"),
-                additional_preview_prompts: Schema.string().role('textarea').description("额外预览 Prompt，一行一条。与主 Prompt 共用同一组参考图与采样参数，生成多条 [[prompts]]"),
+                conditioning_preview_prompt: Schema.string().role('textarea').default("把参考图转换成高质量 Anima 风格插画，保持主体结构与构图").description("主预览 Prompt（manifest 第一条）"),
+                additional_preview_prompts: Schema.string().role('textarea').description("额外预览 Prompt，一行一条。与主 Prompt 共用同一组参考图与采样参数"),
                 negative_prompts: Schema.string().role('textarea').default("low quality, blurry, noisy, bad anatomy, worst quality").description("Negative Prompt"),
                 sample_width: Schema.number().default(512).description("预览图宽（P0 推荐 512）"),
                 sample_height: Schema.number().default(512).description("预览图高（P0 推荐 512）"),

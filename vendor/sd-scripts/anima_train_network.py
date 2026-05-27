@@ -310,12 +310,18 @@ class AnimaNetworkTrainer(train_network.NetworkTrainer):
         conditioning_latents = batch.get("conditioning_images", None)
         if conditioning_latents is not None:
             conditioning_latents = conditioning_latents.to(accelerator.device, dtype=weight_dtype)
-            if conditioning_latents.ndim == 4:
+            if conditioning_latents.ndim == 3:
+                # [C, H, W] single reference (one cached cond latent)
+                conditioning_latents = conditioning_latents.unsqueeze(0).unsqueeze(2)
+            elif conditioning_latents.ndim == 4:
                 # [C, N, H, W] without batch (collator returns examples[0])
                 if (
                     conditioning_latents.shape[0] >= 8
                     and 2 <= conditioning_latents.shape[1] <= 8
                 ):
+                    conditioning_latents = conditioning_latents.unsqueeze(0)
+                elif conditioning_latents.shape[0] >= 8 and conditioning_latents.shape[1] == 1:
+                    # [C, 1, H, W] single reference after stack(dim=1)
                     conditioning_latents = conditioning_latents.unsqueeze(0)
                 else:
                     # [B, C, H, W] single reference per sample

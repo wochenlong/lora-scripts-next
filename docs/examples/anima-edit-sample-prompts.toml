@@ -1,6 +1,7 @@
-# Anima Edit sample prompts manifest (scheme B).
-# Used when model_train_type = anima-edit-lora, or multi_reference_mode with preview enabled.
-# Training still uses dataset_config.toml; this file is only for in-training preview sampling.
+# Legacy dual-ref example (edit3). Prefer:
+# - Single ref: docs/examples/anima-edit-single-ref-sample-prompts.toml
+# - Dual ref:  docs/examples/anima-edit-imagepulse-sample-prompts.toml
+# Generate from dataset: script/ops/generate_anima_edit_sample_prompts.py
 
 [[prompts]]
 prompt = "high quality Anima style illustration, clean color, detailed character"
@@ -11,12 +12,5 @@ scale = 4.5
 seed = 42
 sample_steps = 40
 flow_shift = 3.0
-# Paths are relative to this manifest file (under docs/examples/).
 reference_dir = "../../data/edit3/reference/sample1"
 reference_count = 2
-
-# Alternative: explicit file list
-# references = [
-#   "../../data/edit3/reference/sample1/1.png",
-#   "../../data/edit3/reference/sample1/2.png",
-# ]

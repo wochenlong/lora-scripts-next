@@ -105,6 +105,7 @@ SUPPORTED_FIELDS = {
 
 UI_ONLY_FIELDS = {
     "model_train_type",
+    "edit_reference_layout",
     "enable_preview",
     "positive_prompts",
     "negative_prompts",

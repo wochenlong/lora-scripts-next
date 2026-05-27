@@ -78,9 +78,30 @@ dataset_root/
 
 参考配置：[`docs/examples/anima-edit-reference.toml`](examples/anima-edit-reference.toml)。这是基于一次真实 50 epoch 图像编辑训练探针脱敏后的 TOML，已去掉本机路径和数据集名称，可作为参数参考；使用前请替换模型、数据集、输出目录和预览 prompt 路径。
 
+### 单图参考（文档例图 / 门面集）
+
+**布局**：`reference/<stem>.png` 与 `target/<stem>.png` 同名配对（**不要**用 `reference/<stem>/` 子目录）。
+
+```bash
+python script/ops/build_anima_edit_single_ref_showcase.py --limit 32
+python script/ops/generate_anima_edit_sample_prompts.py ^
+  --data-dir data/anima-edit-single-showcase ^
+  --out docs/examples/anima-edit-single-ref-sample-prompts.toml ^
+  --stems sample0000 sample0010 sample0020
+```
+
+| 路径 | 用途 |
+|------|------|
+| `data/anima-edit-single-showcase/` | 32 对展示训练集（可由 ImagePulse 双参考集取 `1.png` 转成单参考） |
+| `docs/examples/anima-edit-single-ref-12epoch.toml` | 12 epoch 训练示例（512，预览与训练 caption 一致） |
+| `docs/examples/anima-edit-single-ref-sample-prompts.toml` | 3 条 hero 预览（完整 `target/*.txt`） |
+| `docs/assets/anima-edit-single-ref/` | 发布用例图（ref / GT / 推理结果） |
+
+预览务必使用 **与训练相同的完整 caption**；不要用一句泛化英文。训练监控里的曲线图适合调试，正式文档请用上述 hero 三联图。
+
 ### 双参考图（方案 2，P0）
 
-支持 **1 目标 + 2 参考**：`reference/<target_stem>/` 子目录内按文件名排序取前 2 张，训练时沿 latent 时间维拼接（`T=3`）。WebUI 勾选「双参考图模式」；CLI 见 `docs/examples/anima-edit-dual-ref-dataset.toml` 与冒烟配置 `docs/examples/anima-edit-dual-ref-smoke.toml`。设计说明：[docs/design/anima-edit-multi-reference.md](design/anima-edit-multi-reference.md)。
+支持 **1 目标 + 2 参考**：`reference/<target_stem>/` 子目录内按文件名排序取前 2 张，训练时沿 latent 时间维拼接（`T=3`）。WebUI 选择「双张参考图」布局；CLI 见 `docs/examples/anima-edit-dual-ref-dataset.toml` 与冒烟配置 `docs/examples/anima-edit-dual-ref-smoke.toml`。设计说明：[docs/design/anima-edit-multi-reference.md](design/anima-edit-multi-reference.md)。显存与分辨率汇总：[docs/design/anima-edit-vram-resolution.md](design/anima-edit-vram-resolution.md)。
 
 ### 图像编辑独立训练类型（`anima-edit-lora`）
 
@@ -112,7 +133,24 @@ CLI 验证配置：`anima-edit-dual-ref-smoke.toml`（2 step）、`anima-edit-du
 | [ONE-Lab/MultiRef-dataset](https://huggingface.co/datasets/ONE-Lab/MultiRef-dataset) | 38k 合成 | **多参考** | 可只下 JSONL + 按需拉 `input_images`，抽几十条即可 |
 | [AILab-CVC/SEED-Data-Edit-Part2-3](https://huggingface.co/datasets/AILab-CVC/SEED-Data-Edit-Part2-3) Part2 | ~52k | 单参考 | 比 Part1 小很多，适合随机抽子集 |
 
-**推荐优先试**：`MultiRef-benchmark` 的 `real_world`（多输入图）或 `HumanEdit` 抽 50 对（质量稳定）。转换脚本可放 `script/ops/`，输出到 `data/anima-edit-<name>/`。
+**推荐优先试**：`MultiRef-benchmark` 的 `real_world`（多输入图）或 `HumanEdit` 抽 50 对（质量稳定）。
+
+**ImagePulseV2-Edit-Merge（本地分片，含 merged 成品图）**：
+
+```bash
+python script/ops/import_imagepulsev2_local.py ^
+  --src "C:\path\to\1775727894710656047"
+```
+
+输出 `data/imagepulsev2-edit-merge-171/`；`mergedimage` → `target/`，`seperated image` 前 2 张 → `reference/`。训练示例：`anima-edit-imagepulse-10epoch.toml`（冒烟）、`anima-edit-imagepulse-30epoch.toml`（推荐）；CLI 预览 manifest：`anima-edit-imagepulse-sample-prompts.toml`（`width`/`height` 与训练分辨率独立，可 512 训 + 1024 预览）。
+
+**一键拉取（真双参考，benchmark real_world）**：
+
+```bash
+python script/ops/fetch_multiref_anima_edit_subset.py --count 48 --seed 42
+```
+
+输出 `data/anima-edit-multiref-48/` + `docs/examples/anima-edit-multiref-dataset.toml`。HF 版 benchmark **未含 PS 成品图**，`target/` 为 prompt 中的编辑画布（见输出目录 `README-data-limitation.md`）；监督质量训练可用 `--source dataset`。10 epoch 示例：`docs/examples/anima-edit-multiref-10epoch.toml`。
 
 ```toml
 [[prompts]]

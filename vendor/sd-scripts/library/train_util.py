@@ -2722,9 +2722,15 @@ class ControlNetDataset(BaseDataset):
                 info.latents_flipped = orig_latents_flipped
 
             if len(stacked) > 0:
-                info.cond_latents = torch.stack(stacked, dim=1)
+                if len(stacked) == 1:
+                    info.cond_latents = stacked[0]
+                else:
+                    info.cond_latents = torch.stack(stacked, dim=1)
                 if len(stacked_flipped) == len(stacked):
-                    info.cond_latents_flipped = torch.stack(stacked_flipped, dim=1)
+                    if len(stacked_flipped) == 1:
+                        info.cond_latents_flipped = stacked_flipped[0]
+                    else:
+                        info.cond_latents_flipped = torch.stack(stacked_flipped, dim=1)
 
     def new_cache_latents(self, model: Any, accelerator: Accelerator):
         self.dreambooth_dataset_delegate.new_cache_latents(model, accelerator)
@@ -2787,9 +2793,15 @@ class ControlNetDataset(BaseDataset):
                     stacked_flipped.append(self._squeeze_cond_latent_tensor(info.cond_latents_flipped))
 
             if len(stacked) > 0:
-                info.cond_latents = torch.stack(stacked, dim=1)
+                if len(stacked) == 1:
+                    info.cond_latents = stacked[0]
+                else:
+                    info.cond_latents = torch.stack(stacked, dim=1)
                 if len(stacked_flipped) == len(stacked):
-                    info.cond_latents_flipped = torch.stack(stacked_flipped, dim=1)
+                    if len(stacked_flipped) == 1:
+                        info.cond_latents_flipped = stacked_flipped[0]
+                    else:
+                        info.cond_latents_flipped = torch.stack(stacked_flipped, dim=1)
 
         accelerator.wait_for_everyone()
 
@@ -2856,6 +2868,8 @@ class ControlNetDataset(BaseDataset):
                     and cond_latents.shape[0] >= 8
                     and 2 <= cond_latents.shape[1] <= 8
                 ):
+                    conditioning_images.append(cond_latents.unsqueeze(0))
+                elif cond_latents.ndim == 4 and cond_latents.shape[0] >= 8 and cond_latents.shape[1] == 1:
                     conditioning_images.append(cond_latents.unsqueeze(0))
                 else:
                     conditioning_images.append(cond_latents)
@@ -2989,6 +3003,12 @@ class ControlNetDataset(BaseDataset):
                         cond_tensor.ndim == 4
                         and cond_tensor.shape[0] >= 8
                         and 2 <= cond_tensor.shape[1] <= 8
+                    ):
+                        cond_tensor = cond_tensor.unsqueeze(0)
+                    elif (
+                        cond_tensor.ndim == 4
+                        and cond_tensor.shape[0] >= 8
+                        and cond_tensor.shape[1] == 1
                     ):
                         cond_tensor = cond_tensor.unsqueeze(0)
                     example["conditioning_images"] = cond_tensor
