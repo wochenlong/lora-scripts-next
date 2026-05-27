@@ -1,0 +1,16 @@
+# Single-reference edit3 bench (same target as dual-ref; one ref = reference/sample1/1.png).
+[general]
+caption_extension = ".txt"
+
+[[datasets]]
+resolution = [512, 512]
+batch_size = 1
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 1024
+bucket_reso_steps = 64
+
+[[datasets.subsets]]
+image_dir = "./data/edit3/target"
+conditioning_data_dir = "./data/edit3/reference_bench_single"
+conditioning_multi_reference = false
