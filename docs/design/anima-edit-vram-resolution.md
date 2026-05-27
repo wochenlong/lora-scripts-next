@@ -29,13 +29,13 @@
 | 模式 | DiT 输入时间维 `T` | 仓库内**训练分辨率**主流 | 显存数据现状 |
 |:----:|:-------------------:|:------------------------|:-------------|
 | **单张参考** | `T=2`<br>噪声 1 + 参考 1 | **512** — 展示 / 表情 / ImagePulse 示例<br>**1024** — `anima-edit-reference.toml` 50 epoch 探针 | **512**：RTX 4090 峰值 **~13.0GB**（§4.2）<br>**1024**：24GB 卡首 step **~22.9GB**（§4.1） |
-| **双张参考** | `T=3`<br>噪声 1 + 参考 2 | **512** — P0 冒烟、全部 `*-dual-*` / `edit3` | **512**：RTX 4090 峰值 **~13.3GB**，较同配置单参考 **+~0.2GB**（§4.2）<br>**1024**：待测 |
+| **双张参考** | `T=3`<br>噪声 1 + 参考 2 | **512** — P0 冒烟、全部 `*-dual-*` / `edit3`<br>**768** — 中间档位试探 | **512**：RTX 4090 **~13.3GB**（§4.2）<br>**768**：同机双参考 **~14.4GB**（§4.2.1）<br>**1024**：待测 |
 
 ### 1.2 选型建议
 
 | GPU 档位 | 单参考 | 双参考 |
 |----------|--------|--------|
-| **≥ 24GB** | 可试 **1024**（`gradient_checkpointing` + `cache_latents` + `cache_text_encoder_outputs`） | 从 **512** 起步，稳定后再试 1024 |
+| **≥ 24GB** | 可试 **1024**（`gradient_checkpointing` + `cache_latents` + `cache_text_encoder_outputs`） | **512** 已验；**768** 双参考约 **14.4GB**（4090，§4.2.1），可作 512→1024 中间档；1024 仍待测 |
 | **≤ 16GB** | 优先 **512** + 检查点 + TE/VAE 缓存；必要时 `blocks_to_swap`（§5） | 同上，**不要**直接上 1024 |
 | **预览分辨率** | 可与训练不同；manifest `width`/`height` 可 512 训 + 1024 预览（见 `anima-training.md` ImagePulse） | 同左 |
 
@@ -160,6 +160,18 @@ conditioning 接入阶段，**单参考**、latent + TE 缓存开启后，首 tr
 
 配置：`docs/examples/anima-edit-vram-bench-dual-2e.toml`、`anima-edit-vram-bench-single-2e.toml`。
 
+### 4.2.1 双参考 · 768 · RTX 4090（2026-05-27）
+
+同 §4.2 条件（`edit3` / 2 epoch / 关预览 / 全缓存），仅将训练与 dataset 分辨率改为 **768×768**（`max_bucket_reso=1536`）。
+
+| 分辨率 | `T` | `nvidia-smi` 峰值 | 约合 | 相对双参考 512 |
+|:------:|:---:|------------------:|-----:|---------------:|
+| 512 | 3 | 13584 MiB | ~13.3 GB | — |
+| **768** | 3 | **14746 MiB** | **~14.4 GB** | **+1162 MiB（+~8.6%）** |
+
+- 768 仍 **无 OOM**（4090 24GB）；较 512 双参考多约 **1.1GB**，明显低于单参考 1024 会话里的 ~22.9GB 量级。
+- 复现：`docs/examples/anima-edit-vram-bench-dual-768-2e.toml` + `anima-edit-dual-ref-dataset-768.toml`；日志 `output/anima-edit-vram-bench/summary-dual-768.json`。
+
 ### 4.3 双参考 · 512 冒烟（验收）
 
 [multi-reference P0](anima-edit-multi-reference.md)：512、极小集 → 跑通 1～2 epoch，无 shape/OOM。显存数字见 §4.2。
@@ -227,7 +239,9 @@ README-zh 中 **文生图 @ 1024**、RTX 4090 分级（**非** conditioning / Ed
 | 待测项 | 方法 |
 |--------|------|
 | ~~单/双参考 @ 512 峰值~~ | ✅ `script/ops/bench_anima_edit_vram.py`（§4.2） |
+| ~~双参考 @ 768~~ | ✅ §4.2.1（4090 ~14.4GB） |
 | 双参考 @ 1024 | 仅 24GB+；记录 OOM 与否 |
+| 单参考 @ 768 | 与双参考 768 对照（可选） |
 | 单参考 @ 1024 可复现脚本 | 与 §4.1 会话记录对齐的固定 TOML + 日志 |
 | 预览开启峰值 | `sample_every_n_epochs=1` vs 关闭 |
 
@@ -248,6 +262,8 @@ README-zh 中 **文生图 @ 1024**、RTX 4090 分级（**非** conditioning / Ed
 | [anima-edit-vram-bench-dual-2e.toml](../examples/anima-edit-vram-bench-dual-2e.toml) | 512 双参考 2 epoch 显存 bench |
 | [anima-edit-vram-bench-single-2e.toml](../examples/anima-edit-vram-bench-single-2e.toml) | 512 单参考 2 epoch 显存 bench |
 | `script/ops/bench_anima_edit_vram.py` | 跑 bench 并写 `summary.json` |
+| [anima-edit-vram-bench-dual-768-2e.toml](../examples/anima-edit-vram-bench-dual-768-2e.toml) | 768 双参考 2 epoch bench |
+| [anima-edit-dual-ref-dataset-768.toml](../examples/anima-edit-dual-ref-dataset-768.toml) | 768 dataset 子配置 |
 | [anima-edit-single-ref-12epoch.toml](../examples/anima-edit-single-ref-12epoch.toml) | 512 单参考 showcase |
 | `mikazuki/schema/anima-edit-lora.ts` | UI 默认 512、参考布局 |
 | `README-zh.md` | 文生图 Anima LoRA 分级（非 Edit） |
@@ -259,3 +275,4 @@ README-zh 中 **文生图 @ 1024**、RTX 4090 分级（**非** conditioning / Ed
 | 2026-05-27 | 初版：汇总配置与开发观测 |
 | 2026-05-27 | 排版优化；面向训练器实现者补充目录、mermaid、补测字段 |
 | 2026-05-27 | §4.2：`edit3` @ 512 单/双 2 epoch 显存对照（4090）；bench 脚本与 TOML |
+| 2026-05-27 | §4.2.1：双参考 @ 768 峰值 ~14.4GB（4090，+1.1GB vs 512 双参考） |
