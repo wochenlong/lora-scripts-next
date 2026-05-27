@@ -231,13 +231,29 @@ $prefetchScript = Join-Path $sdtDir "scripts\prefetch_default_tagger.py"
 
 if (-not (Test-Path $prefetchScript)) {
     Write-Host "  WARNING: prefetch script missing, skip" -ForegroundColor Yellow
-} elseif (-not (Get-Command python -ErrorAction SilentlyContinue)) {
-    Write-Host "  WARNING: python not in PATH; tagger will download on first tag run" -ForegroundColor Yellow
+} elseif (-not (Get-Command python -ErrorAction SilentlyContinue) -and -not (Test-Path $pythonExe)) {
+    Write-Host "  WARNING: no Python for tagger prefetch; tagger will download on first tag run" -ForegroundColor Yellow
 } else {
     $env:HF_HOME = $hfHome
-    & python -m pip install -q huggingface_hub 2>$null
-    & python $prefetchScript --hf-home $hfHome --if-missing
-    if ($LASTEXITCODE -ne 0) {
+    # pip writes progress to stderr; with $ErrorActionPreference Stop that aborts the build.
+    $prevEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    $prefetchExit = 1
+    if (Get-Command python -ErrorAction SilentlyContinue) {
+        & python -m pip install -q huggingface_hub 2>&1 | Out-Null
+        & python $prefetchScript --hf-home $hfHome --if-missing
+        $prefetchExit = $LASTEXITCODE
+    } elseif (Test-Path $pythonExe) {
+        if (Test-Path $getPipPath) {
+            Write-Host "  Bootstrapping pip in embedded Python..."
+            & $pythonExe $getPipPath --no-warn-script-location 2>&1 | Out-Null
+        }
+        & $pythonExe -s -m pip install -q huggingface_hub 2>&1 | Out-Null
+        & $pythonExe -s $prefetchScript --hf-home $hfHome --if-missing
+        $prefetchExit = $LASTEXITCODE
+    }
+    $ErrorActionPreference = $prevEap
+    if ($prefetchExit -ne 0) {
         Write-Host "  WARNING: tagger prefetch failed; 7z may ship without offline tagger" -ForegroundColor Yellow
     } else {
         Write-Host "  Cached under huggingface/hub/" -ForegroundColor Green
