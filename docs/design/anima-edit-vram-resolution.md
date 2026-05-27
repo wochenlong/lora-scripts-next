@@ -34,20 +34,31 @@
 
 **24GB 卡（4090）上双参考 1024 可跑通**（本对照无 OOM）；仍建议大数据集正式训练前用目标集再 smoke 一次。
 
-### 1.2 单参考 vs 双参考（512）
+### 1.2 单参考 · 分辨率 vs 显存（4090，可复现）
 
-| 模式 | `T` | 峰值（4090） |
-|:----:|:---:|-------------:|
-| 单参考 | 2 | **~13.0 GB** |
-| 双参考 | 3 | **~13.3 GB**（+~0.2 GB） |
+| 训练分辨率 | `T` | 峰值显存 | 相对 512 单参考 |
+|:----------:|:---:|---------:|----------------:|
+| **512** | 2 | **~13.0 GB** | — |
+| **768** | 2 | **~13.8 GB** | +~0.8 GB |
+| **1024** | 2 | **~14.9 GB** | +~1.9 GB |
 
-同一分辨率下，`T=2→T=3` 增量很小；**分辨率**才是显存主因。
+同 §2.3 条件下，单参考 1024 约 **14.9 GB**（非 §5.1 早期会话里的 ~22.9 GB）。
 
-### 1.3 选型建议
+### 1.3 同分辨率：单 vs 双
+
+| 分辨率 | 单参考 `T=2` | 双参考 `T=3` | 双参考多占 |
+|:------:|:------------:|:------------:|-----------:|
+| 512 | 13.0 GB | 13.3 GB | +0.2 GB |
+| 768 | 13.8 GB | 14.4 GB | +0.6 GB |
+| 1024 | 14.9 GB | 16.0 GB | +1.2 GB |
+
+`T=2→T=3` 随分辨率升高略增，但**分辨率**仍是主因。
+
+### 1.4 选型建议
 
 | GPU | 单参考 | 双参考 |
 |-----|--------|--------|
-| **≥ 24 GB** | 可试 1024（注意 §5.1 旧会话 ~22.9GB 为另一语境） | 512 / 768 / **1024** 均已在本机 4090 跑通（§2） |
+| **≥ 24 GB** | 512 / 768 / **1024** 均已跑通（§2.3） | 512 / 768 / **1024** 均已跑通（§2.1） |
 | **16 GB** | 优先 512 + §6 优化项 | 优先 512；768 需自测；1024 风险高 |
 | **≤ 12 GB** | 512 + `blocks_to_swap` 等 | 仅 512，勿直接 1024 |
 
@@ -100,15 +111,39 @@ python -m accelerate.commands.launch --num_cpu_threads_per_process 1 `
 
 > 峰值为进程全程 `memory.used` 采样最大值（含加载与建缓存），非仅 forward 瞬时值。
 
-### 2.2 单参考（512，同数据 ref1）
+### 2.2 单参考（`T=2`，`reference_bench_single/sample1.png`）
 
-| 模式 | `T` | 峰值 |
-|:----:|:---:|-----:|
-| 单参考 | 2 | 13 349 MiB（~13.0 GB） |
-| 双参考 | 3 | 13 584 MiB（~13.3 GB） |
-| **Δ** | — | **+235 MiB（+1.8%）** |
+| 分辨率 | `nvidia-smi` 峰值 | 约合 | 较 512 单参考 |
+|:------:|------------------:|-----:|--------------:|
+| 512×512 | 13 349 MiB | 13.0 GB | — |
+| 768×768 | 14 157 MiB | 13.8 GB | +0.79 GB |
+| 1024×1024 | 15 212 MiB | 14.9 GB | +1.82 GB |
 
-配置：[anima-edit-vram-bench-single-2e.toml](../examples/anima-edit-vram-bench-single-2e.toml) · dataset 见 [anima-edit-vram-bench-single-dataset.toml](../examples/anima-edit-vram-bench-single-dataset.toml)（`reference_bench_single/sample1.png`）。
+| 分辨率 | 训练 TOML | Dataset TOML |
+|:------:|-----------|--------------|
+| 512 | [anima-edit-vram-bench-single-2e.toml](../examples/anima-edit-vram-bench-single-2e.toml) | [anima-edit-vram-bench-single-dataset.toml](../examples/anima-edit-vram-bench-single-dataset.toml) |
+| 768 | [anima-edit-vram-bench-single-768-2e.toml](../examples/anima-edit-vram-bench-single-768-2e.toml) | [anima-edit-vram-bench-single-dataset-768.toml](../examples/anima-edit-vram-bench-single-dataset-768.toml) |
+| 1024 | [anima-edit-vram-bench-single-1024-2e.toml](../examples/anima-edit-vram-bench-single-1024-2e.toml) | [anima-edit-vram-bench-single-dataset-1024.toml](../examples/anima-edit-vram-bench-single-dataset-1024.toml) |
+
+日志：`output/anima-edit-vram-bench/summary-single-768-1024.json`
+
+### 2.3 同分辨率对照（单 `T=2` vs 双 `T=3`）
+
+| 分辨率 | 单参考 | 双参考 | Δ（双−单） |
+|:------:|-------:|-------:|-----------:|
+| 512 | 13 349 MiB | 13 584 MiB | +235 MiB |
+| 768 | 14 157 MiB | 14 746 MiB | +589 MiB |
+| 1024 | 15 212 MiB | 16 434 MiB | +1 222 MiB |
+
+```text
+显存 (GB, 4090, 同 edit3 bench)
+16 |                    *双1024
+15 |              *单1024
+14 |        *双768  *单768
+13 |  *单512 *双512
+   +--------------------------------
+     512    768   1024
+```
 
 ---
 
@@ -175,14 +210,14 @@ flowchart LR
 
 ## 5. 其它观测记录
 
-### 5.1 单参考 · 1024 · 开发会话（未脚本化）
+### 5.1 单参考 · 1024 · 开发会话 vs 可复现 bench
 
-| 指标 | 值 |
-|------|-----|
-| 显存 | **~22.9 GB / 24 GB**（首 training step） |
-| 语境 | 单参考、1024、缓存路径修复前后均有尝试 |
+| 来源 | 峰值 | 说明 |
+|------|------|------|
+| 早期开发会话 | **~22.9 GB / 24 GB** | 首 step、缓存路径修复前后；未脚本化 |
+| **§2.2 可复现 bench** | **~14.9 GB**（15 212 MiB） | `network_dim=4`、全缓存、关预览、edit3 单样本 |
 
-与 §2.1 **双参考 1024 ~16.0 GB** 不可直接对比：本条为早期单参考会话、可能含更重的冷启动/不同 rank；**以 §2 可复现 TOML 为准**做实现对照。
+实现对照请以 **§2 TOML + 数字** 为准；~22.9 GB 可能含更重冷启动、不同 rank/配置或峰值采样方式差异。
 
 ### 5.2 文生图 Anima LoRA（非 Edit）
 
@@ -209,16 +244,15 @@ README-zh 文生图 @ 1024 的 4090 分级**不含** conditioning 多参考，�
 ```text
            单参考                    双参考（4090 bench）
   512      ✅ ~13.0 GB               ✅ ~13.3 GB
-  768      TOML 已备，待跑           ✅ ~14.4 GB
-  1024     TOML 已备，待跑           ✅ ~16.0 GB
+  768      ✅ ~13.8 GB               ✅ ~14.4 GB
+  1024     ✅ ~14.9 GB               ✅ ~16.0 GB
 ```
 
 ### 7.1 建议补测（按优先级）
 
 | 优先级 | 项目 | 目的 | 训练 TOML | Dataset |
 |:------:|------|------|-----------|---------|
-| **P1** | 单参考 @ **768** | 与双参考 768 同分辨率对照 | [single-768-2e.toml](../examples/anima-edit-vram-bench-single-768-2e.toml) | [single-dataset-768.toml](../examples/anima-edit-vram-bench-single-dataset-768.toml) |
-| **P1** | 单参考 @ **1024** | 对齐/反驳 §5.1 的 ~22.9GB 会话记录 | [single-1024-2e.toml](../examples/anima-edit-vram-bench-single-1024-2e.toml) | [single-dataset-1024.toml](../examples/anima-edit-vram-bench-single-dataset-1024.toml) |
+| ~~**P1**~~ | ~~单参考 768 / 1024~~ | ✅ 已完成（§2.2–§2.3） | 见 §9.1 | 见 §9.1 |
 | **P2** | 双参考 512 + **预览** | epoch 末 `sample` 峰值（常高于纯训练步） | [dual-512-2e-preview.toml](../examples/anima-edit-vram-bench-dual-512-2e-preview.toml) | [dual-ref-dataset.toml](../examples/anima-edit-dual-ref-dataset.toml) |
 | **P2** | 双参考 512 + **`network_dim=16`** | UI 默认 rank vs bench 用的 4 | [dual-512-2e-dim16.toml](../examples/anima-edit-vram-bench-dual-512-2e-dim16.toml) | 同上 |
 | **P3** | **16GB** 卡同 TOML | 验证 512/768 是否 OOM（需另机） | §9 任选 | §9 任选 |
@@ -258,8 +292,8 @@ README-zh 文生图 @ 1024 的 4090 分级**不含** conditioning 多参考，�
 | 双参考 768 | [anima-edit-vram-bench-dual-768-2e.toml](../examples/anima-edit-vram-bench-dual-768-2e.toml) | [anima-edit-dual-ref-dataset-768.toml](../examples/anima-edit-dual-ref-dataset-768.toml) | ✅ 14.4 GB |
 | 双参考 1024 | [anima-edit-vram-bench-dual-1024-2e.toml](../examples/anima-edit-vram-bench-dual-1024-2e.toml) | [anima-edit-dual-ref-dataset-1024.toml](../examples/anima-edit-dual-ref-dataset-1024.toml) | ✅ 16.0 GB |
 | 单参考 512 | [anima-edit-vram-bench-single-2e.toml](../examples/anima-edit-vram-bench-single-2e.toml) | [anima-edit-vram-bench-single-dataset.toml](../examples/anima-edit-vram-bench-single-dataset.toml) | ✅ 13.0 GB |
-| 单参考 768 | [anima-edit-vram-bench-single-768-2e.toml](../examples/anima-edit-vram-bench-single-768-2e.toml) | [anima-edit-vram-bench-single-dataset-768.toml](../examples/anima-edit-vram-bench-single-dataset-768.toml) | 待测 |
-| 单参考 1024 | [anima-edit-vram-bench-single-1024-2e.toml](../examples/anima-edit-vram-bench-single-1024-2e.toml) | [anima-edit-vram-bench-single-dataset-1024.toml](../examples/anima-edit-vram-bench-single-dataset-1024.toml) | 待测 |
+| 单参考 768 | [anima-edit-vram-bench-single-768-2e.toml](../examples/anima-edit-vram-bench-single-768-2e.toml) | [anima-edit-vram-bench-single-dataset-768.toml](../examples/anima-edit-vram-bench-single-dataset-768.toml) | ✅ 13.8 GB |
+| 单参考 1024 | [anima-edit-vram-bench-single-1024-2e.toml](../examples/anima-edit-vram-bench-single-1024-2e.toml) | [anima-edit-vram-bench-single-dataset-1024.toml](../examples/anima-edit-vram-bench-single-dataset-1024.toml) | ✅ 14.9 GB |
 
 单参考数据准备：`data/edit3/reference_bench_single/sample1.png`（由 `script/ops/bench_anima_edit_vram.py` 从 `reference/sample1/1.png` 复制）。
 
@@ -286,3 +320,4 @@ README-zh 文生图 @ 1024 的 4090 分级**不含** conditioning 多参考，�
 | 2026-05-27 | 初版与 512 单/双对照 |
 | 2026-05-27 | 768 / 1024 双参考 benchmark；§2 矩阵 |
 | 2026-05-27 | §7 补测清单；§9 附全量 TOML；补齐单参考 768/1024 与 preview/dim16 配置 |
+| 2026-05-27 | P1：单参考 768/1024 实测；§2.3 同分辨率对照表 |
