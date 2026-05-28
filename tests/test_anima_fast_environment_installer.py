@@ -4,12 +4,14 @@ import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
+import subprocess
 
 from mikazuki.anima_fast_backend.environment import (
     AuditResult,
     audit_environment,
     build_environment_install_plan,
     install_environment,
+    _run_streaming,
     start_install_task,
 )
 from mikazuki.anima_fast_backend.extension_state import (
@@ -64,7 +66,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
             discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
 
-            def fake_run(command, cwd, log, env=None):
+            def fake_run(command, cwd, log, env=None, retries=0):
                 if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
                     plan.venv_python.parent.mkdir(parents=True)
                     plan.venv_python.write_text("", encoding="utf-8")
@@ -103,7 +105,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
             discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
 
-            def fake_run(command, cwd, log, env=None):
+            def fake_run(command, cwd, log, env=None, retries=0):
                 if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
                     plan.venv_python.parent.mkdir(parents=True)
                     plan.venv_python.write_text("", encoding="utf-8")
@@ -124,6 +126,24 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertEqual(status.state, STATE_BROKEN)
         self.assertIn("missing flash-attn", status.reason)
+
+    def test_run_streaming_retries_transient_failures(self):
+        calls = {"count": 0}
+        lines: list[str] = []
+
+        def fake_once(command, cwd, log, env=None):
+            calls["count"] += 1
+            if calls["count"] == 1:
+                raise subprocess.CalledProcessError(1, command)
+            log("[fake] ok")
+
+        with tempfile.TemporaryDirectory() as td, \
+            mock.patch("mikazuki.anima_fast_backend.environment._run_streaming_once", side_effect=fake_once), \
+            mock.patch("mikazuki.anima_fast_backend.environment.time.sleep"):
+            _run_streaming(["uv", "pip", "install"], Path(td), lines.append, retries=2)
+
+        self.assertEqual(calls["count"], 2)
+        self.assertTrue(any("[retry]" in line for line in lines))
 
     def test_audit_environment_detects_anima_missing_dependency(self):
         with tempfile.TemporaryDirectory() as td:

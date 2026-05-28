@@ -9,6 +9,7 @@ import os
 import shutil
 import subprocess
 import sys
+import time
 import threading
 import uuid
 
@@ -142,7 +143,7 @@ def _append(log: LogFn, line: str) -> None:
     log(line)
 
 
-def _run_streaming(command: list[str], cwd: Path, log: LogFn, env: dict[str, str] | None = None) -> None:
+def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str, str] | None = None) -> None:
     _append(log, "[cmd] " + " ".join(command))
     merged_env = os.environ.copy()
     if env:
@@ -172,6 +173,21 @@ def _run_streaming(command: list[str], cwd: Path, log: LogFn, env: dict[str, str
     _append(log, f"[exit] returncode={returncode}")
     if returncode != 0:
         raise subprocess.CalledProcessError(returncode, command)
+
+
+def _run_streaming(command: list[str], cwd: Path, log: LogFn, env: dict[str, str] | None = None, retries: int = 0) -> None:
+    attempt = 0
+    while True:
+        try:
+            _run_streaming_once(command, cwd, log, env)
+            return
+        except subprocess.CalledProcessError:
+            attempt += 1
+            if attempt > retries:
+                raise
+            delay = min(30, 5 * attempt)
+            _append(log, f"[retry] command failed; retry {attempt}/{retries} after {delay}s")
+            time.sleep(delay)
 
 
 def _uv_command() -> str:
@@ -257,6 +273,7 @@ def install_environment(plan: EnvironmentInstallPlan, log: LogFn = print) -> Aud
         ],
         plan.project_root,
         log,
+        retries=int(os.environ.get("ANIMA_FAST_INSTALL_RETRIES", "3")),
     )
 
     facts["phase"] = "audit"
