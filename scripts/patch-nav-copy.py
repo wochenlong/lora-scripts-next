@@ -19,7 +19,7 @@ REPLACEMENTS = [
     ("LoRA 相关工具", "LoRA 脚本工具"),
     (
         "<p>本 LoRA 训练界面分为两种模式。</p><ul><li>针对新手的简易训练只有部分可调节参数</li><li>针对有一定经验的用户的专家模式，开放全部的高级参数</li></ul><div class=\"custom-container tip\"><p class=\"custom-container-title\">TIP</p><p>如果你是新手，建议使用新手模式，不要逞强使用专家模式，否则可能会出现意想不到的问题。</p></div>",
-        "<p>LoRA 为<strong>局部微调</strong>；全量微调请使用侧栏 <strong>Dreambooth 训练</strong>。</p>"
+        "<p>LoRA 为<strong>局部微调</strong>；全量微调请使用侧栏 <strong>全量微调</strong>（Stable Diffusion 或 Anima Finetune）。</p>"
         "<ul>"
         "<li><strong>Anima</strong> — 主推训练入口（Anima DiT）</li>"
         "<li><strong>Flux</strong> — Flux 模型 LoRA</li>"

@@ -725,6 +725,286 @@ main.page .theme-default-content .sd-guide li {
 }
 
 
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
+
+/* ----- 首页：Next Trainer 传送门 ----- */
+main.page .theme-default-content > div[align="center"] h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.25rem;
+}
+
+main.page .theme-default-content > div[align="center"] > p {
+  font-size: 0.9375rem;
+  color: var(--c-text-lighter, #606266);
+  margin-top: 0;
+}
+
+main.page .theme-default-content .sd-home-hub {
+  max-width: 40rem;
+  margin: 0.75rem auto 2rem;
+  text-align: left;
+}
+
+main.page .theme-default-content .sd-home-badges {
+  margin: 0.5rem 0 1.25rem;
+}
+
+main.page .theme-default-content .sd-home-lead {
+  font-size: 0.9375rem;
+  line-height: 1.65;
+  color: var(--c-text, #404244);
+  margin: 0 0 1.5rem;
+}
+
+main.page .theme-default-content .sd-home-section-title {
+  font-size: 0.8125rem;
+  font-weight: 650;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--c-text-lighter, #909399);
+  margin: 0 0 0.65rem;
+  padding: 0;
+  border: none;
+}
+
+main.page .theme-default-content .sd-home-portals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0.65rem;
+  margin-bottom: 1.35rem;
+}
+
+@media (max-width: 520px) {
+  main.page .theme-default-content .sd-home-portals {
+    grid-template-columns: 1fr;
+  }
+}
+
+main.page .theme-default-content .sd-home-portals--single {
+  grid-template-columns: 1fr;
+  max-width: 20rem;
+}
+
+main.page .theme-default-content .sd-home-portal {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  padding: 0.85rem 1rem;
+  border-radius: var(--sd-radius-md);
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: var(--c-bg-mute, #fff);
+  text-decoration: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.12s ease;
+}
+
+main.page .theme-default-content .sd-home-portal:hover {
+  border-color: color-mix(in srgb, var(--el-color-primary) 35%, var(--c-border));
+  box-shadow: var(--sd-shadow-sm);
+  transform: translateY(-1px);
+}
+
+main.page .theme-default-content .sd-home-portal--primary {
+  border-left: 3px solid var(--el-color-primary);
+  background: color-mix(in srgb, var(--el-color-primary) 5%, #fff);
+}
+
+main.page .theme-default-content .sd-home-portal--monitor {
+  border-color: color-mix(in srgb, var(--el-color-primary) 25%, var(--c-border));
+  background: color-mix(in srgb, var(--el-color-primary) 4%, var(--c-bg-light, #f8f9fb));
+}
+
+main.page .theme-default-content .sd-home-portal__title {
+  font-size: 1rem;
+  font-weight: 650;
+  color: var(--c-text, #303133);
+}
+
+main.page .theme-default-content .sd-home-portal__desc {
+  font-size: 0.8125rem;
+  color: var(--c-text-lighter, #909399);
+  line-height: 1.4;
+}
+
+main.page .theme-default-content .sd-home-foot {
+  font-size: 0.8125rem;
+  line-height: 1.6;
+  color: var(--c-text-lighter, #909399);
+  text-align: center;
+  margin: 0;
+  padding-top: 0.5rem;
+  border-top: 1px solid var(--c-border, #e4e7ed);
+}
+
+main.page .theme-default-content .sd-home-foot a {
+  color: var(--el-color-primary);
+  font-weight: 500;
+}
+
+/* 帮助 · 新手上路 */
+main.page .theme-default-content .sd-guide {
+  max-width: 42rem;
+  margin: 0 auto;
+  line-height: 1.65;
+}
+
+main.page .theme-default-content .sd-guide h2 {
+  margin: 1.25rem 0 0.65rem;
+  padding-bottom: 0.35rem;
+  font-size: 1.125rem;
+  border-bottom: 1px solid var(--c-border);
+}
+
+main.page .theme-default-content .sd-guide ol,
+main.page .theme-default-content .sd-guide ul {
+  padding-left: 1.35rem;
+}
+
+main.page .theme-default-content .sd-guide li {
+  margin: 0.35rem 0;
+}
+
+
 /* ----- 中栏：秋叶白表单区（沿用 --c-bg-mute = 白） ----- */
 .example-container .schema-container {
   background-color: var(--c-bg-mute);
