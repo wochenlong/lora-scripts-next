@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -104,6 +105,34 @@ class InstallerTests(unittest.TestCase):
             self.assertTrue((layout.source / "train.py").is_file())
             self.assertTrue((layout.source / "library" / "module.py").is_file())
             self.assertFalse((layout.source / "output").exists())
+
+    def test_copy_source_snapshot_can_pin_git_commit(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "source_repo"
+            source.mkdir()
+            subprocess.run(["git", "-C", str(source), "init"], check=True, capture_output=True)
+            subprocess.run(["git", "-C", str(source), "config", "user.email", "test@example.local"], check=True)
+            subprocess.run(["git", "-C", str(source), "config", "user.name", "Test"], check=True)
+            (source / "train.py").write_text("print('old')\n", encoding="utf-8")
+            (source / "pyproject.toml").write_text("[project]\nname='x'\n", encoding="utf-8")
+            (source / "library").mkdir()
+            (source / "library" / "module.py").write_text("VALUE = 'old'\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(source), "commit", "-m", "old"], check=True, capture_output=True)
+            old_commit = subprocess.check_output(["git", "-C", str(source), "rev-parse", "HEAD"], text=True).strip()
+
+            (source / "train.py").write_text("print('new')\n", encoding="utf-8")
+            (source / "library" / "module.py").write_text("VALUE = 'new'\n", encoding="utf-8")
+            subprocess.run(["git", "-C", str(source), "add", "."], check=True)
+            subprocess.run(["git", "-C", str(source), "commit", "-m", "new"], check=True, capture_output=True)
+
+            layout = ExtensionLayout(root / "extensions" / "anima_lora")
+            plan = build_install_plan(source, layout, dry_run=False, source_commit=old_commit)
+            copy_source_snapshot(plan)
+
+            self.assertIn("old", (layout.source / "train.py").read_text(encoding="utf-8"))
+            self.assertIn(old_commit, (layout.source / ".source_commit").read_text(encoding="utf-8"))
 
     def test_remove_extension_is_limited_to_extensions_dir(self):
         with tempfile.TemporaryDirectory() as td:

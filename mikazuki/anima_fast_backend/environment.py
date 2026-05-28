@@ -62,6 +62,7 @@ class EnvironmentInstallPlan:
     project_root: Path
     layout: ExtensionLayout
     source_root: Path
+    source_commit: str | None
     python_install_dir: Path
     base_python: Path
     venv_python: Path
@@ -73,6 +74,7 @@ class EnvironmentInstallPlan:
         return {
             "project_root": str(self.project_root),
             "source_root": str(self.source_root),
+            "source_commit": self.source_commit,
             "target_source": str(self.layout.source),
             "python_install_dir": str(self.python_install_dir),
             "base_python": str(self.base_python),
@@ -113,6 +115,7 @@ def build_environment_install_plan(
     layout: ExtensionLayout,
     source_root: Path,
     dry_run: bool = True,
+    source_commit: str | None = None,
 ) -> EnvironmentInstallPlan:
     root = project_root.resolve()
     extension_root = _resolve_child(root, layout.root)
@@ -125,6 +128,7 @@ def build_environment_install_plan(
         project_root=root,
         layout=ExtensionLayout(extension_root),
         source_root=source_root.resolve(),
+        source_commit=source_commit,
         python_install_dir=python_dir,
         base_python=base_python,
         venv_python=extension_root / ".venv" / "Scripts" / "python.exe",
@@ -191,7 +195,9 @@ def install_environment(plan: EnvironmentInstallPlan, log: LogFn = print) -> Aud
     facts = {"plan": plan.as_dict(), "phase": "source"}
     write_install_state(plan.layout, STATE_INSTALLING, facts, "copying Anima source snapshot")
     _append(log, "[phase] copy source snapshot")
-    copy_source_snapshot(build_install_plan(plan.source_root, plan.layout, dry_run=False))
+    if plan.source_commit:
+        _append(log, f"[source] pinned commit {plan.source_commit}")
+    copy_source_snapshot(build_install_plan(plan.source_root, plan.layout, dry_run=False, source_commit=plan.source_commit))
 
     if not plan.constraints.is_file():
         raise FileNotFoundError(f"Anima constraints file missing: {plan.constraints}")
@@ -445,8 +451,14 @@ def audit_environment(
     return result
 
 
-def start_install_task(project_root: Path, layout: ExtensionLayout, source_root: Path, dry_run: bool = False) -> tuple[str, dict]:
-    plan = build_environment_install_plan(project_root, layout, source_root, dry_run=dry_run)
+def start_install_task(
+    project_root: Path,
+    layout: ExtensionLayout,
+    source_root: Path,
+    dry_run: bool = False,
+    source_commit: str | None = None,
+) -> tuple[str, dict]:
+    plan = build_environment_install_plan(project_root, layout, source_root, dry_run=dry_run, source_commit=source_commit)
     if dry_run:
         return "", {"plan": plan.as_dict()}
 

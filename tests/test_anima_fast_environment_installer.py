@@ -60,7 +60,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             source = self._make_source(project)
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
-            plan = build_environment_install_plan(project, layout, source, dry_run=False)
+            plan = build_environment_install_plan(project, layout, source, dry_run=False, source_commit="abc123")
 
             discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
 
@@ -73,7 +73,12 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                     discovered_python.write_text("", encoding="utf-8")
                 log("[fake] command completed")
 
+            def fake_copy(_plan):
+                layout.source.mkdir(parents=True)
+                layout.train_py.write_text("print('train')\n", encoding="utf-8")
+
             with mock.patch("mikazuki.anima_fast_backend.environment._uv_command", return_value="uv"), \
+                mock.patch("mikazuki.anima_fast_backend.environment.copy_source_snapshot", side_effect=fake_copy), \
                 mock.patch("mikazuki.anima_fast_backend.environment._run_streaming", side_effect=fake_run), \
                 mock.patch(
                     "mikazuki.anima_fast_backend.environment.audit_environment",
@@ -86,6 +91,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertTrue(result.ok)
         self.assertEqual(status.state, STATE_READY)
         self.assertTrue(status.facts["audit"]["ok"])
+        self.assertEqual(status.facts["plan"]["source_commit"], "abc123")
 
     def test_install_environment_marks_broken_when_audit_fails(self):
         with tempfile.TemporaryDirectory() as td:

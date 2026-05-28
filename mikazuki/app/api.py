@@ -548,6 +548,7 @@ async def anima_lora_plugin_status():
     status["feature_enabled"] = feature_enabled()
     status["runtime"] = {
         "anima_root": str(runtime.anima_root),
+        "source_commit": runtime.source_commit,
         "python": str(runtime.python),
         "output_dir": str(runtime.output_dir),
         "logging_dir": str(runtime.logging_dir),
@@ -600,15 +601,17 @@ async def anima_lora_plugin_install(request: Request):
         return _anima_fast_disabled_response()
     payload: dict = json.loads((await request.body()).decode("utf-8") or "{}")
     source_root = Path(payload.get("source_root") or os.environ.get("ANIMA_LORA_ROOT") or (Path.cwd().parent / "anima_lora"))
+    runtime = _anima_fast_runtime()
+    source_commit = str(payload.get("source_commit") or runtime.source_commit or "").strip() or None
     dry_run = payload.get("dry_run", True) is not False
     layout = default_layout(Path.cwd())
-    plan = build_install_plan(source_root, layout, dry_run=dry_run)
+    plan = build_install_plan(source_root, layout, dry_run=dry_run, source_commit=source_commit)
     data = {"plan": plan.as_dict()}
     if dry_run:
         data["message"] = "Installer dry-run completed"
         return APIResponseSuccess(data=data)
     try:
-        task_id, install_data = start_install_task(Path.cwd(), layout, source_root, dry_run=False)
+        task_id, install_data = start_install_task(Path.cwd(), layout, source_root, dry_run=False, source_commit=source_commit)
     except Exception as exc:
         write_install_state(layout, "broken", {"plan": plan.as_dict()}, str(exc))
         return APIResponseFail(message=f"Anima LoRA install failed: {exc}")

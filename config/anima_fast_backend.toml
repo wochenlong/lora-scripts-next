@@ -4,6 +4,7 @@ source_dir = "extensions/anima_lora/source"
 venv_python = "extensions/anima_lora/.venv/Scripts/python.exe"
 external_root = "../anima_lora"
 external_python = "../anima_lora/.venv/Scripts/python.exe"
+source_commit = "87819818975e08167cda8a6f615776e46e889f80"
 preflight_level = "full"
 allow_unsupported = false
 

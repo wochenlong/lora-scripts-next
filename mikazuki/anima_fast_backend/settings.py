@@ -23,6 +23,7 @@ class RuntimeConfig:
     hf_home: Path | None = None
     preflight_level: str = "full"
     allow_unsupported: bool = False
+    source_commit: str | None = None
 
 
 def _as_path(value: str | os.PathLike | None, base: Path) -> Path | None:
@@ -100,4 +101,5 @@ def discover_runtime(config: dict | None = None, lora_next_root: Path | None = N
         hf_home=_as_path(backend.get("hf_home"), lora_next_root),
         preflight_level=str(backend.get("preflight_level", "full")),
         allow_unsupported=_truthy(backend.get("allow_unsupported", False)),
+        source_commit=str(backend.get("source_commit") or "").strip() or None,
     )
