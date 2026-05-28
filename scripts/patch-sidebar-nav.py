@@ -15,7 +15,8 @@ OLD_SIDEBAR_JSON = (
     '[{"text":"\\u65b0\\u624b\\uff08SD1.5\\uff09","link":"/lora/basic.md"},'
     '{"text":"\\u4e13\\u5bb6","link":"/lora/master.md"},'
     '{"text":"Flux","link":"/lora/flux.md"},'
-    '{"text":"Anima","link":"/lora/sd3.md"},'
+    '{"text":"Anima LoRA","link":"/lora/sd3.md"},'
+    '{"text":"Anima 全量","link":"/lora/anima-finetune.md"},'
     '{"text":"\\u5de5\\u5177","link":"/lora/tools.md"},'
     '{"text":"\\u53c2\\u6570\\u8be6\\u89e3","link":"/lora/params.md"}]},'
     '{"text":"Dreambooth \\u8bad\\u7ec3","link":"/dreambooth/index.md"},'
@@ -50,7 +51,8 @@ NEW_SIDEBAR_JSON = (
     '[{"text":"Next Trainer","link":"/"},'
     '{"text":"训练","children":['
     '{"text":"LoRA 训练","link":"/lora/index.md","collapsible":false,"children":['
-    '{"text":"Anima","link":"/lora/sd3.md"},'
+    '{"text":"Anima LoRA","link":"/lora/sd3.md"},'
+    '{"text":"Anima 全量","link":"/lora/anima-finetune.md"},'
     '{"text":"Flux","link":"/lora/flux.md"},'
     '{"text":"Stable Diffusion","link":"/lora/master.md"}]},'
     '{"text":"Dreambooth 训练","link":"/dreambooth/index.md"}]},'
@@ -112,6 +114,7 @@ def build_sidebar_html(rel_path: str) -> str:
     train_expanded = (
         lora_heading_active
         or active("/lora/sd3.md")
+        or active("/lora/anima-finetune.md")
         or active("/lora/flux.md")
         or active("/lora/master.md")
         or active("/lora/basic.md")

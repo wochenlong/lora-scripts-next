@@ -74,6 +74,31 @@ class AnimaTrainingDefaultsTests(unittest.TestCase):
 
         self.assertEqual(config["mixed_precision"], "fp16")
 
+    def test_finetune_maps_legacy_unet_lr_to_learning_rate(self):
+        config = {
+            "unet_lr": "0.0001",
+            "optimizer_type": "AdamW8bit",
+            "attn_mode": "torch",
+        }
+
+        apply_anima_training_defaults(config, "anima-finetune")
+
+        self.assertEqual(config["learning_rate"], "1e-5")
+        self.assertNotIn("unet_lr", config)
+
+    def test_finetune_keeps_explicit_learning_rate(self):
+        config = {
+            "learning_rate": "2e-5",
+            "unet_lr": "5e-5",
+            "optimizer_type": "AdamW8bit",
+            "attn_mode": "torch",
+        }
+
+        apply_anima_training_defaults(config, "anima-finetune")
+
+        self.assertEqual(config["learning_rate"], "2e-5")
+        self.assertNotIn("unet_lr", config)
+
 
 if __name__ == "__main__":
     unittest.main()

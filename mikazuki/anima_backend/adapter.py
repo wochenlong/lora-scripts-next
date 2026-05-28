@@ -99,6 +99,51 @@ SUPPORTED_FIELDS = {
     "seed",
     "logging_dir",
     "log_with",
+    "self_attn_lr",
+    "cross_attn_lr",
+    "mlp_lr",
+    "mod_lr",
+    "llm_adapter_lr",
+}
+
+NETWORK_ONLY_FIELDS = {
+    "network_module",
+    "network_weights",
+    "network_dim",
+    "network_alpha",
+    "network_dropout",
+    "network_args",
+    "dim_from_weights",
+    "scale_weight_norms",
+    "train_norm",
+    "full_matrix",
+    "pissa_init",
+    "pissa_method",
+    "pissa_niter",
+    "pissa_oversample",
+    "pissa_apply_conv2d",
+    "pissa_export_mode",
+    "conv_dim",
+    "conv_alpha",
+    "lycoris_algo",
+    "lokr_factor",
+    "use_cp",
+    "use_scalar",
+    "decompose_both",
+    "bypass_mode",
+    "dora_wd",
+    "rank_dropout",
+    "module_dropout",
+    "rank_dropout_scale",
+    "dropout",
+    "tlora_min_rank",
+    "tlora_rank_schedule",
+    "tlora_orthogonal_init",
+    "network_train_unet_only",
+    "network_train_text_encoder_only",
+    "enable_base_weight",
+    "base_weights",
+    "base_weights_multiplier",
 }
 
 UI_ONLY_FIELDS = {
@@ -199,27 +244,37 @@ def _normalize_network_args(values: Any) -> list[str]:
     return ordered
 
 
-def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+def adapt_anima_config(
+    config: dict[str, Any], *, finetune: bool = False
+) -> tuple[dict[str, Any], list[str]]:
     source = deepcopy(config)
     adapted: dict[str, Any] = {}
     warnings: list[str] = []
 
+    if finetune:
+        for key in list(source):
+            if key in NETWORK_ONLY_FIELDS:
+                source.pop(key, None)
+        source.pop("network_args_custom", None)
+        source.pop("lora_type", None)
+
     custom_network_args = source.pop("network_args_custom", None)
-    merged_network_args: list[str] = []
-    if isinstance(source.get("network_args"), list):
-        merged_network_args.extend(source["network_args"])
-    if isinstance(custom_network_args, list):
-        merged_network_args.extend(custom_network_args)
-    normalized_network_args = _normalize_network_args(merged_network_args)
-    if normalized_network_args:
-        source["network_args"] = normalized_network_args
-    elif "network_args" in source:
-        source.pop("network_args", None)
+    if not finetune:
+        merged_network_args: list[str] = []
+        if isinstance(source.get("network_args"), list):
+            merged_network_args.extend(source["network_args"])
+        if isinstance(custom_network_args, list):
+            merged_network_args.extend(custom_network_args)
+        normalized_network_args = _normalize_network_args(merged_network_args)
+        if normalized_network_args:
+            source["network_args"] = normalized_network_args
+        elif "network_args" in source:
+            source.pop("network_args", None)
 
     # LyCORIS default preset does not include Anima module class names, which may
     # produce zero trainable modules for LoKr. Inject Anima-specific preset unless
     # user already provided one via network_args.
-    if source.get("network_module") == "lycoris.kohya":
+    if not finetune and source.get("network_module") == "lycoris.kohya":
         network_args = source.get("network_args")
         has_preset = isinstance(network_args, list) and any(
             isinstance(item, str) and item.strip().startswith("preset=")
@@ -236,7 +291,7 @@ def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str
     # LyCORIS: convert top-level UI fields into network_args.  sd-scripts only
     # passes network_args items (as **kwargs) to lycoris.kohya.create_network();
     # top-level TOML keys like use_cp, decompose_both, etc. are silently lost.
-    if source.get("network_module") == "lycoris.kohya":
+    if not finetune and source.get("network_module") == "lycoris.kohya":
         network_args = list(source.get("network_args") or [])
         for ui_field, arg_key in LYCORIS_NETWORK_ARG_MAP.items():
             value = source.pop(ui_field, None)
@@ -248,7 +303,7 @@ def adapt_anima_config(config: dict[str, Any]) -> tuple[dict[str, Any], list[str
 
     # T-LoRA: convert top-level UI fields into network_args so sd-scripts
     # can forward them to create_network() as **kwargs.
-    if source.get("network_module") == "networks.tlora_anima":
+    if not finetune and source.get("network_module") == "networks.tlora_anima":
         network_args = list(source.get("network_args") or [])
         for field in TLORA_NETWORK_ARG_FIELDS:
             value = source.pop(field, None)

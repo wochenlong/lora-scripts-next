@@ -7,4 +7,8 @@ entrypoint = "anima_train_network.py"
 
 [compatibility]
 local_entrypoint = "scripts/dev/anima_train_network.py"
-train_types = ["anima-lora", "sd3-lora"]
+train_types = ["anima-lora", "sd3-lora", "anima-finetune"]
+
+[finetune]
+entrypoint = "anima_train.py"
+local_entrypoint = "scripts/dev/anima_train.py"

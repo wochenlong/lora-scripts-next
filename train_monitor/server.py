@@ -696,7 +696,13 @@ def infer_model_type(lines: list[str]) -> str:
             config_text = ""
     source = text + "\n" + config_text
     adapter = _infer_adapter_type(source)
-    if "anima_train_network" in source or "lora_anima" in source or "tlora_anima" in source or "qwen3" in source:
+    if (
+        "anima_train_network" in source
+        or "anima_train.py" in source
+        or "lora_anima" in source
+        or "tlora_anima" in source
+        or "qwen3" in source
+    ):
         return f"Anima {adapter}"
     if "flux_train_network" in source or "flux-lora" in source or "t5xxl" in source:
         return f"Flux {adapter}"

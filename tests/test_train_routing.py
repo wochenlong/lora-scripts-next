@@ -25,6 +25,11 @@ class TrainRoutingTests(unittest.TestCase):
 
         self.assertEqual(mapping["sd3-lora"], "./scripts/dev/anima_train_network.py")
 
+    def test_anima_finetune_routes_to_full_train_wrapper(self):
+        mapping = load_trainer_mapping()
+
+        self.assertEqual(mapping["anima-finetune"], "./scripts/dev/anima_train.py")
+
     def test_standard_training_routes_are_unchanged(self):
         mapping = load_trainer_mapping()
 

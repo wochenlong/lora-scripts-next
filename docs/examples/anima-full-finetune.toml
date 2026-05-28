@@ -1,0 +1,40 @@
+# Anima DiT 全量微调示例（GUI autosave 经 scripts/dev/anima_train.py 适配后提交上游）
+# 本地冒烟（不加载 PyTorch）：
+#   ANIMA_BACKEND_WRAPPER_SMOKE=1 python scripts/dev/anima_train.py --config_file docs/examples/anima-full-finetune.toml
+#
+# 实际上训前请修改 train_data_dir、模型路径与 output_dir。
+
+pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
+vae = "./sd-models/anima/qwen_image_vae.safetensors"
+qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
+
+train_data_dir = "./train/anima_dataset"
+output_dir = "./output/anima-full"
+output_name = "anima-full-finetune"
+
+resolution = "1024,1024"
+enable_bucket = true
+max_train_epochs = 10
+train_batch_size = 1
+gradient_checkpointing = true
+gradient_accumulation_steps = 1
+
+learning_rate = "1e-5"
+optimizer_type = "AdamW8bit"
+lr_scheduler = "cosine_with_restarts"
+lr_warmup_steps = 0
+
+timestep_sampling = "shift"
+discrete_flow_shift = 3.0
+weighting_scheme = "uniform"
+
+cache_latents = true
+cache_latents_to_disk = true
+cache_text_encoder_outputs = true
+cache_text_encoder_outputs_to_disk = true
+max_data_loader_n_workers = 0
+
+mixed_precision = "bf16"
+save_model_as = "safetensors"
+save_precision = "bf16"
+save_every_n_epochs = 2

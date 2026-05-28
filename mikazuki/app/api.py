@@ -37,7 +37,8 @@ from mikazuki.utils.tk_window import (open_directory_selector,
 
 router = APIRouter()
 
-ANIMA_TRAIN_TYPES = {"anima-lora", "sd3-lora"}
+ANIMA_TRAIN_TYPES = {"anima-lora", "sd3-lora", "anima-finetune"}
+ANIMA_FINETUNE_TYPE = "anima-finetune"
 ANIMA_DEFAULT_SAMPLE_POSITIVE = (
     "1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looki"
     "ng at viewer, hair ornament, long hair, yellow kimono, black hair, anime coloring, yukat"
@@ -72,6 +73,7 @@ trainer_mapping = {
 
     "sd3-lora": "./scripts/dev/anima_train_network.py",
     "anima-lora": "./scripts/dev/anima_train_network.py",
+    "anima-finetune": "./scripts/dev/anima_train.py",
     "flux-lora": "./scripts/dev/flux_train_network.py",
     "flux-finetune": "./scripts/dev/flux_train.py",
 }
@@ -296,7 +298,17 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
     if model_train_type not in ANIMA_TRAIN_TYPES:
         return
 
-    if str(config.get("unet_lr", "")).strip() in ANIMA_LEGACY_UNET_LR:
+    if model_train_type == ANIMA_FINETUNE_TYPE:
+        lr = str(config.get("learning_rate", "")).strip()
+        if not lr or lr in ANIMA_LEGACY_UNET_LR:
+            unet_lr = str(config.get("unet_lr", "")).strip()
+            if unet_lr and unet_lr not in ANIMA_LEGACY_UNET_LR:
+                config["learning_rate"] = unet_lr
+            else:
+                config["learning_rate"] = "1e-5"
+        config.pop("unet_lr", None)
+        config.pop("text_encoder_lr", None)
+    elif str(config.get("unet_lr", "")).strip() in ANIMA_LEGACY_UNET_LR:
         config["unet_lr"] = ANIMA_DEFAULT_UNET_LR
     elif isinstance(config.get("unet_lr"), str):
         config["unet_lr"] = float(config["unet_lr"])

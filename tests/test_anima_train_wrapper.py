@@ -79,6 +79,34 @@ class AnimaTrainWrapperTests(unittest.TestCase):
             self.assertEqual(result.returncode, 0, result.stderr)
             self.assertIn("Anima backend wrapper smoke OK", result.stdout)
 
+    def test_finetune_wrapper_smoke(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config_path = Path(temp_dir) / "anima-finetune.toml"
+            config_path.write_text(
+                "\n".join(
+                    [
+                        'pretrained_model_name_or_path = "model.safetensors"',
+                        'vae = "vae.safetensors"',
+                        'qwen3 = "qwen3.safetensors"',
+                        'learning_rate = "1e-5"',
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            env = os.environ.copy()
+            env["ANIMA_BACKEND_WRAPPER_SMOKE"] = "1"
+            result = subprocess.run(
+                [sys.executable, "scripts/dev/anima_train.py", "--config_file", str(config_path)],
+                cwd=Path.cwd(),
+                env=env,
+                text=True,
+                capture_output=True,
+                check=False,
+            )
+
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn("anima_train.py", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()
