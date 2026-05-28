@@ -1,6 +1,11 @@
+import json
 import os
+import subprocess
+import sys
+import tempfile
 import time
 import unittest
+from pathlib import Path
 from unittest import mock
 
 from train_monitor import server
@@ -45,6 +50,99 @@ class TrainMonitorStatusTests(unittest.TestCase):
     def test_infer_model_type_anima_lora_network(self):
         lines = ["python vendor/sd-scripts/anima_train_network.py --config_file x.toml"]
         self.assertEqual(server.infer_model_type(lines), "Anima LoRA")
+
+    def test_anima_fast_progress_jsonl_overrides_stdout_metrics(self):
+        with tempfile.TemporaryDirectory() as td:
+            progress = Path(td) / "progress.jsonl"
+            progress.write_text(
+                "\n".join([
+                    json.dumps({"ev": "run_start", "total_steps": 10}),
+                    json.dumps({"ev": "step", "global_step": 3, "loss": 0.25}),
+                ]),
+                encoding="utf-8",
+            )
+            task = {
+                "id": "task-1",
+                "status": "RUNNING",
+                "metadata": {
+                    "backend": "anima-lora-fast",
+                    "progress_jsonl": str(progress),
+                },
+            }
+            with mock.patch.object(server, "newest_preview_images", return_value=[]), \
+                    mock.patch.object(server, "_training_output_dir", return_value=None), \
+                    mock.patch.object(server, "latest_training_config", return_value={}), \
+                    mock.patch.object(server, "build_model_outputs", return_value={}) as build_outputs, \
+                    mock.patch.object(server, "_extract_train_params", return_value=[]), \
+                    mock.patch.object(server, "tensorboard_loss_scalars", return_value=[]), \
+                    mock.patch.object(server, "gpu_info", return_value={}), \
+                    mock.patch.object(server, "gpu_memory_used_mb", return_value=None), \
+                    mock.patch.object(server, "fetch_gui_json", return_value=({"status": "success", "data": {"tasks": [task]}}, "http://gui/api")), \
+                    mock.patch.object(server, "fetch_json", return_value={"status": "success", "data": {"lines": ["no progress here"], "done": False}}):
+                status = server.collect_status()
+
+        self.assertEqual(status["model_type"], "Anima Fast LoRA")
+        self.assertEqual(status["metrics"]["step"], 3)
+        self.assertEqual(status["metrics"]["total_steps"], 10)
+        self.assertEqual(status["metrics"]["progress_source"], "anima_progress_jsonl")
+        build_outputs.assert_any_call(None)
+
+    def test_active_task_metadata_output_dir_overrides_latest_config(self):
+        task = {
+            "id": "task-1",
+            "status": "RUNNING",
+            "metadata": {
+                "backend": "anima-lora-fast",
+                "output_dir": "output/anima_fast/run-1",
+            },
+        }
+        with mock.patch.object(server, "newest_preview_images", return_value=[]), \
+                mock.patch.object(server, "_training_output_dir", return_value=server.REPO / "output" / "old"), \
+                mock.patch.object(server, "latest_training_config", return_value={}), \
+                mock.patch.object(server, "build_model_outputs", return_value={"outputs": [], "outputs_primary": [], "outputs_other": []}) as build_outputs, \
+                mock.patch.object(server, "_extract_train_params", return_value=[]), \
+                mock.patch.object(server, "tensorboard_loss_scalars", return_value=[]), \
+                mock.patch.object(server, "gpu_info", return_value={}), \
+                mock.patch.object(server, "gpu_memory_used_mb", return_value=None), \
+                mock.patch.object(server, "fetch_gui_json", return_value=({"status": "success", "data": {"tasks": [task]}}, "http://gui/api")), \
+                mock.patch.object(server, "fetch_json", return_value={"status": "success", "data": {"lines": [], "done": False}}):
+            server.collect_status()
+
+        self.assertEqual(build_outputs.call_args_list[-1].args[0], server.REPO / "output" / "anima_fast" / "run-1")
+
+    def test_anima_fast_output_dir_safetensors_are_discoverable(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td)
+            output_dir = repo / "output"
+            train_out = output_dir / "anima_fast" / "run-1"
+            model_file = train_out / "anima-fast-test.safetensors"
+            train_out.mkdir(parents=True)
+            model_file.write_bytes(b"fake model bytes")
+
+            with mock.patch.object(server, "REPO", repo), \
+                    mock.patch.object(server, "OUTPUT_DIR", output_dir):
+                outputs = server.build_model_outputs(train_out)
+                fallback_outputs = server.build_model_outputs(None)
+
+        self.assertEqual(outputs["output_scope"], "output/anima_fast/run-1")
+        self.assertEqual(len(outputs["outputs_primary"]), 1)
+        self.assertEqual(outputs["outputs_primary"][0]["path"], str(model_file))
+        self.assertEqual(outputs["outputs"][0]["path"], str(model_file))
+        self.assertEqual(fallback_outputs["outputs"][0]["path"], str(model_file))
+
+    def test_train_monitor_imports_when_started_from_monitor_dir(self):
+        completed = subprocess.run(
+            [sys.executable, "-c", "import server; print((server.REPO / 'train_monitor').is_dir())"],
+            cwd=Path("train_monitor"),
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=20,
+        )
+
+        self.assertEqual(completed.returncode, 0, completed.stderr)
+        self.assertEqual(completed.stdout.strip(), "True")
 
 
 if __name__ == "__main__":

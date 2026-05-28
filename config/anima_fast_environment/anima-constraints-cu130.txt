@@ -1,0 +1,11 @@
+# Real-test Anima Fast extension environment guard.
+# This environment is intentionally independent from the main GUI venv.
+torch==2.11.0+cu130
+torchvision==0.26.0+cu130
+flash-attn==2.8.3+cu130torch2.11
+triton-windows==3.7.0.post26
+transformers==5.9.0
+diffusers==0.37.1
+accelerate==1.13.0
+safetensors==0.7.0
+iopath==0.1.10

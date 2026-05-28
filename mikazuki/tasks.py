@@ -35,15 +35,33 @@ class TaskStatus(Enum):
     RUNNING = 1
     FINISHED = 2
     TERMINATED = 3
+    FAILED = 4
 
 
 class Task:
-    def __init__(self, task_id, command, environ=None):
+    def __init__(self, task_id, command, environ=None, metadata=None, cwd=None):
         self.task_id = task_id
         self.lock = threading.Lock()
         self.command = command
         self.status = TaskStatus.CREATED
         self.environ = environ or os.environ
+        self.metadata = metadata or {}
+        self.cwd = cwd
+        self.returncode = None
+
+    def start_log_only(self):
+        self.status = TaskStatus.RUNNING
+        self.returncode = None
+        self.metadata.pop("returncode", None)
+        hub.start_task(self.task_id)
+
+    def finish_log_only(self, returncode=0, error=None):
+        self.returncode = returncode
+        self.metadata["returncode"] = returncode
+        if error:
+            self.metadata["error"] = str(error)
+        self.status = TaskStatus.FINISHED if returncode == 0 else TaskStatus.FAILED
+        hub.mark_done(self.task_id)
 
     def communicate(self, input=None, timeout=None):
         try:
@@ -59,12 +77,17 @@ class Task:
             self.process.kill()
             raise
         retcode = self.process.poll()
-        self.status = TaskStatus.FINISHED
+        self.returncode = retcode
+        self.metadata["returncode"] = retcode
+        self.status = TaskStatus.FINISHED if retcode == 0 else TaskStatus.FAILED
         return CompletedProcess(self.process.args, retcode, stdout, stderr)
 
     def wait(self):
-        self.process.wait()
-        self.status = TaskStatus.FINISHED
+        retcode = self.process.wait()
+        self.returncode = retcode
+        self.metadata["returncode"] = retcode
+        if self.status != TaskStatus.TERMINATED:
+            self.status = TaskStatus.FINISHED if retcode == 0 else TaskStatus.FAILED
 
     def _stdout_pump(self):
         """Drain child stdout into TrainLogHub AND echo to parent console."""
@@ -90,11 +113,14 @@ class Task:
 
     def execute(self):
         self.status = TaskStatus.RUNNING
+        self.returncode = None
+        self.metadata.pop("returncode", None)
         hub.start_task(self.task_id)
         try:
             self.process = subprocess.Popen(
                 self.command,
                 env=self.environ,
+                cwd=self.cwd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 universal_newlines=True,
@@ -105,6 +131,10 @@ class Task:
         except Exception as e:
             hub.append_line(self.task_id, f"[error] Failed to start training process: {e}")
             hub.mark_done(self.task_id)
+            self.status = TaskStatus.FAILED
+            self.returncode = -1
+            self.metadata["returncode"] = -1
+            self.metadata["error"] = str(e)
             raise
         threading.Thread(target=self._stdout_pump, daemon=True).start()
 
@@ -123,14 +153,14 @@ class TaskManager:
         self.max_concurrent = max_concurrent
         self.tasks: Dict[Task] = {}
 
-    def create_task(self, command: List[str], environ):
+    def create_task(self, command: List[str], environ, metadata=None, cwd=None, task_id=None):
         running_tasks = [t for _, t in self.tasks.items() if t.status == TaskStatus.RUNNING]
         if len(running_tasks) >= self.max_concurrent:
             log.error(
                 f"Unable to create a task because there are already {len(running_tasks)} tasks running, reaching the maximum concurrent limit. / 无法创建任务，因为已经有 {len(running_tasks)} 个任务正在运行，已达到最大并发限制。")
             return None
-        task_id = str(uuid.uuid4())
-        task = Task(task_id=task_id, command=command, environ=environ)
+        task_id = task_id or str(uuid.uuid4())
+        task = Task(task_id=task_id, command=command, environ=environ, metadata=metadata, cwd=cwd)
         self.tasks[task_id] = task
         # task.execute() # breaking change
         log.info(f"Task {task_id} created")
@@ -154,6 +184,8 @@ class TaskManager:
             {
                 "id": task.task_id,
                 "status": task.status.name,
+                "metadata": task.metadata,
+                "returncode": task.returncode,
             }
             for task in self.tasks.values()
         ]

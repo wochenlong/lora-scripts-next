@@ -17,6 +17,7 @@ import math
 import mimetypes
 import os
 import re
+import sys
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -25,12 +26,17 @@ from urllib.parse import parse_qs, quote, unquote, urlparse
 from urllib.error import HTTPError, URLError
 from urllib.request import urlopen
 
+REPO = Path(__file__).resolve().parent.parent
+if str(REPO) not in sys.path:
+    sys.path.insert(0, str(REPO))
+
+from mikazuki.anima_fast_backend.progress import metrics_from_anima_events, read_jsonl_events
+
 
 HOST = "0.0.0.0"
 PORT = int(os.environ.get("TRAIN_MONITOR_PORT", 6008))
 _GUI_API_PORT = int(os.environ.get("MIKAZUKI_PORT", 28000))
 GUI_API = f"http://127.0.0.1:{_GUI_API_PORT}/api"
-REPO = Path(__file__).resolve().parent.parent
 STATIC_DIR = Path(__file__).resolve().parent
 OUTPUT_DIR = REPO / "output"
 LOG_DIR = REPO / "logs"
@@ -867,6 +873,23 @@ def parse_log(lines: list[str]) -> dict:
     return info
 
 
+def anima_fast_progress_metrics(task: dict) -> dict:
+    metadata = task.get("metadata") or {}
+    if metadata.get("backend") != "anima-lora-fast":
+        return {}
+    raw_path = metadata.get("progress_jsonl")
+    if not raw_path:
+        return {}
+    path = Path(str(raw_path))
+    if not path.is_absolute():
+        path = (REPO / path).resolve()
+    events = read_jsonl_events(path)
+    metrics = metrics_from_anima_events(events)
+    if metrics:
+        metrics["progress_source"] = "anima_progress_jsonl"
+    return metrics
+
+
 # ---------------------------------------------------------------------------
 # Status collection
 # ---------------------------------------------------------------------------
@@ -877,6 +900,14 @@ def _training_output_dir() -> Path | None:
     return resolve_repo_path(str(config.get("output_dir", "")))
 
 
+def _task_output_dir(task: dict) -> Path | None:
+    metadata = task.get("metadata") or {}
+    output_dir = metadata.get("output_dir")
+    if output_dir:
+        return resolve_repo_path(str(output_dir))
+    return None
+
+
 def collect_status() -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     try:
@@ -884,8 +915,8 @@ def collect_status() -> dict:
     except Exception:
         previews = []
 
-    train_out = _training_output_dir()
     train_config = latest_training_config()
+    train_out = _training_output_dir()
     model_outputs = build_model_outputs(train_out)
 
     status = {
@@ -926,9 +957,15 @@ def collect_status() -> dict:
 
     active = next((t for t in reversed(status["tasks"]) if t.get("status") == "RUNNING"), status["tasks"][-1])
     status["active_task"] = active
+    task_train_out = _task_output_dir(active)
+    if task_train_out is not None:
+        train_out = task_train_out
+        model_outputs = build_model_outputs(train_out)
+        status.update(model_outputs)
     state_map = {
         "RUNNING": "训练中",
         "FINISHED": "已结束",
+        "FAILED": "失败",
         "TERMINATED": "已终止",
         "CREATED": "已创建，等待启动",
     }
@@ -937,13 +974,17 @@ def collect_status() -> dict:
     task_id = active.get("id")
     if task_id:
         try:
-            tail_payload = fetch_json(f"{gui_api}/train/log/tail/{task_id}?limit=2000")
+            tail_payload, _tail_url = fetch_gui_json(f"/train/log/tail/{task_id}?limit=2000")
             data = api_data(tail_payload)
             lines = data.get("lines", [])
             status["log_lines"] = lines
             status["model_type"] = infer_model_type(lines)
             try:
                 status["metrics"] = parse_log(lines)
+                anima_metrics = anima_fast_progress_metrics(active)
+                if anima_metrics:
+                    status["metrics"].update(anima_metrics)
+                    status["model_type"] = "Anima Fast LoRA"
                 metrics = status["metrics"]
                 task_status = active.get("status", "")
                 update_progress_health(task_id, task_status, metrics)

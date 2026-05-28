@@ -1,0 +1,12 @@
+# Real-test main lora-scripts-next environment guard.
+# Keep this environment compatible with lora-scripts-next UI/server deps.
+numpy==1.26.4
+opencv-python==4.8.1.78
+torch==2.11.0+cu130
+torchvision==0.26.0+cu130
+diffusers==0.33.1
+transformers==4.51.3
+fastapi==0.95.1
+uvicorn==0.22.0
+tensorboard==2.10.1
+gradio==3.44.2

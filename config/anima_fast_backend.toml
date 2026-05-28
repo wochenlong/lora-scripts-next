@@ -1,0 +1,17 @@
+[backend]
+extension_root = "extensions/anima_lora"
+source_dir = "extensions/anima_lora/source"
+venv_python = "extensions/anima_lora/.venv/Scripts/python.exe"
+external_root = "../anima_lora"
+external_python = "../anima_lora/.venv/Scripts/python.exe"
+preflight_level = "full"
+allow_unsupported = false
+
+[paths]
+output_dir = "output/anima_fast"
+logging_dir = "logs/anima_fast"
+cache_dir = ".cache/anima_fast"
+
+[features]
+enabled_env = "LORA_ENABLE_ANIMA_FAST"
+dev_mode_env = "LORA_ANIMA_FAST_DEV_MODE"

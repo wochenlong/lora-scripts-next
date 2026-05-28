@@ -24,13 +24,19 @@ wd14_tagger_model
 
 train/*
 logs/*
+!logs/.keep
+logs/anima_fast/*
 sd-models/*
 toml/autosave/*
 config/autosave/*
 config/presets/test*.toml
 
 !sd-models/put stable diffusion model here.txt
-!logs/.keep
+extensions/anima_lora/.venv/
+extensions/anima_lora/logs/
+extensions/anima_lora/source/
+extensions/anima_lora/install_state.json
+.cache/anima_fast/
 
 huggingface/hub/models*
 huggingface/hub/version_diffusers_cache.txt

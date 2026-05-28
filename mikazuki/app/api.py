@@ -12,12 +12,40 @@ from datetime import datetime
 from pathlib import Path
 from typing import Tuple, Optional
 
-import toml
+try:
+    import toml
+except ModuleNotFoundError:  # pragma: no cover - lightweight test environment fallback
+    import tomllib
+
+    class _TomlFallback:
+        @staticmethod
+        def loads(content: str):
+            return tomllib.loads(content)
+
+        @staticmethod
+        def dumps(data: dict):
+            from mikazuki.anima_fast_backend.adapter import dump_flat_toml
+            return dump_flat_toml(data)
+
+    toml = _TomlFallback()
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
 from fastapi.responses import StreamingResponse
 
 import mikazuki.process as process
 from mikazuki import launch_utils
+from mikazuki.anima_fast_backend import TRAIN_TYPE as ANIMA_FAST_TRAIN_TYPE
+from mikazuki.anima_fast_backend.adapter import AdapterError, adapt_config, dump_flat_toml
+from mikazuki.anima_fast_backend.extension_state import (
+    STATE_INSTALLED_UNVERIFIED,
+    STATE_READY,
+    default_layout,
+    read_extension_status,
+    write_install_state,
+)
+from mikazuki.anima_fast_backend.environment import audit_environment, start_install_task
+from mikazuki.anima_fast_backend.installer import build_install_plan, copy_source_snapshot, remove_extension
+from mikazuki.anima_fast_backend.preflight import run_preflight
+from mikazuki.anima_fast_backend.settings import discover_runtime, feature_enabled
 from mikazuki.app.config import app_config
 from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  APIResponseSuccess, TaggerInterrogateRequest,
@@ -177,16 +205,19 @@ async def load_schemas():
     avaliable_schemas.clear()
 
     schema_dir = os.path.join(os.getcwd(), "mikazuki", "schema")
-    schemas = os.listdir(schema_dir)
+    schemas = sorted(os.listdir(schema_dir), key=lambda name: (os.path.splitext(name)[0] != "shared", name))
 
     def lambda_hash(x):
         return hashlib.md5(x.encode()).hexdigest()
 
     for schema_name in schemas:
+        schema_id = os.path.splitext(schema_name)[0]
+        if schema_id == ANIMA_FAST_TRAIN_TYPE and not feature_enabled():
+            continue
         with open(os.path.join(schema_dir, schema_name), encoding="utf-8") as f:
             content = f.read()
             avaliable_schemas.append({
-                "name": schema_name.rstrip(".ts"),
+                "name": schema_id,
                 "schema": content,
                 "hash": lambda_hash(content)
             })
@@ -363,6 +394,60 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
             )
 
 
+def _anima_fast_runtime():
+    return discover_runtime(lora_next_root=Path.cwd())
+
+
+def _anima_fast_disabled_response():
+    return APIResponseFail(
+        message="Anima Fast is disabled. Set LORA_ENABLE_ANIMA_FAST=1 to enable this experimental trainer."
+    )
+
+
+def _write_anima_fast_toml(config: dict, timestamp: str, autosave_dir: str) -> tuple[Path, dict, list[str]]:
+    runtime = _anima_fast_runtime()
+    run_id = f"{timestamp}-anima-fast"
+    adapted = adapt_config(config, runtime, run_id)
+    return _write_adapted_anima_fast_toml(adapted.values, adapted.warnings, run_id, autosave_dir)
+
+
+def _write_adapted_anima_fast_toml(values: dict, warnings: list[str], run_id: str, autosave_dir: str) -> tuple[Path, dict, list[str]]:
+    toml_file = Path(autosave_dir) / f"{run_id}.toml"
+    toml_file.write_text(dump_flat_toml(values), encoding="utf-8")
+    return toml_file, values, warnings
+
+
+def _anima_fast_fail_from_preflight(result):
+    return APIResponseFail(
+        message="Anima Fast preflight failed / Anima Fast 预检查失败",
+        data=result.as_dict(),
+    )
+
+
+def _anima_fast_ready_gate():
+    layout = default_layout(Path.cwd())
+    status = read_extension_status(layout)
+    if status.state != STATE_READY:
+        return False, APIResponseFail(
+            message="Anima Fast extension is not ready. Install or repair the extension first.",
+            data=status.as_dict(),
+        )
+    audit = (status.facts or {}).get("audit", {})
+    if not audit.get("ok"):
+        return False, APIResponseFail(
+            message="Anima Fast environment audit has not passed. Repair the extension before training.",
+            data=status.as_dict(),
+        )
+    audit_result = audit_environment(Path.cwd(), layout, main_python=Path(sys.executable), require_cuda=True)
+    if not audit_result.ok:
+        write_install_state(layout, "broken", {"audit": audit_result.as_dict()}, "; ".join(audit_result.errors))
+        return False, APIResponseFail(
+            message="Anima Fast environment drift detected. Repair the extension before training.",
+            data=audit_result.as_dict(),
+        )
+    return True, None
+
+
 @router.post("/run")
 async def create_toml_file(request: Request):
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -377,8 +462,35 @@ async def create_toml_file(request: Request):
 
     gpu_ids = config.pop("gpu_ids", None)
 
-    suggest_cpu_threads = 8 if len(train_utils.get_total_images(config["train_data_dir"])) > 200 else 2
     model_train_type = config.pop("model_train_type", "sd-lora")
+    if model_train_type == ANIMA_FAST_TRAIN_TYPE:
+        if not feature_enabled():
+            return _anima_fast_disabled_response()
+        ready, failure = _anima_fast_ready_gate()
+        if not ready:
+            return failure
+        try:
+            runtime = _anima_fast_runtime()
+            run_id = f"{timestamp}-anima-fast"
+            adapted = adapt_config(config, runtime, run_id)
+            preflight = run_preflight(adapted.values, runtime)
+            if not preflight.ok:
+                return _anima_fast_fail_from_preflight(preflight)
+            toml_file, adapted_values, warnings = _write_adapted_anima_fast_toml(adapted.values, adapted.warnings, run_id, autosave_dir)
+            metadata = {
+                "progress_jsonl": adapted_values.get("progress_jsonl"),
+                "output_dir": adapted_values.get("output_dir"),
+                "logging_dir": adapted_values.get("logging_dir"),
+                "warnings": warnings,
+            }
+            return process.run_anima_fast_train(str(toml_file), runtime, gpu_ids, metadata=metadata)
+        except AdapterError as exc:
+            return APIResponseFail(message=str(exc))
+        except Exception as exc:  # noqa: BLE001 - keep API failures structured
+            log.error(f"Anima Fast launch failed: {exc}")
+            return APIResponseFail(message=f"Anima Fast launch failed: {exc}")
+
+    suggest_cpu_threads = 8 if len(train_utils.get_total_images(config["train_data_dir"])) > 200 else 2
     trainer_file = trainer_mapping[model_train_type]
     apply_sdxl_prediction_type(config, model_train_type)
     apply_anima_training_defaults(config, model_train_type)
@@ -425,6 +537,112 @@ async def create_toml_file(request: Request):
     result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads)
 
     return result
+
+
+@router.get("/plugins/anima-lora/status")
+async def anima_lora_plugin_status():
+    layout = default_layout(Path.cwd())
+    status = read_extension_status(layout).as_dict()
+    runtime = _anima_fast_runtime()
+    runtime_available = runtime.python.is_file() and (runtime.anima_root / "train.py").is_file()
+    status["feature_enabled"] = feature_enabled()
+    status["runtime"] = {
+        "anima_root": str(runtime.anima_root),
+        "python": str(runtime.python),
+        "output_dir": str(runtime.output_dir),
+        "logging_dir": str(runtime.logging_dir),
+        "cache_dir": str(runtime.cache_dir),
+        "external_runtime_exists": runtime_available,
+    }
+    return APIResponseSuccess(data=status)
+
+
+@router.post("/plugins/anima-lora/preflight")
+async def anima_lora_plugin_preflight(request: Request):
+    if not feature_enabled():
+        return _anima_fast_disabled_response()
+    config: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    runtime = _anima_fast_runtime()
+    try:
+        adapted = adapt_config(config, runtime, f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-anima-fast")
+    except AdapterError as exc:
+        return APIResponseFail(message=str(exc))
+    result = run_preflight(adapted.values, runtime)
+    if result.ok:
+        return APIResponseSuccess(data=result.as_dict())
+    return _anima_fast_fail_from_preflight(result)
+
+
+@router.post("/plugins/anima-lora/dry-run")
+async def anima_lora_plugin_dry_run(request: Request):
+    if not feature_enabled():
+        return _anima_fast_disabled_response()
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
+    os.makedirs(autosave_dir, exist_ok=True)
+    config: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    config.pop("gpu_ids", None)
+    config.pop("model_train_type", None)
+    try:
+        toml_file, adapted_values, warnings = _write_anima_fast_toml(config, timestamp, autosave_dir)
+    except AdapterError as exc:
+        return APIResponseFail(message=str(exc))
+    return APIResponseSuccess(data={
+        "toml_path": str(toml_file),
+        "config": adapted_values,
+        "warnings": warnings,
+    })
+
+
+@router.post("/plugins/anima-lora/install")
+async def anima_lora_plugin_install(request: Request):
+    if not feature_enabled():
+        return _anima_fast_disabled_response()
+    payload: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    source_root = Path(payload.get("source_root") or os.environ.get("ANIMA_LORA_ROOT") or (Path.cwd().parent / "anima_lora"))
+    dry_run = payload.get("dry_run", True) is not False
+    layout = default_layout(Path.cwd())
+    plan = build_install_plan(source_root, layout, dry_run=dry_run)
+    data = {"plan": plan.as_dict()}
+    if dry_run:
+        data["message"] = "Installer dry-run completed"
+        return APIResponseSuccess(data=data)
+    try:
+        task_id, install_data = start_install_task(Path.cwd(), layout, source_root, dry_run=False)
+    except Exception as exc:
+        write_install_state(layout, "broken", {"plan": plan.as_dict()}, str(exc))
+        return APIResponseFail(message=f"Anima LoRA install failed: {exc}")
+    data.update(install_data)
+    data["status"] = read_extension_status(layout).as_dict()
+    data["message"] = "Anima LoRA install task started"
+    return APIResponseSuccess(data=data)
+
+
+@router.post("/plugins/anima-lora/repair")
+async def anima_lora_plugin_repair(request: Request):
+    return await anima_lora_plugin_install(request)
+
+
+@router.post("/plugins/anima-lora/uninstall")
+async def anima_lora_plugin_uninstall():
+    if not feature_enabled():
+        return _anima_fast_disabled_response()
+    layout = default_layout(Path.cwd())
+    try:
+        remove_extension(layout, Path.cwd())
+    except Exception as exc:
+        return APIResponseFail(message=f"Anima LoRA uninstall failed: {exc}")
+    return APIResponseSuccess(data={"status": read_extension_status(layout).as_dict()})
+
+
+@router.post("/anima-fast/preflight")
+async def anima_fast_preflight_compat(request: Request):
+    return await anima_lora_plugin_preflight(request)
+
+
+@router.post("/anima-fast/dry-run")
+async def anima_fast_dry_run_compat(request: Request):
+    return await anima_lora_plugin_dry_run(request)
 
 
 @router.post("/run_script")
@@ -688,6 +906,12 @@ async def train_log_stream(task_id: str):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.get("/plugins/anima-lora/install/log/stream/{task_id}")
+async def anima_lora_install_log_stream(task_id: str):
+    """Compatibility alias for plugin install/train task stdout streams."""
+    return await train_log_stream(task_id)
 
 
 @router.get("/train/log/tail/{task_id}")

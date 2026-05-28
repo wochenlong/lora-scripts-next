@@ -3,9 +3,13 @@ import asyncio
 import os
 import sys
 import webbrowser
+import uuid
+from pathlib import Path
 from typing import Optional
 
 from mikazuki.app.models import APIResponse
+from mikazuki.anima_fast_backend.launcher import build_launch_spec
+from mikazuki.anima_fast_backend.service_resolver import default_resolver
 from mikazuki.log import log
 from mikazuki.tasks import tm
 from mikazuki.launch_utils import base_dir_path
@@ -52,8 +56,7 @@ def _announce_train_log(task_id: str, urls: dict) -> None:
 
     if _truthy_env("MIKAZUKI_AUTO_OPEN_TRAIN_LOG"):
         try:
-            from mikazuki.app.application import _resolve_browser
-            _resolve_browser().open(viewer)
+            webbrowser.open(viewer)
         except Exception as exc:  # noqa: BLE001 — best-effort UX nicety
             log.warning(f"Failed to auto-open train log in browser: {exc}")
 
@@ -120,5 +123,63 @@ def run_train(toml_path: str,
             # Full clickable URLs (new in this release).
             "train_log_url": urls["viewer"],
             "train_log_stream_url": urls["stream"],
+        },
+    )
+
+
+def run_anima_fast_train(toml_path: str,
+                         runtime,
+                         gpu_ids: Optional[list] = None,
+                         metadata: Optional[dict] = None):
+    log.info(f"Anima Fast training started with config file / Anima Fast 训练开始，使用配置文件: {toml_path}")
+    task_id = str(uuid.uuid4())
+    spec = build_launch_spec(runtime, Path(toml_path), task_id, gpu_ids)
+    task_metadata = {
+        "backend": "anima-lora-fast",
+        "config_path": str(Path(toml_path).resolve()),
+        "anima_root": str(runtime.anima_root),
+        "anima_python": str(runtime.python),
+        "output_dir": str(runtime.output_dir),
+        "logging_dir": str(runtime.logging_dir),
+    }
+    task_metadata.update(metadata or {})
+
+    if not (task := tm.create_task(spec.command, spec.env, metadata=task_metadata, cwd=str(spec.cwd), task_id=task_id)):
+        return APIResponse(status="error", message="Failed to create Anima Fast task / 无法创建 Anima Fast 训练任务")
+
+    resolver = default_resolver(Path.cwd())
+    urls = {
+        "viewer": resolver.train_log_viewer_url(task.task_id),
+        "stream": resolver.public_base_url().rstrip("/") + resolver.train_log_stream_path(task.task_id),
+        "base": resolver.public_base_url(),
+    }
+    _announce_train_log(task.task_id, urls)
+
+    def _run():
+        try:
+            task.execute()
+            task.wait()
+            rc = task.process.returncode if task.process else -1
+            if rc != 0:
+                log.error(f"Anima Fast training failed / Anima Fast 训练失败 (exit {rc})")
+            else:
+                log.info("Anima Fast training finished / Anima Fast 训练完成")
+        except Exception as e:
+            log.error(f"An error occurred when Anima Fast training / Anima Fast 训练出现致命错误: {e}")
+
+    coro = asyncio.to_thread(_run)
+    asyncio.create_task(coro)
+
+    return APIResponse(
+        status="success",
+        message=f"Anima Fast training started / Anima Fast 训练开始 ID: {task.task_id}",
+        data={
+            "task_id": task.task_id,
+            "train_log_path": "/train-log",
+            "train_log_query": f"task_id={task.task_id}",
+            "train_log_stream": f"/api/train/log/stream/{task.task_id}",
+            "train_log_url": urls["viewer"],
+            "train_log_stream_url": urls["stream"],
+            "metadata": task_metadata,
         },
     )
