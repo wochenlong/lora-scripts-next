@@ -1769,3 +1769,34 @@ html.dark .example-container > .right-container .sd-tagger-dock__start {
 html.dark .example-container > .right-container .sd-tagger-dock__start:hover:not(:disabled) {
   background: color-mix(in srgb, var(--el-color-primary) 22%, var(--c-bg-mute));
 }
+
+/* ----- Anima Finetune：右栏右上角标语 ----- */
+.example-container > .right-container .theme-default-content main > div {
+  position: relative;
+  padding-top: 2.25rem;
+}
+
+.example-container > .right-container .sd-anima-finetune-tagline {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+  max-width: 100%;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--sd-radius-pill, 999px);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  text-align: right;
+  color: var(--el-color-primary, #409eff);
+  background: color-mix(in srgb, var(--el-color-primary, #409eff) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--el-color-primary, #409eff) 24%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+
+html.dark .example-container > .right-container .sd-anima-finetune-tagline {
+  background: color-mix(in srgb, var(--el-color-primary, #409eff) 16%, transparent);
+}
+

@@ -13,8 +13,15 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "frontend" / "dist"
 ASSETS = DIST / "assets"
 APP_JS = ASSETS / "app.547295de.js"
+POLISH_CSS = ASSETS / "sd-trainer-ui-polish.css"
+STYLE_CSS = ASSETS / "style.874872ce.css"
 
 ROUTE_KEY = "v-a1f1ne2e"
+COMP_IMPORT = '"v-a1f1ne2e":Jt(()=>wt(()=>import("./anima-finetune.html.1a4bf32e.js"),[])),'
+I0_SD3_MARKER = '"v-0dc76a3b":Jt(()=>wt(()=>import("./sd3.html.1a4bf31e.js"),[])),'
+TAGLINE_TEXT = "anima-finetune ，一切皆有可能"
+FINETUNE_DESC = "更新完整 DiT 权重，适合进阶玩家训练，需充足样本与高显存"
+TAGLINE_CSS_MARKER = "sd-anima-finetune-tagline"
 DATA_JS = ASSETS / "anima-finetune.html.eaeb05f2.js"
 COMP_JS = ASSETS / "anima-finetune.html.1a4bf32e.js"
 HTML_PATH = DIST / "lora" / "anima-finetune.html"
@@ -24,8 +31,17 @@ SIDEBAR_SNIPPET = '{"text":"Anima Finetune","link":"/lora/anima-finetune.md"},'
 
 def patch_app_js() -> None:
     text = APP_JS.read_text(encoding="utf-8")
-    if ROUTE_KEY in text:
-        print("app.js already has anima-finetune route")
+    if COMP_IMPORT in text:
+        print("app.js already has anima-finetune page component (i0)")
+    elif I0_SD3_MARKER in text:
+        text = text.replace(I0_SD3_MARKER, I0_SD3_MARKER + COMP_IMPORT, 1)
+        print("patched app.js i0 page component map")
+    else:
+        raise SystemExit("sd3 i0 import marker not found in app.js")
+
+    if ROUTE_KEY in text and f'"{ROUTE_KEY}","/lora/anima-finetune.html"' in text:
+        APP_JS.write_text(text, encoding="utf-8")
+        print("app.js route/data already present")
         return
 
     import_marker = 'import("./sd3.html.eaeb05e1.js"),[]).then(({data:e})=>e),'
@@ -56,7 +72,7 @@ def patch_app_js() -> None:
             '{"text":"Stable Diffusion","link":"/dreambooth/index.md"},',
             '{"text":"\\u5168\\u91cf\\u5fae\\u8c03","link":"/lora/anima-finetune.md","collapsible":false,"children":['
             + SIDEBAR_SNIPPET
-            '{"text":"Stable Diffusion","link":"/dreambooth/index.md"},',
+            + '{"text":"Stable Diffusion","link":"/dreambooth/index.md"},',
             1,
         )
     APP_JS.write_text(text, encoding="utf-8")
@@ -81,13 +97,14 @@ def write_page_assets() -> None:
     COMP_JS.write_text(
         'import{_ as s,o as t,c as o,a as e,b as a}from"./app.547295de.js";'
         "const _={},"
+        f'f=e("p",{{class:"sd-anima-finetune-tagline"}},{json.dumps(TAGLINE_TEXT)},-1),'
         'c=e("h1",{id:"anima-finetune",tabindex:"-1"},['
         'e("a",{class:"header-anchor",href:"#anima-finetune","aria-hidden":"true"},"#"),'
         'a(" Anima Finetune 专家模式")],-1),'
-        'n=e("p",null,"Anima DiT 全量微调（full finetune），更新完整 DiT 权重",-1),'
-        'd=e("p",null,"使用 Qwen3 + T5 + anima_train.py；显存需求显著高于 LoRA",-1),'
-        "l=[c,n,d];"
-        "function i(h,u){return t(),o(\"div\",null,l)}"
+        'n=e("p",null,"Anima DiT 全量微调（full finetune）",-1),'
+        f'd=e("p",null,{json.dumps(FINETUNE_DESC)},-1),'
+        "l=[f,c,n,d];"
+        'function i(h,u){return t(),o("div",null,l)}'
         'var p=s(_,[["render",i],["__file","anima-finetune.html.vue"]]);export{p as default};',
         encoding="utf-8",
     )
@@ -103,9 +120,11 @@ def write_page_assets() -> None:
         html,
         count=1,
     )
+    tagline_html = f'<p class="sd-anima-finetune-tagline">{TAGLINE_TEXT}</p>'
     html = re.sub(
         r"<h1[^>]*>.*?</h1>",
-        '<h1 id="anima-finetune" tabindex="-1"><a class="header-anchor" href="#anima-finetune" aria-hidden="true">#</a> Anima Finetune</h1>',
+        tagline_html
+        + '<h1 id="anima-finetune" tabindex="-1"><a class="header-anchor" href="#anima-finetune" aria-hidden="true">#</a> Anima Finetune</h1>',
         html,
         count=1,
         flags=re.DOTALL,
@@ -118,12 +137,60 @@ def write_page_assets() -> None:
     )
     html = re.sub(
         r"<p>Anima DiT 训练入口.*?</p>",
-        "<p>对接上游 anima_train.py，适合小数据集风格化/角色定制（高显存）</p>",
+        f"<p>{FINETUNE_DESC}</p>",
         html,
         count=1,
     )
     HTML_PATH.write_text(html, encoding="utf-8")
     print("wrote lora/anima-finetune.html + assets")
+
+
+def append_tagline_css() -> None:
+    if not POLISH_CSS.exists():
+        return
+    css = POLISH_CSS.read_text(encoding="utf-8")
+    if TAGLINE_CSS_MARKER in css:
+        print("tagline css already present")
+        return
+    block = """
+
+/* ----- Anima Finetune：右栏右上角标语 ----- */
+.example-container > .right-container .theme-default-content main > div {
+  position: relative;
+  padding-top: 2.25rem;
+}
+
+.example-container > .right-container .sd-anima-finetune-tagline {
+  position: absolute;
+  top: 0;
+  right: 0;
+  margin: 0;
+  max-width: 100%;
+  padding: 0.35rem 0.7rem;
+  border-radius: var(--sd-radius-pill, 999px);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1.45;
+  text-align: right;
+  color: var(--el-color-primary, #409eff);
+  background: color-mix(in srgb, var(--el-color-primary, #409eff) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--el-color-primary, #409eff) 24%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+
+html.dark .example-container > .right-container .sd-anima-finetune-tagline {
+  background: color-mix(in srgb, var(--el-color-primary, #409eff) 16%, transparent);
+}
+"""
+    POLISH_CSS.write_text(css.rstrip() + block + "\n", encoding="utf-8")
+    if STYLE_CSS.exists():
+        style = STYLE_CSS.read_text(encoding="utf-8")
+        if TAGLINE_CSS_MARKER not in style:
+            STYLE_CSS.write_text(style.rstrip() + block + "\n", encoding="utf-8")
+            print("appended anima-finetune tagline css to style bundle")
+    print("appended anima-finetune tagline css")
 
 
 def patch_home_portal() -> None:
@@ -159,6 +226,7 @@ def run_sidebar_patch() -> None:
 def main() -> None:
     write_page_assets()
     patch_app_js()
+    append_tagline_css()
     patch_home_portal()
     run_sidebar_patch()
     print("anima-finetune UI patch done")
