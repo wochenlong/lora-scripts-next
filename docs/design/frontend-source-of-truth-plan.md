@@ -21,6 +21,7 @@ Created: 2026-05-30
 - 2026-05-30: Moved the native dataset editor runtime from a copied public script into a source TypeScript module loaded by the Vue page. The generated source frontend no longer emits standalone `dataset-editor.js`, `dataset-editor-entry.js`, or `dataset-editor.css` assets.
 - 2026-05-30: Expanded Anima source routes from contract scaffolds into source-owned training form shells. The forms preserve the Anima `model_train_type` values, submit to `/api/run`, and save/load local route-specific config under `sd-trainer-source-anima-configs`.
 - 2026-05-30: Expanded the source-owned Anima training forms with schema-backed model asset, Anima parameter, batch, cache, preview, and caption controls while keeping SD/Flux training pages unchanged.
+- 2026-05-30: Started visual parity recovery for source-owned Anima training pages by moving them into a trainer-style workbench with a sticky parameter preview and run controls, reducing dependence on the missing compiled schema renderer.
 
 ## Background
 

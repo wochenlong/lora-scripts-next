@@ -45,4 +45,6 @@ test("anima source route loads train form", async ({ page }) => {
   await expect(page.locator("#anima-train-form")).toBeVisible();
   await expect(page.locator("#anima-pretrained-model")).toBeVisible();
   await expect(page.locator("#anima-train-data-dir")).toBeVisible();
+  await expect(page.locator(".anima-preview-panel")).toBeVisible();
+  await expect(page.locator("#anima-preview-code")).toContainText('model_train_type = "anima-finetune"');
 });

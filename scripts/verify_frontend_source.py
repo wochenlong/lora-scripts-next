@@ -136,6 +136,14 @@ def verify_source(root: Path) -> list[dict]:
         "sample_every_n_epochs",
         "caption_extension",
         "prefer_json_caption",
+        "previewToml",
+        "anima-workbench",
+        "anima-form-panel",
+        "anima-preview-panel",
+        "anima-preview-code",
+        "Parameter Preview",
+        "Save Config",
+        "Load Config",
     ]
     for term in required_anima_terms:
         if term not in anima_source:

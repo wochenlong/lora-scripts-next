@@ -84,6 +84,14 @@ def test_frontend_source_declares_anima_route_contracts():
         "sample_every_n_epochs",
         "caption_extension",
         "prefer_json_caption",
+        "previewToml",
+        "anima-workbench",
+        "anima-form-panel",
+        "anima-preview-panel",
+        "anima-preview-code",
+        "Parameter Preview",
+        "Save Config",
+        "Load Config",
     ]:
         assert term in anima
 

@@ -223,6 +223,13 @@ export const AnimaRoutePage = defineComponent({
       status.value = result.message || result.status || "Submitted";
     }
 
+    function previewToml() {
+      return Object.entries(payload())
+        .filter(([, value]) => value !== "")
+        .map(([key, value]) => `${key} = ${tomlValue(value)}`)
+        .join("\n");
+    }
+
     const textField = (key: TextKey, id: string, label: string, placeholder = "") =>
       h("label", { class: "anima-field" }, [
         h("span", label),
@@ -303,144 +310,174 @@ export const AnimaRoutePage = defineComponent({
 
     return () =>
       h("main", { class: "content anima-page" }, [
-        h("p", { class: "eyebrow" }, "Anima source route"),
-        h("h1", plan.heading),
-        h("p", { class: "summary" }, plan.summary),
-        h("section", { class: "anima-grid" }, [
-          h("article", { class: "compat-panel" }, [
-            h("h2", "Stable Contract"),
-            h("dl", { class: "anima-contract" }, [
-              h("dt", "Route"),
-              h("dd", plan.path),
-              h("dt", "model_train_type"),
-              h("dd", plan.modelTrainType),
-              h("dt", "Schema"),
-              h("dd", plan.schemaFile),
-              h("dt", "Backend entrypoint"),
-              h("dd", plan.backendEntrypoint),
-            ]),
+        h("header", { class: "anima-header" }, [
+          h("div", [
+            h("p", { class: "eyebrow" }, "Training"),
+            h("h1", plan.heading),
+            h("p", { class: "summary" }, plan.summary),
           ]),
-          h("article", { class: "compat-panel" }, [
-            h("h2", "Migration Notes"),
-            h(
-              "ul",
-              plan.nextWork.map((item) => h("li", item)),
-            ),
+          h("dl", { class: "anima-route-strip" }, [
+            h("dt", "Route"),
+            h("dd", plan.path),
+            h("dt", "Schema"),
+            h("dd", plan.schemaFile),
           ]),
         ]),
-        h("form", { id: "anima-train-form", class: "anima-form" }, [
-          h("h2", "Training Config"),
-          section("Model Assets", [
-            textField(
-              "pretrained_model_name_or_path",
-              "anima-pretrained-model",
-              "pretrained_model_name_or_path",
-              "D:/models/anima-base-v1.0.safetensors",
-            ),
-            textField("vae", "anima-vae", "vae", "D:/models/qwen_image_vae.safetensors"),
-            textField("qwen3", "anima-qwen3", "qwen3", "D:/models/qwen_3_06b_base.safetensors"),
-            textField("t5_tokenizer_path", "anima-t5-tokenizer-path", "t5_tokenizer_path"),
-          ]),
-          section("Dataset And Output", [
-            textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima"),
-            textField("output_dir", "anima-output-dir", "output_dir"),
-            textField("output_name", "anima-output-name", "output_name"),
-            h("div", { class: "anima-field-row" }, [
-              textField("resolution", "anima-resolution", "resolution"),
-              textField("caption_extension", "anima-caption-extension", "caption_extension"),
-              checkboxField("prefer_json_caption", "anima-prefer-json-caption", "prefer_json_caption"),
-            ]),
-          ]),
-          section("Training", [
-            h("div", { class: "anima-field-row" }, [
-              numberField("max_train_epochs", "anima-epochs", "max_train_epochs", 1),
-              numberField("train_batch_size", "anima-train-batch-size", "train_batch_size", 1),
-              numberField(
-                "gradient_accumulation_steps",
-                "anima-gradient-accumulation-steps",
-                "gradient_accumulation_steps",
-                1,
-              ),
-            ]),
-            h("div", { class: "anima-field-row" }, [
-              textField("learning_rate", "anima-learning-rate", "learning_rate"),
-              textField("optimizer_type", "anima-optimizer", "optimizer_type"),
-              selectField("mixed_precision", "anima-mixed-precision", "mixed_precision", ["bf16", "fp16", "no"]),
-            ]),
-            checkboxField("gradient_checkpointing", "anima-gradient-checkpointing", "gradient_checkpointing"),
-          ]),
-          plan.modelTrainType === "anima-lora"
-            ? section("LoRA Adapter", [
-                h("div", { class: "anima-field-row" }, [
-                  selectField("lora_type", "anima-lora-type", "lora_type", [
-                    "lora",
-                    "lokr",
-                    "tlora",
-                    "lora_fa",
-                    "vera",
-                    "loha",
-                  ]),
-                  textField("unet_lr", "anima-unet-lr", "unet_lr"),
-                  numberField("network_dim", "anima-network-dim", "network_dim", 1),
-                ]),
-                numberField("network_alpha", "anima-network-alpha", "network_alpha", 1),
-              ])
-            : null,
-          section("Anima Parameters", [
-            h("div", { class: "anima-field-row" }, [
-              selectField("attn_mode", "anima-attn-mode", "attn_mode", ["", "torch", "xformers", "sageattn", "flash"]),
-              selectField("timestep_sampling", "anima-timestep-sampling", "timestep_sampling", [
-                "sigma",
-                "uniform",
-                "sigmoid",
-                "shift",
-                "flux_shift",
+        h("section", { class: "anima-workbench" }, [
+          h("div", { class: "anima-form-panel" }, [
+            h("form", { id: "anima-train-form", class: "anima-form" }, [
+              h("h2", "Training Config"),
+              section("Model Assets", [
+                textField(
+                  "pretrained_model_name_or_path",
+                  "anima-pretrained-model",
+                  "pretrained_model_name_or_path",
+                  "D:/models/anima-base-v1.0.safetensors",
+                ),
+                textField("vae", "anima-vae", "vae", "D:/models/qwen_image_vae.safetensors"),
+                textField("qwen3", "anima-qwen3", "qwen3", "D:/models/qwen_3_06b_base.safetensors"),
+                textField("t5_tokenizer_path", "anima-t5-tokenizer-path", "t5_tokenizer_path"),
               ]),
-              numberField("discrete_flow_shift", "anima-discrete-flow-shift", "discrete_flow_shift", 0, 0.001),
+              section("Dataset And Output", [
+                textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima"),
+                textField("output_dir", "anima-output-dir", "output_dir"),
+                textField("output_name", "anima-output-name", "output_name"),
+                h("div", { class: "anima-field-row" }, [
+                  textField("resolution", "anima-resolution", "resolution"),
+                  textField("caption_extension", "anima-caption-extension", "caption_extension"),
+                  checkboxField("prefer_json_caption", "anima-prefer-json-caption", "prefer_json_caption"),
+                ]),
+              ]),
+              section("Training", [
+                h("div", { class: "anima-field-row" }, [
+                  numberField("max_train_epochs", "anima-epochs", "max_train_epochs", 1),
+                  numberField("train_batch_size", "anima-train-batch-size", "train_batch_size", 1),
+                  numberField(
+                    "gradient_accumulation_steps",
+                    "anima-gradient-accumulation-steps",
+                    "gradient_accumulation_steps",
+                    1,
+                  ),
+                ]),
+                h("div", { class: "anima-field-row" }, [
+                  textField("learning_rate", "anima-learning-rate", "learning_rate"),
+                  textField("optimizer_type", "anima-optimizer", "optimizer_type"),
+                  selectField("mixed_precision", "anima-mixed-precision", "mixed_precision", ["bf16", "fp16", "no"]),
+                ]),
+                checkboxField("gradient_checkpointing", "anima-gradient-checkpointing", "gradient_checkpointing"),
+              ]),
+              plan.modelTrainType === "anima-lora"
+                ? section("LoRA Adapter", [
+                    h("div", { class: "anima-field-row" }, [
+                      selectField("lora_type", "anima-lora-type", "lora_type", [
+                        "lora",
+                        "lokr",
+                        "tlora",
+                        "lora_fa",
+                        "vera",
+                        "loha",
+                      ]),
+                      textField("unet_lr", "anima-unet-lr", "unet_lr"),
+                      numberField("network_dim", "anima-network-dim", "network_dim", 1),
+                    ]),
+                    numberField("network_alpha", "anima-network-alpha", "network_alpha", 1),
+                  ])
+                : null,
+              section("Anima Parameters", [
+                h("div", { class: "anima-field-row" }, [
+                  selectField("attn_mode", "anima-attn-mode", "attn_mode", [
+                    "",
+                    "torch",
+                    "xformers",
+                    "sageattn",
+                    "flash",
+                  ]),
+                  selectField("timestep_sampling", "anima-timestep-sampling", "timestep_sampling", [
+                    "sigma",
+                    "uniform",
+                    "sigmoid",
+                    "shift",
+                    "flux_shift",
+                  ]),
+                  numberField("discrete_flow_shift", "anima-discrete-flow-shift", "discrete_flow_shift", 0, 0.001),
+                ]),
+              ]),
+              section("Cache", [
+                h("div", { class: "anima-toggle-grid" }, [
+                  checkboxField("cache_latents", "anima-cache-latents", "cache_latents"),
+                  checkboxField("cache_latents_to_disk", "anima-cache-latents-to-disk", "cache_latents_to_disk"),
+                  checkboxField(
+                    "cache_text_encoder_outputs",
+                    "anima-cache-text-encoder-outputs",
+                    "cache_text_encoder_outputs",
+                  ),
+                  checkboxField(
+                    "cache_text_encoder_outputs_to_disk",
+                    "anima-cache-text-encoder-outputs-to-disk",
+                    "cache_text_encoder_outputs_to_disk",
+                  ),
+                ]),
+              ]),
+              section("Preview", [
+                checkboxField("enable_preview", "anima-enable-preview", "enable_preview"),
+                textareaField("positive_prompts", "anima-positive-prompts", "positive_prompts"),
+                textareaField("negative_prompts", "anima-negative-prompts", "negative_prompts"),
+                textareaField("sample_prompts", "anima-sample-prompts", "sample_prompts"),
+                h("div", { class: "anima-field-row" }, [
+                  numberField("sample_width", "anima-sample-width", "sample_width", 64),
+                  numberField("sample_height", "anima-sample-height", "sample_height", 64),
+                  numberField("sample_every_n_epochs", "anima-sample-every-n-epochs", "sample_every_n_epochs", 1),
+                ]),
+                h("div", { class: "anima-field-row" }, [
+                  numberField("sample_cfg", "anima-sample-cfg", "sample_cfg", 1, 0.1),
+                  numberField("sample_seed", "anima-sample-seed", "sample_seed", 0),
+                  numberField("sample_steps", "anima-sample-steps", "sample_steps", 1),
+                ]),
+              ]),
             ]),
           ]),
-          section("Cache", [
-            h("div", { class: "anima-toggle-grid" }, [
-              checkboxField("cache_latents", "anima-cache-latents", "cache_latents"),
-              checkboxField("cache_latents_to_disk", "anima-cache-latents-to-disk", "cache_latents_to_disk"),
-              checkboxField(
-                "cache_text_encoder_outputs",
-                "anima-cache-text-encoder-outputs",
-                "cache_text_encoder_outputs",
+          h("aside", { class: "anima-preview-panel" }, [
+            h("div", { class: "anima-preview-card" }, [
+              h("h2", "Parameter Preview"),
+              h("pre", { id: "anima-preview-code", class: "anima-preview-code" }, previewToml()),
+            ]),
+            h("div", { class: "anima-preview-card" }, [
+              h("h2", "Run Controls"),
+              h("div", { class: "anima-actions" }, [
+                h("button", { type: "button", onClick: saveForm }, "Save Config"),
+                h("button", { type: "button", onClick: loadForm }, "Load Config"),
+                h("button", { type: "button", class: "primary", onClick: runTraining }, "Start Training"),
+              ]),
+              status.value ? h("p", { class: "anima-status" }, status.value) : null,
+            ]),
+            h("details", { class: "anima-preview-card" }, [
+              h("summary", "Migration Notes"),
+              h(
+                "ul",
+                plan.nextWork.map((item) => h("li", item)),
               ),
-              checkboxField(
-                "cache_text_encoder_outputs_to_disk",
-                "anima-cache-text-encoder-outputs-to-disk",
-                "cache_text_encoder_outputs_to_disk",
-              ),
+              h("dl", { class: "anima-contract" }, [
+                h("dt", "model_train_type"),
+                h("dd", plan.modelTrainType),
+                h("dt", "Backend entrypoint"),
+                h("dd", plan.backendEntrypoint),
+              ]),
             ]),
-          ]),
-          section("Preview", [
-            checkboxField("enable_preview", "anima-enable-preview", "enable_preview"),
-            textareaField("positive_prompts", "anima-positive-prompts", "positive_prompts"),
-            textareaField("negative_prompts", "anima-negative-prompts", "negative_prompts"),
-            textareaField("sample_prompts", "anima-sample-prompts", "sample_prompts"),
-            h("div", { class: "anima-field-row" }, [
-              numberField("sample_width", "anima-sample-width", "sample_width", 64),
-              numberField("sample_height", "anima-sample-height", "sample_height", 64),
-              numberField("sample_every_n_epochs", "anima-sample-every-n-epochs", "sample_every_n_epochs", 1),
-            ]),
-            h("div", { class: "anima-field-row" }, [
-              numberField("sample_cfg", "anima-sample-cfg", "sample_cfg", 1, 0.1),
-              numberField("sample_seed", "anima-sample-seed", "sample_seed", 0),
-              numberField("sample_steps", "anima-sample-steps", "sample_steps", 1),
-            ]),
-          ]),
-          h("div", { class: "anima-actions" }, [
-            h("button", { type: "button", onClick: saveForm }, "Save"),
-            h("button", { type: "button", onClick: loadForm }, "Load"),
-            h("button", { type: "button", class: "primary", onClick: runTraining }, "Start Training"),
-            status.value ? h("span", { class: "anima-status" }, status.value) : null,
           ]),
         ]),
       ]);
   },
 });
+
+function tomlValue(value: unknown): string {
+  if (typeof value === "boolean") {
+    return value ? "true" : "false";
+  }
+  if (typeof value === "number") {
+    return String(value);
+  }
+  return `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", "\\n")}"`;
+}
 
 function normalizePath(value: string): string {
   return value.replaceAll("\\", "/");
