@@ -76,6 +76,22 @@ def verify_source(root: Path) -> list[dict]:
     if "src/routes.json" not in alias_text or "frontend-source-dist" not in alias_text:
         raise RuntimeError("route alias script must derive output aliases from src/routes.json")
 
+    settings_source = (source / "src/settings.ts").read_text(encoding="utf-8")
+    required_settings_terms = [
+        "ui-configs",
+        "sd-trainer-ui-advanced-links",
+        "dataset_tagger_api_endpoint",
+        "dataset_tagger_api_key",
+        "dataset_tagger_api_model",
+        "dataset_tagger_api_prompt",
+        'type: "password"',
+        "showLegacyTagEditor",
+        "showTensorboard",
+    ]
+    for term in required_settings_terms:
+        if term not in settings_source:
+            raise RuntimeError(f"settings source missing contract term: {term}")
+
     return routes
 
 

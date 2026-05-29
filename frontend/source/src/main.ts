@@ -1,11 +1,31 @@
 import { createApp, defineComponent, h } from "vue";
 import { currentRoute, navGroups, routes } from "./routes";
+import { SettingsPage } from "./settings";
 import "./styles.css";
 
 const App = defineComponent({
   name: "SourceTrainerShell",
   setup() {
     const route = currentRoute();
+    const routeContent =
+      route.path === "/other/settings.html"
+        ? h(SettingsPage)
+        : h("main", { class: "content" }, [
+            h("p", { class: "eyebrow" }, "Source-owned frontend shell"),
+            h("h1", route.title),
+            h("p", { class: "summary" }, route.description),
+            h("section", { class: "compat-panel" }, [
+              h("h2", "Compatibility Contract"),
+              h("ul", [
+                h("li", "Public routes are declared in frontend/source/src/routes.json."),
+                h(
+                  "li",
+                  "The production output is static HTML/CSS/JS and can be served by FastAPI StaticFiles.",
+                ),
+                h("li", "Build tooling stays in frontend/source and is not required at portable runtime."),
+              ]),
+            ]),
+          ]);
     return () =>
       h("div", { class: "shell" }, [
         h("aside", { class: "sidebar", "aria-label": "Trainer navigation" }, [
@@ -31,19 +51,7 @@ const App = defineComponent({
             ]),
           ),
         ]),
-        h("main", { class: "content" }, [
-          h("p", { class: "eyebrow" }, "Source-owned frontend shell"),
-          h("h1", route.title),
-          h("p", { class: "summary" }, route.description),
-          h("section", { class: "compat-panel" }, [
-            h("h2", "Compatibility Contract"),
-            h("ul", [
-              h("li", "Public routes are declared in frontend/source/src/routes.json."),
-              h("li", "The production output is static HTML/CSS/JS and can be served by FastAPI StaticFiles."),
-              h("li", "Build tooling stays in frontend/source and is not required at portable runtime."),
-            ]),
-          ]),
-        ]),
+        routeContent,
       ]);
   },
 });
