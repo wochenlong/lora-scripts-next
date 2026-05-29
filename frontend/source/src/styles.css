@@ -161,6 +161,23 @@ h1 {
   font-size: 17px;
 }
 
+.anima-section {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  margin: 0;
+  padding: 14px;
+  border: 1px solid #e1e6ef;
+  border-radius: 8px;
+}
+
+.anima-section legend {
+  padding: 0 6px;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .anima-field,
 .anima-toggle {
   display: grid;
@@ -193,6 +210,12 @@ h1 {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 12px;
+}
+
+.anima-toggle-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 16px;
 }
 
 .anima-actions {
@@ -475,6 +498,10 @@ h1 {
   }
 
   .anima-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .anima-toggle-grid {
     grid-template-columns: 1fr;
   }
 

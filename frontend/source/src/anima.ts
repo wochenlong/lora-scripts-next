@@ -13,10 +13,16 @@ interface AnimaRoutePlan {
 
 interface AnimaForm {
   pretrained_model_name_or_path: string;
+  vae: string;
+  qwen3: string;
+  t5_tokenizer_path: string;
   train_data_dir: string;
   output_dir: string;
   output_name: string;
+  lora_type: "lora" | "lokr" | "tlora" | "lora_fa" | "vera" | "loha";
   max_train_epochs: number;
+  train_batch_size: number;
+  gradient_accumulation_steps: number;
   learning_rate: string;
   unet_lr: string;
   network_dim: number;
@@ -24,9 +30,64 @@ interface AnimaForm {
   resolution: string;
   mixed_precision: "bf16" | "fp16" | "no";
   optimizer_type: string;
+  attn_mode: "" | "torch" | "xformers" | "sageattn" | "flash";
+  timestep_sampling: "sigma" | "uniform" | "sigmoid" | "shift" | "flux_shift";
+  discrete_flow_shift: number;
+  gradient_checkpointing: boolean;
+  cache_latents: boolean;
+  cache_latents_to_disk: boolean;
+  cache_text_encoder_outputs: boolean;
+  cache_text_encoder_outputs_to_disk: boolean;
   enable_preview: boolean;
+  positive_prompts: string;
+  negative_prompts: string;
+  sample_width: number;
+  sample_height: number;
+  sample_cfg: number;
+  sample_seed: number;
+  sample_steps: number;
+  sample_every_n_epochs: number;
   sample_prompts: string;
+  caption_extension: string;
+  prefer_json_caption: boolean;
 }
+
+type TextKey =
+  | "pretrained_model_name_or_path"
+  | "vae"
+  | "qwen3"
+  | "t5_tokenizer_path"
+  | "train_data_dir"
+  | "output_dir"
+  | "output_name"
+  | "learning_rate"
+  | "unet_lr"
+  | "resolution"
+  | "optimizer_type"
+  | "caption_extension";
+
+type NumberKey =
+  | "max_train_epochs"
+  | "train_batch_size"
+  | "gradient_accumulation_steps"
+  | "network_dim"
+  | "network_alpha"
+  | "discrete_flow_shift"
+  | "sample_width"
+  | "sample_height"
+  | "sample_cfg"
+  | "sample_seed"
+  | "sample_steps"
+  | "sample_every_n_epochs";
+
+type BooleanKey =
+  | "gradient_checkpointing"
+  | "cache_latents"
+  | "cache_latents_to_disk"
+  | "cache_text_encoder_outputs"
+  | "cache_text_encoder_outputs_to_disk"
+  | "enable_preview"
+  | "prefer_json_caption";
 
 const ANIMA_STORAGE_KEY = "sd-trainer-source-anima-configs";
 
@@ -60,20 +121,46 @@ const ANIMA_ROUTES: Record<string, AnimaRoutePlan> = {
 };
 
 const animaDefaults: AnimaForm = {
-  pretrained_model_name_or_path: "",
+  pretrained_model_name_or_path: "./sd-models/anima/anima-base-v1.0.safetensors",
+  vae: "./sd-models/anima/qwen_image_vae.safetensors",
+  qwen3: "./sd-models/anima/qwen_3_06b_base.safetensors",
+  t5_tokenizer_path: "",
   train_data_dir: "",
   output_dir: "output",
   output_name: "anima",
+  lora_type: "lora",
   max_train_epochs: 10,
+  train_batch_size: 1,
+  gradient_accumulation_steps: 1,
   learning_rate: "1e-5",
   unet_lr: "1e-4",
   network_dim: 32,
   network_alpha: 16,
   resolution: "1024,1024",
   mixed_precision: "bf16",
-  optimizer_type: "adamw8bit",
+  optimizer_type: "AdamW8bit",
+  attn_mode: "",
+  timestep_sampling: "shift",
+  discrete_flow_shift: 3,
+  gradient_checkpointing: true,
+  cache_latents: true,
+  cache_latents_to_disk: true,
+  cache_text_encoder_outputs: true,
+  cache_text_encoder_outputs_to_disk: true,
   enable_preview: true,
+  positive_prompts:
+    "1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looking at viewer",
+  negative_prompts:
+    "nsfw, explicit, sexual content, worst quality, low quality, artist name, jpeg artifacts",
+  sample_width: 1024,
+  sample_height: 1024,
+  sample_cfg: 4.5,
+  sample_seed: 42,
+  sample_steps: 40,
+  sample_every_n_epochs: 2,
   sample_prompts: "",
+  caption_extension: ".txt",
+  prefer_json_caption: true,
 };
 
 export function isAnimaRoute(path: string): boolean {
@@ -94,17 +181,21 @@ export const AnimaRoutePage = defineComponent({
     const status = ref("");
 
     function payload() {
-      const base = {
+      const base: Partial<AnimaForm> & { model_train_type: AnimaRoutePlan["modelTrainType"] } = {
         ...animaForm,
         model_train_type: plan.modelTrainType,
-        train_data_dir: animaForm.train_data_dir.replaceAll("\\", "/"),
-        pretrained_model_name_or_path: animaForm.pretrained_model_name_or_path.replaceAll("\\", "/"),
-        output_dir: animaForm.output_dir.replaceAll("\\", "/"),
+        pretrained_model_name_or_path: normalizePath(animaForm.pretrained_model_name_or_path),
+        vae: normalizePath(animaForm.vae),
+        qwen3: normalizePath(animaForm.qwen3),
+        t5_tokenizer_path: normalizePath(animaForm.t5_tokenizer_path),
+        train_data_dir: normalizePath(animaForm.train_data_dir),
+        output_dir: normalizePath(animaForm.output_dir),
       };
       if (plan.modelTrainType === "anima-finetune") {
-        delete (base as Partial<AnimaForm>).unet_lr;
-        delete (base as Partial<AnimaForm>).network_dim;
-        delete (base as Partial<AnimaForm>).network_alpha;
+        delete base.lora_type;
+        delete base.unet_lr;
+        delete base.network_dim;
+        delete base.network_alpha;
       }
       return base;
     }
@@ -132,7 +223,7 @@ export const AnimaRoutePage = defineComponent({
       status.value = result.message || result.status || "Submitted";
     }
 
-    const textField = (key: keyof Pick<AnimaForm, "pretrained_model_name_or_path" | "train_data_dir" | "output_dir" | "output_name" | "learning_rate" | "unet_lr" | "resolution" | "optimizer_type">, id: string, label: string, placeholder = "") =>
+    const textField = (key: TextKey, id: string, label: string, placeholder = "") =>
       h("label", { class: "anima-field" }, [
         h("span", label),
         h("input", {
@@ -145,19 +236,70 @@ export const AnimaRoutePage = defineComponent({
         }),
       ]);
 
-    const numberField = (key: keyof Pick<AnimaForm, "max_train_epochs" | "network_dim" | "network_alpha">, id: string, label: string) =>
+    const numberField = (key: NumberKey, id: string, label: string, min = 0, step: string | number = 1) =>
       h("label", { class: "anima-field" }, [
         h("span", label),
         h("input", {
           id,
           type: "number",
-          min: 1,
+          min,
+          step,
           value: animaForm[key],
           onInput: (event: Event) => {
             animaForm[key] = Number((event.target as HTMLInputElement).value);
           },
         }),
       ]);
+
+    const checkboxField = (key: BooleanKey, id: string, label: string) =>
+      h("label", { class: "anima-toggle" }, [
+        h("input", {
+          id,
+          type: "checkbox",
+          checked: animaForm[key],
+          onChange: (event: Event) => {
+            animaForm[key] = (event.target as HTMLInputElement).checked;
+          },
+        }),
+        h("span", label),
+      ]);
+
+    const textareaField = (key: "positive_prompts" | "negative_prompts" | "sample_prompts", id: string, label: string) =>
+      h("label", { class: "anima-field" }, [
+        h("span", label),
+        h("textarea", {
+          id,
+          value: animaForm[key],
+          rows: 4,
+          onInput: (event: Event) => {
+            animaForm[key] = (event.target as HTMLTextAreaElement).value;
+          },
+        }),
+      ]);
+
+    const selectField = <K extends "mixed_precision" | "attn_mode" | "timestep_sampling" | "lora_type">(
+      key: K,
+      id: string,
+      label: string,
+      options: AnimaForm[K][],
+    ) =>
+      h("label", { class: "anima-field" }, [
+        h("span", label),
+        h(
+          "select",
+          {
+            id,
+            value: animaForm[key],
+            onChange: (event: Event) => {
+              animaForm[key] = (event.target as HTMLSelectElement).value as AnimaForm[K];
+            },
+          },
+          options.map((value) => h("option", { value }, value || "auto")),
+        ),
+      ]);
+
+    const section = (title: string, children: ReturnType<typeof h>[]) =>
+      h("fieldset", { class: "anima-section" }, [h("legend", title), ...children]);
 
     return () =>
       h("main", { class: "content anima-page" }, [
@@ -188,61 +330,106 @@ export const AnimaRoutePage = defineComponent({
         ]),
         h("form", { id: "anima-train-form", class: "anima-form" }, [
           h("h2", "Training Config"),
-          textField(
-            "pretrained_model_name_or_path",
-            "anima-pretrained-model",
-            "pretrained_model_name_or_path",
-            "D:/models/anima.safetensors",
-          ),
-          textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima"),
-          textField("output_dir", "anima-output-dir", "output_dir"),
-          textField("output_name", "anima-output-name", "output_name"),
-          numberField("max_train_epochs", "anima-epochs", "max_train_epochs"),
-          textField("learning_rate", "anima-learning-rate", "learning_rate"),
+          section("Model Assets", [
+            textField(
+              "pretrained_model_name_or_path",
+              "anima-pretrained-model",
+              "pretrained_model_name_or_path",
+              "D:/models/anima-base-v1.0.safetensors",
+            ),
+            textField("vae", "anima-vae", "vae", "D:/models/qwen_image_vae.safetensors"),
+            textField("qwen3", "anima-qwen3", "qwen3", "D:/models/qwen_3_06b_base.safetensors"),
+            textField("t5_tokenizer_path", "anima-t5-tokenizer-path", "t5_tokenizer_path"),
+          ]),
+          section("Dataset And Output", [
+            textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima"),
+            textField("output_dir", "anima-output-dir", "output_dir"),
+            textField("output_name", "anima-output-name", "output_name"),
+            h("div", { class: "anima-field-row" }, [
+              textField("resolution", "anima-resolution", "resolution"),
+              textField("caption_extension", "anima-caption-extension", "caption_extension"),
+              checkboxField("prefer_json_caption", "anima-prefer-json-caption", "prefer_json_caption"),
+            ]),
+          ]),
+          section("Training", [
+            h("div", { class: "anima-field-row" }, [
+              numberField("max_train_epochs", "anima-epochs", "max_train_epochs", 1),
+              numberField("train_batch_size", "anima-train-batch-size", "train_batch_size", 1),
+              numberField(
+                "gradient_accumulation_steps",
+                "anima-gradient-accumulation-steps",
+                "gradient_accumulation_steps",
+                1,
+              ),
+            ]),
+            h("div", { class: "anima-field-row" }, [
+              textField("learning_rate", "anima-learning-rate", "learning_rate"),
+              textField("optimizer_type", "anima-optimizer", "optimizer_type"),
+              selectField("mixed_precision", "anima-mixed-precision", "mixed_precision", ["bf16", "fp16", "no"]),
+            ]),
+            checkboxField("gradient_checkpointing", "anima-gradient-checkpointing", "gradient_checkpointing"),
+          ]),
           plan.modelTrainType === "anima-lora"
-            ? h("div", { class: "anima-field-row" }, [
-                textField("unet_lr", "anima-unet-lr", "unet_lr"),
-                numberField("network_dim", "anima-network-dim", "network_dim"),
-                numberField("network_alpha", "anima-network-alpha", "network_alpha"),
+            ? section("LoRA Adapter", [
+                h("div", { class: "anima-field-row" }, [
+                  selectField("lora_type", "anima-lora-type", "lora_type", [
+                    "lora",
+                    "lokr",
+                    "tlora",
+                    "lora_fa",
+                    "vera",
+                    "loha",
+                  ]),
+                  textField("unet_lr", "anima-unet-lr", "unet_lr"),
+                  numberField("network_dim", "anima-network-dim", "network_dim", 1),
+                ]),
+                numberField("network_alpha", "anima-network-alpha", "network_alpha", 1),
               ])
             : null,
-          textField("resolution", "anima-resolution", "resolution"),
-          textField("optimizer_type", "anima-optimizer", "optimizer_type"),
-          h("label", { class: "anima-field" }, [
-            h("span", "mixed_precision"),
-            h(
-              "select",
-              {
-                id: "anima-mixed-precision",
-                value: animaForm.mixed_precision,
-                onChange: (event: Event) => {
-                  animaForm.mixed_precision = (event.target as HTMLSelectElement).value as AnimaForm["mixed_precision"];
-                },
-              },
-              ["bf16", "fp16", "no"].map((value) => h("option", { value }, value)),
-            ),
+          section("Anima Parameters", [
+            h("div", { class: "anima-field-row" }, [
+              selectField("attn_mode", "anima-attn-mode", "attn_mode", ["", "torch", "xformers", "sageattn", "flash"]),
+              selectField("timestep_sampling", "anima-timestep-sampling", "timestep_sampling", [
+                "sigma",
+                "uniform",
+                "sigmoid",
+                "shift",
+                "flux_shift",
+              ]),
+              numberField("discrete_flow_shift", "anima-discrete-flow-shift", "discrete_flow_shift", 0, 0.001),
+            ]),
           ]),
-          h("label", { class: "anima-toggle" }, [
-            h("input", {
-              id: "anima-enable-preview",
-              type: "checkbox",
-              checked: animaForm.enable_preview,
-              onChange: (event: Event) => {
-                animaForm.enable_preview = (event.target as HTMLInputElement).checked;
-              },
-            }),
-            h("span", "enable_preview"),
+          section("Cache", [
+            h("div", { class: "anima-toggle-grid" }, [
+              checkboxField("cache_latents", "anima-cache-latents", "cache_latents"),
+              checkboxField("cache_latents_to_disk", "anima-cache-latents-to-disk", "cache_latents_to_disk"),
+              checkboxField(
+                "cache_text_encoder_outputs",
+                "anima-cache-text-encoder-outputs",
+                "cache_text_encoder_outputs",
+              ),
+              checkboxField(
+                "cache_text_encoder_outputs_to_disk",
+                "anima-cache-text-encoder-outputs-to-disk",
+                "cache_text_encoder_outputs_to_disk",
+              ),
+            ]),
           ]),
-          h("label", { class: "anima-field" }, [
-            h("span", "sample_prompts"),
-            h("textarea", {
-              id: "anima-sample-prompts",
-              value: animaForm.sample_prompts,
-              rows: 4,
-              onInput: (event: Event) => {
-                animaForm.sample_prompts = (event.target as HTMLTextAreaElement).value;
-              },
-            }),
+          section("Preview", [
+            checkboxField("enable_preview", "anima-enable-preview", "enable_preview"),
+            textareaField("positive_prompts", "anima-positive-prompts", "positive_prompts"),
+            textareaField("negative_prompts", "anima-negative-prompts", "negative_prompts"),
+            textareaField("sample_prompts", "anima-sample-prompts", "sample_prompts"),
+            h("div", { class: "anima-field-row" }, [
+              numberField("sample_width", "anima-sample-width", "sample_width", 64),
+              numberField("sample_height", "anima-sample-height", "sample_height", 64),
+              numberField("sample_every_n_epochs", "anima-sample-every-n-epochs", "sample_every_n_epochs", 1),
+            ]),
+            h("div", { class: "anima-field-row" }, [
+              numberField("sample_cfg", "anima-sample-cfg", "sample_cfg", 1, 0.1),
+              numberField("sample_seed", "anima-sample-seed", "sample_seed", 0),
+              numberField("sample_steps", "anima-sample-steps", "sample_steps", 1),
+            ]),
           ]),
           h("div", { class: "anima-actions" }, [
             h("button", { type: "button", onClick: saveForm }, "Save"),
@@ -254,6 +441,10 @@ export const AnimaRoutePage = defineComponent({
       ]);
   },
 });
+
+function normalizePath(value: string): string {
+  return value.replaceAll("\\", "/");
+}
 
 function readStoredForms(): Record<string, Partial<AnimaForm>> {
   try {
