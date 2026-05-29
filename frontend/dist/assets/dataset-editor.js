@@ -93,6 +93,20 @@
     cleanEscape: document.getElementById("clean-escape"),
     cleanSort: document.getElementById("clean-sort"),
     cleanup: document.getElementById("apply-cleanup"),
+    taggerProvider: document.getElementById("tagger-provider"),
+    taggerCaptionType: document.getElementById("tagger-caption-type"),
+    taggerConflict: document.getElementById("tagger-conflict"),
+    taggerModel: document.getElementById("tagger-model"),
+    taggerThreshold: document.getElementById("tagger-threshold"),
+    taggerCharacterThreshold: document.getElementById("tagger-character-threshold"),
+    taggerAdditional: document.getElementById("tagger-additional"),
+    taggerExclude: document.getElementById("tagger-exclude"),
+    taggerApiHint: document.getElementById("tagger-api-hint"),
+    taggerRating: document.getElementById("tagger-rating"),
+    taggerModelTag: document.getElementById("tagger-model-tag"),
+    taggerReplaceUnderscore: document.getElementById("tagger-replace-underscore"),
+    taggerEscape: document.getElementById("tagger-escape"),
+    taggerRun: document.getElementById("run-tagger"),
   };
 
   function loadQuickTags() {
@@ -109,6 +123,14 @@
     if (!stored || stored === "auto") return DEFAULT_GALLERY_PAGE_SIZE;
     const value = Number(stored);
     return [12, 15, 20, 24, 30, 48].includes(value) ? value : DEFAULT_GALLERY_PAGE_SIZE;
+  }
+
+  function loadUiConfigs() {
+    try {
+      return JSON.parse(localStorage.getItem("ui-configs") || "{}") || {};
+    } catch (_err) {
+      return {};
+    }
   }
 
   function effectiveGalleryPageSize() {
@@ -417,6 +439,7 @@
     el.prev.disabled = state.selected <= 0;
     el.next.disabled = state.selected < 0 || state.selected >= state.filtered.length - 1;
     el.batch.disabled = state.filtered.length === 0;
+    if (el.taggerRun) el.taggerRun.disabled = state.filtered.length === 0;
 
     if (!item) {
       el.preview.innerHTML = "<span>未选择图片</span>";
@@ -723,6 +746,68 @@
     }
   }
 
+  function updateTaggerProvider() {
+    const apiMode = el.taggerProvider.value === "api";
+    el.taggerApiHint.hidden = !apiMode;
+    el.taggerCaptionType.value = apiMode ? "caption" : "tags";
+  }
+
+  async function applyTagger() {
+    const targets = selectedBatchItems();
+    if (!targets.length) return;
+    const provider = el.taggerProvider.value;
+    const uiConfigs = loadUiConfigs();
+    const scope = state.selectedPaths.size ? "已选中" : "当前筛选结果中";
+    const providerLabel = provider === "api" ? "API 自然语言" : "本地 TAG";
+    const ok = window.confirm(`将使用${providerLabel}为${scope}的 ${targets.length} 张图片打标，是否继续？`);
+    if (!ok) return;
+    if (
+      provider === "api" &&
+      (!String(uiConfigs.dataset_tagger_api_key || "").trim() ||
+        !String(uiConfigs.dataset_tagger_api_model || "").trim())
+    ) {
+      setStatus("API 打标需要先在 UI 设置里填写 API Key 和模型。", true);
+      return;
+    }
+    el.taggerRun.disabled = true;
+    setStatus(`正在打标 ${targets.length} 张图片...`);
+    try {
+      const data = await api("/api/dataset-editor/tag", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          root: state.root,
+          images: targets.map((item) => item.relative_path),
+          provider,
+          caption_type: el.taggerCaptionType.value,
+          on_conflict: el.taggerConflict.value,
+          interrogator_model: el.taggerModel.value,
+          threshold: Number(el.taggerThreshold.value || 0.35),
+          character_threshold: Number(el.taggerCharacterThreshold.value || 0.6),
+          add_rating_tag: el.taggerRating.checked,
+          add_model_tag: el.taggerModelTag.checked,
+          additional_tags: el.taggerAdditional.value,
+          exclude_tags: el.taggerExclude.value,
+          replace_underscore: el.taggerReplaceUnderscore.checked,
+          escape_tag: el.taggerEscape.checked,
+          api_endpoint: uiConfigs.dataset_tagger_api_endpoint || "https://api.openai.com/v1",
+          api_key: uiConfigs.dataset_tagger_api_key || "",
+          api_model: uiConfigs.dataset_tagger_api_model || "",
+          api_prompt: uiConfigs.dataset_tagger_api_prompt || undefined,
+        }),
+      });
+      applyChangedItems(data.items || []);
+      state.dirty = false;
+      setStatus(`打标完成，修改 ${data.changed || 0} 张，跳过 ${data.skipped || 0} 张。`);
+      await refreshHistory();
+      applyFilters();
+    } catch (err) {
+      setStatus(err.message, true);
+    } finally {
+      el.taggerRun.disabled = state.filtered.length === 0;
+    }
+  }
+
   function appendTagToCaption(tag) {
     const item = currentItem();
     if (!item) return;
@@ -799,6 +884,8 @@
   el.next.addEventListener("click", () => selectIndex(state.selected + 1));
   el.batch.addEventListener("click", applyBatch);
   el.cleanup.addEventListener("click", applyCleanup);
+  el.taggerProvider.addEventListener("change", updateTaggerProvider);
+  el.taggerRun.addEventListener("click", applyTagger);
   el.quickTagAdd.addEventListener("click", addQuickTag);
   el.quickTagInput.addEventListener("keydown", (event) => {
     if (event.key === "Enter") {
@@ -821,6 +908,7 @@
   });
 
   renderCategories();
+  updateTaggerProvider();
   updateAutoGalleryPageSize();
   render();
 })();

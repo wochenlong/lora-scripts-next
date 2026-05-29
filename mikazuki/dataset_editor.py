@@ -5,11 +5,21 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlencode
 
+import base64
+import copy
+import mimetypes
+import time
+
+import httpx
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
+from PIL import Image
 from pydantic import BaseModel, Field
 
 from mikazuki.app.models import APIResponseSuccess
+from mikazuki.tagger.interrogator import available_interrogators
+from mikazuki.tagger.interrogators.base import Interrogator
+from mikazuki.tagger.model_fetch import ensure_interrogator_assets, use_download_endpoint
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
@@ -58,6 +68,31 @@ class BatchEditRequest(BaseModel):
     clean: bool = False
     underscore_to_space: bool = False
     strip_escape_chars: bool = False
+
+
+class DatasetTagRequest(BaseModel):
+    root: str
+    images: list[str]
+    provider: str = Field(default="local", pattern="^(local|api)$")
+    caption_type: str = Field(default="tags", pattern="^(tags|caption)$")
+    on_conflict: str = Field(default="copy", pattern="^(ignore|copy|append|prepend)$")
+    interrogator_model: str = "wd14-convnextv2-v2"
+    threshold: float = Field(default=0.35, ge=0, le=1)
+    character_threshold: float = Field(default=0.6, ge=0, le=1)
+    add_rating_tag: bool = False
+    add_model_tag: bool = False
+    additional_tags: str = ""
+    exclude_tags: str = ""
+    replace_underscore: bool = True
+    escape_tag: bool = True
+    download_endpoint: str = ""
+    api_endpoint: str = "https://api.openai.com/v1"
+    api_key: str = ""
+    api_model: str = ""
+    api_prompt: str = (
+        "Describe this image for image model training. Return a concise caption only, "
+        "without markdown or explanations."
+    )
 
 
 class UndoRequest(BaseModel):
@@ -109,6 +144,16 @@ def normalize_caption_for_cleanup(caption: str, underscore_to_space: bool = Fals
 
 def format_tags(tags: list[str]) -> str:
     return ", ".join(tags)
+
+
+def merge_caption(existing: str, generated: str, on_conflict: str) -> str | None:
+    if existing and on_conflict == "ignore":
+        return None
+    if not existing or on_conflict == "copy":
+        return generated.strip()
+    if on_conflict == "prepend":
+        return format_tags(parse_tags(f"{generated}, {existing}"))
+    return format_tags(parse_tags(f"{existing}, {generated}"))
 
 
 def dataset_root(path: str) -> Path:
@@ -210,6 +255,99 @@ def write_caption(image_path: Path, caption: str) -> str:
     normalized = caption.strip()
     caption_path_for(image_path).write_text(normalized, encoding="utf-8")
     return normalized
+
+
+def image_to_data_url(image_path: Path) -> str:
+    mime_type, _ = mimetypes.guess_type(str(image_path))
+    if not mime_type:
+        mime_type = "image/png"
+    encoded = base64.b64encode(image_path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def build_chat_completions_url(endpoint: str) -> str:
+    endpoint = endpoint.rstrip("/")
+    if endpoint.endswith("/chat/completions"):
+        return endpoint
+    return f"{endpoint}/chat/completions"
+
+
+def parse_api_caption(data: dict) -> str:
+    try:
+        content = data["choices"][0]["message"]["content"]
+    except (KeyError, IndexError, TypeError) as exc:
+        raise ValueError("API response does not contain choices[0].message.content") from exc
+    if isinstance(content, str):
+        caption = content.strip()
+    elif isinstance(content, list):
+        caption = " ".join(
+            str(item.get("text", "")).strip()
+            for item in content
+            if isinstance(item, dict) and item.get("type") in {None, "text", "output_text"}
+        ).strip()
+    else:
+        caption = ""
+    if not caption:
+        raise ValueError("API caption is empty")
+    return caption
+
+
+def generate_api_caption(image_path: Path, req: DatasetTagRequest) -> str:
+    if not req.api_key.strip():
+        raise HTTPException(status_code=400, detail="api_key is required for API tagging")
+    if not req.api_model.strip():
+        raise HTTPException(status_code=400, detail="api_model is required for API tagging")
+    payload = {
+        "model": req.api_model,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": req.api_prompt},
+                    {"type": "image_url", "image_url": {"url": image_to_data_url(image_path)}},
+                ],
+            }
+        ],
+    }
+    headers = {"Authorization": f"Bearer {req.api_key}"}
+    last_error: Exception | None = None
+    for attempt in range(3):
+        try:
+            with httpx.Client(timeout=60) as client:
+                response = client.post(build_chat_completions_url(req.api_endpoint), headers=headers, json=payload)
+            response.raise_for_status()
+            return parse_api_caption(response.json())
+        except Exception as exc:  # noqa: BLE001 - surface provider failures to UI
+            last_error = exc
+            if attempt >= 2:
+                break
+            time.sleep(min(2**attempt, 5))
+    raise RuntimeError(f"API tagging failed for {image_path.name}: {last_error}") from last_error
+
+
+def generate_local_tags(image_path: Path, req: DatasetTagRequest) -> str:
+    if req.interrogator_model not in available_interrogators:
+        raise HTTPException(status_code=400, detail=f"unknown tagger model: {req.interrogator_model}")
+    interrogator = available_interrogators[req.interrogator_model]
+    with use_download_endpoint(req.download_endpoint):
+        ensure_interrogator_assets(req.interrogator_model, interrogator)
+        with Image.open(image_path) as image:
+            tags = interrogator.interrogate(image)
+    processed = Interrogator.postprocess_tags(
+        copy.deepcopy(tags),
+        req.threshold,
+        req.character_threshold,
+        req.add_rating_tag,
+        req.add_model_tag,
+        parse_tags(req.additional_tags),
+        parse_tags(req.exclude_tags),
+        False,
+        False,
+        req.replace_underscore,
+        [],
+        req.escape_tag,
+    )
+    return format_tags(list(processed.keys()))
 
 
 def scan_dataset(root: Path) -> dict:
@@ -336,6 +474,57 @@ async def batch_edit(req: BatchEditRequest):
 
     remember_edit(root, "批量编辑 caption", before_snapshots, after_snapshots)
     return APIResponseSuccess(data={"changed": changed, "items": results})
+
+
+@router.post("/dataset-editor/tag")
+async def tag_images(req: DatasetTagRequest):
+    root = dataset_root(req.root)
+    changed = 0
+    skipped = 0
+    failed = 0
+    results = []
+    before_snapshots = []
+    after_snapshots = []
+
+    for rel in req.images:
+        image_path = resolve_image(root, rel)
+        if not image_path.is_file():
+            continue
+        existing = read_caption(image_path)
+        if existing and req.on_conflict == "ignore":
+            skipped += 1
+            results.append(snapshot_to_item(capture_caption(root, image_path)))
+            continue
+        try:
+            generated = (
+                generate_api_caption(image_path, req)
+                if req.provider == "api"
+                else generate_local_tags(image_path, req)
+            )
+            generated = format_tags(parse_tags(f"{generated}, {req.additional_tags}"))
+            generated = format_tags([tag for tag in parse_tags(generated) if tag not in set(parse_tags(req.exclude_tags))])
+            next_caption = merge_caption(existing, generated, req.on_conflict)
+            if next_caption is None:
+                skipped += 1
+                continue
+            if next_caption != existing:
+                before_snapshots.append(capture_caption(root, image_path))
+                write_caption(image_path, next_caption)
+                after_snapshots.append(capture_caption(root, image_path))
+                changed += 1
+            results.append(snapshot_to_item(capture_caption(root, image_path)))
+        except Exception:
+            failed += 1
+            raise
+
+    label_provider = "API " if req.provider == "api" else "本地"
+    label_kind = "自然语言" if req.caption_type == "caption" else "标签"
+    remember_edit(root, f"{label_provider}{label_kind}打标", before_snapshots, after_snapshots)
+    if req.provider == "local" and req.interrogator_model in available_interrogators:
+        available_interrogators[req.interrogator_model].unload()
+    return APIResponseSuccess(
+        data={"changed": changed, "skipped": skipped, "failed": failed, "items": results}
+    )
 
 
 @router.post("/dataset-editor/undo")

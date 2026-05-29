@@ -11,6 +11,7 @@ title SD-Trainer
 set "PORTABLE_ROOT=%~dp0..\..\..\"
 set "BASE_DIR=%PORTABLE_ROOT%"
 set "HF_HOME=%PORTABLE_ROOT%huggingface"
+set "MIKAZUKI_TAGGER_MODELS_DIR=%PORTABLE_ROOT%tagger-models"
 if not defined HF_ENDPOINT set "HF_ENDPOINT=https://hf-mirror.com"
 set "PYTHONUTF8=1"
 set "PYTHON_EXE=%PORTABLE_ROOT%python_embeded\python.exe"
@@ -61,7 +62,7 @@ if errorlevel 1 goto :no_project
 
 if exist "scripts\prefetch_default_tagger.py" (
     echo [tagger] Ensuring default WD tagger cache >> "%LOG_FILE%"
-    "%PYTHON_EXE%" -s scripts\prefetch_default_tagger.py --if-missing >> "%LOG_FILE%" 2>&1
+    "%PYTHON_EXE%" -s scripts\prefetch_default_tagger.py --if-missing --tagger-models-dir "%MIKAZUKI_TAGGER_MODELS_DIR%" >> "%LOG_FILE%" 2>&1
 )
 
 echo [launch] Starting gui.py >> "%LOG_FILE%"

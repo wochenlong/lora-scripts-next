@@ -1,3 +1,5 @@
+﻿import json
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -289,18 +291,114 @@ def test_dataset_editor_html_is_served_from_main_webui():
     assert "<details" not in response.text
 
 
-def test_legacy_tageditor_points_to_native_editor():
+def test_legacy_tageditor_stays_legacy_only():
     client = TestClient(app)
     response = client.get("/tageditor.html")
 
     assert response.status_code == 200
+    assert "tageditor.html.66da263e.js" in response.text
+    assert "dataset-editor-entry.js" not in response.text
+    assert 'name="sd-dataset-editor-script"' not in response.text
+
+
+def test_native_tageditor_embeds_native_editor_in_trainer_shell():
+    client = TestClient(app)
+    response = client.get("/native-tageditor.html")
+
+    assert response.status_code == 200
     assert "dataset-editor-entry.js" in response.text
-    assert "dataset-editor.js" in response.text
     assert "dataset-editor.css" in response.text
     assert 'name="sd-dataset-editor-script"' in response.text
+    assert 'href="/tageditor.md"' in response.text
+    assert 'href="/native-tageditor.html"' in response.text
+    assert "经典标签编辑" in response.text
+    assert "原生标签编辑" in response.text
 
 
-def test_tageditor_embeds_native_editor_in_trainer_shell():
+def test_trainer_sidebar_exposes_legacy_and_native_tag_editors():
+    index = (ROOT / "frontend" / "dist" / "index.html").read_text(encoding="utf-8")
+    tageditor = (ROOT / "frontend" / "dist" / "tageditor.html").read_text(encoding="utf-8")
+    native_tageditor = (ROOT / "frontend" / "dist" / "native-tageditor.html").read_text(
+        encoding="utf-8"
+    )
+    nav = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
+        encoding="utf-8"
+    )
+    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'href="/tageditor.md"' in index
+    assert 'href="/native-tageditor.html"' in index
+    assert 'href="/tageditor.md"' in tageditor
+    assert 'href="/native-tageditor.html"' in tageditor
+    assert 'href="/tageditor.md"' in native_tageditor
+    assert 'href="/native-tageditor.html"' in native_tageditor
+    assert "经典标签编辑" in index
+    assert "原生标签编辑" in index
+    assert "经典标签编辑" in tageditor
+    assert "原生标签编辑" in tageditor
+    assert "经典标签编辑" in native_tageditor
+    assert "原生标签编辑" in native_tageditor
+    assert '"/native-tageditor.html"' in app_bundle
+    theme = json.loads(
+        re.search(r"const WE=JSON\.parse\(`(?P<json>.*?)`\),x0=", app_bundle).group("json")
+    )
+    sidebar_text = json.dumps(theme["sidebar"], ensure_ascii=False)
+    assert "经典标签编辑" in sidebar_text
+    assert "原生标签编辑" in sidebar_text
+    assert '经典标签编辑: "Legacy Tag Editor"' in nav
+    assert '原生标签编辑: "Native Tag Editor"' in nav
+    assert 'a[href="/dataset-editor.html"]' not in nav
+    assert 'window.location.assign("/dataset-editor.html")' not in nav
+
+
+def test_vuepress_theme_sidebar_json_stays_parseable():
+    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
+        encoding="utf-8"
+    )
+    match = re.search(r"const WE=JSON\.parse\(`(?P<json>.*?)`\),x0=", app_bundle)
+
+    assert match is not None
+    theme = json.loads(match.group("json"))
+    sidebar_text = json.dumps(theme["sidebar"], ensure_ascii=False)
+    assert "\u8bad\u7ec3" in sidebar_text
+    assert "\u5de5\u5177\u4e0e\u8c03\u8bd5" in sidebar_text
+    assert "\u6570\u636e\u96c6\u6253\u6807" in sidebar_text
+    assert "经典标签编辑" in sidebar_text
+    assert "原生标签编辑" in sidebar_text
+    assert "LoRA \u811a\u672c\u5de5\u5177" in sidebar_text
+    assert "\u5e2e\u52a9" in sidebar_text
+    assert "\u5176\u4ed6" in sidebar_text
+    assert "/native-tageditor.html" in sidebar_text
+
+
+def test_nav_i18n_defaults_to_chinese_and_expands_training_group():
+    nav = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'return false;' in nav
+    assert "ensureStableSidebarState" in nav
+    assert "训练" in nav
+    assert 'ul.style.display = ""' in nav
+    assert 'li.dataset.sdForceExpanded = "1"' in nav
+
+
+def test_patched_frontend_core_assets_are_not_immutable_cached():
+    client = TestClient(app)
+
+    for path in (
+        "/assets/sd-nav-i18n.js",
+        "/assets/app.547295de.js",
+        "/assets/style.874872ce.css",
+    ):
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-cache, must-revalidate"
+
+
+def test_embedded_native_editor_assets_keep_trainer_shell_contract():
     script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js").read_text(
         encoding="utf-8"
     )
@@ -317,6 +415,8 @@ def test_tageditor_embeds_native_editor_in_trainer_shell():
     assert "grid-template-rows: 1fr" in css
     assert ".de-shell-embedded .de-workspace" in css
     assert "height: 100%" in css
+    assert "startAfterShellSettles" in script
+    assert "window.setTimeout(scheduleMount, 500)" in script
     assert "grid-template-columns: 320px minmax(520px, 1fr) 380px" in css
     assert ".de-gallery-empty" in css
     assert "@media (max-width: 1500px)" in css
@@ -448,6 +548,42 @@ def test_embedded_dataset_editor_compacts_toolbar_on_narrow_viewports():
     assert "flex-wrap: wrap" in css
 
 
+def test_embedded_dataset_editor_uses_native_workbench_visual_system():
+    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert ".de-shell-embedded .de-gallery-wrap" in css
+    assert "linear-gradient(180deg, var(--de-surface) 0%, var(--de-surface-muted) 100%)" in css
+    assert "min-height: calc(100vh - 26px)" in css
+    assert ".de-shell-embedded .de-gallery-empty::before" in css
+    assert "grid-column: 1 / -1" in css
+    assert ".de-shell-embedded .de-gallery:has(.de-gallery-empty)" in css
+    assert "align-content: center" in css
+    assert "content: \"\";" in css
+    assert ".de-shell-embedded .de-editor textarea" in css
+    assert "font-family: ui-monospace" in css
+    assert ".de-shell-embedded .de-editor .de-primary" in css
+    assert ".de-shell-embedded .de-change-list" in css
+    assert "--de-card-shadow" in css
+    assert ".de-shell-embedded .de-gallery-empty::after" in css
+    assert ".de-shell-embedded .de-preview span::before" in css
+    assert ".de-shell-embedded .de-panel h2::before" in css
+
+
+def test_embedded_dataset_editor_keeps_side_panels_content_sized():
+    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert ".de-shell-embedded .de-workspace" in css
+    assert "align-items: start" in css
+    assert ".de-shell-embedded .de-filter" in css
+    assert ".de-shell-embedded .de-editor" in css
+    assert "align-self: start" in css
+    assert "max-height: calc(100vh - 26px)" in css
+
+
 def test_dataset_editor_dataset_picker_is_prominent():
     html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
     css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
@@ -489,3 +625,132 @@ def test_dataset_editor_left_sidebar_owns_dataset_scope_and_tagger():
     assert "tagger: document.getElementById" in script
     assert ".de-scope-card" in css
     assert "grid-template-columns: repeat(5, 1fr)" in css
+
+
+def test_dataset_editor_tagger_panel_exposes_local_and_api_caption_controls():
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js").read_text(
+        encoding="utf-8"
+    )
+    entry = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js").read_text(
+        encoding="utf-8"
+    )
+    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'id="tagger-provider"' in html
+    assert 'id="tagger-caption-type"' in html
+    assert 'id="tagger-conflict"' in html
+    assert 'id="tagger-model"' in html
+    assert 'class="de-tagger-card de-tagger-card--primary"' in html
+    assert 'class="de-tagger-row de-tagger-row--split"' in html
+    assert 'class="de-tagger-model-card"' in html
+    assert 'class="de-tagger-flags"' in html
+    assert 'id="tagger-api-endpoint"' not in html
+    assert 'id="tagger-api-key"' not in html
+    assert 'id="tagger-api-model"' not in html
+    assert 'id="tagger-api-prompt"' not in html
+    assert 'id="run-tagger"' in html
+    assert 'id="tagger-provider"' in entry
+    assert 'class="de-tagger-card de-tagger-card--primary"' in entry
+    assert 'class="de-tagger-model-card"' in entry
+    assert 'id="tagger-api-endpoint"' not in entry
+    assert 'id="tagger-api-key"' not in entry
+    assert 'id="tagger-api-model"' not in entry
+    assert 'id="tagger-api-prompt"' not in entry
+    assert 'id="run-tagger"' in entry
+    assert "/api/dataset-editor/tag" in script
+    assert "applyTagger" in script
+    assert "taggerProvider" in script
+    assert "tagger-caption-type" in script
+    assert "loadUiConfigs" in script
+    assert "dataset_tagger_api_endpoint" in script
+    assert "dataset_tagger_api_key" in script
+    assert "dataset_tagger_api_model" in script
+    assert "dataset_tagger_api_prompt" in script
+    assert ".de-tagger-grid" in css
+    assert ".de-tagger-card--primary" in css
+    assert ".de-tagger-row--split" in css
+    assert ".de-tagger-model-card" in css
+    assert ".de-tagger-flags" in css
+
+
+def test_ui_settings_exposes_dataset_tagger_api_config():
+    settings = (ROOT / "frontend" / "dist" / "assets" / "settings.html.06993f96.js").read_text(
+        encoding="utf-8"
+    )
+    app_js = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(encoding="utf-8")
+    settings_html = (ROOT / "frontend" / "dist" / "other" / "settings.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert "dataset_tagger_api_endpoint" in settings
+    assert "dataset_tagger_api_key" in settings
+    assert "dataset_tagger_api_model" in settings
+    assert "dataset_tagger_api_prompt" in settings
+    assert "./settings.html.06993f96.js?v=dataset-tagger-api" in app_js
+    assert "/assets/app.547295de.js?v=dataset-tagger-api" in settings_html
+
+
+def test_dataset_editor_tag_endpoint_writes_local_tags_and_api_caption(tmp_path, monkeypatch):
+    make_image(tmp_path / "alpha.png")
+    make_image(tmp_path / "beta.png")
+    (tmp_path / "alpha.txt").write_text("old tag", encoding="utf-8")
+
+    from mikazuki import dataset_editor
+
+    def fake_local_tags(_image_path, _req):
+        return "blue hair, smile"
+
+    def fake_api_caption(_image_path, req):
+        assert req.api_key == "secret"
+        assert req.api_model == "vision-model"
+        return "a natural language caption"
+
+    monkeypatch.setattr(dataset_editor, "generate_local_tags", fake_local_tags)
+    monkeypatch.setattr(dataset_editor, "generate_api_caption", fake_api_caption)
+
+    client = TestClient(app)
+    local = client.post(
+        "/api/dataset-editor/tag",
+        json={
+            "root": str(tmp_path),
+            "images": ["alpha.png", "beta.png"],
+            "provider": "local",
+            "caption_type": "tags",
+            "on_conflict": "append",
+            "additional_tags": "best quality",
+        },
+    )
+
+    assert local.status_code == 200
+    assert local.json()["status"] == "success"
+    assert local.json()["data"]["changed"] == 2
+    assert (tmp_path / "alpha.txt").read_text(encoding="utf-8") == (
+        "old tag, blue hair, smile, best quality"
+    )
+    assert (tmp_path / "beta.txt").read_text(encoding="utf-8") == "blue hair, smile, best quality"
+
+    api = client.post(
+        "/api/dataset-editor/tag",
+        json={
+            "root": str(tmp_path),
+            "images": ["alpha.png"],
+            "provider": "api",
+            "caption_type": "caption",
+            "on_conflict": "copy",
+            "api_endpoint": "https://example.test/v1",
+            "api_key": "secret",
+            "api_model": "vision-model",
+        },
+    )
+
+    assert api.status_code == 200
+    assert api.json()["status"] == "success"
+    assert (tmp_path / "alpha.txt").read_text(encoding="utf-8") == "a natural language caption"
+
+    history = client.post("/api/dataset-editor/history", json={"root": str(tmp_path)})
+    labels = [change["label"] for change in history.json()["data"]["changes"]]
+    assert labels[:2] == ["API 自然语言打标", "本地标签打标"]
+

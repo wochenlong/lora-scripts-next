@@ -5,6 +5,11 @@ from fastapi.testclient import TestClient
 from mikazuki.app.application import app
 from mikazuki.tagger.model_fetch import use_download_endpoint
 from mikazuki.tagger.progress import tagger_progress
+from mikazuki.tagger.interrogators.wd14 import WaifuDiffusionInterrogator
+from mikazuki.tagger.local_models import (
+    local_model_asset_paths,
+    local_model_dir,
+)
 
 
 def test_tagger_status_idle():
@@ -43,3 +48,53 @@ def test_tagger_default_download_endpoint_preserves_existing_hf_endpoint(monkeyp
         assert os.environ["HF_ENDPOINT"] == "https://hf-mirror.com"
 
     assert os.environ["HF_ENDPOINT"] == "https://hf-mirror.com"
+
+
+def test_tagger_local_model_directory_resolves_by_model_key(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIKAZUKI_TAGGER_MODELS_DIR", str(tmp_path / "tagger-models"))
+
+    expected = tmp_path / "tagger-models" / "wd14" / "wd14-convnextv2-v2"
+
+    assert local_model_dir("wd14-convnextv2-v2") == expected
+
+
+def test_tagger_assets_ready_when_files_exist_in_wd14_local_model_dir(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIKAZUKI_TAGGER_MODELS_DIR", str(tmp_path / "tagger-models"))
+    model_dir = tmp_path / "tagger-models" / "wd14" / "wd14-convnextv2-v2"
+    model_dir.mkdir(parents=True)
+    (model_dir / "model.onnx").write_bytes(b"fake onnx")
+    (model_dir / "selected_tags.csv").write_text("name,category\n", encoding="utf-8")
+
+    interrogator = WaifuDiffusionInterrogator(
+        "wd14-convnextv2-v2",
+        repo_id="SmilingWolf/wd-v1-4-convnextv2-tagger-v2",
+        revision="v2.0",
+    )
+
+    assert local_model_asset_paths("wd14-convnextv2-v2", interrogator) == (
+        model_dir / "model.onnx",
+        model_dir / "selected_tags.csv",
+    )
+    assert interrogator.download() == (
+        model_dir / "model.onnx",
+        model_dir / "selected_tags.csv",
+    )
+
+
+def test_tagger_assets_keep_legacy_flat_local_model_dir_compatible(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIKAZUKI_TAGGER_MODELS_DIR", str(tmp_path / "tagger-models"))
+    model_dir = tmp_path / "tagger-models" / "wd14-convnextv2-v2"
+    model_dir.mkdir(parents=True)
+    (model_dir / "model.onnx").write_bytes(b"fake onnx")
+    (model_dir / "selected_tags.csv").write_text("name,category\n", encoding="utf-8")
+
+    interrogator = WaifuDiffusionInterrogator(
+        "wd14-convnextv2-v2",
+        repo_id="SmilingWolf/wd-v1-4-convnextv2-tagger-v2",
+        revision="v2.0",
+    )
+
+    assert local_model_asset_paths("wd14-convnextv2-v2", interrogator) == (
+        model_dir / "model.onnx",
+        model_dir / "selected_tags.csv",
+    )

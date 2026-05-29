@@ -1,4 +1,4 @@
-/**
+﻿/**
  * Sidebar / home hub locale labels when UI is English (en-US).
  * Schema forms use vue-i18n; VuePress sidebar SSR text stays Chinese without this patch.
  */
@@ -12,6 +12,8 @@
     全量微调: "Full Finetune",
     工具与调试: "Tools",
     数据集打标: "Dataset Tagging",
+    经典标签编辑: "Legacy Tag Editor",
+    原生标签编辑: "Native Tag Editor",
     标签编辑: "Tag Editor",
     "LoRA 脚本工具": "LoRA Scripts",
     帮助: "Help",
@@ -81,7 +83,6 @@
     if (i18nLoc) return i18nLoc.toLowerCase().startsWith("en");
 
     const htmlLang = (document.documentElement.lang || "").toLowerCase();
-    if (htmlLang.startsWith("en")) return true;
     if (htmlLang.startsWith("zh")) return false;
 
     const trainSpan = document.querySelector(
@@ -91,7 +92,7 @@
     if (/^start\s*training$/i.test(trainText)) return true;
     if (trainText.includes("开始训练")) return false;
 
-    return true;
+    return false;
   }
 
   function setNodeText(node, text) {
@@ -153,6 +154,20 @@
     }
   }
 
+  function ensureStableSidebarState() {
+    const sidebar = document.querySelector(".sidebar .sidebar-items");
+    if (!sidebar) return;
+    const groups = Array.from(sidebar.children || []);
+    for (const li of groups) {
+      const heading = normalize(li.querySelector(":scope > p.sidebar-item.sidebar-heading")?.textContent);
+      if (heading !== "训练" && heading !== "Training") continue;
+      const ul = li.querySelector(":scope > ul.sidebar-item-children");
+      if (!ul) continue;
+      ul.style.display = "";
+      li.dataset.sdForceExpanded = "1";
+    }
+  }
+
   function hookLanguageToggle() {
     const bottom = document.querySelector(".sidebar-bottom");
     if (!bottom || bottom.dataset.sdNavI18nHooked) return;
@@ -179,12 +194,14 @@
     scheduled = setTimeout(() => {
       scheduled = null;
       applyNavLocale();
+      ensureStableSidebarState();
       hookLanguageToggle();
     }, 60);
   }
 
   function boot() {
     applyNavLocale();
+    ensureStableSidebarState();
     hookLanguageToggle();
 
     const root = document.querySelector("#app");
@@ -204,3 +221,5 @@
     boot();
   }
 })();
+
+

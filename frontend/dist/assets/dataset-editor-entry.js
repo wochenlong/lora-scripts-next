@@ -70,8 +70,66 @@
 
             <div id="side-panel-tagger" class="de-tab-panel">
               <h2>批量打标</h2>
-              <p class="de-placeholder">预留位置：后续接入现有数据集打标能力，只作用于当前范围。</p>
-              <button type="button" disabled>开始打标</button>
+              <section class="de-tagger-card de-tagger-card--primary">
+                <div class="de-tagger-row de-tagger-row--split">
+                  <label for="tagger-provider">打标来源</label>
+                  <select id="tagger-provider">
+                    <option value="local" selected>本地 TAG 模型</option>
+                    <option value="api">API 自然语言</option>
+                  </select>
+                </div>
+                <div class="de-tagger-row de-tagger-row--split">
+                  <label for="tagger-caption-type">输出格式</label>
+                  <select id="tagger-caption-type">
+                    <option value="tags" selected>Tag 列表</option>
+                    <option value="caption">自然语言 caption</option>
+                  </select>
+                </div>
+                <div class="de-tagger-row de-tagger-row--split">
+                  <label for="tagger-conflict">已有 caption</label>
+                  <select id="tagger-conflict">
+                    <option value="copy" selected>覆盖</option>
+                    <option value="append">追加</option>
+                    <option value="prepend">前置</option>
+                    <option value="ignore">跳过</option>
+                  </select>
+                </div>
+              </section>
+              <section class="de-tagger-model-card">
+                <label for="tagger-model">本地模型</label>
+                <select id="tagger-model">
+                  <option value="wd14-convnextv2-v2" selected>wd14-convnextv2-v2</option>
+                  <option value="wd-convnext-v3">wd-convnext-v3</option>
+                  <option value="wd-swinv2-v3">wd-swinv2-v3</option>
+                  <option value="wd-vit-v3">wd-vit-v3</option>
+                  <option value="wd14-swinv2-v2">wd14-swinv2-v2</option>
+                  <option value="wd14-vit-v2">wd14-vit-v2</option>
+                  <option value="wd14-moat-v2">wd14-moat-v2</option>
+                  <option value="wd-eva02-large-tagger-v3">wd-eva02-large-tagger-v3</option>
+                  <option value="wd-vit-large-tagger-v3">wd-vit-large-tagger-v3</option>
+                  <option value="cl_tagger_1_01">cl_tagger_1_01</option>
+                </select>
+                <div class="de-tagger-grid">
+                  <label for="tagger-threshold">Tag 阈值</label>
+                  <input id="tagger-threshold" type="number" min="0" max="1" step="0.01" value="0.35">
+                  <label for="tagger-character-threshold">角色阈值</label>
+                  <input id="tagger-character-threshold" type="number" min="0" max="1" step="0.01" value="0.6">
+                </div>
+              </section>
+              <section class="de-tagger-card">
+                <label for="tagger-additional">附加 tag</label>
+                <input id="tagger-additional" type="text" placeholder="best quality, masterpiece">
+                <label for="tagger-exclude">排除 tag</label>
+                <input id="tagger-exclude" type="text" placeholder="lowres, bad anatomy">
+              </section>
+              <p id="tagger-api-hint" class="de-placeholder" hidden>API 地址、Key、模型和提示词在「UI 设置」中配置。</p>
+              <div class="de-tagger-flags">
+                <label class="de-checkbox"><input id="tagger-rating" type="checkbox"><span>包含 rating tag</span></label>
+                <label class="de-checkbox"><input id="tagger-model-tag" type="checkbox"><span>包含模型 tag</span></label>
+                <label class="de-checkbox"><input id="tagger-replace-underscore" type="checkbox" checked><span>下划线转空格</span></label>
+                <label class="de-checkbox"><input id="tagger-escape" type="checkbox" checked><span>转义括号</span></label>
+              </div>
+              <button id="run-tagger" type="button" class="de-primary de-tagger-run">开始打标</button>
             </div>
 
             <div id="side-panel-quick" class="de-tab-panel">
@@ -178,15 +236,15 @@
     const root = document.querySelector("#app");
     let mounted = false;
     let stableTimer = 0;
+    let started = false;
 
     function scheduleMount() {
       window.clearTimeout(stableTimer);
       stableTimer = window.setTimeout(() => {
-        if (mounted) return;
+        if (mounted && document.getElementById("sd-native-editor-entry")) return;
         if (mountEditor()) {
           mounted = true;
           loadEditorScript();
-          if (observer) observer.disconnect();
         }
       }, 120);
     }
@@ -199,15 +257,20 @@
       observer.observe(root, { childList: true, subtree: true });
     }
 
-    scheduleMount();
-    window.addEventListener("load", () => {
-      if (mounted) return;
-      if (mountEditor()) {
-        mounted = true;
-        loadEditorScript();
+    function startAfterShellSettles() {
+      if (started) return;
+      started = true;
+      window.setTimeout(scheduleMount, 500);
+      window.setTimeout(() => {
         if (observer) observer.disconnect();
-      }
-    });
+      }, 5000);
+    }
+
+    if (document.readyState === "complete") {
+      startAfterShellSettles();
+    } else {
+      window.addEventListener("load", startAfterShellSettles, { once: true });
+    }
   }
 
   if (document.readyState === "loading") {

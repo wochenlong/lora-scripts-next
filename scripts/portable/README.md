@@ -36,4 +36,16 @@
 | Python | `python_embeded` | 系统 / `venv` |
 | 入口 | `run_gui.bat` → `launch_portable.bat` | `run_gui.bat` → `run_gui_source.bat` |
 | 首次依赖 | `setup_environment.py` | `install-cn.ps1` |
-| 默认打标模型 | 7z 内置 `huggingface/hub/`（wd14-convnextv2-v2） | `install-cn.ps1` + 每次启动 `prefetch_default_tagger.py --if-missing` |
+| 默认打标模型 | 7z 内置 `tagger-models/wd14/wd14-convnextv2-v2/`，并保留 `huggingface/` 缓存兜底 | `install-cn.ps1` + 每次启动 `prefetch_default_tagger.py --if-missing` |
+
+## 打标模型目录
+
+整合包根目录包含 `tagger-models/`，用于放置用户可见的本地打标模型。默认 WD 模型位置：
+
+```text
+<PortableRoot>/tagger-models/wd14/wd14-convnextv2-v2/
+  model.onnx
+  selected_tags.csv
+```
+
+WD14 / CL 系列放在 `tagger-models/wd14/<model-key>/`，主要用于 tag 打标。VLM / 自然语言描述模型预留 `tagger-models/vlm/<model-key>/`。旧的一层目录 `tagger-models/<model-key>/` 仍兼容；文件缺失时会继续使用 `huggingface/` 缓存或在线下载。

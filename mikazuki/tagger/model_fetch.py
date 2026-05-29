@@ -9,6 +9,7 @@ from typing import TYPE_CHECKING, Iterator
 
 from huggingface_hub import hf_hub_download, try_to_load_from_cache
 
+from mikazuki.tagger.local_models import asset_filenames, local_model_asset_paths
 from mikazuki.tagger.progress import TaggerCancelled, tagger_progress
 
 if TYPE_CHECKING:
@@ -16,17 +17,7 @@ if TYPE_CHECKING:
 
 
 def _asset_filenames(interrogator: "Interrogator") -> list[str]:
-    model_path = getattr(interrogator, "model_path", None)
-    tags_path = getattr(interrogator, "tags_path", None)
-    mapping_path = getattr(interrogator, "tag_mapping_path", None)
-    files: list[str] = []
-    if model_path:
-        files.append(str(model_path))
-    if tags_path:
-        files.append(str(tags_path))
-    if mapping_path:
-        files.append(str(mapping_path))
-    return files
+    return asset_filenames(interrogator)
 
 
 def _hf_kwargs(interrogator: "Interrogator") -> dict:
@@ -53,8 +44,10 @@ def _file_cached(kwargs: dict, filename: str) -> bool:
         return False
 
 
-def interrogator_assets_ready(interrogator: "Interrogator") -> bool:
+def interrogator_assets_ready(interrogator: "Interrogator", model_key: str | None = None) -> bool:
     """Return True when all HF files for this interrogator are already in the local cache."""
+    if model_key and local_model_asset_paths(model_key, interrogator):
+        return True
     kwargs = _hf_kwargs(interrogator)
     files = _asset_filenames(interrogator)
     if not files:
@@ -166,7 +159,7 @@ def ensure_interrogator_assets(model_key: str, interrogator: "Interrogator") -> 
 
     Returns True if a download was performed (caller should expect brief load after).
     """
-    if interrogator_assets_ready(interrogator):
+    if interrogator_assets_ready(interrogator, model_key):
         return False
     download_interrogator_assets(model_key, interrogator, continue_to_tagging=True)
     return True
