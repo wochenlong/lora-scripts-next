@@ -116,7 +116,7 @@ def verify_source(root: Path) -> list[dict]:
     native_entry = (source / "src/nativeDatasetEditorMarkup.ts").read_text(
         encoding="utf-8"
     )
-    native_runtime = (source / "public/assets/dataset-editor.js").read_text(
+    native_runtime = (source / "src/nativeDatasetEditorRuntime.ts").read_text(
         encoding="utf-8"
     )
     native_css = (source / "src/nativeDatasetEditor.css").read_text(
@@ -124,8 +124,8 @@ def verify_source(root: Path) -> list[dict]:
     )
     required_native_source_terms = [
         "nativeDatasetEditorMarkup",
+        "nativeDatasetEditorRuntime",
         "./nativeDatasetEditor.css",
-        "sd-dataset-editor-script",
     ]
     for term in required_native_source_terms:
         if term not in native_source:
@@ -140,6 +140,8 @@ def verify_source(root: Path) -> list[dict]:
         raise RuntimeError("native editor CSS missing embedded shell styles")
     if (source / "public/assets/dataset-editor.css").exists():
         raise RuntimeError("native editor CSS must be bundled from source, not public assets")
+    if (source / "public/assets/dataset-editor.js").exists():
+        raise RuntimeError("native editor runtime must be imported from source, not public assets")
     for term in (
         "/api/dataset-editor/scan",
         "/api/dataset-editor/caption",
@@ -211,7 +213,6 @@ def verify_built_output(root: Path, routes: list[dict]) -> None:
         if not (out / path.lstrip("/")).is_file():
             raise RuntimeError(f"built output missing route alias: {path}")
     for asset in (
-        "assets/dataset-editor.js",
     ):
         if not (out / asset).is_file():
             raise RuntimeError(f"built output missing native editor asset: {asset}")
@@ -219,6 +220,8 @@ def verify_built_output(root: Path, routes: list[dict]) -> None:
         raise RuntimeError("built output should not include standalone native editor entry")
     if (out / "assets/dataset-editor.css").exists():
         raise RuntimeError("built output should not include standalone native editor CSS")
+    if (out / "assets/dataset-editor.js").exists():
+        raise RuntimeError("built output should not include standalone native editor runtime")
     if (out / "assets/tagger-progress.js").exists():
         raise RuntimeError("built output should not include vendored tagger-progress.js")
 

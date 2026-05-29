@@ -18,6 +18,7 @@ Created: 2026-05-30
 - 2026-05-30: Routed the source `/dataset-editor.html` fallback/debug page to the same native editor source entry as `/native-tageditor.html`, preserving the separate public URLs while avoiding a placeholder fallback in the generated source frontend.
 - 2026-05-30: Moved the native dataset editor stylesheet from a copied public asset into the source bundle. The generated source frontend no longer emits standalone `assets/dataset-editor.css`.
 - 2026-05-30: Moved the native dataset editor embedded markup from copied `dataset-editor-entry.js` into a source TypeScript module. `/native-tageditor.html` and `/dataset-editor.html` now render the editor shell from source and only load the remaining editor runtime script.
+- 2026-05-30: Moved the native dataset editor runtime from a copied public script into a source TypeScript module loaded by the Vue page. The generated source frontend no longer emits standalone `dataset-editor.js`, `dataset-editor-entry.js`, or `dataset-editor.css` assets.
 
 ## Background
 

@@ -1,3 +1,5 @@
+﻿// @ts-nocheck
+export {};
 (function () {
   const QUICK_TAGS_KEY = "sd-trainer.dataset-editor.quick-tags";
   const API_HISTORY = "/api/dataset-editor/history";
@@ -936,3 +938,4 @@
   updateAutoGalleryPageSize();
   render();
 })();
+
