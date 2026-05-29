@@ -38,3 +38,11 @@ test("tagger source route loads progress dock", async ({ page }) => {
   await expect(page.locator("#sd-tagger-dock")).toBeVisible();
   await expect(page.locator("[data-start-btn]")).toBeVisible();
 });
+
+test("anima source route loads train form", async ({ page }) => {
+  await page.goto("/lora/anima-finetune.html");
+  await expect(page.locator("#app")).toBeVisible();
+  await expect(page.locator("#anima-train-form")).toBeVisible();
+  await expect(page.locator("#anima-pretrained-model")).toBeVisible();
+  await expect(page.locator("#anima-train-data-dir")).toBeVisible();
+});

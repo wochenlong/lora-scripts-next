@@ -146,6 +146,83 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.anima-form {
+  display: grid;
+  gap: 14px;
+  margin-top: 24px;
+  padding: 18px;
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.anima-form h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.anima-field,
+.anima-toggle {
+  display: grid;
+  gap: 6px;
+  color: #1f2937;
+  font-weight: 700;
+}
+
+.anima-toggle {
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+}
+
+.anima-field input,
+.anima-field select,
+.anima-field textarea {
+  width: 100%;
+  border: 1px solid #c9d3e3;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font: inherit;
+  font-weight: 400;
+}
+
+.anima-field textarea {
+  resize: vertical;
+}
+
+.anima-field-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.anima-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.anima-actions button {
+  min-height: 36px;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  cursor: pointer;
+}
+
+.anima-actions .primary {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+
+.anima-status {
+  color: #667085;
+}
+
 .native-editor-page {
   min-width: 0;
   background: #eef2f6;
@@ -394,6 +471,10 @@ h1 {
   }
 
   .anima-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .anima-field-row {
     grid-template-columns: 1fr;
   }
 

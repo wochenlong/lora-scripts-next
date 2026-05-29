@@ -55,6 +55,16 @@ def test_frontend_source_declares_anima_route_contracts():
         "mikazuki/schema/anima-finetune.ts",
         "scripts/dev/anima_train_network.py",
         "scripts/dev/anima_train.py",
+        "animaForm",
+        "sd-trainer-source-anima-configs",
+        "/api/run",
+        "pretrained_model_name_or_path",
+        "train_data_dir",
+        "output_dir",
+        "output_name",
+        "max_train_epochs",
+        "mixed_precision",
+        "enable_preview",
     ]:
         assert term in anima
 
@@ -121,6 +131,7 @@ def test_frontend_source_declares_browser_smoke_script():
     assert "/tagger.html" in smoke
     assert "sd-tagger-dock" in smoke
     assert "/lora/anima-finetune.html" in smoke
+    assert "anima-train-form" in smoke
 
 
 def test_frontend_source_owns_tagger_page_and_progress_asset():
