@@ -201,6 +201,17 @@
     return state.items.filter((item) => selected.has(itemPath(item)));
   }
 
+  function batchScope() {
+    const count = selectedBatchItems().length;
+    const selected = state.selectedPaths.size > 0;
+    return {
+      count,
+      selected,
+      label: selected ? `已选 ${count} 张` : `当前筛选结果 ${count} 张`,
+      shortLabel: selected ? `已选 ${count}` : `筛选 ${count}`,
+    };
+  }
+
   function pruneSelection() {
     const existing = new Set(state.items.map((item) => itemPath(item)));
     state.selectedPaths.forEach((path) => {
@@ -430,6 +441,20 @@
     el.thumbnailFit.setAttribute("aria-pressed", state.thumbnailFit === "cover" ? "true" : "false");
   }
 
+  function renderOperationControls() {
+    const scope = batchScope();
+    const disabled = scope.count === 0;
+    el.batch.disabled = disabled;
+    el.cleanup.disabled = disabled;
+    if (el.taggerRun) el.taggerRun.disabled = disabled;
+    el.batch.textContent = scope.selected ? `应用到已选 ${scope.count} 张` : "应用到当前筛选结果";
+    el.cleanup.textContent = scope.selected ? `清理已选 ${scope.count} 张` : "清理当前筛选结果";
+    if (el.taggerRun) el.taggerRun.textContent = `开始打标（${scope.shortLabel}）`;
+    el.batch.title = `将修改${scope.label}`;
+    el.cleanup.title = `将清理${scope.label}`;
+    if (el.taggerRun) el.taggerRun.title = `将为${scope.label}打标`;
+  }
+
   function renderEditor() {
     const item = currentItem();
     el.dirtyFlag.textContent = state.dirty ? "未保存" : "";
@@ -438,8 +463,7 @@
     el.redo.disabled = !state.canRedo;
     el.prev.disabled = state.selected <= 0;
     el.next.disabled = state.selected < 0 || state.selected >= state.filtered.length - 1;
-    el.batch.disabled = state.filtered.length === 0;
-    if (el.taggerRun) el.taggerRun.disabled = state.filtered.length === 0;
+    renderOperationControls();
 
     if (!item) {
       el.preview.innerHTML = "<span>未选择图片</span>";
@@ -804,7 +828,7 @@
     } catch (err) {
       setStatus(err.message, true);
     } finally {
-      el.taggerRun.disabled = state.filtered.length === 0;
+      renderOperationControls();
     }
   }
 
