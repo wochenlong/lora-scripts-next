@@ -67,7 +67,9 @@ Useful URLs:
 - Cache-control workaround in `mikazuki/app/application.py` for patched dist core assets.
 - Regression tests for route/sidebar JSON parsing and Chinese nav labels.
 
-## Important Recent Bug
+## Important Recent Bugs
+
+### VuePress sidebar JSON and mojibake
 
 The VuePress app bundle `frontend/dist/assets/app.547295de.js` contains theme sidebar data as:
 
@@ -85,6 +87,41 @@ Relevant test:
 python -m pytest tests\test_dataset_editor_api.py::test_vuepress_theme_sidebar_json_stays_parseable -q
 ```
 
+### Native editor route loading the classic editor
+
+Root cause found on 2026-05-30:
+
+- `/native-tageditor.html` existed and returned HTTP 200.
+- The HTML loaded `dataset-editor-entry.js`, so the native editor injection path was present.
+- But `frontend/dist/assets/app.547295de.js` mapped the VuePress page key `v-native-tageditor` to the classic editor page data chunk:
+
+```js
+"v-native-tageditor":()=>wt(()=>import("./tageditor.html.66da263e.js"),[]).then(({data:e})=>e)
+```
+
+That classic chunk exports frontmatter like:
+
+```json
+{"type":"iframe","subtype":"tageditor"}
+```
+
+So VuePress could render the old iframe/service warning on the native route. This was not primarily a port issue.
+
+Fix currently on branch:
+
+- Added `frontend/dist/assets/native-tageditor.html.native.js` as dedicated page data for `v-native-tageditor`.
+- Patched `frontend/dist/assets/app.547295de.js` so `v-native-tageditor` imports `native-tageditor.html.native.js`.
+- Patched `frontend/dist/native-tageditor.html` so it preloads the native page data chunk instead of old `tageditor.html.*.js` chunks.
+- Added regression coverage in `tests/test_dataset_editor_api.py::test_native_tageditor_uses_native_vuepress_page_data`.
+
+Safe verification snippets for this minified bundle should avoid `Select-String` on the whole single-line file. Use bounded boolean checks instead:
+
+```powershell
+$text = Get-Content frontend/dist/assets/app.547295de.js -Raw -Encoding UTF8
+$text.Contains('"v-native-tageditor":()=>wt(()=>import("./native-tageditor.html.native.js")')
+$text.Contains('"v-native-tageditor":()=>wt(()=>import("./tageditor.html.66da263e.js")')
+```
+
 ## Verification Commands
 
 Run before claiming the branch is healthy:
@@ -96,7 +133,7 @@ python -m pytest tests\test_dataset_editor_api.py tests\test_tagger_progress_api
 Last known result before this handoff:
 
 ```text
-47 passed, 4 warnings
+50 passed, 4 warnings
 ```
 
 Browser smoke checks:
@@ -120,4 +157,3 @@ Do not commit these runtime files:
 3. Improve native editor UI carefully, one small change at a time, with browser checks after each change.
 4. Keep the classic editor and native editor separate in navigation.
 5. Avoid broad frontend shell rewrites until the current editor flow is stable.
-
