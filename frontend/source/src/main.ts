@@ -1,0 +1,51 @@
+import { createApp, defineComponent, h } from "vue";
+import { currentRoute, navGroups, routes } from "./routes";
+import "./styles.css";
+
+const App = defineComponent({
+  name: "SourceTrainerShell",
+  setup() {
+    const route = currentRoute();
+    return () =>
+      h("div", { class: "shell" }, [
+        h("aside", { class: "sidebar", "aria-label": "Trainer navigation" }, [
+          h("a", { class: "brand", href: "/" }, "SD Trainer Next"),
+          ...navGroups.map((group) =>
+            h("section", { class: "nav-group" }, [
+              h("h2", group.label),
+              h(
+                "nav",
+                routes
+                  .filter((item) => item.section === group.section)
+                  .map((item) =>
+                    h(
+                      "a",
+                      {
+                        href: item.path,
+                        class: item.path === route.path ? "active" : "",
+                      },
+                      item.title,
+                    ),
+                  ),
+              ),
+            ]),
+          ),
+        ]),
+        h("main", { class: "content" }, [
+          h("p", { class: "eyebrow" }, "Source-owned frontend shell"),
+          h("h1", route.title),
+          h("p", { class: "summary" }, route.description),
+          h("section", { class: "compat-panel" }, [
+            h("h2", "Compatibility Contract"),
+            h("ul", [
+              h("li", "Public routes are declared in frontend/source/src/routes.json."),
+              h("li", "The production output is static HTML/CSS/JS and can be served by FastAPI StaticFiles."),
+              h("li", "Build tooling stays in frontend/source and is not required at portable runtime."),
+            ]),
+          ]),
+        ]),
+      ]);
+  },
+});
+
+createApp(App).mount("#app");

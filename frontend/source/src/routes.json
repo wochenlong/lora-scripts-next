@@ -1,0 +1,122 @@
+[
+  {
+    "path": "/",
+    "title": "SD Trainer Next",
+    "section": "home",
+    "description": "Source-owned trainer shell compatibility entry."
+  },
+  {
+    "path": "/tagger.html",
+    "title": "数据集打标",
+    "section": "tools",
+    "description": "Dataset tagging compatibility route."
+  },
+  {
+    "path": "/tageditor.html",
+    "title": "经典标签编辑",
+    "section": "tools",
+    "description": "Legacy tag editor compatibility route."
+  },
+  {
+    "path": "/native-tageditor.html",
+    "title": "原生标签编辑",
+    "section": "tools",
+    "description": "Native tag editor route owned by the trainer shell."
+  },
+  {
+    "path": "/dataset-editor.html",
+    "title": "原生标签编辑 Debug",
+    "section": "tools",
+    "description": "Standalone native editor fallback/debug route."
+  },
+  {
+    "path": "/tensorboard.html",
+    "title": "Tensorboard",
+    "section": "tools",
+    "description": "TensorBoard compatibility route."
+  },
+  {
+    "path": "/other/settings.html",
+    "title": "UI 设置",
+    "section": "more",
+    "description": "Settings route for source-owned configuration UI."
+  },
+  {
+    "path": "/lora/index.html",
+    "title": "LoRA 训练",
+    "section": "training",
+    "description": "LoRA training route placeholder."
+  },
+  {
+    "path": "/lora/sd3.html",
+    "title": "Anima Stable Diffusion LoRA",
+    "section": "training",
+    "description": "Anima LoRA route preserving the historical sd3 URL."
+  },
+  {
+    "path": "/lora/basic.html",
+    "title": "基础训练",
+    "section": "training",
+    "description": "Basic training route placeholder."
+  },
+  {
+    "path": "/lora/master.html",
+    "title": "Stable Diffusion",
+    "section": "training",
+    "description": "Stable Diffusion training route placeholder."
+  },
+  {
+    "path": "/lora/flux.html",
+    "title": "Flux LoRA",
+    "section": "training",
+    "description": "Flux LoRA route placeholder."
+  },
+  {
+    "path": "/lora/anima-finetune.html",
+    "title": "全量微调",
+    "section": "training",
+    "description": "Anima full finetune route placeholder."
+  },
+  {
+    "path": "/lora/params.html",
+    "title": "训练参数说明",
+    "section": "help",
+    "description": "Training parameter documentation route placeholder."
+  },
+  {
+    "path": "/lora/tools.html",
+    "title": "LoRA 脚本工具",
+    "section": "tools",
+    "description": "LoRA script tools route placeholder."
+  },
+  {
+    "path": "/dreambooth/index.html",
+    "title": "Dreambooth",
+    "section": "training",
+    "description": "Dreambooth compatibility route."
+  },
+  {
+    "path": "/help/guide.html",
+    "title": "新手上路",
+    "section": "help",
+    "description": "Getting started route placeholder."
+  },
+  {
+    "path": "/other/about.html",
+    "title": "关于",
+    "section": "more",
+    "description": "About route placeholder."
+  },
+  {
+    "path": "/other/changelog.html",
+    "title": "更新日志",
+    "section": "more",
+    "description": "Changelog route placeholder."
+  },
+  {
+    "path": "/task.html",
+    "title": "任务",
+    "section": "tools",
+    "description": "Task route placeholder."
+  }
+]

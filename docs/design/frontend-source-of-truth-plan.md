@@ -9,6 +9,7 @@ Created: 2026-05-30
 - 2026-05-30: Added `scripts/patch_frontend_dist.py` to reapply and validate the current native tag editor dist patches. The script covers the VuePress app route mapping, sidebar JSON, native page-data chunk, native page preload contract, settings cache-bust URL, and SSR sidebar snapshots.
 - 2026-05-30: The first script run found older SSR pages that still exposed the single `标签编辑` sidebar entry. Those snapshots were updated to split `经典标签编辑` and `原生标签编辑`, with regression coverage in `tests/test_dataset_editor_api.py`.
 - 2026-05-30: Expanded the patch script to also cover the older Anima/SD3 dist text patches documented in `frontend/VENDOR.md`, including the app sidebar, `sd3` render chunk, `sd3` page-data chunk, and `lora/sd3.html` SSR copy.
+- 2026-05-30: Created `codex/frontend-source` with `frontend/source`, a minimal Vite + Vue 3 + TypeScript shell. It declares public compatibility routes in `src/routes.json`, builds static output to `build/frontend-source-dist`, writes HTML route aliases, and has `scripts/verify_frontend_source.py` for source/build contract checks.
 
 ## Background
 

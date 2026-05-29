@@ -1,0 +1,16 @@
+{
+  "name": "sd-trainer-next-frontend-source",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "build": "vite build && node scripts/write-route-aliases.mjs",
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vue": "^3.5.14"
+  },
+  "devDependencies": {}
+}
