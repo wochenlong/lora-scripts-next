@@ -315,6 +315,28 @@ def test_native_tageditor_embeds_native_editor_in_trainer_shell():
     assert "原生标签编辑" in response.text
 
 
+def test_native_tageditor_uses_native_vuepress_page_data():
+    native_tageditor = (ROOT / "frontend" / "dist" / "native-tageditor.html").read_text(
+        encoding="utf-8"
+    )
+    native_page_data = (
+        ROOT / "frontend" / "dist" / "assets" / "native-tageditor.html.native.js"
+    )
+    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert native_page_data.exists()
+    page_data = native_page_data.read_text(encoding="utf-8")
+    assert '"key":"v-native-tageditor"' in page_data
+    assert '"type":"native-dataset-editor"' in page_data
+    assert '"subtype":"tageditor"' not in page_data
+    assert '"v-native-tageditor":()=>wt(()=>import("./native-tageditor.html.native.js")' in app_bundle
+    assert '"v-native-tageditor":()=>wt(()=>import("./tageditor.html.66da263e.js")' not in app_bundle
+    assert 'rel="modulepreload" href="/assets/tageditor.html.66da263e.js"' not in native_tageditor
+    assert 'rel="modulepreload" href="/assets/tageditor.html.173f1b6a.js"' not in native_tageditor
+
+
 def test_trainer_sidebar_exposes_legacy_and_native_tag_editors():
     index = (ROOT / "frontend" / "dist" / "index.html").read_text(encoding="utf-8")
     tageditor = (ROOT / "frontend" / "dist" / "tageditor.html").read_text(encoding="utf-8")
@@ -392,6 +414,7 @@ def test_patched_frontend_core_assets_are_not_immutable_cached():
         "/assets/sd-nav-i18n.js",
         "/assets/app.547295de.js",
         "/assets/style.874872ce.css",
+        "/assets/settings.html.06993f96.js",
     ):
         response = client.get(path)
         assert response.status_code == 200
@@ -687,10 +710,55 @@ def test_ui_settings_exposes_dataset_tagger_api_config():
 
     assert "dataset_tagger_api_endpoint" in settings
     assert "dataset_tagger_api_key" in settings
+    assert "role('password')" in settings
     assert "dataset_tagger_api_model" in settings
     assert "dataset_tagger_api_prompt" in settings
+    assert "\\u8bbe\\u7f6e" in settings.lower()
+    assert "\\u8bad\\u7ec3 ui \\u8bbe\\u7f6e" not in settings.lower()
     assert "./settings.html.06993f96.js?v=dataset-tagger-api" in app_js
     assert "/assets/app.547295de.js?v=dataset-tagger-api" in settings_html
+    assert "maskSettingsOutput" in (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_ui_settings_assets_are_parseable_and_not_mojibake():
+    settings = (ROOT / "frontend" / "dist" / "assets" / "settings.html.06993f96.js").read_text(
+        encoding="utf-8"
+    )
+    settings_html = (ROOT / "frontend" / "dist" / "other" / "settings.html").read_text(
+        encoding="utf-8"
+    )
+    assert "const e={" in settings
+    assert '"title":"\\u8bbe\\u7f6e"' in settings.lower()
+    assert "role('password')" in settings
+    assert "\u8bbe\u7f6e" in settings_html
+    assert "\u8bad\u7ec3 UI \u8bbe\u7f6e" not in settings_html
+    assert not re.search(r"[璁鐠鏍鍦鍏甯]\S*", settings_html)
+
+
+def test_ui_settings_masks_sensitive_output_and_hides_legacy_entries_by_default():
+    nav = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
+        encoding="utf-8"
+    )
+    settings = (ROOT / "frontend" / "dist" / "assets" / "settings.html.06993f96.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "sd-trainer-ui-advanced-links" in nav
+    assert "showTensorboard: false" in nav
+    assert "showLegacyTagEditor: false" in nav
+    assert 'a[href="/tensorboard.md"]' in nav
+    assert 'a[href="/tageditor.md"]' in nav
+    assert "隐藏旧功能入口" in nav
+    assert "maskSettingsOutput" in nav
+    assert "maskSensitiveSettingsFields" in nav
+    assert 'input.type = "password"' in nav
+    assert "renderSettingsHelp" in nav
+    assert "dataset_tagger_api_key" in nav
+    assert "当前选项说明" in nav
+    assert "dataset_tagger_api_key" in settings
+    assert "role('password')" in settings
 
 
 def test_dataset_editor_tag_endpoint_writes_local_tags_and_api_caption(tmp_path, monkeypatch):

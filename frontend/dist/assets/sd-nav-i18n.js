@@ -4,6 +4,11 @@
  */
 (function () {
   const STORAGE_KEY = "sd-trainer-ui-locale";
+  const ADVANCED_LINKS_KEY = "sd-trainer-ui-advanced-links";
+  const DEFAULT_ADVANCED_LINKS = {
+    showTensorboard: false,
+    showLegacyTagEditor: false,
+  };
 
   const ZH_TO_EN = {
     训练: "Training",
@@ -20,7 +25,8 @@
     新手上路: "Getting Started",
     训练参数说明: "Training Parameters",
     其他: "More",
-    "UI 设置": "UI Settings",
+    "UI 设置": "Settings",
+    设置: "Settings",
     关于: "About",
     更新日志: "Changelog",
     训练监控: "Train Monitor",
@@ -168,6 +174,193 @@
     }
   }
 
+  function readAdvancedLinks() {
+    try {
+      return {
+        ...DEFAULT_ADVANCED_LINKS,
+        ...(JSON.parse(localStorage.getItem(ADVANCED_LINKS_KEY) || "{}") || {}),
+      };
+    } catch (e) {
+      return { ...DEFAULT_ADVANCED_LINKS };
+    }
+  }
+
+  function writeAdvancedLinks(next) {
+    localStorage.setItem(ADVANCED_LINKS_KEY, JSON.stringify({
+      ...DEFAULT_ADVANCED_LINKS,
+      ...next,
+    }));
+  }
+
+  function setSidebarLinkVisible(selector, visible) {
+    const link = document.querySelector(`.sidebar .sidebar-items ${selector}`);
+    const item = link?.closest("li");
+    if (!item) return;
+    item.hidden = !visible;
+    item.style.display = visible ? "" : "none";
+  }
+
+  function applyAdvancedLinkVisibility() {
+    const flags = readAdvancedLinks();
+    setSidebarLinkVisible('a[href="/tensorboard.md"]', !!flags.showTensorboard);
+    setSidebarLinkVisible('a[href="/tageditor.md"]', !!flags.showLegacyTagEditor);
+  }
+
+  function maskSettingsOutput() {
+    if (!location.pathname.endsWith("/other/settings.html")) return;
+    const output = document.querySelector("#test-output1");
+    if (output) {
+      output.hidden = true;
+      output.style.display = "none";
+    }
+    document.querySelectorAll("h1, h2.k-schema-header, a.sidebar-item").forEach((el) => {
+      const text = normalize(el.textContent);
+      if (text === "训练 UI 设置" || text === "UI 设置" || text === "UI Settings") {
+        if (el.matches("h1, h2.k-schema-header")) {
+          el.textContent = "设置";
+        } else {
+          el.childNodes.forEach((node) => {
+            if (node.nodeType === Node.TEXT_NODE && normalize(node.textContent)) {
+              node.textContent = " 设置 ";
+            }
+          });
+        }
+        el.setAttribute?.("aria-label", "设置");
+      }
+    });
+    document.title = document.title
+      .replace("训练 UI 设置", "设置")
+      .replace("UI 设置", "设置")
+      .replace("UI Settings", "Settings");
+  }
+
+  const SETTINGS_HELP = {
+    tensorboard_url: {
+      title: "Tensorboard 地址",
+      body: "用于打开训练日志的 Tensorboard 页面。这个入口默认隐藏，需要时可以在下方旧功能入口里打开。",
+    },
+    dataset_tagger_api_endpoint: {
+      title: "标签编辑器 API 打标地址",
+      body: "填写兼容 OpenAI 风格的接口根地址，例如 https://api.openai.com/v1。本地或第三方 VLM 服务也可以放在这里。",
+    },
+    dataset_tagger_api_key: {
+      title: "标签编辑器 API Key",
+      body: "敏感信息，只用于请求 API 打标服务。输入框会打码显示，右侧预览不会展示明文。",
+    },
+    dataset_tagger_api_model: {
+      title: "标签编辑器 API 模型",
+      body: "用于自然语言 caption 的模型名称。不同 API 服务可能使用不同模型 id。",
+    },
+    dataset_tagger_api_prompt: {
+      title: "标签编辑器 API 提示词",
+      body: "发送给自然语言模型的 caption 指令。建议要求输出简洁 caption，不要 Markdown 或解释。",
+    },
+    advanced_links: {
+      title: "隐藏旧功能入口",
+      body: "Tensorboard 和经典标签编辑默认隐藏，避免用户优先进入旧页面。需要排查问题时可以临时显示。",
+    },
+  };
+
+  function findSettingItem(name) {
+    return Array.from(document.querySelectorAll(".schema-container .k-schema-item")).find((item) =>
+      normalize(item.textContent).includes(name)
+    );
+  }
+
+  function maskSensitiveSettingsFields() {
+    if (!location.pathname.endsWith("/other/settings.html")) return;
+    const keyItem = findSettingItem("dataset_tagger_api_key");
+    const input = keyItem?.querySelector("input");
+    if (!input) return;
+    input.type = "password";
+    input.autocomplete = "new-password";
+    input.setAttribute("spellcheck", "false");
+    input.setAttribute("aria-label", "标签编辑器 API Key，已打码");
+  }
+
+  function renderSettingsHelp(activeKey = "dataset_tagger_api_endpoint") {
+    if (!location.pathname.endsWith("/other/settings.html")) return;
+    const container = document.querySelector(".right-container .theme-default-content main");
+    if (!container) return;
+    const help = SETTINGS_HELP[activeKey] || SETTINGS_HELP.dataset_tagger_api_endpoint;
+    container.innerHTML = `
+      <section class="sd-settings-help" style="max-width:520px;padding:8px 0 0;">
+        <p style="margin:0 0 8px;color:var(--c-brand);font-weight:700;">当前选项说明</p>
+        <h1 style="margin:0 0 14px;font-size:24px;line-height:1.35;">${help.title}</h1>
+        <p style="margin:0;color:var(--c-text-lighter);font-size:14px;line-height:1.9;">${help.body}</p>
+      </section>`;
+  }
+
+  function hookSettingsHelp() {
+    if (!location.pathname.endsWith("/other/settings.html")) return;
+    const pairs = [
+      ["tensorboard_url", "tensorboard_url"],
+      ["dataset_tagger_api_endpoint", "dataset_tagger_api_endpoint"],
+      ["dataset_tagger_api_key", "dataset_tagger_api_key"],
+      ["dataset_tagger_api_model", "dataset_tagger_api_model"],
+      ["dataset_tagger_api_prompt", "dataset_tagger_api_prompt"],
+    ];
+    for (const [needle, key] of pairs) {
+      const item = findSettingItem(needle);
+      if (!item || item.dataset.sdHelpHooked) continue;
+      item.dataset.sdHelpHooked = "1";
+      item.addEventListener("mouseenter", () => renderSettingsHelp(key));
+      item.addEventListener("focusin", () => renderSettingsHelp(key));
+      item.addEventListener("click", () => renderSettingsHelp(key));
+    }
+    const advanced = document.getElementById("sd-advanced-link-settings");
+    if (advanced && !advanced.dataset.sdHelpHooked) {
+      advanced.dataset.sdHelpHooked = "1";
+      advanced.addEventListener("mouseenter", () => renderSettingsHelp("advanced_links"));
+      advanced.addEventListener("focusin", () => renderSettingsHelp("advanced_links"));
+      advanced.addEventListener("click", () => renderSettingsHelp("advanced_links"));
+    }
+    renderSettingsHelp();
+  }
+
+  function injectAdvancedSettingsPanel() {
+    if (!location.pathname.endsWith("/other/settings.html")) return;
+    if (document.getElementById("sd-advanced-link-settings")) return;
+    const form = document.querySelector(".schema-container form");
+    if (!form) return;
+    const flags = readAdvancedLinks();
+    const panel = document.createElement("section");
+    panel.id = "sd-advanced-link-settings";
+    panel.className = "k-schema-item";
+    panel.innerHTML = `
+      <div class="actions"></div>
+      <div class="k-schema-main">
+        <div class="k-schema-left">
+          <h3><span>隐藏旧功能入口</span></h3>
+          <div class="markdown"><p>Tensorboard 和经典标签编辑默认从侧边栏隐藏，需要时可临时显示。</p></div>
+        </div>
+        <div class="k-schema-right">
+          <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <input id="sd-show-tensorboard" type="checkbox">
+            <span>显示 Tensorboard 入口</span>
+          </label>
+          <label style="display:flex;align-items:center;gap:8px;margin:4px 0;">
+            <input id="sd-show-legacy-tageditor" type="checkbox">
+            <span>显示经典标签编辑入口</span>
+          </label>
+        </div>
+      </div>`;
+    form.appendChild(panel);
+    const tensorboard = panel.querySelector("#sd-show-tensorboard");
+    const legacy = panel.querySelector("#sd-show-legacy-tageditor");
+    tensorboard.checked = !!flags.showTensorboard;
+    legacy.checked = !!flags.showLegacyTagEditor;
+    const save = () => {
+      writeAdvancedLinks({
+        showTensorboard: tensorboard.checked,
+        showLegacyTagEditor: legacy.checked,
+      });
+      applyAdvancedLinkVisibility();
+    };
+    tensorboard.addEventListener("change", save);
+    legacy.addEventListener("change", save);
+  }
+
   function hookLanguageToggle() {
     const bottom = document.querySelector(".sidebar-bottom");
     if (!bottom || bottom.dataset.sdNavI18nHooked) return;
@@ -195,6 +388,11 @@
       scheduled = null;
       applyNavLocale();
       ensureStableSidebarState();
+      applyAdvancedLinkVisibility();
+      maskSettingsOutput();
+      injectAdvancedSettingsPanel();
+      maskSensitiveSettingsFields();
+      hookSettingsHelp();
       hookLanguageToggle();
     }, 60);
   }
@@ -202,6 +400,11 @@
   function boot() {
     applyNavLocale();
     ensureStableSidebarState();
+    applyAdvancedLinkVisibility();
+    maskSettingsOutput();
+    injectAdvancedSettingsPanel();
+    maskSensitiveSettingsFields();
+    hookSettingsHelp();
     hookLanguageToggle();
 
     const root = document.querySelector("#app");

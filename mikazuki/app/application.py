@@ -164,6 +164,7 @@ async def add_cache_control_header(request, call_next):
         or path.endswith("/assets/dataset-editor.js")
         or path.endswith("/assets/dataset-editor.css")
         or path.endswith("/assets/dataset-editor-entry.js")
+        or path.endswith("/assets/settings.html.06993f96.js")
     ):
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
     elif re.search(r"\.[a-f0-9]{8}\.(js|css|webp)$", path):
