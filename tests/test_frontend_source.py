@@ -76,6 +76,7 @@ def test_frontend_source_owns_native_tag_editor_entry():
 
     assert "NativeTagEditorPage" in main
     assert 'route.path === "/native-tageditor.html"' in main
+    assert 'route.path === "/dataset-editor.html"' in main
     assert "/assets/dataset-editor-entry.js" in native_editor
     assert "/assets/dataset-editor.css" in native_editor
     assert "sd-dataset-editor-script" in native_editor
@@ -105,6 +106,7 @@ def test_frontend_source_declares_browser_smoke_script():
 
     assert '"smoke": "playwright test' in package
     assert "/native-tageditor.html" in smoke
+    assert "/dataset-editor.html" in smoke
     assert "sd-native-editor-entry" in smoke
     assert "/tagger.html" in smoke
     assert "sd-tagger-dock" in smoke

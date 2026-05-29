@@ -153,7 +153,12 @@ def verify_source(root: Path) -> list[dict]:
     )
     if "playwright test" not in package.get("scripts", {}).get("smoke", ""):
         raise RuntimeError("frontend/source package missing Playwright smoke script")
-    for term in ("/native-tageditor.html", "sd-native-editor-entry", "/lora/anima-finetune.html"):
+    for term in (
+        "/native-tageditor.html",
+        "/dataset-editor.html",
+        "sd-native-editor-entry",
+        "/lora/anima-finetune.html",
+    ):
         if term not in smoke_script:
             raise RuntimeError(f"browser smoke missing route/assertion term: {term}")
 
