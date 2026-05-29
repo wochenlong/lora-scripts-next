@@ -55,6 +55,13 @@ interface AnimaForm {
   sigmoid_scale: number;
   discrete_flow_shift: number;
   weighting_scheme: "sigma_sqrt" | "logit_normal" | "mode" | "cosmap" | "none" | "uniform";
+  logit_mean: string;
+  logit_std: string;
+  mode_scale: string;
+  split_attn: boolean;
+  vae_chunk_size: string;
+  vae_disable_cache: boolean;
+  unsloth_offload_checkpointing: boolean;
   gradient_checkpointing: boolean;
   network_train_unet_only: boolean;
   network_train_text_encoder_only: boolean;
@@ -62,6 +69,14 @@ interface AnimaForm {
   cache_latents_to_disk: boolean;
   cache_text_encoder_outputs: boolean;
   cache_text_encoder_outputs_to_disk: boolean;
+  fp8_base: boolean;
+  fp8_base_unet: boolean;
+  persistent_data_loader_workers: boolean;
+  max_data_loader_n_workers: number;
+  text_encoder_batch_size: string;
+  disable_mmap_load_safetensors: boolean;
+  blocks_to_swap: string;
+  cpu_offload_checkpointing: boolean;
   enable_preview: boolean;
   positive_prompts: string;
   negative_prompts: string;
@@ -70,6 +85,9 @@ interface AnimaForm {
   sample_cfg: number;
   sample_seed: number;
   sample_steps: number;
+  sample_sampler: "euler" | "k_euler";
+  sample_scheduler: "simple";
+  sample_at_first: boolean;
   sample_every_n_epochs: number;
   sample_prompts: string;
   caption_extension: string;
@@ -90,6 +108,12 @@ type TextKey =
   | "unet_lr"
   | "resolution"
   | "optimizer_type"
+  | "logit_mean"
+  | "logit_std"
+  | "mode_scale"
+  | "vae_chunk_size"
+  | "text_encoder_batch_size"
+  | "blocks_to_swap"
   | "caption_extension";
 
 type NumberKey =
@@ -111,6 +135,7 @@ type NumberKey =
   | "sample_cfg"
   | "sample_seed"
   | "sample_steps"
+  | "max_data_loader_n_workers"
   | "sample_every_n_epochs";
 
 type BooleanKey =
@@ -123,6 +148,15 @@ type BooleanKey =
   | "enable_bucket"
   | "network_train_unet_only"
   | "network_train_text_encoder_only"
+  | "split_attn"
+  | "vae_disable_cache"
+  | "unsloth_offload_checkpointing"
+  | "fp8_base"
+  | "fp8_base_unet"
+  | "persistent_data_loader_workers"
+  | "disable_mmap_load_safetensors"
+  | "cpu_offload_checkpointing"
+  | "sample_at_first"
   | "prefer_json_caption";
 
 const ANIMA_STORAGE_KEY = "sd-trainer-source-anima-configs";
@@ -190,6 +224,13 @@ const animaDefaults: AnimaForm = {
   sigmoid_scale: 1,
   discrete_flow_shift: 3,
   weighting_scheme: "uniform",
+  logit_mean: "",
+  logit_std: "",
+  mode_scale: "",
+  split_attn: false,
+  vae_chunk_size: "",
+  vae_disable_cache: false,
+  unsloth_offload_checkpointing: false,
   gradient_checkpointing: true,
   network_train_unet_only: true,
   network_train_text_encoder_only: false,
@@ -197,6 +238,14 @@ const animaDefaults: AnimaForm = {
   cache_latents_to_disk: true,
   cache_text_encoder_outputs: true,
   cache_text_encoder_outputs_to_disk: true,
+  fp8_base: false,
+  fp8_base_unet: false,
+  persistent_data_loader_workers: false,
+  max_data_loader_n_workers: 0,
+  text_encoder_batch_size: "",
+  disable_mmap_load_safetensors: false,
+  blocks_to_swap: "",
+  cpu_offload_checkpointing: false,
   enable_preview: true,
   positive_prompts:
     "1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looking at viewer",
@@ -207,6 +256,9 @@ const animaDefaults: AnimaForm = {
   sample_cfg: 4.5,
   sample_seed: 42,
   sample_steps: 40,
+  sample_sampler: "euler",
+  sample_scheduler: "simple",
+  sample_at_first: true,
   sample_every_n_epochs: 2,
   sample_prompts: "",
   caption_extension: ".txt",
@@ -372,7 +424,15 @@ export const AnimaRoutePage = defineComponent({
       });
 
     const selectField = <
-      K extends "mixed_precision" | "attn_mode" | "timestep_sampling" | "lora_type" | "weighting_scheme" | "lr_scheduler",
+      K extends
+        | "mixed_precision"
+        | "attn_mode"
+        | "timestep_sampling"
+        | "lora_type"
+        | "weighting_scheme"
+        | "lr_scheduler"
+        | "sample_sampler"
+        | "sample_scheduler",
     >(
       key: K,
       id: string,
@@ -529,6 +589,22 @@ export const AnimaRoutePage = defineComponent({
                     "uniform",
                   ]),
                 ]),
+                renderTrainingFieldRow([
+                  textField("logit_mean", "anima-logit-mean", "logit_mean", "", "Optional logit_normal mean."),
+                  textField("logit_std", "anima-logit-std", "logit_std", "", "Optional logit_normal stddev."),
+                  textField("mode_scale", "anima-mode-scale", "mode_scale", "", "Optional mode weighting scale."),
+                ]),
+                renderTrainingFieldRow([
+                  checkboxField("split_attn", "anima-split-attn", "split_attn"),
+                  textField("vae_chunk_size", "anima-vae-chunk-size", "vae_chunk_size", "", "Even VAE chunk size."),
+                  checkboxField("vae_disable_cache", "anima-vae-disable-cache", "vae_disable_cache"),
+                ]),
+                checkboxField(
+                  "unsloth_offload_checkpointing",
+                  "anima-unsloth-offload-checkpointing",
+                  "unsloth_offload_checkpointing",
+                  "CPU RAM activation offload. Keep off with blocks_to_swap / cpu_offload_checkpointing.",
+                ),
               ]),
               section("Cache", [
                 h("div", { class: "anima-toggle-grid" }, [
@@ -543,6 +619,43 @@ export const AnimaRoutePage = defineComponent({
                     "cache_text_encoder_outputs_to_disk",
                     "anima-cache-text-encoder-outputs-to-disk",
                     "cache_text_encoder_outputs_to_disk",
+                  ),
+                ]),
+                renderTrainingFieldRow([
+                  checkboxField("fp8_base", "anima-fp8-base", "fp8_base"),
+                  checkboxField("fp8_base_unet", "anima-fp8-base-unet", "fp8_base_unet"),
+                  checkboxField(
+                    "persistent_data_loader_workers",
+                    "anima-persistent-data-loader-workers",
+                    "persistent_data_loader_workers",
+                  ),
+                ]),
+                renderTrainingFieldRow([
+                  numberField(
+                    "max_data_loader_n_workers",
+                    "anima-max-data-loader-n-workers",
+                    "max_data_loader_n_workers",
+                    0,
+                  ),
+                  textField(
+                    "text_encoder_batch_size",
+                    "anima-text-encoder-batch-size",
+                    "text_encoder_batch_size",
+                    "",
+                    "Optional text encoder cache batch size.",
+                  ),
+                  checkboxField(
+                    "disable_mmap_load_safetensors",
+                    "anima-disable-mmap-load-safetensors",
+                    "disable_mmap_load_safetensors",
+                  ),
+                ]),
+                renderTrainingFieldRow([
+                  textField("blocks_to_swap", "anima-blocks-to-swap", "blocks_to_swap"),
+                  checkboxField(
+                    "cpu_offload_checkpointing",
+                    "anima-cpu-offload-checkpointing",
+                    "cpu_offload_checkpointing",
                   ),
                 ]),
               ]),
@@ -560,6 +673,11 @@ export const AnimaRoutePage = defineComponent({
                   numberField("sample_cfg", "anima-sample-cfg", "sample_cfg", 1, 0.1),
                   numberField("sample_seed", "anima-sample-seed", "sample_seed", 0),
                   numberField("sample_steps", "anima-sample-steps", "sample_steps", 1),
+                ]),
+                renderTrainingFieldRow([
+                  selectField("sample_sampler", "anima-sample-sampler", "sample_sampler", ["euler", "k_euler"]),
+                  selectField("sample_scheduler", "anima-sample-scheduler", "sample_scheduler", ["simple"]),
+                  checkboxField("sample_at_first", "anima-sample-at-first", "sample_at_first"),
                 ]),
               ]),
             ]),

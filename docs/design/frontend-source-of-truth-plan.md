@@ -28,6 +28,7 @@ Created: 2026-05-30
 - 2026-05-30: Restored common training config workflow controls in source Anima pages: reset to route defaults, export current run payload as JSON, and import JSON configs back into the source-owned form.
 - 2026-05-30: Added guarded production dist sync tooling in `scripts/sync_frontend_source_dist.py`. It verifies `build/frontend-source-dist` first, dry-runs by default, and requires explicit `--apply` before replacing `frontend/dist`, with optional backup support.
 - 2026-05-30: Migrated low-risk utility/info routes to source-owned static pages: `/tensorboard.html`, `/lora/tools.html`, `/task.html`, `/help/guide.html`, `/other/about.html`, and `/other/changelog.html`. These now render real source content instead of the generic compatibility placeholder while keeping backend/service contracts unchanged.
+- 2026-05-30: Expanded Anima schema parity with preview sampler/scheduler controls, step-0 preview toggle, logit/mode weighting fields, split attention/VAE toggles, FP8 cache controls, worker/cache batch settings, and offload fields shared by LoRA and finetune routes.
 
 ## Background
 
