@@ -2,42 +2,36 @@ import { h, type VNodeChild } from "vue";
 
 export type TrainingFormState = Record<string, unknown>;
 
+interface TrainingFieldBase<TForm extends TrainingFormState> {
+  key: keyof TForm & string;
+  id: string;
+  label: string;
+  description?: string;
+  hidden?: boolean;
+  disabled?: boolean;
+}
+
 export type TrainingFieldSpec<TForm extends TrainingFormState = TrainingFormState> =
-  | {
+  | (TrainingFieldBase<TForm> & {
       kind: "text";
-      key: keyof TForm & string;
-      id: string;
-      label: string;
       placeholder?: string;
-    }
-  | {
+    })
+  | (TrainingFieldBase<TForm> & {
       kind: "number";
-      key: keyof TForm & string;
-      id: string;
-      label: string;
       min?: number;
       step?: string | number;
-    }
-  | {
+    })
+  | (TrainingFieldBase<TForm> & {
       kind: "checkbox";
-      key: keyof TForm & string;
-      id: string;
-      label: string;
-    }
-  | {
+    })
+  | (TrainingFieldBase<TForm> & {
       kind: "select";
-      key: keyof TForm & string;
-      id: string;
-      label: string;
       options: string[];
-    }
-  | {
+    })
+  | (TrainingFieldBase<TForm> & {
       kind: "textarea";
-      key: keyof TForm & string;
-      id: string;
-      label: string;
       rows?: number;
-    };
+    });
 
 export interface RunControl {
   label: string;
@@ -46,17 +40,23 @@ export interface RunControl {
 }
 
 export function renderTrainingField<TForm extends TrainingFormState>(form: TForm, field: TrainingFieldSpec<TForm>) {
+  if (field.hidden) {
+    return null;
+  }
+
   if (field.kind === "checkbox") {
     return h("label", { class: "training-toggle anima-toggle" }, [
       h("input", {
         id: field.id,
         type: "checkbox",
+        disabled: field.disabled,
         checked: Boolean(form[field.key]),
         onChange: (event: Event) => {
           form[field.key] = (event.target as HTMLInputElement).checked as TForm[keyof TForm & string];
         },
       }),
       h("span", field.label),
+      renderFieldDescription(field.description),
     ]);
   }
 
@@ -67,6 +67,7 @@ export function renderTrainingField<TForm extends TrainingFormState>(form: TForm
         "select",
         {
           id: field.id,
+          disabled: field.disabled,
           value: String(form[field.key] ?? ""),
           onChange: (event: Event) => {
             form[field.key] = (event.target as HTMLSelectElement).value as TForm[keyof TForm & string];
@@ -74,6 +75,7 @@ export function renderTrainingField<TForm extends TrainingFormState>(form: TForm
         },
         field.options.map((value) => h("option", { value }, value || "auto")),
       ),
+      renderFieldDescription(field.description),
     ]);
   }
 
@@ -82,12 +84,14 @@ export function renderTrainingField<TForm extends TrainingFormState>(form: TForm
       h("span", field.label),
       h("textarea", {
         id: field.id,
+        disabled: field.disabled,
         value: String(form[field.key] ?? ""),
         rows: field.rows ?? 4,
         onInput: (event: Event) => {
           form[field.key] = (event.target as HTMLTextAreaElement).value as TForm[keyof TForm & string];
         },
       }),
+      renderFieldDescription(field.description),
     ]);
   }
 
@@ -99,11 +103,13 @@ export function renderTrainingField<TForm extends TrainingFormState>(form: TForm
         type: "number",
         min: field.min ?? 0,
         step: field.step ?? 1,
+        disabled: field.disabled,
         value: Number(form[field.key] ?? 0),
         onInput: (event: Event) => {
           form[field.key] = Number((event.target as HTMLInputElement).value) as TForm[keyof TForm & string];
         },
       }),
+      renderFieldDescription(field.description),
     ]);
   }
 
@@ -111,13 +117,26 @@ export function renderTrainingField<TForm extends TrainingFormState>(form: TForm
     h("span", field.label),
     h("input", {
       id: field.id,
+      disabled: field.disabled,
       value: String(form[field.key] ?? ""),
       placeholder: field.placeholder ?? "",
       onInput: (event: Event) => {
         form[field.key] = (event.target as HTMLInputElement).value as TForm[keyof TForm & string];
       },
     }),
+    renderFieldDescription(field.description),
   ]);
+}
+
+export function renderTrainingFields<TForm extends TrainingFormState>(
+  form: TForm,
+  fields: TrainingFieldSpec<TForm>[],
+) {
+  return fields.map((field) => renderTrainingField(form, field));
+}
+
+export function renderTrainingFieldRow(children: VNodeChild[]) {
+  return h("div", { class: "training-field-row anima-field-row" }, children);
 }
 
 export function renderTrainingSection(title: string, children: VNodeChild[]) {
@@ -175,4 +194,8 @@ export function tomlValue(value: unknown): string {
     return String(value);
   }
   return `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", "\\n")}"`;
+}
+
+function renderFieldDescription(description?: string) {
+  return description ? h("small", { class: "training-field-description" }, description) : null;
 }

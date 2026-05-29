@@ -245,6 +245,13 @@ h1 {
   resize: vertical;
 }
 
+.training-field-description {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
 .anima-field-row {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

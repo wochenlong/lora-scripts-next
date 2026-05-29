@@ -1,10 +1,11 @@
-import { defineComponent, h, reactive, ref } from "vue";
+import { defineComponent, h, reactive, ref, type VNodeChild } from "vue";
 import type { AppRoute } from "./routes";
 import {
   previewToml,
   renderParameterPreview,
   renderRunControls,
   renderTrainingField,
+  renderTrainingFieldRow,
   renderTrainingSection,
   renderTrainingWorkbench,
   type TrainingFormState,
@@ -234,16 +235,24 @@ export const AnimaRoutePage = defineComponent({
 
     const formState = animaForm as unknown as TrainingFormState;
 
-    const textField = (key: TextKey, id: string, label: string, placeholder = "") =>
+    const textField = (key: TextKey, id: string, label: string, placeholder = "", description = "") =>
       renderTrainingField(formState, {
         kind: "text",
         key,
         id,
         label,
         placeholder,
+        description,
       });
 
-    const numberField = (key: NumberKey, id: string, label: string, min = 0, step: string | number = 1) =>
+    const numberField = (
+      key: NumberKey,
+      id: string,
+      label: string,
+      min = 0,
+      step: string | number = 1,
+      description = "",
+    ) =>
       renderTrainingField(formState, {
         kind: "number",
         key,
@@ -251,23 +260,31 @@ export const AnimaRoutePage = defineComponent({
         label,
         min,
         step,
+        description,
       });
 
-    const checkboxField = (key: BooleanKey, id: string, label: string) =>
+    const checkboxField = (key: BooleanKey, id: string, label: string, description = "") =>
       renderTrainingField(formState, {
         kind: "checkbox",
         key,
         id,
         label,
+        description,
       });
 
-    const textareaField = (key: "positive_prompts" | "negative_prompts" | "sample_prompts", id: string, label: string) =>
+    const textareaField = (
+      key: "positive_prompts" | "negative_prompts" | "sample_prompts",
+      id: string,
+      label: string,
+      description = "",
+    ) =>
       renderTrainingField(formState, {
         kind: "textarea",
         key,
         id,
         label,
         rows: 4,
+        description,
       });
 
     const selectField = <K extends "mixed_precision" | "attn_mode" | "timestep_sampling" | "lora_type">(
@@ -284,7 +301,7 @@ export const AnimaRoutePage = defineComponent({
         options,
       });
 
-    const section = (title: string, children: ReturnType<typeof h>[]) => renderTrainingSection(title, children);
+    const section = (title: string, children: VNodeChild[]) => renderTrainingSection(title, children);
 
     return () =>
       h("main", { class: "content anima-page" }, [
@@ -311,23 +328,30 @@ export const AnimaRoutePage = defineComponent({
                   "anima-pretrained-model",
                   "pretrained_model_name_or_path",
                   "D:/models/anima-base-v1.0.safetensors",
+                  "Anima DiT / transformer checkpoint path.",
                 ),
-                textField("vae", "anima-vae", "vae", "D:/models/qwen_image_vae.safetensors"),
-                textField("qwen3", "anima-qwen3", "qwen3", "D:/models/qwen_3_06b_base.safetensors"),
-                textField("t5_tokenizer_path", "anima-t5-tokenizer-path", "t5_tokenizer_path"),
+                textField("vae", "anima-vae", "vae", "D:/models/qwen_image_vae.safetensors", "Qwen Image VAE path."),
+                textField("qwen3", "anima-qwen3", "qwen3", "D:/models/qwen_3_06b_base.safetensors", "Qwen3 text model path."),
+                textField(
+                  "t5_tokenizer_path",
+                  "anima-t5-tokenizer-path",
+                  "t5_tokenizer_path",
+                  "",
+                  "Optional T5 tokenizer folder. Empty uses the bundled config.",
+                ),
               ]),
               section("Dataset And Output", [
                 textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima"),
                 textField("output_dir", "anima-output-dir", "output_dir"),
                 textField("output_name", "anima-output-name", "output_name"),
-                h("div", { class: "anima-field-row" }, [
+                renderTrainingFieldRow([
                   textField("resolution", "anima-resolution", "resolution"),
                   textField("caption_extension", "anima-caption-extension", "caption_extension"),
                   checkboxField("prefer_json_caption", "anima-prefer-json-caption", "prefer_json_caption"),
                 ]),
               ]),
               section("Training", [
-                h("div", { class: "anima-field-row" }, [
+                renderTrainingFieldRow([
                   numberField("max_train_epochs", "anima-epochs", "max_train_epochs", 1),
                   numberField("train_batch_size", "anima-train-batch-size", "train_batch_size", 1),
                   numberField(
@@ -337,7 +361,7 @@ export const AnimaRoutePage = defineComponent({
                     1,
                   ),
                 ]),
-                h("div", { class: "anima-field-row" }, [
+                renderTrainingFieldRow([
                   textField("learning_rate", "anima-learning-rate", "learning_rate"),
                   textField("optimizer_type", "anima-optimizer", "optimizer_type"),
                   selectField("mixed_precision", "anima-mixed-precision", "mixed_precision", ["bf16", "fp16", "no"]),
@@ -346,7 +370,7 @@ export const AnimaRoutePage = defineComponent({
               ]),
               plan.modelTrainType === "anima-lora"
                 ? section("LoRA Adapter", [
-                    h("div", { class: "anima-field-row" }, [
+                    renderTrainingFieldRow([
                       selectField("lora_type", "anima-lora-type", "lora_type", [
                         "lora",
                         "lokr",
@@ -362,7 +386,7 @@ export const AnimaRoutePage = defineComponent({
                   ])
                 : null,
               section("Anima Parameters", [
-                h("div", { class: "anima-field-row" }, [
+                renderTrainingFieldRow([
                   selectField("attn_mode", "anima-attn-mode", "attn_mode", [
                     "",
                     "torch",
@@ -401,12 +425,12 @@ export const AnimaRoutePage = defineComponent({
                 textareaField("positive_prompts", "anima-positive-prompts", "positive_prompts"),
                 textareaField("negative_prompts", "anima-negative-prompts", "negative_prompts"),
                 textareaField("sample_prompts", "anima-sample-prompts", "sample_prompts"),
-                h("div", { class: "anima-field-row" }, [
+                renderTrainingFieldRow([
                   numberField("sample_width", "anima-sample-width", "sample_width", 64),
                   numberField("sample_height", "anima-sample-height", "sample_height", 64),
                   numberField("sample_every_n_epochs", "anima-sample-every-n-epochs", "sample_every_n_epochs", 1),
                 ]),
-                h("div", { class: "anima-field-row" }, [
+                renderTrainingFieldRow([
                   numberField("sample_cfg", "anima-sample-cfg", "sample_cfg", 1, 0.1),
                   numberField("sample_seed", "anima-sample-seed", "sample_seed", 0),
                   numberField("sample_steps", "anima-sample-steps", "sample_steps", 1),
