@@ -46,6 +46,8 @@ config/.update_cache.json
 # IDE/Tool directories
 .sisyphus/
 .playwright-mcp/
+frontend/source/test-results/
+frontend/source/playwright-report/
 
 # Local docs (not uploaded to GitHub)
 doc/

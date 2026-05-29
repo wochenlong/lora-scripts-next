@@ -112,6 +112,51 @@ def verify_source(root: Path) -> list[dict]:
         if term not in anima_source:
             raise RuntimeError(f"Anima source missing route contract term: {term}")
 
+    native_source = (source / "src/nativeTagEditor.ts").read_text(encoding="utf-8")
+    native_entry = (source / "public/assets/dataset-editor-entry.js").read_text(
+        encoding="utf-8"
+    )
+    native_runtime = (source / "public/assets/dataset-editor.js").read_text(
+        encoding="utf-8"
+    )
+    native_css = (source / "public/assets/dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+    required_native_source_terms = [
+        "/assets/dataset-editor-entry.js",
+        "/assets/dataset-editor.css",
+        "sd-dataset-editor-script",
+    ]
+    for term in required_native_source_terms:
+        if term not in native_source:
+            raise RuntimeError(f"native editor source missing contract term: {term}")
+    for term in ("sd-native-editor-entry", "de-shell-embedded"):
+        if term not in native_entry:
+            raise RuntimeError(f"native editor entry missing contract term: {term}")
+    if "de-shell-embedded" not in native_css:
+        raise RuntimeError("native editor CSS missing embedded shell styles")
+    for term in (
+        "/api/dataset-editor/scan",
+        "/api/dataset-editor/caption",
+        "/api/dataset-editor/batch",
+        "/api/dataset-editor/tag",
+        "/api/dataset-editor/undo",
+        "/api/dataset-editor/redo",
+        "dataset_tagger_api_endpoint",
+        "dataset_tagger_api_key",
+    ):
+        if term not in native_runtime:
+            raise RuntimeError(f"native editor runtime missing contract term: {term}")
+
+    smoke_script = (source / "scripts/smoke-source-frontend.spec.mjs").read_text(
+        encoding="utf-8"
+    )
+    if "playwright test" not in package.get("scripts", {}).get("smoke", ""):
+        raise RuntimeError("frontend/source package missing Playwright smoke script")
+    for term in ("/native-tageditor.html", "sd-native-editor-entry", "/lora/anima-finetune.html"):
+        if term not in smoke_script:
+            raise RuntimeError(f"browser smoke missing route/assertion term: {term}")
+
     return routes
 
 
@@ -129,6 +174,13 @@ def verify_built_output(root: Path, routes: list[dict]) -> None:
             continue
         if not (out / path.lstrip("/")).is_file():
             raise RuntimeError(f"built output missing route alias: {path}")
+    for asset in (
+        "assets/dataset-editor-entry.js",
+        "assets/dataset-editor.js",
+        "assets/dataset-editor.css",
+    ):
+        if not (out / asset).is_file():
+            raise RuntimeError(f"built output missing native editor asset: {asset}")
 
 
 def main() -> int:

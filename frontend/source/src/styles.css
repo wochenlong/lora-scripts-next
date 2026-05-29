@@ -146,6 +146,25 @@ h1 {
   overflow-wrap: anywhere;
 }
 
+.native-editor-page {
+  min-width: 0;
+  background: #eef2f6;
+}
+
+.native-editor-mount {
+  min-height: 100vh;
+}
+
+.native-editor-mount:empty {
+  padding: 40px;
+}
+
+.native-editor-mount:empty::before {
+  content: "Loading native tag editor...";
+  color: #667085;
+  font-weight: 700;
+}
+
 .settings-page {
   max-width: 1040px;
   padding: 40px;

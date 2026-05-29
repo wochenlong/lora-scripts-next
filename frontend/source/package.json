@@ -5,12 +5,16 @@
   "type": "module",
   "scripts": {
     "build": "vite build && node scripts/write-route-aliases.mjs",
-    "check": "tsc --noEmit"
+    "check": "tsc --noEmit",
+    "preview": "vite preview --host 127.0.0.1 --port 4173 --strictPort",
+    "smoke": "playwright test scripts/smoke-source-frontend.spec.mjs"
   },
   "dependencies": {
     "typescript": "^5.8.3",
     "vite": "^6.3.5",
     "vue": "^3.5.14"
   },
-  "devDependencies": {}
+  "devDependencies": {
+    "@playwright/test": "^1.60.0"
+  }
 }
