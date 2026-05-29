@@ -1,4 +1,5 @@
 import { createApp, defineComponent, h } from "vue";
+import { AnimaRoutePage, isAnimaRoute } from "./anima";
 import { currentRoute, navGroups, routes } from "./routes";
 import { SettingsPage } from "./settings";
 import "./styles.css";
@@ -10,6 +11,8 @@ const App = defineComponent({
     const routeContent =
       route.path === "/other/settings.html"
         ? h(SettingsPage)
+        : isAnimaRoute(route.path)
+          ? h(AnimaRoutePage, { route })
         : h("main", { class: "content" }, [
             h("p", { class: "eyebrow" }, "Source-owned frontend shell"),
             h("h1", route.title),

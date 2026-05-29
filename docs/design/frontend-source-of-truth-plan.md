@@ -11,6 +11,7 @@ Created: 2026-05-30
 - 2026-05-30: Expanded the patch script to also cover the older Anima/SD3 dist text patches documented in `frontend/VENDOR.md`, including the app sidebar, `sd3` render chunk, `sd3` page-data chunk, and `lora/sd3.html` SSR copy.
 - 2026-05-30: Created `codex/frontend-source` with `frontend/source`, a minimal Vite + Vue 3 + TypeScript shell. It declares public compatibility routes in `src/routes.json`, builds static output to `build/frontend-source-dist`, writes HTML route aliases, and has `scripts/verify_frontend_source.py` for source/build contract checks.
 - 2026-05-30: Started incremental migration by adding a source-owned `/other/settings.html` page. It reads and writes the existing `ui-configs` and `sd-trainer-ui-advanced-links` localStorage keys, includes native tag editor API settings, masks the API key field, and is covered by `tests/test_frontend_source.py`.
+- 2026-05-30: Added low-risk Anima source route scaffolding for `/lora/sd3.html` and `/lora/anima-finetune.html`. The source app now records the stable route, `model_train_type`, schema file, and backend entrypoint contracts without touching the mature SD/Flux training pages.
 
 ## Background
 

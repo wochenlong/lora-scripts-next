@@ -92,6 +92,26 @@ def verify_source(root: Path) -> list[dict]:
         if term not in settings_source:
             raise RuntimeError(f"settings source missing contract term: {term}")
 
+    main_source = (source / "src/main.ts").read_text(encoding="utf-8")
+    anima_source = (source / "src/anima.ts").read_text(encoding="utf-8")
+    for term in ("AnimaRoutePage", "isAnimaRoute"):
+        if term not in main_source:
+            raise RuntimeError(f"main source missing Anima route hook: {term}")
+
+    required_anima_terms = [
+        "/lora/sd3.html",
+        "/lora/anima-finetune.html",
+        "anima-lora",
+        "anima-finetune",
+        "mikazuki/schema/sd3-lora.ts",
+        "mikazuki/schema/anima-finetune.ts",
+        "scripts/dev/anima_train_network.py",
+        "scripts/dev/anima_train.py",
+    ]
+    for term in required_anima_terms:
+        if term not in anima_source:
+            raise RuntimeError(f"Anima source missing route contract term: {term}")
+
     return routes
 
 
