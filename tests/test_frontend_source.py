@@ -115,29 +115,27 @@ def test_frontend_source_owns_tagger_page_and_progress_asset():
     tagger = (ROOT / "frontend" / "source" / "src" / "tagger.ts").read_text(
         encoding="utf-8"
     )
-    progress = (
-        ROOT / "frontend" / "source" / "public" / "assets" / "tagger-progress.js"
-    ).read_text(encoding="utf-8")
     main = (ROOT / "frontend" / "source" / "src" / "main.ts").read_text(encoding="utf-8")
 
     assert "TaggerPage" in main
     assert 'route.path === "/tagger.html"' in main
     for term in [
-        "schema-container",
-        "example-container",
-        "right-container",
-        "/assets/tagger-progress.js",
+        "taggerForm",
+        "taggerStatus",
         "interrogator_model",
         "wd14-convnextv2-v2",
         "threshold",
         "character_threshold",
         "batch_output_action_on_conflict",
-    ]:
-        assert term in tagger
-    for term in [
         "/api/tagger/status",
         "/api/tagger/prefetch",
+        "/api/tagger/cancel",
+        "/api/tagger/reset",
         "/api/interrogate",
         "sd-tagger-dock",
     ]:
-        assert term in progress
+        assert term in tagger
+    assert "/assets/tagger-progress.js" not in tagger
+    assert not (
+        ROOT / "frontend" / "source" / "public" / "assets" / "tagger-progress.js"
+    ).exists()

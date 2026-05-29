@@ -219,6 +219,18 @@ h1 {
   display: none;
 }
 
+.tagger-flags {
+  display: grid;
+  gap: 8px;
+}
+
+.tagger-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  color: #475467;
+}
+
 .example-container > .right-container .sd-tagger-dock {
   display: grid;
   gap: 12px;
@@ -265,6 +277,11 @@ h1 {
   border-color: #0f766e;
   background: #0f766e;
   color: #fff;
+}
+
+.tagger-local-status {
+  margin: 0;
+  color: #667085;
 }
 
 .settings-page {
