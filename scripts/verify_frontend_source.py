@@ -94,9 +94,38 @@ def verify_source(root: Path) -> list[dict]:
 
     main_source = (source / "src/main.ts").read_text(encoding="utf-8")
     anima_source = (source / "src/anima.ts").read_text(encoding="utf-8")
+    training_renderer = (source / "src/trainingRenderer.ts").read_text(
+        encoding="utf-8"
+    )
     for term in ("AnimaRoutePage", "isAnimaRoute"):
         if term not in main_source:
             raise RuntimeError(f"main source missing Anima route hook: {term}")
+
+    required_training_renderer_terms = [
+        "TrainingFieldSpec",
+        "renderTrainingField",
+        "renderTrainingSection",
+        "renderTrainingWorkbench",
+        "renderParameterPreview",
+        "renderRunControls",
+        "previewToml",
+        "tomlValue",
+        "anima-workbench",
+        "anima-form-panel",
+        "anima-preview-panel",
+        "Parameter Preview",
+        'kind: "text"',
+        'kind: "number"',
+        'kind: "checkbox"',
+        'kind: "select"',
+        'kind: "textarea"',
+    ]
+    for term in required_training_renderer_terms:
+        if term not in training_renderer:
+            raise RuntimeError(f"training renderer missing contract term: {term}")
+    for term in ("./trainingRenderer", "renderTrainingField"):
+        if term not in anima_source:
+            raise RuntimeError(f"Anima source missing training renderer use: {term}")
 
     required_anima_terms = [
         "/lora/sd3.html",
@@ -137,11 +166,7 @@ def verify_source(root: Path) -> list[dict]:
         "caption_extension",
         "prefer_json_caption",
         "previewToml",
-        "anima-workbench",
-        "anima-form-panel",
-        "anima-preview-panel",
         "anima-preview-code",
-        "Parameter Preview",
         "Save Config",
         "Load Config",
     ]

@@ -85,15 +85,44 @@ def test_frontend_source_declares_anima_route_contracts():
         "caption_extension",
         "prefer_json_caption",
         "previewToml",
-        "anima-workbench",
-        "anima-form-panel",
-        "anima-preview-panel",
         "anima-preview-code",
-        "Parameter Preview",
         "Save Config",
         "Load Config",
     ]:
         assert term in anima
+
+
+def test_frontend_source_has_training_schema_renderer():
+    renderer_path = ROOT / "frontend" / "source" / "src" / "trainingRenderer.ts"
+    assert renderer_path.exists()
+    renderer = renderer_path.read_text(encoding="utf-8")
+    anima = (ROOT / "frontend" / "source" / "src" / "anima.ts").read_text(
+        encoding="utf-8"
+    )
+
+    for term in [
+        "TrainingFieldSpec",
+        "renderTrainingField",
+        "renderTrainingSection",
+        "renderTrainingWorkbench",
+        "renderParameterPreview",
+        "renderRunControls",
+        "previewToml",
+        "tomlValue",
+        "anima-workbench",
+        "anima-form-panel",
+        "anima-preview-panel",
+        "Parameter Preview",
+        "kind: \"text\"",
+        "kind: \"number\"",
+        "kind: \"checkbox\"",
+        "kind: \"select\"",
+        "kind: \"textarea\"",
+    ]:
+        assert term in renderer
+    assert "./trainingRenderer" in anima
+    assert "renderTrainingField" in anima
+    assert "function tomlValue" not in anima
 
 
 def test_frontend_source_owns_native_tag_editor_entry():

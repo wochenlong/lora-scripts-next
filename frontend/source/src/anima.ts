@@ -1,5 +1,14 @@
 import { defineComponent, h, reactive, ref } from "vue";
 import type { AppRoute } from "./routes";
+import {
+  previewToml,
+  renderParameterPreview,
+  renderRunControls,
+  renderTrainingField,
+  renderTrainingSection,
+  renderTrainingWorkbench,
+  type TrainingFormState,
+} from "./trainingRenderer";
 
 interface AnimaRoutePlan {
   path: string;
@@ -223,66 +232,43 @@ export const AnimaRoutePage = defineComponent({
       status.value = result.message || result.status || "Submitted";
     }
 
-    function previewToml() {
-      return Object.entries(payload())
-        .filter(([, value]) => value !== "")
-        .map(([key, value]) => `${key} = ${tomlValue(value)}`)
-        .join("\n");
-    }
+    const formState = animaForm as unknown as TrainingFormState;
 
     const textField = (key: TextKey, id: string, label: string, placeholder = "") =>
-      h("label", { class: "anima-field" }, [
-        h("span", label),
-        h("input", {
-          id,
-          value: animaForm[key],
-          placeholder,
-          onInput: (event: Event) => {
-            animaForm[key] = (event.target as HTMLInputElement).value;
-          },
-        }),
-      ]);
+      renderTrainingField(formState, {
+        kind: "text",
+        key,
+        id,
+        label,
+        placeholder,
+      });
 
     const numberField = (key: NumberKey, id: string, label: string, min = 0, step: string | number = 1) =>
-      h("label", { class: "anima-field" }, [
-        h("span", label),
-        h("input", {
-          id,
-          type: "number",
-          min,
-          step,
-          value: animaForm[key],
-          onInput: (event: Event) => {
-            animaForm[key] = Number((event.target as HTMLInputElement).value);
-          },
-        }),
-      ]);
+      renderTrainingField(formState, {
+        kind: "number",
+        key,
+        id,
+        label,
+        min,
+        step,
+      });
 
     const checkboxField = (key: BooleanKey, id: string, label: string) =>
-      h("label", { class: "anima-toggle" }, [
-        h("input", {
-          id,
-          type: "checkbox",
-          checked: animaForm[key],
-          onChange: (event: Event) => {
-            animaForm[key] = (event.target as HTMLInputElement).checked;
-          },
-        }),
-        h("span", label),
-      ]);
+      renderTrainingField(formState, {
+        kind: "checkbox",
+        key,
+        id,
+        label,
+      });
 
     const textareaField = (key: "positive_prompts" | "negative_prompts" | "sample_prompts", id: string, label: string) =>
-      h("label", { class: "anima-field" }, [
-        h("span", label),
-        h("textarea", {
-          id,
-          value: animaForm[key],
-          rows: 4,
-          onInput: (event: Event) => {
-            animaForm[key] = (event.target as HTMLTextAreaElement).value;
-          },
-        }),
-      ]);
+      renderTrainingField(formState, {
+        kind: "textarea",
+        key,
+        id,
+        label,
+        rows: 4,
+      });
 
     const selectField = <K extends "mixed_precision" | "attn_mode" | "timestep_sampling" | "lora_type">(
       key: K,
@@ -290,23 +276,15 @@ export const AnimaRoutePage = defineComponent({
       label: string,
       options: AnimaForm[K][],
     ) =>
-      h("label", { class: "anima-field" }, [
-        h("span", label),
-        h(
-          "select",
-          {
-            id,
-            value: animaForm[key],
-            onChange: (event: Event) => {
-              animaForm[key] = (event.target as HTMLSelectElement).value as AnimaForm[K];
-            },
-          },
-          options.map((value) => h("option", { value }, value || "auto")),
-        ),
-      ]);
+      renderTrainingField(formState, {
+        kind: "select",
+        key,
+        id,
+        label,
+        options,
+      });
 
-    const section = (title: string, children: ReturnType<typeof h>[]) =>
-      h("fieldset", { class: "anima-section" }, [h("legend", title), ...children]);
+    const section = (title: string, children: ReturnType<typeof h>[]) => renderTrainingSection(title, children);
 
     return () =>
       h("main", { class: "content anima-page" }, [
@@ -323,8 +301,8 @@ export const AnimaRoutePage = defineComponent({
             h("dd", plan.schemaFile),
           ]),
         ]),
-        h("section", { class: "anima-workbench" }, [
-          h("div", { class: "anima-form-panel" }, [
+        renderTrainingWorkbench(
+          [
             h("form", { id: "anima-train-form", class: "anima-form" }, [
               h("h2", "Training Config"),
               section("Model Assets", [
@@ -435,21 +413,17 @@ export const AnimaRoutePage = defineComponent({
                 ]),
               ]),
             ]),
-          ]),
-          h("aside", { class: "anima-preview-panel" }, [
-            h("div", { class: "anima-preview-card" }, [
-              h("h2", "Parameter Preview"),
-              h("pre", { id: "anima-preview-code", class: "anima-preview-code" }, previewToml()),
-            ]),
-            h("div", { class: "anima-preview-card" }, [
-              h("h2", "Run Controls"),
-              h("div", { class: "anima-actions" }, [
-                h("button", { type: "button", onClick: saveForm }, "Save Config"),
-                h("button", { type: "button", onClick: loadForm }, "Load Config"),
-                h("button", { type: "button", class: "primary", onClick: runTraining }, "Start Training"),
-              ]),
-              status.value ? h("p", { class: "anima-status" }, status.value) : null,
-            ]),
+          ],
+          [
+            renderParameterPreview(previewToml(payload()), "anima-preview-code"),
+            renderRunControls(
+              [
+                { label: "Save Config", onClick: saveForm },
+                { label: "Load Config", onClick: loadForm },
+                { label: "Start Training", onClick: runTraining, primary: true },
+              ],
+              status.value,
+            ),
             h("details", { class: "anima-preview-card" }, [
               h("summary", "Migration Notes"),
               h(
@@ -463,21 +437,11 @@ export const AnimaRoutePage = defineComponent({
                 h("dd", plan.backendEntrypoint),
               ]),
             ]),
-          ]),
-        ]),
+          ],
+        ),
       ]);
   },
 });
-
-function tomlValue(value: unknown): string {
-  if (typeof value === "boolean") {
-    return value ? "true" : "false";
-  }
-  if (typeof value === "number") {
-    return String(value);
-  }
-  return `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", "\\n")}"`;
-}
 
 function normalizePath(value: string): string {
   return value.replaceAll("\\", "/");
