@@ -157,6 +157,35 @@ def verify_source(root: Path) -> list[dict]:
         if term not in smoke_script:
             raise RuntimeError(f"browser smoke missing route/assertion term: {term}")
 
+    tagger_source = (source / "src/tagger.ts").read_text(encoding="utf-8")
+    tagger_progress = (source / "public/assets/tagger-progress.js").read_text(
+        encoding="utf-8"
+    )
+    for term in (
+        "schema-container",
+        "example-container",
+        "right-container",
+        "/assets/tagger-progress.js",
+        "interrogator_model",
+        "wd14-convnextv2-v2",
+        "threshold",
+        "character_threshold",
+        "batch_output_action_on_conflict",
+    ):
+        if term not in tagger_source:
+            raise RuntimeError(f"tagger source missing contract term: {term}")
+    for term in (
+        "/api/tagger/status",
+        "/api/tagger/prefetch",
+        "/api/interrogate",
+        "sd-tagger-dock",
+    ):
+        if term not in tagger_progress:
+            raise RuntimeError(f"tagger progress asset missing contract term: {term}")
+    for term in ("/tagger.html", "sd-tagger-dock"):
+        if term not in smoke_script:
+            raise RuntimeError(f"browser smoke missing tagger term: {term}")
+
     return routes
 
 
@@ -178,6 +207,7 @@ def verify_built_output(root: Path, routes: list[dict]) -> None:
         "assets/dataset-editor-entry.js",
         "assets/dataset-editor.js",
         "assets/dataset-editor.css",
+        "assets/tagger-progress.js",
     ):
         if not (out / asset).is_file():
             raise RuntimeError(f"built output missing native editor asset: {asset}")

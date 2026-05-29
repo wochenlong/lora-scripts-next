@@ -13,6 +13,7 @@ Created: 2026-05-30
 - 2026-05-30: Started incremental migration by adding a source-owned `/other/settings.html` page. It reads and writes the existing `ui-configs` and `sd-trainer-ui-advanced-links` localStorage keys, includes native tag editor API settings, masks the API key field, and is covered by `tests/test_frontend_source.py`.
 - 2026-05-30: Added low-risk Anima source route scaffolding for `/lora/sd3.html` and `/lora/anima-finetune.html`. The source app now records the stable route, `model_train_type`, schema file, and backend entrypoint contracts without touching the mature SD/Flux training pages.
 - 2026-05-30: Migrated the native tag editor entry into `frontend/source`. The source app owns `/native-tageditor.html`, packages the native editor JS/CSS assets into the source build output, and adds a Playwright browser smoke script for the generated source frontend.
+- 2026-05-30: Migrated the first tagger source route. `/tagger.html` now has a source-owned form scaffold and packages the tagger progress dock asset into the source build output while preserving the existing `/api/tagger/*` and `/api/interrogate` backend contracts.
 
 ## Background
 

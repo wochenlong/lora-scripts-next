@@ -23,3 +23,11 @@ test("native tag editor source route loads embedded editor", async ({ page }) =>
   await expect(page.locator(".de-shell-embedded")).toBeVisible();
   await expect(page.locator("#dataset-path")).toBeVisible();
 });
+
+test("tagger source route loads progress dock", async ({ page }) => {
+  await page.goto("/tagger.html");
+  await expect(page.locator("#app")).toBeVisible();
+  await expect(page.locator(".schema-container form")).toBeVisible();
+  await expect(page.locator("#sd-tagger-dock")).toBeVisible();
+  await expect(page.locator("[data-start-btn]")).toBeVisible();
+});

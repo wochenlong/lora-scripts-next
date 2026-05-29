@@ -165,6 +165,108 @@ h1 {
   font-weight: 700;
 }
 
+.tagger-page {
+  max-width: 1180px;
+}
+
+.tagger-workbench {
+  display: grid;
+  grid-template-columns: minmax(280px, 420px) minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.tagger-schema,
+.tagger-output,
+.example-container > .right-container .sd-tagger-dock {
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.tagger-schema {
+  padding: 18px;
+}
+
+.tagger-schema form {
+  display: grid;
+  gap: 12px;
+}
+
+.tagger-field {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+}
+
+.tagger-field input,
+.tagger-field select {
+  width: 100%;
+  border: 1px solid #c9d3e3;
+  border-radius: 6px;
+  padding: 9px 10px;
+  font: inherit;
+}
+
+.tagger-output {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  padding: 18px;
+}
+
+.tagger-output > button.el-button {
+  display: none;
+}
+
+.example-container > .right-container .sd-tagger-dock {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.sd-tagger-dock__status-line,
+.sd-tagger-dock__buttons,
+.sd-tagger-dock__meter-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.sd-tagger-dock__track {
+  height: 8px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.sd-tagger-dock__fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #0f766e;
+}
+
+.sd-tagger-dock__start,
+.sd-tagger-dock__reset,
+.sd-tagger-dock__link {
+  min-height: 36px;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  cursor: pointer;
+}
+
+.sd-tagger-dock__start {
+  border-color: #0f766e;
+  background: #0f766e;
+  color: #fff;
+}
+
 .settings-page {
   max-width: 1040px;
   padding: 40px;
@@ -275,6 +377,10 @@ h1 {
   }
 
   .anima-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .tagger-workbench {
     grid-template-columns: 1fr;
   }
 }

@@ -3,6 +3,7 @@ import { AnimaRoutePage, isAnimaRoute } from "./anima";
 import { NativeTagEditorPage } from "./nativeTagEditor";
 import { currentRoute, navGroups, routes } from "./routes";
 import { SettingsPage } from "./settings";
+import { TaggerPage } from "./tagger";
 import "./styles.css";
 
 const App = defineComponent({
@@ -12,6 +13,8 @@ const App = defineComponent({
     const routeContent =
       route.path === "/other/settings.html"
         ? h(SettingsPage)
+        : route.path === "/tagger.html"
+          ? h(TaggerPage)
         : route.path === "/native-tageditor.html"
           ? h(NativeTagEditorPage)
         : isAnimaRoute(route.path)
