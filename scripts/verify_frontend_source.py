@@ -284,6 +284,38 @@ def verify_source(root: Path) -> list[dict]:
         if term not in smoke_script:
             raise RuntimeError(f"browser smoke missing tagger term: {term}")
 
+    static_pages = (source / "src/staticPages.ts").read_text(encoding="utf-8")
+    for term in (
+        "/tensorboard.html",
+        "/lora/tools.html",
+        "/task.html",
+        "/help/guide.html",
+        "/other/about.html",
+        "/other/changelog.html",
+        "source-static-page",
+        "source-static-actions",
+        "Open TensorBoard",
+        "Launch tensorboard.py",
+        "scripts/run_gui.py",
+        "frontend/source",
+    ):
+        if term not in static_pages:
+            raise RuntimeError(f"static source pages missing contract term: {term}")
+    for term in ("StaticInfoPage", "isStaticInfoRoute"):
+        if term not in main_source:
+            raise RuntimeError(f"main source missing static page hook: {term}")
+    for term in (
+        "/tensorboard.html",
+        "/lora/tools.html",
+        "/task.html",
+        "/help/guide.html",
+        "/other/about.html",
+        "/other/changelog.html",
+        "source-static-page",
+    ):
+        if term not in smoke_script:
+            raise RuntimeError(f"browser smoke missing static page term: {term}")
+
     return routes
 
 

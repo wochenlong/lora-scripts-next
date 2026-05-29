@@ -115,6 +115,40 @@ h1 {
   line-height: 1.7;
 }
 
+.source-static-page {
+  display: grid;
+  align-content: start;
+  gap: 18px;
+}
+
+.source-static-page .summary {
+  margin: 0;
+}
+
+.source-static-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.source-static-action {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #fff;
+  color: #1f2937;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.source-static-action:hover {
+  border-color: #0f766e;
+  color: #0f766e;
+}
+
 .anima-page {
   max-width: none;
   width: 100%;

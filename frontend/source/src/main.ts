@@ -3,6 +3,7 @@ import { AnimaRoutePage, isAnimaRoute } from "./anima";
 import { NativeTagEditorPage } from "./nativeTagEditor";
 import { currentRoute, navGroups, routes } from "./routes";
 import { SettingsPage } from "./settings";
+import { isStaticInfoRoute, StaticInfoPage } from "./staticPages";
 import { TaggerPage } from "./tagger";
 import "./styles.css";
 
@@ -19,6 +20,8 @@ const App = defineComponent({
           ? h(NativeTagEditorPage)
         : isAnimaRoute(route.path)
           ? h(AnimaRoutePage, { route })
+        : isStaticInfoRoute(route.path)
+          ? h(StaticInfoPage, { route })
         : h("main", { class: "content" }, [
             h("p", { class: "eyebrow" }, "Source-owned frontend shell"),
             h("h1", route.title),

@@ -234,6 +234,44 @@ def test_frontend_source_declares_browser_smoke_script():
     assert "anima-train-form" in smoke
 
 
+def test_frontend_source_owns_static_utility_pages():
+    static_pages = (
+        ROOT / "frontend" / "source" / "src" / "staticPages.ts"
+    ).read_text(encoding="utf-8")
+    main = (ROOT / "frontend" / "source" / "src" / "main.ts").read_text(encoding="utf-8")
+    smoke = (
+        ROOT / "frontend" / "source" / "scripts" / "smoke-source-frontend.spec.mjs"
+    ).read_text(encoding="utf-8")
+
+    assert "StaticInfoPage" in main
+    assert "isStaticInfoRoute" in main
+    for term in [
+        "/tensorboard.html",
+        "/lora/tools.html",
+        "/task.html",
+        "/help/guide.html",
+        "/other/about.html",
+        "/other/changelog.html",
+        "source-static-page",
+        "source-static-actions",
+        "Open TensorBoard",
+        "Launch tensorboard.py",
+        "scripts/run_gui.py",
+        "frontend/source",
+    ]:
+        assert term in static_pages
+    for route in [
+        "/tensorboard.html",
+        "/lora/tools.html",
+        "/task.html",
+        "/help/guide.html",
+        "/other/about.html",
+        "/other/changelog.html",
+    ]:
+        assert route in smoke
+    assert "source-static-page" in smoke
+
+
 def test_frontend_source_owns_tagger_page_and_progress_asset():
     tagger = (ROOT / "frontend" / "source" / "src" / "tagger.ts").read_text(
         encoding="utf-8"

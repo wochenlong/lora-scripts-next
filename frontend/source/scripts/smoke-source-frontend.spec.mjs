@@ -4,6 +4,12 @@ const shellRoutes = [
   "/",
   "/other/settings.html",
   "/lora/anima-finetune.html",
+  "/tensorboard.html",
+  "/lora/tools.html",
+  "/task.html",
+  "/help/guide.html",
+  "/other/about.html",
+  "/other/changelog.html",
   "/missing-route",
 ];
 
@@ -12,6 +18,22 @@ for (const route of shellRoutes) {
     await page.goto(route);
     await expect(page.locator("#app")).toBeVisible();
     await expect(page.locator(".sidebar")).toBeVisible();
+  });
+}
+
+for (const route of [
+  "/tensorboard.html",
+  "/lora/tools.html",
+  "/task.html",
+  "/help/guide.html",
+  "/other/about.html",
+  "/other/changelog.html",
+]) {
+  test(`source utility page has owned content ${route}`, async ({ page }) => {
+    await page.goto(route);
+    await expect(page.locator("#app")).toBeVisible();
+    await expect(page.locator(".source-static-page")).toBeVisible();
+    await expect(page.locator(".source-static-actions")).toBeVisible();
   });
 }
 
