@@ -26,6 +26,8 @@ interface AnimaForm {
   vae: string;
   qwen3: string;
   t5_tokenizer_path: string;
+  llm_adapter_path: string;
+  resume: string;
   train_data_dir: string;
   output_dir: string;
   output_name: string;
@@ -33,17 +35,29 @@ interface AnimaForm {
   max_train_epochs: number;
   train_batch_size: number;
   gradient_accumulation_steps: number;
+  qwen3_max_token_length: number;
+  t5_max_token_length: number;
   learning_rate: string;
   unet_lr: string;
+  lr_scheduler: "linear" | "cosine" | "cosine_with_restarts" | "polynomial" | "constant" | "constant_with_warmup";
+  lr_warmup_steps: number;
   network_dim: number;
   network_alpha: number;
   resolution: string;
+  enable_bucket: boolean;
+  min_bucket_reso: number;
+  max_bucket_reso: number;
+  bucket_reso_steps: number;
   mixed_precision: "bf16" | "fp16" | "no";
   optimizer_type: string;
   attn_mode: "" | "torch" | "xformers" | "sageattn" | "flash";
   timestep_sampling: "sigma" | "uniform" | "sigmoid" | "shift" | "flux_shift";
+  sigmoid_scale: number;
   discrete_flow_shift: number;
+  weighting_scheme: "sigma_sqrt" | "logit_normal" | "mode" | "cosmap" | "none" | "uniform";
   gradient_checkpointing: boolean;
+  network_train_unet_only: boolean;
+  network_train_text_encoder_only: boolean;
   cache_latents: boolean;
   cache_latents_to_disk: boolean;
   cache_text_encoder_outputs: boolean;
@@ -67,6 +81,8 @@ type TextKey =
   | "vae"
   | "qwen3"
   | "t5_tokenizer_path"
+  | "llm_adapter_path"
+  | "resume"
   | "train_data_dir"
   | "output_dir"
   | "output_name"
@@ -80,8 +96,15 @@ type NumberKey =
   | "max_train_epochs"
   | "train_batch_size"
   | "gradient_accumulation_steps"
+  | "qwen3_max_token_length"
+  | "t5_max_token_length"
+  | "lr_warmup_steps"
   | "network_dim"
   | "network_alpha"
+  | "min_bucket_reso"
+  | "max_bucket_reso"
+  | "bucket_reso_steps"
+  | "sigmoid_scale"
   | "discrete_flow_shift"
   | "sample_width"
   | "sample_height"
@@ -97,6 +120,9 @@ type BooleanKey =
   | "cache_text_encoder_outputs"
   | "cache_text_encoder_outputs_to_disk"
   | "enable_preview"
+  | "enable_bucket"
+  | "network_train_unet_only"
+  | "network_train_text_encoder_only"
   | "prefer_json_caption";
 
 const ANIMA_STORAGE_KEY = "sd-trainer-source-anima-configs";
@@ -135,6 +161,8 @@ const animaDefaults: AnimaForm = {
   vae: "./sd-models/anima/qwen_image_vae.safetensors",
   qwen3: "./sd-models/anima/qwen_3_06b_base.safetensors",
   t5_tokenizer_path: "",
+  llm_adapter_path: "",
+  resume: "",
   train_data_dir: "",
   output_dir: "output",
   output_name: "anima",
@@ -142,17 +170,29 @@ const animaDefaults: AnimaForm = {
   max_train_epochs: 10,
   train_batch_size: 1,
   gradient_accumulation_steps: 1,
+  qwen3_max_token_length: 512,
+  t5_max_token_length: 512,
   learning_rate: "1e-5",
   unet_lr: "1e-4",
+  lr_scheduler: "cosine_with_restarts",
+  lr_warmup_steps: 0,
   network_dim: 32,
   network_alpha: 16,
   resolution: "1024,1024",
+  enable_bucket: true,
+  min_bucket_reso: 256,
+  max_bucket_reso: 2048,
+  bucket_reso_steps: 64,
   mixed_precision: "bf16",
   optimizer_type: "AdamW8bit",
   attn_mode: "",
   timestep_sampling: "shift",
+  sigmoid_scale: 1,
   discrete_flow_shift: 3,
+  weighting_scheme: "uniform",
   gradient_checkpointing: true,
+  network_train_unet_only: true,
+  network_train_text_encoder_only: false,
   cache_latents: true,
   cache_latents_to_disk: true,
   cache_text_encoder_outputs: true,
@@ -198,6 +238,8 @@ export const AnimaRoutePage = defineComponent({
         vae: normalizePath(animaForm.vae),
         qwen3: normalizePath(animaForm.qwen3),
         t5_tokenizer_path: normalizePath(animaForm.t5_tokenizer_path),
+        llm_adapter_path: normalizePath(animaForm.llm_adapter_path),
+        resume: normalizePath(animaForm.resume),
         train_data_dir: normalizePath(animaForm.train_data_dir),
         output_dir: normalizePath(animaForm.output_dir),
       };
@@ -206,6 +248,8 @@ export const AnimaRoutePage = defineComponent({
         delete base.unet_lr;
         delete base.network_dim;
         delete base.network_alpha;
+        delete base.network_train_unet_only;
+        delete base.network_train_text_encoder_only;
       }
       return base;
     }
@@ -287,7 +331,9 @@ export const AnimaRoutePage = defineComponent({
         description,
       });
 
-    const selectField = <K extends "mixed_precision" | "attn_mode" | "timestep_sampling" | "lora_type">(
+    const selectField = <
+      K extends "mixed_precision" | "attn_mode" | "timestep_sampling" | "lora_type" | "weighting_scheme" | "lr_scheduler",
+    >(
       key: K,
       id: string,
       label: string,
@@ -339,6 +385,8 @@ export const AnimaRoutePage = defineComponent({
                   "",
                   "Optional T5 tokenizer folder. Empty uses the bundled config.",
                 ),
+                textField("llm_adapter_path", "anima-llm-adapter-path", "llm_adapter_path"),
+                textField("resume", "anima-resume", "resume"),
               ]),
               section("Dataset And Output", [
                 textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima"),
@@ -349,6 +397,12 @@ export const AnimaRoutePage = defineComponent({
                   textField("caption_extension", "anima-caption-extension", "caption_extension"),
                   checkboxField("prefer_json_caption", "anima-prefer-json-caption", "prefer_json_caption"),
                 ]),
+                renderTrainingFieldRow([
+                  checkboxField("enable_bucket", "anima-enable-bucket", "enable_bucket"),
+                  numberField("min_bucket_reso", "anima-min-bucket-reso", "min_bucket_reso", 64),
+                  numberField("max_bucket_reso", "anima-max-bucket-reso", "max_bucket_reso", 64),
+                ]),
+                numberField("bucket_reso_steps", "anima-bucket-reso-steps", "bucket_reso_steps", 1),
               ]),
               section("Training", [
                 renderTrainingFieldRow([
@@ -366,6 +420,19 @@ export const AnimaRoutePage = defineComponent({
                   textField("optimizer_type", "anima-optimizer", "optimizer_type"),
                   selectField("mixed_precision", "anima-mixed-precision", "mixed_precision", ["bf16", "fp16", "no"]),
                 ]),
+                renderTrainingFieldRow([
+                  selectField("lr_scheduler", "anima-lr-scheduler", "lr_scheduler", [
+                    "linear",
+                    "cosine",
+                    "cosine_with_restarts",
+                    "polynomial",
+                    "constant",
+                    "constant_with_warmup",
+                  ]),
+                  numberField("lr_warmup_steps", "anima-lr-warmup-steps", "lr_warmup_steps", 0),
+                  numberField("qwen3_max_token_length", "anima-qwen3-max-token-length", "qwen3_max_token_length", 1),
+                ]),
+                numberField("t5_max_token_length", "anima-t5-max-token-length", "t5_max_token_length", 1),
                 checkboxField("gradient_checkpointing", "anima-gradient-checkpointing", "gradient_checkpointing"),
               ]),
               plan.modelTrainType === "anima-lora"
@@ -383,6 +450,14 @@ export const AnimaRoutePage = defineComponent({
                       numberField("network_dim", "anima-network-dim", "network_dim", 1),
                     ]),
                     numberField("network_alpha", "anima-network-alpha", "network_alpha", 1),
+                    renderTrainingFieldRow([
+                      checkboxField("network_train_unet_only", "anima-network-train-unet-only", "network_train_unet_only"),
+                      checkboxField(
+                        "network_train_text_encoder_only",
+                        "anima-network-train-text-encoder-only",
+                        "network_train_text_encoder_only",
+                      ),
+                    ]),
                   ])
                 : null,
               section("Anima Parameters", [
@@ -401,7 +476,18 @@ export const AnimaRoutePage = defineComponent({
                     "shift",
                     "flux_shift",
                   ]),
+                  numberField("sigmoid_scale", "anima-sigmoid-scale", "sigmoid_scale", 0, 0.001),
+                ]),
+                renderTrainingFieldRow([
                   numberField("discrete_flow_shift", "anima-discrete-flow-shift", "discrete_flow_shift", 0, 0.001),
+                  selectField("weighting_scheme", "anima-weighting-scheme", "weighting_scheme", [
+                    "sigma_sqrt",
+                    "logit_normal",
+                    "mode",
+                    "cosmap",
+                    "none",
+                    "uniform",
+                  ]),
                 ]),
               ]),
               section("Cache", [
