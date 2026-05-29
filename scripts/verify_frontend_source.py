@@ -113,7 +113,7 @@ def verify_source(root: Path) -> list[dict]:
             raise RuntimeError(f"Anima source missing route contract term: {term}")
 
     native_source = (source / "src/nativeTagEditor.ts").read_text(encoding="utf-8")
-    native_entry = (source / "public/assets/dataset-editor-entry.js").read_text(
+    native_entry = (source / "src/nativeDatasetEditorMarkup.ts").read_text(
         encoding="utf-8"
     )
     native_runtime = (source / "public/assets/dataset-editor.js").read_text(
@@ -123,16 +123,19 @@ def verify_source(root: Path) -> list[dict]:
         encoding="utf-8"
     )
     required_native_source_terms = [
-        "/assets/dataset-editor-entry.js",
+        "nativeDatasetEditorMarkup",
         "./nativeDatasetEditor.css",
         "sd-dataset-editor-script",
     ]
     for term in required_native_source_terms:
         if term not in native_source:
             raise RuntimeError(f"native editor source missing contract term: {term}")
-    for term in ("sd-native-editor-entry", "de-shell-embedded"):
-        if term not in native_entry:
-            raise RuntimeError(f"native editor entry missing contract term: {term}")
+    if "sd-native-editor-entry" not in native_source:
+        raise RuntimeError("native editor source missing mount id: sd-native-editor-entry")
+    if "de-shell-embedded" not in native_entry:
+        raise RuntimeError("native editor entry missing contract term: de-shell-embedded")
+    if (source / "public/assets/dataset-editor-entry.js").exists():
+        raise RuntimeError("native editor entry must be rendered from source, not public assets")
     if "de-shell-embedded" not in native_css:
         raise RuntimeError("native editor CSS missing embedded shell styles")
     if (source / "public/assets/dataset-editor.css").exists():
@@ -208,11 +211,12 @@ def verify_built_output(root: Path, routes: list[dict]) -> None:
         if not (out / path.lstrip("/")).is_file():
             raise RuntimeError(f"built output missing route alias: {path}")
     for asset in (
-        "assets/dataset-editor-entry.js",
         "assets/dataset-editor.js",
     ):
         if not (out / asset).is_file():
             raise RuntimeError(f"built output missing native editor asset: {asset}")
+    if (out / "assets/dataset-editor-entry.js").exists():
+        raise RuntimeError("built output should not include standalone native editor entry")
     if (out / "assets/dataset-editor.css").exists():
         raise RuntimeError("built output should not include standalone native editor CSS")
     if (out / "assets/tagger-progress.js").exists():

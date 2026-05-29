@@ -1,7 +1,7 @@
 import { defineComponent, h, onMounted } from "vue";
+import { nativeDatasetEditorMarkup } from "./nativeDatasetEditorMarkup";
 import "./nativeDatasetEditor.css";
 
-const EDITOR_ENTRY = "/assets/dataset-editor-entry.js?v=2.6.0";
 const EDITOR_RUNTIME = "/assets/dataset-editor.js?v=2.6.0";
 
 function ensureDatasetEditorMeta(): HTMLMetaElement {
@@ -20,16 +20,16 @@ function ensureDatasetEditorMeta(): HTMLMetaElement {
   return meta;
 }
 
-function loadEntryScript(): HTMLScriptElement {
+function loadEditorRuntime(): HTMLScriptElement {
   const existing = document.querySelector<HTMLScriptElement>(
-    'script[data-source-native-editor="entry"]',
+    'script[data-source-native-editor="runtime"]',
   );
   if (existing) return existing;
 
   const script = document.createElement("script");
-  script.src = EDITOR_ENTRY;
+  script.src = EDITOR_RUNTIME;
   script.defer = true;
-  script.dataset.sourceNativeEditor = "entry";
+  script.dataset.sourceNativeEditor = "runtime";
   document.body.appendChild(script);
   return script;
 }
@@ -39,14 +39,16 @@ export const NativeTagEditorPage = defineComponent({
   setup() {
     onMounted(() => {
       ensureDatasetEditorMeta();
-      loadEntryScript();
+      loadEditorRuntime();
     });
 
     return () =>
       h("main", { class: "native-editor-page" }, [
         h("section", {
+          id: "sd-native-editor-entry",
           class: "theme-default-content native-editor-mount",
           "aria-label": "Native Tag Editor",
+          innerHTML: nativeDatasetEditorMarkup,
         }),
       ]);
   },

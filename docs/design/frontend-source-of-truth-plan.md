@@ -17,6 +17,7 @@ Created: 2026-05-30
 - 2026-05-30: Removed the source frontend dependency on the copied `tagger-progress.js` asset. The source tagger page now owns its form state, progress dock, status polling, prefetch, start, cancel, and reset calls in TypeScript.
 - 2026-05-30: Routed the source `/dataset-editor.html` fallback/debug page to the same native editor source entry as `/native-tageditor.html`, preserving the separate public URLs while avoiding a placeholder fallback in the generated source frontend.
 - 2026-05-30: Moved the native dataset editor stylesheet from a copied public asset into the source bundle. The generated source frontend no longer emits standalone `assets/dataset-editor.css`.
+- 2026-05-30: Moved the native dataset editor embedded markup from copied `dataset-editor-entry.js` into a source TypeScript module. `/native-tageditor.html` and `/dataset-editor.html` now render the editor shell from source and only load the remaining editor runtime script.
 
 ## Background
 
