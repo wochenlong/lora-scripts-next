@@ -70,7 +70,7 @@ def test_frontend_source_owns_native_tag_editor_entry():
         ROOT / "frontend" / "source" / "public" / "assets" / "dataset-editor.js"
     ).read_text(encoding="utf-8")
     styles = (
-        ROOT / "frontend" / "source" / "public" / "assets" / "dataset-editor.css"
+        ROOT / "frontend" / "source" / "src" / "nativeDatasetEditor.css"
     ).read_text(encoding="utf-8")
     main = (ROOT / "frontend" / "source" / "src" / "main.ts").read_text(encoding="utf-8")
 
@@ -78,7 +78,10 @@ def test_frontend_source_owns_native_tag_editor_entry():
     assert 'route.path === "/native-tageditor.html"' in main
     assert 'route.path === "/dataset-editor.html"' in main
     assert "/assets/dataset-editor-entry.js" in native_editor
-    assert "/assets/dataset-editor.css" in native_editor
+    assert './nativeDatasetEditor.css' in native_editor
+    assert not (
+        ROOT / "frontend" / "source" / "public" / "assets" / "dataset-editor.css"
+    ).exists()
     assert "sd-dataset-editor-script" in native_editor
     assert "sd-native-editor-entry" in entry
     assert "de-shell-embedded" in entry

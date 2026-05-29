@@ -1,22 +1,8 @@
-import { defineComponent, h, onMounted, onUnmounted } from "vue";
+import { defineComponent, h, onMounted } from "vue";
+import "./nativeDatasetEditor.css";
 
-const EDITOR_CSS = "/assets/dataset-editor.css?v=2.6.0";
 const EDITOR_ENTRY = "/assets/dataset-editor-entry.js?v=2.6.0";
 const EDITOR_RUNTIME = "/assets/dataset-editor.js?v=2.6.0";
-
-function ensureStylesheet(): HTMLLinkElement {
-  const existing = document.querySelector<HTMLLinkElement>(
-    'link[data-source-native-editor="css"]',
-  );
-  if (existing) return existing;
-
-  const link = document.createElement("link");
-  link.rel = "stylesheet";
-  link.href = EDITOR_CSS;
-  link.dataset.sourceNativeEditor = "css";
-  document.head.appendChild(link);
-  return link;
-}
 
 function ensureDatasetEditorMeta(): HTMLMetaElement {
   const existing = document.querySelector<HTMLMetaElement>(
@@ -51,16 +37,9 @@ function loadEntryScript(): HTMLScriptElement {
 export const NativeTagEditorPage = defineComponent({
   name: "NativeTagEditorPage",
   setup() {
-    let stylesheet: HTMLLinkElement | undefined;
-
     onMounted(() => {
-      stylesheet = ensureStylesheet();
       ensureDatasetEditorMeta();
       loadEntryScript();
-    });
-
-    onUnmounted(() => {
-      stylesheet?.remove();
     });
 
     return () =>

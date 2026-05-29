@@ -119,12 +119,12 @@ def verify_source(root: Path) -> list[dict]:
     native_runtime = (source / "public/assets/dataset-editor.js").read_text(
         encoding="utf-8"
     )
-    native_css = (source / "public/assets/dataset-editor.css").read_text(
+    native_css = (source / "src/nativeDatasetEditor.css").read_text(
         encoding="utf-8"
     )
     required_native_source_terms = [
         "/assets/dataset-editor-entry.js",
-        "/assets/dataset-editor.css",
+        "./nativeDatasetEditor.css",
         "sd-dataset-editor-script",
     ]
     for term in required_native_source_terms:
@@ -135,6 +135,8 @@ def verify_source(root: Path) -> list[dict]:
             raise RuntimeError(f"native editor entry missing contract term: {term}")
     if "de-shell-embedded" not in native_css:
         raise RuntimeError("native editor CSS missing embedded shell styles")
+    if (source / "public/assets/dataset-editor.css").exists():
+        raise RuntimeError("native editor CSS must be bundled from source, not public assets")
     for term in (
         "/api/dataset-editor/scan",
         "/api/dataset-editor/caption",
@@ -208,10 +210,11 @@ def verify_built_output(root: Path, routes: list[dict]) -> None:
     for asset in (
         "assets/dataset-editor-entry.js",
         "assets/dataset-editor.js",
-        "assets/dataset-editor.css",
     ):
         if not (out / asset).is_file():
             raise RuntimeError(f"built output missing native editor asset: {asset}")
+    if (out / "assets/dataset-editor.css").exists():
+        raise RuntimeError("built output should not include standalone native editor CSS")
     if (out / "assets/tagger-progress.js").exists():
         raise RuntimeError("built output should not include vendored tagger-progress.js")
 
