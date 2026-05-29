@@ -228,6 +228,7 @@ export const AnimaRoutePage = defineComponent({
   setup(props) {
     const plan = ANIMA_ROUTES[props.route.path];
     const animaForm = reactive<AnimaForm>(loadStoredForm(plan));
+    const importConfigInput = ref<HTMLInputElement | null>(null);
     const status = ref("");
 
     function payload() {
@@ -264,6 +265,45 @@ export const AnimaRoutePage = defineComponent({
     function loadForm() {
       Object.assign(animaForm, loadStoredForm(plan));
       status.value = "Loaded local config";
+    }
+
+    function resetForm() {
+      const stored = readStoredForms();
+      delete stored[plan.path];
+      localStorage.setItem(ANIMA_STORAGE_KEY, JSON.stringify(stored));
+      Object.assign(animaForm, defaultFormForPlan(plan));
+      status.value = "Reset to defaults";
+    }
+
+    function exportConfig() {
+      const blob = new Blob([JSON.stringify(payload(), null, 2)], {
+        type: "application/json",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${animaForm.output_name || plan.modelTrainType}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      status.value = "Exported config";
+    }
+
+    async function importConfigFile(event: Event) {
+      const input = event.target as HTMLInputElement;
+      const file = input.files?.[0];
+      if (!file) {
+        return;
+      }
+      try {
+        const imported = JSON.parse(await file.text()) as Partial<AnimaForm> & { model_train_type?: string };
+        delete imported.model_train_type;
+        Object.assign(animaForm, defaultFormForPlan(plan), imported);
+        status.value = "Imported config";
+      } catch (error) {
+        status.value = error instanceof Error ? error.message : "Import failed";
+      } finally {
+        input.value = "";
+      }
     }
 
     async function runTraining() {
@@ -530,10 +570,21 @@ export const AnimaRoutePage = defineComponent({
               [
                 { label: "Save Config", onClick: saveForm },
                 { label: "Load Config", onClick: loadForm },
+                { label: "Reset Config", onClick: resetForm },
+                { label: "Export Config", onClick: exportConfig },
+                { label: "Import Config", onClick: () => importConfigInput.value?.click() },
                 { label: "Start Training", onClick: runTraining, primary: true },
               ],
               status.value,
             ),
+            h("input", {
+              ref: importConfigInput,
+              id: "anima-import-config",
+              type: "file",
+              accept: "application/json,.json",
+              style: "display:none",
+              onChange: importConfigFile,
+            }),
             h("details", { class: "anima-preview-card" }, [
               h("summary", "Migration Notes"),
               h(
@@ -568,8 +619,14 @@ function readStoredForms(): Record<string, Partial<AnimaForm>> {
 function loadStoredForm(plan: AnimaRoutePlan): AnimaForm {
   const stored = readStoredForms()[plan.path] || {};
   return {
+    ...defaultFormForPlan(plan),
+    ...stored,
+  };
+}
+
+function defaultFormForPlan(plan: AnimaRoutePlan): AnimaForm {
+  return {
     ...animaDefaults,
     output_name: plan.modelTrainType === "anima-finetune" ? "anima-finetune" : "anima-lora",
-    ...stored,
   };
 }

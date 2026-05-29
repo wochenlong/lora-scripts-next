@@ -189,6 +189,13 @@ def verify_source(root: Path) -> list[dict]:
         "anima-preview-code",
         "Save Config",
         "Load Config",
+        "Reset Config",
+        "Export Config",
+        "Import Config",
+        "resetForm",
+        "exportConfig",
+        "importConfigInput",
+        "importConfigFile",
     ]
     for term in required_anima_terms:
         if term not in anima_source:

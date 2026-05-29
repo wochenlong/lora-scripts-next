@@ -102,6 +102,13 @@ def test_frontend_source_declares_anima_route_contracts():
         "anima-preview-code",
         "Save Config",
         "Load Config",
+        "Reset Config",
+        "Export Config",
+        "Import Config",
+        "resetForm",
+        "exportConfig",
+        "importConfigInput",
+        "importConfigFile",
     ]:
         assert term in anima
 
