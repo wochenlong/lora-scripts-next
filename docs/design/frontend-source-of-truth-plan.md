@@ -26,6 +26,7 @@ Created: 2026-05-30
 - 2026-05-30: Expanded the source-owned training renderer with schema-like field metadata (`description`, `hidden`, `disabled`), row layout, and batch field rendering so future Anima/SD/Flux migration can reuse one renderer instead of hand-built page forms.
 - 2026-05-30: Filled another high-priority Anima schema slice in source: adapter/resume paths, token length limits, scheduler warmup, bucket settings, timestep weighting, and LoRA train-target toggles now round-trip through the source form and preview.
 - 2026-05-30: Restored common training config workflow controls in source Anima pages: reset to route defaults, export current run payload as JSON, and import JSON configs back into the source-owned form.
+- 2026-05-30: Added guarded production dist sync tooling in `scripts/sync_frontend_source_dist.py`. It verifies `build/frontend-source-dist` first, dry-runs by default, and requires explicit `--apply` before replacing `frontend/dist`, with optional backup support.
 
 ## Background
 

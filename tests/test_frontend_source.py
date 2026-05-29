@@ -19,6 +19,23 @@ def test_frontend_source_contract_is_declared():
     assert "frontend source contract OK" in result.stdout
 
 
+def test_frontend_source_dist_sync_script_is_guarded():
+    script_path = ROOT / "scripts" / "sync_frontend_source_dist.py"
+    assert script_path.exists()
+    script = script_path.read_text(encoding="utf-8")
+
+    for term in [
+        "build/frontend-source-dist",
+        "frontend/dist",
+        "--apply",
+        "--backup",
+        "scripts/verify_frontend_source.py",
+        "shutil.copytree",
+        "source dist sync plan OK",
+    ]:
+        assert term in script
+
+
 def test_frontend_source_settings_page_owns_tagger_api_config():
     settings = (ROOT / "frontend" / "source" / "src" / "settings.ts").read_text(
         encoding="utf-8"
