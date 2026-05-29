@@ -19,6 +19,9 @@ APP_BUNDLE = Path("frontend/dist/assets/app.547295de.js")
 NATIVE_PAGE_DATA = Path("frontend/dist/assets/native-tageditor.html.native.js")
 NATIVE_HTML = Path("frontend/dist/native-tageditor.html")
 SETTINGS_HTML = Path("frontend/dist/other/settings.html")
+SD3_RENDER_CHUNK = Path("frontend/dist/assets/sd3.html.1a4bf31e.js")
+SD3_DATA_CHUNK = Path("frontend/dist/assets/sd3.html.eaeb05e1.js")
+SD3_HTML = Path("frontend/dist/lora/sd3.html")
 
 SIDEBAR_RE = re.compile(r"const WE=JSON\.parse\(`(?P<json>.*?)`\),x0=")
 OLD_NATIVE_ROUTE = (
@@ -49,6 +52,40 @@ NATIVE_NAV_ITEM = (
     '<li><a href="/native-tageditor.html" class="sidebar-item sidebar-heading" '
     'aria-label="原生标签编辑"><!--[--><!--]--> 原生标签编辑 <!--[--><!--]--></a>'
     "<!----><!----></li>"
+)
+ANIMA_SIDEBAR_ENTRY = {"text": "Anima LoRA", "link": "/lora/sd3.md"}
+SD3_RENDER_REPLACEMENTS = (
+    (
+        'a(" SD3 \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F")',
+        'a(" Anima LoRA \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F")',
+    ),
+    (
+        '"SD3 \\u6A21\\u578B LoRA \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F"',
+        '"Anima DiT \\u6A21\\u578B LoRA \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F"',
+    ),
+    (
+        '"\\u652F\\u6301 SD3.5 \\u6A21\\u578B\\u7684 LoRA \\u8BAD\\u7EC3"',
+        '"Anima DiT \\u8BAD\\u7EC3\\u5165\\u53E3\\uFF0C\\u4F7F\\u7528 Qwen3 + T5 + Anima \\u4E13\\u7528\\u8BAD\\u7EC3\\u53C2\\u6570"',
+    ),
+    (
+        ',r=e("p",null,"\\u522B\\u95EE\\u4E3A\\u4EC0\\u4E48\\u65B0\\u624B\\u6A21\\u5F0F\\u4E0D\\u884C\\uFF0C\\u95EE\\u5C31\\u662F\\u4F60\\u90FD\\u7528 SD3 \\u4E86\\u8FD8\\u60F3\\u5F53\\u65B0\\u624B\\uFF1F",-1),l=[c,n,d,r]',
+        ",l=[c,n,d]",
+    ),
+)
+SD3_DATA_REPLACEMENTS = (
+    (
+        '"title":"SD3 \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F"',
+        '"title":"Anima LoRA \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F"',
+    ),
+)
+SD3_HTML_REPLACEMENTS = (
+    ("aria-label=\"SD3.5\"", "aria-label=\"Anima LoRA\""),
+    ("> SD3.5 <!--[--><!--]--></a>", "> Anima LoRA <!--[--><!--]--></a>"),
+    ("<title>SD3 训练 专家模式 | SD 训练 UI</title>", "<title>Anima Stable Diffusion LoRA | SD 训练 UI</title>"),
+    ("> SD3 训练 专家模式</h1>", "> Anima Stable Diffusion LoRA</h1>"),
+    ("<p>SD3 模型 LoRA 训练 专家模式</p>", "<p>Anima DiT 模型 LoRA 训练 专家模式</p>"),
+    ("<p>支持 SD3.5 模型的 LoRA 训练</p>", "<p>Anima DiT 训练入口，使用 Qwen3 + T5 + Anima 专用参数</p>"),
+    ("<p>别问为什么新手模式不行，问就是你都用 SD3 了还想当新手？</p>", ""),
 )
 
 
@@ -84,6 +121,17 @@ def patch_sidebar_json(text: str, path: Path) -> tuple[str, bool]:
     sidebar = theme.get("sidebar")
     if not isinstance(sidebar, list):
         raise RuntimeError(f"{path}: theme sidebar is not a list")
+
+    lora_group = next((item for item in sidebar if item.get("text") == "训练"), None)
+    if not lora_group or not isinstance(lora_group.get("children"), list):
+        raise RuntimeError(f"{path}: training sidebar group not found")
+    for group in lora_group["children"]:
+        children = group.get("children")
+        if not isinstance(children, list):
+            continue
+        for item in children:
+            if item.get("link") == "/lora/sd3.md":
+                item.update(ANIMA_SIDEBAR_ENTRY)
 
     tools = next((item for item in sidebar if item.get("text") == "工具与调试"), None)
     if not tools or not isinstance(tools.get("children"), list):
@@ -163,6 +211,20 @@ def patch_settings_html(root: Path, dry_run: bool, changed: list[str]) -> None:
     write_if_changed(path, text, dry_run, changed)
 
 
+def patch_anima_sd3_assets(root: Path, dry_run: bool, changed: list[str]) -> None:
+    for rel_path, replacements in (
+        (SD3_RENDER_CHUNK, SD3_RENDER_REPLACEMENTS),
+        (SD3_DATA_CHUNK, SD3_DATA_REPLACEMENTS),
+        (SD3_HTML, SD3_HTML_REPLACEMENTS),
+    ):
+        path = root / rel_path
+        text = read_text(path)
+        for old, new in replacements:
+            if old in text:
+                text = text.replace(old, new)
+        write_if_changed(path, text, dry_run, changed)
+
+
 def patch_sidebar_html(root: Path, dry_run: bool, changed: list[str]) -> None:
     dist = root / "frontend/dist"
     legacy_re = re.compile(
@@ -175,6 +237,9 @@ def patch_sidebar_html(root: Path, dry_run: bool, changed: list[str]) -> None:
         text = read_text(path)
         if 'href="/tageditor.md"' not in text or 'class="sidebar-items"' not in text:
             continue
+        for old, new in SD3_HTML_REPLACEMENTS[:2]:
+            if old in text:
+                text = text.replace(old, new)
         if 'aria-label="标签编辑"' in text:
             text = text.replace('aria-label="标签编辑"', 'aria-label="经典标签编辑"')
             text = text.replace("<!--[--><!--]--> 标签编辑 <!--[--><!--]--></a>", "<!--[--><!--]--> 经典标签编辑 <!--[--><!--]--></a>")
@@ -192,6 +257,9 @@ def validate(root: Path) -> None:
     page = read_text(root / NATIVE_PAGE_DATA)
     native = read_text(root / NATIVE_HTML)
     settings = read_text(root / SETTINGS_HTML)
+    sd3_render = read_text(root / SD3_RENDER_CHUNK)
+    sd3_data = read_text(root / SD3_DATA_CHUNK)
+    sd3_html = read_text(root / SD3_HTML)
     match = SIDEBAR_RE.search(app)
     if not match:
         raise RuntimeError("sidebar JSON block missing after patch")
@@ -216,6 +284,24 @@ def validate(root: Path) -> None:
         raise RuntimeError("native page does not load dataset-editor-entry.js")
     if "/assets/app.547295de.js?v=dataset-tagger-api" not in settings:
         raise RuntimeError("settings HTML does not cache-bust patched app bundle")
+    if "Anima LoRA" not in sidebar_text:
+        raise RuntimeError("sidebar does not expose Anima LoRA")
+    if "Anima LoRA" not in sd3_data or "trainType\":\"sd3-lora" not in sd3_data:
+        raise RuntimeError("sd3 page data does not preserve Anima title and sd3-lora route key")
+    if (
+        "Anima LoRA" not in sd3_render
+        or "Anima DiT" not in sd3_render
+        or "Qwen3 + T5 + Anima" not in sd3_render
+        or "SD3.5" in sd3_render
+    ):
+        raise RuntimeError("sd3 render chunk is not patched for Anima")
+    if (
+        "Anima Stable Diffusion LoRA" not in sd3_html
+        or "Anima DiT 模型 LoRA 训练 专家模式" not in sd3_html
+        or "Qwen3 + T5 + Anima" not in sd3_html
+        or 'aria-label="SD3.5"' in sd3_html
+    ):
+        raise RuntimeError("sd3 SSR HTML is not patched for Anima")
 
 
 def main() -> int:
@@ -230,6 +316,7 @@ def main() -> int:
     patch_native_page_data(root, args.check, changed)
     patch_native_html(root, args.check, changed)
     patch_settings_html(root, args.check, changed)
+    patch_anima_sd3_assets(root, args.check, changed)
     patch_sidebar_html(root, args.check, changed)
     validate(root)
 

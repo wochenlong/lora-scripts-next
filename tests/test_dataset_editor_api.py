@@ -403,6 +403,33 @@ def test_all_trainer_sidebar_snapshots_split_legacy_and_native_editors():
             assert 'href="/dataset-editor.html"' not in html, str(path)
 
 
+def test_frontend_dist_patch_script_covers_anima_sd3_copy():
+    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
+        encoding="utf-8"
+    )
+    sd3_render = (ROOT / "frontend" / "dist" / "assets" / "sd3.html.1a4bf31e.js").read_text(
+        encoding="utf-8"
+    )
+    sd3_data = (ROOT / "frontend" / "dist" / "assets" / "sd3.html.eaeb05e1.js").read_text(
+        encoding="utf-8"
+    )
+    sd3_html = (ROOT / "frontend" / "dist" / "lora" / "sd3.html").read_text(
+        encoding="utf-8"
+    )
+
+    assert '"text":"Anima LoRA","link":"/lora/sd3.md"' in app_bundle
+    assert "Anima LoRA" in sd3_render
+    assert "Anima DiT" in sd3_render
+    assert "Qwen3 + T5 + Anima" in sd3_render
+    assert "SD3.5" not in sd3_render
+    assert '"title":"Anima LoRA \\u8BAD\\u7EC3 \\u4E13\\u5BB6\\u6A21\\u5F0F"' in sd3_data
+    assert '"trainType":"sd3-lora"' in sd3_data
+    assert "Anima Stable Diffusion LoRA" in sd3_html
+    assert "Anima DiT 模型 LoRA 训练 专家模式" in sd3_html
+    assert "Qwen3 + T5 + Anima" in sd3_html
+    assert 'aria-label="SD3.5"' not in sd3_html
+
+
 def test_vuepress_theme_sidebar_json_stays_parseable():
     app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
         encoding="utf-8"
