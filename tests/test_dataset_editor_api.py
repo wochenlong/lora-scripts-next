@@ -1,5 +1,7 @@
 ﻿import json
 import re
+import subprocess
+import sys
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -373,6 +375,32 @@ def test_trainer_sidebar_exposes_legacy_and_native_tag_editors():
     assert '原生标签编辑: "Native Tag Editor"' in nav
     assert 'a[href="/dataset-editor.html"]' not in nav
     assert 'window.location.assign("/dataset-editor.html")' not in nav
+
+
+def test_frontend_dist_patch_script_is_idempotent():
+    result = subprocess.run(
+        [sys.executable, "scripts/patch_frontend_dist.py", "--check"],
+        cwd=ROOT,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "frontend/dist patches already applied" in result.stdout
+
+
+def test_all_trainer_sidebar_snapshots_split_legacy_and_native_editors():
+    for path in (ROOT / "frontend" / "dist").rglob("*.html"):
+        html = path.read_text(encoding="utf-8")
+        if 'class="sidebar-items"' not in html or 'href="/tageditor.md"' not in html:
+            continue
+        assert 'aria-label="标签编辑"' not in html, str(path)
+        assert "经典标签编辑" in html, str(path)
+        assert "原生标签编辑" in html, str(path)
+        assert 'href="/native-tageditor.html"' in html, str(path)
+        if path.name != "dataset-editor.html":
+            assert 'href="/dataset-editor.html"' not in html, str(path)
 
 
 def test_vuepress_theme_sidebar_json_stays_parseable():

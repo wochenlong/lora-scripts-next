@@ -4,6 +4,11 @@ Status: draft
 Branch context: `editor`  
 Created: 2026-05-30
 
+## Progress
+
+- 2026-05-30: Added `scripts/patch_frontend_dist.py` to reapply and validate the current native tag editor dist patches. The script covers the VuePress app route mapping, sidebar JSON, native page-data chunk, native page preload contract, settings cache-bust URL, and SSR sidebar snapshots.
+- 2026-05-30: The first script run found older SSR pages that still exposed the single `标签编辑` sidebar entry. Those snapshots were updated to split `经典标签编辑` and `原生标签编辑`, with regression coverage in `tests/test_dataset_editor_api.py`.
+
 ## Background
 
 SD Trainer Next currently serves the trainer WebUI from `frontend/dist/`. That directory is a vendored prebuilt VuePress/Vue application, originally sourced from `hanamizuki-ai/lora-gui-dist`.
