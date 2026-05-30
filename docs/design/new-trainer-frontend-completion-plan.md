@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Build a source-owned training UI that keeps SD Trainer Next independent from missing legacy frontend source, restores practical full training forms route by route, and presents a polished trainer experience close to Akiba's familiar layout while being cleaner, more searchable, and safer to run.
+**Goal:** Build a source-owned training UI that keeps SD Trainer Next independent from missing legacy frontend source, restores practical full training forms route by route, and presents a polished trainer experience that is visually and behaviorally familiar to Akiba/original trainer users while being cleaner, more searchable, and safer to run.
 
 **Architecture:** `frontend/source` remains the source of truth, `build/frontend-source-dist` is the generated artifact, and `frontend/dist` is committed only from the guarded sync script. Mature training routes should move from compatibility cards to shared schema-rendered forms by adapting existing `mikazuki/schema/*.ts` contracts into local `TrainingSectionSpec` modules. Anima stays the reference implementation for workflow, preview, save/load/import/export, and run submission behavior.
 
@@ -21,7 +21,20 @@ The remaining work is product reconstruction, not blocked-source recovery. The m
 - Existing schema files under `mikazuki/schema/` provide field names, defaults, groups, and option sets. They are not directly executable in the browser source app, so each restored route needs a local schema adapter module.
 - The current renderer already supports text, number, checkbox, select, textarea, table arrays, visibility rules, file/folder browse affordances, section navigation, search, previews, and run submission.
 
-The target visual direction should be "Akiba-familiar, SD Trainer Next cleaner": left navigation, dense grouped forms, right-side preview/run workflow, compact controls, clear section navigation, and fewer decorative blocks. We should not copy old minified CSS; we should recreate the useful layout language from source.
+The target visual direction should be "Akiba-familiar, SD Trainer Next cleaner": left navigation, dense grouped forms, right-side parameter preview/run workflow, compact controls, clear section navigation, and fewer decorative blocks. This is a source-owned reconstruction of the old trainer experience, not a blank new shell. We should not copy old minified CSS; we should recreate the useful layout language from readable `frontend/source` code.
+
+## Updated Acceptance Intent
+
+The user-facing target is closer to pixel-parity than compatibility scaffolding. The old frontend's practical surface area is the benchmark:
+
+- Training routes that existed in the old frontend should not be empty or card-only unless they are explicitly marked as temporary migration fallbacks.
+- Training parameter coverage should be restored from the existing schema contracts and backend-facing parameter names.
+- The core layout should preserve the recognizable old workflow: left navigation, central grouped parameter editor, right parameter preview/actions panel.
+- Buttons, switches, numeric controls, file/folder affordances, save/load/import/export controls, and start/stop training actions should feel familiar to existing users.
+- Improvements are welcome when they make the UI clearer, denser, more searchable, or safer, but not when they make the trainer feel unrelated to the old product.
+- Backend training behavior is a red line. Prefer adapting source frontend schemas, renderers, and payload builders to existing APIs instead of changing backend launch semantics.
+
+In short: source independence is necessary but not sufficient. The finished product must also restore the old frontend's pages, parameter editing experience, and visual rhythm from maintainable source.
 
 ## Completion Definition
 
@@ -34,9 +47,11 @@ The new training frontend is considered complete when all P0 acceptance labels p
 - **[P0-A3 Production Browser Smoke]** `npm run smoke:dist` passes against committed `frontend/dist`.
 - **[P0-A4 Native Tag Editor]** `/native-tageditor.html`, `/native-tageditor-standalone.html`, and `/dataset-editor.html` render the source-owned native editor and do not require old VuePress chunks.
 - **[P0-A5 Classic Tag Editor Retirement]** `/tageditor.html` remains a stable route but does not depend on `/proxy/tageditor/`; it guides users to native editor routes.
-- **[P0-A6 Anima Full Form]** `/lora/sd3.html` and `/lora/anima-finetune.html` expose all currently migrated Anima sections, submit the expected `model_train_type`, show run result links, and provide save/load/import/export.
+- **[P0-A6 Anima Full Form]** `/lora/sd3.html` and `/lora/anima-finetune.html` expose all currently migrated Anima sections, submit the expected `model_train_type`, show run result links, provide save/load/import/export, and retain old-style parameter density with a right-side parameter preview/actions panel.
 - **[P0-A7 Mature Training Forms]** `/lora/basic.html`, `/lora/master.html`, `/lora/flux.html`, and `/dreambooth/index.html` no longer stop at compatibility cards; each has a source-owned form with model, dataset, output, training, optimizer, cache, preview, and advanced sections mapped from existing schema contracts.
-- **[P0-A8 Verification Gate]** This command set passes from repo root:
+- **[P0-A8 Legacy Visual Parity]** Core training pages preserve the old frontend's recognizable layout and interaction model: left navigation, central grouped parameter editor, right parameter preview/actions panel, compact controls, visible file/folder affordances, and prominent training controls.
+- **[P0-A9 Backend Red Line]** Restored pages submit existing backend-facing parameter names and train-type contracts. Backend changes are allowed only for small compatibility fixes that do not alter training launch semantics.
+- **[P0-A10 Verification Gate]** This command set passes from repo root:
 
 ```powershell
 cd frontend\source
@@ -56,12 +71,16 @@ cd ..\..
 - **[P1-B1 Akiba-Familiar Layout]** Training pages use dense left/main forms, grouped fieldsets, compact action bars, and right-side preview/run panels. They should feel familiar to existing trainer users without inheriting old brittle CSS.
 - **[P1-B2 Better Than Old UX]** Each training page has search, section jump navigation, workflow summary, required-path status, and generated parameter preview.
 - **[P1-B3 Reviewable Dist]** Any dist replacement commit is dist-only and accompanied by a preceding source commit plus `verify_frontend_dist_matches_source.py` output.
+- **[P1-B4 Interaction Parity]** Common controls behave like users expect from the old UI: toggles feel like toggles, numeric controls stay compact, file/folder browse affordances are obvious, save/load/import/export controls sit near the preview, and start/stop training actions are prominent.
+- **[P1-B5 No Empty Public Pages]** Public routes from the old frontend either provide real source-owned content or an explicit source-owned fallback explaining the migration state and linking to a working replacement.
 
 ### P2 Acceptance Labels
 
 - **[P2-C1 Visual Polish]** Mobile and desktop screenshots show no overlapping controls at 390px, 768px, 1365px, and 1600px widths.
 - **[P2-C2 Form Ergonomics]** Repeated option groups use reusable section specs rather than ad hoc route-specific code.
 - **[P2-C3 Runtime Grace]** If backend APIs are unavailable, pages show useful status text instead of blank panels.
+- **[P2-C4 Pixel-Parity Audit]** For the core training pages, compare screenshots against the old frontend and fix obvious spacing, density, button, panel, and preview mismatches unless the new design is intentionally cleaner.
+- **[P2-C5 Source-Only Styling]** Visual parity must come from readable `frontend/source` CSS/components, not copied minified assets or hidden legacy bundles.
 
 ---
 
@@ -640,10 +659,14 @@ P0-A4 Native Tag Editor: PASS
 P0-A5 Classic Tag Editor Retirement: PASS
 P0-A6 Anima Full Form: PASS
 P0-A7 Mature Training Forms: PASS
-P0-A8 Verification Gate: PASS
+P0-A8 Legacy Visual Parity: PASS
+P0-A9 Backend Red Line: PASS
+P0-A10 Verification Gate: PASS
 P1-B1 Akiba-Familiar Layout: PASS
 P1-B2 Better Than Old UX: PASS
 P1-B3 Reviewable Dist: PASS
+P1-B4 Interaction Parity: PASS
+P1-B5 No Empty Public Pages: PASS
 ```
 
 - [ ] **Step 3: Push**
