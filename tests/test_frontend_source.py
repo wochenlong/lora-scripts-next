@@ -109,6 +109,7 @@ def test_frontend_source_plan_documents_dist_replacement_gate():
         "npm run check",
         "npm run build",
         "npm run smoke",
+        "npm run smoke:dist",
         "scripts/verify_frontend_source.py --require-built-output",
         "scripts/sync_frontend_source_dist.py",
         "dry-run",

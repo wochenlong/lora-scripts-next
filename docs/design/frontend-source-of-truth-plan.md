@@ -236,6 +236,8 @@ cd ..\..
 
 The sync command above is intentionally a dry-run. Do not run `scripts/sync_frontend_source_dist.py --apply` until the PR has explicit maintainer approval to replace `frontend/dist/`. If approval is granted, use `--backup` for the first replacement rehearsal so the previous vendored dist can be inspected or restored without relying on git history alone.
 
+After an approved `--apply --backup` rehearsal, run `npm run smoke:dist` from `frontend\source` to browser-check the generated `frontend/dist` entrypoints, including `/tageditor.html`, native tag editor routes, Anima, params, and TensorBoard.
+
 The required verification gate is `scripts/verify_frontend_source.py --require-built-output`; it must pass before the dry-run sync is considered meaningful.
 
 ## Investigation Tasks for the Next Agent
