@@ -36,6 +36,25 @@ def test_frontend_source_dist_sync_script_is_guarded():
         assert term in script
 
 
+def test_frontend_source_plan_documents_dist_replacement_gate():
+    plan = (ROOT / "docs" / "design" / "frontend-source-of-truth-plan.md").read_text(
+        encoding="utf-8"
+    )
+
+    for term in [
+        "Production Dist Replacement Gate",
+        "npm run check",
+        "npm run build",
+        "npm run smoke",
+        "scripts/verify_frontend_source.py --require-built-output",
+        "scripts/sync_frontend_source_dist.py",
+        "dry-run",
+        "Do not manually edit `frontend/dist/`",
+        "Do not run `scripts/sync_frontend_source_dist.py --apply`",
+    ]:
+        assert term in plan
+
+
 def test_frontend_source_settings_page_owns_tagger_api_config():
     settings = (ROOT / "frontend" / "source" / "src" / "settings.ts").read_text(
         encoding="utf-8"

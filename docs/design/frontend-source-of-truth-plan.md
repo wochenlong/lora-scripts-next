@@ -42,6 +42,7 @@ Created: 2026-05-30
 - 2026-05-30: Expanded Anima optimizer/LR parity with per-block finetune learning rates, scheduler cycle controls, min SNR, and Prodigy-specific conditional parameters.
 - 2026-05-30: Expanded Anima LoRA adapter parity with resume weights, dim inference, norm/dropout controls, PiSSA conditionals, LoKr fields, and T-LoRA fields, while stripping LoRA-only payload keys from finetune submissions.
 - 2026-05-30: Promoted mature training compatibility routes (`/lora/index.html`, `/lora/basic.html`, `/lora/master.html`, `/lora/flux.html`, `/dreambooth/index.html`, and `/lora/params.html`) from generic placeholders to source-owned static pages without changing their training behavior.
+- 2026-05-30: Added source-owned training schema definition helpers, real slider rendering for `role: "slider"` numeric fields, and a shared path browse event bridge for file/folder fields.
 
 ## Background
 
@@ -211,6 +212,27 @@ Retirement criteria:
 - Settings schema and sensitive-field behavior are source-owned.
 - Native editor entry is source-owned.
 - Build output is reproducible from a clean checkout.
+
+### Production Dist Replacement Gate
+
+Do not manually edit `frontend/dist/` while this source-of-truth branch is being prepared. All source frontend changes must land in `frontend/source/`, then be validated through the generated `build/frontend-source-dist` output.
+
+Before any production replacement attempt, run these commands from a clean checkout:
+
+```powershell
+cd frontend\source
+npm run check
+npm run build
+npm run smoke
+cd ..\..
+.\venv\Scripts\python.exe scripts\verify_frontend_source.py --require-built-output
+.\venv\Scripts\python.exe scripts\sync_frontend_source_dist.py
+.\venv\Scripts\python.exe -m pytest tests\test_frontend_source.py tests\test_dataset_editor_api.py tests\test_tagger_progress_api.py tests\test_portable_packaging_scripts.py -q
+```
+
+The sync command above is intentionally a dry-run. Do not run `scripts/sync_frontend_source_dist.py --apply` until the PR has explicit maintainer approval to replace `frontend/dist/`. If approval is granted, use `--backup` for the first replacement rehearsal so the previous vendored dist can be inspected or restored without relying on git history alone.
+
+The required verification gate is `scripts/verify_frontend_source.py --require-built-output`; it must pass before the dry-run sync is considered meaningful.
 
 ## Investigation Tasks for the Next Agent
 
