@@ -775,6 +775,10 @@ h1 {
   background: #eef2f6;
 }
 
+.native-editor-page--standalone {
+  min-height: 100vh;
+}
+
 .native-editor-mount {
   min-height: 100vh;
 }

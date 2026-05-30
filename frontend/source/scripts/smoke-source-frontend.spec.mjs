@@ -70,10 +70,11 @@ test("lora source index exposes training route hub", async ({ page }) => {
 test("tools source page exposes tool route hub", async ({ page }) => {
   await page.goto("/lora/tools.html");
   await expect(page.locator(".source-route-list")).toBeVisible();
-  await expect(page.locator(".source-route-card")).toHaveCount(6);
+  await expect(page.locator(".source-route-card")).toHaveCount(7);
   await expect(page.locator('.source-route-card[href="/tagger.html"]')).toBeVisible();
   await expect(page.locator('.source-route-card[href="/tageditor.html"]')).toBeVisible();
   await expect(page.locator('.source-route-card[href="/native-tageditor.html"]')).toBeVisible();
+  await expect(page.locator('.source-route-card[href="/native-tageditor-standalone.html"]')).toBeVisible();
   await expect(page.locator('.source-route-card[href="/dataset-editor.html"]')).toBeVisible();
   await expect(page.locator('.source-route-card[href="/tensorboard.html"]')).toBeVisible();
   await expect(page.locator('.source-route-card[href="/task.html"]')).toBeVisible();
@@ -129,6 +130,15 @@ test("native tag editor source route loads embedded editor", async ({ page }) =>
   await expect(page.locator(".sidebar")).toBeVisible();
   await expect(page.locator("#sd-native-editor-entry")).toBeVisible();
   await expect(page.locator(".de-shell-embedded")).toBeVisible();
+  await expect(page.locator("#dataset-path")).toBeVisible();
+});
+
+test("native tag editor standalone route hides trainer shell", async ({ page }) => {
+  await page.goto("/native-tageditor-standalone.html");
+  await expect(page.locator("#app")).toBeVisible();
+  await expect(page.locator(".sidebar")).toHaveCount(0);
+  await expect(page.locator(".native-editor-page--standalone")).toBeVisible();
+  await expect(page.locator("#sd-native-editor-entry")).toBeVisible();
   await expect(page.locator("#dataset-path")).toBeVisible();
 });
 

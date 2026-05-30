@@ -24,6 +24,12 @@
     "description": "Native tag editor route owned by the trainer shell."
   },
   {
+    "path": "/native-tageditor-standalone.html",
+    "title": "原生标签编辑 Standalone",
+    "section": "tools",
+    "description": "Fullscreen native tag editor route for focused demos."
+  },
+  {
     "path": "/dataset-editor.html",
     "title": "原生标签编辑 Debug",
     "section": "tools",

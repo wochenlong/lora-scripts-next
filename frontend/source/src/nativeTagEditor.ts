@@ -4,13 +4,19 @@ import "./nativeDatasetEditor.css";
 
 export const NativeTagEditorPage = defineComponent({
   name: "NativeTagEditorPage",
-  setup() {
+  props: {
+    standalone: {
+      type: Boolean,
+      default: false,
+    },
+  },
+  setup(props) {
     onMounted(() => {
       void import("./nativeDatasetEditorRuntime");
     });
 
     return () =>
-      h("main", { class: "native-editor-page" }, [
+      h("main", { class: ["native-editor-page", props.standalone ? "native-editor-page--standalone" : ""] }, [
         h("section", {
           id: "sd-native-editor-entry",
           class: "theme-default-content native-editor-mount",

@@ -14,6 +14,10 @@ const App = defineComponent({
   name: "SourceTrainerShell",
   setup() {
     const route = currentRoute();
+    if (route.path === "/native-tageditor-standalone.html") {
+      return () => h(NativeTagEditorPage, { standalone: true });
+    }
+
     const routeContent =
       route.path === "/other/settings.html"
         ? h(SettingsPage)
