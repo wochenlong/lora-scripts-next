@@ -79,6 +79,8 @@ test("anima source route loads train form", async ({ page }) => {
   await expect(page.locator("#anima-preview-code")).toContainText('model_train_type = "anima-finetune"');
   await expect(page.locator("#anima-sample-sampler")).toBeVisible();
   await expect(page.locator("#anima-fp8-base")).toBeVisible();
+  await expect(page.locator("#anima-clip-skip")).toHaveAttribute("type", "range");
+  await expect(page.locator("#anima-clip-skip-value")).toContainText("2");
   await expect(page.getByRole("button", { name: "Reset Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Import Config" })).toBeVisible();

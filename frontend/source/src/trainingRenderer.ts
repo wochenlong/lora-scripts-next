@@ -30,6 +30,7 @@ export type TrainingFieldSpec<TForm extends TrainingFormState = TrainingFormStat
   | (TrainingFieldBase<TForm> & {
       kind: "number";
       min?: number;
+      max?: number;
       step?: string | number;
     })
   | (TrainingFieldBase<TForm> & {
@@ -150,12 +151,16 @@ export function renderTrainingField<TForm extends TrainingFormState>(form: TForm
   }
 
   if (field.kind === "number") {
+    if (field.role === "slider") {
+      return renderSliderField(form, field);
+    }
     return h("label", { class: "training-field anima-field" }, [
       h("span", field.label),
       h("input", {
         id: field.id,
         type: "number",
         min: field.min ?? 0,
+        max: field.max,
         step: field.step ?? 1,
         disabled: field.disabled,
         value: Number(form[field.key] ?? 0),
@@ -301,6 +306,33 @@ export function matchesVisibilityRule<TForm extends TrainingFormState>(
     return Boolean(value) === rule.truthy;
   }
   return true;
+}
+
+function renderSliderField<TForm extends TrainingFormState>(
+  form: TForm,
+  field: Extract<TrainingFieldSpec<TForm>, { kind: "number" }>,
+) {
+  const value = Number(form[field.key] ?? 0);
+  return h("label", { class: "training-field anima-field training-slider-field" }, [
+    h("span", field.label),
+    h("div", { class: "training-slider-field__control" }, [
+      h("input", {
+        id: field.id,
+        type: "range",
+        min: field.min ?? 0,
+        max: field.max ?? 12,
+        step: field.step ?? 1,
+        disabled: field.disabled,
+        value,
+        "data-training-role": field.role,
+        onInput: (event: Event) => {
+          form[field.key] = Number((event.target as HTMLInputElement).value) as TForm[keyof TForm & string];
+        },
+      }),
+      h("output", { id: `${field.id}-value`, for: field.id }, String(value)),
+    ]),
+    renderFieldDescription(field.description),
+  ]);
 }
 
 function renderTextInput<TForm extends TrainingFormState>(

@@ -329,6 +329,20 @@ h1 {
   justify-self: start;
 }
 
+.training-slider-field__control {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(34px, auto);
+  gap: 10px;
+  align-items: center;
+}
+
+.training-slider-field__control output {
+  min-width: 34px;
+  color: #475467;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
 .training-field-description {
   color: #667085;
   font-size: 12px;
