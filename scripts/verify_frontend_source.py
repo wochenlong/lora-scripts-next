@@ -162,6 +162,7 @@ def verify_source(root: Path) -> list[dict]:
         "animaParametersSection",
         "animaCacheSection",
         "animaPreviewSection",
+        "animaDebugSection",
         "animaSectionsForPlan",
         "renderTrainingSchemaSections(animaForm, animaSectionsForPlan(plan))",
     ):
@@ -171,6 +172,7 @@ def verify_source(root: Path) -> list[dict]:
         'visibleWhen: { key: "enable_preview", equals: true }',
         'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }',
         'visibleWhen: { key: "weighting_scheme", equals: "mode" }',
+        'visibleWhen: { key: "enable_debug_options", equals: true }',
     ):
         if term not in anima_schema_source:
             raise RuntimeError(f"Anima schema missing visibility rule: {term}")
@@ -251,6 +253,12 @@ def verify_source(root: Path) -> list[dict]:
         "cpu_offload_checkpointing",
         "optimizer_args_custom",
         "network_args_custom",
+        "enable_debug_options",
+        "anima_profile_window",
+        "anima_nan_check_interval",
+        "anima_debug_mode",
+        "anima_rope_mismatch_mode",
+        "anima_rope_max_seq_tokens",
         "previewToml",
         "anima-preview-code",
         "Save Config",

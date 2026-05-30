@@ -83,6 +83,12 @@ export interface AnimaForm {
   sample_prompts: string;
   caption_extension: string;
   prefer_json_caption: boolean;
+  enable_debug_options: boolean;
+  anima_profile_window: number;
+  anima_nan_check_interval: number;
+  anima_debug_mode: boolean;
+  anima_rope_mismatch_mode: "strict" | "resample";
+  anima_rope_max_seq_tokens: number;
 }
 
 export const ANIMA_STORAGE_KEY = "sd-trainer-source-anima-configs";
@@ -191,6 +197,12 @@ export const animaDefaults: AnimaForm = {
   sample_prompts: "",
   caption_extension: ".txt",
   prefer_json_caption: true,
+  enable_debug_options: false,
+  anima_profile_window: 0,
+  anima_nan_check_interval: 0,
+  anima_debug_mode: false,
+  anima_rope_mismatch_mode: "strict",
+  anima_rope_max_seq_tokens: 0,
 };
 
 export const animaModelAssetSection: TrainingSectionSpec<AnimaForm> = {
@@ -684,6 +696,65 @@ export const animaPreviewSection: TrainingSectionSpec<AnimaForm> = {
   ],
 };
 
+export const animaDebugSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Debug Options",
+  fields: [
+    {
+      kind: "checkbox",
+      key: "enable_debug_options",
+      id: "anima-enable-debug-options",
+      label: "enable_debug_options",
+      description: "Show Anima debug options. Normal training usually keeps this off.",
+    },
+    {
+      kind: "row",
+      visibleWhen: { key: "enable_debug_options", equals: true },
+      fields: [
+        {
+          kind: "number",
+          key: "anima_profile_window",
+          id: "anima-profile-window",
+          label: "anima_profile_window",
+          min: 0,
+        },
+        {
+          kind: "number",
+          key: "anima_nan_check_interval",
+          id: "anima-nan-check-interval",
+          label: "anima_nan_check_interval",
+          min: 0,
+        },
+        {
+          kind: "checkbox",
+          key: "anima_debug_mode",
+          id: "anima-debug-mode",
+          label: "anima_debug_mode",
+        },
+      ],
+    },
+    {
+      kind: "row",
+      visibleWhen: { key: "enable_debug_options", equals: true },
+      fields: [
+        {
+          kind: "select",
+          key: "anima_rope_mismatch_mode",
+          id: "anima-rope-mismatch-mode",
+          label: "anima_rope_mismatch_mode",
+          options: ["strict", "resample"],
+        },
+        {
+          kind: "number",
+          key: "anima_rope_max_seq_tokens",
+          id: "anima-rope-max-seq-tokens",
+          label: "anima_rope_max_seq_tokens",
+          min: 0,
+        },
+      ],
+    },
+  ],
+};
+
 export function animaSectionsForPlan(plan: AnimaRoutePlan): TrainingSectionSpec<AnimaForm>[] {
   return [
     animaModelAssetSection,
@@ -693,6 +764,7 @@ export function animaSectionsForPlan(plan: AnimaRoutePlan): TrainingSectionSpec<
     animaParametersSection,
     animaCacheSection,
     animaPreviewSection,
+    animaDebugSection,
   ];
 }
 

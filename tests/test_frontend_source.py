@@ -139,6 +139,12 @@ def test_frontend_source_declares_anima_route_contracts():
         "cpu_offload_checkpointing",
         "optimizer_args_custom",
         "network_args_custom",
+        "enable_debug_options",
+        "anima_profile_window",
+        "anima_nan_check_interval",
+        "anima_debug_mode",
+        "anima_rope_mismatch_mode",
+        "anima_rope_max_seq_tokens",
         "previewToml",
         "anima-preview-code",
         "Save Config",
@@ -220,11 +226,13 @@ def test_frontend_source_has_training_schema_renderer():
     assert "animaParametersSection" in anima_schema
     assert "animaCacheSection" in anima_schema
     assert "animaPreviewSection" in anima_schema
+    assert "animaDebugSection" in anima_schema
     assert "animaSectionsForPlan" in anima_schema
     assert "renderTrainingSchemaSections(animaForm, animaSectionsForPlan(plan))" in anima
     assert 'visibleWhen: { key: "enable_preview", equals: true }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "mode" }' in anima_schema
+    assert 'visibleWhen: { key: "enable_debug_options", equals: true }' in anima_schema
     assert 'kind: "table"' in anima_schema
     assert "role:" in anima_schema
     assert '"file"' in anima_schema
