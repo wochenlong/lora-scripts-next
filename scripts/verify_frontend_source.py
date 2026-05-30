@@ -145,8 +145,18 @@ def verify_source(root: Path) -> list[dict]:
         "TrainingSectionSpec<AnimaForm>",
         "animaModelAssetSection",
         "animaDatasetOutputSection",
+        "animaTrainingSection",
+        "animaLoraAdapterSection",
+        "animaParametersSection",
+        "animaCacheSection",
+        "animaPreviewSection",
         "renderTrainingSectionSpec(animaForm, animaModelAssetSection)",
         "renderTrainingSectionSpec(animaForm, animaDatasetOutputSection)",
+        "renderTrainingSectionSpec(animaForm, animaTrainingSection)",
+        "renderTrainingSectionSpec(animaForm, animaLoraAdapterSection)",
+        "renderTrainingSectionSpec(animaForm, animaParametersSection)",
+        "renderTrainingSectionSpec(animaForm, animaCacheSection)",
+        "renderTrainingSectionSpec(animaForm, animaPreviewSection)",
     ):
         if term not in anima_source:
             raise RuntimeError(f"Anima source missing schema-style section term: {term}")

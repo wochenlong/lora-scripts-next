@@ -405,6 +405,301 @@ const animaDatasetOutputSection: TrainingSectionSpec<AnimaForm> = {
   ],
 };
 
+const animaTrainingSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Training",
+  fields: [
+    {
+      kind: "row",
+      fields: [
+        { kind: "number", key: "max_train_epochs", id: "anima-epochs", label: "max_train_epochs", min: 1 },
+        { kind: "number", key: "train_batch_size", id: "anima-train-batch-size", label: "train_batch_size", min: 1 },
+        {
+          kind: "number",
+          key: "gradient_accumulation_steps",
+          id: "anima-gradient-accumulation-steps",
+          label: "gradient_accumulation_steps",
+          min: 1,
+        },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        { kind: "text", key: "learning_rate", id: "anima-learning-rate", label: "learning_rate" },
+        { kind: "text", key: "optimizer_type", id: "anima-optimizer", label: "optimizer_type" },
+        {
+          kind: "select",
+          key: "mixed_precision",
+          id: "anima-mixed-precision",
+          label: "mixed_precision",
+          options: ["bf16", "fp16", "no"],
+        },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "select",
+          key: "lr_scheduler",
+          id: "anima-lr-scheduler",
+          label: "lr_scheduler",
+          options: ["linear", "cosine", "cosine_with_restarts", "polynomial", "constant", "constant_with_warmup"],
+        },
+        { kind: "number", key: "lr_warmup_steps", id: "anima-lr-warmup-steps", label: "lr_warmup_steps", min: 0 },
+        {
+          kind: "number",
+          key: "qwen3_max_token_length",
+          id: "anima-qwen3-max-token-length",
+          label: "qwen3_max_token_length",
+          min: 1,
+        },
+      ],
+    },
+    { kind: "number", key: "t5_max_token_length", id: "anima-t5-max-token-length", label: "t5_max_token_length", min: 1 },
+    {
+      kind: "checkbox",
+      key: "gradient_checkpointing",
+      id: "anima-gradient-checkpointing",
+      label: "gradient_checkpointing",
+    },
+  ],
+};
+
+const animaLoraAdapterSection: TrainingSectionSpec<AnimaForm> = {
+  title: "LoRA Adapter",
+  fields: [
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "select",
+          key: "lora_type",
+          id: "anima-lora-type",
+          label: "lora_type",
+          options: ["lora", "lokr", "tlora", "lora_fa", "vera", "loha"],
+        },
+        { kind: "text", key: "unet_lr", id: "anima-unet-lr", label: "unet_lr" },
+        { kind: "number", key: "network_dim", id: "anima-network-dim", label: "network_dim", min: 1 },
+      ],
+    },
+    { kind: "number", key: "network_alpha", id: "anima-network-alpha", label: "network_alpha", min: 1 },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "checkbox",
+          key: "network_train_unet_only",
+          id: "anima-network-train-unet-only",
+          label: "network_train_unet_only",
+        },
+        {
+          kind: "checkbox",
+          key: "network_train_text_encoder_only",
+          id: "anima-network-train-text-encoder-only",
+          label: "network_train_text_encoder_only",
+        },
+      ],
+    },
+  ],
+};
+
+const animaParametersSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Anima Parameters",
+  fields: [
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "select",
+          key: "attn_mode",
+          id: "anima-attn-mode",
+          label: "attn_mode",
+          options: ["", "torch", "xformers", "sageattn", "flash"],
+        },
+        {
+          kind: "select",
+          key: "timestep_sampling",
+          id: "anima-timestep-sampling",
+          label: "timestep_sampling",
+          options: ["sigma", "uniform", "sigmoid", "shift", "flux_shift"],
+        },
+        { kind: "number", key: "sigmoid_scale", id: "anima-sigmoid-scale", label: "sigmoid_scale", min: 0, step: 0.001 },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "number",
+          key: "discrete_flow_shift",
+          id: "anima-discrete-flow-shift",
+          label: "discrete_flow_shift",
+          min: 0,
+          step: 0.001,
+        },
+        {
+          kind: "select",
+          key: "weighting_scheme",
+          id: "anima-weighting-scheme",
+          label: "weighting_scheme",
+          options: ["sigma_sqrt", "logit_normal", "mode", "cosmap", "none", "uniform"],
+        },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        { kind: "text", key: "logit_mean", id: "anima-logit-mean", label: "logit_mean", description: "Optional logit_normal mean." },
+        { kind: "text", key: "logit_std", id: "anima-logit-std", label: "logit_std", description: "Optional logit_normal stddev." },
+        { kind: "text", key: "mode_scale", id: "anima-mode-scale", label: "mode_scale", description: "Optional mode weighting scale." },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        { kind: "checkbox", key: "split_attn", id: "anima-split-attn", label: "split_attn" },
+        { kind: "text", key: "vae_chunk_size", id: "anima-vae-chunk-size", label: "vae_chunk_size", description: "Even VAE chunk size." },
+        { kind: "checkbox", key: "vae_disable_cache", id: "anima-vae-disable-cache", label: "vae_disable_cache" },
+      ],
+    },
+    {
+      kind: "checkbox",
+      key: "unsloth_offload_checkpointing",
+      id: "anima-unsloth-offload-checkpointing",
+      label: "unsloth_offload_checkpointing",
+      description: "CPU RAM activation offload. Keep off with blocks_to_swap / cpu_offload_checkpointing.",
+    },
+  ],
+};
+
+const animaCacheSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Cache",
+  fields: [
+    {
+      kind: "row",
+      fields: [
+        { kind: "checkbox", key: "cache_latents", id: "anima-cache-latents", label: "cache_latents" },
+        { kind: "checkbox", key: "cache_latents_to_disk", id: "anima-cache-latents-to-disk", label: "cache_latents_to_disk" },
+        {
+          kind: "checkbox",
+          key: "cache_text_encoder_outputs",
+          id: "anima-cache-text-encoder-outputs",
+          label: "cache_text_encoder_outputs",
+        },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "checkbox",
+          key: "cache_text_encoder_outputs_to_disk",
+          id: "anima-cache-text-encoder-outputs-to-disk",
+          label: "cache_text_encoder_outputs_to_disk",
+        },
+        { kind: "checkbox", key: "fp8_base", id: "anima-fp8-base", label: "fp8_base" },
+        { kind: "checkbox", key: "fp8_base_unet", id: "anima-fp8-base-unet", label: "fp8_base_unet" },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "checkbox",
+          key: "persistent_data_loader_workers",
+          id: "anima-persistent-data-loader-workers",
+          label: "persistent_data_loader_workers",
+        },
+        {
+          kind: "number",
+          key: "max_data_loader_n_workers",
+          id: "anima-max-data-loader-n-workers",
+          label: "max_data_loader_n_workers",
+          min: 0,
+        },
+        {
+          kind: "text",
+          key: "text_encoder_batch_size",
+          id: "anima-text-encoder-batch-size",
+          label: "text_encoder_batch_size",
+          description: "Optional text encoder cache batch size.",
+        },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "checkbox",
+          key: "disable_mmap_load_safetensors",
+          id: "anima-disable-mmap-load-safetensors",
+          label: "disable_mmap_load_safetensors",
+        },
+        { kind: "text", key: "blocks_to_swap", id: "anima-blocks-to-swap", label: "blocks_to_swap" },
+        {
+          kind: "checkbox",
+          key: "cpu_offload_checkpointing",
+          id: "anima-cpu-offload-checkpointing",
+          label: "cpu_offload_checkpointing",
+        },
+      ],
+    },
+  ],
+};
+
+const animaPreviewSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Preview",
+  fields: [
+    { kind: "checkbox", key: "enable_preview", id: "anima-enable-preview", label: "enable_preview" },
+    { kind: "textarea", key: "positive_prompts", id: "anima-positive-prompts", label: "positive_prompts", rows: 4 },
+    { kind: "textarea", key: "negative_prompts", id: "anima-negative-prompts", label: "negative_prompts", rows: 4 },
+    { kind: "textarea", key: "sample_prompts", id: "anima-sample-prompts", label: "sample_prompts", rows: 4 },
+    {
+      kind: "row",
+      fields: [
+        { kind: "number", key: "sample_width", id: "anima-sample-width", label: "sample_width", min: 64 },
+        { kind: "number", key: "sample_height", id: "anima-sample-height", label: "sample_height", min: 64 },
+        {
+          kind: "number",
+          key: "sample_every_n_epochs",
+          id: "anima-sample-every-n-epochs",
+          label: "sample_every_n_epochs",
+          min: 1,
+        },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        { kind: "number", key: "sample_cfg", id: "anima-sample-cfg", label: "sample_cfg", min: 1, step: 0.1 },
+        { kind: "number", key: "sample_seed", id: "anima-sample-seed", label: "sample_seed", min: 0 },
+        { kind: "number", key: "sample_steps", id: "anima-sample-steps", label: "sample_steps", min: 1 },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "select",
+          key: "sample_sampler",
+          id: "anima-sample-sampler",
+          label: "sample_sampler",
+          options: ["euler", "k_euler"],
+        },
+        {
+          kind: "select",
+          key: "sample_scheduler",
+          id: "anima-sample-scheduler",
+          label: "sample_scheduler",
+          options: ["simple"],
+        },
+        { kind: "checkbox", key: "sample_at_first", id: "anima-sample-at-first", label: "sample_at_first" },
+      ],
+    },
+  ],
+};
+
 export function isAnimaRoute(path: string): boolean {
   return path in ANIMA_ROUTES;
 }
@@ -618,182 +913,13 @@ export const AnimaRoutePage = defineComponent({
               h("h2", "Training Config"),
               renderTrainingSectionSpec(animaForm, animaModelAssetSection),
               renderTrainingSectionSpec(animaForm, animaDatasetOutputSection),
-              section("Training", [
-                renderTrainingFieldRow([
-                  numberField("max_train_epochs", "anima-epochs", "max_train_epochs", 1),
-                  numberField("train_batch_size", "anima-train-batch-size", "train_batch_size", 1),
-                  numberField(
-                    "gradient_accumulation_steps",
-                    "anima-gradient-accumulation-steps",
-                    "gradient_accumulation_steps",
-                    1,
-                  ),
-                ]),
-                renderTrainingFieldRow([
-                  textField("learning_rate", "anima-learning-rate", "learning_rate"),
-                  textField("optimizer_type", "anima-optimizer", "optimizer_type"),
-                  selectField("mixed_precision", "anima-mixed-precision", "mixed_precision", ["bf16", "fp16", "no"]),
-                ]),
-                renderTrainingFieldRow([
-                  selectField("lr_scheduler", "anima-lr-scheduler", "lr_scheduler", [
-                    "linear",
-                    "cosine",
-                    "cosine_with_restarts",
-                    "polynomial",
-                    "constant",
-                    "constant_with_warmup",
-                  ]),
-                  numberField("lr_warmup_steps", "anima-lr-warmup-steps", "lr_warmup_steps", 0),
-                  numberField("qwen3_max_token_length", "anima-qwen3-max-token-length", "qwen3_max_token_length", 1),
-                ]),
-                numberField("t5_max_token_length", "anima-t5-max-token-length", "t5_max_token_length", 1),
-                checkboxField("gradient_checkpointing", "anima-gradient-checkpointing", "gradient_checkpointing"),
-              ]),
+              renderTrainingSectionSpec(animaForm, animaTrainingSection),
               plan.modelTrainType === "anima-lora"
-                ? section("LoRA Adapter", [
-                    renderTrainingFieldRow([
-                      selectField("lora_type", "anima-lora-type", "lora_type", [
-                        "lora",
-                        "lokr",
-                        "tlora",
-                        "lora_fa",
-                        "vera",
-                        "loha",
-                      ]),
-                      textField("unet_lr", "anima-unet-lr", "unet_lr"),
-                      numberField("network_dim", "anima-network-dim", "network_dim", 1),
-                    ]),
-                    numberField("network_alpha", "anima-network-alpha", "network_alpha", 1),
-                    renderTrainingFieldRow([
-                      checkboxField("network_train_unet_only", "anima-network-train-unet-only", "network_train_unet_only"),
-                      checkboxField(
-                        "network_train_text_encoder_only",
-                        "anima-network-train-text-encoder-only",
-                        "network_train_text_encoder_only",
-                      ),
-                    ]),
-                  ])
+                ? renderTrainingSectionSpec(animaForm, animaLoraAdapterSection)
                 : null,
-              section("Anima Parameters", [
-                renderTrainingFieldRow([
-                  selectField("attn_mode", "anima-attn-mode", "attn_mode", [
-                    "",
-                    "torch",
-                    "xformers",
-                    "sageattn",
-                    "flash",
-                  ]),
-                  selectField("timestep_sampling", "anima-timestep-sampling", "timestep_sampling", [
-                    "sigma",
-                    "uniform",
-                    "sigmoid",
-                    "shift",
-                    "flux_shift",
-                  ]),
-                  numberField("sigmoid_scale", "anima-sigmoid-scale", "sigmoid_scale", 0, 0.001),
-                ]),
-                renderTrainingFieldRow([
-                  numberField("discrete_flow_shift", "anima-discrete-flow-shift", "discrete_flow_shift", 0, 0.001),
-                  selectField("weighting_scheme", "anima-weighting-scheme", "weighting_scheme", [
-                    "sigma_sqrt",
-                    "logit_normal",
-                    "mode",
-                    "cosmap",
-                    "none",
-                    "uniform",
-                  ]),
-                ]),
-                renderTrainingFieldRow([
-                  textField("logit_mean", "anima-logit-mean", "logit_mean", "", "Optional logit_normal mean."),
-                  textField("logit_std", "anima-logit-std", "logit_std", "", "Optional logit_normal stddev."),
-                  textField("mode_scale", "anima-mode-scale", "mode_scale", "", "Optional mode weighting scale."),
-                ]),
-                renderTrainingFieldRow([
-                  checkboxField("split_attn", "anima-split-attn", "split_attn"),
-                  textField("vae_chunk_size", "anima-vae-chunk-size", "vae_chunk_size", "", "Even VAE chunk size."),
-                  checkboxField("vae_disable_cache", "anima-vae-disable-cache", "vae_disable_cache"),
-                ]),
-                checkboxField(
-                  "unsloth_offload_checkpointing",
-                  "anima-unsloth-offload-checkpointing",
-                  "unsloth_offload_checkpointing",
-                  "CPU RAM activation offload. Keep off with blocks_to_swap / cpu_offload_checkpointing.",
-                ),
-              ]),
-              section("Cache", [
-                h("div", { class: "anima-toggle-grid" }, [
-                  checkboxField("cache_latents", "anima-cache-latents", "cache_latents"),
-                  checkboxField("cache_latents_to_disk", "anima-cache-latents-to-disk", "cache_latents_to_disk"),
-                  checkboxField(
-                    "cache_text_encoder_outputs",
-                    "anima-cache-text-encoder-outputs",
-                    "cache_text_encoder_outputs",
-                  ),
-                  checkboxField(
-                    "cache_text_encoder_outputs_to_disk",
-                    "anima-cache-text-encoder-outputs-to-disk",
-                    "cache_text_encoder_outputs_to_disk",
-                  ),
-                ]),
-                renderTrainingFieldRow([
-                  checkboxField("fp8_base", "anima-fp8-base", "fp8_base"),
-                  checkboxField("fp8_base_unet", "anima-fp8-base-unet", "fp8_base_unet"),
-                  checkboxField(
-                    "persistent_data_loader_workers",
-                    "anima-persistent-data-loader-workers",
-                    "persistent_data_loader_workers",
-                  ),
-                ]),
-                renderTrainingFieldRow([
-                  numberField(
-                    "max_data_loader_n_workers",
-                    "anima-max-data-loader-n-workers",
-                    "max_data_loader_n_workers",
-                    0,
-                  ),
-                  textField(
-                    "text_encoder_batch_size",
-                    "anima-text-encoder-batch-size",
-                    "text_encoder_batch_size",
-                    "",
-                    "Optional text encoder cache batch size.",
-                  ),
-                  checkboxField(
-                    "disable_mmap_load_safetensors",
-                    "anima-disable-mmap-load-safetensors",
-                    "disable_mmap_load_safetensors",
-                  ),
-                ]),
-                renderTrainingFieldRow([
-                  textField("blocks_to_swap", "anima-blocks-to-swap", "blocks_to_swap"),
-                  checkboxField(
-                    "cpu_offload_checkpointing",
-                    "anima-cpu-offload-checkpointing",
-                    "cpu_offload_checkpointing",
-                  ),
-                ]),
-              ]),
-              section("Preview", [
-                checkboxField("enable_preview", "anima-enable-preview", "enable_preview"),
-                textareaField("positive_prompts", "anima-positive-prompts", "positive_prompts"),
-                textareaField("negative_prompts", "anima-negative-prompts", "negative_prompts"),
-                textareaField("sample_prompts", "anima-sample-prompts", "sample_prompts"),
-                renderTrainingFieldRow([
-                  numberField("sample_width", "anima-sample-width", "sample_width", 64),
-                  numberField("sample_height", "anima-sample-height", "sample_height", 64),
-                  numberField("sample_every_n_epochs", "anima-sample-every-n-epochs", "sample_every_n_epochs", 1),
-                ]),
-                renderTrainingFieldRow([
-                  numberField("sample_cfg", "anima-sample-cfg", "sample_cfg", 1, 0.1),
-                  numberField("sample_seed", "anima-sample-seed", "sample_seed", 0),
-                  numberField("sample_steps", "anima-sample-steps", "sample_steps", 1),
-                ]),
-                renderTrainingFieldRow([
-                  selectField("sample_sampler", "anima-sample-sampler", "sample_sampler", ["euler", "k_euler"]),
-                  selectField("sample_scheduler", "anima-sample-scheduler", "sample_scheduler", ["simple"]),
-                  checkboxField("sample_at_first", "anima-sample-at-first", "sample_at_first"),
-                ]),
-              ]),
+              renderTrainingSectionSpec(animaForm, animaParametersSection),
+              renderTrainingSectionSpec(animaForm, animaCacheSection),
+              renderTrainingSectionSpec(animaForm, animaPreviewSection),
             ]),
           ],
           [

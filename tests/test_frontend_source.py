@@ -197,8 +197,18 @@ def test_frontend_source_has_training_schema_renderer():
     assert "TrainingSectionSpec<AnimaForm>" in anima
     assert "animaModelAssetSection" in anima
     assert "animaDatasetOutputSection" in anima
+    assert "animaTrainingSection" in anima
+    assert "animaLoraAdapterSection" in anima
+    assert "animaParametersSection" in anima
+    assert "animaCacheSection" in anima
+    assert "animaPreviewSection" in anima
     assert "renderTrainingSectionSpec(animaForm, animaModelAssetSection)" in anima
     assert "renderTrainingSectionSpec(animaForm, animaDatasetOutputSection)" in anima
+    assert "renderTrainingSectionSpec(animaForm, animaTrainingSection)" in anima
+    assert "renderTrainingSectionSpec(animaForm, animaLoraAdapterSection)" in anima
+    assert "renderTrainingSectionSpec(animaForm, animaParametersSection)" in anima
+    assert "renderTrainingSectionSpec(animaForm, animaCacheSection)" in anima
+    assert "renderTrainingSectionSpec(animaForm, animaPreviewSection)" in anima
     assert "role," in anima
     assert '"file"' in anima
     assert '"folder"' in anima
