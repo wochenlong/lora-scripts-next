@@ -301,6 +301,34 @@ h1 {
   opacity: 0.65;
 }
 
+.training-table-field__rows {
+  display: grid;
+  gap: 8px;
+}
+
+.training-table-field__row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.training-table-field__row button,
+.training-table-field__add {
+  min-height: 36px;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  padding: 0 12px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.training-table-field__add {
+  justify-self: start;
+}
+
 .training-field-description {
   color: #667085;
   font-size: 12px;

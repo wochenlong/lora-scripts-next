@@ -30,8 +30,10 @@ export interface AnimaForm {
   unet_lr: string;
   lr_scheduler: "linear" | "cosine" | "cosine_with_restarts" | "polynomial" | "constant" | "constant_with_warmup";
   lr_warmup_steps: number;
+  optimizer_args_custom: string[];
   network_dim: number;
   network_alpha: number;
+  network_args_custom: string[];
   resolution: string;
   enable_bucket: boolean;
   min_bucket_reso: number;
@@ -134,8 +136,10 @@ export const animaDefaults: AnimaForm = {
   unet_lr: "1e-4",
   lr_scheduler: "cosine_with_restarts",
   lr_warmup_steps: 0,
+  optimizer_args_custom: [],
   network_dim: 32,
   network_alpha: 16,
+  network_args_custom: [],
   resolution: "1024,1024",
   enable_bucket: true,
   min_bucket_reso: 256,
@@ -267,6 +271,13 @@ export const animaDatasetOutputSection: TrainingSectionSpec<AnimaForm> = {
       key: "output_name",
       id: "anima-output-name",
       label: "output_name",
+    },
+    {
+      kind: "table",
+      key: "optimizer_args_custom",
+      id: "anima-optimizer-args-custom",
+      label: "optimizer_args_custom",
+      description: "Custom optimizer_args entries, one argument per row.",
     },
     {
       kind: "row",
@@ -405,6 +416,13 @@ export const animaLoraAdapterSection: TrainingSectionSpec<AnimaForm> = {
       ],
     },
     { kind: "number", key: "network_alpha", id: "anima-network-alpha", label: "network_alpha", min: 1 },
+    {
+      kind: "table",
+      key: "network_args_custom",
+      id: "anima-network-args-custom",
+      label: "network_args_custom",
+      description: "Custom network_args entries, one argument per row.",
+    },
     {
       kind: "row",
       fields: [

@@ -137,6 +137,8 @@ def test_frontend_source_declares_anima_route_contracts():
         "disable_mmap_load_safetensors",
         "blocks_to_swap",
         "cpu_offload_checkpointing",
+        "optimizer_args_custom",
+        "network_args_custom",
         "previewToml",
         "anima-preview-code",
         "Save Config",
@@ -201,6 +203,10 @@ def test_frontend_source_has_training_schema_renderer():
         "kind: \"checkbox\"",
         "kind: \"select\"",
         "kind: \"textarea\"",
+        "kind: \"table\"",
+        "training-table-field",
+        "Add Row",
+        "Remove",
     ]:
         assert term in renderer
     assert "./trainingRenderer" in anima
@@ -219,6 +225,7 @@ def test_frontend_source_has_training_schema_renderer():
     assert 'visibleWhen: { key: "enable_preview", equals: true }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "mode" }' in anima_schema
+    assert 'kind: "table"' in anima_schema
     assert "role:" in anima_schema
     assert '"file"' in anima_schema
     assert '"folder"' in anima_schema

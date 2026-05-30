@@ -36,6 +36,7 @@ Created: 2026-05-30
 - 2026-05-30: Split Anima schema definitions into `frontend/source/src/animaSchema.ts`, so `anima.ts` now owns page workflow while schema/defaults/route metadata live behind a reusable source module.
 - 2026-05-30: Added declarative visibility rules to the source training renderer and started using them in Anima schema sections for preview-only fields and weighting-scheme-specific controls.
 - 2026-05-30: Added batch section rendering with `renderTrainingSchemaSections` and moved Anima route-specific section composition into `animaSectionsForPlan`, further separating schema composition from page workflow.
+- 2026-05-30: Added source-owned table/list field rendering for schema `role('table')`-style inputs and wired Anima `optimizer_args_custom` / `network_args_custom` into the schema sections.
 
 ## Background
 

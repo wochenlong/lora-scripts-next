@@ -140,6 +140,10 @@ def verify_source(root: Path) -> list[dict]:
         'kind: "checkbox"',
         'kind: "select"',
         'kind: "textarea"',
+        'kind: "table"',
+        "training-table-field",
+        "Add Row",
+        "Remove",
     ]
     for term in required_training_renderer_terms:
         if term not in training_renderer:
@@ -245,6 +249,8 @@ def verify_source(root: Path) -> list[dict]:
         "disable_mmap_load_safetensors",
         "blocks_to_swap",
         "cpu_offload_checkpointing",
+        "optimizer_args_custom",
+        "network_args_custom",
         "previewToml",
         "anima-preview-code",
         "Save Config",

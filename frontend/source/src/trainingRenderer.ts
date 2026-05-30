@@ -42,6 +42,10 @@ export type TrainingFieldSpec<TForm extends TrainingFormState = TrainingFormStat
   | (TrainingFieldBase<TForm> & {
       kind: "textarea";
       rows?: number;
+    })
+  | (TrainingFieldBase<TForm> & {
+      kind: "table";
+      addLabel?: string;
     });
 
 export interface RunControl {
@@ -140,6 +144,10 @@ export function renderTrainingField<TForm extends TrainingFormState>(form: TForm
     ]);
   }
 
+  if (field.kind === "table") {
+    return renderTrainingTableField(form, field);
+  }
+
   return h("label", { class: "training-field anima-field" }, [
     h("span", field.label),
     renderTextInput(form, field),
@@ -229,6 +237,9 @@ export function tomlValue(value: unknown): string {
   if (typeof value === "number") {
     return String(value);
   }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => tomlValue(item)).join(", ")}]`;
+  }
   return `"${String(value).replaceAll("\\", "\\\\").replaceAll('"', '\\"').replaceAll("\n", "\\n")}"`;
 }
 
@@ -307,5 +318,58 @@ function renderTextInput<TForm extends TrainingFormState>(
       },
       "Browse",
     ),
+  ]);
+}
+
+function renderTrainingTableField<TForm extends TrainingFormState>(
+  form: TForm,
+  field: Extract<TrainingFieldSpec<TForm>, { kind: "table" }>,
+) {
+  const values = Array.isArray(form[field.key]) ? (form[field.key] as string[]) : [];
+
+  function update(next: string[]) {
+    form[field.key] = next as TForm[keyof TForm & string];
+  }
+
+  return h("div", { class: "training-field anima-field training-table-field" }, [
+    h("span", field.label),
+    h(
+      "div",
+      { class: "training-table-field__rows" },
+      values.map((value, index) =>
+        h("div", { class: "training-table-field__row" }, [
+          h("input", {
+            id: `${field.id}-${index}`,
+            disabled: field.disabled,
+            value,
+            onInput: (event: Event) => {
+              const next = [...values];
+              next[index] = (event.target as HTMLInputElement).value;
+              update(next);
+            },
+          }),
+          h(
+            "button",
+            {
+              type: "button",
+              disabled: field.disabled,
+              onClick: () => update(values.filter((_, itemIndex) => itemIndex !== index)),
+            },
+            "Remove",
+          ),
+        ]),
+      ),
+    ),
+    h(
+      "button",
+      {
+        type: "button",
+        class: "training-table-field__add",
+        disabled: field.disabled,
+        onClick: () => update([...values, ""]),
+      },
+      field.addLabel ?? "Add Row",
+    ),
+    renderFieldDescription(field.description),
   ]);
 }
