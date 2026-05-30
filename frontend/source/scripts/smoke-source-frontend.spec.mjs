@@ -218,3 +218,26 @@ test("anima source route supports section navigation and parameter search", asyn
   await page.locator("#anima-param-search").fill("");
   await expect(page.locator("#anima-pretrained-model")).toBeVisible();
 });
+
+test("anima source route exposes submitted task links", async ({ page }) => {
+  await page.route("**/api/run", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "success",
+        message: "Training started",
+        data: {
+          task_id: "task-123",
+          train_log_viewer: "/train-log?task_id=task-123",
+          train_log_stream: "/api/train/log/stream/task-123",
+        },
+      }),
+    });
+  });
+
+  await page.goto("/lora/sd3.html");
+  await page.getByRole("button", { name: "Start Training" }).click();
+  await expect(page.locator(".anima-run-result")).toContainText("task-123");
+  await expect(page.locator('.anima-run-result a[href="/train-log?task_id=task-123"]')).toContainText("Open Log");
+  await expect(page.locator('.anima-run-result a[href="/task.html"]')).toContainText("Open Tasks");
+});

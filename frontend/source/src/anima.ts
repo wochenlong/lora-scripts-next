@@ -37,6 +37,7 @@ export const AnimaRoutePage = defineComponent({
     const importConfigInput = ref<HTMLInputElement | null>(null);
     const parameterFilter = ref("");
     const status = ref("");
+    const runResult = ref<AnimaRunResult | null>(null);
     let removePathBrowseBridge: (() => void) | undefined;
 
     onMounted(() => {
@@ -141,6 +142,7 @@ export const AnimaRoutePage = defineComponent({
 
     async function runTraining() {
       status.value = "Submitting training config...";
+      runResult.value = null;
       const response = await fetch("/api/run", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -148,6 +150,7 @@ export const AnimaRoutePage = defineComponent({
       });
       const result = await response.json();
       status.value = result.message || result.status || "Submitted";
+      runResult.value = runResultFromResponse(result);
     }
 
     return () =>
@@ -210,6 +213,7 @@ export const AnimaRoutePage = defineComponent({
               ],
               status.value,
             ),
+            renderRunResult(runResult.value),
             h("input", {
               ref: importConfigInput,
               id: "anima-import-config",
@@ -238,6 +242,49 @@ export const AnimaRoutePage = defineComponent({
     };
   },
 });
+
+interface AnimaRunResult {
+  taskId?: string;
+  logViewer?: string;
+  logStream?: string;
+}
+
+function runResultFromResponse(result: unknown): AnimaRunResult {
+  if (!result || typeof result !== "object") {
+    return {};
+  }
+
+  const data = "data" in result && result.data && typeof result.data === "object" ? result.data : result;
+  return {
+    taskId: stringValue(data, "task_id"),
+    logViewer: stringValue(data, "train_log_viewer"),
+    logStream: stringValue(data, "train_log_stream"),
+  };
+}
+
+function stringValue(source: object, key: string) {
+  return key in source && typeof source[key as keyof typeof source] === "string"
+    ? (source[key as keyof typeof source] as string)
+    : undefined;
+}
+
+function renderRunResult(result: AnimaRunResult | null) {
+  if (!result) {
+    return null;
+  }
+
+  return h("section", { class: "anima-preview-card anima-run-result", "aria-label": "Submitted training task" }, [
+    h("div", { class: "anima-run-result__header" }, [
+      h("span", "Submitted Task"),
+      h("strong", result.taskId || "submitted"),
+    ]),
+    h("div", { class: "anima-run-result__links" }, [
+      result.logViewer ? h("a", { href: result.logViewer }, "Open Log") : null,
+      h("a", { href: "/task.html" }, "Open Tasks"),
+    ]),
+    result.logStream ? h("code", result.logStream) : null,
+  ]);
+}
 
 function filterSections(sections: TrainingSectionSpec<AnimaForm>[], query: string) {
   const needle = query.trim().toLowerCase();

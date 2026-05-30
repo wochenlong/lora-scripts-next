@@ -717,6 +717,59 @@ h1 {
   font-weight: 700;
 }
 
+.anima-run-result {
+  gap: 10px;
+}
+
+.anima-run-result__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  align-items: baseline;
+  justify-content: space-between;
+  color: #475467;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.anima-run-result__header strong {
+  color: #172033;
+  overflow-wrap: anywhere;
+}
+
+.anima-run-result__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.anima-run-result__links a {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  padding: 0 10px;
+  color: #0b5f59;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.anima-run-result__links a:hover {
+  border-color: #0f766e;
+  background: #eef6f5;
+}
+
+.anima-run-result code {
+  display: block;
+  border-radius: 6px;
+  padding: 8px 10px;
+  background: #f8fafc;
+  color: #475467;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .native-editor-page {
   min-width: 0;
   background: #eef2f6;
