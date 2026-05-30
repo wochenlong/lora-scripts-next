@@ -159,6 +159,7 @@ def test_frontend_source_has_training_schema_renderer():
 
     for term in [
         "TrainingFieldSpec",
+        "TrainingSectionItem",
         "TrainingSectionSpec",
         "renderTrainingField",
         "renderTrainingSection",
@@ -170,6 +171,7 @@ def test_frontend_source_has_training_schema_renderer():
         "tomlValue",
         "renderTrainingFields",
         "renderTrainingFieldRow",
+        'kind: "row"',
         "description",
         "hidden",
         "disabled",
@@ -194,7 +196,9 @@ def test_frontend_source_has_training_schema_renderer():
     assert "renderTrainingField" in anima
     assert "TrainingSectionSpec<AnimaForm>" in anima
     assert "animaModelAssetSection" in anima
+    assert "animaDatasetOutputSection" in anima
     assert "renderTrainingSectionSpec(animaForm, animaModelAssetSection)" in anima
+    assert "renderTrainingSectionSpec(animaForm, animaDatasetOutputSection)" in anima
     assert "role," in anima
     assert '"file"' in anima
     assert '"folder"' in anima

@@ -41,9 +41,18 @@ export interface RunControl {
   primary?: boolean;
 }
 
+export type TrainingSectionItem<TForm extends TrainingFormState = TrainingFormState> =
+  | TrainingFieldSpec<TForm>
+  | {
+      kind: "row";
+      fields: TrainingFieldSpec<TForm>[];
+      hidden?: boolean;
+      visibleWhen?: (form: TForm) => boolean;
+    };
+
 export interface TrainingSectionSpec<TForm extends TrainingFormState = TrainingFormState> {
   title: string;
-  fields: TrainingFieldSpec<TForm>[];
+  fields: TrainingSectionItem<TForm>[];
   hidden?: boolean;
   visibleWhen?: (form: TForm) => boolean;
 }
@@ -148,7 +157,10 @@ export function renderTrainingSectionSpec<TForm extends TrainingFormState>(form:
   if (section.hidden || section.visibleWhen?.(form) === false) {
     return null;
   }
-  return renderTrainingSection(section.title, renderTrainingFields(form, section.fields));
+  return renderTrainingSection(
+    section.title,
+    section.fields.map((item) => renderTrainingSectionItem(form, item)),
+  );
 }
 
 export function renderTrainingWorkbench(formPanel: VNodeChild[], previewPanel: VNodeChild[]) {
@@ -206,6 +218,16 @@ export function tomlValue(value: unknown): string {
 
 function renderFieldDescription(description?: string) {
   return description ? h("small", { class: "training-field-description" }, description) : null;
+}
+
+function renderTrainingSectionItem<TForm extends TrainingFormState>(form: TForm, item: TrainingSectionItem<TForm>) {
+  if (item.hidden || item.visibleWhen?.(form) === false) {
+    return null;
+  }
+  if (item.kind === "row") {
+    return renderTrainingFieldRow(renderTrainingFields(form, item.fields));
+  }
+  return renderTrainingField(form, item);
 }
 
 function renderTextInput<TForm extends TrainingFormState>(

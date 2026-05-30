@@ -103,6 +103,7 @@ def verify_source(root: Path) -> list[dict]:
 
     required_training_renderer_terms = [
         "TrainingFieldSpec",
+        "TrainingSectionItem",
         "TrainingSectionSpec",
         "renderTrainingField",
         "renderTrainingSection",
@@ -114,6 +115,7 @@ def verify_source(root: Path) -> list[dict]:
         "tomlValue",
         "renderTrainingFields",
         "renderTrainingFieldRow",
+        'kind: "row"',
         "description",
         "hidden",
         "disabled",
@@ -142,7 +144,9 @@ def verify_source(root: Path) -> list[dict]:
     for term in (
         "TrainingSectionSpec<AnimaForm>",
         "animaModelAssetSection",
+        "animaDatasetOutputSection",
         "renderTrainingSectionSpec(animaForm, animaModelAssetSection)",
+        "renderTrainingSectionSpec(animaForm, animaDatasetOutputSection)",
     ):
         if term not in anima_source:
             raise RuntimeError(f"Anima source missing schema-style section term: {term}")

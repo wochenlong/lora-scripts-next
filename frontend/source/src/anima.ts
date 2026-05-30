@@ -323,6 +323,88 @@ const animaModelAssetSection: TrainingSectionSpec<AnimaForm> = {
   ],
 };
 
+const animaDatasetOutputSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Dataset And Output",
+  fields: [
+    {
+      kind: "text",
+      key: "train_data_dir",
+      id: "anima-train-data-dir",
+      label: "train_data_dir",
+      placeholder: "D:/datasets/anima",
+      role: "folder",
+    },
+    {
+      kind: "text",
+      key: "output_dir",
+      id: "anima-output-dir",
+      label: "output_dir",
+      role: "folder",
+    },
+    {
+      kind: "text",
+      key: "output_name",
+      id: "anima-output-name",
+      label: "output_name",
+    },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "text",
+          key: "resolution",
+          id: "anima-resolution",
+          label: "resolution",
+        },
+        {
+          kind: "text",
+          key: "caption_extension",
+          id: "anima-caption-extension",
+          label: "caption_extension",
+        },
+        {
+          kind: "checkbox",
+          key: "prefer_json_caption",
+          id: "anima-prefer-json-caption",
+          label: "prefer_json_caption",
+        },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        {
+          kind: "checkbox",
+          key: "enable_bucket",
+          id: "anima-enable-bucket",
+          label: "enable_bucket",
+        },
+        {
+          kind: "number",
+          key: "min_bucket_reso",
+          id: "anima-min-bucket-reso",
+          label: "min_bucket_reso",
+          min: 64,
+        },
+        {
+          kind: "number",
+          key: "max_bucket_reso",
+          id: "anima-max-bucket-reso",
+          label: "max_bucket_reso",
+          min: 64,
+        },
+      ],
+    },
+    {
+      kind: "number",
+      key: "bucket_reso_steps",
+      id: "anima-bucket-reso-steps",
+      label: "bucket_reso_steps",
+      min: 1,
+    },
+  ],
+};
+
 export function isAnimaRoute(path: string): boolean {
   return path in ANIMA_ROUTES;
 }
@@ -535,22 +617,7 @@ export const AnimaRoutePage = defineComponent({
             h("form", { id: "anima-train-form", class: "anima-form" }, [
               h("h2", "Training Config"),
               renderTrainingSectionSpec(animaForm, animaModelAssetSection),
-              section("Dataset And Output", [
-                textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima", "", "folder"),
-                textField("output_dir", "anima-output-dir", "output_dir", "", "", "folder"),
-                textField("output_name", "anima-output-name", "output_name"),
-                renderTrainingFieldRow([
-                  textField("resolution", "anima-resolution", "resolution"),
-                  textField("caption_extension", "anima-caption-extension", "caption_extension"),
-                  checkboxField("prefer_json_caption", "anima-prefer-json-caption", "prefer_json_caption"),
-                ]),
-                renderTrainingFieldRow([
-                  checkboxField("enable_bucket", "anima-enable-bucket", "enable_bucket"),
-                  numberField("min_bucket_reso", "anima-min-bucket-reso", "min_bucket_reso", 64),
-                  numberField("max_bucket_reso", "anima-max-bucket-reso", "max_bucket_reso", 64),
-                ]),
-                numberField("bucket_reso_steps", "anima-bucket-reso-steps", "bucket_reso_steps", 1),
-              ]),
+              renderTrainingSectionSpec(animaForm, animaDatasetOutputSection),
               section("Training", [
                 renderTrainingFieldRow([
                   numberField("max_train_epochs", "anima-epochs", "max_train_epochs", 1),
