@@ -2,6 +2,15 @@ import { h, type VNodeChild } from "vue";
 
 export type TrainingFormState = Record<string, unknown>;
 
+export type TrainingVisibilityRule<TForm extends TrainingFormState = TrainingFormState> =
+  | ((form: TForm) => boolean)
+  | {
+      key: keyof TForm & string;
+      equals?: unknown;
+      notEquals?: unknown;
+      truthy?: boolean;
+    };
+
 interface TrainingFieldBase<TForm extends TrainingFormState> {
   key: keyof TForm & string;
   id: string;
@@ -9,7 +18,7 @@ interface TrainingFieldBase<TForm extends TrainingFormState> {
   description?: string;
   hidden?: boolean;
   disabled?: boolean;
-  visibleWhen?: (form: TForm) => boolean;
+  visibleWhen?: TrainingVisibilityRule<TForm>;
   role?: "file" | "folder" | "table" | "slider" | "switch";
 }
 
@@ -47,18 +56,18 @@ export type TrainingSectionItem<TForm extends TrainingFormState = TrainingFormSt
       kind: "row";
       fields: TrainingFieldSpec<TForm>[];
       hidden?: boolean;
-      visibleWhen?: (form: TForm) => boolean;
+      visibleWhen?: TrainingVisibilityRule<TForm>;
     };
 
 export interface TrainingSectionSpec<TForm extends TrainingFormState = TrainingFormState> {
   title: string;
   fields: TrainingSectionItem<TForm>[];
   hidden?: boolean;
-  visibleWhen?: (form: TForm) => boolean;
+  visibleWhen?: TrainingVisibilityRule<TForm>;
 }
 
 export function renderTrainingField<TForm extends TrainingFormState>(form: TForm, field: TrainingFieldSpec<TForm>) {
-  if (field.hidden || field.visibleWhen?.(form) === false) {
+  if (field.hidden || !matchesVisibilityRule(form, field.visibleWhen)) {
     return null;
   }
 
@@ -154,7 +163,7 @@ export function renderTrainingSection(title: string, children: VNodeChild[]) {
 }
 
 export function renderTrainingSectionSpec<TForm extends TrainingFormState>(form: TForm, section: TrainingSectionSpec<TForm>) {
-  if (section.hidden || section.visibleWhen?.(form) === false) {
+  if (section.hidden || !matchesVisibilityRule(form, section.visibleWhen)) {
     return null;
   }
   return renderTrainingSection(
@@ -221,13 +230,36 @@ function renderFieldDescription(description?: string) {
 }
 
 function renderTrainingSectionItem<TForm extends TrainingFormState>(form: TForm, item: TrainingSectionItem<TForm>) {
-  if (item.hidden || item.visibleWhen?.(form) === false) {
+  if (item.hidden || !matchesVisibilityRule(form, item.visibleWhen)) {
     return null;
   }
   if (item.kind === "row") {
     return renderTrainingFieldRow(renderTrainingFields(form, item.fields));
   }
   return renderTrainingField(form, item);
+}
+
+export function matchesVisibilityRule<TForm extends TrainingFormState>(
+  form: TForm,
+  rule?: TrainingVisibilityRule<TForm>,
+) {
+  if (!rule) {
+    return true;
+  }
+  if (typeof rule === "function") {
+    return rule(form);
+  }
+  const value = form[rule.key];
+  if ("equals" in rule) {
+    return value === rule.equals;
+  }
+  if ("notEquals" in rule) {
+    return value !== rule.notEquals;
+  }
+  if ("truthy" in rule) {
+    return Boolean(value) === rule.truthy;
+  }
+  return true;
 }
 
 function renderTextInput<TForm extends TrainingFormState>(

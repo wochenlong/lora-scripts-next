@@ -471,9 +471,30 @@ export const animaParametersSection: TrainingSectionSpec<AnimaForm> = {
     {
       kind: "row",
       fields: [
-        { kind: "text", key: "logit_mean", id: "anima-logit-mean", label: "logit_mean", description: "Optional logit_normal mean." },
-        { kind: "text", key: "logit_std", id: "anima-logit-std", label: "logit_std", description: "Optional logit_normal stddev." },
-        { kind: "text", key: "mode_scale", id: "anima-mode-scale", label: "mode_scale", description: "Optional mode weighting scale." },
+        {
+          kind: "text",
+          key: "logit_mean",
+          id: "anima-logit-mean",
+          label: "logit_mean",
+          description: "Optional logit_normal mean.",
+          visibleWhen: { key: "weighting_scheme", equals: "logit_normal" },
+        },
+        {
+          kind: "text",
+          key: "logit_std",
+          id: "anima-logit-std",
+          label: "logit_std",
+          description: "Optional logit_normal stddev.",
+          visibleWhen: { key: "weighting_scheme", equals: "logit_normal" },
+        },
+        {
+          kind: "text",
+          key: "mode_scale",
+          id: "anima-mode-scale",
+          label: "mode_scale",
+          description: "Optional mode weighting scale.",
+          visibleWhen: { key: "weighting_scheme", equals: "mode" },
+        },
       ],
     },
     {
@@ -573,11 +594,33 @@ export const animaPreviewSection: TrainingSectionSpec<AnimaForm> = {
   title: "Preview",
   fields: [
     { kind: "checkbox", key: "enable_preview", id: "anima-enable-preview", label: "enable_preview" },
-    { kind: "textarea", key: "positive_prompts", id: "anima-positive-prompts", label: "positive_prompts", rows: 4 },
-    { kind: "textarea", key: "negative_prompts", id: "anima-negative-prompts", label: "negative_prompts", rows: 4 },
-    { kind: "textarea", key: "sample_prompts", id: "anima-sample-prompts", label: "sample_prompts", rows: 4 },
+    {
+      kind: "textarea",
+      key: "positive_prompts",
+      id: "anima-positive-prompts",
+      label: "positive_prompts",
+      rows: 4,
+      visibleWhen: { key: "enable_preview", equals: true },
+    },
+    {
+      kind: "textarea",
+      key: "negative_prompts",
+      id: "anima-negative-prompts",
+      label: "negative_prompts",
+      rows: 4,
+      visibleWhen: { key: "enable_preview", equals: true },
+    },
+    {
+      kind: "textarea",
+      key: "sample_prompts",
+      id: "anima-sample-prompts",
+      label: "sample_prompts",
+      rows: 4,
+      visibleWhen: { key: "enable_preview", equals: true },
+    },
     {
       kind: "row",
+      visibleWhen: { key: "enable_preview", equals: true },
       fields: [
         { kind: "number", key: "sample_width", id: "anima-sample-width", label: "sample_width", min: 64 },
         { kind: "number", key: "sample_height", id: "anima-sample-height", label: "sample_height", min: 64 },
@@ -592,6 +635,7 @@ export const animaPreviewSection: TrainingSectionSpec<AnimaForm> = {
     },
     {
       kind: "row",
+      visibleWhen: { key: "enable_preview", equals: true },
       fields: [
         { kind: "number", key: "sample_cfg", id: "anima-sample-cfg", label: "sample_cfg", min: 1, step: 0.1 },
         { kind: "number", key: "sample_seed", id: "anima-sample-seed", label: "sample_seed", min: 0 },
@@ -600,6 +644,7 @@ export const animaPreviewSection: TrainingSectionSpec<AnimaForm> = {
     },
     {
       kind: "row",
+      visibleWhen: { key: "enable_preview", equals: true },
       fields: [
         {
           kind: "select",

@@ -167,6 +167,7 @@ def test_frontend_source_has_training_schema_renderer():
         "TrainingFieldSpec",
         "TrainingSectionItem",
         "TrainingSectionSpec",
+        "TrainingVisibilityRule",
         "renderTrainingField",
         "renderTrainingSection",
         "renderTrainingSectionSpec",
@@ -182,6 +183,9 @@ def test_frontend_source_has_training_schema_renderer():
         "hidden",
         "disabled",
         "visibleWhen",
+        "matchesVisibilityRule",
+        "equals",
+        "notEquals",
         "role?:",
         "data-training-role",
         "sd-training-path-browse",
@@ -209,6 +213,9 @@ def test_frontend_source_has_training_schema_renderer():
     assert "animaParametersSection" in anima_schema
     assert "animaCacheSection" in anima_schema
     assert "animaPreviewSection" in anima_schema
+    assert 'visibleWhen: { key: "enable_preview", equals: true }' in anima_schema
+    assert 'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }' in anima_schema
+    assert 'visibleWhen: { key: "weighting_scheme", equals: "mode" }' in anima_schema
     assert "renderTrainingSectionSpec(animaForm, animaModelAssetSection)" in anima
     assert "renderTrainingSectionSpec(animaForm, animaDatasetOutputSection)" in anima
     assert "renderTrainingSectionSpec(animaForm, animaTrainingSection)" in anima

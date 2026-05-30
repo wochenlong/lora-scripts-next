@@ -106,6 +106,7 @@ def verify_source(root: Path) -> list[dict]:
         "TrainingFieldSpec",
         "TrainingSectionItem",
         "TrainingSectionSpec",
+        "TrainingVisibilityRule",
         "renderTrainingField",
         "renderTrainingSection",
         "renderTrainingSectionSpec",
@@ -121,6 +122,9 @@ def verify_source(root: Path) -> list[dict]:
         "hidden",
         "disabled",
         "visibleWhen",
+        "matchesVisibilityRule",
+        "equals",
+        "notEquals",
         "role?:",
         "data-training-role",
         "sd-training-path-browse",
@@ -163,6 +167,13 @@ def verify_source(root: Path) -> list[dict]:
     ):
         if term not in anima_source and term not in anima_schema_source:
             raise RuntimeError(f"Anima source missing schema-style section term: {term}")
+    for term in (
+        'visibleWhen: { key: "enable_preview", equals: true }',
+        'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }',
+        'visibleWhen: { key: "weighting_scheme", equals: "mode" }',
+    ):
+        if term not in anima_schema_source:
+            raise RuntimeError(f"Anima schema missing visibility rule: {term}")
     for term in ("role:", '"file"', '"folder"'):
         if term not in anima_schema_source:
             raise RuntimeError(f"Anima source missing training field role: {term}")
