@@ -41,6 +41,7 @@ Created: 2026-05-30
 - 2026-05-30: Added source-owned Anima coverage for shared noise settings, data enhancement toggles, other/custom params, and distributed training fields.
 - 2026-05-30: Expanded Anima optimizer/LR parity with per-block finetune learning rates, scheduler cycle controls, min SNR, and Prodigy-specific conditional parameters.
 - 2026-05-30: Expanded Anima LoRA adapter parity with resume weights, dim inference, norm/dropout controls, PiSSA conditionals, LoKr fields, and T-LoRA fields, while stripping LoRA-only payload keys from finetune submissions.
+- 2026-05-30: Promoted mature training compatibility routes (`/lora/index.html`, `/lora/basic.html`, `/lora/master.html`, `/lora/flux.html`, `/dreambooth/index.html`, and `/lora/params.html`) from generic placeholders to source-owned static pages without changing their training behavior.
 
 ## Background
 

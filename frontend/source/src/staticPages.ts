@@ -10,6 +10,96 @@ interface StaticInfoPageSpec {
 }
 
 const staticInfoPages: Record<string, StaticInfoPageSpec> = {
+  "/lora/index.html": {
+    kicker: "Training",
+    title: "LoRA Training",
+    body:
+      "Source-owned training index for stable links while mature training pages continue to keep their backend contracts.",
+    actions: [
+      { label: "Open Anima LoRA", href: "/lora/sd3.html" },
+      { label: "Open Anima Finetune", href: "/lora/anima-finetune.html" },
+    ],
+    checks: [
+      "Mature training routes remain compatibility entries until their schemas are intentionally migrated.",
+      "Anima routes are source-owned and share the local training renderer.",
+      "This page replaces the generic compatibility placeholder for /lora/index.html.",
+    ],
+  },
+  "/lora/basic.html": {
+    kicker: "Training",
+    title: "Basic Training",
+    body:
+      "Compatibility route for the basic LoRA training page. The source shell keeps the URL stable without changing mature training behavior.",
+    actions: [
+      { label: "Open LoRA Index", href: "/lora/index.html" },
+      { label: "Open Settings", href: "/other/settings.html" },
+    ],
+    checks: [
+      "Mature training routes remain compatibility entries.",
+      "No SD/Flux training backend contract is changed by this source page.",
+      "Future migration can attach a schema section module to this route.",
+    ],
+  },
+  "/lora/master.html": {
+    kicker: "Training",
+    title: "Stable Diffusion Training",
+    body:
+      "Compatibility route for Stable Diffusion training. It is intentionally not rebuilt while the Anima source renderer is being stabilized.",
+    actions: [
+      { label: "Open LoRA Index", href: "/lora/index.html" },
+      { label: "Open Parameter Notes", href: "/lora/params.html" },
+    ],
+    checks: [
+      "Mature training routes remain compatibility entries.",
+      "The route is declared and generated from frontend/source.",
+      "Schema renderer improvements can be reused here later.",
+    ],
+  },
+  "/lora/flux.html": {
+    kicker: "Training",
+    title: "Flux LoRA",
+    body:
+      "Compatibility route for Flux LoRA training. The source shell owns the route while avoiding changes to the mature Flux form.",
+    actions: [
+      { label: "Open LoRA Index", href: "/lora/index.html" },
+      { label: "Open Tools", href: "/lora/tools.html" },
+    ],
+    checks: [
+      "Mature training routes remain compatibility entries.",
+      "Flux backend and launch behavior are not changed here.",
+      "The route no longer depends on a generic placeholder in the source build.",
+    ],
+  },
+  "/dreambooth/index.html": {
+    kicker: "Training",
+    title: "Dreambooth",
+    body:
+      "Source-owned compatibility route for Dreambooth links while training schema migration remains focused on Anima.",
+    actions: [
+      { label: "Open LoRA Index", href: "/lora/index.html" },
+      { label: "Open Settings", href: "/other/settings.html" },
+    ],
+    checks: [
+      "Mature training routes remain compatibility entries.",
+      "Dreambooth route generation is now covered by frontend/source.",
+      "No Dreambooth training behavior is changed by this page.",
+    ],
+  },
+  "/lora/params.html": {
+    kicker: "Reference",
+    title: "Training Parameters",
+    body:
+      "Source-owned parameter reference route reserved for renderer and schema migration notes.",
+    actions: [
+      { label: "Open Anima LoRA", href: "/lora/sd3.html" },
+      { label: "Open Changelog", href: "/other/changelog.html" },
+    ],
+    checks: [
+      "Mature training routes remain compatibility entries.",
+      "Parameter documentation can now evolve from source files.",
+      "The route keeps historical links stable.",
+    ],
+  },
   "/tensorboard.html": {
     kicker: "Monitoring",
     title: "TensorBoard",

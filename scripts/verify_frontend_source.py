@@ -405,6 +405,12 @@ def verify_source(root: Path) -> list[dict]:
     for term in (
         "/tensorboard.html",
         "/lora/tools.html",
+        "/lora/index.html",
+        "/lora/basic.html",
+        "/lora/master.html",
+        "/lora/flux.html",
+        "/dreambooth/index.html",
+        "/lora/params.html",
         "/task.html",
         "/help/guide.html",
         "/other/about.html",
@@ -415,6 +421,7 @@ def verify_source(root: Path) -> list[dict]:
         "Launch tensorboard.py",
         "scripts/run_gui.py",
         "frontend/source",
+        "Mature training routes remain compatibility entries",
     ):
         if term not in static_pages:
             raise RuntimeError(f"static source pages missing contract term: {term}")
@@ -424,6 +431,12 @@ def verify_source(root: Path) -> list[dict]:
     for term in (
         "/tensorboard.html",
         "/lora/tools.html",
+        "/lora/index.html",
+        "/lora/basic.html",
+        "/lora/master.html",
+        "/lora/flux.html",
+        "/dreambooth/index.html",
+        "/lora/params.html",
         "/task.html",
         "/help/guide.html",
         "/other/about.html",
