@@ -35,6 +35,7 @@ Created: 2026-05-30
 - 2026-05-30: Extracted the remaining Anima form groups (`Training`, `LoRA Adapter`, `Anima Parameters`, `Cache`, and `Preview`) into schema-style `TrainingSectionSpec` constants, leaving the page render function focused on route/workflow composition.
 - 2026-05-30: Split Anima schema definitions into `frontend/source/src/animaSchema.ts`, so `anima.ts` now owns page workflow while schema/defaults/route metadata live behind a reusable source module.
 - 2026-05-30: Added declarative visibility rules to the source training renderer and started using them in Anima schema sections for preview-only fields and weighting-scheme-specific controls.
+- 2026-05-30: Added batch section rendering with `renderTrainingSchemaSections` and moved Anima route-specific section composition into `animaSectionsForPlan`, further separating schema composition from page workflow.
 
 ## Background
 

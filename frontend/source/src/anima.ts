@@ -4,21 +4,15 @@ import {
   previewToml,
   renderParameterPreview,
   renderRunControls,
-  renderTrainingSectionSpec,
+  renderTrainingSchemaSections,
   renderTrainingWorkbench,
 } from "./trainingRenderer";
 
 import {
   ANIMA_ROUTES,
   ANIMA_STORAGE_KEY,
-  animaCacheSection,
   animaDefaults,
-  animaDatasetOutputSection,
-  animaLoraAdapterSection,
-  animaModelAssetSection,
-  animaParametersSection,
-  animaPreviewSection,
-  animaTrainingSection,
+  animaSectionsForPlan,
   type AnimaRoutePlan,
   type AnimaForm,
 } from "./animaSchema";
@@ -145,15 +139,7 @@ export const AnimaRoutePage = defineComponent({
           [
             h("form", { id: "anima-train-form", class: "anima-form" }, [
               h("h2", "Training Config"),
-              renderTrainingSectionSpec(animaForm, animaModelAssetSection),
-              renderTrainingSectionSpec(animaForm, animaDatasetOutputSection),
-              renderTrainingSectionSpec(animaForm, animaTrainingSection),
-              plan.modelTrainType === "anima-lora"
-                ? renderTrainingSectionSpec(animaForm, animaLoraAdapterSection)
-                : null,
-              renderTrainingSectionSpec(animaForm, animaParametersSection),
-              renderTrainingSectionSpec(animaForm, animaCacheSection),
-              renderTrainingSectionSpec(animaForm, animaPreviewSection),
+              renderTrainingSchemaSections(animaForm, animaSectionsForPlan(plan)),
             ]),
           ],
           [

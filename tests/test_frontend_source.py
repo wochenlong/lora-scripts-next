@@ -171,6 +171,7 @@ def test_frontend_source_has_training_schema_renderer():
         "renderTrainingField",
         "renderTrainingSection",
         "renderTrainingSectionSpec",
+        "renderTrainingSchemaSections",
         "renderTrainingWorkbench",
         "renderParameterPreview",
         "renderRunControls",
@@ -213,16 +214,11 @@ def test_frontend_source_has_training_schema_renderer():
     assert "animaParametersSection" in anima_schema
     assert "animaCacheSection" in anima_schema
     assert "animaPreviewSection" in anima_schema
+    assert "animaSectionsForPlan" in anima_schema
+    assert "renderTrainingSchemaSections(animaForm, animaSectionsForPlan(plan))" in anima
     assert 'visibleWhen: { key: "enable_preview", equals: true }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "mode" }' in anima_schema
-    assert "renderTrainingSectionSpec(animaForm, animaModelAssetSection)" in anima
-    assert "renderTrainingSectionSpec(animaForm, animaDatasetOutputSection)" in anima
-    assert "renderTrainingSectionSpec(animaForm, animaTrainingSection)" in anima
-    assert "renderTrainingSectionSpec(animaForm, animaLoraAdapterSection)" in anima
-    assert "renderTrainingSectionSpec(animaForm, animaParametersSection)" in anima
-    assert "renderTrainingSectionSpec(animaForm, animaCacheSection)" in anima
-    assert "renderTrainingSectionSpec(animaForm, animaPreviewSection)" in anima
     assert "role:" in anima_schema
     assert '"file"' in anima_schema
     assert '"folder"' in anima_schema

@@ -666,6 +666,18 @@ export const animaPreviewSection: TrainingSectionSpec<AnimaForm> = {
   ],
 };
 
+export function animaSectionsForPlan(plan: AnimaRoutePlan): TrainingSectionSpec<AnimaForm>[] {
+  return [
+    animaModelAssetSection,
+    animaDatasetOutputSection,
+    animaTrainingSection,
+    ...(plan.modelTrainType === "anima-lora" ? [animaLoraAdapterSection] : []),
+    animaParametersSection,
+    animaCacheSection,
+    animaPreviewSection,
+  ];
+}
+
 
 
 

@@ -172,6 +172,13 @@ export function renderTrainingSectionSpec<TForm extends TrainingFormState>(form:
   );
 }
 
+export function renderTrainingSchemaSections<TForm extends TrainingFormState>(
+  form: TForm,
+  sections: TrainingSectionSpec<TForm>[],
+) {
+  return sections.map((section) => renderTrainingSectionSpec(form, section));
+}
+
 export function renderTrainingWorkbench(formPanel: VNodeChild[], previewPanel: VNodeChild[]) {
   return h("section", { class: "training-workbench anima-workbench" }, [
     h("div", { class: "training-form-panel anima-form-panel" }, formPanel),
