@@ -192,6 +192,9 @@ def test_frontend_source_has_training_schema_renderer():
         assert term in renderer
     assert "./trainingRenderer" in anima
     assert "renderTrainingField" in anima
+    assert "TrainingSectionSpec<AnimaForm>" in anima
+    assert "animaModelAssetSection" in anima
+    assert "renderTrainingSectionSpec(animaForm, animaModelAssetSection)" in anima
     assert "role," in anima
     assert '"file"' in anima
     assert '"folder"' in anima

@@ -6,8 +6,10 @@ import {
   renderRunControls,
   renderTrainingField,
   renderTrainingFieldRow,
+  renderTrainingSectionSpec,
   renderTrainingSection,
   renderTrainingWorkbench,
+  type TrainingSectionSpec,
   type TrainingFormState,
 } from "./trainingRenderer";
 
@@ -22,6 +24,7 @@ interface AnimaRoutePlan {
 }
 
 interface AnimaForm {
+  [key: string]: unknown;
   pretrained_model_name_or_path: string;
   vae: string;
   qwen3: string;
@@ -265,6 +268,61 @@ const animaDefaults: AnimaForm = {
   prefer_json_caption: true,
 };
 
+const animaModelAssetSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Model Assets",
+  fields: [
+    {
+      kind: "text",
+      key: "pretrained_model_name_or_path",
+      id: "anima-pretrained-model",
+      label: "pretrained_model_name_or_path",
+      placeholder: "D:/models/anima-base-v1.0.safetensors",
+      description: "Anima DiT / transformer checkpoint path.",
+      role: "file",
+    },
+    {
+      kind: "text",
+      key: "vae",
+      id: "anima-vae",
+      label: "vae",
+      placeholder: "D:/models/qwen_image_vae.safetensors",
+      description: "Qwen Image VAE path.",
+      role: "file",
+    },
+    {
+      kind: "text",
+      key: "qwen3",
+      id: "anima-qwen3",
+      label: "qwen3",
+      placeholder: "D:/models/qwen_3_06b_base.safetensors",
+      description: "Qwen3 text model path.",
+      role: "file",
+    },
+    {
+      kind: "text",
+      key: "t5_tokenizer_path",
+      id: "anima-t5-tokenizer-path",
+      label: "t5_tokenizer_path",
+      description: "Optional T5 tokenizer folder. Empty uses the bundled config.",
+      role: "folder",
+    },
+    {
+      kind: "text",
+      key: "llm_adapter_path",
+      id: "anima-llm-adapter-path",
+      label: "llm_adapter_path",
+      role: "file",
+    },
+    {
+      kind: "text",
+      key: "resume",
+      id: "anima-resume",
+      label: "resume",
+      role: "folder",
+    },
+  ],
+};
+
 export function isAnimaRoute(path: string): boolean {
   return path in ANIMA_ROUTES;
 }
@@ -476,42 +534,7 @@ export const AnimaRoutePage = defineComponent({
           [
             h("form", { id: "anima-train-form", class: "anima-form" }, [
               h("h2", "Training Config"),
-              section("Model Assets", [
-                textField(
-                  "pretrained_model_name_or_path",
-                  "anima-pretrained-model",
-                  "pretrained_model_name_or_path",
-                  "D:/models/anima-base-v1.0.safetensors",
-                  "Anima DiT / transformer checkpoint path.",
-                  "file",
-                ),
-                textField(
-                  "vae",
-                  "anima-vae",
-                  "vae",
-                  "D:/models/qwen_image_vae.safetensors",
-                  "Qwen Image VAE path.",
-                  "file",
-                ),
-                textField(
-                  "qwen3",
-                  "anima-qwen3",
-                  "qwen3",
-                  "D:/models/qwen_3_06b_base.safetensors",
-                  "Qwen3 text model path.",
-                  "file",
-                ),
-                textField(
-                  "t5_tokenizer_path",
-                  "anima-t5-tokenizer-path",
-                  "t5_tokenizer_path",
-                  "",
-                  "Optional T5 tokenizer folder. Empty uses the bundled config.",
-                  "folder",
-                ),
-                textField("llm_adapter_path", "anima-llm-adapter-path", "llm_adapter_path", "", "", "file"),
-                textField("resume", "anima-resume", "resume", "", "", "folder"),
-              ]),
+              renderTrainingSectionSpec(animaForm, animaModelAssetSection),
               section("Dataset And Output", [
                 textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima", "", "folder"),
                 textField("output_dir", "anima-output-dir", "output_dir", "", "", "folder"),

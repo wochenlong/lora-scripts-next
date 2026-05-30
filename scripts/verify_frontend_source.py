@@ -139,6 +139,13 @@ def verify_source(root: Path) -> list[dict]:
     for term in ("./trainingRenderer", "renderTrainingField"):
         if term not in anima_source:
             raise RuntimeError(f"Anima source missing training renderer use: {term}")
+    for term in (
+        "TrainingSectionSpec<AnimaForm>",
+        "animaModelAssetSection",
+        "renderTrainingSectionSpec(animaForm, animaModelAssetSection)",
+    ):
+        if term not in anima_source:
+            raise RuntimeError(f"Anima source missing schema-style section term: {term}")
     for term in ("role,", '"file"', '"folder"'):
         if term not in anima_source:
             raise RuntimeError(f"Anima source missing training field role: {term}")

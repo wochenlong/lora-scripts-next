@@ -30,6 +30,7 @@ Created: 2026-05-30
 - 2026-05-30: Migrated low-risk utility/info routes to source-owned static pages: `/tensorboard.html`, `/lora/tools.html`, `/task.html`, `/help/guide.html`, `/other/about.html`, and `/other/changelog.html`. These now render real source content instead of the generic compatibility placeholder while keeping backend/service contracts unchanged.
 - 2026-05-30: Expanded Anima schema parity with preview sampler/scheduler controls, step-0 preview toggle, logit/mode weighting fields, split attention/VAE toggles, FP8 cache controls, worker/cache batch settings, and offload fields shared by LoRA and finetune routes.
 - 2026-05-30: Pushed the source training renderer toward reusable schema components by adding `TrainingSectionSpec`, `visibleWhen`, field roles, and source-owned file/folder path field affordances. Anima model, dataset, output, tokenizer, adapter, and resume paths now declare roles instead of being plain text inputs.
+- 2026-05-30: Began moving Anima off render-function field declarations by extracting the model asset controls into a `TrainingSectionSpec<AnimaForm>` rendered through the shared schema-style training renderer.
 
 ## Background
 
