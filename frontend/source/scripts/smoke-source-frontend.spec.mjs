@@ -47,6 +47,17 @@ for (const route of [
   });
 }
 
+for (const route of ["/lora/index.html", "/lora/master.html", "/lora/flux.html", "/tensorboard.html", "/task.html"]) {
+  test(`source compatibility page has product-grade scaffolding ${route}`, async ({ page }) => {
+    await page.goto(route);
+    await expect(page.locator(".source-static-page")).toBeVisible();
+    await expect(page.locator(".source-static-grid")).toBeVisible();
+    await expect(page.locator(".source-static-card")).toHaveCount(3);
+    await expect(page.locator(".source-static-status")).toBeVisible();
+    await expect(page.locator(".source-static-meta")).toBeVisible();
+  });
+}
+
 test("native tag editor source route loads embedded editor", async ({ page }) => {
   await page.goto("/native-tageditor.html");
   await expect(page.locator("#app")).toBeVisible();

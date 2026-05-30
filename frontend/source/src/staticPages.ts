@@ -7,6 +7,8 @@ interface StaticInfoPageSpec {
   body: string;
   actions: { label: string; href: string }[];
   checks: string[];
+  status?: string;
+  nextStep?: string;
 }
 
 const staticInfoPages: Record<string, StaticInfoPageSpec> = {
@@ -25,6 +27,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Production dist replacement remains guarded by dry-run sync.",
       "Mature SD/Flux training routes remain compatibility entries.",
     ],
+    status: "Source-owned shell",
+    nextStep: "Promote the remaining compatibility routes into reusable source renderers.",
   },
   "/tageditor.html": {
     kicker: "Tools",
@@ -40,6 +44,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Native tag editing stays on /native-tageditor.html.",
       "The dataset-editor fallback remains available for debugging.",
     ],
+    status: "Preserved by legacy island",
+    nextStep: "Keep the classic editor available while native editing matures.",
   },
   "/lora/index.html": {
     kicker: "Training",
@@ -55,6 +61,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Anima routes are source-owned and share the local training renderer.",
       "This page replaces the generic compatibility placeholder for /lora/index.html.",
     ],
+    status: "Source-owned index",
+    nextStep: "Link migrated Anima pages with mature training compatibility entries.",
   },
   "/lora/basic.html": {
     kicker: "Training",
@@ -70,6 +78,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "No SD/Flux training backend contract is changed by this source page.",
       "Future migration can attach a schema section module to this route.",
     ],
+    status: "Compatibility route",
+    nextStep: "Reuse the training schema renderer only if this mature page needs changes.",
   },
   "/lora/master.html": {
     kicker: "Training",
@@ -85,6 +95,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "The route is declared and generated from frontend/source.",
       "Schema renderer improvements can be reused here later.",
     ],
+    status: "Compatibility route",
+    nextStep: "Keep this page stable while Anima training is completed first.",
   },
   "/lora/flux.html": {
     kicker: "Training",
@@ -100,6 +112,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Flux backend and launch behavior are not changed here.",
       "The route no longer depends on a generic placeholder in the source build.",
     ],
+    status: "Compatibility route",
+    nextStep: "Defer Flux form migration until source renderer coverage is broader.",
   },
   "/dreambooth/index.html": {
     kicker: "Training",
@@ -115,6 +129,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Dreambooth route generation is now covered by frontend/source.",
       "No Dreambooth training behavior is changed by this page.",
     ],
+    status: "Compatibility route",
+    nextStep: "Keep Dreambooth links stable while source training pages expand.",
   },
   "/lora/params.html": {
     kicker: "Reference",
@@ -130,6 +146,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Parameter documentation can now evolve from source files.",
       "The route keeps historical links stable.",
     ],
+    status: "Reference route",
+    nextStep: "Move parameter documentation into source-owned structured content.",
   },
   "/tensorboard.html": {
     kicker: "Monitoring",
@@ -145,6 +163,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "The page does not bundle or start TensorBoard at portable runtime.",
       "Navigation remains source-owned instead of patched into compiled VuePress assets.",
     ],
+    status: "Runtime bridge route",
+    nextStep: "Add a source-owned launch/status panel after task APIs are stabilized.",
   },
   "/lora/tools.html": {
     kicker: "Tools",
@@ -160,6 +180,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Tooling notes stay visible without editing frontend/dist by hand.",
       "Future utility controls can be added here without touching training schemas.",
     ],
+    status: "Tools route",
+    nextStep: "Add concrete tool actions from source-owned route specs.",
   },
   "/task.html": {
     kicker: "Runtime",
@@ -175,6 +197,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Backend execution contracts stay outside this static page.",
       "The page can grow into a task monitor after the source renderer stabilizes.",
     ],
+    status: "Task route shell",
+    nextStep: "Connect backend task status once the frontend replacement path is stable.",
   },
   "/help/guide.html": {
     kicker: "Help",
@@ -190,6 +214,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "The native tag editor route remains a separate entry.",
       "Classic tag editor fallback stays available through /tageditor.html.",
     ],
+    status: "Guide route",
+    nextStep: "Move getting-started copy into source-owned documentation blocks.",
   },
   "/other/about.html": {
     kicker: "Project",
@@ -205,6 +231,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Generated output targets build/frontend-source-dist.",
       "Production replacement is guarded by scripts/sync_frontend_source_dist.py.",
     ],
+    status: "Project route",
+    nextStep: "Expose source ownership and packaging boundaries from maintained docs.",
   },
   "/other/changelog.html": {
     kicker: "Release Notes",
@@ -220,6 +248,8 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
       "Manual frontend/dist surgery is being retired in small verified steps.",
       "The current branch keeps frontend/dist unchanged until the sync step is explicitly applied.",
     ],
+    status: "Migration route",
+    nextStep: "Show frontend-source milestones from maintained release notes.",
   },
 };
 
@@ -243,12 +273,38 @@ export const StaticInfoPage = defineComponent({
         body: props.route.description,
         actions: [{ label: "Open Route", href: props.route.path }],
         checks: ["This route is declared in frontend/source/src/routes.json."],
+        status: "Compatibility route",
+        nextStep: "Promote this route into a source-owned page when it becomes active work.",
       };
+      const cards = [
+        {
+          title: "Current Coverage",
+          body: spec.status ?? "Source-owned compatibility route",
+        },
+        {
+          title: "Next Source Step",
+          body: spec.nextStep ?? spec.checks[0],
+        },
+        {
+          title: "Safety Contract",
+          body: spec.checks[1] ?? "Keep backend and portable runtime contracts unchanged.",
+        },
+      ];
 
       return h("main", { class: "content source-static-page" }, [
-        h("p", { class: "eyebrow" }, spec.kicker),
-        h("h1", spec.title),
-        h("p", { class: "summary" }, spec.body),
+        h("header", { class: "source-static-hero" }, [
+          h("div", [
+            h("p", { class: "eyebrow" }, spec.kicker),
+            h("h1", spec.title),
+            h("p", { class: "summary" }, spec.body),
+          ]),
+          h("dl", { class: "source-static-meta" }, [
+            h("dt", "Route"),
+            h("dd", props.route.path),
+            h("dt", "Status"),
+            h("dd", spec.status ?? "Compatibility route"),
+          ]),
+        ]),
         h(
           "div",
           { class: "source-static-actions" },
@@ -256,6 +312,17 @@ export const StaticInfoPage = defineComponent({
             h("a", { class: "source-static-action", href: action.href }, action.label),
           ),
         ),
+        h(
+          "section",
+          { class: "source-static-grid", "aria-label": "Source page status" },
+          cards.map((card) =>
+            h("article", { class: "source-static-card" }, [
+              h("h2", card.title),
+              h("p", card.body),
+            ]),
+          ),
+        ),
+        h("p", { class: "source-static-status" }, spec.nextStep ?? spec.checks[0]),
         h("section", { class: "compat-panel source-static-contract" }, [
           h("h2", "Source Contract"),
           h(

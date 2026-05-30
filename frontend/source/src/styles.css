@@ -120,11 +120,63 @@ h1 {
 .source-static-page {
   display: grid;
   align-content: start;
-  gap: 18px;
+  gap: 16px;
+  max-width: 1120px;
 }
 
 .source-static-page .summary {
   margin: 0;
+}
+
+.source-static-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 360px);
+  gap: 18px;
+  align-items: stretch;
+}
+
+.source-static-hero > div,
+.source-static-meta,
+.source-static-card,
+.source-static-status {
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.source-static-hero > div {
+  display: grid;
+  align-content: center;
+  min-height: 174px;
+  padding: 22px 24px;
+}
+
+.source-static-meta {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 12px;
+  align-content: center;
+  margin: 0;
+  padding: 18px;
+}
+
+.source-static-meta dt {
+  color: #667085;
+  font-weight: 800;
+}
+
+.source-static-meta dd {
+  min-width: 0;
+  margin: 0;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: #f2f5f9;
+  color: #172033;
+  font-family:
+    ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
 }
 
 .source-static-actions {
@@ -149,6 +201,38 @@ h1 {
 .source-static-action:hover {
   border-color: #0f766e;
   color: #0f766e;
+}
+
+.source-static-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.source-static-card {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-height: 142px;
+  padding: 18px;
+}
+
+.source-static-card h2 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.source-static-card p {
+  margin: 0;
+  color: #475467;
+  line-height: 1.55;
+}
+
+.source-static-status {
+  margin: 0;
+  padding: 12px 14px;
+  color: #0b5f59;
+  font-weight: 700;
 }
 
 .anima-page {
@@ -771,6 +855,11 @@ h1 {
 
   .content {
     padding: 24px;
+  }
+
+  .source-static-hero,
+  .source-static-grid {
+    grid-template-columns: 1fr;
   }
 
   .anima-field-row {
