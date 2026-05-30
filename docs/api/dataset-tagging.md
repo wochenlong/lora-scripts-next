@@ -62,6 +62,23 @@
 - `https://hf-mirror.com`
 - `https://modelscope.cn`
 
+## 本地打标模型目录
+
+WebUI 会优先检查本地 `tagger-models/<family>/<model-key>/`，文件齐全时不会访问 Hugging Face。默认模型目录为：
+
+```text
+tagger-models/wd14/wd14-convnextv2-v2/
+  model.onnx
+  selected_tags.csv
+```
+
+整合包会把默认 WD 模型放入该目录。用户也可以手动下载其它模型并放到对应的分类子目录：
+
+- `tagger-models/wd14/<model-key>/`：WD14 / CL 系列，主要用于 tag 打标。
+- `tagger-models/vlm/<model-key>/`：预留给 VLM / 自然语言描述模型。
+
+为兼容已安装用户，旧的一层目录 `tagger-models/<model-key>/` 仍可识别。如果文件不完整，系统会继续回退到原有 `huggingface/` 缓存或在线下载流程。
+
 **成功**：`status: success`，`message: 模型下载已开始`  
 **失败**：已有任务进行中、未知模型等返回 `status: fail`。
 

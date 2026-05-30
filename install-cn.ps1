@@ -1,4 +1,5 @@
 ﻿$Env:HF_HOME = "huggingface"
+$Env:MIKAZUKI_TAGGER_MODELS_DIR = "tagger-models"
 $Env:PIP_DISABLE_PIP_VERSION_CHECK = 1
 $Env:PIP_NO_CACHE_DIR = 1
 $Env:PIP_INDEX_URL = "https://pypi.tuna.tsinghua.edu.cn/simple"
@@ -177,7 +178,7 @@ python -m pip install --upgrade -r requirements.txt
 Check "训练依赖库安装失败。"
 
 Write-Output "预下载默认 WD 打标模型 wd14-convnextv2-v2（约 388MB，首次较慢）..."
-python scripts/prefetch_default_tagger.py --if-missing
+python scripts/prefetch_default_tagger.py --if-missing --tagger-models-dir "$Env:MIKAZUKI_TAGGER_MODELS_DIR"
 if ($LASTEXITCODE -ne 0) {
     Write-Output "警告: 默认打标模型预下载失败，可在启动后于「打标」页首次使用时自动下载。"
 }

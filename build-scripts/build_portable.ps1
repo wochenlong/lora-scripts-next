@@ -333,7 +333,11 @@ Write-Host ""
 Write-Host "[3/6] Bundling default WD tagger (wd14-convnextv2-v2, ~388 MB)..." -ForegroundColor Cyan
 
 $hfHome = Join-Path $portableDir "huggingface"
+$taggerModelsDir = Join-Path $portableDir "tagger-models"
 New-Item -ItemType Directory -Path $hfHome -Force | Out-Null
+New-Item -ItemType Directory -Path $taggerModelsDir -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $portableDir "tagger-models\wd14") -Force | Out-Null
+New-Item -ItemType Directory -Path (Join-Path $portableDir "tagger-models\vlm") -Force | Out-Null
 $prefetchScript = Join-Path $sdtDir "scripts\prefetch_default_tagger.py"
 
 if (-not (Test-Path $prefetchScript)) {
@@ -342,13 +346,14 @@ if (-not (Test-Path $prefetchScript)) {
     Write-Host "  WARNING: no Python for tagger prefetch; tagger will download on first tag run" -ForegroundColor Yellow
 } else {
     $env:HF_HOME = $hfHome
+    $env:MIKAZUKI_TAGGER_MODELS_DIR = $taggerModelsDir
     # pip writes progress to stderr; with $ErrorActionPreference Stop that aborts the build.
     $prevEap = $ErrorActionPreference
     $ErrorActionPreference = 'Continue'
     $prefetchExit = 1
     if (Get-Command python -ErrorAction SilentlyContinue) {
         & python -m pip install -q huggingface_hub 2>&1 | Out-Null
-        & python $prefetchScript --hf-home $hfHome --if-missing
+        & python $prefetchScript --hf-home $hfHome --tagger-models-dir $taggerModelsDir --if-missing
         $prefetchExit = $LASTEXITCODE
     } elseif (Test-Path $pythonExe) {
         if (Test-Path $getPipPath) {
@@ -356,14 +361,14 @@ if (-not (Test-Path $prefetchScript)) {
             & $pythonExe $getPipPath --no-warn-script-location 2>&1 | Out-Null
         }
         & $pythonExe -s -m pip install -q huggingface_hub 2>&1 | Out-Null
-        & $pythonExe -s $prefetchScript --hf-home $hfHome --if-missing
+        & $pythonExe -s $prefetchScript --hf-home $hfHome --tagger-models-dir $taggerModelsDir --if-missing
         $prefetchExit = $LASTEXITCODE
     }
     $ErrorActionPreference = $prevEap
     if ($prefetchExit -ne 0) {
         Write-Host "  WARNING: tagger prefetch failed; 7z may ship without offline tagger" -ForegroundColor Yellow
     } else {
-        Write-Host "  Cached under huggingface/hub/" -ForegroundColor Green
+        Write-Host "  Cached under huggingface/hub/ and tagger-models/" -ForegroundColor Green
     }
 }
 
@@ -450,7 +455,7 @@ foreach ($bat in @("Update-SD-Trainer.bat", "Download-Anima-Model.bat")) {
 Write-Host ""
 Write-Host "[5/6] Creating user directories and README..." -ForegroundColor Cyan
 
-foreach ($d in @("sd-models", "output", "logs", "huggingface")) {
+foreach ($d in @("sd-models", "output", "logs", "huggingface", "tagger-models", "tagger-models\wd14", "tagger-models\vlm")) {
     $p = Join-Path $portableDir $d
     New-Item -ItemType Directory -Path $p -Force | Out-Null
     [System.IO.File]::WriteAllText((Join-Path $p ".gitkeep"), "")
@@ -463,8 +468,10 @@ $readme += "  1. Double-click run_gui.bat`r`n"
 $readme += "  2. First launch requires internet (downloads ~3 GB of PyTorch)`r`n"
 $readme += "  3. Open http://127.0.0.1:28000 in browser`r`n`r`n"
 $readme += "Tagging:`r`n"
-$readme += "  Default WD tagger (wd14-convnextv2-v2) is bundled under huggingface/`r`n"
-$readme += "  (~400 MB). Use the built-in Tagger page without extra model download.`r`n`r`n"
+$readme += "  Default WD tagger (wd14-convnextv2-v2) is bundled under tagger-models/wd14/`r`n"
+$readme += "  (~400 MB). Put extra WD/CL tag models in tagger-models/wd14/<model-key>/`r`n"
+$readme += "  Future VLM caption models can be placed under tagger-models/vlm/<model-key>/`r`n"
+$readme += "  with the files required by that model, such as model.onnx and selected_tags.csv.`r`n`r`n"
 $readme += "Directories:`r`n"
 $readme += "  run_gui.bat      - Stable entrypoint for portable users`r`n"
 $readme += "  run_gui_portable.bat - Legacy shim (logic in SD-Trainer/scripts/portable/)`r`n"
@@ -473,6 +480,7 @@ $readme += "  SD-Trainer/      - Project files`r`n"
 $readme += "  sd-models/       - Put your models here`r`n"
 $readme += "  output/          - Training output`r`n"
 $readme += "  logs/            - Logs`r`n`r`n"
+$readme += "  tagger-models/   - Local tagger models`r`n`r`n"
 $readme += "Update:`r`n"
 $readme += "  update\update_sd_trainer.bat       - Shortcut to Update-SD-Trainer.bat`r`n"
 $readme += "  update\update_dependencies.bat     - Update Python packages`r`n`r`n"

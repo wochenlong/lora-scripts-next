@@ -14,6 +14,7 @@ from huggingface_hub import hf_hub_download
 from dataclasses import dataclass
 from mikazuki.tagger import dbimutils, format
 from mikazuki.tagger.interrogators.base import Interrogator
+from mikazuki.tagger.local_models import local_model_asset_paths
 
 
 @dataclass
@@ -139,6 +140,11 @@ class CLTaggerInterrogator(Interrogator):
         self.kwargs = kwargs
 
     def download(self) -> Tuple[os.PathLike, os.PathLike]:
+        local_paths = local_model_asset_paths(self.name, self)
+        if local_paths:
+            print(f"Loading {self.name} model from local tagger-models directory")
+            return local_paths
+
         print(f"Loading {self.name} model file from {self.kwargs['repo_id']}")
 
         model_path = Path(hf_hub_download(
