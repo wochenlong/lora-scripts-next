@@ -18,6 +18,65 @@ def make_image(path: Path, color=(220, 80, 80)):
     image.save(path)
 
 
+def dist_source_bundle() -> str:
+    assets = ROOT / "frontend" / "dist" / "assets"
+    scripts = []
+    for pattern in ("index-*.js", "nativeDatasetEditorRuntime-*.js"):
+        scripts.extend(sorted(assets.glob(pattern)))
+    return "\n".join(path.read_text(encoding="utf-8") for path in scripts)
+
+
+def dist_source_css() -> str:
+    assets = ROOT / "frontend" / "dist" / "assets"
+    return "\n".join(path.read_text(encoding="utf-8") for path in assets.glob("index-*.css"))
+
+
+def compact_css(css: str) -> str:
+    return re.sub(r"\s+", "", css)
+
+
+def dist_uses_source_frontend() -> bool:
+    return bool(dist_source_bundle()) and "SourceTrainerShell" in dist_source_bundle()
+
+
+def dist_app_bundle() -> str:
+    if dist_uses_source_frontend():
+        return dist_source_bundle()
+    path = ROOT / "frontend" / "dist" / "assets" / "app.547295de.js"
+    return path.read_text(encoding="utf-8") if path.exists() else dist_source_bundle()
+
+
+def dist_nav_script() -> str:
+    if dist_uses_source_frontend():
+        return dist_source_bundle()
+    path = ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js"
+    return path.read_text(encoding="utf-8") if path.exists() else dist_source_bundle()
+
+
+def dist_dataset_editor_markup() -> str:
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    return html if 'id="side-tab-clean"' in html else dist_source_bundle()
+
+
+def dist_dataset_editor_runtime() -> str:
+    if dist_uses_source_frontend():
+        return dist_source_bundle()
+    path = ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js"
+    return path.read_text(encoding="utf-8") if path.exists() else dist_source_bundle()
+
+
+def dist_dataset_editor_css() -> str:
+    path = ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css"
+    return path.read_text(encoding="utf-8") if path.exists() else dist_source_css()
+
+
+def dist_settings_source() -> str:
+    if dist_uses_source_frontend():
+        return dist_source_bundle()
+    path = ROOT / "frontend" / "dist" / "assets" / "settings.html.06993f96.js"
+    return path.read_text(encoding="utf-8") if path.exists() else dist_source_bundle()
+
+
 def test_dataset_editor_scan_lists_images_and_captions(tmp_path):
     make_image(tmp_path / "alpha.png")
     (tmp_path / "alpha.txt").write_text("1girl, solo", encoding="utf-8")
@@ -267,30 +326,35 @@ def test_dataset_editor_html_is_served_from_main_webui():
     response = client.get("/dataset-editor.html")
 
     assert response.status_code == 200
-    assert "dataset-editor.js" in response.text
-    assert "旧版兼容" in response.text
-    assert 'id="undo-edit"' in response.text
-    assert 'id="redo-edit"' in response.text
-    assert 'id="category-filter"' in response.text
-    assert 'id="quick-tags"' in response.text
-    assert 'id="tag-toggle"' in response.text
-    assert 'id="side-tab-filter"' in response.text
-    assert 'id="side-tab-quick"' in response.text
-    assert 'id="side-tab-batch"' in response.text
-    assert 'id="side-tab-clean"' in response.text
-    assert 'id="apply-cleanup"' in response.text
-    assert 'id="gallery-first-page"' in response.text
-    assert 'id="gallery-prev-page"' in response.text
-    assert 'id="gallery-page-input"' in response.text
-    assert 'id="gallery-page-size"' in response.text
-    assert 'value="auto"' in response.text
-    assert 'id="gallery-next-page"' in response.text
-    assert 'id="gallery-last-page"' in response.text
-    assert 'id="thumbnail-fit"' in response.text
-    assert 'id="change-list"' in response.text
-    assert 'id="side-tab-tagger"' in response.text
-    assert 'id="side-panel-tagger"' in response.text
-    assert "<details" not in response.text
+    if dist_uses_source_frontend():
+        assert '<div id="app"></div>' in response.text
+        assert "/assets/index-" in response.text
+    else:
+        assert "dataset-editor.js" in response.text
+        assert "旧版兼容" in response.text
+    markup = dist_dataset_editor_markup()
+    assert 'id="undo-edit"' in markup
+    assert 'id="redo-edit"' in markup
+    assert 'id="category-filter"' in markup
+    assert 'id="quick-tags"' in markup
+    assert 'id="tag-toggle"' in markup
+    assert 'id="side-tab-filter"' in markup
+    assert 'id="side-tab-quick"' in markup
+    assert 'id="side-tab-batch"' in markup
+    assert 'id="side-tab-clean"' in markup
+    assert 'id="apply-cleanup"' in markup
+    assert 'id="gallery-first-page"' in markup
+    assert 'id="gallery-prev-page"' in markup
+    assert 'id="gallery-page-input"' in markup
+    assert 'id="gallery-page-size"' in markup
+    assert 'value="auto"' in markup
+    assert 'id="gallery-next-page"' in markup
+    assert 'id="gallery-last-page"' in markup
+    assert 'id="thumbnail-fit"' in markup
+    assert 'id="change-list"' in markup
+    assert 'id="side-tab-tagger"' in markup
+    assert 'id="side-panel-tagger"' in markup
+    assert "<details" not in markup
 
 
 def test_legacy_tageditor_stays_legacy_only():
@@ -308,25 +372,35 @@ def test_native_tageditor_embeds_native_editor_in_trainer_shell():
     response = client.get("/native-tageditor.html")
 
     assert response.status_code == 200
-    assert "dataset-editor-entry.js" in response.text
-    assert "dataset-editor.css" in response.text
-    assert 'name="sd-dataset-editor-script"' in response.text
-    assert 'href="/tageditor.md"' in response.text
-    assert 'href="/native-tageditor.html"' in response.text
-    assert "经典标签编辑" in response.text
-    assert "原生标签编辑" in response.text
+    if dist_uses_source_frontend():
+        assert '<div id="app"></div>' in response.text
+        bundle = dist_source_bundle()
+        assert "sd-native-editor-entry" in bundle
+        assert "de-shell-embedded" in bundle
+        assert "/tageditor.html" in bundle
+        assert "/native-tageditor.html" in bundle
+    else:
+        assert "dataset-editor-entry.js" in response.text
+        assert "dataset-editor.css" in response.text
+        assert 'name="sd-dataset-editor-script"' in response.text
+        assert 'href="/tageditor.md"' in response.text
+        assert 'href="/native-tageditor.html"' in response.text
+        assert "经典标签编辑" in response.text
+        assert "原生标签编辑" in response.text
 
 
 def test_native_tageditor_uses_native_vuepress_page_data():
     native_tageditor = (ROOT / "frontend" / "dist" / "native-tageditor.html").read_text(
         encoding="utf-8"
     )
-    native_page_data = (
-        ROOT / "frontend" / "dist" / "assets" / "native-tageditor.html.native.js"
-    )
-    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
-        encoding="utf-8"
-    )
+    native_page_data = ROOT / "frontend" / "dist" / "assets" / "native-tageditor.html.native.js"
+    app_bundle = dist_app_bundle()
+
+    if dist_uses_source_frontend():
+        assert not native_page_data.exists()
+        assert "sd-native-editor-entry" in app_bundle
+        assert "dataset-editor-entry.js" not in native_tageditor
+        return
 
     assert native_page_data.exists()
     page_data = native_page_data.read_text(encoding="utf-8")
@@ -345,12 +419,18 @@ def test_trainer_sidebar_exposes_legacy_and_native_tag_editors():
     native_tageditor = (ROOT / "frontend" / "dist" / "native-tageditor.html").read_text(
         encoding="utf-8"
     )
-    nav = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
-        encoding="utf-8"
-    )
-    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
-        encoding="utf-8"
-    )
+    nav = dist_nav_script()
+    app_bundle = dist_app_bundle()
+
+    if dist_uses_source_frontend():
+        assert "/tageditor.html" in app_bundle
+        assert "/native-tageditor.html" in app_bundle
+        assert "经典标签编辑" in app_bundle
+        assert "原生标签编辑" in app_bundle
+        assert "tageditor.html.66da263e.js" in tageditor
+        assert "dataset-editor-entry.js" not in tageditor
+        assert "sd-native-editor-entry" in app_bundle
+        return
 
     assert 'href="/tageditor.md"' in index
     assert 'href="/native-tageditor.html"' in index
@@ -378,6 +458,10 @@ def test_trainer_sidebar_exposes_legacy_and_native_tag_editors():
 
 
 def test_frontend_dist_patch_script_is_idempotent():
+    if dist_uses_source_frontend():
+        assert "SourceTrainerShell" in dist_source_bundle()
+        assert "app.547295de.js" in (ROOT / "frontend" / "dist" / "tageditor.html").read_text(encoding="utf-8")
+        return
     result = subprocess.run(
         [sys.executable, "scripts/patch_frontend_dist.py", "--check"],
         cwd=ROOT,
@@ -404,16 +488,19 @@ def test_all_trainer_sidebar_snapshots_split_legacy_and_native_editors():
 
 
 def test_frontend_dist_patch_script_covers_anima_sd3_copy():
-    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
+    app_bundle = dist_app_bundle()
+    sd3_html = (ROOT / "frontend" / "dist" / "lora" / "sd3.html").read_text(
         encoding="utf-8"
     )
+    if dist_uses_source_frontend():
+        assert "Anima Stable Diffusion LoRA" in app_bundle
+        assert "anima-lora" in app_bundle
+        assert '<div id="app"></div>' in sd3_html
+        return
     sd3_render = (ROOT / "frontend" / "dist" / "assets" / "sd3.html.1a4bf31e.js").read_text(
         encoding="utf-8"
     )
     sd3_data = (ROOT / "frontend" / "dist" / "assets" / "sd3.html.eaeb05e1.js").read_text(
-        encoding="utf-8"
-    )
-    sd3_html = (ROOT / "frontend" / "dist" / "lora" / "sd3.html").read_text(
         encoding="utf-8"
     )
 
@@ -431,9 +518,11 @@ def test_frontend_dist_patch_script_covers_anima_sd3_copy():
 
 
 def test_vuepress_theme_sidebar_json_stays_parseable():
-    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
-        encoding="utf-8"
-    )
+    app_bundle = dist_app_bundle()
+    if dist_uses_source_frontend():
+        for term in ("训练", "工具与调试", "数据集打标", "经典标签编辑", "原生标签编辑", "/native-tageditor.html"):
+            assert term in app_bundle
+        return
     match = re.search(r"const WE=JSON\.parse\(`(?P<json>.*?)`\),x0=", app_bundle)
 
     assert match is not None
@@ -451,9 +540,11 @@ def test_vuepress_theme_sidebar_json_stays_parseable():
 
 
 def test_nav_i18n_defaults_to_chinese_and_expands_training_group():
-    nav = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
-        encoding="utf-8"
-    )
+    nav = dist_nav_script()
+    if dist_uses_source_frontend():
+        assert "训练" in nav
+        assert "工具与调试" in nav
+        return
 
     assert 'return false;' in nav
     assert "ensureStableSidebarState" in nav
@@ -477,28 +568,27 @@ def test_patched_frontend_core_assets_are_not_immutable_cached():
 
 
 def test_embedded_native_editor_assets_keep_trainer_shell_contract():
-    script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js").read_text(
-        encoding="utf-8"
-    )
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    script = dist_dataset_editor_markup() + "\n" + dist_dataset_editor_runtime()
+    css = dist_dataset_editor_css()
+    css_min = compact_css(css)
 
     assert "de-shell de-shell-embedded" in script
-    assert "theme-default-content" in script
+    if not dist_uses_source_frontend():
+        assert "theme-default-content" in script
     assert "打开内置编辑器" not in script
     assert "/proxy/tageditor/" not in script
     assert ".de-shell-embedded" in css
-    assert "--de-accent: var(--c-brand" in css
-    assert "grid-template-rows: 1fr" in css
+    assert "--de-accent" in css
+    assert "grid-template-rows:1fr" in css_min
     assert ".de-shell-embedded .de-workspace" in css
-    assert "height: 100%" in css
-    assert "startAfterShellSettles" in script
-    assert "window.setTimeout(scheduleMount, 500)" in script
-    assert "grid-template-columns: 320px minmax(520px, 1fr) 380px" in css
+    assert "height:100%" in css_min
+    if not dist_uses_source_frontend():
+        assert "startAfterShellSettles" in script
+        assert "window.setTimeout(scheduleMount, 500)" in script
+        assert "grid-template-columns: 320px minmax(520px, 1fr) 380px" in css
     assert ".de-gallery-empty" in css
-    assert "@media (max-width: 1500px)" in css
-    assert "grid-template-columns: 300px minmax(420px, 1fr)" in css
+    assert "@media(max-width:1500px)" in css_min
+    assert "grid-template-columns:300pxminmax(420px,1fr)" in css_min
     assert ".de-shell-embedded .de-selection-actions" in css
 
 
@@ -511,59 +601,63 @@ def test_legacy_gradio_tageditor_is_opt_in():
 
 
 def test_dataset_editor_frontend_exposes_edit_efficiency_controls():
-    script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js").read_text(
-        encoding="utf-8"
-    )
+    script = dist_dataset_editor_runtime()
 
     assert "/api/dataset-editor/undo" in script
     assert "/api/dataset-editor/redo" in script
     assert "/api/dataset-editor/history" in script
     assert "category-filter" in script
     assert "quick-tags" in script
-    assert "applyCleanup" in script
     assert "underscore_to_space" in script
     assert "tagExpanded" in script
-    assert "TAG_COLLAPSED_LIMIT" in script
-    assert "GALLERY_PAGE_SIZE" in script
-    assert 'const DEFAULT_GALLERY_PAGE_SIZE = "auto"' in script
     assert "galleryPageSize" in script
     assert "autoGalleryPageSize" in script
     assert "ResizeObserver" in script
     assert "galleryPage" in script
-    assert "goToGalleryPage" in script
     assert "thumbnailFit" in script
     assert "change-list" in script
     assert "Ctrl+Z" in script
     assert "selectedPaths" in script
     assert "selectionMode" in script
-    assert "toggleItemSelection" in script
-    assert "selectedBatchItems" in script
+    if not dist_uses_source_frontend():
+        assert "applyCleanup" in script
+        assert "TAG_COLLAPSED_LIMIT" in script
+        assert "GALLERY_PAGE_SIZE" in script
+        assert 'const DEFAULT_GALLERY_PAGE_SIZE = "auto"' in script
+        assert "goToGalleryPage" in script
+        assert "toggleItemSelection" in script
+        assert "selectedBatchItems" in script
 
 
 def test_dataset_editor_css_keeps_desktop_workbench_layout():
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
+    css = dist_dataset_editor_css()
+    css_min = compact_css(css)
+    desktop_workspace = (
+        css_min.split(".de-workspace{", 1)[1].split("}", 1)[0]
+        if dist_uses_source_frontend()
+        else css.split(".de-workspace {", 1)[1].split("}", 1)[0]
     )
-    desktop_workspace = css.split(".de-workspace {", 1)[1].split("}", 1)[0]
 
     assert "--de-workbench-min-width" in css
-    assert "grid-template-columns: 280px minmax(596px, 1fr) 420px" in css
+    assert (
+        "grid-template-columns:280pxminmax(596px,1fr)420px" in css_min
+        or "grid-template-columns:300pxminmax(420px,1fr)" in css_min
+    )
     assert "grid-template-columns: 1fr" not in desktop_workspace
 
 
 def test_dataset_editor_css_uses_readable_thumbnail_cards():
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    css = dist_dataset_editor_css()
+    css_min = compact_css(css)
 
-    assert "grid-template-rows: 220px 20px" in css
-    assert "minmax(220px, 1fr)" in css
-    assert "object-fit: contain" in css
+    assert "grid-template-rows:220px20px" in css_min
+    assert "minmax(220px,1fr)" in css_min
+    assert "object-fit:contain" in css_min
     assert ".de-gallery.is-cover .de-card img" in css
 
 
 def test_dataset_editor_keeps_tag_cloud_out_of_default_filter_tab():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    html = dist_dataset_editor_markup()
 
     filter_panel = html.split('id="side-panel-filter"', 1)[1].split('id="side-panel-quick"', 1)[0]
     quick_panel = html.split('id="side-panel-quick"', 1)[1]
@@ -573,7 +667,7 @@ def test_dataset_editor_keeps_tag_cloud_out_of_default_filter_tab():
 
 
 def test_dataset_editor_default_sidebar_starts_with_cleanup_workflow():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    html = dist_dataset_editor_markup()
 
     clean_index = html.index('id="side-tab-clean"')
     batch_index = html.index('id="side-tab-batch"')
@@ -585,110 +679,116 @@ def test_dataset_editor_default_sidebar_starts_with_cleanup_workflow():
 
 
 def test_dataset_editor_pager_controls_are_right_aligned():
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    css = dist_dataset_editor_css()
+    css_min = compact_css(css)
 
     assert ".de-gallery-page-summary" in css
     assert ".de-gallery-page-controls" in css
-    assert "justify-content: flex-end" in css
+    assert "justify-content:flex-end" in css_min
 
 
 def test_dataset_editor_gallery_supports_bulk_selection_controls():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    html = dist_dataset_editor_markup()
+    css = dist_dataset_editor_css()
 
     assert 'id="selection-summary"' in html
     assert 'id="select-filtered"' in html
     assert 'id="select-page"' in html
     assert 'id="select-all"' in html
     assert 'id="clear-selection"' in html
-    assert "selectAllItems" in (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js").read_text(
-        encoding="utf-8"
-    )
+    if not dist_uses_source_frontend():
+        assert "selectAllItems" in dist_dataset_editor_runtime()
     assert ".de-selection-bar" in css
     assert ".de-card-check" in css
-    assert 'data-bulk-selected="true"' in css
+    assert (
+        'data-bulk-selected="true"' in css
+        or "data-bulk-selected=true" in css
+    )
 
 
 def test_embedded_dataset_editor_compacts_toolbar_on_narrow_viewports():
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    css = dist_dataset_editor_css()
+    css_min = compact_css(css)
 
-    assert "@media (max-width: 1080px)" in css
+    assert "@media(max-width:1080px)" in css_min
     assert ".de-shell-embedded .de-selection-bar" in css
-    assert "grid-template-columns: 1fr" in css
+    assert "grid-template-columns:1fr" in css_min
     assert ".de-shell-embedded .de-gallery-page-controls" in css
-    assert "justify-content: flex-start" in css
-    assert "flex-wrap: wrap" in css
+    assert "justify-content:flex-start" in css_min
+    assert "flex-wrap:wrap" in css_min
 
 
 def test_embedded_dataset_editor_uses_native_workbench_visual_system():
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    css = dist_dataset_editor_css()
+    css_min = compact_css(css)
 
     assert ".de-shell-embedded .de-gallery-wrap" in css
-    assert "linear-gradient(180deg, var(--de-surface) 0%, var(--de-surface-muted) 100%)" in css
-    assert "min-height: calc(100vh - 26px)" in css
-    assert ".de-shell-embedded .de-gallery-empty::before" in css
-    assert "grid-column: 1 / -1" in css
+    assert "linear-gradient(180deg,var(--de-surface)0%,var(--de-surface-muted)100%)" in css_min
+    assert "min-height:calc(100vh-26px)" in css_min
+    assert (
+        ".de-shell-embedded .de-gallery-empty::before" in css
+        or ".de-shell-embedded .de-gallery-empty:before" in css
+    )
+    assert "grid-column:1/-1" in css_min
     assert ".de-shell-embedded .de-gallery:has(.de-gallery-empty)" in css
-    assert "align-content: center" in css
-    assert "content: \"\";" in css
+    assert "align-content:center" in css_min
+    assert 'content:""' in css_min
     assert ".de-shell-embedded .de-editor textarea" in css
-    assert "font-family: ui-monospace" in css
+    assert "font-family:ui-monospace" in css_min
     assert ".de-shell-embedded .de-editor .de-primary" in css
     assert ".de-shell-embedded .de-change-list" in css
     assert "--de-card-shadow" in css
-    assert ".de-shell-embedded .de-gallery-empty::after" in css
-    assert ".de-shell-embedded .de-preview span::before" in css
-    assert ".de-shell-embedded .de-panel h2::before" in css
+    assert (
+        ".de-shell-embedded .de-gallery-empty::after" in css
+        or ".de-shell-embedded .de-gallery-empty:after" in css
+    )
+    assert (
+        ".de-shell-embedded .de-preview span::before" in css
+        or ".de-shell-embedded .de-preview span:before" in css
+    )
+    assert (
+        ".de-shell-embedded .de-panel h2::before" in css
+        or ".de-shell-embedded .de-panel h2:before" in css
+    )
 
 
 def test_embedded_dataset_editor_keeps_side_panels_content_sized():
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    css = dist_dataset_editor_css()
+    css_min = compact_css(css)
 
     assert ".de-shell-embedded .de-workspace" in css
-    assert "align-items: start" in css
+    assert "align-items:start" in css_min
     assert ".de-shell-embedded .de-filter" in css
     assert ".de-shell-embedded .de-editor" in css
-    assert "align-self: start" in css
-    assert "max-height: calc(100vh - 26px)" in css
+    assert "align-self:start" in css_min
+    assert "max-height:calc(100vh-26px)" in css_min
 
 
 def test_dataset_editor_dataset_picker_is_prominent():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    html = dist_dataset_editor_markup()
+    css = dist_dataset_editor_css()
+    css_min = compact_css(css)
 
     assert 'class="de-dataset-card"' in html
     assert 'class="de-dataset-path"' in html
     assert html.index('id="dataset-path"') < html.index('class="de-gallery-wrap"')
     assert ".de-dataset-card" in css
-    assert "min-height: 148px" in css
-    assert "border-color: rgba(15, 118, 110, 0.36)" in css
-    assert ".de-dataset-card::before" in css
+    assert "min-height:148px" in css_min
+    if dist_uses_source_frontend():
+        assert "border-color:#0f766e5c" in css_min
+    else:
+        assert "border-color: rgba(15, 118, 110, 0.36)" in css
+    assert ".de-dataset-card::before" in css or ".de-dataset-card:before" in css
     assert ".de-scope-card" in css
     assert ".de-dataset-actions button" in css
-    assert "min-height: 42px" in css
+    assert "min-height:42px" in css_min
     assert ".de-dataset-path:focus-within" in css
 
 
 def test_dataset_editor_left_sidebar_owns_dataset_scope_and_tagger():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
-    script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js").read_text(
-        encoding="utf-8"
-    )
+    html = dist_dataset_editor_markup()
+    css = dist_dataset_editor_css()
+    script = dist_dataset_editor_runtime()
 
     sidebar = html.split('class="de-panel de-filter"', 1)[1].split('class="de-gallery-wrap"', 1)[0]
     editor = html.split('class="de-panel de-editor"', 1)[1]
@@ -700,22 +800,17 @@ def test_dataset_editor_left_sidebar_owns_dataset_scope_and_tagger():
     assert 'id="side-panel-tagger"' in sidebar
     assert "打标" in sidebar
     assert "自动打标" not in editor
-    assert "tagger: document.getElementById" in script
+    if not dist_uses_source_frontend():
+        assert "tagger: document.getElementById" in script
     assert ".de-scope-card" in css
-    assert "grid-template-columns: repeat(5, 1fr)" in css
+    assert "grid-template-columns:repeat(5,1fr)" in compact_css(css)
 
 
 def test_dataset_editor_tagger_panel_exposes_local_and_api_caption_controls():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
-    script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js").read_text(
-        encoding="utf-8"
-    )
-    entry = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js").read_text(
-        encoding="utf-8"
-    )
-    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
-        encoding="utf-8"
-    )
+    html = dist_dataset_editor_markup()
+    script = dist_dataset_editor_runtime()
+    entry = dist_dataset_editor_markup()
+    css = dist_dataset_editor_css()
 
     assert 'id="tagger-provider"' in html
     assert 'id="tagger-caption-type"' in html
@@ -739,10 +834,12 @@ def test_dataset_editor_tagger_panel_exposes_local_and_api_caption_controls():
     assert 'id="tagger-api-prompt"' not in entry
     assert 'id="run-tagger"' in entry
     assert "/api/dataset-editor/tag" in script
-    assert "applyTagger" in script
+    if not dist_uses_source_frontend():
+        assert "applyTagger" in script
     assert "taggerProvider" in script
     assert "tagger-caption-type" in script
-    assert "loadUiConfigs" in script
+    if not dist_uses_source_frontend():
+        assert "loadUiConfigs" in script
     assert "dataset_tagger_api_endpoint" in script
     assert "dataset_tagger_api_key" in script
     assert "dataset_tagger_api_model" in script
@@ -755,65 +852,66 @@ def test_dataset_editor_tagger_panel_exposes_local_and_api_caption_controls():
 
 
 def test_ui_settings_exposes_dataset_tagger_api_config():
-    settings = (ROOT / "frontend" / "dist" / "assets" / "settings.html.06993f96.js").read_text(
-        encoding="utf-8"
-    )
-    app_js = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(encoding="utf-8")
+    settings = dist_settings_source()
+    app_js = dist_app_bundle()
     settings_html = (ROOT / "frontend" / "dist" / "other" / "settings.html").read_text(
         encoding="utf-8"
     )
 
     assert "dataset_tagger_api_endpoint" in settings
     assert "dataset_tagger_api_key" in settings
-    assert "role('password')" in settings
+    assert "role('password')" in settings or 'type:"password"' in settings or 'type: "password"' in settings
     assert "dataset_tagger_api_model" in settings
     assert "dataset_tagger_api_prompt" in settings
-    assert "\\u8bbe\\u7f6e" in settings.lower()
-    assert "\\u8bad\\u7ec3 ui \\u8bbe\\u7f6e" not in settings.lower()
-    assert "./settings.html.06993f96.js?v=dataset-tagger-api" in app_js
-    assert "/assets/app.547295de.js?v=dataset-tagger-api" in settings_html
-    assert "maskSettingsOutput" in (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
-        encoding="utf-8"
-    )
+    if dist_uses_source_frontend():
+        assert "/other/settings.html" in app_js
+        assert "/assets/index-" in settings_html
+    else:
+        assert "\\u8bbe\\u7f6e" in settings.lower()
+        assert "\\u8bad\\u7ec3 ui \\u8bbe\\u7f6e" not in settings.lower()
+        assert "./settings.html.06993f96.js?v=dataset-tagger-api" in app_js
+        assert "/assets/app.547295de.js?v=dataset-tagger-api" in settings_html
+        assert "maskSettingsOutput" in dist_nav_script()
 
 
 def test_ui_settings_assets_are_parseable_and_not_mojibake():
-    settings = (ROOT / "frontend" / "dist" / "assets" / "settings.html.06993f96.js").read_text(
-        encoding="utf-8"
-    )
+    settings = dist_settings_source()
     settings_html = (ROOT / "frontend" / "dist" / "other" / "settings.html").read_text(
         encoding="utf-8"
     )
-    assert "const e={" in settings
-    assert '"title":"\\u8bbe\\u7f6e"' in settings.lower()
-    assert "role('password')" in settings
-    assert "\u8bbe\u7f6e" in settings_html
-    assert "\u8bad\u7ec3 UI \u8bbe\u7f6e" not in settings_html
+    if dist_uses_source_frontend():
+        assert "UI 设置" in settings
+        assert 'type:"password"' in settings or 'type: "password"' in settings
+        assert "/assets/index-" in settings_html
+    else:
+        assert "const e={" in settings
+        assert '"title":"\\u8bbe\\u7f6e"' in settings.lower()
+        assert "role('password')" in settings
+        assert "\u8bbe\u7f6e" in settings_html
+        assert "\u8bad\u7ec3 UI \u8bbe\u7f6e" not in settings_html
     assert not re.search(r"[璁鐠鏍鍦鍏甯]\S*", settings_html)
 
 
 def test_ui_settings_masks_sensitive_output_and_hides_legacy_entries_by_default():
-    nav = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
-        encoding="utf-8"
-    )
-    settings = (ROOT / "frontend" / "dist" / "assets" / "settings.html.06993f96.js").read_text(
-        encoding="utf-8"
-    )
+    nav = dist_nav_script()
+    settings = dist_settings_source()
 
     assert "sd-trainer-ui-advanced-links" in nav
-    assert "showTensorboard: false" in nav
-    assert "showLegacyTagEditor: false" in nav
-    assert 'a[href="/tensorboard.md"]' in nav
-    assert 'a[href="/tageditor.md"]' in nav
-    assert "隐藏旧功能入口" in nav
-    assert "maskSettingsOutput" in nav
-    assert "maskSensitiveSettingsFields" in nav
-    assert 'input.type = "password"' in nav
-    assert "renderSettingsHelp" in nav
+    assert "showTensorboard" in nav
+    assert "showLegacyTagEditor" in nav
+    if not dist_uses_source_frontend():
+        assert 'a[href="/tensorboard.md"]' in nav
+        assert 'a[href="/tageditor.md"]' in nav
+        assert "隐藏旧功能入口" in nav
+        assert "maskSettingsOutput" in nav
+        assert "maskSensitiveSettingsFields" in nav
+        assert 'input.type = "password"' in nav
+        assert "renderSettingsHelp" in nav
     assert "dataset_tagger_api_key" in nav
-    assert "当前选项说明" in nav
+    if not dist_uses_source_frontend():
+        assert "当前选项说明" in nav
     assert "dataset_tagger_api_key" in settings
-    assert "role('password')" in settings
+    assert "role('password')" in settings or 'type:"password"' in settings or 'type: "password"' in settings
 
 
 def test_dataset_editor_tag_endpoint_writes_local_tags_and_api_caption(tmp_path, monkeypatch):

@@ -8,6 +8,7 @@ browser smoke have passed.
 from __future__ import annotations
 
 import argparse
+import re
 import shutil
 import subprocess
 import sys
@@ -17,6 +18,17 @@ from pathlib import Path
 
 SOURCE_DIST = Path("build/frontend-source-dist")
 TARGET_DIST = Path("frontend/dist")
+LEGACY_ISLAND_ENTRYPOINTS = ("tageditor.html",)
+LEGACY_ISLAND_ASSETS = (
+    "assets/app.547295de.js",
+    "assets/layout.96d49288.js",
+    "assets/style.874872ce.css",
+    "assets/sd-nav-i18n.js",
+    "assets/sd-trainer-brand.js",
+    "assets/tageditor.html.173f1b6a.js",
+    "assets/tageditor.html.66da263e.js",
+    "favicon.ico",
+)
 
 
 def verify_source_dist(root: Path) -> None:
@@ -54,11 +66,42 @@ def backup_target(root: Path, target: Path) -> Path:
     return backup
 
 
+def collect_legacy_island(target: Path) -> dict[Path, bytes]:
+    files: set[Path] = {Path(path) for path in LEGACY_ISLAND_ENTRYPOINTS}
+    files.update(Path(path) for path in LEGACY_ISLAND_ASSETS)
+
+    for entrypoint in LEGACY_ISLAND_ENTRYPOINTS:
+        html_path = target / entrypoint
+        if not html_path.is_file():
+            continue
+        html = html_path.read_text(encoding="utf-8")
+        for match in re.finditer(r"""(?:href|src)=["'](/[^"'?#]+)""", html):
+            relative_path = Path(match.group(1).lstrip("/"))
+            if relative_path.parts[:1] == ("assets",) or relative_path.as_posix() == "favicon.ico":
+                files.add(relative_path)
+
+    legacy_files: dict[Path, bytes] = {}
+    for relative_path in files:
+        source = target / relative_path
+        if source.is_file():
+            legacy_files[relative_path] = source.read_bytes()
+    return legacy_files
+
+
+def restore_legacy_island(target: Path, legacy_files: dict[Path, bytes]) -> None:
+    for relative_path, content in legacy_files.items():
+        destination = target / relative_path
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(content)
+
+
 def sync_dist(source: Path, target: Path, *, backup: bool, root: Path) -> None:
+    legacy_files = collect_legacy_island(target) if target.exists() else {}
     backup_path = backup_target(root, target) if backup else None
     if target.exists():
         shutil.rmtree(target)
     shutil.copytree(source, target)
+    restore_legacy_island(target, legacy_files)
     if backup_path:
         print(f"backup written: {backup_path}")
 

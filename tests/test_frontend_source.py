@@ -1,4 +1,5 @@
 import json
+import importlib.util
 import subprocess
 import sys
 from pathlib import Path
@@ -53,6 +54,49 @@ def test_frontend_source_dist_sync_script_is_guarded():
         "source dist sync plan OK",
     ]:
         assert term in script
+
+
+def test_frontend_source_dist_sync_preserves_legacy_tageditor_island(tmp_path):
+    module_path = ROOT / "scripts" / "sync_frontend_source_dist.py"
+    spec = importlib.util.spec_from_file_location("sync_frontend_source_dist", module_path)
+    assert spec and spec.loader
+    sync_module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(sync_module)
+
+    root = tmp_path
+    source = root / "build" / "frontend-source-dist"
+    target = root / "frontend" / "dist"
+    (source / "assets").mkdir(parents=True)
+    (target / "assets").mkdir(parents=True)
+    (source / "index.html").write_text("source index", encoding="utf-8")
+    (source / "tageditor.html").write_text("source placeholder", encoding="utf-8")
+    (source / "native-tageditor.html").write_text("source native editor", encoding="utf-8")
+    (source / "assets" / "index-source.js").write_text("source", encoding="utf-8")
+    (target / "tageditor.html").write_text(
+        'legacy classic editor <a href="/native-tageditor.html">native</a>',
+        encoding="utf-8",
+    )
+    (target / "native-tageditor.html").write_text("legacy native editor", encoding="utf-8")
+    for asset in [
+        "app.547295de.js",
+        "style.874872ce.css",
+        "tageditor.html.173f1b6a.js",
+        "tageditor.html.66da263e.js",
+    ]:
+        (target / "assets" / asset).write_text(f"legacy {asset}", encoding="utf-8")
+
+    sync_module.sync_dist(source, target, backup=True, root=root)
+
+    assert (target / "index.html").read_text(encoding="utf-8") == "source index"
+    assert "legacy classic editor" in (target / "tageditor.html").read_text(encoding="utf-8")
+    assert (target / "native-tageditor.html").read_text(encoding="utf-8") == "source native editor"
+    for asset in [
+        "app.547295de.js",
+        "style.874872ce.css",
+        "tageditor.html.173f1b6a.js",
+        "tageditor.html.66da263e.js",
+    ]:
+        assert (target / "assets" / asset).read_text(encoding="utf-8") == f"legacy {asset}"
 
 
 def test_frontend_source_plan_documents_dist_replacement_gate():

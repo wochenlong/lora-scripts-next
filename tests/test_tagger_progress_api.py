@@ -1,6 +1,7 @@
 """Tagger progress API smoke tests (no ONNX / no real images)."""
 
 from fastapi.testclient import TestClient
+from pathlib import Path
 
 from mikazuki.app.application import app
 from mikazuki.tagger.model_fetch import use_download_endpoint
@@ -10,6 +11,13 @@ from mikazuki.tagger.local_models import (
     local_model_asset_paths,
     local_model_dir,
 )
+
+ROOT = Path(__file__).resolve().parents[1]
+
+
+def dist_source_bundle() -> str:
+    assets = ROOT / "frontend" / "dist" / "assets"
+    return "\n".join(path.read_text(encoding="utf-8") for path in assets.glob("index-*.js"))
 
 
 def test_tagger_status_idle():
@@ -36,7 +44,13 @@ def test_tagger_html_serves_progress_script():
     client = TestClient(app)
     r = client.get("/tagger.html")
     assert r.status_code == 200
-    assert "tagger-progress.js" in r.text
+    bundle = dist_source_bundle()
+    if bundle and "SourceTrainerShell" in bundle:
+        assert '<div id="app"></div>' in r.text
+        assert "sd-tagger-dock" in bundle
+        assert "/api/tagger/status" in bundle
+    else:
+        assert "tagger-progress.js" in r.text
 
 
 def test_tagger_default_download_endpoint_preserves_existing_hf_endpoint(monkeypatch):
