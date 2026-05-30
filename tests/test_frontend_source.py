@@ -1,3 +1,4 @@
+import json
 import subprocess
 import sys
 from pathlib import Path
@@ -17,6 +18,24 @@ def test_frontend_source_contract_is_declared():
 
     assert result.returncode == 0, result.stdout + result.stderr
     assert "frontend source contract OK" in result.stdout
+
+
+def test_frontend_source_route_titles_are_readable():
+    routes = json.loads(
+        (ROOT / "frontend" / "source" / "src" / "routes.json").read_text(
+            encoding="utf-8"
+        )
+    )
+    titles = {route["path"]: route["title"] for route in routes}
+
+    assert titles["/tagger.html"] == "数据集打标"
+    assert titles["/tageditor.html"] == "经典标签编辑"
+    assert titles["/native-tageditor.html"] == "原生标签编辑"
+    assert titles["/dataset-editor.html"] == "原生标签编辑 Debug"
+    assert titles["/other/settings.html"] == "UI 设置"
+    assert titles["/lora/anima-finetune.html"] == "全量微调"
+    assert titles["/help/guide.html"] == "新手上路"
+    assert titles["/other/changelog.html"] == "更新日志"
 
 
 def test_frontend_source_dist_sync_script_is_guarded():

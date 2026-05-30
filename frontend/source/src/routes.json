@@ -31,7 +31,7 @@
   },
   {
     "path": "/tensorboard.html",
-    "title": "Tensorboard",
+    "title": "TensorBoard",
     "section": "tools",
     "description": "TensorBoard compatibility route."
   },
@@ -45,7 +45,7 @@
     "path": "/lora/index.html",
     "title": "LoRA 训练",
     "section": "training",
-    "description": "LoRA training route placeholder."
+    "description": "LoRA training route compatibility entry."
   },
   {
     "path": "/lora/sd3.html",
@@ -57,37 +57,37 @@
     "path": "/lora/basic.html",
     "title": "基础训练",
     "section": "training",
-    "description": "Basic training route placeholder."
+    "description": "Basic training route compatibility entry."
   },
   {
     "path": "/lora/master.html",
     "title": "Stable Diffusion",
     "section": "training",
-    "description": "Stable Diffusion training route placeholder."
+    "description": "Stable Diffusion training route compatibility entry."
   },
   {
     "path": "/lora/flux.html",
     "title": "Flux LoRA",
     "section": "training",
-    "description": "Flux LoRA route placeholder."
+    "description": "Flux LoRA route compatibility entry."
   },
   {
     "path": "/lora/anima-finetune.html",
     "title": "全量微调",
     "section": "training",
-    "description": "Anima full finetune route placeholder."
+    "description": "Anima full finetune route."
   },
   {
     "path": "/lora/params.html",
     "title": "训练参数说明",
     "section": "help",
-    "description": "Training parameter documentation route placeholder."
+    "description": "Training parameter documentation route."
   },
   {
     "path": "/lora/tools.html",
     "title": "LoRA 脚本工具",
     "section": "tools",
-    "description": "LoRA script tools route placeholder."
+    "description": "LoRA script tools route."
   },
   {
     "path": "/dreambooth/index.html",
@@ -99,24 +99,24 @@
     "path": "/help/guide.html",
     "title": "新手上路",
     "section": "help",
-    "description": "Getting started route placeholder."
+    "description": "Getting started route."
   },
   {
     "path": "/other/about.html",
     "title": "关于",
     "section": "more",
-    "description": "About route placeholder."
+    "description": "About route."
   },
   {
     "path": "/other/changelog.html",
     "title": "更新日志",
     "section": "more",
-    "description": "Changelog route placeholder."
+    "description": "Changelog route."
   },
   {
     "path": "/task.html",
     "title": "任务",
     "section": "tools",
-    "description": "Task route placeholder."
+    "description": "Task route."
   }
 ]
