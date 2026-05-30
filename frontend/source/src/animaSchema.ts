@@ -27,10 +27,19 @@ export interface AnimaForm {
   qwen3_max_token_length: number;
   t5_max_token_length: number;
   learning_rate: string;
+  self_attn_lr: string;
+  cross_attn_lr: string;
+  mlp_lr: string;
+  mod_lr: string;
+  llm_adapter_lr: string;
   unet_lr: string;
   lr_scheduler: "linear" | "cosine" | "cosine_with_restarts" | "polynomial" | "constant" | "constant_with_warmup";
   lr_warmup_steps: number;
+  lr_scheduler_num_cycles: number;
   optimizer_args_custom: string[];
+  min_snr_gamma: string;
+  prodigy_d0: string;
+  prodigy_d_coef: string;
   network_dim: number;
   network_alpha: number;
   network_args_custom: string[];
@@ -150,10 +159,19 @@ export const animaDefaults: AnimaForm = {
   qwen3_max_token_length: 512,
   t5_max_token_length: 512,
   learning_rate: "1e-5",
+  self_attn_lr: "",
+  cross_attn_lr: "",
+  mlp_lr: "",
+  mod_lr: "",
+  llm_adapter_lr: "",
   unet_lr: "1e-4",
   lr_scheduler: "cosine_with_restarts",
   lr_warmup_steps: 0,
+  lr_scheduler_num_cycles: 1,
   optimizer_args_custom: [],
+  min_snr_gamma: "",
+  prodigy_d0: "",
+  prodigy_d_coef: "2.0",
   network_dim: 32,
   network_alpha: 16,
   network_args_custom: [],
@@ -307,13 +325,6 @@ export const animaDatasetOutputSection: TrainingSectionSpec<AnimaForm> = {
       label: "output_name",
     },
     {
-      kind: "table",
-      key: "optimizer_args_custom",
-      id: "anima-optimizer-args-custom",
-      label: "optimizer_args_custom",
-      description: "Custom optimizer_args entries, one argument per row.",
-    },
-    {
       kind: "row",
       fields: [
         {
@@ -334,6 +345,22 @@ export const animaDatasetOutputSection: TrainingSectionSpec<AnimaForm> = {
           id: "anima-prefer-json-caption",
           label: "prefer_json_caption",
         },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        { kind: "text", key: "self_attn_lr", id: "anima-self-attn-lr", label: "self_attn_lr" },
+        { kind: "text", key: "cross_attn_lr", id: "anima-cross-attn-lr", label: "cross_attn_lr" },
+        { kind: "text", key: "mlp_lr", id: "anima-mlp-lr", label: "mlp_lr" },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        { kind: "text", key: "mod_lr", id: "anima-mod-lr", label: "mod_lr" },
+        { kind: "text", key: "llm_adapter_lr", id: "anima-llm-adapter-lr", label: "llm_adapter_lr" },
+        { kind: "text", key: "min_snr_gamma", id: "anima-min-snr-gamma", label: "min_snr_gamma" },
       ],
     },
     {
@@ -421,6 +448,29 @@ export const animaTrainingSection: TrainingSectionSpec<AnimaForm> = {
           min: 1,
         },
       ],
+    },
+    {
+      kind: "number",
+      key: "lr_scheduler_num_cycles",
+      id: "anima-lr-scheduler-num-cycles",
+      label: "lr_scheduler_num_cycles",
+      min: 1,
+      visibleWhen: { key: "lr_scheduler", equals: "cosine_with_restarts" },
+    },
+    {
+      kind: "row",
+      visibleWhen: { key: "optimizer_type", equals: "Prodigy" },
+      fields: [
+        { kind: "text", key: "prodigy_d0", id: "anima-prodigy-d0", label: "prodigy_d0" },
+        { kind: "text", key: "prodigy_d_coef", id: "anima-prodigy-d-coef", label: "prodigy_d_coef" },
+      ],
+    },
+    {
+      kind: "table",
+      key: "optimizer_args_custom",
+      id: "anima-optimizer-args-custom",
+      label: "optimizer_args_custom",
+      description: "Custom optimizer_args entries, one argument per row.",
     },
     { kind: "number", key: "t5_max_token_length", id: "anima-t5-max-token-length", label: "t5_max_token_length", min: 1 },
     {

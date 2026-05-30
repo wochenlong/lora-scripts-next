@@ -156,6 +156,15 @@ def test_frontend_source_declares_anima_route_contracts():
         "ui_custom_params",
         "ddp_timeout",
         "ddp_gradient_as_bucket_view",
+        "self_attn_lr",
+        "cross_attn_lr",
+        "mlp_lr",
+        "mod_lr",
+        "llm_adapter_lr",
+        "lr_scheduler_num_cycles",
+        "min_snr_gamma",
+        "prodigy_d0",
+        "prodigy_d_coef",
         "previewToml",
         "anima-preview-code",
         "Save Config",
@@ -248,6 +257,8 @@ def test_frontend_source_has_training_schema_renderer():
     assert 'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "mode" }' in anima_schema
     assert 'visibleWhen: { key: "enable_debug_options", equals: true }' in anima_schema
+    assert 'visibleWhen: { key: "lr_scheduler", equals: "cosine_with_restarts" }' in anima_schema
+    assert 'visibleWhen: { key: "optimizer_type", equals: "Prodigy" }' in anima_schema
     assert 'kind: "table"' in anima_schema
     assert "role:" in anima_schema
     assert '"file"' in anima_schema

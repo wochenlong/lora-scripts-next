@@ -177,6 +177,8 @@ def verify_source(root: Path) -> list[dict]:
         'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }',
         'visibleWhen: { key: "weighting_scheme", equals: "mode" }',
         'visibleWhen: { key: "enable_debug_options", equals: true }',
+        'visibleWhen: { key: "lr_scheduler", equals: "cosine_with_restarts" }',
+        'visibleWhen: { key: "optimizer_type", equals: "Prodigy" }',
     ):
         if term not in anima_schema_source:
             raise RuntimeError(f"Anima schema missing visibility rule: {term}")
@@ -274,6 +276,15 @@ def verify_source(root: Path) -> list[dict]:
         "ui_custom_params",
         "ddp_timeout",
         "ddp_gradient_as_bucket_view",
+        "self_attn_lr",
+        "cross_attn_lr",
+        "mlp_lr",
+        "mod_lr",
+        "llm_adapter_lr",
+        "lr_scheduler_num_cycles",
+        "min_snr_gamma",
+        "prodigy_d0",
+        "prodigy_d_coef",
         "previewToml",
         "anima-preview-code",
         "Save Config",

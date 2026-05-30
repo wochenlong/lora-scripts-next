@@ -39,6 +39,7 @@ Created: 2026-05-30
 - 2026-05-30: Added source-owned table/list field rendering for schema `role('table')`-style inputs and wired Anima `optimizer_args_custom` / `network_args_custom` into the schema sections.
 - 2026-05-30: Added Anima debug option coverage with `enable_debug_options` conditional rendering for profiling, NaN checks, debug mode, and RoPE mismatch settings.
 - 2026-05-30: Added source-owned Anima coverage for shared noise settings, data enhancement toggles, other/custom params, and distributed training fields.
+- 2026-05-30: Expanded Anima optimizer/LR parity with per-block finetune learning rates, scheduler cycle controls, min SNR, and Prodigy-specific conditional parameters.
 
 ## Background
 
