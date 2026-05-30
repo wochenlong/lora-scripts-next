@@ -54,6 +54,21 @@ export const AnimaRoutePage = defineComponent({
         delete base.network_alpha;
         delete base.network_train_unet_only;
         delete base.network_train_text_encoder_only;
+        delete base.network_args_custom;
+        delete base.network_weights;
+        delete base.dim_from_weights;
+        delete base.scale_weight_norms;
+        delete base.train_norm;
+        delete base.network_dropout;
+        delete base.pissa_init;
+        delete base.pissa_method;
+        delete base.pissa_niter;
+        delete base.pissa_oversample;
+        delete base.lokr_factor;
+        delete base.full_matrix;
+        delete base.tlora_min_rank;
+        delete base.tlora_rank_schedule;
+        delete base.tlora_orthogonal_init;
       }
       return base;
     }

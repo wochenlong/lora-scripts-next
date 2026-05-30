@@ -43,6 +43,20 @@ export interface AnimaForm {
   network_dim: number;
   network_alpha: number;
   network_args_custom: string[];
+  network_weights: string;
+  dim_from_weights: boolean;
+  scale_weight_norms: string;
+  train_norm: boolean;
+  network_dropout: number;
+  pissa_init: boolean;
+  pissa_method: "rsvd" | "svd";
+  pissa_niter: number;
+  pissa_oversample: number;
+  lokr_factor: number;
+  full_matrix: boolean;
+  tlora_min_rank: number;
+  tlora_rank_schedule: "cosine" | "linear";
+  tlora_orthogonal_init: boolean;
   resolution: string;
   enable_bucket: boolean;
   min_bucket_reso: number;
@@ -175,6 +189,20 @@ export const animaDefaults: AnimaForm = {
   network_dim: 32,
   network_alpha: 16,
   network_args_custom: [],
+  network_weights: "",
+  dim_from_weights: false,
+  scale_weight_norms: "",
+  train_norm: false,
+  network_dropout: 0,
+  pissa_init: false,
+  pissa_method: "rsvd",
+  pissa_niter: 2,
+  pissa_oversample: 8,
+  lokr_factor: -1,
+  full_matrix: false,
+  tlora_min_rank: 4,
+  tlora_rank_schedule: "cosine",
+  tlora_orthogonal_init: true,
   resolution: "1024,1024",
   enable_bucket: true,
   min_bucket_reso: 256,
@@ -500,6 +528,72 @@ export const animaLoraAdapterSection: TrainingSectionSpec<AnimaForm> = {
       ],
     },
     { kind: "number", key: "network_alpha", id: "anima-network-alpha", label: "network_alpha", min: 1 },
+    {
+      kind: "text",
+      key: "network_weights",
+      id: "anima-network-weights",
+      label: "network_weights",
+      role: "file",
+      description: "Resume from an existing LoRA / LyCORIS adapter.",
+    },
+    {
+      kind: "row",
+      fields: [
+        { kind: "checkbox", key: "dim_from_weights", id: "anima-dim-from-weights", label: "dim_from_weights" },
+        { kind: "text", key: "scale_weight_norms", id: "anima-scale-weight-norms", label: "scale_weight_norms" },
+        { kind: "checkbox", key: "train_norm", id: "anima-train-norm", label: "train_norm" },
+      ],
+    },
+    {
+      kind: "row",
+      fields: [
+        { kind: "number", key: "network_dropout", id: "anima-network-dropout", label: "network_dropout", min: 0, step: 0.01 },
+        { kind: "checkbox", key: "pissa_init", id: "anima-pissa-init", label: "pissa_init" },
+      ],
+    },
+    {
+      kind: "row",
+      visibleWhen: { key: "pissa_init", equals: true },
+      fields: [
+        {
+          kind: "select",
+          key: "pissa_method",
+          id: "anima-pissa-method",
+          label: "pissa_method",
+          options: ["rsvd", "svd"],
+        },
+        { kind: "number", key: "pissa_niter", id: "anima-pissa-niter", label: "pissa_niter", min: 0 },
+        { kind: "number", key: "pissa_oversample", id: "anima-pissa-oversample", label: "pissa_oversample", min: 0 },
+      ],
+    },
+    {
+      kind: "row",
+      visibleWhen: { key: "lora_type", equals: "lokr" },
+      fields: [
+        { kind: "number", key: "lokr_factor", id: "anima-lokr-factor", label: "lokr_factor", min: -1 },
+        { kind: "checkbox", key: "full_matrix", id: "anima-full-matrix", label: "full_matrix" },
+      ],
+    },
+    {
+      kind: "row",
+      visibleWhen: { key: "lora_type", equals: "tlora" },
+      fields: [
+        { kind: "number", key: "tlora_min_rank", id: "anima-tlora-min-rank", label: "tlora_min_rank", min: 1 },
+        {
+          kind: "select",
+          key: "tlora_rank_schedule",
+          id: "anima-tlora-rank-schedule",
+          label: "tlora_rank_schedule",
+          options: ["cosine", "linear"],
+        },
+        {
+          kind: "checkbox",
+          key: "tlora_orthogonal_init",
+          id: "anima-tlora-orthogonal-init",
+          label: "tlora_orthogonal_init",
+        },
+      ],
+    },
     {
       kind: "table",
       key: "network_args_custom",

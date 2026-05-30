@@ -165,6 +165,20 @@ def test_frontend_source_declares_anima_route_contracts():
         "min_snr_gamma",
         "prodigy_d0",
         "prodigy_d_coef",
+        "network_weights",
+        "dim_from_weights",
+        "scale_weight_norms",
+        "train_norm",
+        "network_dropout",
+        "pissa_init",
+        "pissa_method",
+        "pissa_niter",
+        "pissa_oversample",
+        "lokr_factor",
+        "full_matrix",
+        "tlora_min_rank",
+        "tlora_rank_schedule",
+        "tlora_orthogonal_init",
         "previewToml",
         "anima-preview-code",
         "Save Config",
@@ -259,6 +273,9 @@ def test_frontend_source_has_training_schema_renderer():
     assert 'visibleWhen: { key: "enable_debug_options", equals: true }' in anima_schema
     assert 'visibleWhen: { key: "lr_scheduler", equals: "cosine_with_restarts" }' in anima_schema
     assert 'visibleWhen: { key: "optimizer_type", equals: "Prodigy" }' in anima_schema
+    assert 'visibleWhen: { key: "lora_type", equals: "lokr" }' in anima_schema
+    assert 'visibleWhen: { key: "lora_type", equals: "tlora" }' in anima_schema
+    assert 'visibleWhen: { key: "pissa_init", equals: true }' in anima_schema
     assert 'kind: "table"' in anima_schema
     assert "role:" in anima_schema
     assert '"file"' in anima_schema
