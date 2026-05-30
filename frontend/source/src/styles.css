@@ -279,6 +279,28 @@ h1 {
   resize: vertical;
 }
 
+.training-path-field {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+}
+
+.training-path-field__browse {
+  min-width: 86px;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.training-path-field__browse:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .training-field-description {
   color: #667085;
   font-size: 12px;

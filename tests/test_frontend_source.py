@@ -159,8 +159,10 @@ def test_frontend_source_has_training_schema_renderer():
 
     for term in [
         "TrainingFieldSpec",
+        "TrainingSectionSpec",
         "renderTrainingField",
         "renderTrainingSection",
+        "renderTrainingSectionSpec",
         "renderTrainingWorkbench",
         "renderParameterPreview",
         "renderRunControls",
@@ -171,6 +173,11 @@ def test_frontend_source_has_training_schema_renderer():
         "description",
         "hidden",
         "disabled",
+        "visibleWhen",
+        "role?:",
+        "data-training-role",
+        "sd-training-path-browse",
+        "Browse",
         "training-field-description",
         "anima-workbench",
         "anima-form-panel",
@@ -185,6 +192,9 @@ def test_frontend_source_has_training_schema_renderer():
         assert term in renderer
     assert "./trainingRenderer" in anima
     assert "renderTrainingField" in anima
+    assert "role," in anima
+    assert '"file"' in anima
+    assert '"folder"' in anima
     assert "function tomlValue" not in anima
 
 

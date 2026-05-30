@@ -67,6 +67,8 @@ test("anima source route loads train form", async ({ page }) => {
   await expect(page.locator("#anima-train-form")).toBeVisible();
   await expect(page.locator("#anima-pretrained-model")).toBeVisible();
   await expect(page.locator("#anima-train-data-dir")).toBeVisible();
+  await expect(page.locator("[data-training-role='file']")).toHaveCount(4);
+  await expect(page.locator("[data-training-role='folder']")).toHaveCount(4);
   await expect(page.locator(".anima-preview-panel")).toBeVisible();
   await expect(page.locator("#anima-preview-code")).toContainText('model_train_type = "anima-finetune"');
   await expect(page.locator("#anima-sample-sampler")).toBeVisible();

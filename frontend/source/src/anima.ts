@@ -371,7 +371,14 @@ export const AnimaRoutePage = defineComponent({
 
     const formState = animaForm as unknown as TrainingFormState;
 
-    const textField = (key: TextKey, id: string, label: string, placeholder = "", description = "") =>
+    const textField = (
+      key: TextKey,
+      id: string,
+      label: string,
+      placeholder = "",
+      description = "",
+      role?: "file" | "folder",
+    ) =>
       renderTrainingField(formState, {
         kind: "text",
         key,
@@ -379,6 +386,7 @@ export const AnimaRoutePage = defineComponent({
         label,
         placeholder,
         description,
+        role,
       });
 
     const numberField = (
@@ -475,22 +483,38 @@ export const AnimaRoutePage = defineComponent({
                   "pretrained_model_name_or_path",
                   "D:/models/anima-base-v1.0.safetensors",
                   "Anima DiT / transformer checkpoint path.",
+                  "file",
                 ),
-                textField("vae", "anima-vae", "vae", "D:/models/qwen_image_vae.safetensors", "Qwen Image VAE path."),
-                textField("qwen3", "anima-qwen3", "qwen3", "D:/models/qwen_3_06b_base.safetensors", "Qwen3 text model path."),
+                textField(
+                  "vae",
+                  "anima-vae",
+                  "vae",
+                  "D:/models/qwen_image_vae.safetensors",
+                  "Qwen Image VAE path.",
+                  "file",
+                ),
+                textField(
+                  "qwen3",
+                  "anima-qwen3",
+                  "qwen3",
+                  "D:/models/qwen_3_06b_base.safetensors",
+                  "Qwen3 text model path.",
+                  "file",
+                ),
                 textField(
                   "t5_tokenizer_path",
                   "anima-t5-tokenizer-path",
                   "t5_tokenizer_path",
                   "",
                   "Optional T5 tokenizer folder. Empty uses the bundled config.",
+                  "folder",
                 ),
-                textField("llm_adapter_path", "anima-llm-adapter-path", "llm_adapter_path"),
-                textField("resume", "anima-resume", "resume"),
+                textField("llm_adapter_path", "anima-llm-adapter-path", "llm_adapter_path", "", "", "file"),
+                textField("resume", "anima-resume", "resume", "", "", "folder"),
               ]),
               section("Dataset And Output", [
-                textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima"),
-                textField("output_dir", "anima-output-dir", "output_dir"),
+                textField("train_data_dir", "anima-train-data-dir", "train_data_dir", "D:/datasets/anima", "", "folder"),
+                textField("output_dir", "anima-output-dir", "output_dir", "", "", "folder"),
                 textField("output_name", "anima-output-name", "output_name"),
                 renderTrainingFieldRow([
                   textField("resolution", "anima-resolution", "resolution"),

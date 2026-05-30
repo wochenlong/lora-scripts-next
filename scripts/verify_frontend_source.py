@@ -103,8 +103,10 @@ def verify_source(root: Path) -> list[dict]:
 
     required_training_renderer_terms = [
         "TrainingFieldSpec",
+        "TrainingSectionSpec",
         "renderTrainingField",
         "renderTrainingSection",
+        "renderTrainingSectionSpec",
         "renderTrainingWorkbench",
         "renderParameterPreview",
         "renderRunControls",
@@ -115,6 +117,11 @@ def verify_source(root: Path) -> list[dict]:
         "description",
         "hidden",
         "disabled",
+        "visibleWhen",
+        "role?:",
+        "data-training-role",
+        "sd-training-path-browse",
+        "Browse",
         "training-field-description",
         "anima-workbench",
         "anima-form-panel",
@@ -132,6 +139,9 @@ def verify_source(root: Path) -> list[dict]:
     for term in ("./trainingRenderer", "renderTrainingField"):
         if term not in anima_source:
             raise RuntimeError(f"Anima source missing training renderer use: {term}")
+    for term in ("role,", '"file"', '"folder"'):
+        if term not in anima_source:
+            raise RuntimeError(f"Anima source missing training field role: {term}")
 
     required_anima_terms = [
         "/lora/sd3.html",

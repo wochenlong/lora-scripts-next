@@ -9,6 +9,8 @@ interface TrainingFieldBase<TForm extends TrainingFormState> {
   description?: string;
   hidden?: boolean;
   disabled?: boolean;
+  visibleWhen?: (form: TForm) => boolean;
+  role?: "file" | "folder" | "table" | "slider" | "switch";
 }
 
 export type TrainingFieldSpec<TForm extends TrainingFormState = TrainingFormState> =
@@ -39,8 +41,15 @@ export interface RunControl {
   primary?: boolean;
 }
 
+export interface TrainingSectionSpec<TForm extends TrainingFormState = TrainingFormState> {
+  title: string;
+  fields: TrainingFieldSpec<TForm>[];
+  hidden?: boolean;
+  visibleWhen?: (form: TForm) => boolean;
+}
+
 export function renderTrainingField<TForm extends TrainingFormState>(form: TForm, field: TrainingFieldSpec<TForm>) {
-  if (field.hidden) {
+  if (field.hidden || field.visibleWhen?.(form) === false) {
     return null;
   }
 
@@ -115,15 +124,7 @@ export function renderTrainingField<TForm extends TrainingFormState>(form: TForm
 
   return h("label", { class: "training-field anima-field" }, [
     h("span", field.label),
-    h("input", {
-      id: field.id,
-      disabled: field.disabled,
-      value: String(form[field.key] ?? ""),
-      placeholder: field.placeholder ?? "",
-      onInput: (event: Event) => {
-        form[field.key] = (event.target as HTMLInputElement).value as TForm[keyof TForm & string];
-      },
-    }),
+    renderTextInput(form, field),
     renderFieldDescription(field.description),
   ]);
 }
@@ -141,6 +142,13 @@ export function renderTrainingFieldRow(children: VNodeChild[]) {
 
 export function renderTrainingSection(title: string, children: VNodeChild[]) {
   return h("fieldset", { class: "training-section anima-section" }, [h("legend", title), ...children]);
+}
+
+export function renderTrainingSectionSpec<TForm extends TrainingFormState>(form: TForm, section: TrainingSectionSpec<TForm>) {
+  if (section.hidden || section.visibleWhen?.(form) === false) {
+    return null;
+  }
+  return renderTrainingSection(section.title, renderTrainingFields(form, section.fields));
 }
 
 export function renderTrainingWorkbench(formPanel: VNodeChild[], previewPanel: VNodeChild[]) {
@@ -198,4 +206,45 @@ export function tomlValue(value: unknown): string {
 
 function renderFieldDescription(description?: string) {
   return description ? h("small", { class: "training-field-description" }, description) : null;
+}
+
+function renderTextInput<TForm extends TrainingFormState>(
+  form: TForm,
+  field: Extract<TrainingFieldSpec<TForm>, { kind: "text" }>,
+) {
+  const input = h("input", {
+    id: field.id,
+    disabled: field.disabled,
+    value: String(form[field.key] ?? ""),
+    placeholder: field.placeholder ?? "",
+    "data-training-role": field.role,
+    onInput: (event: Event) => {
+      form[field.key] = (event.target as HTMLInputElement).value as TForm[keyof TForm & string];
+    },
+  });
+
+  if (field.role !== "file" && field.role !== "folder") {
+    return input;
+  }
+
+  return h("div", { class: "training-path-field" }, [
+    input,
+    h(
+      "button",
+      {
+        type: "button",
+        class: "training-path-field__browse",
+        disabled: field.disabled,
+        title: `${field.role === "folder" ? "Folder" : "File"} picker integration is pending`,
+        onClick: () => {
+          window.dispatchEvent(
+            new CustomEvent("sd-training-path-browse", {
+              detail: { key: field.key, role: field.role, id: field.id },
+            }),
+          );
+        },
+      },
+      "Browse",
+    ),
+  ]);
 }
