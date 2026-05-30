@@ -388,6 +388,7 @@ def test_frontend_source_owns_static_utility_pages():
     for term in [
         "/tensorboard.html",
         "/lora/tools.html",
+        "/tageditor.html",
         "/lora/index.html",
         "/lora/basic.html",
         "/lora/master.html",
@@ -405,11 +406,13 @@ def test_frontend_source_owns_static_utility_pages():
         "scripts/run_gui.py",
         "frontend/source",
         "Mature training routes remain compatibility entries",
+        "Classic tag editor remains a separate compatibility entry",
     ]:
         assert term in static_pages
     for route in [
         "/tensorboard.html",
         "/lora/tools.html",
+        "/tageditor.html",
         "/lora/index.html",
         "/lora/basic.html",
         "/lora/master.html",

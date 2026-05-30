@@ -3,6 +3,7 @@ import { expect, test } from "@playwright/test";
 const shellRoutes = [
   "/",
   "/other/settings.html",
+  "/tageditor.html",
   "/lora/anima-finetune.html",
   "/lora/index.html",
   "/lora/basic.html",
@@ -28,6 +29,7 @@ for (const route of shellRoutes) {
 }
 
 for (const route of [
+  "/tageditor.html",
   "/tensorboard.html",
   "/lora/tools.html",
   "/task.html",

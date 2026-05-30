@@ -405,6 +405,7 @@ def verify_source(root: Path) -> list[dict]:
     for term in (
         "/tensorboard.html",
         "/lora/tools.html",
+        "/tageditor.html",
         "/lora/index.html",
         "/lora/basic.html",
         "/lora/master.html",
@@ -422,6 +423,7 @@ def verify_source(root: Path) -> list[dict]:
         "scripts/run_gui.py",
         "frontend/source",
         "Mature training routes remain compatibility entries",
+        "Classic tag editor remains a separate compatibility entry",
     ):
         if term not in static_pages:
             raise RuntimeError(f"static source pages missing contract term: {term}")
@@ -431,6 +433,7 @@ def verify_source(root: Path) -> list[dict]:
     for term in (
         "/tensorboard.html",
         "/lora/tools.html",
+        "/tageditor.html",
         "/lora/index.html",
         "/lora/basic.html",
         "/lora/master.html",

@@ -10,6 +10,21 @@ interface StaticInfoPageSpec {
 }
 
 const staticInfoPages: Record<string, StaticInfoPageSpec> = {
+  "/tageditor.html": {
+    kicker: "Tools",
+    title: "Classic Tag Editor",
+    body:
+      "Source-owned compatibility entry for the classic tag editor route. It stays separate from the native tag editor while production dist replacement is prepared.",
+    actions: [
+      { label: "Open Native Tag Editor", href: "/native-tageditor.html" },
+      { label: "Open Dataset Debug", href: "/dataset-editor.html" },
+    ],
+    checks: [
+      "Classic tag editor remains a separate compatibility entry.",
+      "Native tag editing stays on /native-tageditor.html.",
+      "The dataset-editor fallback remains available for debugging.",
+    ],
+  },
   "/lora/index.html": {
     kicker: "Training",
     title: "LoRA Training",
