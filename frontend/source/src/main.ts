@@ -1,6 +1,7 @@
 import { createApp, defineComponent, h } from "vue";
 import { AnimaRoutePage, isAnimaRoute } from "./anima";
 import { NativeTagEditorPage } from "./nativeTagEditor";
+import { ParametersPage } from "./parameters";
 import { currentRoute, navGroups, routes } from "./routes";
 import { SettingsPage } from "./settings";
 import { isStaticInfoRoute, StaticInfoPage } from "./staticPages";
@@ -18,6 +19,8 @@ const App = defineComponent({
         ? h(SettingsPage)
         : route.path === "/tagger.html"
           ? h(TaggerPage)
+        : route.path === "/lora/params.html"
+          ? h(ParametersPage)
         : route.path === "/tensorboard.html"
           ? h(TensorboardPage)
         : route.path === "/task.html"

@@ -113,6 +113,16 @@ test("tensorboard source page embeds tensorboard proxy", async ({ page }) => {
   await expect(page.getByRole("link", { name: "Open Tasks" })).toHaveAttribute("href", "/task.html");
 });
 
+test("params source page renders anima schema reference", async ({ page }) => {
+  await page.goto("/lora/params.html");
+  await expect(page.locator(".params-page")).toBeVisible();
+  await expect(page.locator(".params-section-card")).toHaveCount(12);
+  await expect(page.locator(".params-section-card").first()).toContainText("Model Assets");
+  await expect(page.locator(".params-field-row").filter({ hasText: "pretrained_model_name_or_path" })).toBeVisible();
+  await expect(page.locator(".params-field-row").filter({ hasText: "enable_preview" })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Anima LoRA" })).toHaveAttribute("href", "/lora/sd3.html");
+});
+
 test("native tag editor source route loads embedded editor", async ({ page }) => {
   await page.goto("/native-tageditor.html");
   await expect(page.locator("#app")).toBeVisible();

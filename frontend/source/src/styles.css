@@ -995,6 +995,147 @@ h1 {
   background: #f8fafc;
 }
 
+.params-page {
+  max-width: 1180px;
+}
+
+.params-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.params-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.params-actions a {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #fff;
+  color: #1f2937;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.params-actions a:hover {
+  border-color: #0f766e;
+  color: #0b5f59;
+}
+
+.params-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.params-summary-grid article,
+.params-section-card {
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.params-summary-grid article {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+}
+
+.params-summary-grid strong {
+  color: #0b5f59;
+  font-size: 22px;
+}
+
+.params-summary-grid span {
+  color: #667085;
+}
+
+.params-section-list {
+  display: grid;
+  gap: 14px;
+}
+
+.params-section-card {
+  display: grid;
+  gap: 12px;
+  padding: 16px;
+}
+
+.params-section-card header {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.params-section-card h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.params-section-card header span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.params-field-list {
+  display: grid;
+  gap: 8px;
+}
+
+.params-field-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) 96px auto;
+  gap: 8px;
+  align-items: start;
+  padding: 10px;
+  border: 1px solid #e1e6ef;
+  border-radius: 6px;
+  background: #fbfcfe;
+}
+
+.params-field-row code {
+  min-width: 0;
+  color: #172033;
+  overflow-wrap: anywhere;
+}
+
+.params-field-row span,
+.params-field-row small {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #eef6f5;
+  color: #0b5f59;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.params-field-row small {
+  background: #fff7ed;
+  color: #b45309;
+}
+
+.params-field-row p {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: #667085;
+  line-height: 1.5;
+}
+
 .settings-page {
   max-width: 1040px;
   padding: 40px;
@@ -1139,6 +1280,16 @@ h1 {
   }
 
   .tensorboard-actions {
+    justify-content: flex-start;
+  }
+
+  .params-header,
+  .params-summary-grid,
+  .params-field-row {
+    grid-template-columns: 1fr;
+  }
+
+  .params-actions {
     justify-content: flex-start;
   }
 
