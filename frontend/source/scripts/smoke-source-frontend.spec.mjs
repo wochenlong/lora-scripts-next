@@ -219,6 +219,14 @@ test("anima source route supports section navigation and parameter search", asyn
   await expect(page.locator("#anima-pretrained-model")).toBeVisible();
 });
 
+test("anima source route exposes source-owned contract coverage", async ({ page }) => {
+  await page.goto("/lora/anima-finetune.html");
+  await expect(page.locator(".anima-contract-card")).toContainText("Source Contract");
+  await expect(page.locator(".anima-contract-card")).toContainText("11 source-owned sections");
+  await expect(page.locator(".anima-contract-card")).toContainText("scripts/dev/anima_train.py");
+  await expect(page.locator(".anima-contract-card")).not.toContainText("Migration Notes");
+});
+
 test("anima source route exposes submitted task links", async ({ page }) => {
   await page.route("**/api/run", async (route) => {
     await route.fulfill({

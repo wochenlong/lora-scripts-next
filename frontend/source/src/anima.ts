@@ -222,15 +222,14 @@ export const AnimaRoutePage = defineComponent({
               style: "display:none",
               onChange: importConfigFile,
             }),
-            h("details", { class: "anima-preview-card" }, [
-              h("summary", "Migration Notes"),
-              h(
-                "ul",
-                plan.nextWork.map((item) => h("li", item)),
-              ),
+            h("section", { class: "anima-preview-card anima-contract-card" }, [
+              h("h2", "Source Contract"),
+              h("p", `${sections.length} source-owned sections render from frontend/source schema definitions.`),
               h("dl", { class: "anima-contract" }, [
                 h("dt", "model_train_type"),
                 h("dd", plan.modelTrainType),
+                h("dt", "Schema"),
+                h("dd", plan.schemaFile),
                 h("dt", "Backend entrypoint"),
                 h("dd", plan.backendEntrypoint),
               ]),
