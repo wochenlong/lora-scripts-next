@@ -213,6 +213,7 @@ export const AnimaRoutePage = defineComponent({
               ],
               status.value,
             ),
+            renderWorkflowSummary(animaForm, visibleSections),
             renderRunResult(runResult.value),
             h("input", {
               ref: importConfigInput,
@@ -283,6 +284,73 @@ function renderRunResult(result: AnimaRunResult | null) {
     ]),
     result.logStream ? h("code", result.logStream) : null,
   ]);
+}
+
+function renderWorkflowSummary(form: AnimaForm, sections: TrainingSectionSpec<AnimaForm>[]) {
+  const requiredPathKeys: (keyof AnimaForm & string)[] = [
+    "pretrained_model_name_or_path",
+    "vae",
+    "qwen3",
+    "train_data_dir",
+    "output_dir",
+  ];
+  const completedPaths = requiredPathKeys.filter((key) => String(form[key] ?? "").trim()).length;
+  const fieldCount = countVisibleFields(form, sections);
+  const ready = completedPaths === requiredPathKeys.length;
+
+  return h("section", { class: "anima-preview-card training-workflow-summary" }, [
+    h("div", { class: "training-workflow-summary__header" }, [
+      h("h2", "Workflow Summary"),
+      h("span", { class: ready ? "is-ready" : "needs-input" }, ready ? "Ready" : "Needs paths"),
+    ]),
+    h("dl", { class: "training-workflow-summary__grid" }, [
+      h("dt", "Schema coverage"),
+      h("dd", `${sections.length} sections / ${fieldCount} visible fields`),
+      h("dt", "Required paths"),
+      h("dd", `${completedPaths} / ${requiredPathKeys.length} filled`),
+      h("dt", "Output"),
+      h("dd", String(form.output_name || "anima")),
+    ]),
+  ]);
+}
+
+function countVisibleFields(form: AnimaForm, sections: TrainingSectionSpec<AnimaForm>[]) {
+  return sections.reduce((count, section) => {
+    if (section.hidden) {
+      return count;
+    }
+    return count + section.fields.reduce((fieldCount, item) => fieldCount + countVisibleSectionItem(form, item), 0);
+  }, 0);
+}
+
+function countVisibleSectionItem(form: AnimaForm, item: TrainingSectionItem<AnimaForm>) {
+  if (item.hidden) {
+    return 0;
+  }
+  if (item.kind === "row") {
+    return item.fields.filter((field) => !field.hidden && fieldMatchesVisibility(form, field)).length;
+  }
+  return fieldMatchesVisibility(form, item) ? 1 : 0;
+}
+
+function fieldMatchesVisibility(form: AnimaForm, field: TrainingFieldSpec<AnimaForm>) {
+  if (!field.visibleWhen) {
+    return true;
+  }
+  if (typeof field.visibleWhen === "function") {
+    return field.visibleWhen(form);
+  }
+  const value = form[field.visibleWhen.key];
+  if ("equals" in field.visibleWhen) {
+    return value === field.visibleWhen.equals;
+  }
+  if ("notEquals" in field.visibleWhen) {
+    return value !== field.visibleWhen.notEquals;
+  }
+  if ("truthy" in field.visibleWhen) {
+    return Boolean(value) === field.visibleWhen.truthy;
+  }
+  return true;
 }
 
 function filterSections(sections: TrainingSectionSpec<AnimaForm>[], query: string) {

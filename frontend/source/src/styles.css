@@ -717,6 +717,59 @@ h1 {
   font-weight: 700;
 }
 
+.training-workflow-summary {
+  gap: 12px;
+}
+
+.training-workflow-summary__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.training-workflow-summary__header h2 {
+  margin: 0;
+}
+
+.training-workflow-summary__header span {
+  border-radius: 999px;
+  padding: 5px 9px;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.training-workflow-summary__header .is-ready {
+  background: #eef6f5;
+  color: #0b5f59;
+}
+
+.training-workflow-summary__header .needs-input {
+  background: #fff7ed;
+  color: #9a3412;
+}
+
+.training-workflow-summary__grid {
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  gap: 8px 12px;
+  margin: 0;
+}
+
+.training-workflow-summary__grid dt {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.training-workflow-summary__grid dd {
+  margin: 0;
+  color: #172033;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
 .anima-run-result {
   gap: 10px;
 }

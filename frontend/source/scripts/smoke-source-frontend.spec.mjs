@@ -203,6 +203,9 @@ test("anima source route loads train form", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Reset Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Import Config" })).toBeVisible();
+  await expect(page.locator(".training-workflow-summary")).toContainText("Workflow Summary");
+  await expect(page.locator(".training-workflow-summary")).toContainText("11 sections");
+  await expect(page.locator(".training-workflow-summary")).toContainText("Required paths");
 });
 
 test("anima source route keeps document scrolling enabled", async ({ page }) => {
