@@ -18,7 +18,9 @@ from pathlib import Path
 
 SOURCE_DIST = Path("build/frontend-source-dist")
 TARGET_DIST = Path("frontend/dist")
-LEGACY_ISLAND_ENTRYPOINTS = ("tageditor.html",)
+# The classic tag editor entrypoint is source-owned.  Keep old chunks available
+# as assets, but do not restore the old VuePress HTML over the source launcher.
+LEGACY_ISLAND_ENTRYPOINTS = ()
 LEGACY_ISLAND_ASSETS = (
     "assets/app.547295de.js",
     "assets/layout.96d49288.js",

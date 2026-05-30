@@ -31,7 +31,6 @@ for (const route of shellRoutes) {
 
 for (const route of [
   "/",
-  "/tageditor.html",
   "/lora/tools.html",
   "/help/guide.html",
   "/other/about.html",
@@ -131,6 +130,15 @@ test("native tag editor source route loads embedded editor", async ({ page }) =>
   await expect(page.locator("#sd-native-editor-entry")).toBeVisible();
   await expect(page.locator(".de-shell-embedded")).toBeVisible();
   await expect(page.locator("#dataset-path")).toBeVisible();
+});
+
+test("classic tag editor source route launches legacy proxy", async ({ page }) => {
+  await page.goto("/tageditor.html");
+  await expect(page.locator("#app")).toBeVisible();
+  await expect(page.locator(".classic-tag-editor-page")).toBeVisible();
+  await expect(page.locator('iframe[src="/proxy/tageditor/"]')).toBeVisible();
+  await expect(page.getByRole("link", { name: "Open Classic Editor" })).toHaveAttribute("href", "/proxy/tageditor/");
+  await expect(page.locator("#sd-native-editor-entry")).toHaveCount(0);
 });
 
 test("native tag editor standalone route hides trainer shell", async ({ page }) => {

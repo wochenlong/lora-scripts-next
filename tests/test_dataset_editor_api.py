@@ -362,6 +362,13 @@ def test_legacy_tageditor_stays_legacy_only():
     response = client.get("/tageditor.html")
 
     assert response.status_code == 200
+    if dist_uses_source_frontend():
+        bundle = dist_source_bundle()
+        assert '<div id="app"></div>' in response.text
+        assert "classic-tag-editor-page" in bundle
+        assert "/proxy/tageditor/" in bundle
+        return
+
     assert "tageditor.html.66da263e.js" in response.text
     assert "dataset-editor-entry.js" not in response.text
     assert 'name="sd-dataset-editor-script"' not in response.text
@@ -427,7 +434,9 @@ def test_trainer_sidebar_exposes_legacy_and_native_tag_editors():
         assert "/native-tageditor.html" in app_bundle
         assert "经典标签编辑" in app_bundle
         assert "原生标签编辑" in app_bundle
-        assert "tageditor.html.66da263e.js" in tageditor
+        assert '<div id="app"></div>' in tageditor
+        assert "classic-tag-editor-page" in app_bundle
+        assert "/proxy/tageditor/" in app_bundle
         assert "dataset-editor-entry.js" not in tageditor
         assert "sd-native-editor-entry" in app_bundle
         return
@@ -460,7 +469,7 @@ def test_trainer_sidebar_exposes_legacy_and_native_tag_editors():
 def test_frontend_dist_patch_script_is_idempotent():
     if dist_uses_source_frontend():
         assert "SourceTrainerShell" in dist_source_bundle()
-        assert "app.547295de.js" in (ROOT / "frontend" / "dist" / "tageditor.html").read_text(encoding="utf-8")
+        assert '<div id="app"></div>' in (ROOT / "frontend" / "dist" / "tageditor.html").read_text(encoding="utf-8")
         return
     result = subprocess.run(
         [sys.executable, "scripts/patch_frontend_dist.py", "--check"],
@@ -575,8 +584,8 @@ def test_embedded_native_editor_assets_keep_trainer_shell_contract():
     assert "de-shell de-shell-embedded" in script
     if not dist_uses_source_frontend():
         assert "theme-default-content" in script
+        assert "/proxy/tageditor/" not in script
     assert "打开内置编辑器" not in script
-    assert "/proxy/tageditor/" not in script
     assert ".de-shell-embedded" in css
     assert "--de-accent" in css
     assert "grid-template-rows:1fr" in css_min

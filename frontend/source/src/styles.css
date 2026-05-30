@@ -775,6 +775,53 @@ h1 {
   background: #eef2f6;
 }
 
+.classic-tag-editor-page {
+  max-width: none;
+  display: grid;
+  grid-template-rows: auto minmax(520px, 1fr);
+  gap: 16px;
+  min-height: 100vh;
+  padding: 24px;
+}
+
+.classic-tag-editor-header {
+  display: flex;
+  gap: 18px;
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.classic-tag-editor-open {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #0f766e;
+  color: #fff;
+  font-weight: 800;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.classic-tag-editor-frame-wrap {
+  min-width: 0;
+  min-height: 520px;
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.classic-tag-editor-frame {
+  width: 100%;
+  height: 100%;
+  min-height: 720px;
+  border: 0;
+  display: block;
+  background: #fff;
+}
+
 .native-editor-page--standalone {
   min-height: 100vh;
 }

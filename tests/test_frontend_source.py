@@ -56,7 +56,7 @@ def test_frontend_source_dist_sync_script_is_guarded():
         assert term in script
 
 
-def test_frontend_source_dist_sync_preserves_legacy_tageditor_island(tmp_path):
+def test_frontend_source_dist_sync_keeps_source_tageditor_entrypoint(tmp_path):
     module_path = ROOT / "scripts" / "sync_frontend_source_dist.py"
     spec = importlib.util.spec_from_file_location("sync_frontend_source_dist", module_path)
     assert spec and spec.loader
@@ -69,7 +69,7 @@ def test_frontend_source_dist_sync_preserves_legacy_tageditor_island(tmp_path):
     (source / "assets").mkdir(parents=True)
     (target / "assets").mkdir(parents=True)
     (source / "index.html").write_text("source index", encoding="utf-8")
-    (source / "tageditor.html").write_text("source placeholder", encoding="utf-8")
+    (source / "tageditor.html").write_text("source classic launcher", encoding="utf-8")
     (source / "native-tageditor.html").write_text("source native editor", encoding="utf-8")
     (source / "assets" / "index-source.js").write_text("source", encoding="utf-8")
     (target / "tageditor.html").write_text(
@@ -88,7 +88,7 @@ def test_frontend_source_dist_sync_preserves_legacy_tageditor_island(tmp_path):
     sync_module.sync_dist(source, target, backup=True, root=root)
 
     assert (target / "index.html").read_text(encoding="utf-8") == "source index"
-    assert "legacy classic editor" in (target / "tageditor.html").read_text(encoding="utf-8")
+    assert (target / "tageditor.html").read_text(encoding="utf-8") == "source classic launcher"
     assert (target / "native-tageditor.html").read_text(encoding="utf-8") == "source native editor"
     for asset in [
         "app.547295de.js",
