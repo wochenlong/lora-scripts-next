@@ -34,7 +34,6 @@ for (const route of [
   "/tageditor.html",
   "/tensorboard.html",
   "/lora/tools.html",
-  "/task.html",
   "/help/guide.html",
   "/other/about.html",
   "/other/changelog.html",
@@ -47,7 +46,7 @@ for (const route of [
   });
 }
 
-for (const route of ["/lora/index.html", "/lora/master.html", "/lora/flux.html", "/tensorboard.html", "/task.html"]) {
+for (const route of ["/lora/index.html", "/lora/master.html", "/lora/flux.html", "/tensorboard.html"]) {
   test(`source compatibility page has product-grade scaffolding ${route}`, async ({ page }) => {
     await page.goto(route);
     await expect(page.locator(".source-static-page")).toBeVisible();
@@ -79,6 +78,32 @@ test("tools source page exposes tool route hub", async ({ page }) => {
   await expect(page.locator('.source-route-card[href="/dataset-editor.html"]')).toBeVisible();
   await expect(page.locator('.source-route-card[href="/tensorboard.html"]')).toBeVisible();
   await expect(page.locator('.source-route-card[href="/task.html"]')).toBeVisible();
+});
+
+test("task source page renders task monitor from API", async ({ page }) => {
+  await page.route("**/api/tasks", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        status: "success",
+        data: {
+          tasks: [
+            { id: "task-running", status: "RUNNING", command: "python train.py" },
+            { id: "task-done", status: "FINISHED", command: "python export.py" },
+          ],
+        },
+      }),
+    });
+  });
+
+  await page.goto("/task.html");
+  await expect(page.locator(".task-monitor")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Refresh Tasks" })).toBeVisible();
+  await expect(page.locator(".task-card")).toHaveCount(2);
+  await expect(page.locator(".task-card").first()).toContainText("task-running");
+  await expect(page.locator(".task-card").first()).toContainText("RUNNING");
+  await expect(page.locator('.task-card a[href="/train-log?task_id=task-running"]')).toBeVisible();
+  await expect(page.locator('.task-card button[data-task-action="terminate"]')).toHaveCount(1);
 });
 
 test("native tag editor source route loads embedded editor", async ({ page }) => {

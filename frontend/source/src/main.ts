@@ -5,6 +5,7 @@ import { currentRoute, navGroups, routes } from "./routes";
 import { SettingsPage } from "./settings";
 import { isStaticInfoRoute, StaticInfoPage } from "./staticPages";
 import { TaggerPage } from "./tagger";
+import { TaskPage } from "./tasks";
 import "./styles.css";
 
 const App = defineComponent({
@@ -16,6 +17,8 @@ const App = defineComponent({
         ? h(SettingsPage)
         : route.path === "/tagger.html"
           ? h(TaggerPage)
+        : route.path === "/task.html"
+          ? h(TaskPage)
         : route.path === "/native-tageditor.html" || route.path === "/dataset-editor.html"
           ? h(NativeTagEditorPage)
         : isAnimaRoute(route.path)

@@ -808,6 +808,124 @@ h1 {
   color: #667085;
 }
 
+.task-page {
+  max-width: 1120px;
+}
+
+.task-header {
+  display: flex;
+  gap: 18px;
+  align-items: start;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.task-monitor {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.task-status {
+  margin: 0;
+  color: #0b5f59;
+  font-weight: 800;
+}
+
+.task-list {
+  display: grid;
+  gap: 10px;
+}
+
+.task-card {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border: 1px solid #e1e6ef;
+  border-radius: 8px;
+  background: #fbfcfe;
+}
+
+.task-card__main,
+.task-card__actions {
+  min-width: 0;
+}
+
+.task-card__main {
+  display: grid;
+  gap: 6px;
+}
+
+.task-card__main code {
+  overflow: hidden;
+  color: #667085;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-card__status {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #eef6f5;
+  color: #0b5f59;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.task-card--running .task-card__status {
+  background: #fff7ed;
+  color: #b45309;
+}
+
+.task-card__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.task-card__actions a,
+.task-card__actions button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  padding: 0 10px;
+  background: #fff;
+  color: #1f2937;
+  font: inherit;
+  font-weight: 700;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.task-card__actions a:hover,
+.task-card__actions button:hover {
+  border-color: #0f766e;
+  color: #0b5f59;
+}
+
+.task-empty {
+  display: grid;
+  gap: 6px;
+  padding: 22px;
+  border: 1px dashed #c9d3e3;
+  border-radius: 8px;
+  color: #667085;
+  text-align: center;
+}
+
+.task-empty strong {
+  color: #1f2937;
+}
+
 .settings-page {
   max-width: 1040px;
   padding: 40px;
@@ -932,6 +1050,19 @@ h1 {
   .source-static-grid,
   .source-route-list__grid {
     grid-template-columns: 1fr;
+  }
+
+  .task-header,
+  .task-card {
+    grid-template-columns: 1fr;
+  }
+
+  .task-header {
+    display: grid;
+  }
+
+  .task-card__actions {
+    justify-content: flex-start;
   }
 
   .anima-field-row {
