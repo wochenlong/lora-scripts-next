@@ -926,6 +926,75 @@ h1 {
   color: #1f2937;
 }
 
+.tensorboard-page {
+  max-width: 1240px;
+}
+
+.tensorboard-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: start;
+  margin-bottom: 18px;
+}
+
+.tensorboard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.tensorboard-actions a {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8dde6;
+  border-radius: 6px;
+  padding: 0 14px;
+  background: #fff;
+  color: #1f2937;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.tensorboard-actions a:hover {
+  border-color: #0f766e;
+  color: #0b5f59;
+}
+
+.tensorboard-panel {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.tensorboard-panel__status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  color: #667085;
+}
+
+.tensorboard-panel__status code {
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: #f2f5f9;
+  color: #172033;
+}
+
+.tensorboard-frame {
+  width: 100%;
+  min-height: min(720px, calc(100vh - 250px));
+  border: 1px solid #e1e6ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
 .settings-page {
   max-width: 1040px;
   padding: 40px;
@@ -1062,6 +1131,14 @@ h1 {
   }
 
   .task-card__actions {
+    justify-content: flex-start;
+  }
+
+  .tensorboard-header {
+    grid-template-columns: 1fr;
+  }
+
+  .tensorboard-actions {
     justify-content: flex-start;
   }
 

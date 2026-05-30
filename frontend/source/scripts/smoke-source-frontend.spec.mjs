@@ -32,7 +32,6 @@ for (const route of shellRoutes) {
 for (const route of [
   "/",
   "/tageditor.html",
-  "/tensorboard.html",
   "/lora/tools.html",
   "/help/guide.html",
   "/other/about.html",
@@ -46,7 +45,7 @@ for (const route of [
   });
 }
 
-for (const route of ["/lora/index.html", "/lora/master.html", "/lora/flux.html", "/tensorboard.html"]) {
+for (const route of ["/lora/index.html", "/lora/master.html", "/lora/flux.html"]) {
   test(`source compatibility page has product-grade scaffolding ${route}`, async ({ page }) => {
     await page.goto(route);
     await expect(page.locator(".source-static-page")).toBeVisible();
@@ -104,6 +103,14 @@ test("task source page renders task monitor from API", async ({ page }) => {
   await expect(page.locator(".task-card").first()).toContainText("RUNNING");
   await expect(page.locator('.task-card a[href="/train-log?task_id=task-running"]')).toBeVisible();
   await expect(page.locator('.task-card button[data-task-action="terminate"]')).toHaveCount(1);
+});
+
+test("tensorboard source page embeds tensorboard proxy", async ({ page }) => {
+  await page.goto("/tensorboard.html");
+  await expect(page.locator(".tensorboard-page")).toBeVisible();
+  await expect(page.locator(".tensorboard-frame")).toHaveAttribute("src", "/proxy/tensorboard/");
+  await expect(page.locator('a[href="/proxy/tensorboard/"]')).toContainText("Open TensorBoard");
+  await expect(page.getByRole("link", { name: "Open Tasks" })).toHaveAttribute("href", "/task.html");
 });
 
 test("native tag editor source route loads embedded editor", async ({ page }) => {

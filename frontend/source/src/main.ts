@@ -6,6 +6,7 @@ import { SettingsPage } from "./settings";
 import { isStaticInfoRoute, StaticInfoPage } from "./staticPages";
 import { TaggerPage } from "./tagger";
 import { TaskPage } from "./tasks";
+import { TensorboardPage } from "./tensorboard";
 import "./styles.css";
 
 const App = defineComponent({
@@ -17,6 +18,8 @@ const App = defineComponent({
         ? h(SettingsPage)
         : route.path === "/tagger.html"
           ? h(TaggerPage)
+        : route.path === "/tensorboard.html"
+          ? h(TensorboardPage)
         : route.path === "/task.html"
           ? h(TaskPage)
         : route.path === "/native-tageditor.html" || route.path === "/dataset-editor.html"
