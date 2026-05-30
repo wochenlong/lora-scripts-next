@@ -4,6 +4,7 @@ const shellRoutes = [
   "/",
   "/other/settings.html",
   "/tageditor.html",
+  "/lora/sd3.html",
   "/lora/anima-finetune.html",
   "/lora/index.html",
   "/lora/basic.html",
@@ -89,6 +90,16 @@ test("anima source route loads train form", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Reset Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Import Config" })).toBeVisible();
+});
+
+test("anima lora source route loads adapter schema", async ({ page }) => {
+  await page.goto("/lora/sd3.html");
+  await expect(page.locator("#app")).toBeVisible();
+  await expect(page.locator("#anima-train-form")).toBeVisible();
+  await expect(page.locator("#anima-preview-code")).toContainText('model_train_type = "anima-lora"');
+  await expect(page.locator("#anima-lora-type")).toBeVisible();
+  await expect(page.locator("#anima-network-weights")).toBeVisible();
+  await expect(page.locator("#anima-network-args-custom")).toBeVisible();
 });
 
 test("anima schema visibility and table controls work", async ({ page }) => {
