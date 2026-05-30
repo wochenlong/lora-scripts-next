@@ -206,3 +206,15 @@ test("anima schema visibility and table controls work", async ({ page }) => {
   await page.locator("#anima-optimizer-args-custom-0").fill("weight_decay=0.01");
   await expect(page.locator("#anima-preview-code")).toContainText('optimizer_args_custom = ["weight_decay=0.01"]');
 });
+
+test("anima source route supports section navigation and parameter search", async ({ page }) => {
+  await page.goto("/lora/sd3.html");
+  await expect(page.locator(".anima-section-nav a")).toHaveCount(12);
+  await expect(page.locator("#anima-param-search")).toBeVisible();
+  await page.locator("#anima-param-search").fill("cache_latents");
+  await expect(page.locator(".anima-section").filter({ hasText: "Cache" })).toBeVisible();
+  await expect(page.locator("#anima-cache-latents")).toBeVisible();
+  await expect(page.locator("#anima-pretrained-model")).toHaveCount(0);
+  await page.locator("#anima-param-search").fill("");
+  await expect(page.locator("#anima-pretrained-model")).toBeVisible();
+});

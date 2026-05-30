@@ -425,6 +425,53 @@ h1 {
   font-size: 18px;
 }
 
+.anima-form-tools {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid #e1e6ef;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.anima-search-field {
+  max-width: 520px;
+}
+
+.anima-section-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.anima-section-nav a {
+  min-height: 30px;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid #d8dde6;
+  border-radius: 999px;
+  padding: 0 10px;
+  background: #fff;
+  color: #1f2937;
+  font-size: 12px;
+  font-weight: 800;
+  text-decoration: none;
+}
+
+.anima-section-nav a:hover {
+  border-color: #0f766e;
+  color: #0b5f59;
+}
+
+.anima-empty-filter {
+  margin: 0;
+  padding: 18px;
+  border: 1px dashed #c9d3e3;
+  border-radius: 8px;
+  color: #667085;
+  text-align: center;
+}
+
 .anima-section {
   display: grid;
   gap: 12px;

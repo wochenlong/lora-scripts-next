@@ -168,7 +168,9 @@ def verify_source(root: Path) -> list[dict]:
         "animaOtherSection",
         "animaDistributedSection",
         "animaSectionsForPlan",
-        "renderTrainingSchemaSections(animaForm, animaSectionsForPlan(plan))",
+        "renderTrainingSchemaSections(animaForm, visibleSections)",
+        "filterSections(sections, parameterFilter.value)",
+        "anima-param-search",
     ):
         if term not in anima_source and term not in anima_schema_source:
             raise RuntimeError(f"Anima source missing schema-style section term: {term}")

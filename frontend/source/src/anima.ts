@@ -7,6 +7,7 @@ import {
   renderRunControls,
   renderTrainingSchemaSections,
   renderTrainingWorkbench,
+  sectionAnchorId,
 } from "./trainingRenderer";
 
 import {
@@ -17,6 +18,7 @@ import {
   type AnimaRoutePlan,
   type AnimaForm,
 } from "./animaSchema";
+import type { TrainingFieldSpec, TrainingSectionItem, TrainingSectionSpec } from "./trainingRenderer";
 export function isAnimaRoute(path: string): boolean {
   return path in ANIMA_ROUTES;
 }
@@ -33,6 +35,7 @@ export const AnimaRoutePage = defineComponent({
     const plan = ANIMA_ROUTES[props.route.path];
     const animaForm = reactive<AnimaForm>(loadStoredForm(plan));
     const importConfigInput = ref<HTMLInputElement | null>(null);
+    const parameterFilter = ref("");
     const status = ref("");
     let removePathBrowseBridge: (() => void) | undefined;
 
@@ -148,6 +151,10 @@ export const AnimaRoutePage = defineComponent({
     }
 
     return () =>
+    {
+      const sections = animaSectionsForPlan(plan);
+      const visibleSections = filterSections(sections, parameterFilter.value);
+      return (
       h("main", { class: "content anima-page" }, [
         h("header", { class: "anima-header" }, [
           h("div", [
@@ -166,7 +173,28 @@ export const AnimaRoutePage = defineComponent({
           [
             h("form", { id: "anima-train-form", class: "anima-form" }, [
               h("h2", "Training Config"),
-              renderTrainingSchemaSections(animaForm, animaSectionsForPlan(plan)),
+              h("div", { class: "anima-form-tools" }, [
+                h("label", { class: "anima-field anima-search-field" }, [
+                  h("span", "Search parameters"),
+                  h("input", {
+                    id: "anima-param-search",
+                    type: "search",
+                    value: parameterFilter.value,
+                    placeholder: "field name, section, or description",
+                    onInput: (event: Event) => {
+                      parameterFilter.value = (event.target as HTMLInputElement).value;
+                    },
+                  }),
+                ]),
+                h(
+                  "nav",
+                  { class: "anima-section-nav", "aria-label": "Anima parameter sections" },
+                  sections.map((section) => h("a", { href: `#${sectionAnchorId(section.title)}` }, section.title)),
+                ),
+              ]),
+              visibleSections.length
+                ? renderTrainingSchemaSections(animaForm, visibleSections)
+                : h("p", { class: "anima-empty-filter" }, "No matching parameters."),
             ]),
           ],
           [
@@ -205,9 +233,41 @@ export const AnimaRoutePage = defineComponent({
             ]),
           ],
         ),
-      ]);
+      ])
+      );
+    };
   },
 });
+
+function filterSections(sections: TrainingSectionSpec<AnimaForm>[], query: string) {
+  const needle = query.trim().toLowerCase();
+  if (!needle) {
+    return sections;
+  }
+
+  return sections
+    .map((section) => ({
+      ...section,
+      fields: section.fields
+        .map((item) => filterSectionItem(section.title, item, needle))
+        .filter((item): item is TrainingSectionItem<AnimaForm> => Boolean(item)),
+    }))
+    .filter((section) => section.fields.length > 0);
+}
+
+function filterSectionItem(sectionTitle: string, item: TrainingSectionItem<AnimaForm>, needle: string) {
+  if (item.kind === "row") {
+    const fields = item.fields.filter((field) => fieldMatches(sectionTitle, field, needle));
+    return fields.length ? { ...item, fields } : null;
+  }
+  return fieldMatches(sectionTitle, item, needle) ? item : null;
+}
+
+function fieldMatches(sectionTitle: string, field: TrainingFieldSpec<AnimaForm>, needle: string) {
+  return [sectionTitle, field.key, field.label, field.description, field.kind, field.role]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(needle));
+}
 
 function normalizePath(value: string): string {
   return value.replaceAll("\\", "/");

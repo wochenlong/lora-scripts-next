@@ -355,7 +355,9 @@ def test_frontend_source_has_training_schema_renderer():
     assert "animaOtherSection" in anima_schema
     assert "animaDistributedSection" in anima_schema
     assert "animaSectionsForPlan" in anima_schema
-    assert "renderTrainingSchemaSections(animaForm, animaSectionsForPlan(plan))" in anima
+    assert "renderTrainingSchemaSections(animaForm, visibleSections)" in anima
+    assert "filterSections(sections, parameterFilter.value)" in anima
+    assert "anima-param-search" in anima
     assert 'visibleWhen: { key: "enable_preview", equals: true }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "logit_normal" }' in anima_schema
     assert 'visibleWhen: { key: "weighting_scheme", equals: "mode" }' in anima_schema

@@ -212,8 +212,15 @@ export function renderTrainingFieldRow(children: VNodeChild[]) {
   return h("div", { class: "training-field-row anima-field-row" }, children);
 }
 
+export function sectionAnchorId(title: string) {
+  return `training-section-${title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "")}`;
+}
+
 export function renderTrainingSection(title: string, children: VNodeChild[]) {
-  return h("fieldset", { class: "training-section anima-section" }, [h("legend", title), ...children]);
+  return h("fieldset", { id: sectionAnchorId(title), class: "training-section anima-section" }, [
+    h("legend", title),
+    ...children,
+  ]);
 }
 
 export function renderTrainingSectionSpec<TForm extends TrainingFormState>(form: TForm, section: TrainingSectionSpec<TForm>) {
