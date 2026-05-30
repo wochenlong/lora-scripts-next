@@ -403,6 +403,7 @@ def verify_source(root: Path) -> list[dict]:
 
     static_pages = (source / "src/staticPages.ts").read_text(encoding="utf-8")
     for term in (
+        "/",
         "/tensorboard.html",
         "/lora/tools.html",
         "/tageditor.html",
@@ -424,6 +425,7 @@ def verify_source(root: Path) -> list[dict]:
         "frontend/source",
         "Mature training routes remain compatibility entries",
         "Classic tag editor remains a separate compatibility entry",
+        "Source frontend home is owned by frontend/source",
     ):
         if term not in static_pages:
             raise RuntimeError(f"static source pages missing contract term: {term}")
@@ -431,6 +433,7 @@ def verify_source(root: Path) -> list[dict]:
         if term not in main_source:
             raise RuntimeError(f"main source missing static page hook: {term}")
     for term in (
+        "/",
         "/tensorboard.html",
         "/lora/tools.html",
         "/tageditor.html",

@@ -10,6 +10,22 @@ interface StaticInfoPageSpec {
 }
 
 const staticInfoPages: Record<string, StaticInfoPageSpec> = {
+  "/": {
+    kicker: "Source Frontend",
+    title: "SD Trainer Next",
+    body:
+      "Source-owned trainer home for the frontend recovery branch. It keeps stable navigation while native editor, tagger, settings, and Anima routes move out of compiled dist patches.",
+    actions: [
+      { label: "Open Anima LoRA", href: "/lora/sd3.html" },
+      { label: "Open Native Tag Editor", href: "/native-tageditor.html" },
+      { label: "Open Settings", href: "/other/settings.html" },
+    ],
+    checks: [
+      "Source frontend home is owned by frontend/source.",
+      "Production dist replacement remains guarded by dry-run sync.",
+      "Mature SD/Flux training routes remain compatibility entries.",
+    ],
+  },
   "/tageditor.html": {
     kicker: "Tools",
     title: "Classic Tag Editor",

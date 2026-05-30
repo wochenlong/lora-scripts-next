@@ -405,6 +405,7 @@ def test_frontend_source_owns_static_utility_pages():
     assert "StaticInfoPage" in main
     assert "isStaticInfoRoute" in main
     for term in [
+        "/",
         "/tensorboard.html",
         "/lora/tools.html",
         "/tageditor.html",
@@ -426,9 +427,11 @@ def test_frontend_source_owns_static_utility_pages():
         "frontend/source",
         "Mature training routes remain compatibility entries",
         "Classic tag editor remains a separate compatibility entry",
+        "Source frontend home is owned by frontend/source",
     ]:
         assert term in static_pages
     for route in [
+        "/",
         "/tensorboard.html",
         "/lora/tools.html",
         "/tageditor.html",

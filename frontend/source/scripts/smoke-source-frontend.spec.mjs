@@ -29,6 +29,7 @@ for (const route of shellRoutes) {
 }
 
 for (const route of [
+  "/",
   "/tageditor.html",
   "/tensorboard.html",
   "/lora/tools.html",
