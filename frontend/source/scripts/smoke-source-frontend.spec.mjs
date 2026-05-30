@@ -77,3 +77,19 @@ test("anima source route loads train form", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Export Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Import Config" })).toBeVisible();
 });
+
+test("anima schema visibility and table controls work", async ({ page }) => {
+  await page.goto("/lora/anima-finetune.html");
+  await expect(page.locator("#anima-positive-prompts")).toBeVisible();
+  await page.locator("#anima-enable-preview").uncheck();
+  await expect(page.locator("#anima-positive-prompts")).toHaveCount(0);
+
+  await expect(page.locator("#anima-logit-mean")).toHaveCount(0);
+  await page.locator("#anima-weighting-scheme").selectOption("logit_normal");
+  await expect(page.locator("#anima-logit-mean")).toBeVisible();
+
+  await page.locator("#anima-optimizer-args-custom").getByRole("button", { name: "Add Row" }).click();
+  await expect(page.locator("#anima-optimizer-args-custom-0")).toBeVisible();
+  await page.locator("#anima-optimizer-args-custom-0").fill("weight_decay=0.01");
+  await expect(page.locator("#anima-preview-code")).toContainText('optimizer_args_custom = ["weight_decay=0.01"]');
+});

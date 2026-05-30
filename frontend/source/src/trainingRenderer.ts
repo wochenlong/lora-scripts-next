@@ -331,7 +331,7 @@ function renderTrainingTableField<TForm extends TrainingFormState>(
     form[field.key] = next as TForm[keyof TForm & string];
   }
 
-  return h("div", { class: "training-field anima-field training-table-field" }, [
+  return h("div", { id: field.id, class: "training-field anima-field training-table-field" }, [
     h("span", field.label),
     h(
       "div",
