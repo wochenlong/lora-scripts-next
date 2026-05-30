@@ -92,6 +92,19 @@ test("anima source route loads train form", async ({ page }) => {
   await expect(page.getByRole("button", { name: "Import Config" })).toBeVisible();
 });
 
+test("anima source route keeps document scrolling enabled", async ({ page }) => {
+  await page.goto("/lora/sd3.html");
+  await expect(page.locator("#anima-train-form")).toBeVisible();
+
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.body).overflowY))
+    .not.toBe("hidden");
+
+  const before = await page.evaluate(() => window.scrollY);
+  await page.evaluate(() => window.scrollTo(0, 900));
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBeGreaterThan(before);
+});
+
 test("anima lora source route loads adapter schema", async ({ page }) => {
   await page.goto("/lora/sd3.html");
   await expect(page.locator("#app")).toBeVisible();
