@@ -89,6 +89,17 @@ export interface AnimaForm {
   anima_debug_mode: boolean;
   anima_rope_mismatch_mode: "strict" | "resample";
   anima_rope_max_seq_tokens: number;
+  noise_offset: string;
+  multires_noise_iterations: string;
+  multires_noise_discount: string;
+  color_aug: boolean;
+  flip_aug: boolean;
+  random_crop: boolean;
+  seed: number;
+  clip_skip: number;
+  ui_custom_params: string;
+  ddp_timeout: string;
+  ddp_gradient_as_bucket_view: boolean;
 }
 
 export const ANIMA_STORAGE_KEY = "sd-trainer-source-anima-configs";
@@ -203,6 +214,17 @@ export const animaDefaults: AnimaForm = {
   anima_debug_mode: false,
   anima_rope_mismatch_mode: "strict",
   anima_rope_max_seq_tokens: 0,
+  noise_offset: "",
+  multires_noise_iterations: "",
+  multires_noise_discount: "",
+  color_aug: false,
+  flip_aug: false,
+  random_crop: false,
+  seed: 1337,
+  clip_skip: 2,
+  ui_custom_params: "",
+  ddp_timeout: "",
+  ddp_gradient_as_bucket_view: false,
 };
 
 export const animaModelAssetSection: TrainingSectionSpec<AnimaForm> = {
@@ -755,6 +777,91 @@ export const animaDebugSection: TrainingSectionSpec<AnimaForm> = {
   ],
 };
 
+export const animaNoiseSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Noise Settings",
+  fields: [
+    {
+      kind: "row",
+      fields: [
+        { kind: "text", key: "noise_offset", id: "anima-noise-offset", label: "noise_offset" },
+        {
+          kind: "text",
+          key: "multires_noise_iterations",
+          id: "anima-multires-noise-iterations",
+          label: "multires_noise_iterations",
+        },
+        {
+          kind: "text",
+          key: "multires_noise_discount",
+          id: "anima-multires-noise-discount",
+          label: "multires_noise_discount",
+        },
+      ],
+    },
+  ],
+};
+
+export const animaDataEnhancementSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Data Enhancement",
+  fields: [
+    {
+      kind: "row",
+      fields: [
+        { kind: "checkbox", key: "color_aug", id: "anima-color-aug", label: "color_aug" },
+        { kind: "checkbox", key: "flip_aug", id: "anima-flip-aug", label: "flip_aug" },
+        { kind: "checkbox", key: "random_crop", id: "anima-random-crop", label: "random_crop" },
+      ],
+    },
+  ],
+};
+
+export const animaOtherSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Other",
+  fields: [
+    {
+      kind: "row",
+      fields: [
+        { kind: "number", key: "seed", id: "anima-seed", label: "seed", min: 0 },
+        {
+          kind: "number",
+          key: "clip_skip",
+          id: "anima-clip-skip",
+          label: "clip_skip",
+          min: 0,
+          step: 1,
+          role: "slider",
+        },
+      ],
+    },
+    {
+      kind: "textarea",
+      key: "ui_custom_params",
+      id: "anima-ui-custom-params",
+      label: "ui_custom_params",
+      rows: 5,
+      description: "Advanced TOML override text. Use carefully.",
+    },
+  ],
+};
+
+export const animaDistributedSection: TrainingSectionSpec<AnimaForm> = {
+  title: "Distributed Training",
+  fields: [
+    {
+      kind: "row",
+      fields: [
+        { kind: "text", key: "ddp_timeout", id: "anima-ddp-timeout", label: "ddp_timeout" },
+        {
+          kind: "checkbox",
+          key: "ddp_gradient_as_bucket_view",
+          id: "anima-ddp-gradient-as-bucket-view",
+          label: "ddp_gradient_as_bucket_view",
+        },
+      ],
+    },
+  ],
+};
+
 export function animaSectionsForPlan(plan: AnimaRoutePlan): TrainingSectionSpec<AnimaForm>[] {
   return [
     animaModelAssetSection,
@@ -765,6 +872,10 @@ export function animaSectionsForPlan(plan: AnimaRoutePlan): TrainingSectionSpec<
     animaCacheSection,
     animaPreviewSection,
     animaDebugSection,
+    animaNoiseSection,
+    animaDataEnhancementSection,
+    animaOtherSection,
+    animaDistributedSection,
   ];
 }
 

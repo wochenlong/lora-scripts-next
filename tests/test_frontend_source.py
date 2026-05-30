@@ -145,6 +145,17 @@ def test_frontend_source_declares_anima_route_contracts():
         "anima_debug_mode",
         "anima_rope_mismatch_mode",
         "anima_rope_max_seq_tokens",
+        "noise_offset",
+        "multires_noise_iterations",
+        "multires_noise_discount",
+        "color_aug",
+        "flip_aug",
+        "random_crop",
+        "seed",
+        "clip_skip",
+        "ui_custom_params",
+        "ddp_timeout",
+        "ddp_gradient_as_bucket_view",
         "previewToml",
         "anima-preview-code",
         "Save Config",
@@ -227,6 +238,10 @@ def test_frontend_source_has_training_schema_renderer():
     assert "animaCacheSection" in anima_schema
     assert "animaPreviewSection" in anima_schema
     assert "animaDebugSection" in anima_schema
+    assert "animaNoiseSection" in anima_schema
+    assert "animaDataEnhancementSection" in anima_schema
+    assert "animaOtherSection" in anima_schema
+    assert "animaDistributedSection" in anima_schema
     assert "animaSectionsForPlan" in anima_schema
     assert "renderTrainingSchemaSections(animaForm, animaSectionsForPlan(plan))" in anima
     assert 'visibleWhen: { key: "enable_preview", equals: true }' in anima_schema

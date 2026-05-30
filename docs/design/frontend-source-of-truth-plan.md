@@ -38,6 +38,7 @@ Created: 2026-05-30
 - 2026-05-30: Added batch section rendering with `renderTrainingSchemaSections` and moved Anima route-specific section composition into `animaSectionsForPlan`, further separating schema composition from page workflow.
 - 2026-05-30: Added source-owned table/list field rendering for schema `role('table')`-style inputs and wired Anima `optimizer_args_custom` / `network_args_custom` into the schema sections.
 - 2026-05-30: Added Anima debug option coverage with `enable_debug_options` conditional rendering for profiling, NaN checks, debug mode, and RoPE mismatch settings.
+- 2026-05-30: Added source-owned Anima coverage for shared noise settings, data enhancement toggles, other/custom params, and distributed training fields.
 
 ## Background
 
