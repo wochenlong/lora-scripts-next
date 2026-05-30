@@ -94,6 +94,7 @@ def verify_source(root: Path) -> list[dict]:
 
     main_source = (source / "src/main.ts").read_text(encoding="utf-8")
     anima_source = (source / "src/anima.ts").read_text(encoding="utf-8")
+    anima_schema_source = (source / "src/animaSchema.ts").read_text(encoding="utf-8")
     training_renderer = (source / "src/trainingRenderer.ts").read_text(
         encoding="utf-8"
     )
@@ -138,9 +139,11 @@ def verify_source(root: Path) -> list[dict]:
     for term in required_training_renderer_terms:
         if term not in training_renderer:
             raise RuntimeError(f"training renderer missing contract term: {term}")
-    for term in ("./trainingRenderer", "renderTrainingField"):
+    for term in ("./trainingRenderer", "./animaSchema"):
         if term not in anima_source:
             raise RuntimeError(f"Anima source missing training renderer use: {term}")
+    if "AnimaForm" not in anima_schema_source:
+        raise RuntimeError("Anima schema source missing AnimaForm")
     for term in (
         "TrainingSectionSpec<AnimaForm>",
         "animaModelAssetSection",
@@ -158,10 +161,10 @@ def verify_source(root: Path) -> list[dict]:
         "renderTrainingSectionSpec(animaForm, animaCacheSection)",
         "renderTrainingSectionSpec(animaForm, animaPreviewSection)",
     ):
-        if term not in anima_source:
+        if term not in anima_source and term not in anima_schema_source:
             raise RuntimeError(f"Anima source missing schema-style section term: {term}")
-    for term in ("role,", '"file"', '"folder"'):
-        if term not in anima_source:
+    for term in ("role:", '"file"', '"folder"'):
+        if term not in anima_schema_source:
             raise RuntimeError(f"Anima source missing training field role: {term}")
 
     required_anima_terms = [
@@ -248,7 +251,7 @@ def verify_source(root: Path) -> list[dict]:
         "importConfigFile",
     ]
     for term in required_anima_terms:
-        if term not in anima_source:
+        if term not in anima_source and term not in anima_schema_source:
             raise RuntimeError(f"Anima source missing route contract term: {term}")
 
     native_source = (source / "src/nativeTagEditor.ts").read_text(encoding="utf-8")

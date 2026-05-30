@@ -59,6 +59,9 @@ def test_frontend_source_declares_anima_route_contracts():
     anima = (ROOT / "frontend" / "source" / "src" / "anima.ts").read_text(
         encoding="utf-8"
     )
+    anima_schema = (
+        ROOT / "frontend" / "source" / "src" / "animaSchema.ts"
+    ).read_text(encoding="utf-8")
     main = (ROOT / "frontend" / "source" / "src" / "main.ts").read_text(encoding="utf-8")
 
     assert "AnimaRoutePage" in main
@@ -146,7 +149,7 @@ def test_frontend_source_declares_anima_route_contracts():
         "importConfigInput",
         "importConfigFile",
     ]:
-        assert term in anima
+        assert term in anima or term in anima_schema
 
 
 def test_frontend_source_has_training_schema_renderer():
@@ -156,6 +159,9 @@ def test_frontend_source_has_training_schema_renderer():
     anima = (ROOT / "frontend" / "source" / "src" / "anima.ts").read_text(
         encoding="utf-8"
     )
+    anima_schema = (
+        ROOT / "frontend" / "source" / "src" / "animaSchema.ts"
+    ).read_text(encoding="utf-8")
 
     for term in [
         "TrainingFieldSpec",
@@ -193,15 +199,16 @@ def test_frontend_source_has_training_schema_renderer():
     ]:
         assert term in renderer
     assert "./trainingRenderer" in anima
-    assert "renderTrainingField" in anima
-    assert "TrainingSectionSpec<AnimaForm>" in anima
-    assert "animaModelAssetSection" in anima
-    assert "animaDatasetOutputSection" in anima
-    assert "animaTrainingSection" in anima
-    assert "animaLoraAdapterSection" in anima
-    assert "animaParametersSection" in anima
-    assert "animaCacheSection" in anima
-    assert "animaPreviewSection" in anima
+    assert "./animaSchema" in anima
+    assert "AnimaForm" in anima_schema
+    assert "TrainingSectionSpec<AnimaForm>" in anima_schema
+    assert "animaModelAssetSection" in anima_schema
+    assert "animaDatasetOutputSection" in anima_schema
+    assert "animaTrainingSection" in anima_schema
+    assert "animaLoraAdapterSection" in anima_schema
+    assert "animaParametersSection" in anima_schema
+    assert "animaCacheSection" in anima_schema
+    assert "animaPreviewSection" in anima_schema
     assert "renderTrainingSectionSpec(animaForm, animaModelAssetSection)" in anima
     assert "renderTrainingSectionSpec(animaForm, animaDatasetOutputSection)" in anima
     assert "renderTrainingSectionSpec(animaForm, animaTrainingSection)" in anima
@@ -209,9 +216,9 @@ def test_frontend_source_has_training_schema_renderer():
     assert "renderTrainingSectionSpec(animaForm, animaParametersSection)" in anima
     assert "renderTrainingSectionSpec(animaForm, animaCacheSection)" in anima
     assert "renderTrainingSectionSpec(animaForm, animaPreviewSection)" in anima
-    assert "role," in anima
-    assert '"file"' in anima
-    assert '"folder"' in anima
+    assert "role:" in anima_schema
+    assert '"file"' in anima_schema
+    assert '"folder"' in anima_schema
     assert "function tomlValue" not in anima
 
 

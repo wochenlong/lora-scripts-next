@@ -33,6 +33,7 @@ Created: 2026-05-30
 - 2026-05-30: Began moving Anima off render-function field declarations by extracting the model asset controls into a `TrainingSectionSpec<AnimaForm>` rendered through the shared schema-style training renderer.
 - 2026-05-30: Extended `TrainingSectionSpec` with row items and extracted Anima dataset/output controls into a second schema-style section while preserving the existing row layout.
 - 2026-05-30: Extracted the remaining Anima form groups (`Training`, `LoRA Adapter`, `Anima Parameters`, `Cache`, and `Preview`) into schema-style `TrainingSectionSpec` constants, leaving the page render function focused on route/workflow composition.
+- 2026-05-30: Split Anima schema definitions into `frontend/source/src/animaSchema.ts`, so `anima.ts` now owns page workflow while schema/defaults/route metadata live behind a reusable source module.
 
 ## Background
 
