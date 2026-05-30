@@ -58,6 +58,17 @@ for (const route of ["/lora/index.html", "/lora/master.html", "/lora/flux.html",
   });
 }
 
+test("lora source index exposes training route hub", async ({ page }) => {
+  await page.goto("/lora/index.html");
+  await expect(page.locator(".source-route-list")).toBeVisible();
+  await expect(page.locator(".source-route-card")).toHaveCount(6);
+  await expect(page.locator('.source-route-card[href="/lora/sd3.html"]')).toContainText("Anima Stable Diffusion LoRA");
+  await expect(page.locator('.source-route-card[href="/lora/anima-finetune.html"]')).toContainText("全量微调");
+  await expect(page.locator('.source-route-card[href="/lora/master.html"]')).toContainText("Stable Diffusion");
+  await expect(page.locator('.source-route-card[href="/lora/flux.html"]')).toContainText("Flux LoRA");
+  await expect(page.locator('.source-route-card[href="/dreambooth/index.html"]')).toContainText("Dreambooth");
+});
+
 test("native tag editor source route loads embedded editor", async ({ page }) => {
   await page.goto("/native-tageditor.html");
   await expect(page.locator("#app")).toBeVisible();

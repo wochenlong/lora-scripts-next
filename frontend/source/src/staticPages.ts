@@ -1,5 +1,5 @@
 import { defineComponent, h } from "vue";
-import type { AppRoute } from "./routes";
+import { routes, type AppRoute } from "./routes";
 
 interface StaticInfoPageSpec {
   kicker: string;
@@ -323,6 +323,7 @@ export const StaticInfoPage = defineComponent({
           ),
         ),
         h("p", { class: "source-static-status" }, spec.nextStep ?? spec.checks[0]),
+        renderRouteHub(props.route),
         h("section", { class: "compat-panel source-static-contract" }, [
           h("h2", "Source Contract"),
           h(
@@ -334,3 +335,37 @@ export const StaticInfoPage = defineComponent({
     };
   },
 });
+
+function renderRouteHub(route: AppRoute) {
+  if (route.path !== "/lora/index.html") {
+    return null;
+  }
+
+  const trainingRoutes = routes.filter(
+    (item) => item.section === "training" && item.path !== "/lora/index.html",
+  );
+
+  return h("section", { class: "source-route-list", "aria-label": "Training routes" }, [
+    h("div", { class: "source-route-list__header" }, [
+      h("h2", "Training Routes"),
+      h("p", "Anima routes are source-owned now; mature SD, Flux, and Dreambooth routes stay as compatibility entries."),
+    ]),
+    h(
+      "div",
+      { class: "source-route-list__grid" },
+      trainingRoutes.map((item) =>
+        h("a", { class: "source-route-card", href: item.path }, [
+          h("span", { class: "source-route-card__section" }, routeStatus(item.path)),
+          h("strong", item.title),
+          h("small", item.description),
+        ]),
+      ),
+    ),
+  ]);
+}
+
+function routeStatus(path: string) {
+  return path === "/lora/sd3.html" || path === "/lora/anima-finetune.html"
+    ? "Source renderer"
+    : "Compatibility route";
+}

@@ -235,6 +235,77 @@ h1 {
   font-weight: 700;
 }
 
+.source-route-list {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04);
+}
+
+.source-route-list__header {
+  display: grid;
+  gap: 6px;
+}
+
+.source-route-list__header h2,
+.source-route-list__header p {
+  margin: 0;
+}
+
+.source-route-list__header h2 {
+  font-size: 17px;
+}
+
+.source-route-list__header p {
+  color: #667085;
+  line-height: 1.55;
+}
+
+.source-route-list__grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.source-route-card {
+  display: grid;
+  gap: 8px;
+  min-height: 136px;
+  padding: 16px;
+  border: 1px solid #e1e6ef;
+  border-radius: 8px;
+  background: #fbfcfe;
+  color: #172033;
+  text-decoration: none;
+}
+
+.source-route-card:hover {
+  border-color: #0f766e;
+  background: #f6fbfa;
+}
+
+.source-route-card__section {
+  justify-self: start;
+  border-radius: 999px;
+  padding: 3px 8px;
+  background: #eef6f5;
+  color: #0b5f59;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.source-route-card strong {
+  font-size: 15px;
+}
+
+.source-route-card small {
+  color: #667085;
+  line-height: 1.5;
+}
+
 .anima-page {
   max-width: none;
   width: 100%;
@@ -858,7 +929,8 @@ h1 {
   }
 
   .source-static-hero,
-  .source-static-grid {
+  .source-static-grid,
+  .source-route-list__grid {
     grid-template-columns: 1fr;
   }
 
