@@ -43,6 +43,10 @@ Created: 2026-05-30
 - 2026-05-30: Expanded Anima LoRA adapter parity with resume weights, dim inference, norm/dropout controls, PiSSA conditionals, LoKr fields, and T-LoRA fields, while stripping LoRA-only payload keys from finetune submissions.
 - 2026-05-30: Promoted mature training compatibility routes (`/lora/index.html`, `/lora/basic.html`, `/lora/master.html`, `/lora/flux.html`, `/dreambooth/index.html`, and `/lora/params.html`) from generic placeholders to source-owned static pages without changing their training behavior.
 - 2026-05-30: Added source-owned training schema definition helpers, real slider rendering for `role: "slider"` numeric fields, and a shared path browse event bridge for file/folder fields.
+- 2026-05-30: Promoted `/tageditor.html` and `/` from generic compatibility placeholders to source-owned static pages, keeping the classic editor, native editor, and dataset debug routes explicitly separate.
+- 2026-05-30: Added dedicated browser smoke coverage for the historical Anima LoRA route `/lora/sd3.html`, including LoRA adapter fields and `model_train_type = "anima-lora"` preview output.
+
+Current source independence estimate: about 90%. The remaining work is no longer blocked by missing frontend source for the migrated routes; it is mainly final production-dist replacement approval, one clean `--apply --backup` rehearsal, and any visual polish discovered during that rehearsal.
 
 ## Background
 
