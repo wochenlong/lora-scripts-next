@@ -71,6 +71,12 @@ export interface TrainingSectionSpec<TForm extends TrainingFormState = TrainingF
   visibleWhen?: TrainingVisibilityRule<TForm>;
 }
 
+export interface TrainingPathBrowseDetail {
+  key: string;
+  role: "file" | "folder";
+  id: string;
+}
+
 export function defineTrainingField<TForm extends TrainingFormState>(field: TrainingFieldSpec<TForm>) {
   return field;
 }
@@ -92,6 +98,18 @@ export function defineTrainingSection<TForm extends TrainingFormState>(
 
 export function defineTrainingSections<TForm extends TrainingFormState>(sections: TrainingSectionSpec<TForm>[]) {
   return sections;
+}
+
+export function installTrainingPathBrowseBridge(onBrowse: (detail: TrainingPathBrowseDetail) => void) {
+  const listener = (event: Event) => {
+    const detail = (event as CustomEvent<TrainingPathBrowseDetail>).detail;
+    if (!detail?.key || (detail.role !== "file" && detail.role !== "folder")) {
+      return;
+    }
+    onBrowse(detail);
+  };
+  window.addEventListener("sd-training-path-browse", listener);
+  return () => window.removeEventListener("sd-training-path-browse", listener);
 }
 
 export function renderTrainingField<TForm extends TrainingFormState>(form: TForm, field: TrainingFieldSpec<TForm>) {

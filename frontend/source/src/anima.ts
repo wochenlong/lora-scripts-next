@@ -1,6 +1,7 @@
-import { defineComponent, h, reactive, ref } from "vue";
+import { defineComponent, h, onBeforeUnmount, onMounted, reactive, ref } from "vue";
 import type { AppRoute } from "./routes";
 import {
+  installTrainingPathBrowseBridge,
   previewToml,
   renderParameterPreview,
   renderRunControls,
@@ -33,6 +34,17 @@ export const AnimaRoutePage = defineComponent({
     const animaForm = reactive<AnimaForm>(loadStoredForm(plan));
     const importConfigInput = ref<HTMLInputElement | null>(null);
     const status = ref("");
+    let removePathBrowseBridge: (() => void) | undefined;
+
+    onMounted(() => {
+      removePathBrowseBridge = installTrainingPathBrowseBridge((detail) => {
+        status.value = `Browse requested for ${detail.key} (${detail.role})`;
+      });
+    });
+
+    onBeforeUnmount(() => {
+      removePathBrowseBridge?.();
+    });
 
     function payload() {
       const base: Partial<AnimaForm> & { model_train_type: AnimaRoutePlan["modelTrainType"] } = {

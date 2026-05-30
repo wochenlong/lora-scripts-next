@@ -81,6 +81,8 @@ test("anima source route loads train form", async ({ page }) => {
   await expect(page.locator("#anima-fp8-base")).toBeVisible();
   await expect(page.locator("#anima-clip-skip")).toHaveAttribute("type", "range");
   await expect(page.locator("#anima-clip-skip-value")).toContainText("2");
+  await page.locator("#anima-train-data-dir").locator("..").getByRole("button", { name: "Browse" }).click();
+  await expect(page.locator(".anima-status")).toContainText("Browse requested for train_data_dir");
   await expect(page.getByRole("button", { name: "Reset Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Export Config" })).toBeVisible();
   await expect(page.getByRole("button", { name: "Import Config" })).toBeVisible();
