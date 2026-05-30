@@ -56,7 +56,7 @@ def test_frontend_source_dist_sync_script_is_guarded():
         assert term in script
 
 
-def test_frontend_source_dist_sync_keeps_source_tageditor_entrypoint(tmp_path):
+def test_frontend_source_dist_sync_replaces_legacy_tageditor_island(tmp_path):
     module_path = ROOT / "scripts" / "sync_frontend_source_dist.py"
     spec = importlib.util.spec_from_file_location("sync_frontend_source_dist", module_path)
     assert spec and spec.loader
@@ -77,12 +77,13 @@ def test_frontend_source_dist_sync_keeps_source_tageditor_entrypoint(tmp_path):
         encoding="utf-8",
     )
     (target / "native-tageditor.html").write_text("legacy native editor", encoding="utf-8")
-    for asset in [
+    legacy_assets = [
         "app.547295de.js",
         "style.874872ce.css",
         "tageditor.html.173f1b6a.js",
         "tageditor.html.66da263e.js",
-    ]:
+    ]
+    for asset in legacy_assets:
         (target / "assets" / asset).write_text(f"legacy {asset}", encoding="utf-8")
 
     sync_module.sync_dist(source, target, backup=True, root=root)
@@ -90,13 +91,8 @@ def test_frontend_source_dist_sync_keeps_source_tageditor_entrypoint(tmp_path):
     assert (target / "index.html").read_text(encoding="utf-8") == "source index"
     assert (target / "tageditor.html").read_text(encoding="utf-8") == "source classic launcher"
     assert (target / "native-tageditor.html").read_text(encoding="utf-8") == "source native editor"
-    for asset in [
-        "app.547295de.js",
-        "style.874872ce.css",
-        "tageditor.html.173f1b6a.js",
-        "tageditor.html.66da263e.js",
-    ]:
-        assert (target / "assets" / asset).read_text(encoding="utf-8") == f"legacy {asset}"
+    for asset in legacy_assets:
+        assert not (target / "assets" / asset).exists()
 
 
 def test_frontend_source_plan_documents_dist_replacement_gate():
@@ -111,6 +107,7 @@ def test_frontend_source_plan_documents_dist_replacement_gate():
         "npm run smoke",
         "npm run smoke:dist",
         "scripts/verify_frontend_source.py --require-built-output",
+        "scripts/verify_frontend_dist_matches_source.py",
         "scripts/sync_frontend_source_dist.py",
         "dry-run",
         "Do not manually edit `frontend/dist/`",
@@ -473,7 +470,7 @@ def test_frontend_source_owns_static_utility_pages():
         "scripts/run_gui.py",
         "frontend/source",
         "Mature training routes remain compatibility entries",
-        "Classic tag editor remains a separate compatibility entry",
+            "Classic tag editor remains a source-owned compatibility entry",
         "Source frontend home is owned by frontend/source",
     ]:
         assert term in static_pages

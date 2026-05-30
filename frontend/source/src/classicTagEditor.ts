@@ -12,17 +12,29 @@ export const ClassicTagEditorPage = defineComponent({
             h(
               "p",
               { class: "summary" },
-              "Classic tag editing stays on this route while the native editor remains separate.",
+              "The classic URL is kept for compatibility, but editing now uses the source-owned native tag editor.",
             ),
           ]),
-          h("a", { class: "classic-tag-editor-open", href: "/proxy/tageditor/", target: "_blank" }, "Open Classic Editor"),
+          h("div", { class: "classic-tag-editor-actions" }, [
+            h("a", { class: "classic-tag-editor-open", href: "/native-tageditor.html" }, "Open Native Editor"),
+            h(
+              "a",
+              { class: "classic-tag-editor-open secondary", href: "/native-tageditor-standalone.html" },
+              "Open Standalone Editor",
+            ),
+          ]),
         ]),
-        h("section", { class: "classic-tag-editor-frame-wrap" }, [
-          h("iframe", {
-            title: "Classic Tag Editor",
-            src: "/proxy/tageditor/",
-            class: "classic-tag-editor-frame",
-          }),
+        h("section", { class: "classic-tag-editor-panel" }, [
+          h("h2", "Source-Owned Replacement"),
+          h(
+            "p",
+            "The legacy Gradio proxy dependency has been removed from this route. Old bookmarks still land here, then continue into the maintained native editor.",
+          ),
+          h("ul", [
+            h("li", "No legacy proxy iframe is required for production dist replacement."),
+            h("li", "Native editing remains available at /native-tageditor.html."),
+            h("li", "Focused demos can use /native-tageditor-standalone.html."),
+          ]),
         ]),
       ]);
   },

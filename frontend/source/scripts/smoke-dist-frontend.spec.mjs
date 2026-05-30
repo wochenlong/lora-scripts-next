@@ -1,9 +1,10 @@
 import { expect, test } from "@playwright/test";
 
-test("production dist renders source-owned classic tag editor launcher", async ({ page }) => {
+test("production dist renders source-owned classic tag editor replacement", async ({ page }) => {
   await page.goto("/tageditor.html");
   await expect(page.locator(".classic-tag-editor-page")).toBeVisible();
-  await expect(page.locator('iframe[src="/proxy/tageditor/"]')).toBeVisible();
+  await expect(page.locator('iframe[src="/proxy/tageditor/"]')).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Open Native Editor" })).toHaveAttribute("href", "/native-tageditor.html");
   await expect(page.locator("#sd-native-editor-entry")).toHaveCount(0);
 });
 

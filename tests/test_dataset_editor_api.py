@@ -366,7 +366,8 @@ def test_legacy_tageditor_stays_legacy_only():
         bundle = dist_source_bundle()
         assert '<div id="app"></div>' in response.text
         assert "classic-tag-editor-page" in bundle
-        assert "/proxy/tageditor/" in bundle
+        assert "/proxy/tageditor/" not in bundle
+        assert "/native-tageditor-standalone.html" in bundle
         return
 
     assert "tageditor.html.66da263e.js" in response.text
@@ -436,7 +437,8 @@ def test_trainer_sidebar_exposes_legacy_and_native_tag_editors():
         assert "原生标签编辑" in app_bundle
         assert '<div id="app"></div>' in tageditor
         assert "classic-tag-editor-page" in app_bundle
-        assert "/proxy/tageditor/" in app_bundle
+        assert "/proxy/tageditor/" not in app_bundle
+        assert "/native-tageditor-standalone.html" in app_bundle
         assert "dataset-editor-entry.js" not in tageditor
         assert "sd-native-editor-entry" in app_bundle
         return

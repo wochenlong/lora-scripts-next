@@ -791,6 +791,13 @@ h1 {
   justify-content: space-between;
 }
 
+.classic-tag-editor-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
 .classic-tag-editor-open {
   min-height: 38px;
   display: inline-flex;
@@ -804,21 +811,101 @@ h1 {
   white-space: nowrap;
 }
 
-.classic-tag-editor-frame-wrap {
+.classic-tag-editor-open.secondary {
+  border: 1px solid #d8dde6;
+  background: #fff;
+  color: #0b5f59;
+}
+
+.classic-tag-editor-panel {
   min-width: 0;
-  min-height: 520px;
   border: 1px solid #d8dde6;
   border-radius: 8px;
-  overflow: hidden;
+  padding: 22px;
   background: #fff;
 }
 
-.classic-tag-editor-frame {
-  width: 100%;
-  height: 100%;
-  min-height: 720px;
-  border: 0;
-  display: block;
+.classic-tag-editor-panel h2 {
+  margin: 0 0 10px;
+  font-size: 18px;
+}
+
+.classic-tag-editor-panel p {
+  max-width: 760px;
+  color: #475467;
+  line-height: 1.6;
+}
+
+.classic-tag-editor-panel ul {
+  margin: 16px 0 0;
+  padding-left: 20px;
+  color: #475467;
+  line-height: 1.7;
+}
+
+.training-compat-page {
+  display: grid;
+  gap: 18px;
+}
+
+.training-compat-header {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 320px);
+  gap: 18px;
+  align-items: start;
+}
+
+.training-compat-route {
+  margin: 0;
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fff;
+}
+
+.training-compat-route dt {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.training-compat-route dd {
+  margin: 4px 0 12px;
+  color: #172033;
+  font-weight: 700;
+}
+
+.training-compat-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.training-compat-metrics article {
+  min-height: 110px;
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  border: 1px solid #d8dde6;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fff;
+}
+
+.training-compat-metrics span {
+  color: #667085;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.training-compat-metrics strong {
+  color: #172033;
+  line-height: 1.45;
+}
+
+.training-compat-contract {
   background: #fff;
 }
 

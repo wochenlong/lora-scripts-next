@@ -238,6 +238,8 @@ The sync command above is intentionally a dry-run. Do not run `scripts/sync_fron
 
 After an approved `--apply --backup` rehearsal, run `npm run smoke:dist` from `frontend\source` to browser-check the generated `frontend/dist` entrypoints, including `/tageditor.html`, native tag editor routes, Anima, params, and TensorBoard.
 
+For the large production `frontend/dist` replacement commit, reviewers should not audit generated hash files by hand. Instead, review the source changes and run `scripts/verify_frontend_dist_matches_source.py` after `--apply`; it proves the committed production dist matches `build/frontend-source-dist` byte-for-byte.
+
 The required verification gate is `scripts/verify_frontend_source.py --require-built-output`; it must pass before the dry-run sync is considered meaningful.
 
 ## Investigation Tasks for the Next Agent

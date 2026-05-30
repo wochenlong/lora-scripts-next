@@ -426,7 +426,7 @@ def verify_source(root: Path) -> list[dict]:
         "scripts/run_gui.py",
         "frontend/source",
         "Mature training routes remain compatibility entries",
-        "Classic tag editor remains a separate compatibility entry",
+        "Classic tag editor remains a source-owned compatibility entry",
         "Source frontend home is owned by frontend/source",
     ):
         if term not in static_pages:

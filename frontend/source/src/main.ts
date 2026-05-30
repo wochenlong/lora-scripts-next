@@ -1,6 +1,7 @@
 import { createApp, defineComponent, h } from "vue";
 import { AnimaRoutePage, isAnimaRoute } from "./anima";
 import { ClassicTagEditorPage } from "./classicTagEditor";
+import { MatureTrainingPage, isMatureTrainingRoute } from "./matureTraining";
 import { NativeTagEditorPage } from "./nativeTagEditor";
 import { ParametersPage } from "./parameters";
 import { currentRoute, navGroups, routes } from "./routes";
@@ -26,6 +27,8 @@ const App = defineComponent({
           ? h(TaggerPage)
         : route.path === "/tageditor.html"
           ? h(ClassicTagEditorPage)
+        : isMatureTrainingRoute(route.path)
+          ? h(MatureTrainingPage, { route })
         : route.path === "/lora/params.html"
           ? h(ParametersPage)
         : route.path === "/tensorboard.html"

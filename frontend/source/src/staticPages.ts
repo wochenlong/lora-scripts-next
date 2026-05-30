@@ -34,18 +34,18 @@ const staticInfoPages: Record<string, StaticInfoPageSpec> = {
     kicker: "Tools",
     title: "Classic Tag Editor",
     body:
-      "Source-owned compatibility entry for the classic tag editor route. It stays separate from the native tag editor while production dist replacement is prepared.",
+      "Source-owned compatibility entry for the classic tag editor route. It now forwards old links toward the maintained native editor instead of depending on a legacy proxy.",
     actions: [
       { label: "Open Native Tag Editor", href: "/native-tageditor.html" },
       { label: "Open Dataset Debug", href: "/dataset-editor.html" },
     ],
     checks: [
-      "Classic tag editor remains a separate compatibility entry.",
+      "Classic tag editor remains a source-owned compatibility entry.",
       "Native tag editing stays on /native-tageditor.html.",
       "The dataset-editor fallback remains available for debugging.",
     ],
-    status: "Preserved by legacy island",
-    nextStep: "Keep the classic editor available while native editing matures.",
+    status: "Source-owned replacement",
+    nextStep: "Keep old tag editor links stable while native editing matures.",
   },
   "/lora/index.html": {
     kicker: "Training",
@@ -393,7 +393,7 @@ function routeStatus(path: string) {
     return "Source-owned tool";
   }
   if (path === "/tageditor.html") {
-    return "Legacy island";
+    return "Source replacement";
   }
   return "Compatibility route";
 }

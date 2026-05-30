@@ -44,7 +44,7 @@ for (const route of [
   });
 }
 
-for (const route of ["/lora/index.html", "/lora/master.html", "/lora/flux.html"]) {
+for (const route of ["/lora/index.html"]) {
   test(`source compatibility page has product-grade scaffolding ${route}`, async ({ page }) => {
     await page.goto(route);
     await expect(page.locator(".source-static-page")).toBeVisible();
@@ -52,6 +52,21 @@ for (const route of ["/lora/index.html", "/lora/master.html", "/lora/flux.html"]
     await expect(page.locator(".source-static-card")).toHaveCount(3);
     await expect(page.locator(".source-static-status")).toBeVisible();
     await expect(page.locator(".source-static-meta")).toBeVisible();
+  });
+}
+
+for (const [route, backend] of [
+  ["/lora/basic.html", "LoRA compatibility"],
+  ["/lora/master.html", "Stable Diffusion compatibility"],
+  ["/lora/flux.html", "Flux compatibility"],
+  ["/dreambooth/index.html", "Dreambooth compatibility"],
+]) {
+  test(`mature training route uses shared source template ${route}`, async ({ page }) => {
+    await page.goto(route);
+    await expect(page.locator(".training-compat-page")).toBeVisible();
+    await expect(page.locator(".training-compat-page")).toContainText(backend);
+    await expect(page.locator(".training-compat-metrics article")).toHaveCount(3);
+    await expect(page.locator(".training-compat-route")).toContainText(route);
   });
 }
 
@@ -132,12 +147,16 @@ test("native tag editor source route loads embedded editor", async ({ page }) =>
   await expect(page.locator("#dataset-path")).toBeVisible();
 });
 
-test("classic tag editor source route launches legacy proxy", async ({ page }) => {
+test("classic tag editor source route redirects to native editor", async ({ page }) => {
   await page.goto("/tageditor.html");
   await expect(page.locator("#app")).toBeVisible();
   await expect(page.locator(".classic-tag-editor-page")).toBeVisible();
-  await expect(page.locator('iframe[src="/proxy/tageditor/"]')).toBeVisible();
-  await expect(page.getByRole("link", { name: "Open Classic Editor" })).toHaveAttribute("href", "/proxy/tageditor/");
+  await expect(page.locator('iframe[src="/proxy/tageditor/"]')).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "Open Native Editor" })).toHaveAttribute("href", "/native-tageditor.html");
+  await expect(page.getByRole("link", { name: "Open Standalone Editor" })).toHaveAttribute(
+    "href",
+    "/native-tageditor-standalone.html",
+  );
   await expect(page.locator("#sd-native-editor-entry")).toHaveCount(0);
 });
 
