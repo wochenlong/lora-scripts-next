@@ -6,6 +6,16 @@
 
 > 技术细节：该页面复用了原 SD3 的 URL 槽位（`/lora/sd3.html`），但参数集合与训练脚本已完全是 Anima。
 
+## 下载 Anima 模型
+
+Anima 训练需要三个权重文件（DiT、Qwen3 文本编码器、VAE）。**整合包**根目录或**源码 clone 根目录**均可双击：
+
+```text
+Download-Anima-Model.bat
+```
+
+脚本会从 ModelScope（`circlestone-labs/Anima`）下载到相对路径 **`sd-models/anima/`**，已存在的文件会自动跳过。也支持放在整合包根目录（与 `run_gui.bat` 同级）或 `SD-Trainer/` 内（与 `gui.py` 同级）。
+
 ## 模型路径
 
 表单里需要填以下模型路径：

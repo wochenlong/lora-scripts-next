@@ -18,6 +18,11 @@ parser.add_argument("--skip-prepare-environment", action="store_true")
 parser.add_argument("--skip-prepare-onnxruntime", action="store_true")
 parser.add_argument("--disable-tensorboard", action="store_true", default=False)
 parser.add_argument("--disable-tageditor", action="store_true")
+parser.add_argument(
+    "--enable-legacy-tageditor",
+    action="store_true",
+    help="Start the legacy Gradio Dataset Tag Editor compatibility service.",
+)
 parser.add_argument("--disable-train-monitor", action="store_true")
 parser.add_argument("--disable-auto-mirror", action="store_true")
 parser.add_argument("--tensorboard-host", type=str, default="127.0.0.1", help="Port to run the tensorboard")
@@ -119,6 +124,7 @@ def launch():
     log.info("Starting SD-Trainer Mikazuki GUI...")
     log.info(f"Base directory: {base_dir_path()}, Working directory: {os.getcwd()}")
     log.info(f"{platform.system()} Python {platform.python_version()} {sys.executable}")
+    legacy_tageditor_enabled = args.enable_legacy_tageditor and not args.disable_tageditor
 
     if not args.skip_prepare_environment:
         prepare_environment(disable_auto_mirror=args.disable_auto_mirror)
@@ -126,7 +132,7 @@ def launch():
     # Protect each service's default port before scanning fallbacks. Otherwise
     # TensorBoard can claim 6008 as a fallback and make monitor links open it.
     protected_default_ports = {args.port}
-    if not args.disable_tageditor:
+    if legacy_tageditor_enabled:
         protected_default_ports.add(28001)
     if not args.disable_tensorboard:
         protected_default_ports.add(args.tensorboard_port)
@@ -135,7 +141,7 @@ def launch():
 
     reserved_ports: set[int] = set(protected_default_ports)
     tageditor_port = 28001
-    if not args.disable_tageditor:
+    if legacy_tageditor_enabled:
         tageditor_port = ensure_port_available(
             28001, 28001, 28020, "Tag editor", reserved_ports, preferred_reserved_port=28001
         )
@@ -178,8 +184,10 @@ def launch():
         args.host = "0.0.0.0"
         args.tensorboard_host = "0.0.0.0"
 
-    if not args.disable_tageditor:
+    if legacy_tageditor_enabled:
         run_tag_editor(tageditor_port)
+    else:
+        log.info("Using native dataset editor at /dataset-editor.html; legacy Gradio tag editor is disabled.")
 
     if not args.disable_tensorboard:
         run_tensorboard()

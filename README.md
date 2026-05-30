@@ -43,6 +43,8 @@
 3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
 ```
 
+The portable package ships the default WD tagger **wd14-convnextv2-v2** under **`tagger-models/wd14/`** (~400 MB). If Hugging Face download fails, place `model.onnx` and `selected_tags.csv` there manually — see [`docs/tagger-models.md`](docs/tagger-models.md).
+
 > **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
 
 <details>
@@ -150,6 +152,7 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 | Anima full finetune example TOML | [docs/examples/anima-full-finetune.toml](docs/examples/anima-full-finetune.toml) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
 | Train Monitor & SSE API | [docs/train-monitor.md](docs/train-monitor.md) |
+| Tagger model directory (`tagger-models/`) | [docs/tagger-models.md](docs/tagger-models.md) |
 | Docker Deployment | [docs/docker.md](docs/docker.md) |
 | CLI Arguments | [docs/cli-args.md](docs/cli-args.md) |
 

@@ -24,7 +24,7 @@ def run_prefetch_job(req) -> None:
 
     try:
         with use_download_endpoint(getattr(req, "download_endpoint", "")):
-            if interrogator_assets_ready(interrogator):
+            if interrogator_assets_ready(interrogator, model_key):
                 tagger_progress.finish_download_success(f"模型 {model_key} 已在本地")
                 return
             download_interrogator_assets(model_key, interrogator, continue_to_tagging=False)
@@ -43,7 +43,7 @@ def run_interrogate_job(req) -> None:
         model_key, available_interrogators["wd14-convnextv2-v2"]
     )
 
-    needs_download = not interrogator_assets_ready(interrogator)
+    needs_download = not interrogator_assets_ready(interrogator, model_key)
     initial_phase = "downloading" if needs_download else "tagging"
     initial_message = (
         "正在下载模型，完成后自动开始打标…"
