@@ -337,18 +337,19 @@ export const StaticInfoPage = defineComponent({
 });
 
 function renderRouteHub(route: AppRoute) {
-  if (route.path !== "/lora/index.html") {
+  const hub = routeHubFor(route.path);
+  if (!hub) {
     return null;
   }
 
   const trainingRoutes = routes.filter(
-    (item) => item.section === "training" && item.path !== "/lora/index.html",
+    (item) => item.section === hub.section && item.path !== route.path,
   );
 
   return h("section", { class: "source-route-list", "aria-label": "Training routes" }, [
     h("div", { class: "source-route-list__header" }, [
-      h("h2", "Training Routes"),
-      h("p", "Anima routes are source-owned now; mature SD, Flux, and Dreambooth routes stay as compatibility entries."),
+      h("h2", hub.title),
+      h("p", hub.body),
     ]),
     h(
       "div",
@@ -364,8 +365,35 @@ function renderRouteHub(route: AppRoute) {
   ]);
 }
 
+function routeHubFor(path: string) {
+  if (path === "/lora/index.html") {
+    return {
+      section: "training" as const,
+      title: "Training Routes",
+      body:
+        "Anima routes are source-owned now; mature SD, Flux, and Dreambooth routes stay as compatibility entries.",
+    };
+  }
+  if (path === "/lora/tools.html") {
+    return {
+      section: "tools" as const,
+      title: "Tool Routes",
+      body:
+        "Tool and debugging routes are declared from source so they can be migrated without editing compiled dist assets.",
+    };
+  }
+  return null;
+}
+
 function routeStatus(path: string) {
-  return path === "/lora/sd3.html" || path === "/lora/anima-finetune.html"
-    ? "Source renderer"
-    : "Compatibility route";
+  if (path === "/lora/sd3.html" || path === "/lora/anima-finetune.html") {
+    return "Source renderer";
+  }
+  if (path === "/native-tageditor.html" || path === "/dataset-editor.html" || path === "/tagger.html") {
+    return "Source-owned tool";
+  }
+  if (path === "/tageditor.html") {
+    return "Legacy island";
+  }
+  return "Compatibility route";
 }

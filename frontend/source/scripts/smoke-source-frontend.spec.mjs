@@ -69,6 +69,18 @@ test("lora source index exposes training route hub", async ({ page }) => {
   await expect(page.locator('.source-route-card[href="/dreambooth/index.html"]')).toContainText("Dreambooth");
 });
 
+test("tools source page exposes tool route hub", async ({ page }) => {
+  await page.goto("/lora/tools.html");
+  await expect(page.locator(".source-route-list")).toBeVisible();
+  await expect(page.locator(".source-route-card")).toHaveCount(6);
+  await expect(page.locator('.source-route-card[href="/tagger.html"]')).toBeVisible();
+  await expect(page.locator('.source-route-card[href="/tageditor.html"]')).toBeVisible();
+  await expect(page.locator('.source-route-card[href="/native-tageditor.html"]')).toBeVisible();
+  await expect(page.locator('.source-route-card[href="/dataset-editor.html"]')).toBeVisible();
+  await expect(page.locator('.source-route-card[href="/tensorboard.html"]')).toBeVisible();
+  await expect(page.locator('.source-route-card[href="/task.html"]')).toBeVisible();
+});
+
 test("native tag editor source route loads embedded editor", async ({ page }) => {
   await page.goto("/native-tageditor.html");
   await expect(page.locator("#app")).toBeVisible();
