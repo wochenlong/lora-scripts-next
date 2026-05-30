@@ -210,6 +210,10 @@ def test_frontend_source_has_training_schema_renderer():
         "TrainingSectionItem",
         "TrainingSectionSpec",
         "TrainingVisibilityRule",
+        "defineTrainingField",
+        "defineTrainingRow",
+        "defineTrainingSection",
+        "defineTrainingSections",
         "renderTrainingField",
         "renderTrainingSection",
         "renderTrainingSectionSpec",
@@ -253,6 +257,9 @@ def test_frontend_source_has_training_schema_renderer():
     assert "./animaSchema" in anima
     assert "AnimaForm" in anima_schema
     assert "TrainingSectionSpec<AnimaForm>" in anima_schema
+    assert "defineTrainingSection<AnimaForm>" in anima_schema
+    assert "defineTrainingRow<AnimaForm>" in anima_schema
+    assert "defineTrainingSections<AnimaForm>" in anima_schema
     assert "animaModelAssetSection" in anima_schema
     assert "animaDatasetOutputSection" in anima_schema
     assert "animaTrainingSection" in anima_schema

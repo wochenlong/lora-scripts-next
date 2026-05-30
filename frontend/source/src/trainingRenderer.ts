@@ -70,6 +70,29 @@ export interface TrainingSectionSpec<TForm extends TrainingFormState = TrainingF
   visibleWhen?: TrainingVisibilityRule<TForm>;
 }
 
+export function defineTrainingField<TForm extends TrainingFormState>(field: TrainingFieldSpec<TForm>) {
+  return field;
+}
+
+export function defineTrainingRow<TForm extends TrainingFormState>(
+  fields: TrainingFieldSpec<TForm>[],
+  options: Omit<Extract<TrainingSectionItem<TForm>, { kind: "row" }>, "kind" | "fields"> = {},
+) {
+  return { kind: "row" as const, fields, ...options };
+}
+
+export function defineTrainingSection<TForm extends TrainingFormState>(
+  title: string,
+  fields: TrainingSectionItem<TForm>[],
+  options: Omit<TrainingSectionSpec<TForm>, "title" | "fields"> = {},
+) {
+  return { title, fields, ...options };
+}
+
+export function defineTrainingSections<TForm extends TrainingFormState>(sections: TrainingSectionSpec<TForm>[]) {
+  return sections;
+}
+
 export function renderTrainingField<TForm extends TrainingFormState>(form: TForm, field: TrainingFieldSpec<TForm>) {
   if (field.hidden || !matchesVisibilityRule(form, field.visibleWhen)) {
     return null;

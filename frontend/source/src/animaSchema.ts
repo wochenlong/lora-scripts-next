@@ -1,4 +1,9 @@
-import type { TrainingSectionSpec } from "./trainingRenderer";
+import {
+  defineTrainingRow,
+  defineTrainingSection,
+  defineTrainingSections,
+  type TrainingSectionSpec,
+} from "./trainingRenderer";
 
 export interface AnimaRoutePlan {
   path: string;
@@ -945,19 +950,16 @@ export const animaNoiseSection: TrainingSectionSpec<AnimaForm> = {
   ],
 };
 
-export const animaDataEnhancementSection: TrainingSectionSpec<AnimaForm> = {
-  title: "Data Enhancement",
-  fields: [
-    {
-      kind: "row",
-      fields: [
-        { kind: "checkbox", key: "color_aug", id: "anima-color-aug", label: "color_aug" },
-        { kind: "checkbox", key: "flip_aug", id: "anima-flip-aug", label: "flip_aug" },
-        { kind: "checkbox", key: "random_crop", id: "anima-random-crop", label: "random_crop" },
-      ],
-    },
+export const animaDataEnhancementSection: TrainingSectionSpec<AnimaForm> = defineTrainingSection<AnimaForm>(
+  "Data Enhancement",
+  [
+    defineTrainingRow<AnimaForm>([
+      { kind: "checkbox", key: "color_aug", id: "anima-color-aug", label: "color_aug" },
+      { kind: "checkbox", key: "flip_aug", id: "anima-flip-aug", label: "flip_aug" },
+      { kind: "checkbox", key: "random_crop", id: "anima-random-crop", label: "random_crop" },
+    ]),
   ],
-};
+);
 
 export const animaOtherSection: TrainingSectionSpec<AnimaForm> = {
   title: "Other",
@@ -1007,7 +1009,7 @@ export const animaDistributedSection: TrainingSectionSpec<AnimaForm> = {
 };
 
 export function animaSectionsForPlan(plan: AnimaRoutePlan): TrainingSectionSpec<AnimaForm>[] {
-  return [
+  return defineTrainingSections<AnimaForm>([
     animaModelAssetSection,
     animaDatasetOutputSection,
     animaTrainingSection,
@@ -1020,7 +1022,7 @@ export function animaSectionsForPlan(plan: AnimaRoutePlan): TrainingSectionSpec<
     animaDataEnhancementSection,
     animaOtherSection,
     animaDistributedSection,
-  ];
+  ]);
 }
 
 
