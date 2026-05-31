@@ -4988,7 +4988,7 @@ def resume_from_local_or_hf_if_specified(accelerator, args):
 
 
 def get_optimizer(args, trainable_params) -> tuple[str, str, object]:
-    # "Optimizer to use: AdamW, AdamW8bit, Lion, SGDNesterov, SGDNesterov8bit, PagedAdamW, PagedAdamW8bit, PagedAdamW32bit, Lion8bit, PagedLion8bit, AdEMAMix8bit, PagedAdEMAMix8bit, DAdaptation(DAdaptAdamPreprint), DAdaptAdaGrad, DAdaptAdam, DAdaptAdan, DAdaptAdanIP, DAdaptLion, DAdaptSGD, Adafactor"
+    # "Optimizer to use: AdamW, AdamW8bit, Lion, SGDNesterov, SGDNesterov8bit, PagedAdamW, PagedAdamW8bit, PagedAdamW32bit, Lion8bit, PagedLion8bit, AdEMAMix8bit, PagedAdEMAMix8bit, DAdaptation(DAdaptAdamPreprint), DAdaptAdaGrad, DAdaptAdam, DAdaptAdan, DAdaptAdanIP, DAdaptLion, DAdaptSGD, Adafactor, EmoSens"
 
     optimizer_type = args.optimizer_type
     if args.use_8bit_adam:
@@ -5272,6 +5272,12 @@ def get_optimizer(args, trainable_params) -> tuple[str, str, object]:
         optimizer_class = torch.optim.AdamW
         optimizer = optimizer_class(trainable_params, lr=lr, **optimizer_kwargs)
 
+    elif optimizer_type.lower() == "emosens" or optimizer_type.lower() == "optimizer.emosens.emosens":
+        from library.optimizers.emosens import EmoSens
+        logger.info(f"use EmoSens optimizer | {optimizer_kwargs}")
+        optimizer_class = EmoSens
+        optimizer = optimizer_class(trainable_params, lr=lr, **optimizer_kwargs)
+
     elif optimizer_type.endswith("schedulefree".lower()):
         try:
             import schedulefree as sf
@@ -5416,6 +5422,11 @@ def is_schedulefree_optimizer(optimizer: Optimizer, args: argparse.Namespace) ->
     return args.optimizer_type.lower().endswith("schedulefree".lower())  # or args.optimizer_schedulefree_wrapper
 
 
+def is_emo_optimizer(optimizer: Optimizer, args: argparse.Namespace) -> bool:
+    opt_type = args.optimizer_type.lower()
+    return opt_type == "emosens" or opt_type.endswith(".emosens") or opt_type == "emoairy" or opt_type.endswith(".emoairy") or opt_type == "emocats" or opt_type.endswith(".emocats") or opt_type == "emotion" or opt_type.endswith(".emotion") or opt_type == "emovoid" or opt_type.endswith(".emovoid")
+
+
 def get_dummy_scheduler(optimizer: Optimizer) -> Any:
     # dummy scheduler for schedulefree optimizer. supports only empty step(), get_last_lr() and optimizers.
     # this scheduler is used for logging only.
@@ -5443,6 +5454,11 @@ def get_scheduler_fix(args, optimizer: Optimizer, num_processes: int):
     """
     # if schedulefree optimizer, return dummy scheduler
     if is_schedulefree_optimizer(optimizer, args):
+        return get_dummy_scheduler(optimizer)
+
+    # emo series optimizers manage their own LR, use dummy scheduler to avoid overriding
+    if is_emo_optimizer(optimizer, args):
+        logger.info(f"use dummy scheduler for emo optimizer (optimizer manages its own LR)")
         return get_dummy_scheduler(optimizer)
 
     name = args.lr_scheduler
@@ -5492,6 +5508,30 @@ def get_scheduler_fix(args, optimizer: Optimizer, num_processes: int):
         initial_lr = float(name.split(":")[1])
         # logger.info(f"adafactor scheduler init lr {initial_lr}")
         return wrap_check_needless_num_warmup_steps(transformers.optimization.AdafactorSchedule(optimizer, initial_lr))
+
+    if name.lower() == "emopulse" or name.lower() == "emopulsescheduler" or name.lower() == "emopulse_scheduler":
+        from library.schedulers.emopulse_scheduler import EmoPulseScheduler
+        base_lr = args.learning_rate if args.learning_rate is not None else 1.0
+        logger.info(f"use EmoPulseScheduler | base_lr={base_lr} | {lr_scheduler_kwargs}")
+        _inner = EmoPulseScheduler(optimizer, base_lr=base_lr, **lr_scheduler_kwargs)
+
+        class EmoPulseSchedulerWrapper:
+            def __init__(self, inner, opt):
+                self._inner = inner
+                self.optimizer = opt
+
+            def __getattr__(self, name):
+                if name in ("_inner", "optimizer"):
+                    return super().__getattribute__(name)
+                return getattr(self._inner, name)
+
+            def step(self, loss_val=None):
+                return self._inner.step(loss_val)
+
+            def get_last_lr(self):
+                return [group["lr"] for group in self.optimizer.param_groups]
+
+        return EmoPulseSchedulerWrapper(_inner, optimizer)
 
     if name == DiffusersSchedulerType.PIECEWISE_CONSTANT.value:
         name = DiffusersSchedulerType(name)
