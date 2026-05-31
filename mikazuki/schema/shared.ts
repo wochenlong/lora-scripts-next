@@ -119,7 +119,6 @@
                     "linear",
                     "cosine",
                     "cosine_with_restarts",
-                    "emopulse_scheduler",
                     "polynomial",
                     "constant",
                     "constant_with_warmup",

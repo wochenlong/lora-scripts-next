@@ -5509,30 +5509,6 @@ def get_scheduler_fix(args, optimizer: Optimizer, num_processes: int):
         # logger.info(f"adafactor scheduler init lr {initial_lr}")
         return wrap_check_needless_num_warmup_steps(transformers.optimization.AdafactorSchedule(optimizer, initial_lr))
 
-    if name.lower() == "emopulse" or name.lower() == "emopulsescheduler" or name.lower() == "emopulse_scheduler":
-        from library.schedulers.emopulse_scheduler import EmoPulseScheduler
-        base_lr = args.learning_rate if args.learning_rate is not None else 1.0
-        logger.info(f"use EmoPulseScheduler | base_lr={base_lr} | {lr_scheduler_kwargs}")
-        _inner = EmoPulseScheduler(optimizer, base_lr=base_lr, **lr_scheduler_kwargs)
-
-        class EmoPulseSchedulerWrapper:
-            def __init__(self, inner, opt):
-                self._inner = inner
-                self.optimizer = opt
-
-            def __getattr__(self, name):
-                if name in ("_inner", "optimizer"):
-                    return super().__getattribute__(name)
-                return getattr(self._inner, name)
-
-            def step(self, loss_val=None):
-                return self._inner.step(loss_val)
-
-            def get_last_lr(self):
-                return [group["lr"] for group in self.optimizer.param_groups]
-
-        return EmoPulseSchedulerWrapper(_inner, optimizer)
-
     if name == DiffusersSchedulerType.PIECEWISE_CONSTANT.value:
         name = DiffusersSchedulerType(name)
         schedule_func = DIFFUSERS_TYPE_TO_SCHEDULER_FUNCTION[name]
