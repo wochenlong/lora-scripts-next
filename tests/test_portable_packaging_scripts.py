@@ -40,3 +40,18 @@ def test_portable_launcher_keeps_default_hf_mirror_for_skip_prepare_mode():
 
     assert "HF_ENDPOINT" in launcher
     assert "https://hf-mirror.com" in launcher
+
+
+def test_portable_builder_bundles_visible_tagger_models_directory():
+    script = (ROOT / "build-scripts" / "build_portable.ps1").read_text(
+        encoding="utf-8"
+    )
+    launcher = (ROOT / "scripts" / "portable" / "launch_portable.bat").read_text(
+        encoding="utf-8"
+    )
+
+    assert "tagger-models" in script
+    assert "tagger-models\\wd14" in script
+    assert "tagger-models\\vlm" in script
+    assert "--tagger-models-dir" in script
+    assert "MIKAZUKI_TAGGER_MODELS_DIR" in launcher

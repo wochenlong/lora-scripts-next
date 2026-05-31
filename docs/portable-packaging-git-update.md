@@ -28,6 +28,9 @@
   output/
   logs/
   huggingface/
+  tagger-models/
+  tagger-models/wd14/
+  tagger-models/vlm/
 ```
 
 这些路径被用户快捷方式、启动脚本和文档绑定，不要随意改名。
@@ -69,6 +72,9 @@ sd-models/
 output/
 logs/
 huggingface/
+tagger-models/
+tagger-models/wd14/
+tagger-models/vlm/
 train/
 config/
 toml/autosave/

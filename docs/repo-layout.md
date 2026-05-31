@@ -9,6 +9,7 @@
 | `gui.py` | 服务主程序 |
 | `setup_environment.py` | 整合包首次安装（`SD-Trainer/setup_environment.py`） |
 | `run_gui.bat` | Windows 主入口（整合包根目录 + 源码） |
+| `Download-Anima-Model.bat` | 一键下载 Anima 三件套到 `sd-models/anima/`（整合包根 / 源码根） |
 | `requirements.txt` / `VERSION` | 依赖与版本 |
 
 ### 整合包（Portable 7z）

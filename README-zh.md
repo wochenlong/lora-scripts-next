@@ -43,7 +43,7 @@
 3. 训练  →  浏览器打开 http://127.0.0.1:28000，选模型、填参数、开练
 ```
 
-整合包已内置默认 WD 打标模型 **wd14-convnextv2-v2**（约 400 MB，位于 `huggingface/`），WebUI「打标」页开箱即用。
+整合包已内置默认 WD 打标模型 **wd14-convnextv2-v2**（约 400 MB，位于 **`tagger-models/wd14/`**），WebUI「数据集打标」页开箱即用。在线下载失败时，可手动把 `model.onnx` 与 `selected_tags.csv` 放进该目录，详见 [`docs/tagger-models.md`](docs/tagger-models.md)。
 
 > **要求：** Windows 10/11，NVIDIA 显卡（RTX 20+），~7 GB 磁盘。
 
@@ -152,6 +152,7 @@ bash install_flash_attn.sh
 | Anima 全量微调示例 TOML | [docs/examples/anima-full-finetune.toml](docs/examples/anima-full-finetune.toml) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
 | 训练监控 & SSE 接口 | [docs/train-monitor.md](docs/train-monitor.md) |
+| 打标模型目录（`tagger-models/`） | [docs/tagger-models.md](docs/tagger-models.md) |
 | Docker 部署 | [docs/docker.md](docs/docker.md) |
 | CLI 参数 | [docs/cli-args.md](docs/cli-args.md) |
 
@@ -219,9 +220,12 @@ powershell -ExecutionPolicy Bypass -File .\install-cn.ps1
 <summary><b>打标模型放在哪 / 还要下载吗</b></summary>
 
 - **默认模型**：`wd14-convnextv2-v2`（HuggingFace：`SmilingWolf/wd-v1-4-convnextv2-tagger-v2`，revision `v2.0`）
-- **缓存路径**：项目根目录 `huggingface/hub/`（环境变量 `HF_HOME=huggingface`）
-- **整合包**：发布 7z 已内置，一般无需再下
-- **源码**：首次 `install-cn.ps1` 会预下载；之后每次 `run_gui.bat` 启动前若缺失会自动补下。手动：`python scripts/prefetch_default_tagger.py`
+- **推荐路径（优先）**：项目根目录 **`tagger-models/wd14/wd14-convnextv2-v2/`**，需包含 `model.onnx` 与 `selected_tags.csv`
+- **手动放置**：若 WebUI 下载失败，可从 HF / 镜像下载上述两个文件，放入上述目录后重启即可，**无需改 huggingface 缓存**
+- **回退路径**：文件不完整时仍会用 `huggingface/hub/`（`HF_HOME=huggingface`）或在线下载
+- **整合包**：新版 7z 已内置 `tagger-models/`，一般无需再下
+- **源码**：`install-cn.ps1` 或 `python scripts/prefetch_default_tagger.py` 会写入 `tagger-models/`；`run_gui.bat` 启动前也会自动补全
+- **完整说明**：[`docs/tagger-models.md`](docs/tagger-models.md)
 
 </details>
 

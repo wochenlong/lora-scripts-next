@@ -154,8 +154,13 @@ async def redirect_vuepress_md_to_html(request, call_next):
 async def add_cache_control_header(request, call_next):
     response = await call_next(request)
     path = request.url.path
-    if path.endswith(".html") or path.endswith("/assets/tagger-progress.js") or path.endswith(
-        "/assets/sd-trainer-brand.js"
+    if (
+        path.endswith(".html")
+        or path.endswith("/assets/tagger-progress.js")
+        or path.endswith("/assets/sd-trainer-brand.js")
+        or path.endswith("/assets/dataset-editor.js")
+        or path.endswith("/assets/dataset-editor.css")
+        or path.endswith("/assets/dataset-editor-entry.js")
     ):
         response.headers["Cache-Control"] = "no-cache, must-revalidate"
     elif re.search(r"\.[a-f0-9]{8}\.(js|css|webp)$", path):
