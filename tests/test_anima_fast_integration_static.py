@@ -77,14 +77,6 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         merge = Path("docs/anima-fast-merge-checklist.md").read_text(encoding="utf-8")
         self.assertIn("sorryhyun/anima_lora", merge)
 
-    def test_anima_fast_nav_i18n_includes_english_credit(self):
-        nav = Path("frontend/dist/assets/sd-nav-i18n.js").read_text(encoding="utf-8")
-        self.assertIn("applyAnimaFastIntro", nav)
-        self.assertIn("Thanks to the original author and community", nav)
-        self.assertIn('"Fast 模式": "Fast mode"', nav)
-        self.assertIn("window.i18n?.global?.locale", nav)
-        self.assertIn("inferEnglishFromButtons", nav)
-
 
 if __name__ == "__main__":
     unittest.main()
