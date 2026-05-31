@@ -32,6 +32,24 @@ ANIMA_CONSTRAINTS = ENVIRONMENT_DIR / "anima-constraints-cu130.txt"
 ANIMA_OVERRIDES = ENVIRONMENT_DIR / "anima-overrides-cu130.txt"
 MAIN_CONSTRAINTS = ENVIRONMENT_DIR / "main-constraints-cu130.txt"
 
+ANIMA_OPTIMIZER_PACKAGES = {
+    "bitsandbytes": "0.49.2",
+    "dadaptation": "3.1",
+    "lion-pytorch": "0.2.3",
+    "prodigyopt": "1.1.2",
+    "schedulefree": "1.4",
+    "pytorch-optimizer": "3.9.0",
+}
+
+ANIMA_OPTIMIZER_IMPORTS = [
+    "bitsandbytes",
+    "dadaptation",
+    "lion_pytorch",
+    "prodigyopt",
+    "schedulefree",
+    "optimum.quanto",
+]
+
 ANIMA_EXPECTED = {
     "python_major_minor": "3.13",
     "exact": {
@@ -44,6 +62,8 @@ ANIMA_EXPECTED = {
         "accelerate": "1.13.0",
         "safetensors": "0.7.0",
         "iopath": "0.1.10",
+        "bitsandbytes": ANIMA_OPTIMIZER_PACKAGES["bitsandbytes"],
+        "dadaptation": ANIMA_OPTIMIZER_PACKAGES["dadaptation"],
     },
 }
 
@@ -52,8 +72,6 @@ MAIN_EXPECTED = {
     "exact": {
         "numpy": "1.26.4",
         "opencv-python": "4.8.1.78",
-        "torch": "2.11.0+cu130",
-        "torchvision": "0.26.0+cu130",
     },
 }
 
@@ -443,7 +461,7 @@ def audit_environment(
         _collect_python_facts(
             layout.venv_python,
             sorted(set(ANIMA_EXPECTED["exact"]) | {"numpy", "opencv-python"}),
-            ["torch", "flash_attn", "triton", "transformers", "diffusers"],
+            ["torch", "flash_attn", "triton", "transformers", "diffusers", *ANIMA_OPTIMIZER_IMPORTS],
             layout.source if layout.source.is_dir() else root,
         )
         if layout.venv_python.is_file()

@@ -233,5 +233,12 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                 self.assertEqual(read_extension_status(layout).state, STATE_READY)
 
 
+    def test_anima_constraints_include_optimizer_packages(self):
+        constraints = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-constraints-cu130.txt"
+        text = constraints.read_text(encoding="utf-8")
+        for package in ("bitsandbytes==0.49.2", "dadaptation==3.1", "lion-pytorch==0.2.3", "prodigyopt==1.1.2"):
+            self.assertIn(package, text)
+
+
 if __name__ == "__main__":
     unittest.main()

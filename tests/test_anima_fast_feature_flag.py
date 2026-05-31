@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import unittest
+from unittest import mock
 
 from starlette.requests import Request
 
@@ -30,34 +31,38 @@ class AnimaFastFeatureFlagTests(unittest.TestCase):
             os.environ["LORA_ENABLE_ANIMA_FAST"] = self.previous
         asyncio.run(api.load_schemas())
 
-    def test_schema_is_hidden_when_feature_flag_is_disabled(self):
+    def test_schema_is_always_visible_by_default(self):
         asyncio.run(api.load_schemas())
 
         names = {schema["name"] for schema in api.avaliable_schemas}
+        self.assertIn("anima-lora-fast", names)
 
-        self.assertNotIn("anima-lora-fast", names)
-
-    def test_schema_is_visible_when_feature_flag_is_enabled(self):
-        os.environ["LORA_ENABLE_ANIMA_FAST"] = "1"
-
+    def test_schema_stays_visible_when_kill_switch_is_set(self):
+        os.environ["LORA_ENABLE_ANIMA_FAST"] = "0"
         asyncio.run(api.load_schemas())
 
         names = {schema["name"] for schema in api.avaliable_schemas}
         self.assertIn("anima-lora-fast", names)
 
     def test_shared_schema_is_loaded_before_anima_fast_schema(self):
-        os.environ["LORA_ENABLE_ANIMA_FAST"] = "1"
-
         asyncio.run(api.load_schemas())
 
         names = [schema["name"] for schema in api.avaliable_schemas]
         self.assertLess(names.index("shared"), names.index("anima-lora-fast"))
 
-    def test_run_rejects_anima_fast_when_feature_flag_is_disabled(self):
+    def test_run_rejects_anima_fast_when_plugin_not_ready(self):
+        with mock.patch.object(api, "_anima_fast_ready_gate", return_value=(False, api.APIResponseFail(message="not ready"))):
+            response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
+
+        self.assertEqual(response.status, "fail")
+        self.assertIn("not ready", response.message)
+
+    def test_run_rejects_anima_fast_when_kill_switch_is_set(self):
+        os.environ["LORA_ENABLE_ANIMA_FAST"] = "0"
         response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
 
         self.assertEqual(response.status, "fail")
-        self.assertIn("disabled", response.message)
+        self.assertIn("disabled", response.message.lower())
 
 
 if __name__ == "__main__":

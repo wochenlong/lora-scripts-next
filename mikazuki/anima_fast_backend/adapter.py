@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+import re
 from typing import Any
 
 from .settings import RuntimeConfig
@@ -25,6 +26,9 @@ UI_ONLY_FIELDS = {
     "sample_seed",
     "sample_steps",
     "randomly_choice_prompt",
+    "prompt_file",
+    "sample_scheduler",
+    "sample_sampler",
 }
 
 PATH_FIELDS = {
@@ -44,6 +48,28 @@ PATH_FIELDS = {
 }
 
 SUPPORTED_LORA_TYPES = {"lora"}
+
+FAST_SUPPORTED_OPTIMIZERS = {
+    "AdamW",
+    "AdamW8bit",
+    "Automagic",
+    "PagedAdamW8bit",
+    "RAdamScheduleFree",
+    "Lion",
+    "Lion8bit",
+    "PagedLion8bit",
+    "SGDNesterov",
+    "SGDNesterov8bit",
+    "DAdaptation",
+    "DAdaptAdam",
+    "DAdaptAdaGrad",
+    "DAdaptAdanIP",
+    "DAdaptLion",
+    "DAdaptSGD",
+    "AdaFactor",
+    "Prodigy",
+    "pytorch_optimizer.CAME",
+}
 
 
 @dataclass
@@ -89,6 +115,36 @@ def resolve_path(value: Any, base: Path) -> str:
     return path.resolve().as_posix()
 
 
+def dataset_cache_slug(train_data_dir: Path, base: Path) -> str:
+    resolved = train_data_dir if train_data_dir.is_absolute() else (base / train_data_dir).resolve()
+    try:
+        rel = resolved.relative_to(base.resolve())
+        parts = [part for part in rel.parts if part not in (".", "..")]
+        if parts:
+            slug = "_".join(parts)
+            return re.sub(r"[^\w.-]+", "_", slug) or "dataset"
+    except ValueError:
+        pass
+    name = resolved.name or "dataset"
+    return re.sub(r"[^\w.-]+", "_", name)
+
+
+def default_dataset_cache_dir(
+    source_dir: str | None,
+    runtime: RuntimeConfig,
+    run_id: str,
+    subdir: str,
+) -> Path:
+    if source_dir and not is_empty(source_dir):
+        path = Path(str(source_dir))
+        if not path.is_absolute():
+            path = (runtime.lora_next_root / path).resolve()
+        else:
+            path = path.resolve()
+        return runtime.cache_dir / dataset_cache_slug(path, runtime.lora_next_root) / subdir
+    return runtime.cache_dir / run_id / subdir
+
+
 def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) -> AdaptedConfig:
     warnings: list[str] = []
     lora_type = str(source.get("lora_type", "lora")).lower()
@@ -106,8 +162,14 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
         "progress_jsonl": (runtime.logging_dir / f"{run_id}.progress.jsonl").resolve().as_posix(),
         "output_dir": resolve_path(output_dir, runtime.lora_next_root),
         "logging_dir": resolve_path(logging_dir, runtime.lora_next_root),
-        "lora_cache_dir": resolve_path(source.get("lora_cache_dir") or (runtime.cache_dir / run_id / "lora"), runtime.lora_next_root),
-        "resized_image_dir": resolve_path(source.get("resized_image_dir") or (runtime.cache_dir / run_id / "resized"), runtime.lora_next_root),
+        "lora_cache_dir": resolve_path(
+            source.get("lora_cache_dir") or default_dataset_cache_dir(str(source_dir) if source_dir else None, runtime, run_id, "lora"),
+            runtime.lora_next_root,
+        ),
+        "resized_image_dir": resolve_path(
+            source.get("resized_image_dir") or default_dataset_cache_dir(str(source_dir) if source_dir else None, runtime, run_id, "resized"),
+            runtime.lora_next_root,
+        ),
     }
     if source_dir:
         values["source_image_dir"] = resolve_path(source_dir, runtime.lora_next_root)
@@ -144,6 +206,15 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     if source.get("network_module") and source["network_module"] != "networks.lora_anima":
         warnings.append(f"network_module={source['network_module']} was replaced by networks.lora_anima")
         values["network_module"] = "networks.lora_anima"
+
+    optimizer_type = str(values.get("optimizer_type", source.get("optimizer_type", "AdamW8bit"))).strip()
+    if optimizer_type and optimizer_type not in FAST_SUPPORTED_OPTIMIZERS:
+        raise AdapterError(
+            f"optimizer_type={optimizer_type} is not supported by anima-lora-fast; "
+            f"choose one of: {', '.join(sorted(FAST_SUPPORTED_OPTIMIZERS))}"
+        )
+    if optimizer_type == "Automagic":
+        warnings.append("Automagic manages per-parameter learning rates; keep learning_rate near 1e-6")
 
     return AdaptedConfig(values=values, warnings=warnings)
 

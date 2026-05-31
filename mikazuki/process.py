@@ -134,6 +134,7 @@ def run_anima_fast_train(toml_path: str,
     log.info(f"Anima Fast training started with config file / Anima Fast 训练开始，使用配置文件: {toml_path}")
     task_id = str(uuid.uuid4())
     spec = build_launch_spec(runtime, Path(toml_path), task_id, gpu_ids)
+    log_file = Path(metadata.get("logging_dir") or runtime.logging_dir) / f"{Path(toml_path).stem}.launch.log" if metadata else runtime.logging_dir / f"{Path(toml_path).stem}.launch.log"
     task_metadata = {
         "backend": "anima-lora-fast",
         "config_path": str(Path(toml_path).resolve()),
@@ -141,6 +142,7 @@ def run_anima_fast_train(toml_path: str,
         "anima_python": str(runtime.python),
         "output_dir": str(runtime.output_dir),
         "logging_dir": str(runtime.logging_dir),
+        "log_file": str(log_file),
     }
     task_metadata.update(metadata or {})
 
@@ -181,5 +183,6 @@ def run_anima_fast_train(toml_path: str,
             "train_log_url": urls["viewer"],
             "train_log_stream_url": urls["stream"],
             "metadata": task_metadata,
+            "log_file": str(log_file),
         },
     )

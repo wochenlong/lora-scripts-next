@@ -130,6 +130,48 @@ class TrainMonitorStatusTests(unittest.TestCase):
         self.assertEqual(outputs["outputs"][0]["path"], str(model_file))
         self.assertEqual(fallback_outputs["outputs"][0]["path"], str(model_file))
 
+    def test_extract_train_params_uses_source_image_dir_for_anima_fast(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = Path(td) / "10_style"
+            data.mkdir()
+            (data / "a.png").write_bytes(b"x")
+            config = {
+                "source_image_dir": str(data),
+                "train_batch_size": "1",
+                "gradient_accumulation_steps": "1",
+                "max_train_epochs": "2",
+            }
+            params = server._extract_train_params(config)
+            labels = [item["label"] for item in params]
+            self.assertIn("总步数", labels)
+
+    def test_newest_preview_images_uses_active_task_output_dir(self):
+        with tempfile.TemporaryDirectory() as td:
+            repo = Path(td)
+            sample_dir = repo / "output" / "fast_anima_V1" / "sample"
+            sample_dir.mkdir(parents=True)
+            image = sample_dir / "fast_anima_V1_e000001_00_20260601020605_42.png"
+            image.write_bytes(b"png")
+            task = {
+                "metadata": {
+                    "output_dir": "output/fast_anima_V1",
+                    "output_name": "fast_anima_V1",
+                }
+            }
+            with mock.patch.object(server, "REPO", repo), \
+                    mock.patch.object(server, "OUTPUT_DIR", repo / "output"), \
+                    mock.patch.object(server, "latest_training_config", return_value={
+                        "output_dir": "output/other_run",
+                        "output_name": "other_run",
+                    }):
+                preview_dir, preview_name, _ = server._preview_context(task, server.latest_training_config())
+                previews = server.newest_preview_images(
+                    output_dir=preview_dir,
+                    output_name=preview_name,
+                )
+        self.assertEqual(len(previews), 1)
+        self.assertIn("fast_anima_V1", previews[0]["name"])
+
     def test_train_monitor_imports_when_started_from_monitor_dir(self):
         completed = subprocess.run(
             [sys.executable, "-c", "import server; print((server.REPO / 'train_monitor').is_dir())"],

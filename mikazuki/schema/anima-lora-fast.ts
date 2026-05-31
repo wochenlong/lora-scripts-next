@@ -21,9 +21,9 @@ Schema.intersect([
     }).description("Anima Fast 参数"),
 
     Schema.object({
-        train_data_dir: Schema.string().role('filepicker', { type: "folder" }).description("原始训练图片目录"),
-        source_image_dir: Schema.string().role('filepicker', { type: "folder" }).description("Anima 原生 source_image_dir；不填时使用训练图片目录"),
-        resized_image_dir: Schema.string().role('filepicker', { type: "folder" }).description("Anima 实际读取的 resized 图片目录；已有预处理数据时应填写该目录，不填时自动使用 .cache/anima_fast"),
+        train_data_dir: Schema.string().role('filepicker', { type: "folder" }).description("原始训练图片目录（含子文件夹与 .txt caption；与 Kohya 相同结构）"),
+        source_image_dir: Schema.string().role('filepicker', { type: "folder" }).description("Anima 原图目录；不填时使用「训练图片目录」"),
+        resized_image_dir: Schema.string().role('filepicker', { type: "folder" }).description("训练实际读取的 resized 目录。留空则自动使用 .cache/anima_fast/<数据集路径>/resized 并可复用"),
         lora_cache_dir: Schema.string().role('filepicker', { type: "folder" }).description("Anima LoRA cache 目录；不填时自动使用 .cache/anima_fast"),
         cache_latents: Schema.boolean().default(false).description("使用已预处理的 latent cache；全新训练默认关闭，开启前必须先完成 preprocess"),
         cache_latents_to_disk: Schema.boolean().default(false).description("将 latent cache 写入磁盘"),
@@ -38,11 +38,9 @@ Schema.intersect([
     SHARED_SCHEMAS.SAVE_SETTINGS,
 
     Schema.object({
-        output_dir: Schema.string().role('filepicker', { type: "folder" }).default("./output/anima_fast").description("模型输出目录"),
-        output_name: Schema.string().default("anima_fast").description("输出模型名称"),
         logging_dir: Schema.string().role('filepicker', { type: "folder" }).default("./logs/anima_fast").description("日志目录"),
         progress_jsonl: Schema.string().hidden(),
-    }).description("输出与监控"),
+    }).description("日志与监控"),
 
     Schema.object({
         max_train_epochs: Schema.number().min(1).default(1).description("最大训练 epoch；设置后 Anima 会按 epoch 和 dataloader 长度重算 step"),
@@ -53,7 +51,31 @@ Schema.intersect([
         seed: Schema.number().step(1).default(42).description("随机种子"),
     }).description("训练相关参数"),
 
-    SHARED_SCHEMAS.LR_OPTIMIZER,
+    SHARED_SCHEMAS.ANIMA_FAST_LR_OPTIMIZER,
+
+    Schema.intersect([
+        Schema.object({
+            enable_preview: Schema.boolean().default(false).description("启用训练预览图"),
+        }).description("训练预览图设置"),
+        Schema.union([
+            Schema.object({
+                enable_preview: Schema.const(true).required(),
+                randomly_choice_prompt: Schema.boolean().default(false).description("随机选择预览图 Prompt（训练集仅一个子文件夹且含 .txt 时可用）"),
+                prompt_file: Schema.string().role('textarea').description("预览 Prompt 文件路径；填写后优先于下方 positive/negative"),
+                positive_prompts: Schema.string().role('textarea').default("1girl, solo, smile, japanese clothes, kimono, blue eyes, closed mouth, upper body, looking at viewer, hair ornament, long hair, yellow kimono, black hair, anime coloring, yukata, choker, split mouth, side ponytail, bow, brown hair").description("预览 Prompt"),
+                negative_prompts: Schema.string().role('textarea').default("nsfw, explicit, sexual content, nude, naked, nipples, areola, genitals, cleavage, breasts, ass, buttocks, thighs, underwear, lingerie, bikini, swimsuit, erotic, suggestive, lewd, spread legs, close-up body, transparent clothes, worst quality, low quality, score_1, score_2, score_3, artist name, jpeg artifacts").description("Negative Prompt"),
+                sample_width: Schema.number().default(1024).description("预览图宽"),
+                sample_height: Schema.number().default(1024).description("预览图高"),
+                sample_cfg: Schema.number().min(1).max(30).default(4.5).description("CFG Scale（Anima 建议 4–5）"),
+                sample_seed: Schema.number().default(42).description("预览图种子"),
+                sample_steps: Schema.number().min(1).max(300).default(40).description("推理步数（Anima 建议 30–50）"),
+                sample_sampler: Schema.union(["euler", "k_euler"]).default("euler").description("Anima 训练预览采样器"),
+                sample_at_first: Schema.boolean().default(true).description("训练开始前生成 step 0 预览图"),
+                sample_every_n_epochs: Schema.number().default(2).description("每 N 个 epoch 生成一次预览图"),
+            }),
+            Schema.object({}),
+        ]),
+    ]),
 
     Schema.object({
         network_module: Schema.const("networks.lora_anima").default("networks.lora_anima").hidden(),

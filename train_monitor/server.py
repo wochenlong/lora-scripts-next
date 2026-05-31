@@ -30,10 +30,14 @@ REPO = Path(__file__).resolve().parent.parent
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from mikazuki.anima_fast_backend.progress import metrics_from_anima_events, read_jsonl_events
+from mikazuki.anima_fast_backend.progress import (
+    merge_anima_training_metrics,
+    metrics_from_anima_events,
+    read_jsonl_events,
+)
 
 
-HOST = "0.0.0.0"
+HOST = os.environ.get("TRAIN_MONITOR_HOST", "127.0.0.1")
 PORT = int(os.environ.get("TRAIN_MONITOR_PORT", 6008))
 _GUI_API_PORT = int(os.environ.get("MIKAZUKI_PORT", 28000))
 GUI_API = f"http://127.0.0.1:{_GUI_API_PORT}/api"
@@ -258,32 +262,46 @@ def build_model_outputs(train_out: Path | None) -> dict:
     }
 
 
-def newest_preview_images(limit: int = 6) -> list[dict]:
+def newest_preview_images(
+    limit: int = 6,
+    output_dir: Path | None = None,
+    output_name: str = "",
+    max_epochs: int = 0,
+) -> list[dict]:
     config = latest_training_config()
-    output_dir = resolve_repo_path(str(config.get("output_dir", "")))
-    output_name = str(config.get("output_name", "")).strip()
-    try:
-        max_epochs = int(float(str(config.get("max_train_epochs", "")).strip()))
-    except ValueError:
-        max_epochs = 0
-    roots = []
-    if output_dir is not None:
-        roots.extend([output_dir / "sample", output_dir])
-    else:
-        roots.extend([OUTPUT_DIR / "sample", OUTPUT_DIR, LOG_DIR])
+    if output_dir is None:
+        output_dir = resolve_repo_path(str(config.get("output_dir", "")))
+    if not output_name:
+        output_name = str(config.get("output_name", "")).strip()
+    if max_epochs <= 0:
+        try:
+            max_epochs = int(float(str(config.get("max_train_epochs", "")).strip()))
+        except ValueError:
+            max_epochs = 0
 
-    newest_by_name: dict[str, Path] = {}
-    for root in roots:
-        if not root.exists():
-            continue
-        for p in root.rglob("*"):
-            if not p.is_file() or p.suffix.lower() not in IMAGE_EXTENSIONS:
+    def _collect(name_filter: str) -> dict[str, Path]:
+        newest_by_name: dict[str, Path] = {}
+        roots: list[Path] = []
+        if output_dir is not None:
+            roots.extend([output_dir / "sample", output_dir])
+        else:
+            roots.extend([OUTPUT_DIR / "sample", OUTPUT_DIR, LOG_DIR])
+        for root in roots:
+            if not root.exists():
                 continue
-            if output_name and not p.name.startswith(output_name):
-                continue
-            old = newest_by_name.get(p.name)
-            if old is None or p.stat().st_mtime >= old.stat().st_mtime:
-                newest_by_name[p.name] = p
+            for p in root.rglob("*"):
+                if not p.is_file() or p.suffix.lower() not in IMAGE_EXTENSIONS:
+                    continue
+                if name_filter and not p.name.startswith(name_filter):
+                    continue
+                old = newest_by_name.get(p.name)
+                if old is None or p.stat().st_mtime >= old.stat().st_mtime:
+                    newest_by_name[p.name] = p
+        return newest_by_name
+
+    newest_by_name = _collect(output_name)
+    if not newest_by_name and output_name:
+        newest_by_name = _collect("")
 
     all_files = list(newest_by_name.values())
     all_files.sort(key=lambda p: p.stat().st_mtime)
@@ -402,7 +420,7 @@ def tensorboard_loss_scalars(limit: int = TENSORBOARD_LOSS_LIMIT) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 _TOML_STR_KEYS = ("output_dir", "output_name", "optimizer_type", "lr_scheduler",
-                   "network_module", "network_args", "train_data_dir", "reg_data_dir",
+                   "network_module", "network_args", "train_data_dir", "source_image_dir", "reg_data_dir",
                    "resolution", "mixed_precision")
 _TOML_NUM_KEYS = ("max_train_epochs", "max_train_steps", "learning_rate", "unet_lr",
                    "text_encoder_lr", "network_dim", "network_alpha", "train_batch_size",
@@ -502,7 +520,7 @@ def _extract_train_params(config: dict) -> list[dict]:
                 pass
         params.append({"label": label, "value": str(val)})
 
-    train_data_dir = config.get("train_data_dir", "")
+    train_data_dir = config.get("train_data_dir") or config.get("source_image_dir") or ""
     if train_data_dir:
         resolved = resolve_repo_path(train_data_dir)
         reg_dir = config.get("reg_data_dir", "")
@@ -747,11 +765,14 @@ def parse_log(lines: list[str]) -> dict:
         step = int(m.group("step"))
         total = int(m.group("total"))
         elapsed = m.group("elapsed") or ""
+        eta = (m.group("eta") or "").strip()
+        if eta in ("?", "-"):
+            eta = ""
         info.update({
             "percent": min(100.0, round(step * 100 / total, 2)) if total else int(m.group("pct")),
             "step": step,
             "total_steps": total,
-            "eta": m.group("eta") or "",
+            "eta": eta,
         })
         if elapsed:
             duration = format_duration(elapsed)
@@ -793,13 +814,17 @@ def parse_log(lines: list[str]) -> dict:
         current, total = epoch_matches[-1]
         info["epoch"] = current + (f"/{total}" if total else "")
 
-    loss_matches = re.findall(r"(?:loss|train_loss)\s*[=:]\s*([0-9.eE+-]+)", source)
+    loss_matches = re.findall(
+        r"(?:loss|train_loss|avr_loss|loss/average|loss/current)\s*[=:]\s*([0-9.eE+-]+)",
+        source,
+    )
     if loss_matches:
         info["loss"] = loss_matches[-1]
 
     loss_points: list[dict[str, float | int]] = []
     for m in re.finditer(
-        r"(?:^|[\r\n])steps:.*?\|\s*(?P<step>\d+)\s*/\s*(?P<total>\d+).*?(?:avr_loss|train_loss|loss)\s*[=:]\s*(?P<loss>[0-9.eE+-]+)",
+        r"(?:^|[\r\n])steps:.*?\|\s*(?P<step>\d+)\s*/\s*(?P<total>\d+)"
+        r".*?(?:avr_loss|train_loss|loss/average|loss/current|loss)\s*[=:]\s*(?P<loss>[0-9.eE+-]+)",
         source,
     ):
         try:
@@ -908,17 +933,26 @@ def _task_output_dir(task: dict) -> Path | None:
     return None
 
 
+def _preview_context(active: dict | None, train_config: dict) -> tuple[Path | None, str, int]:
+    output_dir = _task_output_dir(active) if active else None
+    if output_dir is None:
+        output_dir = resolve_repo_path(str(train_config.get("output_dir", "")))
+
+    output_name = str(train_config.get("output_name", "")).strip()
+    config_output_dir = resolve_repo_path(str(train_config.get("output_dir", "")))
+    if active and output_dir is not None and config_output_dir is not None and output_dir != config_output_dir:
+        output_name = str((active.get("metadata") or {}).get("output_name", "")).strip()
+
+    try:
+        max_epochs = int(float(str(train_config.get("max_train_epochs", "")).strip()))
+    except ValueError:
+        max_epochs = 0
+    return output_dir, output_name, max_epochs
+
+
 def collect_status() -> dict:
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    try:
-        previews = newest_preview_images()
-    except Exception:
-        previews = []
-
     train_config = latest_training_config()
-    train_out = _training_output_dir()
-    model_outputs = build_model_outputs(train_out)
-
     status = {
         "time": now,
         "gui_online": False,
@@ -929,9 +963,12 @@ def collect_status() -> dict:
         "model_type": None,
         "log_lines": [],
         "metrics": {},
-        "previews": previews,
+        "previews": [],
         "log_files": newest_files(LOG_DIR),
-        **model_outputs,
+        "outputs": [],
+        "outputs_primary": [],
+        "outputs_other": [],
+        "output_scope": "",
         "train_params": _extract_train_params(train_config),
         "tensorboard_loss": tensorboard_loss_scalars(),
         "gpu_info": gpu_info(),
@@ -948,20 +985,41 @@ def collect_status() -> dict:
             f"主 GUI API 暂不可用（尝试 {', '.join(gui_api_candidates())}）：{exc}。"
             "训练参数、GPU 状态和 TensorBoard Loss 仍会继续同步。"
         )
+        preview_dir, preview_name, max_epochs = _preview_context(None, train_config)
+        try:
+            status["previews"] = newest_preview_images(
+                output_dir=preview_dir,
+                output_name=preview_name,
+                max_epochs=max_epochs,
+            )
+        except Exception:
+            status["previews"] = []
+        train_out = preview_dir or _training_output_dir()
+        status.update(build_model_outputs(train_out))
         return status
+
+    active = None
+    if status["tasks"]:
+        active = next((t for t in reversed(status["tasks"]) if t.get("status") == "RUNNING"), status["tasks"][-1])
+    preview_dir, preview_name, max_epochs = _preview_context(active, train_config)
+    try:
+        status["previews"] = newest_preview_images(
+            output_dir=preview_dir,
+            output_name=preview_name,
+            max_epochs=max_epochs,
+        )
+    except Exception:
+        status["previews"] = []
+
+    train_out = preview_dir or _training_output_dir()
+    status.update(build_model_outputs(train_out))
 
     if not status["tasks"]:
         status["state"] = "空闲"
         status["model_type"] = None
         return status
 
-    active = next((t for t in reversed(status["tasks"]) if t.get("status") == "RUNNING"), status["tasks"][-1])
     status["active_task"] = active
-    task_train_out = _task_output_dir(active)
-    if task_train_out is not None:
-        train_out = task_train_out
-        model_outputs = build_model_outputs(train_out)
-        status.update(model_outputs)
     state_map = {
         "RUNNING": "训练中",
         "FINISHED": "已结束",
@@ -980,11 +1038,13 @@ def collect_status() -> dict:
             status["log_lines"] = lines
             status["model_type"] = infer_model_type(lines)
             try:
-                status["metrics"] = parse_log(lines)
+                stdout_metrics = parse_log(lines)
                 anima_metrics = anima_fast_progress_metrics(active)
                 if anima_metrics:
-                    status["metrics"].update(anima_metrics)
+                    status["metrics"] = merge_anima_training_metrics(stdout_metrics, anima_metrics)
                     status["model_type"] = "Anima Fast LoRA"
+                else:
+                    status["metrics"] = stdout_metrics
                 metrics = status["metrics"]
                 task_status = active.get("status", "")
                 update_progress_health(task_id, task_status, metrics)

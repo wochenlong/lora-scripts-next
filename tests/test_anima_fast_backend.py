@@ -6,7 +6,12 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mikazuki.anima_fast_backend.adapter import AdapterError, adapt_config, dump_flat_toml
+from mikazuki.anima_fast_backend.adapter import (
+    AdapterError,
+    adapt_config,
+    dataset_cache_slug,
+    dump_flat_toml,
+)
 from mikazuki.anima_fast_backend.extension_state import (
     STATE_INSTALLED_UNVERIFIED,
     STATE_NOT_INSTALLED,
@@ -168,6 +173,31 @@ class AdapterTests(unittest.TestCase):
         self.assertNotIn("model_train_type", adapted.values)
         self.assertIn('method = "lora"', dump_flat_toml(adapted.values))
 
+    def test_adapt_config_uses_stable_dataset_cache_paths(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            adapted = adapt_config(
+                {
+                    "lora_type": "lora",
+                    "train_data_dir": "data/xinhaicheng",
+                },
+                runtime,
+                "20260101-run",
+            )
+
+        resized = Path(adapted.values["resized_image_dir"])
+        lora_cache = Path(adapted.values["lora_cache_dir"])
+        self.assertEqual(resized, (root / ".cache" / "anima_fast" / "data_xinhaicheng" / "resized").resolve())
+        self.assertEqual(lora_cache, (root / ".cache" / "anima_fast" / "data_xinhaicheng" / "lora").resolve())
+        self.assertNotIn("20260101-run", resized.as_posix())
+
+    def test_dataset_cache_slug_from_relative_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            slug = dataset_cache_slug(root / "data" / "xinhaicheng", root)
+        self.assertEqual(slug, "data_xinhaicheng")
+
     def test_adapt_config_warns_when_epochs_override_steps(self):
         with tempfile.TemporaryDirectory() as td:
             runtime = make_runtime(Path(td))
@@ -206,7 +236,7 @@ class PreflightLauncherTests(unittest.TestCase):
                 "resolution": "64,64",
                 "static_token_count": 4096,
                 "attn_mode": "flash",
-            }, runtime, lambda _runtime: ProbeFacts("3.13.11", cuda_available=True, flash_attn_importable=True))
+            }, runtime, lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True, flash_attn_importable=True))
 
         self.assertTrue(result.ok, result.errors)
 
@@ -231,7 +261,7 @@ class PreflightLauncherTests(unittest.TestCase):
                 "enable_bucket": True,
                 "torch_compile": False,
                 "attn_mode": "flash",
-            }, runtime, lambda _runtime: ProbeFacts("3.13.11", cuda_available=True, flash_attn_importable=True))
+            }, runtime, lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True, flash_attn_importable=True))
 
         self.assertTrue(result.ok, result.errors)
         self.assertTrue(any("static_token_count=4096" in warning for warning in result.warnings))
@@ -260,7 +290,7 @@ class PreflightLauncherTests(unittest.TestCase):
                 "attn_mode": "flash",
                 "cache_latents": True,
                 "cache_text_encoder_outputs": True,
-            }, runtime, lambda _runtime: ProbeFacts("3.13.11", cuda_available=True, flash_attn_importable=True))
+            }, runtime, lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True, flash_attn_importable=True))
 
         self.assertFalse(result.ok)
         self.assertTrue(any("cache_latents=true requires completed" in error for error in result.errors))
@@ -290,9 +320,97 @@ class PreflightLauncherTests(unittest.TestCase):
                 "attn_mode": "flash",
                 "cache_latents": False,
                 "cache_text_encoder_outputs": False,
-            }, runtime, lambda _runtime: ProbeFacts("3.13.11", cuda_available=True, flash_attn_importable=True))
+            }, runtime, lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True, flash_attn_importable=True))
 
         self.assertTrue(result.ok, result.errors)
+
+    def test_preflight_rejects_missing_torch_metadata(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            (root / "data").mkdir()
+            (root / "data" / "1.png").write_bytes(b"png")
+            (root / "data" / "1.txt").write_text("test", encoding="utf-8")
+            for name in ("dit.safetensors", "vae.safetensors", "qwen.safetensors"):
+                (root / name).write_bytes(b"x")
+
+            result = run_preflight({
+                "pretrained_model_name_or_path": str(root / "dit.safetensors"),
+                "vae": str(root / "vae.safetensors"),
+                "qwen3": str(root / "qwen.safetensors"),
+                "train_data_dir": str(root / "data"),
+                "torch_compile": False,
+                "static_token_count": 4096,
+                "attn_mode": "torch",
+            }, runtime, lambda _runtime: ProbeFacts("3.13.11", torch_version="2.11.0+cu130", cuda_available=True))
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("torch package metadata is missing" in err for err in result.errors))
+
+    def test_adapt_config_rejects_unsupported_optimizer(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            with self.assertRaises(AdapterError):
+                adapt_config(
+                    {
+                        "model_train_type": "anima-lora-fast",
+                        "train_data_dir": str(root / "data"),
+                        "optimizer_type": "prodigyplus.ProdigyPlusScheduleFree",
+                    },
+                    runtime,
+                    "run-1",
+                )
+
+    def test_adapt_config_accepts_automagic(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            adapted = adapt_config(
+                {
+                    "model_train_type": "anima-lora-fast",
+                    "train_data_dir": str(root / "data"),
+                    "optimizer_type": "Automagic",
+                    "learning_rate": "1e-6",
+                },
+                runtime,
+                "run-1",
+            )
+        self.assertEqual(adapted.values["optimizer_type"], "Automagic")
+        self.assertTrue(any("Automagic" in w for w in adapted.warnings))
+
+    def test_preflight_rejects_automagic_without_quanto(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            (root / "data").mkdir()
+            (root / "data" / "1.png").write_bytes(b"png")
+            (root / "data" / "1.txt").write_text("test", encoding="utf-8")
+            for name in ("dit.safetensors", "vae.safetensors", "qwen.safetensors"):
+                (root / name).write_bytes(b"x")
+
+            result = run_preflight(
+                {
+                    "pretrained_model_name_or_path": str(root / "dit.safetensors"),
+                    "vae": str(root / "vae.safetensors"),
+                    "qwen3": str(root / "qwen.safetensors"),
+                    "train_data_dir": str(root / "data"),
+                    "torch_compile": False,
+                    "static_token_count": 4096,
+                    "attn_mode": "torch",
+                    "optimizer_type": "Automagic",
+                },
+                runtime,
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                    quanto_importable=False,
+                ),
+            )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("Automagic requires optimum-quanto" in err for err in result.errors))
 
     def test_launcher_uses_external_python_and_isolated_env(self):
         with tempfile.TemporaryDirectory() as td:

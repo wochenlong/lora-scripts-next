@@ -45,6 +45,8 @@ from mikazuki.anima_fast_backend.extension_state import (
 from mikazuki.anima_fast_backend.environment import audit_environment, start_install_task
 from mikazuki.anima_fast_backend.installer import build_install_plan, copy_source_snapshot, remove_extension
 from mikazuki.anima_fast_backend.preflight import run_preflight
+from mikazuki.anima_fast_backend.preview import apply_anima_fast_preview
+from mikazuki.anima_fast_backend.preprocess import prepare_anima_fast_dataset, user_left_resized_empty
 from mikazuki.anima_fast_backend.settings import discover_runtime, feature_enabled
 from mikazuki.app.config import app_config
 from mikazuki.app.models import (APIResponse, APIResponseFail,
@@ -212,8 +214,6 @@ async def load_schemas():
 
     for schema_name in schemas:
         schema_id = os.path.splitext(schema_name)[0]
-        if schema_id == ANIMA_FAST_TRAIN_TYPE and not feature_enabled():
-            continue
         with open(os.path.join(schema_dir, schema_name), encoding="utf-8") as f:
             content = f.read()
             avaliable_schemas.append({
@@ -400,15 +400,22 @@ def _anima_fast_runtime():
 
 def _anima_fast_disabled_response():
     return APIResponseFail(
-        message="Anima Fast is disabled. Set LORA_ENABLE_ANIMA_FAST=1 to enable this experimental trainer."
+        message="Anima Fast plugin is temporarily disabled by maintainer (LORA_ENABLE_ANIMA_FAST=0)."
     )
 
 
 def _write_anima_fast_toml(config: dict, timestamp: str, autosave_dir: str) -> tuple[Path, dict, list[str]]:
     runtime = _anima_fast_runtime()
     run_id = f"{timestamp}-anima-fast"
+    preview_warnings = apply_anima_fast_preview(config, autosave_dir, run_id)
     adapted = adapt_config(config, runtime, run_id)
-    return _write_adapted_anima_fast_toml(adapted.values, adapted.warnings, run_id, autosave_dir)
+    warnings = list(adapted.warnings) + preview_warnings
+    if user_left_resized_empty(config):
+        warnings.append(
+            "resized_image_dir 未填写；开始训练时将自动 resize 到 "
+            ".cache/anima_fast/<train_data_dir 相对路径>/resized（同一数据集可复用）"
+        )
+    return _write_adapted_anima_fast_toml(adapted.values, warnings, run_id, autosave_dir)
 
 
 def _write_adapted_anima_fast_toml(values: dict, warnings: list[str], run_id: str, autosave_dir: str) -> tuple[Path, dict, list[str]]:
@@ -472,16 +479,22 @@ async def create_toml_file(request: Request):
         try:
             runtime = _anima_fast_runtime()
             run_id = f"{timestamp}-anima-fast"
-            adapted = adapt_config(config, runtime, run_id)
+            preview_warnings = apply_anima_fast_preview(config, autosave_dir, run_id)
+            prepared = prepare_anima_fast_dataset(config, runtime, run_id)
+            adapted = prepared.adapted
             preflight = run_preflight(adapted.values, runtime)
             if not preflight.ok:
                 return _anima_fast_fail_from_preflight(preflight)
-            toml_file, adapted_values, warnings = _write_adapted_anima_fast_toml(adapted.values, adapted.warnings, run_id, autosave_dir)
+            toml_file, adapted_values, warnings = _write_adapted_anima_fast_toml(
+                adapted.values, [*adapted.warnings, *preview_warnings, *preflight.warnings], run_id, autosave_dir
+            )
             metadata = {
                 "progress_jsonl": adapted_values.get("progress_jsonl"),
                 "output_dir": adapted_values.get("output_dir"),
+                "output_name": adapted_values.get("output_name"),
                 "logging_dir": adapted_values.get("logging_dir"),
                 "warnings": warnings,
+                "auto_resized": prepared.auto_resized,
             }
             return process.run_anima_fast_train(str(toml_file), runtime, gpu_ids, metadata=metadata)
         except AdapterError as exc:
@@ -560,15 +573,18 @@ async def anima_lora_plugin_status():
 
 @router.post("/plugins/anima-lora/preflight")
 async def anima_lora_plugin_preflight(request: Request):
-    if not feature_enabled():
-        return _anima_fast_disabled_response()
     config: dict = json.loads((await request.body()).decode("utf-8") or "{}")
     runtime = _anima_fast_runtime()
+    autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
+    os.makedirs(autosave_dir, exist_ok=True)
+    run_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-anima-fast"
     try:
-        adapted = adapt_config(config, runtime, f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-anima-fast")
+        preview_warnings = apply_anima_fast_preview(config, autosave_dir, run_id)
+        adapted = adapt_config(config, runtime, run_id)
     except AdapterError as exc:
         return APIResponseFail(message=str(exc))
     result = run_preflight(adapted.values, runtime)
+    result.warnings = [*preview_warnings, *result.warnings]
     if result.ok:
         return APIResponseSuccess(data=result.as_dict())
     return _anima_fast_fail_from_preflight(result)
@@ -576,8 +592,6 @@ async def anima_lora_plugin_preflight(request: Request):
 
 @router.post("/plugins/anima-lora/dry-run")
 async def anima_lora_plugin_dry_run(request: Request):
-    if not feature_enabled():
-        return _anima_fast_disabled_response()
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
     os.makedirs(autosave_dir, exist_ok=True)

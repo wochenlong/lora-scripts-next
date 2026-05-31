@@ -17,12 +17,14 @@ IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".avif"
 class ProbeFacts:
     python_version: str = ""
     torch_version: str = ""
+    torch_metadata_version: str = ""
     cuda_available: bool = False
     cuda_version: str = ""
     gpu_name: str = ""
     vram_total_mb: int = 0
     flash_attn_importable: bool = False
     triton_importable: bool = False
+    quanto_importable: bool = False
     transformers_version: str = ""
     diffusers_version: str = ""
 
@@ -48,8 +50,12 @@ DependencyProbe = Callable[[RuntimeConfig], ProbeFacts]
 
 def default_dependency_probe(runtime: RuntimeConfig) -> ProbeFacts:
     script = r"""
-import importlib.util, json, platform
+import importlib.metadata, importlib.util, json, platform
 facts = {"python_version": platform.python_version()}
+try:
+    facts["torch_metadata_version"] = importlib.metadata.version("torch")
+except Exception:
+    facts["torch_metadata_version"] = ""
 try:
     import torch
     facts["torch_version"] = getattr(torch, "__version__", "")
@@ -62,6 +68,7 @@ except Exception as exc:
     facts["torch_error"] = str(exc)
 for name in ("flash_attn", "triton"):
     facts[name + "_importable"] = importlib.util.find_spec(name) is not None
+facts["quanto_importable"] = importlib.util.find_spec("optimum.quanto") is not None
 for name in ("transformers", "diffusers"):
     try:
         mod = __import__(name)
@@ -92,12 +99,14 @@ print(json.dumps(facts))
     return ProbeFacts(
         python_version=str(raw.get("python_version", "")),
         torch_version=str(raw.get("torch_version", "")),
+        torch_metadata_version=str(raw.get("torch_metadata_version", "")),
         cuda_available=bool(raw.get("cuda_available", False)),
         cuda_version=str(raw.get("cuda_version", "")),
         gpu_name=str(raw.get("gpu_name", "")),
         vram_total_mb=int(raw.get("vram_total_mb", 0) or 0),
         flash_attn_importable=bool(raw.get("flash_attn_importable", False)),
         triton_importable=bool(raw.get("triton_importable", False)),
+        quanto_importable=bool(raw.get("quanto_importable", False)),
         transformers_version=str(raw.get("transformers_version", "")),
         diffusers_version=str(raw.get("diffusers_version", "")),
     )
@@ -264,9 +273,27 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
             errors.append(f"anima_lora requires Python 3.13.*, got {dep.python_version or 'unknown'}")
         if not dep.cuda_available:
             errors.append("torch.cuda is not available in anima_lora runtime")
+        if not dep.torch_metadata_version:
+            errors.append(
+                "torch package metadata is missing (dist-info corrupt); "
+                "repair the Anima Fast plugin before training"
+            )
+        optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
+        if optimizer_type == "automagic" and not dep.quanto_importable:
+            errors.append(
+                "optimizer_type=Automagic requires optimum-quanto in the Fast plugin venv; repair the plugin"
+            )
         if str(config.get("attn_mode", "flash")) == "flash" and not dep.flash_attn_importable:
             errors.append("attn_mode=flash requested but flash_attn is not importable")
         if torch_compile and dep.vram_total_mb and dep.vram_total_mb < 14000:
             warnings.append(f"VRAM {dep.vram_total_mb} MB may be low for torch_compile + static_token_count=4096")
+        if config.get("sample_prompts"):
+            warnings.append(
+                "sample_prompts is enabled; sampling loads VAE/Qwen3 during training and increases VRAM/time"
+            )
+            if dep.vram_total_mb and dep.vram_total_mb < 18000:
+                warnings.append(
+                    f"VRAM {dep.vram_total_mb} MB may be tight for torch_compile training with preview sampling"
+                )
 
     return PreflightResult(ok=not errors, errors=errors, warnings=warnings, facts=facts)

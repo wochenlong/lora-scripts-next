@@ -14,5 +14,6 @@ logging_dir = "logs/anima_fast"
 cache_dir = ".cache/anima_fast"
 
 [features]
+# LORA_ENABLE_ANIMA_FAST=0 disables install/train (maintainer kill switch). Default: visible UI.
 enabled_env = "LORA_ENABLE_ANIMA_FAST"
 dev_mode_env = "LORA_ANIMA_FAST_DEV_MODE"

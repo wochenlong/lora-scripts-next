@@ -8,8 +8,12 @@ from pathlib import Path
 class AnimaFastStaticIntegrationTests(unittest.TestCase):
     def test_schema_file_exists_and_uses_fast_train_type(self):
         schema = Path("mikazuki/schema/anima-lora-fast.ts").read_text(encoding="utf-8")
+        shared = Path("mikazuki/schema/shared.ts").read_text(encoding="utf-8")
 
         self.assertIn('default("anima-lora-fast")', schema)
+        self.assertIn("ANIMA_FAST_LR_OPTIMIZER", schema)
+        self.assertIn('"Automagic"', shared)
+        self.assertNotIn("prodigyplus.ProdigyPlusScheduleFree", shared[shared.index("ANIMA_FAST_LR_OPTIMIZER"):])
         self.assertIn('Schema.const("lora")', schema)
 
     def test_fast_train_type_is_not_legacy_trainer_mapping(self):
@@ -46,11 +50,13 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertTrue(data.is_file())
         self.assertTrue(component.is_file())
         self.assertIn("/lora/anima-fast.html", app)
-        self.assertIn('{"text":"Anima Fast","link":"/lora/anima-fast.md"}', app)
+        self.assertIn('"text":"Fast 模式","link":"/lora/anima-fast.md"', app)
         self.assertIn("anima-lora-fast", data.read_text(encoding="utf-8"))
         self.assertIn("data-anima-fast-install", component.read_text(encoding="utf-8"))
-        self.assertIn("feature_enabled", app)
-        self.assertIn("setFastLinksVisible", app)
+        self.assertIn("anima-fast-dataset-guide", page.read_text(encoding="utf-8"))
+        self.assertIn("data-anima-fast-guide-toggle", page.read_text(encoding="utf-8"))
+        self.assertIn("进阶插件 · 待开启", app)
+        self.assertNotIn("setFastLinksVisible", app)
 
 
 if __name__ == "__main__":

@@ -3,6 +3,8 @@ import sys
 import os
 import threading
 import uuid
+from datetime import datetime
+from pathlib import Path
 from enum import Enum
 from typing import Dict, List
 from subprocess import Popen, PIPE, TimeoutExpired, CalledProcessError, CompletedProcess
@@ -48,6 +50,20 @@ class Task:
         self.metadata = metadata or {}
         self.cwd = cwd
         self.returncode = None
+        self.log_file = self.metadata.get("log_file")
+
+    def _append_disk_log(self, text: str):
+        if not self.log_file:
+            return
+        try:
+            path = Path(self.log_file)
+            path.parent.mkdir(parents=True, exist_ok=True)
+            with path.open("a", encoding="utf-8", errors="replace") as f:
+                f.write(text)
+                if text and not text.endswith("\n"):
+                    f.write("\n")
+        except Exception:
+            pass
 
     def start_log_only(self):
         self.status = TaskStatus.RUNNING
@@ -60,7 +76,9 @@ class Task:
         self.metadata["returncode"] = returncode
         if error:
             self.metadata["error"] = str(error)
+            self._append_disk_log(f"[error] {error}")
         self.status = TaskStatus.FINISHED if returncode == 0 else TaskStatus.FAILED
+        self._append_disk_log(f"[task finished] returncode={returncode}")
         hub.mark_done(self.task_id)
 
     def communicate(self, input=None, timeout=None):
@@ -80,6 +98,7 @@ class Task:
         self.returncode = retcode
         self.metadata["returncode"] = retcode
         self.status = TaskStatus.FINISHED if retcode == 0 else TaskStatus.FAILED
+        self._append_disk_log(f"[task communicate finished] returncode={retcode}")
         return CompletedProcess(self.process.args, retcode, stdout, stderr)
 
     def wait(self):
@@ -88,6 +107,7 @@ class Task:
         self.metadata["returncode"] = retcode
         if self.status != TaskStatus.TERMINATED:
             self.status = TaskStatus.FINISHED if retcode == 0 else TaskStatus.FAILED
+        self._append_disk_log(f"[task wait finished] returncode={retcode}")
 
     def _stdout_pump(self):
         """Drain child stdout into TrainLogHub AND echo to parent console."""
@@ -96,6 +116,7 @@ class Task:
                 return
             for line in iter(self.process.stdout.readline, ""):
                 hub.append_line(self.task_id, line)
+                self._append_disk_log(line)
                 try:
                     sys.stdout.write(line)
                     sys.stdout.flush()
@@ -103,6 +124,7 @@ class Task:
                     pass
         except Exception as e:
             hub.append_line(self.task_id, f"[stdout pump] {e}")
+            self._append_disk_log(f"[stdout pump] {e}")
         finally:
             try:
                 if self.process and self.process.stdout:
@@ -116,6 +138,13 @@ class Task:
         self.returncode = None
         self.metadata.pop("returncode", None)
         hub.start_task(self.task_id)
+        self._append_disk_log(
+            "\n"
+            f"[task start] {datetime.now().isoformat(timespec='seconds')}\n"
+            f"task_id={self.task_id}\n"
+            f"cwd={self.cwd or os.getcwd()}\n"
+            f"command={' '.join(map(str, self.command))}\n"
+        )
         try:
             self.process = subprocess.Popen(
                 self.command,
@@ -130,6 +159,7 @@ class Task:
             )
         except Exception as e:
             hub.append_line(self.task_id, f"[error] Failed to start training process: {e}")
+            self._append_disk_log(f"[error] Failed to start training process: {e}")
             hub.mark_done(self.task_id)
             self.status = TaskStatus.FAILED
             self.returncode = -1
@@ -146,6 +176,7 @@ class Task:
             return
         finally:
             self.status = TaskStatus.TERMINATED
+            self._append_disk_log("[task terminated]")
 
 
 class TaskManager:

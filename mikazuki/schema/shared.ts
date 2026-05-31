@@ -175,6 +175,78 @@
             })
         ]),
 
+        ANIMA_FAST_LR_OPTIMIZER: Schema.intersect([
+            Schema.object({
+                learning_rate: Schema.string().default("1e-4").description("总学习率, 在分开设置 U-Net 与文本编码器学习率后这个值失效。"),
+                unet_lr: Schema.string().default("1e-4").description("U-Net 学习率"),
+                text_encoder_lr: Schema.string().default("1e-5").description("文本编码器学习率"),
+                lr_scheduler: Schema.union([
+                    "linear",
+                    "cosine",
+                    "cosine_with_restarts",
+                    "polynomial",
+                    "constant",
+                    "constant_with_warmup",
+                ]).default("cosine_with_restarts").description("学习率调度器设置"),
+                lr_warmup_steps: Schema.number().default(0).description('学习率预热步数'),
+                loss_type: Schema.union(["l1", "l2", "huber", "smooth_l1"]).description("损失函数类型"),
+            }).description("学习率与优化器设置"),
+
+            Schema.union([
+                Schema.object({
+                    lr_scheduler: Schema.const('cosine_with_restarts'),
+                    lr_scheduler_num_cycles: Schema.number().default(1).description('重启次数'),
+                }),
+                Schema.object({}),
+            ]),
+
+            Schema.object({
+                optimizer_type: Schema.union([
+                    "AdamW",
+                    "AdamW8bit",
+                    "Automagic",
+                    "PagedAdamW8bit",
+                    "RAdamScheduleFree",
+                    "Lion",
+                    "Lion8bit",
+                    "PagedLion8bit",
+                    "SGDNesterov",
+                    "SGDNesterov8bit",
+                    "DAdaptation",
+                    "DAdaptAdam",
+                    "DAdaptAdaGrad",
+                    "DAdaptAdanIP",
+                    "DAdaptLion",
+                    "DAdaptSGD",
+                    "AdaFactor",
+                    "Prodigy",
+                    "pytorch_optimizer.CAME",
+                ]).default("AdamW8bit").description("优化器（仅 anima_lora Fast 已支持的选项）"),
+                min_snr_gamma: Schema.number().step(0.1).description("最小信噪比伽马值, 如果启用推荐为 5"),
+            }),
+
+            Schema.union([
+                Schema.object({
+                    optimizer_type: Schema.const('Prodigy').required(),
+                    prodigy_d0: Schema.string(),
+                    prodigy_d_coef: Schema.string().default("2.0"),
+                }),
+                Schema.object({}),
+            ]),
+
+            Schema.union([
+                Schema.object({
+                    optimizer_type: Schema.const('Automagic').required(),
+                    learning_rate: Schema.string().default("1e-6").description("Automagic 起始学习率，建议 1e-6 量级"),
+                }),
+                Schema.object({}),
+            ]),
+
+            Schema.object({
+                optimizer_args_custom: Schema.array(String).role('table').description('自定义 optimizer_args，一行一个。同名参数会覆盖默认值（预览中可能显示重复，实际训练以此处为准）'),
+            })
+        ]),
+
         PREVIEW_IMAGE: Schema.intersect([
             Schema.object({
                 enable_preview: Schema.boolean().default(false).description('启用训练预览图'),

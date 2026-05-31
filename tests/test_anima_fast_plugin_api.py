@@ -104,12 +104,21 @@ class AnimaFastPluginApiTests(unittest.TestCase):
                     "warnings": [],
                 },
             )()
-            preflight = type("Preflight", (), {"ok": True, "as_dict": lambda self: {"ok": True}})()
+            prepared = type(
+                "Prepared",
+                (),
+                {
+                    "adapted": adapted,
+                    "warnings": [],
+                    "auto_resized": False,
+                },
+            )()
+            preflight = type("Preflight", (), {"ok": True, "warnings": [], "as_dict": lambda self: {"ok": True}})()
             audit = type("Audit", (), {"ok": True, "errors": [], "as_dict": lambda self: {"ok": True}})()
 
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
                 mock.patch("mikazuki.app.api.audit_environment", return_value=audit), \
-                mock.patch("mikazuki.app.api.adapt_config", return_value=adapted), \
+                mock.patch("mikazuki.app.api.prepare_anima_fast_dataset", return_value=prepared), \
                 mock.patch("mikazuki.app.api.run_preflight", return_value=preflight), \
                 mock.patch("mikazuki.app.api.process.run_anima_fast_train", return_value=api.APIResponseSuccess(data={"task_id": "train-1"})) as runner:
                 response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))

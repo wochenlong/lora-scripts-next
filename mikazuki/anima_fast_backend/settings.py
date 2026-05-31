@@ -53,11 +53,19 @@ def load_backend_config(root: Path | None = None) -> dict:
     return tomllib.loads(path.read_text(encoding="utf-8"))
 
 
-def feature_enabled(env: dict[str, str] | None = None, config: dict | None = None) -> bool:
+def feature_kill_switch(env: dict[str, str] | None = None, config: dict | None = None) -> bool:
+    """Maintainer-only emergency off switch. Default: Fast UI stays visible."""
     env = env or os.environ
     config = config or load_backend_config()
     key = config.get("features", {}).get("enabled_env", "LORA_ENABLE_ANIMA_FAST")
-    return _truthy(env.get(key, "0"))
+    raw = str(env.get(key, "")).strip().lower()
+    if not raw:
+        return False
+    return raw in {"0", "false", "no", "off"}
+
+
+def feature_enabled(env: dict[str, str] | None = None, config: dict | None = None) -> bool:
+    return not feature_kill_switch(env=env, config=config)
 
 
 def dev_mode_enabled(env: dict[str, str] | None = None, config: dict | None = None) -> bool:
