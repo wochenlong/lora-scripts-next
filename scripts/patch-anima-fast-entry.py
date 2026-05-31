@@ -44,6 +44,16 @@ FAST_CREDIT_HTML = (
     "</p>"
 )
 
+FAST_DOC_URL = "https://github.com/wochenlong/lora-scripts-next/blob/main/docs/anima-fast.md"
+
+FAST_DOC_LINKS_HTML = (
+    '<p class="anima-fast-doc-links">'
+    f'<a href="{FAST_DOC_URL}" target="_blank" rel="noopener noreferrer">'
+    "Fast 模式训练教程</a>（安装、数据路径、故障排除）"
+    ' · <a href="/lora/sd3.html">标准 Kohya 模式</a>'
+    "</p>"
+)
+
 FAST_DATASET_GUIDE_BODY = """
   <p>Fast 训练<strong>实际读取 resized 目录</strong>里的 bucket 预处理图，不是直接读原图。</p>
   <ul>
@@ -57,8 +67,8 @@ FAST_DATASET_GUIDE_BODY = """
 FAST_DATASET_GUIDE_HTML = f"""
 <div class="anima-fast-guide-collapsible">
   <button type="button" class="anima-fast-guide-toggle" data-anima-fast-guide-toggle aria-expanded="false">
-    <span class="anima-fast-guide-toggle__label">数据集说明（与 Kohya 不同）</span>
     <span class="anima-fast-guide-toggle__icon" aria-hidden="true">▸</span>
+    <span class="anima-fast-guide-toggle__label">数据集路径说明（与 Kohya 不同）</span>
   </button>
   <div class="anima-fast-dataset-guide anima-fast-dataset-guide__body" hidden>
     {FAST_DATASET_GUIDE_BODY}
@@ -66,7 +76,9 @@ FAST_DATASET_GUIDE_HTML = f"""
 </div>
 """.strip()
 
-INSTALL_GUARD = r''';(()=>{if(window.__ANIMA_FAST_INSTALL_GUARD__)return;window.__ANIMA_FAST_INSTALL_GUARD__=true;const CONFIRM="Anima Fast 为进阶实验插件，需 NVIDIA GPU、约 16GB+ 显存，并会下载独立 Python 环境（数 GB）。\n\n确认已了解并继续安装？";let last={feature_enabled:true,state:"unknown"},es=null,tmr=null,scheduled=false;function q(s){return Array.from(document.querySelectorAll(s))}function isFastPage(){return/^\/lora\/anima-fast(\.html|\.md)?$/.test(location.pathname)}function markPage(){document.body.classList.toggle("anima-fast-page",isFastPage())}function setControls(d){if(!isFastPage())return;const kill=!d.feature_enabled,working=d.state==="installing"||d.state==="auditing",ready=d.state==="ready";q("[data-anima-fast-install]").forEach(b=>{b.disabled=kill||working;b.setAttribute("aria-disabled",b.disabled?"true":"false")});q(".right-container button").forEach(b=>{const t=(b.textContent||"").trim();if(t==="开始训练"||t==="✨加载训练预设✨"||t==="导入配置文件"||t==="保存参数"){b.disabled=kill||!ready;b.setAttribute("aria-disabled",b.disabled?"true":"false")}});document.body.classList.toggle("anima-fast-disabled",kill||!ready)}function label(d){if(!d.feature_enabled)return"功能已关闭";return d.state==="ready"?"插件已就绪":d.state==="installing"?"安装中":d.state==="auditing"?"审计中":d.state==="broken"?"需修复":d.state==="installed_unverified"?"待审计":"进阶插件 · 待开启"}function appendLog(x){const p=document.querySelector("[data-anima-fast-log]");if(!p)return;p.hidden=false;p.textContent+=(p.textContent?"\n":"")+x;p.scrollTop=p.scrollHeight}function apply(d){last=d||last;setControls(last);const n=document.querySelector("[data-anima-fast-status]");if(n)n.textContent=label(last);const a=last.facts&&last.facts.audit;if(a&&!a.ok&&a.errors)appendLog("[audit] "+a.errors.join("; "))}async function status(){try{const r=await fetch("/api/plugins/anima-lora/status"),j=await r.json();apply(Object.assign({feature_enabled:true},j.data||{state:"unknown"}))}catch(e){const n=document.querySelector("[data-anima-fast-status]");if(n)n.textContent="状态检查失败"}}function scheduleStatus(){if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;status()},120)}function openLog(url){if(!url||!window.EventSource)return;if(es)es.close();appendLog("[log] streaming "+url);es=new EventSource(url);es.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.text)appendLog(d.text);if(d.done){appendLog("[log] done");es.close();es=null;if(tmr){clearInterval(tmr);tmr=null}status()}}catch(_){appendLog(e.data)}};es.onerror=()=>{appendLog("[log] stream disconnected");if(es){es.close();es=null}status()}}document.addEventListener("click",async e=>{const t=e.target&&e.target.closest&&e.target.closest("[data-anima-fast-guide-toggle]");if(t&&isFastPage()){const p=t.closest(".anima-fast-guide-collapsible"),b=p&&p.querySelector(".anima-fast-dataset-guide__body");if(b){const o=b.hidden;b.hidden=!o;t.setAttribute("aria-expanded",o?"true":"false");p.classList.toggle("is-open",o);try{localStorage.setItem("anima-fast-guide-open",o?"1":"0")}catch(_){}}return}const b=e.target&&e.target.closest&&e.target.closest("[data-anima-fast-install]");if(!b||!isFastPage())return;if(!last.feature_enabled)return;if(!window.confirm(CONFIRM))return;b.disabled=true;const s=document.querySelector("[data-anima-fast-status]"),p=document.querySelector("[data-anima-fast-log]");if(p){p.hidden=false;p.textContent=""}if(s)s.textContent="安装任务启动中";try{const r=await fetch("/api/plugins/anima-lora/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:false})}),j=await r.json();if(j.status!=="success"){if(s)s.textContent=j.message||"安装失败";appendLog("[error] "+(j.message||"install failed"));return}const d=j.data||{};if(s)s.textContent="安装中";appendLog("[task] "+(d.task_id||"unknown"));openLog(d.log_stream||d.log_stream_url||(d.task_id?"/api/plugins/anima-lora/install/log/stream/"+d.task_id:""));if(tmr)clearInterval(tmr);tmr=setInterval(status,2000);status()}catch(t){if(s)s.textContent="安装失败";appendLog("[error] "+t)}finally{setTimeout(()=>setControls(last),250)}});function initGuideToggle(){if(!isFastPage())return;q("[data-anima-fast-guide-toggle]").forEach(t=>{const p=t.closest(".anima-fast-guide-collapsible"),b=p&&p.querySelector(".anima-fast-dataset-guide__body");if(!b)return;let o=false;try{o=localStorage.getItem("anima-fast-guide-open")==="1"}catch(_){}b.hidden=!o;t.setAttribute("aria-expanded",o?"true":"false");p.classList.toggle("is-open",o)})}new MutationObserver(scheduleStatus).observe(document.documentElement,{childList:true,subtree:true});document.addEventListener("DOMContentLoaded",()=>{markPage();initGuideToggle();status()});markPage();initGuideToggle();setTimeout(status,0)})();'''
+FAST_UI_CSS_MARKER = "/* ----- Anima Fast UI ----- */"
+
+INSTALL_GUARD = r''';(()=>{if(window.__ANIMA_FAST_INSTALL_GUARD__)return;window.__ANIMA_FAST_INSTALL_GUARD__=true;function uiEn(){try{const s=sessionStorage.getItem("sd-trainer-ui-locale");if(s==="en-US")return true;if(s==="zh-CN")return false}catch(_){}const l=(document.documentElement.lang||"").toLowerCase();if(l.startsWith("en"))return true;if(l.startsWith("zh"))return false;return(document.documentElement.dataset.sdUiLocale||"").startsWith("en")}function L(z,e){return uiEn()?e:z}const CONFIRM_ZH="Anima Fast 为进阶实验插件，需 NVIDIA GPU、约 16GB+ 显存，并会下载独立 Python 环境（数 GB）。\n\n确认已了解并继续安装？";const CONFIRM_EN="Anima Fast is an advanced experimental plugin. It requires an NVIDIA GPU, ~16 GB+ VRAM, and downloads a separate Python environment (several GB).\n\nContinue with install?";let last={feature_enabled:true,state:"unknown"},es=null,tmr=null,scheduled=false;function q(s){return Array.from(document.querySelectorAll(s))}function isFastPage(){return/^\/lora\/anima-fast(\.html|\.md)?$/.test(location.pathname)}function markPage(){document.body.classList.toggle("anima-fast-page",isFastPage())}function setControls(d){if(!isFastPage())return;const kill=!d.feature_enabled,working=d.state==="installing"||d.state==="auditing",ready=d.state==="ready";q("[data-anima-fast-install]").forEach(b=>{b.disabled=kill||working;b.setAttribute("aria-disabled",b.disabled?"true":"false")});q(".right-container button").forEach(b=>{const t=(b.textContent||"").trim();if(/^(开始训练|Start training)$/.test(t)||/^(✨加载训练预设✨|Load training preset)$/.test(t)||/^(导入配置文件|Import config)$/.test(t)||/^(保存参数|Save parameters)$/.test(t)){b.disabled=kill||!ready;b.setAttribute("aria-disabled",b.disabled?"true":"false")}});document.body.classList.toggle("anima-fast-disabled",kill||!ready)}function label(d){if(!d.feature_enabled)return L("功能已关闭","Feature disabled");return d.state==="ready"?L("插件已就绪","Plugin ready"):d.state==="installing"?L("安装中","Installing"):d.state==="auditing"?L("审计中","Auditing"):d.state==="broken"?L("需修复","Needs repair"):d.state==="installed_unverified"?L("待审计","Pending audit"):L("进阶插件 · 待开启","Advanced plugin · not enabled")}function appendLog(x){const p=document.querySelector("[data-anima-fast-log]");if(!p)return;p.hidden=false;p.textContent+=(p.textContent?"\n":"")+x;p.scrollTop=p.scrollHeight}function apply(d){last=d||last;setControls(last);const n=document.querySelector("[data-anima-fast-status]");if(n)n.textContent=label(last);const a=last.facts&&last.facts.audit;if(a&&!a.ok&&a.errors)appendLog("[audit] "+a.errors.join("; "))}async function status(){try{const r=await fetch("/api/plugins/anima-lora/status"),j=await r.json();apply(Object.assign({feature_enabled:true},j.data||{state:"unknown"}))}catch(e){const n=document.querySelector("[data-anima-fast-status]");if(n)n.textContent=L("状态检查失败","Status check failed")}}function scheduleStatus(){if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;status()},120)}function openLog(url){if(!url||!window.EventSource)return;if(es)es.close();appendLog("[log] streaming "+url);es=new EventSource(url);es.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.text)appendLog(d.text);if(d.done){appendLog("[log] done");es.close();es=null;if(tmr){clearInterval(tmr);tmr=null}status()}}catch(_){appendLog(e.data)}};es.onerror=()=>{appendLog("[log] stream disconnected");if(es){es.close();es=null}status()}}document.addEventListener("click",async e=>{const t=e.target&&e.target.closest&&e.target.closest("[data-anima-fast-guide-toggle]");if(t&&isFastPage()){const p=t.closest(".anima-fast-guide-collapsible"),b=p&&p.querySelector(".anima-fast-dataset-guide__body");if(b){const o=b.hidden;b.hidden=!o;t.setAttribute("aria-expanded",o?"true":"false");p.classList.toggle("is-open",o);try{localStorage.setItem("anima-fast-guide-open",o?"1":"0")}catch(_){}}return}const b=e.target&&e.target.closest&&e.target.closest("[data-anima-fast-install]");if(!b||!isFastPage())return;if(!last.feature_enabled)return;if(!window.confirm(L(CONFIRM_ZH,CONFIRM_EN)))return;b.disabled=true;const s=document.querySelector("[data-anima-fast-status]"),p=document.querySelector("[data-anima-fast-log]");if(p){p.hidden=false;p.textContent=""}if(s)s.textContent=L("安装任务启动中","Starting install…");try{const r=await fetch("/api/plugins/anima-lora/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:false})}),j=await r.json();if(j.status!=="success"){if(s)s.textContent=j.message||L("安装失败","Install failed");appendLog("[error] "+(j.message||"install failed"));return}const d=j.data||{};if(s)s.textContent=L("安装中","Installing");appendLog("[task] "+(d.task_id||"unknown"));openLog(d.log_stream||d.log_stream_url||(d.task_id?"/api/plugins/anima-lora/install/log/stream/"+d.task_id:""));if(tmr)clearInterval(tmr);tmr=setInterval(status,2000);status()}catch(t){if(s)s.textContent=L("安装失败","Install failed");appendLog("[error] "+t)}finally{setTimeout(()=>setControls(last),250)}});function initGuideToggle(){if(!isFastPage())return;q("[data-anima-fast-guide-toggle]").forEach(t=>{const p=t.closest(".anima-fast-guide-collapsible"),b=p&&p.querySelector(".anima-fast-dataset-guide__body");if(!b)return;let o=false;try{o=localStorage.getItem("anima-fast-guide-open")==="1"}catch(_){}b.hidden=!o;t.setAttribute("aria-expanded",o?"true":"false");p.classList.toggle("is-open",o)})}new MutationObserver(scheduleStatus).observe(document.documentElement,{childList:true,subtree:true});document.addEventListener("DOMContentLoaded",()=>{markPage();initGuideToggle();status()});markPage();initGuideToggle();setTimeout(status,0)})();'''
 
 
 def _guide_html_for_vue() -> str:
@@ -85,6 +97,7 @@ def write_page_chunks() -> None:
         'a(" Anima LoRA · Fast 模式")],-1),'
         f'n=e("p",null,{json.dumps(FAST_PAGE_INTRO)},-1),'
         f'x=e("div",{{class:"anima-fast-credit-root",innerHTML:{credit_json}}}),'
+        f'd=e("div",{{class:"anima-fast-doc-links-root",innerHTML:{json.dumps(FAST_DOC_LINKS_HTML)}}}),'
         'r=e("p",null,"标准模式（Kohya）见 /lora/sd3.html",-1),'
         f'g=e("div",{{class:"anima-fast-guide-root",innerHTML:{guide_json}}}),'
         'm=e("div",{class:"anima-fast-install-panel",style:"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0;"},['
@@ -92,7 +105,7 @@ def write_page_chunks() -> None:
         'e("span",null,"开启插件")]),'
         'e("span",{"data-anima-fast-status":"",style:"font-size:13px;opacity:.8;"},"检查中")],-1),'
         'f=e("pre",{"data-anima-fast-log":"",hidden:"",style:"max-height:260px;overflow:auto;margin:12px 0;padding:10px;border:1px solid var(--c-border);border-radius:6px;font-size:12px;line-height:1.45;white-space:pre-wrap;"},null,-1),'
-        "l=[c,n,x,r,g,m,f];"
+        "l=[c,n,x,d,r,g,m,f];"
         'function i(h,u){return t(),o("div",{class:"anima-fast-intro-wrap"},l)}'
         'var p=s(_,[["render",i],["__file","anima-fast.html.vue"]]);export{p as default};'
     )
@@ -124,7 +137,7 @@ def patch_html() -> None:
         'Anima LoRA · Fast 模式</h1>'
         f'<p>{FAST_PAGE_INTRO}</p>'
         f'{FAST_CREDIT_HTML}'
-        '<p>标准模式（Kohya）见 <a href="/lora/sd3.html">/lora/sd3.html</a></p>'
+        f'{FAST_DOC_LINKS_HTML}'
         f'{FAST_DATASET_GUIDE_HTML}'
         '<div class="anima-fast-install-panel" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0;">'
         '<button data-anima-fast-install type="button" class="el-button el-button--primary is-plain">'
@@ -186,168 +199,239 @@ def patch_prefetch_links() -> None:
             path.write_text(html, encoding="utf-8")
 
 
-def append_guide_css() -> None:
-    if not POLISH_CSS.exists():
-        return
-    css = POLISH_CSS.read_text(encoding="utf-8")
-    credit_block = """
-
-/* ----- Anima Fast：开源致谢 ----- */
-.example-container > .right-container .anima-fast-credit {
-  margin: 0.55rem 0 0.75rem;
+def _fast_ui_css_block() -> str:
+    return f"""
+{FAST_UI_CSS_MARKER}
+.example-container > .right-container .anima-fast-credit {{
+  margin: 0.55rem 0 0.65rem;
   padding: 0.65rem 0.85rem;
-  border-radius: 8px;
+  border-radius: var(--sd-radius-md, 8px);
   font-size: 12.5px;
   line-height: 1.65;
   color: var(--c-text-lighter, #606266);
   background: color-mix(in srgb, var(--el-color-success, #67c23a) 7%, var(--c-bg, #fff));
   border: 1px solid color-mix(in srgb, var(--el-color-success, #67c23a) 24%, var(--c-border, #dcdfe6));
-}
+}}
 
-.example-container > .right-container .anima-fast-credit a {
+.example-container > .right-container .anima-fast-doc-links {{
+  margin: 0 0 0.75rem;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--c-text-lighter, #606266);
+}}
+
+.example-container > .right-container .anima-fast-doc-links a {{
   color: var(--el-color-primary, #409eff);
   font-weight: 600;
   text-decoration: none;
-}
+}}
 
-.example-container > .right-container .anima-fast-credit a:hover {
+.example-container > .right-container .anima-fast-doc-links a:hover {{
   text-decoration: underline;
-}
+}}
 
-html.dark .example-container > .right-container .anima-fast-credit {
-  background: color-mix(in srgb, var(--el-color-success, #67c23a) 12%, var(--c-bg, #22272e));
-  border-color: color-mix(in srgb, var(--el-color-success, #67c23a) 28%, var(--c-border, #3d444d));
-  color: var(--c-text-lighter, #adbac7);
-}
-"""
-    guide_block = """
+.example-container > .right-container .anima-fast-credit a {{
+  color: var(--el-color-primary, #409eff);
+  font-weight: 600;
+  text-decoration: none;
+}}
 
-/* ----- Anima Fast：右栏可折叠数据集说明 ----- */
-body.anima-fast-page .example-container > .right-container > section:first-of-type {
+.example-container > .right-container .anima-fast-credit a:hover {{
+  text-decoration: underline;
+}}
+
+body.anima-fast-page .example-container > .right-container > section:first-of-type {{
   flex: 0 0 auto;
-}
+}}
 
 body.anima-fast-page .example-container > .right-container > section:first-of-type .el-scrollbar,
-body.anima-fast-page .example-container > .right-container > section:first-of-type .el-scrollbar__wrap {
+body.anima-fast-page .example-container > .right-container > section:first-of-type .el-scrollbar__wrap {{
   overflow: visible !important;
   max-height: none !important;
-}
+}}
 
-.example-container > .right-container .anima-fast-intro-wrap {
+.example-container > .right-container .anima-fast-intro-wrap {{
   padding-bottom: 0.25rem;
-}
+}}
 
-.example-container > .right-container .anima-fast-guide-collapsible {
-  margin: 0.65rem 0 0.85rem;
-}
+.example-container > .right-container .anima-fast-guide-collapsible {{
+  margin: 0.15rem 0 0.85rem;
+}}
 
-.example-container > .right-container .anima-fast-guide-toggle {
-  display: flex;
+.example-container > .right-container .anima-fast-guide-toggle {{
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  width: 100%;
+  gap: 0.35rem;
+  width: auto;
+  max-width: 100%;
   margin: 0;
-  padding: 0.55rem 0.75rem;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary, #409eff) 24%, var(--c-border, #dcdfe6));
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 8%, var(--c-bg, #fff));
+  padding: 0.1rem 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
   color: var(--el-color-primary, #409eff);
-  font-size: 13.5px;
-  font-weight: 700;
-  line-height: 1.4;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
   cursor: pointer;
   text-align: left;
-}
+  box-shadow: none;
+}}
 
-.example-container > .right-container .anima-fast-guide-toggle:hover {
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 12%, var(--c-bg, #fff));
-}
+.example-container > .right-container .anima-fast-guide-toggle:hover {{
+  color: var(--el-color-primary-dark-2, #337ecc);
+  text-decoration: underline;
+}}
 
-.example-container > .right-container .anima-fast-guide-toggle__icon {
+.example-container > .right-container .anima-fast-guide-toggle:focus-visible {{
+  outline: 2px solid color-mix(in srgb, var(--el-color-primary, #409eff) 45%, transparent);
+  outline-offset: 2px;
+}}
+
+.example-container > .right-container .anima-fast-guide-toggle__icon {{
   flex: 0 0 auto;
+  font-size: 11px;
+  opacity: 0.85;
   transition: transform 0.15s ease;
-}
+}}
 
-.example-container > .right-container .anima-fast-guide-collapsible.is-open .anima-fast-guide-toggle__icon {
+.example-container > .right-container .anima-fast-guide-collapsible.is-open .anima-fast-guide-toggle__icon {{
   transform: rotate(90deg);
-}
+}}
 
-.example-container > .right-container .anima-fast-dataset-guide__body {
+.example-container > .right-container .anima-fast-dataset-guide__body {{
   margin-top: 0.45rem;
-  padding: 0.85rem 1rem;
-  border-radius: 10px;
-  font-size: 13.5px;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--sd-radius-md, 8px);
+  font-size: 13px;
   line-height: 1.65;
   color: var(--c-text, #303133);
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 7%, var(--c-bg, #fff));
-  border: 1px solid color-mix(in srgb, var(--el-color-primary, #409eff) 22%, var(--c-border, #dcdfe6));
-}
+  background: var(--c-bg-light, #f8f9fb);
+  border: 1px solid var(--c-border, #e4e7ed);
+  border-left: 3px solid var(--el-color-primary, #409eff);
+}}
 
-.example-container > .right-container .anima-fast-dataset-guide__body p {
+.example-container > .right-container .anima-fast-dataset-guide__body p {{
   margin: 0.35rem 0;
-}
+}}
 
-.example-container > .right-container .anima-fast-dataset-guide__body ul {
+.example-container > .right-container .anima-fast-dataset-guide__body ul {{
   margin: 0.35rem 0 0.5rem 1.1rem;
   padding: 0;
-}
+}}
 
-.example-container > .right-container .anima-fast-dataset-guide__body li {
+.example-container > .right-container .anima-fast-dataset-guide__body li {{
   margin: 0.2rem 0;
-}
+}}
 
-.example-container > .right-container .anima-fast-dataset-guide__body code {
+.example-container > .right-container .anima-fast-dataset-guide__body code {{
   font-size: 12px;
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--c-bg, #fff) 70%, transparent);
+  background: var(--c-bg-mute, #fff);
   border: 1px solid var(--c-border, #e4e7ed);
-}
+}}
 
-.example-container > .right-container .anima-fast-dataset-guide__highlight {
+.example-container > .right-container .anima-fast-dataset-guide__highlight {{
   padding: 0.55rem 0.65rem;
   border-radius: 8px;
   background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 10%, var(--c-bg, #fff));
   border: 1px solid color-mix(in srgb, var(--el-color-warning, #e6a23c) 28%, transparent);
-}
+}}
 
-.example-container > .right-container .anima-fast-dataset-guide__note {
+.example-container > .right-container .anima-fast-dataset-guide__note {{
   font-size: 12.5px;
   color: var(--c-text-lighter, #606266);
-}
+}}
 
-html.dark .example-container > .right-container .anima-fast-guide-toggle {
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 14%, var(--c-bg, #22272e));
-  border-color: color-mix(in srgb, var(--el-color-primary, #409eff) 30%, var(--c-border, #3d444d));
-}
+body.anima-fast-page .example-container .schema-container .el-collapse {{
+  border: none;
+}}
 
-html.dark .example-container > .right-container .anima-fast-dataset-guide__body {
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 14%, var(--c-bg, #22272e));
-  border-color: color-mix(in srgb, var(--el-color-primary, #409eff) 30%, var(--c-border, #3d444d));
-}
+body.anima-fast-page .example-container .schema-container .el-collapse-item__header {{
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--c-border, #e4e7ed) !important;
+  border-radius: 0 !important;
+  height: auto !important;
+  line-height: 1.4 !important;
+  padding: 0 0 0.5rem !important;
+  margin: 1.25rem 0 0.5rem !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--c-text, #303133) !important;
+}}
 
-html.dark .example-container > .right-container .anima-fast-dataset-guide__body code {
+body.anima-fast-page .example-container .schema-container .el-collapse-item__wrap {{
+  border-bottom: none;
+}}
+
+body.anima-fast-page .example-container .schema-container .el-collapse-item__content {{
+  padding-bottom: 0.25rem;
+}}
+
+html.dark .example-container > .right-container .anima-fast-credit {{
+  background: color-mix(in srgb, var(--el-color-success, #67c23a) 12%, var(--c-bg, #22272e));
+  border-color: color-mix(in srgb, var(--el-color-success, #67c23a) 28%, var(--c-border, #3d444d));
+  color: var(--c-text-lighter, #adbac7);
+}}
+
+html.dark .example-container > .right-container .anima-fast-dataset-guide__body {{
+  background: color-mix(in srgb, var(--c-bg-light, #2d333b) 90%, var(--c-bg, #22272e));
+  border-color: var(--c-border, #3d444d);
+}}
+
+html.dark .example-container > .right-container .anima-fast-dataset-guide__body code {{
   background: color-mix(in srgb, var(--c-bg, #22272e) 80%, transparent);
   border-color: var(--c-border, #3d444d);
-}
+}}
 
-html.dark .example-container > .right-container .anima-fast-dataset-guide__highlight {
+html.dark .example-container > .right-container .anima-fast-dataset-guide__highlight {{
   background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 14%, var(--c-bg, #22272e));
-}
+}}
+
+html.dark body.anima-fast-page .example-container .schema-container .el-collapse-item__header {{
+  color: var(--c-text, #adbac7) !important;
+  border-bottom-color: var(--c-border, #3d444d) !important;
+}}
+/* ----- /Anima Fast UI ----- */
 """
-    if CREDIT_CSS_MARKER not in css:
-        css = css.rstrip() + credit_block + "\n"
-    if "anima-fast-guide-collapsible" not in css:
-        css = css.rstrip() + guide_block + "\n"
+
+
+def _upsert_css_block(css: str, block: str) -> str:
+    end_marker = "/* ----- /Anima Fast UI ----- */"
+    if FAST_UI_CSS_MARKER in css and end_marker in css:
+        start = css.index(FAST_UI_CSS_MARKER)
+        end = css.index(end_marker) + len(end_marker)
+        return css[:start] + block.strip() + css[end:]
+    legacy = re.compile(
+        r"/\* ----- Anima Fast：.*?(?=/\* ----- [^/]|\Z)",
+        re.DOTALL,
+    )
+    css = legacy.sub("", css)
+    return css.rstrip() + "\n" + block.strip() + "\n"
+
+
+def _sync_style_bundle(polish_css: str) -> None:
+    if not STYLE_CSS.exists():
+        return
+    style = STYLE_CSS.read_text(encoding="utf-8")
+    anchor = style.find("/* ========== SD-Trainer UI polish")
+    if anchor < 0:
+        return
+    STYLE_CSS.write_text(style[:anchor] + polish_css, encoding="utf-8")
+
+
+def append_guide_css() -> None:
+    if not POLISH_CSS.exists():
+        return
+    block = _fast_ui_css_block()
+    css = _upsert_css_block(POLISH_CSS.read_text(encoding="utf-8"), block)
     POLISH_CSS.write_text(css, encoding="utf-8")
-    if STYLE_CSS.exists():
-        style = STYLE_CSS.read_text(encoding="utf-8")
-        if CREDIT_CSS_MARKER not in style:
-            style = style.rstrip() + credit_block + "\n"
-        if "anima-fast-guide-collapsible" not in style:
-            style = style.rstrip() + guide_block + "\n"
-        STYLE_CSS.write_text(style, encoding="utf-8")
+    _sync_style_bundle(css)
 
 
 def assert_registered() -> None:
@@ -362,9 +446,9 @@ def assert_registered() -> None:
         (PAGE_JS.name in html and DATA_JS.name in html, "html preloads chunks"),
         (GUIDE_CSS_MARKER in html, "dataset guide in html"),
         (CREDIT_CSS_MARKER in html, "open-source credit in html"),
+        ("anima-fast-doc-links" in html, "doc tutorial link in html"),
         ("data-anima-fast-guide-toggle" in html, "collapsible guide toggle in html"),
-        (CREDIT_CSS_MARKER in POLISH_CSS.read_text(encoding="utf-8"), "open-source credit css"),
-        ("anima-fast-guide-collapsible" in POLISH_CSS.read_text(encoding="utf-8"), "collapsible guide css"),
+        (FAST_UI_CSS_MARKER in POLISH_CSS.read_text(encoding="utf-8"), "fast ui css block"),
     ]
     missing = [label for ok, label in checks if not ok]
     if missing:

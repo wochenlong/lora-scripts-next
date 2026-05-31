@@ -196,6 +196,12 @@ async def lora_sdxl_redirect():
     return RedirectResponse(url="/lora/master.html", status_code=302)
 
 
+@app.get("/lora/anima-fast")
+async def lora_anima_fast_redirect():
+    """VuePress alias without .html → static dist page."""
+    return RedirectResponse(url="/lora/anima-fast.html", status_code=302)
+
+
 @app.get("/")
 async def index():
     return FileResponse(str(_FRONTEND_DIST / "index.html"))

@@ -57,6 +57,8 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertIn("data-anima-fast-guide-toggle", page.read_text(encoding="utf-8"))
         self.assertIn("sorryhyun/anima_lora", page.read_text(encoding="utf-8"))
         self.assertIn("anima-fast-credit", page.read_text(encoding="utf-8"))
+        self.assertIn("anima-fast-doc-links", page.read_text(encoding="utf-8"))
+        self.assertIn("docs/anima-fast.md", page.read_text(encoding="utf-8"))
 
     def test_benchmark_example_configs_exist(self):
         examples = Path("docs/examples")
@@ -74,6 +76,14 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertIn("2.8 s/step", text)
         merge = Path("docs/anima-fast-merge-checklist.md").read_text(encoding="utf-8")
         self.assertIn("sorryhyun/anima_lora", merge)
+
+    def test_anima_fast_nav_i18n_includes_english_credit(self):
+        nav = Path("frontend/dist/assets/sd-nav-i18n.js").read_text(encoding="utf-8")
+        self.assertIn("applyAnimaFastIntro", nav)
+        self.assertIn("Thanks to the original author and community", nav)
+        self.assertIn('"Fast 模式": "Fast mode"', nav)
+        self.assertIn("window.i18n?.global?.locale", nav)
+        self.assertIn("inferEnglishFromButtons", nav)
 
 
 if __name__ == "__main__":

@@ -22,6 +22,7 @@
 | [`docs/anima-training.md`](anima-training.md) | 标准 Anima LoRA；文末链接 Fast |
 | [`docs/examples/anima-lora-benchmark-*.toml`](examples/) | 可复现对标配置 |
 | Fast 页 `/lora/anima-fast.html` | 页内安装引导 + 开源致谢 |
+| `assets/readme/screenshot-anima-fast.png` | README / `docs/anima-fast.md` 界面截图 |
 
 **用户路径**：`run_gui.bat` → **Anima LoRA → Fast 模式** → **开启插件** → **开始训练**。
 

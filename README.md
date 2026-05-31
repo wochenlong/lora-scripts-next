@@ -78,6 +78,7 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 | Mode | Model / script | Notes |
 |------|----------------|-------|
 | **Anima LoRA** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA · from ~12 GB VRAM |
+| **Anima LoRA Fast** | LoRA only (plugin) | Optional [anima_lora](https://github.com/sorryhyun/anima_lora) runtime · ~16 GB+ · see [`docs/anima-fast.md`](docs/anima-fast.md) |
 | **Anima Finetune** | Full DiT (`anima_train.py`) | Sidebar **全量微调 → Anima Finetune** · **~24 GB VRAM** (4090-class) |
 | SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |
 | SD 1.5 / SDXL Finetune | Dreambooth / SDXL finetune | Sidebar **全量微调 → Stable Diffusion** |
@@ -88,6 +89,12 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
 </p>
 
 <p align="center"><sub>Anima LoRA — sidebar, model &amp; dataset form, config preview on the right</sub></p>
+
+<p align="center">
+  <img src="assets/readme/screenshot-anima-fast.png?v=20260528" alt="Anima LoRA Fast mode UI" width="920" />
+</p>
+
+<p align="center"><sub>Anima LoRA Fast — optional plugin path under <b>标准模式 / Fast 模式</b>; install runtime from the page before training</sub></p>
 
 <p align="center">
   <img src="assets/readme/screenshot-anima-finetune.png?v=20260528" alt="Anima full finetune UI" width="920" />

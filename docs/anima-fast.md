@@ -6,6 +6,10 @@ Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_l
 
 **LoRA 训练 → Anima LoRA → Fast 模式**（`/lora/anima-fast.html`）
 
+![Anima LoRA Fast 模式训练页](../assets/readme/screenshot-anima-fast.png)
+
+> 侧栏 **标准模式** 为 Kohya 路径（`/lora/sd3.html`）；**Fast 模式** 为本页。页顶含安装引导与 upstream 致谢；切换 **Language** 后侧栏与说明区可显示英文（schema 分组标题仍可能为中文，后续迭代）。
+
 > 维护者合并前清单：[`docs/anima-fast-merge-checklist.md`](./anima-fast-merge-checklist.md)
 
 ---

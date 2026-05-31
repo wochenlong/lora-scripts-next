@@ -17,6 +17,7 @@
 ### 前端（dist）
 
 - Fast 页安装引导、开源致谢（`anima-fast-credit`）；首页/更新日志 v2.7.0 条目。
+- **中英切换（部分）**：`sd-nav-i18n.js` 同步侧栏、Fast 页 intro/致谢与安装状态；读取 `window.i18n` 与训练按钮文案；schema 折叠分组标题仍待上游 schema 英文化。
 
 ### 整合包说明
 

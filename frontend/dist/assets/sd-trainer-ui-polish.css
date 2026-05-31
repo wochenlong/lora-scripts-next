@@ -1939,89 +1939,45 @@ html.dark .example-container > .right-container .sd-tagger-dock__start:hover:not
 html.dark .example-container > .right-container .sd-anima-finetune-tagline {
   background: color-mix(in srgb, var(--el-color-primary, #409eff) 16%, transparent);
 }
-
-/* ----- Anima Fast：右栏数据集说明（勿被 scroll 裁切） ----- */
-body.anima-fast-page .example-container > .right-container > section:first-of-type {
-  flex: 0 0 auto;
-}
-
-body.anima-fast-page .example-container > .right-container > section:first-of-type .el-scrollbar,
-body.anima-fast-page .example-container > .right-container > section:first-of-type .el-scrollbar__wrap {
-  overflow: visible !important;
-  max-height: none !important;
-}
-
-.example-container > .right-container .anima-fast-intro-wrap {
-  padding-bottom: 0.25rem;
-}
-
-.example-container > .right-container .anima-fast-dataset-guide {
-  margin: 0.75rem 0 1rem;
-  padding: 0.85rem 1rem;
-  border-radius: 10px;
-  font-size: 13.5px;
-  line-height: 1.65;
-  color: var(--c-text, #303133);
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 7%, var(--c-bg, #fff));
-  border: 1px solid color-mix(in srgb, var(--el-color-primary, #409eff) 22%, var(--c-border, #dcdfe6));
-  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.6) inset;
-}
-
-.example-container > .right-container .anima-fast-dataset-guide__title {
-  margin: 0 0 0.45rem;
-  font-size: 14.5px;
-  font-weight: 700;
-  color: var(--el-color-primary, #409eff);
-}
-
-.example-container > .right-container .anima-fast-dataset-guide p {
-  margin: 0.35rem 0;
-}
-
-.example-container > .right-container .anima-fast-dataset-guide ul {
-  margin: 0.35rem 0 0.5rem 1.1rem;
-  padding: 0;
-}
-
-.example-container > .right-container .anima-fast-dataset-guide li {
-  margin: 0.2rem 0;
-}
-
-.example-container > .right-container .anima-fast-dataset-guide code {
-  font-size: 12px;
-  padding: 0.1rem 0.35rem;
-  border-radius: 4px;
-  background: color-mix(in srgb, var(--c-bg, #fff) 70%, transparent);
-  border: 1px solid var(--c-border, #e4e7ed);
-}
-
-.example-container > .right-container .anima-fast-dataset-guide__highlight {
-  padding: 0.55rem 0.65rem;
-  border-radius: 8px;
-  background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 10%, var(--c-bg, #fff));
-  border: 1px solid color-mix(in srgb, var(--el-color-warning, #e6a23c) 28%, transparent);
-}
-
-.example-container > .right-container .anima-fast-dataset-guide__note {
+/* ----- Anima Fast UI ----- */
+.example-container > .right-container .anima-fast-credit {
+  margin: 0.55rem 0 0.65rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--sd-radius-md, 8px);
   font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--c-text-lighter, #606266);
+  background: color-mix(in srgb, var(--el-color-success, #67c23a) 7%, var(--c-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--el-color-success, #67c23a) 24%, var(--c-border, #dcdfe6));
+}
+
+.example-container > .right-container .anima-fast-doc-links {
+  margin: 0 0 0.75rem;
+  font-size: 13px;
+  line-height: 1.55;
   color: var(--c-text-lighter, #606266);
 }
 
-html.dark .example-container > .right-container .anima-fast-dataset-guide {
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 14%, var(--c-bg, #22272e));
-  border-color: color-mix(in srgb, var(--el-color-primary, #409eff) 30%, var(--c-border, #3d444d));
+.example-container > .right-container .anima-fast-doc-links a {
+  color: var(--el-color-primary, #409eff);
+  font-weight: 600;
+  text-decoration: none;
 }
 
-html.dark .example-container > .right-container .anima-fast-dataset-guide code {
-  background: color-mix(in srgb, var(--c-bg, #22272e) 80%, transparent);
-  border-color: var(--c-border, #3d444d);
+.example-container > .right-container .anima-fast-doc-links a:hover {
+  text-decoration: underline;
 }
 
-html.dark .example-container > .right-container .anima-fast-dataset-guide__highlight {
-  background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 14%, var(--c-bg, #22272e));
+.example-container > .right-container .anima-fast-credit a {
+  color: var(--el-color-primary, #409eff);
+  font-weight: 600;
+  text-decoration: none;
 }
 
-/* ----- Anima Fast：右栏可折叠数据集说明 ----- */
+.example-container > .right-container .anima-fast-credit a:hover {
+  text-decoration: underline;
+}
+
 body.anima-fast-page .example-container > .right-container > section:first-of-type {
   flex: 0 0 auto;
 }
@@ -2037,34 +1993,46 @@ body.anima-fast-page .example-container > .right-container > section:first-of-ty
 }
 
 .example-container > .right-container .anima-fast-guide-collapsible {
-  margin: 0.65rem 0 0.85rem;
+  margin: 0.15rem 0 0.85rem;
 }
 
 .example-container > .right-container .anima-fast-guide-toggle {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  width: 100%;
+  gap: 0.35rem;
+  width: auto;
+  max-width: 100%;
   margin: 0;
-  padding: 0.55rem 0.75rem;
-  border-radius: 8px;
-  border: 1px solid color-mix(in srgb, var(--el-color-primary, #409eff) 24%, var(--c-border, #dcdfe6));
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 8%, var(--c-bg, #fff));
+  padding: 0.1rem 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  appearance: none;
+  -webkit-appearance: none;
   color: var(--el-color-primary, #409eff);
-  font-size: 13.5px;
-  font-weight: 700;
-  line-height: 1.4;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.5;
   cursor: pointer;
   text-align: left;
+  box-shadow: none;
 }
 
 .example-container > .right-container .anima-fast-guide-toggle:hover {
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 12%, var(--c-bg, #fff));
+  color: var(--el-color-primary-dark-2, #337ecc);
+  text-decoration: underline;
+}
+
+.example-container > .right-container .anima-fast-guide-toggle:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--el-color-primary, #409eff) 45%, transparent);
+  outline-offset: 2px;
 }
 
 .example-container > .right-container .anima-fast-guide-toggle__icon {
   flex: 0 0 auto;
+  font-size: 11px;
+  opacity: 0.85;
   transition: transform 0.15s ease;
 }
 
@@ -2074,13 +2042,14 @@ body.anima-fast-page .example-container > .right-container > section:first-of-ty
 
 .example-container > .right-container .anima-fast-dataset-guide__body {
   margin-top: 0.45rem;
-  padding: 0.85rem 1rem;
-  border-radius: 10px;
-  font-size: 13.5px;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--sd-radius-md, 8px);
+  font-size: 13px;
   line-height: 1.65;
   color: var(--c-text, #303133);
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 7%, var(--c-bg, #fff));
-  border: 1px solid color-mix(in srgb, var(--el-color-primary, #409eff) 22%, var(--c-border, #dcdfe6));
+  background: var(--c-bg-light, #f8f9fb);
+  border: 1px solid var(--c-border, #e4e7ed);
+  border-left: 3px solid var(--el-color-primary, #409eff);
 }
 
 .example-container > .right-container .anima-fast-dataset-guide__body p {
@@ -2100,7 +2069,7 @@ body.anima-fast-page .example-container > .right-container > section:first-of-ty
   font-size: 12px;
   padding: 0.1rem 0.35rem;
   border-radius: 4px;
-  background: color-mix(in srgb, var(--c-bg, #fff) 70%, transparent);
+  background: var(--c-bg-mute, #fff);
   border: 1px solid var(--c-border, #e4e7ed);
 }
 
@@ -2116,14 +2085,41 @@ body.anima-fast-page .example-container > .right-container > section:first-of-ty
   color: var(--c-text-lighter, #606266);
 }
 
-html.dark .example-container > .right-container .anima-fast-guide-toggle {
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 14%, var(--c-bg, #22272e));
-  border-color: color-mix(in srgb, var(--el-color-primary, #409eff) 30%, var(--c-border, #3d444d));
+body.anima-fast-page .example-container .schema-container .el-collapse {
+  border: none;
+}
+
+body.anima-fast-page .example-container .schema-container .el-collapse-item__header {
+  background: transparent !important;
+  border: none !important;
+  border-bottom: 1px solid var(--c-border, #e4e7ed) !important;
+  border-radius: 0 !important;
+  height: auto !important;
+  line-height: 1.4 !important;
+  padding: 0 0 0.5rem !important;
+  margin: 1.25rem 0 0.5rem !important;
+  font-size: 15px !important;
+  font-weight: 600 !important;
+  color: var(--c-text, #303133) !important;
+}
+
+body.anima-fast-page .example-container .schema-container .el-collapse-item__wrap {
+  border-bottom: none;
+}
+
+body.anima-fast-page .example-container .schema-container .el-collapse-item__content {
+  padding-bottom: 0.25rem;
+}
+
+html.dark .example-container > .right-container .anima-fast-credit {
+  background: color-mix(in srgb, var(--el-color-success, #67c23a) 12%, var(--c-bg, #22272e));
+  border-color: color-mix(in srgb, var(--el-color-success, #67c23a) 28%, var(--c-border, #3d444d));
+  color: var(--c-text-lighter, #adbac7);
 }
 
 html.dark .example-container > .right-container .anima-fast-dataset-guide__body {
-  background: color-mix(in srgb, var(--el-color-primary, #409eff) 14%, var(--c-bg, #22272e));
-  border-color: color-mix(in srgb, var(--el-color-primary, #409eff) 30%, var(--c-border, #3d444d));
+  background: color-mix(in srgb, var(--c-bg-light, #2d333b) 90%, var(--c-bg, #22272e));
+  border-color: var(--c-border, #3d444d);
 }
 
 html.dark .example-container > .right-container .anima-fast-dataset-guide__body code {
@@ -2135,31 +2131,8 @@ html.dark .example-container > .right-container .anima-fast-dataset-guide__highl
   background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 14%, var(--c-bg, #22272e));
 }
 
-/* ----- Anima Fast：开源致谢 ----- */
-.example-container > .right-container .anima-fast-credit {
-  margin: 0.55rem 0 0.75rem;
-  padding: 0.65rem 0.85rem;
-  border-radius: 8px;
-  font-size: 12.5px;
-  line-height: 1.65;
-  color: var(--c-text-lighter, #606266);
-  background: color-mix(in srgb, var(--el-color-success, #67c23a) 7%, var(--c-bg, #fff));
-  border: 1px solid color-mix(in srgb, var(--el-color-success, #67c23a) 24%, var(--c-border, #dcdfe6));
+html.dark body.anima-fast-page .example-container .schema-container .el-collapse-item__header {
+  color: var(--c-text, #adbac7) !important;
+  border-bottom-color: var(--c-border, #3d444d) !important;
 }
-
-.example-container > .right-container .anima-fast-credit a {
-  color: var(--el-color-primary, #409eff);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.example-container > .right-container .anima-fast-credit a:hover {
-  text-decoration: underline;
-}
-
-html.dark .example-container > .right-container .anima-fast-credit {
-  background: color-mix(in srgb, var(--el-color-success, #67c23a) 12%, var(--c-bg, #22272e));
-  border-color: color-mix(in srgb, var(--el-color-success, #67c23a) 28%, var(--c-border, #3d444d));
-  color: var(--c-text-lighter, #adbac7);
-}
-
+/* ----- /Anima Fast UI ----- */
