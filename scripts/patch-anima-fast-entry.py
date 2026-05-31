@@ -23,6 +23,7 @@ ROUTE_KEY = "v-anima-fast"
 PAGE_TITLE = "Anima LoRA · Fast 模式"
 TRAIN_TYPE = "anima-lora-fast"
 GUIDE_CSS_MARKER = "anima-fast-dataset-guide"
+CREDIT_CSS_MARKER = "anima-fast-credit"
 
 GUARD_PATTERN = re.compile(
     r";?\(\(\)=>\{if\(window\.__ANIMA_FAST_INSTALL_GUARD__\).*?setTimeout\(status,0\)\}\)\(\);",
@@ -32,6 +33,15 @@ GUARD_PATTERN = re.compile(
 FAST_PAGE_INTRO = (
     "Anima 高速 LoRA 训练（进阶插件）。需单独安装 runtime，仅支持标准 LoRA。"
     "显存建议 16GB+，首次安装需下载数 GB 依赖。"
+)
+
+FAST_CREDIT_HTML = (
+    '<p class="anima-fast-credit">'
+    "Fast 训练引擎来自开源项目 "
+    '<a href="https://github.com/sorryhyun/anima_lora" target="_blank" rel="noopener noreferrer">'
+    "sorryhyun/anima_lora</a>。"
+    "感谢原作者与社区的开发与分享；本页以可选插件形式集成，遵循各自开源许可。"
+    "</p>"
 )
 
 FAST_DATASET_GUIDE_BODY = """
@@ -66,6 +76,7 @@ def _guide_html_for_vue() -> str:
 
 def write_page_chunks() -> None:
     guide_json = _guide_html_for_vue()
+    credit_json = json.dumps(FAST_CREDIT_HTML)
     page = (
         'import{_ as s,o as t,c as o,a as e,b as a}from"./app.547295de.js";'
         "const _={},"
@@ -73,6 +84,7 @@ def write_page_chunks() -> None:
         'e("a",{class:"header-anchor",href:"#anima-fast-lora","aria-hidden":"true"},"#"),'
         'a(" Anima LoRA · Fast 模式")],-1),'
         f'n=e("p",null,{json.dumps(FAST_PAGE_INTRO)},-1),'
+        f'x=e("div",{{class:"anima-fast-credit-root",innerHTML:{credit_json}}}),'
         'r=e("p",null,"标准模式（Kohya）见 /lora/sd3.html",-1),'
         f'g=e("div",{{class:"anima-fast-guide-root",innerHTML:{guide_json}}}),'
         'm=e("div",{class:"anima-fast-install-panel",style:"display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0;"},['
@@ -80,7 +92,7 @@ def write_page_chunks() -> None:
         'e("span",null,"开启插件")]),'
         'e("span",{"data-anima-fast-status":"",style:"font-size:13px;opacity:.8;"},"检查中")],-1),'
         'f=e("pre",{"data-anima-fast-log":"",hidden:"",style:"max-height:260px;overflow:auto;margin:12px 0;padding:10px;border:1px solid var(--c-border);border-radius:6px;font-size:12px;line-height:1.45;white-space:pre-wrap;"},null,-1),'
-        "l=[c,n,r,g,m,f];"
+        "l=[c,n,x,r,g,m,f];"
         'function i(h,u){return t(),o("div",{class:"anima-fast-intro-wrap"},l)}'
         'var p=s(_,[["render",i],["__file","anima-fast.html.vue"]]);export{p as default};'
     )
@@ -111,6 +123,7 @@ def patch_html() -> None:
         '<a class="header-anchor" href="#anima-fast-lora" aria-hidden="true">#</a> '
         'Anima LoRA · Fast 模式</h1>'
         f'<p>{FAST_PAGE_INTRO}</p>'
+        f'{FAST_CREDIT_HTML}'
         '<p>标准模式（Kohya）见 <a href="/lora/sd3.html">/lora/sd3.html</a></p>'
         f'{FAST_DATASET_GUIDE_HTML}'
         '<div class="anima-fast-install-panel" style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:12px 0;">'
@@ -177,9 +190,37 @@ def append_guide_css() -> None:
     if not POLISH_CSS.exists():
         return
     css = POLISH_CSS.read_text(encoding="utf-8")
-    if "anima-fast-guide-collapsible" in css:
-        return
-    block = """
+    credit_block = """
+
+/* ----- Anima Fast：开源致谢 ----- */
+.example-container > .right-container .anima-fast-credit {
+  margin: 0.55rem 0 0.75rem;
+  padding: 0.65rem 0.85rem;
+  border-radius: 8px;
+  font-size: 12.5px;
+  line-height: 1.65;
+  color: var(--c-text-lighter, #606266);
+  background: color-mix(in srgb, var(--el-color-success, #67c23a) 7%, var(--c-bg, #fff));
+  border: 1px solid color-mix(in srgb, var(--el-color-success, #67c23a) 24%, var(--c-border, #dcdfe6));
+}
+
+.example-container > .right-container .anima-fast-credit a {
+  color: var(--el-color-primary, #409eff);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.example-container > .right-container .anima-fast-credit a:hover {
+  text-decoration: underline;
+}
+
+html.dark .example-container > .right-container .anima-fast-credit {
+  background: color-mix(in srgb, var(--el-color-success, #67c23a) 12%, var(--c-bg, #22272e));
+  border-color: color-mix(in srgb, var(--el-color-success, #67c23a) 28%, var(--c-border, #3d444d));
+  color: var(--c-text-lighter, #adbac7);
+}
+"""
+    guide_block = """
 
 /* ----- Anima Fast：右栏可折叠数据集说明 ----- */
 body.anima-fast-page .example-container > .right-container > section:first-of-type {
@@ -295,11 +336,18 @@ html.dark .example-container > .right-container .anima-fast-dataset-guide__highl
   background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 14%, var(--c-bg, #22272e));
 }
 """
-    POLISH_CSS.write_text(css.rstrip() + block + "\n", encoding="utf-8")
+    if CREDIT_CSS_MARKER not in css:
+        css = css.rstrip() + credit_block + "\n"
+    if "anima-fast-guide-collapsible" not in css:
+        css = css.rstrip() + guide_block + "\n"
+    POLISH_CSS.write_text(css, encoding="utf-8")
     if STYLE_CSS.exists():
         style = STYLE_CSS.read_text(encoding="utf-8")
+        if CREDIT_CSS_MARKER not in style:
+            style = style.rstrip() + credit_block + "\n"
         if "anima-fast-guide-collapsible" not in style:
-            STYLE_CSS.write_text(style.rstrip() + block + "\n", encoding="utf-8")
+            style = style.rstrip() + guide_block + "\n"
+        STYLE_CSS.write_text(style, encoding="utf-8")
 
 
 def assert_registered() -> None:
@@ -313,7 +361,9 @@ def assert_registered() -> None:
         (TRAIN_TYPE in DATA_JS.read_text(encoding="utf-8"), "train type in data"),
         (PAGE_JS.name in html and DATA_JS.name in html, "html preloads chunks"),
         (GUIDE_CSS_MARKER in html, "dataset guide in html"),
+        (CREDIT_CSS_MARKER in html, "open-source credit in html"),
         ("data-anima-fast-guide-toggle" in html, "collapsible guide toggle in html"),
+        (CREDIT_CSS_MARKER in POLISH_CSS.read_text(encoding="utf-8"), "open-source credit css"),
         ("anima-fast-guide-collapsible" in POLISH_CSS.read_text(encoding="utf-8"), "collapsible guide css"),
     ]
     missing = [label for ok, label in checks if not ok]

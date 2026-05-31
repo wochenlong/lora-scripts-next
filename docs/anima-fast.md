@@ -1,10 +1,93 @@
 # Anima Fast 模式（进阶插件）
 
-Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora) 的**可选进阶插件**，通过独立 Python 环境与 `torch.compile` 加速 LoRA 训练。
+Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora)（**MIT License**）的**可选进阶插件**，通过独立 Python 环境与 `torch.compile` 加速 LoRA 训练。
 
 与 **标准模式**（Kohya / `sd3-lora`）并列，入口在 WebUI：
 
 **LoRA 训练 → Anima LoRA → Fast 模式**（`/lora/anima-fast.html`）
+
+> 维护者合并前清单：[`docs/anima-fast-merge-checklist.md`](./anima-fast-merge-checklist.md)
+
+---
+
+## 快速开始
+
+1. 启动：`run_gui.bat` 或 `python gui.py`
+2. 准备 Anima 三件套（[`anima-training.md`](./anima-training.md) 或根目录 `Download-Anima-Model.bat`）
+3. 打开 **Anima LoRA → Fast 模式**，点击 **开启插件**，等待「插件已就绪」
+4. 填写训练目录与参数，点击 **开始训练**；监控页 `/train-monitor` 显示 **Anima Fast LoRA**
+
+---
+
+## 何时选 Fast / 何时选标准模式
+
+| 选 **标准模式**（`/lora/sd3.html`） | 选 **Fast 模式**（本页） |
+|-----------------------------------|-------------------------|
+| 需要 LoKr、T-LoRA 等 Kohya 网络 | **仅标准 LoRA**，追求训练吞吐 |
+| 显存约 12GB，依赖 gradient checkpointing | **建议 16GB+**，可关闭部分省显存选项 |
+| 开箱即用，无需额外安装 | 可接受首次 **数 GB** 插件环境下载 |
+| Windows 主环境 PyTorch cu124 即可 | 需要 **CUDA 13** 插件 venv（cu130） |
+
+**速度**：同数据集、同 LoRA 维度下，Fast 在本仓库 RTX 4090 实测约为标准模式的 **2.5×**（见下）；开启 UI 默认的 `torch_compile` 后通常更快。
+
+---
+
+## 性能对比（本仓库实测）
+
+### 测试条件
+
+| 项 | 值 |
+|----|-----|
+| 日期 | 2026-06-01 |
+| GPU | **NVIDIA RTX 4090 24GB** |
+| 数据集 | `data/train_data/10_subject`（10 张，caption `.txt`；Kohya 子目录命名示例） |
+| 分辨率 | 1024×1024，enable bucket |
+| LoRA | dim=16，alpha=16，`networks.lora_anima` |
+| 优化器 | AdamW，lr=1e-4 |
+| 批量 | 1，gradient_checkpointing=true |
+| Cache | cache_latents / TE cache **均关闭**（冷启动公平对比） |
+| 精度 | bf16 |
+
+### 结果（20 step / 2 epoch 可比）
+
+| 模式 | 后端 | Attention | torch.compile | 稳态 step 耗时 | 20 step 总耗时 | 相对标准模式 |
+|------|------|-----------|---------------|----------------|----------------|--------------|
+| **标准** | Kohya sd-scripts | sdpa* | — | **≈7.1 s/step** | **2分22秒** | 1× |
+| **Fast** | anima_lora | flash | 关闭** | **≈2.8 s/step** | ≈56秒（按稳态估算） | **≈2.5×** |
+
+\* 本机主 venv（cu124）上 Kohya 路径使用 `attn_mode=sdpa`；Flash Attention 需额外环境，与整合包默认一致。  
+\** 本次 Fast 对标运行中 `torch_compile=false`；UI **默认 true**，编译预热后 step 时间通常更低。
+
+### 参考：上游 anima_lora 公开数据
+
+[sorryhyun/anima_lora README](https://github.com/sorryhyun/anima_lora) 在 **RTX 5060 Ti**、rank 32、1MP、full compile 场景报告 **≈1.1 s/step**、峰值显存约 13.4GB。与 Kohya 常规 **5–8 s/step** 量级相比约为 **5×**（硬件与 rank 不同，仅作上限参考）。
+
+### 为什么 Fast 更快？
+
+- **静态 token 形状**（bucket + padding 至 `static_token_count`）→ `torch.compile` 少重编译
+- **按 block 或全模型 compile** +（可选）CUDAGraph → 降低 kernel 启动开销
+- **独立 cu130 栈** + Flash Attention 4 等在 anima_lora 内深度适配
+
+代价：**更高显存**、**仅 LoRA**、**需安装插件**、首次 compile **epoch 边界有秒级抖动**。
+
+### 复现对标训练
+
+配置文件（仓库内，可改路径后直接用）：
+
+- 标准模式：[`docs/examples/anima-lora-benchmark-kohya.toml`](./examples/anima-lora-benchmark-kohya.toml)
+- Fast 模式：[`docs/examples/anima-lora-benchmark-fast.toml`](./examples/anima-lora-benchmark-fast.toml)
+
+```powershell
+# 标准模式（主 venv，2 epoch = 20 step）
+venv\Scripts\python.exe scripts\dev\anima_train_network.py `
+  --config_file docs\examples\anima-lora-benchmark-kohya.toml
+
+# Fast 模式（需先安装插件；2 epoch）
+extensions\anima_lora\.venv\Scripts\python.exe extensions\anima_lora\source\train.py `
+  --config_file docs\examples\anima-lora-benchmark-fast.toml
+```
+
+运行前请将 TOML 中的 `image_dir` / `source_image_dir` 改为你本地的训练数据路径。日志中查看 tqdm 行 `s/it` 即为每 step 耗时。
 
 ---
 
@@ -15,7 +98,7 @@ Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_l
 | 后端 | kohya sd-scripts | anima_lora 独立 runtime |
 | 适配器 | LoRA / LoKr / T-LoRA 等 | **仅 LoRA** |
 | 显存 | ~12GB+（可 checkpoint） | **建议 16GB+** |
-| 速度 | 常规 | 明显更快（依赖 compile + 静态 token） |
+| 速度 | 常规（本测 ≈7 s/step） | **更快**（本测 ≈2.8 s/step 起） |
 | 安装 | 开箱即用 | **需先开启插件** |
 
 ---
@@ -176,3 +259,21 @@ Fast 页优化器下拉**仅列出 anima_lora 已支持的选项**（不含 `pro
 | 维护者禁用 | 环境变量 `LORA_ENABLE_ANIMA_FAST=0` |
 
 更多架构说明见本地规划文档 `doc/双模式Turbo集成计划.md`（不上传 GitHub）。
+
+---
+
+## 致谢
+
+Fast 模式训练引擎基于开源项目 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora)。感谢原作者与社区的开发与分享；SD Trainer 以可选插件形式集成，各组件遵循其各自的开源许可。
+
+## 开源许可
+
+| 组件 | 许可证 | 说明 |
+|------|--------|------|
+| **lora-scripts-next**（本仓库 GUI/集成） | AGPL-3.0 | 见根目录 `LICENSE` |
+| **sorryhyun/anima_lora**（Fast 训练引擎） | **MIT** | 插件安装时复制至 `extensions/anima_lora/source/LICENSE` |
+| **kohya-ss/sd-scripts**（标准 Anima LoRA） | Apache-2.0 等 | 见 `vendor/sd-scripts/LICENSE.md` |
+
+MIT 与 AGPL 兼容：Fast 插件以**独立可选组件**分发，不修改上游 MIT 许可文本。完整第三方列表见根目录 [`NOTICE.md`](../NOTICE.md)。
+
+在 Fast 模式页面顶部的致谢条中亦指向 upstream 仓库。

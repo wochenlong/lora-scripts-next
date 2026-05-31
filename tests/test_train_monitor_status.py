@@ -148,14 +148,14 @@ class TrainMonitorStatusTests(unittest.TestCase):
     def test_newest_preview_images_uses_active_task_output_dir(self):
         with tempfile.TemporaryDirectory() as td:
             repo = Path(td)
-            sample_dir = repo / "output" / "fast_anima_V1" / "sample"
+            sample_dir = repo / "output" / "lora_demo_run" / "sample"
             sample_dir.mkdir(parents=True)
-            image = sample_dir / "fast_anima_V1_e000001_00_20260601020605_42.png"
+            image = sample_dir / "lora_demo_run_e000001_00_20260601020605_42.png"
             image.write_bytes(b"png")
             task = {
                 "metadata": {
-                    "output_dir": "output/fast_anima_V1",
-                    "output_name": "fast_anima_V1",
+                    "output_dir": "output/lora_demo_run",
+                    "output_name": "lora_demo_run",
                 }
             }
             with mock.patch.object(server, "REPO", repo), \
@@ -170,7 +170,7 @@ class TrainMonitorStatusTests(unittest.TestCase):
                     output_name=preview_name,
                 )
         self.assertEqual(len(previews), 1)
-        self.assertIn("fast_anima_V1", previews[0]["name"])
+        self.assertIn("lora_demo_run", previews[0]["name"])
 
     def test_train_monitor_imports_when_started_from_monitor_dir(self):
         completed = subprocess.run(

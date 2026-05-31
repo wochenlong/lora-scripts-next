@@ -4,6 +4,30 @@
 
 ---
 
+## v2.7.0 — 2026-05-28
+
+### Anima LoRA Fast 模式（可选插件）
+
+- **训练入口**：WebUI 侧栏「Anima LoRA → Fast 模式」（`/lora/anima-fast.html`），`model_train_type: anima-lora-fast` 路由至 `extensions/anima_lora/` 独立 venv 与 `train.py`。
+- **页内安装器**：一键克隆/快照上游 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora)（MIT），创建 cu130 插件环境；未就绪时拒绝开训。
+- **训练监控**：Loss / ETA / Epoch 与 Fast 专用 `*.progress.jsonl` 同步；预览图按活动任务 `output_dir` 发现。
+- **文档与对标**：[`docs/anima-fast.md`](docs/anima-fast.md)、[`docs/examples/anima-lora-benchmark-*.toml`](docs/examples/)；4090 同参约 **2.5×** 加速（标准 Kohya ≈7.1 s/step vs Fast ≈2.8 s/step）。
+- **归属**：[`NOTICE.md`](NOTICE.md) § Anima LoRA Fast Mode；Fast 页与文档致谢 upstream。
+
+### 前端（dist）
+
+- Fast 页安装引导、开源致谢（`anima-fast-credit`）；首页/更新日志 v2.7.0 条目。
+
+### 整合包说明
+
+- **不预装** Fast 插件 venv（`extensions/anima_lora/.venv`）；用户首次在 Fast 页点击「开启插件」安装，避免 7z 体积暴增。
+
+### 环境变量
+
+- `LORA_ENABLE_ANIMA_FAST=1`（默认开启 Fast 入口；设为 `0` 可隐藏侧栏与 API）。
+
+---
+
 ## v2.6.0 — 2026-05-28
 
 ### Anima 全量微调（Finetune）

@@ -148,6 +148,8 @@ Automatically opens a monitor page (port 6008) when training starts — GPU stat
 | Topic | Link |
 |-------|------|
 | Anima LoRA Training Guide | [docs/anima-training.md](docs/anima-training.md) |
+| **Anima Fast Mode (optional plugin)** | [docs/anima-fast.md](docs/anima-fast.md) |
+| Open-source notices | [NOTICE.md](NOTICE.md) |
 | Anima backend (LoRA + full finetune) | [docs/anima-backend.md](docs/anima-backend.md) |
 | Anima full finetune example TOML | [docs/examples/anima-full-finetune.toml](docs/examples/anima-full-finetune.toml) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |

@@ -35,6 +35,7 @@ $excludeDirs = @(
     "sd-models",
     "wd14_tagger_model",
     "train",
+    "extensions",
     ".idea",
     ".vscode",
     ".sisyphus",

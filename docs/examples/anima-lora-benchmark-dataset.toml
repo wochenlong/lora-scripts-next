@@ -1,0 +1,15 @@
+# 对标基准：10 张图 × repeat 1 × 2 epoch = 20 step（与 Fast 每 epoch 10 step 对齐）
+# 请将 image_dir 改为你本地的训练子目录（Kohya 结构：data/<父目录>/<N>_子文件夹名>/）
+
+[[datasets]]
+resolution = 1024
+batch_size = 1
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 1024
+bucket_reso_steps = 64
+
+  [[datasets.subsets]]
+  image_dir = "./data/train_data/10_subject"
+  num_repeats = 1
+  caption_extension = ".txt"

@@ -54,7 +54,7 @@ Download-Anima-Model.bat
 
 配置文件：[`config/anima_backend.toml`](../config/anima_backend.toml)
 
-**Fast 模式（进阶插件）**：与标准 Kohya 后端并列，需单独安装插件。详见 **[Anima Fast 模式指南](./anima-fast.md)**。
+**Fast 模式（进阶插件）**：与标准 Kohya 后端并列，需单独安装插件；同参下 RTX 4090 实测约 **2.5×** 步速提升。详见 **[Anima Fast 模式指南](./anima-fast.md)**。
 
 ## 进阶：T-LoRA 训练教程
 

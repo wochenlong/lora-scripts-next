@@ -11,6 +11,15 @@
 | `run_gui.bat` | Windows 主入口（整合包根目录 + 源码） |
 | `Download-Anima-Model.bat` | 一键下载 Anima 三件套到 `sd-models/anima/`（整合包根 / 源码根） |
 | `requirements.txt` / `VERSION` | 依赖与版本 |
+| `config/anima_fast_backend.toml` | Fast 插件默认路径（输出 / 日志 / cache） |
+| `config/anima_fast_environment/` | Fast 插件 venv 约束与 overrides（cu130） |
+
+### Anima Fast 插件（可选，运行时安装）
+
+| 路径 | 原因 |
+|------|------|
+| `extensions/anima_lora/` | 页内安装器写入；**整合包不预装** `.venv`（见 `docs/portable-packaging-git-update.md`） |
+| `mikazuki/anima_fast_backend/` | Fast 路由、安装器、监控适配（主仓代码） |
 
 ### 整合包（Portable 7z）
 
@@ -60,6 +69,7 @@ Agent 内部操作说明（Token、Release、本机路径等）：`doc/local/AGE
 | `doc/local/` | 本地交接与 Issue 草稿（不上传 GitHub）；`AGENT_INTERNAL.md` 放此处 |
 | `docs/team/` | 协作约定、[backlog 总表](team/backlog-priorities.md)、优先级草案、风险备忘录（维护者，不上主页） |
 | `mikazuki/` / `vendor/` / `train_monitor/` / `frontend/` | 主产品代码 |
+| `extensions/anima_lora/` | Fast 插件快照与独立 venv（用户页内安装，非整合包预装） |
 
 ## 日常开发记一句
 

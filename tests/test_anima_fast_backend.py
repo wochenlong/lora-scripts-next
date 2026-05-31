@@ -180,7 +180,7 @@ class AdapterTests(unittest.TestCase):
             adapted = adapt_config(
                 {
                     "lora_type": "lora",
-                    "train_data_dir": "data/xinhaicheng",
+                    "train_data_dir": "data/train_data",
                 },
                 runtime,
                 "20260101-run",
@@ -188,15 +188,15 @@ class AdapterTests(unittest.TestCase):
 
         resized = Path(adapted.values["resized_image_dir"])
         lora_cache = Path(adapted.values["lora_cache_dir"])
-        self.assertEqual(resized, (root / ".cache" / "anima_fast" / "data_xinhaicheng" / "resized").resolve())
-        self.assertEqual(lora_cache, (root / ".cache" / "anima_fast" / "data_xinhaicheng" / "lora").resolve())
+        self.assertEqual(resized, (root / ".cache" / "anima_fast" / "data_train_data" / "resized").resolve())
+        self.assertEqual(lora_cache, (root / ".cache" / "anima_fast" / "data_train_data" / "lora").resolve())
         self.assertNotIn("20260101-run", resized.as_posix())
 
     def test_dataset_cache_slug_from_relative_path(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            slug = dataset_cache_slug(root / "data" / "xinhaicheng", root)
-        self.assertEqual(slug, "data_xinhaicheng")
+            slug = dataset_cache_slug(root / "data" / "train_data", root)
+        self.assertEqual(slug, "data_train_data")
 
     def test_adapt_config_warns_when_epochs_override_steps(self):
         with tempfile.TemporaryDirectory() as td:

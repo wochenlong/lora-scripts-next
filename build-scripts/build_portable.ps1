@@ -288,7 +288,7 @@ $copyFiles = @(
 $excludeDirs = @(
     ".git", "__pycache__", ".vscode", ".idea",
     "node_modules", ".sisyphus", ".playwright-mcp", ".tmp",
-    "anima_lora", "drafts"
+    "anima_lora", "extensions", "drafts"
 )
 
 foreach ($dir in $copyDirs) {

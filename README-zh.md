@@ -148,6 +148,8 @@ bash install_flash_attn.sh
 | 主题 | 链接 |
 |------|------|
 | Anima LoRA 训练指南 | [docs/anima-training.md](docs/anima-training.md) |
+| **Anima Fast 模式（进阶插件）** | [docs/anima-fast.md](docs/anima-fast.md) |
+| 开源归属与 NOTICE | [NOTICE.md](NOTICE.md) |
 | Anima 后端（LoRA + 全量微调） | [docs/anima-backend.md](docs/anima-backend.md) |
 | Anima 全量微调示例 TOML | [docs/examples/anima-full-finetune.toml](docs/examples/anima-full-finetune.toml) |
 | Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |

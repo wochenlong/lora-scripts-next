@@ -1,0 +1,43 @@
+# Anima LoRA Fast 模式对标基准（与 Kohya 标准模式同参）
+# 运行前需安装 Fast 插件；请修改 source_image_dir / resized_image_dir 为你的路径。
+
+base_config = "./extensions/anima_lora/source/configs/base.toml"
+method = "lora"
+methods_subdir = "gui-methods"
+
+pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
+vae = "./sd-models/anima/qwen_image_vae.safetensors"
+qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
+source_image_dir = "./data/train_data"
+resized_image_dir = "./.cache/anima_fast/train_data/resized/10_subject"
+lora_cache_dir = "./.cache/anima_fast/train_data/lora"
+
+output_dir = "./output/benchmark/anima_fast_bench"
+output_name = "lora_bench_fast"
+logging_dir = "./logs/benchmark/anima_fast_bench"
+progress_jsonl = "./logs/benchmark/anima_fast_bench.progress.jsonl"
+
+network_module = "networks.lora_anima"
+network_dim = 16
+network_alpha = 16
+max_train_epochs = 2
+train_batch_size = 1
+resolution = "1024,1024"
+enable_bucket = true
+learning_rate = 0.0001
+optimizer_type = "AdamW"
+gradient_checkpointing = true
+seed = 42
+caption_extension = ".txt"
+
+cache_latents = false
+cache_latents_to_disk = false
+cache_text_encoder_outputs = false
+cache_text_encoder_outputs_to_disk = false
+skip_cache_check = true
+
+torch_compile = true
+static_token_count = 4096
+compile_mode = "blocks"
+dynamo_backend = "inductor"
+attn_mode = "flash"

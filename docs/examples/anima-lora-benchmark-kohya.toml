@@ -1,0 +1,39 @@
+# Anima LoRA 标准模式（Kohya / sd-scripts）对标基准
+# 与 docs/examples/anima-lora-benchmark-fast.toml 参数对齐，用于速度对比。
+# 运行前请修改 dataset_config 中的 image_dir 为你的数据路径。
+# 运行：venv\Scripts\python.exe scripts\dev\anima_train_network.py --config_file docs/examples/anima-lora-benchmark-kohya.toml
+
+pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
+vae = "./sd-models/anima/qwen_image_vae.safetensors"
+qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
+dataset_config = "./docs/examples/anima-lora-benchmark-dataset.toml"
+output_dir = "./output/benchmark/anima_lora_kohya_bench"
+output_name = "lora_bench_kohya"
+logging_dir = "./logs/benchmark/anima_lora_kohya_bench"
+
+network_module = "networks.lora_anima"
+network_dim = 16
+network_alpha = 16
+network_train_unet_only = true
+
+max_train_epochs = 2
+train_batch_size = 1
+resolution = "1024,1024"
+enable_bucket = true
+min_bucket_reso = 256
+max_bucket_reso = 1024
+bucket_reso_steps = 64
+
+learning_rate = 0.0001
+optimizer_type = "AdamW"
+lr_scheduler = "constant"
+mixed_precision = "bf16"
+gradient_checkpointing = true
+seed = 42
+caption_extension = ".txt"
+
+cache_latents = false
+cache_text_encoder_outputs = false
+attn_mode = "sdpa"
+save_model_as = "safetensors"
+save_every_n_epochs = 99

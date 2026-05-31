@@ -44,8 +44,22 @@
 3. 保留主仓 `.git`。
 4. 确保 remote 指向 `https://github.com/wochenlong/lora-scripts-next.git`。
 5. 不要带入本机 `doc/`、`script/`、`data/`、`benchmark/`、`.vscode/`、`.cursor/`、临时草稿等目录。
+6. **不要**打入 `extensions/anima_lora/`（含 `.venv`、上游源码快照）；Fast 插件由用户在 WebUI 页内首次安装。
 
 `vendor/sd-scripts` 已经是主仓 tracked 普通目录，不是子模块，会随主仓更新。
+
+## Anima Fast 插件与整合包（v2.7.0+）
+
+Anima LoRA **Fast 模式**使用可选插件 [`sorryhyun/anima_lora`](https://github.com/sorryhyun/anima_lora)（MIT），运行时安装到 `SD-Trainer/extensions/anima_lora/`，并创建独立 cu130 venv（体积可达数 GB）。
+
+| 项 | 约定 |
+|----|------|
+| 7z 是否预装插件 | **否** — 控制发布体积；用户路径：侧栏 **Anima LoRA → Fast 模式 → 开启插件** |
+| 打包排除 | `build-scripts/build_portable.ps1`、`03-copy-project.ps1` 排除整个 `extensions/` |
+| 用户数据 | 用户安装后的 `extensions/anima_lora/` 视为本地数据；Git 更新勿覆盖（`.gitignore` 已忽略 `.venv/`、`source/`） |
+| 文档 | [`docs/anima-fast.md`](anima-fast.md)、[`NOTICE.md`](../NOTICE.md) § Anima LoRA Fast Mode |
+
+主 venv（`python_embeded`）仍负责标准 Kohya Anima LoRA / Finetune；Fast 训练**不**占用主 venv。
 
 ## 子模块策略
 

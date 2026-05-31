@@ -55,8 +55,25 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertIn("data-anima-fast-install", component.read_text(encoding="utf-8"))
         self.assertIn("anima-fast-dataset-guide", page.read_text(encoding="utf-8"))
         self.assertIn("data-anima-fast-guide-toggle", page.read_text(encoding="utf-8"))
-        self.assertIn("进阶插件 · 待开启", app)
-        self.assertNotIn("setFastLinksVisible", app)
+        self.assertIn("sorryhyun/anima_lora", page.read_text(encoding="utf-8"))
+        self.assertIn("anima-fast-credit", page.read_text(encoding="utf-8"))
+
+    def test_benchmark_example_configs_exist(self):
+        examples = Path("docs/examples")
+        for name in (
+            "anima-lora-benchmark-kohya.toml",
+            "anima-lora-benchmark-fast.toml",
+            "anima-lora-benchmark-dataset.toml",
+        ):
+            self.assertTrue((examples / name).is_file(), name)
+
+    def test_anima_fast_docs_mention_license_and_benchmark(self):
+        text = Path("docs/anima-fast.md").read_text(encoding="utf-8")
+        self.assertIn("MIT License", text)
+        self.assertIn("7.1 s/step", text)
+        self.assertIn("2.8 s/step", text)
+        merge = Path("docs/anima-fast-merge-checklist.md").read_text(encoding="utf-8")
+        self.assertIn("sorryhyun/anima_lora", merge)
 
 
 if __name__ == "__main__":

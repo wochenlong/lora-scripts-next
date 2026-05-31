@@ -24,15 +24,17 @@ Earlier Anima integration work also referenced:
 
 The historical reference repository is licensed under AGPL-3.0. Current Anima training should be synchronized from `kohya-ss/sd-scripts`; local code is limited to the WebUI compatibility wrapper, config adapter, defaults, and launch orchestration.
 
-### Anima LoRA Compile Optimizations (Turbo Mode)
+### Anima LoRA Fast Mode（进阶插件）
 
-The optional "Turbo" training mode integrates torch.compile acceleration, constant-token bucketing, and compile-friendly code patterns adapted from:
+The optional **Fast mode** (`model_train_type: anima-lora-fast`) integrates the optimized Anima LoRA training engine adapted from:
 
 - `sorryhyun/anima_lora`: https://github.com/sorryhyun/anima_lora
 
 Licensed under the **MIT License** (Copyright (c) 2026 Seunghyun Ji).
 
-The referenced repository is an optimized Anima LoRA training engine featuring per-block torch.compile with CUDAGraph capture, static-shape token bucketing for zero recompilation, and compile-friendly forward paths (einops removal, autocast elimination, hoisted dict loops). These techniques achieve ~5x training speedup on consumer GPUs at the cost of higher VRAM usage.
+SD Trainer ships this engine as an **optional plugin** (`extensions/anima_lora/`). On install, the plugin snapshot includes upstream `LICENSE` / `NOTICE` / `README.md` (see `mikazuki/anima_fast_backend/installer.py`). User-facing docs: [`docs/anima-fast.md`](docs/anima-fast.md).
+
+The referenced repository features per-block or full-model `torch.compile`, static-shape token bucketing, and compile-friendly forward paths. On consumer GPUs this yields substantially faster step times than the default Kohya/sd-scripts path at the cost of higher VRAM and a separate Python/CUDA runtime. See **Performance** in `docs/anima-fast.md` for measured comparisons in this repo.
 
 ### LyCORIS
 
