@@ -37,7 +37,7 @@ run_gui.bat          # Windows；Linux 见下方「安装」
 
 ## 命令行训练（进阶）
 
-习惯终端可直接用 **[docs/anima-edit-cli.md](docs/anima-edit-cli.md)**（单张 / 双张参考、数据集 TOML 字段、示例索引）。
+习惯终端可直接用 **[docs/anima-edit-cli.md](docs/anima-edit-cli.md)**；**所有示例 TOML / 数据路径**见 **[docs/anima-edit-examples.md](docs/anima-edit-examples.md)**。
 
 **双张参考（多图编辑）最小示例** — 先准备 `target/` + `reference/<stem>/` 两张图，再：
 
@@ -125,6 +125,7 @@ LoRA 可在 ComfyUI 配合 [ComfyUI-Cosmos-Reference](https://github.com/Mirumo0
 
 | 主题 | 链接 |
 |------|------|
+| **示例总览（单图 / 多图配置索引）** | **[docs/anima-edit-examples.md](docs/anima-edit-examples.md)** |
 | **命令行训练（单/双参考）** | **[docs/anima-edit-cli.md](docs/anima-edit-cli.md)** |
 | WebUI 教程、外部数据集 | [docs/anima-training.md — 图像编辑](docs/anima-training.md#图像编辑--条件训练实验) |
 | 双参考设计说明 | [docs/design/anima-edit-multi-reference.md](docs/design/anima-edit-multi-reference.md) |

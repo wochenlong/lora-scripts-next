@@ -37,7 +37,7 @@ run_gui.bat          # Windows; see Install below for Linux
 
 ## Command-line training (advanced)
 
-See **[docs/anima-edit-cli.md](docs/anima-edit-cli.md)** for single- and dual-reference layouts, dataset TOML fields, and example configs.
+See **[docs/anima-edit-cli.md](docs/anima-edit-cli.md)** and the full **[examples index](docs/anima-edit-examples.md)**.
 
 **Dual-reference (multi-image edit) quick start:**
 
@@ -122,6 +122,7 @@ Use the LoRA in ComfyUI with [ComfyUI-Cosmos-Reference](https://github.com/Mirum
 
 | Topic | Link |
 |-------|------|
+| **Examples index (single / dual ref)** | **[docs/anima-edit-examples.md](docs/anima-edit-examples.md)** |
 | **CLI training (single/dual ref)** | **[docs/anima-edit-cli.md](docs/anima-edit-cli.md)** |
 | WebUI guide & datasets | [docs/anima-training.md — image editing](docs/anima-training.md#图像编辑--条件训练实验) |
 | Dual-reference design | [docs/design/anima-edit-multi-reference.md](docs/design/anima-edit-multi-reference.md) |

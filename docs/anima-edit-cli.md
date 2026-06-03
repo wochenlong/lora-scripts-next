@@ -154,9 +154,8 @@ reference_count = 2
 
 示例文件：
 
-- [anima-edit-sample-prompts.toml](examples/anima-edit-sample-prompts.toml)（edit3）
+- [anima-edit-sample-prompts.toml](examples/anima-edit-sample-prompts.toml)（edit3 相对路径示例）
 - [anima-edit-dual-ref-multi-preview.toml](examples/anima-edit-dual-ref-multi-preview.toml)（多条 `[[prompts]]`）
-- [anima-edit-imagepulse-sample-prompts.toml](examples/anima-edit-imagepulse-sample-prompts.toml)（ImagePulse 数据）
 
 生成 manifest：
 
@@ -178,13 +177,16 @@ python script/ops/fetch_multiref_anima_edit_subset.py --count 48 --seed 42
 
 ## 4. 示例配置索引
 
+完整表格（单图 / 多图 / showcase / 脚本）见 **[docs/anima-edit-examples.md](anima-edit-examples.md)**。
+
 | 场景 | 数据集 TOML | 训练 TOML |
 |------|-------------|-----------|
 | 单参考 12 epoch | [single-ref-dataset](examples/anima-edit-single-ref-dataset.toml) | [single-ref-12epoch](examples/anima-edit-single-ref-12epoch.toml) |
 | 双参考冒烟 | [dual-ref-dataset](examples/anima-edit-dual-ref-dataset.toml) | [dual-ref-smoke](examples/anima-edit-dual-ref-smoke.toml) |
 | 双参考 10 epoch | 同上 | [dual-ref-10epoch](examples/anima-edit-dual-ref-10epoch.toml) |
 | 双参考多图预览 | 同上 | [dual-ref-multi-preview](examples/anima-edit-dual-ref-multi-preview.toml) |
-| ImagePulse 双参考 | [imagepulse-dataset](examples/anima-edit-imagepulse-dataset.toml) | [imagepulse-10epoch](examples/anima-edit-imagepulse-10epoch.toml) |
+
+> ImagePulse 相关 TOML 目前在 **`main`** 分支；本分支未跟踪，见 [anima-edit-examples.md §九](anima-edit-examples.md#九分支差异备忘)。
 
 上游直连（不经 wrapper 适配时，仅当你明确需要）：`vendor/sd-scripts/anima_train_network.py`，配置见 `*-sd-scripts.toml` 同名示例。
 
