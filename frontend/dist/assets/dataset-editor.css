@@ -5,6 +5,10 @@
   --de-border: #d8dde6;
   --de-text: #1f2937;
   --de-muted: #667085;
+  --de-input-bg: #ffffff;
+  --de-control-bg: #ffffff;
+  --de-control-text: var(--de-text);
+  --de-card-bg: #ffffff;
   --de-accent: #0f766e;
   --de-accent-strong: #0b5f59;
   --de-warn: #b45309;
@@ -35,8 +39,8 @@ button {
   min-height: 34px;
   border: 1px solid var(--de-border);
   border-radius: 6px;
-  background: #fff;
-  color: var(--de-text);
+  background: var(--de-control-bg);
+  color: var(--de-control-text);
   cursor: pointer;
 }
 
@@ -55,7 +59,7 @@ textarea {
   width: 100%;
   border: 1px solid var(--de-border);
   border-radius: 6px;
-  background: #fff;
+  background: var(--de-input-bg);
   color: var(--de-text);
   outline: none;
 }
@@ -246,7 +250,7 @@ label {
 }
 
 .de-tab.is-active {
-  background: #fff;
+  background: var(--de-card-bg);
   color: var(--de-accent-strong);
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
 }
@@ -592,8 +596,12 @@ label {
   --de-bg: var(--c-bg-soft, #f9f9f9);
   --de-surface: var(--c-bg, #ffffff);
   --de-border: var(--c-border, rgba(60, 60, 60, 0.12));
-  --de-text: var(--c-text-1, #213547);
-  --de-muted: var(--c-text-2, rgba(60, 60, 60, 0.7));
+  --de-text: #213547;
+  --de-muted: #5f6b7a;
+  --de-input-bg: #ffffff;
+  --de-control-bg: #ffffff;
+  --de-control-text: #213547;
+  --de-card-bg: #ffffff;
   --de-accent: var(--c-brand, #646cff);
   --de-accent-strong: var(--c-brand-dark, #535bf2);
   --de-workbench-min-width: 960px;
@@ -602,6 +610,7 @@ label {
   grid-template-rows: 1fr;
   padding: 8px 12px 14px;
   background: var(--de-bg);
+  color: var(--de-text);
 }
 
 .de-shell-embedded .de-workspace {
@@ -641,6 +650,8 @@ label {
 .de-shell-embedded textarea {
   border-color: var(--de-border);
   border-radius: 6px;
+  background: var(--de-input-bg);
+  color: var(--de-text);
 }
 
 .de-shell-embedded .de-dataset-path,
@@ -651,6 +662,21 @@ label {
 
 .de-shell-embedded button {
   border-radius: 6px;
+  background: var(--de-control-bg);
+  color: var(--de-control-text);
+}
+
+.de-shell-embedded .de-primary {
+  border-color: var(--de-accent);
+  background: var(--de-accent);
+  color: #fff;
+}
+
+.de-shell-embedded .de-card,
+.de-shell-embedded .de-preview,
+.de-shell-embedded .de-gallery-empty {
+  background: var(--de-card-bg);
+  color: var(--de-text);
 }
 
 .de-shell-embedded .de-tabs {

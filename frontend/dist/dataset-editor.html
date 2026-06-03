@@ -99,8 +99,10 @@
 
           <div id="side-panel-tagger" class="de-tab-panel">
             <h2>批量打标</h2>
-            <p class="de-placeholder">预留位置：后续接入现有数据集打标能力，只作用于当前范围。</p>
-            <button type="button" disabled>开始打标</button>
+            <p class="de-placeholder">为当前范围追加触发词；可先打标，再把角色名、画风词等触发词补到 caption 末尾。</p>
+            <label for="tagger-trigger-tags">额外触发词</label>
+            <input id="tagger-trigger-tags" type="text" placeholder="character name, style trigger">
+            <button id="apply-tagger-trigger" type="button">追加到当前范围</button>
           </div>
 
           <div id="side-panel-quick" class="de-tab-panel">

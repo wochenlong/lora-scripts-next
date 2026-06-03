@@ -88,6 +88,8 @@
     replaceTo: document.getElementById("replace-to"),
     sort: document.getElementById("sort-tags"),
     batch: document.getElementById("apply-batch"),
+    taggerTrigger: document.getElementById("tagger-trigger-tags"),
+    taggerTriggerApply: document.getElementById("apply-tagger-trigger"),
     cleanCaption: document.getElementById("clean-caption"),
     cleanUnderscore: document.getElementById("clean-underscore"),
     cleanEscape: document.getElementById("clean-escape"),
@@ -417,6 +419,7 @@
     el.prev.disabled = state.selected <= 0;
     el.next.disabled = state.selected < 0 || state.selected >= state.filtered.length - 1;
     el.batch.disabled = state.filtered.length === 0;
+    el.taggerTriggerApply.disabled = state.filtered.length === 0 || !el.taggerTrigger.value.trim();
 
     if (!item) {
       el.preview.innerHTML = "<span>未选择图片</span>";
@@ -723,6 +726,33 @@
     }
   }
 
+  async function applyTaggerTrigger() {
+    const targets = selectedBatchItems();
+    const triggerTags = splitTags(el.taggerTrigger.value);
+    if (!targets.length || !triggerTags.length) return;
+    const scope = state.selectedPaths.size ? "已选中" : "当前筛选结果中";
+    const ok = window.confirm(`将额外触发词追加到${scope}的 ${targets.length} 张图片，是否继续？`);
+    if (!ok) return;
+    try {
+      const data = await api("/api/dataset-editor/batch", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          root: state.root,
+          images: targets.map((item) => item.relative_path),
+          append: splitTags(el.taggerTrigger.value),
+        }),
+      });
+      applyChangedItems(data.items || []);
+      state.dirty = false;
+      setStatus(`额外触发词已追加，修改 ${data.changed || 0} 张图片。`);
+      await refreshHistory();
+      applyFilters();
+    } catch (err) {
+      setStatus(err.message, true);
+    }
+  }
+
   function appendTagToCaption(tag) {
     const item = currentItem();
     if (!item) return;
@@ -798,6 +828,14 @@
   el.prev.addEventListener("click", () => selectIndex(state.selected - 1));
   el.next.addEventListener("click", () => selectIndex(state.selected + 1));
   el.batch.addEventListener("click", applyBatch);
+  el.taggerTrigger.addEventListener("input", renderEditor);
+  el.taggerTrigger.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      applyTaggerTrigger();
+    }
+  });
+  el.taggerTriggerApply.addEventListener("click", applyTaggerTrigger);
   el.cleanup.addEventListener("click", applyCleanup);
   el.quickTagAdd.addEventListener("click", addQuickTag);
   el.quickTagInput.addEventListener("keydown", (event) => {

@@ -489,3 +489,44 @@ def test_dataset_editor_left_sidebar_owns_dataset_scope_and_tagger():
     assert "tagger: document.getElementById" in script
     assert ".de-scope-card" in css
     assert "grid-template-columns: repeat(5, 1fr)" in css
+
+
+def test_dataset_editor_tagger_panel_can_append_trigger_words():
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    entry = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js").read_text(
+        encoding="utf-8"
+    )
+    script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js").read_text(
+        encoding="utf-8"
+    )
+
+    for markup in (html, entry):
+        assert 'id="tagger-trigger-tags"' in markup
+        assert 'id="apply-tagger-trigger"' in markup
+        assert "额外触发词" in markup
+        assert "预留位置" not in markup
+
+    assert "taggerTrigger" in script
+    assert "applyTaggerTrigger" in script
+    assert "额外触发词" in script
+    assert 'append: splitTags(el.taggerTrigger.value)' in script
+
+
+def test_dataset_editor_embedded_dark_mode_keeps_text_and_controls_readable():
+    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+
+    embedded_shell = css.split(".de-shell-embedded {", 1)[1].split("}", 1)[0]
+    embedded_inputs = css.split(".de-shell-embedded .de-dataset-path,", 1)[1].split("}", 1)[0]
+    embedded_buttons = css.split(".de-shell-embedded button {", 1)[1].split("}", 1)[0]
+    embedded_primary = css.split(".de-shell-embedded .de-primary {", 1)[1].split("}", 1)[0]
+    embedded_cards = css.split(".de-shell-embedded .de-card,", 1)[1].split("}", 1)[0]
+
+    assert "color: var(--de-text)" in embedded_shell
+    assert "background: var(--de-input-bg)" in embedded_inputs
+    assert "color: var(--de-text)" in embedded_inputs
+    assert "background: var(--de-control-bg)" in embedded_buttons
+    assert "color: var(--de-control-text)" in embedded_buttons
+    assert "color: #fff" in embedded_primary
+    assert "color: var(--de-text)" in embedded_cards
