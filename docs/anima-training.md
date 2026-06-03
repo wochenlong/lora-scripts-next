@@ -34,9 +34,12 @@
 
 ## 图像编辑 / 条件训练（实验）
 
-`anima-edit` 分支在 Anima 训练页增加了 **图像编辑（实验功能）** 分组，并已接入 Anima conditioning / image editing 训练后端。
+> **WebUI 入口（推荐）**：侧栏 **「Anima 图像编辑」** → http://127.0.0.1:28000/lora/anima-edit.html（`anima-edit-lora`）。文生图 LoRA 请用 **「Anima」** 页，不要与 Edit 混用。  
+> **命令行入口**：[docs/anima-edit-cli.md](anima-edit-cli.md)（单/双参考、`accelerate launch`、双参考数据集字段）。  
+> **分支**：`git checkout anima-edit`；Release 整合包与 `main` 暂无本后端。  
+> **分支首页速查**：[README-zh.md](../README-zh.md)（WebUI 步骤 + CLI 双参考命令）。
 
-> 当前 Release 整合包还不包含该分支能力。要测试图像编辑训练，请从源码切到 `anima-edit` 分支运行：`git checkout anima-edit`。
+`anima-edit` 分支除专用 Edit 页外，旧版 **Anima LoRA 页内的「图像编辑（实验功能）」** 分组仍可用；新用户请优先使用 **Anima 图像编辑** 专用页（支持 **单张 / 双张参考图** 布局与 manifest 预览）。
 
 条件训练使用成对图片：
 
@@ -101,7 +104,11 @@ python script/ops/generate_anima_edit_sample_prompts.py ^
 
 ### 双参考图（方案 2，P0）
 
-支持 **1 目标 + 2 参考**：`reference/<target_stem>/` 子目录内按文件名排序取前 2 张，训练时沿 latent 时间维拼接（`T=3`）。WebUI 选择「双张参考图」布局；CLI 见 `docs/examples/anima-edit-dual-ref-dataset.toml` 与冒烟配置 `docs/examples/anima-edit-dual-ref-smoke.toml`。设计说明：[docs/design/anima-edit-multi-reference.md](design/anima-edit-multi-reference.md)。显存与分辨率汇总：[docs/design/anima-edit-vram-resolution.md](design/anima-edit-vram-resolution.md)。
+支持 **1 目标 + 2 参考**：`reference/<target_stem>/` 子目录内按文件名排序取前 2 张，训练时沿 latent 时间维拼接（`T=3`）。WebUI 选择「双张参考图」布局。
+
+**命令行**：见 **[docs/anima-edit-cli.md](anima-edit-cli.md)** §3（`conditioning_multi_reference = true`、`conditioning_reference_count = 2`、manifest 预览）。示例 TOML：`anima-edit-dual-ref-dataset.toml`、`anima-edit-dual-ref-smoke.toml`、`anima-edit-dual-ref-10epoch.toml`。
+
+设计说明：[docs/design/anima-edit-multi-reference.md](design/anima-edit-multi-reference.md)。显存与分辨率：[docs/design/anima-edit-vram-resolution.md](design/anima-edit-vram-resolution.md)。
 
 ### 图像编辑独立训练类型（`anima-edit-lora`）
 
