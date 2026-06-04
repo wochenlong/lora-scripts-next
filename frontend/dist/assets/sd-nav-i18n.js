@@ -14,6 +14,8 @@
     工具与调试: "Tools",
     数据集打标: "Dataset Tagging",
     标签编辑: "Tag Editor",
+    原生标签编辑: "Native Tag Editor",
+    经典标签编辑: "Legacy Tag Editor",
     "LoRA 脚本工具": "LoRA Scripts",
     帮助: "Help",
     新手上路: "Getting Started",
@@ -196,6 +198,44 @@
     a.appendChild(document.createTextNode(" 终端 "));
     li.appendChild(a);
     othersGroup.appendChild(li);
+  }
+
+  function setSidebarAnchorLabel(anchor, text) {
+    if (!anchor) return;
+    anchor.setAttribute("aria-label", text);
+    const textNodes = Array.from(anchor.childNodes).filter((node) => node.nodeType === Node.TEXT_NODE);
+    const textNode = textNodes[0];
+    textNodes.slice(1).forEach((node) => node.remove());
+    if (textNode) {
+      textNode.textContent = " " + text + " ";
+    } else {
+      anchor.appendChild(document.createTextNode(" " + text + " "));
+    }
+  }
+
+  function ensureTagEditorLinks() {
+    const sidebar = document.querySelector(".sidebar .sidebar-items");
+    if (!sidebar) return;
+    const legacy =
+      sidebar.querySelector('a[href="/tageditor.md"]') ||
+      sidebar.querySelector('a[href="/tageditor.html"]');
+    if (!legacy) return;
+    setSidebarAnchorLabel(legacy, "经典标签编辑");
+
+    let native = sidebar.querySelector('a[href="/native-tageditor.html"]');
+    if (!native) {
+      const li = document.createElement("li");
+      native = document.createElement("a");
+      native.href = "/native-tageditor.html";
+      native.className = "sidebar-item sidebar-heading";
+      li.appendChild(native);
+      legacy.closest("li")?.after(li);
+    }
+    if (location.pathname === "/native-tageditor.html") {
+      native.classList.add("active");
+      legacy.classList.remove("active");
+    }
+    setSidebarAnchorLabel(native, "原生标签编辑");
   }
 
   function ensureTerminalStyle() {
@@ -748,6 +788,7 @@
 
     const map = english ? ZH_TO_EN : EN_TO_ZH;
     ensureSidebarTerminalLink();
+    ensureTagEditorLinks();
     const sidebar = document.querySelector(".sidebar .sidebar-items");
     if (sidebar) replaceInElement(sidebar, map);
 

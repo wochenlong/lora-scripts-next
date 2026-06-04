@@ -1,4 +1,9 @@
 (function () {
+  function initDatasetEditor() {
+  const root = document.getElementById("sd-native-editor-entry") || document.querySelector(".de-shell");
+  if (!root || root.dataset.sdDatasetEditorBound === "true") return;
+  root.dataset.sdDatasetEditorBound = "true";
+
   const QUICK_TAGS_KEY = "sd-trainer.dataset-editor.quick-tags";
   const API_HISTORY = "/api/dataset-editor/history";
   const API_UNDO = "/api/dataset-editor/undo";
@@ -861,4 +866,9 @@
   renderCategories();
   updateAutoGalleryPageSize();
   render();
+  }
+
+  window.sdDatasetEditor = window.sdDatasetEditor || {};
+  window.sdDatasetEditor.init = initDatasetEditor;
+  initDatasetEditor();
 })();

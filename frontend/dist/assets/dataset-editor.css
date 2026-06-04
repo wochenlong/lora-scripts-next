@@ -560,6 +560,12 @@ label {
   color: var(--de-muted);
 }
 
+.de-quick-tags-title,
+.de-quick-tags,
+.de-quick-custom {
+  display: none;
+}
+
 .de-collapsible {
   border-top: 1px solid var(--de-border);
   padding-top: 8px;
@@ -607,16 +613,18 @@ label {
   --de-workbench-min-width: 960px;
   height: 100vh;
   min-width: 0;
+  display: block;
   grid-template-rows: 1fr;
   padding: 8px 12px 14px;
   background: var(--de-bg);
   color: var(--de-text);
+  overflow: hidden;
 }
 
 .de-shell-embedded .de-workspace {
-  grid-template-columns: 320px minmax(520px, 1fr) 380px;
+  height: calc(100vh - 22px);
+  grid-template-columns: 280px minmax(0, 1fr) 300px;
   gap: 10px;
-  height: 100%;
   padding: 0;
 }
 
@@ -630,6 +638,17 @@ label {
 .de-shell-embedded .de-panel {
   gap: 8px;
   padding: 10px;
+}
+
+.de-shell-embedded .de-filter,
+.de-shell-embedded .de-gallery-wrap,
+.de-shell-embedded .de-editor {
+  min-height: 0;
+}
+
+.de-shell-embedded .de-tab-panel.is-active {
+  flex: 0 0 auto;
+  min-height: max-content;
 }
 
 .de-shell-embedded .de-dataset-card {
@@ -706,6 +725,18 @@ label {
   font-size: 12px;
 }
 
+@media (max-width: 1260px) {
+  .de-shell-embedded .de-gallery-pager {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .de-shell-embedded .de-gallery-page-controls {
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+}
+
 .de-shell-embedded .de-gallery {
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 8px;
@@ -752,13 +783,80 @@ label {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
-@media (max-width: 1500px) {
+html.dark .de-shell-embedded {
+  --de-bg: #111827;
+  --de-surface: #1f2937;
+  --de-border: rgba(148, 163, 184, 0.2);
+  --de-text: #e5e7eb;
+  --de-muted: #94a3b8;
+  --de-input-bg: #0f172a;
+  --de-control-bg: #0f172a;
+  --de-control-text: #e5e7eb;
+  --de-card-bg: #111827;
+  --de-accent: #818cf8;
+  --de-accent-strong: #a5b4fc;
+}
+
+html.dark .de-shell-embedded .de-dataset-card,
+html.dark .de-shell-embedded .de-scope-card,
+html.dark .de-shell-embedded .de-selection-bar,
+html.dark .de-shell-embedded .de-gallery-pager,
+html.dark .de-shell-embedded .de-change,
+html.dark .de-shell-embedded .de-gallery-empty {
+  background: #0f172a;
+}
+
+html.dark .de-shell-embedded .de-tabs {
+  background: #0f172a;
+}
+
+html.dark .de-shell-embedded .de-tab.is-active {
+  background: #1f2937;
+  color: var(--de-text);
+}
+
+html.dark .de-shell-embedded .de-card,
+html.dark .de-shell-embedded .de-preview,
+html.dark .de-shell-embedded .de-gallery-empty,
+html.dark .de-shell-embedded .de-card img {
+  background: #020617;
+}
+
+html.dark .de-shell-embedded .de-tag {
+  background: rgba(129, 140, 248, 0.16);
+  color: #c7d2fe;
+}
+
+html.dark .de-shell-embedded .de-card-check {
+  border-color: rgba(148, 163, 184, 0.45);
+  background: rgba(15, 23, 42, 0.92);
+  color: #93c5fd;
+}
+
+@media (max-width: 1120px) {
   .de-shell-embedded .de-workspace {
-    grid-template-columns: 300px minmax(420px, 1fr);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: stretch;
+    align-content: flex-start;
+    height: calc(100vh - 22px);
+  }
+
+  .de-shell-embedded .de-filter {
+    flex: 0 0 280px;
+    width: 280px;
+    max-width: 280px;
+    min-height: 0;
+  }
+
+  .de-shell-embedded .de-gallery-wrap {
+    flex: 1 1 420px;
+    min-width: 0;
+    min-height: 320px;
   }
 
   .de-shell-embedded .de-editor {
-    grid-column: 1 / -1;
+    flex: 1 0 100%;
     min-height: 320px;
   }
 
@@ -767,13 +865,25 @@ label {
   }
 }
 
-@media (max-width: 1080px) {
+@media (max-width: 920px) {
   .de-shell-embedded {
     height: auto;
+    overflow: auto;
   }
 
   .de-shell-embedded .de-workspace {
-    grid-template-columns: 260px minmax(360px, 1fr);
+    display: grid;
+    flex-wrap: nowrap;
+    height: auto;
+    grid-template-columns: 1fr;
+  }
+
+  .de-shell-embedded .de-filter,
+  .de-shell-embedded .de-gallery-wrap,
+  .de-shell-embedded .de-editor {
+    flex: none;
+    width: auto;
+    max-width: none;
   }
 
   .de-shell-embedded .de-selection-bar,

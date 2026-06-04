@@ -77,7 +77,7 @@
             </div>
 
             <div id="side-panel-quick" class="de-tab-panel">
-              <h2>常用标签</h2>
+              <h2 class="de-quick-tags-title">常用标签</h2>
               <div id="quick-tags" class="de-quick-tags"></div>
               <div class="de-quick-custom">
                 <input id="quick-tag-input" type="text" placeholder="添加常用 tag">
@@ -165,30 +165,37 @@
     return true;
   }
 
+  function initializeMountedEditor() {
+    window.sdDatasetEditor?.init?.();
+  }
+
   function loadEditorScript() {
-    if (document.getElementById(EDITOR_SCRIPT_ID)) return;
-    if ([...document.scripts].some((script) => script.src.includes("/assets/dataset-editor.js"))) return;
+    if (document.getElementById(EDITOR_SCRIPT_ID)) {
+      initializeMountedEditor();
+      return;
+    }
+    if ([...document.scripts].some((script) => script.src.includes("/assets/dataset-editor.js"))) {
+      initializeMountedEditor();
+      return;
+    }
     const configured = document.querySelector('meta[name="sd-dataset-editor-script"]')?.content;
     const script = document.createElement("script");
     script.id = EDITOR_SCRIPT_ID;
-    script.src = configured || "/assets/dataset-editor.js?v=2.6.0";
+    script.src = configured || "/assets/dataset-editor.js?v=2.7.1";
     script.defer = true;
+    script.addEventListener("load", initializeMountedEditor, { once: true });
     document.body.appendChild(script);
   }
 
   function boot() {
     const root = document.querySelector("#app");
-    let mounted = false;
     let stableTimer = 0;
 
     function scheduleMount() {
       window.clearTimeout(stableTimer);
       stableTimer = window.setTimeout(() => {
-        if (mounted) return;
         if (mountEditor()) {
-          mounted = true;
           loadEditorScript();
-          if (observer) observer.disconnect();
         }
       }, 120);
     }
@@ -203,11 +210,8 @@
 
     scheduleMount();
     window.addEventListener("load", () => {
-      if (mounted) return;
       if (mountEditor()) {
-        mounted = true;
         loadEditorScript();
-        if (observer) observer.disconnect();
       }
     });
   }

@@ -1,3 +1,5 @@
+import json
+import re
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -27,8 +29,13 @@ def test_dataset_editor_scan_lists_images_and_captions(tmp_path):
     assert payload["status"] == "success"
     assert payload["data"]["root"] == str(tmp_path.resolve()).replace("\\", "/")
     assert payload["data"]["total"] == 2
-    assert payload["data"]["tags"] == [{"tag": "1girl", "count": 1}, {"tag": "solo", "count": 1}]
-    assert payload["data"]["categories"] == [{"name": "根目录", "value": "", "count": 2}]
+    assert payload["data"]["tags"] == [
+        {"tag": "1girl", "count": 1},
+        {"tag": "solo", "count": 1},
+    ]
+    assert payload["data"]["categories"] == [
+        {"name": "根目录", "value": "", "count": 2}
+    ]
 
     first = payload["data"]["items"][0]
     assert first["name"] == "alpha.png"
@@ -72,7 +79,11 @@ def test_dataset_editor_save_caption_creates_txt_caption(tmp_path):
     client = TestClient(app)
     response = client.post(
         "/api/dataset-editor/caption",
-        json={"root": str(tmp_path), "image": "alpha.png", "caption": "cat ears, smile"},
+        json={
+            "root": str(tmp_path),
+            "image": "alpha.png",
+            "caption": "cat ears, smile",
+        },
     )
 
     assert response.status_code == 200
@@ -105,8 +116,12 @@ def test_dataset_editor_batch_replace_remove_append_and_sort(tmp_path):
     payload = response.json()
     assert payload["status"] == "success"
     assert payload["data"]["changed"] == 2
-    assert (tmp_path / "alpha.txt").read_text(encoding="utf-8") == "1girl, masterpiece, new tag"
-    assert (tmp_path / "beta.txt").read_text(encoding="utf-8") == "blue eyes, masterpiece"
+    assert (tmp_path / "alpha.txt").read_text(
+        encoding="utf-8"
+    ) == "1girl, masterpiece, new tag"
+    assert (tmp_path / "beta.txt").read_text(
+        encoding="utf-8"
+    ) == "blue eyes, masterpiece"
 
 
 def test_dataset_editor_batch_cleans_obvious_caption_noise(tmp_path):
@@ -289,21 +304,85 @@ def test_dataset_editor_html_is_served_from_main_webui():
     assert "<details" not in response.text
 
 
-def test_legacy_tageditor_points_to_native_editor():
+def test_legacy_tageditor_stays_legacy_only():
     client = TestClient(app)
     response = client.get("/tageditor.html")
 
     assert response.status_code == 200
+    assert "tageditor.html.66da263e.js" in response.text
+    assert "dataset-editor-entry.js" not in response.text
+    assert 'name="sd-dataset-editor-script"' not in response.text
+
+
+def test_native_tageditor_embeds_native_editor_in_trainer_shell():
+    client = TestClient(app)
+    response = client.get("/native-tageditor.html")
+
+    assert response.status_code == 200
     assert "dataset-editor-entry.js" in response.text
-    assert "dataset-editor.js" in response.text
     assert "dataset-editor.css" in response.text
     assert 'name="sd-dataset-editor-script"' in response.text
+    assert (
+        'src="/assets/app.547295de.js?v=20260604-native-tageditor-2"' in response.text
+    )
+    assert 'href="/tageditor.md"' in response.text
+    assert 'href="/native-tageditor.html"' in response.text
+    assert "经典标签编辑" in response.text
+    assert "原生标签编辑" in response.text
+
+
+def test_native_tageditor_uses_native_vuepress_page_data():
+    native_tageditor = (ROOT / "frontend" / "dist" / "native-tageditor.html").read_text(
+        encoding="utf-8"
+    )
+    native_page_data = (
+        ROOT / "frontend" / "dist" / "assets" / "native-tageditor.html.native.js"
+    )
+    native_page_component = (
+        ROOT / "frontend" / "dist" / "assets" / "native-tageditor.html.page.js"
+    )
+    app_bundle = (ROOT / "frontend" / "dist" / "assets" / "app.547295de.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert native_page_data.exists()
+    assert native_page_component.exists()
+    page_data = native_page_data.read_text(encoding="utf-8")
+    parsed_page_data = json.loads(
+        re.search(r"JSON\.parse\((.*)\);export", page_data).group(1)
+    )
+    parsed_page_data = json.loads(parsed_page_data)
+    assert parsed_page_data["key"] == "v-native-tageditor"
+    assert parsed_page_data["title"] == "原生标签编辑"
+    assert parsed_page_data["frontmatter"] == {}
+    assert parsed_page_data["frontmatter"].get("type") != "iframe"
+    assert (
+        '"v-native-tageditor":()=>wt(()=>import("./native-tageditor.html.native.js?v=20260604-native-tageditor-2")'
+        in app_bundle
+    )
+    assert (
+        '"v-native-tageditor":Jt(()=>wt(()=>import("./native-tageditor.html.page.js?v=20260604-native-tageditor-2")'
+        in app_bundle
+    )
+    assert app_bundle.count('["v-native-tageditor","/native-tageditor.html"') == 1
+    assert (
+        '["v-native-tageditor","/native-tageditor.html",{title:"原生标签编辑"}'
+        in app_bundle
+    )
+    assert (
+        'rel="modulepreload" href="/assets/tageditor.html.66da263e.js"'
+        not in native_tageditor
+    )
+    assert (
+        'rel="modulepreload" href="/assets/tageditor.html.173f1b6a.js"'
+        not in native_tageditor
+    )
 
 
 def test_tageditor_embeds_native_editor_in_trainer_shell():
-    script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js").read_text(
-        encoding="utf-8"
-    )
+    script = (
+        ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js"
+    ).read_text(encoding="utf-8")
     css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
         encoding="utf-8"
     )
@@ -312,16 +391,64 @@ def test_tageditor_embeds_native_editor_in_trainer_shell():
     assert "theme-default-content" in script
     assert "打开内置编辑器" not in script
     assert "/proxy/tageditor/" not in script
+    assert 'document.getElementById("sd-native-editor-entry")' in script
+    assert "initializeMountedEditor()" in script
+    assert "window.sdDatasetEditor?.init?.()" in script
+    assert "observer.disconnect()" not in script
     assert ".de-shell-embedded" in css
     assert "--de-accent: var(--c-brand" in css
     assert "grid-template-rows: 1fr" in css
     assert ".de-shell-embedded .de-workspace" in css
     assert "height: 100%" in css
-    assert "grid-template-columns: 320px minmax(520px, 1fr) 380px" in css
+    assert "grid-template-columns: 280px minmax(0, 1fr) 300px" in css
     assert ".de-gallery-empty" in css
-    assert "@media (max-width: 1500px)" in css
-    assert "grid-template-columns: 300px minmax(420px, 1fr)" in css
+    assert "@media (max-width: 1120px)" in css
+    assert "flex-wrap: wrap;" in css
     assert ".de-shell-embedded .de-selection-actions" in css
+
+
+def test_embedded_dataset_editor_medium_width_layout_avoids_overlap():
+    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+
+    medium_breakpoint = css.split("@media (max-width: 1120px)", 1)[1].split(
+        "@media (max-width: 920px)", 1
+    )[0]
+    assert "display: flex;" in medium_breakpoint
+    assert "flex-wrap: wrap;" in medium_breakpoint
+    assert ".de-shell-embedded .de-filter" in medium_breakpoint
+    assert "flex: 0 0 280px;" in medium_breakpoint
+    assert ".de-shell-embedded .de-editor" in medium_breakpoint
+    assert "flex: 1 0 100%;" in medium_breakpoint
+
+
+def test_embedded_dataset_editor_dark_mode_tokens_are_explicit():
+    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert "html.dark .de-shell-embedded" in css
+    assert "--de-bg: #111827;" in css
+    assert "--de-surface: #1f2937;" in css
+    assert "--de-text: #e5e7eb;" in css
+    assert "html.dark .de-shell-embedded .de-preview" in css
+    assert "html.dark .de-shell-embedded .de-tag" in css
+
+
+def test_embedded_dataset_editor_pager_wraps_before_buttons_overflow():
+    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+
+    pager_breakpoint = css.split("@media (max-width: 1260px)", 1)[1].split(
+        "html.dark .de-shell-embedded", 1
+    )[0]
+    assert ".de-shell-embedded .de-gallery-pager" in pager_breakpoint
+    assert "grid-template-columns: 1fr;" in pager_breakpoint
+    assert ".de-shell-embedded .de-gallery-page-controls" in pager_breakpoint
+    assert "flex-wrap: wrap;" in pager_breakpoint
+    assert "justify-content: flex-start;" in pager_breakpoint
 
 
 def test_legacy_gradio_tageditor_is_opt_in():
@@ -359,6 +486,9 @@ def test_dataset_editor_frontend_exposes_edit_efficiency_controls():
     assert "selectedPaths" in script
     assert "selectionMode" in script
     assert "toggleItemSelection" in script
+    assert "window.sdDatasetEditor" in script
+    assert "function initDatasetEditor()" in script
+    assert "dataset.sdDatasetEditorBound" in script
     assert "selectedBatchItems" in script
 
 
@@ -385,9 +515,13 @@ def test_dataset_editor_css_uses_readable_thumbnail_cards():
 
 
 def test_dataset_editor_keeps_tag_cloud_out_of_default_filter_tab():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(
+        encoding="utf-8"
+    )
 
-    filter_panel = html.split('id="side-panel-filter"', 1)[1].split('id="side-panel-quick"', 1)[0]
+    filter_panel = html.split('id="side-panel-filter"', 1)[1].split(
+        'id="side-panel-quick"', 1
+    )[0]
     quick_panel = html.split('id="side-panel-quick"', 1)[1]
 
     assert 'id="tag-list"' not in filter_panel
@@ -395,7 +529,9 @@ def test_dataset_editor_keeps_tag_cloud_out_of_default_filter_tab():
 
 
 def test_dataset_editor_default_sidebar_starts_with_cleanup_workflow():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(
+        encoding="utf-8"
+    )
 
     clean_index = html.index('id="side-tab-clean"')
     batch_index = html.index('id="side-tab-batch"')
@@ -417,7 +553,9 @@ def test_dataset_editor_pager_controls_are_right_aligned():
 
 
 def test_dataset_editor_gallery_supports_bulk_selection_controls():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(
+        encoding="utf-8"
+    )
     css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
         encoding="utf-8"
     )
@@ -427,9 +565,9 @@ def test_dataset_editor_gallery_supports_bulk_selection_controls():
     assert 'id="select-page"' in html
     assert 'id="select-all"' in html
     assert 'id="clear-selection"' in html
-    assert "selectAllItems" in (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js").read_text(
-        encoding="utf-8"
-    )
+    assert "selectAllItems" in (
+        ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js"
+    ).read_text(encoding="utf-8")
     assert ".de-selection-bar" in css
     assert ".de-card-check" in css
     assert 'data-bulk-selected="true"' in css
@@ -440,7 +578,8 @@ def test_embedded_dataset_editor_compacts_toolbar_on_narrow_viewports():
         encoding="utf-8"
     )
 
-    assert "@media (max-width: 1080px)" in css
+    assert "@media (max-width: 920px)" in css
+    assert "@media (max-width: 1260px)" in css
     assert ".de-shell-embedded .de-selection-bar" in css
     assert "grid-template-columns: 1fr" in css
     assert ".de-shell-embedded .de-gallery-page-controls" in css
@@ -449,7 +588,9 @@ def test_embedded_dataset_editor_compacts_toolbar_on_narrow_viewports():
 
 
 def test_dataset_editor_dataset_picker_is_prominent():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(
+        encoding="utf-8"
+    )
     css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
         encoding="utf-8"
     )
@@ -468,7 +609,9 @@ def test_dataset_editor_dataset_picker_is_prominent():
 
 
 def test_dataset_editor_left_sidebar_owns_dataset_scope_and_tagger():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(
+        encoding="utf-8"
+    )
     css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
         encoding="utf-8"
     )
@@ -476,7 +619,9 @@ def test_dataset_editor_left_sidebar_owns_dataset_scope_and_tagger():
         encoding="utf-8"
     )
 
-    sidebar = html.split('class="de-panel de-filter"', 1)[1].split('class="de-gallery-wrap"', 1)[0]
+    sidebar = html.split('class="de-panel de-filter"', 1)[1].split(
+        'class="de-gallery-wrap"', 1
+    )[0]
     editor = html.split('class="de-panel de-editor"', 1)[1]
 
     assert 'class="de-dataset-card"' in sidebar
@@ -491,11 +636,49 @@ def test_dataset_editor_left_sidebar_owns_dataset_scope_and_tagger():
     assert "grid-template-columns: repeat(5, 1fr)" in css
 
 
-def test_dataset_editor_tagger_panel_can_append_trigger_words():
-    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(encoding="utf-8")
-    entry = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js").read_text(
+def test_dataset_editor_hides_quick_tags_but_keeps_tag_filter():
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(
         encoding="utf-8"
     )
+    entry = (
+        ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js"
+    ).read_text(encoding="utf-8")
+    css = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.css").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'class="de-quick-tags-title"' in html
+    assert 'class="de-quick-tags-title"' in entry
+    assert ".de-quick-tags-title" in css
+    assert ".de-quick-tags" in css
+    assert ".de-quick-custom" in css
+    assert "display: none;" in css
+    assert "按标签筛选" in html
+    assert "按标签筛选" in entry
+    assert 'id="tag-list"' in html
+    assert 'id="tag-list"' in entry
+
+
+def test_nav_i18n_keeps_native_tag_editor_entry_distinct():
+    script = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "function ensureTagEditorLinks()" in script
+    assert "经典标签编辑" in script
+    assert "原生标签编辑" in script
+    assert "textNodes.slice(1).forEach" in script
+    assert 'native.href = "/native-tageditor.html"' in script
+    assert "ensureTagEditorLinks();" in script
+
+
+def test_dataset_editor_tagger_panel_can_append_trigger_words():
+    html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(
+        encoding="utf-8"
+    )
+    entry = (
+        ROOT / "frontend" / "dist" / "assets" / "dataset-editor-entry.js"
+    ).read_text(encoding="utf-8")
     script = (ROOT / "frontend" / "dist" / "assets" / "dataset-editor.js").read_text(
         encoding="utf-8"
     )
@@ -509,7 +692,7 @@ def test_dataset_editor_tagger_panel_can_append_trigger_words():
     assert "taggerTrigger" in script
     assert "applyTaggerTrigger" in script
     assert "额外触发词" in script
-    assert 'append: splitTags(el.taggerTrigger.value)' in script
+    assert "append: splitTags(el.taggerTrigger.value)" in script
 
 
 def test_dataset_editor_embedded_dark_mode_keeps_text_and_controls_readable():
@@ -518,9 +701,13 @@ def test_dataset_editor_embedded_dark_mode_keeps_text_and_controls_readable():
     )
 
     embedded_shell = css.split(".de-shell-embedded {", 1)[1].split("}", 1)[0]
-    embedded_inputs = css.split(".de-shell-embedded .de-dataset-path,", 1)[1].split("}", 1)[0]
+    embedded_inputs = css.split(".de-shell-embedded .de-dataset-path,", 1)[1].split(
+        "}", 1
+    )[0]
     embedded_buttons = css.split(".de-shell-embedded button {", 1)[1].split("}", 1)[0]
-    embedded_primary = css.split(".de-shell-embedded .de-primary {", 1)[1].split("}", 1)[0]
+    embedded_primary = css.split(".de-shell-embedded .de-primary {", 1)[1].split(
+        "}", 1
+    )[0]
     embedded_cards = css.split(".de-shell-embedded .de-card,", 1)[1].split("}", 1)[0]
 
     assert "color: var(--de-text)" in embedded_shell
