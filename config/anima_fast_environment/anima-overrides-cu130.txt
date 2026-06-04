@@ -1,3 +1,4 @@
 # sam3 declares numpy<2, while current anima_lora requires numpy>=2.
 # The existing Anima runtime validated in this real test uses NumPy 2.x.
 numpy>=2.0.0
+opencv-python-headless==4.13.0.92 ; sys_platform == "linux"

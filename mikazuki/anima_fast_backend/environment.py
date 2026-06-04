@@ -31,6 +31,12 @@ ENVIRONMENT_DIR = Path("config/anima_fast_environment")
 ANIMA_CONSTRAINTS = ENVIRONMENT_DIR / "anima-constraints-cu130.txt"
 ANIMA_OVERRIDES = ENVIRONMENT_DIR / "anima-overrides-cu130.txt"
 MAIN_CONSTRAINTS = ENVIRONMENT_DIR / "main-constraints-cu130.txt"
+FLASH_ATTN_WINDOWS_MARKER = "flash-attn @ https://"
+FLASH_ATTN_LINUX_PLATFORM_MARKER = "sys_platform == 'linux'"
+FLASH_ATTN_LINUX_CU130_URL = (
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.4/"
+    "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl"
+)
 
 ANIMA_OPTIMIZER_PACKAGES = {
     "bitsandbytes": "0.49.2",
@@ -76,11 +82,21 @@ ANIMA_EXPECTED = {
     },
 }
 
+ANIMA_LINUX_EXACT_OVERRIDES = {
+    "torch": "2.12.0+cu130",
+    "torchvision": "0.27.0+cu130",
+}
+
+ANIMA_WINDOWS_ONLY_EXACT = {"triton-windows"}
+
 MAIN_EXPECTED = {
     "python_major_minor": None,
     "exact": {
         "numpy": "1.26.4",
         "opencv-python": "4.8.1.78",
+    },
+    "alternatives": {
+        "opencv-python": ["opencv-python-headless"],
     },
 }
 
@@ -148,7 +164,12 @@ def build_environment_install_plan(
     root = project_root.resolve()
     extension_root = _resolve_child(root, layout.root)
     python_dir = _resolve_child(root, root / ".python")
-    base_python = python_dir / "cpython-3.13.13-windows-x86_64-none" / "python.exe"
+    if sys.platform == "win32":
+        base_python = python_dir / "cpython-3.13.13-windows-x86_64-none" / "python.exe"
+        venv_python = extension_root / ".venv" / "Scripts" / "python.exe"
+    else:
+        base_python = python_dir / "cpython-3.13.13-linux-x86_64-gnu" / "bin" / "python3"
+        venv_python = extension_root / ".venv" / "bin" / "python"
     env_dir = root / ENVIRONMENT_DIR
     constraints = env_dir / ANIMA_CONSTRAINTS.name
     overrides = env_dir / ANIMA_OVERRIDES.name
@@ -159,7 +180,7 @@ def build_environment_install_plan(
         source_commit=source_commit,
         python_install_dir=python_dir,
         base_python=base_python,
-        venv_python=extension_root / ".venv" / "Scripts" / "python.exe",
+        venv_python=venv_python,
         constraints=constraints,
         overrides=overrides,
         dry_run=dry_run,
@@ -168,6 +189,52 @@ def build_environment_install_plan(
 
 def _append(log: LogFn, line: str) -> None:
     log(line)
+
+
+def _replace_flash_attn_dependency(source_root: Path, platform_marker: str, replacement: str, log: LogFn) -> list[str]:
+    pyproject = source_root / "pyproject.toml"
+    if not pyproject.is_file():
+        return []
+    lines = pyproject.read_text(encoding="utf-8").splitlines(keepends=True)
+    changed: list[str] = []
+    patched: list[str] = []
+    for line in lines:
+        stripped = line.lstrip()
+        if (
+            not stripped.startswith("#")
+            and FLASH_ATTN_WINDOWS_MARKER in line
+            and platform_marker in line
+        ):
+            indent = line[: len(line) - len(stripped)]
+            patched.append(indent + replacement + ("\n" if line.endswith("\n") else ""))
+            changed.append(line.strip())
+            continue
+        patched.append(line)
+    if changed:
+        pyproject.write_text("".join(patched), encoding="utf-8")
+        for dependency in changed:
+            _append(log, f"[patch] localized Linux cu130 flash-attn dependency: {dependency}")
+    return changed
+
+
+def localize_linux_flash_attn_dependency(source_root: Path, log: LogFn = print) -> list[str]:
+    if not sys.platform.startswith("linux"):
+        return []
+    replacement = f'"flash-attn @ {FLASH_ATTN_LINUX_CU130_URL} ; {FLASH_ATTN_LINUX_PLATFORM_MARKER}",'
+    return _replace_flash_attn_dependency(source_root, FLASH_ATTN_LINUX_PLATFORM_MARKER, replacement, log)
+
+
+def _anima_expected_for_platform(platform: str | None = None) -> dict:
+    platform = platform or sys.platform
+    expected = {
+        "python_major_minor": ANIMA_EXPECTED["python_major_minor"],
+        "exact": dict(ANIMA_EXPECTED["exact"]),
+    }
+    if platform.startswith("linux"):
+        for package in ANIMA_WINDOWS_ONLY_EXACT:
+            expected["exact"].pop(package, None)
+        expected["exact"].update(ANIMA_LINUX_EXACT_OVERRIDES)
+    return expected
 
 
 def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str, str] | None = None) -> None:
@@ -245,6 +312,9 @@ def install_environment(plan: EnvironmentInstallPlan, log: LogFn = print) -> Aud
     if plan.source_commit:
         _append(log, f"[source] pinned commit {plan.source_commit}")
     copy_source_snapshot(build_install_plan(plan.source_root, plan.layout, dry_run=False, source_commit=plan.source_commit))
+    localized_direct_urls = localize_linux_flash_attn_dependency(plan.layout.source, log)
+    if localized_direct_urls:
+        facts["localized_direct_url_dependencies"] = localized_direct_urls
 
     if not plan.constraints.is_file():
         raise FileNotFoundError(f"Anima constraints file missing: {plan.constraints}")
@@ -408,7 +478,26 @@ def _check_facts(
         errors.append(f"{label}: expected Python {major_minor}.x, got {facts.get('version') or 'unknown'}")
     for package, version in expected["exact"].items():
         actual = facts.get("packages", {}).get(package)
-        if actual != version:
+        if actual == version:
+            continue
+        alternatives = expected.get("alternatives", {}).get(package, [])
+        matched_alternative = next(
+            (
+                alternative
+                for alternative in alternatives
+                if facts.get("packages", {}).get(alternative) == version
+            ),
+            None,
+        )
+        if matched_alternative:
+            continue
+        if alternatives:
+            detail = ", ".join(
+                f"{name}={facts.get('packages', {}).get(name)}"
+                for name in [package, *alternatives]
+            )
+            errors.append(f"{label}: {package} expected {version} or equivalent, got {detail}")
+        else:
             errors.append(f"{label}: {package} expected {version}, got {actual}")
     if require_cuda and not facts.get("torch_cuda_available"):
         errors.append(f"{label}: torch.cuda is not available")
@@ -418,7 +507,10 @@ def _check_facts(
 
 
 def _main_facts_in_process() -> dict:
-    packages = {name: None for name in MAIN_EXPECTED["exact"]}
+    package_names = set(MAIN_EXPECTED["exact"])
+    for alternatives in MAIN_EXPECTED.get("alternatives", {}).values():
+        package_names.update(alternatives)
+    packages = {name: None for name in sorted(package_names)}
     for name in packages:
         try:
             packages[name] = importlib.metadata.version(name)
@@ -467,14 +559,15 @@ def audit_environment(
     main_python = main_python or Path(sys.executable)
     main_facts = _main_facts_in_process() if main_python.resolve() == Path(sys.executable).resolve() else _collect_python_facts(
         main_python,
-        sorted(MAIN_EXPECTED["exact"]),
+        sorted(set(MAIN_EXPECTED["exact"]) | {name for names in MAIN_EXPECTED.get("alternatives", {}).values() for name in names}),
         ["cv2", "torch"],
         root,
     )
+    anima_expected = _anima_expected_for_platform()
     anima_facts = (
         _collect_python_facts(
             layout.venv_python,
-            sorted(set(ANIMA_EXPECTED["exact"]) | {"numpy", "opencv-python"}),
+            sorted(set(anima_expected["exact"]) | {"numpy", "opencv-python"}),
             ["torch", "flash_attn", "triton", "transformers", "diffusers", *ANIMA_OPTIMIZER_IMPORTS],
             layout.source if layout.source.is_dir() else root,
         )
@@ -482,7 +575,7 @@ def audit_environment(
         else {"subprocess_error": "missing", "python": str(layout.venv_python)}
     )
     _check_facts("main", main_facts, MAIN_EXPECTED, root, errors, require_cuda=False, require_inside_root=require_main_inside_root)
-    _check_facts("anima", anima_facts, ANIMA_EXPECTED, root, errors, require_cuda=require_cuda, require_inside_root=True)
+    _check_facts("anima", anima_facts, anima_expected, root, errors, require_cuda=require_cuda, require_inside_root=True)
     result = AuditResult(
         ok=not errors,
         errors=errors,

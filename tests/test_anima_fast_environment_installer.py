@@ -14,6 +14,7 @@ from mikazuki.anima_fast_backend.environment import (
     audit_environment,
     build_environment_install_plan,
     install_environment,
+    localize_linux_flash_attn_dependency,
     _run_streaming,
     start_install_task,
 )
@@ -44,6 +45,19 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         env_dir.mkdir(parents=True)
         (env_dir / "anima-constraints-cu130.txt").write_text("torch==2.11.0+cu130\n", encoding="utf-8")
         (env_dir / "anima-overrides-cu130.txt").write_text("numpy>=2\n", encoding="utf-8")
+
+    def test_install_plan_uses_linux_python_layout_off_windows(self):
+        with tempfile.TemporaryDirectory() as td, mock.patch(
+            "mikazuki.anima_fast_backend.environment.sys.platform", "linux"
+        ):
+            project = Path(td)
+            source = self._make_source(project)
+            layout = ExtensionLayout(project / "extensions" / "anima_lora")
+
+            plan = build_environment_install_plan(project, layout, source)
+
+        self.assertTrue(str(plan.base_python).replace("\\", "/").endswith("cpython-3.13.13-linux-x86_64-gnu/bin/python3"))
+        self.assertTrue(str(plan.venv_python).replace("\\", "/").endswith("extensions/anima_lora/.venv/bin/python"))
 
     def test_ready_requires_audit_ok_facts(self):
         with tempfile.TemporaryDirectory() as td:
@@ -243,6 +257,113 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         text = constraints.read_text(encoding="utf-8")
         for package in ("bitsandbytes==0.49.2", "dadaptation==3.1", "lion-pytorch==0.2.3", "prodigyopt==1.1.2"):
             self.assertIn(package, text)
+
+    def test_anima_constraints_scope_linux_fast_runtime_packages_by_platform(self):
+        constraints = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-constraints-cu130.txt"
+        text = constraints.read_text(encoding="utf-8")
+
+        self.assertIn('torch==2.11.0+cu130 ; sys_platform == "win32"', text)
+        self.assertIn('torchvision==0.26.0+cu130 ; sys_platform == "win32"', text)
+        self.assertIn('torch==2.12.0+cu130 ; sys_platform == "linux"', text)
+        self.assertIn('torchvision==0.27.0+cu130 ; sys_platform == "linux"', text)
+        self.assertIn('triton-windows==3.7.0.post26 ; sys_platform == "win32"', text)
+
+    def test_anima_expected_packages_skip_triton_windows_on_linux(self):
+        from mikazuki.anima_fast_backend.environment import _anima_expected_for_platform
+
+        linux_expected = _anima_expected_for_platform("linux")
+        windows_expected = _anima_expected_for_platform("win32")
+
+        self.assertEqual(linux_expected["exact"]["torch"], "2.12.0+cu130")
+        self.assertEqual(linux_expected["exact"]["torchvision"], "0.27.0+cu130")
+        self.assertNotIn("triton-windows", linux_expected["exact"])
+        self.assertEqual(windows_expected["exact"]["torch"], "2.11.0+cu130")
+        self.assertEqual(windows_expected["exact"]["torchvision"], "0.26.0+cu130")
+        self.assertEqual(windows_expected["exact"]["triton-windows"], "3.7.0.post26")
+
+    def test_anima_overrides_use_headless_opencv_on_linux(self):
+        overrides = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-overrides-cu130.txt"
+        text = overrides.read_text(encoding="utf-8")
+
+        self.assertIn('opencv-python-headless==4.13.0.92 ; sys_platform == "linux"', text)
+
+    def test_localize_linux_flash_attn_dependency_uses_cu130_direct_url(self):
+        with tempfile.TemporaryDirectory() as td, mock.patch(
+            "mikazuki.anima_fast_backend.environment.sys.platform", "linux"
+        ):
+            source = Path(td) / "source"
+            source.mkdir()
+            pyproject = source / "pyproject.toml"
+            pyproject.write_text(
+                '[project]\ndependencies = [\n'
+                '    "flash-attn @ https://example.invalid/linux-cu132.whl ; sys_platform == \'linux\'",\n'
+                '    "flash-attn @ https://example.invalid/windows.whl ; sys_platform == \'win32\'",\n'
+                ']\n',
+                encoding="utf-8",
+            )
+            lines: list[str] = []
+
+            changed = localize_linux_flash_attn_dependency(source, lines.append)
+            text = pyproject.read_text(encoding="utf-8")
+
+        self.assertEqual(len(changed), 1)
+        self.assertIn("flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl", text)
+        self.assertIn("windows.whl", text)
+        self.assertTrue(any("localized Linux cu130 flash-attn" in line for line in lines))
+
+    def test_audit_environment_skips_triton_windows_on_linux(self):
+        with tempfile.TemporaryDirectory() as td, mock.patch(
+            "mikazuki.anima_fast_backend.environment.sys.platform", "linux"
+        ):
+            project = Path(td)
+            layout = ExtensionLayout(project / "extensions" / "anima_lora")
+            layout.source.mkdir(parents=True)
+            layout.train_py.write_text("", encoding="utf-8")
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.write_text("", encoding="utf-8")
+
+            def fake_collect(python, packages, imports, cwd):
+                package_facts = {name: "unused" for name in packages}
+                package_facts.update(
+                    {
+                        "torch": "2.12.0+cu130",
+                        "torchvision": "0.27.0+cu130",
+                        "flash-attn": "2.8.3+cu130torch2.11",
+                        "transformers": "5.9.0",
+                        "diffusers": "0.37.1",
+                        "accelerate": "1.13.0",
+                        "safetensors": "0.7.0",
+                        "iopath": "0.1.10",
+                        "bitsandbytes": "0.49.2",
+                        "dadaptation": "3.1",
+                    }
+                )
+                return {
+                    "python": str(python),
+                    "version": "3.13.13",
+                    "prefix": str(layout.venv_python.parent.parent),
+                    "base_prefix": str(project / ".python"),
+                    "packages": package_facts,
+                    "imports": {name: True for name in imports},
+                    "torch_cuda_available": True,
+                }
+
+            with mock.patch("mikazuki.anima_fast_backend.environment._collect_python_facts", side_effect=fake_collect), \
+                mock.patch(
+                    "mikazuki.anima_fast_backend.environment._main_facts_in_process",
+                    return_value={
+                        "python": str(project / ".venv" / "bin" / "python"),
+                        "version": "3.13.13",
+                        "prefix": str(project / ".venv"),
+                        "base_prefix": str(project / ".python"),
+                        "packages": {"numpy": "1.26.4", "opencv-python": None, "opencv-python-headless": "4.8.1.78"},
+                        "imports": {"cv2": True, "torch": True},
+                    },
+                ):
+                result = audit_environment(project, layout, require_cuda=True)
+
+        self.assertTrue(result.ok, result.errors)
+        self.assertNotIn("triton-windows", result.facts["anima"]["packages"])
 
     def test_anima_pip_dependency_targets_include_optimizer_and_quanto(self):
         targets = anima_pip_dependency_targets()
