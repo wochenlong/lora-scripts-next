@@ -38,6 +38,15 @@ def _as_path(value: str | os.PathLike | None, base: Path) -> Path | None:
     return path.resolve()
 
 
+def _as_launcher_path(value: str | os.PathLike | None, base: Path) -> Path | None:
+    if value is None or str(value).strip() == "":
+        return None
+    path = Path(value)
+    if not path.is_absolute():
+        path = base / path
+    return path
+
+
 def _truthy(value: object) -> bool:
     if isinstance(value, bool):
         return value
@@ -92,10 +101,10 @@ def discover_runtime(config: dict | None = None, lora_next_root: Path | None = N
     layout = default_layout(lora_next_root)
 
     extension_source = _as_path(backend.get("source_dir"), lora_next_root)
-    extension_python = _as_path(backend.get("venv_python"), lora_next_root)
-    layout_python = layout.venv_python.resolve()
+    extension_python = _as_launcher_path(backend.get("venv_python"), lora_next_root)
+    layout_python = layout.venv_python
     external_root = _as_path(backend.get("external_root"), lora_next_root)
-    external_python = _as_path(backend.get("external_python"), lora_next_root)
+    external_python = _as_launcher_path(backend.get("external_python"), lora_next_root)
 
     root = (
         (extension_source if extension_source and (extension_source / "train.py").is_file() else None)
@@ -103,12 +112,12 @@ def discover_runtime(config: dict | None = None, lora_next_root: Path | None = N
         or external_root
         or (lora_next_root.parent / "anima_lora").resolve()
     )
-    fallback_python = layout_python if root.resolve() == layout.source.resolve() else _venv_python_for_root(root).resolve()
+    fallback_python = layout_python if root.resolve() == layout.source.resolve() else _venv_python_for_root(root)
     python = (
-        _as_path(os.environ.get("ANIMA_LORA_PYTHON"), lora_next_root)
+        _as_launcher_path(os.environ.get("ANIMA_LORA_PYTHON"), lora_next_root)
         or (extension_python if extension_python and extension_python.is_file() else None)
         or (layout_python if layout_python.is_file() else None)
-        or external_python
+        or (external_python if external_python and external_python.is_file() else None)
         or fallback_python
     )
 

@@ -76,7 +76,37 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             )
             runtime = discover_runtime(lora_next_root=root)
 
-        self.assertEqual(runtime.python.resolve(), layout.venv_python.resolve())
+        self.assertEqual(runtime.python, layout.venv_python)
+
+    def test_discover_runtime_keeps_linux_uv_venv_launcher_path(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = ExtensionLayout(root / "extensions" / "anima_lora")
+            base_python = root / ".python" / "cpython-3.13.13-linux-x86_64-gnu" / "bin" / "python3.13"
+            base_python.parent.mkdir(parents=True)
+            base_python.write_text("", encoding="utf-8")
+
+            with mock.patch("mikazuki.anima_fast_backend.settings.sys.platform", "linux"), \
+                mock.patch("mikazuki.anima_fast_backend.extension_state.sys.platform", "linux"):
+                layout.source.mkdir(parents=True)
+                layout.train_py.write_text("", encoding="utf-8")
+                layout.venv_python.parent.mkdir(parents=True)
+                layout.venv_python.write_text("", encoding="utf-8")
+                original_resolve = Path.resolve
+
+                def fake_resolve(path: Path, *args, **kwargs):
+                    if path == layout.venv_python:
+                        return base_python
+                    return original_resolve(path, *args, **kwargs)
+
+                with mock.patch("pathlib.Path.resolve", fake_resolve):
+                    runtime = discover_runtime(lora_next_root=root)
+
+                expected = layout.venv_python
+
+        self.assertEqual(runtime.python, expected)
+        self.assertIn(".venv", runtime.python.parts)
+        self.assertNotEqual(runtime.python, base_python)
 
     def test_install_starts_background_task_and_returns_log_stream(self):
         with tempfile.TemporaryDirectory() as td:
