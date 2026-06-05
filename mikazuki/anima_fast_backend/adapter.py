@@ -64,7 +64,6 @@ FAST_NETWORK_ARGS_ALLOWLIST = {
 FAST_SUPPORTED_OPTIMIZERS = {
     "AdamW",
     "AdamW8bit",
-    "Automagic",
     "PagedAdamW8bit",
     "RAdamScheduleFree",
     "Lion",
@@ -328,12 +327,15 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
 
     optimizer_type = str(values.get("optimizer_type", source.get("optimizer_type", "AdamW8bit"))).strip()
     if optimizer_type and optimizer_type not in FAST_SUPPORTED_OPTIMIZERS:
+        if optimizer_type == "Automagic":
+            raise AdapterError(
+                "optimizer_type=Automagic is not supported by the Anima Fast plugin runtime; "
+                "choose AdamW8bit or another Fast optimizer"
+            )
         raise AdapterError(
             f"optimizer_type={optimizer_type} is not supported by anima-lora-fast; "
             f"choose one of: {', '.join(sorted(FAST_SUPPORTED_OPTIMIZERS))}"
         )
-    if optimizer_type == "Automagic":
-        warnings.append("Automagic manages per-parameter learning rates; keep learning_rate near 1e-6")
 
     return AdaptedConfig(values=values, warnings=warnings)
 

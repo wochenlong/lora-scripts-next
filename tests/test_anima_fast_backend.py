@@ -458,22 +458,24 @@ class PreflightLauncherTests(unittest.TestCase):
                     "run-1",
                 )
 
-    def test_adapt_config_accepts_automagic(self):
+    def test_adapt_config_rejects_automagic(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             runtime = make_runtime(root)
-            adapted = adapt_config(
-                {
-                    "model_train_type": "anima-lora-fast",
-                    "train_data_dir": str(root / "data"),
-                    "optimizer_type": "Automagic",
-                    "learning_rate": "1e-6",
-                },
-                runtime,
-                "run-1",
-            )
-        self.assertEqual(adapted.values["optimizer_type"], "Automagic")
-        self.assertTrue(any("Automagic" in w for w in adapted.warnings))
+            with self.assertRaises(AdapterError) as ctx:
+                adapt_config(
+                    {
+                        "model_train_type": "anima-lora-fast",
+                        "train_data_dir": str(root / "data"),
+                        "optimizer_type": "Automagic",
+                        "learning_rate": "1e-6",
+                    },
+                    runtime,
+                    "run-1",
+                )
+
+        self.assertIn("Automagic", str(ctx.exception))
+        self.assertIn("not supported", str(ctx.exception))
 
     def test_preflight_rejects_compile_mode_full_with_gradient_checkpointing(self):
         with tempfile.TemporaryDirectory() as td:
@@ -522,7 +524,7 @@ class PreflightLauncherTests(unittest.TestCase):
         self.assertEqual(adapted.values["compile_mode"], "blocks")
         self.assertTrue(any("gradient_checkpointing" in w for w in adapted.warnings))
 
-    def test_preflight_rejects_automagic_without_quanto(self):
+    def test_preflight_rejects_automagic_even_when_quanto_is_available(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             runtime = make_runtime(root)
@@ -548,12 +550,12 @@ class PreflightLauncherTests(unittest.TestCase):
                     "3.13.11",
                     torch_metadata_version="2.11.0+cu130",
                     cuda_available=True,
-                    quanto_importable=False,
+                    quanto_importable=True,
                 ),
             )
 
         self.assertFalse(result.ok)
-        self.assertTrue(any("Automagic" in err and "optimum-quanto" in err and "修复环境" in err for err in result.errors))
+        self.assertTrue(any("Automagic" in err and "not supported" in err for err in result.errors))
 
     def test_launcher_uses_external_python_and_isolated_env(self):
         with tempfile.TemporaryDirectory() as td:

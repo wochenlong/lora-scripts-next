@@ -281,6 +281,13 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
     if torch_compile and tokens and static_token_count and tokens > static_token_count:
         errors.append(f"static_token_count={static_token_count} is smaller than resolution token count {tokens}")
 
+    optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
+    if optimizer_type == "automagic":
+        errors.append(
+            "optimizer_type=Automagic is not supported by the Anima Fast plugin runtime; "
+            "use AdamW8bit or another Fast optimizer"
+        )
+
     cache_latents = _truthy(config.get("cache_latents"))
     cache_text_encoder = _truthy(config.get("cache_text_encoder_outputs"))
     skip_cache_check = _truthy(config.get("skip_cache_check"))
@@ -320,12 +327,6 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
             errors.append(
                 "torch package metadata is missing (dist-info corrupt); "
                 "repair the Anima Fast plugin before training"
-            )
-        optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
-        if optimizer_type == "automagic" and not dep.quanto_importable:
-            errors.append(
-                "optimizer_type=Automagic 需要 Fast 插件环境安装 optimum-quanto；"
-                "请先在 Anima Fast 插件页修复环境，或改用 AdamW8bit"
             )
         if str(config.get("attn_mode", "")).strip() == "flash" and not dep.flash_attn_importable:
             errors.append(

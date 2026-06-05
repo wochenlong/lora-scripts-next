@@ -212,7 +212,6 @@
                 optimizer_type: Schema.union([
                     "AdamW",
                     "AdamW8bit",
-                    "Automagic",
                     "PagedAdamW8bit",
                     "RAdamScheduleFree",
                     "Lion",
@@ -238,14 +237,6 @@
                     optimizer_type: Schema.const('Prodigy').required(),
                     prodigy_d0: Schema.string(),
                     prodigy_d_coef: Schema.string().default("2.0"),
-                }),
-                Schema.object({}),
-            ]),
-
-            Schema.union([
-                Schema.object({
-                    optimizer_type: Schema.const('Automagic').required(),
-                    learning_rate: Schema.string().default("1e-6").description("Automagic 起始学习率，建议 1e-6 量级"),
                 }),
                 Schema.object({}),
             ]),

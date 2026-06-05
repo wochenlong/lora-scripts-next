@@ -10,7 +10,7 @@
 | 插件安装复制上游 `LICENSE` / `NOTICE` | ✅ | `installer.py` → `INCLUDE_TOP_LEVEL` |
 | 用户文档致谢与仓库链接 | ✅ | `docs/anima-fast.md` §致谢；Fast 页 `anima-fast-credit` |
 | 本仓库 AGPL 与 upstream MIT 兼容 | ✅ | MIT 可嵌入；插件以独立目录分发，不修改上游许可 |
-| Automagic 等移植代码文件头 MIT 注明 | ✅ | `extensions/anima_lora/source/library/training/optimizers/`（插件快照内） |
+| Automagic 等额外优化器移植代码文件头 MIT 注明 | N/A | 当前 Fast 插件快照未接入 Automagic；UI/adapter 会拒绝 `optimizer_type=Automagic` |
 
 **关于是否告知上游作者**：MIT **不要求**事先征得作者同意；合规要点是**保留版权与许可声明**并在产品中**醒目致谢**（本仓已在 `NOTICE.md`、Fast 页、用户文档完成）。向 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora) 开 Discussion/Issue 仅为**礼节性可选**，作者若未回复也不影响合入与发布。
 
