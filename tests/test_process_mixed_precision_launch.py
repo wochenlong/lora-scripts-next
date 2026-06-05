@@ -126,6 +126,20 @@ class BuildAccelerateTrainCommandTests(unittest.TestCase):
         self.assertLess(args.index("--multi_gpu"), args.index("--mixed_precision"))
         self.assertEqual(env["CUDA_VISIBLE_DEVICES"], "0,1")
 
+    def test_disables_colored_subprocess_output(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            toml_path = Path(tmp) / "train.toml"
+            toml_path.write_text('mixed_precision = "bf16"\n', encoding="utf-8")
+            _args, env, _mp = process.build_accelerate_train_command(
+                trainer_file="./scripts/stable/train_network.py",
+                toml_path=str(toml_path),
+            )
+
+        self.assertEqual(env["ACCELERATE_DISABLE_RICH"], "1")
+        self.assertEqual(env["NO_COLOR"], "1")
+        self.assertEqual(env["FORCE_COLOR"], "0")
+        self.assertEqual(env["TERM"], "dumb")
+
 
 if __name__ == "__main__":
     unittest.main()

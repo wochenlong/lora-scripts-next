@@ -94,6 +94,9 @@ def build_accelerate_train_command(
     customize_env["PYTHONUNBUFFERED"] = "1"
     customize_env["PYTHONWARNINGS"] = "ignore::FutureWarning,ignore::UserWarning"
     customize_env["PYTHONNOUSERSITE"] = "1"
+    customize_env["NO_COLOR"] = "1"
+    customize_env["FORCE_COLOR"] = "0"
+    customize_env["TERM"] = "dumb"
 
     if gpu_ids:
         customize_env["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)

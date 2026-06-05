@@ -26,6 +26,9 @@ def build_launch_spec(runtime: RuntimeConfig, config_path: Path, task_id: str, g
     env["PYTHONUNBUFFERED"] = "1"
     env["PYTHONNOUSERSITE"] = "1"
     env["ACCELERATE_DISABLE_RICH"] = "1"
+    env["NO_COLOR"] = "1"
+    env["FORCE_COLOR"] = "0"
+    env["TERM"] = "dumb"
     env["ANIMA_FAST_PARENT_TASK_ID"] = task_id
     env.pop("PYTHONPATH", None)
     if runtime.hf_home is not None:

@@ -5,10 +5,21 @@ Buffers training subprocess stdout per task_id for SSE streaming and optional UI
 from __future__ import annotations
 
 import threading
+import re
 from collections import deque
 from typing import Deque, Dict, List, Tuple
 
 _MAX_LINES = 15000
+_ANSI_ESCAPE_RE = re.compile(
+    r"\x1B\][^\x07]*?(?:\x07|\x1B\\)|"
+    r"\x1B\[[0-?]*[ -/]*[@-~]|"
+    r"\x1B[@-Z\\-_]"
+)
+
+
+def strip_ansi(text: str) -> str:
+    """Remove terminal color/control codes before streaming logs to browsers."""
+    return _ANSI_ESCAPE_RE.sub("", text)
 
 
 class TrainLogHub:
@@ -25,7 +36,7 @@ class TrainLogHub:
             self._done[task_id] = False
 
     def append_line(self, task_id: str, line: str) -> None:
-        text = line.rstrip("\r\n")
+        text = strip_ansi(line.rstrip("\r\n"))
         if not text and line == "":
             return
         with self._lock:

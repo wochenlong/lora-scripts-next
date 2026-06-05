@@ -566,6 +566,10 @@ class PreflightLauncherTests(unittest.TestCase):
         self.assertEqual(spec.env["PYTHONNOUSERSITE"], "1")
         self.assertNotIn("PYTHONPATH", spec.env)
         self.assertEqual(spec.env["CUDA_VISIBLE_DEVICES"], "0")
+        self.assertEqual(spec.env["ACCELERATE_DISABLE_RICH"], "1")
+        self.assertEqual(spec.env["NO_COLOR"], "1")
+        self.assertEqual(spec.env["FORCE_COLOR"], "0")
+        self.assertEqual(spec.env["TERM"], "dumb")
 
 
 if __name__ == "__main__":
