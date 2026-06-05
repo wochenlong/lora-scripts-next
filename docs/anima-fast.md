@@ -264,7 +264,7 @@ Fast 页与标准 Kohya 页共用 **LR_OPTIMIZER** 选项（默认 `AdamW8bit`�
 | `pytorch_optimizer.CAME` 等 | `pytorch-optimizer` |
 | `AdamW` | 无额外依赖（PyTorch 内置） |
 
-Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选项**（不含 `prodigyplus.*` 等 Kohya 专用项）。当前 Fast 插件快照未接入 Automagic 优化器，若导入旧配置选择 `optimizer_type=Automagic`，后端会在启动前拒绝并提示改用 `AdamW8bit` 等 Fast 支持项。
+Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选项**（不含 `prodigyplus.*` 等 Kohya 专用项）。当前 Fast 插件快照未接入 Automagic 优化器，若导入旧配置选择 `optimizer_type=Automagic`，后端会在启动前拒绝并提示改用 `AdamW8bit` 等 Fast 支持项。`DAdaptAdaGrad` 在 `dadaptation==3.1` 下默认 `eps=0.0` 会报错，Fast 会在用户未填写 `eps=` 时自动补充 `optimizer_args=["eps=1e-8"]`；需要实验其它值时可在自定义 optimizer_args 中显式填写。
 
 若报错 `ImportError: No bitsandbytes` 或 `libbitsandbytes_cuda130.dll not found`，说明插件是在补全优化器依赖前安装的，或 `bitsandbytes` 版本过旧（cu130 需 **≥ 0.49**）：在 Fast 页点击 **「修复插件」**（或 `POST /api/plugins/anima-lora/repair`）重新同步依赖。
 

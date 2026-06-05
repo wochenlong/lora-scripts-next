@@ -477,6 +477,41 @@ class PreflightLauncherTests(unittest.TestCase):
         self.assertIn("Automagic", str(ctx.exception))
         self.assertIn("not supported", str(ctx.exception))
 
+    def test_adapt_config_adds_dadapt_adagrad_eps_default(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            adapted = adapt_config(
+                {
+                    "model_train_type": "anima-lora-fast",
+                    "train_data_dir": str(root / "data"),
+                    "optimizer_type": "DAdaptAdaGrad",
+                },
+                runtime,
+                "run-1",
+            )
+
+        self.assertIn("eps=1e-8", adapted.values["optimizer_args"])
+        self.assertTrue(any("DAdaptAdaGrad" in warning and "eps=1e-8" in warning for warning in adapted.warnings))
+
+    def test_adapt_config_keeps_user_dadapt_adagrad_eps(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            adapted = adapt_config(
+                {
+                    "model_train_type": "anima-lora-fast",
+                    "train_data_dir": str(root / "data"),
+                    "optimizer_type": "DAdaptAdaGrad",
+                    "optimizer_args_custom": ["eps=1e-6", "weight_decay=0.01"],
+                },
+                runtime,
+                "run-1",
+            )
+
+        self.assertEqual(adapted.values["optimizer_args"], ["eps=1e-6", "weight_decay=0.01"])
+        self.assertFalse(any("eps=1e-8" in warning for warning in adapted.warnings))
+
     def test_preflight_rejects_compile_mode_full_with_gradient_checkpointing(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

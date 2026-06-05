@@ -150,6 +150,18 @@ def normalize_kv_args(values: Any) -> list[str]:
     return out
 
 
+def has_kv_arg(values: Any, key: str) -> bool:
+    if not isinstance(values, list):
+        return False
+    expected = key.strip().lower()
+    for raw in values:
+        if isinstance(raw, str) and "=" in raw:
+            raw_key = raw.split("=", 1)[0].strip().lower()
+            if raw_key == expected:
+                return True
+    return False
+
+
 def normalize_fast_network_args(values: Any) -> list[str]:
     if not isinstance(values, list):
         return []
@@ -336,6 +348,9 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
             f"optimizer_type={optimizer_type} is not supported by anima-lora-fast; "
             f"choose one of: {', '.join(sorted(FAST_SUPPORTED_OPTIMIZERS))}"
         )
+    if optimizer_type == "DAdaptAdaGrad" and not has_kv_arg(values.get("optimizer_args"), "eps"):
+        values["optimizer_args"] = normalize_kv_args([*values.get("optimizer_args", []), "eps=1e-8"])
+        warnings.append("DAdaptAdaGrad 默认 eps=0.0 会被 dadaptation 3.1 拒绝；已自动补充 optimizer_args eps=1e-8")
 
     return AdaptedConfig(values=values, warnings=warnings)
 
