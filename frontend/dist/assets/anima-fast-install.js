@@ -23,8 +23,18 @@
     return /^\/lora\/anima-fast(\.html|\.md)?$/.test(location.pathname);
   }
 
+  function isStandardAnimaPage() {
+    return /^\/lora\/sd3(\.html|\.md)?$/.test(location.pathname);
+  }
+
+  function isAnimaDiagnosticsPage() {
+    return isFastPage() || isStandardAnimaPage();
+  }
+
   function markPage() {
     document.body.classList.toggle("anima-fast-page", isFastPage());
+    document.body.classList.toggle("anima-standard-page", isStandardAnimaPage());
+    document.body.classList.toggle("anima-diagnostics-page", isAnimaDiagnosticsPage());
   }
 
   function setControls(d) {
@@ -85,6 +95,176 @@
       });
     }
     return parts.join(" | ");
+  }
+
+  function ensureDiagnosticsPanel() {
+    if (!isAnimaDiagnosticsPage()) return null;
+    let panel = document.querySelector("[data-anima-diagnostics]");
+    if (panel) return panel;
+    panel = document.createElement("div");
+    panel.className = "anima-diagnostics";
+    panel.setAttribute("data-anima-diagnostics", "");
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-modal", "true");
+    panel.hidden = true;
+    panel.innerHTML =
+      '<div class="anima-diagnostics__backdrop" data-anima-diagnostics-close></div>' +
+      '<div class="anima-diagnostics__card">' +
+      '<div class="anima-diagnostics__head">' +
+      '<div class="anima-diagnostics__icon" aria-hidden="true">!</div>' +
+      '<div class="anima-diagnostics__title-wrap">' +
+      '<strong data-anima-diagnostics-title>训练诊断</strong>' +
+      '<p>预检查发现以下问题，请修复后重试</p>' +
+      "</div>" +
+      '<button type="button" class="el-button el-button--primary is-plain anima-diagnostics__copy" data-anima-diagnostics-copy>复制全部</button>' +
+      '<button type="button" class="anima-diagnostics__close" data-anima-diagnostics-close aria-label="关闭">×</button>' +
+      "</div>" +
+      '<div class="anima-diagnostics__summary" data-anima-diagnostics-message></div>' +
+      '<div class="anima-diagnostics__section" data-anima-diagnostics-errors-section>' +
+      '<div class="anima-diagnostics__section-title"><span>错误</span><span data-anima-diagnostics-errors-count>0</span></div>' +
+      '<div class="anima-diagnostics__items" data-anima-diagnostics-errors></div>' +
+      "</div>" +
+      '<div class="anima-diagnostics__section anima-diagnostics__section--warning" data-anima-diagnostics-warnings-section>' +
+      '<div class="anima-diagnostics__section-title"><span>警告</span><span data-anima-diagnostics-warnings-count>0</span></div>' +
+      '<div class="anima-diagnostics__items" data-anima-diagnostics-warnings></div>' +
+      "</div>" +
+      '<div class="anima-diagnostics__section anima-diagnostics__section--json">' +
+      '<div class="anima-diagnostics__section-title"><span>详细诊断 / JSON</span>' +
+      '<button type="button" class="el-button el-button--small is-plain anima-diagnostics__json-copy" data-anima-diagnostics-copy-json>复制 JSON</button>' +
+      "</div>" +
+      '<div class="anima-diagnostics__json-wrap">' +
+      '<div class="anima-diagnostics__gutter" data-anima-diagnostics-lines></div>' +
+      '<pre class="anima-diagnostics__json" data-anima-diagnostics-json></pre>' +
+      "</div>" +
+      '<div class="anima-diagnostics__foot"><button type="button" class="el-button el-button--primary" data-anima-diagnostics-close>关闭</button></div>' +
+      "</div>";
+    document.body.appendChild(panel);
+    return panel;
+  }
+
+  function extractDiagnosticPayload(json, cfg, url) {
+    if (!json || json.status === "success") return null;
+    const errors = json.data ? json.data.errors : null;
+    const warnings = json.data ? json.data.warnings : null;
+    const facts = json.data ? json.data.facts : null;
+    return {
+      page: isFastPage() ? "anima-fast" : "anima-standard",
+      request: url || "",
+      train_type: cfg && cfg.model_train_type,
+      message: json.message || "未知错误",
+      errors: Array.isArray(errors) ? errors : [],
+      warnings: Array.isArray(warnings) ? warnings : [],
+      facts: facts || null,
+      response: json,
+    };
+  }
+
+  function isAnimaTrainConfig(cfg) {
+    return cfg && (cfg.model_train_type === "anima-lora" || cfg.model_train_type === "anima-lora-fast");
+  }
+
+  function showRunDiagnostics(payload) {
+    if (!payload) return;
+    const panel = ensureDiagnosticsPanel();
+    if (!panel) return;
+    const title = panel.querySelector("[data-anima-diagnostics-title]");
+    const message = panel.querySelector("[data-anima-diagnostics-message]");
+    const errors = panel.querySelector("[data-anima-diagnostics-errors]");
+    const warnings = panel.querySelector("[data-anima-diagnostics-warnings]");
+    const errorsSection = panel.querySelector("[data-anima-diagnostics-errors-section]");
+    const warningsSection = panel.querySelector("[data-anima-diagnostics-warnings-section]");
+    const errorsCount = panel.querySelector("[data-anima-diagnostics-errors-count]");
+    const warningsCount = panel.querySelector("[data-anima-diagnostics-warnings-count]");
+    const pre = panel.querySelector("[data-anima-diagnostics-json]");
+    const lines = panel.querySelector("[data-anima-diagnostics-lines]");
+    const text = JSON.stringify(payload, null, 2);
+    const titleText = payload.page === "anima-fast" ? "Anima Fast 训练诊断" : "Anima 标准模式训练诊断";
+    const fullText = [
+      titleText,
+      payload.message || "未知错误",
+      payload.errors.length ? "\n错误:\n" + payload.errors.map(function (x) { return "- " + x; }).join("\n") : "",
+      payload.warnings.length ? "\n警告:\n" + payload.warnings.map(function (x) { return "- " + x; }).join("\n") : "",
+      "\nJSON:\n" + text,
+    ].filter(Boolean).join("\n");
+    panel.hidden = false;
+    panel.dataset.diagnosticJson = text;
+    panel.dataset.diagnosticFullText = fullText;
+    if (title) title.textContent = titleText;
+    if (message) message.textContent = payload.message || "未知错误";
+    if (errors) {
+      errors.innerHTML = "";
+      payload.errors.slice(0, 8).forEach(function (item) {
+        const row = document.createElement("div");
+        row.className = "anima-diagnostics__item";
+        row.innerHTML = '<span class="anima-diagnostics__item-icon">×</span><code></code>';
+        row.querySelector("code").textContent = String(item);
+        errors.appendChild(row);
+      });
+      if (errorsSection) errorsSection.hidden = !payload.errors.length;
+      if (errorsCount) errorsCount.textContent = String(payload.errors.length);
+    }
+    if (warnings) {
+      warnings.innerHTML = "";
+      payload.warnings.slice(0, 8).forEach(function (item) {
+        const row = document.createElement("div");
+        row.className = "anima-diagnostics__item anima-diagnostics__item--warning";
+        row.innerHTML = '<span class="anima-diagnostics__item-icon">!</span><code></code>';
+        row.querySelector("code").textContent = String(item);
+        warnings.appendChild(row);
+      });
+      if (warningsSection) warningsSection.hidden = !payload.warnings.length;
+      if (warningsCount) warningsCount.textContent = String(payload.warnings.length);
+    }
+    if (pre) pre.textContent = text;
+    if (lines) {
+      lines.innerHTML = "";
+      text.split("\n").forEach(function (_, index) {
+        const line = document.createElement("span");
+        line.textContent = String(index + 1);
+        lines.appendChild(line);
+      });
+    }
+    if (payload.page === "anima-fast") {
+      appendLog("[训练] " + (payload.errors[0] || payload.message || "未知错误"));
+    }
+  }
+
+  async function copyDiagnosticText(text) {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      try {
+        await navigator.clipboard.writeText(text);
+        return "copied";
+      } catch (_) {}
+    }
+    const ta = document.createElement("textarea");
+    ta.value = text;
+    ta.setAttribute("readonly", "");
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    let ok = false;
+    try {
+      ok = document.execCommand("copy");
+    } catch (_) {
+      ok = false;
+    } finally {
+      ta.remove();
+    }
+    return ok ? "copied" : "failed";
+  }
+
+  function selectDiagnosticsJson(panel) {
+    const pre = panel && panel.querySelector("[data-anima-diagnostics-json]");
+    if (!pre || !window.getSelection || !document.createRange) return false;
+    const range = document.createRange();
+    range.selectNodeContents(pre);
+    const selection = window.getSelection();
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
   }
 
   const COMPILE_WARN_TEXT =
@@ -294,18 +474,42 @@
       const url = typeof input === "string" ? input : input && input.url ? input.url : "";
       const isRun =
         url.indexOf("/api/run") !== -1 && init && String(init.method || "GET").toUpperCase() === "POST";
+      const isPreflight =
+        url.indexOf("/api/plugins/anima-lora/preflight") !== -1 &&
+        init &&
+        String(init.method || "GET").toUpperCase() === "POST";
+      let requestConfig = null;
+      if ((isRun || isPreflight) && init && typeof init.body === "string") {
+        try {
+          requestConfig = JSON.parse(init.body);
+        } catch (_) {}
+      }
       if (isRun && isFastPage() && init) {
         init = patchRunRequestBody(init);
+        if (typeof init.body === "string") {
+          try {
+            requestConfig = JSON.parse(init.body);
+          } catch (_) {}
+        }
       }
       return nativeFetch(input, init).then(function (res) {
-        if (!isRun || !isFastPage()) return res;
+        const isAnimaRun =
+          isRun &&
+          isAnimaDiagnosticsPage() &&
+          isAnimaTrainConfig(requestConfig);
+        const isAnimaFastPreflight = isPreflight && isFastPage();
+        if (!isAnimaRun && !isAnimaFastPreflight) return res;
         return res
           .clone()
           .json()
           .then(function (json) {
             if (json && json.status === "fail") {
-              const msg = formatFastRunFail(json);
-              if (msg) appendLog("[训练] " + msg);
+              const payload = extractDiagnosticPayload(json, requestConfig, url);
+              showRunDiagnostics(payload);
+              if (isFastPage()) {
+                const msg = formatFastRunFail(json);
+                if (msg) appendLog("[训练] " + msg);
+              }
             }
             return res;
           })
@@ -441,6 +645,63 @@
         try {
           localStorage.setItem("anima-fast-guide-open", o ? "1" : "0");
         } catch (_) {}
+      }
+      return;
+    }
+
+    const closeBtn = e.target && e.target.closest && e.target.closest("[data-anima-diagnostics-close]");
+    if (closeBtn && isAnimaDiagnosticsPage()) {
+      const panel = closeBtn.closest("[data-anima-diagnostics]") || document.querySelector("[data-anima-diagnostics]");
+      if (panel) panel.hidden = true;
+      return;
+    }
+
+    const copyJsonBtn = e.target && e.target.closest && e.target.closest("[data-anima-diagnostics-copy-json]");
+    if (copyJsonBtn && isAnimaDiagnosticsPage()) {
+      const panel = copyJsonBtn.closest("[data-anima-diagnostics]");
+      const text = (panel && panel.dataset.diagnosticJson) || "";
+      if (!text) return;
+      const copyResult = await copyDiagnosticText(text);
+      if (copyResult === "copied") {
+        copyJsonBtn.textContent = "已复制";
+        setTimeout(function () {
+          copyJsonBtn.textContent = "复制 JSON";
+        }, 1600);
+      } else if (selectDiagnosticsJson(panel)) {
+        copyJsonBtn.textContent = "已选中，可 Ctrl+C";
+        setTimeout(function () {
+          copyJsonBtn.textContent = "复制 JSON";
+        }, 2200);
+      } else {
+        copyJsonBtn.textContent = "复制失败";
+        setTimeout(function () {
+          copyJsonBtn.textContent = "复制 JSON";
+        }, 1600);
+      }
+      return;
+    }
+
+    const copyBtn = e.target && e.target.closest && e.target.closest("[data-anima-diagnostics-copy]");
+    if (copyBtn && isAnimaDiagnosticsPage()) {
+      const panel = copyBtn.closest("[data-anima-diagnostics]");
+      const text = (panel && (panel.dataset.diagnosticFullText || panel.dataset.diagnosticJson)) || "";
+      if (!text) return;
+      const copyResult = await copyDiagnosticText(text);
+      if (copyResult === "copied") {
+        copyBtn.textContent = "已复制";
+        setTimeout(function () {
+          copyBtn.textContent = "复制全部";
+        }, 1600);
+      } else if (selectDiagnosticsJson(panel)) {
+        copyBtn.textContent = "已选中，可 Ctrl+C";
+        setTimeout(function () {
+          copyBtn.textContent = "复制全部";
+        }, 2200);
+      } else {
+        copyBtn.textContent = "复制失败";
+        setTimeout(function () {
+          copyBtn.textContent = "复制全部";
+        }, 1600);
       }
       return;
     }

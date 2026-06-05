@@ -78,6 +78,22 @@ FAST_DATASET_GUIDE_HTML = f"""
 """.strip()
 
 FAST_UI_CSS_MARKER = "/* ----- Anima Fast UI ----- */"
+DIAGNOSTIC_SCRIPT_MARKERS = [
+    "data-anima-diagnostics",
+    "data-anima-diagnostics-copy",
+    "data-anima-diagnostics-copy-json",
+    "data-anima-diagnostics-close",
+    "anima-diagnostics__section",
+    "anima-diagnostics__item--warning",
+    "isStandardAnimaPage",
+    "showRunDiagnostics",
+    "extractDiagnosticPayload",
+    "复制全部",
+    "复制 JSON",
+    "json.data ? json.data.errors",
+    'cfg.model_train_type === "anima-lora"',
+    'cfg.model_train_type === "anima-lora-fast"',
+]
 
 INSTALL_GUARD = r''';(()=>{if(window.__ANIMA_FAST_INSTALL_GUARD__)return;window.__ANIMA_FAST_INSTALL_GUARD__=true;const CONFIRM="Anima Fast 为进阶实验插件，需 NVIDIA GPU、约 16GB+ 显存，并会下载独立 Python 环境（数 GB）。\n\n确认已了解并继续安装？";let last={feature_enabled:true,state:"unknown"},es=null,tmr=null,scheduled=false;function q(s){return Array.from(document.querySelectorAll(s))}function isFastPage(){return/^\/lora\/anima-fast(\.html|\.md)?$/.test(location.pathname)}function markPage(){document.body.classList.toggle("anima-fast-page",isFastPage())}function setControls(d){if(!isFastPage())return;const kill=!d.feature_enabled,working=d.state==="installing"||d.state==="auditing",ready=d.state==="ready";q("[data-anima-fast-install]").forEach(b=>{b.disabled=kill||working;b.setAttribute("aria-disabled",b.disabled?"true":"false")});q(".right-container button").forEach(b=>{const t=(b.textContent||"").trim();if(t==="开始训练"||t==="✨加载训练预设✨"||t==="导入配置文件"||t==="保存参数"){b.disabled=kill||!ready;b.setAttribute("aria-disabled",b.disabled?"true":"false")}});document.body.classList.toggle("anima-fast-disabled",kill||!ready)}function label(d){if(!d.feature_enabled)return"功能已关闭";return d.state==="ready"?"插件已就绪":d.state==="installing"?"安装中":d.state==="auditing"?"审计中":d.state==="broken"?"需修复":d.state==="installed_unverified"?"待审计":"进阶插件 · 待开启"}function appendLog(x){const p=document.querySelector("[data-anima-fast-log]");if(!p)return;p.hidden=false;p.textContent+=(p.textContent?"\n":"")+x;p.scrollTop=p.scrollHeight}function apply(d){last=d||last;setControls(last);const n=document.querySelector("[data-anima-fast-status]");if(n)n.textContent=label(last);const a=last.facts&&last.facts.audit;if(a&&!a.ok&&a.errors)appendLog("[audit] "+a.errors.join("; "))}async function status(){try{const r=await fetch("/api/plugins/anima-lora/status"),j=await r.json();apply(Object.assign({feature_enabled:true},j.data||{state:"unknown"}))}catch(e){const n=document.querySelector("[data-anima-fast-status]");if(n)n.textContent="状态检查失败"}}function scheduleStatus(){if(scheduled)return;scheduled=true;setTimeout(()=>{scheduled=false;status()},120)}function openLog(url){if(!url||!window.EventSource)return;if(es)es.close();appendLog("[log] streaming "+url);es=new EventSource(url);es.onmessage=e=>{try{const d=JSON.parse(e.data);if(d.text)appendLog(d.text);if(d.done){appendLog("[log] done");es.close();es=null;if(tmr){clearInterval(tmr);tmr=null}status()}}catch(_){appendLog(e.data)}};es.onerror=()=>{appendLog("[log] stream disconnected");if(es){es.close();es=null}status()}}document.addEventListener("click",async e=>{const t=e.target&&e.target.closest&&e.target.closest("[data-anima-fast-guide-toggle]");if(t&&isFastPage()){const p=t.closest(".anima-fast-guide-collapsible"),b=p&&p.querySelector(".anima-fast-dataset-guide__body");if(b){const o=b.hidden;b.hidden=!o;t.setAttribute("aria-expanded",o?"true":"false");p.classList.toggle("is-open",o);try{localStorage.setItem("anima-fast-guide-open",o?"1":"0")}catch(_){}}return}const b=e.target&&e.target.closest&&e.target.closest("[data-anima-fast-install]");if(!b||!isFastPage())return;if(!last.feature_enabled)return;if(!window.confirm(CONFIRM))return;b.disabled=true;const s=document.querySelector("[data-anima-fast-status]"),p=document.querySelector("[data-anima-fast-log]");if(p){p.hidden=false;p.textContent=""}if(s)s.textContent="安装任务启动中";try{const r=await fetch("/api/plugins/anima-lora/install",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({dry_run:false})}),j=await r.json();if(j.status!=="success"){if(s)s.textContent=j.message||"安装失败";appendLog("[error] "+(j.message||"install failed"));return}const d=j.data||{};if(s)s.textContent="安装中";appendLog("[task] "+(d.task_id||"unknown"));openLog(d.log_stream||d.log_stream_url||(d.task_id?"/api/plugins/anima-lora/install/log/stream/"+d.task_id:""));if(tmr)clearInterval(tmr);tmr=setInterval(status,2000);status()}catch(t){if(s)s.textContent="安装失败";appendLog("[error] "+t)}finally{setTimeout(()=>setControls(last),250)}});function initGuideToggle(){if(!isFastPage())return;q("[data-anima-fast-guide-toggle]").forEach(t=>{const p=t.closest(".anima-fast-guide-collapsible"),b=p&&p.querySelector(".anima-fast-dataset-guide__body");if(!b)return;let o=false;try{o=localStorage.getItem("anima-fast-guide-open")==="1"}catch(_){}b.hidden=!o;t.setAttribute("aria-expanded",o?"true":"false");p.classList.toggle("is-open",o)})}new MutationObserver(scheduleStatus).observe(document.documentElement,{childList:true,subtree:true});document.addEventListener("DOMContentLoaded",()=>{markPage();initGuideToggle();status()});markPage();initGuideToggle();setTimeout(status,0)})();'''
 
@@ -131,7 +147,8 @@ def patch_html() -> None:
     html = html.replace("Anima Stable Diffusion LoRA | SD 训练 UI", "Anima LoRA Fast | SD 训练 UI")
     html = html.replace("/assets/sd3.html.1a4bf31e.js", f"/assets/{PAGE_JS.name}")
     html = html.replace("/assets/sd3.html.eaeb05e1.js", f"/assets/{DATA_JS.name}")
-    main_block = (
+    main_block = "<main></main>"
+    unused_static_main_block = (
         '<main><div class="anima-fast-intro-wrap">'
         '<h1 id="anima-fast-lora" tabindex="-1">'
         '<a class="header-anchor" href="#anima-fast-lora" aria-hidden="true">#</a> '
@@ -215,6 +232,13 @@ def patch_prefetch_links() -> None:
 
 
 def _fast_ui_css_block() -> str:
+    if POLISH_CSS.exists():
+        existing = POLISH_CSS.read_text(encoding="utf-8")
+        end_marker = "/* ----- /Anima Fast UI ----- */"
+        if FAST_UI_CSS_MARKER in existing and end_marker in existing:
+            start = existing.index(FAST_UI_CSS_MARKER)
+            end = existing.index(end_marker) + len(end_marker)
+            return existing[start:end]
     return f"""
 {FAST_UI_CSS_MARKER}
 .example-container > .right-container .anima-fast-credit {{
@@ -428,6 +452,65 @@ html.dark body.anima-fast-page .example-container .schema-container .el-collapse
   display: none !important;
 }}
 
+.anima-diagnostics {{
+  margin: 0 0 0.85rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: var(--sd-radius-md, 8px);
+  border: 1px solid color-mix(in srgb, var(--el-color-danger, #f56c6c) 32%, var(--c-border, #dcdfe6));
+  background: color-mix(in srgb, var(--el-color-danger, #f56c6c) 8%, var(--c-bg, #fff));
+  color: var(--c-text, #303133);
+}}
+
+.anima-diagnostics[hidden] {{
+  display: none !important;
+}}
+
+.anima-diagnostics__head {{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.45rem;
+}}
+
+.anima-diagnostics__head strong {{
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 1.35;
+  color: var(--el-color-danger-dark-2, #c45656);
+}}
+
+.anima-diagnostics__message {{
+  font-size: 13px;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}}
+
+.anima-diagnostics__list {{
+  margin: 0.45rem 0 0;
+  padding-left: 1.15rem;
+  font-size: 12.5px;
+  line-height: 1.55;
+}}
+
+.anima-diagnostics__list[hidden] {{
+  display: none !important;
+}}
+
+.anima-diagnostics__json {{
+  max-height: 180px;
+  overflow: auto;
+  margin: 0.55rem 0 0;
+  padding: 0.55rem 0.65rem;
+  border-radius: 6px;
+  border: 1px solid var(--c-border, #e4e7ed);
+  background: color-mix(in srgb, var(--c-bg-mute, #f6f8fa) 80%, var(--c-bg, #fff));
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}}
+
 body.anima-fast-page .el-form-item.anima-fast-compile-locked .el-switch {{
   opacity: 0.55;
   pointer-events: none;
@@ -482,6 +565,16 @@ html.dark .anima-fast-compile-warn {{
   background: color-mix(in srgb, var(--el-color-warning, #e6a23c) 16%, var(--c-bg, #22272e));
   border-color: color-mix(in srgb, var(--el-color-warning, #e6a23c) 32%, var(--c-border, #3d444d));
 }}
+
+html.dark .anima-diagnostics {{
+  background: color-mix(in srgb, var(--el-color-danger, #f56c6c) 12%, var(--c-bg, #22272e));
+  border-color: color-mix(in srgb, var(--el-color-danger, #f56c6c) 34%, var(--c-border, #3d444d));
+}}
+
+html.dark .anima-diagnostics__json {{
+  background: color-mix(in srgb, var(--c-bg, #22272e) 82%, transparent);
+  border-color: var(--c-border, #3d444d);
+}}
 /* ----- /Anima Fast UI ----- */
 """
 
@@ -522,6 +615,8 @@ def append_guide_css() -> None:
 def assert_registered() -> None:
     app = APP_JS.read_text(encoding="utf-8")
     html = TARGET_HTML.read_text(encoding="utf-8")
+    install_js = INSTALL_JS.read_text(encoding="utf-8")
+    page_js = PAGE_JS.read_text(encoding="utf-8")
     checks = [
         (TARGET_HTML.exists(), "target html exists"),
         (PAGE_JS.exists(), "page chunk exists"),
@@ -529,13 +624,15 @@ def assert_registered() -> None:
         ("/lora/anima-fast.html" in app, "route registered"),
         (TRAIN_TYPE in DATA_JS.read_text(encoding="utf-8"), "train type in data"),
         (PAGE_JS.name in html and DATA_JS.name in html, "html preloads chunks"),
-        (GUIDE_CSS_MARKER in html, "dataset guide in html"),
-        (CREDIT_CSS_MARKER in html, "open-source credit in html"),
-        ("anima-fast-doc-links" in html, "doc tutorial link in html"),
-        ("data-anima-fast-guide-toggle" in html, "collapsible guide toggle in html"),
+        ("data-anima-fast-install" not in html, "install panel omitted from static html"),
+        (GUIDE_CSS_MARKER in page_js, "dataset guide in page chunk"),
+        (CREDIT_CSS_MARKER in page_js, "open-source credit in page chunk"),
+        ("anima-fast-doc-links" in page_js, "doc tutorial link in page chunk"),
+        ("data-anima-fast-guide-toggle" in page_js, "collapsible guide toggle in page chunk"),
         (FAST_UI_CSS_MARKER in POLISH_CSS.read_text(encoding="utf-8"), "fast ui css block"),
         (INSTALL_JS.name in html, "install guard script in target html"),
         (INSTALL_JS.name in (DIST / "index.html").read_text(encoding="utf-8"), "install guard script in root html"),
+        (all(marker in install_js for marker in DIAGNOSTIC_SCRIPT_MARKERS), "anima diagnostics script markers"),
     ]
     missing = [label for ok, label in checks if not ok]
     if missing:
