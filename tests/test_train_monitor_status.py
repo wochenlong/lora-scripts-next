@@ -145,6 +145,130 @@ class TrainMonitorStatusTests(unittest.TestCase):
             labels = [item["label"] for item in params]
             self.assertIn("总步数", labels)
 
+    def test_kohya_step_estimate_ignores_subdirs_without_repeat_prefix(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            data = root / "dataset"
+            valid = data / "10_style"
+            ignored = data / "style_misc"
+            valid.mkdir(parents=True)
+            ignored.mkdir()
+            (valid / "a.png").write_bytes(b"x")
+            for idx in range(20):
+                (ignored / f"ignored_{idx}.png").write_bytes(b"x")
+
+            estimate = server.estimate_training_steps(
+                {
+                    "train_data_dir": str(data),
+                    "train_batch_size": "4",
+                    "gradient_accumulation_steps": "1",
+                    "max_train_epochs": "2",
+                },
+                engine="kohya",
+            )
+
+        self.assertEqual(estimate["samples_per_epoch"], 10)
+        self.assertEqual(estimate["steps_per_epoch"], 3)
+        self.assertEqual(estimate["total_steps"], 6)
+
+    def test_kohya_step_detail_lists_each_repeat_folder(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = Path(td) / "dataset"
+            first = data / "10_style"
+            second = data / "2_closeup"
+            first.mkdir(parents=True)
+            second.mkdir()
+            for idx in range(2):
+                (first / f"a{idx}.png").write_bytes(b"x")
+            (second / "b.png").write_bytes(b"x")
+
+            estimate = server.estimate_training_steps(
+                {
+                    "train_data_dir": str(data),
+                    "train_batch_size": "4",
+                    "gradient_accumulation_steps": "1",
+                    "max_train_epochs": "3",
+                },
+                engine="kohya",
+            )
+
+        self.assertEqual(estimate["samples_per_epoch"], 22)
+        self.assertEqual(estimate["total_steps"], 18)
+        self.assertIn("10_style:2x10r", estimate["detail"])
+        self.assertIn("2_closeup:1x2r", estimate["detail"])
+
+    def test_anima_fast_train_params_prefer_runtime_total_steps(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = Path(td) / "1_style"
+            data.mkdir()
+            (data / "a.png").write_bytes(b"x")
+            config = {
+                "model_train_type": "anima-lora-fast",
+                "source_image_dir": str(data),
+                "train_batch_size": "1",
+                "gradient_accumulation_steps": "1",
+                "max_train_epochs": "100",
+            }
+
+            params = server._extract_train_params(
+                config,
+                engine="anima-fast",
+                runtime_metrics={"total_steps": 12, "progress_source": "anima_progress_jsonl"},
+            )
+
+        step_card = params[0]
+        self.assertTrue(step_card["value"].startswith("12"))
+        self.assertIn("Fast", step_card["value"])
+
+    def test_collect_status_uses_anima_fast_runtime_total_steps_for_train_params(self):
+        with tempfile.TemporaryDirectory() as td:
+            data = Path(td) / "1_style"
+            data.mkdir()
+            (data / "a.png").write_bytes(b"x")
+            progress = Path(td) / "progress.jsonl"
+            progress.write_text(
+                "\n".join([
+                    json.dumps({"ev": "run_start", "total_steps": 12, "total_epochs": 2}),
+                    json.dumps({"ev": "step", "global_step": 2, "loss": 0.1}),
+                ]),
+                encoding="utf-8",
+            )
+            task = {
+                "id": "t-fast",
+                "status": "RUNNING",
+                "metadata": {
+                    "backend": "anima-lora-fast",
+                    "progress_jsonl": str(progress),
+                },
+            }
+
+            def fetch_gui_side_effect(path: str):
+                if path == "/train/tasks":
+                    return {"status": "success", "data": {"tasks": [task]}}, "http://gui/api/train/tasks"
+                if path.startswith("/train/log/tail/"):
+                    return {"status": "success", "data": {"lines": [], "done": False}}, "http://gui/api/train/log/tail/t-fast"
+                raise AssertionError(f"unexpected path: {path}")
+
+            with mock.patch.object(server, "newest_preview_images", return_value=[]), \
+                    mock.patch.object(server, "_training_output_dir", return_value=None), \
+                    mock.patch.object(server, "latest_training_config", return_value={
+                        "model_train_type": "anima-lora-fast",
+                        "source_image_dir": str(data),
+                        "train_batch_size": "1",
+                        "gradient_accumulation_steps": "1",
+                        "max_train_epochs": "100",
+                    }), \
+                    mock.patch.object(server, "build_model_outputs", return_value={}), \
+                    mock.patch.object(server, "tensorboard_loss_scalars", return_value=[]), \
+                    mock.patch.object(server, "gpu_info", return_value={}), \
+                    mock.patch.object(server, "gpu_memory_used_mb", return_value=None), \
+                    mock.patch.object(server, "fetch_gui_json", side_effect=fetch_gui_side_effect):
+                status = server.collect_status()
+
+        self.assertEqual(status["metrics"]["total_steps"], 12)
+        self.assertTrue(status["train_params"][0]["value"].startswith("12"))
+        self.assertIn("Fast", status["train_params"][0]["value"])
+
     def test_newest_preview_images_uses_active_task_output_dir(self):
         with tempfile.TemporaryDirectory() as td:
             repo = Path(td)

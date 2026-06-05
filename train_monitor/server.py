@@ -434,7 +434,7 @@ def tensorboard_loss_scalars(limit: int = TENSORBOARD_LOSS_LIMIT) -> list[dict]:
 
 _TOML_STR_KEYS = ("output_dir", "output_name", "optimizer_type", "lr_scheduler",
                    "network_module", "network_args", "train_data_dir", "source_image_dir", "reg_data_dir",
-                   "resolution", "mixed_precision")
+                   "resolution", "mixed_precision", "model_train_type")
 _TOML_NUM_KEYS = ("max_train_epochs", "max_train_steps", "learning_rate", "unet_lr",
                    "text_encoder_lr", "network_dim", "network_alpha", "train_batch_size",
                    "gradient_accumulation_steps", "save_every_n_epochs", "save_every_n_steps",
@@ -472,50 +472,150 @@ def latest_training_config() -> dict:
     return {}
 
 
-def _count_dataset_images(train_data_dir: str, reg_data_dir: str | None) -> dict:
-    """Scan kohya-style dataset dir to count images and repeats."""
-    IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".tif", ".avif"}
-    result: dict = {}
+IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".gif", ".tiff", ".tif", ".avif"}
 
-    def _scan(base_dir: str) -> tuple[int, int]:
-        """Return (total images with repeats, raw image count)."""
-        base = Path(base_dir)
-        if not base.exists():
-            return 0, 0
-        total_with_repeats = 0
-        raw_count = 0
-        subdirs = [d for d in base.iterdir() if d.is_dir()]
-        if subdirs:
-            for d in subdirs:
-                match = re.match(r"^(\d+)_", d.name)
-                repeats = int(match.group(1)) if match else 1
-                imgs = [f for f in d.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS]
-                raw_count += len(imgs)
-                total_with_repeats += repeats * len(imgs)
-        else:
-            imgs = [f for f in base.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS]
-            raw_count = len(imgs)
-            total_with_repeats = raw_count
-        return total_with_repeats, raw_count
 
-    train_total, train_raw = _scan(train_data_dir)
-    result["train_images"] = train_raw
-    result["train_images_repeated"] = train_total
+def _positive_int(value: object, default: int = 1) -> int:
+    try:
+        return max(1, int(float(str(value))))
+    except (TypeError, ValueError):
+        return default
 
-    reg_total = 0
-    if reg_data_dir:
-        reg_total_raw, reg_raw = _scan(reg_data_dir)
-        if reg_raw > 0:
-            reg_matched = max(reg_total_raw, train_total)
-            result["reg_images"] = reg_raw
-            result["reg_images_matched"] = reg_matched
-            reg_total = reg_matched
 
-    result["samples_per_epoch"] = train_total + reg_total
+def _runtime_total_steps(runtime_metrics: dict | None) -> int:
+    if not runtime_metrics:
+        return 0
+    try:
+        total_steps = int(float(str(runtime_metrics.get("total_steps", ""))))
+    except (TypeError, ValueError):
+        return 0
+    if total_steps <= 0:
+        return 0
+    if runtime_metrics.get("progress_source") == "anima_progress_jsonl":
+        return total_steps
+    return 0
+
+
+def infer_training_engine(config: dict, active_task: dict | None = None) -> str:
+    metadata = (active_task or {}).get("metadata") or {}
+    backend = str(metadata.get("backend", "")).strip().lower()
+    train_type = str(config.get("model_train_type", "")).strip().lower()
+    if backend == "anima-lora-fast" or train_type == "anima-lora-fast":
+        return "anima-fast"
+    return "kohya"
+
+
+def _scan_repeat_subsets(base_dir: str, *, require_repeat_prefix: bool) -> dict:
+    base = Path(base_dir)
+    result = {"raw": 0, "repeated": 0, "subsets": []}
+    if not base.exists():
+        return result
+
+    subdirs = [d for d in base.iterdir() if d.is_dir()]
+    if subdirs:
+        for directory in sorted(subdirs, key=lambda path: path.name):
+            match = re.match(r"^(\d+)_", directory.name)
+            if not match and require_repeat_prefix:
+                continue
+            repeats = int(match.group(1)) if match else 1
+            images = [f for f in directory.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS]
+            raw = len(images)
+            if raw < 1:
+                continue
+            repeated = repeats * raw
+            result["raw"] += raw
+            result["repeated"] += repeated
+            result["subsets"].append({
+                "name": directory.name,
+                "raw": raw,
+                "repeats": repeats,
+                "repeated": repeated,
+            })
+        return result
+
+    images = [f for f in base.iterdir() if f.is_file() and f.suffix.lower() in IMAGE_EXTS]
+    raw = len(images)
+    result["raw"] = raw
+    result["repeated"] = raw
+    if raw:
+        result["subsets"].append({"name": base.name, "raw": raw, "repeats": 1, "repeated": raw})
     return result
 
 
-def _extract_train_params(config: dict) -> list[dict]:
+def estimate_training_steps(config: dict, engine: str = "kohya", runtime_metrics: dict | None = None) -> dict:
+    runtime_total = _runtime_total_steps(runtime_metrics) if engine == "anima-fast" else 0
+    train_data_dir = config.get("train_data_dir") or config.get("source_image_dir") or ""
+    estimate: dict = {
+        "engine": engine,
+        "total_steps": runtime_total,
+        "steps_per_epoch": 0,
+        "samples_per_epoch": 0,
+        "detail": "Fast runtime progress" if runtime_total else "",
+        "runtime_total": bool(runtime_total),
+    }
+    if not train_data_dir:
+        return estimate
+
+    resolved = resolve_repo_path(train_data_dir)
+    reg_dir = config.get("reg_data_dir", "")
+    resolved_reg = resolve_repo_path(reg_dir) if reg_dir else None
+    require_repeat_prefix = engine == "kohya"
+    train_scan = _scan_repeat_subsets(str(resolved) if resolved else train_data_dir, require_repeat_prefix=require_repeat_prefix)
+    train_total = int(train_scan["repeated"])
+    train_raw = int(train_scan["raw"])
+    reg_total = 0
+    reg_raw = 0
+    if resolved_reg or reg_dir:
+        reg_scan = _scan_repeat_subsets(str(resolved_reg) if resolved_reg else reg_dir, require_repeat_prefix=require_repeat_prefix)
+        reg_total_raw = int(reg_scan["repeated"])
+        reg_raw = int(reg_scan["raw"])
+        if reg_raw:
+            reg_total = max(reg_total_raw, train_total)
+
+    samples = train_total + reg_total
+    estimate.update({
+        "train_images": train_raw,
+        "train_images_repeated": train_total,
+        "train_subsets": train_scan["subsets"],
+        "reg_images": reg_raw,
+        "reg_images_matched": reg_total,
+        "samples_per_epoch": samples,
+    })
+    if samples <= 0:
+        return estimate
+
+    bs = _positive_int(config.get("train_batch_size", "1"))
+    ga = _positive_int(config.get("gradient_accumulation_steps", "1"))
+    batches_per_epoch = math.ceil(samples / bs)
+    steps_per_epoch = math.ceil(batches_per_epoch / ga)
+    subset_parts = [
+        f"{item['name']}:{item['raw']}x{item['repeats']}r"
+        for item in train_scan["subsets"]
+    ]
+    detail_parts = subset_parts or [f"{train_raw}图 × {train_total // train_raw if train_raw else 1}r"]
+    if reg_raw:
+        detail_parts.append(f"+{reg_raw}正则")
+    detail_parts.append(f"÷ BS{bs * ga}")
+    estimate.update({
+        "batches_per_epoch": batches_per_epoch,
+        "steps_per_epoch": steps_per_epoch,
+        "effective_batch_size": bs * ga,
+        "detail": " ".join(detail_parts),
+    })
+
+    epochs_str = config.get("max_train_epochs", "")
+    steps_str = config.get("max_train_steps", "")
+    if epochs_str:
+        epochs = _positive_int(epochs_str)
+        estimate["epochs"] = epochs
+        if not runtime_total:
+            estimate["total_steps"] = epochs * steps_per_epoch
+    elif steps_str and not runtime_total:
+        estimate["total_steps"] = _positive_int(steps_str)
+        estimate["manual_steps"] = True
+    return estimate
+
+def _extract_train_params(config: dict, engine: str | None = None, runtime_metrics: dict | None = None) -> list[dict]:
     """Build ordered list of key training hyperparameters for the monitor UI."""
     if not config:
         return []
@@ -533,43 +633,23 @@ def _extract_train_params(config: dict) -> list[dict]:
                 pass
         params.append({"label": label, "value": str(val)})
 
-    train_data_dir = config.get("train_data_dir") or config.get("source_image_dir") or ""
-    if train_data_dir:
-        resolved = resolve_repo_path(train_data_dir)
-        reg_dir = config.get("reg_data_dir", "")
-        resolved_reg = resolve_repo_path(reg_dir) if reg_dir else None
-        ds = _count_dataset_images(str(resolved) if resolved else train_data_dir,
-                                   str(resolved_reg) if resolved_reg else None)
-        train_img = ds.get("train_images", 0)
-        train_repeated = ds.get("train_images_repeated", 0)
-        samples = ds.get("samples_per_epoch", 0)
-
-        bs = max(1, int(float(config.get("train_batch_size", "1"))))
-        ga = max(1, int(float(config.get("gradient_accumulation_steps", "1"))))
-        effective_bs = bs * ga
-
-        if samples > 0:
-            batches_per_epoch = math.ceil(samples / bs)
-            steps_per_epoch = math.ceil(batches_per_epoch / ga)
-
-            epochs_str = config.get("max_train_epochs", "")
-            steps_str = config.get("max_train_steps", "")
-
-            detail_parts = [f"{train_img}图 × {train_repeated // train_img if train_img else 1}r"]
-            if ds.get("reg_images"):
-                detail_parts.append(f"+{ds['reg_images']}正则")
-            detail_parts.append(f"÷ BS{effective_bs}")
-            detail = " ".join(detail_parts)
-
-            if epochs_str:
-                epochs = int(float(epochs_str))
-                total_steps = epochs * steps_per_epoch
-                params.append({"label": "总步数", "value": f"{total_steps}（{detail} × {epochs}ep）"})
-            elif steps_str:
-                total_steps = int(float(steps_str))
-                params.append({"label": "总步数", "value": f"{total_steps}（手动设定）"})
-            else:
-                params.append({"label": "每 Epoch", "value": f"{steps_per_epoch} 步（{detail}）"})
+    engine = engine or infer_training_engine(config)
+    step_estimate = estimate_training_steps(config, engine=engine, runtime_metrics=runtime_metrics)
+    step_label = "总步数"
+    if step_estimate.get("runtime_total") and step_estimate.get("total_steps"):
+        params.append({"label": step_label, "value": f"{step_estimate['total_steps']}（Fast 真实进度）"})
+    elif step_estimate.get("total_steps") and step_estimate.get("epochs"):
+        params.append({
+            "label": step_label,
+            "value": f"{step_estimate['total_steps']}（{step_estimate.get('detail', '')} × {step_estimate['epochs']}ep）",
+        })
+    elif step_estimate.get("total_steps") and step_estimate.get("manual_steps"):
+        params.append({"label": step_label, "value": f"{step_estimate['total_steps']}（手动设定）"})
+    elif step_estimate.get("steps_per_epoch"):
+        params.append({
+            "label": "每 Epoch",
+            "value": f"{step_estimate['steps_per_epoch']} 步（{step_estimate.get('detail', '')}）",
+        })
 
     _add("学习率", "learning_rate", "lr")
     _add("UNet LR", "unet_lr", "lr")
@@ -1033,6 +1113,8 @@ def collect_status() -> dict:
         return status
 
     status["active_task"] = active
+    engine = infer_training_engine(train_config, active)
+    status["train_params"] = _extract_train_params(train_config, engine=engine)
     state_map = {
         "RUNNING": "训练中",
         "FINISHED": "已结束",
@@ -1059,6 +1141,7 @@ def collect_status() -> dict:
                 else:
                     status["metrics"] = stdout_metrics
                 metrics = status["metrics"]
+                status["train_params"] = _extract_train_params(train_config, engine=engine, runtime_metrics=metrics)
                 task_status = active.get("status", "")
                 update_progress_health(task_id, task_status, metrics)
                 strong_error = bool(metrics.get("strong_error"))
