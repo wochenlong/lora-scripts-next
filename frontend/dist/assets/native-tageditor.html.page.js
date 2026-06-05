@@ -1,1 +1,1 @@
-import{_ as e,o as t,c as r}from"./app.547295de.js?v=20260604-native-tageditor-2";const c={};function o(_,a){return t(),r("div")}var s=e(c,[["render",o],["__file","native-tageditor.html.vue"]]);export{s as default};
+import{_ as e,o as t,c as r}from"./app.547295de.js?v=20260605-routefix2";const c={};function o(_,a){return t(),r("div")}var s=e(c,[["render",o],["__file","native-tageditor.html.vue"]]);export{s as default};
