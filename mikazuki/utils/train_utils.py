@@ -311,7 +311,34 @@ def check_training_params(data):
     return True
 
 
-def get_total_images(path, recursive=True):
+def get_total_images(path, recursive=True, limit=None):
+    if limit is not None:
+        limit = int(limit)
+        if limit <= 0:
+            return []
+        if not os.path.isdir(path):
+            return []
+        image_files = []
+        image_suffixes = {".jpg", ".jpeg", ".png"}
+        if recursive:
+            for root, _, files in os.walk(path):
+                for name in files:
+                    if os.path.splitext(name)[1].lower() not in image_suffixes:
+                        continue
+                    image_files.append(os.path.join(root, name))
+                    if len(image_files) >= limit:
+                        return image_files
+        else:
+            for entry in os.scandir(path):
+                if not entry.is_file():
+                    continue
+                if os.path.splitext(entry.name)[1].lower() not in image_suffixes:
+                    continue
+                image_files.append(entry.path)
+                if len(image_files) >= limit:
+                    return image_files
+        return image_files
+
     if recursive:
         image_files = glob.glob(path + '/**/*.jpg', recursive=True)
         image_files += glob.glob(path + '/**/*.jpeg', recursive=True)
