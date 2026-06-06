@@ -27,6 +27,14 @@ logger = logging.getLogger(__name__)
 FP8_OPTIMIZATION_TARGET_KEYS = ["blocks", ""]
 # ".embed." excludes Embedding in LLMAdapter
 FP8_OPTIMIZATION_EXCLUDE_KEYS = ["_embedder", "norm", "adaln", "final_layer", ".embed."]
+ANIMA_CHECKPOINT_KEY_PREFIXES = ("net.", "model.diffusion_model.", "diffusion_model.")
+
+
+def normalize_anima_checkpoint_key(key: str) -> str:
+    for prefix in ANIMA_CHECKPOINT_KEY_PREFIXES:
+        if key.startswith(prefix):
+            return key[len(prefix) :]
+    return key
 
 
 def load_anima_model(
@@ -103,7 +111,7 @@ def load_anima_model(
 
     # load model weights with dynamic fp8 optimization and LoRA merging if needed
     logger.info(f"Loading DiT model from {dit_path}, device={loading_device}")
-    rename_hooks = WeightTransformHooks(rename_hook=lambda k: k[len("net.") :] if k.startswith("net.") else k)
+    rename_hooks = WeightTransformHooks(rename_hook=normalize_anima_checkpoint_key)
     sd = load_safetensors_with_lora_and_fp8(
         model_files=dit_path,
         lora_weights_list=lora_weights_list,
