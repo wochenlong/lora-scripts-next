@@ -229,7 +229,7 @@ final 的结果：
 
 主对比图：
 
-- [akatsuki_latent_25_vs_50_256x1_contact_sheet.png](D:/ai/lora-scripts-next/.runtime/anima_action_transfer/akatsuki_latent_25_vs_50_256x1_contact_sheet.png)
+- `docs/assets/akatsuki-latent-action-transfer/akatsuki_latent_25_vs_50_256x1_contact_sheet.png`
 
 这张图从左到右分别是：
 
@@ -241,14 +241,14 @@ final 的结果：
 
 为了方便查看，这里直接放入对比图：
 
-![akatsuki latent 25 vs 50 contact sheet](D:/ai/lora-scripts-next/.runtime/anima_action_transfer/akatsuki_latent_25_vs_50_256x1_contact_sheet.png)
+![akatsuki latent 25 vs 50 contact sheet](./assets/akatsuki-latent-action-transfer/akatsuki_latent_25_vs_50_256x1_contact_sheet.png)
 
 这张对比图里使用到的两张单独验收图分别是：
 
 - step 25：
-  [20260608-200514-069_606120_.png](D:/ai/lora-scripts-next/.runtime/anima_action_transfer/akatsuki_latent_25steps_0000_256x1/20260608-200514-069_606120_.png)
+  - `docs/assets/akatsuki-latent-action-transfer/latent25-256x1.png`
 - step 50：
-  [20260608-195918-968_606120_.png](D:/ai/lora-scripts-next/.runtime/anima_action_transfer/akatsuki_latent_attn_xformers.png/20260608-195918-968_606120_.png)
+  - `docs/assets/akatsuki-latent-action-transfer/latent50-256x1.png`
 
 从 25-step 和 50-step 的视觉结果来看，我们的结论是：
 
