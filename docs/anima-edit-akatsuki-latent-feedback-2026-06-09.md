@@ -11,17 +11,17 @@
 
 ## 环境信息
 
-- 工作区：`D:\ai\lora-scripts-next`
-- 训练/推理时使用的私有仓库 clone：`C:\Users\cenjy\AppData\Local\Temp\akatsuki-neo-anima-edit`
+- 工作区：`<workspace_root>`
+- 训练/推理时使用的私有仓库 clone：`<local_clone>/akatsuki-neo-anima-edit`
 - 操作系统：Windows
 - GPU：RTX 4090 24 GB
-- 本轮实验使用的 Python 环境：`D:\ai\lora-scripts-next` 下的本地 `venv`
+- 本轮实验使用的 Python 环境：`<workspace_root>` 下的本地 `venv`
 
 使用到的基础模型权重：
 
-- DiT：`D:\ai\lora-scripts-next\sd-models\anima\anima-base-v1.0.safetensors`
-- VAE：`D:\ai\lora-scripts-next\sd-models\anima\qwen_image_vae.safetensors`
-- Text Encoder：`D:\ai\lora-scripts-next\sd-models\anima\qwen_3_06b_base.safetensors`
+- DiT：`<workspace_root>/sd-models/anima/anima-base-v1.0.safetensors`
+- VAE：`<workspace_root>/sd-models/anima/qwen_image_vae.safetensors`
+- Text Encoder：`<workspace_root>/sd-models/anima/qwen_3_06b_base.safetensors`
 
 ## 数据集情况
 
@@ -31,11 +31,11 @@
 
 本地实验使用的数据目录：
 
-- `D:\ai\lora-scripts-next\data\anima-edit-action-transfer-12-akatsuki-vlm\1_action_transfer`
+- `<workspace_root>/data/anima-edit-action-transfer-12-akatsuki-vlm/1_action_transfer`
 
 训练启动时传入的是它的父目录：
 
-- `D:\ai\lora-scripts-next\data\anima-edit-action-transfer-12-akatsuki-vlm`
+- `<workspace_root>/data/anima-edit-action-transfer-12-akatsuki-vlm`
 
 数据格式如下：
 
@@ -58,7 +58,7 @@ caption 是比较简单的编辑式描述，直接描述想要的变换结果。
 
 本地训练启动脚本：
 
-- [run_akatsuki_latent_50steps.ps1](D:/ai/lora-scripts-next/.runtime/anima_action_transfer/run_akatsuki_latent_50steps.ps1)
+- `run_akatsuki_latent_50steps.ps1`
 
 它实际调用的是：
 
@@ -66,8 +66,8 @@ caption 是比较简单的编辑式描述，直接描述想要的变换结果。
 
 本轮实验使用的关键参数如下：
 
-- `--train_data_dir D:\ai\lora-scripts-next\data\anima-edit-action-transfer-12-akatsuki-vlm`
-- `--output_dir D:\ai\lora-scripts-next\output\anima-edit-action-transfer-12-akatsuki-latent-50steps`
+- `--train_data_dir <workspace_root>/data/anima-edit-action-transfer-12-akatsuki-vlm`
+- `--output_dir <workspace_root>/output/anima-edit-action-transfer-12-akatsuki-latent-50steps`
 - `--output_name anima-edit-lora-action-transfer-12-akatsuki-latent-50steps`
 - `--network_module networks.lora_anima`
 - `--network_dim 128`
@@ -98,7 +98,7 @@ caption 是比较简单的编辑式描述，直接描述想要的变换结果。
 
 输出目录：
 
-- `D:\ai\lora-scripts-next\output\anima-edit-action-transfer-12-akatsuki-latent-50steps`
+- `<workspace_root>/output/anima-edit-action-transfer-12-akatsuki-latent-50steps`
 
 实际产物：
 
@@ -122,7 +122,7 @@ caption 是比较简单的编辑式描述，直接描述想要的变换结果。
 
 我们使用下面这个脚本做 checkpoint 元数据验收：
 
-- `D:\ai\lora-scripts-next\.runtime\anima_action_transfer\verify_akatsuki_latent_safetensors.py`
+- `<workspace_root>/.runtime/anima_action_transfer/verify_akatsuki_latent_safetensors.py`
 
 step 25 的结果：
 
@@ -146,7 +146,7 @@ final 的结果：
 
 本地推理包装脚本：
 
-- `D:\ai\lora-scripts-next\.runtime\anima_action_transfer\run_akatsuki_latent_infer.ps1`
+- `<workspace_root>/.runtime/anima_action_transfer/run_akatsuki_latent_infer.ps1`
 
 它内部调用：
 
@@ -299,17 +299,17 @@ final 的结果：
 这轮实验相关的本地文件包括：
 
 - 训练启动脚本：
-  - `D:\ai\lora-scripts-next\.runtime\anima_action_transfer\run_akatsuki_latent_50steps.ps1`
+  - `<workspace_root>/.runtime/anima_action_transfer/run_akatsuki_latent_50steps.ps1`
 - 推理包装脚本：
-  - `D:\ai\lora-scripts-next\.runtime\anima_action_transfer\run_akatsuki_latent_infer.ps1`
+  - `<workspace_root>/.runtime/anima_action_transfer/run_akatsuki_latent_infer.ps1`
 - 25-step watcher：
-  - `D:\ai\lora-scripts-next\.runtime\anima_action_transfer\watch_akatsuki_latent_25step_eval.ps1`
+  - `<workspace_root>/.runtime/anima_action_transfer/watch_akatsuki_latent_25step_eval.ps1`
 - final watcher：
-  - `D:\ai\lora-scripts-next\.runtime\anima_action_transfer\watch_akatsuki_latent_50steps_and_eval.ps1`
+  - `<workspace_root>/.runtime/anima_action_transfer/watch_akatsuki_latent_50steps_and_eval.ps1`
 - safetensors 验收脚本：
-  - `D:\ai\lora-scripts-next\.runtime\anima_action_transfer\verify_akatsuki_latent_safetensors.py`
+  - `<workspace_root>/.runtime/anima_action_transfer/verify_akatsuki_latent_safetensors.py`
 - 主对比图：
-  - `D:\ai\lora-scripts-next\.runtime\anima_action_transfer\akatsuki_latent_25_vs_50_256x1_contact_sheet.png`
+  - `<workspace_root>/.runtime/anima_action_transfer/akatsuki_latent_25_vs_50_256x1_contact_sheet.png`
 
 ## 简短结论
 
