@@ -22,13 +22,7 @@ if not defined PYTHON_EXE (
     exit /b 1
 )
 
-where uv >nul 2>&1
-if errorlevel 1 (
-    echo [Error] uv not found in PATH.
-    echo Install: https://docs.astral.sh/uv/getting-started/installation/
-    pause
-    exit /b 1
-)
+:: uv is bootstrapped automatically by install_anima_fast.py if missing.
 
 set "PYTHONUTF8=1"
 set "PYTHONPATH=%PROJECT_ROOT%"
@@ -40,6 +34,7 @@ echo ========================================
 echo.
 echo This installs extensions\anima_lora\ without opening WebUI.
 echo Requires NVIDIA GPU, ~16GB+ VRAM, several GB download.
+echo uv will be installed automatically if it is not found.
 echo.
 
 "%PYTHON_EXE%" -s "%~dp0install_anima_fast.py" %*

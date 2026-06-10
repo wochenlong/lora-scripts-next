@@ -22,7 +22,7 @@ Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_l
 2. **安装插件（推荐 CLI）**：
    - Windows：`scripts\cli\install_anima_fast.bat`
    - Linux：`bash scripts/cli/install_anima_fast.sh`
-   - 要求 `uv` 在 PATH、NVIDIA GPU、稳定网络；首次下载数 GB。可先加 `--dry-run` 查看安装计划。
+   - 要求 NVIDIA GPU、稳定网络；首次下载数 GB。**无需手动准备 `uv`**——缺少时脚本会用所选 Python 自动安装。可先加 `--dry-run` 查看安装计划。
 3. 启动 WebUI：`run_gui.bat` 或 `python gui.py`，打开 **Anima LoRA → Fast 模式**，确认状态为「插件已就绪」
 4. 填写训练目录与参数，点击 **开始训练**；监控页 `/train-monitor` 显示 **Anima Fast LoRA**
 
@@ -122,7 +122,7 @@ scripts\cli\install_anima_fast.bat
 scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast.toml
 ```
 
-要求：**`uv` 在 PATH 中**、NVIDIA GPU、稳定网络。无本地 `anima_lora` 克隆时会自动克隆到 `.cache/anima_fast/upstream/`（commit 默认读 `config/anima_fast_backend.toml` 的 `source_commit`）。已有克隆可设 `ANIMA_LORA_ROOT` 或 `--source-root`。
+要求：NVIDIA GPU、稳定网络。**`uv` 无需手动安装**——脚本检测到缺少 `uv` 时，会用所选 Python（整合包的 `python_embeded`）自动 `pip install uv` 并加入本次 PATH，因此普通用户**双击 bat 即可**，无需任何额外操作。无本地 `anima_lora` 克隆时会自动克隆到 `.cache/anima_fast/upstream/`（commit 默认读 `config/anima_fast_backend.toml` 的 `source_commit`）。已有克隆可设 `ANIMA_LORA_ROOT` 或 `--source-root`。
 
 > 安装与训练相互独立：用 CLI 安装后，既可继续用 CLI 训练，也可回到 WebUI 的 **Fast 模式** 页正常训练（状态会显示「插件已就绪」）。
 

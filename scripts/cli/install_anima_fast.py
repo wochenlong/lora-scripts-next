@@ -5,8 +5,88 @@ from __future__ import annotations
 import argparse
 import os
 import shutil
+import subprocess
 import sys
 from pathlib import Path
+
+UV_INSTALL_URL = "https://docs.astral.sh/uv/getting-started/installation/"
+
+
+def _uv_bin_dir_candidates() -> list[Path]:
+    """Dirs where `uv` may live next to the running interpreter (after pip install)."""
+    base = Path(sys.executable).resolve().parent
+    candidates = [base]
+    if sys.platform == "win32":
+        candidates.append(base / "Scripts")
+    else:
+        candidates.append(base / "bin")
+        candidates.append(base.parent / "bin")
+    return candidates
+
+
+def _uv_exe_name() -> str:
+    return "uv.exe" if sys.platform == "win32" else "uv"
+
+
+def _prepend_path(directory: Path) -> None:
+    os.environ["PATH"] = str(directory) + os.pathsep + os.environ.get("PATH", "")
+
+
+def ensure_uv(log) -> str:
+    """Return a usable `uv`, bootstrapping it via the current Python if missing.
+
+    Keeps the CLI install truly one-click for portable users (python_embeded has
+    no uv on PATH): we install uv into the selected interpreter and expose it for
+    the rest of this process so environment.py's shutil.which("uv") succeeds.
+    """
+    found = shutil.which("uv")
+    if found:
+        return found
+
+    # Maybe uv was installed previously next to this interpreter but isn't on PATH.
+    for directory in _uv_bin_dir_candidates():
+        exe = directory / _uv_exe_name()
+        if exe.is_file():
+            _prepend_path(directory)
+            return str(exe)
+
+    log("uv not found in PATH; bootstrapping it with the current Python ...")
+
+    def run(cmd: list[str]) -> subprocess.CompletedProcess[str]:
+        log("  $ " + " ".join(cmd))
+        return subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
+
+    if run([sys.executable, "-m", "pip", "--version"]).returncode != 0:
+        if run([sys.executable, "-m", "ensurepip", "--upgrade"]).returncode != 0:
+            raise SystemExit(
+                "uv is required but not found, and pip could not be bootstrapped on this Python. "
+                f"Install uv manually: {UV_INSTALL_URL}"
+            )
+
+    result = run([sys.executable, "-m", "pip", "install", "-U", "uv"])
+    if result.returncode != 0:
+        if result.stdout:
+            log(result.stdout)
+        if result.stderr:
+            log(result.stderr)
+        raise SystemExit(
+            f"Failed to install uv via pip. Install uv manually: {UV_INSTALL_URL}"
+        )
+
+    for directory in _uv_bin_dir_candidates():
+        exe = directory / _uv_exe_name()
+        if exe.is_file():
+            _prepend_path(directory)
+            log(f"uv installed: {exe}")
+            return str(exe)
+
+    found = shutil.which("uv")
+    if found:
+        return found
+    raise SystemExit(
+        "uv was installed but could not be located on PATH. "
+        f"Re-run the script, or install uv manually: {UV_INSTALL_URL}"
+    )
 
 
 def ensure_project_import_path(project_root: Path) -> None:
@@ -84,13 +164,10 @@ def main(argv: list[str] | None = None) -> int:
         print("[dry-run] No changes made.")
         return 0
 
-    if not shutil.which("uv"):
-        raise SystemExit(
-            "uv is required but not found in PATH. Install: https://docs.astral.sh/uv/getting-started/installation/"
-        )
-
     def log(line: str) -> None:
         print(line, flush=True)
+
+    ensure_uv(log)
 
     result = install_environment(plan, log)
     status = read_extension_status(layout)

@@ -49,3 +49,30 @@ class InstallAnimaFastCliTests(unittest.TestCase):
             ):
                 rc = cli.main(["--project-root", str(project), "--dry-run"])
             self.assertEqual(rc, 0)
+
+
+class EnsureUvTests(unittest.TestCase):
+    def test_returns_existing_uv_on_path(self):
+        with mock.patch.object(cli.shutil, "which", return_value="/usr/bin/uv"), mock.patch.object(
+            cli.subprocess, "run"
+        ) as run:
+            result = cli.ensure_uv(lambda _m: None)
+        self.assertEqual(result, "/usr/bin/uv")
+        run.assert_not_called()
+
+    def test_uses_uv_next_to_interpreter_without_pip(self):
+        original_path = cli.os.environ.get("PATH", "")
+        try:
+            with tempfile.TemporaryDirectory() as td:
+                bindir = Path(td)
+                exe = bindir / cli._uv_exe_name()
+                exe.write_text("", encoding="utf-8")
+                with mock.patch.object(cli.shutil, "which", return_value=None), mock.patch.object(
+                    cli, "_uv_bin_dir_candidates", return_value=[bindir]
+                ), mock.patch.object(cli.subprocess, "run") as run:
+                    result = cli.ensure_uv(lambda _m: None)
+                run.assert_not_called()
+                self.assertEqual(result, str(exe))
+                self.assertIn(str(bindir), cli.os.environ["PATH"])
+        finally:
+            cli.os.environ["PATH"] = original_path
