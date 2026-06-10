@@ -11,6 +11,39 @@ from pathlib import Path
 from unittest import mock
 
 
+# sys.modules keys this module replaces with stand-ins (plus mikazuki.process,
+# imported below). They are snapshotted before stubbing and restored in
+# tearDownModule so stubs do not leak into later tests collected in the same
+# process (see issue #95).
+_STUBBED_MODULE_NAMES = (
+    "mikazuki.app",
+    "mikazuki.app.models",
+    "mikazuki.log",
+    "mikazuki.tasks",
+    "mikazuki.launch_utils",
+    "mikazuki.portable_utils",
+    "toml",
+    "mikazuki.anima_fast_backend.launcher",
+    "mikazuki.anima_fast_backend.service_resolver",
+    "mikazuki.process",
+)
+_SAVED_MODULES: dict[str, types.ModuleType | None] = {}
+
+
+def _snapshot_modules() -> None:
+    for name in _STUBBED_MODULE_NAMES:
+        _SAVED_MODULES[name] = sys.modules.get(name)
+
+
+def _restore_modules() -> None:
+    for name, original in _SAVED_MODULES.items():
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
+    _SAVED_MODULES.clear()
+
+
 def _install_stub_modules() -> None:
     app_pkg = types.ModuleType("mikazuki.app")
     app_pkg.__path__ = []  # type: ignore[attr-defined]
@@ -67,8 +100,16 @@ def _install_stub_modules() -> None:
     sys.modules["mikazuki.anima_fast_backend.service_resolver"] = resolver_mod
 
 
+# Install stubs only long enough to import ``mikazuki.process``; the imported
+# module keeps its own references to whatever it pulled in, so we restore
+# sys.modules immediately to avoid leaking stubs into later test modules that
+# are imported in the same collection pass (issue #95).
+_snapshot_modules()
 _install_stub_modules()
-process = importlib.import_module("mikazuki.process")
+try:
+    process = importlib.import_module("mikazuki.process")
+finally:
+    _restore_modules()
 
 
 class NormalizeMixedPrecisionTests(unittest.TestCase):

@@ -14,6 +14,34 @@ import unittest
 from unittest import mock
 
 
+# sys.modules keys this module replaces with stand-ins (plus mikazuki.process,
+# imported below). Snapshotted before stubbing and restored in tearDownModule
+# so stubs do not leak into later tests in the same process (see issue #95).
+_STUBBED_MODULE_NAMES = (
+    "mikazuki.app",
+    "mikazuki.app.models",
+    "mikazuki.log",
+    "mikazuki.tasks",
+    "mikazuki.launch_utils",
+    "mikazuki.process",
+)
+_SAVED_MODULES: dict[str, types.ModuleType | None] = {}
+
+
+def _snapshot_modules() -> None:
+    for name in _STUBBED_MODULE_NAMES:
+        _SAVED_MODULES[name] = sys.modules.get(name)
+
+
+def _restore_modules() -> None:
+    for name, original in _SAVED_MODULES.items():
+        if original is None:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
+    _SAVED_MODULES.clear()
+
+
 def _install_stub_modules() -> None:
     """Inject minimal stand-in modules so ``mikazuki.process`` imports cleanly."""
 
@@ -49,8 +77,15 @@ def _install_stub_modules() -> None:
     sys.modules["mikazuki.launch_utils"] = launch_mod
 
 
+# Install stubs only long enough to import ``mikazuki.process``; restore
+# sys.modules immediately so the stubs do not leak into later test modules
+# imported in the same collection pass (issue #95).
+_snapshot_modules()
 _install_stub_modules()
-process = importlib.import_module("mikazuki.process")
+try:
+    process = importlib.import_module("mikazuki.process")
+finally:
+    _restore_modules()
 
 
 class BuildTrainLogUrlsTests(unittest.TestCase):
