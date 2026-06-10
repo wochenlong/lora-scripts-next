@@ -16,10 +16,17 @@ Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_l
 
 ## 快速开始
 
-1. 启动：`run_gui.bat` 或 `python gui.py`
-2. 准备 Anima 三件套（[`anima-training.md`](./anima-training.md) 或根目录 `Download-Anima-Model.bat`）
-3. 打开 **Anima LoRA → Fast 模式**，点击 **开启插件**，等待「插件已就绪」
+> **推荐用命令行脚本安装 Fast 插件**（`scripts/cli/install_anima_fast.*`）：终端全程可见依赖下载与编译输出，出错时能直接看到报错、便于诊断。WebUI 内「开启插件」为备选方式（安装日志藏在页面下方，不易排查）。
+
+1. 准备 Anima 三件套（[`anima-training.md`](./anima-training.md) 或根目录 `Download-Anima-Model.bat`）
+2. **安装插件（推荐 CLI）**：
+   - Windows：`scripts\cli\install_anima_fast.bat`
+   - Linux：`bash scripts/cli/install_anima_fast.sh`
+   - 要求 `uv` 在 PATH、NVIDIA GPU、稳定网络；首次下载数 GB。可先加 `--dry-run` 查看安装计划。
+3. 启动 WebUI：`run_gui.bat` 或 `python gui.py`，打开 **Anima LoRA → Fast 模式**，确认状态为「插件已就绪」
 4. 填写训练目录与参数，点击 **开始训练**；监控页 `/train-monitor` 显示 **Anima Fast LoRA**
+
+> 不想用命令行也可以：在 Fast 模式页点 **开启插件** 完成安装（见下「备选：WebUI 内安装」）。
 
 ---
 
@@ -95,9 +102,9 @@ extensions\anima_lora\.venv\Scripts\python.exe extensions\anima_lora\source\trai
 
 ---
 
-## 纯命令行（不打开 WebUI）
+## 安装 Fast 插件（推荐：命令行脚本）
 
-适合手写 TOML、全程 CLI 的进阶用户。脚本在 **`scripts/cli/`**（不占用整合包根目录）：
+**这是推荐的安装方式。** 命令行脚本会在终端实时打印环境创建、依赖下载、`torch` 安装与审计的全部输出——一旦失败（网络、`uv`、CUDA 轮子等），报错直接可见，方便复制反馈与排查。脚本在 **`scripts/cli/`**（不占用整合包根目录）：
 
 | 步骤 | Windows | Linux |
 |------|---------|-------|
@@ -105,14 +112,19 @@ extensions\anima_lora\.venv\Scripts\python.exe extensions\anima_lora\source\trai
 | TOML 训练 | `scripts\cli\train_anima_fast_by_toml.bat <config.toml>` | `bash scripts/cli/train_anima_fast_by_toml.sh <config.toml>` |
 
 ```powershell
-# 查看安装计划（不下载）
+# 1. 先看安装计划（不下载、不改动）
 scripts\cli\install_anima_fast.bat --dry-run
 
-# 安装完成后（与页内「开启插件」等价）
+# 2. 正式安装（终端可见全部输出；与页内「开启插件」等价）
+scripts\cli\install_anima_fast.bat
+
+# 3. 安装完成后即可训练（也可改回 WebUI 训练）
 scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast.toml
 ```
 
 要求：**`uv` 在 PATH 中**、NVIDIA GPU、稳定网络。无本地 `anima_lora` 克隆时会自动克隆到 `.cache/anima_fast/upstream/`（commit 默认读 `config/anima_fast_backend.toml` 的 `source_commit`）。已有克隆可设 `ANIMA_LORA_ROOT` 或 `--source-root`。
+
+> 安装与训练相互独立：用 CLI 安装后，既可继续用 CLI 训练，也可回到 WebUI 的 **Fast 模式** 页正常训练（状态会显示「插件已就绪」）。
 
 ---
 
@@ -124,7 +136,7 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 | 适配器 | LoRA / LoKr / T-LoRA 等 | **仅 LoRA** |
 | 显存 | ~12GB+（可 checkpoint） | **建议 16GB+** |
 | 速度 | 常规（本测 ≈7 s/step） | **更快**（本测 ≈2.8 s/step 起） |
-| 安装 | 开箱即用 | **需先开启插件** |
+| 安装 | 开箱即用 | **需先安装插件（推荐 CLI 脚本）** |
 
 ---
 
@@ -137,7 +149,9 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 
 ---
 
-## 安装插件（WebUI）
+## 备选：WebUI 内安装
+
+> 这是便捷的备选方式。WebUI 内安装会把下载/编译日志收进页面下方的日志区，遇到报错时**不如命令行直观**；若安装卡住或失败，建议改用上面的 **CLI 脚本** 重装并把终端报错反馈给我们。
 
 1. 启动 SD Trainer：`run_gui.bat` 或 `python gui.py`
 2. 打开 **Anima LoRA → Fast 模式**
@@ -274,8 +288,8 @@ Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选�
 
 | 现象 | 处理 |
 |------|------|
-| 状态「进阶插件 · 待开启」 | 点击「开启插件」完成安装 |
-| 安装失败 / 审计失败 | 页内日志；或 `POST /api/plugins/anima-lora/repair` |
+| 状态「进阶插件 · 待开启」 | 运行 `scripts/cli/install_anima_fast.*` 安装（推荐，终端可见报错）；或在页内点「开启插件」 |
+| 安装失败 / 审计失败 | 优先用 CLI 脚本重装看终端报错；亦可看页内日志或 `POST /api/plugins/anima-lora/repair` |
 | `No bitsandbytes` / 优化器 ImportError | 修复插件；或确认 `optimizer_type=AdamW` 临时绕过 |
 | 末 epoch 报 accelerate / `NoneType is not iterable` | torch 的 `.dist-info` 损坏；**修复插件** 或重装 `torch==2.11.0+cu130` |
 | 训练按钮灰色 | 插件未就绪；先安装 |

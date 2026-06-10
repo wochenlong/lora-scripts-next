@@ -102,7 +102,7 @@ bash install_flash_attn.sh
   <img src="assets/readme/screenshot-anima-fast.png?v=20260528" alt="Anima LoRA Fast 模式界面" width="920" />
 </p>
 
-<p align="center"><sub>Anima LoRA Fast — 侧栏「标准模式 / Fast 模式」；页内安装插件后再开训</sub></p>
+<p align="center"><sub>Anima LoRA Fast — 侧栏「标准模式 / Fast 模式」；推荐用 <code>scripts/cli/install_anima_fast.*</code> 命令行脚本安装（终端可见报错），也可用页内按钮。见 <a href="docs/anima-fast.md">docs/anima-fast.md</a></sub></p>
 
 <p align="center">
   <img src="assets/readme/screenshot-anima-finetune.png?v=20260528" alt="Anima 全量微调界面" width="920" />

@@ -102,7 +102,7 @@ Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.m
   <img src="assets/readme/screenshot-anima-fast.png?v=20260528" alt="Anima LoRA Fast mode UI" width="920" />
 </p>
 
-<p align="center"><sub>Anima LoRA Fast — optional plugin path under <b>标准模式 / Fast 模式</b>; install runtime from the page before training</sub></p>
+<p align="center"><sub>Anima LoRA Fast — optional plugin path under <b>标准模式 / Fast 模式</b>; install the runtime with <code>scripts/cli/install_anima_fast.*</code> (recommended — full terminal output) or the in-page button. See <a href="docs/anima-fast.md">docs/anima-fast.md</a></sub></p>
 
 <p align="center">
   <img src="assets/readme/screenshot-anima-finetune.png?v=20260528" alt="Anima full finetune UI" width="920" />
