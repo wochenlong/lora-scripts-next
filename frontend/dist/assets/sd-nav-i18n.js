@@ -57,6 +57,67 @@
     "帮助 → 新手上路": "Help → Getting started",
     "秋叶用户迁移说明": "Migration from Akiba lora-scripts",
     参数释义: "Parameter glossary",
+    标准模式: "Standard mode",
+    "Fast 模式": "Fast mode",
+    训练用模型: "Training model",
+    "Anima Fast 参数": "Anima Fast options",
+    数据集设置: "Dataset settings",
+    保存设置: "Save settings",
+    日志与监控: "Logging & monitoring",
+    训练相关参数: "Training options",
+    学习率与优化器设置: "Learning rate & optimizer",
+    训练预览图设置: "Sample preview settings",
+    网络设置: "Network settings",
+    "Anima 专用参数": "Anima-specific options",
+    日志设置: "Logging settings",
+    "caption（Tag）选项": "Caption (tag) options",
+    噪声设置: "Noise settings",
+    数据增强: "Data augmentation",
+    其他设置: "Other settings",
+    速度优化选项: "Speed optimization",
+    调试选项: "Debug options",
+    分布式训练: "Distributed training",
+    "Anima LoRA · Fast 模式": "Anima LoRA · Fast mode",
+    "Anima 高速 LoRA 训练（进阶插件）。需单独安装 runtime，仅支持标准 LoRA。显存建议 16GB+，首次安装需下载数 GB 依赖。":
+      "Anima high-speed LoRA training (advanced plugin). Requires a separate runtime, supports standard LoRA only, recommends 16GB+ VRAM, and downloads several GB of dependencies on first install.",
+    "Fast 训练引擎来自开源项目": "Fast training engine from the open-source project",
+    "感谢原作者与社区的开发与分享；本页以可选插件形式集成，遵循各自开源许可。":
+      "Thanks to the original author and community; this page integrates it as an optional plugin and follows the respective open-source licenses.",
+    "Fast 模式训练教程": "Fast mode training guide",
+    "（安装、数据路径、故障排除）": "(install, dataset paths, troubleshooting)",
+    "标准 Kohya 模式": "Standard Kohya mode",
+    "标准模式（Kohya）见 /lora/sd3.html": "Standard mode (Kohya): /lora/sd3.html",
+    "数据集路径说明（与 Kohya 不同）": "Dataset path notes (different from Kohya)",
+    "Fast 训练": "Fast training",
+    "实际读取 resized 目录": "actually reads the resized directory",
+    "里的 bucket 预处理图，不是直接读原图。": "bucket-preprocessed images instead of the original images.",
+    "训练图片目录": "Training image directory",
+    "原图 + caption（如": "Original images + captions (for example",
+    "子文件夹": "subfolder",
+    "resized 目录": "resized directory",
+    "训练真正用到的 bucket PNG；": "Bucket PNGs used for training;",
+    留空: "leave blank",
+    "时自动写入": "to auto-write to",
+    "数据集路径": "dataset path",
+    "同一数据集可复用": "reusable for the same dataset",
+    "可以填同一路径吗？": "Can both paths be the same?",
+    "可以。若该目录已是 bucket 预处理后的 PNG + caption，两处可填":
+      "Yes. If the directory already contains bucket-preprocessed PNGs and captions, both fields can use the",
+    相同路径: "same path",
+    "输出 / cache 目录不存在时会自动创建。左侧「cache_latents」等保持关闭，除非已完成完整 preprocess。":
+      "Output/cache directories are created automatically. Keep cache_latents and similar options off unless a full preprocess has already completed.",
+    开启插件: "Enable plugin",
+    检查中: "Checking",
+    功能已关闭: "Disabled",
+    插件已就绪: "Plugin ready",
+    安装中: "Installing",
+    审计中: "Auditing",
+    需修复: "Repair needed",
+    待审计: "Audit pending",
+    "进阶插件 · 待开启": "Advanced plugin · not enabled",
+    状态检查失败: "Status check failed",
+    安装任务启动中: "Starting install task",
+    安装失败: "Install failed",
   };
 
   const EN_TO_ZH = Object.fromEntries(
@@ -97,6 +158,16 @@
     const stored = sessionStorage.getItem(STORAGE_KEY);
     if (stored === "en-US") return true;
     if (stored === "zh-CN") return false;
+
+    const browserLocales = [
+      ...(Array.isArray(navigator.languages) ? navigator.languages : []),
+      navigator.language,
+      navigator.userLanguage,
+    ]
+      .filter(Boolean)
+      .map((loc) => String(loc).toLowerCase());
+    if (browserLocales.some((loc) => loc.startsWith("en"))) return true;
+    if (browserLocales.some((loc) => loc.startsWith("zh"))) return false;
 
     const i18nLoc = resolveI18nLocale();
     if (i18nLoc) return i18nLoc.toLowerCase().startsWith("en");
@@ -797,6 +868,9 @@
 
     const main = document.querySelector(".right-container .theme-default-content main");
     if (main) replaceInElement(main, map);
+
+    const schemaForm = document.querySelector("section.schema-container");
+    if (schemaForm) replaceInElement(schemaForm, map);
 
     const rightHeader = document.querySelector(".right-container section > header");
     if (rightHeader) replaceInElement(rightHeader, map);
