@@ -177,7 +177,8 @@ def main(argv: list[str] | None = None) -> int:
             print(f"[error] {err}", file=sys.stderr)
         return 1
     print("")
-    print("Fast plugin ready. Train with:")
+    print("Fast plugin ready (core trainable dependencies verified; sam3/masking extras install on demand).")
+    print("Train with:")
     if sys.platform == "win32":
         print(r"  scripts\cli\train_anima_fast_by_toml.bat <config.toml>")
     else:

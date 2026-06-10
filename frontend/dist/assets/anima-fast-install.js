@@ -320,7 +320,13 @@
     last = d || last;
     setControls(last);
     const n = document.querySelector("[data-anima-fast-status]");
-    if (n) n.textContent = label(last);
+    if (n) {
+      n.textContent = label(last);
+      n.title =
+        last.state === "ready"
+          ? "核心可训练依赖齐全；sam3/遮罩等可选依赖按需安装，不影响训练就绪状态。"
+          : "";
+    }
     const a = last.facts && last.facts.audit;
     if (a && !a.ok && a.errors) appendLog("[audit] " + a.errors.join("; "));
     syncAuditOptionGuards();

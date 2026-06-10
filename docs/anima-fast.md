@@ -147,6 +147,10 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 - 已准备 Anima 三件套（见 [anima-training.md](./anima-training.md) 或根目录 `Download-Anima-Model.bat`）
 - 稳定网络（首次安装插件会下载 **数 GB** 依赖到 `extensions/anima_lora/.venv/`）
 
+> **依赖范围与就绪判定**：安装只拉取**核心可训练依赖**，状态「插件已就绪」即代表训练所需依赖齐全。
+> 遮罩相关的 `sam3`（`facebookresearch/sam3`，体积大且 HF 权重受限）**已降为可选**，不在安装中拉取、也**不影响就绪状态**，需要遮罩功能时再按需安装。
+> 下载默认走 **HF 镜像**（`HF_ENDPOINT=https://hf-mirror.com`，与 CLI 训练脚本一致）；如需 **魔搭** 优先，安装前设置 `HF_ENDPOINT=https://modelscope.cn` 即可。
+
 ---
 
 ## 备选：WebUI 内安装

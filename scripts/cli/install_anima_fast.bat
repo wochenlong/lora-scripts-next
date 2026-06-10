@@ -32,9 +32,11 @@ echo   Anima Fast CLI Install
 echo   Project: %PROJECT_ROOT%
 echo ========================================
 echo.
-echo This installs extensions\anima_lora\ without opening WebUI.
+echo This installs the core trainable dependencies for extensions\anima_lora\.
+echo Masking extras (sam3) are optional and installed on demand, not here.
 echo Requires NVIDIA GPU, ~16GB+ VRAM, several GB download.
 echo uv will be installed automatically if it is not found.
+echo Downloads prefer the HuggingFace mirror; set HF_ENDPOINT to override.
 echo.
 
 "%PYTHON_EXE%" -s "%~dp0install_anima_fast.py" %*

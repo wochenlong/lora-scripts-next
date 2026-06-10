@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -15,6 +16,7 @@ from mikazuki.anima_fast_backend.environment import (
     build_environment_install_plan,
     install_environment,
     localize_linux_flash_attn_dependency,
+    strip_optional_runtime_dependencies,
     _run_streaming,
     start_install_task,
 )
@@ -310,6 +312,94 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertIn("flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl", text)
         self.assertIn("windows.whl", text)
         self.assertTrue(any("localized Linux cu130 flash-attn" in line for line in lines))
+
+    def test_strip_optional_runtime_dependencies_removes_sam3_git_build(self):
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source"
+            source.mkdir()
+            pyproject = source / "pyproject.toml"
+            pyproject.write_text(
+                "[project]\ndependencies = [\n"
+                '    "pyyaml",\n'
+                '    "sam3 @ git+https://github.com/facebookresearch/sam3.git",\n'
+                '    "segmentation-models-pytorch>=0.3.4",\n'
+                "]\n",
+                encoding="utf-8",
+            )
+            lines: list[str] = []
+
+            removed = strip_optional_runtime_dependencies(source, lines.append)
+            text = pyproject.read_text(encoding="utf-8")
+
+        self.assertEqual(len(removed), 1)
+        self.assertIn("sam3 @ git+", removed[0])
+        self.assertNotIn("sam3 @ git+", text)
+        # Core/masking-adjacent deps stay; only sam3 is dropped.
+        self.assertIn("pyyaml", text)
+        self.assertIn("segmentation-models-pytorch", text)
+        self.assertTrue(any("dropped optional masking dependency" in line for line in lines))
+
+    def test_strip_optional_runtime_dependencies_noop_without_sam3(self):
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source"
+            source.mkdir()
+            pyproject = source / "pyproject.toml"
+            original = "[project]\ndependencies = [\n    \"pyyaml\",\n]\n"
+            pyproject.write_text(original, encoding="utf-8")
+
+            removed = strip_optional_runtime_dependencies(source, lambda _line: None)
+
+            self.assertEqual(removed, [])
+            self.assertEqual(pyproject.read_text(encoding="utf-8"), original)
+
+    def test_install_streaming_defaults_hf_endpoint_mirror(self):
+        from mikazuki.anima_fast_backend.environment import _run_streaming_once, DEFAULT_HF_ENDPOINT
+
+        captured: dict = {}
+
+        class _FakeStdout:
+            def readline(self):
+                return ""
+
+        class _FakeProc:
+            def __init__(self, *a, **k):
+                self.stdout = _FakeStdout()
+                captured["env"] = k.get("env")
+
+            def wait(self):
+                return 0
+
+        env_without_endpoint = {k: v for k, v in os.environ.items() if k != "HF_ENDPOINT"}
+        with tempfile.TemporaryDirectory() as td, \
+            mock.patch("mikazuki.anima_fast_backend.environment.subprocess.Popen", _FakeProc), \
+            mock.patch.dict("os.environ", env_without_endpoint, clear=True):
+            _run_streaming_once(["echo", "hi"], Path(td), lambda _l: None)
+
+        self.assertEqual(captured["env"].get("HF_ENDPOINT"), DEFAULT_HF_ENDPOINT)
+
+    def test_install_streaming_respects_user_hf_endpoint(self):
+        from mikazuki.anima_fast_backend.environment import _run_streaming_once
+
+        captured: dict = {}
+
+        class _FakeStdout:
+            def readline(self):
+                return ""
+
+        class _FakeProc:
+            def __init__(self, *a, **k):
+                self.stdout = _FakeStdout()
+                captured["env"] = k.get("env")
+
+            def wait(self):
+                return 0
+
+        with tempfile.TemporaryDirectory() as td, \
+            mock.patch("mikazuki.anima_fast_backend.environment.subprocess.Popen", _FakeProc), \
+            mock.patch.dict("os.environ", {"HF_ENDPOINT": "https://modelscope.cn"}, clear=False):
+            _run_streaming_once(["echo", "hi"], Path(td), lambda _l: None)
+
+        self.assertEqual(captured["env"].get("HF_ENDPOINT"), "https://modelscope.cn")
 
     def test_audit_environment_skips_triton_windows_on_linux(self):
         with tempfile.TemporaryDirectory() as td, mock.patch(

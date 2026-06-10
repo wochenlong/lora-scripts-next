@@ -38,6 +38,19 @@ FLASH_ATTN_LINUX_CU130_URL = (
     "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl"
 )
 
+# Optional, masking-only dependencies that core LoRA training never imports.
+# sam3 is a heavy git build (facebookresearch/sam3) whose HF weights are gated;
+# pulling it during install is slow and frequently fails, which blocks READY even
+# though it is irrelevant to training. We strip it from the copied snapshot and
+# leave it to be installed on demand. The audit list already excludes it, so the
+# plugin reaches READY on the core trainable dependency set alone.
+OPTIONAL_RUNTIME_DEPENDENCY_MARKERS = ("sam3 @ git+",)
+
+# Mirror endpoint applied to install/runtime so HuggingFace fetches prefer a
+# China-friendly mirror first (matches the CLI training scripts). Override by
+# exporting HF_ENDPOINT (e.g. https://modelscope.cn) before installing.
+DEFAULT_HF_ENDPOINT = "https://hf-mirror.com"
+
 ANIMA_OPTIMIZER_PACKAGES = {
     "bitsandbytes": "0.49.2",
     "dadaptation": "3.1",
@@ -224,6 +237,34 @@ def localize_linux_flash_attn_dependency(source_root: Path, log: LogFn = print) 
     return _replace_flash_attn_dependency(source_root, FLASH_ATTN_LINUX_PLATFORM_MARKER, replacement, log)
 
 
+def strip_optional_runtime_dependencies(source_root: Path, log: LogFn = print) -> list[str]:
+    """Drop masking-only deps (sam3) from the copied snapshot's pyproject.
+
+    Keeps the Fast install scoped to the core trainable dependency set so a slow
+    or gated sam3 git build cannot block the plugin from reaching READY. Editing
+    the *copied* snapshot leaves the upstream source untouched.
+    """
+    pyproject = source_root / "pyproject.toml"
+    if not pyproject.is_file():
+        return []
+    lines = pyproject.read_text(encoding="utf-8").splitlines(keepends=True)
+    removed: list[str] = []
+    kept: list[str] = []
+    for line in lines:
+        stripped = line.lstrip()
+        if not stripped.startswith("#") and any(
+            marker in line for marker in OPTIONAL_RUNTIME_DEPENDENCY_MARKERS
+        ):
+            removed.append(line.strip().rstrip(","))
+            continue
+        kept.append(line)
+    if removed:
+        pyproject.write_text("".join(kept), encoding="utf-8")
+        for dependency in removed:
+            _append(log, f"[patch] dropped optional masking dependency (install on demand): {dependency}")
+    return removed
+
+
 def _anima_expected_for_platform(platform: str | None = None) -> dict:
     platform = platform or sys.platform
     expected = {
@@ -248,6 +289,10 @@ def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str
         "PYTHONNOUSERSITE": "1",
         "UV_HTTP_TIMEOUT": merged_env.get("UV_HTTP_TIMEOUT", "300"),
         "UV_CONCURRENT_DOWNLOADS": merged_env.get("UV_CONCURRENT_DOWNLOADS", "2"),
+        # Prefer a China-friendly HuggingFace mirror unless the user already set
+        # one (matches the CLI training scripts). Set HF_ENDPOINT=https://modelscope.cn
+        # to route through ModelScope instead.
+        "HF_ENDPOINT": merged_env.get("HF_ENDPOINT", DEFAULT_HF_ENDPOINT),
     })
     completed = subprocess.Popen(
         command,
@@ -315,6 +360,9 @@ def install_environment(plan: EnvironmentInstallPlan, log: LogFn = print) -> Aud
     localized_direct_urls = localize_linux_flash_attn_dependency(plan.layout.source, log)
     if localized_direct_urls:
         facts["localized_direct_url_dependencies"] = localized_direct_urls
+    dropped_optional = strip_optional_runtime_dependencies(plan.layout.source, log)
+    if dropped_optional:
+        facts["dropped_optional_dependencies"] = dropped_optional
 
     if not plan.constraints.is_file():
         raise FileNotFoundError(f"Anima constraints file missing: {plan.constraints}")
@@ -387,7 +435,7 @@ def install_environment(plan: EnvironmentInstallPlan, log: LogFn = print) -> Aud
     final_facts["audit"] = result.as_dict()
     if result.ok:
         write_install_state(plan.layout, STATE_READY, final_facts, "audit passed")
-        _append(log, "[ready] Anima Fast environment audit passed")
+        _append(log, "[ready] Anima Fast core trainable dependencies verified (masking extras like sam3 install on demand)")
     else:
         write_install_state(plan.layout, STATE_BROKEN, final_facts, "; ".join(result.errors))
         _append(log, "[broken] Anima Fast environment audit failed")
