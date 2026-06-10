@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>训练监控</title>
   
-  <link rel="stylesheet" href="/static/monitor.css?v=20260521-ui6">
+  <link rel="stylesheet" href="/static/monitor.css?v=20260610-lightbox">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 </head>
 <body>
@@ -96,6 +96,18 @@
       <div id="resultFiles"><div class="muted">暂无模型输出。训练完成后会在这里显示模型保存位置。</div></div>
     </section>
   </main>
-  <script src="/static/monitor.js?v=20260521-ui6"></script>
+  <div id="previewLightbox" class="preview-lightbox hidden" aria-hidden="true">
+    <div class="preview-lightbox__backdrop" data-lightbox-close="1"></div>
+    <div class="preview-lightbox__panel" role="dialog" aria-modal="true" aria-label="预览图放大查看">
+      <button type="button" class="preview-lightbox__close" id="previewLightboxClose" aria-label="关闭">×</button>
+      <button type="button" class="preview-lightbox__nav preview-lightbox__nav--prev" id="previewLightboxPrev" aria-label="上一张">‹</button>
+      <button type="button" class="preview-lightbox__nav preview-lightbox__nav--next" id="previewLightboxNext" aria-label="下一张">›</button>
+      <div class="preview-lightbox__stage" id="previewLightboxStage">
+        <img id="previewLightboxImage" alt="训练预览图放大" draggable="false">
+      </div>
+      <div class="preview-lightbox__meta" id="previewLightboxMeta">-</div>
+    </div>
+  </div>
+  <script src="/static/monitor.js?v=20260610-lightbox"></script>
 </body>
 </html>

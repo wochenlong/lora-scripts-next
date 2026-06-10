@@ -4,15 +4,41 @@ const jumpLatest = document.getElementById("jumpLatest");
 const togglePreview = document.getElementById("togglePreview");
 const logDetails = document.getElementById("logDetails");
 const logSummary = document.getElementById("logSummary");
+const previewArea = document.getElementById("previewArea");
+const lightbox = document.getElementById("previewLightbox");
+const lightboxStage = document.getElementById("previewLightboxStage");
+const lightboxImage = document.getElementById("previewLightboxImage");
+const lightboxMeta = document.getElementById("previewLightboxMeta");
+const lightboxClose = document.getElementById("previewLightboxClose");
+const lightboxPrev = document.getElementById("previewLightboxPrev");
+const lightboxNext = document.getElementById("previewLightboxNext");
 let autoFollow = true;
 let lastLogText = "";
 let lastPreviewKey = "";
 let lastResultKey = "";
 let previewEnabled = localStorage.getItem("loraMonitorPreviewEnabled") === "1";
+let previewItems = [];
 const heroEl = document.querySelector(".hero");
 const progressTrackEl = document.getElementById("progressTrack");
 const progressFillEl = document.getElementById("progressFill");
 let chartThemeCache = null;
+const lightboxState = {
+  open: false,
+  index: 0,
+  scale: 1,
+  minScale: 1,
+  maxScale: 4,
+  tx: 0,
+  ty: 0,
+  pointers: new Map(),
+  dragging: false,
+  dragStartX: 0,
+  dragStartY: 0,
+  startTx: 0,
+  startTy: 0,
+  pinchStartDist: 0,
+  pinchStartScale: 1
+};
 
 function isIdleState(state) {
   return state === "空闲" || state === "GUI 离线";
@@ -39,6 +65,222 @@ function escapeHtml(value) {
   return String(value ?? "").replace(/[&<>"']/g, function(ch) {
     return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
   });
+}
+
+function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
+}
+
+function distance(a, b) {
+  const dx = a.x - b.x;
+  const dy = a.y - b.y;
+  return Math.sqrt(dx * dx + dy * dy);
+}
+
+function updateLightboxTransform() {
+  if (!lightboxImage) return;
+  lightboxImage.style.transform = "translate(" + lightboxState.tx + "px," + lightboxState.ty + "px) scale(" + lightboxState.scale + ")";
+}
+
+function resetLightboxTransform() {
+  lightboxState.scale = 1;
+  lightboxState.tx = 0;
+  lightboxState.ty = 0;
+  lightboxState.dragging = false;
+  lightboxState.pinchStartDist = 0;
+  lightboxState.pinchStartScale = 1;
+  lightboxState.pointers.clear();
+  updateLightboxTransform();
+}
+
+function canNavigateLightbox() {
+  return previewItems.length > 1;
+}
+
+function updateLightboxNav() {
+  const enabled = canNavigateLightbox();
+  if (lightboxPrev) lightboxPrev.disabled = !enabled;
+  if (lightboxNext) lightboxNext.disabled = !enabled;
+}
+
+function renderLightboxFrame() {
+  const item = previewItems[lightboxState.index];
+  if (!item || !lightboxImage || !lightboxMeta) return;
+  lightboxImage.src = item.url;
+  lightboxImage.alt = item.name || "训练预览图";
+  const role = item.role ? "[" + item.role + "] " : "";
+  lightboxMeta.textContent = role + (item.name || "-") + " · " + (lightboxState.index + 1) + "/" + previewItems.length;
+  updateLightboxNav();
+  resetLightboxTransform();
+}
+
+function openLightbox(index) {
+  if (!previewItems.length || !lightbox) return;
+  lightboxState.index = clamp(index, 0, previewItems.length - 1);
+  lightboxState.open = true;
+  lightbox.classList.remove("hidden");
+  lightbox.setAttribute("aria-hidden", "false");
+  document.body.classList.add("lightbox-open");
+  renderLightboxFrame();
+}
+
+function closeLightbox() {
+  if (!lightbox || !lightboxState.open) return;
+  lightboxState.open = false;
+  lightbox.classList.add("hidden");
+  lightbox.setAttribute("aria-hidden", "true");
+  document.body.classList.remove("lightbox-open");
+  if (lightboxImage) {
+    lightboxImage.removeAttribute("src");
+  }
+  resetLightboxTransform();
+}
+
+function stepLightbox(delta) {
+  if (!previewItems.length) return;
+  lightboxState.index = (lightboxState.index + delta + previewItems.length) % previewItems.length;
+  renderLightboxFrame();
+}
+
+function zoomLightbox(factor, centerX, centerY) {
+  const prevScale = lightboxState.scale;
+  const nextScale = clamp(prevScale * factor, lightboxState.minScale, lightboxState.maxScale);
+  if (Math.abs(nextScale - prevScale) < 1e-4) return;
+  if (!lightboxStage) return;
+  const rect = lightboxStage.getBoundingClientRect();
+  const cx = centerX - rect.left - rect.width / 2;
+  const cy = centerY - rect.top - rect.height / 2;
+  lightboxState.tx = (lightboxState.tx - cx) * (nextScale / prevScale) + cx;
+  lightboxState.ty = (lightboxState.ty - cy) * (nextScale / prevScale) + cy;
+  lightboxState.scale = nextScale;
+  if (nextScale <= 1.0001) {
+    lightboxState.tx = 0;
+    lightboxState.ty = 0;
+  }
+  updateLightboxTransform();
+}
+
+function bindLightboxEvents() {
+  if (!lightbox || !lightboxStage || !lightboxImage) return;
+  if (bindLightboxEvents._bound) return;
+  bindLightboxEvents._bound = true;
+
+  previewArea.addEventListener("click", function(event) {
+    const card = event.target.closest(".preview-card");
+    if (!card || !previewEnabled) return;
+    const idx = Number(card.getAttribute("data-preview-index"));
+    if (Number.isFinite(idx)) openLightbox(idx);
+  });
+  previewArea.addEventListener("keydown", function(event) {
+    const card = event.target.closest(".preview-card");
+    if (!card || !previewEnabled) return;
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    const idx = Number(card.getAttribute("data-preview-index"));
+    if (Number.isFinite(idx)) openLightbox(idx);
+  });
+
+  lightbox.addEventListener("click", function(event) {
+    if (event.target && event.target.getAttribute("data-lightbox-close") === "1") closeLightbox();
+  });
+  lightboxClose.addEventListener("click", closeLightbox);
+  lightboxPrev.addEventListener("click", function() { stepLightbox(-1); });
+  lightboxNext.addEventListener("click", function() { stepLightbox(1); });
+
+  document.addEventListener("keydown", function(event) {
+    if (!lightboxState.open) return;
+    if (event.key === "Escape") {
+      event.preventDefault();
+      closeLightbox();
+    } else if (event.key === "ArrowLeft") {
+      event.preventDefault();
+      stepLightbox(-1);
+    } else if (event.key === "ArrowRight") {
+      event.preventDefault();
+      stepLightbox(1);
+    }
+  });
+
+  lightboxStage.addEventListener("wheel", function(event) {
+    if (!lightboxState.open) return;
+    event.preventDefault();
+    const factor = event.deltaY < 0 ? 1.1 : 0.9;
+    zoomLightbox(factor, event.clientX, event.clientY);
+  }, { passive: false });
+
+  lightboxStage.addEventListener("dblclick", function(event) {
+    if (!lightboxState.open) return;
+    event.preventDefault();
+    if (lightboxState.scale > 1.01) resetLightboxTransform();
+    else zoomLightbox(2, event.clientX, event.clientY);
+  });
+
+  lightboxImage.addEventListener("pointerdown", function(event) {
+    if (!lightboxState.open) return;
+    lightboxImage.setPointerCapture(event.pointerId);
+    lightboxState.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (lightboxState.pointers.size === 1) {
+      lightboxState.dragging = true;
+      lightboxState.dragStartX = event.clientX;
+      lightboxState.dragStartY = event.clientY;
+      lightboxState.startTx = lightboxState.tx;
+      lightboxState.startTy = lightboxState.ty;
+    } else if (lightboxState.pointers.size === 2) {
+      const arr = Array.from(lightboxState.pointers.values());
+      lightboxState.dragging = false;
+      lightboxState.pinchStartDist = distance(arr[0], arr[1]);
+      lightboxState.pinchStartScale = lightboxState.scale;
+    }
+  });
+
+  lightboxImage.addEventListener("pointermove", function(event) {
+    if (!lightboxState.open || !lightboxState.pointers.has(event.pointerId)) return;
+    lightboxState.pointers.set(event.pointerId, { x: event.clientX, y: event.clientY });
+
+    if (lightboxState.pointers.size >= 2) {
+      const arr = Array.from(lightboxState.pointers.values());
+      const dist = distance(arr[0], arr[1]);
+      if (lightboxState.pinchStartDist > 0) {
+        const factor = dist / lightboxState.pinchStartDist;
+        const centerX = (arr[0].x + arr[1].x) / 2;
+        const centerY = (arr[0].y + arr[1].y) / 2;
+        const targetScale = clamp(lightboxState.pinchStartScale * factor, lightboxState.minScale, lightboxState.maxScale);
+        const zoomFactor = targetScale / lightboxState.scale;
+        zoomLightbox(zoomFactor, centerX, centerY);
+      }
+      return;
+    }
+
+    if (!lightboxState.dragging) return;
+    if (lightboxState.scale <= 1.0001) return;
+    lightboxState.tx = lightboxState.startTx + (event.clientX - lightboxState.dragStartX);
+    lightboxState.ty = lightboxState.startTy + (event.clientY - lightboxState.dragStartY);
+    updateLightboxTransform();
+  });
+
+  function releasePointer(event) {
+    lightboxState.pointers.delete(event.pointerId);
+    if (lightboxState.pointers.size === 0) {
+      lightboxState.dragging = false;
+      lightboxState.pinchStartDist = 0;
+      lightboxState.pinchStartScale = lightboxState.scale;
+      if (lightboxState.scale <= 1.0001) {
+        resetLightboxTransform();
+      }
+    } else if (lightboxState.pointers.size === 1) {
+      const p = Array.from(lightboxState.pointers.values())[0];
+      lightboxState.dragging = true;
+      lightboxState.dragStartX = p.x;
+      lightboxState.dragStartY = p.y;
+      lightboxState.startTx = lightboxState.tx;
+      lightboxState.startTy = lightboxState.ty;
+      lightboxState.pinchStartDist = 0;
+    }
+  }
+
+  lightboxImage.addEventListener("pointerup", releasePointer);
+  lightboxImage.addEventListener("pointercancel", releasePointer);
 }
 
 function isNearBottom(el) {
@@ -646,6 +888,8 @@ function renderPreviewToggle() {
   if (!previewEnabled) {
     document.getElementById("previewArea").innerHTML = '<div class="preview-hidden"><strong>预览图未加载</strong>点击右侧"开启预览图"后，当前浏览器才会加载训练图片；关闭时不会请求图片，适合公开端口截图。</div>';
     lastPreviewKey = "";
+    previewItems = [];
+    closeLightbox();
   }
 }
 
@@ -665,10 +909,16 @@ function previewProgressParts(item, metrics) {
 }
 
 function renderPreviews(previews, metrics) {
-  const area = document.getElementById("previewArea");
+  const area = previewArea;
   if (!previewEnabled) {
     renderPreviewToggle();
     return;
+  }
+  previewItems = previews || [];
+  if (lightboxState.open && lightboxState.index >= previewItems.length) {
+    lightboxState.index = Math.max(0, previewItems.length - 1);
+    if (previewItems.length) renderLightboxFrame();
+    else closeLightbox();
   }
   if (!previews || previews.length === 0) {
     if (lastPreviewKey !== "__empty__") {
@@ -684,9 +934,9 @@ function renderPreviews(previews, metrics) {
   lastPreviewKey = previewKey;
   const count = previews.length;
   const gridClass = "preview-grid preview-grid--count-" + Math.min(count, 3);
-  area.innerHTML = '<div class="' + gridClass + '">' + previews.map(function(item) {
+  area.innerHTML = '<div class="' + gridClass + '">' + previews.map(function(item, idx) {
     const progress = previewProgressParts(item, metrics || {});
-    return '<div class="preview-card">' +
+    return '<div class="preview-card" data-preview-index="' + idx + '" role="button" tabindex="0" aria-label="放大查看 ' + escapeHtml(item.name) + '">' +
       (item.role ? '<span class="preview-role">' + escapeHtml(item.role) + '</span>' : '') +
       '<div class="preview-media"><img loading="lazy" src="' + escapeHtml(item.url) + '" alt="' + escapeHtml(item.name) + '"></div>' +
       '<div class="preview-meta">' +
@@ -757,5 +1007,6 @@ async function pollStatus() {
 }
 
 renderPreviewToggle();
+bindLightboxEvents();
 pollStatus();
 setInterval(pollStatus, 2000);
