@@ -1,39 +1,145 @@
-# Anima LoRA 标准模式（Kohya / sd-scripts）对标基准
-# 与 docs/examples/anima-lora-benchmark-fast.toml 参数对齐，用于速度对比。
-# 运行前请修改 dataset_config 中的 image_dir 为你的数据路径。
-# 运行：venv\Scripts\python.exe scripts\dev\anima_train_network.py --config_file docs/examples/anima-lora-benchmark-kohya.toml
+# =============================================================================
+# Anima LoRA 标准模式（Kohya / sd-scripts）命令行对标基准
+# =============================================================================
+#
+# 用途：与 docs/examples/anima-lora-benchmark-fast.toml 参数对齐，用于速度对比。
+# 前置：复制本文件后，至少修改「模型路径」与 dataset_config 里的 image_dir。
+#
+# 运行（项目根目录）：
+#   bash train_anima_by_toml.sh docs/examples/anima-lora-benchmark-kohya.toml
+# 或：
+#   python scripts/dev/anima_train_network.py --config_file docs/examples/anima-lora-benchmark-kohya.toml
+#
+# 更多 CLI 说明见 docs/anima-training.md §「纯命令行训练」。
+# 参数含义与 WebUI「Anima LoRA」页一致（schema: mikazuki/schema/sd3-lora.ts）。
+#
+# =============================================================================
+# 一、模型路径（运行前必改）
+# =============================================================================
 
-pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
-vae = "./sd-models/anima/qwen_image_vae.safetensors"
-qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
-dataset_config = "./docs/examples/anima-lora-benchmark-dataset.toml"
-output_dir = "./output/benchmark/anima_lora_kohya_bench"
-output_name = "lora_bench_kohya"
-logging_dir = "./logs/benchmark/anima_lora_kohya_bench"
+pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"  # Anima DiT 主权重
+vae = "./sd-models/anima/qwen_image_vae.safetensors"                              # Qwen Image VAE（必填）
+qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"                           # Qwen3 文本模型（safetensors / 目录均可）
+
+# =============================================================================
+# 二、数据集与输出
+# =============================================================================
+
+dataset_config = "./docs/examples/anima-lora-benchmark-dataset.toml"  # Kohya 多 subset 数据集配置；见同目录 anima-lora-benchmark-dataset.toml
+output_dir = "./output/benchmark/anima_lora_kohya_bench"              # 模型与 checkpoint 保存目录（相对项目根）
+output_name = "lora_bench_kohya"                                      # 输出文件名前缀（不含扩展名）
+logging_dir = "./logs/benchmark/anima_lora_kohya_bench"               # TensorBoard / 训练日志目录
+
+# =============================================================================
+# 三、网络与适配器类型（LoRA 训练类型）
+# =============================================================================
+#
+# WebUI 的「适配器类型」对应下方 network_module（及 LoKr 时的 lycoris_algo）。
+# 常规人物/风格 LoRA 保持默认即可；切换类型时改 network_module，并按需增减专用字段。
+#
+# | 适配器 (lora_type) | network_module           | 额外必填项（示例）                    |
+# |--------------------|--------------------------|---------------------------------------|
+# | lora（默认）       | networks.lora_anima      | 无                                    |
+# | lokr               | lycoris.kohya            | lycoris_algo = "lokr"                 |
+# | tlora              | networks.tlora_anima     | tlora_min_rank, tlora_rank_schedule   |
+# | loha               | networks.loha            | 无                                    |
+# | vera / lora_fa     | networks.lora_anima      | 无（模块内部分支）                    |
+#
+# LoKr 示例（取消注释并注释掉上方 lora 块即可切换）：
+#   network_module = "lycoris.kohya"
+#   lycoris_algo = "lokr"
+#   lokr_factor = -1          # -1 表示无穷分解因子；常用 4 或更大整数
+#   full_matrix = false       # true 为高风险全矩阵模式，会触发稳定性护栏
+#
+# T-LoRA 示例：
+#   network_module = "networks.tlora_anima"
+#   network_dim = 32          # T-LoRA 建议更大基础 rank
+#   network_alpha = 32
+#   tlora_min_rank = 4
+#   tlora_rank_schedule = "cosine"   # cosine | linear
+#   tlora_orthogonal_init = true
 
 network_module = "networks.lora_anima"
-network_dim = 16
-network_alpha = 16
-network_train_unet_only = true
+network_dim = 16              # rank / 维度；常用 4~128，不是越大越好
+network_alpha = 16            # 常用：= network_dim、network_dim/2 或 1
+network_train_unet_only = true  # true = 仅训练 DiT；false 且 network_train_text_encoder_only=true 可只训 Qwen3
+
+# network_weights = ""        # 从已有 LoRA/LoKr 继续训练时填写路径
+# dim_from_weights = false    # 从 network_weights 自动推断 rank
+
+# =============================================================================
+# 四、训练轮次与分辨率
+# =============================================================================
 
 max_train_epochs = 2
-train_batch_size = 1
-resolution = "1024,1024"
-enable_bucket = true
+train_batch_size = 1          # 越大显存越高
+resolution = "1024,1024"      # 宽,高；须为 64 的倍数
+enable_bucket = true          # arb 桶：允许非正方形图片
 min_bucket_reso = 256
 max_bucket_reso = 1024
 bucket_reso_steps = 64
 
+# =============================================================================
+# 五、学习率与优化器
+# =============================================================================
+#
+# optimizer_type 与 WebUI「优化器」下拉一致。常用：
+#   AdamW8bit     — 默认推荐，省显存
+#   AdamW         — 本基准使用；全精度权重，显存略高
+#   Automagic     — 需 optimum-quanto；学习率建议约 1e-6；fp16 下易 nan，建议 bf16
+#   PagedAdamW8bit, Lion, Lion8bit, PagedLion8bit
+#   RAdamScheduleFree, SGDNesterov, SGDNesterov8bit
+#   DAdaptation, DAdaptAdam, DAdaptAdaGrad, DAdaptAdanIP, DAdaptLion, DAdaptSGD
+#   AdaFactor, Prodigy, prodigyplus.ProdigyPlusScheduleFree
+#   EmoSens       — 学习率需手动调至约 1.0（LoRA）
+#   pytorch_optimizer.CAME
+#
+# 分开设置 U-Net / 文本编码器学习率时，可添加：
+#   unet_lr = "5e-5"
+#   text_encoder_lr = "1e-5"
+# 此时 learning_rate 在训练逻辑中会被忽略。
+#
+# lr_scheduler：linear | cosine | cosine_with_restarts | polynomial | constant | constant_with_warmup
+# optimizer_args = ["eps=1e-8"]   # 自定义优化器参数，一行一个 key=value
+
 learning_rate = 0.0001
 optimizer_type = "AdamW"
 lr_scheduler = "constant"
-mixed_precision = "bf16"
-gradient_checkpointing = true
+# lr_warmup_steps = 0
+# min_snr_gamma = 5             # 最小信噪比加权，启用时推荐 5
+
+# =============================================================================
+# 六、精度、Attention 与缓存
+# =============================================================================
+
+mixed_precision = "bf16"      # bf16 | fp16 | no；有 bf16 的显卡优先 bf16
+gradient_checkpointing = true # 用计算换显存
 seed = 42
-caption_extension = ".txt"
+caption_extension = ".txt"    # 标签文件扩展名；结构化标签可设 prefer_json_caption = true
 
 cache_latents = false
 cache_text_encoder_outputs = false
+# cache_text_encoder_outputs_to_disk = true   # 缓存 TE 输出到磁盘可省显存；需关闭 shuffle_caption
+
+# attn_mode：留空=自动（优先 flash > xformers > sdpa）
+#   torch | xformers | sageattn | flash | sdpa
+# flash 需 flash-attn 且算力 ≥ 8.0（RTX 30 系+）
 attn_mode = "sdpa"
-save_model_as = "safetensors"
-save_every_n_epochs = 99
+
+# =============================================================================
+# 七、保存设置
+# =============================================================================
+
+save_model_as = "safetensors" # safetensors | pt | ckpt
+save_every_n_epochs = 99        # 本基准故意设大，仅末 epoch 保存；常规定期保存可改为 1~2
+
+# =============================================================================
+# 八、可选：训练预览图（取消注释即可启用）
+# =============================================================================
+# enable_preview = true
+# positive_prompts = "1girl, solo, smile, ..."
+# negative_prompts = "nsfw, worst quality, ..."
+# sample_at_first = true
+# sample_every_n_epochs = 2
+# sample_steps = 40
+# sample_cfg = 4.5

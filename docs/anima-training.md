@@ -72,13 +72,15 @@ bash train_anima_by_toml.sh docs/examples/anima-lora-benchmark-kohya.toml
 python scripts/dev/anima_train_network.py --config_file docs/examples/anima-lora-benchmark-kohya.toml
 ```
 
-训练前请复制 `docs/examples/anima-lora-benchmark-kohya.toml` 并修改模型与数据集路径：
+训练前请**复制** `docs/examples/anima-lora-benchmark-kohya.toml` 并按文件内分段注释修改（模型路径、数据集、**适配器类型**、**优化器**等均有说明）。至少改这几项：
 
 - `pretrained_model_name_or_path`：Anima DiT 主权重
 - `vae`：Qwen Image VAE
 - `qwen3`：Qwen3 文本模型
-- `dataset_config`：数据集配置
+- `dataset_config`：数据集配置（同步改 `anima-lora-benchmark-dataset.toml` 里的 `image_dir`）
 - `output_dir` / `output_name`：输出位置与模型名称
+
+示例 TOML 内注释覆盖：`network_module` 与 LoRA / LoKr / T-LoRA 等适配器对照、`optimizer_type` 可选列表、学习率调度与常见可选参数。无需 WebUI 也可对照注释改配置。
 
 **Anima Fast 插件模式：**
 

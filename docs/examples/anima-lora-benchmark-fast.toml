@@ -1,43 +1,68 @@
-# Anima LoRA Fast 模式对标基准（与 Kohya 标准模式同参）
-# 运行前需安装 Fast 插件；请修改 source_image_dir / resized_image_dir 为你的路径。
+# =============================================================================
+# Anima LoRA Fast 模式命令行对标基准（与 Kohya 标准模式同参）
+# =============================================================================
+#
+# 前置：先安装 Fast 插件（推荐 CLI）：
+#   bash scripts/cli/install_anima_fast.sh
+# 运行：
+#   bash train_anima_fast_by_toml.sh docs/examples/anima-lora-benchmark-fast.toml
+#
+# Fast 使用 extensions/anima_lora/.venv 独立环境，配置字段与 Kohya TOML 不同：
+#   - 用 source_image_dir / resized_image_dir / lora_cache_dir，而非 dataset_config
+#   - 不要与 anima-lora-benchmark-kohya.toml 混用入口
+#
+# 优化器子集与标准模式不同（见 docs/anima-fast.md）：
+#   支持 AdamW, AdamW8bit, PagedAdamW8bit, RAdamScheduleFree, Lion 系, DAdapt*, AdaFactor, Prodigy, CAME 等
+#   不支持 Automagic、prodigyplus.* 等 Kohya 专用项
+#
+# =============================================================================
 
 base_config = "./extensions/anima_lora/source/configs/base.toml"
 method = "lora"
 methods_subdir = "gui-methods"
 
+# --- 模型路径（运行前必改）---
 pretrained_model_name_or_path = "./sd-models/anima/anima-base-v1.0.safetensors"
 vae = "./sd-models/anima/qwen_image_vae.safetensors"
 qwen3 = "./sd-models/anima/qwen_3_06b_base.safetensors"
-source_image_dir = "./data/train_data"
-resized_image_dir = "./.cache/anima_fast/train_data/resized/10_subject"
-lora_cache_dir = "./.cache/anima_fast/train_data/lora"
 
+# --- 数据集（Fast 扁平目录，非 Kohya subset TOML）---
+source_image_dir = "./data/train_data"                                        # 原始图片目录
+resized_image_dir = "./.cache/anima_fast/train_data/resized/10_subject"      # 预处理缩放缓存
+lora_cache_dir = "./.cache/anima_fast/train_data/lora"                        # latent / 标签缓存
+
+# --- 输出 ---
 output_dir = "./output/benchmark/anima_fast_bench"
 output_name = "lora_bench_fast"
 logging_dir = "./logs/benchmark/anima_fast_bench"
 progress_jsonl = "./logs/benchmark/anima_fast_bench.progress.jsonl"
 
+# --- 网络（Fast MVP 当前仅 lora + networks.lora_anima）---
 network_module = "networks.lora_anima"
 network_dim = 16
 network_alpha = 16
+
+# --- 训练 ---
 max_train_epochs = 2
 train_batch_size = 1
 resolution = "1024,1024"
 enable_bucket = true
 learning_rate = 0.0001
-optimizer_type = "AdamW"
+optimizer_type = "AdamW"        # 见文件头说明；省显存可改 AdamW8bit
 gradient_checkpointing = true
 seed = 42
 caption_extension = ".txt"
 
+# --- 缓存（Fast 默认关闭磁盘缓存，与对标基准一致）---
 cache_latents = false
 cache_latents_to_disk = false
 cache_text_encoder_outputs = false
 cache_text_encoder_outputs_to_disk = false
 skip_cache_check = true
 
+# --- Fast 加速项 ---
 torch_compile = true
 static_token_count = 4096
 compile_mode = "blocks"
 dynamo_backend = "inductor"
-attn_mode = "flash"
+attn_mode = "flash"             # Fast 环境需已安装 flash-attn；否则改为 sdpa
