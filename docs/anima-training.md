@@ -30,7 +30,8 @@ Download-Anima-Model.bat
 ## 训练类型
 
 - **LoRA** — 默认训练类型，适合大多数场景
-- **LoKr** — 使用 LyCORIS 后端（`lycoris.kohya` + `algo=lokr`），支持 CP 分解、DoRA 等高级参数
+- **DoRA** — 独立入口，适合想直接训练 DoRA 适配器的用户；界面隐藏 LyCORIS 细节，后端自动使用 `lycoris.kohya` + `algo=lora` + `dora_wd=true`
+- **LoKr** — 使用 LyCORIS 后端（`lycoris.kohya` + `algo=lokr`），支持 CP 分解、`dora_wd` 等高级参数。它的 `dora_wd` 是 LoKr 高级权重分解选项，不等同于上面的独立 DoRA 类型入口
 - **T-LoRA** — 时间步动态 LoRA，根据扩散时间步自动调整 rank，配合正交初始化防止过拟合（详见下方教程）
 
 ## 预览图生成

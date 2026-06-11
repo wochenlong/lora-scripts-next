@@ -111,6 +111,31 @@ class AnimaBackendAdapterTests(unittest.TestCase):
 
         self.assertNotIn("lora_type", adapted)
 
+    def test_dora_lora_type_maps_to_lycoris_dora_args(self):
+        config = {
+            "lora_type": "dora",
+            "network_dim": 16,
+            "network_alpha": 16,
+            "network_args": ["algo=lokr", "dora_wd=False"],
+            "lokr_factor": 8,
+            "full_matrix": True,
+            "dropout": 0.1,
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        na = adapted["network_args"]
+        self.assertEqual(adapted["network_module"], "lycoris.kohya")
+        self.assertIn("algo=lora", na)
+        self.assertIn("dora_wd=True", na)
+        self.assertIn("dropout=0.1", na)
+        self.assertTrue(any(item.startswith("preset=") for item in na))
+        self.assertNotIn("algo=lokr", na)
+        self.assertNotIn("dora_wd=False", na)
+        self.assertNotIn("factor=8", na)
+        self.assertNotIn("full_matrix=True", na)
+        self.assertNotIn("lora_type", adapted)
+        self.assertEqual(warnings, [])
+
     def test_lycoris_fields_injected_into_network_args(self):
         config = {
             "network_module": "lycoris.kohya",
