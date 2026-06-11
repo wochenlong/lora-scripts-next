@@ -537,23 +537,110 @@ var tbLossCharts = {};
 var tbLossLayoutKey = "";
 var tbLossRange = "20p";
 var tbLossManualZoom = false;
+var tbLossSmooth = 0;
 var latestStatus = null;
+
+function isLossSeriesTag(tag) {
+  if (!tag || tag === "lr" || /^lr\//.test(tag)) return false;
+  return /loss/i.test(tag) || tag.indexOf("avr_loss") >= 0;
+}
+
+function emaSmoothValues(values, smoothWeight) {
+  if (!smoothWeight || smoothWeight <= 0 || !values.length) return values.slice();
+  var weight = Math.min(0.99, Math.max(0, smoothWeight / 100));
+  var result = [];
+  var last = values[0];
+  for (var i = 0; i < values.length; i += 1) {
+    var v = values[i];
+    if (!Number.isFinite(v)) {
+      result.push(v);
+      continue;
+    }
+    if (!Number.isFinite(last)) {
+      last = v;
+      result.push(v);
+      continue;
+    }
+    last = last * weight + v * (1 - weight);
+    result.push(last);
+  }
+  return result;
+}
+
+function buildLossChartSeries(item, data, theme, smooth) {
+  var values = data.map(function(row) { return row[1]; });
+  if (!isLossSeriesTag(item.tag) || smooth <= 0) {
+    return [{
+      name: item.tag,
+      type: "line",
+      data: data,
+      showSymbol: false,
+      symbolSize: 2,
+      sampling: "lttb",
+      lineStyle: { color: theme.line, width: 1.5 },
+      itemStyle: { color: theme.line },
+      areaStyle: { color: theme.area }
+    }];
+  }
+  var smoothed = emaSmoothValues(values, smooth);
+  var smoothData = data.map(function(row, idx) {
+    return [row[0], smoothed[idx]];
+  });
+  return [
+    {
+      name: item.tag + " (原始)",
+      type: "line",
+      data: data,
+      showSymbol: false,
+      symbolSize: 2,
+      sampling: "lttb",
+      z: 1,
+      lineStyle: { color: theme.line, width: 1, opacity: 0.28 },
+      itemStyle: { color: theme.line, opacity: 0.28 },
+      areaStyle: { opacity: 0 }
+    },
+    {
+      name: item.tag + " (平滑)",
+      type: "line",
+      data: smoothData,
+      showSymbol: false,
+      symbolSize: 2,
+      sampling: "lttb",
+      z: 3,
+      lineStyle: { color: theme.line, width: 2.4 },
+      itemStyle: { color: theme.line },
+      areaStyle: { color: theme.area }
+    }
+  ];
+}
 window.addEventListener("resize", function() {
   Object.keys(tbLossCharts).forEach(function(key) {
     tbLossCharts[key].resize();
   });
 });
 
-document.getElementById("tbLossControls").addEventListener("click", function(event) {
-  const button = event.target.closest("button[data-range]");
-  if (!button) return;
-  tbLossRange = button.dataset.range === "latest" ? "20p" : button.dataset.range;
-  tbLossManualZoom = false;
-  Array.from(this.querySelectorAll("button")).forEach(function(btn) {
-    btn.classList.toggle("active", btn.dataset.range === tbLossRange || (button.dataset.range === "latest" && btn.dataset.range === "20p"));
+(function bindTbLossControls() {
+  var controls = document.getElementById("tbLossControls");
+  var smoothInput = document.getElementById("tbLossSmooth");
+  var smoothOutput = document.getElementById("tbLossSmoothValue");
+  if (smoothInput && smoothOutput) {
+    smoothInput.addEventListener("input", function() {
+      tbLossSmooth = Number(smoothInput.value) || 0;
+      smoothOutput.textContent = String(tbLossSmooth);
+      if (latestStatus) renderLossChart(latestStatus.metrics || {}, latestStatus);
+    });
+  }
+  controls.addEventListener("click", function(event) {
+    const button = event.target.closest("button[data-range]");
+    if (!button) return;
+    tbLossRange = button.dataset.range === "latest" ? "20p" : button.dataset.range;
+    tbLossManualZoom = false;
+    Array.from(this.querySelectorAll("button")).forEach(function(btn) {
+      btn.classList.toggle("active", btn.dataset.range === tbLossRange || (button.dataset.range === "latest" && btn.dataset.range === "20p"));
+    });
+    if (latestStatus) renderLossChart(latestStatus.metrics || {}, latestStatus);
   });
-  if (latestStatus) renderLossChart(latestStatus.metrics || {}, latestStatus);
-});
+})();
 
 function buildLogLossSeries(metrics) {
   const raw = (metrics && metrics.loss_points) || [];
@@ -719,17 +806,7 @@ function renderLossChart(metrics, status) {
         splitLine: { lineStyle: { color: theme.grid, opacity: 0.55 } }
       },
       dataZoom: dataZoom,
-      series: [{
-        name: item.tag,
-        type: "line",
-        data: data,
-        showSymbol: false,
-        symbolSize: 2,
-        sampling: "lttb",
-        lineStyle: { color: theme.line, width: 1.5 },
-        itemStyle: { color: theme.line },
-        areaStyle: { color: theme.area }
-      }]
+      series: buildLossChartSeries(item, data, theme, tbLossSmooth)
     };
     chart.setOption(option, { replaceMerge: ["dataZoom", "series"] });
   });

@@ -596,6 +596,34 @@ body.monitor-training .site-header {
   font-size: var(--text-sm);
 }
 
+.tb-loss-control-sep {
+  width: 1px;
+  height: 18px;
+  background: var(--color-border-subtle);
+  margin: 0 var(--space-1);
+}
+
+.tb-loss-smooth {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--color-text-secondary);
+  margin: 0;
+}
+
+.tb-loss-smooth input[type="range"] {
+  width: 120px;
+  accent-color: var(--color-accent-primary);
+}
+
+.tb-loss-smooth output {
+  min-width: 1.5em;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text-code);
+}
+
 .tb-loss-control-help {
   color: var(--color-text-tertiary);
   font-size: var(--text-sm);

@@ -6,7 +6,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>训练监控</title>
   
-  <link rel="stylesheet" href="/static/monitor.css?v=20260610-lightbox">
+  <link rel="stylesheet" href="/static/monitor.css?v=20260611-ema">
   <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
 </head>
 <body>
@@ -70,7 +70,13 @@
         <button type="button" data-range="20p" class="active">最近 20%</button>
         <button type="button" data-range="10p">最近 10%</button>
         <button type="button" data-range="latest">恢复最新</button>
-        <span class="tb-loss-control-help">控制横轴显示范围；数据不变，滚轮可继续缩放。</span>
+        <span class="tb-loss-control-sep" aria-hidden="true"></span>
+        <label class="tb-loss-smooth" for="tbLossSmooth">
+          <span>平滑</span>
+          <input type="range" id="tbLossSmooth" min="0" max="99" value="0" step="1">
+          <output id="tbLossSmoothValue" for="tbLossSmooth">0</output>
+        </label>
+        <span class="tb-loss-control-help">范围控制横轴；平滑仅影响 Loss 曲线显示（0=原始，客户端 EMA）。</span>
       </div>
       <div id="tensorboardLossArea" class="tb-loss-empty">等待 TensorBoard Loss 数据。</div>
     </section>
@@ -108,6 +114,6 @@
       <div class="preview-lightbox__meta" id="previewLightboxMeta">-</div>
     </div>
   </div>
-  <script src="/static/monitor.js?v=20260610-lightbox"></script>
+  <script src="/static/monitor.js?v=20260611-ema"></script>
 </body>
 </html>
