@@ -361,6 +361,30 @@ def _anima_lokr_training(config: dict) -> bool:
     return False
 
 
+def _is_truthy(value) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int):
+        return value != 0
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "on"}
+    return False
+
+
+def _anima_lokr_full_matrix_training(config: dict) -> bool:
+    if not _anima_lokr_training(config):
+        return False
+    if _is_truthy(config.get("full_matrix")):
+        return True
+    for item in config.get("network_args") or []:
+        if not isinstance(item, str) or "=" not in item:
+            continue
+        key, value = item.split("=", 1)
+        if key.strip().lower() == "full_matrix" and _is_truthy(value):
+            return True
+    return False
+
+
 def apply_anima_training_defaults(config: dict, model_train_type: str):
     if model_train_type not in ANIMA_TRAIN_TYPES:
         return
@@ -402,6 +426,19 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
                 f"{config.get('optimizer_type')} ({', '.join(disabled)}). "
                 "This keeps trainable LoRA weights in fp32 to reduce loss=nan risk."
             )
+    elif _anima_lokr_full_matrix_training(config):
+        disabled = []
+        for key in ("full_bf16", "full_fp16"):
+            if config.pop(key, None):
+                disabled.append(key)
+        if _is_invalid_value(config.get("scale_weight_norms")):
+            config["scale_weight_norms"] = 1
+        log.warning(
+            "Anima LoKr full_matrix=true uses conservative stability guardrails: "
+            "trainable adapter weights stay fp32 and scale_weight_norms defaults to 1. "
+            "Disabled full half precision: %s",
+            ", ".join(disabled) if disabled else "none",
+        )
     elif _anima_lokr_training(config):
         # LyCORIS LoKr can hit dtype mismatch under mixed precision when adapter
         # params stay fp32 while activations are bf16/fp16.

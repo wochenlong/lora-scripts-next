@@ -33,6 +33,22 @@ class AnimaTrainingDefaultsTests(unittest.TestCase):
 
         self.assertTrue(config.get("full_bf16"))
 
+    def test_anima_lokr_full_matrix_uses_conservative_guardrails(self):
+        config = {
+            "mixed_precision": "bf16",
+            "full_bf16": True,
+            "optimizer_type": "AdamW8bit",
+            "network_module": "lycoris.kohya",
+            "network_args": ["algo=lokr", "full_matrix=True"],
+            "unet_lr": "5e-5",
+            "attn_mode": "torch",
+        }
+
+        apply_anima_training_defaults(config, "anima-lora")
+
+        self.assertNotIn("full_bf16", config)
+        self.assertEqual(config["scale_weight_norms"], 1)
+
     def test_anima_disables_full_bf16_for_came(self):
         config = {
             "mixed_precision": "bf16",

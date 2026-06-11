@@ -79,7 +79,7 @@ Schema.intersect([
                 network_module: Schema.const("lycoris.kohya").default("lycoris.kohya").hidden(),
                 lycoris_algo: Schema.const("lokr").default("lokr").hidden(),
                 lokr_factor: Schema.number().min(-1).default(-1).description("LoKr 分解因子。常用 4~无穷，填写 -1 为无穷"),
-                full_matrix: Schema.boolean().default(false).description("使用全矩阵模式（替代大 dim），开启后 LoKr 使用完整 Kronecker 乘积而非低秩近似"),
+                full_matrix: Schema.boolean().default(false).description("使用全矩阵模式（高风险）。开启后系统会自动启用保守稳定性护栏：可训练权重保持 FP32，并默认 scale_weight_norms=1"),
                 use_cp: Schema.boolean().default(false).description("使用 CP 分解"),
                 use_scalar: Schema.boolean().default(false).description("使用可学习缩放系数"),
                 decompose_both: Schema.boolean().default(false).description("同时分解输入与输出维度"),
