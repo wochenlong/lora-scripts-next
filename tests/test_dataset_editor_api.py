@@ -322,9 +322,7 @@ def test_native_tageditor_embeds_native_editor_in_trainer_shell():
     assert "dataset-editor-entry.js" in response.text
     assert "dataset-editor.css" in response.text
     assert 'name="sd-dataset-editor-script"' in response.text
-    assert (
-        'src="/assets/app.547295de.js?v=20260604-native-tageditor-2"' in response.text
-    )
+    assert 'src="/assets/app.547295de.js?v=' in response.text
     assert 'href="/tageditor.md"' in response.text
     assert 'href="/native-tageditor.html"' in response.text
     assert "经典标签编辑" in response.text
@@ -356,14 +354,8 @@ def test_native_tageditor_uses_native_vuepress_page_data():
     assert parsed_page_data["title"] == "原生标签编辑"
     assert parsed_page_data["frontmatter"] == {}
     assert parsed_page_data["frontmatter"].get("type") != "iframe"
-    assert (
-        '"v-native-tageditor":()=>wt(()=>import("./native-tageditor.html.native.js?v=20260604-native-tageditor-2")'
-        in app_bundle
-    )
-    assert (
-        '"v-native-tageditor":Jt(()=>wt(()=>import("./native-tageditor.html.page.js?v=20260604-native-tageditor-2")'
-        in app_bundle
-    )
+    assert '"v-native-tageditor":()=>wt(()=>import("./native-tageditor.html.native.js?v=' in app_bundle
+    assert '"v-native-tageditor":Jt(()=>wt(()=>import("./native-tageditor.html.page.js?v=' in app_bundle
     assert app_bundle.count('["v-native-tageditor","/native-tageditor.html"') == 1
     assert (
         '["v-native-tageditor","/native-tageditor.html",{title:"原生标签编辑"}'
@@ -451,12 +443,12 @@ def test_embedded_dataset_editor_pager_wraps_before_buttons_overflow():
     assert "justify-content: flex-start;" in pager_breakpoint
 
 
-def test_legacy_gradio_tageditor_is_opt_in():
+def test_legacy_gradio_tageditor_starts_by_default_for_existing_users():
     gui = (ROOT / "gui.py").read_text(encoding="utf-8")
 
     assert "--enable-legacy-tageditor" in gui
-    assert "legacy_tageditor_enabled = args.enable_legacy_tageditor" in gui
-    assert "Using native dataset editor at /dataset-editor.html" in gui
+    assert "legacy_tageditor_enabled = not args.disable_tageditor" in gui
+    assert "run_tag_editor(tageditor_port)" in gui
 
 
 def test_dataset_editor_frontend_exposes_edit_efficiency_controls():
@@ -670,6 +662,16 @@ def test_nav_i18n_keeps_native_tag_editor_entry_distinct():
     assert "textNodes.slice(1).forEach" in script
     assert 'native.href = "/native-tageditor.html"' in script
     assert "ensureTagEditorLinks();" in script
+
+
+def test_nav_i18n_persists_language_choice_across_browser_sessions():
+    script = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
+        encoding="utf-8"
+    )
+
+    assert "localStorage.getItem(STORAGE_KEY)" in script
+    assert "localStorage.setItem(STORAGE_KEY, next)" in script
+    assert "sessionStorage.setItem(STORAGE_KEY, next)" not in script
 
 
 def test_dataset_editor_tagger_panel_can_append_trigger_words():

@@ -155,7 +155,10 @@
   }
 
   function detectEnglishUI() {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
+    const stored = localStorage.getItem(STORAGE_KEY) || sessionStorage.getItem(STORAGE_KEY);
+    if (stored === "en-US" || stored === "zh-CN") {
+      localStorage.setItem(STORAGE_KEY, stored);
+    }
     if (stored === "en-US") return true;
     if (stored === "zh-CN") return false;
 
@@ -900,7 +903,7 @@
         const row = btn.closest("li.appearance");
         if (!row || !/language/i.test(row.textContent || "")) return;
         const next = detectEnglishUI() ? "zh-CN" : "en-US";
-        sessionStorage.setItem(STORAGE_KEY, next);
+        localStorage.setItem(STORAGE_KEY, next);
         setTimeout(applyNavLocale, 80);
         setTimeout(applyNavLocale, 400);
       },
