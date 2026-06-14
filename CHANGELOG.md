@@ -4,6 +4,19 @@
 
 ---
 
+## v2.7.1 — 2026-06-14
+
+### Bug 修复（前端 dist）
+
+- **#121** 侧栏中英文切换不再丢失：语言选择由 `sessionStorage` 改存 `localStorage`，关闭重开浏览器后保持；启动时一次性迁移旧 `sessionStorage` 值并清理，检测逻辑改为纯读取无副作用。
+- **#121** 英文模式下底部主题按钮残留中文「灯泡」：新增 `灯泡 → Theme` 映射，将 `.sidebar-bottom` 纳入文本替换范围，并翻译主题按钮 `title`（`toggle color mode`）提示。
+
+### 资源版本
+
+- `sd-nav-i18n.js` / `sd-trainer-brand.js` 的 cache 查询参数随 `VERSION` 统一为 `?v=2.7.1`（由 `scripts/patch-ui-brand-version.py` 生成），确保旧缓存的客户端加载到修复后的脚本。
+
+---
+
 ## v2.7.0 — 2026-05-28
 
 ### Anima LoRA Fast 模式（可选插件）

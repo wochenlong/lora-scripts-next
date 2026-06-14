@@ -5,6 +5,33 @@
 (function () {
   const STORAGE_KEY = "sd-trainer-ui-locale";
 
+  function readStoredLocale() {
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored === "en-US" || stored === "zh-CN") return stored;
+    return null;
+  }
+
+  // One-time migration: older builds persisted the locale in sessionStorage,
+  // which did not survive a browser restart. Promote any legacy value into
+  // localStorage once, then drop the sessionStorage copy so there is a single
+  // source of truth. Kept out of detectEnglishUI() so detection has no write
+  // side effects.
+  function migrateLegacyLocale() {
+    try {
+      if (readStoredLocale()) {
+        sessionStorage.removeItem(STORAGE_KEY);
+        return;
+      }
+      const legacy = sessionStorage.getItem(STORAGE_KEY);
+      if (legacy === "en-US" || legacy === "zh-CN") {
+        localStorage.setItem(STORAGE_KEY, legacy);
+      }
+      sessionStorage.removeItem(STORAGE_KEY);
+    } catch (e) {
+      /* storage may be unavailable (private mode); ignore */
+    }
+  }
+
   const ZH_TO_EN = {
     训练: "Training",
     "LoRA训练": "LoRA Training",
@@ -26,6 +53,8 @@
     更新日志: "Changelog",
     终端: "Terminal",
     训练终端: "Training Terminal",
+    灯泡: "Theme",
+    切换颜色模式: "toggle color mode",
     全部: "All",
     部署: "Deploy",
     系统: "System",
@@ -155,7 +184,7 @@
   }
 
   function detectEnglishUI() {
-    const stored = sessionStorage.getItem(STORAGE_KEY);
+    const stored = readStoredLocale();
     if (stored === "en-US") return true;
     if (stored === "zh-CN") return false;
 
@@ -214,6 +243,10 @@
     el.querySelectorAll("[aria-label]").forEach((a) => {
       const label = normalize(a.getAttribute("aria-label"));
       if (map[label]) a.setAttribute("aria-label", map[label]);
+    });
+    el.querySelectorAll("[title]").forEach((a) => {
+      const title = normalize(a.getAttribute("title"));
+      if (map[title]) a.setAttribute("title", map[title]);
     });
   }
 
@@ -863,6 +896,9 @@
     const sidebar = document.querySelector(".sidebar .sidebar-items");
     if (sidebar) replaceInElement(sidebar, map);
 
+    const sidebarBottom = document.querySelector(".sidebar-bottom");
+    if (sidebarBottom) replaceInElement(sidebarBottom, map);
+
     const hub = document.querySelector(".sd-home-hub");
     if (hub) replaceInElement(hub, map);
 
@@ -900,7 +936,7 @@
         const row = btn.closest("li.appearance");
         if (!row || !/language/i.test(row.textContent || "")) return;
         const next = detectEnglishUI() ? "zh-CN" : "en-US";
-        sessionStorage.setItem(STORAGE_KEY, next);
+        localStorage.setItem(STORAGE_KEY, next);
         setTimeout(applyNavLocale, 80);
         setTimeout(applyNavLocale, 400);
       },
@@ -920,6 +956,7 @@
   }
 
   function boot() {
+    migrateLegacyLocale();
     applyNavLocale();
     hookLanguageToggle();
     ensureTerminalPanel();

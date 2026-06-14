@@ -664,6 +664,45 @@ def test_nav_i18n_keeps_native_tag_editor_entry_distinct():
     assert "ensureTagEditorLinks();" in script
 
 
+def test_nav_i18n_persists_language_choice_across_browser_sessions():
+    # frontend/dist is a precompiled artifact with no JS test harness, so these
+    # are static source-presence checks: they guard against the specific
+    # regressions we fixed (session-only storage, write side effects in the
+    # detector), NOT a substitute for runtime behavior. Real persistence is
+    # verified via agent-browser (see PR #124 evidence screenshots).
+    script = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
+        encoding="utf-8"
+    )
+
+    # Persisted in localStorage (survives browser restart), never sessionStorage.
+    assert "localStorage.setItem(STORAGE_KEY, next)" in script
+    assert "sessionStorage.setItem(STORAGE_KEY" not in script
+
+    # One-time legacy migration runs at boot and clears the stale session copy.
+    assert "function migrateLegacyLocale()" in script
+    assert "migrateLegacyLocale();" in script
+    assert "sessionStorage.removeItem(STORAGE_KEY)" in script
+
+    # Detection is a pure read: it must not write storage on the read path.
+    detect_start = script.index("function detectEnglishUI()")
+    detect_body = script[detect_start : detect_start + 600]
+    assert "readStoredLocale()" in detect_body
+    assert "setItem" not in detect_body
+
+
+def test_nav_i18n_translates_sidebar_bottom_theme_and_tooltip():
+    script = (ROOT / "frontend" / "dist" / "assets" / "sd-nav-i18n.js").read_text(
+        encoding="utf-8"
+    )
+
+    # Bottom sidebar (theme toggle) is included in the locale pass.
+    assert 'document.querySelector(".sidebar-bottom")' in script
+    assert '灯泡: "Theme"' in script
+    # Color-mode tooltip (title attribute) is translated too.
+    assert '切换颜色模式: "toggle color mode"' in script
+    assert 'querySelectorAll("[title]")' in script
+
+
 def test_dataset_editor_tagger_panel_can_append_trigger_words():
     html = (ROOT / "frontend" / "dist" / "dataset-editor.html").read_text(
         encoding="utf-8"
