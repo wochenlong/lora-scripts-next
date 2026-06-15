@@ -21,7 +21,7 @@ parser.add_argument("--disable-tageditor", action="store_true")
 parser.add_argument(
     "--enable-legacy-tageditor",
     action="store_true",
-    help="Start the legacy Gradio Dataset Tag Editor compatibility service.",
+    help="Deprecated compatibility flag. Legacy Gradio Dataset Tag Editor now starts by default.",
 )
 parser.add_argument("--disable-train-monitor", action="store_true")
 parser.add_argument("--disable-auto-mirror", action="store_true")
@@ -124,7 +124,7 @@ def launch():
     log.info("Starting SD-Trainer Mikazuki GUI...")
     log.info(f"Base directory: {base_dir_path()}, Working directory: {os.getcwd()}")
     log.info(f"{platform.system()} Python {platform.python_version()} {sys.executable}")
-    legacy_tageditor_enabled = args.enable_legacy_tageditor and not args.disable_tageditor
+    legacy_tageditor_enabled = not args.disable_tageditor
 
     if not args.skip_prepare_environment:
         prepare_environment(disable_auto_mirror=args.disable_auto_mirror)

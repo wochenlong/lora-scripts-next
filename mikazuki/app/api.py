@@ -113,6 +113,19 @@ trainer_mapping = {
 }
 
 
+def _missing_standard_train_field(field: str, label: str) -> APIResponseFail:
+    return APIResponseFail(
+        message=f"缺少 {label} ({field})，无法启动训练。请检查训练参数后重试。",
+        data={"field": field},
+    )
+
+
+def _add_training_warning(config: dict, message: str) -> None:
+    warnings = config.setdefault("_training_warnings", [])
+    if isinstance(warnings, list) and message not in warnings:
+        warnings.append(message)
+
+
 def _normalize_kv_arg_list(values) -> list[str]:
     """Normalize key=value style arg list from UI payload."""
     if not isinstance(values, list):
@@ -131,7 +144,7 @@ def _normalize_kv_arg_list(values) -> list[str]:
         value = value.strip()
         if not key:
             continue
-        if value.lower() in {"undefined", "null", "nan"}:
+        if _is_invalid_value(value):
             continue
         normalized = f"{key}={value}"
         if key in key_index:
@@ -199,7 +212,11 @@ def sanitize_config(config: dict) -> None:
         del config[k]
     for key in ("network_args", "optimizer_args"):
         if isinstance(config.get(key), list):
-            config[key] = _normalize_kv_arg_list(config[key])
+            normalized = _normalize_kv_arg_list(config[key])
+            if normalized:
+                config[key] = normalized
+            else:
+                config.pop(key, None)
     for key in _PATH_FIELDS:
         if isinstance(config.get(key), str):
             config[key] = config[key].replace("\\", "/")
@@ -317,7 +334,15 @@ def apply_sdxl_prediction_type(config: dict, model_train_type: str):
 
 
 def is_preview_enabled(config: dict) -> bool:
-    return config.get("enable_preview") in (True, "true", "True", "1", 1)
+    return train_utils.is_preview_enabled(config)
+
+
+def has_explicit_sample_prompt_source(config: dict) -> bool:
+    return train_utils.has_explicit_sample_prompt_source(config)
+
+
+def should_generate_sample_prompts(config: dict) -> bool:
+    return train_utils.should_generate_sample_prompts(config)
 
 
 def _detect_best_attn_mode() -> str:
@@ -412,6 +437,11 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
     if optimizer_type in ANIMA_FULL_PRECISION_UNSAFE_OPTIMIZERS:
         if config.get("mixed_precision") == "fp16" and _cuda_bf16_supported():
             config["mixed_precision"] = "bf16"
+            _add_training_warning(
+                config,
+                "Changed Anima mixed_precision from fp16 to bf16 for optimizer "
+                f"{config.get('optimizer_type')}. fp16 is more likely to produce loss=nan.",
+            )
             log.warning(
                 "Changed Anima mixed_precision from fp16 to bf16 for optimizer "
                 f"{config.get('optimizer_type')}. fp16 is more likely to produce loss=nan."
@@ -422,11 +452,34 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
             if config.pop(key, None):
                 disabled.append(key)
         if disabled:
+            _add_training_warning(
+                config,
+                "Disabled Anima full half-precision training for optimizer "
+                f"{config.get('optimizer_type')} ({', '.join(disabled)}). "
+                "This keeps trainable LoRA weights in fp32 to reduce loss=nan risk.",
+            )
             log.warning(
                 "Disabled Anima full half-precision training for optimizer "
                 f"{config.get('optimizer_type')} ({', '.join(disabled)}). "
                 "This keeps trainable LoRA weights in fp32 to reduce loss=nan risk."
             )
+        if _anima_lokr_full_matrix_training(config):
+            had_scale_guardrail = not _is_invalid_value(config.get("scale_weight_norms"))
+            if _is_invalid_value(config.get("scale_weight_norms")):
+                config["scale_weight_norms"] = 1
+            if disabled or not had_scale_guardrail:
+                _add_training_warning(
+                    config,
+                    "Anima LoKr full_matrix=true uses conservative stability guardrails: "
+                    "trainable adapter weights stay fp32 and scale_weight_norms defaults to 1. "
+                    f"Disabled full half precision: {', '.join(disabled) if disabled else 'none'}",
+                )
+                log.warning(
+                    "Anima LoKr full_matrix=true uses conservative stability guardrails: "
+                    "trainable adapter weights stay fp32 and scale_weight_norms defaults to 1. "
+                    "Disabled full half precision: %s",
+                    ", ".join(disabled) if disabled else "none",
+                )
     elif _anima_lokr_full_matrix_training(config):
         disabled = []
         for key in ("full_bf16", "full_fp16"):
@@ -434,6 +487,12 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
                 disabled.append(key)
         if _is_invalid_value(config.get("scale_weight_norms")):
             config["scale_weight_norms"] = 1
+        _add_training_warning(
+            config,
+            "Anima LoKr full_matrix=true uses conservative stability guardrails: "
+            "trainable adapter weights stay fp32 and scale_weight_norms defaults to 1. "
+            f"Disabled full half precision: {', '.join(disabled) if disabled else 'none'}",
+        )
         log.warning(
             "Anima LoKr full_matrix=true uses conservative stability guardrails: "
             "trainable adapter weights stay fp32 and scale_weight_norms defaults to 1. "
@@ -447,6 +506,11 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
         full_key = "full_bf16" if mixed == "bf16" else "full_fp16" if mixed == "fp16" else None
         if full_key and not config.get(full_key):
             config[full_key] = True
+            _add_training_warning(
+                config,
+                f"Enabled {full_key} for Anima LoKr mixed_precision={mixed} to keep "
+                "adapter and activation dtypes aligned.",
+            )
             log.info(
                 "Enabled %s for Anima LoKr mixed_precision=%s to keep adapter and "
                 "activation dtypes aligned.",
@@ -612,16 +676,32 @@ async def create_toml_file(request: Request):
             log.error(f"Anima Fast launch failed: {exc}")
             return APIResponseFail(message=f"Anima Fast launch failed: {exc}")
 
-    suggest_cpu_threads = 8 if len(train_utils.get_total_images(config["train_data_dir"], limit=200)) >= 200 else 2
+    if model_train_type not in trainer_mapping:
+        return APIResponseFail(
+            message=f"不支持的训练类型: {model_train_type}",
+            data={"model_train_type": model_train_type},
+        )
+
+    train_data_dir = str(config.get("train_data_dir") or "").strip()
+    if not train_data_dir:
+        return _missing_standard_train_field("train_data_dir", "训练数据集路径")
+    config["train_data_dir"] = train_data_dir
+
+    pretrained_model = str(config.get("pretrained_model_name_or_path") or "").strip()
+    if not pretrained_model:
+        return _missing_standard_train_field("pretrained_model_name_or_path", "底模路径")
+    config["pretrained_model_name_or_path"] = pretrained_model
+
+    suggest_cpu_threads = 8 if len(train_utils.get_total_images(train_data_dir, limit=200)) >= 200 else 2
     trainer_file = trainer_mapping[model_train_type]
     apply_sdxl_prediction_type(config, model_train_type)
     apply_anima_training_defaults(config, model_train_type)
 
     if model_train_type != "sdxl-finetune":
-        if not train_utils.validate_data_dir(config["train_data_dir"]):
+        if not train_utils.validate_data_dir(train_data_dir):
             return APIResponseFail(message="训练数据集路径不存在或没有图片，请检查目录。")
 
-    validated, message = train_utils.validate_model(config["pretrained_model_name_or_path"], model_train_type)
+    validated, message = train_utils.validate_model(pretrained_model, model_train_type)
     if not validated:
         return APIResponseFail(message=message)
 
@@ -631,7 +711,7 @@ async def create_toml_file(request: Request):
             return APIResponseFail(message=f"Prompt 文件 {prompt_file} 不存在，请检查路径。")
         config["sample_prompts"] = prompt_file
         train_utils.normalize_sample_prompt_file(prompt_file)
-    else:
+    elif should_generate_sample_prompts(config):
         try:
             positive_prompt, sample_prompts_arg = get_sample_prompts(config=config, model_train_type=model_train_type)
 
@@ -645,12 +725,15 @@ async def create_toml_file(request: Request):
         except ValueError as e:
             log.error(f"Error while processing prompts: {e}")
             return APIResponseFail(message=str(e))
+    else:
+        train_utils.strip_disabled_preview_fields(config)
 
     if config.get("sample_prompts"):
         train_utils.normalize_sample_prompt_file(str(config["sample_prompts"]))
 
     apply_anima_training_defaults(config, model_train_type)
     sanitize_config(config)
+    training_warnings = config.pop("_training_warnings", [])
 
     if not config.get("sample_prompts"):
         config.pop("sample_at_first", None)
@@ -660,7 +743,8 @@ async def create_toml_file(request: Request):
     with open(toml_file, "w", encoding="utf-8") as f:
         f.write(toml.dumps(config))
 
-    result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads)
+    metadata = {"warnings": training_warnings} if training_warnings else None
+    result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads, metadata=metadata)
 
     return result
 

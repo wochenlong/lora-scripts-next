@@ -182,5 +182,82 @@ class TruthyEnvTests(unittest.TestCase):
                     self.assertFalse(process._truthy_env("MIKAZUKI_TEST_FLAG"))
 
 
+class RunTrainMetadataTests(unittest.TestCase):
+    def test_run_train_returns_metadata_for_observability(self):
+        task = mock.MagicMock()
+        task.task_id = "task-meta"
+
+        with mock.patch.object(process.tm, "create_task", return_value=task) as create_task, \
+                mock.patch.object(process, "asyncio") as asyncio_mock, \
+                mock.patch.object(process, "_announce_train_log"), \
+                mock.patch.object(process, "build_train_log_urls", return_value={
+                    "base": "http://127.0.0.1:28000",
+                    "viewer": "http://127.0.0.1:28000/train-log?task_id=task-meta",
+                    "stream": "http://127.0.0.1:28000/api/train/log/stream/task-meta",
+                }), \
+                mock.patch.object(process, "read_mixed_precision_from_train_toml", return_value="bf16"):
+            asyncio_mock.to_thread.return_value = object()
+            response = process.run_train(
+                "config/autosave/test.toml",
+                "./scripts/stable/train_network.py",
+                gpu_ids=["0"],
+                cpu_threads=4,
+            )
+
+        self.assertEqual(response.status, "success")
+        create_task.assert_called_once()
+        metadata = create_task.call_args.kwargs["metadata"]
+        self.assertEqual(metadata["backend"], "standard")
+        self.assertEqual(metadata["trainer_file"], "./scripts/stable/train_network.py")
+        self.assertEqual(metadata["mixed_precision"], "bf16")
+        self.assertEqual(metadata["cpu_threads"], 4)
+        self.assertEqual(metadata["gpu_ids"], ["0"])
+        self.assertIn("command", metadata)
+        self.assertEqual(response.data["metadata"], metadata)
+        self.assertEqual(response.data["config_path"], metadata["config_path"])
+        self.assertEqual(response.data["trainer_file"], "./scripts/stable/train_network.py")
+
+    def test_run_train_preserves_extra_metadata_warnings(self):
+        task = mock.MagicMock()
+        task.task_id = "task-warning"
+
+        with mock.patch.object(process.tm, "create_task", return_value=task) as create_task, \
+                mock.patch.object(process, "asyncio") as asyncio_mock, \
+                mock.patch.object(process, "_announce_train_log"), \
+                mock.patch.object(process, "build_train_log_urls", return_value={
+                    "base": "http://127.0.0.1:28000",
+                    "viewer": "http://127.0.0.1:28000/train-log?task_id=task-warning",
+                    "stream": "http://127.0.0.1:28000/api/train/log/stream/task-warning",
+                }), \
+                mock.patch.object(process, "read_mixed_precision_from_train_toml", return_value="bf16"):
+            asyncio_mock.to_thread.return_value = object()
+            response = process.run_train(
+                "config/autosave/test.toml",
+                "./scripts/dev/anima_train_network.py",
+                cpu_threads=2,
+                metadata={"warnings": ["guardrail active"]},
+            )
+
+        metadata = create_task.call_args.kwargs["metadata"]
+        self.assertEqual(response.status, "success")
+        self.assertEqual(metadata["warnings"], ["guardrail active"])
+        self.assertEqual(response.data["metadata"]["warnings"], ["guardrail active"])
+
+    def test_run_train_create_task_failure_returns_diagnostic_data(self):
+        with mock.patch.object(process.tm, "create_task", return_value=None), \
+                mock.patch.object(process, "read_mixed_precision_from_train_toml", return_value=None):
+            response = process.run_train(
+                "config/autosave/test.toml",
+                "./scripts/stable/train_network.py",
+                gpu_ids=None,
+                cpu_threads=2,
+            )
+
+        self.assertEqual(response.status, "error")
+        self.assertIn("trainer_file", response.data)
+        self.assertIn("config_path", response.data)
+        self.assertEqual(response.data["backend"], "standard")
+
+
 if __name__ == "__main__":
     unittest.main()

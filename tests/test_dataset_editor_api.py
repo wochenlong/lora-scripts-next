@@ -1,9 +1,27 @@
 import json
 import re
+import sys
+import types
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 from PIL import Image
+
+stub_interrogator = types.ModuleType("mikazuki.tagger.interrogator")
+stub_interrogator.available_interrogators = {}
+stub_jobs = types.ModuleType("mikazuki.tagger.jobs")
+stub_jobs.run_interrogate_job = lambda *args, **kwargs: None
+stub_jobs.run_prefetch_job = lambda *args, **kwargs: None
+stub_progress = types.ModuleType("mikazuki.tagger.progress")
+stub_progress.tagger_progress = types.SimpleNamespace(
+    get=lambda: {},
+    request_cancel=lambda: False,
+    is_busy=lambda: False,
+    reset_idle=lambda message=None: None,
+)
+sys.modules["mikazuki.tagger.interrogator"] = stub_interrogator
+sys.modules["mikazuki.tagger.jobs"] = stub_jobs
+sys.modules["mikazuki.tagger.progress"] = stub_progress
 
 from mikazuki.app.application import app
 
@@ -443,12 +461,12 @@ def test_embedded_dataset_editor_pager_wraps_before_buttons_overflow():
     assert "justify-content: flex-start;" in pager_breakpoint
 
 
-def test_legacy_gradio_tageditor_is_opt_in():
+def test_legacy_gradio_tageditor_starts_by_default_for_existing_users():
     gui = (ROOT / "gui.py").read_text(encoding="utf-8")
 
     assert "--enable-legacy-tageditor" in gui
-    assert "legacy_tageditor_enabled = args.enable_legacy_tageditor" in gui
-    assert "Using native dataset editor at /dataset-editor.html" in gui
+    assert "legacy_tageditor_enabled = not args.disable_tageditor" in gui
+    assert "run_tag_editor(tageditor_port)" in gui
 
 
 def test_dataset_editor_frontend_exposes_edit_efficiency_controls():

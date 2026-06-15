@@ -154,12 +154,14 @@ def _announce_train_log(task_id: str, urls: dict) -> None:
 def run_train(toml_path: str,
               trainer_file: str = "./scripts/train_network.py",
               gpu_ids: Optional[list] = None,
-              cpu_threads: Optional[int] = 2):
+              cpu_threads: Optional[int] = 2,
+              metadata: Optional[dict] = None):
     log.info(f"Training started with config file / 训练开始，使用配置文件: {toml_path}")
+    cpu_threads = cpu_threads or 2
     args, customize_env, mixed_precision = build_accelerate_train_command(
         trainer_file=trainer_file,
         toml_path=toml_path,
-        cpu_threads=cpu_threads or 2,
+        cpu_threads=cpu_threads,
         gpu_ids=gpu_ids,
     )
 
@@ -181,8 +183,24 @@ def run_train(toml_path: str,
     if gpu_ids:
         log.info(f"Using GPU(s) / 使用 GPU: {gpu_ids}")
 
-    if not (task := tm.create_task(args, customize_env)):
-        return APIResponse(status="error", message="Failed to create task / 无法创建训练任务")
+    task_metadata = {
+        "backend": "standard",
+        "config_path": str(Path(toml_path).resolve()),
+        "trainer_file": trainer_file,
+        "cwd": str(Path.cwd()),
+        "mixed_precision": mixed_precision,
+        "cpu_threads": cpu_threads,
+        "gpu_ids": list(gpu_ids or []),
+        "command": [str(part) for part in args],
+    }
+    task_metadata.update(metadata or {})
+
+    if not (task := tm.create_task(args, customize_env, metadata=task_metadata)):
+        return APIResponse(
+            status="error",
+            message="Failed to create task / 无法创建训练任务",
+            data=task_metadata,
+        )
 
     urls = build_train_log_urls(task.task_id)
     _announce_train_log(task.task_id, urls)
@@ -213,6 +231,9 @@ def run_train(toml_path: str,
             # Full clickable URLs (new in this release).
             "train_log_url": urls["viewer"],
             "train_log_stream_url": urls["stream"],
+            "metadata": task_metadata,
+            "config_path": task_metadata["config_path"],
+            "trainer_file": trainer_file,
         },
     )
 

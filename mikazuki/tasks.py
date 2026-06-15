@@ -13,6 +13,8 @@ import psutil
 from mikazuki.log import log
 from mikazuki.train_log_hub import hub
 
+_FAILURE_LOG_TAIL_LINES = 80
+
 try:
     import msvcrt
     import _winapi
@@ -51,6 +53,7 @@ class Task:
         self.cwd = cwd
         self.returncode = None
         self.log_file = self.metadata.get("log_file")
+        self._stdout_thread = None
 
     def _append_disk_log(self, text: str):
         if not self.log_file:
@@ -73,13 +76,29 @@ class Task:
 
     def finish_log_only(self, returncode=0, error=None):
         self.returncode = returncode
-        self.metadata["returncode"] = returncode
         if error:
             self.metadata["error"] = str(error)
             self._append_disk_log(f"[error] {error}")
         self.status = TaskStatus.FINISHED if returncode == 0 else TaskStatus.FAILED
         self._append_disk_log(f"[task finished] returncode={returncode}")
         hub.mark_done(self.task_id)
+        self._record_completion(returncode)
+
+    def _join_stdout_pump(self):
+        thread = self._stdout_thread
+        if thread and thread.is_alive():
+            thread.join(timeout=2)
+
+    def _record_completion(self, returncode):
+        self.metadata["returncode"] = returncode
+        if returncode == 0:
+            self.metadata.pop("last_log_lines", None)
+            if self.metadata.get("error") == "Training process exited with code 0":
+                self.metadata.pop("error", None)
+            return
+        message = f"Training process exited with code {returncode}"
+        self.metadata.setdefault("error", message)
+        self.metadata["last_log_lines"] = hub.tail(self.task_id, _FAILURE_LOG_TAIL_LINES)
 
     def communicate(self, input=None, timeout=None):
         try:
@@ -96,18 +115,19 @@ class Task:
             raise
         retcode = self.process.poll()
         self.returncode = retcode
-        self.metadata["returncode"] = retcode
         self.status = TaskStatus.FINISHED if retcode == 0 else TaskStatus.FAILED
         self._append_disk_log(f"[task communicate finished] returncode={retcode}")
+        self._record_completion(retcode)
         return CompletedProcess(self.process.args, retcode, stdout, stderr)
 
     def wait(self):
         retcode = self.process.wait()
+        self._join_stdout_pump()
         self.returncode = retcode
-        self.metadata["returncode"] = retcode
         if self.status != TaskStatus.TERMINATED:
             self.status = TaskStatus.FINISHED if retcode == 0 else TaskStatus.FAILED
         self._append_disk_log(f"[task wait finished] returncode={retcode}")
+        self._record_completion(retcode)
 
     def _stdout_pump(self):
         """Drain child stdout into TrainLogHub AND echo to parent console."""
@@ -166,7 +186,8 @@ class Task:
             self.metadata["returncode"] = -1
             self.metadata["error"] = str(e)
             raise
-        threading.Thread(target=self._stdout_pump, daemon=True).start()
+        self._stdout_thread = threading.Thread(target=self._stdout_pump, daemon=True)
+        self._stdout_thread.start()
 
     def terminate(self):
         try:

@@ -65,5 +65,14 @@ class TrainLogHub:
         total = len(lst)
         return lst[start_idx:], total, done
 
+    def tail(self, task_id: str, limit: int = 80) -> List[str]:
+        """Return the most recent sanitized log lines for diagnostics."""
+        limit = max(1, min(int(limit or 1), _MAX_LINES))
+        with self._lock:
+            dq = self._lines.get(task_id)
+            if dq is None:
+                return []
+            return list(dq)[-limit:]
+
 
 hub = TrainLogHub()

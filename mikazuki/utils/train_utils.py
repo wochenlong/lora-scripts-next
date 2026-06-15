@@ -11,6 +11,22 @@ from mikazuki.log import log
 
 python_bin = sys.executable
 
+PREVIEW_UI_FIELDS = (
+    "positive_prompts",
+    "negative_prompts",
+    "sample_width",
+    "sample_height",
+    "sample_cfg",
+    "sample_seed",
+    "sample_steps",
+    "sample_sampler",
+    "randomly_choice_prompt",
+    "sample_at_first",
+    "sample_every_n_epochs",
+    "sample_every_n_steps",
+    "prompt_file",
+)
+
 
 class ModelType(Enum):
     UNKNOWN = -1
@@ -82,6 +98,27 @@ def is_promopt_like(s):
         if p in s:
             return True
     return False
+
+
+def is_preview_enabled(config: dict) -> bool:
+    return config.get("enable_preview") in (True, "true", "True", "1", 1)
+
+
+def has_explicit_sample_prompt_source(config: dict) -> bool:
+    prompt_file = str(config.get("prompt_file") or "").strip()
+    if prompt_file:
+        return True
+    sample_prompts = str(config.get("sample_prompts") or "").strip()
+    return bool(sample_prompts)
+
+
+def should_generate_sample_prompts(config: dict) -> bool:
+    return is_preview_enabled(config) or has_explicit_sample_prompt_source(config)
+
+
+def strip_disabled_preview_fields(config: dict) -> None:
+    for key in PREVIEW_UI_FIELDS:
+        config.pop(key, None)
 
 
 def normalize_sample_prompt_text(text: str) -> str:
@@ -354,4 +391,15 @@ def fix_config_types(config: dict):
     keep_float_params = ["guidance_scale", "sigmoid_scale", "discrete_flow_shift"]
     for k in keep_float_params:
         if k in config:
-            config[k] = float(config[k])
+            value = config[k]
+            if value is None:
+                config.pop(k, None)
+                continue
+            if isinstance(value, str) and value.strip().lower() in {"", "undefined", "null", "nan", "inf", "+inf", "-inf"}:
+                config.pop(k, None)
+                continue
+            try:
+                config[k] = float(value)
+            except (TypeError, ValueError):
+                log.warning(f"Removed invalid numeric config value {k}={value!r}")
+                config.pop(k, None)

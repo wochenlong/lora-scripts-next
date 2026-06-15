@@ -32,6 +32,17 @@ class TrainLogHubAnsiTests(unittest.TestCase):
         self.assertEqual(total, 2)
         self.assertFalse(done)
 
+    def test_tail_returns_recent_sanitized_lines(self):
+        hub = TrainLogHub()
+        hub.start_task("task-tail")
+
+        hub.append_line("task-tail", "\x1b[31mfirst\x1b[0m\n")
+        hub.append_line("task-tail", "second\n")
+        hub.append_line("task-tail", "third\n")
+
+        self.assertEqual(hub.tail("task-tail", 2), ["second", "third"])
+        self.assertEqual(hub.tail("missing", 2), [])
+
 
 if __name__ == "__main__":
     unittest.main()
