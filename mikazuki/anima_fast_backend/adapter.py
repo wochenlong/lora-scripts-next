@@ -270,6 +270,7 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     }
     if source_dir:
         values["source_image_dir"] = resolve_path(source_dir, runtime.lora_next_root)
+        values["train_data_dir"] = values["source_image_dir"]
 
     for key, value in source.items():
         if key in UI_ONLY_FIELDS:
