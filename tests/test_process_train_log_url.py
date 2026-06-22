@@ -258,6 +258,111 @@ class RunTrainMetadataTests(unittest.TestCase):
         self.assertIn("config_path", response.data)
         self.assertEqual(response.data["backend"], "standard")
 
+    def test_run_train_records_sdxl_runtime_asset_preflight(self):
+        task = mock.MagicMock()
+        task.task_id = "task-sdxl-preflight"
+        preflight = {
+            "kind": "sdxl_tokenizers",
+            "checked": [{"model_id": "openai/clip-vit-large-patch14"}],
+        }
+
+        with mock.patch.object(process.tm, "create_task", return_value=task) as create_task, \
+                mock.patch.object(process, "asyncio") as asyncio_mock, \
+                mock.patch.object(process, "_announce_train_log"), \
+                mock.patch.object(process, "build_train_log_urls", return_value={
+                    "base": "http://127.0.0.1:28000",
+                    "viewer": "http://127.0.0.1:28000/train-log?task_id=task-sdxl-preflight",
+                    "stream": "http://127.0.0.1:28000/api/train/log/stream/task-sdxl-preflight",
+                }), \
+                mock.patch.object(process, "read_mixed_precision_from_train_toml", return_value="bf16"), \
+                mock.patch.object(process, "ensure_training_runtime_assets", return_value=preflight) as ensure_assets:
+            asyncio_mock.to_thread.return_value = object()
+            response = process.run_train(
+                "config/autosave/test.toml",
+                "./vendor/sd-scripts/sdxl_train_network.py",
+                cpu_threads=2,
+            )
+
+        self.assertEqual(response.status, "success")
+        ensure_assets.assert_called_once()
+        metadata = create_task.call_args.kwargs["metadata"]
+        self.assertEqual(metadata["runtime_asset_preflight"], preflight)
+        self.assertEqual(response.data["metadata"]["runtime_asset_preflight"], preflight)
+
+    def test_run_train_preflight_failure_does_not_create_task(self):
+        error = process.RuntimeAssetPreflightError(
+            "Required SDXL tokenizer is not available before training: openai/clip-vit-large-patch14.",
+            {"model_id": "openai/clip-vit-large-patch14"},
+        )
+
+        with mock.patch.object(process.tm, "create_task") as create_task, \
+                mock.patch.object(process, "read_mixed_precision_from_train_toml", return_value="bf16"), \
+                mock.patch.object(process, "ensure_training_runtime_assets", side_effect=error):
+            response = process.run_train(
+                "config/autosave/test.toml",
+                "./vendor/sd-scripts/sdxl_train_network.py",
+                cpu_threads=2,
+            )
+
+        self.assertEqual(response.status, "error")
+        self.assertIn("Training preflight failed", response.message)
+        self.assertEqual(response.data["runtime_asset_preflight"]["model_id"], "openai/clip-vit-large-patch14")
+        create_task.assert_not_called()
+
+
+class RuntimeAssetPreflightTests(unittest.TestCase):
+    def test_trainer_requires_sdxl_tokenizers_only_for_sdxl_entrypoint(self):
+        self.assertTrue(process.trainer_requires_sdxl_tokenizers("./vendor/sd-scripts/sdxl_train_network.py"))
+        self.assertTrue(process.trainer_requires_sdxl_tokenizers(r".\scripts\stable\sdxl_train_network.py"))
+        self.assertFalse(process.trainer_requires_sdxl_tokenizers("./scripts/stable/train_network.py"))
+
+    def test_hf_env_candidates_falls_back_to_official_when_mirror_configured(self):
+        candidates = process._hf_env_candidates({
+            "HF_ENDPOINT": "https://hf-mirror.com",
+            "HF_HOME": "cache",
+        })
+
+        self.assertEqual([name for name, _env in candidates], ["configured", "official"])
+        self.assertEqual(candidates[0][1]["HF_ENDPOINT"], "https://hf-mirror.com")
+        self.assertNotIn("HF_ENDPOINT", candidates[1][1])
+        self.assertEqual(candidates[1][1]["HF_HOME"], "cache")
+
+    def test_ensure_training_runtime_assets_checks_both_sdxl_tokenizers(self):
+        calls = []
+
+        def fake_check(model_id, env, tokenizer_cache_dir):
+            calls.append((model_id, env, tokenizer_cache_dir))
+            return {"model_id": model_id, "source": model_id}
+
+        with mock.patch.object(process, "read_tokenizer_cache_dir_from_train_toml", return_value="tok-cache"), \
+                mock.patch.object(process, "_ensure_clip_tokenizer_available", side_effect=fake_check):
+            result = process.ensure_training_runtime_assets(
+                "./vendor/sd-scripts/sdxl_train_network.py",
+                {"HF_ENDPOINT": "https://hf-mirror.com"},
+                "config/autosave/test.toml",
+            )
+
+        self.assertEqual(result["kind"], "sdxl_tokenizers")
+        self.assertEqual(result["tokenizer_cache_dir"], "tok-cache")
+        self.assertEqual(
+            [call[0] for call in calls],
+            [
+                "openai/clip-vit-large-patch14",
+                "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
+            ],
+        )
+
+    def test_ensure_training_runtime_assets_skips_non_sdxl_trainers(self):
+        with mock.patch.object(process, "_ensure_clip_tokenizer_available") as ensure_one:
+            result = process.ensure_training_runtime_assets(
+                "./scripts/stable/train_network.py",
+                {},
+                "config/autosave/test.toml",
+            )
+
+        self.assertIsNone(result)
+        ensure_one.assert_not_called()
+
 
 if __name__ == "__main__":
     unittest.main()

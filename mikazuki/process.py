@@ -1,5 +1,6 @@
 
 import asyncio
+from contextlib import contextmanager
 import os
 import sys
 import webbrowser
@@ -8,6 +9,18 @@ from pathlib import Path
 from typing import Any, Optional
 
 _VALID_ACCELERATE_MIXED_PRECISION = frozenset({"no", "fp16", "bf16"})
+_SDXL_TRAINER_TOKEN = "sdxl_train_network.py"
+_SDXL_TOKENIZER_MODEL_IDS = (
+    "openai/clip-vit-large-patch14",
+    "laion/CLIP-ViT-bigG-14-laion2B-39B-b160k",
+)
+_OFFICIAL_HF_ENDPOINT = "https://huggingface.co"
+_HF_ENV_KEYS = (
+    "HF_ENDPOINT",
+    "HF_HOME",
+    "HUGGINGFACE_HUB_CACHE",
+    "TRANSFORMERS_CACHE",
+)
 
 from mikazuki.app.models import APIResponse
 from mikazuki.anima_fast_backend.launcher import build_launch_spec
@@ -16,6 +29,12 @@ from mikazuki.log import log
 from mikazuki.tasks import tm
 from mikazuki.launch_utils import base_dir_path
 from mikazuki.portable_utils import train_env_overrides
+
+
+class RuntimeAssetPreflightError(RuntimeError):
+    def __init__(self, message: str, data: Optional[dict] = None):
+        super().__init__(message)
+        self.data = data or {}
 
 
 def _truthy_env(name: str) -> bool:
@@ -59,6 +78,159 @@ def read_mixed_precision_from_train_toml(toml_path: str) -> Optional[str]:
     if not data:
         return None
     return normalize_mixed_precision(data.get("mixed_precision"))
+
+
+def read_tokenizer_cache_dir_from_train_toml(toml_path: str) -> Optional[str]:
+    path = Path(toml_path)
+    if not path.is_file():
+        return None
+    try:
+        data = _loads_train_toml(path.read_text(encoding="utf-8"))
+    except OSError:
+        return None
+    if not data:
+        return None
+    value = data.get("tokenizer_cache_dir")
+    if value is None:
+        return None
+    value = str(value).strip()
+    return value or None
+
+
+def trainer_requires_sdxl_tokenizers(trainer_file: str) -> bool:
+    normalized = str(trainer_file).replace("\\", "/").lower()
+    return normalized.endswith(_SDXL_TRAINER_TOKEN) or f"/{_SDXL_TRAINER_TOKEN}" in normalized
+
+
+def _patch_huggingface_endpoint(endpoint: str) -> list[tuple[Any, str, Any]]:
+    import importlib
+
+    endpoint = endpoint.rstrip("/")
+    template = f"{endpoint}/{{repo_id}}/resolve/{{revision}}/{{filename}}"
+    home = f"{endpoint}/"
+    previous = []
+    module_attrs = {
+        "huggingface_hub.constants": {
+            "ENDPOINT": endpoint,
+            "HUGGINGFACE_CO_URL_HOME": home,
+            "HUGGINGFACE_CO_URL_TEMPLATE": template,
+        },
+        "huggingface_hub.file_download": {
+            "HUGGINGFACE_CO_URL_TEMPLATE": template,
+        },
+    }
+
+    for module_name, attrs in module_attrs.items():
+        try:
+            module = importlib.import_module(module_name)
+        except Exception:  # noqa: BLE001 - tokenizer loading will surface missing/broken deps
+            continue
+        for attr, value in attrs.items():
+            if hasattr(module, attr):
+                previous.append((module, attr, getattr(module, attr)))
+                setattr(module, attr, value)
+
+    return previous
+
+
+@contextmanager
+def _temporary_hf_env(env: dict[str, str]):
+    previous = {key: os.environ.get(key) for key in _HF_ENV_KEYS}
+    previous_hf_attrs = []
+    try:
+        for key in _HF_ENV_KEYS:
+            if key in env and env[key] is not None:
+                os.environ[key] = str(env[key])
+            else:
+                os.environ.pop(key, None)
+        endpoint = os.environ.get("HF_ENDPOINT") or _OFFICIAL_HF_ENDPOINT
+        previous_hf_attrs = _patch_huggingface_endpoint(endpoint)
+        yield
+    finally:
+        for module, attr, value in reversed(previous_hf_attrs):
+            setattr(module, attr, value)
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+
+
+def _hf_env_candidates(env: dict[str, str]) -> list[tuple[str, dict[str, str]]]:
+    candidates = [("configured", env.copy())]
+    endpoint = (env.get("HF_ENDPOINT") or "").rstrip("/")
+    if endpoint and endpoint != _OFFICIAL_HF_ENDPOINT:
+        official_env = env.copy()
+        official_env.pop("HF_ENDPOINT", None)
+        candidates.append(("official", official_env))
+    return candidates
+
+
+def _load_clip_tokenizer(model_id: str, env: dict[str, str], tokenizer_cache_dir: Optional[str] = None) -> str:
+    with _temporary_hf_env(env):
+        from transformers import CLIPTokenizer
+
+        local_tokenizer_path = None
+        if tokenizer_cache_dir:
+            local_tokenizer_path = Path(tokenizer_cache_dir) / model_id.replace("/", "_")
+            if local_tokenizer_path.exists():
+                CLIPTokenizer.from_pretrained(str(local_tokenizer_path))
+                return str(local_tokenizer_path)
+
+        tokenizer = CLIPTokenizer.from_pretrained(model_id)
+        if local_tokenizer_path is not None and not local_tokenizer_path.exists():
+            tokenizer.save_pretrained(str(local_tokenizer_path))
+            return str(local_tokenizer_path)
+        return model_id
+
+
+def _ensure_clip_tokenizer_available(
+    model_id: str,
+    env: dict[str, str],
+    tokenizer_cache_dir: Optional[str],
+) -> dict[str, str]:
+    errors = []
+    for label, candidate_env in _hf_env_candidates(env):
+        try:
+            source = _load_clip_tokenizer(model_id, candidate_env, tokenizer_cache_dir)
+            return {
+                "model_id": model_id,
+                "source": source,
+                "endpoint": candidate_env.get("HF_ENDPOINT") or _OFFICIAL_HF_ENDPOINT,
+                "mode": label,
+            }
+        except Exception as exc:  # noqa: BLE001 - surface dependency/network failures as preflight diagnostics
+            errors.append({
+                "mode": label,
+                "endpoint": candidate_env.get("HF_ENDPOINT") or _OFFICIAL_HF_ENDPOINT,
+                "error": str(exc),
+            })
+
+    message = (
+        f"Required SDXL tokenizer is not available before training: {model_id}. "
+        "Check network/proxy/HF_ENDPOINT or pre-download the tokenizer cache."
+    )
+    raise RuntimeAssetPreflightError(message, {"model_id": model_id, "errors": errors})
+
+
+def ensure_training_runtime_assets(
+    trainer_file: str,
+    env: dict[str, str],
+    toml_path: Optional[str] = None,
+) -> Optional[dict]:
+    if not trainer_requires_sdxl_tokenizers(trainer_file):
+        return None
+
+    tokenizer_cache_dir = read_tokenizer_cache_dir_from_train_toml(toml_path) if toml_path else None
+    checked = [
+        _ensure_clip_tokenizer_available(model_id, env, tokenizer_cache_dir)
+        for model_id in _SDXL_TOKENIZER_MODEL_IDS
+    ]
+    return {
+        "kind": "sdxl_tokenizers",
+        "tokenizer_cache_dir": tokenizer_cache_dir,
+        "checked": checked,
+    }
 
 
 def build_accelerate_train_command(
@@ -194,6 +366,19 @@ def run_train(toml_path: str,
         "command": [str(part) for part in args],
     }
     task_metadata.update(metadata or {})
+
+    try:
+        runtime_asset_preflight = ensure_training_runtime_assets(trainer_file, customize_env, toml_path)
+        if runtime_asset_preflight:
+            task_metadata["runtime_asset_preflight"] = runtime_asset_preflight
+    except RuntimeAssetPreflightError as exc:
+        log.error(f"Training preflight failed / 训练预检失败: {exc}")
+        task_metadata["runtime_asset_preflight"] = exc.data
+        return APIResponse(
+            status="error",
+            message=f"Training preflight failed / 训练预检失败: {exc}",
+            data=task_metadata,
+        )
 
     if not (task := tm.create_task(args, customize_env, metadata=task_metadata)):
         return APIResponse(
