@@ -191,6 +191,7 @@ class AdapterTests(unittest.TestCase):
 
         self.assertEqual(adapted.values["method"], "lora")
         self.assertIn("source_image_dir", adapted.values)
+        self.assertEqual(adapted.values["train_data_dir"], adapted.values["source_image_dir"])
         self.assertIn("resized_image_dir", adapted.values)
         self.assertIn("lora_cache_dir", adapted.values)
         self.assertNotIn("cache_dir", adapted.values)

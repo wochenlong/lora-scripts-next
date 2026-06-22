@@ -391,4 +391,15 @@ def fix_config_types(config: dict):
     keep_float_params = ["guidance_scale", "sigmoid_scale", "discrete_flow_shift"]
     for k in keep_float_params:
         if k in config:
-            config[k] = float(config[k])
+            value = config[k]
+            if value is None:
+                config.pop(k, None)
+                continue
+            if isinstance(value, str) and value.strip().lower() in {"", "undefined", "null", "nan", "inf", "+inf", "-inf"}:
+                config.pop(k, None)
+                continue
+            try:
+                config[k] = float(value)
+            except (TypeError, ValueError):
+                log.warning(f"Removed invalid numeric config value {k}={value!r}")
+                config.pop(k, None)

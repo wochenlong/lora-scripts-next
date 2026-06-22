@@ -1,9 +1,27 @@
 import json
 import re
+import sys
+import types
 from pathlib import Path
 
 from fastapi.testclient import TestClient
 from PIL import Image
+
+stub_interrogator = types.ModuleType("mikazuki.tagger.interrogator")
+stub_interrogator.available_interrogators = {}
+stub_jobs = types.ModuleType("mikazuki.tagger.jobs")
+stub_jobs.run_interrogate_job = lambda *args, **kwargs: None
+stub_jobs.run_prefetch_job = lambda *args, **kwargs: None
+stub_progress = types.ModuleType("mikazuki.tagger.progress")
+stub_progress.tagger_progress = types.SimpleNamespace(
+    get=lambda: {},
+    request_cancel=lambda: False,
+    is_busy=lambda: False,
+    reset_idle=lambda message=None: None,
+)
+sys.modules["mikazuki.tagger.interrogator"] = stub_interrogator
+sys.modules["mikazuki.tagger.jobs"] = stub_jobs
+sys.modules["mikazuki.tagger.progress"] = stub_progress
 
 from mikazuki.app.application import app
 
