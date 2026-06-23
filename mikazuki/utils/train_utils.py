@@ -105,11 +105,8 @@ def is_preview_enabled(config: dict) -> bool:
 
 
 def has_explicit_sample_prompt_source(config: dict) -> bool:
-    prompt_file = str(config.get("prompt_file") or "").strip()
-    if prompt_file:
-        return True
-    sample_prompts = str(config.get("sample_prompts") or "").strip()
-    return bool(sample_prompts)
+    """True only when the user picked an explicit prompt file in the UI."""
+    return bool(str(config.get("prompt_file") or "").strip())
 
 
 def should_generate_sample_prompts(config: dict) -> bool:
@@ -119,6 +116,7 @@ def should_generate_sample_prompts(config: dict) -> bool:
 def strip_disabled_preview_fields(config: dict) -> None:
     for key in PREVIEW_UI_FIELDS:
         config.pop(key, None)
+    config.pop("sample_prompts", None)
 
 
 def normalize_sample_prompt_text(text: str) -> str:

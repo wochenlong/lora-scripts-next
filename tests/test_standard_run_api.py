@@ -106,6 +106,44 @@ class StandardRunApiTests(unittest.TestCase):
             self.assertEqual(trainer_file, "./scripts/stable/train_network.py")
             self.assertEqual(cpu_threads, 2)
 
+    def test_run_preview_off_strips_stale_sample_fields_from_toml(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            data_dir = root / "dataset"
+            image_dir = data_dir / "1_class"
+            image_dir.mkdir(parents=True)
+            (image_dir / "sample.png").write_bytes(b"png")
+            model_path = root / "model.safetensors"
+            model_path.write_bytes(b"model")
+
+            payload = {
+                "model_train_type": "sd-lora",
+                "train_data_dir": str(data_dir),
+                "pretrained_model_name_or_path": str(model_path),
+                "output_dir": str(root / "output"),
+                "output_name": "unit-preview-off",
+                "enable_preview": False,
+                "sample_prompts": str(root / "stale-prompts.txt"),
+                "sample_at_first": True,
+                "sample_every_n_epochs": 1,
+                "positive_prompts": "1girl",
+            }
+            fake_response = api.APIResponseSuccess(
+                message="Training started",
+                data={"task_id": "task-preview-off", "metadata": {"backend": "standard"}},
+            )
+
+            with mock.patch.object(api.os, "getcwd", return_value=str(root)), \
+                    mock.patch.object(api.process, "run_train", return_value=fake_response) as run_train:
+                response = asyncio.run(api.create_toml_file(make_request(payload)))
+
+            self.assertEqual(response.status, "success")
+            toml_path = run_train.call_args.args[0]
+            written = Path(toml_path).read_text(encoding="utf-8")
+            self.assertNotIn("sample_prompts", written)
+            self.assertNotIn("sample_at_first", written)
+            self.assertNotIn("sample_every_n_epochs", written)
+
     def test_run_routes_sdxl_lora_to_vendor_trainer(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

@@ -72,14 +72,18 @@ class TrainUtilsPreviewGateTests(unittest.TestCase):
 
         self.assertTrue(train_utils.should_generate_sample_prompts(config))
 
-    def test_explicit_sample_prompts_generates_even_without_preview_toggle(self):
+    def test_orphan_sample_prompts_do_not_bypass_preview_gate(self):
         config = {
             "enable_preview": False,
             "sample_prompts": "E:/prompts.txt",
+            "sample_at_first": True,
             "train_data_dir": "./train",
         }
 
-        self.assertTrue(train_utils.should_generate_sample_prompts(config))
+        self.assertFalse(train_utils.should_generate_sample_prompts(config))
+        train_utils.strip_disabled_preview_fields(config)
+        self.assertNotIn("sample_prompts", config)
+        self.assertNotIn("sample_at_first", config)
 
 
 if __name__ == "__main__":

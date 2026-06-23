@@ -449,8 +449,12 @@ def apply_anima_training_defaults(config: dict, model_train_type: str):
     elif isinstance(config.get("unet_lr"), str):
         config["unet_lr"] = float(config["unet_lr"])
 
-    if is_preview_enabled(config) or config.get("sample_prompts"):
+    if config.get("sample_prompts") and (
+        is_preview_enabled(config) or str(config.get("prompt_file") or "").strip()
+    ):
         config["sample_at_first"] = True
+    elif not is_preview_enabled(config):
+        config.pop("sample_at_first", None)
 
     optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
     if optimizer_type in ANIMA_FULL_PRECISION_UNSAFE_OPTIMIZERS:

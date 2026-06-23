@@ -147,6 +147,85 @@
     状态检查失败: "Status check failed",
     安装任务启动中: "Starting install task",
     安装失败: "Install failed",
+    历史参数: "Saved parameters",
+    导出: "Export",
+    导入: "Import",
+    日期: "Date",
+    名称: "Name",
+    使用: "Apply",
+    预览: "Preview",
+    设置名称: "Rename",
+    删除: "Delete",
+    参数提示: "Parameter warnings",
+    参数错误: "Parameter errors",
+    确认: "Confirm",
+    取消: "Cancel",
+    确定: "OK",
+    重命名: "Rename",
+    请输入名称: "Enter a name",
+    取消重命名: "Cancel rename",
+    重命名成功: "Renamed",
+    删除成功: "Deleted",
+    导入成功: "Imported",
+    导入失败: "Import failed",
+    已导入: "Imported",
+    已取消导入: "Import cancelled",
+    参数为空: "Parameters are empty",
+    暂无预设文件: "No preset files",
+    条历史记录: " saved entries",
+    已将历史参数应用至当前参数: "Applied saved parameters to the form",
+    已将模板应用至当前参数: "Applied template to the form",
+    已自动加载历史参数: "Loaded saved parameters automatically",
+    应用历史参数失败: "Failed to apply saved parameters",
+    历史记录缺少有效配置（需要: "Saved entry is missing a valid config (requires ",
+    字段）: " fields)",
+    此操作将永久删除该参数配置: "This will permanently delete the saved configuration",
+    配置格式错误：需要对象: "Invalid config format: expected an object",
+    配置类型不匹配: "Config type mismatch",
+    导入失败：文件格式错误: "Import failed: invalid file format",
+    导入失败：网络错误: "Import failed: network error",
+    导入失败：需要历史记录数组或单个配置对象: "Import failed: expected an array or a single config object",
+    已在目标页面导入配置: "Config imported on the target page",
+    已将修改保存至浏览器: "Changes saved to browser storage",
+    跳转并导入: "Open page and import",
+    任务已提交: "Task submitted",
+    任务提交失败: "Task submission failed",
+    训练任务已提交成功：: "Training task submitted: ",
+    训练任务提交失败：: "Training task submission failed: ",
+    停止任务成功: "Task stopped",
+    停止任务失败：: "Failed to stop task: ",
+    确定要停止任务: "Stop this task?",
+    是否继续: "Continue?",
+    当前没有正在运行的训练任务: "No running training task",
+    无法连接到后端: "Cannot connect to backend",
+    无法连接到训练端，网络请求错误。: "Cannot connect to the training server (network error).",
+    无法连接到训练端，请检查是否开启训练端。: "Cannot connect to the training server. Check that it is running.",
+    获取显卡信息失败，将使用默认显卡：: "Failed to read GPU info; using default GPU: ",
+    获取显卡信息失败，将使用默认显卡：请求超时: "Failed to read GPU info (timeout); using default GPU",
+    显卡设置: "GPU settings",
+    选择显卡: "Select GPU",
+    可用: "Available",
+    描述: "Description",
+    版本: "Version",
+    作者: "Author",
+    标签器: "Tagger",
+    训练预设: "Training preset",
+    启动: "Launch",
+    迭代步数: "Sampling steps",
+    种子: "Seed",
+    宽，: "Width, ",
+    后方为反向提示词: " — text after this is the negative prompt",
+    预览图生成参数。可填写直接填写参数，或单独写入: "Sample image settings. Enter values here or use a separate ",
+    文件填写路径: "prompt file path",
+    检测到本地数据结构有更新，正在更新本地数据结构，请稍等: "Updating local schema data, please wait…",
+    冲突，请只启用其中一个: " conflict; enable only one",
+    您使用了: "You selected ",
+    目前仅对: "Currently only for ",
+    训练时，所有学习率将被设置为: "During training all learning rates will be set to ",
+    。并且学习率调度器将被设置为: ", and the LR scheduler will be set to ",
+    优化器，若想利用它获得学习率，请将: " optimizer; to use its adaptive LR, set ",
+    系列优化器，若想利用它获得学习率，请将: " optimizer family; to use its adaptive LR, set ",
+    设置为: " to ",
   };
 
   const EN_TO_ZH = Object.fromEntries(
@@ -184,6 +263,17 @@
   }
 
   function detectEnglishUI() {
+    const i18nLoc = resolveI18nLocale();
+    if (i18nLoc) {
+      const english = i18nLoc.toLowerCase().startsWith("en");
+      try {
+        localStorage.setItem(STORAGE_KEY, english ? "en-US" : "zh-CN");
+      } catch (e) {
+        /* ignore */
+      }
+      return english;
+    }
+
     const stored = readStoredLocale();
     if (stored === "en-US") return true;
     if (stored === "zh-CN") return false;
@@ -197,9 +287,6 @@
       .map((loc) => String(loc).toLowerCase());
     if (browserLocales.some((loc) => loc.startsWith("en"))) return true;
     if (browserLocales.some((loc) => loc.startsWith("zh"))) return false;
-
-    const i18nLoc = resolveI18nLocale();
-    if (i18nLoc) return i18nLoc.toLowerCase().startsWith("en");
 
     const htmlLang = (document.documentElement.lang || "").toLowerCase();
     if (htmlLang.startsWith("en")) return true;
@@ -914,6 +1001,10 @@
     const buttons = document.querySelector(".right-container .el-row");
     if (buttons) replaceInElement(buttons.closest(".right-container") || buttons, map);
 
+    document.querySelectorAll(".el-dialog, .el-overlay, .el-drawer, .el-message-box").forEach((node) => {
+      replaceInElement(node, map);
+    });
+
     const tagline = document.querySelector(".sd-anima-finetune-tagline");
     if (tagline && english) {
       tagline.textContent = "anima-finetune — anything is possible";
@@ -935,9 +1026,16 @@
         if (!btn) return;
         const row = btn.closest("li.appearance");
         if (!row || !/language/i.test(row.textContent || "")) return;
-        const next = detectEnglishUI() ? "zh-CN" : "en-US";
-        localStorage.setItem(STORAGE_KEY, next);
-        setTimeout(applyNavLocale, 80);
+        setTimeout(() => {
+          const i18nLoc = resolveI18nLocale();
+          if (i18nLoc) {
+            localStorage.setItem(
+              STORAGE_KEY,
+              i18nLoc.toLowerCase().startsWith("en") ? "en-US" : "zh-CN"
+            );
+          }
+          applyNavLocale();
+        }, 80);
         setTimeout(applyNavLocale, 400);
       },
       true
