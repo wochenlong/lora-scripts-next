@@ -105,6 +105,11 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
             self.assertIn(expected, text, path)
             self.assertNotIn("max-height:260px", text, path)
 
+    def test_fast_page_component_imports_versioned_app_module(self):
+        component = Path("frontend/dist/assets/anima-fast.html.page.js").read_text(encoding="utf-8")
+        self.assertIn('from"./app.547295de.js?v=20260626-configimport1"', component)
+        self.assertNotIn('from"./app.547295de.js";', component)
+
     def test_fast_page_columns_use_content_height(self):
         css = Path("frontend/dist/assets/sd-trainer-ui-polish.css").read_text(encoding="utf-8")
         self.assertIn(

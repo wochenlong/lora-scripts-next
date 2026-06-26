@@ -10,6 +10,8 @@ ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / "frontend/dist"
 ASSETS = DIST / "assets"
 APP_JS = ASSETS / "app.547295de.js"
+APP_JS_CACHE_KEY = "20260626-configimport1"
+APP_JS_MODULE = f"./app.547295de.js?v={APP_JS_CACHE_KEY}"
 
 SOURCE_HTML = DIST / "lora/sd3.html"
 TARGET_HTML = DIST / "lora/anima-fast.html"
@@ -107,7 +109,7 @@ def write_page_chunks() -> None:
     credit_json = json.dumps(FAST_CREDIT_HTML)
     progress_json = json.dumps(FAST_PROGRESS_HTML)
     page = (
-        'import{_ as s,o as t,c as o,a as e,b as a}from"./app.547295de.js";'
+        f'import{{_ as s,o as t,c as o,a as e,b as a}}from"{APP_JS_MODULE}";'
         "const _={},"
         'c=e("h1",{id:"anima-fast-lora",tabindex:"-1"},['
         'e("a",{class:"header-anchor",href:"#anima-fast-lora","aria-hidden":"true"},"#"),'

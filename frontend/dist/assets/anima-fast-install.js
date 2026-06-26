@@ -60,7 +60,13 @@
       const t = (b.textContent || "").trim();
       if (
         t === "开始训练" ||
-        t === "Start training"
+        t === "✨加载训练预设✨" ||
+        t === "导入配置文件" ||
+        t === "保存参数" ||
+        t === "Start training" ||
+        t === "Load training preset" ||
+        t === "Import config" ||
+        t === "Save parameters"
       ) {
         b.disabled = kill || !ready;
         b.setAttribute("aria-disabled", b.disabled ? "true" : "false");
@@ -423,7 +429,6 @@
   }
 
   function scheduleStatus() {
-    if (!isFastPage()) return;
     if (scheduled) return;
     scheduled = true;
     setTimeout(function () {
@@ -431,6 +436,7 @@
       const pathChanged = observedPath !== location.pathname;
       observedPath = location.pathname;
       markPage();
+      if (!isFastPage()) return;
       initGuideToggle();
       ensureSidebarFastLink();
       initCompileModeGuard();
