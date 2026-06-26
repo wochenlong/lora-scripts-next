@@ -63,7 +63,10 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertIn("/lora/anima-fast.html", app)
         self.assertIn('"text":"Fast 模式","link":"/lora/anima-fast.md"', app)
         self.assertIn("anima-lora-fast", data.read_text(encoding="utf-8"))
-        self.assertIn("data-anima-fast-install", component.read_text(encoding="utf-8"))
+        component_text = component.read_text(encoding="utf-8")
+        self.assertIn("data-anima-fast-install", component_text)
+        self.assertIn('from"./app.547295de.js?v=20260626-configimport1"', component_text)
+        self.assertNotIn('from"./app.547295de.js";', component_text)
         self.assertIn("anima-fast-dataset-guide", page.read_text(encoding="utf-8"))
         self.assertIn("data-anima-fast-guide-toggle", page.read_text(encoding="utf-8"))
         self.assertIn("sorryhyun/anima_lora", page.read_text(encoding="utf-8"))
@@ -105,20 +108,16 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
             self.assertIn(expected, text, path)
             self.assertNotIn("max-height:260px", text, path)
 
-    def test_fast_page_component_imports_versioned_app_module(self):
-        component = Path("frontend/dist/assets/anima-fast.html.page.js").read_text(encoding="utf-8")
-        self.assertIn('from"./app.547295de.js?v=20260626-configimport1"', component)
-        self.assertNotIn('from"./app.547295de.js";', component)
-
-    def test_fast_page_columns_use_content_height(self):
+    def test_fast_page_uses_viewport_split_layout(self):
         css = Path("frontend/dist/assets/sd-trainer-ui-polish.css").read_text(encoding="utf-8")
         self.assertIn(
             "body.anima-fast-page .theme-container.no-navbar .example-container",
             css,
         )
-        self.assertIn("align-items: flex-start", css)
-        self.assertIn("height: auto", css)
-        self.assertIn("min-height: 100vh", css)
+        self.assertIn("height: 100vh", css)
+        self.assertIn("min-height: 0", css)
+        self.assertNotIn("body.anima-fast-page .theme-container.no-navbar .example-container {\n  height: auto;", css)
+        self.assertIn("max-height: min(42vh, 360px)", css)
 
     def test_frontend_dist_uses_project_version_cache_bust(self):
         version = Path("VERSION").read_text(encoding="utf-8").strip()

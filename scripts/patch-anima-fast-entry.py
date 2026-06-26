@@ -277,23 +277,33 @@ def _fast_ui_css_block() -> str:
 }}
 
 body.anima-fast-page .theme-container.no-navbar .example-container {{
-  height: auto;
-  min-height: 100vh;
-  align-items: flex-start;
+  height: 100vh;
+  min-height: 0;
+  align-items: stretch;
 }}
 
 body.anima-fast-page .example-container > .schema-container,
 body.anima-fast-page .example-container > .right-container {{
-  align-self: flex-start;
+  min-height: 0;
+  overflow: hidden;
 }}
 
 body.anima-fast-page .example-container > .right-container > section:first-of-type {{
   flex: 0 0 auto;
+  max-height: min(42vh, 360px);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}}
+
+body.anima-fast-page .example-container > .right-container > section:first-of-type .el-scrollbar {{
+  flex: 1 1 auto;
+  min-height: 0;
 }}
 
 body.anima-fast-page .example-container > .right-container > section:first-of-type .el-scrollbar,
 body.anima-fast-page .example-container > .right-container > section:first-of-type .el-scrollbar__wrap {{
-  overflow: visible !important;
+  overflow: auto !important;
   max-height: none !important;
 }}
 
