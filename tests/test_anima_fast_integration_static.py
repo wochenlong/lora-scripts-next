@@ -105,6 +105,16 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
             self.assertIn(expected, text, path)
             self.assertNotIn("max-height:260px", text, path)
 
+    def test_fast_page_columns_use_content_height(self):
+        css = Path("frontend/dist/assets/sd-trainer-ui-polish.css").read_text(encoding="utf-8")
+        self.assertIn(
+            "body.anima-fast-page .theme-container.no-navbar .example-container",
+            css,
+        )
+        self.assertIn("align-items: flex-start", css)
+        self.assertIn("height: auto", css)
+        self.assertIn("min-height: 100vh", css)
+
     def test_frontend_dist_uses_project_version_cache_bust(self):
         version = Path("VERSION").read_text(encoding="utf-8").strip()
         self.assertEqual(version, "2.8.2")

@@ -274,6 +274,17 @@ def _fast_ui_css_block() -> str:
   text-decoration: underline;
 }}
 
+body.anima-fast-page .theme-container.no-navbar .example-container {{
+  height: auto;
+  min-height: 100vh;
+  align-items: flex-start;
+}}
+
+body.anima-fast-page .example-container > .schema-container,
+body.anima-fast-page .example-container > .right-container {{
+  align-self: flex-start;
+}}
+
 body.anima-fast-page .example-container > .right-container > section:first-of-type {{
   flex: 0 0 auto;
 }}
