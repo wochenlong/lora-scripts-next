@@ -277,29 +277,24 @@ PREVIEW_PATCHES: list[tuple[str, str, str]] = [
 
 SUBMIT_FEEDBACK_PATCHES: list[tuple[str, str, str]] = [
     (
-        "remove shared const train submit notice handle",
-        "submitLoading=ref(!1),submitNotice=null,setSubmitButtonLoading=",
+        "declare train submit notice handle",
         "submitLoading=ref(!1),setSubmitButtonLoading=",
+        "submitLoading=ref(!1),submitNotice=ref(null),setSubmitButtonLoading=",
     ),
     (
-        "use function-local train submit notice handle",
-        'submitLoading.value=!0,setSubmitButtonLoading(!0),submitNotice=ElMessage({message:"任务正在提交中，请稍等",duration:0,type:"info"});try{',
-        'submitLoading.value=!0,setSubmitButtonLoading(!0);const submitNotice=ElMessage({message:"任务正在提交中，请稍等",duration:0,type:"info"});try{',
+        "persistent train submit notice",
+        'ElMessage.info({message:"正在提交训练任务...",duration:2e3});try{',
+        '0;try{submitNotice.value=ElMessage({message:"任务正在提交中，请稍等",duration:0,type:"info"});',
     ),
     (
         "train started notice",
         'g.status=="success"?ElMessage.success("\\u8BAD\\u7EC3\\u4EFB\\u52A1\\u5DF2\\u63D0\\u4EA4\\u6210\\u529F\\uFF1A"+g.message):ElMessage.error("\\u8BAD\\u7EC3\\u4EFB\\u52A1\\u63D0\\u4EA4\\u5931\\u8D25\\uFF1A"+g.message)',
-        'g.status=="success"?(submitNotice.close(),ElMessage.success("训练已开始")):(submitNotice.close(),ElMessage.error("\\u8BAD\\u7EC3\\u4EFB\\u52A1\\u63D0\\u4EA4\\u5931\\u8D25\\uFF1A"+g.message))',
-    ),
-    (
-        "train submit error closes notice",
-        '}catch(m){ElMessage.error(v("networkError")),console.error("There was a problem with the fetch operation:",m)}',
-        '}catch(m){submitNotice.close(),ElMessage.error(v("networkError")),console.error("There was a problem with the fetch operation:",m)}',
+        'g.status=="success"?ElMessage.success("训练已开始"):ElMessage.error("\\u8BAD\\u7EC3\\u4EFB\\u52A1\\u63D0\\u4EA4\\u5931\\u8D25\\uFF1A"+g.message)',
     ),
     (
         "train submit finally closes notice",
         '}finally{submitLoading.value=!1,setSubmitButtonLoading(!1)}',
-        '}finally{submitNotice.close(),submitLoading.value=!1,setSubmitButtonLoading(!1)}',
+        '}finally{submitNotice.value&&submitNotice.value.close(),submitNotice.value=null,submitLoading.value=!1,setSubmitButtonLoading(!1)}',
     ),
 ]
 
@@ -314,19 +309,40 @@ def _replace_once(text: str, label: str, old: str, new: str) -> str:
 
 def main() -> None:
     text = LAYOUT.read_text(encoding="utf-8")
-    # Normalize the pre-v2.9.0 short notice before applying the fixed persistent
-    # notice rule. The complete anchor includes the preceding comma expression,
-    # so the local const starts a valid statement instead of joining that chain.
+    # Repair previously generated submit-feedback variants before applying rules.
     text = text.replace(
-        'submitLoading.value=!0,setSubmitButtonLoading(!0),ElMessage.info({message:"正在提交训练任务...",duration:2e3});try{',
-        'submitLoading.value=!0,setSubmitButtonLoading(!0),submitNotice=ElMessage({message:"任务正在提交中，请稍等",duration:0,type:"info"});try{',
+        "const submitNotice=ElMessage(",
+        "submitNotice=ElMessage(",
         1,
     )
-    # Normalize the short-lived invalid syntax variant without touching the
-    # correct function-local `;const submitNotice` form.
     text = text.replace(
-        ",const submitNotice=ElMessage(",
-        ",submitNotice=ElMessage(",
+        "submitLoading=ref(!1),submitNotice=null,setSubmitButtonLoading=",
+        "submitLoading=ref(!1),submitNotice=ref(null),setSubmitButtonLoading=",
+        1,
+    )
+    text = text.replace(
+        'submitNotice=ElMessage({message:"任务正在提交中，请稍等",duration:0,type:"info"});try{',
+        'try{submitNotice.value=ElMessage({message:"任务正在提交中，请稍等",duration:0,type:"info"});',
+        1,
+    )
+    text = text.replace(
+        ',try{submitNotice.value=ElMessage(',
+        ',0;try{submitNotice.value=ElMessage(',
+        1,
+    )
+    text = text.replace(
+        'g.status=="success"?(submitNotice.close(),ElMessage.success("训练已开始")):(submitNotice.close(),ElMessage.error("\\u8BAD\\u7EC3\\u4EFB\\u52A1\\u63D0\\u4EA4\\u5931\\u8D25\\uFF1A"+g.message))',
+        'g.status=="success"?ElMessage.success("训练已开始"):ElMessage.error("\\u8BAD\\u7EC3\\u4EFB\\u52A1\\u63D0\\u4EA4\\u5931\\u8D25\\uFF1A"+g.message)',
+        1,
+    )
+    text = text.replace(
+        '}catch(m){submitNotice.close(),ElMessage.error(v("networkError")),console.error("There was a problem with the fetch operation:",m)}',
+        '}catch(m){ElMessage.error(v("networkError")),console.error("There was a problem with the fetch operation:",m)}',
+        1,
+    )
+    text = text.replace(
+        '}finally{submitNotice.close(),submitLoading.value=!1,setSubmitButtonLoading(!1)}',
+        '}finally{submitNotice.value&&submitNotice.value.close(),submitNotice.value=null,submitLoading.value=!1,setSubmitButtonLoading(!1)}',
         1,
     )
     already = HELPER_MARKER in text
