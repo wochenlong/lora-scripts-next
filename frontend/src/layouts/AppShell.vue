@@ -12,7 +12,7 @@ const appStore = useAppStore()
 const { version } = storeToRefs(appStore)
 const groups = [
   { title: "训练", items: [["LoRA 训练", "/lora/index.html"], ["新手模式", "/lora/basic.html"], ["专家模式", "/lora/master.html"], ["Flux LoRA", "/lora/flux.html"], ["Anima LoRA", "/lora/sd3.html"], ["Anima Fast", "/lora/anima-fast.html"], ["全量微调", "/lora/anima-finetune.html"]] },
-  { title: "工具与调试", items: [["数据集打标", "/tagger.html"], ["标签编辑", "/native-tageditor.html"], ["TensorBoard", "/tensorboard.html"], ["训练任务", "/task.html"], ["LoRA 脚本工具", "/lora/tools.html"]] },
+  { title: "工具与调试", items: [["数据集打标", "/tagger.html"], ["标签编辑", "/native-tageditor.html"], ["TensorBoard", "/tensorboard.html"], ["训练监控", "/train-monitor", true], ["训练任务", "/task.html"], ["LoRA 脚本工具", "/lora/tools.html"]] },
   { title: "帮助", items: [["新手上路", "/help/guide.html"], ["训练 UI 设置", "/other/settings.html"], ["更新日志", "/other/changelog.html"], ["关于", "/other/about.html"]] },
 ] as const
 const currentPath = computed(() => route.path)
@@ -40,7 +40,10 @@ function toggleTheme() {
       <nav class="navigation" aria-label="主导航">
         <section v-for="group in groups" :key="group.title" class="nav-group">
           <h2>{{ group.title }}</h2>
-          <RouterLink v-for="([label, path], index) in group.items" :key="path" :to="path" class="nav-link" :class="{ active: currentPath === path, nested: index > 0 && group.title === '训练' }" @click="mobileOpen = false">{{ label }}</RouterLink>
+          <template v-for="([label, path, external], index) in group.items" :key="path">
+            <a v-if="external" :href="path" class="nav-link" @click="mobileOpen = false">{{ label }}</a>
+            <RouterLink v-else :to="path" class="nav-link" :class="{ active: currentPath === path, nested: index > 0 && group.title === '训练' }" @click="mobileOpen = false">{{ label }}</RouterLink>
+          </template>
         </section>
       </nav>
       <footer class="sidebar-footer">
