@@ -181,19 +181,20 @@ def launch():
     from mikazuki.update_check import local_version
     log.info(f"SD-Trainer Version: {local_version()}")
 
+    if args.listen:
+        args.host = "0.0.0.0"
+        args.tensorboard_host = "0.0.0.0"
+
     os.environ["MIKAZUKI_HOST"] = args.host
     os.environ["MIKAZUKI_PORT"] = str(args.port)
     os.environ["MIKAZUKI_TENSORBOARD_HOST"] = args.tensorboard_host
     os.environ["MIKAZUKI_TENSORBOARD_PORT"] = str(args.tensorboard_port)
+    os.environ["TRAIN_MONITOR_HOST"] = args.host
     os.environ["TRAIN_MONITOR_PORT"] = str(args.train_monitor_port)
     os.environ["MIKAZUKI_TAGEDITOR_PORT"] = str(tageditor_port)
     os.environ["MIKAZUKI_DEV"] = "1" if args.dev else "0"
     if args.browser:
         os.environ["MIKAZUKI_BROWSER"] = args.browser
-
-    if args.listen:
-        args.host = "0.0.0.0"
-        args.tensorboard_host = "0.0.0.0"
 
     if legacy_tageditor_enabled:
         run_tag_editor(tageditor_port)

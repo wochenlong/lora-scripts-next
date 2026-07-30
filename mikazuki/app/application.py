@@ -7,7 +7,7 @@ import webbrowser
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
@@ -19,7 +19,7 @@ from mikazuki.app.api import router as api_router
 # from mikazuki.app.ipc import router as ipc_router
 from mikazuki.app.proxy import router as proxy_router
 from mikazuki.utils.devices import check_torch_gpu
-from mikazuki.spa import should_fallback_to_spa
+from mikazuki.spa import should_fallback_to_spa, train_monitor_url
 
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
@@ -193,10 +193,10 @@ async def train_log_viewer():
 
 
 @app.get("/train-monitor")
-async def train_monitor_redirect():
+async def train_monitor_redirect(request: Request):
     """Open the lightweight monitor on the actual runtime port."""
     monitor_port = os.environ.get("TRAIN_MONITOR_PORT", "6008")
-    return RedirectResponse(url=f"http://127.0.0.1:{monitor_port}", status_code=302)
+    return RedirectResponse(url=train_monitor_url(str(request.url), int(monitor_port)), status_code=302)
 
 
 @app.get("/lora/sdxl.html")
