@@ -9,6 +9,7 @@ const TaggerPage = () => import("./pages/TaggerPage.vue")
 const DatasetEditorPage = () => import("./pages/DatasetEditorPage.vue")
 const AnimaFastPage = () => import("./pages/AnimaFastPage.vue")
 const TrainingPage = () => import("./pages/TrainingPage.vue")
+const TrainingWorkbenchPage = () => import("./pages/TrainingWorkbenchPage.vue")
 const TrainingIndexPage = () => import("./pages/TrainingIndexPage.vue")
 const GuidePage = () => import("./pages/GuidePage.vue")
 const ParamsPage = () => import("./pages/ParamsPage.vue")
@@ -29,8 +30,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/", component: HomePage, meta: { title: "LoRA Scripts Next" } },
   {
     path: "/training",
-    component: TrainingPage,
-    props: { title: "Anima LoRA 训练 专家模式", area: "Anima LoRA", schemaName: "sd3-lora" },
+    component: TrainingWorkbenchPage,
     meta: { title: "训练" },
   },
   { path: "/dataset", redirect: "/dataset/editor" },
