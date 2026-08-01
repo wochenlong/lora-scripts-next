@@ -1,4 +1,6 @@
 import { createI18n } from "vue-i18n"
+import epZhCN from "element-plus/es/locale/lang/zh-cn"
+import epEnUS from "element-plus/es/locale/lang/en"
 import zhCN from "./messages/zh-CN"
 import enUS from "./messages/en-US"
 
@@ -46,4 +48,10 @@ export const i18n = createI18n({
 export function setLocale(locale: AppLocale) {
   i18n.global.locale.value = locale
   setStoredLocale(locale)
+}
+
+const elementPlusLocales = { "zh-CN": epZhCN, "en-US": epEnUS } as const
+
+export function getElementPlusLocale(locale: AppLocale) {
+  return elementPlusLocales[locale] ?? epZhCN
 }

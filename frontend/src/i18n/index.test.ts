@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest"
-import { DEFAULT_LOCALE, UI_CONFIGS_KEY, getStoredLocale, i18n, setLocale, setStoredLocale } from "./index"
+import { DEFAULT_LOCALE, UI_CONFIGS_KEY, getElementPlusLocale, getStoredLocale, i18n, setLocale, setStoredLocale } from "./index"
 
 describe("i18n infrastructure", () => {
   beforeEach(() => {
@@ -37,5 +37,10 @@ describe("i18n infrastructure", () => {
   it("falls back to zh-CN for keys missing in en-US", () => {
     setLocale("en-US")
     expect(i18n.global.t("training.startHint")).toBe("配置完成后点击开始训练，右侧将显示运行状态与训练日志。")
+  })
+
+  it("maps app locales to Element Plus locale packs", () => {
+    expect(getElementPlusLocale("zh-CN").el.messagebox.confirm).toBe("确定")
+    expect(getElementPlusLocale("en-US").el.messagebox.confirm).toBe("OK")
   })
 })

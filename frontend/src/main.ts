@@ -1,8 +1,9 @@
 import { createApp } from "vue"
 import { createPinia } from "pinia"
-import { ElButton, ElDialog, ElIcon, ElInput, ElInputNumber, ElOption, ElSelect, ElSwitch, vLoading } from "element-plus"
+import { ElButton, ElConfigProvider, ElDialog, ElIcon, ElInput, ElInputNumber, ElOption, ElSelect, ElSwitch, vLoading } from "element-plus"
 import "element-plus/theme-chalk/base.css"
 import "element-plus/es/components/button/style/css"
+import "element-plus/es/components/config-provider/style/css"
 import "element-plus/es/components/dialog/style/css"
 import "element-plus/es/components/icon/style/css"
 import "element-plus/es/components/input/style/css"
@@ -23,5 +24,5 @@ import "./styles/anima-fast.css"
 import "./styles/content-pages.css"
 
 const app = createApp(App)
-for (const component of [ElButton, ElDialog, ElIcon, ElInput, ElInputNumber, ElOption, ElSelect, ElSwitch]) app.component(component.name!, component)
+for (const component of [ElButton, ElConfigProvider, ElDialog, ElIcon, ElInput, ElInputNumber, ElOption, ElSelect, ElSwitch]) app.component(component.name!, component)
 app.directive("loading", vLoading).use(createPinia()).use(router).use(i18n).mount("#app")
