@@ -152,6 +152,7 @@
 .settings-nav-link:hover{color:var(--text);background:var(--surface-soft)}
 .settings-nav-link.active{color:var(--accent);background:var(--accent-soft)}
 .settings-content{display:grid;gap:16px;min-width:0}
+.settings-content .settings-card{margin-top:0}
 .settings-content .settings-card h2{margin:0 0 14px;font-size:18px}
 .settings-content .settings-card select{margin-top:6px;width:100%;min-height:40px;padding:0 12px;color:var(--text);background:var(--surface-soft);border:1px solid var(--border);border-radius:9px}
 .settings-field{display:grid;gap:7px}
