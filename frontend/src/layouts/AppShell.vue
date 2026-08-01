@@ -1,54 +1,52 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
 import { useRoute } from "vue-router"
-import { Menu as MenuIcon, Moon, Sunny } from "@element-plus/icons-vue"
+import { useI18n } from "vue-i18n"
+import { Cpu, DataLine, FolderOpened, Menu as MenuIcon, QuestionFilled, Setting } from "@element-plus/icons-vue"
 import { storeToRefs } from "pinia"
 import { useAppStore } from "../stores/app"
 
 const route = useRoute()
+const { t } = useI18n()
 const mobileOpen = ref(false)
-const dark = ref(document.documentElement.classList.contains("dark"))
 const appStore = useAppStore()
 const { version } = storeToRefs(appStore)
-const groups = [
-  { title: "训练", items: [["LoRA 训练", "/lora/index.html"], ["新手模式", "/lora/basic.html"], ["专家模式", "/lora/master.html"], ["Flux LoRA", "/lora/flux.html"], ["Anima LoRA", "/lora/sd3.html"], ["Anima Fast", "/lora/anima-fast.html"], ["全量微调", "/lora/anima-finetune.html"]] },
-  { title: "工具与调试", items: [["数据集打标", "/tagger.html"], ["标签编辑", "/native-tageditor.html"], ["TensorBoard", "/tensorboard.html"], ["训练监控", "/train-monitor", true], ["训练任务", "/task.html"], ["LoRA 脚本工具", "/lora/tools.html"]] },
-  { title: "帮助", items: [["新手上路", "/help/guide.html"], ["训练 UI 设置", "/other/settings.html"], ["更新日志", "/other/changelog.html"], ["关于", "/other/about.html"]] },
-] as const
-const currentPath = computed(() => route.path)
-onMounted(() => appStore.loadVersion())
 
-function toggleTheme() {
-  dark.value = !dark.value
-  document.documentElement.classList.toggle("dark", dark.value)
-  localStorage.setItem("vuepress-color-scheme", dark.value ? "dark" : "light")
+const sections = [
+  { key: "training", to: "/training", icon: Cpu, match: ["/training", "/lora/", "/dreambooth/"] },
+  { key: "dataset", to: "/dataset", icon: FolderOpened, match: ["/dataset", "/tagger.html", "/native-tageditor.html", "/dataset-editor.html", "/tageditor.html"] },
+  { key: "tasks", to: "/tasks", icon: DataLine, match: ["/tasks", "/task.html", "/tensorboard.html"] },
+  { key: "settings", to: "/settings", icon: Setting, match: ["/settings", "/other/"] },
+] as const
+
+const currentPath = computed(() => route.path)
+function isActive(match: readonly string[]) {
+  return match.some((prefix) => currentPath.value.startsWith(prefix))
 }
+onMounted(() => appStore.loadVersion())
 </script>
 
 <template>
   <div class="app-shell">
     <header class="mobile-header">
       <button class="icon-button" aria-label="打开导航" @click="mobileOpen = !mobileOpen"><el-icon><MenuIcon /></el-icon></button>
-      <RouterLink class="mobile-brand" to="/">Next Trainer</RouterLink>
-      <button class="icon-button" aria-label="切换主题" @click="toggleTheme"><el-icon><Moon v-if="!dark" /><Sunny v-else /></el-icon></button>
+      <RouterLink class="mobile-brand" to="/">{{ t("app.brand") }}</RouterLink>
     </header>
     <button v-if="mobileOpen" class="sidebar-mask" aria-label="关闭导航" @click="mobileOpen = false" />
     <aside class="sidebar" :class="{ 'is-open': mobileOpen }">
       <RouterLink class="brand" to="/" @click="mobileOpen = false">
-        <span class="brand-mark">N</span><span><strong>Next Trainer</strong><small>{{ version ? `v${version}` : "Vue 3 workspace" }}</small></span>
+        <span class="brand-mark">L</span><span><strong>{{ t("app.brand") }}</strong><small>{{ version ? `v${version}` : "Vue 3 workspace" }}</small></span>
       </RouterLink>
       <nav class="navigation" aria-label="主导航">
-        <section v-for="group in groups" :key="group.title" class="nav-group">
-          <h2>{{ group.title }}</h2>
-          <template v-for="([label, path, external], index) in group.items" :key="path">
-            <a v-if="external" :href="path" class="nav-link" @click="mobileOpen = false">{{ label }}</a>
-            <RouterLink v-else :to="path" class="nav-link" :class="{ active: currentPath === path, nested: index > 0 && group.title === '训练' }" @click="mobileOpen = false">{{ label }}</RouterLink>
-          </template>
-        </section>
+        <RouterLink v-for="section in sections" :key="section.key" :to="section.to" class="nav-link" :class="{ active: isActive(section.match) }" @click="mobileOpen = false">
+          <el-icon><component :is="section.icon" /></el-icon><span>{{ t(`nav.${section.key}`) }}</span>
+        </RouterLink>
       </nav>
       <footer class="sidebar-footer">
-        <a href="https://github.com/wochenlong/lora-scripts-next" target="_blank" rel="noreferrer">GitHub</a>
-        <button class="icon-button" aria-label="切换主题" @click="toggleTheme"><el-icon><Moon v-if="!dark" /><Sunny v-else /></el-icon></button>
+        <RouterLink to="/help/guide.html" class="nav-link help-link" @click="mobileOpen = false">
+          <el-icon><QuestionFilled /></el-icon><span>{{ t("nav.help") }}</span>
+        </RouterLink>
+        <a href="https://github.com/wochenlong/lora-scripts-next" target="_blank" rel="noreferrer" class="github-link">GitHub</a>
       </footer>
     </aside>
     <main class="app-content"><RouterView /></main>

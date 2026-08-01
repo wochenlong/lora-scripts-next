@@ -26,7 +26,18 @@ const trainingRoutes = [
 ] as const
 
 const routes: RouteRecordRaw[] = [
-  { path: "/", component: HomePage, meta: { title: "Next Trainer" } },
+  { path: "/", component: HomePage, meta: { title: "LoRA Scripts Next" } },
+  {
+    path: "/training",
+    component: TrainingPage,
+    props: { title: "Anima LoRA 训练 专家模式", area: "Anima LoRA", schemaName: "sd3-lora" },
+    meta: { title: "训练" },
+  },
+  { path: "/dataset", redirect: "/dataset/editor" },
+  { path: "/dataset/editor", component: DatasetEditorPage, meta: { title: "数据集" } },
+  { path: "/dataset/tagger", component: TaggerPage, meta: { title: "数据集" } },
+  { path: "/tasks", component: TasksPage, meta: { title: "任务" } },
+  { path: "/settings", component: SettingsPage, meta: { title: "设置" } },
   {
     path: "/lora/index.html",
     component: TrainingIndexPage,
@@ -80,8 +91,8 @@ const router = createRouter({
 })
 
 router.afterEach((route) => {
-  const title = typeof route.meta.title === "string" ? route.meta.title : "Next Trainer"
-  document.title = `${title} | 训练 UI`
+  const title = typeof route.meta.title === "string" ? route.meta.title : "LoRA Scripts Next"
+  document.title = `${title} | LoRA Scripts Next`
 })
 
 export default router
