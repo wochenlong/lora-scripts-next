@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from "vue-router"
+import { i18n } from "./i18n"
 const HomePage = () => import("./pages/HomePage.vue")
 const IntegrationPage = () => import("./pages/IntegrationPage.vue")
 const NotFoundPage = () => import("./pages/NotFoundPage.vue")
@@ -16,17 +17,17 @@ const trainingQuery = (model: string, engine: string, target: string) => ({
 })
 
 const routes: RouteRecordRaw[] = [
-  { path: "/", component: HomePage, meta: { title: "LoRA Scripts Next" } },
-  { path: "/training", component: TrainingWorkbenchPage, meta: { title: "训练" } },
+  { path: "/", component: HomePage, meta: { titleKey: "app.brand" } },
+  { path: "/training", component: TrainingWorkbenchPage, meta: { titleKey: "training.title" } },
   { path: "/dataset", redirect: "/dataset/editor" },
-  { path: "/dataset/editor", component: DatasetPage, props: { tab: "editor" }, meta: { title: "数据集" } },
-  { path: "/dataset/tagger", component: DatasetPage, props: { tab: "tagger" }, meta: { title: "数据集" } },
-  { path: "/tasks", component: TasksPage, meta: { title: "任务" } },
+  { path: "/dataset/editor", component: DatasetPage, props: { tab: "editor" }, meta: { titleKey: "dataset.title" } },
+  { path: "/dataset/tagger", component: DatasetPage, props: { tab: "tagger" }, meta: { titleKey: "dataset.title" } },
+  { path: "/tasks", component: TasksPage, meta: { titleKey: "tasks.title" } },
   { path: "/settings", redirect: "/settings/ui" },
-  { path: "/settings/ui", component: SettingsContainerPage, props: { tab: "ui" }, meta: { title: "设置" } },
-  { path: "/settings/about", component: SettingsContainerPage, props: { tab: "about" }, meta: { title: "设置" } },
-  { path: "/settings/changelog", component: SettingsContainerPage, props: { tab: "changelog" }, meta: { title: "设置" } },
-  { path: "/help/guide.html", component: GuidePage, meta: { title: "新手上路" } },
+  { path: "/settings/ui", component: SettingsContainerPage, props: { tab: "ui" }, meta: { titleKey: "settings.title" } },
+  { path: "/settings/about", component: SettingsContainerPage, props: { tab: "about" }, meta: { titleKey: "settings.title" } },
+  { path: "/settings/changelog", component: SettingsContainerPage, props: { tab: "changelog" }, meta: { titleKey: "settings.title" } },
+  { path: "/help/guide.html", component: GuidePage, meta: { titleKey: "guide.title" } },
   // 旧 URL → 新 IA redirect
   { path: "/lora/index.html", redirect: "/training" },
   { path: "/lora/basic.html", redirect: () => trainingQuery("sd", "kohya", "lora") },
@@ -52,15 +53,15 @@ const routes: RouteRecordRaw[] = [
     props: { title: "TensorBoard", src: "/proxy/tensorboard/", configurable: true },
     meta: { title: "TensorBoard" },
   },
-  { path: "/lora/tools.html", component: ToolsPage, meta: { title: "LoRA 脚本工具" } },
-  { path: "/lora/params.html", component: ParamsPage, meta: { title: "训练参数调节" } },
+  { path: "/lora/tools.html", component: ToolsPage, meta: { titleKey: "tools.title" } },
+  { path: "/lora/params.html", component: ParamsPage, meta: { titleKey: "paramsPage.title" } },
   {
     path: "/tageditor.html",
     component: IntegrationPage,
-    props: { title: "旧版标签编辑器", src: "/proxy/tageditor/" },
-    meta: { title: "旧版标签编辑器" },
+    props: { titleKey: "integration.legacyTagEditor", src: "/proxy/tageditor/" },
+    meta: { titleKey: "integration.legacyTagEditor" },
   },
-  { path: "/:pathMatch(.*)*", component: NotFoundPage, meta: { title: "页面不存在" } },
+  { path: "/:pathMatch(.*)*", component: NotFoundPage, meta: { titleKey: "notFound.title" } },
 ]
 
 const router = createRouter({
@@ -70,8 +71,8 @@ const router = createRouter({
 })
 
 router.afterEach((route) => {
-  const title = typeof route.meta.title === "string" ? route.meta.title : "LoRA Scripts Next"
-  document.title = `${title} | LoRA Scripts Next`
+  const titleKey = typeof route.meta.titleKey === "string" ? route.meta.titleKey : "app.brand"
+  document.title = `${i18n.global.t(titleKey)} | ${i18n.global.t("app.brand")}`
 })
 
 export default router

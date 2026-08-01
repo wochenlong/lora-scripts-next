@@ -1,4 +1,5 @@
 import Schema from "schemastery"
+import { i18n } from "../i18n"
 import type { SchemaSource } from "../api/schemas"
 
 export type FormValue = string | number | boolean | Array<string | number> | undefined
@@ -57,7 +58,6 @@ type SchemaRecord = Schema & {
 }
 
 const SAMPLE_PROMPTS_DEFAULT = "(masterpiece, best quality:1.2), 1girl, solo, --n lowres, bad anatomy, bad hands, text, error, missing fingers, extra digit, fewer digits, cropped, worst quality, low quality, normal quality, jpeg artifacts,signature, watermark, username, blurry,  --w 512  --h 768  --l 7  --s 24  --d 1337"
-const SAMPLE_PROMPTS_DESCRIPTION = "预览图生成参数。`--n` 后方为反向提示词，`--w/--h` 为尺寸，`--l` 为 CFG Scale，`--s` 为迭代步数，`--d` 为种子。"
 
 function updateSchema<T extends Record<string, unknown>>(base: T, patch: Partial<T>, removed?: string[]) {
   const result = { ...base, ...patch }
@@ -69,7 +69,7 @@ function execute(source: string, shared?: unknown) {
   const runtimeWindow = {
     __MIKAZUKI__: {
       SAMPLE_PROMPTS_DEFAULT,
-      SAMPLE_PROMPTS_DESCRIPTION,
+      SAMPLE_PROMPTS_DESCRIPTION: i18n.global.t("schema.samplePromptsDescription"),
     },
   }
   const expression = source.trim().replace(/;\s*$/, "")
@@ -80,11 +80,11 @@ function execute(source: string, shared?: unknown) {
 export function executeSchemaSources(sources: SchemaSource[], name: string): AdaptedSchema {
   const sharedSource = sources.find((item) => item.name === "shared")
   const target = sources.find((item) => item.name === name)
-  if (!target) throw new Error(`后端未提供 Schema：${name}`)
+  if (!target) throw new Error(i18n.global.t("schema.notProvided", { name }))
 
   const shared = sharedSource ? execute(sharedSource.schema) : undefined
   const schema = execute(target.schema, shared) as SchemaRecord
-  if (typeof schema !== "function" || !schema.type) throw new Error(`Schema ${name} 未返回有效定义`)
+  if (typeof schema !== "function" || !schema.type) throw new Error(i18n.global.t("schema.invalid", { name }))
 
   return {
     name,
@@ -167,7 +167,7 @@ function buildSections(schema: SchemaRecord) {
   for (const root of roots) {
     const fields = collectFields(root)
     if (!fields.length) continue
-    const title = description(root.meta) || "高级设置"
+    const title = description(root.meta) || i18n.global.t("schema.advancedSection")
     const previous = sections.at(-1)
     if (!description(root.meta) && previous?.title === title) {
       previous.fields.push(...fields)
@@ -208,11 +208,11 @@ export function validateModel(schema: AdaptedSchema, model: FormModel) {
     if (!isFieldActive(field, model) || field.hidden) continue
     const value = model[field.key]
     if (field.required && (value === undefined || value === "" || (Array.isArray(value) && !value.length))) {
-      errors[field.key] = "此项为必填项"
+      errors[field.key] = i18n.global.t("schema.required")
     } else if (typeof value === "number" && field.min !== undefined && value < field.min) {
-      errors[field.key] = `不能小于 ${field.min}`
+      errors[field.key] = i18n.global.t("schema.tooSmall", { min: field.min })
     } else if (typeof value === "number" && field.max !== undefined && value > field.max) {
-      errors[field.key] = `不能大于 ${field.max}`
+      errors[field.key] = i18n.global.t("schema.tooLarge", { max: field.max })
     }
   }
   return errors

@@ -2,6 +2,7 @@
 import { mount } from "@vue/test-utils"
 import { describe, expect, it } from "vitest"
 import DynamicSchemaForm from "./DynamicSchemaForm.vue"
+import { i18n } from "../i18n"
 import type { AdaptedSchema } from "../schema/adapter"
 import Schema from "schemastery"
 
@@ -24,7 +25,7 @@ describe("DynamicSchemaForm", () => {
   it("renders active visible fields and propagates updates", async () => {
     const wrapper = mount(DynamicSchemaForm, {
       props: { schema, modelValue: { mode: "basic" }, errors: {} },
-      global: { stubs: { SchemaField: { props: ["field"], template: "<button @click=\"$emit('update:modelValue', 12)\">{{ field.key }}</button>" } } },
+      global: { plugins: [i18n], stubs: { SchemaField: { props: ["field"], template: "<button @click=\"$emit('update:modelValue', 12)\">{{ field.key }}</button>" } } },
     })
 
     expect(wrapper.text()).toContain("mode")

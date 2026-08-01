@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { computed } from "vue"
-const props = defineProps<{ title: string; src: string; configurable?: boolean }>()
+import { useI18n } from "vue-i18n"
+
+const props = defineProps<{ title?: string; titleKey?: string; src: string; configurable?: boolean }>()
+const { t } = useI18n()
+const displayTitle = computed(() => props.titleKey ? t(props.titleKey) : props.title ?? "")
 const resolvedSrc = computed(() => {
   if (!props.configurable) return props.src
   try {
@@ -11,5 +15,5 @@ const resolvedSrc = computed(() => {
 </script>
 
 <template>
-  <div class="integration-page"><header><div><span class="eyebrow">INTEGRATED SERVICE</span><h1>{{ title }}</h1></div><a :href="resolvedSrc" target="_blank" rel="noreferrer">在新窗口打开</a></header><iframe :title="title" :src="resolvedSrc" /></div>
+  <div class="integration-page"><header><div><span class="eyebrow">INTEGRATED SERVICE</span><h1>{{ displayTitle }}</h1></div><a :href="resolvedSrc" target="_blank" rel="noreferrer">{{ t("integration.openExternal") }}</a></header><iframe :title="displayTitle" :src="resolvedSrc" /></div>
 </template>

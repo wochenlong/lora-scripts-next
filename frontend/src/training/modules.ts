@@ -29,14 +29,14 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
   { model: "lumina", engine: "kohya", target: "lora", schemaName: "lumina2-lora" },
 ]
 
-export const SCHEMA_META: Record<string, { title: string; area: string }> = {
-  "sd3-lora": { title: "Anima LoRA", area: "Anima DiT · Kohya-ss · LoRA" },
-  "anima-lora-fast": { title: "Anima LoRA Fast", area: "Anima DiT · Anima Fast · LoRA" },
-  "anima-finetune": { title: "Anima 全量微调", area: "Anima DiT · Kohya-ss · 全量微调" },
-  "lora-master": { title: "SD / SDXL LoRA", area: "SD / SDXL · Kohya-ss · LoRA" },
-  dreambooth: { title: "SD / SDXL 全量微调", area: "SD / SDXL · Kohya-ss · 全量微调" },
-  "flux-lora": { title: "Flux LoRA", area: "Flux · Kohya-ss · LoRA" },
-  "lumina2-lora": { title: "Lumina 2 LoRA", area: "Lumina 2 · Kohya-ss · LoRA" },
+export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> = {
+  "sd3-lora": { titleKey: "training.schemas.sd3-lora.title", areaKey: "training.schemas.sd3-lora.area" },
+  "anima-lora-fast": { titleKey: "training.schemas.anima-lora-fast.title", areaKey: "training.schemas.anima-lora-fast.area" },
+  "anima-finetune": { titleKey: "training.schemas.anima-finetune.title", areaKey: "training.schemas.anima-finetune.area" },
+  "lora-master": { titleKey: "training.schemas.lora-master.title", areaKey: "training.schemas.lora-master.area" },
+  dreambooth: { titleKey: "training.schemas.dreambooth.title", areaKey: "training.schemas.dreambooth.area" },
+  "flux-lora": { titleKey: "training.schemas.flux-lora.title", areaKey: "training.schemas.flux-lora.area" },
+  "lumina2-lora": { titleKey: "training.schemas.lumina2-lora.title", areaKey: "training.schemas.lumina2-lora.area" },
 }
 
 export function resolveModule(model: TrainingModel, engine: TrainingEngine, target: TrainingTarget): TrainingModule | undefined {

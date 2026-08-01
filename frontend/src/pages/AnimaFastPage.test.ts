@@ -3,6 +3,7 @@ import { flushPromises, mount } from "@vue/test-utils"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import AnimaFastPage from "./AnimaFastPage.vue"
 import { animaFastApi, type AnimaFastStatus } from "../api/animaFast"
+import { i18n } from "../i18n"
 
 vi.mock("../api/animaFast", () => ({
   animaFastApi: {
@@ -27,7 +28,7 @@ describe("AnimaFastPage polling", () => {
     const setInterval = vi.spyOn(window, "setInterval")
 
     const wrapper = mount(AnimaFastPage, {
-      global: { stubs: { TrainingPage: true } },
+      global: { plugins: [i18n], stubs: { TrainingPage: true } },
     })
     await flushPromises()
 
@@ -45,7 +46,7 @@ describe("AnimaFastPage polling", () => {
     const clearInterval = vi.spyOn(window, "clearInterval")
 
     const wrapper = mount(AnimaFastPage, {
-      global: { stubs: { TrainingPage: true } },
+      global: { plugins: [i18n], stubs: { TrainingPage: true } },
     })
     await flushPromises()
     poll?.()

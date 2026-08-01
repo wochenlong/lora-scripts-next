@@ -1,6 +1,7 @@
 import { computed, ref } from "vue"
 import { defineStore } from "pinia"
 import { tasksApi, type TrainingTask } from "../api/tasks"
+import { i18n } from "../i18n"
 
 export const useTasksStore = defineStore("tasks", () => {
   const tasks = ref<TrainingTask[]>([])
@@ -15,7 +16,7 @@ export const useTasksStore = defineStore("tasks", () => {
       tasks.value = await tasksApi.list()
       error.value = ""
     } catch (caught) {
-      error.value = caught instanceof Error ? caught.message : "任务列表加载失败"
+      error.value = caught instanceof Error ? caught.message : i18n.global.t("tasks.listLoadFail")
     } finally {
       loading.value = false
     }

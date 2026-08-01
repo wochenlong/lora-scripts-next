@@ -1,3 +1,5 @@
+import { i18n } from "../i18n"
+
 export type ApiStatus = "success" | "fail" | "pending" | "error"
 
 export interface ApiResponse<T> {
@@ -34,27 +36,27 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
       },
     })
   } catch (error) {
-    throw new ApiError(error instanceof Error ? error.message : "无法连接到后端", "network")
+    throw new ApiError(error instanceof Error ? error.message : i18n.global.t("api.network"), "network")
   }
 
   let payload: ApiResponse<T>
   try {
     payload = await response.json() as ApiResponse<T>
   } catch {
-    throw new ApiError(`后端返回了无法解析的响应（HTTP ${response.status}）`, "http")
+    throw new ApiError(i18n.global.t("api.unparseable", { status: response.status }), "http")
   }
 
   if (!response.ok) {
-    throw new ApiError(payload.message || `请求失败（HTTP ${response.status}）`, "http", payload)
+    throw new ApiError(payload.message || i18n.global.t("api.httpFail", { status: response.status }), "http", payload)
   }
   if (payload.status !== "success" && !(allowPending && payload.status === "pending")) {
-    throw new ApiError(payload.message || "请求失败", payload.status, payload)
+    throw new ApiError(payload.message || i18n.global.t("api.fail"), payload.status, payload)
   }
   return payload
 }
 
 export async function apiData<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const response = await apiRequest<T>(path, options)
-  if (response.data == null) throw new ApiError("后端响应缺少 data", response.status, response)
+  if (response.data == null) throw new ApiError(i18n.global.t("api.missingData"), response.status, response)
   return response.data
 }

@@ -59,7 +59,11 @@ function initFromQuery() {
 initFromQuery()
 
 const resolved = computed(() => resolveModule(model.value, engine.value, target.value))
-const schemaMeta = computed(() => resolved.value ? SCHEMA_META[resolved.value.schemaName] : undefined)
+const schemaMeta = computed(() => {
+  if (!resolved.value) return undefined
+  const meta = SCHEMA_META[resolved.value.schemaName]
+  return { title: t(meta.titleKey), area: t(meta.areaKey) }
+})
 
 watch([model, engine, target], () => {
   if (!isEngineSupported(model.value, engine.value)) {

@@ -29,15 +29,15 @@ onMounted(() => appStore.loadVersion())
 <template>
   <div class="app-shell">
     <header class="mobile-header">
-      <button class="icon-button" aria-label="打开导航" @click="mobileOpen = !mobileOpen"><el-icon><MenuIcon /></el-icon></button>
+      <button class="icon-button" :aria-label="t('nav.openNav')" @click="mobileOpen = !mobileOpen"><el-icon><MenuIcon /></el-icon></button>
       <RouterLink class="mobile-brand" to="/">{{ t("app.brand") }}</RouterLink>
     </header>
-    <button v-if="mobileOpen" class="sidebar-mask" aria-label="关闭导航" @click="mobileOpen = false" />
+    <button v-if="mobileOpen" class="sidebar-mask" :aria-label="t('nav.closeNav')" @click="mobileOpen = false" />
     <aside class="sidebar" :class="{ 'is-open': mobileOpen }">
       <RouterLink class="brand" to="/" @click="mobileOpen = false">
         <span class="brand-mark">L</span><span><strong>{{ t("app.brand") }}</strong><small>{{ version ? `v${version}` : "Vue 3 workspace" }}</small></span>
       </RouterLink>
-      <nav class="navigation" aria-label="主导航">
+      <nav class="navigation" :aria-label="t('nav.mainAria')">
         <RouterLink v-for="section in sections" :key="section.key" :to="section.to" class="nav-link" :class="{ active: isActive(section.match) }" @click="mobileOpen = false">
           <el-icon><component :is="section.icon" /></el-icon><span>{{ t(`nav.${section.key}`) }}</span>
         </RouterLink>

@@ -1,4 +1,5 @@
 import { cloneFormModel, type FormModel, type FormValue } from "../schema/adapter"
+import { i18n } from "../i18n"
 import { parse } from "smol-toml"
 
 const FLOAT_PARAMS = ["learning_rate", "unet_lr", "text_encoder_lr", "learning_rate_te", "learning_rate_te1", "learning_rate_te2", "sigmoid_scale", "guidance_scale"]
@@ -133,11 +134,11 @@ export function checkTrainingConfig(config: FormModel): ParamDiagnostics {
   const warnings: string[] = []
   const errors: string[] = []
   const optimizer = String(config.optimizer_type || "")
-  if (optimizer.startsWith("DAdapt") && config.lr_scheduler !== "constant") warnings.push("DAdaptation 系列优化器建议将 lr_scheduler 设置为 constant")
-  if (optimizer.toLowerCase().startsWith("prodigy") && (config.unet_lr !== 1 || config.text_encoder_lr !== 1)) warnings.push("Prodigy 建议将 unet_lr、text_encoder_lr 设置为 1")
-  if (config.network_module === "networks.oft" && config.model_train_type !== "sdxl-lora") errors.push("OFT 当前仅对 SDXL 可用")
+  if (optimizer.startsWith("DAdapt") && config.lr_scheduler !== "constant") warnings.push(i18n.global.t("training.diagnostics.dadaptScheduler"))
+  if (optimizer.toLowerCase().startsWith("prodigy") && (config.unet_lr !== 1 || config.text_encoder_lr !== 1)) warnings.push(i18n.global.t("training.diagnostics.prodigyLr"))
+  if (config.network_module === "networks.oft" && config.model_train_type !== "sdxl-lora") errors.push(i18n.global.t("training.diagnostics.oftSdxl"))
   for (const [left, right] of [["cache_text_encoder_outputs", "shuffle_caption"], ["noise_offset", "multires_noise_iterations"], ["cache_latents", "color_aug"], ["cache_latents", "random_crop"]]) {
-    if (config[left] && config[right]) errors.push(`参数 ${left} 与 ${right} 冲突，请只启用其中一个`)
+    if (config[left] && config[right]) errors.push(i18n.global.t("training.diagnostics.conflict", { left, right }))
   }
   return { warnings, errors }
 }
