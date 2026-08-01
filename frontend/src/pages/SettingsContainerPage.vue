@@ -7,7 +7,7 @@ import AboutPage from "./AboutPage.vue"
 import ChangelogPage from "./ChangelogPage.vue"
 import { SUPPORTED_LOCALES, UI_CONFIGS_KEY, getStoredLocale, setLocale, type AppLocale } from "../i18n"
 import { getTheme, setTheme, type ThemeName } from "../utils/theme"
-import { releases } from "../data/releases"
+import { releases } from "../content/releases"
 import { useAppStore } from "../stores/app"
 
 const props = defineProps<{ tab: "ui" | "about" | "changelog" }>()

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { releases } from "../data/releases"
+import { releases } from "../content/releases"
 </script>
 
 <template>
