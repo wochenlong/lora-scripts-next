@@ -2,6 +2,7 @@
 import { computed, onMounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { datasetApi, type ChangedItem, type DatasetHistory, type DatasetItem } from "../api/dataset"
+import { addTagToCaption, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 
 const QUICK_TAGS_KEY = "dataset-editor-quick-tags"
 const PAGE_SIZE_KEY = "dataset-editor-page-size"
@@ -26,6 +27,7 @@ const underscoreToSpace = ref(false)
 const stripEscapeChars = ref(false)
 const loading = ref(false)
 const quickTag = ref("")
+const newCaptionTag = ref("")
 const quickTags = ref<string[]>([])
 const page = ref(1)
 const pageSize = ref(Number(localStorage.getItem(PAGE_SIZE_KEY)) || 48)
@@ -41,6 +43,17 @@ const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.va
 const current = computed(() => items.value.find((item) => item.relative_path === selected.value))
 const targets = computed(() => selectedPaths.value.size ? items.value.filter((item) => selectedPaths.value.has(item.relative_path)) : filtered.value)
 const popularTags = computed(() => tags.value.slice(0, 24))
+const captionTags = computed(() => splitCaptionTags(caption.value))
+
+function addCaptionTag() {
+  const next = addTagToCaption(caption.value, newCaptionTag.value)
+  if (next !== caption.value) caption.value = next
+  newCaptionTag.value = ""
+}
+
+function removeCaptionTag(tag: string) {
+  caption.value = removeTagFromCaption(caption.value, tag)
+}
 
 function choose(item: DatasetItem, event?: MouseEvent) {
   selected.value = item.relative_path
@@ -181,7 +194,7 @@ onMounted(() => {
       <div class="image-grid"><button v-for="item in paged" :key="item.relative_path" :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }" @click="choose(item, $event)"><i v-if="selectedPaths.has(item.relative_path)">✓</i><img :src="item.image_url" :alt="item.name" loading="lazy"><span>{{ item.name }}</span></button></div>
       <footer class="dataset-pager"><button :disabled="page === 1" @click="page = 1">首页</button><button :disabled="page === 1" @click="page--">上一页</button><span>{{ page }} / {{ pageCount }}</span><button :disabled="page === pageCount" @click="page++">下一页</button><button :disabled="page === pageCount" @click="page = pageCount">末页</button><select v-model.number="pageSize"><option v-for="size in [24,48,96,192]" :key="size" :value="size">{{ size }} / 页</option></select></footer>
     </main>
-    <aside class="caption-panel"><div v-if="current"><img :src="current.image_url" :alt="current.name"><strong>{{ current.relative_path }}</strong><textarea v-model="caption" rows="10"></textarea><div class="caption-tags"><button v-for="tag in current.tags" :key="tag" @click="appendQuickTag(tag)">{{ tag }}</button></div><button class="primary-action" @click="save">保存 Caption</button></div><p v-else>扫描并选择图片后开始编辑。</p></aside>
+    <aside class="caption-panel"><div v-if="current"><img :src="current.image_url" :alt="current.name"><strong>{{ current.relative_path }}</strong><div class="caption-editor"><textarea v-model="caption" rows="10"></textarea><small class="caption-count">{{ caption.length }} 字</small></div><div class="caption-chips"><span v-for="tag in captionTags" :key="tag" class="chip">{{ tag }}<button :aria-label="`删除标签 ${tag}`" @click="removeCaptionTag(tag)">×</button></span><span class="chip-add"><input v-model="newCaptionTag" placeholder="添加标签" @keyup.enter="addCaptionTag"><button @click="addCaptionTag">添加</button></span></div><button class="primary-action" @click="save">保存 Caption</button></div><p v-else>扫描并选择图片后开始编辑。</p></aside>
   </div>
   <el-dialog v-model="historyOpen" title="会话编辑历史" width="min(820px, 94vw)"><div class="dataset-history"><article v-for="change in sessionHistory.changes" :key="`${change.label}-${change.items[0]?.image}`"><header><strong>{{ change.label }}</strong><span>{{ change.count }} 张</span></header><details><summary>查看明细</summary><div v-for="item in change.items" :key="item.image"><code>{{ item.image }}</code><del>{{ item.before || '（无 caption）' }}</del><ins>{{ item.after || '（无 caption）' }}</ins></div></details></article><p v-if="!sessionHistory.changes.length">当前会话暂无编辑记录</p></div></el-dialog>
 </template>

@@ -87,3 +87,21 @@
 .preview-actions button{padding:4px 9px;color:var(--text-soft);background:var(--surface-soft);border:1px solid var(--border);border-radius:6px;font-size:11px;cursor:pointer}
 .preview-actions button:hover{color:var(--accent);border-color:var(--accent)}
 @media(max-width:900px){.workbench-selector{grid-template-columns:1fr}.workbench-header{flex-direction:column}}
+
+/* IA v1 dataset section */
+.dataset-section{min-height:100vh;background:var(--bg)}
+.dataset-section-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px clamp(20px,3vw,40px);background:var(--surface);border-bottom:1px solid var(--border)}
+.dataset-section-header h1{margin:0;font-size:22px;letter-spacing:-.01em}
+.dataset-switch{min-width:260px}
+.segmented a{flex:1;display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 12px;color:var(--text-soft);font-size:12px;font-weight:600;transition:.15s ease}
+.segmented a.active{color:var(--accent);background:var(--surface);box-shadow:var(--shadow)}
+.caption-editor{display:grid;gap:4px}
+.caption-count{justify-self:end;color:var(--text-faint);font-size:11px}
+.caption-chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 6px 4px 10px;color:var(--accent-dark);background:var(--accent-soft);border-radius:7px;font-size:12px}
+.chip button{display:grid;width:16px;height:16px;place-items:center;padding:0;color:inherit;background:transparent;border:0;border-radius:50%;font-size:12px;cursor:pointer}
+.chip button:hover{background:rgba(37,99,235,.18)}
+.chip-add{display:inline-flex;gap:5px}
+.chip-add input{width:90px;min-height:26px;padding:0 8px;color:var(--text);background:var(--surface-soft);border:1px solid var(--border);border-radius:7px;font-size:12px}
+.chip-add button{padding:0 10px;color:var(--accent-dark);background:var(--accent-soft);border:0;border-radius:7px;font-size:12px;cursor:pointer}
+@media(max-width:700px){.dataset-section-header{flex-direction:column;align-items:stretch}.dataset-switch{min-width:0}}

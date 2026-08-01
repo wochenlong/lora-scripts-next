@@ -6,6 +6,7 @@ const TasksPage = () => import("./pages/TasksPage.vue")
 const SettingsPage = () => import("./pages/SettingsPage.vue")
 const ToolsPage = () => import("./pages/ToolsPage.vue")
 const TaggerPage = () => import("./pages/TaggerPage.vue")
+const DatasetPage = () => import("./pages/DatasetPage.vue")
 const DatasetEditorPage = () => import("./pages/DatasetEditorPage.vue")
 const AnimaFastPage = () => import("./pages/AnimaFastPage.vue")
 const TrainingPage = () => import("./pages/TrainingPage.vue")
@@ -34,8 +35,8 @@ const routes: RouteRecordRaw[] = [
     meta: { title: "训练" },
   },
   { path: "/dataset", redirect: "/dataset/editor" },
-  { path: "/dataset/editor", component: DatasetEditorPage, meta: { title: "数据集" } },
-  { path: "/dataset/tagger", component: TaggerPage, meta: { title: "数据集" } },
+  { path: "/dataset/editor", component: DatasetPage, props: { tab: "editor" }, meta: { title: "数据集" } },
+  { path: "/dataset/tagger", component: DatasetPage, props: { tab: "tagger" }, meta: { title: "数据集" } },
   { path: "/tasks", component: TasksPage, meta: { title: "任务" } },
   { path: "/settings", component: SettingsPage, meta: { title: "设置" } },
   {
