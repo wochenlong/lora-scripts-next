@@ -4,6 +4,7 @@ const IntegrationPage = () => import("./pages/IntegrationPage.vue")
 const NotFoundPage = () => import("./pages/NotFoundPage.vue")
 const TasksPage = () => import("./pages/TasksPage.vue")
 const SettingsPage = () => import("./pages/SettingsPage.vue")
+const SettingsContainerPage = () => import("./pages/SettingsContainerPage.vue")
 const ToolsPage = () => import("./pages/ToolsPage.vue")
 const TaggerPage = () => import("./pages/TaggerPage.vue")
 const DatasetPage = () => import("./pages/DatasetPage.vue")
@@ -38,7 +39,10 @@ const routes: RouteRecordRaw[] = [
   { path: "/dataset/editor", component: DatasetPage, props: { tab: "editor" }, meta: { title: "数据集" } },
   { path: "/dataset/tagger", component: DatasetPage, props: { tab: "tagger" }, meta: { title: "数据集" } },
   { path: "/tasks", component: TasksPage, meta: { title: "任务" } },
-  { path: "/settings", component: SettingsPage, meta: { title: "设置" } },
+  { path: "/settings", redirect: "/settings/ui" },
+  { path: "/settings/ui", component: SettingsContainerPage, props: { tab: "ui" }, meta: { title: "设置" } },
+  { path: "/settings/about", component: SettingsContainerPage, props: { tab: "about" }, meta: { title: "设置" } },
+  { path: "/settings/changelog", component: SettingsContainerPage, props: { tab: "changelog" }, meta: { title: "设置" } },
   {
     path: "/lora/index.html",
     component: TrainingIndexPage,

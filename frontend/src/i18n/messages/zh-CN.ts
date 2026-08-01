@@ -104,5 +104,7 @@ export default {
       note: "LoRA 脚本工具暂未纳入 v1 信息架构，仍可通过 /lora/tools.html 直接访问。",
     },
     preview: "预览（切换左侧选项查看）",
+    aboutDesc: "LoRA Scripts Next 是一个强大、灵活且易用的本地训练工具。",
+    moreChangelog: "查看更多更新日志…",
   },
 }
