@@ -1,10 +1,16 @@
+<script setup lang="ts">
+import { useI18n } from "vue-i18n"
+
+const { t } = useI18n()
+</script>
+
 <template>
   <article class="content-page">
-    <header class="content-hero content-hero-split"><div><span class="eyebrow">GETTING STARTED</span><h1>新手上路</h1><p>从准备图片到查看训练结果，按顺序完成一次本地训练。</p></div><img src="/assets/guide-mascot.webp" alt="LoRA Scripts Next 使用指南"></header>
-    <section><h2>1. 准备数据</h2><p>准备训练图片及同名 <code>.txt</code> 标签文件。没有标签时可先使用 <RouterLink to="/dataset/tagger">数据集打标</RouterLink>，再到 <RouterLink to="/dataset/editor">标签编辑器</RouterLink>清理 Caption。</p></section>
-    <section><h2>2. 选择训练类型</h2><div class="content-cards"><div><h3>LoRA 训练</h3><p><RouterLink to="/training">训练页</RouterLink>中选择基础模型、训练引擎与训练目标：Anima DiT、Flux 或 SD / SDXL，搭配 Kohya-ss 或 Anima Fast。</p></div><div><h3>全量微调</h3><p><RouterLink to="/training?model=anima&engine=kohya&target=finetune">Anima 全量微调</RouterLink>用于 DiT 整模微调；<RouterLink to="/dreambooth/index.html">Dreambooth</RouterLink>用于 Stable Diffusion 全量训练。</p></div></div></section>
-    <section><h2>3. 填写参数并训练</h2><ol><li>选择底模、图片目录和输出目录。</li><li>选择训练预设或按需调整参数，右侧会实时生成 TOML 预览。</li><li>先执行参数校验，再点击“开始训练”并确认创建后台任务。</li></ol></section>
-    <section><h2>4. 查看进度</h2><p>提交后可打开训练日志，也可进入 <RouterLink to="/tasks">训练任务</RouterLink>终止任务；指标与曲线在 <RouterLink to="/tensorboard.html">TensorBoard</RouterLink> 中查看。</p></section>
-    <section><h2>从秋叶版迁移</h2><ul><li>训练类型现在按 LoRA 与全量微调组织，旧 URL 仍保持兼容。</li><li>Anima 标准、Fast 和 Finetune 使用各自独立的 Schema 与约束。</li><li>历史配置与自动草稿继续使用旧浏览器 storage key。</li></ul></section>
+    <header class="content-hero content-hero-split"><div><span class="eyebrow">GETTING STARTED</span><h1>{{ t("guide.title") }}</h1><p>{{ t("guide.subtitle") }}</p></div><img src="/assets/guide-mascot.webp" :alt="t('guide.mascotAlt')"></header>
+    <section><h2>{{ t("guide.step1Title") }}</h2><i18n-t keypath="guide.step1" tag="p" scope="global"><template #ext><code>.txt</code></template><template #tagger><RouterLink to="/dataset/tagger">{{ t("guide.link.tagger") }}</RouterLink></template><template #editor><RouterLink to="/dataset/editor">{{ t("guide.link.editor") }}</RouterLink></template></i18n-t></section>
+    <section><h2>{{ t("guide.step2Title") }}</h2><div class="content-cards"><div><h3>{{ t("guide.loraTitle") }}</h3><i18n-t keypath="guide.loraDesc" tag="p" scope="global"><template #page><RouterLink to="/training">{{ t("guide.link.trainingPage") }}</RouterLink></template></i18n-t></div><div><h3>{{ t("guide.finetuneTitle") }}</h3><i18n-t keypath="guide.finetuneDesc" tag="p" scope="global"><template #anima><RouterLink to="/training?model=anima&engine=kohya&target=finetune">{{ t("guide.link.animaFinetune") }}</RouterLink></template><template #dreambooth><RouterLink to="/dreambooth/index.html">Dreambooth</RouterLink></template></i18n-t></div></div></section>
+    <section><h2>{{ t("guide.step3Title") }}</h2><ol><li>{{ t("guide.step3a") }}</li><li>{{ t("guide.step3b") }}</li><li>{{ t("guide.step3c") }}</li></ol></section>
+    <section><h2>{{ t("guide.step4Title") }}</h2><i18n-t keypath="guide.step4" tag="p" scope="global"><template #tasks><RouterLink to="/tasks">{{ t("guide.link.tasks") }}</RouterLink></template><template #tensorboard><RouterLink to="/tensorboard.html">TensorBoard</RouterLink></template></i18n-t></section>
+    <section><h2>{{ t("guide.migrateTitle") }}</h2><ul><li>{{ t("guide.migrate1") }}</li><li>{{ t("guide.migrate2") }}</li><li>{{ t("guide.migrate3") }}</li></ul></section>
   </article>
 </template>
