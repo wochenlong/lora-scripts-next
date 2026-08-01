@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { reactive, ref } from "vue"
 import { ElMessage } from "element-plus"
+import { useI18n } from "vue-i18n"
 import { AVAILABLE_SCRIPTS, toolsApi, type ToolScript } from "../api/tools"
 
+const { t } = useI18n()
 const script = ref<ToolScript>(AVAILABLE_SCRIPTS[0])
 const rows = reactive([{ key: "", value: "" }])
 const submitting = ref(false)
@@ -21,18 +23,18 @@ async function run() {
     if (key) args[key] = parseValue(row.value.trim())
   }
   submitting.value = true
-  try { await toolsApi.run(script.value, args); ElMessage.success("工具任务已提交") }
-  catch (error) { ElMessage.error(error instanceof Error ? error.message : "任务提交失败") }
+  try { await toolsApi.run(script.value, args); ElMessage.success(t("tools.msg.submitted")) }
+  catch (error) { ElMessage.error(error instanceof Error ? error.message : t("tools.msg.submitFail")) }
   finally { submitting.value = false }
 }
 </script>
 
 <template>
-  <div class="simple-page"><header><span class="eyebrow">SCRIPT TOOLS</span><h1>LoRA 脚本工具</h1><p>运行后端白名单中的模型与 LoRA 处理脚本。任务在后端后台执行。</p></header>
-    <section class="settings-card"><label for="tool-script">脚本</label><select id="tool-script" v-model="script"><option v-for="name in AVAILABLE_SCRIPTS" :key="name" :value="name">{{ name }}</option></select>
-      <div class="argument-heading"><strong>参数</strong><button @click="addRow">添加参数</button></div>
-      <div v-for="(row, index) in rows" :key="index" class="argument-row"><input v-model="row.key" placeholder="参数名，例如 model_org" /><input v-model="row.value" placeholder="参数值" /><button aria-label="删除参数" @click="removeRow(index)">×</button></div>
-      <div class="form-actions"><button class="primary-action" :disabled="submitting" @click="run">{{ submitting ? "提交中…" : "启动工具" }}</button></div>
+  <div class="simple-page"><header><span class="eyebrow">SCRIPT TOOLS</span><h1>{{ t("tools.title") }}</h1><p>{{ t("tools.subtitle") }}</p></header>
+    <section class="settings-card"><label for="tool-script">{{ t("tools.scriptLabel") }}</label><select id="tool-script" v-model="script"><option v-for="name in AVAILABLE_SCRIPTS" :key="name" :value="name">{{ name }}</option></select>
+      <div class="argument-heading"><strong>{{ t("tools.argsTitle") }}</strong><button @click="addRow">{{ t("tools.addArg") }}</button></div>
+      <div v-for="(row, index) in rows" :key="index" class="argument-row"><input v-model="row.key" :placeholder="t('tools.argKeyPlaceholder')" /><input v-model="row.value" :placeholder="t('tools.argValuePlaceholder')" /><button :aria-label="t('tools.removeArgAria')" @click="removeRow(index)">×</button></div>
+      <div class="form-actions"><button class="primary-action" :disabled="submitting" @click="run">{{ submitting ? t("tools.submitting") : t("tools.run") }}</button></div>
     </section>
   </div>
 </template>

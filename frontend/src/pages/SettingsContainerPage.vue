@@ -67,7 +67,7 @@ function reset() {
       <p>{{ t("settings.subtitle") }}</p>
     </header>
     <div class="settings-body">
-      <nav class="settings-nav" aria-label="设置导航">
+      <nav class="settings-nav" :aria-label="t('settings.navAria')">
         <RouterLink v-for="item in tabs" :key="item.key" :to="item.to" class="settings-nav-link" :class="{ active: props.tab === item.key }">{{ item.label }}</RouterLink>
       </nav>
       <main class="settings-content">
@@ -88,14 +88,14 @@ function reset() {
             </div>
             <label for="tensorboard-url">{{ t("settings.ui.tensorboardUrl") }}</label>
             <input id="tensorboard-url" v-model="form.tensorboard_url" :placeholder="t('settings.ui.tensorboardPlaceholder')">
-            <small>可填写独立 TensorBoard 地址；留空时继续通过后端同源代理访问。</small>
+            <small>{{ t("settings.ui.tensorboardHint") }}</small>
             <div class="form-actions">
               <button class="primary-action" @click="save">{{ t("settings.ui.save") }}</button>
               <button class="secondary-action" @click="reset">{{ t("settings.ui.reset") }}</button>
             </div>
           </section>
           <section class="settings-card">
-            <h2>LoRA 脚本工具</h2>
+            <h2>{{ t("settings.tools.title") }}</h2>
             <small>{{ t("settings.tools.note") }}</small>
           </section>
           <section class="settings-preview">

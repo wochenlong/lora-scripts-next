@@ -12,13 +12,13 @@ const { tasks, loading, error, terminatingId } = storeToRefs(store)
 const { t } = useI18n()
 let timer: number | undefined
 
-const statusLabels: Record<TaskStatus, string> = {
-  CREATED: "已创建",
-  RUNNING: "运行中",
-  FINISHED: "已完成",
-  TERMINATED: "已终止",
-  FAILED: "失败",
-}
+const statusLabels = computed<Record<TaskStatus, string>>(() => ({
+  CREATED: t("tasks.status.created"),
+  RUNNING: t("tasks.status.running"),
+  FINISHED: t("tasks.status.finished"),
+  TERMINATED: t("tasks.status.terminated"),
+  FAILED: t("tasks.status.failed"),
+}))
 
 const activeTab = ref<"running" | "recent">("running")
 const selectedId = ref("")
@@ -30,11 +30,11 @@ const visibleList = computed(() => activeTab.value === "running" ? runningList.v
 const selected = computed(() => tasks.value.find((task) => task.id === selectedId.value))
 
 function taskName(task: TrainingTask) {
-  return String(task.metadata.output_name || task.metadata.trainer_file || task.metadata.backend || "训练任务")
+  return String(task.metadata.output_name || task.metadata.trainer_file || task.metadata.backend || t("tasks.defaultName"))
 }
 
 function taskDetail(task: TrainingTask) {
-  return String(task.metadata.config_path || task.metadata.command || "暂无任务描述")
+  return String(task.metadata.config_path || task.metadata.command || t("tasks.noDetail"))
 }
 
 function select(task: TrainingTask) {
@@ -47,16 +47,16 @@ watch(visibleList, (list) => {
 
 async function terminate(task: TrainingTask) {
   try {
-    await ElMessageBox.confirm(`确定要停止任务 ${task.id} 吗？`, "终止训练", {
-      confirmButtonText: "停止任务",
-      cancelButtonText: "取消",
+    await ElMessageBox.confirm(t("tasks.terminate.confirm", { id: task.id }), t("tasks.terminate.title"), {
+      confirmButtonText: t("tasks.terminate.confirmButton"),
+      cancelButtonText: t("tasks.terminate.cancel"),
       type: "warning",
     })
     await store.terminate(task.id)
-    ElMessage.success("停止任务成功")
+    ElMessage.success(t("tasks.terminate.success"))
   } catch (caught) {
     if (caught !== "cancel" && caught !== "close") {
-      ElMessage.error(caught instanceof Error ? caught.message : "停止任务失败")
+      ElMessage.error(caught instanceof Error ? caught.message : t("tasks.terminate.fail"))
     }
   }
 }
@@ -76,17 +76,17 @@ onBeforeUnmount(() => window.clearInterval(timer))
       <button class="ghost-button" :disabled="loading" @click="store.refresh()"><el-icon><Refresh /></el-icon>{{ t("tasks.refresh") }}</button>
     </header>
 
-    <div v-if="error" class="task-error"><strong>无法读取任务</strong><span>{{ error }}</span><button @click="store.refresh()">重试</button></div>
-    <div v-else-if="loading && !tasks.length" class="task-empty">正在读取任务列表…</div>
-    <div v-else-if="!tasks.length" class="task-empty"><strong>当前没有训练任务</strong><span>从训练页提交任务后，将在这里显示状态和日志入口。</span></div>
+    <div v-if="error" class="task-error"><strong>{{ t("tasks.loadError") }}</strong><span>{{ error }}</span><button @click="store.refresh()">{{ t("tasks.retry") }}</button></div>
+    <div v-else-if="loading && !tasks.length" class="task-empty">{{ t("tasks.loading") }}</div>
+    <div v-else-if="!tasks.length" class="task-empty"><strong>{{ t("tasks.emptyTitle") }}</strong><span>{{ t("tasks.emptyDesc") }}</span></div>
 
     <div v-else class="tasks-columns">
       <aside class="tasks-list-panel">
-        <div class="tasks-tabs" role="group" aria-label="任务筛选">
+        <div class="tasks-tabs" role="group" :aria-label="t('tasks.filterAria')">
           <button :class="{ active: activeTab === 'running' }" @click="activeTab = 'running'">{{ t("tasks.tabs.running") }}<b>{{ runningList.length }}</b></button>
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
-        <p v-if="!visibleList.length" class="tasks-tab-empty">暂无任务</p>
+        <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
         <article v-for="task in visibleList" :key="task.id" class="task-row" :class="{ selected: task.id === selectedId }" :data-status="task.status.toLowerCase()" @click="select(task)">
           <span class="task-status">{{ statusLabels[task.status] || task.status }}</span>
           <div class="task-row-main"><h2>{{ taskName(task) }}</h2><code>{{ task.id }}</code></div>
