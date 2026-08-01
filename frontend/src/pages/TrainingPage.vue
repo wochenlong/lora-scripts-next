@@ -2,6 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { useI18n } from "vue-i18n"
 import { parse, stringify } from "smol-toml"
 import DynamicSchemaForm from "../components/DynamicSchemaForm.vue"
 import { schemasApi } from "../api/schemas"
@@ -14,6 +15,7 @@ interface HistoryRow { time: string; name?: string; value: FormModel }
 
 const props = withDefaults(defineProps<{ title: string; area: string; schemaName: string; bare?: boolean }>(), { bare: false })
 const router = useRouter()
+const { t } = useI18n()
 const schema = ref<AdaptedSchema>()
 const model = ref<FormModel>({})
 const loading = ref(true)
@@ -43,18 +45,18 @@ function loadHistory() {
   catch { history.value = [] }
 }
 
-async function applyImportedConfig(config: FormModel, successMessage = "配置已导入") {
+async function applyImportedConfig(config: FormModel, successMessage?: string) {
   const result = await trainingApi.validateImport(props.schemaName, config)
-  if (result.result === "reject") throw new Error(result.errors?.join("\n") || result.message || "配置不适用于当前页面")
+  if (result.result === "reject") throw new Error(result.errors?.join("\n") || result.message || t("training.importMsg.reject"))
   if (result.result === "redirect" && result.target_path) {
-    await ElMessageBox.confirm(result.message || "配置属于其他训练页面，是否跳转？", "训练类型不匹配", { confirmButtonText: "跳转并导入", cancelButtonText: "取消", type: "warning" })
+    await ElMessageBox.confirm(result.message || t("training.importMsg.mismatchConfirm"), t("training.importMsg.mismatchTitle"), { confirmButtonText: t("training.importMsg.jump"), cancelButtonText: t("training.importMsg.cancel"), type: "warning" })
     sessionStorage.setItem("mikazuki-pending-import", JSON.stringify(result.config || config))
     await router.push(result.target_path)
     return
   }
   model.value = { ...createDefaultModel(schema.value!), ...hydrateImportedConfig(result.config || config) }
   if (result.notice) ElMessage.info(result.notice)
-  ElMessage.success(successMessage)
+  ElMessage.success(successMessage ?? t("training.importMsg.imported"))
 }
 
 async function load() {
@@ -70,16 +72,16 @@ async function load() {
     const cards = await schemasApi.graphicCards()
     if (cards.length > 1) {
       const options = cards.map((card, index) => typeof card === "object" ? (card.value ?? card.label ?? index) : card)
-      const field: FormField = { key: "gpu_ids", type: "array", role: "select", description: "选择用于训练的显卡", options, conditions: [] }
-      loaded.sections.push({ id: "gpu-settings", title: "显卡设置", fields: [field] })
+      const field: FormField = { key: "gpu_ids", type: "array", role: "select", description: t("training.gpu.fieldDescription"), options, conditions: [] }
+      loaded.sections.push({ id: "gpu-settings", title: t("training.gpu.sectionTitle"), fields: [field] })
     }
     schema.value = loaded
     const pending = sessionStorage.getItem("mikazuki-pending-import")
     if (pending) {
       sessionStorage.removeItem("mikazuki-pending-import")
-      await applyImportedConfig(JSON.parse(pending), "已在目标页面导入配置")
+      await applyImportedConfig(JSON.parse(pending), t("training.importMsg.importedRedirect"))
     }
-  } catch (reason) { error.value = reason instanceof Error ? reason.message : "Schema 加载失败" }
+  } catch (reason) { error.value = reason instanceof Error ? reason.message : t("training.schemaLoadFail") }
   finally { loading.value = false }
 }
 
@@ -89,7 +91,7 @@ function validate() {
   const messages = [...Object.values(errors.value), ...diagnostics.value.errors]
   if (messages.length) { ElMessage.error(messages[0]); return false }
   if (diagnostics.value.warnings.length) ElMessage.warning(diagnostics.value.warnings[0])
-  else ElMessage.success("参数校验通过")
+  else ElMessage.success(t("training.validatePassed"))
   return true
 }
 
@@ -98,7 +100,7 @@ function saveHistory() {
   if (typeof model.value.output_name === "string") row.name = model.value.output_name
   history.value.push(row)
   localStorage.setItem(historyKey(), JSON.stringify(history.value))
-  ElMessage.success("参数已保存到浏览器历史")
+  ElMessage.success(t("training.historyDialog.saved"))
 }
 
 function deleteHistory(index: number) {
@@ -111,14 +113,14 @@ async function openPresets() {
   if (presets.value.length) return
   presetsLoading.value = true
   try { presets.value = await trainingApi.presets() }
-  catch (reason) { ElMessage.error(reason instanceof Error ? reason.message : "预设加载失败") }
+  catch (reason) { ElMessage.error(reason instanceof Error ? reason.message : t("training.presetsDialog.loadFail")) }
   finally { presetsLoading.value = false }
 }
 
 function applyPreset(preset: TrainingPreset) {
   model.value = { ...model.value, ...preset.data }
   presetsOpen.value = false
-  ElMessage.success(`已应用预设：${preset.metadata.name}`)
+  ElMessage.success(t("training.presetsDialog.applied", { name: preset.metadata.name }))
 }
 
 async function importFile(event: Event) {
@@ -131,7 +133,7 @@ async function importFile(event: Event) {
     const config = file.name.toLowerCase().endsWith(".json") ? JSON.parse(text) : parse(text)
     await applyImportedConfig(config as FormModel)
   } catch (reason) {
-    if (reason !== "cancel" && reason !== "close") ElMessage.error(reason instanceof Error ? reason.message : "配置导入失败")
+    if (reason !== "cancel" && reason !== "close") ElMessage.error(reason instanceof Error ? reason.message : t("training.importMsg.fail"))
   }
 }
 
@@ -147,42 +149,42 @@ async function exportConfig() {
     anchor.click()
     URL.revokeObjectURL(url)
     normalized.warnings.forEach((warning) => ElMessage.warning(warning))
-  } catch (reason) { ElMessage.error(reason instanceof Error ? reason.message : "配置导出失败") }
+  } catch (reason) { ElMessage.error(reason instanceof Error ? reason.message : t("training.exportFail")) }
 }
 
 async function submit() {
   if (!validate() || submitting.value) return
   try {
-    await ElMessageBox.confirm("训练将占用 GPU 并创建后台任务，确认开始？", "开始训练", { confirmButtonText: "开始训练", cancelButtonText: "取消", type: "warning" })
+    await ElMessageBox.confirm(t("training.submitConfirm.message"), t("training.submitConfirm.title"), { confirmButtonText: t("training.submitConfirm.confirm"), cancelButtonText: t("training.submitConfirm.cancel"), type: "warning" })
     submitting.value = true
     if (props.schemaName === "anima-lora-fast") {
       const preflight = await trainingApi.animaFastPreflight(output.value)
-      if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || "Anima Fast 预检查未通过")
+      if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
     started.value = await trainingApi.run(output.value)
     saveHistory()
-    ElMessage.success(`训练任务已启动：${started.value.task_id}`)
+    ElMessage.success(t("training.submitConfirm.started", { id: started.value.task_id }))
   } catch (reason) {
-    if (reason !== "cancel" && reason !== "close") ElMessage.error(reason instanceof Error ? reason.message : "训练提交失败")
+    if (reason !== "cancel" && reason !== "close") ElMessage.error(reason instanceof Error ? reason.message : t("training.submitConfirm.fail"))
   } finally { submitting.value = false }
 }
 
 async function resetConfig() {
   if (!schema.value) return
   try {
-    await ElMessageBox.confirm("重置将清空当前草稿并恢复默认参数，是否继续？", "重置参数", { confirmButtonText: "重置", cancelButtonText: "取消", type: "warning" })
+    await ElMessageBox.confirm(t("training.actions.resetConfirm"), t("training.resetDialog.title"), { confirmButtonText: t("training.actions.reset"), cancelButtonText: t("training.resetDialog.cancel"), type: "warning" })
   } catch { return }
   localStorage.removeItem(autosaveKey())
   model.value = createDefaultModel(schema.value)
-  ElMessage.success("已重置为默认参数")
+  ElMessage.success(t("training.actions.resetDone"))
 }
 
 async function copyToml() {
   try {
     await navigator.clipboard.writeText(outputText.value)
-    ElMessage.success("TOML 已复制到剪贴板")
-  } catch { ElMessage.error("复制失败，请手动选择文本复制") }
+    ElMessage.success(t("training.preview.copied"))
+  } catch { ElMessage.error(t("training.preview.copyFail")) }
 }
 
 function openImport() { importInput.value?.click() }
@@ -198,24 +200,24 @@ onBeforeUnmount(() => localStorage.setItem(autosaveKey(), JSON.stringify(model.v
 <template>
   <div class="training-layout schema-training-layout" :class="{ bare }">
     <section class="form-canvas">
-      <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>依次填写模型、数据集与训练参数。提交前会执行参数转换、冲突检查和后端训练约束。</p></div>
+      <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
       <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
       <slot name="form-top" />
-      <div class="training-toolbar"><button @click="openPresets">训练预设</button><label v-if="!bare" @click="openImport">导入配置</label><button v-if="!bare" @click="saveHistory">保存参数</button><button @click="historyOpen = true">历史记录</button><button @click="exportConfig">导出 TOML</button><button v-if="!bare" @click="resetConfig">重置</button></div>
-      <div v-if="loading" class="schema-state"><strong>正在加载训练 Schema</strong><span>检查缓存与后端版本…</span></div>
-      <div v-else-if="error" class="schema-state schema-error"><strong>Schema 无法加载</strong><span>{{ error }}</span><button @click="load">重试</button></div>
+      <div class="training-toolbar"><button @click="openPresets">{{ t("training.toolbar.presets") }}</button><label v-if="!bare" @click="openImport">{{ t("training.toolbar.import") }}</label><button v-if="!bare" @click="saveHistory">{{ t("training.toolbar.save") }}</button><button @click="historyOpen = true">{{ t("training.toolbar.history") }}</button><button @click="exportConfig">{{ t("training.toolbar.export") }}</button><button v-if="!bare" @click="resetConfig">{{ t("training.toolbar.reset") }}</button></div>
+      <div v-if="loading" class="schema-state"><strong>{{ t("training.loadingSchema") }}</strong><span>{{ t("training.loadingSchemaHint") }}</span></div>
+      <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
       <DynamicSchemaForm v-else-if="schema" v-model="model" :schema="schema" :errors="errors" />
     </section>
     <aside class="control-panel">
-      <div v-if="!bare" class="panel-copy"><span class="eyebrow">TRAINING CONTROL</span><h2>{{ title }}</h2><p>右侧为实际提交的 TOML。建议先校验参数，再开始后台训练任务。</p></div>
+      <div v-if="!bare" class="panel-copy"><span class="eyebrow">TRAINING CONTROL</span><h2>{{ title }}</h2><p>{{ t("training.panelHint") }}</p></div>
       <div v-if="diagnostics.errors.length || diagnostics.warnings.length" class="param-diagnostics"><p v-for="item in diagnostics.errors" :key="item" class="error">{{ item }}</p><p v-for="item in diagnostics.warnings" :key="item">{{ item }}</p></div>
-      <div v-if="started" class="started-task"><strong>任务已启动</strong><code>{{ started.task_id }}</code><a :href="trainLogHref" target="_blank" rel="noreferrer">打开训练日志</a><RouterLink to="/tasks">查看任务页</RouterLink></div>
-      <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>TOML 参数预览</span><b>{{ Object.keys(output).length }} 项</b><span class="preview-actions"><button @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? "展开" : "收起" }}</button><button @click="copyToml">复制</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
-      <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">校验当前参数</button>
-      <button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? "提交中…" : "开始训练" }}</button>
+      <div v-if="started" class="started-task"><strong>{{ t("training.startedTask") }}</strong><code>{{ started.task_id }}</code><a :href="trainLogHref" target="_blank" rel="noreferrer">{{ t("training.openLog") }}</a><RouterLink to="/tasks">{{ t("training.viewTasks") }}</RouterLink></div>
+      <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>{{ t("training.preview.panelTitle") }}</span><b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b><span class="preview-actions"><button @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? t("training.preview.expand") : t("training.preview.collapse") }}</button><button @click="copyToml">{{ t("training.preview.copy") }}</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
+      <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">{{ t("training.validate") }}</button>
+      <button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button>
     </aside>
   </div>
 
-  <el-dialog v-model="historyOpen" title="历史参数" width="min(760px, 92vw)"><div class="config-list"><article v-for="(row, index) in history" :key="`${row.time}-${index}`"><div><strong>{{ row.name || '未命名配置' }}</strong><span>{{ row.time }}</span></div><button @click="model = { ...createDefaultModel(schema!), ...row.value }; historyOpen = false">使用</button><button class="danger" @click="deleteHistory(index)">删除</button></article><p v-if="!history.length">暂无历史参数</p></div></el-dialog>
-  <el-dialog v-model="presetsOpen" title="训练预设" width="min(760px, 92vw)"><div v-loading="presetsLoading" class="config-list"><article v-for="preset in filteredPresets" :key="preset.metadata.name"><div><strong>{{ preset.metadata.name }}</strong><span>{{ preset.metadata.description || `${preset.metadata.author || ''} ${preset.metadata.version || ''}` }}</span></div><button @click="applyPreset(preset)">应用</button></article><p v-if="!presetsLoading && !filteredPresets.length">当前训练类型暂无预设</p></div></el-dialog>
+  <el-dialog v-model="historyOpen" :title="t('training.historyDialog.title')" width="min(760px, 92vw)"><div class="config-list"><article v-for="(row, index) in history" :key="`${row.time}-${index}`"><div><strong>{{ row.name || t('training.historyDialog.unnamed') }}</strong><span>{{ row.time }}</span></div><button @click="model = { ...createDefaultModel(schema!), ...row.value }; historyOpen = false">{{ t("training.historyDialog.use") }}</button><button class="danger" @click="deleteHistory(index)">{{ t("training.historyDialog.delete") }}</button></article><p v-if="!history.length">{{ t("training.historyDialog.empty") }}</p></div></el-dialog>
+  <el-dialog v-model="presetsOpen" :title="t('training.presetsDialog.title')" width="min(760px, 92vw)"><div v-loading="presetsLoading" class="config-list"><article v-for="preset in filteredPresets" :key="preset.metadata.name"><div><strong>{{ preset.metadata.name }}</strong><span>{{ preset.metadata.description || `${preset.metadata.author || ''} ${preset.metadata.version || ''}` }}</span></div><button @click="applyPreset(preset)">{{ t("training.presetsDialog.apply") }}</button></article><p v-if="!presetsLoading && !filteredPresets.length">{{ t("training.presetsDialog.empty") }}</p></div></el-dialog>
 </template>

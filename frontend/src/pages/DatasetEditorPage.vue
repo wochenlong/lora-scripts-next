@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
+import { useI18n } from "vue-i18n"
 import { datasetApi, type ChangedItem, type DatasetHistory, type DatasetItem } from "../api/dataset"
 import { addTagToCaption, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
+
+const { t } = useI18n()
 
 const QUICK_TAGS_KEY = "dataset-editor-quick-tags"
 const PAGE_SIZE_KEY = "dataset-editor-page-size"
@@ -104,8 +107,8 @@ async function scan() {
     page.value = 1
     if (data.items[0]) choose(data.items[0])
     await refreshHistory()
-    ElMessage.success(`已加载 ${data.total} 张图片`)
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "扫描失败") }
+    ElMessage.success(t("datasetEditor.scanMsg.loaded", { n: data.total }))
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.scanMsg.fail")) }
   finally { loading.value = false }
 }
 
@@ -114,8 +117,8 @@ async function save() {
   try {
     apply([await datasetApi.save(root.value, current.value.relative_path, caption.value)])
     await refreshHistory()
-    ElMessage.success("Caption 已保存")
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "保存失败") }
+    ElMessage.success(t("datasetEditor.caption.saved"))
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.caption.saveFail")) }
 }
 
 function splitTags(value: string) { return value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean) }
@@ -123,7 +126,7 @@ function splitTags(value: string) { return value.split(/[,，\n]/).map((item) =>
 async function batch() {
   if (!targets.value.length) return
   try {
-    await ElMessageBox.confirm(`将修改 ${targets.value.length} 张图片，是否继续？`, selectedPaths.value.size ? "批量编辑已选图片" : "批量编辑当前筛选")
+    await ElMessageBox.confirm(t("datasetEditor.batch.confirm", { n: targets.value.length }), selectedPaths.value.size ? t("datasetEditor.batch.confirmSelected") : t("datasetEditor.batch.confirmFiltered"))
     const replacements = replaceFrom.value.trim() ? [{ from: replaceFrom.value.trim(), to: replaceTo.value.trim() }] : []
     const data = await datasetApi.batch({
       root: root.value, images: targets.value.map((item) => item.relative_path), append: splitTags(append.value), remove: splitTags(remove.value),
@@ -131,8 +134,8 @@ async function batch() {
     })
     apply(data.items)
     await refreshHistory()
-    ElMessage.success(`已修改 ${data.changed} 张图片`)
-  } catch (error) { if (error !== "cancel" && error !== "close") ElMessage.error(error instanceof Error ? error.message : "批量编辑失败") }
+    ElMessage.success(t("datasetEditor.batch.done", { n: data.changed }))
+  } catch (error) { if (error !== "cancel" && error !== "close") ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.batch.fail")) }
 }
 
 async function changeHistory(kind: "undo" | "redo") {
@@ -140,8 +143,8 @@ async function changeHistory(kind: "undo" | "redo") {
     const data = await datasetApi[kind](root.value)
     apply(data.items)
     await refreshHistory()
-    ElMessage.success(data.changed ? (kind === "undo" ? "已撤回" : "已重做") : "没有可执行的历史操作")
-  } catch (error) { ElMessage.error(error instanceof Error ? error.message : "操作失败") }
+    ElMessage.success(data.changed ? (kind === "undo" ? t("datasetEditor.historyMsg.undone") : t("datasetEditor.historyMsg.redone")) : t("datasetEditor.historyMsg.none"))
+  } catch (error) { ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.historyMsg.fail")) }
 }
 
 function togglePageSelection() {
@@ -181,20 +184,20 @@ onMounted(() => {
 <template>
   <div class="dataset-page">
     <aside class="dataset-side">
-      <span class="eyebrow">DATASET EDITOR</span><h1>标签编辑器</h1>
-      <label>数据集目录<input v-model="path" @keyup.enter="scan"></label>
-      <button class="primary-action" :disabled="loading" @click="scan">{{ loading ? "扫描中…" : "扫描数据集" }}</button>
-      <label>分类<select v-model="category"><option value="">全部</option><option v-for="item in categories" :key="item.value" :value="item.value">{{ item.name }} ({{ item.count }})</option></select></label>
-      <label>Caption / 文件名筛选<input v-model="query"></label>
-      <div class="batch-box"><strong>批量编辑 {{ selectedPaths.size ? `已选 ${selectedPaths.size} 张` : `筛选结果 ${filtered.length} 张` }}</strong><input v-model="append" placeholder="追加 tag，逗号分隔"><input v-model="remove" placeholder="删除 tag，逗号分隔"><div class="replace-row"><input v-model="replaceFrom" placeholder="替换前"><input v-model="replaceTo" placeholder="替换后"></div><label><input v-model="clean" type="checkbox">清理分隔符、空白和重复</label><label><input v-model="underscoreToSpace" type="checkbox">下划线转空格</label><label><input v-model="stripEscapeChars" type="checkbox">清理转义字符</label><label><input v-model="sort" type="checkbox">按字母排序</label><button @click="batch">应用批量操作</button></div>
-      <div class="quick-tag-box"><strong>快捷 tag</strong><div><button v-for="item in quickTags" :key="item" @click="appendQuickTag(item)" @contextmenu.prevent="removeQuickTag(item)">{{ item }}</button><button v-for="item in popularTags" :key="item.tag" class="suggested" @click="appendQuickTag(item.tag)">{{ item.tag }} <small>{{ item.count }}</small></button></div><span><input v-model="quickTag" placeholder="添加快捷 tag" @keyup.enter="addQuickTag"><button @click="addQuickTag">添加</button></span><small>右键删除自定义快捷 tag</small></div>
+      <span class="eyebrow">DATASET EDITOR</span><h1>{{ t("datasetEditor.title") }}</h1>
+      <label>{{ t("datasetEditor.pathLabel") }}<input v-model="path" @keyup.enter="scan"></label>
+      <button class="primary-action" :disabled="loading" @click="scan">{{ loading ? t("datasetEditor.scanning") : t("datasetEditor.scan") }}</button>
+      <label>{{ t("datasetEditor.categoryLabel") }}<select v-model="category"><option value="">{{ t("datasetEditor.allCategories") }}</option><option v-for="item in categories" :key="item.value" :value="item.value">{{ item.name }} ({{ item.count }})</option></select></label>
+      <label>{{ t("datasetEditor.queryLabel") }}<input v-model="query"></label>
+      <div class="batch-box"><strong>{{ t("datasetEditor.batch.title") }} {{ selectedPaths.size ? t("datasetEditor.batch.selected", { n: selectedPaths.size }) : t("datasetEditor.batch.filtered", { n: filtered.length }) }}</strong><input v-model="append" :placeholder="t('datasetEditor.batch.appendPlaceholder')"><input v-model="remove" :placeholder="t('datasetEditor.batch.removePlaceholder')"><div class="replace-row"><input v-model="replaceFrom" :placeholder="t('datasetEditor.batch.replaceFrom')"><input v-model="replaceTo" :placeholder="t('datasetEditor.batch.replaceTo')"></div><label><input v-model="clean" type="checkbox">{{ t("datasetEditor.batch.clean") }}</label><label><input v-model="underscoreToSpace" type="checkbox">{{ t("datasetEditor.batch.underscore") }}</label><label><input v-model="stripEscapeChars" type="checkbox">{{ t("datasetEditor.batch.stripEscape") }}</label><label><input v-model="sort" type="checkbox">{{ t("datasetEditor.batch.sort") }}</label><button @click="batch">{{ t("datasetEditor.batch.apply") }}</button></div>
+      <div class="quick-tag-box"><strong>{{ t("datasetEditor.quickTag.title") }}</strong><div><button v-for="item in quickTags" :key="item" @click="appendQuickTag(item)" @contextmenu.prevent="removeQuickTag(item)">{{ item }}</button><button v-for="item in popularTags" :key="item.tag" class="suggested" @click="appendQuickTag(item.tag)">{{ item.tag }} <small>{{ item.count }}</small></button></div><span><input v-model="quickTag" :placeholder="t('datasetEditor.quickTag.addPlaceholder')" @keyup.enter="addQuickTag"><button @click="addQuickTag">{{ t("datasetEditor.quickTag.add") }}</button></span><small>{{ t("datasetEditor.quickTag.hint") }}</small></div>
     </aside>
     <main class="dataset-gallery">
-      <header><strong>{{ filtered.length }} / {{ items.length }} 张，已选 {{ selectedPaths.size }} 张</strong><div><button :disabled="!root" @click="togglePageSelection">选中/取消本页</button><button :disabled="!sessionHistory.can_undo" @click="changeHistory('undo')">撤回</button><button :disabled="!sessionHistory.can_redo" @click="changeHistory('redo')">重做</button><button :disabled="!root" @click="historyOpen = true">历史</button></div></header>
+      <header><strong>{{ t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size }) }}</strong><div><button :disabled="!root" @click="togglePageSelection">{{ t("datasetEditor.gallery.togglePage") }}</button><button :disabled="!sessionHistory.can_undo" @click="changeHistory('undo')">{{ t("datasetEditor.gallery.undo") }}</button><button :disabled="!sessionHistory.can_redo" @click="changeHistory('redo')">{{ t("datasetEditor.gallery.redo") }}</button><button :disabled="!root" @click="historyOpen = true">{{ t("datasetEditor.gallery.history") }}</button></div></header>
       <div class="image-grid"><button v-for="item in paged" :key="item.relative_path" :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }" @click="choose(item, $event)"><i v-if="selectedPaths.has(item.relative_path)">✓</i><img :src="item.image_url" :alt="item.name" loading="lazy"><span>{{ item.name }}</span></button></div>
-      <footer class="dataset-pager"><button :disabled="page === 1" @click="page = 1">首页</button><button :disabled="page === 1" @click="page--">上一页</button><span>{{ page }} / {{ pageCount }}</span><button :disabled="page === pageCount" @click="page++">下一页</button><button :disabled="page === pageCount" @click="page = pageCount">末页</button><select v-model.number="pageSize"><option v-for="size in [24,48,96,192]" :key="size" :value="size">{{ size }} / 页</option></select></footer>
+      <footer class="dataset-pager"><button :disabled="page === 1" @click="page = 1">{{ t("datasetEditor.pager.first") }}</button><button :disabled="page === 1" @click="page--">{{ t("datasetEditor.pager.prev") }}</button><span>{{ page }} / {{ pageCount }}</span><button :disabled="page === pageCount" @click="page++">{{ t("datasetEditor.pager.next") }}</button><button :disabled="page === pageCount" @click="page = pageCount">{{ t("datasetEditor.pager.last") }}</button><select v-model.number="pageSize"><option v-for="size in [24,48,96,192]" :key="size" :value="size">{{ t("datasetEditor.pager.perPage", { size }) }}</option></select></footer>
     </main>
-    <aside class="caption-panel"><div v-if="current"><img :src="current.image_url" :alt="current.name"><strong>{{ current.relative_path }}</strong><div class="caption-editor"><textarea v-model="caption" rows="10"></textarea><small class="caption-count">{{ caption.length }} 字</small></div><div class="caption-chips"><span v-for="tag in captionTags" :key="tag" class="chip">{{ tag }}<button :aria-label="`删除标签 ${tag}`" @click="removeCaptionTag(tag)">×</button></span><span class="chip-add"><input v-model="newCaptionTag" placeholder="添加标签" @keyup.enter="addCaptionTag"><button @click="addCaptionTag">添加</button></span></div><button class="primary-action" @click="save">保存 Caption</button></div><p v-else>扫描并选择图片后开始编辑。</p></aside>
+    <aside class="caption-panel"><div v-if="current"><img :src="current.image_url" :alt="current.name"><strong>{{ current.relative_path }}</strong><div class="caption-editor"><textarea v-model="caption" rows="10"></textarea><small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small></div><div class="caption-chips"><span v-for="tag in captionTags" :key="tag" class="chip">{{ tag }}<button :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)">×</button></span><span class="chip-add"><input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag"><button @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button></span></div><button class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button></div><p v-else>{{ t("datasetEditor.caption.empty") }}</p></aside>
   </div>
-  <el-dialog v-model="historyOpen" title="会话编辑历史" width="min(820px, 94vw)"><div class="dataset-history"><article v-for="change in sessionHistory.changes" :key="`${change.label}-${change.items[0]?.image}`"><header><strong>{{ change.label }}</strong><span>{{ change.count }} 张</span></header><details><summary>查看明细</summary><div v-for="item in change.items" :key="item.image"><code>{{ item.image }}</code><del>{{ item.before || '（无 caption）' }}</del><ins>{{ item.after || '（无 caption）' }}</ins></div></details></article><p v-if="!sessionHistory.changes.length">当前会话暂无编辑记录</p></div></el-dialog>
+  <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)"><div class="dataset-history"><article v-for="change in sessionHistory.changes" :key="`${change.label}-${change.items[0]?.image}`"><header><strong>{{ change.label }}</strong><span>{{ t("datasetEditor.historyDialog.count", { n: change.count }) }}</span></header><details><summary>{{ t("datasetEditor.historyDialog.detail") }}</summary><div v-for="item in change.items" :key="item.image"><code>{{ item.image }}</code><del>{{ item.before || t('datasetEditor.historyDialog.noCaption') }}</del><ins>{{ item.after || t('datasetEditor.historyDialog.noCaption') }}</ins></div></details></article><p v-if="!sessionHistory.changes.length">{{ t("datasetEditor.historyDialog.empty") }}</p></div></el-dialog>
 </template>
