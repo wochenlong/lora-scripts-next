@@ -22,6 +22,7 @@ export default {
         anima: "Anima DiT",
         sd: "SD / SDXL",
         flux: "Flux",
+        lumina: "Lumina 2",
       },
       engines: {
         kohya: "Kohya-ss",

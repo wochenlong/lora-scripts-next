@@ -21,14 +21,23 @@ describe("training module mapping", () => {
     expect(resolveModule("flux", "kohya", "lora")?.schemaName).toBe("flux-lora")
   })
 
+  it("covers every training schema shipped by the backend except lora-basic", () => {
+    expect(resolveModule("sd", "kohya", "finetune")?.schemaName).toBe("dreambooth")
+    expect(resolveModule("lumina", "kohya", "lora")?.schemaName).toBe("lumina2-lora")
+    const mapped = new Set(TRAINING_MODULES.map((module) => module.schemaName))
+    for (const schema of ["sd3-lora", "anima-lora-fast", "anima-finetune", "lora-master", "dreambooth", "flux-lora", "lumina2-lora"]) {
+      expect(mapped.has(schema), schema).toBe(true)
+    }
+  })
+
   it("resolves the default selection to the acceptance path sd3-lora", () => {
     expect(resolveModule(DEFAULT_SELECTION.model, DEFAULT_SELECTION.engine, DEFAULT_SELECTION.target)?.schemaName).toBe("sd3-lora")
   })
 
   it("returns undefined for unmapped combinations", () => {
     expect(resolveModule("anima", "kohya", "lokr")).toBeUndefined()
-    expect(resolveModule("sd", "kohya", "finetune")).toBeUndefined()
     expect(resolveModule("flux", "kohya", "finetune")).toBeUndefined()
+    expect(resolveModule("lumina", "kohya", "finetune")).toBeUndefined()
     expect(resolveModule("anima", "musubi", "lora")).toBeUndefined()
   })
 
@@ -47,6 +56,7 @@ describe("training module mapping", () => {
     expect(isEngineSupported("anima", "anima-fast")).toBe(true)
     expect(isEngineSupported("sd", "anima-fast")).toBe(false)
     expect(isEngineSupported("flux", "anima-fast")).toBe(false)
+    expect(isEngineSupported("lumina", "anima-fast")).toBe(false)
   })
 
   it("suggests fallback engine and target for unsupported selections", () => {
@@ -58,7 +68,8 @@ describe("training module mapping", () => {
   it("maps schema names back to modules", () => {
     expect(moduleForSchema("sd3-lora")).toMatchObject({ model: "anima", engine: "kohya", target: "lora" })
     expect(moduleForSchema("anima-finetune")).toMatchObject({ target: "finetune" })
-    expect(moduleForSchema("dreambooth")).toBeUndefined()
+    expect(moduleForSchema("dreambooth")).toMatchObject({ model: "sd", engine: "kohya", target: "finetune" })
+    expect(moduleForSchema("lora-basic")).toBeUndefined()
   })
 
   it("keeps schema metadata for every mapped schema", () => {

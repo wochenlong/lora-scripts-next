@@ -5,7 +5,6 @@ const NotFoundPage = () => import("./pages/NotFoundPage.vue")
 const TasksPage = () => import("./pages/TasksPage.vue")
 const ToolsPage = () => import("./pages/ToolsPage.vue")
 const DatasetPage = () => import("./pages/DatasetPage.vue")
-const TrainingPage = () => import("./pages/TrainingPage.vue")
 const TrainingWorkbenchPage = () => import("./pages/TrainingWorkbenchPage.vue")
 const SettingsContainerPage = () => import("./pages/SettingsContainerPage.vue")
 const GuidePage = () => import("./pages/GuidePage.vue")
@@ -38,6 +37,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/lora/anima-fast.html", redirect: () => trainingQuery("anima", "anima-fast", "lora") },
   { path: "/lora/anima-fast", redirect: () => trainingQuery("anima", "anima-fast", "lora") },
   { path: "/lora/anima-finetune.html", redirect: () => trainingQuery("anima", "kohya", "finetune") },
+  { path: "/dreambooth/index.html", redirect: () => trainingQuery("sd", "kohya", "finetune") },
   { path: "/tagger.html", redirect: "/dataset/tagger" },
   { path: "/native-tageditor.html", redirect: "/dataset/editor" },
   { path: "/dataset-editor.html", redirect: "/dataset/editor" },
@@ -52,7 +52,6 @@ const routes: RouteRecordRaw[] = [
     props: { title: "TensorBoard", src: "/proxy/tensorboard/", configurable: true },
     meta: { title: "TensorBoard" },
   },
-  { path: "/dreambooth/index.html", component: TrainingPage, props: { title: "Dreambooth 训练 专家模式", area: "Dreambooth", schemaName: "dreambooth" }, meta: { title: "Dreambooth" } },
   { path: "/lora/tools.html", component: ToolsPage, meta: { title: "LoRA 脚本工具" } },
   { path: "/lora/params.html", component: ParamsPage, meta: { title: "训练参数调节" } },
   {

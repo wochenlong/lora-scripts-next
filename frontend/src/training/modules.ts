@@ -1,4 +1,4 @@
-export type TrainingModel = "anima" | "sd" | "flux"
+export type TrainingModel = "anima" | "sd" | "flux" | "lumina"
 export type TrainingEngine = "kohya" | "anima-fast" | "musubi"
 export type TrainingTarget = "lora" | "lokr" | "finetune"
 
@@ -9,7 +9,7 @@ export interface TrainingModule {
   schemaName: string
 }
 
-export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd", "flux"]
+export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd", "flux", "lumina"]
 export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi"]
 export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "lokr", "finetune"]
 
@@ -24,7 +24,9 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
   { model: "anima", engine: "anima-fast", target: "lora", schemaName: "anima-lora-fast" },
   { model: "anima", engine: "kohya", target: "finetune", schemaName: "anima-finetune" },
   { model: "sd", engine: "kohya", target: "lora", schemaName: "lora-master" },
+  { model: "sd", engine: "kohya", target: "finetune", schemaName: "dreambooth" },
   { model: "flux", engine: "kohya", target: "lora", schemaName: "flux-lora" },
+  { model: "lumina", engine: "kohya", target: "lora", schemaName: "lumina2-lora" },
 ]
 
 export const SCHEMA_META: Record<string, { title: string; area: string }> = {
@@ -32,7 +34,9 @@ export const SCHEMA_META: Record<string, { title: string; area: string }> = {
   "anima-lora-fast": { title: "Anima LoRA Fast", area: "Anima DiT · Anima Fast · LoRA" },
   "anima-finetune": { title: "Anima 全量微调", area: "Anima DiT · Kohya-ss · 全量微调" },
   "lora-master": { title: "SD / SDXL LoRA", area: "SD / SDXL · Kohya-ss · LoRA" },
+  dreambooth: { title: "SD / SDXL 全量微调", area: "SD / SDXL · Kohya-ss · 全量微调" },
   "flux-lora": { title: "Flux LoRA", area: "Flux · Kohya-ss · LoRA" },
+  "lumina2-lora": { title: "Lumina 2 LoRA", area: "Lumina 2 · Kohya-ss · LoRA" },
 }
 
 export function resolveModule(model: TrainingModel, engine: TrainingEngine, target: TrainingTarget): TrainingModule | undefined {
