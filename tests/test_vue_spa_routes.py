@@ -6,6 +6,15 @@ from mikazuki.spa import should_fallback_to_spa, train_monitor_url
 
 ROOT = Path(__file__).resolve().parents[1]
 ROUTES = (
+    "training",
+    "dataset",
+    "dataset/editor",
+    "dataset/tagger",
+    "tasks",
+    "settings",
+    "settings/ui",
+    "settings/about",
+    "settings/changelog",
     "lora/basic.html",
     "lora/master.html",
     "lora/flux.html",

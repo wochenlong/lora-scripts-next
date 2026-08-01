@@ -20,7 +20,6 @@ import "./styles/tokens.css"
 import "./styles/layout.css"
 import "./styles/features.css"
 import "./styles/anima-fast.css"
-import "./styles/training-index.css"
 import "./styles/content-pages.css"
 
 const app = createApp(App)

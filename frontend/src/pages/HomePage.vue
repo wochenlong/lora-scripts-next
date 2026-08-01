@@ -1,8 +1,8 @@
 <script setup lang="ts">
 const portals = [
-  { title: "标准 LoRA", text: "Stable Diffusion、Flux 与 Anima 的标准训练入口。", to: "/lora/index.html", tone: "blue" },
-  { title: "Anima Fast", text: "独立运行环境、安装审计与高性能训练流程。", to: "/lora/anima-fast.html", tone: "cyan" },
-  { title: "数据集工作台", text: "自动打标、Caption 清理、筛选和批量编辑。", to: "/native-tageditor.html", tone: "violet" },
+  { title: "训练", text: "基础模型 × 训练引擎 × 训练目标，一处完成配置与提交。", to: "/training", tone: "blue" },
+  { title: "数据集", text: "标签编辑与模型打标，准备训练所需的 caption。", to: "/dataset/editor", tone: "violet" },
+  { title: "任务", text: "查看训练任务状态、日志入口与运行监控。", to: "/tasks", tone: "cyan" },
 ] as const
 </script>
 
@@ -12,10 +12,10 @@ const portals = [
       <div class="hero-copy">
         <span class="eyebrow">LOCAL TRAINING WORKSPACE</span>
         <h1>模型训练，从一套清晰的工作流开始。</h1>
-        <p>Next Trainer 将训练配置、数据集准备与运行监控集中在本地界面中。</p>
-        <div class="hero-actions"><RouterLink class="primary-action" to="/lora/index.html">开始配置训练</RouterLink><RouterLink class="secondary-action" to="/help/guide.html">阅读使用指南</RouterLink></div>
+        <p>LoRA Scripts Next 将训练配置、数据集准备与运行监控集中在本地界面中。</p>
+        <div class="hero-actions"><RouterLink class="primary-action" to="/training">开始配置训练</RouterLink><RouterLink class="secondary-action" to="/help/guide.html">阅读使用指南</RouterLink></div>
       </div>
-      <div class="hero-visual"><div class="visual-grid" /><div class="orbit orbit-one" /><div class="orbit orbit-two" /><img src="/assets/home-logo.webp" alt="Next Trainer"></div>
+      <div class="hero-visual"><div class="visual-grid" /><div class="orbit orbit-one" /><div class="orbit orbit-two" /><img src="/assets/home-logo.webp" alt="LoRA Scripts Next"></div>
     </section>
     <section class="portal-grid" aria-label="功能入口">
       <RouterLink v-for="(portal, index) in portals" :key="portal.to" :to="portal.to" class="portal-card" :data-tone="portal.tone">

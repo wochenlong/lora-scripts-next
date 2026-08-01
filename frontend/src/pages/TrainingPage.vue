@@ -208,7 +208,7 @@ onBeforeUnmount(() => localStorage.setItem(autosaveKey(), JSON.stringify(model.v
     <aside class="control-panel">
       <div class="panel-copy"><span class="eyebrow">TRAINING CONTROL</span><h2>{{ title }}</h2><p>右侧为实际提交的 TOML。建议先校验参数，再开始后台训练任务。</p></div>
       <div v-if="diagnostics.errors.length || diagnostics.warnings.length" class="param-diagnostics"><p v-for="item in diagnostics.errors" :key="item" class="error">{{ item }}</p><p v-for="item in diagnostics.warnings" :key="item">{{ item }}</p></div>
-      <div v-if="started" class="started-task"><strong>任务已启动</strong><code>{{ started.task_id }}</code><a :href="trainLogHref" target="_blank" rel="noreferrer">打开训练日志</a><RouterLink to="/task.html">查看任务页</RouterLink></div>
+      <div v-if="started" class="started-task"><strong>任务已启动</strong><code>{{ started.task_id }}</code><a :href="trainLogHref" target="_blank" rel="noreferrer">打开训练日志</a><RouterLink to="/tasks">查看任务页</RouterLink></div>
       <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>TOML 参数预览</span><b>{{ Object.keys(output).length }} 项</b><span class="preview-actions"><button @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? "展开" : "收起" }}</button><button @click="copyToml">复制</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
       <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">校验当前参数</button>
       <button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? "提交中…" : "开始训练" }}</button>
