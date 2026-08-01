@@ -1,0 +1,108 @@
+export default {
+  app: {
+    brand: "LoRA Scripts Next",
+  },
+  nav: {
+    training: "训练",
+    dataset: "数据集",
+    tasks: "任务",
+    settings: "设置",
+    help: "帮助文档",
+  },
+  training: {
+    title: "训练",
+    subtitle: "配置训练参数，预设配置文件并开始训练。",
+    selector: {
+      group: "主控设置",
+      model: "基础模型",
+      engine: "训练引擎",
+      target: "训练目标",
+      targetType: "训练目标类型",
+      models: {
+        anima: "Anima DiT",
+        sd: "SD / SDXL",
+        flux: "Flux",
+      },
+      engines: {
+        kohya: "Kohya-ss",
+        "anima-fast": "Anima Fast",
+        musubi: "Musubi-Tuner",
+      },
+      targets: {
+        lora: "LoRA",
+        lokr: "LoKr",
+        finetune: "全量微调",
+      },
+      unsupported: "该组合暂不支持",
+    },
+    actions: {
+      save: "保存配置",
+      import: "导入",
+      reset: "重置",
+      resetConfirm: "重置将清空当前草稿并恢复默认参数，是否继续？",
+      resetDone: "已重置为默认参数",
+    },
+    preview: {
+      title: "配置预览",
+      subtitle: "查看当前配置生成的 TOML",
+      collapse: "收起",
+      expand: "展开",
+      copy: "复制",
+      copied: "TOML 已复制到剪贴板",
+    },
+    start: "开始训练",
+    startHint: "配置完成后点击开始训练，右侧将显示运行状态与训练日志。",
+  },
+  dataset: {
+    title: "数据集",
+    tab: {
+      editor: "标签编辑",
+      tagger: "模型打标",
+    },
+  },
+  tasks: {
+    title: "任务",
+    refresh: "刷新",
+    tabs: {
+      running: "进行中",
+      recent: "最近",
+    },
+    detail: {
+      stop: "停止任务",
+      stopping: "停止中…",
+      viewLog: "查看日志",
+      tensorboard: "TensorBoard",
+      empty: "从左侧选择一个任务查看详情",
+      taskId: "任务 ID",
+      config: "训练配置",
+      returncode: "返回码",
+      overview: "概览",
+      logsDeferred: "日志与曲线内嵌视图将在下一阶段提供，当前请使用外链查看。",
+    },
+  },
+  settings: {
+    title: "设置",
+    subtitle: "训练 UI 与关于信息",
+    nav: {
+      ui: "UI 设置",
+      about: "关于",
+      changelog: "更新日志",
+    },
+    ui: {
+      language: "界面语言",
+      theme: "主题",
+      themeLight: "浅色",
+      themeDark: "深色",
+      tensorboardUrl: "TensorBoard URL",
+      tensorboardPlaceholder: "留空则使用默认代理",
+      save: "保存设置",
+      reset: "重置",
+      saved: "设置已保存",
+      resetDone: "设置已重置",
+    },
+    tools: {
+      note: "LoRA 脚本工具暂未纳入 v1 信息架构，仍可通过 /lora/tools.html 直接访问。",
+    },
+    preview: "预览（切换左侧选项查看）",
+  },
+}

@@ -14,6 +14,7 @@ import "element-plus/es/components/select/style/css"
 import "element-plus/es/components/switch/style/css"
 import "element-plus/es/components/loading/style/css"
 import App from "./App.vue"
+import { i18n } from "./i18n"
 import router from "./router"
 import "./styles/tokens.css"
 import "./styles/layout.css"
@@ -24,4 +25,4 @@ import "./styles/content-pages.css"
 
 const app = createApp(App)
 for (const component of [ElButton, ElDialog, ElIcon, ElInput, ElInputNumber, ElOption, ElSelect, ElSwitch]) app.component(component.name!, component)
-app.directive("loading", vLoading).use(createPinia()).use(router).mount("#app")
+app.directive("loading", vLoading).use(createPinia()).use(router).use(i18n).mount("#app")
