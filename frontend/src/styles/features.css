@@ -90,9 +90,9 @@
 
 /* IA v1 dataset section */
 .dataset-section{min-height:100vh;background:var(--bg)}
-.dataset-section-header{display:flex;align-items:center;justify-content:space-between;gap:18px;padding:20px clamp(20px,3vw,40px);background:var(--surface);border-bottom:1px solid var(--border)}
+.dataset-section-header{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:18px;padding:20px clamp(20px,3vw,40px);background:var(--surface);border-bottom:1px solid var(--border)}
 .dataset-section-header h1{margin:0;font-size:22px;letter-spacing:-.01em}
-.dataset-switch{min-width:260px}
+.dataset-switch{min-width:260px;justify-self:center}
 .segmented a{flex:1;display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:0 12px;color:var(--text-soft);font-size:12px;font-weight:600;transition:.15s ease}
 .segmented a.active{color:var(--accent);background:var(--surface);box-shadow:var(--shadow)}
 .caption-editor{display:grid;gap:4px}
@@ -104,7 +104,7 @@
 .chip-add{display:inline-flex;gap:5px}
 .chip-add input{width:90px;min-height:26px;padding:0 8px;color:var(--text);background:var(--surface-soft);border:1px solid var(--border);border-radius:7px;font-size:12px}
 .chip-add button{padding:0 10px;color:var(--accent-dark);background:var(--accent-soft);border:0;border-radius:7px;font-size:12px;cursor:pointer}
-@media(max-width:700px){.dataset-section-header{flex-direction:column;align-items:stretch}.dataset-switch{min-width:0}}
+@media(max-width:700px){.dataset-section-header{grid-template-columns:1fr;justify-items:stretch}.dataset-switch{min-width:0;justify-self:stretch}}
 
 /* IA v1 tasks board */
 .tasks-board{min-height:100vh;padding:28px clamp(20px,3vw,44px);background:var(--bg)}
@@ -172,3 +172,23 @@
 .settings-content .content-page{padding:0}
 @media(max-width:900px){.settings-body{grid-template-columns:1fr}.settings-preview-grid{grid-template-columns:1fr}}
 .settings-content .content-page{max-width:none;margin:0;padding:0}
+
+/* TrainingPage embedded in the workbench (bare mode) */
+.training-layout.bare{min-height:0}
+.training-layout.bare .form-canvas{padding:0;background:transparent}
+.training-layout.bare .control-panel{position:sticky;top:20px;height:auto;max-height:calc(100vh - 40px);overflow:auto;padding:24px;background:transparent;border:0;box-shadow:none}
+.training-layout.bare .preview-panel{margin-top:0}
+@media(max-width:900px){.training-layout.bare .control-panel{position:static;max-height:none;min-height:0}}
+
+/* Workbench selector lives in the form column (matches mockup stacking) */
+.workbench-selector{grid-template-columns:1fr;margin-bottom:18px}
+.workbench-fallback{display:grid;gap:16px}
+
+/* Anima Fast install view embedded in the workbench */
+.workbench-page .fast-page{min-height:0;gap:24px}
+.fast-main{min-width:0}
+.fast-page.bare .fast-intro{align-self:start;padding:0}
+.fast-page.bare .fast-state{margin-top:0}
+.fast-page.bare{grid-template-columns:minmax(0,1fr) clamp(320px,32%,460px)}
+.fast-page.bare .install-console{align-self:start;height:min(560px,60vh);min-height:320px;max-height:calc(100vh - 40px)}
+.workbench-page .install-console{margin:0}

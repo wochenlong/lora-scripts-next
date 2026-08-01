@@ -4,6 +4,8 @@ import { useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import AnimaFastPage from "./AnimaFastPage.vue"
 import TrainingPage from "./TrainingPage.vue"
+import TrainingSelector from "../components/TrainingSelector.vue"
+import WorkbenchHeader from "../components/WorkbenchHeader.vue"
 import {
   DEFAULT_SELECTION,
   SCHEMA_META,
@@ -76,41 +78,22 @@ function callChild(method: keyof TrainingChildActions) {
 
 <template>
   <div class="workbench-page">
-    <header class="workbench-header">
-      <div><h1>{{ t("training.title") }}</h1><p>{{ t("training.subtitle") }}</p></div>
-      <div class="workbench-actions">
-        <button class="ghost-button" @click="callChild('saveConfig')">{{ t("training.actions.save") }}</button>
-        <button class="ghost-button" @click="callChild('openImport')">{{ t("training.actions.import") }}</button>
-        <button class="ghost-button" @click="callChild('resetConfig')">{{ t("training.actions.reset") }}</button>
-      </div>
-    </header>
-
-    <section class="workbench-selector">
-      <div class="selector-card">
-        <h2>{{ t("training.selector.group") }}</h2>
-        <div class="selector-grid">
-          <label>{{ t("training.selector.model") }}
-            <select v-model="model">
-              <option v-for="item in TRAINING_MODELS" :key="item" :value="item">{{ t(`training.selector.models.${item}`) }}</option>
-            </select>
-          </label>
-          <label>{{ t("training.selector.engine") }}
-            <select v-model="engine">
-              <option v-for="item in TRAINING_ENGINES" :key="item" :value="item" :disabled="!isEngineSupported(model, item)">{{ t(`training.selector.engines.${item}`) }}</option>
-            </select>
-          </label>
-        </div>
-      </div>
-      <div class="selector-card">
-        <h2>{{ t("training.selector.target") }}</h2>
-        <div class="segmented" role="group" :aria-label="t('training.selector.targetType')">
-          <button v-for="item in TRAINING_TARGETS" :key="item" :class="{ active: target === item }" :disabled="!isTargetSupported(model, engine, item)" @click="target = item">{{ t(`training.selector.targets.${item}`) }}</button>
-        </div>
-      </div>
-    </section>
-
-    <div v-if="!resolved" class="unsupported-hint"><strong>{{ t("training.selector.unsupported") }}</strong></div>
-    <AnimaFastPage v-else-if="resolved.schemaName === 'anima-lora-fast'" ref="childRef" bare />
-    <TrainingPage v-else-if="schemaMeta" :key="resolved.schemaName" ref="childRef" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName" />
+    <div v-if="!resolved" class="workbench-fallback">
+      <WorkbenchHeader @save="callChild('saveConfig')" @import="callChild('openImport')" @reset="callChild('resetConfig')" />
+      <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
+      <div class="unsupported-hint"><strong>{{ t("training.selector.unsupported") }}</strong></div>
+    </div>
+    <AnimaFastPage v-else-if="resolved.schemaName === 'anima-lora-fast'" ref="childRef" bare>
+      <template #form-top>
+        <WorkbenchHeader @save="callChild('saveConfig')" @import="callChild('openImport')" @reset="callChild('resetConfig')" />
+        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
+      </template>
+    </AnimaFastPage>
+    <TrainingPage v-else-if="schemaMeta" :key="resolved.schemaName" ref="childRef" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName">
+      <template #form-top>
+        <WorkbenchHeader @save="callChild('saveConfig')" @import="callChild('openImport')" @reset="callChild('resetConfig')" />
+        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
+      </template>
+    </TrainingPage>
   </div>
 </template>
