@@ -10,6 +10,7 @@ import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/tra
 import { cloneFormModel, createDefaultModel, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig } from "../training/params"
+import { moduleForTrainType } from "../training/modules"
 
 interface HistoryRow { time: string; name?: string; value: FormModel }
 
@@ -66,7 +67,11 @@ async function applyImportedConfig(config: FormModel, successMessage?: string) {
   if (result.result === "redirect" && result.target_path) {
     await ElMessageBox.confirm(result.message || t("training.importMsg.mismatchConfirm"), t("training.importMsg.mismatchTitle"), { confirmButtonText: t("training.importMsg.jump"), cancelButtonText: t("training.importMsg.cancel"), type: "warning" })
     sessionStorage.setItem("mikazuki-pending-import", JSON.stringify(result.config || config))
-    await router.push(result.target_path)
+    // 后端 target_path 基于旧 IA（sd/sdxl 都指向 master 页），优先按 config 的
+    // model_train_type 精确落到拆分后的模块，查不到再走后端路径。
+    const targetModule = moduleForTrainType((result.config || config).model_train_type)
+    if (targetModule) await router.push({ path: "/training", query: { model: targetModule.model, engine: targetModule.engine, target: targetModule.target } })
+    else await router.push(result.target_path)
     return
   }
   model.value = { ...createDefaultModel(schema.value!), ...hydrateImportedConfig(result.config || config) }

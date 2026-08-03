@@ -9,6 +9,7 @@ import {
   isEngineSupported,
   isTargetSupported,
   moduleForSchema,
+  moduleForTrainType,
   normalizeModel,
   resolveModule,
 } from "./modules"
@@ -100,6 +101,18 @@ describe("training module mapping", () => {
     expect(moduleForSchema("lora-master")).toMatchObject({ model: "sdxl", engine: "kohya", target: "lora" })
     expect(moduleForSchema("dreambooth")).toMatchObject({ model: "sdxl", engine: "kohya", target: "finetune" })
     expect(moduleForSchema("lora-basic")).toBeUndefined()
+  })
+
+  it("resolves modules from model_train_type without ambiguity", () => {
+    expect(moduleForTrainType("sd-lora")).toMatchObject({ model: "sd15", engine: "kohya", target: "lora" })
+    expect(moduleForTrainType("sdxl-lora")).toMatchObject({ model: "sdxl", engine: "kohya", target: "lora" })
+    expect(moduleForTrainType("sd-dreambooth")).toMatchObject({ model: "sd15", engine: "kohya", target: "finetune" })
+    expect(moduleForTrainType("sdxl-finetune")).toMatchObject({ model: "sdxl", engine: "kohya", target: "finetune" })
+    expect(moduleForTrainType("sd3-lora")).toMatchObject({ model: "anima", engine: "kohya", target: "lora" })
+    expect(moduleForTrainType("flux-lora")).toMatchObject({ model: "flux", target: "lora" })
+    expect(moduleForTrainType("unknown-type")).toBeUndefined()
+    expect(moduleForTrainType(undefined)).toBeUndefined()
+    expect(moduleForTrainType(42)).toBeUndefined()
   })
 
   it("keeps schema metadata for every mapped schema", () => {

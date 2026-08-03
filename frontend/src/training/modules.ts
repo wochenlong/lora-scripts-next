@@ -66,6 +66,17 @@ export function moduleForSchema(schemaName: string): TrainingModule | undefined 
   return TRAINING_MODULES.find((module) => module.schemaName === schemaName)
 }
 
+/**
+ * Resolve a module from a config's model_train_type. Unambiguous for modules
+ * carrying defaults (sd15/sdxl lora and finetune); falls back to schemaName
+ * for train types that are schema names themselves (e.g. sd3-lora).
+ */
+export function moduleForTrainType(trainType: unknown): TrainingModule | undefined {
+  if (typeof trainType !== "string" || !trainType) return undefined
+  return TRAINING_MODULES.find((module) => module.defaults?.model_train_type === trainType)
+    ?? TRAINING_MODULES.find((module) => module.schemaName === trainType)
+}
+
 export function isEngineSupported(model: TrainingModel, engine: TrainingEngine): boolean {
   return TRAINING_MODULES.some((module) => module.model === model && module.engine === engine)
 }
