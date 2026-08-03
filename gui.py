@@ -132,7 +132,8 @@ def launch():
     legacy_tageditor_enabled = not args.disable_tageditor
 
     if not args.skip_prepare_environment:
-        prepare_environment(disable_auto_mirror=args.disable_auto_mirror)
+        prepare_environment(disable_auto_mirror=args.disable_auto_mirror,
+                            prepare_onnxruntime=not args.skip_prepare_onnxruntime)
     else:
         # Portable launch skips prepare_environment, so requirements.txt is
         # otherwise never validated. Run a cheap presence-only guard so newly

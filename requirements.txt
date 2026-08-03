@@ -44,7 +44,11 @@ open-clip-torch==2.20.0
 lycoris-lora==3.3.0
 dadaptation==3.1
 # tagger (WD14 etc.) — required by dataset tagging; NVIDIA portable build uses GPU build
-onnxruntime-gpu
+# Windows guard installs the GPU build. Linux/macOS onnxruntime is handled by
+# setup_onnxruntime() (GPU build when available, CPU build otherwise), because
+# onnxruntime-gpu has no wheels for some platforms (e.g. aarch64) and a forced
+# install here would abort startup.
+onnxruntime-gpu; sys_platform == "win32"
 # domestic Hugging Face downloads (ModelScope hub patch for transformers / sd-scripts)
 modelscope>=1.20.0
 # triton for Windows — source installs only (portable package skips this)
