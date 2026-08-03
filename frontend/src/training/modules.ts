@@ -1,3 +1,5 @@
+import type { FormModel } from "../schema/adapter"
+
 export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina"
 export type TrainingEngine = "kohya" | "anima-fast" | "musubi"
 export type TrainingTarget = "lora" | "lokr" | "finetune"
@@ -8,7 +10,7 @@ export interface TrainingModule {
   target: TrainingTarget
   schemaName: string
   /** Field overrides applied on top of schema defaults, e.g. model_train_type. */
-  defaults?: Record<string, unknown>
+  defaults?: FormModel
   /** localStorage identity for drafts/history; defaults to schemaName when omitted. */
   storageKey?: string
   /** Legacy schemaName whose drafts/history this module inherits on first load. */

@@ -10,13 +10,13 @@ import {
   DEFAULT_SELECTION,
   SCHEMA_META,
   TRAINING_ENGINES,
-  TRAINING_MODELS,
   TRAINING_TARGETS,
   firstSupportedEngine,
   firstSupportedTarget,
   isEngineSupported,
   isTargetSupported,
   moduleForSchema,
+  normalizeModel,
   resolveModule,
   type TrainingEngine,
   type TrainingModel,
@@ -38,7 +38,6 @@ const engine = ref<TrainingEngine>(DEFAULT_SELECTION.engine)
 const target = ref<TrainingTarget>(DEFAULT_SELECTION.target)
 const childRef = ref<TrainingChildActions>()
 
-function isModel(value: unknown): value is TrainingModel { return TRAINING_MODELS.includes(value as TrainingModel) }
 function isEngine(value: unknown): value is TrainingEngine { return TRAINING_ENGINES.includes(value as TrainingEngine) }
 function isTarget(value: unknown): value is TrainingTarget { return TRAINING_TARGETS.includes(value as TrainingTarget) }
 
@@ -51,7 +50,8 @@ function initFromQuery() {
     target.value = fromSchema.target
     return
   }
-  if (isModel(query.model)) model.value = query.model
+  const normalized = normalizeModel(query.model)
+  if (normalized) model.value = normalized
   if (isEngine(query.engine)) engine.value = query.engine
   if (isTarget(query.target)) target.value = query.target
 }
@@ -93,7 +93,7 @@ function callChild(method: keyof TrainingChildActions) {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </AnimaFastPage>
-    <TrainingPage v-else-if="schemaMeta" :key="resolved.schemaName" ref="childRef" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName">
+    <TrainingPage v-else-if="schemaMeta" :key="resolved.storageKey || resolved.schemaName" ref="childRef" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName" :field-defaults="resolved.defaults" :storage-key="resolved.storageKey" :legacy-storage-key="resolved.legacyStorageKey">
       <template #form-top>
         <WorkbenchHeader @save="callChild('saveConfig')" @import="callChild('openImport')" @reset="callChild('resetConfig')" />
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />

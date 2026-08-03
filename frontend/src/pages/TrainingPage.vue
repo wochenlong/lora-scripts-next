@@ -13,7 +13,7 @@ import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig } from 
 
 interface HistoryRow { time: string; name?: string; value: FormModel }
 
-const props = withDefaults(defineProps<{ title: string; area: string; schemaName: string; bare?: boolean }>(), { bare: false })
+const props = withDefaults(defineProps<{ title: string; area: string; schemaName: string; bare?: boolean; fieldDefaults?: FormModel; storageKey?: string; legacyStorageKey?: string }>(), { bare: false, fieldDefaults: undefined, storageKey: undefined, legacyStorageKey: undefined })
 const router = useRouter()
 const { t } = useI18n()
 const schema = ref<AdaptedSchema>()
@@ -37,8 +37,23 @@ const outputText = computed(() => stringify(output.value))
 const filteredPresets = computed(() => presets.value.filter((item) => !item.metadata.train_type || item.metadata.train_type === props.schemaName))
 const trainLogHref = computed(() => started.value ? `${started.value.train_log_path || "/train-log"}?${started.value.train_log_query || `task_id=${encodeURIComponent(started.value.task_id)}`}` : "")
 
-function autosaveKey() { return `configs-${props.schemaName}-autosave` }
-function historyKey() { return `configs-${props.schemaName}` }
+function storageId() { return props.storageKey || props.schemaName }
+function autosaveKey() { return `configs-${storageId()}-autosave` }
+function historyKey() { return `configs-${storageId()}` }
+
+// One-time migration: modules split from a shared schema (e.g. SD 1.5/SDXL from
+// lora-master) inherit the legacy schema's drafts/history on their heir side.
+function migrateLegacyStorage() {
+  if (!props.legacyStorageKey || props.legacyStorageKey === storageId()) return
+  for (const suffix of ["", "-autosave"]) {
+    const legacyKey = `configs-${props.legacyStorageKey}${suffix}`
+    const currentKey = `configs-${storageId()}${suffix}`
+    const legacyValue = localStorage.getItem(legacyKey)
+    if (legacyValue !== null && localStorage.getItem(currentKey) === null) {
+      localStorage.setItem(currentKey, legacyValue)
+    }
+  }
+}
 
 function loadHistory() {
   try { history.value = JSON.parse(localStorage.getItem(historyKey()) || "[]") }
@@ -64,7 +79,7 @@ async function load() {
   error.value = ""
   try {
     const loaded = await loadTrainingSchema(props.schemaName)
-    const defaults = createDefaultModel(loaded)
+    const defaults = { ...createDefaultModel(loaded), ...props.fieldDefaults }
     try {
       const saved = JSON.parse(localStorage.getItem(autosaveKey()) || "null")
       model.value = saved && typeof saved === "object" ? { ...defaults, ...saved } : defaults
@@ -176,7 +191,7 @@ async function resetConfig() {
     await ElMessageBox.confirm(t("training.actions.resetConfirm"), t("training.resetDialog.title"), { confirmButtonText: t("training.actions.reset"), cancelButtonText: t("training.resetDialog.cancel"), type: "warning" })
   } catch { return }
   localStorage.removeItem(autosaveKey())
-  model.value = createDefaultModel(schema.value)
+  model.value = { ...createDefaultModel(schema.value), ...props.fieldDefaults }
   ElMessage.success(t("training.actions.resetDone"))
 }
 
@@ -193,7 +208,7 @@ defineExpose({ saveConfig: saveHistory, openImport, resetConfig })
 
 watch(() => props.schemaName, () => { started.value = undefined; loadHistory(); load() })
 watch(model, (value) => localStorage.setItem(autosaveKey(), JSON.stringify(value)), { deep: true })
-onMounted(() => { loadHistory(); load() })
+onMounted(() => { migrateLegacyStorage(); loadHistory(); load() })
 onBeforeUnmount(() => localStorage.setItem(autosaveKey(), JSON.stringify(model.value)))
 </script>
 
