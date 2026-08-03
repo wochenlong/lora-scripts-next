@@ -1,4 +1,4 @@
-export type TrainingModel = "anima" | "sd" | "flux" | "lumina"
+export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina"
 export type TrainingEngine = "kohya" | "anima-fast" | "musubi"
 export type TrainingTarget = "lora" | "lokr" | "finetune"
 
@@ -7,9 +7,15 @@ export interface TrainingModule {
   engine: TrainingEngine
   target: TrainingTarget
   schemaName: string
+  /** Field overrides applied on top of schema defaults, e.g. model_train_type. */
+  defaults?: Record<string, unknown>
+  /** localStorage identity for drafts/history; defaults to schemaName when omitted. */
+  storageKey?: string
+  /** Legacy schemaName whose drafts/history this module inherits on first load. */
+  legacyStorageKey?: string
 }
 
-export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd", "flux", "lumina"]
+export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina"]
 export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi"]
 export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "lokr", "finetune"]
 
@@ -19,12 +25,17 @@ export const DEFAULT_SELECTION: { model: TrainingModel; engine: TrainingEngine; 
   target: "lora",
 }
 
+// NOTE: sdxl entries intentionally precede sd15 ones so moduleForSchema()
+// resolves shared schemas (lora-master, dreambooth) to the sdxl module,
+// matching the previous single-SD default (schema default was sdxl-lora).
 export const TRAINING_MODULES: readonly TrainingModule[] = [
   { model: "anima", engine: "kohya", target: "lora", schemaName: "sd3-lora" },
   { model: "anima", engine: "anima-fast", target: "lora", schemaName: "anima-lora-fast" },
   { model: "anima", engine: "kohya", target: "finetune", schemaName: "anima-finetune" },
-  { model: "sd", engine: "kohya", target: "lora", schemaName: "lora-master" },
-  { model: "sd", engine: "kohya", target: "finetune", schemaName: "dreambooth" },
+  { model: "sdxl", engine: "kohya", target: "lora", schemaName: "lora-master", defaults: { model_train_type: "sdxl-lora" }, storageKey: "sdxl-lora", legacyStorageKey: "lora-master" },
+  { model: "sd15", engine: "kohya", target: "lora", schemaName: "lora-master", defaults: { model_train_type: "sd-lora" }, storageKey: "sd15-lora" },
+  { model: "sdxl", engine: "kohya", target: "finetune", schemaName: "dreambooth", defaults: { model_train_type: "sdxl-finetune" }, storageKey: "sdxl-dreambooth", legacyStorageKey: "dreambooth" },
+  { model: "sd15", engine: "kohya", target: "finetune", schemaName: "dreambooth", defaults: { model_train_type: "sd-dreambooth" }, storageKey: "sd15-dreambooth" },
   { model: "flux", engine: "kohya", target: "lora", schemaName: "flux-lora" },
   { model: "lumina", engine: "kohya", target: "lora", schemaName: "lumina2-lora" },
 ]
@@ -37,6 +48,12 @@ export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> 
   dreambooth: { titleKey: "training.schemas.dreambooth.title", areaKey: "training.schemas.dreambooth.area" },
   "flux-lora": { titleKey: "training.schemas.flux-lora.title", areaKey: "training.schemas.flux-lora.area" },
   "lumina2-lora": { titleKey: "training.schemas.lumina2-lora.title", areaKey: "training.schemas.lumina2-lora.area" },
+}
+
+export function normalizeModel(value: unknown): TrainingModel | undefined {
+  // Legacy "sd" covered both SD 1.5 and SDXL; map it to sdxl, the old default.
+  if (value === "sd") return "sdxl"
+  return TRAINING_MODELS.includes(value as TrainingModel) ? (value as TrainingModel) : undefined
 }
 
 export function resolveModule(model: TrainingModel, engine: TrainingEngine, target: TrainingTarget): TrainingModule | undefined {

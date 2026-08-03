@@ -9,6 +9,7 @@ import {
   isEngineSupported,
   isTargetSupported,
   moduleForSchema,
+  normalizeModel,
   resolveModule,
 } from "./modules"
 
@@ -17,17 +18,43 @@ describe("training module mapping", () => {
     expect(resolveModule("anima", "kohya", "lora")?.schemaName).toBe("sd3-lora")
     expect(resolveModule("anima", "anima-fast", "lora")?.schemaName).toBe("anima-lora-fast")
     expect(resolveModule("anima", "kohya", "finetune")?.schemaName).toBe("anima-finetune")
-    expect(resolveModule("sd", "kohya", "lora")?.schemaName).toBe("lora-master")
+    expect(resolveModule("sd15", "kohya", "lora")?.schemaName).toBe("lora-master")
+    expect(resolveModule("sdxl", "kohya", "lora")?.schemaName).toBe("lora-master")
     expect(resolveModule("flux", "kohya", "lora")?.schemaName).toBe("flux-lora")
   })
 
+  it("splits the shared lora-master schema into SD 1.5 and SDXL with field defaults", () => {
+    expect(resolveModule("sd15", "kohya", "lora")).toMatchObject({ defaults: { model_train_type: "sd-lora" }, storageKey: "sd15-lora" })
+    expect(resolveModule("sdxl", "kohya", "lora")).toMatchObject({ defaults: { model_train_type: "sdxl-lora" }, storageKey: "sdxl-lora", legacyStorageKey: "lora-master" })
+  })
+
+  it("splits the shared dreambooth schema into SD 1.5 and SDXL finetune with field defaults", () => {
+    expect(resolveModule("sd15", "kohya", "finetune")).toMatchObject({ schemaName: "dreambooth", defaults: { model_train_type: "sd-dreambooth" }, storageKey: "sd15-dreambooth" })
+    expect(resolveModule("sdxl", "kohya", "finetune")).toMatchObject({ schemaName: "dreambooth", defaults: { model_train_type: "sdxl-finetune" }, storageKey: "sdxl-dreambooth", legacyStorageKey: "dreambooth" })
+  })
+
   it("covers every training schema shipped by the backend except lora-basic", () => {
-    expect(resolveModule("sd", "kohya", "finetune")?.schemaName).toBe("dreambooth")
     expect(resolveModule("lumina", "kohya", "lora")?.schemaName).toBe("lumina2-lora")
     const mapped = new Set(TRAINING_MODULES.map((module) => module.schemaName))
     for (const schema of ["sd3-lora", "anima-lora-fast", "anima-finetune", "lora-master", "dreambooth", "flux-lora", "lumina2-lora"]) {
       expect(mapped.has(schema), schema).toBe(true)
     }
+  })
+
+  it("keeps storage keys identical to schemaName for unsplit modules", () => {
+    for (const module of TRAINING_MODULES) {
+      if (module.model === "sd15" || module.model === "sdxl") continue
+      expect(module.storageKey, module.schemaName).toBeUndefined()
+      expect(module.legacyStorageKey, module.schemaName).toBeUndefined()
+    }
+  })
+
+  it("normalizes legacy sd model query to sdxl", () => {
+    expect(normalizeModel("sd")).toBe("sdxl")
+    expect(normalizeModel("sd15")).toBe("sd15")
+    expect(normalizeModel("anima")).toBe("anima")
+    expect(normalizeModel("unknown")).toBeUndefined()
+    expect(normalizeModel(42)).toBeUndefined()
   })
 
   it("resolves the default selection to the acceptance path sd3-lora", () => {
@@ -54,21 +81,24 @@ describe("training module mapping", () => {
 
   it("limits anima-fast engine to the anima model", () => {
     expect(isEngineSupported("anima", "anima-fast")).toBe(true)
-    expect(isEngineSupported("sd", "anima-fast")).toBe(false)
+    expect(isEngineSupported("sd15", "anima-fast")).toBe(false)
+    expect(isEngineSupported("sdxl", "anima-fast")).toBe(false)
     expect(isEngineSupported("flux", "anima-fast")).toBe(false)
     expect(isEngineSupported("lumina", "anima-fast")).toBe(false)
   })
 
   it("suggests fallback engine and target for unsupported selections", () => {
-    expect(firstSupportedEngine("sd")).toBe("kohya")
+    expect(firstSupportedEngine("sd15")).toBe("kohya")
+    expect(firstSupportedEngine("sdxl")).toBe("kohya")
     expect(firstSupportedTarget("anima", "kohya")).toBe("lora")
     expect(firstSupportedTarget("flux", "anima-fast")).toBeUndefined()
   })
 
-  it("maps schema names back to modules", () => {
+  it("maps shared schemas back to the sdxl module (previous default)", () => {
     expect(moduleForSchema("sd3-lora")).toMatchObject({ model: "anima", engine: "kohya", target: "lora" })
     expect(moduleForSchema("anima-finetune")).toMatchObject({ target: "finetune" })
-    expect(moduleForSchema("dreambooth")).toMatchObject({ model: "sd", engine: "kohya", target: "finetune" })
+    expect(moduleForSchema("lora-master")).toMatchObject({ model: "sdxl", engine: "kohya", target: "lora" })
+    expect(moduleForSchema("dreambooth")).toMatchObject({ model: "sdxl", engine: "kohya", target: "finetune" })
     expect(moduleForSchema("lora-basic")).toBeUndefined()
   })
 

@@ -23,7 +23,8 @@ export default {
       targetType: "Training Target Type",
       models: {
         anima: "Anima DiT",
-        sd: "SD / SDXL",
+        sd15: "SD 1.5",
+        sdxl: "SDXL",
         flux: "Flux",
         lumina: "Lumina 2",
       },
