@@ -196,6 +196,10 @@ export default {
       previewEmpty: "No training previews yet",
       lossTitle: "Loss curves",
       lossEmpty: "No loss data yet",
+      epochLabel: "Epoch {n}",
+      stepLabel: "Step {n}",
+      stepProgress: "Step {step}/{total}",
+      epochProgress: "Epoch {epoch}/{total}",
     },
   },
   settings: {

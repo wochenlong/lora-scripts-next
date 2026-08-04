@@ -196,6 +196,10 @@ export default {
       previewEmpty: "暂无训练预览",
       lossTitle: "Loss 曲线",
       lossEmpty: "暂无 Loss",
+      epochLabel: "第 {n} 轮",
+      stepLabel: "第 {n} 步",
+      stepProgress: "步进 {step}/{total}",
+      epochProgress: "轮次 {epoch}/{total}",
     },
   },
   settings: {

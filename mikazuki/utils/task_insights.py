@@ -72,6 +72,38 @@ def parse_epoch(name: str) -> int | None:
     return None
 
 
+def parse_step(name: str) -> int | None:
+    match = re.search(r"_(\d{6})_", name)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def read_progress(log_lines: list[str]) -> dict:
+    fragments: list[str] = []
+    for line in log_lines[-400:]:
+        fragments.extend(line.replace("\r", "\n").split("\n"))
+    progress: dict[str, int] = {}
+    for line in reversed(fragments):
+        if "total_steps" not in progress:
+            match = re.search(r"steps:\s*(\d+)%\|[^|]*\|\s*(\d+)/(\d+)", line)
+            if match:
+                progress["percent"] = int(match.group(1))
+                progress["step"] = int(match.group(2))
+                progress["total_steps"] = int(match.group(3))
+        if "total_epochs" not in progress:
+            match = re.search(r"epoch\s+(\d+)/(\d+)", line)
+            if match:
+                progress["epoch"] = int(match.group(1))
+                progress["total_epochs"] = int(match.group(2))
+        if "total_steps" in progress and "total_epochs" in progress:
+            break
+    return progress
+
+
 def _since(metadata: dict) -> float:
     try:
         return float((metadata or {}).get("created_at") or 0) - SINCE_TOLERANCE_SECONDS
@@ -121,7 +153,7 @@ def list_preview_images(metadata: dict) -> list[dict]:
             mtime = path.stat().st_mtime
         except OSError:
             continue
-        images.append({"name": path.name, "epoch": parse_epoch(path.name), "mtime": mtime})
+        images.append({"name": path.name, "epoch": parse_epoch(path.name), "step": parse_step(path.name), "mtime": mtime})
     return images
 
 
@@ -220,7 +252,7 @@ def _read_run_scalars(run_dir: Path, limit: int) -> dict:
         accumulator.Reload()
         scalar_tags = set(accumulator.Tags().get("scalars", []))
     except Exception:
-        return {}
+        return dict(cached[1]) if cached else {}
 
     series: dict[str, list[dict]] = {}
     for tag in LOSS_TAGS:
@@ -233,5 +265,7 @@ def _read_run_scalars(run_dir: Path, limit: int) -> dict:
         points = [{"step": int(event.step), "value": float(event.value)} for event in events]
         if points:
             series[tag] = downsample(points, limit)
+    if not series and cached:
+        return dict(cached[1])
     _loss_cache[str(run_dir)] = (signature, series)
     return series

@@ -1077,7 +1077,10 @@ async def task_metrics(task_id: str) -> APIResponse:
     task = tm.tasks.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Unknown task_id")
-    return APIResponseSuccess(data={"tags": task_insights.read_loss_scalars(task.metadata)})
+    return APIResponseSuccess(data={
+        "tags": task_insights.read_loss_scalars(task.metadata),
+        "progress": task_insights.read_progress(train_log_hub.tail(task_id, 300)),
+    })
 
 
 @router.get("/graphic_cards")

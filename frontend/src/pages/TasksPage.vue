@@ -5,7 +5,7 @@ import { Refresh } from "@element-plus/icons-vue"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useTasksStore } from "../stores/tasks"
-import { tasksApi, type TaskMetrics, type TaskPreviewImage, type TaskStatus, type TrainingTask } from "../api/tasks"
+import { tasksApi, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
 import LossChart from "../components/LossChart.vue"
 
 const store = useTasksStore()
@@ -16,8 +16,15 @@ let insightTick = 0
 
 const previews = ref<TaskPreviewImage[]>([])
 const metrics = ref<TaskMetrics>({})
+const progress = ref<TaskProgress>({})
 let previewSig = ""
 let metricsSig = ""
+
+function imageLabel(image: TaskPreviewImage): string {
+  if (image.epoch != null) return t("tasks.detail.epochLabel", { n: image.epoch })
+  if (image.step != null) return t("tasks.detail.stepLabel", { n: image.step })
+  return ""
+}
 const hasLoss = computed(() => Object.values(metrics.value).some((points) => points.length > 0))
 const lossSeries = computed(() => {
   const series: { name: string; color: string; points: { step: number; value: number }[] }[] = []
@@ -35,17 +42,23 @@ const lossSeries = computed(() => {
 
 async function loadInsights(taskId: string) {
   try {
-    const [images, tags] = await Promise.all([tasksApi.previews(taskId), tasksApi.metrics(taskId)])
-    const nextPreviewSig = images.map((image) => `${image.name}:${image.mtime}`).join("|")
-    if (nextPreviewSig !== previewSig) {
-      previewSig = nextPreviewSig
-      previews.value = images
+    const [images, data] = await Promise.all([tasksApi.previews(taskId), tasksApi.metrics(taskId)])
+    if (images.length > 0) {
+      const nextPreviewSig = images.map((image) => `${image.name}:${image.mtime}`).join("|")
+      if (nextPreviewSig !== previewSig) {
+        previewSig = nextPreviewSig
+        previews.value = images
+      }
     }
-    const nextMetricsSig = Object.entries(tags).map(([tag, points]) => `${tag}:${points.length}:${points[points.length - 1]?.step ?? 0}`).join("|")
-    if (nextMetricsSig !== metricsSig) {
-      metricsSig = nextMetricsSig
-      metrics.value = tags
+    const tags = data.tags
+    if (Object.values(tags).some((points) => points.length > 0)) {
+      const nextMetricsSig = Object.entries(tags).map(([tag, points]) => `${tag}:${points.length}:${points[points.length - 1]?.step ?? 0}`).join("|")
+      if (nextMetricsSig !== metricsSig) {
+        metricsSig = nextMetricsSig
+        metrics.value = tags
+      }
     }
+    if (data.progress && Object.keys(data.progress).length > 0) progress.value = data.progress
   } catch {}
 }
 
@@ -82,12 +95,13 @@ watch(visibleList, (list) => {
   if (!list.some((task) => task.id === selectedId.value)) selectedId.value = list[0]?.id ?? ""
 }, { immediate: true })
 
-watch(selected, (task) => {
+watch(selectedId, (id) => {
   previews.value = []
   metrics.value = {}
+  progress.value = {}
   previewSig = ""
   metricsSig = ""
-  if (task) loadInsights(task.id)
+  if (id) loadInsights(id)
 })
 
 async function terminate(task: TrainingTask) {
@@ -148,6 +162,10 @@ onBeforeUnmount(() => window.clearInterval(timer))
           <div class="task-detail-title"><h2>{{ taskName(selected) }}</h2><span class="task-status">{{ statusLabels[selected.status] || selected.status }}</span></div>
           <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
         </header>
+        <div v-if="progress.total_steps" class="task-progress">
+          <div class="task-progress-meta"><span>{{ t("tasks.detail.stepProgress", { step: progress.step, total: progress.total_steps }) }}</span><span v-if="progress.total_epochs">{{ t("tasks.detail.epochProgress", { epoch: progress.epoch, total: progress.total_epochs }) }}</span><b>{{ progress.percent }}%</b></div>
+          <div class="task-progress-track"><i :style="{ width: `${progress.percent}%` }"></i></div>
+        </div>
         <dl class="task-meta-grid">
           <div><dt>{{ t("tasks.detail.taskId") }}</dt><dd><code>{{ selected.id }}</code></dd></div>
           <div><dt>{{ t("tasks.detail.config") }}</dt><dd :title="taskDetail(selected)">{{ taskDetail(selected) }}</dd></div>
@@ -159,7 +177,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
         </div>
         <section class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0 }">
           <header>{{ t("tasks.detail.previewTitle") }}</header>
-          <div v-if="previews.length" class="preview-scroll"><a v-for="image in previews" :key="image.name" :href="image.url" target="_blank" rel="noreferrer"><img :src="image.url" :alt="image.name" loading="lazy"></a></div>
+          <div v-if="previews.length" class="preview-scroll"><div v-for="image in previews" :key="image.name" class="preview-item"><a :href="image.url" target="_blank" rel="noreferrer"><img :src="image.url" :alt="image.name" loading="lazy"></a><span v-if="imageLabel(image)">{{ imageLabel(image) }}</span></div></div>
           <p v-else>{{ t("tasks.detail.previewEmpty") }}</p>
         </section>
         <section class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss }">

@@ -91,6 +91,28 @@ class TaskInsightsTests(unittest.TestCase):
         self.assertEqual(sampled[-1], points[-1])
         self.assertEqual(task_insights.downsample(points[:10], 500), points[:10])
 
+    def test_parse_step_and_epoch_from_sample_names(self):
+        self.assertEqual(task_insights.parse_step("aki_000100_00_20260804103000_2333.png"), 100)
+        self.assertIsNone(task_insights.parse_epoch("aki_000100_00_20260804103000_2333.png"))
+        self.assertEqual(task_insights.parse_epoch("aki_e000001_00_20260804103000_2333.png"), 1)
+        self.assertIsNone(task_insights.parse_step("aki_e000001_00_20260804103000_2333.png"))
+
+    def test_read_progress_parses_tqdm_lines(self):
+        lines = [
+            "epoch 1/5\n",
+            "steps:   0%|          | 0/1000 [00:00<?, ?it/s]\rsteps:  12%|█▏        | 120/1000 [00:30<03:40, 3.99it/s, avr_loss=0.123]",
+        ]
+        progress = task_insights.read_progress(lines)
+        self.assertEqual(progress["percent"], 12)
+        self.assertEqual(progress["step"], 120)
+        self.assertEqual(progress["total_steps"], 1000)
+        self.assertEqual(progress["epoch"], 1)
+        self.assertEqual(progress["total_epochs"], 5)
+
+    def test_read_progress_ignores_unrelated_bars(self):
+        lines = ["caching latents:  50%|████| 3/6 [00:01<00:01, 2.0it/s]"]
+        self.assertEqual(task_insights.read_progress(lines), {})
+
     def test_read_loss_scalars_without_event_files_is_empty(self):
         self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})
 
