@@ -10,7 +10,7 @@ interface LossSeries {
 const props = defineProps<{ series: LossSeries[] }>()
 
 const WIDTH = 600
-const HEIGHT = 240
+const HEIGHT = 170
 const PAD = { top: 14, right: 14, bottom: 24, left: 52 }
 
 const domain = computed(() => {

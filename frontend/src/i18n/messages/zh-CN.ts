@@ -194,6 +194,7 @@ export default {
       overview: "概览",
       previewTitle: "训练预览图",
       previewEmpty: "暂无训练预览",
+      previewDisabled: "该任务未开启训练预览，不会生成预览图。可在训练表单「预览图设置」中开启。",
       lossTitle: "Loss 曲线",
       lossEmpty: "暂无 Loss",
       epochLabel: "第 {n} 轮",

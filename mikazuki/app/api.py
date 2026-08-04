@@ -28,7 +28,7 @@ except ModuleNotFoundError:  # pragma: no cover - lightweight test environment f
             return dump_flat_toml(data)
 
     toml = _TomlFallback()
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
 from fastapi.responses import FileResponse, StreamingResponse
 from urllib.parse import quote
 
@@ -1055,21 +1055,32 @@ async def task_previews(task_id: str) -> APIResponse:
     if task is None:
         raise HTTPException(status_code=404, detail="Unknown task_id")
     images = [
-        {**item, "url": f"/api/tasks/{quote(task_id)}/previews/{quote(item['name'])}"}
+        {
+            **item,
+            "url": f"/api/tasks/{quote(task_id)}/previews/{quote(item['name'])}",
+            "thumb_url": f"/api/tasks/{quote(task_id)}/previews/{quote(item['name'])}?thumb=1",
+        }
         for item in task_insights.list_preview_images(task.metadata)
     ]
-    return APIResponseSuccess(data={"images": images})
+    config = task_insights.resolve_task_config(task.metadata)
+    preview_enabled = bool(config.get("sample_prompts")) if config else None
+    return APIResponseSuccess(data={"images": images, "preview_enabled": preview_enabled})
 
 
 @router.get("/tasks/{task_id}/previews/{filename}")
-async def task_preview_image(task_id: str, filename: str):
+async def task_preview_image(task_id: str, filename: str, thumb: bool = False):
     task = tm.tasks.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Unknown task_id")
     path = task_insights.resolve_preview_image(task.metadata, filename)
     if path is None:
         raise HTTPException(status_code=404, detail="Unknown preview image")
-    return FileResponse(path)
+    headers = {"Cache-Control": "private, max-age=30"}
+    if thumb:
+        data = task_insights.preview_thumbnail(path)
+        if data is not None:
+            return Response(content=data, media_type="image/jpeg", headers=headers)
+    return FileResponse(path, headers=headers)
 
 
 @router.get("/tasks/{task_id}/metrics", response_model_exclude_none=True)

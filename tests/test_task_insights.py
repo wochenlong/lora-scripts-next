@@ -1,3 +1,4 @@
+import io
 import tempfile
 import time
 import os
@@ -12,6 +13,12 @@ try:
     HAS_TENSORBOARD = True
 except Exception:
     HAS_TENSORBOARD = False
+
+try:
+    from PIL import Image
+    HAS_PIL = True
+except Exception:
+    HAS_PIL = False
 
 
 def _write_config(tmp: Path, output_dir: Path, logging_dir: Path, output_name: str = "aki") -> Path:
@@ -112,6 +119,18 @@ class TaskInsightsTests(unittest.TestCase):
     def test_read_progress_ignores_unrelated_bars(self):
         lines = ["caching latents:  50%|████| 3/6 [00:01<00:01, 2.0it/s]"]
         self.assertEqual(task_insights.read_progress(lines), {})
+
+    @unittest.skipUnless(HAS_PIL, "Pillow not available")
+    def test_preview_thumbnail_shrinks_and_caches(self):
+        source = self.output_dir / "sample" / "aki_e000001_00_20260804103000.png"
+        Image.new("RGB", (1024, 768), (128, 64, 32)).save(source, "PNG")
+        data = task_insights.preview_thumbnail(source)
+        self.assertIsNotNone(data)
+        with Image.open(io.BytesIO(data)) as thumb:
+            self.assertLessEqual(max(thumb.size), task_insights.THUMB_MAX_SIDE)
+            self.assertEqual(thumb.format, "JPEG")
+        self.assertLess(len(data), source.stat().st_size)
+        self.assertEqual(task_insights.preview_thumbnail(source), data)
 
     def test_read_loss_scalars_without_event_files_is_empty(self):
         self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})

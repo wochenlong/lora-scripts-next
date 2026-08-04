@@ -17,6 +17,7 @@ let insightTick = 0
 const previews = ref<TaskPreviewImage[]>([])
 const metrics = ref<TaskMetrics>({})
 const progress = ref<TaskProgress>({})
+const previewEnabled = ref(true)
 let previewSig = ""
 let metricsSig = ""
 
@@ -42,7 +43,9 @@ const lossSeries = computed(() => {
 
 async function loadInsights(taskId: string) {
   try {
-    const [images, data] = await Promise.all([tasksApi.previews(taskId), tasksApi.metrics(taskId)])
+    const [previewsData, data] = await Promise.all([tasksApi.previews(taskId), tasksApi.metrics(taskId)])
+    previewEnabled.value = previewsData.preview_enabled !== false
+    const images = previewsData.images
     if (images.length > 0) {
       const nextPreviewSig = images.map((image) => `${image.name}:${image.mtime}`).join("|")
       if (nextPreviewSig !== previewSig) {
@@ -99,9 +102,16 @@ watch(selectedId, (id) => {
   previews.value = []
   metrics.value = {}
   progress.value = {}
+  previewEnabled.value = true
   previewSig = ""
   metricsSig = ""
   if (id) loadInsights(id)
+})
+
+watch(() => selected.value?.status, (status, previous) => {
+  const wasActive = previous === "RUNNING" || previous === "CREATED"
+  const isActive = status === "RUNNING" || status === "CREATED"
+  if (wasActive && status && !isActive && selectedId.value) loadInsights(selectedId.value)
 })
 
 async function terminate(task: TrainingTask) {
@@ -123,6 +133,8 @@ async function terminate(task: TrainingTask) {
 onMounted(async () => {
   await store.refresh()
   timer = window.setInterval(() => {
+    const hasActive = tasks.value.some((task) => task.status === "RUNNING" || task.status === "CREATED")
+    if (!hasActive) return
     store.refresh({ silent: true })
     insightTick += 1
     const task = selected.value
@@ -177,7 +189,8 @@ onBeforeUnmount(() => window.clearInterval(timer))
         </div>
         <section class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0 }">
           <header>{{ t("tasks.detail.previewTitle") }}</header>
-          <div v-if="previews.length" class="preview-scroll"><div v-for="image in previews" :key="image.name" class="preview-item"><a :href="image.url" target="_blank" rel="noreferrer"><img :src="image.url" :alt="image.name" loading="lazy"></a><span v-if="imageLabel(image)">{{ imageLabel(image) }}</span></div></div>
+          <div v-if="previews.length" class="preview-scroll"><div v-for="image in previews" :key="image.name" class="preview-item"><a :href="image.url" target="_blank" rel="noreferrer"><img :src="image.thumb_url || image.url" :alt="image.name" loading="lazy"></a><span v-if="imageLabel(image)">{{ imageLabel(image) }}</span></div></div>
+          <p v-else-if="!previewEnabled">{{ t("tasks.detail.previewDisabled") }}</p>
           <p v-else>{{ t("tasks.detail.previewEmpty") }}</p>
         </section>
         <section class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss }">

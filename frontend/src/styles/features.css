@@ -156,7 +156,7 @@
 .task-progress-track{height:8px;overflow:hidden;background:var(--surface-inset);border-radius:99px}
 .task-progress-track i{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .4s ease}
 .preview-scroll img{display:block;height:110px}
-.loss-chart svg{display:block;width:100%;height:auto}
+.loss-chart svg{display:block;width:100%;height:auto;max-height:200px}
 .loss-chart .axis{stroke:var(--border);stroke-width:1}
 .loss-chart .tick{fill:var(--text-faint);font-size:10px}
 .loss-chart .line{fill:none;stroke-width:1.6}

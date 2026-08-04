@@ -19,6 +19,12 @@ export interface TaskPreviewImage {
   step?: number | null
   mtime: number
   url: string
+  thumb_url?: string
+}
+
+export interface TaskPreviewsData {
+  images: TaskPreviewImage[]
+  preview_enabled?: boolean | null
 }
 
 export interface TaskMetricsPoint {
@@ -44,6 +50,6 @@ export interface TaskMetricsData {
 export const tasksApi = {
   list: async () => (await apiData<TasksData>("/api/tasks")).tasks,
   terminate: (taskId: string) => apiRequest(`/api/tasks/terminate/${encodeURIComponent(taskId)}`),
-  previews: async (taskId: string) => (await apiData<{ images: TaskPreviewImage[] }>(`/api/tasks/${encodeURIComponent(taskId)}/previews`)).images,
+  previews: (taskId: string) => apiData<TaskPreviewsData>(`/api/tasks/${encodeURIComponent(taskId)}/previews`),
   metrics: (taskId: string) => apiData<TaskMetricsData>(`/api/tasks/${encodeURIComponent(taskId)}/metrics`),
 }

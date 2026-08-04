@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import io
 import re
 import time
 from pathlib import Path
@@ -23,6 +24,37 @@ SINCE_TOLERANCE_SECONDS = 1.0
 _LIST_CACHE_TTL_SECONDS = 2.0
 _list_cache: dict[tuple, tuple[float, list[Path]]] = {}
 _loss_cache: dict[str, tuple[tuple, dict]] = {}
+_thumb_cache: dict[tuple, bytes] = {}
+_THUMB_CACHE_LIMIT = 64
+THUMB_MAX_SIDE = 384
+
+
+def preview_thumbnail(path: Path, max_side: int = THUMB_MAX_SIDE) -> bytes | None:
+    try:
+        stat = path.stat()
+    except OSError:
+        return None
+    key = (str(path), stat.st_mtime, stat.st_size, max_side)
+    cached = _thumb_cache.get(key)
+    if cached is not None:
+        return cached
+    try:
+        from PIL import Image
+    except Exception:
+        return None
+    try:
+        with Image.open(path) as image:
+            converted = image.convert("RGB")
+            converted.thumbnail((max_side, max_side))
+            buffer = io.BytesIO()
+            converted.save(buffer, "JPEG", quality=82)
+            data = buffer.getvalue()
+    except Exception:
+        return None
+    if len(_thumb_cache) >= _THUMB_CACHE_LIMIT:
+        _thumb_cache.clear()
+    _thumb_cache[key] = data
+    return data
 
 
 def resolve_task_config(metadata: dict) -> dict:

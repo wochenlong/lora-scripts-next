@@ -194,6 +194,7 @@ export default {
       overview: "Overview",
       previewTitle: "Training previews",
       previewEmpty: "No training previews yet",
+      previewDisabled: "Preview sampling is disabled for this task, so no images will be generated. Enable it in the training form's preview settings.",
       lossTitle: "Loss curves",
       lossEmpty: "No loss data yet",
       epochLabel: "Epoch {n}",
