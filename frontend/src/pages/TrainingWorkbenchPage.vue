@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue"
 import { useRoute, useRouter } from "vue-router"
+import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import AnimaFastPage from "./AnimaFastPage.vue"
 import TrainingPage from "./TrainingPage.vue"
@@ -59,12 +60,16 @@ const schemaMeta = computed(() => {
 })
 
 watch([model, engine, target], () => {
+  let adjusted = false
   if (!isEngineSupported(model.value, engine.value)) {
     engine.value = firstSupportedEngine(model.value) ?? engine.value
+    adjusted = true
   }
   if (!isTargetSupported(model.value, engine.value, target.value)) {
     target.value = firstSupportedTarget(model.value, engine.value) ?? target.value
+    adjusted = true
   }
+  if (adjusted) ElMessage.info(t("training.selector.autoAdjusted"))
   router.replace({ query: { model: model.value, engine: engine.value, target: target.value } })
 })
 </script>

@@ -98,16 +98,30 @@ async function applyImportedConfig(config: FormModel, successMessage?: string) {
   ElMessage.success(successMessage ?? t("training.importMsg.imported"))
 }
 
+function readCarryOver(): FormModel {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem("mikazuki-carry-over") || "null")
+    return parsed && typeof parsed === "object" ? parsed as FormModel : {}
+  } catch { return {} }
+}
+
 async function load() {
   loading.value = true
   error.value = ""
   try {
     const loaded = await loadTrainingSchema(props.schemaName)
     const defaults = { ...createDefaultModel(loaded), ...props.fieldDefaults }
+    const carry = readCarryOver()
+    sessionStorage.removeItem("mikazuki-carry-over")
+    const carried: FormModel = {}
+    for (const [key, value] of Object.entries(carry)) {
+      if (key in defaults && !(props.fieldDefaults && key in props.fieldDefaults)) carried[key] = value
+    }
+    const base = { ...defaults, ...carried }
     try {
       const saved = JSON.parse(localStorage.getItem(autosaveKey()) || "null")
-      model.value = saved && typeof saved === "object" ? { ...defaults, ...saved } : defaults
-    } catch { model.value = defaults }
+      model.value = saved && typeof saved === "object" ? { ...base, ...saved } : base
+    } catch { model.value = base }
     const cards = await schemasApi.graphicCards()
     if (cards.length > 1) {
       const options = cards.map((card, index) => typeof card === "object" ? (card.value ?? card.label ?? index) : card)
@@ -245,7 +259,7 @@ watch(() => props.schemaName, () => { started.value = undefined; loadHistory(); 
 watch(model, (value) => localStorage.setItem(autosaveKey(), JSON.stringify(value)), { deep: true })
 watch(previewCollapsed, (value) => persistPreviewCollapsed(value))
 onMounted(() => { migrateLegacyStorage(); loadHistory(); load(); tasksStore.refresh(); tasksTimer = window.setInterval(() => tasksStore.refresh({ silent: true }), 2000) })
-onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(autosaveKey(), JSON.stringify(model.value)) })
+onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(autosaveKey(), JSON.stringify(model.value)); sessionStorage.setItem("mikazuki-carry-over", JSON.stringify(model.value)) })
 </script>
 
 <template>

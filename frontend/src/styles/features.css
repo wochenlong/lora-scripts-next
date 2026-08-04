@@ -76,6 +76,7 @@
 .selector-card{padding:18px 20px;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow)}
 .selector-card h2{margin:0 0 12px;font-size:14px}
 .selector-grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.selector-hint{grid-column:1/-1;margin:10px 0 0;color:var(--text-faint);font-size:11px}
 .selector-grid label{display:grid;gap:7px;color:var(--text-soft);font-size:12px}
 .selector-grid select{min-height:38px;padding:0 11px;color:var(--text);background:var(--surface-soft);border:1px solid var(--border);border-radius:8px}
 .selector-grid select:focus{border-color:var(--accent);outline:none;box-shadow:0 0 0 3px var(--accent-soft)}

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import {
   TRAINING_ENGINES,
@@ -15,6 +16,9 @@ const model = defineModel<TrainingModel>("model", { required: true })
 const engine = defineModel<TrainingEngine>("engine", { required: true })
 const target = defineModel<TrainingTarget>("target", { required: true })
 const { t } = useI18n()
+
+const unsupportedEngines = computed(() => TRAINING_ENGINES.filter((item) => !isEngineSupported(model.value, item)))
+const unsupportedTargets = computed(() => TRAINING_TARGETS.filter((item) => !isTargetSupported(model.value, engine.value, item)))
 </script>
 
 <template>
@@ -32,6 +36,7 @@ const { t } = useI18n()
             <option v-for="item in TRAINING_ENGINES" :key="item" :value="item" :disabled="!isEngineSupported(model, item)">{{ t(`training.selector.engines.${item}`) }}</option>
           </select>
         </label>
+        <p v-if="unsupportedEngines.length" class="selector-hint">{{ t("training.selector.unsupportedForModel", { list: unsupportedEngines.map((item) => t(`training.selector.engines.${item}`)).join(" / ") }) }}</p>
       </div>
     </div>
     <div class="selector-card">
@@ -39,6 +44,7 @@ const { t } = useI18n()
       <div class="segmented" role="group" :aria-label="t('training.selector.targetType')">
         <button v-for="item in TRAINING_TARGETS" :key="item" :class="{ active: target === item }" :disabled="!isTargetSupported(model, engine, item)" @click="target = item">{{ t(`training.selector.targets.${item}`) }}</button>
       </div>
+      <p v-if="unsupportedTargets.length" class="selector-hint">{{ t("training.selector.unsupportedForModel", { list: unsupportedTargets.map((item) => t(`training.selector.targets.${item}`)).join(" / ") }) }}</p>
     </div>
   </div>
 </template>

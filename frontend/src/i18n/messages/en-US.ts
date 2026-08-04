@@ -38,6 +38,8 @@ export default {
         finetune: "Full Fine-tune",
       },
       unsupported: "This combination is not supported yet",
+      unsupportedForModel: "{list}: not available for this model",
+      autoAdjusted: "The current combination is unavailable for this model; switched to the default supported combination.",
     },
     actions: {
       save: "Save",

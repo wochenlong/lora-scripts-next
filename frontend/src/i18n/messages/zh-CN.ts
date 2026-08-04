@@ -38,6 +38,8 @@ export default {
         finetune: "全量微调",
       },
       unsupported: "该组合暂不支持",
+      unsupportedForModel: "{list}：该模型暂不支持",
+      autoAdjusted: "当前组合与该模型不兼容，已切换为默认可用组合",
     },
     actions: {
       save: "保存配置",
