@@ -29,7 +29,8 @@ except ModuleNotFoundError:  # pragma: no cover - lightweight test environment f
 
     toml = _TomlFallback()
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
+from urllib.parse import quote
 
 import mikazuki.process as process
 from mikazuki import launch_utils
@@ -66,7 +67,7 @@ from mikazuki.tagger.jobs import run_interrogate_job, run_prefetch_job
 from mikazuki.tagger.progress import tagger_progress
 from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
-from mikazuki.utils import train_utils
+from mikazuki.utils import task_insights, train_utils
 from mikazuki.utils.config_import import validate_config_import
 from mikazuki.utils.config_export import normalize_config_for_export
 from mikazuki.utils.config_args import normalize_custom_args, normalize_kv_arg_list
@@ -1046,6 +1047,37 @@ async def get_tasks() -> APIResponse:
 async def terminate_task(task_id: str):
     tm.terminate_task(task_id)
     return APIResponseSuccess()
+
+
+@router.get("/tasks/{task_id}/previews", response_model_exclude_none=True)
+async def task_previews(task_id: str) -> APIResponse:
+    task = tm.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    images = [
+        {**item, "url": f"/api/tasks/{quote(task_id)}/previews/{quote(item['name'])}"}
+        for item in task_insights.list_preview_images(task.metadata)
+    ]
+    return APIResponseSuccess(data={"images": images})
+
+
+@router.get("/tasks/{task_id}/previews/{filename}")
+async def task_preview_image(task_id: str, filename: str):
+    task = tm.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    path = task_insights.resolve_preview_image(task.metadata, filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Unknown preview image")
+    return FileResponse(path)
+
+
+@router.get("/tasks/{task_id}/metrics", response_model_exclude_none=True)
+async def task_metrics(task_id: str) -> APIResponse:
+    task = tm.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    return APIResponseSuccess(data={"tags": task_insights.read_loss_scalars(task.metadata)})
 
 
 @router.get("/graphic_cards")

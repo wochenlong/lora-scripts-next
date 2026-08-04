@@ -50,6 +50,7 @@ class Task:
         self.status = TaskStatus.CREATED
         self.environ = environ or os.environ
         self.metadata = metadata or {}
+        self.metadata.setdefault("created_at", datetime.now().timestamp())
         self.cwd = cwd
         self.returncode = None
         self.log_file = self.metadata.get("log_file")

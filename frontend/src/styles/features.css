@@ -144,6 +144,18 @@
 .task-placeholder p{margin:0;font-size:12px}
 .task-preview-strip{min-height:130px}
 .task-loss-panel{min-height:300px}
+.task-placeholder.has-data{display:block;place-content:unset;text-align:left}
+.task-placeholder.has-data header{margin-bottom:10px;text-align:left}
+.preview-scroll{display:flex;gap:8px;overflow-x:auto}
+.preview-scroll a{flex:0 0 auto;overflow:hidden;border:1px solid var(--border);border-radius:8px}
+.preview-scroll img{display:block;height:110px}
+.loss-chart svg{display:block;width:100%;height:auto}
+.loss-chart .axis{stroke:var(--border);stroke-width:1}
+.loss-chart .tick{fill:var(--text-faint);font-size:10px}
+.loss-chart .line{fill:none;stroke-width:1.6}
+.loss-legend{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;color:var(--text-soft);font-size:11px}
+.loss-legend i{display:inline-block;width:10px;height:3px;margin-right:6px;vertical-align:middle}
+.loss-legend b{color:var(--text)}
 .task-detail-empty{display:grid;min-height:280px;place-content:center;color:var(--text-faint);font-size:13px}
 @media(max-width:900px){.tasks-columns{grid-template-columns:1fr}}
 

@@ -5,12 +5,39 @@ import { Refresh } from "@element-plus/icons-vue"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useTasksStore } from "../stores/tasks"
-import type { TaskStatus, TrainingTask } from "../api/tasks"
+import { tasksApi, type TaskMetrics, type TaskPreviewImage, type TaskStatus, type TrainingTask } from "../api/tasks"
+import LossChart from "../components/LossChart.vue"
 
 const store = useTasksStore()
 const { tasks, loading, error, terminatingId } = storeToRefs(store)
 const { t } = useI18n()
 let timer: number | undefined
+let insightTick = 0
+
+const previews = ref<TaskPreviewImage[]>([])
+const metrics = ref<TaskMetrics>({})
+const hasLoss = computed(() => Object.values(metrics.value).some((points) => points.length > 0))
+const lossSeries = computed(() => {
+  const series: { name: string; color: string; points: { step: number; value: number }[] }[] = []
+  const average = metrics.value["loss/average"]
+  const current = metrics.value["loss/current"]
+  if (average?.length) series.push({ name: "loss/average", color: "#2563eb", points: average })
+  if (current?.length) series.push({ name: "loss/current", color: "#d97706", points: current })
+  if (!series.length) {
+    for (const [name, points] of Object.entries(metrics.value)) {
+      if (points.length) series.push({ name, color: series.length ? "#d97706" : "#2563eb", points })
+    }
+  }
+  return series
+})
+
+async function loadInsights(taskId: string) {
+  try {
+    const [images, tags] = await Promise.all([tasksApi.previews(taskId), tasksApi.metrics(taskId)])
+    previews.value = images
+    metrics.value = tags
+  } catch {}
+}
 
 const statusLabels = computed<Record<TaskStatus, string>>(() => ({
   CREATED: t("tasks.status.created"),
@@ -45,6 +72,12 @@ watch(visibleList, (list) => {
   if (!list.some((task) => task.id === selectedId.value)) selectedId.value = list[0]?.id ?? ""
 }, { immediate: true })
 
+watch(selected, (task) => {
+  previews.value = []
+  metrics.value = {}
+  if (task) loadInsights(task.id)
+})
+
 async function terminate(task: TrainingTask) {
   try {
     await ElMessageBox.confirm(t("tasks.terminate.confirm", { id: task.id }), t("tasks.terminate.title"), {
@@ -63,7 +96,12 @@ async function terminate(task: TrainingTask) {
 
 onMounted(async () => {
   await store.refresh()
-  timer = window.setInterval(() => store.refresh({ silent: true }), 2000)
+  timer = window.setInterval(() => {
+    store.refresh({ silent: true })
+    insightTick += 1
+    const task = selected.value
+    if (task && (task.status === "RUNNING" || task.status === "CREATED") && insightTick % 2 === 0) loadInsights(task.id)
+  }, 2000)
 })
 
 onBeforeUnmount(() => window.clearInterval(timer))
@@ -107,13 +145,15 @@ onBeforeUnmount(() => window.clearInterval(timer))
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
           <RouterLink class="ghost-button" to="/tensorboard.html">{{ t("tasks.detail.tensorboard") }}</RouterLink>
         </div>
-        <section class="task-preview-strip task-placeholder">
+        <section class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0 }">
           <header>{{ t("tasks.detail.previewTitle") }}</header>
-          <p>{{ t("tasks.detail.previewEmpty") }}</p>
+          <div v-if="previews.length" class="preview-scroll"><a v-for="image in previews" :key="image.name" :href="image.url" target="_blank" rel="noreferrer"><img :src="image.url" :alt="image.name" loading="lazy"></a></div>
+          <p v-else>{{ t("tasks.detail.previewEmpty") }}</p>
         </section>
-        <section class="task-loss-panel task-placeholder">
+        <section class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss }">
           <header>{{ t("tasks.detail.lossTitle") }}</header>
-          <p>{{ t("tasks.detail.lossEmpty") }}</p>
+          <LossChart v-if="hasLoss" :series="lossSeries" />
+          <p v-else>{{ t("tasks.detail.lossEmpty") }}</p>
         </section>
       </section>
       <section v-else class="task-detail task-detail-empty"><p>{{ t("tasks.detail.empty") }}</p></section>
