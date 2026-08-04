@@ -189,7 +189,10 @@ export default {
       config: "训练配置",
       returncode: "返回码",
       overview: "概览",
-      logsDeferred: "日志与曲线内嵌视图将在下一阶段提供，当前请使用外链查看。",
+      previewTitle: "训练预览图",
+      previewEmpty: "暂无训练预览",
+      lossTitle: "Loss 曲线",
+      lossEmpty: "暂无 Loss",
     },
   },
   settings: {

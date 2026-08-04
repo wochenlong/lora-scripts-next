@@ -189,7 +189,10 @@ export default {
       config: "Training Config",
       returncode: "Return Code",
       overview: "Overview",
-      logsDeferred: "The embedded logs and curves view will be available in a later phase. Please use the external links for now.",
+      previewTitle: "Training previews",
+      previewEmpty: "No training previews yet",
+      lossTitle: "Loss curves",
+      lossEmpty: "No loss data yet",
     },
   },
   settings: {

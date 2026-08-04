@@ -107,7 +107,14 @@ onBeforeUnmount(() => window.clearInterval(timer))
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
           <RouterLink class="ghost-button" to="/tensorboard.html">{{ t("tasks.detail.tensorboard") }}</RouterLink>
         </div>
-        <p class="task-deferred-note">{{ t("tasks.detail.logsDeferred") }}</p>
+        <section class="task-preview-strip task-placeholder">
+          <header>{{ t("tasks.detail.previewTitle") }}</header>
+          <p>{{ t("tasks.detail.previewEmpty") }}</p>
+        </section>
+        <section class="task-loss-panel task-placeholder">
+          <header>{{ t("tasks.detail.lossTitle") }}</header>
+          <p>{{ t("tasks.detail.lossEmpty") }}</p>
+        </section>
       </section>
       <section v-else class="task-detail task-detail-empty"><p>{{ t("tasks.detail.empty") }}</p></section>
     </div>
