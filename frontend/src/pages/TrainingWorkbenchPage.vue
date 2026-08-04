@@ -23,12 +23,6 @@ import {
   type TrainingTarget,
 } from "../training/modules"
 
-interface TrainingChildActions {
-  saveConfig?: () => void
-  openImport?: () => void
-  resetConfig?: () => void
-}
-
 const route = useRoute()
 const router = useRouter()
 const { t } = useI18n()
@@ -36,7 +30,6 @@ const { t } = useI18n()
 const model = ref<TrainingModel>(DEFAULT_SELECTION.model)
 const engine = ref<TrainingEngine>(DEFAULT_SELECTION.engine)
 const target = ref<TrainingTarget>(DEFAULT_SELECTION.target)
-const childRef = ref<TrainingChildActions>()
 
 function isEngine(value: unknown): value is TrainingEngine { return TRAINING_ENGINES.includes(value as TrainingEngine) }
 function isTarget(value: unknown): value is TrainingTarget { return TRAINING_TARGETS.includes(value as TrainingTarget) }
@@ -74,28 +67,24 @@ watch([model, engine, target], () => {
   }
   router.replace({ query: { model: model.value, engine: engine.value, target: target.value } })
 })
-
-function callChild(method: keyof TrainingChildActions) {
-  childRef.value?.[method]?.()
-}
 </script>
 
 <template>
   <div class="workbench-page">
     <div v-if="!resolved" class="workbench-fallback">
-      <WorkbenchHeader @save="callChild('saveConfig')" @import="callChild('openImport')" @reset="callChild('resetConfig')" />
+      <WorkbenchHeader />
       <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       <div class="unsupported-hint"><strong>{{ t("training.selector.unsupported") }}</strong></div>
     </div>
-    <AnimaFastPage v-else-if="resolved.schemaName === 'anima-lora-fast'" ref="childRef" bare>
+    <AnimaFastPage v-else-if="resolved.schemaName === 'anima-lora-fast'" bare>
       <template #form-top>
-        <WorkbenchHeader @save="callChild('saveConfig')" @import="callChild('openImport')" @reset="callChild('resetConfig')" />
+        <WorkbenchHeader />
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </AnimaFastPage>
-    <TrainingPage v-else-if="schemaMeta" :key="resolved.storageKey || resolved.schemaName" ref="childRef" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName" :field-defaults="resolved.defaults" :storage-key="resolved.storageKey" :legacy-storage-key="resolved.legacyStorageKey">
+    <TrainingPage v-else-if="schemaMeta" :key="resolved.storageKey || resolved.schemaName" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName" :field-defaults="resolved.defaults" :storage-key="resolved.storageKey" :legacy-storage-key="resolved.legacyStorageKey">
       <template #form-top>
-        <WorkbenchHeader @save="callChild('saveConfig')" @import="callChild('openImport')" @reset="callChild('resetConfig')" />
+        <WorkbenchHeader />
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </TrainingPage>
