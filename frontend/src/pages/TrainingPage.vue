@@ -24,12 +24,27 @@ const error = ref("")
 const errors = ref<Record<string, string>>({})
 const submitting = ref(false)
 const historyOpen = ref(false)
+
+function readPreviewCollapsed(): boolean {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("ui-configs") || "{}")
+    return Boolean(parsed && typeof parsed === "object" && parsed.training_preview_collapsed)
+  } catch { return false }
+}
+
+function persistPreviewCollapsed(collapsed: boolean) {
+  try {
+    const parsed = JSON.parse(localStorage.getItem("ui-configs") || "{}")
+    const configs = parsed && typeof parsed === "object" ? parsed : {}
+    localStorage.setItem("ui-configs", JSON.stringify({ ...configs, training_preview_collapsed: collapsed }))
+  } catch {}
+}
 const presetsOpen = ref(false)
 const history = ref<HistoryRow[]>([])
 const presets = ref<TrainingPreset[]>([])
 const presetsLoading = ref(false)
 const started = ref<TrainingStart>()
-const previewCollapsed = ref(false)
+const previewCollapsed = ref(readPreviewCollapsed())
 const importInput = ref<HTMLInputElement>()
 const rawConfig = computed(() => schema.value ? serializeModel(schema.value, model.value) : {})
 const output = computed(() => buildTrainingConfig(rawConfig.value, props.schemaName))
@@ -213,12 +228,13 @@ defineExpose({ saveConfig: saveHistory, openImport, resetConfig })
 
 watch(() => props.schemaName, () => { started.value = undefined; loadHistory(); load() })
 watch(model, (value) => localStorage.setItem(autosaveKey(), JSON.stringify(value)), { deep: true })
+watch(previewCollapsed, (value) => persistPreviewCollapsed(value))
 onMounted(() => { migrateLegacyStorage(); loadHistory(); load() })
 onBeforeUnmount(() => localStorage.setItem(autosaveKey(), JSON.stringify(model.value)))
 </script>
 
 <template>
-  <div class="training-layout schema-training-layout" :class="{ bare }">
+  <div class="training-layout schema-training-layout" :class="{ bare, 'preview-docked': previewCollapsed }">
     <section class="form-canvas">
       <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
       <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
@@ -228,13 +244,23 @@ onBeforeUnmount(() => localStorage.setItem(autosaveKey(), JSON.stringify(model.v
       <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
       <DynamicSchemaForm v-else-if="schema" v-model="model" :schema="schema" :errors="errors" />
     </section>
-    <aside class="control-panel">
-      <div v-if="!bare" class="panel-copy"><span class="eyebrow">TRAINING CONTROL</span><h2>{{ title }}</h2><p>{{ t("training.panelHint") }}</p></div>
-      <div v-if="diagnostics.errors.length || diagnostics.warnings.length" class="param-diagnostics"><p v-for="item in diagnostics.errors" :key="item" class="error">{{ item }}</p><p v-for="item in diagnostics.warnings" :key="item">{{ item }}</p></div>
-      <div v-if="started" class="started-task"><strong>{{ t("training.startedTask") }}</strong><code>{{ started.task_id }}</code><a :href="trainLogHref" target="_blank" rel="noreferrer">{{ t("training.openLog") }}</a><RouterLink to="/tasks">{{ t("training.viewTasks") }}</RouterLink></div>
-      <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>{{ t("training.preview.panelTitle") }}</span><b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b><span class="preview-actions"><button @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? t("training.preview.expand") : t("training.preview.collapse") }}</button><button @click="copyToml">{{ t("training.preview.copy") }}</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
-      <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">{{ t("training.validate") }}</button>
-      <button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button>
+    <aside class="control-panel" :class="{ collapsed: previewCollapsed }">
+      <div class="panel-rail">
+        <button class="rail-handle" @click="previewCollapsed = false">
+          <span v-if="diagnostics.errors.length || diagnostics.warnings.length" class="rail-alert" :class="{ error: diagnostics.errors.length > 0 }"></span>
+          <span class="rail-label">{{ t("training.preview.panelTitle") }}</span>
+          <b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b>
+        </button>
+        <button class="primary-action rail-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button>
+      </div>
+      <div class="panel-full">
+        <div v-if="!bare" class="panel-copy"><span class="eyebrow">TRAINING CONTROL</span><h2>{{ title }}</h2><p>{{ t("training.panelHint") }}</p></div>
+        <div v-if="diagnostics.errors.length || diagnostics.warnings.length" class="param-diagnostics"><p v-for="item in diagnostics.errors" :key="item" class="error">{{ item }}</p><p v-for="item in diagnostics.warnings" :key="item">{{ item }}</p></div>
+        <div v-if="started" class="started-task"><strong>{{ t("training.startedTask") }}</strong><code>{{ started.task_id }}</code><a :href="trainLogHref" target="_blank" rel="noreferrer">{{ t("training.openLog") }}</a><RouterLink to="/tasks">{{ t("training.viewTasks") }}</RouterLink></div>
+        <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>{{ t("training.preview.panelTitle") }}</span><b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b><span class="preview-actions"><button @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? t("training.preview.expand") : t("training.preview.collapse") }}</button><button @click="copyToml">{{ t("training.preview.copy") }}</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
+        <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">{{ t("training.validate") }}</button>
+        <button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button>
+      </div>
     </aside>
   </div>
 
