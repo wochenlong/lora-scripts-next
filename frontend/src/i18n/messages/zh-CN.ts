@@ -35,7 +35,6 @@ export default {
       },
       targets: {
         lora: "LoRA",
-        lokr: "LoKr",
         finetune: "全量微调",
       },
       unsupported: "该组合暂不支持",

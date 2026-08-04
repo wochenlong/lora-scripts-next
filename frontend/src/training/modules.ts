@@ -2,7 +2,7 @@ import type { FormModel } from "../schema/adapter"
 
 export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina"
 export type TrainingEngine = "kohya" | "anima-fast" | "musubi"
-export type TrainingTarget = "lora" | "lokr" | "finetune"
+export type TrainingTarget = "lora" | "finetune"
 
 export interface TrainingModule {
   model: TrainingModel
@@ -19,7 +19,7 @@ export interface TrainingModule {
 
 export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina"]
 export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi"]
-export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "lokr", "finetune"]
+export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "finetune"]
 
 export const DEFAULT_SELECTION: { model: TrainingModel; engine: TrainingEngine; target: TrainingTarget } = {
   model: "anima",

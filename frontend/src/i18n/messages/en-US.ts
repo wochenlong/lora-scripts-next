@@ -35,7 +35,6 @@ export default {
       },
       targets: {
         lora: "LoRA",
-        lokr: "LoKr",
         finetune: "Full Fine-tune",
       },
       unsupported: "This combination is not supported yet",

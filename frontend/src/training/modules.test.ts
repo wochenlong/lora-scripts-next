@@ -2,12 +2,11 @@ import { describe, expect, it } from "vitest"
 import {
   DEFAULT_SELECTION,
   SCHEMA_META,
-  TRAINING_ENGINES,
   TRAINING_MODELS,
   TRAINING_MODULES,
+  TRAINING_TARGETS,
   firstSupportedEngine,  firstSupportedTarget,
   isEngineSupported,
-  isTargetSupported,
   moduleForSchema,
   moduleForTrainType,
   normalizeModel,
@@ -63,7 +62,6 @@ describe("training module mapping", () => {
   })
 
   it("returns undefined for unmapped combinations", () => {
-    expect(resolveModule("anima", "kohya", "lokr")).toBeUndefined()
     expect(resolveModule("flux", "kohya", "finetune")).toBeUndefined()
     expect(resolveModule("lumina", "kohya", "finetune")).toBeUndefined()
     expect(resolveModule("anima", "musubi", "lora")).toBeUndefined()
@@ -73,11 +71,9 @@ describe("training module mapping", () => {
     for (const model of TRAINING_MODELS) expect(isEngineSupported(model, "musubi")).toBe(false)
   })
 
-  it("marks lokr as unsupported for every listed combination", () => {
-    for (const module of TRAINING_MODULES) expect(module.target).not.toBe("lokr")
-    for (const model of TRAINING_MODELS) {
-      for (const engine of TRAINING_ENGINES) expect(isTargetSupported(model, engine, "lokr")).toBe(false)
-    }
+  it("limits master targets to lora and finetune; adapter types live in the form schema", () => {
+    expect(TRAINING_TARGETS).toEqual(["lora", "finetune"])
+    for (const module of TRAINING_MODULES) expect(["lora", "finetune"]).toContain(module.target)
   })
 
   it("limits anima-fast engine to the anima model", () => {
