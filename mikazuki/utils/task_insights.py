@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+import time
 from pathlib import Path
 
 try:
@@ -18,6 +19,10 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 LOSS_TAGS = ("loss/average", "loss/current", "loss/epoch_average", "lr/unet")
 LOSS_POINT_LIMIT = 500
 SINCE_TOLERANCE_SECONDS = 1.0
+
+_LIST_CACHE_TTL_SECONDS = 2.0
+_list_cache: dict[tuple, tuple[float, list[Path]]] = {}
+_loss_cache: dict[str, tuple[tuple, dict]] = {}
 
 
 def resolve_task_config(metadata: dict) -> dict:
@@ -81,6 +86,11 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
         return []
     output_name = dirs.get("output_name") or ""
     since = _since(metadata)
+    cache_key = (str(output_dir), output_name, since)
+    now = time.monotonic()
+    cached = _list_cache.get(cache_key)
+    if cached and now - cached[0] < _LIST_CACHE_TTL_SECONDS:
+        return cached[1]
     found: dict[str, Path] = {}
     for root in (output_dir / "sample", output_dir):
         if not root.exists():
@@ -99,7 +109,9 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
             old = found.get(path.name)
             if old is None or mtime >= old.stat().st_mtime:
                 found[path.name] = path
-    return sorted(found.values(), key=lambda p: p.stat().st_mtime)
+    result = sorted(found.values(), key=lambda p: p.stat().st_mtime)
+    _list_cache[cache_key] = (now, result)
+    return result
 
 
 def list_preview_images(metadata: dict) -> list[dict]:
@@ -142,43 +154,84 @@ def read_loss_scalars(metadata: dict, limit: int = LOSS_POINT_LIMIT) -> dict:
     except Exception:
         return {}
 
-    run_dirs: dict[Path, float] = {}
+    run_mtimes: dict[Path, float] = {}
     for event_file in logging_dir.rglob("events.out.tfevents.*"):
         if not event_file.is_file():
-            continue
-        if output_name and output_name not in event_file.parent.name:
             continue
         try:
             mtime = event_file.stat().st_mtime
         except OSError:
             continue
-        if since and mtime < since:
-            continue
-        run_dirs[event_file.parent] = max(run_dirs.get(event_file.parent, 0.0), mtime)
+        run_mtimes[event_file.parent] = max(run_mtimes.get(event_file.parent, 0.0), mtime)
+    if not run_mtimes:
+        return {}
 
-    for run_dir, _ in sorted(run_dirs.items(), key=lambda item: item[1], reverse=True):
+    chosen = _select_run_dir(run_mtimes, output_name, since)
+    if chosen is None:
+        return {}
+    return _read_run_scalars(chosen, limit)
+
+
+def _run_dir_timestamp(name: str) -> float | None:
+    match = re.search(r"(\d{14})", name)
+    if not match:
+        return None
+    try:
+        return time.mktime(time.strptime(match.group(1), "%Y%m%d%H%M%S"))
+    except ValueError:
+        return None
+
+
+def _select_run_dir(run_mtimes: dict[Path, float], output_name: str, since: float) -> Path | None:
+    if since:
+        run_mtimes = {path: mtime for path, mtime in run_mtimes.items() if mtime >= since}
+        if not run_mtimes:
+            return None
+    timed = [(path, ts) for path in run_mtimes if (ts := _run_dir_timestamp(path.name)) is not None and ts >= since]
+    if timed:
+        if since:
+            return min(timed, key=lambda item: item[1])[0]
+        return max(timed, key=lambda item: item[1])[0]
+    named = [path for path in run_mtimes if output_name and output_name in path.name]
+    pool = named or list(run_mtimes)
+    return max(pool, key=lambda path: run_mtimes[path])
+
+
+def _read_run_scalars(run_dir: Path, limit: int) -> dict:
+    try:
+        from tensorboard.backend.event_processing import event_accumulator
+    except Exception:
+        return {}
+    try:
+        files = [p for p in run_dir.glob("events.out.tfevents.*") if p.is_file()]
+    except OSError:
+        return {}
+    if not files:
+        return {}
+    signature = (len(files), sum(p.stat().st_size for p in files), max(p.stat().st_mtime for p in files))
+    cached = _loss_cache.get(str(run_dir))
+    if cached and cached[0] == signature:
+        return dict(cached[1])
+    try:
+        accumulator = event_accumulator.EventAccumulator(
+            str(run_dir),
+            size_guidance={event_accumulator.SCALARS: 0},
+        )
+        accumulator.Reload()
+        scalar_tags = set(accumulator.Tags().get("scalars", []))
+    except Exception:
+        return {}
+
+    series: dict[str, list[dict]] = {}
+    for tag in LOSS_TAGS:
+        if tag not in scalar_tags:
+            continue
         try:
-            accumulator = event_accumulator.EventAccumulator(
-                str(run_dir),
-                size_guidance={event_accumulator.SCALARS: 0},
-            )
-            accumulator.Reload()
-            scalar_tags = set(accumulator.Tags().get("scalars", []))
+            events = accumulator.Scalars(tag)
         except Exception:
             continue
-
-        series: dict[str, list[dict]] = {}
-        for tag in LOSS_TAGS:
-            if tag not in scalar_tags:
-                continue
-            try:
-                events = accumulator.Scalars(tag)
-            except Exception:
-                continue
-            points = [{"step": int(event.step), "value": float(event.value)} for event in events]
-            if points:
-                series[tag] = downsample(points, limit)
-        if series:
-            return series
-
-    return {}
+        points = [{"step": int(event.step), "value": float(event.value)} for event in events]
+        if points:
+            series[tag] = downsample(points, limit)
+    _loss_cache[str(run_dir)] = (signature, series)
+    return series

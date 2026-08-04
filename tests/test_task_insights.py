@@ -95,24 +95,26 @@ class TaskInsightsTests(unittest.TestCase):
         self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})
 
     @unittest.skipUnless(HAS_TENSORBOARD, "tensorboard not available")
-    def test_read_loss_scalars_reads_matching_run_dir(self):
-        run_dir = self.logging_dir / "aki_20260804-120000"
-        writer = SummaryWriter(log_dir=str(run_dir))
+    def test_read_loss_scalars_selects_run_started_after_task_creation(self):
+        old_run = self.logging_dir / "20260801000000"
+        old_writer = SummaryWriter(log_dir=str(old_run))
+        old_writer.add_scalar("loss/average", 99.0, 0)
+        old_writer.close()
+
+        new_run = self.logging_dir / "20260804120000"
+        writer = SummaryWriter(log_dir=str(new_run))
         for step in range(5):
             writer.add_scalar("loss/average", 1.0 / (step + 1), step)
             writer.add_scalar("loss/current", 0.5 / (step + 1), step)
         writer.close()
 
-        other_dir = self.logging_dir / "someoneelse_20260804-120000"
-        other = SummaryWriter(log_dir=str(other_dir))
-        other.add_scalar("loss/average", 99.0, 0)
-        other.close()
-
         tags = task_insights.read_loss_scalars(self.metadata)
         self.assertIn("loss/average", tags)
-        self.assertEqual(len(tags["loss/average"]), 5)
-        self.assertAlmostEqual(tags["loss/average"][0]["value"], 1.0)
-        self.assertNotEqual(tags["loss/average"][-1]["value"], 99.0)
+        self.assertAlmostEqual(tags["loss/average"][-1]["value"], 0.2)
+
+        self.metadata["created_at"] = time.mktime((2026, 8, 2, 0, 0, 0, 0, 0, -1))
+        tags = task_insights.read_loss_scalars(self.metadata)
+        self.assertAlmostEqual(tags["loss/average"][-1]["value"], 0.2)
 
         self.metadata["created_at"] = time.time() + 60
         self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})

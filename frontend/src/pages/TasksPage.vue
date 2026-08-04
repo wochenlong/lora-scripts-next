@@ -16,6 +16,8 @@ let insightTick = 0
 
 const previews = ref<TaskPreviewImage[]>([])
 const metrics = ref<TaskMetrics>({})
+let previewSig = ""
+let metricsSig = ""
 const hasLoss = computed(() => Object.values(metrics.value).some((points) => points.length > 0))
 const lossSeries = computed(() => {
   const series: { name: string; color: string; points: { step: number; value: number }[] }[] = []
@@ -34,8 +36,16 @@ const lossSeries = computed(() => {
 async function loadInsights(taskId: string) {
   try {
     const [images, tags] = await Promise.all([tasksApi.previews(taskId), tasksApi.metrics(taskId)])
-    previews.value = images
-    metrics.value = tags
+    const nextPreviewSig = images.map((image) => `${image.name}:${image.mtime}`).join("|")
+    if (nextPreviewSig !== previewSig) {
+      previewSig = nextPreviewSig
+      previews.value = images
+    }
+    const nextMetricsSig = Object.entries(tags).map(([tag, points]) => `${tag}:${points.length}:${points[points.length - 1]?.step ?? 0}`).join("|")
+    if (nextMetricsSig !== metricsSig) {
+      metricsSig = nextMetricsSig
+      metrics.value = tags
+    }
   } catch {}
 }
 
@@ -75,6 +85,8 @@ watch(visibleList, (list) => {
 watch(selected, (task) => {
   previews.value = []
   metrics.value = {}
+  previewSig = ""
+  metricsSig = ""
   if (task) loadInsights(task.id)
 })
 
@@ -100,7 +112,7 @@ onMounted(async () => {
     store.refresh({ silent: true })
     insightTick += 1
     const task = selected.value
-    if (task && (task.status === "RUNNING" || task.status === "CREATED") && insightTick % 2 === 0) loadInsights(task.id)
+    if (task && (task.status === "RUNNING" || task.status === "CREATED") && insightTick % 4 === 0) loadInsights(task.id)
   }, 2000)
 })
 

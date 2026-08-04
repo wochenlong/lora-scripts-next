@@ -22,7 +22,7 @@
 
 1. `resolve_task_dirs(task) -> {output_dir, logging_dir, output_name}`：读 `metadata.config_path` → `toml.load` → 取三项；缺 config_path 或文件不存在返回空。
 2. `list_preview_images(output_dir, output_name, since) -> list[dict]`：扫描 `output_dir/sample`（其次 `output_dir`)，按 `output_name` 前缀 + mtime ≥ 任务创建时间过滤，解析 epoch（复用 `_parse_epoch_from_name` 思路），按时间升序返回 `{name, epoch, mtime}`。
-3. `read_loss_scalars(logging_dir, output_name, since, limit=500) -> dict[str, list[{step, value}]]`：在 `logging_dir` 下匹配父目录名含 `output_name` 的 tfevents（多个取最新）,EventAccumulator 读取 4 个 tag，尾部均匀降采样到 ≤500 点/tag。tensorboard 解析失败/无文件 → 空 dict，不报错。
+3. `read_loss_scalars(logging_dir, output_name, since, limit=500) -> dict[str, list[{step, value}]]`：注意 sd-scripts 的 run 目录名是 `{log_prefix}{YYYYMMDDHHMMSS}` 纯时间戳（**不含 output_name**)，按任务过滤靠时间：解析目录名时间戳，任务有 `created_at` 时取「≥ 创建时间的最早一个 run」（钉住本任务启动的那次），无 `created_at` 取最新 run;`output_name` 仅作兜底。EventAccumulator 读取 4 个 tag，尾部均匀降采样到 ≤500 点/tag，并按 run 目录文件签名（数量+大小+mtime）缓存避免重复解析。tensorboard 解析失败/无文件 → 空 dict，不报错。
 
 ### 2.2 API(`mikazuki/app/api.py`，走现有 envelope)
 
