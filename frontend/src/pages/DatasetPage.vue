@@ -12,8 +12,8 @@ const { t } = useI18n()
     <header class="dataset-section-header">
       <h1>{{ t("dataset.title") }}</h1>
       <div class="segmented dataset-switch" role="group" :aria-label="t('dataset.switchAria')">
-        <RouterLink to="/dataset/editor" :class="{ active: tab === 'editor' }">{{ t("dataset.tab.editor") }}</RouterLink>
         <RouterLink to="/dataset/tagger" :class="{ active: tab === 'tagger' }">{{ t("dataset.tab.tagger") }}</RouterLink>
+        <RouterLink to="/dataset/editor" :class="{ active: tab === 'editor' }">{{ t("dataset.tab.editor") }}</RouterLink>
       </div>
     </header>
     <DatasetEditorPage v-if="tab === 'editor'" />

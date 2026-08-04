@@ -19,7 +19,7 @@ const trainingQuery = (model: string, engine: string, target: string) => ({
 const routes: RouteRecordRaw[] = [
   { path: "/", component: HomePage, meta: { titleKey: "app.brand" } },
   { path: "/training", component: TrainingWorkbenchPage, meta: { titleKey: "training.title" } },
-  { path: "/dataset", redirect: "/dataset/editor" },
+  { path: "/dataset", redirect: "/dataset/tagger" },
   { path: "/dataset/editor", component: DatasetPage, props: { tab: "editor" }, meta: { titleKey: "dataset.title" } },
   { path: "/dataset/tagger", component: DatasetPage, props: { tab: "tagger" }, meta: { titleKey: "dataset.title" } },
   { path: "/tasks", component: TasksPage, meta: { titleKey: "tasks.title" } },

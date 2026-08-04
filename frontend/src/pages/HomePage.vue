@@ -6,7 +6,7 @@ const { t } = useI18n()
 
 const portals = computed(() => [
   { title: t("home.portals.training.title"), text: t("home.portals.training.text"), to: "/training", tone: "blue" },
-  { title: t("home.portals.dataset.title"), text: t("home.portals.dataset.text"), to: "/dataset/editor", tone: "violet" },
+  { title: t("home.portals.dataset.title"), text: t("home.portals.dataset.text"), to: "/dataset", tone: "violet" },
   { title: t("home.portals.tasks.title"), text: t("home.portals.tasks.text"), to: "/tasks", tone: "cyan" },
 ] as const)
 </script>
