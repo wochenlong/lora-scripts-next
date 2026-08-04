@@ -58,6 +58,7 @@ export default {
       copyFail: "Copy failed. Please select the text and copy it manually",
     },
     start: "Start Training",
+    stop: "Stop Training",
     startHint: "Click Start Training when the configuration is complete. Run status and training logs will appear on the right.",
     intro: "Fill in model, dataset, and training parameters in order. Parameter conversion, conflict checks, and backend training constraints run before submission.",
     panelHint: "The right side shows the TOML that will actually be submitted. Validate parameters first, then start the background training task.",

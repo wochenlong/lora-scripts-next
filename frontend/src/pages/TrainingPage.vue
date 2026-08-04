@@ -11,6 +11,7 @@ import { cloneFormModel, createDefaultModel, serializeModel, validateModel, type
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig } from "../training/params"
 import { moduleForTrainType } from "../training/modules"
+import { useTasksStore } from "../stores/tasks"
 
 interface HistoryRow { time: string; name?: string; value: FormModel }
 
@@ -24,6 +25,9 @@ const error = ref("")
 const errors = ref<Record<string, string>>({})
 const submitting = ref(false)
 const historyOpen = ref(false)
+const tasksStore = useTasksStore()
+const currentRunning = computed(() => tasksStore.runningTasks.at(-1))
+let tasksTimer: number | undefined
 
 function readPreviewCollapsed(): boolean {
   try {
@@ -198,6 +202,7 @@ async function submit() {
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
     started.value = await trainingApi.run(output.value)
+    tasksStore.refresh({ silent: true })
     saveHistory()
     ElMessage.success(t("training.submitConfirm.started", { id: started.value.task_id }))
   } catch (reason) {
@@ -224,13 +229,23 @@ async function copyToml() {
 
 function openImport() { importInput.value?.click() }
 
-defineExpose({ saveConfig: saveHistory, openImport, resetConfig })
+async function stopTraining() {
+  const task = currentRunning.value
+  if (!task) return
+  try {
+    await ElMessageBox.confirm(t("tasks.terminate.confirm", { id: task.id }), t("tasks.terminate.title"), { confirmButtonText: t("tasks.terminate.confirmButton"), cancelButtonText: t("tasks.terminate.cancel"), type: "warning" })
+    await tasksStore.terminate(task.id)
+    ElMessage.success(t("tasks.terminate.success"))
+  } catch (reason) {
+    if (reason !== "cancel" && reason !== "close") ElMessage.error(reason instanceof Error ? reason.message : t("tasks.terminate.fail"))
+  }
+}
 
 watch(() => props.schemaName, () => { started.value = undefined; loadHistory(); load() })
 watch(model, (value) => localStorage.setItem(autosaveKey(), JSON.stringify(value)), { deep: true })
 watch(previewCollapsed, (value) => persistPreviewCollapsed(value))
-onMounted(() => { migrateLegacyStorage(); loadHistory(); load() })
-onBeforeUnmount(() => localStorage.setItem(autosaveKey(), JSON.stringify(model.value)))
+onMounted(() => { migrateLegacyStorage(); loadHistory(); load(); tasksStore.refresh(); tasksTimer = window.setInterval(() => tasksStore.refresh({ silent: true }), 2000) })
+onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(autosaveKey(), JSON.stringify(model.value)) })
 </script>
 
 <template>
@@ -239,7 +254,6 @@ onBeforeUnmount(() => localStorage.setItem(autosaveKey(), JSON.stringify(model.v
       <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
       <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
       <slot name="form-top" />
-      <div class="training-toolbar"><button @click="openPresets">{{ t("training.toolbar.presets") }}</button><label v-if="!bare" @click="openImport">{{ t("training.toolbar.import") }}</label><button v-if="!bare" @click="saveHistory">{{ t("training.toolbar.save") }}</button><button @click="historyOpen = true">{{ t("training.toolbar.history") }}</button><button @click="exportConfig">{{ t("training.toolbar.export") }}</button><button v-if="!bare" @click="resetConfig">{{ t("training.toolbar.reset") }}</button></div>
       <div v-if="loading" class="schema-state"><strong>{{ t("training.loadingSchema") }}</strong><span>{{ t("training.loadingSchemaHint") }}</span></div>
       <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
       <DynamicSchemaForm v-else-if="schema" v-model="model" :schema="schema" :errors="errors" />
@@ -252,14 +266,16 @@ onBeforeUnmount(() => localStorage.setItem(autosaveKey(), JSON.stringify(model.v
           <b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b>
         </button>
         <button class="primary-action rail-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button>
+        <button class="danger-action rail-stop" :disabled="!currentRunning || Boolean(tasksStore.terminatingId)" @click="stopTraining">{{ t("training.stop") }}</button>
       </div>
       <div class="panel-full">
         <div v-if="!bare" class="panel-copy"><span class="eyebrow">TRAINING CONTROL</span><h2>{{ title }}</h2><p>{{ t("training.panelHint") }}</p></div>
         <div v-if="diagnostics.errors.length || diagnostics.warnings.length" class="param-diagnostics"><p v-for="item in diagnostics.errors" :key="item" class="error">{{ item }}</p><p v-for="item in diagnostics.warnings" :key="item">{{ item }}</p></div>
         <div v-if="started" class="started-task"><strong>{{ t("training.startedTask") }}</strong><code>{{ started.task_id }}</code><a :href="trainLogHref" target="_blank" rel="noreferrer">{{ t("training.openLog") }}</a><RouterLink to="/tasks">{{ t("training.viewTasks") }}</RouterLink></div>
         <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>{{ t("training.preview.panelTitle") }}</span><b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b><span class="preview-actions"><button @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? t("training.preview.expand") : t("training.preview.collapse") }}</button><button @click="copyToml">{{ t("training.preview.copy") }}</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
+        <div class="panel-actions"><button @click="openPresets">{{ t("training.toolbar.presets") }}</button><button @click="saveHistory">{{ t("training.toolbar.save") }}</button><button @click="openImport">{{ t("training.toolbar.import") }}</button><button @click="historyOpen = true">{{ t("training.toolbar.history") }}</button><button @click="exportConfig">{{ t("training.toolbar.export") }}</button><button @click="resetConfig">{{ t("training.toolbar.reset") }}</button></div>
         <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">{{ t("training.validate") }}</button>
-        <button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button>
+        <div class="submit-row"><button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button><button class="danger-action stop-training" :disabled="!currentRunning || Boolean(tasksStore.terminatingId)" @click="stopTraining">{{ tasksStore.terminatingId ? t("tasks.detail.stopping") : t("training.stop") }}</button></div>
       </div>
     </aside>
   </div>
