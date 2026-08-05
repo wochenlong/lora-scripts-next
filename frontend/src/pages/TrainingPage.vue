@@ -5,9 +5,10 @@ import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { parse, stringify } from "smol-toml"
 import DynamicSchemaForm from "../components/DynamicSchemaForm.vue"
+import SectionToc from "../components/SectionToc.vue"
 import { schemasApi } from "../api/schemas"
 import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/training"
-import { cloneFormModel, createDefaultModel, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
+import { cloneFormModel, createDefaultModel, isFieldActive, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig } from "../training/params"
 import { moduleForTrainType } from "../training/modules"
@@ -55,6 +56,16 @@ const output = computed(() => buildTrainingConfig(rawConfig.value, props.schemaN
 const diagnostics = computed(() => checkTrainingConfig(output.value))
 const outputText = computed(() => stringify(output.value))
 const filteredPresets = computed(() => presets.value.filter((item) => !item.metadata.train_type || item.metadata.train_type === props.schemaName))
+const tocSections = computed(() => {
+  if (!schema.value) return []
+  const selected = new Map<string, FormField>()
+  for (const section of schema.value.sections) {
+    for (const field of section.fields) {
+      if (isFieldActive(field, model.value)) selected.set(field.key, field)
+    }
+  }
+  return schema.value.sections.filter((section) => section.fields.some((field) => !field.hidden && selected.get(field.key) === field)).map((section) => ({ id: section.id, title: section.title }))
+})
 const trainLogHref = computed(() => started.value ? `${started.value.train_log_path || "/train-log"}?${started.value.train_log_query || `task_id=${encodeURIComponent(started.value.task_id)}`}` : "")
 
 function storageId() { return props.storageKey || props.schemaName }
@@ -265,6 +276,7 @@ onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(a
 <template>
   <div class="training-layout schema-training-layout" :class="{ bare, 'preview-docked': previewCollapsed }">
     <section class="form-canvas">
+      <SectionToc v-if="tocSections.length > 1" :sections="tocSections" />
       <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
       <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
       <slot name="form-top" />
@@ -275,6 +287,7 @@ onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(a
     <aside class="control-panel" :class="{ collapsed: previewCollapsed }">
       <div class="panel-rail">
         <button class="rail-handle" @click="previewCollapsed = false">
+          <span class="rail-arrow" aria-hidden="true">←</span>
           <span v-if="diagnostics.errors.length || diagnostics.warnings.length" class="rail-alert" :class="{ error: diagnostics.errors.length > 0 }"></span>
           <span class="rail-label">{{ t("training.preview.panelTitle") }}</span>
           <b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b>
@@ -286,7 +299,7 @@ onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(a
         <div v-if="!bare" class="panel-copy"><span class="eyebrow">TRAINING CONTROL</span><h2>{{ title }}</h2><p>{{ t("training.panelHint") }}</p></div>
         <div v-if="diagnostics.errors.length || diagnostics.warnings.length" class="param-diagnostics"><p v-for="item in diagnostics.errors" :key="item" class="error">{{ item }}</p><p v-for="item in diagnostics.warnings" :key="item">{{ item }}</p></div>
         <div v-if="started" class="started-task"><strong>{{ t("training.startedTask") }}</strong><code>{{ started.task_id }}</code><a :href="trainLogHref" target="_blank" rel="noreferrer">{{ t("training.openLog") }}</a><RouterLink to="/tasks">{{ t("training.viewTasks") }}</RouterLink></div>
-        <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>{{ t("training.preview.panelTitle") }}</span><b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b><span class="preview-actions"><button @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? t("training.preview.expand") : t("training.preview.collapse") }}</button><button @click="copyToml">{{ t("training.preview.copy") }}</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
+        <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>{{ t("training.preview.panelTitle") }}</span><b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b><span class="preview-actions"><button class="preview-collapse" :title="previewCollapsed ? t('training.preview.expand') : t('training.preview.collapse')" :aria-label="previewCollapsed ? t('training.preview.expand') : t('training.preview.collapse')" @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? "←" : "→" }}</button><button @click="copyToml">{{ t("training.preview.copy") }}</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
         <div class="panel-actions"><button @click="openPresets">{{ t("training.toolbar.presets") }}</button><button @click="saveHistory">{{ t("training.toolbar.save") }}</button><button @click="openImport">{{ t("training.toolbar.import") }}</button><button @click="historyOpen = true">{{ t("training.toolbar.history") }}</button><button @click="exportConfig">{{ t("training.toolbar.export") }}</button><button @click="resetConfig">{{ t("training.toolbar.reset") }}</button></div>
         <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">{{ t("training.validate") }}</button>
         <div class="submit-row"><button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button><button class="danger-action stop-training" :disabled="!currentRunning || Boolean(tasksStore.terminatingId)" @click="stopTraining">{{ tasksStore.terminatingId ? t("tasks.detail.stopping") : t("training.stop") }}</button></div>

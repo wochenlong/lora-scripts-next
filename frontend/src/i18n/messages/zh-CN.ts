@@ -59,6 +59,11 @@ export default {
       copied: "TOML 已复制到剪贴板",
       copyFail: "复制失败，请手动选择文本复制",
     },
+    toc: {
+      title: "分区目录",
+      expand: "展开分区目录",
+      collapse: "收起分区目录",
+    },
     start: "开始训练",
     stop: "停止训练",
     startHint: "配置完成后点击开始训练，右侧将显示运行状态与训练日志。",

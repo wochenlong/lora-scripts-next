@@ -30,7 +30,7 @@ function update(key: string, value: FormModel[string]) {
 
 <template>
   <div class="schema-form">
-    <section v-for="section in schema.sections" v-show="visibleFields(section.fields).length" :key="section.id" class="schema-section">
+    <section v-for="section in schema.sections" v-show="visibleFields(section.fields).length" :id="`sec-${section.id}`" :key="section.id" class="schema-section">
       <header><h2>{{ section.title }}</h2><span>{{ t("schemaForm.fieldCount", { n: visibleFields(section.fields).length }) }}</span></header>
       <div class="schema-fields">
         <SchemaField v-for="field in visibleFields(section.fields)" :key="field.key" :field="field" :model-value="modelValue[field.key]" :error="errors[field.key]" @update:model-value="update(field.key, $event)" />

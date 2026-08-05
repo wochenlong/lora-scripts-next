@@ -59,6 +59,11 @@ export default {
       copied: "TOML copied to clipboard",
       copyFail: "Copy failed. Please select the text and copy it manually",
     },
+    toc: {
+      title: "Sections",
+      expand: "Expand sections index",
+      collapse: "Collapse sections index",
+    },
     start: "Start Training",
     stop: "Stop Training",
     startHint: "Click Start Training when the configuration is complete. Run status and training logs will appear on the right.",

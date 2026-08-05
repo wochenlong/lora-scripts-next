@@ -17,6 +17,11 @@ const arrayText = computed({
   get: () => Array.isArray(props.modelValue) ? props.modelValue.join("\n") : "",
   set: (value: string) => emit("update:modelValue", value.split(/\r?\n/).filter(Boolean)),
 })
+const compact = computed(() => {
+  if (props.field.type === "boolean" || props.field.type === "number") return true
+  if (props.field.options) return true
+  return props.field.type === "string" && !props.field.role
+})
 
 async function pick() {
   picking.value = true
@@ -41,22 +46,26 @@ async function openCatalog() {
 </script>
 
 <template>
-  <label class="schema-field" :class="{ 'has-error': error }">
-    <span class="field-label"><code>{{ field.key }}</code><b v-if="field.required">{{ t("schemaForm.required") }}</b></span>
-    <span v-if="field.description" class="field-description">{{ field.description }}</span>
-    <el-switch v-if="field.type === 'boolean'" :model-value="Boolean(modelValue)" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
-    <el-select v-else-if="field.options" :model-value="modelValue" :disabled="field.disabled" :multiple="field.type === 'array'" clearable @update:model-value="emit('update:modelValue', $event)">
-      <el-option v-for="option in field.options" :key="String(option)" :label="String(option) || t('schemaForm.emptyOption')" :value="option ?? ''" />
-    </el-select>
-    <el-input-number v-else-if="field.type === 'number'" :model-value="modelValue as number | undefined" :disabled="field.disabled" :min="field.min" :max="field.max" :step="field.step || 1" controls-position="right" @update:model-value="emit('update:modelValue', $event ?? undefined)" />
-    <el-input v-else-if="field.type === 'array' || field.role === 'table'" v-model="arrayText" type="textarea" :rows="4" :disabled="field.disabled" :placeholder="t('schemaForm.arrayPlaceholder')" />
-    <el-input v-else-if="field.role === 'textarea'" :model-value="modelValue as string | undefined" type="textarea" :rows="5" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
-    <span v-else-if="field.role === 'filepicker'" class="filepicker-control">
-      <el-input :model-value="modelValue as string | undefined" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
-      <el-button :loading="picking" :disabled="field.disabled" @click.prevent="pick">{{ t("schemaForm.browse") }}</el-button>
-      <el-button v-if="internalPicker" :disabled="field.disabled" @click.prevent="openCatalog">{{ t("schemaForm.commonPaths") }}</el-button>
+  <label class="schema-field" :class="{ 'has-error': error, 'schema-field--compact': compact }">
+    <span class="field-text">
+      <span class="field-label"><code>{{ field.key }}</code><b v-if="field.required">{{ t("schemaForm.required") }}</b></span>
+      <span v-if="field.description" class="field-description">{{ field.description }}</span>
     </span>
-    <el-input v-else :model-value="modelValue as string | undefined" :disabled="field.disabled || field.type === 'const'" @update:model-value="emit('update:modelValue', $event)" />
+    <span class="field-control">
+      <el-switch v-if="field.type === 'boolean'" :model-value="Boolean(modelValue)" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
+      <el-select v-else-if="field.options" :model-value="modelValue" :disabled="field.disabled" :multiple="field.type === 'array'" clearable @update:model-value="emit('update:modelValue', $event)">
+        <el-option v-for="option in field.options" :key="String(option)" :label="String(option) || t('schemaForm.emptyOption')" :value="option ?? ''" />
+      </el-select>
+      <el-input-number v-else-if="field.type === 'number'" :model-value="modelValue as number | undefined" :disabled="field.disabled" :min="field.min" :max="field.max" :step="field.step || 1" controls-position="right" @update:model-value="emit('update:modelValue', $event ?? undefined)" />
+      <el-input v-else-if="field.type === 'array' || field.role === 'table'" v-model="arrayText" type="textarea" :rows="4" :disabled="field.disabled" :placeholder="t('schemaForm.arrayPlaceholder')" />
+      <el-input v-else-if="field.role === 'textarea'" :model-value="modelValue as string | undefined" type="textarea" :rows="5" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
+      <span v-else-if="field.role === 'filepicker'" class="filepicker-control">
+        <el-input :model-value="modelValue as string | undefined" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
+        <el-button :loading="picking" :disabled="field.disabled" @click.prevent="pick">{{ t("schemaForm.browse") }}</el-button>
+        <el-button v-if="internalPicker" :disabled="field.disabled" @click.prevent="openCatalog">{{ t("schemaForm.commonPaths") }}</el-button>
+      </span>
+      <el-input v-else :model-value="modelValue as string | undefined" :disabled="field.disabled || field.type === 'const'" @update:model-value="emit('update:modelValue', $event)" />
+    </span>
     <span v-if="error" class="field-error">{{ error }}</span>
   </label>
 
