@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException
@@ -52,6 +53,7 @@ class BatchEditRequest(BaseModel):
     root: str
     images: list[str]
     append: list[str] = []
+    append_position: Literal["front", "back"] = "back"
     remove: list[str] = []
     replace: list[TagReplacement] = []
     sort: bool = False
@@ -314,9 +316,16 @@ async def batch_edit(req: BatchEditRequest):
             tag = replacements.get(tag, tag)
             if tag and tag not in next_tags:
                 next_tags.append(tag)
-        for tag in append_tags:
-            if tag not in next_tags:
-                next_tags.append(tag)
+        if req.append_position == "front":
+            prefix: list[str] = []
+            for tag in append_tags:
+                if tag not in next_tags and tag not in prefix:
+                    prefix.append(tag)
+            next_tags = [*prefix, *next_tags]
+        else:
+            for tag in append_tags:
+                if tag not in next_tags:
+                    next_tags.append(tag)
         if req.sort:
             next_tags = sorted(next_tags)
         next_caption = format_tags(next_tags)

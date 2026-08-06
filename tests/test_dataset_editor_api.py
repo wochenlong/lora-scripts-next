@@ -122,6 +122,35 @@ def test_dataset_editor_batch_replace_remove_append_and_sort(tmp_path):
     ) == "blue eyes, masterpiece"
 
 
+def test_dataset_editor_batch_prepend_appends_tags_at_front(tmp_path):
+    make_image(tmp_path / "alpha.png")
+    make_image(tmp_path / "beta.png")
+    (tmp_path / "alpha.txt").write_text("solo, 1girl", encoding="utf-8")
+    (tmp_path / "beta.txt").write_text("masterpiece, solo", encoding="utf-8")
+
+    client = TestClient(app)
+    response = client.post(
+        "/api/dataset-editor/batch",
+        json={
+            "root": str(tmp_path),
+            "images": ["alpha.png", "beta.png"],
+            "append": ["masterpiece, best quality", "1girl"],
+            "append_position": "front",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["status"] == "success"
+    assert payload["data"]["changed"] == 2
+    assert (tmp_path / "alpha.txt").read_text(
+        encoding="utf-8"
+    ) == "masterpiece, best quality, 1girl, solo"
+    assert (tmp_path / "beta.txt").read_text(
+        encoding="utf-8"
+    ) == "best quality, 1girl, masterpiece, solo"
+
+
 def test_dataset_editor_batch_cleans_obvious_caption_noise(tmp_path):
     make_image(tmp_path / "alpha.png")
     (tmp_path / "alpha.txt").write_text(

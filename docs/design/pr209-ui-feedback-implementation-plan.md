@@ -56,8 +56,41 @@
 ## 范围外(参考稿第 5–7 节,另行处理)
 
 - ⑤ Schema 分区命名对齐旧版(adapter 无标题 intersect 展开)→ 见下方「§5 实施计划」
-- ⑥ 数据集浏览按钮 / tag 位置 / 空分页贴底
+- ⑥ 数据集浏览按钮 / tag 位置 / 空分页贴底 → 见下方「§6 实施计划」
 - ⑦ 任务页内嵌训练日志面板(折叠 + 红点)
+
+## §6 实施计划:数据集打标 / 标签编辑
+
+### 现状清点
+
+| 关注点 | 现状 | 位置 |
+| --- | --- | --- |
+| 打标「图片文件夹」 | 纯文本 input,无浏览 | `pages/TaggerPage.vue:23`(`form.path`) |
+| 编辑「数据集目录」 | 纯文本 input,无浏览 | `pages/DatasetEditorPage.vue:188` |
+| 批量添加 tag | `append` 只支持追加到末尾;后端 `batch_edit` 固定 `next_tags.append` | `DatasetEditorPage.vue:126-139`、`mikazuki/dataset_editor.py:286-338` |
+| 快捷 tag | `appendQuickTag` 写入 append 框(去重),位置由批量执行决定 | `DatasetEditorPage.vue:157-161` |
+| 空工作台 | 未 scan 时 `.image-grid` 为空,pager 悬在中部 | `DatasetEditorPage.vue:195-199`、`features.css` `.dataset-gallery` |
+| 浏览 API | 已有 `schemasApi.pickFile("folder")`(tkinter 后端弹窗,训练页同款) | `api/schemas.ts:36` |
+
+### 改动
+
+1. **浏览按钮(前端)**
+   - `TaggerPage.vue` 与 `DatasetEditorPage.vue` 路径行加「浏览」按钮(复用 i18n `schemaForm.browse`):调 `schemasApi.pickFile("folder")`,`replaceAll("\\","/")` 写回;`picking` busy 态 + 失败 `ElMessage`(模式照抄 `SchemaField.vue:21-31`);仍可手填
+   - CSS:路径行改 `grid-template-columns:minmax(0,1fr) auto`
+2. **添加位置(前后端)**
+   - `mikazuki/dataset_editor.py`:`BatchEditRequest` 加 `append_position: Literal["front","back"] = "back"`;`batch_edit` 中 front 时追加 tags 去重后**前置**到 `next_tags`;「删除 tag」不动
+   - `api/dataset.ts`:`BatchEditRequest` 加 `append_position?: "front" | "back"`
+   - `DatasetEditorPage.vue`:batch-box 加位置 select(最前面/最后面,默认最后面),`batch()` 传参;快捷 tag 逻辑不变(写入 append 框,执行时按所选位置生效)
+   - 单张 caption 的 chip 添加(`addCaptionTag`)不在反馈范围,保持末尾追加
+3. **空工作台贴底(前端)**
+   - `DatasetEditorPage.vue`:`!root` 时 `.image-grid` 区域渲染空状态说明(未加载数据集提示 + 引导),pager 始终渲染
+   - `features.css`:`.dataset-gallery` 改 flex column,`.image-grid`/`empty-state` `flex:1`,`.dataset-pager` `margin-top:auto` 贴底
+4. **i18n**:zh-CN / en-US 增 `datasetEditor.batch.position|positionFront|positionBack`、`datasetEditor.gallery.empty*`;浏览复用 `schemaForm.browse`
+5. **测试**:`tests/test_dataset_editor_api.py` 加 prepend 用例(front/back/去重);`dataset/caption.test.ts` 不动
+
+### 验证
+
+前端 `npm run typecheck && npm run lint && npm run build`;后端 `pytest tests/test_dataset_editor_api.py`。
 
 ## §5 实施计划:Schema 分区命名对齐旧版
 
