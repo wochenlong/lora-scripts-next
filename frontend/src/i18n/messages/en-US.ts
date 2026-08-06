@@ -1,6 +1,7 @@
 export default {
   app: {
     brand: "Next Trainer",
+    prerelease: "beta",
   },
   nav: {
     training: "Training",
@@ -352,6 +353,7 @@ export default {
       vue: "Vue 3 training workspace",
       models: "Stable Diffusion · Flux · Anima",
     },
+    credit: "Built on Akegarasu lora-scripts, kohya-ss/sd-scripts, and other open-source projects. Credits and licenses: {about} / {notice}.",
     portals: {
       training: { title: "Training", text: "Base model × engine × target — configure and submit in one place." },
       dataset: { title: "Dataset", text: "Tag editing and model tagging to prepare captions for training." },
@@ -361,9 +363,20 @@ export default {
   about: {
     tagline: "A local training WebUI for Stable Diffusion, Flux, and Anima.",
     projectTitle: "About the Project",
-    projectDesc: "Next Trainer builds on the lora-scripts ecosystem, providing training configuration, dataset preparation, task management, and training monitoring in one place. Dynamic forms are powered by {schemastery}.",
+    projectDesc: "Next Trainer builds on the Akegarasu lora-scripts ecosystem and the kohya-ss/sd-scripts training backend, providing training configuration, dataset preparation, task management, and training monitoring in one place. Dynamic forms are powered by {schemastery}.",
+    creditsTitle: "Open-Source Credits",
+    creditsIntro: "This project depends on and adapts multiple open-source components. Please respect each component's license when using or redistributing. Full notices are in the repository NOTICE file.",
+    credits: {
+      akegarasu: "Upstream GUI and community packaging (Akegarasu SD-Trainer / lora-scripts)",
+      kohya: "Training scripts and Anima / Flux / SD backends (AGPL-3.0)",
+      animaFast: "Optional Anima Fast training engine (MIT)",
+      lycoris: "LoKr / LoHa network modules (Apache-2.0)",
+      tagger: "Default WD14 tagger model and tag list",
+      schemastery: "Dynamic form schema runtime",
+    },
+    creditsNotice: "Full third-party notices: {notice}. This repository license: {license}.",
     feedbackTitle: "Feedback",
-    feedbackDesc: "When reporting a problem, include the version, training type, reproduction steps, and relevant logs, and submit it on {issues}.",
+    feedbackDesc: "When reporting a problem, include the version (including beta builds), training type, reproduction steps, and relevant logs, and submit it on {issues}.",
     linksTitle: "Project Links",
     source: "Source Code",
     releases: "Releases",
@@ -509,6 +522,8 @@ export default {
   },
   animaFast: {
     intro: "A standalone runtime with install auditing and a high-performance training entry.",
+    credit:
+      "The Fast training engine is based on the open-source project {upstream} (MIT). Thanks to the authors and community; this page integrates it as an optional plugin under the respective licenses. Full notices: {notice}.",
     refresh: "Refresh status",
     statusBar: {
       readyHint: "Anima Fast runtime is installed. You can start training.",

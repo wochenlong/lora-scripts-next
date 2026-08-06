@@ -28,5 +28,13 @@ const portals = computed(() => [
       </RouterLink>
     </section>
     <section class="status-strip"><span><i class="status-dot" /> {{ t("home.status.local") }}</span><span>{{ t("home.status.vue") }}</span><span>{{ t("home.status.models") }}</span></section>
+    <p class="home-credit">
+      <i18n-t keypath="home.credit" tag="span" scope="global">
+        <template #about><RouterLink to="/settings/about">{{ t("settings.nav.about") }}</RouterLink></template>
+        <template #notice>
+          <a href="https://github.com/wochenlong/lora-scripts-next/blob/dev/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
+        </template>
+      </i18n-t>
+    </p>
   </div>
 </template>

@@ -10,6 +10,9 @@
 .content-page h3 { margin: 22px 0 8px; font-size: 15px; }
 .content-page p, .content-page li { color: var(--text-soft); font-size: 15px; line-height: 1.65; }
 .content-page :is(p, li) a { color: var(--accent-dark); font-weight: 650; }
+.about-credits { margin: 0; padding-left: 1.2em; display: grid; gap: 10px; }
+.about-credits li { display: grid; gap: 2px; }
+.about-credits a { font-weight: 700; }
 .content-page code { padding: 2px 5px; color: var(--accent-dark); background: var(--accent-soft); border-radius: 4px; }
 .content-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
 .content-cards > div, .content-table > div, .release-list > article { padding: 20px; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }

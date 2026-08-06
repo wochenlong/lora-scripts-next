@@ -51,9 +51,27 @@
 3. 保留主仓 `.git`。
 4. 确保 remote 指向 `https://github.com/wochenlong/lora-scripts-next.git`。
 5. 不要带入本机 `doc/`、`script/`、`data/`、`benchmark/`、`.vscode/`、`.cursor/`、临时草稿等目录。
-6. **不要**打入 `extensions/anima_lora/`（含 `.venv`、上游源码快照）；Fast 插件由用户在 WebUI 页内首次安装。
+6. 默认 **lite** 包**不要**打入 `extensions/anima_lora/`（含 `.venv`）；Fast 由用户在 WebUI 首次安装。完整 **full** 包见下表 `-BundleAnimaFast`。
 
 `vendor/sd-scripts` 已经是主仓 tracked 普通目录，不是子模块，会随主仓更新。
+
+## 双整合包（lite / full，内测起）
+
+| 包 | 用途 | Fast 运行时 | 打标模型 | 体积目标 |
+|----|------|-------------|----------|----------|
+| **lite** | GitHub Release / 预发布上传 | 不预装 | 内置 `tagger-models/wd14/wd14-convnextv2-v2` | 压缩包 **&lt; 2 GB** |
+| **full** | 百度网盘等大文件渠道 | 预装 `extensions/anima_lora`（含 `.venv`） | 同上 | 数 GB～十余 GB，视 venv 而定 |
+
+```powershell
+# 轻量（默认）
+.\build-scripts\build_portable.ps1 -Version 3.0.0-beta.1 -Clean
+
+# 完整（需本机已有可用 Fast 环境）
+.\build-scripts\build_portable.ps1 -Version 3.0.0-beta.1 -Clean -BundleAnimaFast `
+  -AnimaFastSource "D:\path\to\extensions\anima_lora"
+```
+
+产物文件名：`SD-Trainer-v{Version}-lite.7z` / `SD-Trainer-v{Version}-full.7z`；`PORTABLE_BUILD` 含 `flavor=lite|full`。
 
 ## Anima Fast 插件与整合包（v2.7.0+）
 
@@ -61,8 +79,9 @@ Anima LoRA **Fast 模式**使用可选插件 [`sorryhyun/anima_lora`](https://gi
 
 | 项 | 约定 |
 |----|------|
-| 7z 是否预装插件 | **否** — 控制发布体积；用户路径：侧栏 **Anima LoRA → Fast 模式 → 开启插件** |
-| 打包排除 | `build-scripts/build_portable.ps1`、`03-copy-project.ps1` 排除整个 `extensions/` |
+| lite 7z | **不**预装插件；用户路径：设置 → 训练引擎 / Anima Fast 页内安装 |
+| full 7z | `-BundleAnimaFast` 从维护机已就绪环境复制（含 `.venv`） |
+| 打包排除（默认） | `build-scripts/build_portable.ps1`、`03-copy-project.ps1` 排除整个 `extensions/` |
 | 用户数据 | 用户安装后的 `extensions/anima_lora/` 视为本地数据；Git 更新勿覆盖（`.gitignore` 已忽略 `.venv/`、`source/`） |
 | 文档 | [`docs/anima-fast.md`](anima-fast.md)、[`NOTICE.md`](../NOTICE.md) § Anima LoRA Fast Mode |
 

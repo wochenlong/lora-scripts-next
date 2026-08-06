@@ -69,3 +69,19 @@ Licensed under the **Apache License 2.0** (Copyright (c) muooon).
 EmoSens is an emotion-driven optimizer that generates autonomous learning rates via the emoPulse mechanism, analyzing loss fluctuations through multi-scale EMA. The implementation is in `vendor/sd-scripts/library/optimizers/emosens.py`.
 
 **Citation**: muooon. "emo series Optimizers: An emotion-driven optimizer that feels loss and navigates accordingly." DOI: 10.57967/hf/7738. https://github.com/muooon/EmoSens
+
+### WD14 Tagger (default portable model)
+
+Default offline image tagging uses weights and tag lists derived from:
+
+- `SmilingWolf/wd-v1-4-convnextv2-tagger-v2`: https://huggingface.co/SmilingWolf/wd-v1-4-convnextv2-tagger-v2
+
+Bundled under `tagger-models/wd14/wd14-convnextv2-v2/` in portable packages. Redistribute the model files only under the terms published by the model author / host.
+
+### Schemastery
+
+Dynamic training forms are driven by:
+
+- `shigma/schemastery`: https://github.com/shigma/schemastery
+
+Please see the upstream repository for its license terms.

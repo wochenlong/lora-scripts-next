@@ -138,6 +138,16 @@ onBeforeUnmount(() => {
         <i aria-hidden="true" />
         <span>{{ t("settings.engines.readyChip") }}</span>
       </p>
+      <p class="engine-credit" data-testid="anima-fast-credit">
+        <i18n-t keypath="animaFast.credit" tag="span" scope="global">
+          <template #upstream>
+            <a href="https://github.com/sorryhyun/anima_lora" target="_blank" rel="noreferrer">sorryhyun/anima_lora</a>
+          </template>
+          <template #notice>
+            <a href="https://github.com/wochenlong/lora-scripts-next/blob/dev/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
+          </template>
+        </i18n-t>
+      </p>
     </template>
   </TrainingPage>
 
@@ -158,6 +168,16 @@ onBeforeUnmount(() => {
         <span v-if="!bare" class="eyebrow">ANIMA FAST RUNTIME</span>
         <h1 v-if="!bare">Anima LoRA Fast</h1>
         <p v-if="!bare">{{ t("animaFast.intro") }}</p>
+        <p class="engine-credit" data-testid="anima-fast-credit">
+          <i18n-t keypath="animaFast.credit" tag="span" scope="global">
+            <template #upstream>
+              <a href="https://github.com/sorryhyun/anima_lora" target="_blank" rel="noreferrer">sorryhyun/anima_lora</a>
+            </template>
+            <template #notice>
+              <a href="https://github.com/wochenlong/lora-scripts-next/blob/dev/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
+            </template>
+          </i18n-t>
+        </p>
         <div class="fast-state" :data-state="status.state">
           <span>{{ label }}</span>
           <strong>{{ status.state }}</strong>

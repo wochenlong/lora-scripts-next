@@ -6,7 +6,12 @@ param(
     [switch]$Clean,
     [switch]$Skip7z,
     [switch]$SkipTaggerPrefetch,
-    [string]$TaggerCacheSource = ""
+    [string]$TaggerCacheSource = "",
+    # Lite (default): no Anima Fast runtime — GitHub upload target (<2 GB compressed).
+    # Full: bundle extensions/anima_lora including .venv for Baidu Netdisk.
+    [switch]$BundleAnimaFast,
+    [string]$AnimaFastSource = "",
+    [string]$PackageSuffix = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -122,7 +127,8 @@ function Clone-SDTrainerGitMetadata {
 function Write-PortableBuildMetadata {
     param(
         [string]$TrainerDir,
-        [string]$Version
+        [string]$Version,
+        [string]$Flavor = "lite"
     )
     $sha = (& git -C $ProjectRoot rev-parse --short HEAD 2>$null | Select-Object -First 1)
     if ($sha) { $sha = $sha.Trim() } else { $sha = "unknown" }
@@ -132,8 +138,61 @@ function Write-PortableBuildMetadata {
         $sha
         "built_at=$utc"
         "version=$Version"
+        "flavor=$Flavor"
     ) | Set-Content $path -Encoding UTF8
-    Write-Host "  Wrote PORTABLE_BUILD ($sha)"
+    Write-Host "  Wrote PORTABLE_BUILD ($sha, flavor=$Flavor)"
+}
+
+function Resolve-AnimaFastSource {
+    param(
+        [string]$Explicit,
+        [string]$Root
+    )
+    if ($Explicit -and (Test-Path $Explicit)) {
+        return (Resolve-Path $Explicit).Path
+    }
+    $candidates = @(
+        (Join-Path $Root "extensions\anima_lora"),
+        (Join-Path (Split-Path $Root -Parent) "lora-scripts-next\extensions\anima_lora")
+    )
+    foreach ($c in $candidates) {
+        if (Test-Path (Join-Path $c ".venv\Scripts\python.exe")) {
+            return (Resolve-Path $c).Path
+        }
+    }
+    return $null
+}
+
+function Copy-AnimaFastRuntime {
+    param(
+        [Parameter(Mandatory = $true)][string]$SourceRoot,
+        [Parameter(Mandatory = $true)][string]$TrainerDir
+    )
+    $venvPy = Join-Path $SourceRoot ".venv\Scripts\python.exe"
+    if (-not (Test-Path $venvPy)) {
+        throw "Anima Fast source missing .venv: $SourceRoot"
+    }
+    $dst = Join-Path $TrainerDir "extensions\anima_lora"
+    New-Item -ItemType Directory -Path (Split-Path $dst -Parent) -Force | Out-Null
+    if (Test-Path $dst) {
+        Remove-Item $dst -Recurse -Force
+    }
+    Write-Host "  Bundling Anima Fast from: $SourceRoot"
+    # Keep install_state / source / .venv; drop bulky caches that are regenerable.
+    $xd = @("__pycache__", ".git", ".cache", "pip-cache", "__pycache__")
+    $xdArgs = @()
+    foreach ($name in $xd) { $xdArgs += "/XD"; $xdArgs += $name }
+    $null = robocopy $SourceRoot $dst /E /NFL /NDL /NJH /NJS /NC /NS /XF "*.pyc" $xdArgs
+    if ($LASTEXITCODE -ge 8) {
+        throw "robocopy Anima Fast failed (exit $LASTEXITCODE)"
+    }
+    if (-not (Test-Path (Join-Path $dst ".venv\Scripts\python.exe"))) {
+        throw "Anima Fast bundle incomplete: missing .venv after copy"
+    }
+    if (-not (Test-Path (Join-Path $dst "install_state.json"))) {
+        Write-Host "  WARNING: install_state.json missing; Fast UI may require re-audit" -ForegroundColor Yellow
+    }
+    Write-Host "  Bundled extensions/anima_lora (full flavor)" -ForegroundColor Green
 }
 
 function Resolve-TaggerCacheSource {
@@ -173,9 +232,22 @@ function Copy-TaggerCacheFromSource {
         if ($LASTEXITCODE -le 7) { $copied = $true }
     }
 
-    $srcWd14 = Join-Path $SourceRoot "tagger-models\wd14"
+    # Accept portable root, tagger-models/, or wd14/ as -TaggerCacheSource.
+    $wd14Candidates = @(
+        (Join-Path $SourceRoot "tagger-models\wd14"),
+        (Join-Path $SourceRoot "wd14"),
+        $SourceRoot
+    )
+    $srcWd14 = $null
+    foreach ($candidate in $wd14Candidates) {
+        $probe = Join-Path $candidate "wd14-convnextv2-v2\model.onnx"
+        if (Test-Path $probe) {
+            $srcWd14 = $candidate
+            break
+        }
+    }
     $dstWd14 = Join-Path $DestinationPortable "tagger-models\wd14"
-    if (Test-Path $srcWd14) {
+    if ($srcWd14) {
         New-Item -ItemType Directory -Path $dstWd14 -Force | Out-Null
         $null = robocopy $srcWd14 $dstWd14 /E /NFL /NDL /NJH /NJS /NC /NS
         if ($LASTEXITCODE -le 7) { $copied = $true }
@@ -422,7 +494,25 @@ foreach ($file in $copyFiles) {
     }
 }
 Clone-SDTrainerGitMetadata -Destination $portableDir
-Write-PortableBuildMetadata -TrainerDir $sdtDir -Version $Version
+
+$packageFlavor = if ($BundleAnimaFast) { "full" } else { "lite" }
+if (-not $PackageSuffix) {
+    $PackageSuffix = $packageFlavor
+}
+
+if ($BundleAnimaFast) {
+    Write-Host ""
+    Write-Host "[2b/6] Bundling Anima Fast runtime (full package)..." -ForegroundColor Cyan
+    $fastSrc = Resolve-AnimaFastSource -Explicit $AnimaFastSource -Root $ProjectRoot
+    if (-not $fastSrc) {
+        throw "BundleAnimaFast requested but no usable extensions/anima_lora (.venv) found. Pass -AnimaFastSource."
+    }
+    Copy-AnimaFastRuntime -SourceRoot $fastSrc -TrainerDir $sdtDir
+} else {
+    Write-Host "  Lite package: Anima Fast runtime NOT bundled (install via WebUI)" -ForegroundColor Yellow
+}
+
+Write-PortableBuildMetadata -TrainerDir $sdtDir -Version $Version -Flavor $packageFlavor
 Write-Host "  Copied root files"
 Write-Host "  Done" -ForegroundColor Green
 
@@ -744,7 +834,8 @@ if (-not $Skip7z) {
     if (-not $7zExe) {
         Write-Host "  [!] 7-Zip not found, skipping compression." -ForegroundColor Yellow
     } else {
-        $archiveName = "SD-Trainer-v${Version}.7z"
+        $suffixPart = if ($PackageSuffix) { "-$PackageSuffix" } else { "" }
+        $archiveName = "SD-Trainer-v${Version}${suffixPart}.7z"
         $archivePath = Join-Path $buildDir $archiveName
         if (Test-Path $archivePath) { Remove-Item $archivePath -Force }
 
@@ -813,7 +904,11 @@ if (-not $Skip7z) {
 
         $sizeBytes = (Get-Item $archivePath).Length
         $sizeMB = [math]::Round($sizeBytes / 1MB, 1)
-        Write-Host "  Output: $archiveName  ($sizeMB MB)" -ForegroundColor Green
+        $sizeGB = [math]::Round($sizeBytes / 1GB, 2)
+        Write-Host "  Output: $archiveName  ($sizeMB MB / $sizeGB GB)  flavor=$packageFlavor" -ForegroundColor Green
+        if ($packageFlavor -eq "lite" -and $sizeBytes -ge 2GB) {
+            Write-Host "  WARNING: lite package exceeds 2 GB GitHub soft target" -ForegroundColor Yellow
+        }
     }
 } else {
     Write-Host ""

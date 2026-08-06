@@ -1,6 +1,7 @@
 export default {
   app: {
     brand: "Next Trainer",
+    prerelease: "内测",
   },
   nav: {
     training: "训练",
@@ -352,6 +353,7 @@ export default {
       vue: "Vue 3 训练工作区",
       models: "Stable Diffusion · Flux · Anima",
     },
+    credit: "基于秋叶 lora-scripts 与 kohya-ss/sd-scripts 等开源项目；致谢与许可见 {about} / {notice}。",
     portals: {
       training: { title: "训练", text: "基础模型 × 训练引擎 × 训练目标，一处完成配置与提交。" },
       dataset: { title: "数据集", text: "标签编辑与模型打标，准备训练所需的 caption。" },
@@ -361,9 +363,20 @@ export default {
   about: {
     tagline: "面向 Stable Diffusion、Flux 与 Anima 的本地训练 WebUI。",
     projectTitle: "关于项目",
-    projectDesc: "Next Trainer 基于 lora-scripts 生态，集中提供训练配置、数据集准备、任务管理和训练监控。动态表单由 {schemastery} 驱动。",
+    projectDesc: "Next Trainer 基于秋叶 lora-scripts 生态与 kohya-ss/sd-scripts 训练后端，集中提供训练配置、数据集准备、任务管理和训练监控。动态表单由 {schemastery} 驱动。",
+    creditsTitle: "开源致谢与引用",
+    creditsIntro: "本项目依赖并改编自多个开源组件。使用与再分发时请遵守各组件许可；完整声明见仓库 NOTICE。",
+    credits: {
+      akegarasu: "上游 GUI 与社区整合包生态（秋叶 SD-Trainer / lora-scripts）",
+      kohya: "训练脚本与 Anima / Flux / SD 系列后端（AGPL-3.0）",
+      animaFast: "Anima Fast 可选训练引擎（MIT）",
+      lycoris: "LoKr / LoHa 等网络模块（Apache-2.0）",
+      tagger: "默认 WD14 打标模型与标签表",
+      schemastery: "动态表单 Schema 运行时",
+    },
+    creditsNotice: "完整第三方声明见 {notice}；本仓库许可证见 {license}。",
     feedbackTitle: "反馈",
-    feedbackDesc: "遇到问题时，请附上版本号、训练类型、复现步骤和相关日志，前往 {issues} 提交。",
+    feedbackDesc: "遇到问题时，请附上版本号（含 beta 内测号）、训练类型、复现步骤和相关日志，前往 {issues} 提交。",
     linksTitle: "项目链接",
     source: "源代码",
     releases: "发行版本",
@@ -509,6 +522,8 @@ export default {
   },
   animaFast: {
     intro: "独立运行环境、安装审计与高性能训练入口。",
+    credit:
+      "Fast 训练引擎基于开源项目 {upstream}（MIT）。感谢原作者与社区；本页以可选插件形式集成，请遵守各自开源许可。完整声明见 {notice}。",
     refresh: "刷新状态",
     statusBar: {
       readyHint: "Anima Fast 运行时已安装，可以直接开始训练。",

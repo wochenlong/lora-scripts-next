@@ -23,6 +23,8 @@
 
 .engine-ready-chip { display: inline-flex; align-items: center; gap: 7px; margin: -4px 0 14px; padding: 0; color: #047857; font-size: 12px; font-weight: 600; line-height: 1; }
 .engine-ready-chip i { width: 7px; height: 7px; border-radius: 50%; background: #10b981; box-shadow: 0 0 0 3px rgba(16,185,129,.18); }
+.engine-credit { margin: 0 0 14px; color: var(--text-soft); font-size: 12px; line-height: 1.55; }
+.engine-credit a { color: var(--accent-dark); font-weight: 650; }
 .engine-status-bar { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 0 0 16px; padding: 12px 14px; background: var(--surface); border: 1px solid var(--border); border-left: 3px solid var(--text-faint); border-radius: var(--radius); }
 .engine-status-bar[data-state=ready] { border-left-color: #059669; background: rgba(5,150,105,.06); }
 .engine-status-bar[data-state=installing],.engine-status-bar[data-state=auditing] { border-left-color: var(--accent); background: var(--accent-soft); }

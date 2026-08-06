@@ -11,6 +11,11 @@ const { t } = useI18n()
 const mobileOpen = ref(false)
 const appStore = useAppStore()
 const { version } = storeToRefs(appStore)
+const versionLabel = computed(() => {
+  if (!version.value) return "beta"
+  const pre = /(?:alpha|beta|rc)/i.test(version.value)
+  return pre ? `v${version.value} · ${t("app.prerelease")}` : `v${version.value}`
+})
 
 const sections = [
   { key: "training", to: "/training", icon: Cpu, match: ["/training", "/lora/", "/dreambooth/"] },
@@ -35,7 +40,7 @@ onMounted(() => appStore.loadVersion())
     <button v-if="mobileOpen" class="sidebar-mask" :aria-label="t('nav.closeNav')" @click="mobileOpen = false" />
     <aside class="sidebar" :class="{ 'is-open': mobileOpen }">
       <RouterLink class="brand" to="/" @click="mobileOpen = false">
-        <span class="brand-mark">N</span><span><strong>{{ t("app.brand") }}</strong><small>{{ version ? `v${version}` : "beta" }}</small></span>
+        <span class="brand-mark">N</span><span><strong>{{ t("app.brand") }}</strong><small>{{ versionLabel }}</small></span>
       </RouterLink>
       <nav class="navigation" :aria-label="t('nav.mainAria')">
         <RouterLink v-for="section in sections" :key="section.key" :to="section.to" class="nav-link" :class="{ active: isActive(section.match) }" @click="mobileOpen = false">
