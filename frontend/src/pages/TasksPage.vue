@@ -7,6 +7,7 @@ import { useI18n } from "vue-i18n"
 import { useTasksStore } from "../stores/tasks"
 import { tasksApi, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
 import LossChart from "../components/LossChart.vue"
+import TaskLogPanel from "../components/TaskLogPanel.vue"
 
 const store = useTasksStore()
 const { tasks, loading, error, terminatingId } = storeToRefs(store)
@@ -198,6 +199,7 @@ onBeforeUnmount(() => window.clearInterval(timer))
           <LossChart v-if="hasLoss" :series="lossSeries" />
           <p v-else>{{ t("tasks.detail.lossEmpty") }}</p>
         </section>
+        <TaskLogPanel :task-id="selected.id" :status="selected.status" />
       </section>
       <section v-else class="task-detail task-detail-empty"><p>{{ t("tasks.detail.empty") }}</p></section>
     </div>

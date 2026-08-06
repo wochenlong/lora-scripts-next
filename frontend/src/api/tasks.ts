@@ -47,9 +47,19 @@ export interface TaskMetricsData {
   progress?: TaskProgress
 }
 
+export interface TaskLogTail {
+  task_id: string
+  lines: string[]
+  total: number
+  done: boolean
+}
+
+export const trainLogStreamUrl = (taskId: string) => `/api/train/log/stream/${encodeURIComponent(taskId)}`
+
 export const tasksApi = {
   list: async () => (await apiData<TasksData>("/api/tasks")).tasks,
   terminate: (taskId: string) => apiRequest(`/api/tasks/terminate/${encodeURIComponent(taskId)}`),
   previews: (taskId: string) => apiData<TaskPreviewsData>(`/api/tasks/${encodeURIComponent(taskId)}/previews`),
   metrics: (taskId: string) => apiData<TaskMetricsData>(`/api/tasks/${encodeURIComponent(taskId)}/metrics`),
+  logTail: (taskId: string, limit = 240) => apiData<TaskLogTail>(`/api/train/log/tail/${encodeURIComponent(taskId)}?limit=${limit}`),
 }

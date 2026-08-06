@@ -57,7 +57,37 @@
 
 - ⑤ Schema 分区命名对齐旧版(adapter 无标题 intersect 展开)→ 见下方「§5 实施计划」
 - ⑥ 数据集浏览按钮 / tag 位置 / 空分页贴底 → 见下方「§6 实施计划」
-- ⑦ 任务页内嵌训练日志面板(折叠 + 红点)
+- ⑦ 任务页内嵌训练日志面板(折叠 + 红点)→ 见下方「§7 实施方案」
+
+## §7 实施方案:任务页内嵌训练日志(云端适配)
+
+### 现状清点
+
+| 关注点 | 现状 | 位置 |
+| --- | --- | --- |
+| 任务详情结构 | header → 进度条 → meta → actions(含「新窗口打开日志」)→ 预览图 → Loss | `pages/TasksPage.vue:172-201` |
+| 日志 API | SSE `GET /api/train/log/stream/{task_id}`(全量回放 + `{done}` 结束);`GET /api/train/log/tail/{task_id}?limit=`(≤2000 行,返回 `lines/total/done`);旧任务(非本会话)404 | `mikazuki/app/api.py:1148,1218` |
+| 前端 API 层 | `tasksApi` 无日志方法 | `api/tasks.ts:50-55` |
+| 「新窗口打开」 | `/train-log?task_id=…`(后端独立 HTML,保留不动) | `TasksPage.vue:187` |
+
+### 改动(纯前端,后端零改动)
+
+1. **`api/tasks.ts`**
+   - `logTail(taskId, limit?)` 类型化 client(`TaskLogTail { lines, total, done }`)
+   - `trainLogStreamUrl(taskId)` 返回 SSE 路径(组件用 `EventSource` 消费)
+2. **新建 `components/TaskLogPanel.vue`**(props:`taskId`、`status`)
+   - **默认折叠**。折叠态:每 ~4s 轮询 `logTail(240)` 做错误探测;命中正则 `/\berror\b|\btraceback\b|out of memory|\boom\b/i` 或 `status === "FAILED"` → 标题旁红点
+   - **展开态**:`EventSource` 消费 SSE(回放全量缓冲,`{done}` 后关闭);`EventSource` 不可用/报错回退 tail 轮询;正文 `pre` 滚动区(~320px,monospace)
+   - 工具行:跟随底部开关(默认开,新行自动滚底)、跳到最后一次报错(最后命中行 `scrollIntoView`)、复制(`navigator.clipboard` + 回退)、下载(Blob → `train-log-{taskId}.txt`)、行数显示
+   - 切换任务/组件卸载:关流、清空、重置红点;tail/stream 404(跨会话旧任务)→ 显示「本会话无日志」态,不亮红点(除非 FAILED)
+3. **`TasksPage.vue`**:Loss 区块下加 `<TaskLogPanel :task-id="selected.id" :status="selected.status" />`;「新窗口打开」链接保留
+4. **CSS**(`features.css` 任务页段):面板复用 `task-placeholder` 卡片语言;红点复用 rail-alert 样式语义;工具行 ghost 小按钮
+5. **i18n**(zh/en):`tasks.log.title|expand|collapse|errorBadge|follow|jumpToError|copy|copied|download|empty|unavailable`
+6. **测试**:`TaskLogPanel.test.ts` — mock `tasksApi.logTail`,jsdom 无 `EventSource` 走 tail 回退;断言:默认折叠、FAILED 出红点、tail 命中 Error 出红点、展开渲染日志行
+
+### 验证
+
+`npm run typecheck` → `lint` → `vitest`(新组件测试)→ `build`;后端无改动,不需 pytest。
 
 ## §6 实施计划:数据集打标 / 标签编辑
 
