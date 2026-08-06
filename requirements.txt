@@ -27,6 +27,9 @@ huggingface-hub==0.36.2
 imagesize==1.4.1
 # for T5XXL tokenizer (SD3/FLUX)
 sentencepiece==0.2.0
+# sentencepiece needs protobuf>=3.20 (builder). Pin so Flux/SD3 don't land on 3.19.x.
+# tensorboard 2.10.1 declares protobuf<3.20; pip may warn — training still works.
+protobuf==3.20.3
 # for ui
 rich==13.7.0
 pandas
