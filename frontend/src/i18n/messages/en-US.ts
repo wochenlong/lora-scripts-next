@@ -320,6 +320,9 @@ export default {
       selected: "{n} selected",
       filtered: "{n} in filter results",
       appendPlaceholder: "Tags to append, comma-separated",
+      position: "Append position",
+      positionBack: "Append at end",
+      positionFront: "Prepend at front",
       removePlaceholder: "Tags to remove, comma-separated",
       replaceFrom: "Replace from",
       replaceTo: "Replace to",
@@ -346,6 +349,8 @@ export default {
       undo: "Undo",
       redo: "Redo",
       history: "History",
+      emptyTitle: "No dataset loaded",
+      emptyHint: "Enter the dataset folder on the left (or use Browse), then click Scan to start editing tags.",
     },
     pager: {
       first: "First",

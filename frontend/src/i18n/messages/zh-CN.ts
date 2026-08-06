@@ -320,6 +320,9 @@ export default {
       selected: "已选 {n} 张",
       filtered: "筛选结果 {n} 张",
       appendPlaceholder: "追加 tag，逗号分隔",
+      position: "添加位置",
+      positionBack: "加到最后面",
+      positionFront: "加到最前面",
       removePlaceholder: "删除 tag，逗号分隔",
       replaceFrom: "替换前",
       replaceTo: "替换后",
@@ -346,6 +349,8 @@ export default {
       undo: "撤回",
       redo: "重做",
       history: "历史",
+      emptyTitle: "尚未加载数据集",
+      emptyHint: "在左侧填写数据集目录（或点「浏览」选择），点击「扫描」后即可编辑标签。",
     },
     pager: {
       first: "首页",

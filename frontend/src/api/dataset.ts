@@ -9,6 +9,7 @@ export interface BatchEditRequest {
   root: string
   images: string[]
   append?: string[]
+  append_position?: "front" | "back"
   remove?: string[]
   replace?: TagReplacement[]
   sort?: boolean
