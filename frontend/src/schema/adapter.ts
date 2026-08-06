@@ -164,17 +164,25 @@ function buildSections(schema: SchemaRecord) {
   const roots = schema.type === "intersect" ? schema.list ?? [] : [schema]
   const sections: FormSection[] = []
   let unnamed = 0
-  for (const root of roots) {
-    const fields = collectFields(root)
-    if (!fields.length) continue
-    const title = description(root.meta) || i18n.global.t("schema.advancedSection")
+  const push = (title: string | undefined, fields: FormField[]) => {
+    if (!fields.length) return
     const previous = sections.at(-1)
-    if (!description(root.meta) && previous?.title === title) {
+    if (!title && previous) {
       previous.fields.push(...fields)
-    } else {
-      sections.push({ id: `${title}-${unnamed++}`, title, fields })
+      return
     }
+    const resolved = title || i18n.global.t("schema.advancedSection")
+    sections.push({ id: `${resolved}-${unnamed++}`, title: resolved, fields })
   }
+  const walk = (node: SchemaRecord) => {
+    const title = description(node.meta)
+    if (!title && node.type === "intersect") {
+      for (const child of node.list ?? []) walk(child)
+      return
+    }
+    push(title, collectFields(node))
+  }
+  for (const root of roots) walk(root)
   return sections
 }
 

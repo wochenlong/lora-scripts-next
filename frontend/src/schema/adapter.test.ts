@@ -92,6 +92,49 @@ describe("dynamic schema adapter", () => {
     expect(serializeModel(schema, model)).toMatchObject({ mode: "b", implementation: "module.b" })
   })
 
+  it("expands untitled nested intersects into named sections", () => {
+    const nestedSources = [{
+      name: "nested",
+      hash: "nested",
+      schema: `Schema.intersect([
+        Schema.object({ orphan: Schema.string() }),
+        Schema.intersect([
+          Schema.object({ learning_rate: Schema.string().default('1e-4') }).description('学习率与优化器设置'),
+          Schema.union([
+            Schema.object({ lr_warmup: Schema.number().default(0) }),
+            Schema.object({}),
+          ]),
+        ]),
+      ])`,
+    }]
+    const schema = executeSchemaSources(nestedSources, "nested")
+    expect(schema.sections.map((section) => section.title)).toEqual(["高级设置", "学习率与优化器设置"])
+    const lr = schema.sections[1]
+    expect(lr.fields.map((field) => field.key)).toEqual(["learning_rate", "lr_warmup"])
+  })
+
+  it("names real backend schema sections instead of one giant advanced block", () => {
+    const schemaDir = resolve(process.cwd(), "../mikazuki/schema")
+    const realSources = readdirSync(schemaDir).filter((name) => name.endsWith(".ts")).map((file) => ({
+      name: file.slice(0, -3),
+      hash: file,
+      schema: readFileSync(resolve(schemaDir, file), "utf8"),
+    }))
+    const master = executeSchemaSources(realSources, "lora-master")
+    const titles = master.sections.map((section) => section.title)
+    for (const expected of ["保存设置", "学习率与优化器设置", "网络设置", "训练预览图设置", "日志设置"]) {
+      expect(titles).toContain(expected)
+    }
+    const lr = master.sections.find((section) => section.title === "学习率与优化器设置")!
+    expect(lr.fields.map((field) => field.key)).toContain("optimizer_type")
+    expect(lr.fields.map((field) => field.key)).toContain("lr_scheduler_num_cycles")
+    expect(lr.fields.map((field) => field.key)).toContain("prodigy_d0")
+    const log = master.sections.find((section) => section.title === "日志设置")!
+    expect(log.fields.map((field) => field.key)).toContain("wandb_api_key")
+    const preview = master.sections.find((section) => section.title === "训练预览图设置")!
+    expect(preview.fields.map((field) => field.key)).toContain("sample_sampler")
+  })
+
   it("executes every backend training schema", () => {
     const schemaDir = resolve(process.cwd(), "../mikazuki/schema")
     const realSources = readdirSync(schemaDir).filter((name) => name.endsWith(".ts")).map((file) => ({

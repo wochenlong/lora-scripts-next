@@ -55,9 +55,35 @@
 
 ## 范围外(参考稿第 5–7 节,另行处理)
 
-- ⑤ Schema 分区命名对齐旧版(adapter 无标题 intersect 展开)
+- ⑤ Schema 分区命名对齐旧版(adapter 无标题 intersect 展开)→ 见下方「§5 实施计划」
 - ⑥ 数据集浏览按钮 / tag 位置 / 空分页贴底
 - ⑦ 任务页内嵌训练日志面板(折叠 + 红点)
+
+## §5 实施计划:Schema 分区命名对齐旧版
+
+### 根因
+
+`mikazuki/schema/shared.ts` 的 `SAVE_SETTINGS`(:94)、`LR_OPTIMIZER`(:113)、`ANIMA_FAST_LR_OPTIMIZER`(:186)、`PREVIEW_IMAGE`(:249)、`LOG_SETTINGS`(:273) 以及 `lora-master.ts:2`(:「训练用模型」)、`lora-master.ts:93`(「网络设置」)等内联结构,都是**外层无 `.description()` 的 `Schema.intersect`**,标题在内层第一个 object 上。`frontend/src/schema/adapter.ts` 的 `buildSections()` 只读顶层节点标题 → 整块落入「高级设置」且互相合并。
+
+### 改动
+
+1. **`frontend/src/schema/adapter.ts` — `buildSections()` 递归展开**
+   - 有标题节点:维持现状(`collectFields` 整组成一个 section)
+   - 无标题 intersect:下钻 `list` 子节点——有标题 object → 独立命名 section;无标题 object / 条件 union 碎片 → 并入上一 section;位于首位且无上一 section 时才落到「高级设置」兜底
+   - `collectFields` / `conditionsFrom` / 序列化 / 校验逻辑不动,字段集合与条件不变
+2. **`frontend/src/schema/adapter.test.ts` — 回归断言**
+   - 真实 schema(lora-master / flux-lora / sd3-lora)sections 含「保存设置 / 学习率与优化器设置 / 网络设置 / 训练预览图设置 / 日志设置」
+   - 条件字段(`lr_scheduler_num_cycles`、`prodigy_d0`、`wandb_api_key`)并入所属命名区
+   - 合成用例:leading 无标题碎片 → 「高级设置」兜底
+   - `dreambooth.ts:191` 显式「高级设置」保留
+
+### 不需要改
+
+后端 `mikazuki/schema/*.ts`(前端展开即可,避免 schema hash 缓存失效)、`DynamicSchemaForm` / `SectionToc`(自动受益)、i18n(`advancedSection` 留作兜底)。
+
+### 验证
+
+`npm run typecheck` → `npm run lint` → `npx vitest run src/schema/adapter.test.ts` → `npm run build`。
 
 ## 验证
 
