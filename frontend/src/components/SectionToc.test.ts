@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { mount } from "@vue/test-utils"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import SectionToc from "./SectionToc.vue"
 import { i18n } from "../i18n"
 
@@ -10,6 +10,13 @@ const sections = [
 ]
 
 describe("SectionToc", () => {
+  beforeEach(() => {
+    vi.useFakeTimers()
+  })
+  afterEach(() => {
+    vi.useRealTimers()
+  })
+
   it("starts collapsed and expands on seam click", async () => {
     const wrapper = mount(SectionToc, { props: { sections }, global: { plugins: [i18n] } })
     expect(wrapper.classes()).not.toContain("open")
@@ -21,7 +28,7 @@ describe("SectionToc", () => {
     expect(wrapper.classes()).not.toContain("open")
   })
 
-  it("navigates to the section anchor and retracts after selection", async () => {
+  it("navigates without closing immediately, then auto-collapses after idle", async () => {
     const target = document.createElement("div")
     target.id = "sec-network"
     const scrollIntoView = vi.fn()
@@ -32,6 +39,11 @@ describe("SectionToc", () => {
     const items = wrapper.findAll(".toc-item")
     await items[1].trigger("click")
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" })
+    expect(wrapper.classes()).toContain("open")
+    await vi.advanceTimersByTimeAsync(3499)
+    expect(wrapper.classes()).toContain("open")
+    await vi.advanceTimersByTimeAsync(1)
+    await wrapper.vm.$nextTick()
     expect(wrapper.classes()).not.toContain("open")
     target.remove()
   })

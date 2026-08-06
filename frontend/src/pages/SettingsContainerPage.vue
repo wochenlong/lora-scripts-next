@@ -5,12 +5,13 @@ import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import AboutPage from "./AboutPage.vue"
 import ChangelogPage from "./ChangelogPage.vue"
+import EnginesSettingsPage from "./EnginesSettingsPage.vue"
 import { SUPPORTED_LOCALES, UI_CONFIGS_KEY, getStoredLocale, setLocale, type AppLocale } from "../i18n"
 import { getTheme, setTheme, type ThemeName } from "../utils/theme"
 import { releases } from "../content/releases"
 import { useAppStore } from "../stores/app"
 
-const props = defineProps<{ tab: "ui" | "about" | "changelog" }>()
+const props = defineProps<{ tab: "ui" | "engines" | "about" | "changelog" }>()
 const { t } = useI18n()
 const appStore = useAppStore()
 const { version } = storeToRefs(appStore)
@@ -30,6 +31,7 @@ const form = reactive({ tensorboard_url: String(readUiConfigs().tensorboard_url 
 
 const tabs = computed(() => [
   { key: "ui", to: "/settings/ui", label: t("settings.nav.ui") },
+  { key: "engines", to: "/settings/engines", label: t("settings.nav.engines") },
   { key: "about", to: "/settings/about", label: t("settings.nav.about") },
   { key: "changelog", to: "/settings/changelog", label: t("settings.nav.changelog") },
 ] as const)
@@ -117,6 +119,7 @@ function reset() {
             </div>
           </section>
         </template>
+        <EnginesSettingsPage v-else-if="props.tab === 'engines'" />
         <AboutPage v-else-if="props.tab === 'about'" />
         <ChangelogPage v-else />
       </main>

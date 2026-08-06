@@ -1,2 +1,49 @@
-:root { color-scheme: light; font-family: Inter,"Segoe UI","Microsoft YaHei",sans-serif; font-size:16px; line-height:1.5; --bg:#f5f7fa; --surface:#fff; --surface-soft:#f8fafc; --surface-inset:#eef2f7; --text:#1f2430; --text-soft:#5b6472; --text-faint:#98a2b3; --border:#e5e8ef; --accent:#2563eb; --accent-dark:#1d4ed8; --accent-soft:rgba(37,99,235,.08); --accent-contrast:#fff; --danger:#dc2626; --sidebar:#fff; --radius:10px; --radius-lg:14px; --shadow:0 1px 2px rgba(16,24,40,.04),0 8px 24px rgba(16,24,40,.06) }
-html.dark { color-scheme:dark; --bg:#10141b; --surface:#171d27; --surface-soft:#1c2430; --surface-inset:#10151c; --text:#edf3f8; --text-soft:#a9b5c2; --text-faint:#758292; --border:#2a3442; --accent:#3b82f6; --accent-dark:#60a5fa; --accent-soft:rgba(59,130,246,.14); --accent-contrast:#fff; --danger:#f87171; --sidebar:#131922; --shadow:0 1px 2px rgba(0,0,0,.3),0 8px 24px rgba(0,0,0,.28) }
+:root {
+  color-scheme: light;
+  font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  --bg: #f5f7fa;
+  --surface: #fff;
+  --surface-soft: #f8fafc;
+  --surface-inset: #eef2f7;
+  --text: #1f2430;
+  --text-soft: #5b6472;
+  --text-faint: #98a2b3;
+  --border: #e8ecf3;
+  --accent: #2563eb;
+  --accent-dark: #1d4ed8;
+  --accent-soft: rgba(37, 99, 235, .08);
+  --accent-contrast: #fff;
+  --danger: #dc2626;
+  --sidebar: #fff;
+  --radius-sm: 12px;
+  --radius: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 22px;
+  --shadow: 0 1px 2px rgba(16, 24, 40, .03), 0 10px 28px rgba(16, 24, 40, .06);
+  --el-border-radius-base: 12px;
+  --el-border-radius-small: 10px;
+  --el-border-radius-round: 20px;
+}
+html.dark {
+  color-scheme: dark;
+  --bg: #10141b;
+  --surface: #171d27;
+  --surface-soft: #1c2430;
+  --surface-inset: #10151c;
+  --text: #edf3f8;
+  --text-soft: #a9b5c2;
+  --text-faint: #758292;
+  --border: #2a3442;
+  --accent: #3b82f6;
+  --accent-dark: #60a5fa;
+  --accent-soft: rgba(59, 130, 246, .14);
+  --accent-contrast: #fff;
+  --danger: #f87171;
+  --sidebar: #131922;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .28), 0 10px 28px rgba(0, 0, 0, .26);
+  --el-border-radius-base: 12px;
+  --el-border-radius-small: 10px;
+  --el-border-radius-round: 20px;
+}

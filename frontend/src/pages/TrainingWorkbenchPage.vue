@@ -7,6 +7,7 @@ import AnimaFastPage from "./AnimaFastPage.vue"
 import TrainingPage from "./TrainingPage.vue"
 import TrainingSelector from "../components/TrainingSelector.vue"
 import WorkbenchHeader from "../components/WorkbenchHeader.vue"
+import { lastSelectionFor, rememberSelection } from "../engines/prefs"
 import {
   DEFAULT_SELECTION,
   SCHEMA_META,
@@ -44,10 +45,19 @@ function initFromQuery() {
     target.value = fromSchema.target
     return
   }
+  const hasExplicit = Boolean(query.model || query.engine || query.target)
   const normalized = normalizeModel(query.model)
   if (normalized) model.value = normalized
   if (isEngine(query.engine)) engine.value = query.engine
   if (isTarget(query.target)) target.value = query.target
+  // Cold start stays on Kohya; only restore last engine when URL has no explicit selection.
+  if (!hasExplicit) {
+    const remembered = lastSelectionFor(model.value)
+    if (remembered) {
+      if (isEngine(remembered.engine) && isEngineSupported(model.value, remembered.engine)) engine.value = remembered.engine
+      if (isTarget(remembered.target) && isTargetSupported(model.value, engine.value, remembered.target)) target.value = remembered.target
+    }
+  }
 }
 
 initFromQuery()
@@ -70,6 +80,7 @@ watch([model, engine, target], () => {
     adjusted = true
   }
   if (adjusted) ElMessage.info(t("training.selector.autoAdjusted"))
+  rememberSelection(model.value, engine.value, target.value)
   router.replace({ query: { model: model.value, engine: engine.value, target: target.value } })
 })
 </script>

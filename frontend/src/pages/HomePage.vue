@@ -20,7 +20,7 @@ const portals = computed(() => [
         <p>{{ t("home.heroSubtitle") }}</p>
         <div class="hero-actions"><RouterLink class="primary-action" to="/training">{{ t("home.startTraining") }}</RouterLink><RouterLink class="secondary-action" to="/help/guide.html">{{ t("home.readGuide") }}</RouterLink></div>
       </div>
-      <div class="hero-visual"><div class="visual-grid" /><div class="orbit orbit-one" /><div class="orbit orbit-two" /><img src="/assets/home-logo.webp" alt="LoRA Scripts Next"></div>
+      <div class="hero-visual"><div class="visual-grid" /><div class="orbit orbit-one" /><div class="orbit orbit-two" /><img src="/assets/home-logo.webp" alt="Next Trainer"></div>
     </section>
     <section class="portal-grid" :aria-label="t('home.portalAria')">
       <RouterLink v-for="(portal, index) in portals" :key="portal.to" :to="portal.to" class="portal-card" :data-tone="portal.tone">

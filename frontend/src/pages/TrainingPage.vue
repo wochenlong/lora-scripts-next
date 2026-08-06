@@ -275,25 +275,29 @@ onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(a
 
 <template>
   <div class="training-layout schema-training-layout" :class="{ bare, 'preview-docked': previewCollapsed }">
-    <section class="form-canvas">
-      <SectionToc v-if="tocSections.length > 1" :sections="tocSections" />
-      <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
-      <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
-      <slot name="form-top" />
-      <div v-if="loading" class="schema-state"><strong>{{ t("training.loadingSchema") }}</strong><span>{{ t("training.loadingSchemaHint") }}</span></div>
-      <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
-      <DynamicSchemaForm v-else-if="schema" v-model="model" :schema="schema" :errors="errors" />
+    <section class="form-canvas" :class="{ 'with-schema-toc': tocSections.length > 1 }">
+      <div class="schema-form-shell" :class="{ 'has-toc': tocSections.length > 1 }">
+        <SectionToc v-if="tocSections.length > 1" :sections="tocSections" />
+        <div class="schema-form-binder">
+          <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
+          <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
+          <slot name="form-top" />
+          <div v-if="loading" class="schema-state"><strong>{{ t("training.loadingSchema") }}</strong><span>{{ t("training.loadingSchemaHint") }}</span></div>
+          <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
+          <DynamicSchemaForm v-else-if="schema" v-model="model" :schema="schema" :errors="errors" />
+        </div>
+      </div>
     </section>
     <aside class="control-panel" :class="{ collapsed: previewCollapsed }">
       <div class="panel-rail">
         <button class="rail-handle" @click="previewCollapsed = false">
           <span class="rail-arrow" aria-hidden="true">←</span>
           <span v-if="diagnostics.errors.length || diagnostics.warnings.length" class="rail-alert" :class="{ error: diagnostics.errors.length > 0 }"></span>
-          <span class="rail-label">{{ t("training.preview.panelTitle") }}</span>
+          <span class="rail-label">{{ t("training.preview.railTitle") }}</span>
           <b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b>
         </button>
-        <button class="primary-action rail-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button>
-        <button class="danger-action rail-stop" :disabled="!currentRunning || Boolean(tasksStore.terminatingId)" @click="stopTraining">{{ t("training.stop") }}</button>
+        <button class="primary-action rail-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.railSubmitting") : t("training.railStart") }}</button>
+        <button class="danger-action rail-stop" :disabled="!currentRunning || Boolean(tasksStore.terminatingId)" @click="stopTraining">{{ t("training.railStop") }}</button>
       </div>
       <div class="panel-full">
         <div v-if="!bare" class="panel-copy"><span class="eyebrow">TRAINING CONTROL</span><h2>{{ title }}</h2><p>{{ t("training.panelHint") }}</p></div>
