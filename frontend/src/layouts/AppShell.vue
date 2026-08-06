@@ -35,7 +35,7 @@ onMounted(() => appStore.loadVersion())
     <button v-if="mobileOpen" class="sidebar-mask" :aria-label="t('nav.closeNav')" @click="mobileOpen = false" />
     <aside class="sidebar" :class="{ 'is-open': mobileOpen }">
       <RouterLink class="brand" to="/" @click="mobileOpen = false">
-        <span class="brand-mark">N</span><span><strong>{{ t("app.brand") }}</strong><small>{{ version ? `v${version}` : "Vue 3 workspace" }}</small></span>
+        <span class="brand-mark">N</span><span><strong>{{ t("app.brand") }}</strong><small>{{ version ? `v${version}` : "beta" }}</small></span>
       </RouterLink>
       <nav class="navigation" :aria-label="t('nav.mainAria')">
         <RouterLink v-for="section in sections" :key="section.key" :to="section.to" class="nav-link" :class="{ active: isActive(section.match) }" @click="mobileOpen = false">

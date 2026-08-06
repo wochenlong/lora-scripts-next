@@ -1,6 +1,27 @@
 # 更新日志
 
-本文件记录 **wochenlong/lora-scripts-next** 面向镜像与 AutoDL 的发行说明；上游 kohya-ss/sd-scripts 的变更请见其仓库。
+本文件记录 **wochenlong/lora-scripts-next**（产品名 **Next Trainer**）面向镜像与 AutoDL 的发行说明；上游 kohya-ss/sd-scripts 的变更请见其仓库。
+
+---
+## v3.0.0-beta.1 — 2026-08-06
+
+> **内测线（pre-release）**：Vue3 信息架构重写。合入 `dev`，**不替代** `main` 上的稳定版 v2.9.1。仓库名仍为 `lora-scripts-next`；界面品牌统一为 **Next Trainer**。
+
+### 产品
+
+- 四栏 IA：训练 / 数据集 / 任务 / 设置（模型 × 引擎 × 目标工作台）
+- 界面品牌统一为 **Next Trainer**
+- 设置 → 训练引擎管理；Anima Fast 就绪态仅显示「训练环境准备就绪」
+- 任务页：预览图、Loss、内嵌日志；日常盯盘以任务为主（训练监控次要入口见 #217）
+
+### 依赖
+
+- 钉死 `protobuf==3.20.3`，避免 Flux/SD3 sentencepiece 落到 3.19.x
+
+### 说明
+
+- 整合包请标 **pre-release**；文件名建议含 `v3.0.0-beta.1`
+- 已知与秋叶旧导航不同；习惯对齐专项在 `dev` 内测后再开
 
 ---
 ## v2.9.1 — 2026-07-28
