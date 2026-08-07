@@ -121,13 +121,13 @@ def krea2_tokenizer_dir(project_root: Path) -> Path:
 
 KREA2_ENCODER_REL = Path("src/musubi_tuner/krea2/krea2_encoder.py")
 _TOKENIZER_PATCH_MARK = "# mikazuki: patched tokenizer path"
-_TOKENIZER_LOAD_LINE = "tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo, max_length=max_length)"
+_TOKENIZER_LOAD_LINE = "    tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo, max_length=max_length)"
 
 
 def patch_krea2_tokenizer_path(source_root: Path, tokenizer_dir: Path, log: Callable[[str], None] = print) -> bool:
     """Rewrite krea2_encoder.py so the Qwen3-VL tokenizer loads from the local
     tokenizer directory instead of hitting the Hub. Idempotent; no-op when the
-    directory is incomplete."""
+    directory is incomplete. Refuses to write if the result would not compile."""
     encoder = Path(source_root) / KREA2_ENCODER_REL
     if not encoder.is_file():
         return False
@@ -138,9 +138,16 @@ def patch_krea2_tokenizer_path(source_root: Path, tokenizer_dir: Path, log: Call
     if _TOKENIZER_PATCH_MARK in text:
         return True
     if _TOKENIZER_LOAD_LINE not in text:
+        log(f"[patch] tokenizer load line not found in {encoder}; skipped")
         return False
     injection = f'    tokenizer_repo = r"{tokenizer_dir.as_posix()}"  {_TOKENIZER_PATCH_MARK}\n'
-    encoder.write_text(text.replace(_TOKENIZER_LOAD_LINE, injection + _TOKENIZER_LOAD_LINE, 1), encoding="utf-8")
+    patched = text.replace(_TOKENIZER_LOAD_LINE, injection + _TOKENIZER_LOAD_LINE, 1)
+    try:
+        compile(patched, str(encoder), "exec")
+    except SyntaxError as exc:
+        log(f"[patch] result would not compile ({exc}); {encoder} left unchanged")
+        return False
+    encoder.write_text(patched, encoding="utf-8")
     log(f"[patch] krea2 tokenizer_repo -> {tokenizer_dir}")
     return True
 

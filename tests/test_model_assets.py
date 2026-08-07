@@ -145,6 +145,7 @@ class Krea2TokenizerPatchTests(unittest.TestCase):
             encoder = source_root / "src" / "musubi_tuner" / "krea2" / "krea2_encoder.py"
             text = encoder.read_text(encoding="utf-8")
             self.assertIn(f'tokenizer_repo = r"{tokenizer_dir.as_posix()}"', text)
+            compile(text, str(encoder), "exec")
             self.assertTrue(patch_krea2_tokenizer_path(source_root, tokenizer_dir, logs.append))
             self.assertEqual(encoder.read_text(encoding="utf-8").count("mikazuki: patched tokenizer path"), 1)
 
