@@ -11,6 +11,7 @@
     <td align="center"><a href="https://github.com/SupermarKleet"><img src="https://github.com/SupermarKleet.png" width="80" /><br /><sub><b>SupermarKleet</b></sub></a><br /><sub>UI 设计</sub></td>
     <td align="center"><a href="https://github.com/niangao2331"><img src="https://github.com/niangao2331.png" width="80" /><br /><sub><b>niangao2331</b></sub></a><br /><sub>社区贡献</sub></td>
     <td align="center"><a href="https://github.com/MikumikuDAIFans"><img src="https://github.com/MikumikuDAIFans.png" width="80" /><br /><sub><b>MikumikuDAIFans</b></sub></a><br /><sub>核心开发</sub></td>
+    <td align="center"><a href="https://github.com/IryNeko"><img src="https://github.com/IryNeko.png" width="80" /><br /><sub><b>IryNeko</b></sub></a><br /><sub>前端重构</sub></td>
   </tr>
 </table>
 
@@ -23,5 +24,6 @@
 | [@SupermarKleet](https://github.com/SupermarKleet) | Next Trainer 看板娘与品牌素材（Logo、README 首图、Favicon、社交预览图） | — |
 | [@niangao2331](https://github.com/niangao2331) | 修复 `Download-Anima-Model.bat` 在整合包内重复创建嵌套 `SD-Trainer` 目录的问题，模型正确下载至 `sd-models/anima/` | [#23](https://github.com/wochenlong/lora-scripts-next/pull/23) |
 | [@MikumikuDAIFans](https://github.com/MikumikuDAIFans) | **Anima Fast 模式**：`anima_lora` 插件安装器、Fast 训练路由与监控同步、预览图/进度 JSONL、性能对标与用户文档 | [#64](https://github.com/wochenlong/lora-scripts-next/pull/64) |
+| [@IryNeko](https://github.com/IryNeko) | **Vue3 前端重构**：四栏 IA（训练 / 数据集 / 任务 / 设置）、训练工作台与前端源码公开，奠定 `dev` 内测线 | [#209](https://github.com/wochenlong/lora-scripts-next/pull/209) |
 
 上游项目与完整归属信息见 [`NOTICE.md`](NOTICE.md)。Fast 训练引擎原作者见 [`docs/anima-fast.md`](docs/anima-fast.md) §致谢（[sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora)）。

@@ -12,6 +12,7 @@
 | [@ageless-h](https://github.com/ageless-h) | 后端开发 | Anima / sd-scripts 后端、整合包相关修复 | 是 | **未来约 1～2 周较忙，暂不接新任务**；紧急项由项目负责人协调 |
 | [@niangao2331](https://github.com/niangao2331) | 开发（vibe coding） | 打标器、Dataset Tag Editor | 是 | 若实践后难以独立维护该模块，可改任 **Issue 分诊**（仍参与协作，调整职责） |
 | [@MikumikuDAIFans](https://github.com/MikumikuDAIFans) | 开发（vibe coding） | 训练引擎相关、**端口与路径治理**（草案见 `docs/design/ports/`） | 是 | 先小步落地 P0；方案为草案，合入前经 Discussion / PR review |
+| [@IryNeko](https://github.com/IryNeko) | 前端重构 | Vue3 四栏 IA、训练工作台与前端源码（`dev` / [#209](https://github.com/wochenlong/lora-scripts-next/pull/209)） | 是 | 核心参与前端重构；持续合入以 `dev` 为主 |
 
 ### 领域负责人（DRI）
 
@@ -21,6 +22,7 @@
 |------|-----|-------------|
 | 项目级 / Release / 合 `main` | @wochenlong | — |
 | UI / 品牌素材 | @SupermarKleet（出图） | @wochenlong（进仓库） |
+| Vue3 前端 / `dev` IA | @IryNeko | @wochenlong |
 | 打标 / Dataset Tag Editor | @niangao2331 | @wochenlong |
 | 端口、启动、`gui.py` 子服务 | @MikumikuDAIFans | @wochenlong |
 | 训练引擎 / Anima 后端 / sd-scripts | @MikumikuDAIFans（引擎与端口线） | @ageless-h（恢复后）、@wochenlong |
