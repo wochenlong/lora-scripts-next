@@ -28,6 +28,7 @@ export default {
         sdxl: "SDXL",
         flux: "Flux",
         lumina: "Lumina 2",
+        krea2: "Krea 2",
       },
       engines: {
         kohya: "Kohya-ss",
@@ -150,6 +151,7 @@ export default {
       dreambooth: { title: "SD / SDXL 全量微调", area: "SD / SDXL · Kohya-ss · 全量微调" },
       "flux-lora": { title: "Flux LoRA", area: "Flux · Kohya-ss · LoRA" },
       "lumina2-lora": { title: "Lumina 2 LoRA", area: "Lumina 2 · Kohya-ss · LoRA" },
+      "krea2-lora": { title: "Krea 2 LoRA", area: "Krea 2 · Musubi-Tuner · LoRA" },
     },
   },
   dataset: {
@@ -274,7 +276,8 @@ export default {
         },
         musubi: {
           name: "Musubi-Tuner",
-          summary: "规划中的可选训练引擎。",
+          summary: "可选训练引擎（kohya-ss/musubi-tuner），支持 Krea 2 等图像模型 LoRA。",
+          sizeHint: "体积较大（通常数 GB），需额外磁盘与下载时间",
         },
       },
       state: {
@@ -320,8 +323,12 @@ export default {
       },
       confirm: {
         animaFast: "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
+        install: {
+          "anima-fast": "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
+          musubi: "Musubi-Tuner 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
+        },
         reinstall: "「重新安装」会完整重装独立运行时，通常需要重新下载数 GB 依赖。仅在环境损坏或安装不完整时使用。确认继续？",
-        uninstall: "卸载将移除 Anima Fast 独立运行时。确认继续？",
+        uninstall: "卸载将移除对应的独立运行时。确认继续？",
       },
       msg: {
         ready: "引擎已就绪",

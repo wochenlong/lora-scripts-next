@@ -1,6 +1,6 @@
 import type { FormModel } from "../schema/adapter"
 
-export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina"
+export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2"
 export type TrainingEngine = "kohya" | "anima-fast" | "musubi"
 export type TrainingTarget = "lora" | "finetune"
 
@@ -17,7 +17,7 @@ export interface TrainingModule {
   legacyStorageKey?: string
 }
 
-export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina"]
+export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2"]
 export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi"]
 export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "finetune"]
 
@@ -40,6 +40,7 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
   { model: "sd15", engine: "kohya", target: "finetune", schemaName: "dreambooth", defaults: { model_train_type: "sd-dreambooth" }, storageKey: "sd15-dreambooth" },
   { model: "flux", engine: "kohya", target: "lora", schemaName: "flux-lora" },
   { model: "lumina", engine: "kohya", target: "lora", schemaName: "lumina2-lora" },
+  { model: "krea2", engine: "musubi", target: "lora", schemaName: "krea2-lora" },
 ]
 
 export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> = {
@@ -50,6 +51,7 @@ export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> 
   dreambooth: { titleKey: "training.schemas.dreambooth.title", areaKey: "training.schemas.dreambooth.area" },
   "flux-lora": { titleKey: "training.schemas.flux-lora.title", areaKey: "training.schemas.flux-lora.area" },
   "lumina2-lora": { titleKey: "training.schemas.lumina2-lora.title", areaKey: "training.schemas.lumina2-lora.area" },
+  "krea2-lora": { titleKey: "training.schemas.krea2-lora.title", areaKey: "training.schemas.krea2-lora.area" },
 }
 
 export function normalizeModel(value: unknown): TrainingModel | undefined {

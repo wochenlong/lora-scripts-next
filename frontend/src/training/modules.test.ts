@@ -67,8 +67,12 @@ describe("training module mapping", () => {
     expect(resolveModule("anima", "musubi", "lora")).toBeUndefined()
   })
 
-  it("marks musubi as unsupported for every model", () => {
-    for (const model of TRAINING_MODELS) expect(isEngineSupported(model, "musubi")).toBe(false)
+  it("limits musubi engine to the krea2 model", () => {
+    expect(isEngineSupported("krea2", "musubi")).toBe(true)
+    for (const model of TRAINING_MODELS) {
+      if (model === "krea2") continue
+      expect(isEngineSupported(model, "musubi")).toBe(false)
+    }
   })
 
   it("limits master targets to lora and finetune; adapter types live in the form schema", () => {

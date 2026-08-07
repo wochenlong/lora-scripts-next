@@ -52,4 +52,5 @@ export const trainingApi = {
   normalizeExport: (pageTrainType: string, config: FormModel) => post<NormalizedExport>("/api/config/normalize-for-export", { page_train_type: pageTrainType, config }),
   run: (config: FormModel) => post<TrainingStart>("/api/run", config),
   animaFastPreflight: (config: FormModel) => post<PreflightResult>("/api/anima-fast/preflight", config),
+  musubiPreflight: (config: FormModel) => post<PreflightResult>("/api/plugins/musubi/preflight", config),
 }

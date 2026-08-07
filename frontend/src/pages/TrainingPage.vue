@@ -226,6 +226,11 @@ async function submit() {
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
+    if (props.schemaName === "krea2-lora") {
+      const preflight = await trainingApi.musubiPreflight(output.value)
+      if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
+      preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
+    }
     started.value = await trainingApi.run(output.value)
     tasksStore.refresh({ silent: true })
     saveHistory()

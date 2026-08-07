@@ -6,6 +6,6 @@ describe("engine catalog", () => {
     expect(engineDefinition("kohya")?.kind).toBe("builtin")
     expect(engineDefinition("anima-fast")?.kind).toBe("optional")
     expect(engineDefinition("anima-fast")?.managesRuntime).toBe(true)
-    expect(ENGINE_CATALOG.some((engine) => engine.id === "musubi" && engine.kind === "planned")).toBe(true)
+    expect(ENGINE_CATALOG.some((engine) => engine.id === "musubi" && engine.kind === "optional" && engine.managesRuntime)).toBe(true)
   })
 })

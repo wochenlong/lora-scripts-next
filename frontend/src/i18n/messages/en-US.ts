@@ -28,6 +28,7 @@ export default {
         sdxl: "SDXL",
         flux: "Flux",
         lumina: "Lumina 2",
+        krea2: "Krea 2",
       },
       engines: {
         kohya: "Kohya-ss",
@@ -150,6 +151,7 @@ export default {
       dreambooth: { title: "SD / SDXL Full Fine-tune", area: "SD / SDXL · Kohya-ss · Full Fine-tune" },
       "flux-lora": { title: "Flux LoRA", area: "Flux · Kohya-ss · LoRA" },
       "lumina2-lora": { title: "Lumina 2 LoRA", area: "Lumina 2 · Kohya-ss · LoRA" },
+      "krea2-lora": { title: "Krea 2 LoRA", area: "Krea 2 · Musubi-Tuner · LoRA" },
     },
   },
   dataset: {
@@ -274,7 +276,8 @@ export default {
         },
         musubi: {
           name: "Musubi-Tuner",
-          summary: "Planned optional training engine.",
+          summary: "Optional training engine (kohya-ss/musubi-tuner) for Krea 2 and other image model LoRA.",
+          sizeHint: "Large download (usually several GB); extra disk space and download time required",
         },
       },
       state: {
@@ -320,8 +323,12 @@ export default {
       },
       confirm: {
         animaFast: "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
+        install: {
+          "anima-fast": "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
+          musubi: "Musubi-Tuner downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
+        },
         reinstall: "Reinstall fully replaces the standalone runtime and usually re-downloads several GB. Use only when the environment is broken or incomplete. Continue?",
-        uninstall: "Uninstall will remove the Anima Fast standalone runtime. Continue?",
+        uninstall: "Uninstall will remove the standalone runtime. Continue?",
       },
       msg: {
         ready: "Engine ready",

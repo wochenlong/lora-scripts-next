@@ -11,6 +11,7 @@ from mikazuki.utils.train_utils import ensure_enable_preview_flag
 
 ANIMA_TRAIN_TYPES = frozenset({"anima-lora", "sd3-lora"})
 ANIMA_FAST_TRAIN_TYPES = frozenset({"anima-lora-fast"})
+MUSUBI_TRAIN_TYPES = frozenset({"krea2-lora"})
 FLUX_TRAIN_TYPES = frozenset({"flux-lora", "flux-finetune"})
 LUMINA_TRAIN_TYPES = frozenset({"lumina-lora"})
 SDXL_TRAIN_TYPES = frozenset({"sdxl-lora", "sdxl-finetune"})
@@ -140,6 +141,12 @@ PAGE_SPECS: dict[str, dict[str, Any]] = {
         "accepted": FLUX_TRAIN_TYPES,
         "default_train_type": "flux-lora",
     },
+    "krea2-lora": {
+        "label": "Krea 2 LoRA 训练",
+        "path": "/lora/krea2.html",
+        "accepted": MUSUBI_TRAIN_TYPES,
+        "default_train_type": "krea2-lora",
+    },
     "lumina-lora": {
         "label": "Lumina LoRA 训练",
         "path": "/lora/lumina.html",
@@ -176,6 +183,7 @@ TRAIN_TYPE_TARGETS: dict[str, dict[str, str]] = {
     "anima-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "sd3-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "anima-lora-fast": {"path": "/lora/anima-fast.html", "label": "Anima Fast 训练"},
+    "krea2-lora": {"path": "/lora/krea2.html", "label": "Krea 2 LoRA 训练"},
     "flux-lora": {"path": "/lora/flux.html", "label": "Flux LoRA 训练"},
     "flux-finetune": {"path": "/lora/flux.html", "label": "Flux 训练"},
     "lumina-lora": {"path": "/lora/lumina.html", "label": "Lumina LoRA 训练"},
