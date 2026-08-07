@@ -24,7 +24,7 @@ from .extension_state import (
     write_install_state,
 )
 from .installer import build_install_plan, copy_source_snapshot
-from .settings import RuntimeConfig, load_backend_config
+from .settings import RuntimeConfig, ensure_install_source_ready, load_backend_config
 
 
 IMPORT_PROBE = (
@@ -340,8 +340,11 @@ def install_environment(
     _append(log, "[phase] copy source snapshot")
     if plan.source_commit:
         _append(log, f"[source] pinned commit {plan.source_commit}")
+    resolved_source = ensure_install_source_ready(
+        plan.project_root, plan.source_root, plan.source_commit, log=lambda line: _append(log, line)
+    )
     copy_source_snapshot(
-        build_install_plan(plan.source_root, plan.layout, dry_run=False, source_commit=plan.source_commit, cuda_extra=plan.cuda_extra)
+        build_install_plan(resolved_source, plan.layout, dry_run=False, source_commit=plan.source_commit, cuda_extra=plan.cuda_extra)
     )
 
     uv = _uv_command()

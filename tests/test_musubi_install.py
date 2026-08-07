@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from mikazuki.musubi_backend.environment import (
     build_environment_install_plan,
@@ -25,7 +27,9 @@ from mikazuki.musubi_backend.installer import (
 from mikazuki.musubi_backend.preflight import ProbeFacts, run_preflight
 from mikazuki.musubi_backend.settings import (
     RuntimeConfig,
+    default_upstream_cache,
     discover_runtime,
+    ensure_install_source_ready,
     resolve_install_source_root,
 )
 
@@ -138,6 +142,39 @@ class InstallerTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             with self.assertRaises(ValueError):
                 resolve_install_source_root(Path(td))
+
+    def test_resolve_install_source_root_prefers_existing_cache(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            cache = default_upstream_cache(root)
+            (cache / "src" / "musubi_tuner").mkdir(parents=True)
+            self.assertEqual(resolve_install_source_root(root), cache)
+
+    def test_resolve_install_source_root_clones_when_allowed(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            cache = default_upstream_cache(root)
+
+            def fake_run(cmd, **kwargs):
+                if cmd[:2] == ["git", "clone"]:
+                    (cache / "src" / "musubi_tuner").mkdir(parents=True)
+                return subprocess.CompletedProcess(cmd, 0)
+
+            with mock.patch("mikazuki.musubi_backend.settings.subprocess.run", side_effect=fake_run) as run:
+                found = resolve_install_source_root(root, allow_clone=True)
+            self.assertEqual(found, cache)
+            clone_cmd = run.call_args_list[0].args[0]
+            self.assertIn("https://github.com/kohya-ss/musubi-tuner.git", clone_cmd)
+
+    def test_ensure_install_source_ready_keeps_usable_preferred(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            preferred = root / "elsewhere"
+            (preferred / "src" / "musubi_tuner").mkdir(parents=True)
+            with mock.patch("mikazuki.musubi_backend.settings.subprocess.run") as run:
+                found = ensure_install_source_ready(root, preferred)
+            self.assertEqual(found, preferred.resolve())
+            run.assert_not_called()
 
 
 class EnvironmentPlanTests(unittest.TestCase):

@@ -79,6 +79,7 @@ from mikazuki.musubi_backend.installer import (
 )
 from mikazuki.musubi_backend.preflight import run_preflight as run_musubi_preflight
 from mikazuki.musubi_backend.settings import (
+    default_upstream_cache as musubi_default_upstream_cache,
     discover_runtime as discover_musubi_runtime,
     feature_enabled as musubi_feature_enabled,
     resolve_install_source_root as resolve_musubi_install_source_root,
@@ -1047,10 +1048,14 @@ async def _musubi_plugin_install_impl(request: Request, force_install: bool = Fa
     explicit = payload.get("source_root")
     try:
         source_root = resolve_musubi_install_source_root(
-            project_root, Path(str(explicit)) if explicit else None
+            project_root, Path(str(explicit)) if explicit else None, source_commit
         )
     except ValueError as exc:
-        return APIResponseFail(message=str(exc))
+        if dry_run:
+            return APIResponseFail(message=str(exc))
+        # Real install: let the background task auto-clone upstream into the cache
+        # (mirrors the Anima Fast installer) so clone output streams to the install log.
+        source_root = musubi_default_upstream_cache(project_root)
     plan = build_musubi_install_plan(source_root, layout, dry_run=dry_run, source_commit=source_commit)
     data = {"plan": plan.as_dict()}
     if dry_run:

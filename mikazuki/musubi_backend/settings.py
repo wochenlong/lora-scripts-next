@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 import os
+import shutil
+import subprocess
 import sys
 
 try:
@@ -12,6 +15,7 @@ except ModuleNotFoundError:  # Python 3.10 runtime
 
 
 DEFAULT_CONFIG = Path("config/musubi_backend.toml")
+UPSTREAM_REPO = "https://github.com/kohya-ss/musubi-tuner.git"
 
 
 @dataclass(frozen=True)
@@ -67,8 +71,55 @@ def feature_enabled(env: dict[str, str] | None = None, config: dict | None = Non
     return not feature_kill_switch(env=env, config=config)
 
 
-def resolve_install_source_root(project_root: Path, explicit: Path | None = None) -> Path:
-    """Locate a musubi-tuner source checkout usable as install input."""
+def _has_package_tree(path: Path) -> bool:
+    return (path / "src" / "musubi_tuner").is_dir()
+
+
+def default_upstream_cache(project_root: Path) -> Path:
+    return (project_root / ".cache" / "musubi" / "upstream").resolve()
+
+
+def ensure_upstream_clone(
+    project_root: Path,
+    target: Path,
+    commit: str | None,
+    log: Callable[[str], None] | None = None,
+) -> Path:
+    target = target.resolve()
+    if _has_package_tree(target):
+        if commit:
+            subprocess.run(["git", "-C", str(target), "fetch", "origin", commit, "--depth", "1"], check=False)
+            subprocess.run(["git", "-C", str(target), "checkout", commit], check=True)
+        return target
+    if target.exists() and any(target.iterdir()):
+        raise ValueError(f"musubi-tuner 上游缓存已存在但不是有效源码目录: {target}")
+    target.parent.mkdir(parents=True, exist_ok=True)
+    clone_cmd = ["git", "clone", "--depth", "1", UPSTREAM_REPO, str(target)]
+    if commit:
+        clone_cmd = ["git", "clone", UPSTREAM_REPO, str(target)]
+    if log:
+        log(f"[clone] {' '.join(clone_cmd)}")
+    subprocess.run(clone_cmd, check=True)
+    if commit:
+        subprocess.run(["git", "-C", str(target), "checkout", commit], check=True)
+    if not _has_package_tree(target):
+        raise ValueError(f"克隆的 musubi-tuner 缺少 src/musubi_tuner: {target}")
+    return target
+
+
+def resolve_install_source_root(
+    project_root: Path,
+    explicit: Path | None = None,
+    source_commit: str | None = None,
+    *,
+    allow_clone: bool = False,
+    log: Callable[[str], None] | None = None,
+) -> Path:
+    """Locate a musubi-tuner source checkout usable as install input.
+
+    Priority: explicit → MUSUBI_ROOT → vendor/musubi-tuner → .cache/musubi/upstream
+    (git clone when allow_clone is set, mirroring the Anima Fast installer).
+    """
     candidates: list[Path] = []
     if explicit is not None:
         candidates.append(explicit if explicit.is_absolute() else (project_root / explicit))
@@ -77,13 +128,35 @@ def resolve_install_source_root(project_root: Path, explicit: Path | None = None
         candidates.append(Path(env_root))
     candidates.append(project_root / "vendor" / "musubi-tuner")
     for candidate in candidates:
-        if (candidate / "src" / "musubi_tuner").is_dir():
+        if _has_package_tree(candidate):
             return candidate.resolve()
-    searched = ", ".join(str(c) for c in candidates)
+    cache_root = default_upstream_cache(project_root)
+    if _has_package_tree(cache_root):
+        return cache_root
+    if allow_clone:
+        if not shutil.which("git"):
+            raise ValueError(
+                "需要 git 才能自动下载 musubi-tuner 源码。请安装 git，"
+                "或设置 MUSUBI_ROOT 指向现有的 kohya-ss/musubi-tuner 克隆。"
+            )
+        return ensure_upstream_clone(project_root, cache_root, (source_commit or "").strip() or None, log=log)
+    searched = ", ".join(str(c) for c in [*candidates, cache_root])
     raise ValueError(
         "未找到 musubi-tuner 源码。请先把 https://github.com/kohya-ss/musubi-tuner "
         f"克隆到 vendor/musubi-tuner（或设置 MUSUBI_ROOT）。已查找: {searched}"
     )
+
+
+def ensure_install_source_ready(
+    project_root: Path,
+    preferred: Path,
+    source_commit: str | None = None,
+    log: Callable[[str], None] | None = None,
+) -> Path:
+    preferred = preferred.resolve()
+    if _has_package_tree(preferred):
+        return preferred
+    return resolve_install_source_root(project_root, None, source_commit, allow_clone=True, log=log)
 
 
 def discover_runtime(config: dict | None = None, lora_next_root: Path | None = None) -> RuntimeConfig:
