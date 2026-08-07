@@ -1,7 +1,15 @@
+import os
 import unittest
 from pathlib import Path
+from unittest import mock
 
-from mikazuki.spa import should_fallback_to_spa, train_monitor_url
+from mikazuki.spa import (
+    should_fallback_to_spa,
+    train_monitor_browser_url,
+    train_monitor_enabled,
+    train_monitor_url,
+    wait_for_tcp_port,
+)
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -61,6 +69,32 @@ class VueSpaRouteTests(unittest.TestCase):
         listen = source.index('if args.listen:')
         monitor_host = source.index('os.environ["TRAIN_MONITOR_HOST"] = args.host')
         self.assertLess(listen, monitor_host)
+        self.assertIn('TRAIN_MONITOR_ENABLED', source)
+
+    def test_train_monitor_browser_url_requires_enabled_flag(self):
+        with mock.patch.dict(os.environ, {"TRAIN_MONITOR_ENABLED": "0", "TRAIN_MONITOR_PORT": "6008"}, clear=False):
+            self.assertFalse(train_monitor_enabled())
+            self.assertIsNone(train_monitor_browser_url())
+        with mock.patch.dict(
+            os.environ,
+            {
+                "TRAIN_MONITOR_ENABLED": "1",
+                "TRAIN_MONITOR_HOST": "0.0.0.0",
+                "TRAIN_MONITOR_PORT": "6012",
+            },
+            clear=False,
+        ):
+            self.assertTrue(train_monitor_enabled())
+            self.assertEqual(train_monitor_browser_url(), "http://127.0.0.1:6012/")
+
+    def test_wait_for_tcp_port_times_out_on_closed_port(self):
+        self.assertFalse(wait_for_tcp_port("127.0.0.1", 1, timeout=0.3, interval=0.1))
+
+    def test_application_gates_monitor_browser_open(self):
+        source = (ROOT / "mikazuki/app/application.py").read_text(encoding="utf-8")
+        self.assertIn("train_monitor_browser_url()", source)
+        self.assertIn("wait_for_tcp_port", source)
+        self.assertNotIn('browser.open(f\'http://127.0.0.1:{monitor_port}\')', source)
 
 
 if __name__ == "__main__":

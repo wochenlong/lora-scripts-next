@@ -19,7 +19,13 @@ from mikazuki.app.api import router as api_router
 # from mikazuki.app.ipc import router as ipc_router
 from mikazuki.app.proxy import router as proxy_router
 from mikazuki.utils.devices import check_torch_gpu
-from mikazuki.spa import should_fallback_to_spa, train_monitor_url
+from mikazuki.spa import (
+    should_fallback_to_spa,
+    train_monitor_browser_host,
+    train_monitor_browser_url,
+    train_monitor_url,
+    wait_for_tcp_port,
+)
 
 mimetypes.add_type("application/javascript", ".js")
 mimetypes.add_type("text/css", ".css")
@@ -105,7 +111,6 @@ async def app_startup():
     asyncio.create_task(_async_update_check())
 
     if sys.platform == "win32" and os.environ.get("MIKAZUKI_DEV", "0") != "1":
-        import time
         from mikazuki.log import log as app_log
 
         browser = _resolve_browser()
@@ -113,10 +118,22 @@ async def app_startup():
             app_log.info(f"Using browser: {os.environ.get('MIKAZUKI_BROWSER', 'default')}")
 
         browser.open(_start_url())
-        monitor_port = os.environ.get("TRAIN_MONITOR_PORT", "6008")
-        time.sleep(1)
-        app_log.info(f"Opening train monitor in browser: http://127.0.0.1:{monitor_port}")
-        browser.open(f'http://127.0.0.1:{monitor_port}')
+        # Only open the monitor tab when gui.py actually started it, and only
+        # after the port accepts connections. Otherwise Windows users get a
+        # blank ERR_CONNECTION_REFUSED tab on a dead 6008.
+        monitor_url = train_monitor_browser_url()
+        if not monitor_url:
+            return
+        host = train_monitor_browser_host()
+        port = int(os.environ.get("TRAIN_MONITOR_PORT", "6008"))
+        if wait_for_tcp_port(host, port, timeout=12.0):
+            app_log.info(f"Opening train monitor in browser: {monitor_url}")
+            browser.open(monitor_url)
+        else:
+            app_log.warning(
+                f"Train monitor not ready at {monitor_url}; skip opening browser tab. "
+                f"Use /train-monitor from the WebUI after it comes up."
+            )
 
 
 @asynccontextmanager

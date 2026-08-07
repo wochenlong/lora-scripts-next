@@ -192,6 +192,7 @@ def launch():
     os.environ["MIKAZUKI_TENSORBOARD_PORT"] = str(args.tensorboard_port)
     os.environ["TRAIN_MONITOR_HOST"] = args.host
     os.environ["TRAIN_MONITOR_PORT"] = str(args.train_monitor_port)
+    os.environ["TRAIN_MONITOR_ENABLED"] = "0" if args.disable_train_monitor else "1"
     os.environ["MIKAZUKI_TAGEDITOR_PORT"] = str(tageditor_port)
     os.environ["MIKAZUKI_DEV"] = "1" if args.dev else "0"
     if args.browser:
@@ -210,7 +211,10 @@ def launch():
 
     import uvicorn
     log.info(f"Server started at http://{args.host}:{args.port}")
-    log.info(f"Train monitor at http://{args.host}:{args.train_monitor_port}")
+    if not args.disable_train_monitor:
+        log.info(f"Train monitor at http://{args.host}:{args.train_monitor_port}")
+    else:
+        log.info("Train monitor disabled (--disable-train-monitor)")
     uvicorn.run("mikazuki.app:app", host=args.host, port=args.port, log_level="error", reload=args.dev)
 
 
