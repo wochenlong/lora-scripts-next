@@ -9,6 +9,7 @@ const props = defineProps<{ schemaName: string; model: FormModel }>()
 const { t } = useI18n()
 
 const items = ref<AssetItem[]>([])
+const selectedKeys = ref(new Set<string>())
 const checking = ref(false)
 const dialogOpen = ref(false)
 const source = ref<AssetSource>("modelscope")
@@ -18,7 +19,15 @@ let logSource: EventSource | undefined
 
 const trainType = computed(() => String(props.model.model_train_type || props.schemaName))
 const missing = computed(() => items.value.filter((item) => !item.exists && !item.optional))
-const missingOptional = computed(() => items.value.filter((item) => !item.exists && item.optional))
+const downloadable = computed(() => items.value.filter((item) => !item.exists))
+const selectedTargets = computed(() => downloadable.value.filter((item) => selectedKeys.value.has(item.key)))
+
+function toggleSelect(key: string, checked: boolean) {
+  const next = new Set(selectedKeys.value)
+  if (checked) next.add(key)
+  else next.delete(key)
+  selectedKeys.value = next
+}
 
 function closeStream() {
   logSource?.close()
@@ -30,6 +39,12 @@ async function check(silent = false) {
   try {
     const data = await assetsApi.check(trainType.value, props.model)
     items.value = data.items
+    const next = new Set(selectedKeys.value)
+    for (const item of data.items) {
+      if (item.exists) next.delete(item.key)
+      else if (!next.has(item.key) && !item.optional) next.add(item.key)
+    }
+    selectedKeys.value = next
     if (!silent) {
       if (missing.value.length) ElMessage.warning(t("training.assets.missingCount", { n: missing.value.length }))
       else ElMessage.success(t("training.assets.allPresent"))
@@ -67,7 +82,7 @@ function followLog(streamUrl: string) {
 }
 
 async function download() {
-  const targets = [...missing.value, ...missingOptional.value].map((item) => ({ key: item.key, path: item.path }))
+  const targets = selectedTargets.value.map((item) => ({ key: item.key, path: item.path }))
   if (!targets.length || downloading.value) return
   downloading.value = true
   logs.value = []
@@ -95,6 +110,7 @@ onBeforeUnmount(closeStream)
   <el-dialog v-model="dialogOpen" :title="t('training.assets.title')" width="min(640px, 92vw)" @closed="closeStream">
     <ul class="assets-list">
       <li v-for="item in items" :key="item.key" :class="{ missing: !item.exists }">
+        <input v-if="!item.exists" type="checkbox" :checked="selectedKeys.has(item.key)" :aria-label="t('training.assets.selectAria', { label: item.label })" @change="toggleSelect(item.key, ($event.target as HTMLInputElement).checked)">
         <strong>{{ item.label }}</strong>
         <code>{{ item.path }}</code>
         <span v-if="item.exists" class="asset-ok">{{ t("training.assets.exists") }}</span>
@@ -108,8 +124,8 @@ onBeforeUnmount(closeStream)
     </div>
     <pre v-if="logs.length" class="assets-log">{{ logs.join("\n") }}</pre>
     <div class="assets-actions">
-      <button class="primary-action" :disabled="downloading || (!missing.length && !missingOptional.length)" @click="download">
-        {{ downloading ? t("training.assets.downloading") : t("training.assets.downloadMissing") }}
+      <button class="primary-action" :disabled="downloading || !selectedTargets.length" @click="download">
+        {{ downloading ? t("training.assets.downloading") : t("training.assets.downloadSelected", { n: selectedTargets.length }) }}
       </button>
       <button class="secondary-action" @click="dialogOpen = false">{{ t("training.assets.close") }}</button>
     </div>

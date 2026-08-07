@@ -55,4 +55,25 @@ describe("ModelAssetsTools", () => {
     await flushPromises()
     expect(download).toHaveBeenCalledWith("krea2-lora", expect.anything(), [{ key: "dit", path: "/x/dit.safetensors" }], "modelscope")
   })
+
+  it("downloads only the selected items", async () => {
+    check.mockResolvedValue({
+      train_type: "krea2-lora",
+      items: [asset({}), asset({ key: "vae", path: "/x/vae.safetensors" }), asset({ key: "turbo_dit", path: "/x/turbo.safetensors", optional: true })],
+    })
+    download.mockResolvedValue({ task_id: "t-1", log_stream: "/api/train/log/stream/t-1" })
+    const wrapper = mountTools()
+    await flushPromises()
+    await wrapper.findAll(".model-assets-tools button")[1].trigger("click")
+    await flushPromises()
+
+    const checkboxes = wrapper.findAll(".assets-list input[type=checkbox]")
+    expect(checkboxes).toHaveLength(3)
+    expect((checkboxes[2].element as HTMLInputElement).checked).toBe(false)
+    await checkboxes[0].setValue(false)
+    await checkboxes[2].setValue(true)
+    await wrapper.findAll(".assets-actions button")[0].trigger("click")
+    await flushPromises()
+    expect(download).toHaveBeenCalledWith("krea2-lora", expect.anything(), [{ key: "vae", path: "/x/vae.safetensors" }, { key: "turbo_dit", path: "/x/turbo.safetensors" }], "modelscope")
+  })
 })
