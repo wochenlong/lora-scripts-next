@@ -235,7 +235,8 @@ class PreflightTests(unittest.TestCase):
         return values, dataset
 
     def test_ok_with_fake_probe(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory() as td, \
+                mock.patch("mikazuki.model_assets.dir_complete", return_value=True):
             root = Path(td)
             runtime = make_runtime(root)
             runtime.python.parent.mkdir(parents=True, exist_ok=True)
@@ -252,6 +253,17 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(result.ok, result.errors)
         self.assertEqual(result.facts["dataset_image_count"], 1)
 
+    def test_missing_tokenizer_dir_fails(self):
+        with tempfile.TemporaryDirectory() as td, \
+                mock.patch("mikazuki.model_assets.dir_complete", return_value=False):
+            root = Path(td)
+            runtime = make_runtime(root)
+            values, dataset = self._values_and_dataset(root)
+            probe = lambda rt: ProbeFacts()  # noqa: E731
+            result = run_preflight(values, runtime, dataset, probe=probe)
+        self.assertFalse(result.ok)
+        self.assertTrue(any("tokenizer" in e for e in result.errors))
+
     def test_missing_model_file_fails(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -264,7 +276,8 @@ class PreflightTests(unittest.TestCase):
         self.assertTrue(any("dit" in e for e in result.errors))
 
     def test_old_transformers_fails(self):
-        with tempfile.TemporaryDirectory() as td:
+        with tempfile.TemporaryDirectory() as td, \
+                mock.patch("mikazuki.model_assets.dir_complete", return_value=True):
             root = Path(td)
             runtime = make_runtime(root)
             runtime.python.parent.mkdir(parents=True, exist_ok=True)

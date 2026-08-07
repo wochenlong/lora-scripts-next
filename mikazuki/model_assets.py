@@ -108,7 +108,7 @@ def _target_path(raw: str, project_root: Path) -> Path:
     return path.resolve()
 
 
-def _dir_complete(path: Path) -> bool:
+def dir_complete(path: Path) -> bool:
     return all((path / name).is_file() for name in TOKENIZER_REQUIRED)
 
 
@@ -132,7 +132,7 @@ def patch_krea2_tokenizer_path(source_root: Path, tokenizer_dir: Path, log: Call
     if not encoder.is_file():
         return False
     tokenizer_dir = Path(tokenizer_dir)
-    if not _dir_complete(tokenizer_dir):
+    if not dir_complete(tokenizer_dir):
         return False
     text = encoder.read_text(encoding="utf-8")
     if _TOKENIZER_PATCH_MARK in text:
@@ -164,7 +164,7 @@ def check_assets(train_type: str, values: dict[str, Any], project_root: Path) ->
     items = []
     for asset in manifest_for(train_type):
         target = _target_path(str(values.get(asset.key) or asset.default_path), project_root)
-        exists = _dir_complete(target) if asset.kind == "dir" else target.is_file()
+        exists = dir_complete(target) if asset.kind == "dir" else target.is_file()
         items.append({
             "key": asset.key,
             "label": asset.label,
@@ -195,7 +195,7 @@ def _download_dir_asset(asset: AssetDef, source: str, target_dir: Path, log: Cal
             raise RuntimeError("ModelScope 下载需要 modelscope 依赖，请先安装 requirements.txt") from exc
 
         snapshot_download(asset.ms_repo, allow_patterns=TOKENIZER_FILES, local_dir=str(target_dir))
-    if not _dir_complete(target_dir):
+    if not dir_complete(target_dir):
         raise FileNotFoundError(f"下载完成但目录缺少 tokenizer 文件: {target_dir}")
 
 

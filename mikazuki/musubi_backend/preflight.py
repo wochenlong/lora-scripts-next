@@ -134,6 +134,14 @@ def run_preflight(
             errors.append(f"缺少必需模型字段: {field_name}")
         elif not Path(str(raw)).is_file():
             errors.append(f"模型文件不存在: {field_name}={raw}")
+    if values.get("text_encoder"):
+        from mikazuki.model_assets import dir_complete, krea2_tokenizer_dir
+
+        tokenizer_dir = krea2_tokenizer_dir(runtime.lora_next_root)
+        if not dir_complete(tokenizer_dir):
+            errors.append(
+                f"Qwen3-VL tokenizer 文件不在 {tokenizer_dir}，请先在「训练用模型」区探测并下载 tokenizer"
+            )
     turbo = values.get("turbo_dit")
     if turbo is not None and str(turbo).strip() and not Path(str(turbo)).is_file():
         errors.append(f"Turbo DiT 文件不存在: turbo_dit={turbo}")
