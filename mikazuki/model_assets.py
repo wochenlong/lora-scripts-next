@@ -150,15 +150,19 @@ def check_assets(train_type: str, values: dict[str, Any], project_root: Path) ->
 
 def _materialize_hf_cache(repo: str, source_dir: Path, log: Callable[[str], None]) -> None:
     """Lay ModelScope-downloaded files into the HF hub cache layout so
-    transformers' from_pretrained(repo_id) hits the cache without network."""
+    transformers' from_pretrained(repo_id) hits the cache without network.
+    The snapshot dir must look like a commit hash: huggingface_hub's
+    try_to_load_from_cache rejects non-hex revisions (e.g. "main")."""
+    import hashlib
     import shutil
 
+    pseudo_commit = hashlib.sha1(f"modelscope:{repo}".encode("utf-8")).hexdigest()
     repo_dir = _hf_cache_repo_dir(repo)
-    snapshot = repo_dir / "snapshots" / "main"
+    snapshot = repo_dir / "snapshots" / pseudo_commit
     snapshot.mkdir(parents=True, exist_ok=True)
     refs = repo_dir / "refs"
     refs.mkdir(parents=True, exist_ok=True)
-    (refs / "main").write_text("main", encoding="utf-8")
+    (refs / "main").write_text(pseudo_commit, encoding="utf-8")
     for path in source_dir.rglob("*"):
         if path.is_file():
             shutil.copy2(path, snapshot / path.name)

@@ -68,8 +68,12 @@ class ModelAssetsHfCacheTests(unittest.TestCase):
             logs = []
             _materialize_hf_cache("Qwen/Qwen3-VL-4B-Instruct", source, logs.append)
             self.assertTrue(_hf_cache_complete("Qwen/Qwen3-VL-4B-Instruct"))
-            snapshot = Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "snapshots" / "main"
-            self.assertTrue((snapshot / "tokenizer.json").is_file())
+            snapshots = list((Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "snapshots").iterdir())
+            self.assertEqual(len(snapshots), 1)
+            self.assertRegex(snapshots[0].name, r"^[0-9a-f]{40}$")
+            self.assertTrue((snapshots[0] / "tokenizer.json").is_file())
+            ref = (Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "refs" / "main").read_text(encoding="utf-8")
+            self.assertEqual(ref, snapshots[0].name)
 
     def test_hf_cache_check_reports_missing(self):
         with tempfile.TemporaryDirectory() as td, \
