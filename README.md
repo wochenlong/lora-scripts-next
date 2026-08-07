@@ -1,204 +1,157 @@
-<p align="center">
-  <img src="assets/readme/next-trainer-cover.png" alt="Next Trainer" width="880" />
-</p>
+# Next Trainer
 
-<h1 align="center">Next Trainer</h1>
+Local Windows training WebUI (**Next Trainer**; repo name `lora-scripts-next`).  
+LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux, built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) with an Akegarasu-style workflow.
 
-<p align="center">
-  <b>One-click LoRA &amp; full finetune training GUI for Windows</b> — supports <b>Anima</b> / SD 1.5 / SDXL / Flux<br/>
-  Extract and run. No environment setup needed. ~12 GB VRAM for Anima LoRA; <b>Anima full finetune needs ~24 GB</b>.<br/>
-  <sub>Powered by <a href="https://github.com/kohya-ss/sd-scripts">kohya-ss/sd-scripts</a>, Akegarasu-style GUI.</sub>
-</p>
-
-<p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/releases"><img src="https://img.shields.io/github/v/release/wochenlong/lora-scripts-next?include_prereleases&style=for-the-badge&color=a78bfa&label=Download" alt="Download"/></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next"><img src="https://img.shields.io/github/stars/wochenlong/lora-scripts-next?style=flat-square&label=stars&logo=github&color=8b5cf6" alt="stars"/></a>
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/LICENSE"><img src="https://img.shields.io/github/license/wochenlong/lora-scripts-next?style=flat-square&color=ec4899" alt="license"/></a>
-</p>
-<p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/README-zh.md"><b>中文</b></a>
-</p>
-<p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md"><b>Credits</b></a>
-</p>
-<p align="center">
-  <a href="https://github.com/wochenlong/lora-scripts-next/tree/anima-edit"><b>Experimental: Anima Edit branch</b></a>
-</p>
+[中文](README-zh.md) · [Credits](docs/credits.md) · [NOTICE](NOTICE.md) · [CHANGELOG](CHANGELOG.md)
 
 ---
 
-<p align="center">
-  <img src="assets/readme/screenshot-webui.png?v=20260528" alt="Next Trainer home portal" width="920" />
-</p>
+## Branches and versions
 
-<p align="center"><sub>Home portal — quick links to training, monitor, and onboarding</sub></p>
+| Branch | Role | UI | Version |
+|--------|------|----|---------|
+| **`main`** | Stable releases | Legacy prebuilt frontend | Stable **v2.9.1** |
+| **`dev`** | **Vue 3 beta** (this README) | Vue 3 four-pane workspace | **`2.9.x-beta.*`** (e.g. `2.9.2-beta.1`) |
+
+**Versioning:** betas stay on **`2.9.x`**; **`3.0.0` is reserved for the formal release**. Include the full version from the sidebar when filing issues.
 
 ---
 
-## Get Started in 3 Steps
+## Portable packages
 
+| Package | Contents | Download |
+|---------|----------|----------|
+| **lite** | No Anima Fast runtime; bundled WD tagger; ~**0.38 GB** | [GitHub Release v2.9.2-beta.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-beta.1) |
+| **full** | Anima Fast `.venv` preinstalled + same tagger; ~**2.3 GB** | [ModelScope dataset windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
+
+ModelScope paths:
+
+```text
+releases/v2.9.2-beta.1/SD-Trainer-v2.9.2-beta.1-full.7z
+releases/v2.9.2-beta.1/SD-Trainer-v2.9.2-beta.1-lite.7z
 ```
-1. Download  →  SD-Trainer-v2.8.2.7z from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), extract
-2. Launch    →  Double-click run_gui.bat (auto-installs deps on first run, ~3 GB)
-3. Train     →  Open http://127.0.0.1:28000, pick a model, set params, start training
-```
 
-> **Requirements:** Windows 10/11, NVIDIA GPU (RTX 20+), ~7 GB disk.
+Stable (legacy UI) packages: [Releases](https://github.com/wochenlong/lora-scripts-next/releases) → **v2.9.1** and earlier.
 
-For tagger paths, CLI/cloud training, and upgrade notes see **[Portable getting started (details)](docs/portable-getting-started.md)**.
+---
 
-<details>
-<summary><b>Install from source (Linux / advanced users)</b></summary>
+## How to use
+
+### A. Portable (recommended for beta testers)
+
+1. Download **lite** or **full**, extract with 7-Zip to a path **without spaces or non-ASCII characters**  
+2. Double-click **`run_gui.bat`** (first run installs main deps online)  
+3. Open **http://127.0.0.1:28000**  
+4. Confirm the sidebar shows **`v2.9.2-beta.1 · beta`**
+
+Requirements: Windows 10/11, NVIDIA GPU (RTX 20+ recommended).
+
+More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md)
+
+### B. Run `dev` from source (Vue 3)
 
 ```sh
 git clone https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
 
-# Windows
-run_gui.bat
+git fetch origin
+git checkout dev
+git pull origin dev
 
-# Linux
-bash install.bash && bash run_gui.sh
-
-# Optional: install Flash Attention 2 for faster Anima training
 # Windows
-install_flash_attn.bat
-# Linux
-bash install_flash_attn.sh
+./run_gui.bat
+# or: python gui.py --dev
 ```
 
-Python **3.10** recommended. See [Flash Attention 2 docs](docs/flash-attention.md) for details.
+```sh
+git branch --show-current   # should be dev
+cat VERSION                 # e.g. 2.9.2-beta.1
+```
 
-</details>
+Frontend lives in `frontend/` (Vue 3 + Vite):
 
----
+```sh
+cd frontend
+npm install
+npm run dev      # hot reload (backend gui must be running)
+npm run build    # writes frontend/dist for static hosting
+```
 
-## What's Supported
+### C. Switch an existing clone from `main` to `dev`
 
-| Mode | Model / script | Notes |
-|------|----------------|-------|
-| **Anima LoRA** | LoRA · LoKr · **T-LoRA** | Flash Attention 2 / xformers / SDPA · from ~12 GB VRAM |
-| **Anima Edit** | Image editing LoRA (experimental) | Maintained on the [`anima-edit`](https://github.com/wochenlong/lora-scripts-next/tree/anima-edit) branch |
-| **Anima LoRA Fast** | LoRA only (plugin) | Optional [anima_lora](https://github.com/sorryhyun/anima_lora) runtime · ~16 GB+ · see [`docs/anima-fast.md`](docs/anima-fast.md) |
-| **Anima Finetune** | Full DiT (`anima_train.py`) | Sidebar **Full Finetune → Anima Finetune** · **~24 GB VRAM** (4090-class) |
-| SD 1.5 / SDXL LoRA | LoRA · LoHa · LoKr | xformers / SDPA |
-| SD 1.5 / SDXL Finetune | Dreambooth / SDXL finetune | Sidebar **Full Finetune → Stable Diffusion** |
-| Flux | LoRA | xformers / SDPA |
+```sh
+git fetch origin
+git switch dev
+git pull
+```
 
-<p align="center">
-  <img src="assets/readme/screenshot-anima-lora.png?v=20260528" alt="Anima LoRA training UI" width="920" />
-</p>
+Back to stable:
 
-<p align="center"><sub>Anima LoRA — sidebar, model &amp; dataset form, config preview on the right</sub></p>
+```sh
+git switch main
+git pull
+```
 
-<p align="center">
-  <img src="assets/readme/screenshot-anima-fast.png?v=20260528" alt="Anima LoRA Fast mode UI" width="920" />
-</p>
-
-<p align="center"><sub>Anima LoRA Fast — optional plugin path under <b>标准模式 / Fast 模式</b>; install the runtime with <code>scripts/cli/install_anima_fast.*</code> (recommended — full terminal output) or the in-page button. See <a href="docs/anima-fast.md">docs/anima-fast.md</a></sub></p>
-
-<p align="center">
-  <img src="assets/readme/screenshot-anima-finetune.png?v=20260528" alt="Anima full finetune UI" width="920" />
-</p>
-
-<p align="center"><sub>Anima Finetune — full DiT weights under <b>Full Finetune</b> in the sidebar</sub></p>
+> **Note:** `main` and `dev` use different frontend architectures. Do not mix uncommitted `frontend/dist` hotfixes across branches. Portable users should use the package version as-is.
 
 ---
 
-## Train Monitor
+## Vue 3 beta features (`dev`)
 
-Automatically opens a monitor page (port 6008) when training starts — GPU stats, training parameters, Loss curves, preview samples, and logs all in one dashboard.
+Compared with the legacy multi-page dist UI, **`dev` is a Vue 3 SPA workspace**:
 
-<p align="center">
-  <img src="assets/readme/screenshot-train-monitor.png" alt="Train Monitor Dashboard" width="920" />
-</p>
+| Area | Capabilities |
+|------|----------------|
+| **Training** | Base model × engine × target; live TOML preview; validate / import-export / start |
+| **Dataset** | WD14 tagging + tag editor entry |
+| **Tasks** | Task list, status, logs; primary place to watch runs |
+| **Settings** | UI prefs, **engine management** (built-in Kohya / optional Anima Fast), About, changelog |
+| **Branding** | Next Trainer; beta badge on prerelease versions |
+| **Credits** | Settings → About; also [docs/credits.md](docs/credits.md) |
 
-<p align="center"><sub>GPU load & VRAM, total steps, training params at a glance</sub></p>
+Training backends match the stable line: Anima LoRA / Fast / finetune, SD/SDXL, Flux, local tagger, train monitor (`/train-monitor`), TensorBoard.
 
-<p align="center">
-  <img src="assets/readme/train-monitor-samples.png" alt="Preview Samples & Loss Curves" width="920" />
-</p>
-
-<p align="center"><sub>Preview samples and TensorBoard-backed Loss / LR curves</sub></p>
-
-<p align="center">
-  <img src="assets/readme/train-monitor-logs.png" alt="Training Logs" width="920" />
-</p>
-
-<p align="center"><sub>Real-time training logs with auto-scroll</sub></p>
+Anima Fast: [docs/anima-fast.md](docs/anima-fast.md)
 
 ---
 
-<details>
-<summary><b>VRAM Reference (Anima, 1024 resolution, RTX 4090 benchmarked)</b></summary>
+## Supported modes
 
-**Anima LoRA**
+| Mode | Notes |
+|------|-------|
+| Anima LoRA | LoRA · LoKr · T-LoRA · from ~12 GB VRAM |
+| Anima Fast | Optional runtime · 16 GB+ recommended · install in UI on lite; preinstalled on full |
+| Anima finetune | Full DiT · ~24 GB recommended |
+| SD 1.5 / SDXL | LoRA / full finetune |
+| Flux | LoRA |
 
-| VRAM | Configuration | Notes |
-|------|---------------|-------|
-| ≥ 24 GB | Default settings | Easiest |
-| ≥ 16 GB | `gradient_checkpointing` | Recommended |
-| ≥ 12 GB | Gradient checkpointing | Stable |
-| ≥ 10 GB | Gradient checkpointing + `blocks_to_swap=16` | Slightly slower |
-| ≥ 8 GB | Gradient checkpointing + swap 24 + cache TE + LoKr | Tight |
+See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 
-**Anima full finetune** (updates full DiT weights — use **Anima Finetune** in the WebUI, not LoRA)
+---
 
-| VRAM | Configuration | Notes |
-|------|---------------|-------|
-| ≥ 24 GB | Default + latents/TE cache | **~23–24 GB dedicated VRAM** in practice; 4090-class recommended |
-
-</details>
-
-<details>
-<summary><b>Documentation</b></summary>
+## Docs
 
 | Topic | Link |
-|-------|------|
-| **Portable pack details (tagger / CLI / upgrade)** | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
-| Anima LoRA Training Guide | [docs/anima-training.md](docs/anima-training.md) |
-| **Anima Fast Mode (optional plugin)** | [docs/anima-fast.md](docs/anima-fast.md) |
-| Open-source notices | [NOTICE.md](NOTICE.md) |
-| Anima backend (LoRA + full finetune) | [docs/anima-backend.md](docs/anima-backend.md) |
-| Anima full finetune example TOML | [docs/examples/anima-full-finetune.toml](docs/examples/anima-full-finetune.toml) |
-| Flash Attention 2 | [docs/flash-attention.md](docs/flash-attention.md) |
-| Train Monitor & SSE API | [docs/train-monitor.md](docs/train-monitor.md) |
-| Tagger model directory (`tagger-models/`) | [docs/tagger-models.md](docs/tagger-models.md) |
-| Docker Deployment | [docs/docker.md](docs/docker.md) |
-| CLI Arguments | [docs/cli-args.md](docs/cli-args.md) |
-
-</details>
-
-<details>
-<summary><b>Changelog</b></summary>
-
-| Date | Version |
-|------|---------|
-| 2026-06-27 | **v2.8.2** — Portable pack: **SDXL training**, **tagging**, **preview images**, **config import** fixes; bundled tagger + SDXL tokenizer cache · see [CHANGELOG.md](CHANGELOG.md) |
-| 2026-05-28 | **v2.7.0** — **Anima LoRA Fast mode** (optional `anima_lora` plugin): WebUI entry, one-click install, train monitor sync, benchmark docs · see [`docs/anima-fast.md`](docs/anima-fast.md) |
-| 2026-05-28 | **v2.6.0** — **Anima full finetune** WebUI (`anima-finetune`), `anima_train.py` wrapper, full finetune nav, train monitor label fix; ~24 GB VRAM reference |
-| 2026-05-27 | **v2.5.3** — Portable dependency health check, sidebar version chip ([#54](https://github.com/wochenlong/lora-scripts-next/issues/54)) |
-| 2026-05-21 | **v2.5.0** — UI refresh: new sidebar navigation, home portal page, training monitor dashboard with GPU metrics; CSS cleanup |
-| 2026-05-21 | **v2.4.0** — Training stability: env isolation, NaN filter, sample guard, attn_mode fallback, path normalization; Portable tkinter fix |
-| 2026-05-20 | **v2.3.0** — Train Monitor: TensorBoard-backed curves, parameter checks, log sync |
-| 2026-05-19 | **v2.2.0** — Portable flash-attn fix, crash logging, cross-drive monitor |
-| 2026-05-19 | **v2.1.0** — Flash Attention 2 prebuilt wheels, save-by-steps |
-| 2026-05-18 | **v2.0.0** — First portable release, AMD detection, bf16 fix |
-
-Full details in [CHANGELOG.md](CHANGELOG.md).
-
-</details>
-
-<details>
-<summary><b>Credits</b></summary>
-
-[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) · [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) · [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) · [T-LoRA](https://github.com/ControlGenAI/T-LoRA) — Full attribution in [NOTICE.md](NOTICE.md)
-
-</details>
+|------|------|
+| **Credits (subpage)** | [docs/credits.md](docs/credits.md) |
+| Full legal NOTICE | [NOTICE.md](NOTICE.md) |
+| Portable notes | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
+| Tagger models | [docs/tagger-models.md](docs/tagger-models.md) |
+| Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
+| Train monitor | [docs/train-monitor.md](docs/train-monitor.md) |
+| Repo layout | [docs/repo-layout.md](docs/repo-layout.md) |
 
 ---
 
-<p align="center"><sub>Maintainer: <b><a href="https://github.com/wochenlong">@wochenlong</a></b> · <a href="CONTRIBUTORS.md">Contributors</a></sub></p>
+## FAQ (short)
+
+**What to include in a bug report?**  
+Full version (including beta), train type (model/engine/target), steps to reproduce, logs. → [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
+
+**lite vs full?**  
+Kohya-only → lite. Want Anima Fast out of the box → full (ModelScope).
+
+---
+
+<p align="center"><sub>Maintainer: <a href="https://github.com/wochenlong">@wochenlong</a> · <a href="docs/credits.md">Credits</a> · <a href="CONTRIBUTORS.md">Contributors</a></sub></p>
