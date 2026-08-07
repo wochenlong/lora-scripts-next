@@ -13,7 +13,7 @@
 
 | 项目 | 链接 | 本仓库中的角色 |
 |------|------|----------------|
-| Akegarasu / lora-scripts | https://github.com/Akegarasu/lora-scripts | 秋叶 SD-Trainer / 一键训练包生态与 GUI 体验来源 |
+| Akegarasu / lora-scripts | https://github.com/Akegarasu/lora-scripts | 秋叶一键训练包生态与 GUI 体验来源（上游常称 SD-Trainer；本产品品牌为 Next Trainer） |
 | kohya-ss / sd-scripts | https://github.com/kohya-ss/sd-scripts | Anima / Flux / SD 系列训练脚本与后端（AGPL-3.0） |
 
 ## Anima Fast（可选引擎）

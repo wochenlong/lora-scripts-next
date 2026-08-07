@@ -71,7 +71,7 @@
   -AnimaFastSource "D:\path\to\extensions\anima_lora"
 ```
 
-产物文件名：`SD-Trainer-v{Version}-lite.7z` / `SD-Trainer-v{Version}-full.7z`；`PORTABLE_BUILD` 含 `flavor=lite|full`。
+产物文件名：`Next-Trainer-v{Version}-lite.7z` / `Next-Trainer-v{Version}-full.7z`（旧 Release 可能仍为 `SD-Trainer-v*`）；`PORTABLE_BUILD` 含 `flavor=lite|full`。包内项目目录仍为 `SD-Trainer/`（启动契约）。
 
 ## Anima Fast 插件与整合包（v2.7.0+）
 
@@ -145,7 +145,7 @@ Release 更新实现：`SD-Trainer/scripts/portable/update_from_release.ps1`
 - 更新开始时会打印：**当前 VERSION / PORTABLE_BUILD**、**线上 main VERSION / 最新 Release**、**本地与线上 UPDATER_VERSION**
 - **自更新（bootstrap）**：`Update-*.bat` 会先从 GitHub `main` 拉取最新更新脚本（含镜像回退），若有变化则自动重启后再执行 Git / Release 更新；网络失败时回退到本地 bundled 脚本
 
-1. 通过 GitHub API 获取最新 `SD-Trainer-v*.7z` 资产
+1. 通过 GitHub API 获取最新 `Next-Trainer-v*.7z` 资产（兼容旧名 `SD-Trainer-v*.7z`）
 2. 下载到 `update/.cache/`（含 ghfast / ghproxy 镜像回退）
 3. 7-Zip 解压到临时目录
 4. `robocopy` 合并 `SD-Trainer/`（使用 `/IS /IT` 强制覆盖，**不用** `/XO`），排除用户数据目录

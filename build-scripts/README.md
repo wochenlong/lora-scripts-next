@@ -6,7 +6,7 @@ Windows 便携整合包构建脚本。详细契约见 [`docs/portable-packaging-
 
 | 脚本 | 用途 |
 |------|------|
-| `build_portable.ps1` | 主流程：Python embed + 复制 SD-Trainer + 7z |
+| `build_portable.ps1` | 主流程：Python embed + 复制包内 `SD-Trainer/` + 打 `Next-Trainer-v*.7z` |
 | `build-all.ps1` | 旧版一键构建（`build/sd-trainer-portable`） |
 
 ## Anima Fast / 双包（lite · full）

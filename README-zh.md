@@ -1,7 +1,9 @@
 # Next Trainer
 
-Windows 本地训练 WebUI（产品名 **Next Trainer**，仓库名 `lora-scripts-next`）。  
+**Next Trainer** 是 Windows 本地训练 WebUI（GitHub 仓库名：`lora-scripts-next`）。  
 支持 Anima / SD 1.5 / SDXL / Flux 的 LoRA 与全量微调；基于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) 与秋叶系训练体验。
+
+> 产品品牌与发布归档一律为 **Next Trainer** / `Next-Trainer-v*.7z`。整合包内目录名 `SD-Trainer/`（及 `Update-SD-Trainer*.bat`）仍为兼容旧安装的启动契约，暂不改名。
 
 [English](README.md) · [开源引用](docs/credits.md) · [NOTICE](NOTICE.md) · [CHANGELOG](CHANGELOG.md)
 
@@ -18,7 +20,7 @@ Windows 本地训练 WebUI（产品名 **Next Trainer**，仓库名 `lora-script
 
 ---
 
-## 下载整合包
+## 下载 Next Trainer 整合包
 
 | 包 | 内容 | 下载 |
 |----|------|------|
@@ -28,8 +30,8 @@ Windows 本地训练 WebUI（产品名 **Next Trainer**，仓库名 `lora-script
 魔搭路径示例：
 
 ```text
-releases/v2.9.2-beta.1/SD-Trainer-v2.9.2-beta.1-full.7z
-releases/v2.9.2-beta.1/SD-Trainer-v2.9.2-beta.1-lite.7z
+releases/v2.9.2-beta.1/Next-Trainer-v2.9.2-beta.1-full.7z
+releases/v2.9.2-beta.1/Next-Trainer-v2.9.2-beta.1-lite.7z
 ```
 
 稳定版（旧 UI）整合包仍见 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 中 **v2.9.1** 及更早条目。
@@ -111,7 +113,7 @@ git pull
 | **数据集** | 模型打标（内置 WD14）+ 标签编辑入口 |
 | **任务** | 任务列表、状态、日志与监控入口；日常盯盘以任务页为主 |
 | **设置** | UI 偏好、**训练引擎管理**（Kohya 内置 / Anima Fast 可选安装）、关于、更新日志 |
-| **品牌与版本** | 界面统一为 Next Trainer；内测号显示「内测」徽标 |
+| **品牌与版本** | 产品名统一为 **Next Trainer**；内测号显示「内测」徽标 |
 | **开源致谢** | 设置 → 关于；仓库另有 [开源引用](docs/credits.md) 子页 |
 
 训练能力（引擎侧）与稳定线一致，包括：

@@ -30,7 +30,7 @@ if (-not (Test-Path $7zExe)) {
 }
 
 Write-Host ""
-Write-Host "  SD-Trainer Portable Package Builder  v$Version" -ForegroundColor Cyan
+Write-Host "  Next Trainer Portable Package Builder  v$Version" -ForegroundColor Cyan
 Write-Host ""
 
 & (Join-Path $ProjectRoot "build-scripts\00-build-frontend.ps1") -ProjectRoot $ProjectRoot
@@ -780,7 +780,7 @@ if (Test-Path $linkScript) {
     }
 }
 
-$readme = "SD-Trainer Portable`r`n"
+$readme = "Next Trainer Portable`r`n"
 $readme += "===================`r`n`r`n"
 $readme += "Quick Start:`r`n"
 $readme += "  1. Double-click run_gui.bat`r`n"
@@ -835,7 +835,7 @@ if (-not $Skip7z) {
         Write-Host "  [!] 7-Zip not found, skipping compression." -ForegroundColor Yellow
     } else {
         $suffixPart = if ($PackageSuffix) { "-$PackageSuffix" } else { "" }
-        $archiveName = "SD-Trainer-v${Version}${suffixPart}.7z"
+        $archiveName = "Next-Trainer-v${Version}${suffixPart}.7z"
         $archivePath = Join-Path $buildDir $archiveName
         if (Test-Path $archivePath) { Remove-Item $archivePath -Force }
 

@@ -1,7 +1,9 @@
 # Next Trainer
 
-Local Windows training WebUI (**Next Trainer**; repo name `lora-scripts-next`).  
+**Next Trainer** is a local Windows training WebUI (GitHub repo: `lora-scripts-next`).  
 LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux, built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) with an Akegarasu-style workflow.
+
+> Product brand and release archives use **Next Trainer** / `Next-Trainer-v*.7z`. The portable layout folder `SD-Trainer/` (and updater bat names) stay as launcher contracts for existing installs.
 
 [中文](README-zh.md) · [Credits](docs/credits.md) · [NOTICE](NOTICE.md) · [CHANGELOG](CHANGELOG.md)
 
@@ -18,7 +20,7 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux, built on [kohya-ss/sd-s
 
 ---
 
-## Portable packages
+## Portable packages (Next Trainer)
 
 | Package | Contents | Download |
 |---------|----------|----------|
@@ -28,8 +30,8 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux, built on [kohya-ss/sd-s
 ModelScope paths:
 
 ```text
-releases/v2.9.2-beta.1/SD-Trainer-v2.9.2-beta.1-full.7z
-releases/v2.9.2-beta.1/SD-Trainer-v2.9.2-beta.1-lite.7z
+releases/v2.9.2-beta.1/Next-Trainer-v2.9.2-beta.1-full.7z
+releases/v2.9.2-beta.1/Next-Trainer-v2.9.2-beta.1-lite.7z
 ```
 
 Stable (legacy UI) packages: [Releases](https://github.com/wochenlong/lora-scripts-next/releases) → **v2.9.1** and earlier.
@@ -107,7 +109,7 @@ Compared with the legacy multi-page dist UI, **`dev` is a Vue 3 SPA workspace**:
 | **Dataset** | WD14 tagging + tag editor entry |
 | **Tasks** | Task list, status, logs; primary place to watch runs |
 | **Settings** | UI prefs, **engine management** (built-in Kohya / optional Anima Fast), About, changelog |
-| **Branding** | Next Trainer; beta badge on prerelease versions |
+| **Branding** | Product name **Next Trainer**; beta badge on prerelease versions |
 | **Credits** | Settings → About; also [docs/credits.md](docs/credits.md) |
 
 Training backends match the stable line: Anima LoRA / Fast / finetune, SD/SDXL, Flux, local tagger, train monitor (`/train-monitor`), TensorBoard.

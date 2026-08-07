@@ -16,7 +16,7 @@ $startTime = Get-Date
 
 Write-Host @"
 ========================================
-  SD-Trainer 便携式整合包构建脚本
+  Next Trainer 便携式整合包构建脚本
   版本: $Version
   开始时间: $($startTime.ToString('yyyy-MM-dd HH:mm:ss'))
 ========================================
@@ -68,7 +68,7 @@ try {
   构建完成!
   
   输出文件:
-  - $(Join-Path $buildDir "SD-Trainer-v$Version.zip")
+  - $(Join-Path $buildDir "Next-Trainer-v$Version.zip")
   
   便携式目录:
   - $portableDir
