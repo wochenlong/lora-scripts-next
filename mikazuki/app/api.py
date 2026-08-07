@@ -57,6 +57,11 @@ from mikazuki.anima_fast_backend.preprocess import prepare_anima_fast_dataset, u
 from mikazuki.anima_fast_backend.settings import discover_runtime, feature_enabled
 from mikazuki.anima_fast_backend.source_root import InstallSourceError, resolve_install_source_root
 from mikazuki.musubi_backend import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
+from mikazuki.model_assets import (
+    check_assets as check_model_assets,
+    resolve_train_type as resolve_model_asset_train_type,
+    start_download_task as start_model_assets_download_task,
+)
 from mikazuki.musubi_backend.adapter import (
     AdapterError as MusubiAdapterError,
     adapt_config as adapt_musubi_config,
@@ -1089,6 +1094,40 @@ async def musubi_plugin_uninstall():
     except Exception as exc:
         return APIResponseFail(message=f"musubi-tuner uninstall failed: {exc}")
     return APIResponseSuccess(data={"status": read_musubi_extension_status(layout).as_dict()})
+
+
+@router.post("/assets/check")
+async def model_assets_check(request: Request):
+    payload: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    values = payload.get("values") or {}
+    if not isinstance(values, dict):
+        return APIResponseFail(message="values must be an object")
+    train_type = resolve_model_asset_train_type(str(payload.get("train_type") or ""), values)
+    return APIResponseSuccess(data={
+        "train_type": train_type,
+        "items": check_model_assets(train_type, values, Path.cwd()),
+    })
+
+
+@router.post("/assets/download")
+async def model_assets_download(request: Request):
+    payload: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    values = payload.get("values") or {}
+    items = payload.get("items") or []
+    source = str(payload.get("source") or "")
+    train_type = resolve_model_asset_train_type(str(payload.get("train_type") or ""), values if isinstance(values, dict) else {})
+    if not items or not isinstance(items, list):
+        return APIResponseFail(message="items must be a non-empty list")
+    if source not in {"huggingface", "modelscope"}:
+        return APIResponseFail(message="source must be huggingface or modelscope")
+    if not train_type:
+        return APIResponseFail(message="missing train_type")
+    try:
+        task_id, data = start_model_assets_download_task(train_type, items, source, Path.cwd())
+    except Exception as exc:
+        return APIResponseFail(message=f"asset download failed to start: {exc}")
+    data["message"] = "asset download task started"
+    return APIResponseSuccess(data=data)
 
 
 @router.get("/plugins/musubi/install/log/stream/{task_id}")

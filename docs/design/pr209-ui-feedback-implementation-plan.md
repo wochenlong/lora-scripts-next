@@ -89,6 +89,46 @@
 
 `npm run typecheck` → `lint` → `vitest`(新组件测试)→ `build`;后端无改动,不需 pytest。
 
+## §8 实施方案:缺失模型资产弹窗下载(musubi/krea2 先行)
+
+### 背景
+
+musubi 训练除本地模型文件外还有隐性 HF 依赖(tokenizer),网络不可达时直接炸在训练中途。设计定稿(用户确认):
+
+- 每种训练类型内置**默认资产清单**(默认本地路径 + HF/ModelScope 下载源)
+- 校验发现缺失**不直接报错**,弹窗询问是否下载,源二选一(ModelScope / HuggingFace),可 X 取消
+- 主平台 `requirements.txt` 增加 `modelscope` 依赖(下载在主后端进程执行)
+
+### 改动
+
+1. **`mikazuki/musubi_backend/assets.py`(新)**
+   - `AssetDef { key, label, default_path, hf_repo, hf_file, ms_repo, ms_file }`
+   - `KREA2_ASSETS`:dit / vae / text_encoder(+可选 turbo_dit);repo id 由 `config/musubi_backend.toml [assets.krea2.*]` 覆盖(代码不硬编未证实的 repo)
+   - `check_assets(values, project_root) -> missing`(按表单实际填的路径判断,相对路径基于 cwd)
+   - 下载任务:HF 走 `hf_hub_download(local_dir=…)`;ModelScope 走 `modelscope` SDK;经 tm 任务 + train_log_hub 输出日志/进度(复用 `/api/train/log/stream`)
+2. **`mikazuki/app/api.py`**
+   - `POST /api/plugins/musubi/assets/check` {config} → `missing_assets[]`
+   - `POST /api/plugins/musubi/assets/download` {items, source} → 后台任务 + log_stream
+3. **`requirements.txt`**:+ `modelscope`
+4. **前端**
+   - `api/musubi.ts`:`assetsCheck` / `assetsDownload` + 类型
+   - `TrainingPage.submit()` krea2 分支:preflight 前先 check → 有缺失 → 新组件 `AssetDownloadDialog`(el-dialog,缺失列表 + 源单选 + 进度;X/取消即中止提交)→ 下载完成重跑 check/preflight → 继续提交
+   - i18n `training.assets.*` 双语
+5. **测试**:`tests/test_musubi_assets.py`(check 命中/缺失、config 覆盖、下载任务 hf/modelscope 路径 mock)
+
+### 不做(v1)
+
+- 其它后端(sd15/sdxl/flux 底模)资产清单——机制通用,按 `ASSET_REGISTRY` 补条目即可
+
+### 已补充(tokenizer 套路)
+
+- krea2 清单 5 项已填死双源 repo(HF/ModelScope 同为 `Comfy-Org/Krea-2`,文件布局一致;tokenizer 为 `Qwen/Qwen3-VL-4B-Instruct`)
+- `tokenizer` 为 `kind="hf_cache"` 特殊资产:musubi 的 `AutoTokenizer.from_pretrained` 只认 Hub id/缓存,CLI 未暴露本地目录参数,故下载落点铺进 HF hub 缓存布局(`refs/main` + `snapshots/main/`),ModelScope 下载经 `_materialize_hf_cache` 转换,断网可命中
+
+### 验证
+
+后端 `pytest tests/test_musubi_assets.py`;前端 `npm run typecheck && lint && vitest && build`。
+
 ## §6 实施计划:数据集打标 / 标签编辑
 
 ### 现状清点
