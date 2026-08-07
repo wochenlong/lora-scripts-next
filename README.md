@@ -14,7 +14,7 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux, built on [kohya-ss/sd-s
 | Branch | Role | UI | Version |
 |--------|------|----|---------|
 | **`main`** | Stable releases | Legacy prebuilt frontend | Stable **v2.9.1** |
-| **`dev`** | **Vue 3 beta** (this README) | Vue 3 four-pane workspace | **`2.9.x-beta.*`** (e.g. `2.9.2-beta.1`) |
+| **`dev`** | **Vue 3 beta** (this README) | Vue 3 four-pane workspace | **`2.9.x-beta.*`** (e.g. `2.9.2-beta.2`) |
 
 **Versioning:** betas stay on **`2.9.x`**; **`3.0.0` is reserved for the formal release**. Include the full version from the sidebar when filing issues.
 
@@ -24,14 +24,14 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux, built on [kohya-ss/sd-s
 
 | Package | Contents | Download |
 |---------|----------|----------|
-| **lite** | No Anima Fast runtime; bundled WD tagger; ~**0.38 GB** | [GitHub Release v2.9.2-beta.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-beta.1) |
+| **lite** | No Anima Fast runtime; bundled WD tagger; ~**0.38 GB** | [GitHub Release v2.9.2-beta.2](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-beta.2) |
 | **full** | Anima Fast `.venv` preinstalled + same tagger; ~**2.3 GB** | [ModelScope dataset windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
 
 ModelScope paths:
 
 ```text
-releases/v2.9.2-beta.1/Next-Trainer-v2.9.2-beta.1-full.7z
-releases/v2.9.2-beta.1/Next-Trainer-v2.9.2-beta.1-lite.7z
+releases/v2.9.2-beta.2/Next-Trainer-v2.9.2-beta.2-full.7z
+releases/v2.9.2-beta.2/Next-Trainer-v2.9.2-beta.2-lite.7z
 ```
 
 Stable (legacy UI) packages: [Releases](https://github.com/wochenlong/lora-scripts-next/releases) → **v2.9.1** and earlier.
@@ -45,7 +45,7 @@ Stable (legacy UI) packages: [Releases](https://github.com/wochenlong/lora-scrip
 1. Download **lite** or **full**, extract with 7-Zip to a path **without spaces or non-ASCII characters**  
 2. Double-click **`run_gui.bat`** (first run installs main deps online)  
 3. Open **http://127.0.0.1:28000**  
-4. Confirm the sidebar shows **`v2.9.2-beta.1 · beta`**
+4. Confirm the sidebar shows **`v2.9.2-beta.2 · beta`**
 
 Requirements: Windows 10/11, NVIDIA GPU (RTX 20+ recommended).
 
@@ -68,7 +68,7 @@ git pull origin dev
 
 ```sh
 git branch --show-current   # should be dev
-cat VERSION                 # e.g. 2.9.2-beta.1
+cat VERSION                 # e.g. 2.9.2-beta.2
 ```
 
 Frontend lives in `frontend/` (Vue 3 + Vite):
@@ -118,7 +118,7 @@ Anima Fast: [docs/anima-fast.md](docs/anima-fast.md)
 
 ### Screenshots
 
-Captured from the `dev` Vue 3 UI (`v2.9.2-beta.1`, Chinese locale).
+Captured from the `dev` Vue 3 UI (`v2.9.2-beta.2`, Chinese locale).
 
 #### Training
 

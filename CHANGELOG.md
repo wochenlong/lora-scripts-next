@@ -3,6 +3,21 @@
 本文件记录 **wochenlong/lora-scripts-next**（产品名 **Next Trainer**）面向镜像与 AutoDL 的发行说明；上游 kohya-ss/sd-scripts 的变更请见其仓库。
 
 ---
+## v2.9.2-beta.2 — 2026-08-07
+
+> **内测线（pre-release）**：在 `2.9.2-beta.1` 上的整合包热修。合入 `dev`，**不替代** `main` 稳定版 v2.9.1。
+
+### 修复
+
+- Windows 启动时不再打开未就绪/未启用的训练监控页（避免空白 `127.0.0.1:6008` / `ERR_CONNECTION_REFUSED`）
+- 仅在监控进程实际启动且端口可连时才打开浏览器标签；也可用 WebUI `/train-monitor`
+
+### 整合包
+
+- 归档名：`Next-Trainer-v2.9.2-beta.2-lite.7z` / `-full.7z`（包内目录仍为 `SD-Trainer/`）
+- **lite** → GitHub Release；**full** → 魔搭 `windsing/next-trainer-portable`
+
+---
 ## v2.9.2-beta.1 — 2026-08-07
 
 > **内测线（pre-release）**：Vue3 信息架构重写。合入 `dev`，**不替代** `main` 上的稳定版 v2.9.1。  
@@ -24,7 +39,7 @@
 
 - **lite**（GitHub）：不含 Fast 运行时，内置 WD 打标模型，压缩包目标 &lt; 2 GB
 - **full**（网盘）：预装 Anima Fast `.venv` + 同上打标模型
-- 文件名：`SD-Trainer-v2.9.2-beta.1-lite.7z` / `-full.7z`
+- 文件名：`Next-Trainer-v2.9.2-beta.1-lite.7z` / `-full.7z`（发布时已从旧前缀 `SD-Trainer-` 更名）
 
 ### 说明
 
