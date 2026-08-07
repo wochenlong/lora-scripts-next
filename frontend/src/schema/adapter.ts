@@ -199,6 +199,20 @@ export function createDefaultModel(schema: AdaptedSchema): FormModel {
   return model
 }
 
+// Readonly fields (disabled/hidden/const discriminators like model_train_type) must
+// always match the active schema; carry-over/autosave from another module may
+// otherwise leak a foreign value in (e.g. anima-lora into the krea2 page).
+export function applyReadonlyDefaults(schema: AdaptedSchema, model: FormModel, defaults: FormModel) {
+  const seen = new Set<string>()
+  for (const field of schema.sections.flatMap((section) => section.fields)) {
+    if (seen.has(field.key)) continue
+    seen.add(field.key)
+    if (!(field.disabled || field.hidden || field.type === "const")) continue
+    const value = defaults[field.key]
+    if (value !== undefined) model[field.key] = cloneFormValue(value)
+  }
+}
+
 export function serializeModel(schema: AdaptedSchema, model: FormModel) {
   const output: FormModel = {}
   for (const field of schema.sections.flatMap((section) => section.fields)) {

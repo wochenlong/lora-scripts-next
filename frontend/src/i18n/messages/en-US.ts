@@ -567,6 +567,14 @@ export default {
       statusFail: "Failed to read status",
     },
   },
+  musubiGate: {
+    intro: "Krea 2 LoRA training runs on the standalone Musubi-Tuner runtime; finish install and audit to start training.",
+    auditTitle: "Environment Audit",
+    installWorking: "Installing",
+    install: "Install Plugin",
+    consoleIdle: "Install Log",
+    consoleWaiting: "Waiting for install task output…",
+  },
   integration: {
     openExternal: "Open in New Window",
     legacyTagEditor: "Legacy Tag Editor",

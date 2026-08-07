@@ -567,6 +567,14 @@ export default {
       statusFail: "状态读取失败",
     },
   },
+  musubiGate: {
+    intro: "Krea 2 LoRA 训练由 Musubi-Tuner 独立运行环境承载；完成安装与审计后即可开始训练。",
+    auditTitle: "环境审计",
+    installWorking: "安装进行中",
+    install: "安装插件",
+    consoleIdle: "安装日志",
+    consoleWaiting: "等待安装任务输出…",
+  },
   integration: {
     openExternal: "在新窗口打开",
     legacyTagEditor: "旧版标签编辑器",

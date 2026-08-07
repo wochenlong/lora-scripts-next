@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router"
 import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import AnimaFastPage from "./AnimaFastPage.vue"
+import MusubiGatePage from "./MusubiGatePage.vue"
 import TrainingPage from "./TrainingPage.vue"
 import TrainingSelector from "../components/TrainingSelector.vue"
 import WorkbenchHeader from "../components/WorkbenchHeader.vue"
@@ -98,6 +99,12 @@ watch([model, engine, target], () => {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </AnimaFastPage>
+    <MusubiGatePage v-else-if="resolved.engine === 'musubi'" bare>
+      <template #form-top>
+        <WorkbenchHeader />
+        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
+      </template>
+    </MusubiGatePage>
     <TrainingPage v-else-if="schemaMeta" :key="resolved.storageKey || resolved.schemaName" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName" :field-defaults="resolved.defaults" :storage-key="resolved.storageKey" :legacy-storage-key="resolved.legacyStorageKey">
       <template #form-top>
         <WorkbenchHeader />

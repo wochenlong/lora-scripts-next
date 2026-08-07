@@ -21,6 +21,7 @@ ROUTES = (
     "tasks",
     "settings",
     "settings/ui",
+    "settings/engines",
     "settings/about",
     "settings/changelog",
     "lora/basic.html",

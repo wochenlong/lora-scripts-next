@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { createDefaultModel, executeSchemaSources, serializeModel } from "./adapter"
+import { applyReadonlyDefaults, createDefaultModel, executeSchemaSources, serializeModel } from "./adapter"
 
 const sources = [
   {
@@ -133,6 +133,23 @@ describe("dynamic schema adapter", () => {
     expect(log.fields.map((field) => field.key)).toContain("wandb_api_key")
     const preview = master.sections.find((section) => section.title === "训练预览图设置")!
     expect(preview.fields.map((field) => field.key)).toContain("sample_sampler")
+  })
+
+  it("restores readonly fields polluted by carry-over or autosave", () => {
+    const lockedSources = [{
+      name: "locked",
+      hash: "locked",
+      schema: `Schema.object({
+        model_train_type: Schema.string().default('krea2-lora').disabled(),
+        mode: Schema.const('musubi').default('musubi').hidden(),
+        learning_rate: Schema.string().default('1e-4'),
+      })`,
+    }]
+    const schema = executeSchemaSources(lockedSources, "locked")
+    const defaults = createDefaultModel(schema)
+    const model = { ...defaults, model_train_type: "anima-lora", mode: "foreign", learning_rate: "2e-4" }
+    applyReadonlyDefaults(schema, model, defaults)
+    expect(model).toMatchObject({ model_train_type: "krea2-lora", mode: "musubi", learning_rate: "2e-4" })
   })
 
   it("executes every backend training schema", () => {
