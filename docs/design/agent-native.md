@@ -2,6 +2,7 @@
 
 > 状态：设计草案（公开）  
 > 说明：本文不含密钥、本机路径或内部排期承诺；实现细节以后续 PR 为准。  
+> **排期：等 `dev` 转正后再启动实现，当前不急；本稿仅定方向与开发任务边界。**  
 > 关联：前端信息架构 [#215](https://github.com/wochenlong/lora-scripts-next/issues/215)、Vue3 前端 [#209](https://github.com/wochenlong/lora-scripts-next/pull/209)
 
 本文说明 **目标、约束、以及开发需要交付的工作包**。未列入 P0 的项默认后置。
