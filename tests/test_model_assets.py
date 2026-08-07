@@ -82,6 +82,27 @@ class ModelAssetsHfCacheTests(unittest.TestCase):
             tokenizer = next(item for item in items if item["key"] == "tokenizer")
             self.assertFalse(tokenizer["exists"])
 
+    def test_hf_cache_check_rejects_non_commit_snapshot(self):
+        # transformers ignores files in snapshots/main (non-commit-hash revision)
+        with tempfile.TemporaryDirectory() as td, \
+                mock.patch("huggingface_hub.constants.HF_HUB_CACHE", str(Path(td) / "hub")):
+            legacy = Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "snapshots" / "main"
+            legacy.mkdir(parents=True)
+            (legacy / "tokenizer.json").write_text("{}", encoding="utf-8")
+            (legacy / "tokenizer_config.json").write_text("{}", encoding="utf-8")
+            self.assertFalse(_hf_cache_complete("Qwen/Qwen3-VL-4B-Instruct"))
+
+    def test_hf_cache_check_accepts_hf_native_layout(self):
+        # no refs file, but a commit-hash snapshot (as written by snapshot_download)
+        with tempfile.TemporaryDirectory() as td, \
+                mock.patch("huggingface_hub.constants.HF_HUB_CACHE", str(Path(td) / "hub")):
+            commit = "a" * 40
+            snapshot = Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "snapshots" / commit
+            snapshot.mkdir(parents=True)
+            (snapshot / "tokenizer.json").write_text("{}", encoding="utf-8")
+            (snapshot / "tokenizer_config.json").write_text("{}", encoding="utf-8")
+            self.assertTrue(_hf_cache_complete("Qwen/Qwen3-VL-4B-Instruct"))
+
 
 class ModelAssetsDownloadTests(unittest.TestCase):
     def test_download_via_huggingface(self):

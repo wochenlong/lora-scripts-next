@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 import os
+import re
 
 try:
     import tomllib
@@ -114,14 +115,27 @@ def _hf_cache_repo_dir(repo: str) -> Path:
     return Path(HF_HUB_CACHE) / ("models--" + repo.replace("/", "--"))
 
 
+_COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{5,64}$")
+
+
 def _hf_cache_complete(repo: str) -> bool:
-    snapshots = _hf_cache_repo_dir(repo) / "snapshots"
-    if not snapshots.is_dir():
-        return False
+    """Mirror huggingface_hub.try_to_load_from_cache: refs/main must resolve to a
+    commit-hash-shaped snapshot dir containing the required files. Files sitting in
+    a non-hex snapshot (e.g. snapshots/main) are invisible to transformers too."""
+    repo_dir = _hf_cache_repo_dir(repo)
+    snapshots: list[Path] = []
+    ref = repo_dir / "refs" / "main"
+    if ref.is_file():
+        revision = ref.read_text(encoding="utf-8").strip()
+        if _COMMIT_HASH_RE.match(revision):
+            snapshots.append(repo_dir / "snapshots" / revision)
+    else:
+        parent = repo_dir / "snapshots"
+        if parent.is_dir():
+            snapshots.extend(p for p in parent.iterdir() if p.is_dir() and _COMMIT_HASH_RE.match(p.name))
     return any(
         all((snapshot / name).is_file() for name in HF_CACHE_REQUIRED)
-        for snapshot in snapshots.iterdir()
-        if snapshot.is_dir()
+        for snapshot in snapshots
     )
 
 
