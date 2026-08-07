@@ -11,7 +11,7 @@
     <td align="center"><a href="https://github.com/SupermarKleet"><img src="https://github.com/SupermarKleet.png" width="80" /><br /><sub><b>SupermarKleet</b></sub></a><br /><sub>UI 设计</sub></td>
     <td align="center"><a href="https://github.com/niangao2331"><img src="https://github.com/niangao2331.png" width="80" /><br /><sub><b>niangao2331</b></sub></a><br /><sub>社区贡献</sub></td>
     <td align="center"><a href="https://github.com/MikumikuDAIFans"><img src="https://github.com/MikumikuDAIFans.png" width="80" /><br /><sub><b>MikumikuDAIFans</b></sub></a><br /><sub>核心开发</sub></td>
-    <td align="center"><a href="https://github.com/IryNeko"><img src="https://github.com/IryNeko.png" width="80" /><br /><sub><b>IryNeko</b></sub></a><br /><sub>前端重构</sub></td>
+    <td align="center"><a href="https://github.com/IryNeko"><img src="https://github.com/IryNeko.png" width="80" /><br /><sub><b>IryNeko</b></sub></a><br /><sub>前端负责人</sub></td>
   </tr>
 </table>
 
