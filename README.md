@@ -116,6 +116,32 @@ Training backends match the stable line: Anima LoRA / Fast / finetune, SD/SDXL, 
 
 Anima Fast: [docs/anima-fast.md](docs/anima-fast.md)
 
+### Screenshots
+
+Captured from the `dev` Vue 3 UI (`v2.9.2-beta.1`, Chinese locale).
+
+#### Training
+
+| Standard (Kohya / Anima LoRA) | Anima Fast |
+|---|---|
+| ![Training · standard](assets/readme/vue3/01-training-standard.png) | ![Training · Fast](assets/readme/vue3/02-training-fast.png) |
+
+#### Dataset
+
+| Tagger | Tag editor |
+|---|---|
+| ![Dataset · tagger](assets/readme/vue3/03-dataset-tagger.png) | ![Dataset · editor](assets/readme/vue3/04-dataset-editor.png) |
+
+#### Tasks
+
+![Tasks](assets/readme/vue3/05-tasks.png)
+
+#### Settings
+
+| UI prefs | Engines |
+|---|---|
+| ![Settings · UI](assets/readme/vue3/07-settings-ui.png) | ![Settings · engines](assets/readme/vue3/06-settings-engines.png) |
+
 ---
 
 ## Supported modes

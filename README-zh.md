@@ -124,6 +124,32 @@ git pull
 
 Anima Fast 文档：[docs/anima-fast.md](docs/anima-fast.md)
 
+### 界面预览
+
+截图来自 `dev` / Vue3（`v2.9.2-beta.1` 中文界面）。
+
+#### 训练
+
+| 标准（Kohya / Anima LoRA） | Anima Fast |
+|---|---|
+| ![训练 · 标准](assets/readme/vue3/01-training-standard.png) | ![训练 · Fast](assets/readme/vue3/02-training-fast.png) |
+
+#### 数据集
+
+| 模型打标 | 标签编辑 |
+|---|---|
+| ![数据集 · 打标](assets/readme/vue3/03-dataset-tagger.png) | ![数据集 · 标签编辑](assets/readme/vue3/04-dataset-editor.png) |
+
+#### 任务
+
+![任务](assets/readme/vue3/05-tasks.png)
+
+#### 设置
+
+| 界面偏好 | 训练引擎 |
+|---|---|
+| ![设置 · 界面](assets/readme/vue3/07-settings-ui.png) | ![设置 · 训练引擎](assets/readme/vue3/06-settings-engines.png) |
+
 ---
 
 ## 支持一览
