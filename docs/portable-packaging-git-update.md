@@ -64,10 +64,10 @@
 
 ```powershell
 # 轻量（默认）
-.\build-scripts\build_portable.ps1 -Version 3.0.0-beta.1 -Clean
+.\build-scripts\build_portable.ps1 -Version 2.9.2-beta.1 -Clean
 
 # 完整（需本机已有可用 Fast 环境）
-.\build-scripts\build_portable.ps1 -Version 3.0.0-beta.1 -Clean -BundleAnimaFast `
+.\build-scripts\build_portable.ps1 -Version 2.9.2-beta.1 -Clean -BundleAnimaFast `
   -AnimaFastSource "D:\path\to\extensions\anima_lora"
 ```
 
