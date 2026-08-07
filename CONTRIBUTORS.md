@@ -25,7 +25,7 @@
 | [@niangao2331](https://github.com/niangao2331) | 修复整合包内 `Download-Anima-Model.bat` 重复创建嵌套目录，使模型正确下载至 `sd-models/anima/` | [#23](https://github.com/wochenlong/lora-scripts-next/pull/23) |
 | [@MikumikuDAIFans](https://github.com/MikumikuDAIFans) | Anima Fast 模式：`anima_lora` 插件安装器、Fast 训练路由与监控同步、预览图 / 进度 JSONL、性能对标与用户文档 | [#64](https://github.com/wochenlong/lora-scripts-next/pull/64) |
 | [@IryNeko](https://github.com/IryNeko) | Vue3 前端重写：公开 `frontend/` 源码，完成训练 / 数据集 / 任务 / 设置等工作台，并支撑 `dev` 内测线 | [#209](https://github.com/wochenlong/lora-scripts-next/pull/209) |
-| [@wochenlong](https://github.com/wochenlong) | 产品信息架构：侧栏四栏（训练 / 数据集 / 任务 / 设置）、模型 × 引擎 × 目标工作台与发版相关产品约定 | [#215](https://github.com/wochenlong/lora-scripts-next/issues/215) |
+| [@wochenlong](https://github.com/wochenlong) | 团队协调与产品设计 | — |
 
 ## 3.0.0 内测鸣谢
 
