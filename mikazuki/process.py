@@ -298,9 +298,11 @@ def run_musubi_train(toml_path: str,
                      gpu_ids: Optional[list] = None,
                      metadata: Optional[dict] = None):
     """Launch a musubi-tuner Krea 2 run: cache latents -> cache TE outputs -> train."""
+    from mikazuki.model_assets import krea2_tokenizer_dir, patch_krea2_tokenizer_path
     from mikazuki.tasks import TaskStatus
 
     log.info(f"musubi-tuner training started with config file / musubi 训练开始，使用配置文件: {toml_path}")
+    patch_krea2_tokenizer_path(runtime.musubi_root, krea2_tokenizer_dir(runtime.lora_next_root), log=log.info)
     train_task_id = str(uuid.uuid4())
     dataset_toml = Path(str(values["dataset_config"]))
     cache_latents_spec = build_cache_latents_spec(

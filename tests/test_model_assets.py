@@ -9,10 +9,10 @@ from mikazuki.model_assets import (
     AssetDef,
     check_assets,
     download_assets,
+    krea2_tokenizer_dir,
     manifest_for,
+    patch_krea2_tokenizer_path,
     resolve_train_type,
-    _hf_cache_complete,
-    _materialize_hf_cache,
 )
 
 
@@ -47,6 +47,7 @@ class ModelAssetsCheckTests(unittest.TestCase):
             self.assertEqual(by_key["dit"]["path"], str(existing.resolve()))
             self.assertFalse(by_key["vae"]["exists"])
             self.assertFalse(by_key["text_encoder"]["exists"])
+            self.assertFalse(by_key["tokenizer"]["exists"])
             self.assertTrue(by_key["turbo_dit"]["optional"])
 
     def test_check_marks_sources_configured_for_krea2(self):
@@ -56,52 +57,17 @@ class ModelAssetsCheckTests(unittest.TestCase):
                 self.assertTrue(item["sources"]["huggingface"], item["key"])
                 self.assertTrue(item["sources"]["modelscope"], item["key"])
 
-
-class ModelAssetsHfCacheTests(unittest.TestCase):
-    def test_materialize_hf_cache_makes_repo_complete(self):
-        with tempfile.TemporaryDirectory() as td, \
-                mock.patch("huggingface_hub.constants.HF_HUB_CACHE", str(Path(td) / "hub")):
-            source = Path(td) / "ms"
-            source.mkdir()
-            (source / "tokenizer.json").write_text("{}", encoding="utf-8")
-            (source / "tokenizer_config.json").write_text("{}", encoding="utf-8")
-            logs = []
-            _materialize_hf_cache("Qwen/Qwen3-VL-4B-Instruct", source, logs.append)
-            self.assertTrue(_hf_cache_complete("Qwen/Qwen3-VL-4B-Instruct"))
-            snapshots = list((Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "snapshots").iterdir())
-            self.assertEqual(len(snapshots), 1)
-            self.assertRegex(snapshots[0].name, r"^[0-9a-f]{40}$")
-            self.assertTrue((snapshots[0] / "tokenizer.json").is_file())
-            ref = (Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "refs" / "main").read_text(encoding="utf-8")
-            self.assertEqual(ref, snapshots[0].name)
-
-    def test_hf_cache_check_reports_missing(self):
-        with tempfile.TemporaryDirectory() as td, \
-                mock.patch("huggingface_hub.constants.HF_HUB_CACHE", str(Path(td) / "hub")):
-            items = check_assets("krea2-lora", {}, Path(td))
+    def test_tokenizer_dir_complete_when_required_files_present(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            tokenizer_dir = root / "sd-models/krea2/qwen3-vl-tokenizer"
+            tokenizer_dir.mkdir(parents=True)
+            (tokenizer_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
+            (tokenizer_dir / "tokenizer_config.json").write_text("{}", encoding="utf-8")
+            items = check_assets("krea2-lora", {}, root)
             tokenizer = next(item for item in items if item["key"] == "tokenizer")
-            self.assertFalse(tokenizer["exists"])
-
-    def test_hf_cache_check_rejects_non_commit_snapshot(self):
-        # transformers ignores files in snapshots/main (non-commit-hash revision)
-        with tempfile.TemporaryDirectory() as td, \
-                mock.patch("huggingface_hub.constants.HF_HUB_CACHE", str(Path(td) / "hub")):
-            legacy = Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "snapshots" / "main"
-            legacy.mkdir(parents=True)
-            (legacy / "tokenizer.json").write_text("{}", encoding="utf-8")
-            (legacy / "tokenizer_config.json").write_text("{}", encoding="utf-8")
-            self.assertFalse(_hf_cache_complete("Qwen/Qwen3-VL-4B-Instruct"))
-
-    def test_hf_cache_check_accepts_hf_native_layout(self):
-        # no refs file, but a commit-hash snapshot (as written by snapshot_download)
-        with tempfile.TemporaryDirectory() as td, \
-                mock.patch("huggingface_hub.constants.HF_HUB_CACHE", str(Path(td) / "hub")):
-            commit = "a" * 40
-            snapshot = Path(td) / "hub" / "models--Qwen--Qwen3-VL-4B-Instruct" / "snapshots" / commit
-            snapshot.mkdir(parents=True)
-            (snapshot / "tokenizer.json").write_text("{}", encoding="utf-8")
-            (snapshot / "tokenizer_config.json").write_text("{}", encoding="utf-8")
-            self.assertTrue(_hf_cache_complete("Qwen/Qwen3-VL-4B-Instruct"))
+            self.assertTrue(tokenizer["exists"])
+            self.assertEqual(tokenizer["path"], str(tokenizer_dir.resolve()))
 
 
 class ModelAssetsDownloadTests(unittest.TestCase):
@@ -116,7 +82,6 @@ class ModelAssetsDownloadTests(unittest.TestCase):
 
             with mock.patch("mikazuki.model_assets.manifest_for") as manifest, \
                  mock.patch("huggingface_hub.hf_hub_download", side_effect=fake_hf_download):
-                from mikazuki.model_assets import AssetDef
                 manifest.return_value = [
                     AssetDef("dit", "DiT", "sd-models/krea2/krea2.safetensors", hf_repo="org/repo", hf_file="krea2.safetensors")
                 ]
@@ -131,6 +96,64 @@ class ModelAssetsDownloadTests(unittest.TestCase):
             manifest.return_value = [AssetDef("dit", "DiT", "x.safetensors", hf_repo="org/repo", hf_file="f.safetensors")]
             with self.assertRaises(ValueError):
                 download_assets("krea2-lora", [{"key": "dit"}], "modelscope", Path(td), lambda line: None)
+
+    def test_download_tokenizer_dir_via_huggingface(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+
+            def fake_hf_download(repo_id, filename, local_dir):
+                target = Path(local_dir) / filename
+                target.write_text("{}", encoding="utf-8")
+                return str(target)
+
+            with mock.patch("huggingface_hub.hf_hub_download", side_effect=fake_hf_download), \
+                 mock.patch("mikazuki.model_assets.patch_krea2_tokenizer_everywhere") as patch:
+                logs = []
+                download_assets("krea2-lora", [{"key": "tokenizer"}], "huggingface", root, logs.append)
+
+            tokenizer_dir = krea2_tokenizer_dir(root)
+            self.assertTrue((tokenizer_dir / "tokenizer.json").is_file())
+            self.assertTrue((tokenizer_dir / "merges.txt").is_file())
+            patch.assert_called_once()
+
+
+class Krea2TokenizerPatchTests(unittest.TestCase):
+    ENCODER = (
+        '"""encoder"""\n'
+        "def load_qwen3_vl_conditioner(model_path, tokenizer_repo, max_length):\n"
+        "    tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo, max_length=max_length)\n"
+        "    processor = Qwen2TokenizerFast.from_pretrained(tokenizer_repo, max_length=max_length)\n"
+    )
+
+    def _layout(self, root: Path, with_tokenizer: bool = True) -> tuple[Path, Path]:
+        tokenizer_dir = root / "tokenizer"
+        if with_tokenizer:
+            tokenizer_dir.mkdir(parents=True)
+            (tokenizer_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
+            (tokenizer_dir / "tokenizer_config.json").write_text("{}", encoding="utf-8")
+        source_root = root / "musubi"
+        encoder_dir = source_root / "src" / "musubi_tuner" / "krea2"
+        encoder_dir.mkdir(parents=True, exist_ok=True)
+        (encoder_dir / "krea2_encoder.py").write_text(self.ENCODER, encoding="utf-8")
+        return source_root, tokenizer_dir
+
+    def test_patch_injects_local_tokenizer_dir_once(self):
+        with tempfile.TemporaryDirectory() as td:
+            source_root, tokenizer_dir = self._layout(Path(td))
+            logs = []
+            self.assertTrue(patch_krea2_tokenizer_path(source_root, tokenizer_dir, logs.append))
+            encoder = source_root / "src" / "musubi_tuner" / "krea2" / "krea2_encoder.py"
+            text = encoder.read_text(encoding="utf-8")
+            self.assertIn(f'tokenizer_repo = r"{tokenizer_dir.as_posix()}"', text)
+            self.assertTrue(patch_krea2_tokenizer_path(source_root, tokenizer_dir, logs.append))
+            self.assertEqual(encoder.read_text(encoding="utf-8").count("mikazuki: patched tokenizer path"), 1)
+
+    def test_patch_noop_without_tokenizer_files(self):
+        with tempfile.TemporaryDirectory() as td:
+            source_root, tokenizer_dir = self._layout(Path(td), with_tokenizer=False)
+            self.assertFalse(patch_krea2_tokenizer_path(source_root, tokenizer_dir, lambda line: None))
+            encoder = source_root / "src" / "musubi_tuner" / "krea2" / "krea2_encoder.py"
+            self.assertEqual(encoder.read_text(encoding="utf-8"), self.ENCODER)
 
 
 if __name__ == "__main__":

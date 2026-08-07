@@ -123,7 +123,9 @@ musubi 训练除本地模型文件外还有隐性 HF 依赖(tokenizer),网络不
 ### 已补充(tokenizer 套路)
 
 - krea2 清单 5 项已填死双源 repo(HF/ModelScope 同为 `Comfy-Org/Krea-2`,文件布局一致;tokenizer 为 `Qwen/Qwen3-VL-4B-Instruct`)
-- `tokenizer` 为 `kind="hf_cache"` 特殊资产:musubi 的 `AutoTokenizer.from_pretrained` 只认 Hub id/缓存,CLI 未暴露本地目录参数,故下载落点铺进 HF hub 缓存布局(`refs/main` + `snapshots/main/`),ModelScope 下载经 `_materialize_hf_cache` 转换,断网可命中
+- `tokenizer` 为 `kind="dir"` 资产:直接下载到普通目录 `sd-models/krea2/qwen3-vl-tokenizer/`(双源同 repo,只要 tokenizer.json / tokenizer_config.json / vocab.json / merges.txt)
+- musubi 的 `AutoTokenizer.from_pretrained` CLI 未暴露本地目录参数,改为 **patch 源码**:`krea2_encoder.py` 注入 `tokenizer_repo = r"<tokenizer 目录>"`(幂等标记);下载完成后 patch 所有已知源码根,训练启动时(`run_musubi_train`)对当前 runtime 再补一次,重装可自愈
+- 权重仍用 Comfy-Org 单文件 safetensors:官方 Qwen repo 是分片 + index,musubi TE 加载走单文件路径
 
 ### 验证
 

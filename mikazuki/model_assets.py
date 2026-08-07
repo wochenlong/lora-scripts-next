@@ -18,7 +18,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 import os
-import re
 
 try:
     import tomllib
@@ -33,9 +32,9 @@ CONFIG_PATH = Path("config/model_assets.toml")
 class AssetDef:
     key: str
     label: str
-    default_path: str  # relative to project root; unused for kind="hf_cache"
+    default_path: str  # relative to project root; a directory for kind="dir"
     optional: bool = False
-    kind: str = "file"  # "file" | "hf_cache" (tokenizer files living in the HF hub cache)
+    kind: str = "file"  # "file" | "dir" (directory of loose files, e.g. tokenizer)
     hf_repo: str = ""
     hf_file: str = ""
     ms_repo: str = ""
@@ -44,8 +43,8 @@ class AssetDef:
 
 KREA2_REPO = "Comfy-Org/Krea-2"
 QWEN3_VL_REPO = "Qwen/Qwen3-VL-4B-Instruct"
-HF_CACHE_PATTERNS = ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt", "special_tokens_map.json", "added_tokens.json"]
-HF_CACHE_REQUIRED = ("tokenizer.json", "tokenizer_config.json")
+TOKENIZER_FILES = ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt"]
+TOKENIZER_REQUIRED = ("tokenizer.json", "tokenizer_config.json")
 
 ASSET_REGISTRY: dict[str, tuple[AssetDef, ...]] = {
     "krea2-lora": (
@@ -61,7 +60,7 @@ ASSET_REGISTRY: dict[str, tuple[AssetDef, ...]] = {
         AssetDef("turbo_dit", "Turbo 蒸馏 DiT（可选）", "sd-models/krea2/krea2-turbo.safetensors", optional=True,
                  hf_repo=KREA2_REPO, hf_file="diffusion_models/krea2_turbo_bf16.safetensors",
                  ms_repo=KREA2_REPO, ms_file="diffusion_models/krea2_turbo_bf16.safetensors"),
-        AssetDef("tokenizer", "Qwen3-VL tokenizer（HF 缓存）", "", kind="hf_cache",
+        AssetDef("tokenizer", "Qwen3-VL tokenizer（目录）", "sd-models/krea2/qwen3-vl-tokenizer", kind="dir",
                  hf_repo=QWEN3_VL_REPO, ms_repo=QWEN3_VL_REPO),
     ),
 }
@@ -109,45 +108,63 @@ def _target_path(raw: str, project_root: Path) -> Path:
     return path.resolve()
 
 
-def _hf_cache_repo_dir(repo: str) -> Path:
-    from huggingface_hub.constants import HF_HUB_CACHE
-
-    return Path(HF_HUB_CACHE) / ("models--" + repo.replace("/", "--"))
+def _dir_complete(path: Path) -> bool:
+    return all((path / name).is_file() for name in TOKENIZER_REQUIRED)
 
 
-_COMMIT_HASH_RE = re.compile(r"^[0-9a-f]{5,64}$")
+def krea2_tokenizer_dir(project_root: Path) -> Path:
+    for asset in manifest_for("krea2-lora"):
+        if asset.key == "tokenizer":
+            return _target_path(asset.default_path, project_root)
+    return _target_path("sd-models/krea2/qwen3-vl-tokenizer", project_root)
 
 
-def _hf_cache_complete(repo: str) -> bool:
-    """Mirror huggingface_hub.try_to_load_from_cache: refs/main must resolve to a
-    commit-hash-shaped snapshot dir containing the required files. Files sitting in
-    a non-hex snapshot (e.g. snapshots/main) are invisible to transformers too."""
-    repo_dir = _hf_cache_repo_dir(repo)
-    snapshots: list[Path] = []
-    ref = repo_dir / "refs" / "main"
-    if ref.is_file():
-        revision = ref.read_text(encoding="utf-8").strip()
-        if _COMMIT_HASH_RE.match(revision):
-            snapshots.append(repo_dir / "snapshots" / revision)
-    else:
-        parent = repo_dir / "snapshots"
-        if parent.is_dir():
-            snapshots.extend(p for p in parent.iterdir() if p.is_dir() and _COMMIT_HASH_RE.match(p.name))
-    return any(
-        all((snapshot / name).is_file() for name in HF_CACHE_REQUIRED)
-        for snapshot in snapshots
-    )
+KREA2_ENCODER_REL = Path("src/musubi_tuner/krea2/krea2_encoder.py")
+_TOKENIZER_PATCH_MARK = "# mikazuki: patched tokenizer path"
+_TOKENIZER_LOAD_LINE = "tokenizer = AutoTokenizer.from_pretrained(tokenizer_repo, max_length=max_length)"
+
+
+def patch_krea2_tokenizer_path(source_root: Path, tokenizer_dir: Path, log: Callable[[str], None] = print) -> bool:
+    """Rewrite krea2_encoder.py so the Qwen3-VL tokenizer loads from the local
+    tokenizer directory instead of hitting the Hub. Idempotent; no-op when the
+    directory is incomplete."""
+    encoder = Path(source_root) / KREA2_ENCODER_REL
+    if not encoder.is_file():
+        return False
+    tokenizer_dir = Path(tokenizer_dir)
+    if not _dir_complete(tokenizer_dir):
+        return False
+    text = encoder.read_text(encoding="utf-8")
+    if _TOKENIZER_PATCH_MARK in text:
+        return True
+    if _TOKENIZER_LOAD_LINE not in text:
+        return False
+    injection = f'    tokenizer_repo = r"{tokenizer_dir.as_posix()}"  {_TOKENIZER_PATCH_MARK}\n'
+    encoder.write_text(text.replace(_TOKENIZER_LOAD_LINE, injection + _TOKENIZER_LOAD_LINE, 1), encoding="utf-8")
+    log(f"[patch] krea2 tokenizer_repo -> {tokenizer_dir}")
+    return True
+
+
+def patch_krea2_tokenizer_everywhere(project_root: Path, log: Callable[[str], None] = print) -> bool:
+    """Patch every known musubi source root (installed extension, vendor, upstream cache)."""
+    from mikazuki.musubi_backend.extension_state import default_layout as musubi_default_layout
+
+    tokenizer_dir = krea2_tokenizer_dir(project_root)
+    patched = False
+    for root in (
+        musubi_default_layout(project_root).source,
+        Path(project_root) / "vendor" / "musubi-tuner",
+        Path(project_root) / ".cache" / "musubi" / "upstream",
+    ):
+        patched = patch_krea2_tokenizer_path(root, tokenizer_dir, log) or patched
+    return patched
 
 
 def check_assets(train_type: str, values: dict[str, Any], project_root: Path) -> list[dict]:
     items = []
     for asset in manifest_for(train_type):
-        if asset.kind == "hf_cache":
-            target = _hf_cache_repo_dir(asset.hf_repo or asset.ms_repo)
-            exists = _hf_cache_complete(asset.hf_repo or asset.ms_repo)
-        else:
-            target = _target_path(str(values.get(asset.key) or asset.default_path), project_root)
-            exists = target.is_file()
+        target = _target_path(str(values.get(asset.key) or asset.default_path), project_root)
+        exists = _dir_complete(target) if asset.kind == "dir" else target.is_file()
         items.append({
             "key": asset.key,
             "label": asset.label,
@@ -155,54 +172,31 @@ def check_assets(train_type: str, values: dict[str, Any], project_root: Path) ->
             "exists": exists,
             "optional": asset.optional,
             "sources": {
-                "huggingface": bool(asset.hf_repo and (asset.hf_file or asset.kind == "hf_cache")),
-                "modelscope": bool(asset.ms_repo and (asset.ms_file or asset.kind == "hf_cache")),
+                "huggingface": bool(asset.hf_repo and (asset.hf_file or asset.kind == "dir")),
+                "modelscope": bool(asset.ms_repo and (asset.ms_file or asset.kind == "dir")),
             },
         })
     return items
 
 
-def _materialize_hf_cache(repo: str, source_dir: Path, log: Callable[[str], None]) -> None:
-    """Lay ModelScope-downloaded files into the HF hub cache layout so
-    transformers' from_pretrained(repo_id) hits the cache without network.
-    The snapshot dir must look like a commit hash: huggingface_hub's
-    try_to_load_from_cache rejects non-hex revisions (e.g. "main")."""
-    import hashlib
-    import shutil
-
-    pseudo_commit = hashlib.sha1(f"modelscope:{repo}".encode("utf-8")).hexdigest()
-    repo_dir = _hf_cache_repo_dir(repo)
-    snapshot = repo_dir / "snapshots" / pseudo_commit
-    snapshot.mkdir(parents=True, exist_ok=True)
-    refs = repo_dir / "refs"
-    refs.mkdir(parents=True, exist_ok=True)
-    (refs / "main").write_text(pseudo_commit, encoding="utf-8")
-    for path in source_dir.rglob("*"):
-        if path.is_file():
-            shutil.copy2(path, snapshot / path.name)
-    log(f"[cache] materialized {repo} into {repo_dir}")
-
-
-def _download_hf_cache_asset(asset: AssetDef, source: str, log: Callable[[str], None]) -> None:
+def _download_dir_asset(asset: AssetDef, source: str, target_dir: Path, log: Callable[[str], None]) -> None:
+    target_dir.mkdir(parents=True, exist_ok=True)
     if source == "huggingface":
-        log(f"[download] huggingface {asset.hf_repo} (cache files) -> HF hub cache")
-        from huggingface_hub import snapshot_download
+        log(f"[download] huggingface {asset.hf_repo} (tokenizer files) -> {target_dir}")
+        from huggingface_hub import hf_hub_download
 
-        snapshot_download(asset.hf_repo, allow_patterns=HF_CACHE_PATTERNS)
+        for name in TOKENIZER_FILES:
+            hf_hub_download(repo_id=asset.hf_repo, filename=name, local_dir=str(target_dir))
     else:
-        log(f"[download] modelscope {asset.ms_repo} (cache files) -> HF hub cache")
-        import tempfile
-
+        log(f"[download] modelscope {asset.ms_repo} (tokenizer files) -> {target_dir}")
         try:
-            from modelscope import snapshot_download as ms_snapshot_download
+            from modelscope import snapshot_download
         except ImportError as exc:
             raise RuntimeError("ModelScope 下载需要 modelscope 依赖，请先安装 requirements.txt") from exc
 
-        with tempfile.TemporaryDirectory() as td:
-            ms_snapshot_download(asset.ms_repo, allow_patterns=HF_CACHE_PATTERNS, local_dir=td)
-            _materialize_hf_cache(asset.ms_repo, Path(td), log)
-    if not _hf_cache_complete(asset.hf_repo or asset.ms_repo):
-        raise FileNotFoundError(f"下载完成但 HF 缓存缺少 tokenizer 文件: {asset.hf_repo or asset.ms_repo}")
+        snapshot_download(asset.ms_repo, allow_patterns=TOKENIZER_FILES, local_dir=str(target_dir))
+    if not _dir_complete(target_dir):
+        raise FileNotFoundError(f"下载完成但目录缺少 tokenizer 文件: {target_dir}")
 
 
 def download_assets(
@@ -218,9 +212,11 @@ def download_assets(
         asset = assets.get(str(item.get("key")))
         if asset is None:
             raise ValueError(f"未知资产: {item.get('key')}")
-        if asset.kind == "hf_cache":
-            _download_hf_cache_asset(asset, source, log)
+        if asset.kind == "dir":
+            _download_dir_asset(asset, source, _target_path(str(item.get("path") or asset.default_path), project_root), log)
             log(f"[done] {asset.label}")
+            if train_type == "krea2-lora" and asset.key == "tokenizer":
+                patch_krea2_tokenizer_everywhere(project_root, log)
             continue
         target = _target_path(str(item.get("path") or asset.default_path), project_root)
         target.parent.mkdir(parents=True, exist_ok=True)
