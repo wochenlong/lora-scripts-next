@@ -1,4 +1,4 @@
-# Next Trainer
+﻿# Next Trainer
 
 **Next Trainer** 是 Windows 本地训练 WebUI（GitHub 仓库名：`lora-scripts-next`）。  
 支持 Anima / SD 1.5 / SDXL / Flux 的 LoRA 与全量微调；基于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) 与秋叶系训练体验。
@@ -14,7 +14,7 @@
 | 分支 | 用途 | 界面 | 版本号 |
 |------|------|------|--------|
 | **`main`** | 稳定发布 | 旧版前端（预编译 dist） | 当前稳定 **v2.9.1** |
-| **`dev`** | **Vue3 内测线**（本 README 默认对应此线） | Vue 3 四栏工作台 | **`2.9.x-beta.*`**（如 `2.9.2-beta.2`） |
+| **`dev`** | **Vue3 内测线**（本 README 默认对应此线） | Vue 3 四栏工作台 | **`2.9.x-beta.*`**（如 `2.9.2-beta.3`） |
 
 **版本约定：** 内测一律使用 **`2.9.x`**；**正式版才用 `3.0.0`**，便于按版本号定位问题。反馈 Issue 时请附上侧栏显示的完整版本号。
 
@@ -24,14 +24,14 @@
 
 | 包 | 内容 | 下载 |
 |----|------|------|
-| **lite** | 不含 Anima Fast 运行时；内置 WD 打标模型；约 **0.38 GB** | [GitHub Release v2.9.2-beta.2](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-beta.2) |
+| **lite** | 不含 Anima Fast 运行时；内置 WD 打标模型；约 **0.38 GB** | [GitHub Release v2.9.2-beta.3](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-beta.3) |
 | **full** | 预装 Anima Fast `.venv` + 同上打标模型；约 **2.3 GB** | [魔搭数据集 windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
 
 魔搭路径示例：
 
 ```text
-releases/v2.9.2-beta.2/Next-Trainer-v2.9.2-beta.2-full.7z
-releases/v2.9.2-beta.2/Next-Trainer-v2.9.2-beta.2-lite.7z
+releases/v2.9.2-beta.3/Next-Trainer-v2.9.2-beta.3-full.7z
+releases/v2.9.2-beta.3/Next-Trainer-v2.9.2-beta.3-lite.7z
 ```
 
 稳定版（旧 UI）整合包仍见 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 中 **v2.9.1** 及更早条目。
@@ -45,7 +45,7 @@ releases/v2.9.2-beta.2/Next-Trainer-v2.9.2-beta.2-lite.7z
 1. 下载 **lite** 或 **full**，用 7-Zip 解压到**非中文、非空格**路径  
 2. 双击根目录 **`run_gui.bat`**（首次会联网安装主环境依赖）  
 3. 浏览器打开 **http://127.0.0.1:28000**  
-4. 侧栏确认版本为 **`v2.9.2-beta.2 · 内测`**
+4. 侧栏确认版本为 **`v2.9.2-beta.3 · 内测`**
 
 要求：Windows 10/11，NVIDIA GPU（建议 RTX 20+）。
 
@@ -71,7 +71,7 @@ git pull origin dev
 
 ```powershell
 git branch --show-current   # 应为 dev
-Get-Content VERSION         # 如 2.9.2-beta.2
+Get-Content VERSION         # 如 2.9.2-beta.3
 ```
 
 前端源码在 `frontend/`（Vue 3 + Vite）。日常开发：
@@ -126,7 +126,7 @@ Anima Fast 文档：[docs/anima-fast.md](docs/anima-fast.md)
 
 ### 界面预览
 
-截图来自 `dev` / Vue3（`v2.9.2-beta.2` 中文界面）。
+截图来自 `dev` / Vue3（`v2.9.2-beta.3` 中文界面）。
 
 #### 训练
 
@@ -194,3 +194,4 @@ Anima Fast 文档：[docs/anima-fast.md](docs/anima-fast.md)
 ---
 
 <p align="center"><sub>维护：<a href="https://github.com/wochenlong">@wochenlong</a> · <a href="docs/credits.md">开源引用</a> · <a href="CONTRIBUTORS.md">贡献者</a></sub></p>
+
