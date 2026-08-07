@@ -12,7 +12,7 @@
 | [@ageless-h](https://github.com/ageless-h) | 后端开发 | Anima / sd-scripts 后端、整合包相关修复 | 是 | **未来约 1～2 周较忙，暂不接新任务**；紧急项由项目负责人协调 |
 | [@niangao2331](https://github.com/niangao2331) | 开发（vibe coding） | 打标器、Dataset Tag Editor | 是 | 若实践后难以独立维护该模块，可改任 **Issue 分诊**（仍参与协作，调整职责） |
 | [@MikumikuDAIFans](https://github.com/MikumikuDAIFans) | 开发（vibe coding） | 训练引擎相关、**端口与路径治理**（草案见 `docs/design/ports/`） | 是 | 先小步落地 P0；方案为草案，合入前经 Discussion / PR review |
-| [@IryNeko](https://github.com/IryNeko) | 前端负责人 | Vue3 前端工程与工作台实现（按产品 IA 落地；`dev` / [#209](https://github.com/wochenlong/lora-scripts-next/pull/209)） | 是 | 对外头衔为前端负责人；产品结构由项目负责人定稿，工程实现主力 |
+| [@IryNeko](https://github.com/IryNeko) | 前端负责人 | Vue3 前端工程与工作台实现（初版与持续迭代；`dev` / [#209](https://github.com/wochenlong/lora-scripts-next/pull/209)） | 是 | 对外头衔为前端负责人；Vue3 前端工程主力 |
 
 ### 领域负责人（DRI）
 
