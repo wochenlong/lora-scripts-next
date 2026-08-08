@@ -55,6 +55,14 @@ FLUX_CONFIG_MARKERS = frozenset({
     "model_prediction_type",
 })
 
+MUSUBI_CONFIG_MARKERS = frozenset({
+    "dit",
+    "text_encoder",
+    "turbo_dit",
+    "turbo_dit_cache",
+    "fp8_scaled",
+})
+
 LUMINA_CONFIG_MARKERS = frozenset({
     "gemma2",
 })
@@ -75,6 +83,9 @@ MODEL_PATH_KEYS = (
     "clip_l",
     "t5xxl",
     "gemma2",
+    "dit",
+    "text_encoder",
+    "turbo_dit",
     "network_weights",
     "resume",
 )
@@ -99,6 +110,12 @@ SDXL_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"/sdxl/", re.I), "模型路径含 /sdxl/"),
     (re.compile(r"sdxl[-_]", re.I), "主模型路径含 sdxl"),
     (re.compile(r"noobxl|pony|illustrious", re.I), "主模型路径为常见 SDXL 模型"),
+)
+
+MUSUBI_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"/krea2/", re.I), "模型路径含 /krea2/"),
+    (re.compile(r"krea2", re.I), "模型路径含 krea2"),
+    (re.compile(r"qwen3[-_]?vl", re.I), "文本编码器路径含 qwen3-vl"),
 )
 
 LUMINA_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -312,6 +329,13 @@ def analyze_train_type(config: dict) -> TrainTypeAnalysis:
         network_modules=ANIMA_NETWORK_MODULES,
     )
     families.append(("anima-lora", anima_score, anima_reasons))
+
+    musubi_score, musubi_reasons = _score_family(
+        config,
+        marker_keys=MUSUBI_CONFIG_MARKERS,
+        path_rules=MUSUBI_PATH_RULES,
+    )
+    families.append(("krea2-lora", musubi_score, musubi_reasons))
 
     flux_score, flux_reasons = _score_family(
         config,
