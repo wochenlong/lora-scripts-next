@@ -7,7 +7,10 @@ from pathlib import Path
 from unittest import mock
 
 from mikazuki.musubi_backend.environment import (
+    AuditResult,
+    audit_environment,
     build_environment_install_plan,
+    install_environment,
     resolve_cuda_extra,
 )
 from mikazuki.musubi_backend.extension_state import (
@@ -192,6 +195,63 @@ class EnvironmentPlanTests(unittest.TestCase):
             self.assertEqual(plan.venv_python, layout.venv_python)
             self.assertEqual(plan.cuda_extra, "cu130")
             self.assertTrue(plan.as_dict()["target_source"].endswith("source"))
+
+
+class InstallEnvironmentTests(unittest.TestCase):
+    def test_install_command_includes_tensorboard(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = default_layout(root)
+            source = root / "upstream"
+            (source / "src" / "musubi_tuner").mkdir(parents=True)
+            base_python = root / "base-python" / "python3"
+            base_python.parent.mkdir(parents=True)
+            base_python.write_text("", encoding="utf-8")
+            plan = build_environment_install_plan(root, layout, source)
+            commands: list[list[str]] = []
+            audit = AuditResult(ok=True)
+            with mock.patch("mikazuki.musubi_backend.environment.ensure_install_source_ready", return_value=source), \
+                    mock.patch("mikazuki.musubi_backend.environment.copy_source_snapshot"), \
+                    mock.patch("mikazuki.musubi_backend.environment._uv_command", return_value="uv"), \
+                    mock.patch("mikazuki.musubi_backend.environment._find_base_python", return_value=base_python), \
+                    mock.patch("mikazuki.musubi_backend.environment._run_streaming", side_effect=lambda cmd, *_a, **_k: commands.append(cmd)), \
+                    mock.patch("mikazuki.musubi_backend.environment.audit_environment", return_value=audit):
+                result = install_environment(plan, lambda _line: None)
+            self.assertTrue(result.ok)
+            pip_installs = [cmd for cmd in commands if cmd[:3] == ["uv", "pip", "install"]]
+            self.assertEqual(len(pip_installs), 1)
+            install_cmd = pip_installs[0]
+            self.assertIn(f"{plan.layout.source}[{plan.cuda_extra}]", install_cmd)
+            self.assertIn("tensorboard", install_cmd)
+
+
+class AuditEnvironmentTests(unittest.TestCase):
+    def _ready_runtime(self, root: Path) -> RuntimeConfig:
+        runtime = make_runtime(root)
+        (runtime.musubi_root / "src" / "musubi_tuner").mkdir(parents=True)
+        runtime.python.parent.mkdir(parents=True)
+        runtime.python.write_text("", encoding="utf-8")
+        return runtime
+
+    def _fake_probe(self, tensorboard: bool):
+        stdout = f"3.12.0\n2.7.1+cu128\nTrue\n{tensorboard}\n"
+        return lambda *_a, **_k: subprocess.CompletedProcess([], 0, stdout=stdout)
+
+    def test_audit_ok_when_tensorboard_present(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = self._ready_runtime(Path(td))
+            with mock.patch("mikazuki.musubi_backend.environment.subprocess.run", self._fake_probe(True)):
+                result = audit_environment(runtime)
+            self.assertTrue(result.ok, result.errors)
+            self.assertEqual(result.facts["tensorboard_available"], "True")
+
+    def test_audit_fails_when_tensorboard_missing(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = self._ready_runtime(Path(td))
+            with mock.patch("mikazuki.musubi_backend.environment.subprocess.run", self._fake_probe(False)):
+                result = audit_environment(runtime)
+            self.assertFalse(result.ok)
+            self.assertTrue(any("tensorboard" in e for e in result.errors))
 
 
 class SettingsDiscoveryTests(unittest.TestCase):

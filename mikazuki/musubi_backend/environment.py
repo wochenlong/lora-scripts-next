@@ -30,9 +30,11 @@ from .settings import RuntimeConfig, ensure_install_source_ready, load_backend_c
 IMPORT_PROBE = (
     "import torch, musubi_tuner;"
     "import sys, platform;"
+    "import importlib.util;"
     "print(platform.python_version());"
     "print(torch.__version__);"
-    "print(torch.cuda.is_available())"
+    "print(torch.cuda.is_available());"
+    "print(importlib.util.find_spec('tensorboard') is not None)"
 )
 
 # musubi-tuner requires Python >=3.10,<3.13 (pyproject.toml).
@@ -45,6 +47,10 @@ MUSUBI_PYTORCH_INDEXES = {
 }
 DEFAULT_CUDA_EXTRA = "cu128"
 DEFAULT_HF_ENDPOINT = "https://hf-mirror.com"
+
+# 上游 musubi-tuner 主依赖不含 tensorboard（仅在 dev group），但训练默认
+# log_with="tensorboard"；缺包时 accelerate 静默跳过 tracker，无事件文件。
+MUSUBI_EXTRA_PIP_TARGETS = ("tensorboard",)
 
 
 @dataclass
@@ -166,18 +172,21 @@ def audit_environment(
 
         if result is not None:
             lines = [line.strip() for line in (result.stdout or "").splitlines() if line.strip()]
-            if result.returncode != 0 or len(lines) < 3:
+            if result.returncode != 0 or len(lines) < 4:
                 tail = " | ".join(lines[-3:]) if lines else "<no output>"
                 errors.append(f"musubi-tuner 依赖自检失败（import torch/musubi_tuner）：{tail}")
             else:
-                facts["python_version"] = lines[-3]
-                facts["torch_version"] = lines[-2]
-                facts["cuda_available"] = lines[-1]
-                major_minor = tuple(int_value for int_value in lines[-3].split(".")[:2] if int_value.isdigit())
+                facts["python_version"] = lines[-4]
+                facts["torch_version"] = lines[-3]
+                facts["cuda_available"] = lines[-2]
+                facts["tensorboard_available"] = lines[-1]
+                major_minor = tuple(int_value for int_value in lines[-4].split(".")[:2] if int_value.isdigit())
                 if len(major_minor) == 2 and not (int(major_minor[0]) == 3 and 10 <= int(major_minor[1]) <= 12):
-                    errors.append(f"musubi-tuner 要求 Python >=3.10,<3.13，当前为 {lines[-3]}")
-                if lines[-1] != "True":
+                    errors.append(f"musubi-tuner 要求 Python >=3.10,<3.13，当前为 {lines[-4]}")
+                if lines[-2] != "True":
                     errors.append("musubi-tuner 环境的 torch 未检测到 CUDA，无法训练")
+                if lines[-1] != "True":
+                    errors.append("musubi-tuner 环境缺少 tensorboard，训练不会写出 Loss 事件文件，请修复或重装插件")
 
     result_obj = AuditResult(ok=not errors, errors=errors, warnings=warnings, facts=facts)
     if layout is not None:
@@ -394,6 +403,7 @@ def install_environment(
             "--index-strategy",
             "unsafe-best-match",
             f"{plan.layout.source}[{plan.cuda_extra}]",
+            *MUSUBI_EXTRA_PIP_TARGETS,
         ],
         plan.project_root,
         log,
