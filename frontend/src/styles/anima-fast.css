@@ -7,7 +7,7 @@
 .fast-state span { font-weight: 700; }
 .fast-state strong { color: var(--text-faint); font: 10px/1 ui-monospace,monospace; text-transform: uppercase; }
 .fast-state[data-state=broken] { border-left-color: #dc2626; }
-.audit-errors { padding: 17px; color: #b42318; background: rgba(220,38,38,.06); border-radius: 10px; }
+.audit-errors { padding: 17px; color: var(--danger); background: var(--danger-soft); border-radius: 10px; }
 .audit-errors p { margin: 8px 0; font-size: 11px; }
 .fast-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 24px; }
 .fast-actions button,.fast-actions a { border: 1px solid var(--border); }
