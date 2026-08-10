@@ -28,6 +28,7 @@
 .schema-toc-seam{position:absolute;inset:0;z-index:2;display:grid;place-items:start center;width:6px;padding:14px 0 0;border:0;background:linear-gradient(180deg,rgba(37,99,235,.55),rgba(37,99,235,.18) 42%,rgba(37,99,235,.06));cursor:pointer}
 .schema-toc.open .schema-toc-seam{opacity:0;pointer-events:none;background:transparent}
 .schema-toc-seam-icon{margin-left:1px;color:#fff;filter:drop-shadow(0 0 2px rgba(37,99,235,.65));transition:opacity .15s ease;opacity:.9}.schema-toc-seam:hover{background:linear-gradient(180deg,rgba(37,99,235,.78),rgba(37,99,235,.28) 42%,rgba(37,99,235,.1))}
+.schema-toc.empty .schema-toc-seam{opacity:.3;cursor:default}.schema-toc.empty .schema-toc-seam:hover{background:linear-gradient(180deg,rgba(37,99,235,.55),rgba(37,99,235,.18) 42%,rgba(37,99,235,.06))}
 .schema-toc-panel{position:relative;z-index:3;display:none;flex-direction:column;width:100%;height:100vh;max-height:100vh;color:var(--text);background:var(--surface);border-right:1px solid var(--border)}
 .schema-toc.open .schema-toc-panel{display:flex}
 .schema-toc-head{display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:52px;padding:14px 12px 10px;border-bottom:1px solid var(--border)}

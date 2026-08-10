@@ -1,59 +1,34 @@
 <script setup lang="ts">
-import { onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { ArrowLeft, ArrowRight } from "@element-plus/icons-vue"
 
 export interface TocSection { id: string; title: string }
 
-/** Stay open while browsing sections; fold after idle. */
-const IDLE_COLLAPSE_MS = 3500
-
 const props = defineProps<{ sections: TocSection[] }>()
 const { t } = useI18n()
-const open = ref(false)
+const hovered = ref(false)
+const pinned = ref(false)
 const activeId = ref("")
 let observer: IntersectionObserver | undefined
-let collapseTimer: number | undefined
+
+const hasSections = computed(() => props.sections.length > 0)
+const open = computed(() => hasSections.value && (hovered.value || pinned.value))
 
 function anchorId(id: string) { return `sec-${id}` }
 
-function clearCollapseTimer() {
-  if (collapseTimer !== undefined) {
-    window.clearTimeout(collapseTimer)
-    collapseTimer = undefined
-  }
-}
-
-function scheduleCollapse() {
-  clearCollapseTimer()
-  if (!open.value) return
-  collapseTimer = window.setTimeout(() => {
-    open.value = false
-    collapseTimer = undefined
-  }, IDLE_COLLAPSE_MS)
-}
-
-function expand() {
-  open.value = true
-  scheduleCollapse()
+function togglePinned() {
+  pinned.value = !pinned.value
 }
 
 function collapseNow() {
-  clearCollapseTimer()
-  open.value = false
-}
-
-/** Keep open while pointer is over the panel; restart idle when it leaves. */
-function holdOpen() {
-  clearCollapseTimer()
-  open.value = true
+  pinned.value = false
+  hovered.value = false
 }
 
 function navigate(id: string) {
   activeId.value = id
   document.getElementById(anchorId(id))?.scrollIntoView({ behavior: "smooth", block: "start" })
-  open.value = true
-  scheduleCollapse()
 }
 
 function observe() {
@@ -80,7 +55,6 @@ function observe() {
 onMounted(observe)
 watch(() => props.sections, observe)
 onBeforeUnmount(() => {
-  clearCollapseTimer()
   observer?.disconnect()
 })
 </script>
@@ -88,8 +62,10 @@ onBeforeUnmount(() => {
 <template>
   <aside
     class="section-toc schema-toc"
-    :class="{ open, collapsed: !open }"
+    :class="{ open, collapsed: !open, empty: !hasSections }"
     :aria-label="t('training.toc.title')"
+    @mouseenter="hovered = true"
+    @mouseleave="hovered = false"
   >
     <button
       type="button"
@@ -97,16 +73,14 @@ onBeforeUnmount(() => {
       :title="t('training.toc.expand')"
       :aria-label="t('training.toc.expand')"
       :aria-expanded="open ? 'true' : 'false'"
-      @mouseenter="expand"
-      @click="open ? collapseNow() : expand()"
+      :disabled="!hasSections"
+      @click="togglePinned"
     >
       <el-icon class="schema-toc-seam-icon" :size="12"><ArrowRight /></el-icon>
     </button>
     <div
       class="toc-panel schema-toc-panel"
       :aria-hidden="open ? 'false' : 'true'"
-      @mouseenter="holdOpen"
-      @mouseleave="scheduleCollapse"
     >
       <header class="schema-toc-head">
         <p class="schema-toc-caption">{{ t("training.toc.title") }}</p>

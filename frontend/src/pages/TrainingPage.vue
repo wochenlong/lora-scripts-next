@@ -66,6 +66,7 @@ const tocSections = computed(() => {
   }
   return schema.value.sections.filter((section) => section.fields.some((field) => !field.hidden && selected.get(field.key) === field)).map((section) => ({ id: section.id, title: section.title }))
 })
+const showToc = computed(() => loading.value || Boolean(error.value) || tocSections.value.length > 1)
 const trainLogHref = computed(() => started.value ? `${started.value.train_log_path || "/train-log"}?${started.value.train_log_query || `task_id=${encodeURIComponent(started.value.task_id)}`}` : "")
 
 function storageId() { return props.storageKey || props.schemaName }
@@ -275,9 +276,9 @@ onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(a
 
 <template>
   <div class="training-layout schema-training-layout" :class="{ bare, 'preview-docked': previewCollapsed }">
-    <section class="form-canvas" :class="{ 'with-schema-toc': tocSections.length > 1 }">
-      <div class="schema-form-shell" :class="{ 'has-toc': tocSections.length > 1 }">
-        <SectionToc v-if="tocSections.length > 1" :sections="tocSections" />
+    <section class="form-canvas" :class="{ 'with-schema-toc': showToc }">
+      <div class="schema-form-shell" :class="{ 'has-toc': showToc }">
+        <SectionToc v-if="showToc" :sections="tocSections" />
         <div class="schema-form-binder">
           <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
           <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
