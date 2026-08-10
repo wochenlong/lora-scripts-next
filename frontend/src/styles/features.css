@@ -127,6 +127,12 @@
 .task-row code{overflow:hidden;color:var(--text-faint);font-size:11px;text-overflow:ellipsis;white-space:nowrap}
 .task-row .task-status{justify-self:start}
 .task-kind{justify-self:start;padding:2px 7px;color:var(--text-soft);background:var(--surface-inset);border:1px solid var(--border);border-radius:6px;font-size:10px;font-weight:600}
+.task-stage-strip{display:flex;flex-wrap:wrap;gap:4px}
+.task-stage{padding:2px 7px;color:var(--text-faint);background:var(--surface-inset);border:1px solid var(--border);border-radius:99px;font-size:10px;font-weight:600}
+.task-stage[data-status=running]{color:var(--accent-dark);background:var(--accent-soft);border-color:var(--accent)}
+.task-stage[data-status=finished]{color:#047857;background:rgba(5,150,105,.1);border-color:rgba(5,150,105,.35)}
+.task-stage[data-status=failed]{color:var(--danger);background:rgba(220,38,38,.08);border-color:rgba(220,38,38,.35)}
+.task-stage[data-status=terminated]{color:#b45309;background:rgba(217,119,6,.1);border-color:rgba(217,119,6,.35)}
 .task-status{display:inline-block;padding:3px 8px;color:var(--accent-dark);background:var(--accent-soft);border-radius:6px;font-size:11px;font-weight:650}
 .task-row[data-status=finished] .task-status,.task-detail[data-status=finished] .task-status{color:#047857;background:rgba(5,150,105,.1)}
 .task-row[data-status=failed] .task-status,.task-detail[data-status=failed] .task-status{color:var(--danger);background:rgba(220,38,38,.08)}

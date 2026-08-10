@@ -209,6 +209,11 @@ export default {
       animaFastInstall: "Plugin Install · Anima Fast",
       assetsDownload: "Model Assets Download",
     },
+    stage: {
+      cacheLatents: "Cache Latents",
+      cacheTextEncoder: "Cache Text Encoder",
+      train: "Train",
+    },
     noDetail: "No task description",
     listLoadFail: "Failed to load the task list",
     terminate: {

@@ -209,6 +209,11 @@ export default {
       animaFastInstall: "插件安装 · Anima Fast",
       assetsDownload: "模型资产下载",
     },
+    stage: {
+      cacheLatents: "缓存 Latents",
+      cacheTextEncoder: "缓存文本编码",
+      train: "训练",
+    },
     noDetail: "暂无任务描述",
     listLoadFail: "任务列表加载失败",
     terminate: {

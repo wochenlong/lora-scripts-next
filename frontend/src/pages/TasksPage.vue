@@ -50,7 +50,7 @@ async function loadInsights(taskId: string) {
   insightController = controller
   try {
     const [previewsData, data] = await Promise.all([tasksApi.previews(taskId, controller.signal), tasksApi.metrics(taskId, controller.signal)])
-    if (controller.signal.aborted || taskId !== selectedId.value) return
+    if (controller.signal.aborted || taskId !== selected.value?.id) return
     previewEnabled.value = previewsData.preview_enabled !== false
     const images = previewsData.images
     if (images.length > 0) {
@@ -83,11 +83,78 @@ const statusLabels = computed<Record<TaskStatus, string>>(() => ({
 const activeTab = ref<"running" | "recent">("running")
 const selectedId = ref("")
 
+interface TaskStage {
+  id: string
+  name: string
+  status: TaskStatus
+}
+
+interface TaskGroup {
+  key: string
+  tasks: TrainingTask[]
+  representative: TrainingTask
+  stages: TaskStage[]
+}
+
+const STAGE_ORDER = ["cache_latents", "cache_text_encoder", "train"]
+const STAGE_LABEL_KEYS: Record<string, string> = {
+  cache_latents: "tasks.stage.cacheLatents",
+  cache_text_encoder: "tasks.stage.cacheTextEncoder",
+  train: "tasks.stage.train",
+}
+
+function stageLabelKey(name: string): string {
+  return STAGE_LABEL_KEYS[name] ?? ""
+}
+
+function isActiveTask(task: TrainingTask): boolean {
+  return task.status === "RUNNING" || task.status === "CREATED"
+}
+
+function groupKey(task: TrainingTask): string {
+  const group = task.metadata.train_task_id
+  const stage = task.metadata.stage
+  return typeof group === "string" && typeof stage === "string" ? group : task.id
+}
+
+function stageRank(task: TrainingTask): number {
+  const rank = STAGE_ORDER.indexOf(String(task.metadata.stage))
+  return rank === -1 ? STAGE_ORDER.length : rank
+}
+
+function pickRepresentative(bucket: TrainingTask[]): TrainingTask {
+  const staged = bucket.filter((task) => typeof task.metadata.stage === "string")
+  if (staged.length < 2) return bucket[0]
+  const running = staged.find((task) => task.status === "RUNNING")
+  if (running) return running
+  const failed = [...staged].sort((a, b) => stageRank(b) - stageRank(a)).find((task) => task.status === "FAILED" || task.status === "TERMINATED")
+  if (failed) return failed
+  return [...staged].sort((a, b) => stageRank(b) - stageRank(a))[0]
+}
+
+function buildGroups(list: TrainingTask[]): TaskGroup[] {
+  const buckets = new Map<string, TrainingTask[]>()
+  for (const task of list) {
+    const key = groupKey(task)
+    const bucket = buckets.get(key)
+    if (bucket) bucket.push(task)
+    else buckets.set(key, [task])
+  }
+  return [...buckets.entries()].map(([key, bucket]) => {
+    const stages = bucket
+      .filter((task) => typeof task.metadata.stage === "string")
+      .sort((a, b) => stageRank(a) - stageRank(b))
+      .map((task) => ({ id: task.id, name: String(task.metadata.stage), status: task.status }))
+    return { key, tasks: bucket, representative: pickRepresentative(bucket), stages }
+  })
+}
+
 const orderedTasks = computed(() => [...tasks.value].reverse())
-const runningList = computed(() => orderedTasks.value.filter((task) => task.status === "RUNNING" || task.status === "CREATED"))
-const recentList = computed(() => orderedTasks.value.filter((task) => task.status !== "RUNNING" && task.status !== "CREATED"))
+const allGroups = computed(() => buildGroups(orderedTasks.value))
+const runningList = computed(() => allGroups.value.filter((group) => group.tasks.some(isActiveTask)))
+const recentList = computed(() => allGroups.value.filter((group) => !group.tasks.some(isActiveTask)))
 const visibleList = computed(() => activeTab.value === "running" ? runningList.value : recentList.value)
-const selected = computed(() => tasks.value.find((task) => task.id === selectedId.value))
+const selected = computed(() => allGroups.value.find((group) => group.key === selectedId.value)?.representative)
 
 const KIND_LABEL_KEYS: Record<string, string> = {
   musubi_install: "tasks.kind.musubiInstall",
@@ -144,15 +211,15 @@ const elapsedLabel = computed(() => {
   return `${secs}s`
 })
 
-function select(task: TrainingTask) {
-  selectedId.value = task.id
+function select(group: TaskGroup) {
+  selectedId.value = group.key
 }
 
 watch(visibleList, (list) => {
-  if (!list.some((task) => task.id === selectedId.value)) selectedId.value = list[0]?.id ?? ""
+  if (!list.some((group) => group.key === selectedId.value)) selectedId.value = list[0]?.key ?? ""
 }, { immediate: true })
 
-watch(selectedId, (id) => {
+watch(() => selected.value?.id, (id) => {
   previews.value = []
   metrics.value = {}
   progress.value = {}
@@ -165,7 +232,8 @@ watch(selectedId, (id) => {
 watch(() => selected.value?.status, (status, previous) => {
   const wasActive = previous === "RUNNING" || previous === "CREATED"
   const isActive = status === "RUNNING" || status === "CREATED"
-  if (wasActive && status && !isActive && selectedId.value) loadInsights(selectedId.value)
+  const id = selected.value?.id
+  if (wasActive && status && !isActive && id) loadInsights(id)
 })
 
 async function terminate(task: TrainingTask) {
@@ -221,10 +289,13 @@ onBeforeUnmount(() => {
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
         <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
-        <article v-for="task in visibleList" :key="task.id" class="task-row" :class="{ selected: task.id === selectedId }" :data-status="task.status.toLowerCase()" @click="select(task)">
-          <span class="task-status">{{ statusLabels[task.status] || task.status }}</span>
-          <div class="task-row-main"><h2>{{ taskName(task) }}</h2><code>{{ task.id }}</code></div>
-          <span v-if="kindLabelKey(task)" class="task-kind">{{ t(kindLabelKey(task)) }}</span>
+        <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
+          <span class="task-status">{{ statusLabels[group.representative.status] || group.representative.status }}</span>
+          <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code>{{ group.key }}</code></div>
+          <span v-if="kindLabelKey(group.representative)" class="task-kind">{{ t(kindLabelKey(group.representative)) }}</span>
+          <div v-if="group.stages.length > 1" class="task-stage-strip">
+            <span v-for="stage in group.stages" :key="stage.id" class="task-stage" :data-status="stage.status.toLowerCase()">{{ stageLabelKey(stage.name) ? t(stageLabelKey(stage.name)) : stage.name }}</span>
+          </div>
         </article>
       </aside>
 
