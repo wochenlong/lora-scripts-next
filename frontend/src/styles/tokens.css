@@ -8,14 +8,24 @@
   --surface-soft: #f8fafc;
   --surface-inset: #eef2f7;
   --text: #1f2430;
+  --text-title: #1f2430;
+  --text-label: #3d4654;
   --text-soft: #5b6472;
   --text-faint: #98a2b3;
+  --text-desc: #6b7280;
   --border: #e8ecf3;
+  --border-muted: #eef1f6;
   --accent: #2563eb;
   --accent-dark: #1d4ed8;
   --accent-soft: rgba(37, 99, 235, .08);
   --accent-contrast: #fff;
+  --focus-ring: rgba(37, 99, 235, .22);
   --danger: #dc2626;
+  --danger-soft: rgba(220, 38, 38, .08);
+  --success: #15803d;
+  --warning-bg: #fff8e8;
+  --warning-border: #efd59c;
+  --warning-text: #8a5a08;
   --sidebar: #fff;
   --radius-sm: 12px;
   --radius: 14px;
@@ -26,24 +36,88 @@
   --el-border-radius-small: 10px;
   --el-border-radius-round: 20px;
 }
+
+/*
+  GitHub Dark–inspired hierarchy (4 depths):
+  1. sidebar  --sidebar        #010409
+  2. page     --bg             #0d1117
+  3. card     --surface        #161b22
+  4. input    --surface-inset  #21262d
+*/
 html.dark {
   color-scheme: dark;
-  --bg: #10141b;
-  --surface: #171d27;
-  --surface-soft: #1c2430;
-  --surface-inset: #10151c;
-  --text: #edf3f8;
-  --text-soft: #a9b5c2;
-  --text-faint: #758292;
-  --border: #2a3442;
-  --accent: #3b82f6;
-  --accent-dark: #60a5fa;
-  --accent-soft: rgba(59, 130, 246, .14);
-  --accent-contrast: #fff;
-  --danger: #f87171;
-  --sidebar: #131922;
-  --shadow: 0 1px 2px rgba(0, 0, 0, .28), 0 10px 28px rgba(0, 0, 0, .26);
-  --el-border-radius-base: 12px;
-  --el-border-radius-small: 10px;
+  --bg: #0d1117;
+  --sidebar: #010409;
+  --surface: #161b22;
+  --surface-soft: #1c2128;
+  --surface-inset: #21262d;
+  /* Readable first: closer to GitHub fg.default / fg.muted, not over-dimmed. */
+  --text: #e6edf3;
+  --text-title: #f0f6fc;
+  --text-label: #e6edf3;
+  --text-soft: #b1bac4;
+  --text-faint: #8b949e;
+  --text-desc: #9198a1;
+  --border: #30363d;
+  --border-muted: #21262d;
+  --accent: #4493f8;
+  --accent-dark: #79b8ff;
+  --accent-soft: rgba(56, 139, 253, .15);
+  --accent-contrast: #ffffff;
+  --focus-ring: rgba(56, 139, 253, .3);
+  --danger: #f85149;
+  --danger-soft: rgba(248, 81, 73, .14);
+  --success: #3fb950;
+  --warning-bg: rgba(187, 128, 9, .12);
+  --warning-border: rgba(187, 128, 9, .35);
+  --warning-text: #d29922;
+  --shadow: none;
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 10px;
+  --radius-xl: 12px;
+
+  --el-color-primary: #2f81f7;
+  --el-color-primary-light-3: #5794f5;
+  --el-color-primary-light-5: #79b8ff;
+  --el-color-primary-light-7: #a5c9ff;
+  --el-color-primary-light-8: #c8dcff;
+  --el-color-primary-light-9: rgba(56, 139, 253, .15);
+  --el-color-primary-dark-2: #1f6feb;
+  --el-color-danger: var(--danger);
+  --el-color-success: var(--success);
+  --el-color-warning: var(--warning-text);
+  --el-color-info: var(--text-soft);
+  --el-bg-color: var(--surface);
+  --el-bg-color-page: var(--bg);
+  --el-bg-color-overlay: var(--surface-soft);
+  --el-text-color-primary: var(--text);
+  --el-text-color-regular: var(--text-label);
+  --el-text-color-secondary: var(--text-soft);
+  --el-text-color-placeholder: var(--text-faint);
+  --el-text-color-disabled: var(--text-faint);
+  --el-border-color: var(--border);
+  --el-border-color-light: #3d444d;
+  --el-border-color-lighter: #3d444d;
+  --el-border-color-extra-light: #262c36;
+  --el-border-color-dark: #484f58;
+  --el-border-color-darker: #6e7681;
+  --el-fill-color: var(--surface-soft);
+  --el-fill-color-light: #262c36;
+  --el-fill-color-lighter: #2a313c;
+  --el-fill-color-extra-light: #1c2128;
+  --el-fill-color-blank: var(--surface-inset);
+  --el-fill-color-dark: #30363d;
+  --el-fill-color-darker: #3d444d;
+  --el-mask-color: rgba(1, 4, 9, .72);
+  --el-mask-color-extra-light: rgba(1, 4, 9, .4);
+  --el-box-shadow: none;
+  --el-box-shadow-light: none;
+  --el-box-shadow-lighter: none;
+  --el-disabled-bg-color: #161b22;
+  --el-disabled-text-color: var(--text-faint);
+  --el-disabled-border-color: var(--border);
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 6px;
   --el-border-radius-round: 20px;
 }

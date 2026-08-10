@@ -428,10 +428,16 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     elif mixed != "bf16":
         raise AdapterError(f"mixed_precision={mixed} 不被 Krea 2 支持，请使用 bf16")
 
-    # Krea 2 fp8 only supports the scaled (dynamic) path.
-    if values.get("fp8_base") and not values.get("fp8_scaled"):
-        values["fp8_scaled"] = True
-        warnings.append("Krea 2 的 fp8 仅支持 scaled 模式，已自动开启 fp8_scaled")
+    # Krea 2: fp8_base and fp8_scaled must be paired. Trainer asserts
+    # ``fp8_scaled requires fp8_base``; plain fp8_base without scaled is also rejected.
+    # Prefer both ON when either is requested (product default). Both OFF is allowed.
+    fp8_base = bool(values.get("fp8_base"))
+    fp8_scaled = bool(values.get("fp8_scaled"))
+    if fp8_base or fp8_scaled:
+        if not (fp8_base and fp8_scaled):
+            values["fp8_base"] = True
+            values["fp8_scaled"] = True
+            warnings.append("Krea 2 的 fp8 须同时开启 fp8_base 与 fp8_scaled，已自动成对开启")
 
     # RAW-train / Turbo-sample constraints (see musubi krea2_train_network.py).
     if not is_empty(values.get("turbo_dit")):

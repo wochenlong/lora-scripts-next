@@ -3,6 +3,20 @@
 本文件记录 **wochenlong/lora-scripts-next**（产品名 **Next Trainer**）面向镜像与 AutoDL 的发行说明；上游 kohya-ss/sd-scripts 的变更请见其仓库。
 
 ---
+## v2.9.2-beta.3 — 2026-08-08
+
+> **内测线（pre-release）**：冷启动依赖安装热修。合入 `dev`，**不替代** `main` 稳定版 v2.9.1。
+
+### 修复
+
+- 将 `tensorboard` 升至 `2.14.0`，与 `protobuf==3.20.3` 兼容；修复整合包首次 `pip install -r requirements.txt` 因现代 pip 严格解析而 **硬失败**（旧钉 `tensorboard==2.10.1` 要求 `protobuf<3.20`）
+
+### 整合包
+
+- 归档名：`Next-Trainer-v2.9.2-beta.3-lite.7z` / `-full.7z`（包内目录仍为 `SD-Trainer/`）
+- **lite** → GitHub Release；**full** → 魔搭 `windsing/next-trainer-portable`
+
+---
 ## v2.9.2-beta.2 — 2026-08-07
 
 > **内测线（pre-release）**：在 `2.9.2-beta.1` 上的整合包热修。合入 `dev`，**不替代** `main` 稳定版 v2.9.1。

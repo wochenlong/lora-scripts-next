@@ -145,7 +145,23 @@ class AdapterTests(unittest.TestCase):
 
         self.assertTrue(adapted.values["fp8_base"])
         self.assertTrue(adapted.values["fp8_scaled"])
-        self.assertTrue(any("fp8_scaled" in w for w in adapted.warnings))
+        self.assertTrue(any("成对开启" in w or "fp8_scaled" in w for w in adapted.warnings))
+
+    def test_fp8_scaled_alone_forces_fp8_base(self):
+        """Regression: only fp8_scaled=true in TOML crashed trainer (fp8_scaled requires fp8_base)."""
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            (root / "train" / "4_char").mkdir(parents=True)
+            runtime = make_runtime(root)
+            config = base_config(root)
+            config.pop("fp8_base", None)
+            config["fp8_scaled"] = True
+
+            adapted = adapt_config(config, runtime, "run1")
+
+        self.assertTrue(adapted.values["fp8_base"])
+        self.assertTrue(adapted.values["fp8_scaled"])
+        self.assertTrue(any("成对开启" in w for w in adapted.warnings))
 
     def test_fp16_coerced_to_bf16(self):
         with tempfile.TemporaryDirectory() as td:

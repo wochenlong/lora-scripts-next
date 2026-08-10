@@ -10,7 +10,7 @@ Schema.intersect([
     }).description("数据集设置"),
 
     Schema.object({
-        output_name: Schema.string().default("aki").description("模型保存名称"),
+        output_name: Schema.string().default("next-lora").description("模型保存名称（Next Trainer 默认；建议按角色/风格自行改名）"),
         output_dir: Schema.string().default("./output").role('filepicker', { type: "folder" }).description("模型保存文件夹"),
         save_every_n_epochs: Schema.number().default(2).description("每 N epoch（轮）自动保存一次模型"),
     }).description("保存设置"),

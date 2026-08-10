@@ -1,0 +1,30 @@
+---
+description: Krea2 / Musubi fp8_base 与 fp8_scaled 必须成对
+globs:
+  - mikazuki/schema/krea2-lora.ts
+  - mikazuki/musubi_backend/**/*
+  - config/presets/krea2-lora.toml
+  - extensions/musubi_tuner/**/*
+alwaysApply: false
+---
+
+# Krea 2 FP8 成对约束
+
+训练脚本断言：`fp8_scaled` 必须同时有 `fp8_base`；Krea2 也不接受「只开 fp8_base、不开 scaled」。
+
+## 产品约定
+
+- **默认：两个都开**（schema / preset 已是 `true`）。
+- **允许：两个都关**。
+- **禁止：只开其中一个**——用户会直接训不起来（本机已复现 `AssertionError: fp8_scaled requires fp8_base`）。
+
+## 实现要求
+
+- Adapter（`mikazuki/musubi_backend/adapter.py`）须在提交前把「只开一个」纠正为**成对开启**，并给 warning。
+- 注意 boolean 序列化：假值常被丢掉，TOML 里可能只剩 `fp8_scaled = true`，adapter 必须覆盖这种半开状态。
+- 改 schema 文案时保持「须同时开启」说明。
+
+## 勿做
+
+- 不要把默认改成只开其一。
+- 不要只修 UI 不同时修 adapter（导入旧配置 / 半开 TOML 仍会炸）。

@@ -26,7 +26,7 @@ Schema.intersect([
     }).description("数据集设置"),
 
     Schema.object({
-        output_name: Schema.string().default("krea2-lora").description("模型保存名称"),
+        output_name: Schema.string().default("next-krea2-lora").description("模型保存名称（Next Trainer · Krea2 默认；建议按角色/风格自行改名）"),
         output_dir: Schema.string().role('filepicker', { type: "folder" }).default("./output").description("模型保存文件夹"),
         save_precision: Schema.union(["fp16", "float", "bf16"]).default("bf16").description("模型保存精度"),
         save_every_n_epochs: Schema.number().default(2).description("每 N epoch（轮）自动保存一次模型"),
@@ -70,8 +70,8 @@ Schema.intersect([
 
     Schema.object({
         mixed_precision: Schema.union(["bf16"]).default("bf16").description("训练混合精度（Krea 2 仅支持 bf16）"),
-        fp8_base: Schema.boolean().default(true).description("DiT 基础权重使用 fp8，大幅降低显存占用"),
-        fp8_scaled: Schema.boolean().default(true).description("fp8 scaled（动态缩放）模式；Krea 2 的 fp8 必须与 fp8_base 一起开启"),
+        fp8_base: Schema.boolean().default(true).description("DiT 基础权重使用 fp8，大幅降低显存占用。须与 fp8_scaled 同时开启（默认都开）；只开一个会训不起来"),
+        fp8_scaled: Schema.boolean().default(true).description("fp8 scaled（动态缩放）。须与 fp8_base 同时开启（默认都开）；只开一个会训不起来"),
         blocks_to_swap: Schema.number().min(0).max(200).step(1).default(0).description("交换到内存的 DiT block 数量以节省显存（与 turbo_dit 互斥）"),
         sdpa: Schema.boolean().default(true).description("启用 sdpa"),
         sage_attn: Schema.boolean().default(false).description("启用 SageAttention（需要额外安装）"),
