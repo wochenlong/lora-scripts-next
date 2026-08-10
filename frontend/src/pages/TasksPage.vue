@@ -106,6 +106,31 @@ const selectedErrorLines = computed(() => {
   return Array.isArray(value) ? value.filter((line): line is string => typeof line === "string") : []
 })
 
+function metaString(task: TrainingTask, key: string): string {
+  const value = task.metadata[key]
+  return typeof value === "string" && value ? value : ""
+}
+
+const now = ref(Date.now())
+const selectedCreatedAt = computed(() => {
+  const value = selected.value?.metadata.created_at
+  return typeof value === "number" && value > 0 ? value : null
+})
+function formatTimestamp(ts: number): string {
+  return new Date(ts * 1000).toLocaleString()
+}
+const elapsedLabel = computed(() => {
+  const created = selectedCreatedAt.value
+  if (!created) return ""
+  const seconds = Math.max(0, Math.floor((now.value - created * 1000) / 1000))
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor((seconds % 3600) / 60)
+  const secs = seconds % 60
+  if (hours) return `${hours}h ${minutes}m ${secs}s`
+  if (minutes) return `${minutes}m ${secs}s`
+  return `${secs}s`
+})
+
 function select(task: TrainingTask) {
   selectedId.value = task.id
 }
@@ -149,6 +174,7 @@ async function terminate(task: TrainingTask) {
 onMounted(async () => {
   await store.refresh()
   timer = window.setInterval(() => {
+    now.value = Date.now()
     const hasActive = tasks.value.some((task) => task.status === "RUNNING" || task.status === "CREATED")
     if (!hasActive) return
     store.refresh({ silent: true })
@@ -201,6 +227,11 @@ onBeforeUnmount(() => {
           <div><dt>{{ t("tasks.detail.taskId") }}</dt><dd><code>{{ selected.id }}</code></dd></div>
           <div><dt>{{ t("tasks.detail.config") }}</dt><dd :title="taskDetail(selected)">{{ taskDetail(selected) }}</dd></div>
           <div><dt>{{ t("tasks.detail.returncode") }}</dt><dd>{{ selected.returncode ?? "-" }}</dd></div>
+          <div v-if="metaString(selected, 'backend')"><dt>{{ t("tasks.detail.backend") }}</dt><dd>{{ metaString(selected, "backend") }}</dd></div>
+          <div v-if="metaString(selected, 'train_type')"><dt>{{ t("tasks.detail.trainType") }}</dt><dd>{{ metaString(selected, "train_type") }}</dd></div>
+          <div v-if="selectedCreatedAt"><dt>{{ t("tasks.detail.createdAt") }}</dt><dd>{{ formatTimestamp(selectedCreatedAt) }}</dd></div>
+          <div v-if="selectedCreatedAt"><dt>{{ t("tasks.detail.elapsed") }}</dt><dd>{{ elapsedLabel }}</dd></div>
+          <div v-if="metaString(selected, 'output_dir')"><dt>{{ t("tasks.detail.outputDir") }}</dt><dd :title="metaString(selected, 'output_dir')">{{ metaString(selected, "output_dir") }}</dd></div>
         </dl>
         <section v-if="selectedError" class="task-failure">
           <header>{{ t("tasks.detail.errorTitle") }}</header>
