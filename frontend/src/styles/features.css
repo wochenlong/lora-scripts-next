@@ -139,6 +139,10 @@
 .task-meta-grid dt{color:var(--text-faint);font-size:11px}
 .task-meta-grid dd{overflow:hidden;margin:4px 0 0;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
 .task-detail-actions{display:flex;gap:8px}
+.task-failure{display:grid;gap:8px;margin:0 0 18px;padding:14px 16px;background:rgba(220,38,38,.05);border:1px solid rgba(220,38,38,.25);border-left:3px solid var(--danger);border-radius:10px}
+.task-failure header{color:var(--danger);font-size:12px;font-weight:650}
+.task-failure-message{margin:0;color:var(--text);font-size:13px;word-break:break-word}
+.task-failure .log-lines{max-height:200px}
 .task-placeholder{display:grid;place-content:center;gap:6px;margin-top:18px;padding:16px;text-align:center;color:var(--text-faint);background:var(--surface-soft);border:1px dashed var(--border);border-radius:9px}
 .task-placeholder header{color:var(--text-soft);font-size:12px;font-weight:650}
 .task-placeholder p{margin:0;font-size:12px}

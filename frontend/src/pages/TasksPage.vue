@@ -97,6 +97,15 @@ function taskDetail(task: TrainingTask) {
   return String(task.metadata.config_path || task.metadata.command || t("tasks.noDetail"))
 }
 
+const selectedError = computed(() => {
+  const value = selected.value?.metadata.error
+  return typeof value === "string" ? value : ""
+})
+const selectedErrorLines = computed(() => {
+  const value = selected.value?.metadata.last_log_lines
+  return Array.isArray(value) ? value.filter((line): line is string => typeof line === "string") : []
+})
+
 function select(task: TrainingTask) {
   selectedId.value = task.id
 }
@@ -193,6 +202,11 @@ onBeforeUnmount(() => {
           <div><dt>{{ t("tasks.detail.config") }}</dt><dd :title="taskDetail(selected)">{{ taskDetail(selected) }}</dd></div>
           <div><dt>{{ t("tasks.detail.returncode") }}</dt><dd>{{ selected.returncode ?? "-" }}</dd></div>
         </dl>
+        <section v-if="selectedError" class="task-failure">
+          <header>{{ t("tasks.detail.errorTitle") }}</header>
+          <p class="task-failure-message">{{ selectedError }}</p>
+          <pre v-if="selectedErrorLines.length" class="log-lines">{{ selectedErrorLines.join("\n") }}</pre>
+        </section>
         <div class="task-detail-actions">
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
           <RouterLink class="ghost-button" to="/tensorboard.html">{{ t("tasks.detail.tensorboard") }}</RouterLink>

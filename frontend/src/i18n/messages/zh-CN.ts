@@ -223,6 +223,7 @@ export default {
       taskId: "任务 ID",
       config: "训练配置",
       returncode: "返回码",
+      errorTitle: "失败原因",
       overview: "概览",
       previewTitle: "训练预览图",
       previewEmpty: "暂无训练预览",

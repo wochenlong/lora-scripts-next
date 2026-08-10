@@ -223,6 +223,7 @@ export default {
       taskId: "Task ID",
       config: "Training Config",
       returncode: "Return Code",
+      errorTitle: "Failure reason",
       overview: "Overview",
       previewTitle: "Training previews",
       previewEmpty: "No training previews yet",
