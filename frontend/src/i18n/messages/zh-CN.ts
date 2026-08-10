@@ -204,6 +204,11 @@ export default {
     filterAria: "任务筛选",
     tabEmpty: "暂无任务",
     defaultName: "训练任务",
+    kind: {
+      musubiInstall: "插件安装 · Musubi-Tuner",
+      animaFastInstall: "插件安装 · Anima Fast",
+      assetsDownload: "模型资产下载",
+    },
     noDetail: "暂无任务描述",
     listLoadFail: "任务列表加载失败",
     terminate: {

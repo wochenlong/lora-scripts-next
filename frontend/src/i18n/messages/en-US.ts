@@ -204,6 +204,11 @@ export default {
     filterAria: "Task filter",
     tabEmpty: "No tasks",
     defaultName: "Training Task",
+    kind: {
+      musubiInstall: "Plugin Install · Musubi-Tuner",
+      animaFastInstall: "Plugin Install · Anima Fast",
+      assetsDownload: "Model Assets Download",
+    },
     noDetail: "No task description",
     listLoadFail: "Failed to load the task list",
     terminate: {

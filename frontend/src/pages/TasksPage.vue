@@ -89,7 +89,20 @@ const recentList = computed(() => orderedTasks.value.filter((task) => task.statu
 const visibleList = computed(() => activeTab.value === "running" ? runningList.value : recentList.value)
 const selected = computed(() => tasks.value.find((task) => task.id === selectedId.value))
 
+const KIND_LABEL_KEYS: Record<string, string> = {
+  musubi_install: "tasks.kind.musubiInstall",
+  anima_fast_install: "tasks.kind.animaFastInstall",
+  assets_download: "tasks.kind.assetsDownload",
+}
+
+function kindLabelKey(task: TrainingTask): string {
+  const kind = task.metadata.kind
+  return typeof kind === "string" ? (KIND_LABEL_KEYS[kind] ?? "") : ""
+}
+
 function taskName(task: TrainingTask) {
+  const kindKey = kindLabelKey(task)
+  if (kindKey) return t(kindKey)
   return String(task.metadata.output_name || task.metadata.trainer_file || task.metadata.backend || t("tasks.defaultName"))
 }
 
@@ -211,6 +224,7 @@ onBeforeUnmount(() => {
         <article v-for="task in visibleList" :key="task.id" class="task-row" :class="{ selected: task.id === selectedId }" :data-status="task.status.toLowerCase()" @click="select(task)">
           <span class="task-status">{{ statusLabels[task.status] || task.status }}</span>
           <div class="task-row-main"><h2>{{ taskName(task) }}</h2><code>{{ task.id }}</code></div>
+          <span v-if="kindLabelKey(task)" class="task-kind">{{ t(kindLabelKey(task)) }}</span>
         </article>
       </aside>
 
