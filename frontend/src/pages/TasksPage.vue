@@ -42,9 +42,15 @@ const lossSeries = computed(() => {
   return series
 })
 
+let insightController: AbortController | undefined
+
 async function loadInsights(taskId: string) {
+  insightController?.abort()
+  const controller = new AbortController()
+  insightController = controller
   try {
-    const [previewsData, data] = await Promise.all([tasksApi.previews(taskId), tasksApi.metrics(taskId)])
+    const [previewsData, data] = await Promise.all([tasksApi.previews(taskId, controller.signal), tasksApi.metrics(taskId, controller.signal)])
+    if (controller.signal.aborted || taskId !== selectedId.value) return
     previewEnabled.value = previewsData.preview_enabled !== false
     const images = previewsData.images
     if (images.length > 0) {
@@ -143,7 +149,10 @@ onMounted(async () => {
   }, 2000)
 })
 
-onBeforeUnmount(() => window.clearInterval(timer))
+onBeforeUnmount(() => {
+  window.clearInterval(timer)
+  insightController?.abort()
+})
 </script>
 
 <template>
