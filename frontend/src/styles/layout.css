@@ -51,4 +51,5 @@
 @media(max-width:520px){.hero h1{font-size:39px}.hero-actions{align-items:stretch;flex-direction:column}.form-canvas{padding:30px 18px}.skeleton-row{grid-template-columns:1fr;gap:7px}.migration-page{padding:10vh 22px}.tasks-page{padding:30px 16px}.tasks-header{align-items:flex-start;flex-direction:column}.task-summary{grid-template-columns:1fr}.task-actions{align-items:stretch;flex-direction:column}.task-actions a,.task-actions button{text-align:center}}
 
 .section-heading p,.panel-copy p,.hero p,.portal-card p{line-height:1.55}
+.integration-page header nav{display:flex;align-items:center;gap:14px}
 .task-main p,.task-actions a,.task-actions button,.task-status,.task-main code,.task-meta span{font-size:12px}
