@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it } from "vitest"
-import { lastSelectionFor, readEnginePrefs, rememberSelection, writeEnginePrefs } from "./prefs"
+import { lastSelection, lastSelectionFor, readEnginePrefs, rememberSelection, writeEnginePrefs } from "./prefs"
 
 const KEY = "nt.training.enginePrefs"
 
@@ -18,9 +18,15 @@ describe("engine prefs", () => {
     expect(lastSelectionFor("anima")).toEqual({ engine: "anima-fast", target: "lora" })
   })
 
+  it("remembers the full last selection when enabled", () => {
+    rememberSelection("sdxl", "kohya", "lora")
+    expect(lastSelection()).toEqual({ model: "sdxl", engine: "kohya", target: "lora" })
+  })
+
   it("does not remember when disabled", () => {
     writeEnginePrefs({ rememberLast: false, lastByModel: {} })
     rememberSelection("anima", "anima-fast", "lora")
     expect(lastSelectionFor("anima")).toBeUndefined()
+    expect(lastSelection()).toBeUndefined()
   })
 })
