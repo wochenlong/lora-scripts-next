@@ -16,6 +16,7 @@ let timer: number | undefined
 let insightTick = 0
 
 const previews = ref<TaskPreviewImage[]>([])
+const lightboxImage = ref<TaskPreviewImage | null>(null)
 const metrics = ref<TaskMetrics>({})
 const progress = ref<TaskProgress>({})
 const previewEnabled = ref(true)
@@ -329,7 +330,7 @@ onBeforeUnmount(() => {
         </div>
         <section class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0 }">
           <header>{{ t("tasks.detail.previewTitle") }}</header>
-          <div v-if="previews.length" class="preview-scroll"><div v-for="image in previews" :key="image.name" class="preview-item"><a :href="image.url" target="_blank" rel="noreferrer"><img :src="image.thumb_url || image.url" :alt="image.name" loading="lazy"></a><span v-if="imageLabel(image)">{{ imageLabel(image) }}</span></div></div>
+          <div v-if="previews.length" class="preview-scroll"><div v-for="image in previews" :key="image.name" class="preview-item"><button type="button" class="preview-thumb" @click="lightboxImage = image"><img :src="image.thumb_url || image.url" :alt="image.name" loading="lazy"></button><span v-if="imageLabel(image)">{{ imageLabel(image) }}</span></div></div>
           <p v-else-if="!previewEnabled">{{ t("tasks.detail.previewDisabled") }}</p>
           <p v-else>{{ t("tasks.detail.previewEmpty") }}</p>
         </section>
@@ -342,5 +343,9 @@ onBeforeUnmount(() => {
       </section>
       <section v-else class="task-detail task-detail-empty"><p>{{ t("tasks.detail.empty") }}</p></section>
     </div>
+
+    <el-dialog :model-value="!!lightboxImage" :title="lightboxImage ? (imageLabel(lightboxImage) || lightboxImage.name) : ''" align-center class="preview-lightbox" @update:model-value="lightboxImage = null">
+      <img v-if="lightboxImage" class="lightbox-image" :src="lightboxImage.url" :alt="lightboxImage.name">
+    </el-dialog>
   </div>
 </template>

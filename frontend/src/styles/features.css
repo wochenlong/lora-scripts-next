@@ -174,7 +174,7 @@
 .log-lines{max-height:320px;margin:0;padding:12px 14px;overflow:auto;white-space:pre;color:var(--text);background:var(--surface-inset);border:1px solid var(--border);border-radius:8px;font:11px/1.7 ui-monospace,monospace}
 .preview-scroll{display:flex;gap:8px;overflow-x:auto}
 .preview-item{display:grid;flex:0 0 auto;gap:4px}
-.preview-item a{display:block;overflow:hidden;border:1px solid var(--border);border-radius:8px}
+.preview-item a,.preview-item .preview-thumb{display:block;overflow:hidden;padding:0;background:none;border:1px solid var(--border);border-radius:8px;cursor:zoom-in}
 .preview-item span{max-width:110px;overflow:hidden;color:var(--text-faint);font-size:10px;text-align:center;text-overflow:ellipsis;white-space:nowrap}
 .task-progress{margin-bottom:18px}
 .task-progress-meta{display:flex;align-items:baseline;gap:12px;margin-bottom:6px;color:var(--text-soft);font-size:11px}
@@ -182,6 +182,8 @@
 .task-progress-track{height:8px;overflow:hidden;background:var(--surface-inset);border-radius:99px}
 .task-progress-track i{display:block;height:100%;background:var(--accent);border-radius:inherit;transition:width .4s ease}
 .preview-scroll img{display:block;height:110px}
+.preview-lightbox{width:auto;max-width:92vw}
+.lightbox-image{display:block;max-width:86vw;max-height:76vh}
 .loss-chart svg{display:block;width:100%;height:auto;max-height:200px}
 .loss-chart .axis{stroke:var(--border);stroke-width:1}
 .loss-chart .tick{fill:var(--text-faint);font-size:10px}
