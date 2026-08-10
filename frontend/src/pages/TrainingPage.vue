@@ -5,10 +5,11 @@ import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { parse, stringify } from "smol-toml"
 import DynamicSchemaForm from "../components/DynamicSchemaForm.vue"
+import ModelAssetsTools from "../components/ModelAssetsTools.vue"
 import SectionToc from "../components/SectionToc.vue"
 import { schemasApi } from "../api/schemas"
 import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/training"
-import { cloneFormModel, createDefaultModel, isFieldActive, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
+import { applyReadonlyDefaults, cloneFormModel, createDefaultModel, isFieldActive, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig } from "../training/params"
 import { moduleForTrainType } from "../training/modules"
@@ -65,6 +66,10 @@ const tocSections = computed(() => {
     }
   }
   return schema.value.sections.filter((section) => section.fields.some((field) => !field.hidden && selected.get(field.key) === field)).map((section) => ({ id: section.id, title: section.title }))
+})
+const modelToolsSlot = computed(() => {
+  const section = schema.value?.sections.find((item) => item.title === "训练用模型")
+  return section ? `tools-${section.id}` : "tools-none"
 })
 const trainLogHref = computed(() => started.value ? `${started.value.train_log_path || "/train-log"}?${started.value.train_log_query || `task_id=${encodeURIComponent(started.value.task_id)}`}` : "")
 
@@ -133,6 +138,7 @@ async function load() {
       const saved = JSON.parse(localStorage.getItem(autosaveKey()) || "null")
       model.value = saved && typeof saved === "object" ? { ...base, ...saved } : base
     } catch { model.value = base }
+    applyReadonlyDefaults(loaded, model.value, defaults)
     const cards = await schemasApi.graphicCards()
     if (cards.length > 1) {
       const options = cards.map((card, index) => typeof card === "object" ? (card.value ?? card.label ?? index) : card)
@@ -226,6 +232,11 @@ async function submit() {
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
+    if (props.schemaName === "krea2-lora") {
+      const preflight = await trainingApi.musubiPreflight(output.value)
+      if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
+      preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
+    }
     started.value = await trainingApi.run(output.value)
     tasksStore.refresh({ silent: true })
     saveHistory()
@@ -284,7 +295,11 @@ onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(a
           <slot name="form-top" />
           <div v-if="loading" class="schema-state"><strong>{{ t("training.loadingSchema") }}</strong><span>{{ t("training.loadingSchemaHint") }}</span></div>
           <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
-          <DynamicSchemaForm v-else-if="schema" v-model="model" :schema="schema" :errors="errors" />
+          <DynamicSchemaForm v-else-if="schema" v-model="model" :schema="schema" :errors="errors">
+        <template #[modelToolsSlot]>
+          <ModelAssetsTools :schema-name="schemaName" :model="model" />
+        </template>
+      </DynamicSchemaForm>
         </div>
       </div>
     </section>

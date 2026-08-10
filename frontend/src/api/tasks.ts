@@ -59,7 +59,7 @@ export const trainLogStreamUrl = (taskId: string) => `/api/train/log/stream/${en
 export const tasksApi = {
   list: async () => (await apiData<TasksData>("/api/tasks")).tasks,
   terminate: (taskId: string) => apiRequest(`/api/tasks/terminate/${encodeURIComponent(taskId)}`),
-  previews: (taskId: string) => apiData<TaskPreviewsData>(`/api/tasks/${encodeURIComponent(taskId)}/previews`),
-  metrics: (taskId: string) => apiData<TaskMetricsData>(`/api/tasks/${encodeURIComponent(taskId)}/metrics`),
+  previews: (taskId: string, signal?: AbortSignal) => apiData<TaskPreviewsData>(`/api/tasks/${encodeURIComponent(taskId)}/previews`, { signal }),
+  metrics: (taskId: string, signal?: AbortSignal) => apiData<TaskMetricsData>(`/api/tasks/${encodeURIComponent(taskId)}/metrics`, { signal }),
   logTail: (taskId: string, limit = 240) => apiData<TaskLogTail>(`/api/train/log/tail/${encodeURIComponent(taskId)}?limit=${limit}`),
 }

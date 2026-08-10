@@ -5,6 +5,7 @@ import { useI18n } from "vue-i18n"
 import { enginesApi, type EngineStatus } from "../api/engines"
 import { ENGINE_CATALOG, type EngineDefinition } from "../engines/catalog"
 import { readEnginePrefs, writeEnginePrefs } from "../engines/prefs"
+import type { TrainingEngine } from "../training/modules"
 
 const { t } = useI18n()
 const loadingId = ref<string | null>(null)
@@ -12,10 +13,26 @@ const statuses = ref<Record<string, EngineStatus>>({})
 const logs = ref<string[]>([])
 const progress = ref(0)
 const phase = ref("")
+const activeConsoleId = ref<string | null>(null)
 const rememberLast = ref(readEnginePrefs().rememberLast)
 let timer: number | undefined
 let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
+
+const MANAGED_ENGINES = new Set(["anima-fast", "musubi"])
+const INSTALL_STREAM_BASE: Record<string, string> = {
+  "anima-fast": "/api/plugins/anima-lora/install",
+  musubi: "/api/plugins/musubi/install",
+}
+
+function isManaged(id: string) {
+  return MANAGED_ENGINES.has(id)
+}
+
+function workingStatus(id: string): EngineStatus | undefined {
+  const status = statuses.value[id]
+  return status && ["installing", "auditing"].includes(status.state) ? status : undefined
+}
 
 const cards = computed(() => ENGINE_CATALOG.map((engine) => ({
   engine,
@@ -48,9 +65,11 @@ function stopPolling() {
   }
 }
 
-function attachStreams(taskId: string, logUrl?: string, progressUrl?: string) {
+function attachStreams(engineId: string, taskId: string, logUrl?: string, progressUrl?: string) {
   closeStreams()
-  logSource = new EventSource(logUrl || `/api/plugins/anima-lora/install/log/stream/${taskId}`)
+  activeConsoleId.value = engineId
+  const base = INSTALL_STREAM_BASE[engineId] || INSTALL_STREAM_BASE["anima-fast"]
+  logSource = new EventSource(logUrl || `${base}/log/stream/${taskId}`)
   logSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
@@ -60,7 +79,7 @@ function attachStreams(taskId: string, logUrl?: string, progressUrl?: string) {
       logs.value.push(event.data)
     }
   }
-  progressSource = new EventSource(progressUrl || `/api/plugins/anima-lora/install/progress/stream/${taskId}`)
+  progressSource = new EventSource(progressUrl || `${base}/progress/stream/${taskId}`)
   progressSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
@@ -79,34 +98,34 @@ async function refresh(reportError = true) {
     const next: Record<string, EngineStatus> = {}
     for (const item of list) next[item.id] = item
     statuses.value = next
-    const fast = next["anima-fast"]
-    const working = fast && ["installing", "auditing"].includes(fast.state)
-    if (working && fast.facts?.task_id && !logSource) attachStreams(fast.facts.task_id)
+    const active = activeConsoleId.value ? workingStatus(activeConsoleId.value) : undefined
+    const working = active ?? [...MANAGED_ENGINES].map((id) => workingStatus(id)).find(Boolean)
+    if (working?.facts?.task_id && !logSource) attachStreams(working.id, working.facts.task_id)
     if (!working) stopPolling()
   } catch (error) {
     if (reportError) ElMessage.error(error instanceof Error ? error.message : t("settings.engines.msg.statusFail"))
   }
 }
 
-async function install(forceReinstall = false) {
+async function install(engineId: TrainingEngine, forceReinstall = false) {
   try {
     await ElMessageBox.confirm(
-      forceReinstall ? t("settings.engines.confirm.reinstall") : t("settings.engines.confirm.animaFast"),
+      forceReinstall ? t("settings.engines.confirm.reinstall") : t(`settings.engines.confirm.install.${engineId}`),
       forceReinstall ? t("settings.engines.actions.reinstall") : t("settings.engines.actions.install"),
       { type: "warning" },
     )
-    loadingId.value = "anima-fast"
+    loadingId.value = engineId
     logs.value = []
     progress.value = 0
     phase.value = ""
-    const result = forceReinstall ? await enginesApi.repair("anima-fast") : await enginesApi.install("anima-fast")
+    const result = forceReinstall ? await enginesApi.repair(engineId) : await enginesApi.install(engineId)
     if (result.alreadyReady) {
-      if (result.status) statuses.value = { ...statuses.value, "anima-fast": result.status }
+      if (result.status) statuses.value = { ...statuses.value, [engineId]: result.status }
       ElMessage.success(t("settings.engines.msg.ready"))
       return
     }
     if (result.taskId) {
-      attachStreams(result.taskId, result.logStream, result.progressStream)
+      attachStreams(engineId, result.taskId, result.logStream, result.progressStream)
       if (!timer) timer = window.setInterval(() => refresh(false), 2000)
     }
     await refresh(false)
@@ -120,12 +139,12 @@ async function install(forceReinstall = false) {
   }
 }
 
-async function uninstall() {
+async function uninstall(engineId: TrainingEngine) {
   try {
     await ElMessageBox.confirm(t("settings.engines.confirm.uninstall"), t("settings.engines.actions.uninstall"), { type: "warning" })
-    loadingId.value = "anima-fast"
-    const status = await enginesApi.uninstall("anima-fast")
-    statuses.value = { ...statuses.value, "anima-fast": status }
+    loadingId.value = engineId
+    const status = await enginesApi.uninstall(engineId)
+    statuses.value = { ...statuses.value, [engineId]: status }
     logs.value = []
     progress.value = 0
     ElMessage.success(t("settings.engines.msg.uninstalled"))
@@ -147,8 +166,8 @@ function saveRemember() {
 
 onMounted(async () => {
   await refresh()
-  const fast = statuses.value["anima-fast"]
-  if (fast && ["installing", "auditing"].includes(fast.state)) {
+  const working = [...MANAGED_ENGINES].map((id) => workingStatus(id)).find(Boolean)
+  if (working) {
     timer = window.setInterval(() => refresh(false), 2000)
   }
 })
@@ -199,40 +218,40 @@ onBeforeUnmount(() => {
         <li v-if="card.engine.kind === 'planned'">{{ t("settings.engines.meta.planned") }}</li>
       </ul>
 
-      <p v-if="card.status.runtime?.animaRoot" class="engine-path">
+      <p v-if="card.status.runtime?.animaRoot || card.status.runtime?.musubiRoot" class="engine-path">
         <span>{{ t("settings.engines.meta.path") }}</span>
-        <code>{{ card.status.runtime.animaRoot }}</code>
+        <code>{{ card.status.runtime.animaRoot || card.status.runtime.musubiRoot }}</code>
       </p>
 
-      <div v-if="card.engine.id === 'anima-fast'" class="engine-card-actions">
+      <div v-if="isManaged(card.engine.id)" class="engine-card-actions">
         <button
           class="primary-action"
-          :disabled="loadingId === 'anima-fast' || ['installing', 'auditing', 'ready'].includes(card.status.state) || !card.status.featureEnabled"
-          @click="install(false)"
+          :disabled="loadingId === card.engine.id || ['installing', 'auditing', 'ready'].includes(card.status.state) || !card.status.featureEnabled"
+          @click="install(card.engine.id, false)"
         >
           {{ ["installing", "auditing"].includes(card.status.state) ? t("settings.engines.actions.installing") : t("settings.engines.actions.install") }}
         </button>
         <button
           class="secondary-action"
-          :disabled="loadingId === 'anima-fast' || !['broken', 'installed_unverified'].includes(card.status.state)"
+          :disabled="loadingId === card.engine.id || !['broken', 'installed_unverified'].includes(card.status.state)"
           :title="t('settings.engines.actions.reinstallHint')"
-          @click="install(true)"
+          @click="install(card.engine.id, true)"
         >
           {{ t("settings.engines.actions.reinstall") }}
         </button>
         <button
           class="secondary-action"
-          :disabled="loadingId === 'anima-fast' || ['installing', 'auditing', 'not_installed', 'coming_soon'].includes(card.status.state)"
-          @click="uninstall"
+          :disabled="loadingId === card.engine.id || ['installing', 'auditing', 'not_installed', 'coming_soon'].includes(card.status.state)"
+          @click="uninstall(card.engine.id)"
         >
           {{ t("settings.engines.actions.uninstall") }}
         </button>
-        <button class="ghost-button" :disabled="loadingId === 'anima-fast'" @click="refresh()">
+        <button class="ghost-button" :disabled="loadingId === card.engine.id" @click="refresh()">
           {{ t("settings.engines.actions.refresh") }}
         </button>
       </div>
 
-      <div v-if="card.engine.id === 'anima-fast' && (logs.length || ['installing', 'auditing'].includes(card.status.state))" class="engine-console">
+      <div v-if="isManaged(card.engine.id) && activeConsoleId === card.engine.id && (logs.length || ['installing', 'auditing'].includes(card.status.state))" class="engine-console">
         <header>
           <span>{{ phase || t("settings.engines.console.idle") }}</span>
           <b>{{ progress }}%</b>

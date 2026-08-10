@@ -45,10 +45,12 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
   },
   {
     id: "musubi",
-    kind: "planned",
+    kind: "optional",
     nameKey: "settings.engines.catalog.musubi.name",
     summaryKey: "settings.engines.catalog.musubi.summary",
-    managesRuntime: false,
+    sizeHintKey: "settings.engines.catalog.musubi.sizeHint",
+    requiresGpu: true,
+    managesRuntime: true,
   },
 ] as const
 

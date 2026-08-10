@@ -7,6 +7,7 @@ import sys
 import webbrowser
 import uuid
 from pathlib import Path
+from datetime import datetime
 from typing import Any, Optional
 
 _VALID_ACCELERATE_MIXED_PRECISION = frozenset({"no", "fp16", "bf16"})
@@ -14,6 +15,11 @@ _VALID_ACCELERATE_MIXED_PRECISION = frozenset({"no", "fp16", "bf16"})
 from mikazuki.app.models import APIResponse
 from mikazuki.anima_fast_backend.launcher import build_launch_spec
 from mikazuki.anima_fast_backend.service_resolver import default_resolver
+from mikazuki.musubi_backend.launcher import (
+    build_cache_latents_spec,
+    build_cache_text_encoder_spec,
+    build_train_spec,
+)
 from mikazuki.log import log
 from mikazuki.tasks import tm
 from mikazuki.launch_utils import base_dir_path
@@ -283,6 +289,102 @@ def run_train(toml_path: str,
             "metadata": task_metadata,
             "config_path": task_metadata["config_path"],
             "trainer_file": trainer_file,
+        },
+    )
+
+
+def run_musubi_train(toml_path: str,
+                     runtime,
+                     values: dict,
+                     gpu_ids: Optional[list] = None,
+                     metadata: Optional[dict] = None):
+    """Launch a musubi-tuner Krea 2 run: cache latents -> cache TE outputs -> train."""
+    from mikazuki.model_assets import krea2_tokenizer_dir, patch_krea2_tokenizer_path
+    from mikazuki.tasks import TaskStatus
+
+    log.info(f"musubi-tuner training started with config file / musubi 训练开始，使用配置文件: {toml_path}")
+    patch_krea2_tokenizer_path(runtime.musubi_root, krea2_tokenizer_dir(runtime.lora_next_root), log=log.info)
+    train_task_id = str(uuid.uuid4())
+    dataset_toml = Path(str(values["dataset_config"]))
+    cache_latents_spec = build_cache_latents_spec(
+        runtime, dataset_toml, str(values["vae"]), f"{train_task_id}-cache_latents", gpu_ids
+    )
+    cache_te_spec = build_cache_text_encoder_spec(
+        runtime, dataset_toml, str(values["text_encoder"]), f"{train_task_id}-cache_text_encoder", gpu_ids
+    )
+    train_spec = build_train_spec(runtime, Path(toml_path), train_task_id, gpu_ids)
+
+    base_metadata = {
+        "backend": "musubi",
+        "train_type": "krea2-lora",
+        "config_path": str(Path(toml_path).resolve()),
+        "dataset_config": str(dataset_toml.resolve()),
+        "musubi_root": str(runtime.musubi_root),
+        "musubi_python": str(runtime.python),
+        "train_task_id": train_task_id,
+    }
+    base_metadata.update(metadata or {})
+
+    stages = [
+        ("cache_latents", cache_latents_spec, "缓存图像 latents"),
+        ("cache_text_encoder", cache_te_spec, "缓存文本编码器输出"),
+        ("train", train_spec, "训练"),
+    ]
+    tasks = []
+    for stage_name, spec, label in stages:
+        stage_metadata = dict(base_metadata)
+        stage_metadata["stage"] = stage_name
+        stage_metadata["command"] = [str(part) for part in spec.command]
+        task_id = train_task_id if stage_name == "train" else f"{train_task_id}-{stage_name}"
+        task = tm.create_task(spec.command, spec.env, metadata=stage_metadata, cwd=str(spec.cwd), task_id=task_id)
+        if task is None:
+            return APIResponse(status="error", message=f"Failed to create musubi task / 无法创建 musubi {label} 任务")
+        tasks.append((label, task))
+
+    urls = build_train_log_urls(train_task_id)
+    _announce_train_log(train_task_id, urls)
+
+    def _mark_skipped(task, message: str):
+        task.status = TaskStatus.FAILED
+        task.returncode = -1
+        task.metadata["returncode"] = -1
+        task.metadata.setdefault("finished_at", datetime.now().timestamp())
+        task.metadata["error"] = message
+
+    def _run():
+        for index, (label, task) in enumerate(tasks):
+            try:
+                task.execute()
+                task.wait()
+                rc = task.process.returncode if task.process else -1
+            except Exception as e:
+                rc = -1
+                log.error(f"musubi {label} failed to start / 阶段启动失败: {e}")
+            if rc != 0:
+                log.error(f"musubi {label} failed / 阶段失败 (exit {rc})")
+                for _label, pending in tasks[index + 1:]:
+                    _mark_skipped(pending, f"上一阶段「{label}」失败 (exit {rc})，已跳过")
+                return
+            log.info(f"musubi {label} finished / 阶段完成")
+        log.info("musubi-tuner training finished / musubi 训练完成")
+
+    coro = asyncio.to_thread(_run)
+    asyncio.create_task(coro)
+
+    return APIResponse(
+        status="success",
+        message=f"musubi-tuner training started / musubi 训练开始 ID: {train_task_id}",
+        data={
+            "task_id": train_task_id,
+            "cache_latents_task_id": tasks[0][1].task_id,
+            "cache_te_task_id": tasks[1][1].task_id,
+            "train_log_path": "/train-log",
+            "train_log_query": f"task_id={train_task_id}",
+            "train_log_stream": f"/api/train/log/stream/{train_task_id}",
+            "train_log_url": urls["viewer"],
+            "train_log_stream_url": urls["stream"],
+            "metadata": base_metadata,
+            "config_path": base_metadata["config_path"],
         },
     )
 
