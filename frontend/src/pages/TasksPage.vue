@@ -197,13 +197,18 @@ const selectedCreatedAt = computed(() => {
   const value = selected.value?.metadata.created_at
   return typeof value === "number" && value > 0 ? value : null
 })
+const selectedFinishedAt = computed(() => {
+  const value = selected.value?.metadata.finished_at
+  return typeof value === "number" && value > 0 ? value : null
+})
 function formatTimestamp(ts: number): string {
   return new Date(ts * 1000).toLocaleString()
 }
 const elapsedLabel = computed(() => {
   const created = selectedCreatedAt.value
   if (!created) return ""
-  const seconds = Math.max(0, Math.floor((now.value - created * 1000) / 1000))
+  const end = selectedFinishedAt.value ? selectedFinishedAt.value * 1000 : now.value
+  const seconds = Math.max(0, Math.floor((end - created * 1000) / 1000))
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
   const secs = seconds % 60

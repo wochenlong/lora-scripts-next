@@ -91,6 +91,7 @@ class Task:
             thread.join(timeout=2)
 
     def _record_completion(self, returncode):
+        self.metadata.setdefault("finished_at", datetime.now().timestamp())
         self.metadata["returncode"] = returncode
         if returncode == 0:
             self.metadata.pop("last_log_lines", None)

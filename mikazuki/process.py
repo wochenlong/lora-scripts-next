@@ -7,6 +7,7 @@ import sys
 import webbrowser
 import uuid
 from pathlib import Path
+from datetime import datetime
 from typing import Any, Optional
 
 _VALID_ACCELERATE_MIXED_PRECISION = frozenset({"no", "fp16", "bf16"})
@@ -347,6 +348,7 @@ def run_musubi_train(toml_path: str,
         task.status = TaskStatus.FAILED
         task.returncode = -1
         task.metadata["returncode"] = -1
+        task.metadata.setdefault("finished_at", datetime.now().timestamp())
         task.metadata["error"] = message
 
     def _run():
