@@ -1,0 +1,364 @@
+/* Loaded last. GitHub Dark / Cursor–style visual hierarchy for html.dark only. */
+
+/* ——— Controls ——— */
+html.dark .el-input__wrapper,
+html.dark .el-textarea__inner,
+html.dark .el-select__wrapper,
+html.dark .el-input-number {
+  background-color: var(--surface-inset) !important;
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+html.dark .el-input__wrapper:hover,
+html.dark .el-select__wrapper:hover,
+html.dark .el-textarea__inner:hover {
+  box-shadow: 0 0 0 1px #8b949e inset !important;
+}
+
+html.dark .el-input__wrapper.is-focus,
+html.dark .el-select__wrapper.is-focused,
+html.dark .el-textarea__inner:focus,
+html.dark .schema-field .el-input__wrapper.is-focus,
+html.dark .schema-field .el-select__wrapper.is-focused {
+  box-shadow:
+    0 0 0 1px #388bfd inset,
+    0 0 0 3px var(--focus-ring) !important;
+}
+
+html.dark .schema-field .el-input__wrapper,
+html.dark .schema-field .el-select__wrapper {
+  box-shadow: 0 0 0 1px var(--border) inset !important;
+}
+
+html.dark .schema-field .el-input__wrapper:hover,
+html.dark .schema-field .el-select__wrapper:hover {
+  box-shadow: 0 0 0 1px #8b949e inset !important;
+}
+
+html.dark .el-input__inner,
+html.dark .el-textarea__inner,
+html.dark .el-select__selected-item,
+html.dark .el-input-number .el-input__inner {
+  color: var(--text);
+}
+
+html.dark .el-select__placeholder,
+html.dark .el-input__inner::placeholder,
+html.dark .el-textarea__inner::placeholder {
+  color: var(--text-faint);
+}
+
+html.dark .el-select-dropdown,
+html.dark .el-popper.is-light,
+html.dark .el-dialog,
+html.dark .el-message-box {
+  --el-bg-color-overlay: var(--surface);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  border-radius: var(--radius);
+  box-shadow: 0 8px 24px rgba(1, 4, 9, .55);
+}
+
+html.dark .el-select-dropdown__item {
+  color: var(--text-label);
+  border-radius: 4px;
+}
+
+html.dark .el-select-dropdown__item.is-hovering,
+html.dark .el-select-dropdown__item:hover {
+  background: rgba(177, 186, 196, .12);
+}
+
+html.dark .el-select-dropdown__item.is-selected {
+  color: var(--accent-dark);
+  font-weight: 650;
+  background: var(--accent-soft);
+}
+
+html.dark .el-switch__core {
+  border-color: var(--border);
+  background: #30363d;
+}
+
+html.dark .el-switch.is-checked .el-switch__core {
+  background: #1f6feb;
+  border-color: #1f6feb;
+}
+
+html.dark .el-button {
+  --el-button-bg-color: var(--surface-inset);
+  --el-button-border-color: var(--border);
+  --el-button-text-color: var(--text-label);
+  --el-button-hover-bg-color: #30363d;
+  --el-button-hover-border-color: #8b949e;
+  --el-button-hover-text-color: var(--text);
+  border-radius: var(--radius-sm);
+}
+
+html.dark .el-button--primary {
+  --el-button-bg-color: rgba(56, 139, 253, .18);
+  --el-button-border-color: rgba(56, 139, 253, .45);
+  --el-button-text-color: #79b8ff;
+  --el-button-hover-bg-color: rgba(56, 139, 253, .28);
+  --el-button-hover-border-color: rgba(56, 139, 253, .7);
+  --el-button-hover-text-color: #a5d6ff;
+}
+
+html.dark .el-input-number__decrease,
+html.dark .el-input-number__increase {
+  background: var(--surface-soft);
+  color: var(--text-soft);
+  border-color: var(--border);
+}
+
+/* ——— Structure: quieter chrome, clearer depth ——— */
+html.dark .schema-form {
+  gap: 28px;
+}
+
+html.dark .schema-section,
+html.dark .selector-card,
+html.dark .form-skeleton,
+html.dark .settings-card,
+html.dark .unsupported-hint {
+  background: var(--surface);
+  border: 1px solid var(--border-muted);
+  box-shadow: none;
+  border-radius: var(--radius-lg);
+}
+
+html.dark .schema-section > header {
+  padding: 18px 4px 10px;
+  margin: 0 16px;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+html.dark .schema-section h2,
+html.dark .selector-card h2,
+html.dark .settings-card h2,
+html.dark .section-heading h1,
+html.dark .panel-copy h2 {
+  color: var(--text-title);
+  font-weight: 700;
+  letter-spacing: -.01em;
+}
+
+html.dark .schema-section > header span {
+  color: var(--text-faint);
+}
+
+html.dark .schema-fields {
+  gap: 22px;
+  padding: 8px 20px 22px;
+}
+
+html.dark .field-label code {
+  color: var(--text-label);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+html.dark .field-description {
+  color: var(--text-desc);
+  font-size: 13px;
+  line-height: 1.55;
+  opacity: 1;
+}
+
+html.dark .section-heading p,
+html.dark .panel-copy p,
+html.dark .selector-hint,
+html.dark .selector-grid label {
+  color: var(--text-desc);
+}
+
+html.dark .selector-grid select {
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+html.dark .selector-grid select:focus {
+  border-color: #388bfd;
+  outline: none;
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+html.dark .segmented {
+  background: var(--bg);
+  border: 1px solid var(--border);
+}
+
+html.dark .segmented button {
+  color: var(--text-soft);
+}
+
+html.dark .segmented button.active,
+html.dark .segmented a.active {
+  color: var(--text-title);
+  background: var(--surface-inset);
+  box-shadow: none;
+}
+
+html.dark .workbench-selector {
+  gap: 16px;
+  margin-bottom: 28px;
+}
+
+html.dark .nav-link {
+  color: var(--text-soft);
+}
+
+html.dark .nav-link.active {
+  color: var(--text-title);
+  background: rgba(56, 139, 253, .12);
+}
+
+html.dark .brand-mark {
+  background: linear-gradient(145deg, #388bfd, #1f6feb);
+  box-shadow: none;
+}
+
+html.dark .brand strong {
+  color: var(--text-title);
+}
+
+html.dark .sidebar {
+  background: var(--sidebar);
+  border-right-color: var(--border-muted);
+}
+
+html.dark .control-panel {
+  background: var(--surface);
+  border-left-color: var(--border-muted);
+}
+
+html.dark .training-layout.bare .control-panel {
+  background: var(--surface) !important;
+  border: 1px solid var(--border-muted) !important;
+  border-radius: var(--radius-lg);
+  box-shadow: none !important;
+}
+
+html.dark .preview-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: none;
+}
+
+html.dark .preview-panel header {
+  color: var(--text-soft);
+  border-bottom-color: var(--border-muted);
+  background: transparent;
+}
+
+html.dark .preview-panel pre {
+  color: var(--text) !important;
+  background: var(--bg) !important;
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+html.dark .panel-actions button,
+html.dark .preview-actions button,
+html.dark .config-list button,
+html.dark .ghost-button,
+html.dark .refresh-button,
+html.dark .secondary-action,
+html.dark .schema-validate,
+html.dark .filepicker-control .el-button {
+  color: var(--text-label) !important;
+  background: var(--surface-inset) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm) !important;
+  box-shadow: none !important;
+}
+
+html.dark .panel-actions button:hover,
+html.dark .preview-actions button:hover,
+html.dark .secondary-action:hover {
+  color: var(--text) !important;
+  background: #30363d !important;
+  border-color: #8b949e !important;
+}
+
+/* Primary CTA: same blue family as switches/focus — no GitHub green. */
+html.dark .train-submit,
+html.dark .primary-action {
+  background: rgba(56, 139, 253, .16) !important;
+  border: 1px solid rgba(56, 139, 253, .4) !important;
+  color: #79b8ff !important;
+  box-shadow: none !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+html.dark .train-submit:hover,
+html.dark .primary-action:hover {
+  background: rgba(56, 139, 253, .26) !important;
+  border-color: rgba(56, 139, 253, .65) !important;
+  color: #a5d6ff !important;
+}
+
+html.dark .stop-training,
+html.dark .danger-action {
+  background: var(--surface-inset) !important;
+  border: 1px solid var(--border) !important;
+  color: #d2a8a8 !important;
+  box-shadow: none !important;
+  border-radius: var(--radius-sm) !important;
+}
+
+html.dark .stop-training:hover,
+html.dark .danger-action:hover {
+  background: rgba(248, 81, 73, .1) !important;
+  border-color: rgba(248, 81, 73, .45) !important;
+  color: #ff7b72 !important;
+}
+
+html.dark .assets-list li,
+html.dark .check-row,
+html.dark .started-task {
+  background: var(--surface-inset);
+  border-color: var(--border);
+  box-shadow: none;
+}
+
+html.dark .install-console,
+html.dark .log-body,
+html.dark .assets-log {
+  background: var(--bg) !important;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-label);
+}
+
+html.dark .rail-handle {
+  background: var(--surface-inset);
+  border-color: var(--border);
+  color: var(--text-label);
+}
+
+html.dark .rail-handle:hover {
+  background: #30363d;
+  border-color: #8b949e;
+  color: var(--text);
+}
+
+html.dark .model-assets-tools button,
+html.dark .path-row button {
+  color: var(--text-label) !important;
+  background: var(--surface-inset) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: var(--radius-sm);
+}
+
+html.dark .settings-page,
+html.dark .workbench-page,
+html.dark .tasks-board,
+html.dark .form-canvas {
+  background: var(--bg);
+}

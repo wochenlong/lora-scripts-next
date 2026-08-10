@@ -38,7 +38,7 @@ Schema.intersect([
     }).description("数据集设置"),
 
     Schema.object({
-        output_name: Schema.string().default("aki").description("模型保存名称"),
+        output_name: Schema.string().default("next-lora").description("模型保存名称（Next Trainer 默认；建议按角色/风格自行改名）"),
         output_dir: Schema.string().role("filepicker", { type: "folder" }).default("./output").description("模型保存文件夹"),
         save_model_as: Schema.union(["safetensors", "pt", "ckpt"]).default("safetensors").description("模型保存格式"),
         save_precision: Schema.union(["fp16", "float", "bf16"]).default("fp16").description("模型保存精度"),

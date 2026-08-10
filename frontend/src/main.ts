@@ -22,6 +22,7 @@ import "./styles/layout.css"
 import "./styles/features.css"
 import "./styles/anima-fast.css"
 import "./styles/content-pages.css"
+import "./styles/dark-theme.css"
 
 const app = createApp(App)
 for (const component of [ElButton, ElConfigProvider, ElDialog, ElIcon, ElInput, ElInputNumber, ElOption, ElSelect, ElSwitch]) app.component(component.name!, component)
