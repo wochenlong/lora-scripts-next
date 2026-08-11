@@ -175,6 +175,7 @@ Anima Fast 文档：[docs/anima-fast.md](docs/anima-fast.md)
 | 整合包补充 | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
 | 打标模型 | [docs/tagger-models.md](docs/tagger-models.md) |
 | Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
+| **Krea 2 Linux 多卡（Musubi / `dev`）** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
 | 训练监控 | [docs/train-monitor.md](docs/train-monitor.md) |
 | 仓库布局契约 | [docs/repo-layout.md](docs/repo-layout.md) |
 
