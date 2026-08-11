@@ -85,6 +85,12 @@ describe("searchTagList", () => {
     expect(searchTagList(tagList, "girl", "suffix").map((entry) => entry.tag)).toEqual(["1girl"])
     expect(searchTagList(tagList, "ears", "suffix").map((entry) => entry.tag)).toEqual(["cat ears"])
   })
+
+  it("ORs multiple terms separated by commas or spaces", () => {
+    expect(searchTagList(tagList, "bplay, masterpiece").map((entry) => entry.tag)).toEqual(["bplay", "masterpiece"])
+    expect(searchTagList(tagList, "girl ears").map((entry) => entry.tag)).toEqual(["1girl", "cat ears"])
+    expect(searchTagList(tagList, "girl， ears", "suffix").map((entry) => entry.tag)).toEqual(["1girl", "cat ears"])
+  })
 })
 
 describe("estimateTokenLength", () => {

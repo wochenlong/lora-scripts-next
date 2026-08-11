@@ -49,12 +49,14 @@ export function sortTagList(tags: TagCount[], sortBy: TagSortBy, order: SortOrde
 }
 
 export function searchTagList(tags: TagCount[], search: string, mode: TagSearchMode = "substring"): TagCount[] {
-  const needle = search.trim().toLowerCase()
-  if (!needle) return tags
+  const terms = search.toLowerCase().split(/[,，\s]+/).filter(Boolean)
+  if (!terms.length) return tags
   return tags.filter(({ tag }) => {
     const candidate = tag.toLowerCase()
-    if (mode === "prefix") return candidate.startsWith(needle)
-    if (mode === "suffix") return candidate.endsWith(needle)
-    return candidate.includes(needle)
+    return terms.some((needle) => {
+      if (mode === "prefix") return candidate.startsWith(needle)
+      if (mode === "suffix") return candidate.endsWith(needle)
+      return candidate.includes(needle)
+    })
   })
 }

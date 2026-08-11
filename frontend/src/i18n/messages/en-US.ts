@@ -504,7 +504,7 @@ export default {
     },
     tagFilter: {
       title: "Filter by Tags",
-      searchPlaceholder: "Search tags…",
+      searchPlaceholder: "Search tags… (comma/space = OR)",
       searchModeLabel: "Search mode",
       searchModeSubstring: "Substring",
       searchModePrefix: "Prefix",

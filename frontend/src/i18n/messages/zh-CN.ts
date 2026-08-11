@@ -504,7 +504,7 @@ export default {
     },
     tagFilter: {
       title: "按 tag 筛图",
-      searchPlaceholder: "检索 tag…",
+      searchPlaceholder: "检索 tag…（逗号/空格分隔为 OR）",
       searchModeLabel: "检索方式",
       searchModeSubstring: "子串",
       searchModePrefix: "前缀",
