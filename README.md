@@ -167,7 +167,7 @@ See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 | Portable notes | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
 | Tagger models | [docs/tagger-models.md](docs/tagger-models.md) |
 | Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
-| **Krea 2 multi-GPU on Linux (Musubi / `dev`)** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
+| **Krea 2 multi-GPU (Linux host + WebUI / `dev`)** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
 | Train monitor | [docs/train-monitor.md](docs/train-monitor.md) |
 | Repo layout | [docs/repo-layout.md](docs/repo-layout.md) |
 

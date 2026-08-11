@@ -1,198 +1,146 @@
-# Linux：Krea 2 多卡训练（`dev` / Musubi）
+# Linux WebUI：Krea 2 多卡训练（`dev` / Musubi）
 
-面向 **`dev` 分支**（Vue3 内测线）在 Linux 上用 **Musubi-Tuner** 训 **Krea 2 LoRA**，并启用 **多 GPU（Accelerate DDP）**。
+面向：**机器在 Linux（本机或云主机）上部署 Next Trainer，日常用浏览器打开 WebUI 训练**，并在界面里勾选多张 GPU 训 **Krea 2 LoRA**。
+
+不要求你会手写 `accelerate` 命令；多卡由 WebUI 提交后自动启用（`dev` 含 [#229](https://github.com/wochenlong/lora-scripts-next/pull/229)）。
 
 | 项 | 说明 |
 |----|------|
-| 通道 | Git 分支 **`dev`**（含 [#229](https://github.com/wochenlong/lora-scripts-next/pull/229) 多卡启动器） |
-| 引擎 | **Musubi**（独立 venv，与 Kohya 主环境隔离） |
-| 上游 | [kohya-ss/musubi-tuner](https://github.com/kohya-ss/musubi-tuner)（官方示例本身用 `accelerate launch`） |
-| Windows 整合包 | 多卡同样走前端「显卡设置」；本篇以 **Linux 源码 / 云主机** 为主 |
+| 界面 | Vue3 四栏（训练 / 数据集 / 任务 / 设置），浏览器访问 |
+| 通道 | Git 分支 **`dev`** |
+| 引擎 | **Musubi**（页内安装，独立环境） |
+| 多卡入口 | 训练表单 **「显卡设置」** 多选 GPU |
 
-> 实现说明：训练阶段由 `mikazuki/musubi_backend/launcher.py` 调用 musubi venv 的  
-> `python -m accelerate.commands.launch`；`gpu_ids` ≥ 2 时附加 `--multi_gpu --num_processes N`。  
-> **缓存 latents / 文本编码器** 仍固定在**第一张**选中的 GPU（单进程），避免多卡抢写缓存。
+部署主环境、端口映射等若尚未完成，请先按 [AutoDL / Linux 部署](./autodl-deploy.md) 或项目 README 把 **WebUI 跑起来**，再回到本文做 Krea2 多卡。
 
 ---
 
-## 1. 环境要求
+## 你需要准备什么
 
-- Linux + **NVIDIA 驱动**（建议 2 张及以上同架构 GPU；异构卡可能不稳定）
-- Python **3.10**（与本仓库一致）
-- CUDA / Torch 与 Musubi 安装选项一致（页内/CLI 常用 **`cu128`**）
-- 磁盘：底模约 **35 GB**（DiT + TE + VAE）+ 数据集缓存 + 输出
-- 网络：首次安装 Musubi 需访问 GitHub / PyPI / PyTorch wheel
-
-确认 GPU：
-
-```bash
-nvidia-smi
-# 应看到多张卡，例如 GPU 0 / GPU 1
-```
+- Linux + 至少 **2 张** NVIDIA GPU（同架构更稳；云主机确认实例挂了多卡）
+- 已能打开 WebUI（常见 `http://<主机>:28000`，侧栏版本为 **`2.9.x-beta.*`**，且已是含多卡修复的 `dev`）
+- 磁盘：底模约 **35 GB** + 数据集与缓存 + 输出
+- 首次装 Musubi、下底模需要联网
 
 ---
 
-## 2. 获取 `dev` 并启动 WebUI
-
-```bash
-git clone https://github.com/wochenlong/lora-scripts-next.git
-cd lora-scripts-next
-git checkout dev
-git pull
-
-# 主环境安装（按你机器习惯；可用国内镜像）
-# python -m venv .venv && source .venv/bin/activate
-# pip install -r requirements.txt   # 或项目文档推荐的 setup 流程
-
-bash run_gui.sh
-# 国内镜像可选：USE_CN_MIRROR=1 bash run_gui.sh
-```
-
-浏览器打开 **http://127.0.0.1:28000**（或实例映射端口）。  
-云主机（如 AutoDL）可参考 [docs/autodl-deploy.md](./autodl-deploy.md) 完成主环境与端口。
-
-侧栏版本号应落在 **`2.9.x-beta.*`**（含多卡修复的 `dev` 提交之后）。
-
----
-
-## 3. 安装 Musubi 引擎
-
-Musubi **不能**并入主 `requirements.txt`，必须独立 venv。
-
-### 方式 A：WebUI（推荐）
-
-1. **设置 → 训练引擎 → Musubi → 安装**（或训练页选 Krea2 × Musubi 时按引导安装）
-2. CUDA 口味选 **`cu128`**（与当前默认一致；勿与 Anima Fast 的 cu130 混为一谈）
-3. 等待状态变为 **就绪 / ready**
-
-### 方式 B：命令行
-
-在仓库根目录：
-
-```bash
-python scripts/cli/install_musubi.py --cuda-extra cu128
-```
-
-安装完成后，常见布局类似：
+## 推荐流程（全在浏览器里）
 
 ```text
-extensions/musubi_tuner/   # 或 vendor / 配置指定路径
-  .venv/                   # musubi 专用 Python + accelerate + torch
-  source/ 或 src/          # musubi-tuner 源码
+打开 WebUI
+  → 设置：安装 Musubi（就绪）
+  → 训练：选 Krea 2 × Musubi × LoRA
+  → 填底模 / 数据 / 参数
+  →「显卡设置」多选 GPU
+  → 开始训练
+  → 任务页看进度与日志
 ```
 
 ---
 
-## 4. 准备 Krea 2 底模
+## 1. 安装 Musubi（设置页）
 
-相对项目根（与 `gui.py` 同级）放置：
+1. 侧栏进入 **设置**。
+2. 打开 **训练引擎**（或同类「引擎」区块）。
+3. 找到 **Musubi** → 点 **安装**（未就绪时也可从训练页引导进入）。
+4. CUDA 选 **`cu128`**（默认路线；不要和 Anima Fast 的 cu130 搞混）。
+5. 等到状态为 **就绪 / ready**。安装过程可在页面日志里看进度。
 
-```text
-sd-models/krea2/
-  krea2.safetensors                 # DiT RAW
-  qwen_image_vae.safetensors        # VAE
-  qwen3_vl_4b.safetensors           # 文本编码器
-```
-
-训练页默认路径与上表一致。也可在页内「下载资源」拉取（若已提供条目）。  
-**fp8**：若开 `fp8_base`，必须同时开 `fp8_scaled`（Krea2 硬约束）。
+Musubi 是独立环境，装好后一般不用再进终端。
 
 ---
 
-## 5. 数据集
+## 2. 准备底模与数据（仍用界面）
 
-推荐 Kohya 风格子目录（WebUI 会转成 musubi dataset toml）：
+### 底模
+
+训练页默认路径（相对项目根）：
+
+| 字段 | 典型路径 |
+|------|----------|
+| DiT（RAW） | `./sd-models/krea2/krea2.safetensors` |
+| VAE | `./sd-models/krea2/qwen_image_vae.safetensors` |
+| 文本编码器 | `./sd-models/krea2/qwen3_vl_4b.safetensors` |
+
+把文件放到上述位置，或在训练页用 **文件选择 / 下载资源**（若条目可用）填好三条路径即可。
+
+**fp8：** 若勾选 `fp8_base`，必须同时勾选 `fp8_scaled`，否则任务会失败。
+
+### 数据集
+
+1. 侧栏 **数据集**：打标、改 caption（可选）。
+2. 目录建议：
 
 ```text
-train/
-  10_character/
-    xxx.png
-    xxx.txt
-  5_style/
+某数据根/
+  10_角色名/     ← 前缀数字 = 重复次数
+    图.png + 同名.txt
+  5_风格名/
     ...
 ```
 
-目录名前缀数字为 `num_repeats`。打标可用本仓库数据集页 / WD14。
+3. 训练页「训练数据目录」指向该根目录即可（WebUI 会转成 Musubi 需要的配置）。
 
 ---
 
-## 6. WebUI 多卡开训（主路径）
+## 3. 在训练页开多卡
 
-1. 打开 **训练**，选择：
+1. 侧栏点 **训练**。
+2. 顶栏选择：
    - 基础模型：**Krea 2**
    - 引擎：**Musubi**
    - 目标：**LoRA**
-2. 填好 DiT / VAE / TE、数据集目录、输出名与训练步数等。
-3. 若机器有 **≥ 2 张 GPU**，表单会出现 **「显卡设置」**：
-   - **多选**要用的卡（例如 GPU 0 与 GPU 1）
-   - 只选一张 = 单卡（仍走 `accelerate launch` 单进程）
-4. 校验 → **开始训练**。
-5. 到 **任务** 页查看三段流水线：
-   1. `cache_latents`（单卡）
-   2. `cache_text_encoder`（单卡）
-   3. `train`（多卡时应出现 accelerate multi-GPU / 多 process）
+3. 填好模型路径、数据目录、输出名、epoch/步数、学习率等（可先用页内预设再改）。
+4. 找到 **「显卡设置」**（仅当系统检测到 **≥ 2 张** GPU 时出现）：
+   - **多选**要参与训练的卡（例如 GPU 0、GPU 1）
+   - 只选一张 = 单卡训练
+5. 点 **校验**（可选）→ **开始训练**，确认占用 GPU 的提示。
 
-可用另一终端观察：
-
-```bash
-watch -n 1 nvidia-smi
-```
-
-训练阶段两张卡都应有明显显存/利用率；若只有一张在动，检查是否只勾了一张卡，或 `dev` 是否尚未包含 #229。
-
-### 有效 batch 怎么理解
-
-多卡时 Accelerate DDP 通常使 **全局有效 batch ≈ 每卡 `train_batch_size` × GPU 数**（再乘梯度累积）。  
-从单卡迁到多卡时，可酌情下调每卡 batch 或学习率，并以验证图为准。
+之后请到 **任务** 页盯盘，不要关浏览器标签也没关系（任务在后台跑），但建议留着任务页看状态。
 
 ---
 
-## 7. 进阶：不经 WebUI 的 accelerate 命令（对照用）
+## 4. 任务页你会看到什么
 
-WebUI 已代写 TOML 并编排 cache→train。若你在 musubi 目录手工复现（排障时有用），形态接近上游文档：
+一次提交通常是三段（名称可能带 UUID 后缀）：
 
-```bash
-# 进入 musubi 根目录，并激活其 .venv
-cd /path/to/musubi-tuner   # 以本机 extensions/musubi_tuner 等实际路径为准
-source .venv/bin/activate
+| 阶段 | 界面上大致含义 | 多卡时 |
+|------|----------------|--------|
+| 缓存 latents | 图像潜空间缓存 | **只用你勾选的第一张卡** |
+| 缓存文本编码器 | TE 输出缓存 | **同上，单卡** |
+| 训练 | 真正训 LoRA | **多卡一起跑** |
 
-export CUDA_VISIBLE_DEVICES=0,1
+因此：前面两段只有一张卡忙是正常的；进入 **训练** 阶段后，多张卡才应同时有负载。
 
-# 先单卡完成 cache（示例参数按你的 toml 改）
-python krea2_cache_latents.py --dataset_config /path/to/dataset.toml --vae /path/to/vae.safetensors --skip_existing
-python krea2_cache_text_encoder_outputs.py --dataset_config /path/to/dataset.toml --text_encoder /path/to/te.safetensors --skip_existing
-
-# 再多卡训练（与 WebUI 启动器等价思路）
-accelerate launch --multi_gpu --num_processes 2 \
-  --num_cpu_threads_per_process 1 --mixed_precision bf16 \
-  krea2_train_network.py --config_file /path/to/train.toml
-```
-
-日常请优先用 WebUI，避免手工 TOML 与 GUI 字段不一致。
-
-首次使用 Accelerate 也可在 musubi venv 内执行一次 `accelerate config`（本机、This machine、多 GPU）；**WebUI 路径会在命令行显式传 `--multi_gpu`，不依赖你是否跑过 config**。
+失败时打开该任务详情：看顶部错误摘要和末几行日志（例如 fp8 成对问题会直接写在错误里）。
 
 ---
 
-## 8. 常见问题
+## 5. 参数小提示（多卡）
 
-| 现象 | 处理 |
-|------|------|
-| 没有「显卡设置」 | 通常只有 **1** 张可见 GPU；检查 `nvidia-smi`、驱动、容器是否只挂了一张卡 |
-| 多选了卡但只有一张在跑 | 确认已 `git pull` 到含 #229 的 `dev`；看训练任务命令是否含 `accelerate.commands.launch` 与 `--multi_gpu` |
-| `fp8_scaled requires fp8_base` | 成对勾选 fp8_base + fp8_scaled，或都关掉 |
-| Musubi 安装失败 | 查引擎安装日志；网络 / CUDA extra 是否匹配；可重试「修复」 |
-| cache 很慢、训练才双卡 | **预期行为**：cache 只用第一张卡 |
-| NCCL / 分布式超时 | 确认同机多卡、驱动正常；可试减少进程数或换更稳的驱动；日志留 Issue |
-
-反馈 Issue 时请附：`dev` commit / 侧栏版本、`nvidia-smi`、所选 `gpu_ids`、任务详情里的 command 摘要与失败末几行日志。
+- 全局有效 batch 往往 ≈ **每卡 batch × GPU 数**（再乘梯度累积）。从单卡改双卡时，可略降每卡 batch 或学习率，以预览图为准。
+- 预览 / Loss：以任务页与训练监控入口为准；预览变化小多半是训练参数问题，不是「多卡没开」。
+- 不想多卡时：在「显卡设置」里只留一张即可。
 
 ---
 
-## 9. 相关链接
+## 6. 常见问题（GUI）
 
-- Issue：[feat(musubi): Krea2 多卡训练](https://github.com/wochenlong/lora-scripts-next/issues/228)
-- PR：[#229](https://github.com/wochenlong/lora-scripts-next/pull/229)
-- 引擎计划（维护者）：[docs/musubi-tuner-engine-plan.md](./musubi-tuner-engine-plan.md)
-- AutoDL 主环境：[docs/autodl-deploy.md](./autodl-deploy.md)
-- 上游 Krea2：[musubi-tuner docs/krea2.md](https://github.com/kohya-ss/musubi-tuner/blob/main/docs/krea2.md)
+| 现象 | 怎么办 |
+|------|--------|
+| 没有「显卡设置」 | 多半系统只认出 1 张卡：检查云主机是否买了多卡、容器是否只挂了一张；设置/任务无此选项时无法在界面里多卡 |
+| 勾了两张卡，训练阶段仍像单卡 | 确认侧栏版本已是含 #229 的 `dev`；用「检查更新」或重新拉 `dev` 后再起 WebUI；任务详情里 command 应含多卡启动参数 |
+| 点开始后停在缓存很久 | 正常：缓存单卡且数据大时较久；等进入「训练」阶段再看多卡 |
+| Musubi 一直装不好 | 在设置页看安装日志；检查网络；CUDA 选 cu128；可点「修复」重试 |
+| `fp8_scaled requires fp8_base` | 回到训练表单，fp8 两项成对开或都关，再提交 |
+| 页面打不开 / 不是本机 | 用部署时映射的公网或自定义服务地址访问，不是死记 `127.0.0.1`（见部署文档） |
+
+反馈 Issue 时请附：侧栏完整版本号、训练页三元组（Krea2 / Musubi / LoRA）、勾选了哪些 GPU、任务详情截图或错误原文。
+
+---
+
+## 相关链接
+
+- 多卡实现 Issue / PR：[#228](https://github.com/wochenlong/lora-scripts-next/issues/228) · [#229](https://github.com/wochenlong/lora-scripts-next/pull/229)
+- Linux / AutoDL 把 WebUI 部署起来：[docs/autodl-deploy.md](./autodl-deploy.md)
+- 上游 Krea2 说明（偏命令行，排障对照用）：[musubi-tuner krea2.md](https://github.com/kohya-ss/musubi-tuner/blob/main/docs/krea2.md)

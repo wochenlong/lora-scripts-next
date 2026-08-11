@@ -40,7 +40,7 @@ WebUI 整合包以 **Windows 双击启动** 为主。若你在 Linux、AutoDL �
 | SD / SDXL / Flux（旧式） | `train.sh` |
 | Anima 标准 LoRA | `bash train_anima_by_toml.sh docs/examples/anima-lora-benchmark-kohya.toml` |
 | Anima Fast 插件 | 先 `bash scripts/cli/install_anima_fast.sh`，再 `bash train_anima_fast_by_toml.sh docs/examples/anima-lora-benchmark-fast.toml` |
-| **Krea 2 多卡（Linux / `dev` / Musubi）** | WebUI 显卡多选；教程见 [`krea2-linux-multigpu.md`](krea2-linux-multigpu.md) |
+| **Krea 2 多卡（Linux 上开 WebUI）** | 浏览器「显卡设置」多选；教程见 [`krea2-linux-multigpu.md`](krea2-linux-multigpu.md) |
 
 Anima Fast 在整合包内也可通过侧栏 **Anima LoRA → Fast 模式** 页内安装，详见 [`anima-fast.md`](anima-fast.md)。
 
