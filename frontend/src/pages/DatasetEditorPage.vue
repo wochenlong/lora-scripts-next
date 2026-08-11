@@ -4,6 +4,8 @@ import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { datasetApi, type ChangedItem, type DatasetHistory, type DatasetItem } from "../api/dataset"
 import { schemasApi } from "../api/schemas"
+import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
+import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
 import { addTagToCaption, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 
 const { t } = useI18n()
@@ -40,7 +42,9 @@ const pageSize = ref(Number(localStorage.getItem(PAGE_SIZE_KEY)) || 48)
 const historyOpen = ref(false)
 const sessionHistory = ref<DatasetHistory>({ can_undo: false, can_redo: false, changes: [] })
 
-const filtered = computed(() => items.value.filter((item) =>
+const { state: tagFilter, filteredItems: tagFilteredItems, visibleTagList, toggleTag, clearTags, reset: resetTagFilter } = useDatasetTagFilter(items, tags)
+
+const filtered = computed(() => tagFilteredItems.value.filter((item) =>
   (!category.value || item.category === category.value) &&
   (!query.value || item.caption.toLowerCase().includes(query.value.toLowerCase()) || item.name.toLowerCase().includes(query.value.toLowerCase())),
 ))
@@ -107,6 +111,7 @@ async function scan() {
     tags.value = data.tags.sort((a, b) => b.count - a.count)
     categories.value = data.categories
     selectedPaths.value = new Set()
+    resetTagFilter()
     page.value = 1
     if (data.items[0]) choose(data.items[0])
     await refreshHistory()
@@ -164,6 +169,10 @@ function togglePageSelection() {
   selectedPaths.value = next
 }
 
+function selectAllFiltered() {
+  selectedPaths.value = new Set(filtered.value.map((item) => item.relative_path))
+}
+
 function appendQuickTag(tag: string) {
   const next = new Set(splitTags(append.value))
   next.add(tag)
@@ -184,6 +193,7 @@ function removeQuickTag(tag: string) {
 }
 
 watch([category, query, pageSize], () => { page.value = 1; localStorage.setItem(PAGE_SIZE_KEY, String(pageSize.value)) })
+watch(() => [tagFilter.logic, tagFilter.selectedTags.size], () => { page.value = 1 })
 watch(pageCount, (count) => { if (page.value > count) page.value = count })
 onMounted(() => {
   try { quickTags.value = JSON.parse(localStorage.getItem(QUICK_TAGS_KEY) || "[]") }
@@ -199,8 +209,26 @@ onMounted(() => {
       <button class="primary-action" :disabled="loading" @click="scan">{{ loading ? t("datasetEditor.scanning") : t("datasetEditor.scan") }}</button>
       <label>{{ t("datasetEditor.categoryLabel") }}<select v-model="category"><option value="">{{ t("datasetEditor.allCategories") }}</option><option v-for="item in categories" :key="item.value" :value="item.value">{{ item.name }} ({{ item.count }})</option></select></label>
       <label>{{ t("datasetEditor.queryLabel") }}<input v-model="query"></label>
+      <TagFilterPanel
+        :tags="visibleTagList"
+        :selected-tags="tagFilter.selectedTags"
+        :logic="tagFilter.logic"
+        :search="tagFilter.search"
+        :search-mode="tagFilter.searchMode"
+        :sort-by="tagFilter.sortBy"
+        :order="tagFilter.order"
+        :filtered-count="filtered.length"
+        @update:logic="tagFilter.logic = $event"
+        @update:search="tagFilter.search = $event"
+        @update:search-mode="tagFilter.searchMode = $event"
+        @update:sort-by="tagFilter.sortBy = $event"
+        @update:order="tagFilter.order = $event"
+        @toggle-tag="toggleTag"
+        @clear="clearTags"
+        @select-all="selectAllFiltered"
+      />
       <div class="batch-box"><strong>{{ t("datasetEditor.batch.title") }} {{ selectedPaths.size ? t("datasetEditor.batch.selected", { n: selectedPaths.size }) : t("datasetEditor.batch.filtered", { n: filtered.length }) }}</strong><input v-model="append" :placeholder="t('datasetEditor.batch.appendPlaceholder')"><select v-model="appendPosition" :aria-label="t('datasetEditor.batch.position')"><option value="back">{{ t("datasetEditor.batch.positionBack") }}</option><option value="front">{{ t("datasetEditor.batch.positionFront") }}</option></select><input v-model="remove" :placeholder="t('datasetEditor.batch.removePlaceholder')"><div class="replace-row"><input v-model="replaceFrom" :placeholder="t('datasetEditor.batch.replaceFrom')"><input v-model="replaceTo" :placeholder="t('datasetEditor.batch.replaceTo')"></div><label><input v-model="clean" type="checkbox">{{ t("datasetEditor.batch.clean") }}</label><label><input v-model="underscoreToSpace" type="checkbox">{{ t("datasetEditor.batch.underscore") }}</label><label><input v-model="stripEscapeChars" type="checkbox">{{ t("datasetEditor.batch.stripEscape") }}</label><label><input v-model="sort" type="checkbox">{{ t("datasetEditor.batch.sort") }}</label><button @click="batch">{{ t("datasetEditor.batch.apply") }}</button></div>
-      <div class="quick-tag-box"><strong>{{ t("datasetEditor.quickTag.title") }}</strong><div><button v-for="item in quickTags" :key="item" @click="appendQuickTag(item)" @contextmenu.prevent="removeQuickTag(item)">{{ item }}</button><button v-for="item in popularTags" :key="item.tag" class="suggested" @click="appendQuickTag(item.tag)">{{ item.tag }} <small>{{ item.count }}</small></button></div><span><input v-model="quickTag" :placeholder="t('datasetEditor.quickTag.addPlaceholder')" @keyup.enter="addQuickTag"><button @click="addQuickTag">{{ t("datasetEditor.quickTag.add") }}</button></span><small>{{ t("datasetEditor.quickTag.hint") }}</small></div>
+      <div class="quick-tag-box"><strong>{{ t("datasetEditor.quickTag.title") }}</strong><div><button v-for="item in quickTags" :key="item" @click="appendQuickTag(item)" @contextmenu.prevent="removeQuickTag(item)">{{ item }}</button><button v-for="item in popularTags" :key="item.tag" class="suggested" @click="appendQuickTag(item.tag)">{{ item.tag }} <small>{{ item.count }}</small></button></div><span><input v-model="quickTag" :placeholder="t('datasetEditor.quickTag.addPlaceholder')" @keyup.enter="addQuickTag"><button @click="addQuickTag">{{ t("datasetEditor.quickTag.add") }}</button></span><small>{{ t("datasetEditor.quickTag.hint") }}</small><small>{{ t("datasetEditor.quickTag.filterNote") }}</small></div>
     </aside>
     <main class="dataset-gallery">
       <header><strong>{{ t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size }) }}</strong><div><button :disabled="!root" @click="togglePageSelection">{{ t("datasetEditor.gallery.togglePage") }}</button><button :disabled="!sessionHistory.can_undo" @click="changeHistory('undo')">{{ t("datasetEditor.gallery.undo") }}</button><button :disabled="!sessionHistory.can_redo" @click="changeHistory('redo')">{{ t("datasetEditor.gallery.redo") }}</button><button :disabled="!root" @click="historyOpen = true">{{ t("datasetEditor.gallery.history") }}</button></div></header>

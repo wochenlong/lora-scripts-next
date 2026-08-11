@@ -234,6 +234,22 @@
 .fast-page.bare .install-console{align-self:start;height:min(560px,60vh);min-height:320px;max-height:calc(100vh - 40px)}
 .workbench-page .install-console{margin:0}
 
+/* Dataset editor: filter-by-tags panel */
+.tag-filter-box{display:grid;gap:8px;margin-bottom:16px;padding-top:18px;border-top:1px solid var(--border);font-size:13px}
+.tag-filter-controls{display:grid;grid-template-columns:1fr auto auto;gap:6px}
+.tag-filter-logic{display:flex;flex-wrap:wrap;gap:10px}
+.tag-filter-logic label{display:flex;align-items:center;gap:4px;cursor:pointer}
+.tag-filter-box input[type=checkbox],.tag-filter-box input[type=radio]{width:auto}
+.tag-filter-list{display:grid;gap:2px;max-height:220px;overflow:auto}
+.tag-filter-item{display:flex;align-items:center;gap:7px;padding:3px 5px;border-radius:6px;cursor:pointer}
+.tag-filter-item:hover{background:var(--surface-soft)}
+.tag-filter-item span{flex:1;overflow:hidden;font-size:12px;text-overflow:ellipsis;white-space:nowrap}
+.tag-filter-item small{color:var(--text-faint)}
+.tag-filter-meta{margin:0;color:var(--text-faint);font-size:11px}
+.tag-filter-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.tag-filter-actions button{min-height:32px;color:var(--accent-dark);background:var(--accent-soft);border:0;border-radius:8px;cursor:pointer}
+.tag-filter-actions button:disabled{opacity:.5;cursor:not-allowed}
+
 
 /* soft-ui radius pass */
 .schema-section,.form-skeleton,.schema-state,.selector-card,.settings-card,.tagger-grid,.check-row,.preview-panel,.unsupported-hint{border-radius:var(--radius-lg)}
