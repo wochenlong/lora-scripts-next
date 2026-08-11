@@ -28,6 +28,13 @@ describe("filterItemsByTags", () => {
     expect(filterItemsByTags(items, new Set(["bplay"]), "none").map((item) => item.name)).toEqual(["c", "d"])
     expect(filterItemsByTags(items, new Set(["bplay", "1girl"]), "none").map((item) => item.name)).toEqual(["d"])
   })
+
+  it("always drops items containing an excluded tag, on top of any logic", () => {
+    expect(filterItemsByTags(items, new Set(["bplay"]), "or", new Set(["cat ears"])).map((item) => item.name)).toEqual(["a"])
+    expect(filterItemsByTags(items, new Set(["bplay", "1girl"]), "and", new Set(["1girl"]))).toEqual([])
+    expect(filterItemsByTags(items, new Set(), "and", new Set(["bplay"])).map((item) => item.name)).toEqual(["c", "d"])
+    expect(filterItemsByTags(items, new Set(["bplay"]), "none", new Set(["1girl"])).map((item) => item.name)).toEqual(["d"])
+  })
 })
 
 const tagList: TagCount[] = [

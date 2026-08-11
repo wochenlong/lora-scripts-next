@@ -18,11 +18,13 @@ export function useDatasetTagFilter<T extends { tags: string[] }>(items: Ref<T[]
     searchMode: "substring" as TagSearchMode,
     sortBy: "frequency" as TagSortBy,
     order: "desc" as SortOrder,
+    excludeInput: "",
   })
 
-  const filteredItems = computed(() => filterItemsByTags(items.value, state.selectedTags, state.logic))
+  const excludedTags = computed(() => new Set(state.excludeInput.split(/[,，\n]/).map((tag) => tag.trim()).filter(Boolean)))
+  const filteredItems = computed(() => filterItemsByTags(items.value, state.selectedTags, state.logic, excludedTags.value))
   const visibleTagList = computed(() => searchTagList(sortTagList(globalTags.value, state.sortBy, state.order), state.search, state.searchMode))
-  const hasActiveFilter = computed(() => state.selectedTags.size > 0)
+  const hasActiveFilter = computed(() => state.selectedTags.size > 0 || excludedTags.value.size > 0)
 
   function toggleTag(tag: string) {
     const next = new Set(state.selectedTags)
@@ -38,7 +40,8 @@ export function useDatasetTagFilter<T extends { tags: string[] }>(items: Ref<T[]
   function reset() {
     clearTags()
     state.search = ""
+    state.excludeInput = ""
   }
 
-  return { state, filteredItems, visibleTagList, hasActiveFilter, toggleTag, clearTags, reset }
+  return { state, filteredItems, visibleTagList, hasActiveFilter, excludedTags, toggleTag, clearTags, reset }
 }

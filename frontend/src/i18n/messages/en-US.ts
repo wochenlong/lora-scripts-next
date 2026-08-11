@@ -524,6 +524,8 @@ export default {
         none: "NONE (has none)",
       },
       selectedCount: "{k} tags selected",
+      excludePlaceholder: "Exclude tags, comma-separated",
+      excludeTip: "Images with these tags are always hidden; works together with the checkboxes above",
       clear: "Clear Selection",
       selectAll: "Select All Filtered ({n})",
       selectAllTip: "Select every image in the current filter results, ready for batch edit",

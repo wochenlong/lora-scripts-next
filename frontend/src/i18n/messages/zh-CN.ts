@@ -524,6 +524,8 @@ export default {
         none: "NONE（全部不含）",
       },
       selectedCount: "已选 {k} 个 tag",
+      excludePlaceholder: "排除 tag，逗号分隔",
+      excludeTip: "含这些 tag 的图片一律不显示，可与上方勾选同时使用",
       clear: "清空勾选",
       selectAll: "全选筛选结果 ({n})",
       selectAllTip: "选中当前筛选出的全部图片，可接批量编辑",

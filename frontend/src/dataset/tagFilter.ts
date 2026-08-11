@@ -19,13 +19,15 @@ export interface TagFilterState {
   order: SortOrder
 }
 
-export function filterItemsByTags<T extends { tags: string[] }>(items: T[], selectedTags: ReadonlySet<string>, logic: TagFilterLogic): T[] {
-  if (!selectedTags.size) return items
-  if (logic === "none") return items.filter((item) => !item.tags.some((tag) => selectedTags.has(tag)))
-  return items.filter((item) => {
-    const owned = new Set(item.tags)
-    return logic === "and" ? [...selectedTags].every((tag) => owned.has(tag)) : [...selectedTags].some((tag) => owned.has(tag))
-  })
+export function filterItemsByTags<T extends { tags: string[] }>(items: T[], selectedTags: ReadonlySet<string>, logic: TagFilterLogic, excludedTags: ReadonlySet<string> = new Set()): T[] {
+  const included = !selectedTags.size ? items
+    : logic === "none" ? items.filter((item) => !item.tags.some((tag) => selectedTags.has(tag)))
+    : items.filter((item) => {
+      const owned = new Set(item.tags)
+      return logic === "and" ? [...selectedTags].every((tag) => owned.has(tag)) : [...selectedTags].some((tag) => owned.has(tag))
+    })
+  if (!excludedTags.size) return included
+  return included.filter((item) => !item.tags.some((tag) => excludedTags.has(tag)))
 }
 
 function compareAlphabetical(a: string, b: string): number {

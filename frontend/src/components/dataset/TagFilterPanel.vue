@@ -10,6 +10,7 @@ defineProps<{
   searchMode: TagSearchMode
   sortBy: TagSortBy
   order: SortOrder
+  excludeInput: string
   filteredCount: number
 }>()
 
@@ -19,6 +20,7 @@ const emit = defineEmits<{
   "update:searchMode": [value: TagSearchMode]
   "update:sortBy": [value: TagSortBy]
   "update:order": [value: SortOrder]
+  "update:excludeInput": [value: string]
   toggleTag: [tag: string]
   clear: []
   selectAll: []
@@ -67,6 +69,7 @@ function selectValue(event: Event): string {
       <p v-if="!tags.length" class="tag-filter-meta">{{ t("datasetEditor.tagFilter.empty") }}</p>
     </div>
     <small v-if="selectedTags.size" class="tag-filter-meta">{{ t("datasetEditor.tagFilter.selectedCount", { k: selectedTags.size }) }}</small>
+    <input :value="excludeInput" :placeholder="t('datasetEditor.tagFilter.excludePlaceholder')" :title="t('datasetEditor.tagFilter.excludeTip')" @input="emit('update:excludeInput', ($event.target as HTMLInputElement).value)">
     <div class="tag-filter-actions">
       <button :disabled="!selectedTags.size" @click="emit('clear')">{{ t("datasetEditor.tagFilter.clear") }}</button>
       <button :disabled="!filteredCount" :title="t('datasetEditor.tagFilter.selectAllTip')" @click="emit('selectAll')">{{ t("datasetEditor.tagFilter.selectAll", { n: filteredCount }) }}</button>

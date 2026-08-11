@@ -193,7 +193,7 @@ function removeQuickTag(tag: string) {
 }
 
 watch([category, query, pageSize], () => { page.value = 1; localStorage.setItem(PAGE_SIZE_KEY, String(pageSize.value)) })
-watch(() => [tagFilter.logic, tagFilter.selectedTags.size], () => { page.value = 1 })
+watch(() => [tagFilter.logic, tagFilter.selectedTags.size, tagFilter.excludeInput], () => { page.value = 1 })
 watch(pageCount, (count) => { if (page.value > count) page.value = count })
 onMounted(() => {
   try { quickTags.value = JSON.parse(localStorage.getItem(QUICK_TAGS_KEY) || "[]") }
@@ -217,12 +217,14 @@ onMounted(() => {
         :search-mode="tagFilter.searchMode"
         :sort-by="tagFilter.sortBy"
         :order="tagFilter.order"
+        :exclude-input="tagFilter.excludeInput"
         :filtered-count="filtered.length"
         @update:logic="tagFilter.logic = $event"
         @update:search="tagFilter.search = $event"
         @update:search-mode="tagFilter.searchMode = $event"
         @update:sort-by="tagFilter.sortBy = $event"
         @update:order="tagFilter.order = $event"
+        @update:exclude-input="tagFilter.excludeInput = $event"
         @toggle-tag="toggleTag"
         @clear="clearTags"
         @select-all="selectAllFiltered"
@@ -233,7 +235,7 @@ onMounted(() => {
     <main class="dataset-gallery">
       <header><strong>{{ t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size }) }}</strong><div><button :disabled="!root" @click="togglePageSelection">{{ t("datasetEditor.gallery.togglePage") }}</button><button :disabled="!sessionHistory.can_undo" @click="changeHistory('undo')">{{ t("datasetEditor.gallery.undo") }}</button><button :disabled="!sessionHistory.can_redo" @click="changeHistory('redo')">{{ t("datasetEditor.gallery.redo") }}</button><button :disabled="!root" @click="historyOpen = true">{{ t("datasetEditor.gallery.history") }}</button></div></header>
       <div v-if="!root" class="dataset-empty"><strong>{{ t("datasetEditor.gallery.emptyTitle") }}</strong><span>{{ t("datasetEditor.gallery.emptyHint") }}</span></div>
-      <div v-else class="image-grid"><button v-for="item in paged" :key="item.relative_path" :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }" @click="choose(item, $event)"><i v-if="selectedPaths.has(item.relative_path)">✓</i><img :src="item.image_url" :alt="item.name" loading="lazy"><span>{{ item.name }}</span></button></div>
+      <div v-else class="image-grid"><button v-for="item in paged" :key="item.relative_path" :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }" @click="choose(item, $event)"><i v-if="selectedPaths.has(item.relative_path)">✓</i><img :src="item.thumb_url" :alt="item.name" loading="lazy"><span>{{ item.name }}</span></button></div>
       <footer class="dataset-pager"><button :disabled="page === 1" @click="page = 1">{{ t("datasetEditor.pager.first") }}</button><button :disabled="page === 1" @click="page--">{{ t("datasetEditor.pager.prev") }}</button><span>{{ page }} / {{ pageCount }}</span><button :disabled="page === pageCount" @click="page++">{{ t("datasetEditor.pager.next") }}</button><button :disabled="page === pageCount" @click="page = pageCount">{{ t("datasetEditor.pager.last") }}</button><select v-model.number="pageSize"><option v-for="size in [24,48,96,192]" :key="size" :value="size">{{ t("datasetEditor.pager.perPage", { size }) }}</option></select></footer>
     </main>
     <aside class="caption-panel"><div v-if="current"><img :src="current.image_url" :alt="current.name"><strong>{{ current.relative_path }}</strong><div class="caption-editor"><textarea v-model="caption" rows="10"></textarea><small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small></div><div class="caption-chips"><span v-for="tag in captionTags" :key="tag" class="chip">{{ tag }}<button :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)">×</button></span><span class="chip-add"><input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag"><button @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button></span></div><button class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button></div><p v-else>{{ t("datasetEditor.caption.empty") }}</p></aside>
