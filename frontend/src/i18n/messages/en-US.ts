@@ -549,6 +549,8 @@ export default {
     },
     caption: {
       chars: "{n} chars",
+      previewTip: "Click to open full-size preview",
+      previewAria: "Full-size preview, click anywhere or press Esc to close",
       addPlaceholder: "Add a tag",
       add: "Add",
       removeAria: "Remove tag {tag}",

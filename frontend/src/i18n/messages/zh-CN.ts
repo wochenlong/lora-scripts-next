@@ -549,6 +549,8 @@ export default {
     },
     caption: {
       chars: "{n} 字",
+      previewTip: "点击打开全图预览",
+      previewAria: "全图预览，点击任意处或按 Esc 关闭",
       addPlaceholder: "添加标签",
       add: "添加",
       removeAria: "删除标签 {tag}",

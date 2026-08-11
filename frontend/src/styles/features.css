@@ -249,6 +249,9 @@
 .tag-filter-actions{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .tag-filter-actions button{min-height:32px;color:var(--accent-dark);background:var(--accent-soft);border:0;border-radius:8px;cursor:pointer}
 .tag-filter-actions button:disabled{opacity:.5;cursor:not-allowed}
+.caption-preview{cursor:zoom-in}
+.dataset-lightbox{position:fixed;z-index:2000;display:grid;place-items:center;background:rgba(0,0,0,.85);cursor:zoom-out;inset:0}
+.dataset-lightbox img{max-width:95vw;max-height:95vh;object-fit:contain}
 
 
 /* soft-ui radius pass */
