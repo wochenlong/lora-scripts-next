@@ -1,3 +1,4 @@
+import io
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -43,11 +44,41 @@ def test_dataset_editor_scan_lists_images_and_captions(tmp_path):
     assert first["image_url"].startswith("/api/dataset-editor/image?")
     assert "root=" in first["image_url"]
     assert "image=alpha.png" in first["image_url"]
+    assert first["thumb_url"].startswith("/api/dataset-editor/image?")
+    assert "thumb=1" in first["thumb_url"]
 
     second = payload["data"]["items"][1]
     assert second["name"] == "beta.jpg"
     assert second["caption"] == ""
     assert second["caption_exists"] is False
+
+
+def test_dataset_editor_thumbnail_serves_scaled_jpeg(tmp_path):
+    make_image(tmp_path / "alpha.png")
+
+    client = TestClient(app)
+    response = client.get("/api/dataset-editor/image", params={"root": str(tmp_path), "image": "alpha.png", "thumb": 1})
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/jpeg"
+    assert "max-age" in response.headers["cache-control"]
+    with Image.open(io.BytesIO(response.content)) as thumb:
+        assert thumb.format == "JPEG"
+        assert max(thumb.size) <= 256
+
+    original = client.get("/api/dataset-editor/image", params={"root": str(tmp_path), "image": "alpha.png"})
+    assert original.status_code == 200
+    assert original.headers["content-type"] != "image/jpeg" or len(original.content) != len(response.content)
+
+
+def test_dataset_editor_thumbnail_rejects_invalid_and_missing(tmp_path):
+    make_image(tmp_path / "alpha.png")
+
+    client = TestClient(app)
+    missing = client.get("/api/dataset-editor/image", params={"root": str(tmp_path), "image": "missing.png", "thumb": 1})
+    assert missing.status_code == 404
+    outside = client.get("/api/dataset-editor/image", params={"root": str(tmp_path), "image": "../alpha.png", "thumb": 1})
+    assert outside.status_code == 400
 
 
 def test_dataset_editor_scan_groups_first_level_subfolders(tmp_path):

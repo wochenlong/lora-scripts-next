@@ -1,6 +1,6 @@
 import { apiData } from "./client"
 
-export interface DatasetItem { name: string; relative_path: string; category: string; caption: string; caption_exists: boolean; tags: string[]; image_url: string }
+export interface DatasetItem { name: string; relative_path: string; category: string; caption: string; caption_exists: boolean; tags: string[]; image_url: string; thumb_url: string }
 export interface DatasetScan { root: string; total: number; items: DatasetItem[]; tags: Array<{ tag: string; count: number }>; categories: Array<{ name: string; value: string; count: number }> }
 export interface ChangedItem { image: string; caption: string; caption_exists: boolean; tags: string[] }
 export interface TagReplacement { from: string; to: string }
