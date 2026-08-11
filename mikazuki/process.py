@@ -303,6 +303,15 @@ def run_musubi_train(toml_path: str,
     from mikazuki.tasks import TaskStatus
 
     log.info(f"musubi-tuner training started with config file / musubi 训练开始，使用配置文件: {toml_path}")
+    if gpu_ids:
+        log.info(f"Using GPU(s) / 使用 GPU: {gpu_ids}")
+        if len(gpu_ids) > 1:
+            log.info(
+                "Musubi train will use accelerate --multi_gpu; cache stages stay on GPU %s / "
+                "训练阶段多卡，缓存阶段仍用 GPU %s",
+                gpu_ids[0],
+                gpu_ids[0],
+            )
     patch_krea2_tokenizer_path(runtime.musubi_root, krea2_tokenizer_dir(runtime.lora_next_root), log=log.info)
     train_task_id = str(uuid.uuid4())
     dataset_toml = Path(str(values["dataset_config"]))

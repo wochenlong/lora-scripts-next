@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -225,6 +227,7 @@ class LauncherTests(unittest.TestCase):
             runtime = make_runtime(root)
             dataset_toml = root / "d.toml"
             train_toml = root / "t.toml"
+            train_toml.write_text('mixed_precision = "bf16"\n', encoding="utf-8")
 
             latents = build_cache_latents_spec(runtime, dataset_toml, "/models/vae.safetensors", "task-cache_latents", ["0"])
             te = build_cache_text_encoder_spec(runtime, dataset_toml, "/models/te.safetensors", "task-cache_text_encoder")
@@ -234,17 +237,59 @@ class LauncherTests(unittest.TestCase):
             self.assertEqual(spec.command[0], str(runtime.python))
             self.assertEqual(spec.cwd, runtime.musubi_root)
             self.assertEqual(spec.env["PYTHONNOUSERSITE"], "1")
-            self.assertIn(str((runtime.musubi_root / "src").resolve()), spec.env["PYTHONPATH"].split(";"))
+            self.assertIn(str((runtime.musubi_root / "src").resolve()), spec.env["PYTHONPATH"].split(os.pathsep))
 
         self.assertIn("krea2_cache_latents.py", latents.command[1])
         self.assertIn("--skip_existing", latents.command)
         self.assertIn("--vae", latents.command)
         self.assertIn("krea2_cache_text_encoder_outputs.py", te.command[1])
         self.assertIn("--text_encoder", te.command)
-        self.assertIn("krea2_train_network.py", train.command[1])
-        self.assertEqual(train.command[-1], str(train_toml))
+        self.assertEqual(train.command[1:3], ["-m", "accelerate.commands.launch"])
+        self.assertTrue(any("krea2_train_network.py" in str(part) for part in train.command))
+        self.assertEqual(train.command[-2:], ["--config_file", str(train_toml)])
+        self.assertIn("--mixed_precision", train.command)
+        self.assertEqual(train.command[train.command.index("--mixed_precision") + 1], "bf16")
+        self.assertEqual(train.env["ACCELERATE_DISABLE_RICH"], "1")
         self.assertEqual(latents.env["CUDA_VISIBLE_DEVICES"], "0")
         self.assertEqual(latents.env["MUSUBI_PARENT_TASK_ID"], "task-cache_latents")
+
+    def test_train_multi_gpu_uses_accelerate_launch(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            train_toml = root / "t.toml"
+            train_toml.write_text('mixed_precision = "bf16"\n', encoding="utf-8")
+            train = build_train_spec(runtime, train_toml, "task", ["0", "1"])
+
+        self.assertEqual(train.command[0], str(runtime.python))
+        self.assertEqual(train.command[1:3], ["-m", "accelerate.commands.launch"])
+        self.assertIn("--multi_gpu", train.command)
+        self.assertIn("--num_processes", train.command)
+        self.assertEqual(train.command[train.command.index("--num_processes") + 1], "2")
+        self.assertLess(train.command.index("--multi_gpu"), train.command.index("--mixed_precision"))
+        self.assertLess(train.command.index("--mixed_precision"), train.command.index("--config_file"))
+        self.assertEqual(train.env["CUDA_VISIBLE_DEVICES"], "0,1")
+        if sys.platform == "win32":
+            self.assertEqual(train.env["USE_LIBUV"], "0")
+            self.assertIn("--rdzv_backend", train.command)
+            self.assertEqual(train.command[train.command.index("--rdzv_backend") + 1], "c10d")
+
+    def test_cache_uses_first_gpu_only_when_multi_selected(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            dataset_toml = root / "d.toml"
+            latents = build_cache_latents_spec(
+                runtime, dataset_toml, "/models/vae.safetensors", "task-cache_latents", ["0", "1"]
+            )
+            te = build_cache_text_encoder_spec(
+                runtime, dataset_toml, "/models/te.safetensors", "task-cache_text_encoder", ["0", "1"]
+            )
+
+        self.assertEqual(latents.env["CUDA_VISIBLE_DEVICES"], "0")
+        self.assertEqual(te.env["CUDA_VISIBLE_DEVICES"], "0")
+        self.assertNotIn("--multi_gpu", latents.command)
+        self.assertNotIn("-m", latents.command)
 
 
 class HelperTests(unittest.TestCase):
