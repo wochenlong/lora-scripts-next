@@ -1,12 +1,30 @@
 # Issue #227 实施方案：数据集编辑器 tag 筛图与多维排序
 
-> **执行状态（2026-08-11 更新）：已实施完成，待手测验收。** 分支 `feat/issue-227`。
+> **执行状态（2026-08-11 更新）：已实施完成并推送，待手测验收。** 分支 `feat/issue-227`，已推送远端，PR 未开（建议手测后开 draft）。
 >
-> - P0 六项全部完成；P1 的「检索缩小列表（子串/前缀/后缀）」与「NONE 逻辑」随领域层一并实现（无额外成本）
-> - 实际交付与 §3 设计一致，仅两处微调：排序的方向键只作用于主指标、平级回退恒为字母升序（更可预期）；`searchTagList` 的 mode 在 UI 用下拉切换
-> - 验证：`typecheck` ✅ `lint` 0 error ✅ `tagFilter.test.ts` 15/15 ✅；全量测试 13 个失败经 stash 对照确认为基线既有的 jsdom 环境问题（`localStorage.clear is not a function`），与本次无关
-> - 未执行 `npm run build`（避免污染 `frontend/dist`）；浏览器手测回归清单（§5）待进行
-> - 遗留：手测通过后拆 PR-1（P0）/ PR-2（P1）提交
+> **P0 六项全部完成；P1 全部完成**（检索缩小列表、NONE、轻量排除、OR 多词检索均落地；仅「caption 写回排序扩展」按方案标注砍掉）。
+>
+> 提交记录：
+> - `e018436` feat：P0 筛图 + AND/OR/NONE + 四维排序 + 全选闭环（含单测、i18n、样式、dist）
+> - `920e9d1` feat：轻量排除 tag 输入框（与任意逻辑叠加，逗号分隔）
+> - `3fcbab9` perf：图库缩略图（后端 PIL 内存缓存缩略图端点，零新依赖；scan 增加 `thumb_url`）
+> - `d6d8a7b` feat：详情图点击开全屏灯箱（Esc/点击关闭；详情面板同时改用缩略图）
+> - `8a29991` feat：详情预览升级 512px 缩略图（三级加载：图库 256 / 详情 512 / 灯箱全图）
+> - `60df285` feat：检索框逗号/空格分隔多词 OR 缩小列表
+> - `c4dfd05` docs：本方案 + #210 联合计划 + 架构健康登记
+>
+> 与设计文档的偏差：
+> - 排序方向键只作用于主指标、平级回退恒为字母升序（更可预期）
+> - 词元长度估算规则按 `tokenLength.ts` docstring 实现，UI 标注「估算值」
+> - 缩略图/灯箱为方案外的性能与体验优化（用户反馈驱动），后端改动仅限 `dataset_editor.py` image 端点，无契约破坏（`thumb_url` 为新增字段）
+>
+> 验证：`typecheck` ✅ `lint` 0 error ✅ `tagFilter.test.ts` 17/17 ✅；缩略图函数经 stub 绕过 cv2 缺失实测通过；全量前端测试 13 个失败确认为基线既有 jsdom 环境问题；`tests/test_dataset_editor_api.py` 新增缩略图端点测试**因本机缺 cv2 未执行**，需在有完整依赖的环境（CI/整合包）跑
+>
+> 遗留：
+> - [ ] 浏览器手测回归清单（§5）
+> - [ ] 开 draft PR → 手测通过转 ready
+> - [ ] （可选）caption 写回排序扩展（频率/长度），P1 可砍项，未做
+> - [ ] （可选）词元长度精确计数后端接口，当前为前端估算
 
 > 关联 Issue：[#227](https://github.com/wochenlong/lora-scripts-next/issues/227) feat(dataset-editor): 对齐秋叶 DTE——按 tag 筛图、多维排序与过滤逻辑
 >
