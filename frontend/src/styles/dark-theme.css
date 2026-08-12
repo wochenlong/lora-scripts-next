@@ -58,7 +58,7 @@ html.dark .el-message-box {
   border: 1px solid var(--border);
   color: var(--text);
   border-radius: var(--radius);
-  box-shadow: 0 8px 24px rgba(1, 4, 9, .55);
+  box-shadow: 0 8px 24px rgba(1, 4, 9, 0.55);
 }
 
 html.dark .el-select-dropdown__item {
@@ -68,7 +68,7 @@ html.dark .el-select-dropdown__item {
 
 html.dark .el-select-dropdown__item.is-hovering,
 html.dark .el-select-dropdown__item:hover {
-  background: rgba(177, 186, 196, .12);
+  background: rgba(177, 186, 196, 0.12);
 }
 
 html.dark .el-select-dropdown__item.is-selected {
@@ -98,11 +98,11 @@ html.dark .el-button {
 }
 
 html.dark .el-button--primary {
-  --el-button-bg-color: rgba(56, 139, 253, .18);
-  --el-button-border-color: rgba(56, 139, 253, .45);
+  --el-button-bg-color: rgba(56, 139, 253, 0.18);
+  --el-button-border-color: rgba(56, 139, 253, 0.45);
   --el-button-text-color: #79b8ff;
-  --el-button-hover-bg-color: rgba(56, 139, 253, .28);
-  --el-button-hover-border-color: rgba(56, 139, 253, .7);
+  --el-button-hover-bg-color: rgba(56, 139, 253, 0.28);
+  --el-button-hover-border-color: rgba(56, 139, 253, 0.7);
   --el-button-hover-text-color: #a5d6ff;
 }
 
@@ -142,7 +142,7 @@ html.dark .section-heading h1,
 html.dark .panel-copy h2 {
   color: var(--text-title);
   font-weight: 700;
-  letter-spacing: -.01em;
+  letter-spacing: -0.01em;
 }
 
 html.dark .schema-section > header span {
@@ -214,7 +214,7 @@ html.dark .nav-link {
 
 html.dark .nav-link.active {
   color: var(--text-title);
-  background: rgba(56, 139, 253, .12);
+  background: rgba(56, 139, 253, 0.12);
 }
 
 html.dark .brand-mark {
@@ -289,8 +289,8 @@ html.dark .secondary-action:hover {
 /* Primary CTA: same blue family as switches/focus — no GitHub green. */
 html.dark .train-submit,
 html.dark .primary-action {
-  background: rgba(56, 139, 253, .16) !important;
-  border: 1px solid rgba(56, 139, 253, .4) !important;
+  background: rgba(56, 139, 253, 0.16) !important;
+  border: 1px solid rgba(56, 139, 253, 0.4) !important;
   color: #79b8ff !important;
   box-shadow: none !important;
   border-radius: var(--radius-sm) !important;
@@ -298,8 +298,8 @@ html.dark .primary-action {
 
 html.dark .train-submit:hover,
 html.dark .primary-action:hover {
-  background: rgba(56, 139, 253, .26) !important;
-  border-color: rgba(56, 139, 253, .65) !important;
+  background: rgba(56, 139, 253, 0.26) !important;
+  border-color: rgba(56, 139, 253, 0.65) !important;
   color: #a5d6ff !important;
 }
 
@@ -314,8 +314,8 @@ html.dark .danger-action {
 
 html.dark .stop-training:hover,
 html.dark .danger-action:hover {
-  background: rgba(248, 81, 73, .1) !important;
-  border-color: rgba(248, 81, 73, .45) !important;
+  background: rgba(248, 81, 73, 0.1) !important;
+  border-color: rgba(248, 81, 73, 0.45) !important;
   color: #ff7b72 !important;
 }
 
