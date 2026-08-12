@@ -3,6 +3,7 @@ import { computed, nextTick, onBeforeUnmount, ref, watch } from "vue"
 import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { tasksApi, trainLogStreamUrl, type TaskStatus } from "../api/tasks"
+import { copyText } from "../utils/clipboard"
 
 const props = defineProps<{ taskId: string; status: TaskStatus }>()
 const { t } = useI18n()
@@ -128,7 +129,7 @@ function jumpToError() {
 
 async function copyLog() {
   try {
-    await navigator.clipboard.writeText(logText.value)
+    await copyText(logText.value)
     ElMessage.success(t("tasks.log.copied"))
   } catch {
     ElMessage.error(t("tasks.log.copyFail"))

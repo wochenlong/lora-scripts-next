@@ -13,6 +13,7 @@ import { applyReadonlyDefaults, cloneFormModel, createDefaultModel, isFieldActiv
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig } from "../training/params"
 import { moduleForTrainType } from "../training/modules"
+import { copyText } from "../utils/clipboard"
 import { useTasksStore } from "../stores/tasks"
 
 interface HistoryRow { time: string; name?: string; value: FormModel }
@@ -258,7 +259,7 @@ async function resetConfig() {
 
 async function copyToml() {
   try {
-    await navigator.clipboard.writeText(outputText.value)
+    await copyText(outputText.value)
     ElMessage.success(t("training.preview.copied"))
   } catch { ElMessage.error(t("training.preview.copyFail")) }
 }
