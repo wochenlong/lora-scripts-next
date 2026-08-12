@@ -10,7 +10,6 @@ import { addTagToCaption, removeTagFromCaption, splitCaptionTags } from "../data
 
 const { t } = useI18n()
 
-const QUICK_TAGS_KEY = "dataset-editor-quick-tags"
 const PAGE_SIZE_KEY = "dataset-editor-page-size"
 const path = ref("")
 const root = ref("")
@@ -34,9 +33,7 @@ const stripEscapeChars = ref(false)
 const loading = ref(false)
 const picking = ref(false)
 const appendPosition = ref<"front" | "back">("back")
-const quickTag = ref("")
 const newCaptionTag = ref("")
-const quickTags = ref<string[]>([])
 const page = ref(1)
 const pageSize = ref(Number(localStorage.getItem(PAGE_SIZE_KEY)) || 48)
 const historyOpen = ref(false)
@@ -57,7 +54,6 @@ const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / p
 const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const current = computed(() => items.value.find((item) => item.relative_path === selected.value))
 const targets = computed(() => selectedPaths.value.size ? items.value.filter((item) => selectedPaths.value.has(item.relative_path)) : filtered.value)
-const popularTags = computed(() => tags.value.slice(0, 24))
 const captionTags = computed(() => splitCaptionTags(caption.value))
 
 function addCaptionTag() {
@@ -178,33 +174,10 @@ function selectAllFiltered() {
   selectedPaths.value = new Set(filtered.value.map((item) => item.relative_path))
 }
 
-function appendQuickTag(tag: string) {
-  const next = new Set(splitTags(append.value))
-  next.add(tag)
-  append.value = [...next].join(", ")
-}
-
-function addQuickTag() {
-  const value = quickTag.value.trim()
-  if (!value || quickTags.value.includes(value)) return
-  quickTags.value.push(value)
-  quickTag.value = ""
-  localStorage.setItem(QUICK_TAGS_KEY, JSON.stringify(quickTags.value))
-}
-
-function removeQuickTag(tag: string) {
-  quickTags.value = quickTags.value.filter((item) => item !== tag)
-  localStorage.setItem(QUICK_TAGS_KEY, JSON.stringify(quickTags.value))
-}
-
 watch([category, query, pageSize], () => { page.value = 1; localStorage.setItem(PAGE_SIZE_KEY, String(pageSize.value)) })
 watch(() => [tagFilter.logic, tagFilter.selectedTags.size, tagFilter.excludeInput], () => { page.value = 1 })
 watch(pageCount, (count) => { if (page.value > count) page.value = count })
-onMounted(() => {
-  try { quickTags.value = JSON.parse(localStorage.getItem(QUICK_TAGS_KEY) || "[]") }
-  catch { quickTags.value = [] }
-  window.addEventListener("keydown", onPreviewKeydown)
-})
+onMounted(() => window.addEventListener("keydown", onPreviewKeydown))
 onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
 </script>
 
@@ -236,8 +209,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
         @clear="clearTags"
         @select-all="selectAllFiltered"
       />
-      <div class="batch-box"><strong>{{ t("datasetEditor.batch.title") }} {{ selectedPaths.size ? t("datasetEditor.batch.selected", { n: selectedPaths.size }) : t("datasetEditor.batch.filtered", { n: filtered.length }) }}</strong><input v-model="append" :placeholder="t('datasetEditor.batch.appendPlaceholder')"><select v-model="appendPosition" :aria-label="t('datasetEditor.batch.position')"><option value="back">{{ t("datasetEditor.batch.positionBack") }}</option><option value="front">{{ t("datasetEditor.batch.positionFront") }}</option></select><input v-model="remove" :placeholder="t('datasetEditor.batch.removePlaceholder')"><div class="replace-row"><input v-model="replaceFrom" :placeholder="t('datasetEditor.batch.replaceFrom')"><input v-model="replaceTo" :placeholder="t('datasetEditor.batch.replaceTo')"></div><label><input v-model="clean" type="checkbox">{{ t("datasetEditor.batch.clean") }}</label><label><input v-model="underscoreToSpace" type="checkbox">{{ t("datasetEditor.batch.underscore") }}</label><label><input v-model="stripEscapeChars" type="checkbox">{{ t("datasetEditor.batch.stripEscape") }}</label><label><input v-model="sort" type="checkbox">{{ t("datasetEditor.batch.sort") }}</label><button @click="batch">{{ t("datasetEditor.batch.apply") }}</button></div>
-      <div class="quick-tag-box"><strong>{{ t("datasetEditor.quickTag.title") }}</strong><div><button v-for="item in quickTags" :key="item" @click="appendQuickTag(item)" @contextmenu.prevent="removeQuickTag(item)">{{ item }}</button><button v-for="item in popularTags" :key="item.tag" class="suggested" @click="appendQuickTag(item.tag)">{{ item.tag }} <small>{{ item.count }}</small></button></div><span><input v-model="quickTag" :placeholder="t('datasetEditor.quickTag.addPlaceholder')" @keyup.enter="addQuickTag"><button @click="addQuickTag">{{ t("datasetEditor.quickTag.add") }}</button></span><small>{{ t("datasetEditor.quickTag.hint") }}</small><small>{{ t("datasetEditor.quickTag.filterNote") }}</small></div>
+      <details class="batch-box"><summary>{{ t("datasetEditor.batch.title") }} · {{ selectedPaths.size ? t("datasetEditor.batch.selected", { n: selectedPaths.size }) : t("datasetEditor.batch.filtered", { n: filtered.length }) }}</summary><div class="batch-body"><input v-model="append" :placeholder="t('datasetEditor.batch.appendPlaceholder')"><select v-model="appendPosition" :aria-label="t('datasetEditor.batch.position')"><option value="back">{{ t("datasetEditor.batch.positionBack") }}</option><option value="front">{{ t("datasetEditor.batch.positionFront") }}</option></select><input v-model="remove" :placeholder="t('datasetEditor.batch.removePlaceholder')"><div class="replace-row"><input v-model="replaceFrom" :placeholder="t('datasetEditor.batch.replaceFrom')"><input v-model="replaceTo" :placeholder="t('datasetEditor.batch.replaceTo')"></div><label><input v-model="clean" type="checkbox">{{ t("datasetEditor.batch.clean") }}</label><label><input v-model="underscoreToSpace" type="checkbox">{{ t("datasetEditor.batch.underscore") }}</label><label><input v-model="stripEscapeChars" type="checkbox">{{ t("datasetEditor.batch.stripEscape") }}</label><label><input v-model="sort" type="checkbox">{{ t("datasetEditor.batch.sort") }}</label><button @click="batch">{{ t("datasetEditor.batch.apply") }}</button></div></details>
     </aside>
     <main class="dataset-gallery">
       <header><strong>{{ t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size }) }}</strong><div><button :disabled="!root" @click="togglePageSelection">{{ t("datasetEditor.gallery.togglePage") }}</button><button :disabled="!sessionHistory.can_undo" @click="changeHistory('undo')">{{ t("datasetEditor.gallery.undo") }}</button><button :disabled="!sessionHistory.can_redo" @click="changeHistory('redo')">{{ t("datasetEditor.gallery.redo") }}</button><button :disabled="!root" @click="historyOpen = true">{{ t("datasetEditor.gallery.history") }}</button></div></header>
@@ -245,7 +217,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
       <div v-else class="image-grid"><button v-for="item in paged" :key="item.relative_path" :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }" @click="choose(item, $event)"><i v-if="selectedPaths.has(item.relative_path)">✓</i><img :src="item.thumb_url" :alt="item.name" loading="lazy"><span>{{ item.name }}</span></button></div>
       <footer class="dataset-pager"><button :disabled="page === 1" @click="page = 1">{{ t("datasetEditor.pager.first") }}</button><button :disabled="page === 1" @click="page--">{{ t("datasetEditor.pager.prev") }}</button><span>{{ page }} / {{ pageCount }}</span><button :disabled="page === pageCount" @click="page++">{{ t("datasetEditor.pager.next") }}</button><button :disabled="page === pageCount" @click="page = pageCount">{{ t("datasetEditor.pager.last") }}</button><select v-model.number="pageSize"><option v-for="size in [24,48,96,192]" :key="size" :value="size">{{ t("datasetEditor.pager.perPage", { size }) }}</option></select></footer>
     </main>
-    <aside class="caption-panel"><div v-if="current"><img class="caption-preview" :src="current.thumb_url + '&size=512'" :alt="current.name" :title="t('datasetEditor.caption.previewTip')" @click="previewOpen = true"><strong>{{ current.relative_path }}</strong><div class="caption-editor"><textarea v-model="caption" rows="10"></textarea><small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small></div><div class="caption-chips"><span v-for="tag in captionTags" :key="tag" class="chip">{{ tag }}<button :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)">×</button></span><span class="chip-add"><input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag"><button @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button></span></div><button class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button></div><p v-else>{{ t("datasetEditor.caption.empty") }}</p></aside>
+    <aside class="caption-panel"><div v-if="current"><img class="caption-preview" :src="current.thumb_url + '&size=512'" :alt="current.name" :title="t('datasetEditor.caption.previewTip')" @click="previewOpen = true"><span class="caption-filename" :title="current.relative_path">{{ current.name }}</span><div class="caption-chips"><span v-for="tag in captionTags" :key="tag" class="chip">{{ tag }}<button :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)">×</button></span><span class="chip-add"><input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag"><button @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button></span></div><details class="caption-raw"><summary>{{ t("datasetEditor.caption.rawToggle") }}</summary><div class="caption-editor"><textarea v-model="caption" rows="8"></textarea><small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small></div></details><button class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button></div><p v-else>{{ t("datasetEditor.caption.empty") }}</p></aside>
   </div>
   <div v-if="previewOpen && current" class="dataset-lightbox" role="dialog" :aria-label="t('datasetEditor.caption.previewAria')" @click="previewOpen = false"><img :src="current.image_url" :alt="current.name"></div>
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)"><div class="dataset-history"><article v-for="change in sessionHistory.changes" :key="`${change.label}-${change.items[0]?.image}`"><header><strong>{{ change.label }}</strong><span>{{ t("datasetEditor.historyDialog.count", { n: change.count }) }}</span></header><details><summary>{{ t("datasetEditor.historyDialog.detail") }}</summary><div v-for="item in change.items" :key="item.image"><code>{{ item.image }}</code><del>{{ item.before || t('datasetEditor.historyDialog.noCaption') }}</del><ins>{{ item.after || t('datasetEditor.historyDialog.noCaption') }}</ins></div></details></article><p v-if="!sessionHistory.changes.length">{{ t("datasetEditor.historyDialog.empty") }}</p></div></el-dialog>

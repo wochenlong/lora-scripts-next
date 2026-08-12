@@ -495,13 +495,6 @@ export default {
       done: "已修改 {n} 张图片",
       fail: "批量编辑失败",
     },
-    quickTag: {
-      title: "快捷 tag",
-      addPlaceholder: "添加快捷 tag",
-      add: "添加",
-      hint: "右键删除自定义快捷 tag",
-      filterNote: "快捷 tag 仅用于加词；筛图请用上方「按 tag 筛图」勾选区",
-    },
     tagFilter: {
       title: "按 tag 筛图",
       searchPlaceholder: "检索 tag…（逗号/空格分隔为 OR）",
@@ -554,6 +547,7 @@ export default {
       addPlaceholder: "添加标签",
       add: "添加",
       removeAria: "删除标签 {tag}",
+      rawToggle: "查看 / 编辑 caption 原文",
       save: "保存 Caption",
       saved: "Caption 已保存",
       saveFail: "保存失败",
