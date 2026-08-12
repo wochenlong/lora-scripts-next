@@ -91,9 +91,10 @@ frontend/
 ### 样式层
 
 - `tokens.css`：颜色、字体和全局基础 token。
-- `layout.css`：应用框架、首页、训练双栏、任务页和响应式布局。
-- `features.css`：动态表单、Tagger、数据集、工具和其他共享功能。
-- `content-pages.css`、`training-index.css`、`anima-fast.css`：页面族样式。
+- `dark-theme.css`：暗色主题覆盖。
+- `base.css`：reset、应用框架、侧栏/导航和跨页共享类（`.primary-action`、`.eyebrow` 等）。
+- 按功能拆分：`home.css`、`training.css`（训练双栏 / control-panel / schema-toc）、`schema-form.css`（动态表单）、`workbench.css`、`tasks.css`、`dataset.css`、`tagger.css`、`settings.css`、`anima-fast.css`、`content-pages.css`。
+- 新样式只进对应 feature 文件，媒体查询紧跟所属组件块；不要新建全局补丁区。
 - 保持现有视觉语言，不引入第二套设计系统。
 - 正文通常不应低于 `12px`；长正文建议 `14-16px`、行高 `1.5-1.65`。`9-11px` 只用于真正次要的 badge 或 eyebrow。
 

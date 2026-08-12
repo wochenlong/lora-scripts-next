@@ -120,7 +120,6 @@ html.dark .schema-form {
 
 html.dark .schema-section,
 html.dark .selector-card,
-html.dark .form-skeleton,
 html.dark .settings-card,
 html.dark .unsupported-hint {
   background: var(--surface);
@@ -267,7 +266,6 @@ html.dark .panel-actions button,
 html.dark .preview-actions button,
 html.dark .config-list button,
 html.dark .ghost-button,
-html.dark .refresh-button,
 html.dark .secondary-action,
 html.dark .schema-validate,
 html.dark .filepicker-control .el-button {
