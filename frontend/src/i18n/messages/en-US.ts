@@ -547,6 +547,8 @@ export default {
       addPlaceholder: "Add a tag",
       add: "Add",
       removeAria: "Remove tag {tag}",
+      dragTip: "Drag to reorder",
+      dragHint: "Drag tags to reorder; save when done",
       rawToggle: "View / edit raw caption",
       save: "Save Caption",
       saved: "Caption saved",

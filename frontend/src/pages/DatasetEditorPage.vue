@@ -6,7 +6,7 @@ import { datasetApi, type ChangedItem, type DatasetHistory, type DatasetItem } f
 import { schemasApi } from "../api/schemas"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
-import { addTagToCaption, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
+import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 
 const { t } = useI18n()
 
@@ -64,6 +64,31 @@ function addCaptionTag() {
 
 function removeCaptionTag(tag: string) {
   caption.value = removeTagFromCaption(caption.value, tag)
+}
+
+const dragTagIndex = ref<number | null>(null)
+
+function onChipDragStart(index: number, event: DragEvent) {
+  dragTagIndex.value = index
+  event.dataTransfer?.setData("text/plain", String(index))
+  if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
+}
+
+function onChipDragOver(event: DragEvent) {
+  event.preventDefault()
+  if (event.dataTransfer) event.dataTransfer.dropEffect = "move"
+}
+
+function onChipDrop(toIndex: number, event: DragEvent) {
+  event.preventDefault()
+  const from = dragTagIndex.value
+  dragTagIndex.value = null
+  if (from == null || from === toIndex) return
+  caption.value = moveCaptionTag(caption.value, from, toIndex)
+}
+
+function onChipDragEnd() {
+  dragTagIndex.value = null
 }
 
 function choose(item: DatasetItem, event?: MouseEvent) {
@@ -217,7 +242,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
       <div v-else class="image-grid"><button v-for="item in paged" :key="item.relative_path" :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }" @click="choose(item, $event)"><i v-if="selectedPaths.has(item.relative_path)">✓</i><img :src="item.thumb_url" :alt="item.name" loading="lazy"><span>{{ item.name }}</span></button></div>
       <footer class="dataset-pager"><button :disabled="page === 1" @click="page = 1">{{ t("datasetEditor.pager.first") }}</button><button :disabled="page === 1" @click="page--">{{ t("datasetEditor.pager.prev") }}</button><span>{{ page }} / {{ pageCount }}</span><button :disabled="page === pageCount" @click="page++">{{ t("datasetEditor.pager.next") }}</button><button :disabled="page === pageCount" @click="page = pageCount">{{ t("datasetEditor.pager.last") }}</button><select v-model.number="pageSize"><option v-for="size in [24,48,96,192]" :key="size" :value="size">{{ t("datasetEditor.pager.perPage", { size }) }}</option></select></footer>
     </main>
-    <aside class="caption-panel"><div v-if="current"><img class="caption-preview" :src="current.thumb_url + '&size=512'" :alt="current.name" :title="t('datasetEditor.caption.previewTip')" @click="previewOpen = true"><span class="caption-filename" :title="current.relative_path">{{ current.name }}</span><div class="caption-chips"><span v-for="tag in captionTags" :key="tag" class="chip">{{ tag }}<button :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)">×</button></span><span class="chip-add"><input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag"><button @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button></span></div><details class="caption-raw"><summary>{{ t("datasetEditor.caption.rawToggle") }}</summary><div class="caption-editor"><textarea v-model="caption" rows="8"></textarea><small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small></div></details><button class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button></div><p v-else>{{ t("datasetEditor.caption.empty") }}</p></aside>
+    <aside class="caption-panel"><div v-if="current"><img class="caption-preview" :src="current.thumb_url + '&size=512'" :alt="current.name" :title="t('datasetEditor.caption.previewTip')" @click="previewOpen = true"><span class="caption-filename" :title="current.relative_path">{{ current.name }}</span><div class="caption-chips" @dragover="onChipDragOver"><span v-for="(tag, index) in captionTags" :key="`${index}:${tag}`" class="chip" :class="{ dragging: dragTagIndex === index }" draggable="true" :title="t('datasetEditor.caption.dragTip')" @dragstart="onChipDragStart(index, $event)" @drop="onChipDrop(index, $event)" @dragend="onChipDragEnd">{{ tag }}<button type="button" :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)" @mousedown.stop>×</button></span><span class="chip-add"><input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag"><button type="button" @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button></span></div><small class="caption-drag-hint">{{ t("datasetEditor.caption.dragHint") }}</small><details class="caption-raw"><summary>{{ t("datasetEditor.caption.rawToggle") }}</summary><div class="caption-editor"><textarea v-model="caption" rows="8"></textarea><small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small></div></details><button class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button></div><p v-else>{{ t("datasetEditor.caption.empty") }}</p></aside>
   </div>
   <div v-if="previewOpen && current" class="dataset-lightbox" role="dialog" :aria-label="t('datasetEditor.caption.previewAria')" @click="previewOpen = false"><img :src="current.image_url" :alt="current.name"></div>
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)"><div class="dataset-history"><article v-for="change in sessionHistory.changes" :key="`${change.label}-${change.items[0]?.image}`"><header><strong>{{ change.label }}</strong><span>{{ t("datasetEditor.historyDialog.count", { n: change.count }) }}</span></header><details><summary>{{ t("datasetEditor.historyDialog.detail") }}</summary><div v-for="item in change.items" :key="item.image"><code>{{ item.image }}</code><del>{{ item.before || t('datasetEditor.historyDialog.noCaption') }}</del><ins>{{ item.after || t('datasetEditor.historyDialog.noCaption') }}</ins></div></details></article><p v-if="!sessionHistory.changes.length">{{ t("datasetEditor.historyDialog.empty") }}</p></div></el-dialog>

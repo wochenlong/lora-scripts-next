@@ -547,6 +547,8 @@ export default {
       addPlaceholder: "添加标签",
       add: "添加",
       removeAria: "删除标签 {tag}",
+      dragTip: "拖动可调整顺序",
+      dragHint: "拖动标签可调整顺序；改完后点下方保存",
       rawToggle: "查看 / 编辑 caption 原文",
       save: "保存 Caption",
       saved: "Caption 已保存",
