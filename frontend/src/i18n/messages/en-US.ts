@@ -495,13 +495,6 @@ export default {
       done: "Modified {n} images",
       fail: "Batch edit failed",
     },
-    quickTag: {
-      title: "Quick Tags",
-      addPlaceholder: "Add a quick tag",
-      add: "Add",
-      hint: "Right-click to remove a custom quick tag",
-      filterNote: "Quick tags only append tags; use the Filter by Tags checkboxes above to filter images",
-    },
     tagFilter: {
       title: "Filter by Tags",
       searchPlaceholder: "Search tags… (comma/space = OR)",
@@ -554,6 +547,7 @@ export default {
       addPlaceholder: "Add a tag",
       add: "Add",
       removeAria: "Remove tag {tag}",
+      rawToggle: "View / edit raw caption",
       save: "Save Caption",
       saved: "Caption saved",
       saveFail: "Failed to save",
