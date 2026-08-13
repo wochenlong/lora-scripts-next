@@ -40,6 +40,7 @@ npm run check
 | 任务、日志、终止 | `src/pages/TasksPage.vue`、`src/stores/tasks.ts` | `src/api/tasks.ts`、`../mikazuki/app/api.py` |
 | Tagger | `src/pages/TaggerPage.vue`、`src/stores/tagger.ts` | `src/api/tagger.ts`、后端 tagger 模块 |
 | 数据集编辑器 | `src/pages/DatasetEditorPage.vue` | `src/api/dataset.ts`、`../mikazuki/dataset_editor.py` |
+| 网页内服务端路径浏览（Linux/远程） | `src/components/PathPickerDialog.vue`、`src/composables/useServerPathPick.ts` | `src/api/pathBrowser.ts`、后端 `/api/path_browser/*` |
 | Element Plus 显示异常 | `src/main.ts` | 对应组件模板、`src/styles/*.css` |
 | 样式、字号、响应式 | `src/styles/tokens.css`、`layout.css`、对应 feature CSS | 页面模板 |
 | 生产 history 回退 | `../mikazuki/spa.py`、`../mikazuki/app/application.py` | `../tests/test_vue_spa_routes.py` |
@@ -183,9 +184,9 @@ Element Plus 没有全量引入。新增组件时必须同时完成：
 
 ### 远程路径选择
 
-- “浏览”请求 `/api/pick_file`，后端通过 tkinter 在后端机器桌面弹窗。
-- 它不浏览访问网页的客户端文件系统；无 GUI、SSH headless 或缺少 tkinter 时不可用。
-- “常用路径”使用 `/api/get_files` 在网页内列出后端已知目录，更适合远程部署。
+- “浏览”打开网页内 `PathPickerDialog`（`useServerPathPick`），通过 `/api/path_browser/list` 浏览**服务端**文件系统；Linux / 无桌面 / 远程时可用。
+- 旧接口 `/api/pick_file`（tkinter）仅在主机有 GUI 时可用；前端已不再依赖它作为默认浏览路径。
+- “常用路径”仍可用 `/api/get_files` 列出后端已知目录。
 - 所有手工路径也是后端机器路径。
 
 ### 开发代理与生产路由

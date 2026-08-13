@@ -4,6 +4,8 @@ import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { schemasApi, type PickerFile } from "../api/schemas"
 import type { FormField, FormValue } from "../schema/adapter"
+import PathPickerDialog from "./PathPickerDialog.vue"
+import { useServerPathPick } from "../composables/useServerPathPick"
 
 const props = defineProps<{ field: FormField; modelValue: FormValue; error?: string }>()
 const emit = defineEmits<{ "update:modelValue": [value: FormValue] }>()
@@ -13,6 +15,15 @@ const catalogOpen = ref(false)
 const picking = ref(false)
 const pickerType = computed(() => String(props.field.extra?.type || "folder"))
 const internalPicker = computed(() => props.field.extra?.internal ? String(props.field.extra.internal) : "")
+const {
+  open: pathPickerOpen,
+  mode: pathPickerMode,
+  initialPath: pathPickerInitial,
+  nameFilter: pathPickerFilter,
+  pick: pickServerPath,
+  onConfirm: onPathConfirm,
+  onCancel: onPathCancel,
+} = useServerPathPick()
 const arrayText = computed({
   get: () => Array.isArray(props.modelValue) ? props.modelValue.join("\n") : "",
   set: (value: string) => emit("update:modelValue", value.split(/\r?\n/).filter(Boolean)),
@@ -26,8 +37,13 @@ const compact = computed(() => {
 async function pick() {
   picking.value = true
   try {
-    const data = await schemasApi.pickFile(pickerType.value)
-    emit("update:modelValue", data.path.replaceAll("\\", "/"))
+    const isFile = pickerType.value === "model-file"
+    const path = await pickServerPath({
+      mode: isFile ? "file" : "folder",
+      initialPath: typeof props.modelValue === "string" ? props.modelValue : "",
+      nameFilter: isFile ? "*.safetensors;*.ckpt;*.pt" : "",
+    })
+    if (path) emit("update:modelValue", path)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t("schemaForm.pickFail"))
   } finally {
@@ -76,4 +92,13 @@ async function openCatalog() {
       </button>
     </div>
   </el-dialog>
+
+  <PathPickerDialog
+    v-model="pathPickerOpen"
+    :mode="pathPickerMode"
+    :initial-path="pathPickerInitial"
+    :name-filter="pathPickerFilter"
+    @confirm="onPathConfirm"
+    @cancel="onPathCancel"
+  />
 </template>

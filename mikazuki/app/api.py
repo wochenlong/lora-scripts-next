@@ -106,6 +106,7 @@ from mikazuki.utils.config_export import normalize_config_for_export
 from mikazuki.utils.config_args import normalize_custom_args, normalize_kv_arg_list
 from mikazuki.utils.devices import printable_devices
 from mikazuki.portable_utils import flash_attn_stack_usable
+from mikazuki.utils import path_browser as path_browser_utils
 from mikazuki.utils.tk_window import (open_directory_selector,
                                       open_file_selector,
                                       tkinter_available)
@@ -1333,10 +1334,12 @@ async def run_interrogate(req: TaggerInterrogateRequest, background_tasks: Backg
 
 @router.get("/pick_file")
 async def pick_file(picker_type: str):
-    if not tkinter_available():
+    """Native tkinter picker (desktop host only). Prefer /api/path_browser on Linux/remote."""
+    if not path_browser_utils.gui_picker_available():
         return APIResponseFail(
-            message="当前环境未安装 tkinter，无法弹出系统文件夹/文件选择框。"
-            "请手动输入路径；整合包用户请使用已打包 tkinter 的版本或重新运行 build_portable.ps1。"
+            message="当前环境无法使用系统文件选择框（无桌面 / 远程访问 / 未安装 tkinter）。"
+            "请使用网页路径浏览器，或手动输入服务器上的路径。",
+            data={"code": "GUI_PICKER_UNAVAILABLE", "web_picker": True},
         )
     if picker_type == "folder":
         coro = asyncio.to_thread(open_directory_selector, "")
@@ -1348,11 +1351,43 @@ async def pick_file(picker_type: str):
 
     result = await coro
     if result == "":
-        return APIResponseFail(message="用户取消选择")
+        return APIResponseFail(message="用户取消选择", data={"code": "CANCELLED", "web_picker": True})
 
     return APIResponseSuccess(data={
         "path": result
     })
+
+
+@router.get("/path_browser/capability")
+async def path_browser_capability():
+    return APIResponseSuccess(data={
+        "web_picker": True,
+        "gui_picker": path_browser_utils.gui_picker_available(),
+        "tkinter": tkinter_available(),
+    })
+
+
+@router.get("/path_browser/list")
+async def path_browser_list(
+    path: str = "",
+    mode: str = "folder",
+    name_filter: str = "",
+):
+    """List a server directory for the in-browser path picker (#244)."""
+    try:
+        data = await asyncio.to_thread(
+            path_browser_utils.list_directory,
+            path or None,
+            mode=mode,
+            name_filter=name_filter or None,
+        )
+    except PermissionError as exc:
+        return APIResponseFail(message=str(exc), data={"code": "DENIED"})
+    except FileNotFoundError as exc:
+        return APIResponseFail(message=str(exc), data={"code": "NOT_FOUND"})
+    except (NotADirectoryError, ValueError, OSError) as exc:
+        return APIResponseFail(message=str(exc), data={"code": "BAD_PATH"})
+    return APIResponseSuccess(data=data)
 
 
 @router.get("/get_files")
