@@ -1,7 +1,7 @@
 ﻿# Next Trainer
 
 **Next Trainer** is a local Windows training WebUI (GitHub repo: `lora-scripts-next`).  
-LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux, built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) with an Akegarasu-style workflow.
+LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / Krea 2, built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (and optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner)) with an Akegarasu-style workflow.
 
 > Product brand and release archives use **Next Trainer** / `Next-Trainer-v*.7z`. The portable layout folder `SD-Trainer/` (and updater bat names) stay as launcher contracts for existing installs.
 
@@ -14,25 +14,17 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux, built on [kohya-ss/sd-s
 | Branch | Role | UI | Version |
 |--------|------|----|---------|
 | **`main`** | Stable releases | Legacy prebuilt frontend | Stable **v2.9.1** |
-| **`dev`** | **Vue 3 beta** (this README) | Vue 3 four-pane workspace | **`2.9.x-beta.*`** (e.g. `2.9.2-beta.3`) |
+| **`dev`** | **Vue 3 RC** (this README) | Vue 3 four-pane workspace | **`2.9.x-rc.*`** (e.g. `2.9.2-rc.1`) |
 
-**Versioning:** betas stay on **`2.9.x`**; **`3.0.0` is reserved for the formal release**. Include the full version from the sidebar when filing issues.
+**Versioning:** pre-releases stay on **`2.9.x`** (`beta` → **`rc`**); **`3.0.0` is reserved for the formal release**. Include the full version from the sidebar when filing issues.
 
 ---
 
 ## Portable packages (Next Trainer)
 
-| Package | Contents | Download |
-|---------|----------|----------|
-| **lite** | No Anima Fast runtime; bundled WD tagger; ~**0.38 GB** | [GitHub Release v2.9.2-beta.3](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-beta.3) |
-| **full** | Anima Fast `.venv` preinstalled + same tagger; ~**2.3 GB** | [ModelScope dataset windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
-
-ModelScope paths:
-
-```text
-releases/v2.9.2-beta.3/Next-Trainer-v2.9.2-beta.3-full.7z
-releases/v2.9.2-beta.3/Next-Trainer-v2.9.2-beta.3-lite.7z
-```
+> **RC portable builds are not ready yet.** Download links for `2.9.2-rc.*` lite / full will be filled in here when packaging is done.
+>
+> Until then, use **source checkout of `dev`** below, or the last published beta packages (**v2.9.2-beta.3**) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases) / [ModelScope](https://modelscope.cn/datasets/windsing/next-trainer-portable) if you only need the earlier beta UI.
 
 Stable (legacy UI) packages: [Releases](https://github.com/wochenlong/lora-scripts-next/releases) → **v2.9.1** and earlier.
 
@@ -40,18 +32,20 @@ Stable (legacy UI) packages: [Releases](https://github.com/wochenlong/lora-scrip
 
 ## How to use
 
-### A. Portable (recommended for beta testers)
+### A. Portable (RC — coming soon)
 
-1. Download **lite** or **full**, extract with 7-Zip to a path **without spaces or non-ASCII characters**  
-2. Double-click **`run_gui.bat`** (first run installs main deps online)  
-3. Open **http://127.0.0.1:28000**  
-4. Confirm the sidebar shows **`v2.9.2-beta.3 · beta`**
+Steps will match previous betas once archives are published:
+
+1. Download **lite** or **full**, extract with 7-Zip to a path **without spaces or non-ASCII characters**
+2. Double-click **`run_gui.bat`** (first run installs main deps online)
+3. Open **http://127.0.0.1:28000**
+4. Confirm the sidebar shows **`v2.9.2-rc.1 · rc`** (or the package’s exact version)
 
 Requirements: Windows 10/11, NVIDIA GPU (RTX 20+ recommended).
 
 More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md)
 
-### B. Run `dev` from source (Vue 3)
+### B. Run `dev` from source (Vue 3) — recommended while RC packages are pending
 
 ```sh
 git clone https://github.com/wochenlong/lora-scripts-next.git
@@ -68,7 +62,7 @@ git pull origin dev
 
 ```sh
 git branch --show-current   # should be dev
-cat VERSION                 # e.g. 2.9.2-beta.3
+cat VERSION                 # e.g. 2.9.2-rc.1
 ```
 
 Frontend lives in `frontend/` (Vue 3 + Vite):
@@ -99,32 +93,36 @@ git pull
 
 ---
 
-## Vue 3 beta features (`dev`)
+## Vue 3 RC features (`dev`)
 
 Compared with the legacy multi-page dist UI, **`dev` is a Vue 3 SPA workspace**:
 
 | Area | Capabilities |
 |------|----------------|
 | **Training** | Base model × engine × target; live TOML preview; validate / import-export / start |
-| **Dataset** | WD14 tagging + tag editor entry |
-| **Tasks** | Task list, status, logs; primary place to watch runs |
-| **Settings** | UI prefs, **engine management** (built-in Kohya / optional Anima Fast), About, changelog |
-| **Branding** | Product name **Next Trainer**; beta badge on prerelease versions |
+| **Dataset** | WD14 tagging; **image-first tag editor** (toolbar source/load, filter & batch edit in a right panel) |
+| **Tasks** | Task list, status, logs, previews / Loss; primary place to watch runs |
+| **Settings** | UI prefs (incl. light/dark theme), **engine management** (Kohya / Anima Fast / Musubi), **download sources** (pip / PyTorch / HF / GitHub mirrors), About, changelog |
+| **Branding** | Product name **Next Trainer**; **rc** badge on prerelease versions |
 | **Credits** | Settings → About; also [docs/credits.md](docs/credits.md) |
 
-Training backends match the stable line: Anima LoRA / Fast / finetune, SD/SDXL, Flux, local tagger, train monitor (`/train-monitor`), TensorBoard.
+Training backends:
 
-Anima Fast: [docs/anima-fast.md](docs/anima-fast.md)
+- Anima LoRA / Fast / finetune, SD/SDXL, Flux (Kohya line)
+- **Krea 2 LoRA** via optional **Musubi-Tuner** engine (install from Settings)
+- Local tagger, train monitor (`/train-monitor`), TensorBoard
+
+Anima Fast: [docs/anima-fast.md](docs/anima-fast.md) · Krea 2 multi-GPU (Linux): [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
 
 ### Screenshots
 
-Captured from the `dev` Vue 3 UI (`v2.9.2-beta.3`, Chinese locale).
+Captured from the `dev` Vue 3 UI (`v2.9.2-rc.1`, Chinese locale).
 
 #### Training
 
-| Standard (Kohya / Anima LoRA) | Anima Fast |
-|---|---|
-| ![Training · standard](assets/readme/vue3/01-training-standard.png) | ![Training · Fast](assets/readme/vue3/02-training-fast.png) |
+| Standard (Kohya / Anima LoRA) | Anima Fast | Krea 2 (Musubi) |
+|---|---|---|
+| ![Training · standard](assets/readme/vue3/01-training-standard.png) | ![Training · Fast](assets/readme/vue3/02-training-fast.png) | ![Training · Krea 2](assets/readme/vue3/08-training-krea2.png) |
 
 #### Dataset
 
@@ -149,10 +147,11 @@ Captured from the `dev` Vue 3 UI (`v2.9.2-beta.3`, Chinese locale).
 | Mode | Notes |
 |------|-------|
 | Anima LoRA | LoRA · LoKr · T-LoRA · from ~12 GB VRAM |
-| Anima Fast | Optional runtime · 16 GB+ recommended · install in UI on lite; preinstalled on full |
+| Anima Fast | Optional runtime · 16 GB+ recommended · install in Settings |
 | Anima finetune | Full DiT · ~24 GB recommended |
 | SD 1.5 / SDXL | LoRA / full finetune |
 | Flux | LoRA |
+| Krea 2 | LoRA via Musubi · install engine in Settings · multi-GPU on Linux |
 
 See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 
@@ -176,12 +175,14 @@ See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 ## FAQ (short)
 
 **What to include in a bug report?**  
-Full version (including beta), train type (model/engine/target), steps to reproduce, logs. → [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
+Full version (including `rc`), train type (model/engine/target), steps to reproduce, logs. → [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
 
-**lite vs full?**  
+**Where are the RC portable packages?**  
+Not published yet — this section will be updated when lite/full archives are ready. Use `dev` from source for the current Vue 3 RC line.
+
+**lite vs full (when packages return)?**  
 Kohya-only → lite. Want Anima Fast out of the box → full (ModelScope).
 
 ---
 
 <p align="center"><sub>Maintainer: <a href="https://github.com/wochenlong">@wochenlong</a> · <a href="docs/credits.md">Credits</a> · <a href="CONTRIBUTORS.md">Contributors</a></sub></p>
-

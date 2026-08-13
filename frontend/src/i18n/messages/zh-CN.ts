@@ -1,7 +1,7 @@
 export default {
   app: {
     brand: "Next Trainer",
-    prerelease: "内测",
+    prerelease: "RC",
   },
   nav: {
     training: "训练",
