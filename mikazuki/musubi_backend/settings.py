@@ -13,6 +13,8 @@ try:
 except ModuleNotFoundError:  # Python 3.10 runtime
     import toml as tomllib
 
+from mikazuki.download_sources import apply_github_prefix
+
 
 DEFAULT_CONFIG = Path("config/musubi_backend.toml")
 UPSTREAM_REPO = "https://github.com/kohya-ss/musubi-tuner.git"
@@ -84,6 +86,7 @@ def ensure_upstream_clone(
     target: Path,
     commit: str | None,
     log: Callable[[str], None] | None = None,
+    github_url_prefix: str | None = None,
 ) -> Path:
     target = target.resolve()
     if _has_package_tree(target):
@@ -94,9 +97,10 @@ def ensure_upstream_clone(
     if target.exists() and any(target.iterdir()):
         raise ValueError(f"musubi-tuner 上游缓存已存在但不是有效源码目录: {target}")
     target.parent.mkdir(parents=True, exist_ok=True)
-    clone_cmd = ["git", "clone", "--depth", "1", UPSTREAM_REPO, str(target)]
+    repo_url = apply_github_prefix(UPSTREAM_REPO, github_url_prefix)
+    clone_cmd = ["git", "clone", "--depth", "1", repo_url, str(target)]
     if commit:
-        clone_cmd = ["git", "clone", UPSTREAM_REPO, str(target)]
+        clone_cmd = ["git", "clone", repo_url, str(target)]
     if log:
         log(f"[clone] {' '.join(clone_cmd)}")
     subprocess.run(clone_cmd, check=True)
@@ -114,6 +118,7 @@ def resolve_install_source_root(
     *,
     allow_clone: bool = False,
     log: Callable[[str], None] | None = None,
+    github_url_prefix: str | None = None,
 ) -> Path:
     """Locate a musubi-tuner source checkout usable as install input.
 
@@ -139,7 +144,13 @@ def resolve_install_source_root(
                 "需要 git 才能自动下载 musubi-tuner 源码。请安装 git，"
                 "或设置 MUSUBI_ROOT 指向现有的 kohya-ss/musubi-tuner 克隆。"
             )
-        return ensure_upstream_clone(project_root, cache_root, (source_commit or "").strip() or None, log=log)
+        return ensure_upstream_clone(
+            project_root,
+            cache_root,
+            (source_commit or "").strip() or None,
+            log=log,
+            github_url_prefix=github_url_prefix,
+        )
     searched = ", ".join(str(c) for c in [*candidates, cache_root])
     raise ValueError(
         "未找到 musubi-tuner 源码。请先把 https://github.com/kohya-ss/musubi-tuner "
@@ -152,11 +163,19 @@ def ensure_install_source_ready(
     preferred: Path,
     source_commit: str | None = None,
     log: Callable[[str], None] | None = None,
+    github_url_prefix: str | None = None,
 ) -> Path:
     preferred = preferred.resolve()
     if _has_package_tree(preferred):
         return preferred
-    return resolve_install_source_root(project_root, None, source_commit, allow_clone=True, log=log)
+    return resolve_install_source_root(
+        project_root,
+        None,
+        source_commit,
+        allow_clone=True,
+        log=log,
+        github_url_prefix=github_url_prefix,
+    )
 
 
 def discover_runtime(config: dict | None = None, lora_next_root: Path | None = None) -> RuntimeConfig:

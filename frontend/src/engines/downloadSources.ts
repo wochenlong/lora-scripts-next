@@ -148,6 +148,23 @@ export function resolveGithubPrefix(prefs: DownloadSourcesPrefs): string {
   return GITHUB_PREFIXES[prefs.github.choice]
 }
 
+/** Payload fields sent with Fast / Musubi install & repair requests. */
+export interface DownloadSourcesPayload {
+  pip_index_url: string
+  pytorch_index_url: string
+  hf_endpoint: string
+  github_url_prefix: string
+}
+
+export function resolvedDownloadSourcesPayload(prefs: DownloadSourcesPrefs = readDownloadSources()): DownloadSourcesPayload {
+  return {
+    pip_index_url: resolvePipIndexUrl(prefs),
+    pytorch_index_url: resolvePytorchIndexUrl(prefs),
+    hf_endpoint: resolveHfEndpoint(prefs),
+    github_url_prefix: resolveGithubPrefix(prefs),
+  }
+}
+
 /** Summary chips for the collapsed header (resolved choice labels, not URLs). */
 export function activeSourceSummary(prefs: DownloadSourcesPrefs): {
   pip: string

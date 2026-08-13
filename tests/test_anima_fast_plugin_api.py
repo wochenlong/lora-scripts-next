@@ -128,12 +128,30 @@ class AnimaFastPluginApiTests(unittest.TestCase):
                     "mikazuki.app.api.start_install_task",
                     return_value=("task-1", {"task_id": "task-1", "log_stream": "/api/plugins/anima-lora/install/log/stream/task-1"}),
                 ) as starter:
-                response = asyncio.run(api.anima_lora_plugin_install(make_request({"source_root": str(source), "dry_run": False})))
+                response = asyncio.run(
+                    api.anima_lora_plugin_install(
+                        make_request(
+                            {
+                                "source_root": str(source),
+                                "dry_run": False,
+                                "pip_index_url": "https://pypi.tuna.tsinghua.edu.cn/simple",
+                                "pytorch_index_url": "https://mirrors.aliyun.com/pytorch-wheels",
+                                "hf_endpoint": "https://hf-mirror.com",
+                                "github_url_prefix": "https://ghfast.top/",
+                            }
+                        )
+                    )
+                )
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["task_id"], "task-1")
         self.assertIn("/install/log/stream/task-1", response.data["log_stream"])
         starter.assert_called_once()
+        kwargs = starter.call_args.kwargs
+        sources = kwargs.get("download_sources")
+        self.assertIsNotNone(sources)
+        self.assertEqual(sources.pip_index_url, "https://pypi.tuna.tsinghua.edu.cn/simple")
+        self.assertEqual(sources.github_url_prefix, "https://ghfast.top/")
 
     def test_install_returns_existing_ready_status_without_reinstalling(self):
         with tempfile.TemporaryDirectory() as td:

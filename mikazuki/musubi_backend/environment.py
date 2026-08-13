@@ -12,6 +12,11 @@ import threading
 import time
 import uuid
 
+from mikazuki.download_sources import (
+    DownloadSources,
+    install_process_env,
+    pytorch_extra_index_url,
+)
 from mikazuki.tasks import Task, tm
 from mikazuki.train_log_hub import hub as train_log_hub
 
@@ -47,6 +52,8 @@ MUSUBI_PYTORCH_INDEXES = {
 }
 DEFAULT_CUDA_EXTRA = "cu128"
 DEFAULT_HF_ENDPOINT = "https://hf-mirror.com"
+DEFAULT_PIP_INDEX_URL = "https://pypi.org/simple"
+DEFAULT_PYTORCH_INDEX_BASE = "https://download.pytorch.org/whl"
 
 # 上游 musubi-tuner 主依赖不含 tensorboard（仅在 dev group），但训练默认
 # log_with="tensorboard"；缺包时 accelerate 静默跳过 tracker，无事件文件。
@@ -80,6 +87,7 @@ class EnvironmentInstallPlan:
     venv_python: Path
     cuda_extra: str
     dry_run: bool = True
+    download_sources: DownloadSources | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -92,6 +100,7 @@ class EnvironmentInstallPlan:
             "venv_python": str(self.venv_python),
             "cuda_extra": self.cuda_extra,
             "dry_run": self.dry_run,
+            "download_sources": self.download_sources.as_dict() if self.download_sources else None,
         }
 
 
@@ -202,6 +211,7 @@ def build_environment_install_plan(
     dry_run: bool = True,
     source_commit: str | None = None,
     cuda_extra: str | None = None,
+    download_sources: DownloadSources | None = None,
 ) -> EnvironmentInstallPlan:
     root = project_root.resolve()
     python_dir = root / ".python"
@@ -221,6 +231,7 @@ def build_environment_install_plan(
         venv_python=venv_python,
         cuda_extra=cuda_extra or resolve_cuda_extra(),
         dry_run=dry_run,
+        download_sources=download_sources,
     )
 
 
@@ -349,12 +360,36 @@ def install_environment(
     _append(log, "[phase] copy source snapshot")
     if plan.source_commit:
         _append(log, f"[source] pinned commit {plan.source_commit}")
+    github_prefix = plan.download_sources.github_url_prefix if plan.download_sources else None
     resolved_source = ensure_install_source_ready(
-        plan.project_root, plan.source_root, plan.source_commit, log=lambda line: _append(log, line)
+        plan.project_root,
+        plan.source_root,
+        plan.source_commit,
+        log=lambda line: _append(log, line),
+        github_url_prefix=github_prefix,
     )
     copy_source_snapshot(
         build_install_plan(resolved_source, plan.layout, dry_run=False, source_commit=plan.source_commit, cuda_extra=plan.cuda_extra)
     )
+
+    process_env = install_process_env(plan.download_sources)
+    pip_index = (
+        plan.download_sources.pip_index_url
+        if plan.download_sources and plan.download_sources.pip_index_url
+        else DEFAULT_PIP_INDEX_URL
+    )
+    default_torch = MUSUBI_PYTORCH_INDEXES.get(plan.cuda_extra) or f"{DEFAULT_PYTORCH_INDEX_BASE}/{plan.cuda_extra}"
+    torch_index = pytorch_extra_index_url(
+        plan.download_sources.pytorch_index_url if plan.download_sources else None,
+        plan.cuda_extra,
+        default_torch,
+    )
+    if plan.download_sources:
+        _append(
+            log,
+            f"[sources] pip={pip_index} pytorch={torch_index} "
+            f"hf={plan.download_sources.hf_endpoint or '(default)'} github_prefix={github_prefix or '(none)'}",
+        )
 
     uv = _uv_command()
     facts["phase"] = "python"
@@ -367,6 +402,7 @@ def install_environment(
             [uv, "python", "install", MUSUBI_PYTHON_VERSION, "--install-dir", str(plan.python_install_dir), "--no-cache"],
             plan.project_root,
             log,
+            env=process_env,
         )
         base_python = _find_base_python(plan)
     if not base_python.is_file():
@@ -379,14 +415,18 @@ def install_environment(
     write_install_state(plan.layout, STATE_INSTALLING, facts, "creating musubi-tuner extension venv")
     if not plan.venv_python.is_file():
         plan.venv_python.parent.parent.mkdir(parents=True, exist_ok=True)
-        _run_streaming([str(base_python), "-m", "venv", str(plan.venv_python.parent.parent)], plan.project_root, log)
+        _run_streaming(
+            [str(base_python), "-m", "venv", str(plan.venv_python.parent.parent)],
+            plan.project_root,
+            log,
+            env=process_env,
+        )
     else:
         _append(log, f"[skip] musubi venv exists: {plan.venv_python}")
 
     facts["phase"] = "dependencies"
     _emit_progress(progress, "dependencies", "Installing musubi-tuner Python dependencies")
     write_install_state(plan.layout, STATE_INSTALLING, facts, "installing musubi-tuner dependencies")
-    torch_index = MUSUBI_PYTORCH_INDEXES[plan.cuda_extra]
     _run_streaming(
         [
             uv,
@@ -397,7 +437,7 @@ def install_environment(
             "--no-cache",
             "--no-config",
             "--index-url",
-            "https://pypi.org/simple",
+            pip_index,
             "--extra-index-url",
             torch_index,
             "--index-strategy",
@@ -407,6 +447,7 @@ def install_environment(
         ],
         plan.project_root,
         log,
+        env=process_env,
         retries=int(os.environ.get("MUSUBI_INSTALL_RETRIES", "3")),
     )
 
@@ -435,9 +476,16 @@ def start_install_task(
     dry_run: bool = False,
     source_commit: str | None = None,
     cuda_extra: str | None = None,
+    download_sources: DownloadSources | None = None,
 ) -> tuple[str, dict]:
     plan = build_environment_install_plan(
-        project_root, layout, source_root, dry_run=dry_run, source_commit=source_commit, cuda_extra=cuda_extra
+        project_root,
+        layout,
+        source_root,
+        dry_run=dry_run,
+        source_commit=source_commit,
+        cuda_extra=cuda_extra,
+        download_sources=download_sources,
     )
     if dry_run:
         return "", {"plan": plan.as_dict()}

@@ -1,4 +1,5 @@
 import { apiData } from "./client"
+import type { DownloadSourcesPayload } from "../engines/downloadSources"
 
 export type MusubiState = "unknown" | "installing" | "auditing" | "ready" | "broken" | "installed_unverified" | "not_installed" | "disabled"
 
@@ -48,10 +49,16 @@ export interface MusubiPreflightResult {
   facts?: Record<string, unknown>
 }
 
+function installBody(downloadSources?: DownloadSourcesPayload) {
+  return JSON.stringify({ dry_run: false, ...(downloadSources || {}) })
+}
+
 export const musubiApi = {
   status: () => apiData<MusubiStatus>("/api/plugins/musubi/status"),
-  install: () => apiData<MusubiInstallResult>("/api/plugins/musubi/install", { method: "POST", body: JSON.stringify({ dry_run: false }) }),
-  repair: () => apiData<MusubiInstallResult>("/api/plugins/musubi/repair", { method: "POST", body: JSON.stringify({ dry_run: false }) }),
+  install: (downloadSources?: DownloadSourcesPayload) =>
+    apiData<MusubiInstallResult>("/api/plugins/musubi/install", { method: "POST", body: installBody(downloadSources) }),
+  repair: (downloadSources?: DownloadSourcesPayload) =>
+    apiData<MusubiInstallResult>("/api/plugins/musubi/repair", { method: "POST", body: installBody(downloadSources) }),
   uninstall: () => apiData<{ status?: MusubiStatus }>("/api/plugins/musubi/uninstall", { method: "POST", body: "{}" }),
   preflight: (config: Record<string, unknown>) => apiData<MusubiPreflightResult>("/api/plugins/musubi/preflight", { method: "POST", body: JSON.stringify(config) }),
 }

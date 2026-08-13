@@ -2,6 +2,7 @@ import { animaFastApi, type AnimaFastState, type AnimaFastStatus, type InstallRe
 import { musubiApi, type MusubiInstallResult, type MusubiStatus } from "./musubi"
 import { apiData } from "./client"
 import type { EngineRuntimeState } from "../engines/catalog"
+import { resolvedDownloadSourcesPayload } from "../engines/downloadSources"
 import type { TrainingEngine } from "../training/modules"
 
 export interface EngineStatus {
@@ -118,14 +119,16 @@ export const enginesApi = {
   },
 
   async install(id: TrainingEngine): Promise<EngineActionResult> {
-    if (id === "anima-fast") return fromInstall(await animaFastApi.install())
-    if (id === "musubi") return fromMusubiInstall(await musubiApi.install())
+    const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "anima-fast") return fromInstall(await animaFastApi.install(downloadSources))
+    if (id === "musubi") return fromMusubiInstall(await musubiApi.install(downloadSources))
     throw new Error(`Install is not supported for engine: ${id}`)
   },
 
   async repair(id: TrainingEngine): Promise<EngineActionResult> {
-    if (id === "anima-fast") return fromInstall(await animaFastApi.repair())
-    if (id === "musubi") return fromMusubiInstall(await musubiApi.repair())
+    const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "anima-fast") return fromInstall(await animaFastApi.repair(downloadSources))
+    if (id === "musubi") return fromMusubiInstall(await musubiApi.repair(downloadSources))
     throw new Error(`Repair is not supported for engine: ${id}`)
   },
 
