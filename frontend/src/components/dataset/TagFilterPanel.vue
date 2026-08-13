@@ -2,17 +2,21 @@
 import { useI18n } from "vue-i18n"
 import type { SortOrder, TagCount, TagFilterLogic, TagSearchMode, TagSortBy } from "../../dataset/tagFilter"
 
-defineProps<{
-  tags: TagCount[]
-  selectedTags: ReadonlySet<string>
-  logic: TagFilterLogic
-  search: string
-  searchMode: TagSearchMode
-  sortBy: TagSortBy
-  order: SortOrder
-  excludeInput: string
-  filteredCount: number
-}>()
+withDefaults(
+  defineProps<{
+    tags: TagCount[]
+    selectedTags: ReadonlySet<string>
+    logic: TagFilterLogic
+    search: string
+    searchMode: TagSearchMode
+    sortBy: TagSortBy
+    order: SortOrder
+    excludeInput: string
+    filteredCount: number
+    showSelectAll?: boolean
+  }>(),
+  { showSelectAll: true },
+)
 
 const emit = defineEmits<{
   "update:logic": [value: TagFilterLogic]
@@ -72,7 +76,14 @@ function selectValue(event: Event): string {
     <input :value="excludeInput" :placeholder="t('datasetEditor.tagFilter.excludePlaceholder')" :title="t('datasetEditor.tagFilter.excludeTip')" @input="emit('update:excludeInput', ($event.target as HTMLInputElement).value)">
     <div class="tag-filter-actions">
       <button :disabled="!selectedTags.size" @click="emit('clear')">{{ t("datasetEditor.tagFilter.clear") }}</button>
-      <button :disabled="!filteredCount" :title="t('datasetEditor.tagFilter.selectAllTip')" @click="emit('selectAll')">{{ t("datasetEditor.tagFilter.selectAll", { n: filteredCount }) }}</button>
+      <button
+        v-if="showSelectAll"
+        :disabled="!filteredCount"
+        :title="t('datasetEditor.tagFilter.selectAllTip')"
+        @click="emit('selectAll')"
+      >
+        {{ t("datasetEditor.tagFilter.selectAll", { n: filteredCount }) }}
+      </button>
     </div>
   </div>
 </template>
