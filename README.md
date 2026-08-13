@@ -22,9 +22,16 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / Krea 2, built on [kohy
 
 ## Portable packages (Next Trainer)
 
-> **RC portable builds are not ready yet.** Download links for `2.9.2-rc.*` lite / full will be filled in here when packaging is done.
->
-> Until then, use **source checkout of `dev`** below, or the last published beta packages (**v2.9.2-beta.3**) from [Releases](https://github.com/wochenlong/lora-scripts-next/releases) / [ModelScope](https://modelscope.cn/datasets/windsing/next-trainer-portable) if you only need the earlier beta UI.
+| Package | Contents | Download |
+|---------|----------|----------|
+| **lite** | No Anima Fast / Musubi runtime; bundled WD tagger; ~**0.39 GB** | [GitHub Release v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) |
+| **kohya-musubi** | Kohya main env (cu128) + Musubi preinstalled; same tagger; ~**4.2 GB** | [ModelScope dataset windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
+
+ModelScope path:
+
+```text
+releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
+```
 
 Stable (legacy UI) packages: [Releases](https://github.com/wochenlong/lora-scripts-next/releases) → **v2.9.1** and earlier.
 
@@ -32,20 +39,18 @@ Stable (legacy UI) packages: [Releases](https://github.com/wochenlong/lora-scrip
 
 ## How to use
 
-### A. Portable (RC — coming soon)
+### A. Portable (recommended for RC testers)
 
-Steps will match previous betas once archives are published:
-
-1. Download **lite** or **full**, extract with 7-Zip to a path **without spaces or non-ASCII characters**
-2. Double-click **`run_gui.bat`** (first run installs main deps online)
+1. Download **lite** (GitHub) or **kohya-musubi** (ModelScope), extract with 7-Zip to a path **without spaces or non-ASCII characters**
+2. **lite:** double-click **`run_gui.bat`** (first run installs main deps online). **kohya-musubi:** double-click **`启动.bat`**
 3. Open **http://127.0.0.1:28000**
-4. Confirm the sidebar shows **`v2.9.2-rc.1 · rc`** (or the package’s exact version)
+4. Confirm the sidebar shows **`v2.9.2-rc.1 · rc`** (archive build stamp: **0813**)
 
 Requirements: Windows 10/11, NVIDIA GPU (RTX 20+ recommended).
 
 More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md)
 
-### B. Run `dev` from source (Vue 3) — recommended while RC packages are pending
+### B. Run `dev` from source (Vue 3)
 
 ```sh
 git clone https://github.com/wochenlong/lora-scripts-next.git
@@ -177,11 +182,8 @@ See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 **What to include in a bug report?**  
 Full version (including `rc`), train type (model/engine/target), steps to reproduce, logs. → [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
 
-**Where are the RC portable packages?**  
-Not published yet — this section will be updated when lite/full archives are ready. Use `dev` from source for the current Vue 3 RC line.
-
-**lite vs full (when packages return)?**  
-Kohya-only → lite. Want Anima Fast out of the box → full (ModelScope).
+**lite vs kohya-musubi?**  
+Quick / weak network → lite (install deps on first run). Want Kohya + Musubi (Krea 2) ready → **kohya-musubi** (ModelScope). Anima Fast is install-from-Settings on both.
 
 ---
 

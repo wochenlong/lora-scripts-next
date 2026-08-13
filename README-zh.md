@@ -22,9 +22,16 @@
 
 ## 下载 Next Trainer 整合包
 
-> **RC 整合包尚未就绪。** `2.9.2-rc.*` 的 lite / full 下载链接会在打包完成后补到此处。
->
-> 在此之前请用下方 **源码检出 `dev`**；若只需更早的 beta 界面，仍可使用已发布的 **v2.9.2-beta.3**（[Releases](https://github.com/wochenlong/lora-scripts-next/releases) / [魔搭](https://modelscope.cn/datasets/windsing/next-trainer-portable)）。
+| 包 | 内容 | 下载 |
+|----|------|------|
+| **lite** | 不含 Anima Fast / Musubi 运行时；内置 WD 打标模型；约 **0.39 GB** | [GitHub Release v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) |
+| **kohya-musubi** | 预装 Kohya 主环境（cu128）+ Musubi；同上打标模型；约 **4.2 GB** | [魔搭数据集 windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
+
+魔搭路径：
+
+```text
+releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
+```
 
 稳定版（旧 UI）整合包仍见 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 中 **v2.9.1** 及更早条目。
 
@@ -32,20 +39,18 @@
 
 ## 怎么用
 
-### A. 整合包（RC — 待发布）
+### A. 整合包（推荐 RC 试用）
 
-归档就绪后步骤与以往 beta 相同：
-
-1. 下载 **lite** 或 **full**，用 7-Zip 解压到**非中文、非空格**路径  
-2. 双击根目录 **`run_gui.bat`**（首次会联网安装主环境依赖）  
+1. 下载 **lite**（GitHub）或 **kohya-musubi**（魔搭），用 7-Zip 解压到**非中文、非空格**路径  
+2. **lite：** 双击 **`run_gui.bat`**（首次会联网安装主环境依赖）。**kohya-musubi：** 双击 **`启动.bat`**  
 3. 浏览器打开 **http://127.0.0.1:28000**  
-4. 侧栏确认版本为 **`v2.9.2-rc.1 · RC`**（以包内版本为准）
+4. 侧栏确认版本为 **`v2.9.2-rc.1 · RC`**（归档名带日期 **0813**）
 
 要求：Windows 10/11，NVIDIA GPU（建议 RTX 20+）。
 
 补充说明：[整合包补充说明](docs/portable-getting-started.md) · [打标模型目录](docs/tagger-models.md)
 
-### B. 从源码运行 `dev`（Vue3）— RC 整合包未出前推荐
+### B. 从源码运行 `dev`（Vue3）
 
 ```powershell
 git clone https://github.com/wochenlong/lora-scripts-next.git
@@ -182,11 +187,8 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 **反馈 Bug 要带什么？**  
 版本号（含 `rc`）、训练类型（模型/引擎/目标）、复现步骤、相关日志。→ [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
 
-**RC 整合包在哪下？**  
-尚未发布；打包完成后会更新本节。当前请用源码跑 `dev`。
-
-**lite 和 full 怎么选？（包发布后）**  
-只要 Kohya 标准训练 → lite；要开箱 Anima Fast → full（魔搭）。
+**lite 和 kohya-musubi 怎么选？**  
+弱网 / 轻量入口 → lite（首次启动装依赖）。要开箱 Kohya + Musubi（可训 Krea 2）→ **kohya-musubi**（魔搭）。Anima Fast 两包都需在设置页安装。
 
 **RC 和稳定版能混用配置吗？**  
 多数 TOML 可导入；导航与存储 key 有差异，以当前页「导入配置」为准。
