@@ -6,6 +6,7 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
+from mikazuki.download_sources import DownloadSources
 from mikazuki.musubi_backend.environment import (
     AuditResult,
     audit_environment,
@@ -223,6 +224,44 @@ class InstallEnvironmentTests(unittest.TestCase):
             install_cmd = pip_installs[0]
             self.assertIn(f"{plan.layout.source}[{plan.cuda_extra}]", install_cmd)
             self.assertIn("tensorboard", install_cmd)
+
+    def test_install_command_uses_download_sources(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = default_layout(root)
+            source = root / "upstream"
+            (source / "src" / "musubi_tuner").mkdir(parents=True)
+            base_python = root / "base-python" / "python3"
+            base_python.parent.mkdir(parents=True)
+            base_python.write_text("", encoding="utf-8")
+            sources = DownloadSources(
+                pip_index_url="https://pypi.tuna.tsinghua.edu.cn/simple",
+                pytorch_index_url="https://mirrors.aliyun.com/pytorch-wheels",
+                hf_endpoint="https://hf-mirror.com",
+            )
+            plan = build_environment_install_plan(root, layout, source, cuda_extra="cu128", download_sources=sources)
+            commands: list[list[str]] = []
+            envs: list[dict | None] = []
+            audit = AuditResult(ok=True)
+
+            def _capture(cmd, *_a, env=None, **_k):
+                commands.append(cmd)
+                envs.append(env)
+
+            with mock.patch("mikazuki.musubi_backend.environment.ensure_install_source_ready", return_value=source), \
+                    mock.patch("mikazuki.musubi_backend.environment.copy_source_snapshot"), \
+                    mock.patch("mikazuki.musubi_backend.environment._uv_command", return_value="uv"), \
+                    mock.patch("mikazuki.musubi_backend.environment._find_base_python", return_value=base_python), \
+                    mock.patch("mikazuki.musubi_backend.environment._run_streaming", side_effect=_capture), \
+                    mock.patch("mikazuki.musubi_backend.environment.audit_environment", return_value=audit):
+                result = install_environment(plan, lambda _line: None)
+            self.assertTrue(result.ok)
+            pip_installs = [cmd for cmd in commands if cmd[:3] == ["uv", "pip", "install"]]
+            self.assertEqual(len(pip_installs), 1)
+            install_cmd = pip_installs[0]
+            self.assertIn("https://pypi.tuna.tsinghua.edu.cn/simple", install_cmd)
+            self.assertIn("https://mirrors.aliyun.com/pytorch-wheels/cu128", install_cmd)
+            self.assertTrue(any(env and env.get("HF_ENDPOINT") == "https://hf-mirror.com" for env in envs))
 
 
 class AuditEnvironmentTests(unittest.TestCase):

@@ -1,4 +1,5 @@
 import { apiData } from "./client"
+import type { DownloadSourcesPayload } from "../engines/downloadSources"
 
 export type AnimaFastState = "unknown" | "installing" | "auditing" | "ready" | "broken" | "installed_unverified" | "disabled"
 
@@ -38,8 +39,14 @@ export interface InstallResult {
   status?: AnimaFastStatus
 }
 
+function installBody(downloadSources?: DownloadSourcesPayload) {
+  return JSON.stringify({ dry_run: false, ...(downloadSources || {}) })
+}
+
 export const animaFastApi = {
   status: () => apiData<AnimaFastStatus>("/api/plugins/anima-lora/status"),
-  install: () => apiData<InstallResult>("/api/plugins/anima-lora/install", { method: "POST", body: JSON.stringify({ dry_run: false }) }),
-  repair: () => apiData<InstallResult>("/api/plugins/anima-lora/repair", { method: "POST", body: JSON.stringify({ dry_run: false }) }),
+  install: (downloadSources?: DownloadSourcesPayload) =>
+    apiData<InstallResult>("/api/plugins/anima-lora/install", { method: "POST", body: installBody(downloadSources) }),
+  repair: (downloadSources?: DownloadSourcesPayload) =>
+    apiData<InstallResult>("/api/plugins/anima-lora/repair", { method: "POST", body: installBody(downloadSources) }),
 }

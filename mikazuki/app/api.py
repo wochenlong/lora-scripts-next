@@ -1067,8 +1067,16 @@ async def _musubi_plugin_install_impl(request: Request, force_install: bool = Fa
         data["message"] = "Installer dry-run completed"
         return APIResponseSuccess(data=data)
     try:
+        from mikazuki.download_sources import parse_download_sources
+
         task_id, install_data = start_musubi_install_task(
-            project_root, layout, source_root, dry_run=False, source_commit=source_commit, cuda_extra=cuda_extra
+            project_root,
+            layout,
+            source_root,
+            dry_run=False,
+            source_commit=source_commit,
+            cuda_extra=cuda_extra,
+            download_sources=parse_download_sources(payload),
         )
     except Exception as exc:
         write_musubi_install_state(layout, "broken", {"plan": plan.as_dict()}, str(exc))
@@ -1202,7 +1210,16 @@ async def _anima_lora_plugin_install_impl(request: Request, force_install: bool 
         data["message"] = "Installer dry-run completed"
         return APIResponseSuccess(data=data)
     try:
-        task_id, install_data = start_install_task(Path.cwd(), layout, source_root, dry_run=False, source_commit=source_commit)
+        from mikazuki.download_sources import parse_download_sources
+
+        task_id, install_data = start_install_task(
+            Path.cwd(),
+            layout,
+            source_root,
+            dry_run=False,
+            source_commit=source_commit,
+            download_sources=parse_download_sources(payload),
+        )
     except Exception as exc:
         write_install_state(layout, "broken", {"plan": plan.as_dict()}, str(exc))
         return APIResponseFail(message=f"Anima LoRA install failed: {exc}")

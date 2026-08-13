@@ -6,6 +6,8 @@ import subprocess
 from collections.abc import Callable
 from pathlib import Path
 
+from mikazuki.download_sources import apply_github_prefix
+
 UPSTREAM_REPO = "https://github.com/sorryhyun/anima_lora.git"
 
 
@@ -26,6 +28,7 @@ def ensure_upstream_clone(
     target: Path,
     commit: str | None,
     log: Callable[[str], None] | None = None,
+    github_url_prefix: str | None = None,
 ) -> Path:
     target = target.resolve()
     if _has_train_py(target):
@@ -38,9 +41,10 @@ def ensure_upstream_clone(
         raise InstallSourceError(f"Upstream cache exists but is not a valid anima_lora checkout: {target}")
 
     target.parent.mkdir(parents=True, exist_ok=True)
-    clone_cmd = ["git", "clone", "--depth", "1", UPSTREAM_REPO, str(target)]
+    repo_url = apply_github_prefix(UPSTREAM_REPO, github_url_prefix)
+    clone_cmd = ["git", "clone", "--depth", "1", repo_url, str(target)]
     if commit:
-        clone_cmd = ["git", "clone", UPSTREAM_REPO, str(target)]
+        clone_cmd = ["git", "clone", repo_url, str(target)]
     if log:
         log(f"[clone] {' '.join(clone_cmd)}")
     subprocess.run(clone_cmd, check=True)
@@ -70,6 +74,7 @@ def resolve_install_source_root(
     *,
     allow_clone: bool = False,
     log: Callable[[str], None] | None = None,
+    github_url_prefix: str | None = None,
 ) -> Path:
     """Resolve sorryhyun/anima_lora source for Fast plugin install.
 
@@ -119,7 +124,9 @@ def resolve_install_source_root(
                 "git is required to download Anima Fast source. Install Git or set ANIMA_LORA_ROOT "
                 "to an existing sorryhyun/anima_lora clone."
             )
-        return ensure_upstream_clone(project_root, cache_root, commit, log=log)
+        return ensure_upstream_clone(
+            project_root, cache_root, commit, log=log, github_url_prefix=github_url_prefix
+        )
 
     return cache_root
 
@@ -129,9 +136,17 @@ def ensure_install_source_ready(
     preferred: Path,
     source_commit: str | None,
     log: Callable[[str], None] | None = None,
+    github_url_prefix: str | None = None,
 ) -> Path:
     preferred = preferred.resolve()
     commit = (source_commit or "").strip() or None
     if _usable_git_source(preferred, commit):
         return preferred
-    return resolve_install_source_root(project_root, None, commit, allow_clone=True, log=log)
+    return resolve_install_source_root(
+        project_root,
+        None,
+        commit,
+        allow_clone=True,
+        log=log,
+        github_url_prefix=github_url_prefix,
+    )
