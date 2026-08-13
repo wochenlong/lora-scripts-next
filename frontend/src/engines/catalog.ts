@@ -24,7 +24,19 @@ export interface EngineDefinition {
   sizeHintKey?: string
   requiresGpu?: boolean
   managesRuntime: boolean
+  /** Short mark for logo tile (UI). */
+  mark: string
+  /** Capability tags shown on cards (i18n keys under settings.engines.tags.*). */
+  tags: readonly string[]
+  /** Display version (UI metadata; not a live feed). */
+  version: string
+  /** Display last-updated date (UI metadata). */
+  updatedAt: string
+  recommended?: boolean
 }
+
+/** Product cold-start / global default engine (Kohya). UI-only marker. */
+export const PRODUCT_DEFAULT_ENGINE: TrainingEngine = "kohya"
 
 export const ENGINE_CATALOG: readonly EngineDefinition[] = [
   {
@@ -33,6 +45,10 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     nameKey: "settings.engines.catalog.kohya.name",
     summaryKey: "settings.engines.catalog.kohya.summary",
     managesRuntime: false,
+    mark: "K",
+    tags: ["lora", "sd15", "sdxl", "flux", "anima"],
+    version: "builtin",
+    updatedAt: "—",
   },
   {
     id: "anima-fast",
@@ -42,6 +58,11 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     sizeHintKey: "settings.engines.catalog.anima-fast.sizeHint",
     requiresGpu: true,
     managesRuntime: true,
+    mark: "AF",
+    tags: ["lora", "anima", "nvidia"],
+    version: "plugin",
+    updatedAt: "2026-08",
+    recommended: true,
   },
   {
     id: "musubi",
@@ -51,6 +72,10 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     sizeHintKey: "settings.engines.catalog.musubi.sizeHint",
     requiresGpu: true,
     managesRuntime: true,
+    mark: "M",
+    tags: ["lora", "krea2", "nvidia"],
+    version: "plugin",
+    updatedAt: "2026-08",
   },
 ] as const
 
