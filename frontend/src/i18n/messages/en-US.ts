@@ -1,7 +1,7 @@
 export default {
   app: {
     brand: "Next Trainer",
-    prerelease: "beta",
+    prerelease: "rc",
   },
   nav: {
     training: "Training",
