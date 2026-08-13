@@ -4,8 +4,9 @@ import { ElMessage } from "element-plus"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useTaggerStore } from "../stores/tagger"
-import { schemasApi } from "../api/schemas"
 import type { TaggerRequest } from "../api/tagger"
+import PathPickerDialog from "../components/PathPickerDialog.vue"
+import { useServerPathPick } from "../composables/useServerPathPick"
 
 const models = ["wd14-convnextv2-v2", "wd-convnext-v3", "wd-swinv2-v3", "wd-vit-v3", "wd14-swinv2-v2", "wd14-vit-v2", "wd14-moat-v2", "wd-eva02-large-tagger-v3", "wd-vit-large-tagger-v3", "cl_tagger_1_01"]
 const form = reactive<TaggerRequest>({ path: "", interrogator_model: models[0], threshold: .35, character_threshold: .6, add_rating_tag: false, add_model_tag: false, additional_tags: "", exclude_tags: "", escape_tag: true, batch_input_recursive: false, batch_output_action_on_conflict: "copy", replace_underscore: true, download_endpoint: "", replace_underscore_excludes: "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||" })
@@ -18,10 +19,38 @@ let timer: number | undefined
 async function start() { if (!form.path.trim()) return ElMessage.error(t("tagger.msg.pathRequired")); try { await store.start({ ...form, path: form.path.replaceAll("\\", "/") }); ElMessage.success(t("tagger.msg.submitted")) } catch (e) { ElMessage.error(e instanceof Error ? e.message : t("tagger.msg.submitFail")) } }
 async function invoke(kind: "prefetch" | "cancel" | "reset") { try { if (kind === "prefetch") await store.prefetch(form.interrogator_model, form.download_endpoint); else await store[kind](); ElMessage.success(kind === "cancel" ? t("tagger.msg.cancelRequested") : kind === "reset" ? t("tagger.msg.resetDone") : t("tagger.msg.prefetchStarted")) } catch (e) { ElMessage.error(e instanceof Error ? e.message : t("tagger.msg.actionFail")) } }
 const picking = ref(false)
-async function browsePath() { picking.value = true; try { form.path = (await schemasApi.pickFile("folder")).path.replaceAll("\\", "/") } catch (e) { ElMessage.error(e instanceof Error ? e.message : t("schemaForm.pickFail")) } finally { picking.value = false } }
+const {
+  open: pathPickerOpen,
+  mode: pathPickerMode,
+  initialPath: pathPickerInitial,
+  nameFilter: pathPickerFilter,
+  pick: pickServerPath,
+  onConfirm: onPathConfirm,
+  onCancel: onPathCancel,
+} = useServerPathPick()
+async function browsePath() {
+  picking.value = true
+  try {
+    const path = await pickServerPath({ mode: "folder", initialPath: form.path })
+    if (path) form.path = path
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : t("schemaForm.pickFail"))
+  } finally {
+    picking.value = false
+  }
+}
 onMounted(async () => { await store.refresh(); timer = window.setInterval(store.refresh, 1200) })
 onBeforeUnmount(() => window.clearInterval(timer))
 </script>
 
-<template><div class="tagger-page"><section class="tagger-form"><header><span class="eyebrow">DATASET TAGGER</span><h1>{{ t("tagger.title") }}</h1><p>{{ t("tagger.subtitle") }}</p></header><div class="tagger-grid"><label>{{ t("tagger.modelLabel") }}<select v-model="form.interrogator_model"><option v-for="model in models" :key="model">{{ model }}</option></select></label><label>{{ t("tagger.pathLabel") }}<span class="path-row"><input v-model="form.path" placeholder="D:/datasets/images" /><button :disabled="picking" @click.prevent="browsePath">{{ t("schemaForm.browse") }}</button></span></label><label>{{ t("tagger.thresholdLabel") }}<input v-model.number="form.threshold" type="number" min="0" max="1" step="0.05" /></label><label>{{ t("tagger.characterThresholdLabel") }}<input v-model.number="form.character_threshold" type="number" min="0" max="1" step="0.05" /></label><label>{{ t("tagger.additionalTagsLabel") }}<input v-model="form.additional_tags" /></label><label>{{ t("tagger.excludeTagsLabel") }}<input v-model="form.exclude_tags" /></label><label>{{ t("tagger.endpointLabel") }}<input v-model="form.download_endpoint" :placeholder="t('tagger.endpointPlaceholder')" /></label><label>{{ t("tagger.conflictLabel") }}<select v-model="form.batch_output_action_on_conflict"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option></select></label></div><div class="check-row"><label><input v-model="form.batch_input_recursive" type="checkbox" />{{ t("tagger.recursive") }}</label><label><input v-model="form.replace_underscore" type="checkbox" />{{ t("tagger.replaceUnderscore") }}</label><label><input v-model="form.escape_tag" type="checkbox" />{{ t("tagger.escapeTag") }}</label><label><input v-model="form.add_rating_tag" type="checkbox" />{{ t("tagger.addRatingTag") }}</label><label><input v-model="form.add_model_tag" type="checkbox" />{{ t("tagger.addModelTag") }}</label></div></section>
-<aside class="tagger-status"><span class="task-status">{{ status.phase }}</span><h2>{{ status.message || t("tagger.idle") }}</h2><p v-if="error">{{ error }}</p><div class="meter"><header><span>{{ t("tagger.downloadMeter") }}</span><b>{{ downloadPercent }}%</b></header><div><i :style="{ width: `${downloadPercent}%` }" /></div><small>{{ status.download.filename || t("tagger.downloadIdle") }}</small></div><div class="meter"><header><span>{{ t("tagger.taggingMeter") }}</span><b>{{ taggingPercent }}%</b></header><div><i :style="{ width: `${taggingPercent}%` }" /></div><small>{{ status.tagging.current }} / {{ status.tagging.total }} {{ status.tagging.filename }}</small></div><div class="tagger-actions"><button v-if="busy" class="danger-action" :disabled="submitting" @click="invoke('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="submitting" @click="start">{{ t("tagger.start") }}</button><button class="secondary-action" :disabled="submitting || status.phase === 'tagging'" @click="invoke('prefetch')">{{ t("tagger.prefetch") }}</button><button class="secondary-action" :disabled="submitting" @click="invoke('reset')">{{ t("tagger.reset") }}</button></div></aside></div></template>
+<template><div class="tagger-page"><section class="tagger-form"><header><span class="eyebrow">DATASET TAGGER</span><h1>{{ t("tagger.title") }}</h1><p>{{ t("tagger.subtitle") }}</p></header><div class="tagger-grid"><label>{{ t("tagger.modelLabel") }}<select v-model="form.interrogator_model"><option v-for="model in models" :key="model">{{ model }}</option></select></label><label>{{ t("tagger.pathLabel") }}<span class="path-row"><input v-model="form.path" placeholder="/data/datasets/images" /><button :disabled="picking" @click.prevent="browsePath">{{ t("schemaForm.browse") }}</button></span></label><label>{{ t("tagger.thresholdLabel") }}<input v-model.number="form.threshold" type="number" min="0" max="1" step="0.05" /></label><label>{{ t("tagger.characterThresholdLabel") }}<input v-model.number="form.character_threshold" type="number" min="0" max="1" step="0.05" /></label><label>{{ t("tagger.additionalTagsLabel") }}<input v-model="form.additional_tags" /></label><label>{{ t("tagger.excludeTagsLabel") }}<input v-model="form.exclude_tags" /></label><label>{{ t("tagger.endpointLabel") }}<input v-model="form.download_endpoint" :placeholder="t('tagger.endpointPlaceholder')" /></label><label>{{ t("tagger.conflictLabel") }}<select v-model="form.batch_output_action_on_conflict"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option></select></label></div><div class="check-row"><label><input v-model="form.batch_input_recursive" type="checkbox" />{{ t("tagger.recursive") }}</label><label><input v-model="form.replace_underscore" type="checkbox" />{{ t("tagger.replaceUnderscore") }}</label><label><input v-model="form.escape_tag" type="checkbox" />{{ t("tagger.escapeTag") }}</label><label><input v-model="form.add_rating_tag" type="checkbox" />{{ t("tagger.addRatingTag") }}</label><label><input v-model="form.add_model_tag" type="checkbox" />{{ t("tagger.addModelTag") }}</label></div></section>
+<aside class="tagger-status"><span class="task-status">{{ status.phase }}</span><h2>{{ status.message || t("tagger.idle") }}</h2><p v-if="error">{{ error }}</p><div class="meter"><header><span>{{ t("tagger.downloadMeter") }}</span><b>{{ downloadPercent }}%</b></header><div><i :style="{ width: `${downloadPercent}%` }" /></div><small>{{ status.download.filename || t("tagger.downloadIdle") }}</small></div><div class="meter"><header><span>{{ t("tagger.taggingMeter") }}</span><b>{{ taggingPercent }}%</b></header><div><i :style="{ width: `${taggingPercent}%` }" /></div><small>{{ status.tagging.current }} / {{ status.tagging.total }} {{ status.tagging.filename }}</small></div><div class="tagger-actions"><button v-if="busy" class="danger-action" :disabled="submitting" @click="invoke('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="submitting" @click="start">{{ t("tagger.start") }}</button><button class="secondary-action" :disabled="submitting || status.phase === 'tagging'" @click="invoke('prefetch')">{{ t("tagger.prefetch") }}</button><button class="secondary-action" :disabled="submitting" @click="invoke('reset')">{{ t("tagger.reset") }}</button></div></aside>
+<PathPickerDialog
+  v-model="pathPickerOpen"
+  :mode="pathPickerMode"
+  :initial-path="pathPickerInitial"
+  :name-filter="pathPickerFilter"
+  @confirm="onPathConfirm"
+  @cancel="onPathCancel"
+/>
+</div></template>

@@ -3,9 +3,10 @@ import { computed, onMounted, onUnmounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { datasetApi, type ChangedItem, type DatasetHistory, type DatasetItem } from "../api/dataset"
-import { schemasApi } from "../api/schemas"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
+import PathPickerDialog from "../components/PathPickerDialog.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
+import { useServerPathPick } from "../composables/useServerPathPick"
 import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 
 const { t } = useI18n()
@@ -35,6 +36,15 @@ const underscoreToSpace = ref(false)
 const stripEscapeChars = ref(false)
 const loading = ref(false)
 const picking = ref(false)
+const {
+  open: pathPickerOpen,
+  mode: pathPickerMode,
+  initialPath: pathPickerInitial,
+  nameFilter: pathPickerFilter,
+  pick: pickServerPath,
+  onConfirm: onPathConfirm,
+  onCancel: onPathCancel,
+} = useServerPathPick()
 const appendPosition = ref<"front" | "back">("back")
 const newCaptionTag = ref("")
 const page = ref(1)
@@ -229,7 +239,8 @@ function splitTags(value: string) {
 async function browsePath() {
   picking.value = true
   try {
-    path.value = (await schemasApi.pickFile("folder")).path.replaceAll("\\", "/")
+    const next = await pickServerPath({ mode: "folder", initialPath: path.value })
+    if (next) path.value = next
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t("schemaForm.pickFail"))
   } finally {
@@ -624,4 +635,13 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
       <p v-if="!sessionHistory.changes.length">{{ t("datasetEditor.historyDialog.empty") }}</p>
     </div>
   </el-dialog>
+
+  <PathPickerDialog
+    v-model="pathPickerOpen"
+    :mode="pathPickerMode"
+    :initial-path="pathPickerInitial"
+    :name-filter="pathPickerFilter"
+    @confirm="onPathConfirm"
+    @cancel="onPathCancel"
+  />
 </template>
