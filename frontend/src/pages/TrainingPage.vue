@@ -239,6 +239,7 @@ async function submit() {
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
     started.value = await trainingApi.run(output.value)
+    tasksStore.markAttention()
     tasksStore.refresh({ silent: true })
     saveHistory()
     ElMessage.success(t("training.submitConfirm.started", { id: started.value.task_id }))
