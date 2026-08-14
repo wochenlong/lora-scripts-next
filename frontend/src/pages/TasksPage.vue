@@ -20,6 +20,9 @@ const lightboxImage = ref<TaskPreviewImage | null>(null)
 const metrics = ref<TaskMetrics>({})
 const progress = ref<TaskProgress>({})
 const previewEnabled = ref(true)
+/** Default expanded; collapse to focus on the training log. */
+const previewOpen = ref(true)
+const lossOpen = ref(true)
 let previewSig = ""
 let metricsSig = ""
 
@@ -333,16 +336,26 @@ onBeforeUnmount(() => {
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
           <RouterLink class="ghost-button" to="/tensorboard.html?from=tasks">{{ t("tasks.detail.tensorboard") }}</RouterLink>
         </div>
-        <section class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0 }">
-          <header>{{ t("tasks.detail.previewTitle") }}</header>
-          <div v-if="previews.length" class="preview-scroll"><div v-for="image in previews" :key="image.name" class="preview-item"><button type="button" class="preview-thumb" @click="lightboxImage = image"><img :src="image.thumb_url || image.url" :alt="image.name" loading="lazy"></button><span v-if="imageLabel(image)">{{ imageLabel(image) }}</span></div></div>
-          <p v-else-if="!previewEnabled">{{ t("tasks.detail.previewDisabled") }}</p>
-          <p v-else>{{ t("tasks.detail.previewEmpty") }}</p>
+        <section class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0, collapsed: !previewOpen }">
+          <header class="task-panel-header" @click="previewOpen = !previewOpen">
+            <span>{{ t("tasks.detail.previewTitle") }}</span>
+            <button type="button" class="log-toggle" @click.stop="previewOpen = !previewOpen">{{ previewOpen ? t("tasks.log.collapse") : t("tasks.log.expand") }}</button>
+          </header>
+          <template v-if="previewOpen">
+            <div v-if="previews.length" class="preview-scroll"><div v-for="image in previews" :key="image.name" class="preview-item"><button type="button" class="preview-thumb" @click="lightboxImage = image"><img :src="image.thumb_url || image.url" :alt="image.name" loading="lazy"></button><span v-if="imageLabel(image)">{{ imageLabel(image) }}</span></div></div>
+            <p v-else-if="!previewEnabled">{{ t("tasks.detail.previewDisabled") }}</p>
+            <p v-else>{{ t("tasks.detail.previewEmpty") }}</p>
+          </template>
         </section>
-        <section class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss }">
-          <header>{{ t("tasks.detail.lossTitle") }}</header>
-          <LossChart v-if="hasLoss" :series="lossSeries" />
-          <p v-else>{{ t("tasks.detail.lossEmpty") }}</p>
+        <section class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss, collapsed: !lossOpen }">
+          <header class="task-panel-header" @click="lossOpen = !lossOpen">
+            <span>{{ t("tasks.detail.lossTitle") }}</span>
+            <button type="button" class="log-toggle" @click.stop="lossOpen = !lossOpen">{{ lossOpen ? t("tasks.log.collapse") : t("tasks.log.expand") }}</button>
+          </header>
+          <template v-if="lossOpen">
+            <LossChart v-if="hasLoss" :series="lossSeries" />
+            <p v-else>{{ t("tasks.detail.lossEmpty") }}</p>
+          </template>
         </section>
         <TaskLogPanel :task-id="selected.id" :status="selected.status" />
       </section>
