@@ -3,12 +3,22 @@ import { defineStore } from "pinia"
 import { tasksApi, type TrainingTask } from "../api/tasks"
 import { i18n } from "../i18n"
 
+function isActiveStatus(status: string) {
+  return status === "RUNNING" || status === "CREATED"
+}
+
 export const useTasksStore = defineStore("tasks", () => {
   const tasks = ref<TrainingTask[]>([])
   const loading = ref(false)
   const error = ref("")
   const terminatingId = ref("")
+  /** Unread cue after a task is started; cleared when visiting Tasks / TensorBoard. */
+  const attention = ref(false)
   const runningTasks = computed(() => tasks.value.filter((task) => task.status === "RUNNING"))
+  const activeTasks = computed(() => tasks.value.filter((task) => isActiveStatus(task.status)))
+  const activeCount = computed(() => activeTasks.value.length)
+  const showNavBadge = computed(() => attention.value || activeCount.value > 0)
+  const navBadgeCount = computed(() => (activeCount.value > 0 ? activeCount.value : attention.value ? 1 : 0))
 
   async function refresh(options: { silent?: boolean } = {}) {
     if (!options.silent) loading.value = true
@@ -22,6 +32,14 @@ export const useTasksStore = defineStore("tasks", () => {
     }
   }
 
+  function markAttention() {
+    attention.value = true
+  }
+
+  function clearAttention() {
+    attention.value = false
+  }
+
   async function terminate(taskId: string) {
     terminatingId.value = taskId
     try {
@@ -32,5 +50,20 @@ export const useTasksStore = defineStore("tasks", () => {
     }
   }
 
-  return { tasks, runningTasks, loading, error, terminatingId, refresh, terminate }
+  return {
+    tasks,
+    runningTasks,
+    activeTasks,
+    activeCount,
+    attention,
+    showNavBadge,
+    navBadgeCount,
+    loading,
+    error,
+    terminatingId,
+    refresh,
+    markAttention,
+    clearAttention,
+    terminate,
+  }
 })
