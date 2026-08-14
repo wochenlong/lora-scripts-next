@@ -326,6 +326,15 @@
   font-weight: 650;
 }
 
+.task-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
 .task-placeholder p {
   margin: 0;
   font-size: 12px;
@@ -339,15 +348,27 @@
   min-height: 300px;
 }
 
+.task-preview-strip.collapsed,
+.task-loss-panel.collapsed {
+  min-height: 0;
+  place-content: unset;
+  text-align: left;
+}
+
 .task-placeholder.has-data {
   display: block;
   place-content: unset;
   text-align: left;
 }
 
-.task-placeholder.has-data header {
+.task-placeholder.has-data header,
+.task-placeholder.collapsed header {
   margin-bottom: 10px;
   text-align: left;
+}
+
+.task-placeholder.collapsed header {
+  margin-bottom: 0;
 }
 
 .task-log-panel {
