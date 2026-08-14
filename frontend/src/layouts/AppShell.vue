@@ -35,7 +35,8 @@ function isActive(match: readonly string[]) {
 let tasksPoll: number | undefined
 
 function clearAttentionIfOnTasks() {
-  if (route.path.startsWith("/tasks") || route.path.startsWith("/task.html")) {
+  const path = route.path
+  if (path.startsWith("/tasks") || path.startsWith("/task.html") || path.startsWith("/tensorboard.html")) {
     tasksStore.clearAttention()
   }
 }
@@ -81,7 +82,7 @@ onBeforeUnmount(() => {
               v-if="section.key === 'tasks' && showNavBadge"
               class="nav-badge"
               :class="{ 'nav-badge-dot': activeCount === 0 }"
-              :title="t('nav.tasksBadgeHint', { n: navBadgeCount })"
+              :title="activeCount > 0 ? t('nav.tasksBadgeHint', { n: activeCount }) : t('nav.tasksBadgeUnread')"
             >{{ activeCount > 0 ? (activeCount > 9 ? "9+" : activeCount) : "" }}</i>
           </span>
         </RouterLink>

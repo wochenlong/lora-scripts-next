@@ -14,6 +14,7 @@ export default {
     mainAria: "主导航",
     tasksWithBadge: "任务，{n} 个进行中或待查看",
     tasksBadgeHint: "有 {n} 个进行中任务，点此查看进度与日志",
+    tasksBadgeUnread: "有新启动的任务，点此查看进度与日志",
   },
   training: {
     title: "训练",

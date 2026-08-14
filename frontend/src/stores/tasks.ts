@@ -12,7 +12,7 @@ export const useTasksStore = defineStore("tasks", () => {
   const loading = ref(false)
   const error = ref("")
   const terminatingId = ref("")
-  /** Unread cue after a task is started elsewhere; cleared when visiting /tasks. */
+  /** Unread cue after a task is started; cleared when visiting Tasks / TensorBoard. */
   const attention = ref(false)
   const runningTasks = computed(() => tasks.value.filter((task) => task.status === "RUNNING"))
   const activeTasks = computed(() => tasks.value.filter((task) => isActiveStatus(task.status)))

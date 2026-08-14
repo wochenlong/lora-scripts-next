@@ -14,6 +14,7 @@ export default {
     mainAria: "Main navigation",
     tasksWithBadge: "Tasks, {n} active or unread",
     tasksBadgeHint: "{n} active task(s) — open Tasks for progress and logs",
+    tasksBadgeUnread: "A task just started — open Tasks for progress and logs",
   },
   training: {
     title: "Training",
