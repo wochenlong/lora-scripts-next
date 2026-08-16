@@ -24,28 +24,47 @@
 
 ## 1. 先选包型（需求）
 
-| 包型 | 谁需要 | 预装内容 | 典型体积 | 构建入口 |
-|------|--------|----------|----------|----------|
-| **lite** | 弱网 / 先开 UI / 自己装引擎 | 嵌入 Python + 代码 + WD 打标；**无** Torch 训练环境 | 7z ~0.4 GB | `build-scripts/build_portable.ps1` |
-| **kohya** | 常规 Anima / SDXL / Flux | lite + **Kohya 主环境（cu128）**；无 Musubi | 7z 数 GB | `build-scripts/build_portable_kohya_only.ps1` |
-| **kohya-musubi** | 傻瓜满配 / Krea2+常规 | Kohya + **Musubi**（cu128）；无 Fast | 7z ~4 GB 级 | `build-scripts/build_portable_2026_full.ps1` |
-| **musubi** | 只要 Krea2、省盘 | lite 骨架 + Musubi；**无**完整 Kohya Torch | 小于满配 | `build-scripts/build_portable_musubi_only.ps1` |
+### 1.0 默认策略（请先读）
+
+| 角色 | 引擎 | 默认带环境包怎么处理 |
+|------|------|----------------------|
+| **主线（默认）** | **Kohya** | **预装**进「带环境」默认包（`*-kohya.7z`） |
+| **可选项** | **Musubi**（Krea2） | **不**进默认包；用户可在设置页安装，或另下 `*-musubi` / `*-kohya-musubi` |
+| **可选项** | **Anima Fast** | **永不预装**；仅设置页 / CLI 安装 |
+
+因此：
+
+- **对外主推的「解压即训（常规 Anima / SDXL / Flux）」包 = `kohya`**，不是 `kohya-musubi`。  
+- `kohya-musubi` 是**可选一键双引擎**（要开箱 Krea2 且接受更大体积时再发）。  
+- `lite` 是无训练环境的瘦身入口；`musubi` 是只要 Krea2、不要完整 Kohya 时的分轨。
+
+> 注：早期 `docs/design/portable-2026.md` 曾把「Kohya+Musubi」写成 v1 傻瓜默认；**产品默认已收口为预装 Kohya**，以本文为准。
+
+### 1.1 包型一览
+
+| 包型 | 定位 | 预装内容 | 典型体积 | 构建入口 |
+|------|------|----------|----------|----------|
+| **kohya**（**默认带环境**） | 常规训练主推 | lite + **Kohya 主环境（cu128）**；无 Musubi / Fast | 7z 数 GB | `build-scripts/build_portable_kohya_only.ps1` |
+| **lite** | 弱网 / 先开 UI | 嵌入 Python + 代码 + WD 打标；**无** Torch | 7z ~0.4 GB | `build-scripts/build_portable.ps1` |
+| **kohya-musubi**（可选满配） | 开箱 Krea2 + 常规 | Kohya + Musubi；无 Fast | 7z ~4 GB 级 | `build-scripts/build_portable_2026_full.ps1` |
+| **musubi**（可选分轨） | 只要 Krea2、省盘 | Musubi；**无**完整 Kohya Torch | 小于满配 | `build-scripts/build_portable_musubi_only.ps1` |
 
 **硬性产品约定（所有包型）：**
 
-- **不预装** Anima Fast（`extensions/anima_lora/.venv`）— 用户在设置页安装  
+- **默认带环境 = 只预装 Kohya**；Musubi / Fast 为可选项（见 §1.0）  
+- **不预装** Anima Fast（`extensions/anima_lora/.venv`）  
 - **不预装** 训练底模（Anima / Krea2 权重等）  
 - **建议预置** 默认 WD 打标：`tagger-models/wd14/wd14-convnextv2-v2/`  
 - 解压路径避免中文与空格；目标：Windows 10/11 + NVIDIA（建议 RTX 20+）  
 - 30G 云系统盘：**不要**把三引擎硬塞进同一包；用分轨  
 
-**命名：**
+**命名（默认包优先写 kohya）：**
 
 ```text
-Next-Trainer-v{VERSION}.7z                 # lite（旧脚本可能仍产出 SD-Trainer-v*.7z）
-Next-Trainer-v{VERSION}-kohya.7z
-Next-Trainer-v{VERSION}-kohya-musubi.7z
-Next-Trainer-v{VERSION}-musubi.7z
+Next-Trainer-v{VERSION}-kohya.7z           # 默认带环境（主推）
+Next-Trainer-v{VERSION}-lite.7z            # 或历史名 SD-Trainer-v{VERSION}.7z
+Next-Trainer-v{VERSION}-kohya-musubi.7z    # 可选满配
+Next-Trainer-v{VERSION}-musubi.7z          # 可选 Krea2 分轨
 ```
 
 `VERSION` 必须与仓库根目录 **`VERSION` 文件**及侧栏一致（正式如 `3.0.0`；候选可用 `3.0.0-rc.1` / 带日期后缀，须在 Release 说明写清）。
@@ -103,7 +122,18 @@ cd D:\build\lora-scripts-next-portable
 
 以下均在**仓库根目录**执行。把 `3.0.0` 换成实际版本号。
 
-### 4.1 lite（体积小、首次启动再装依赖）
+### 4.1 kohya（**默认带环境，优先打这个**）
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable_kohya_only.ps1 `
+  -Clean -Version 3.0.0 `
+  -TaggerCacheSource D:\path\to\seed-with-tagger-models
+```
+
+输出：`build\Next-Trainer-v3.0.0-kohya.7z`。  
+入口一般为 2026 根：`启动.bat` / `检查更新.bat` / `说明.txt`。Musubi / Fast 需用户在设置页另装。
+
+### 4.2 lite（体积小、首次启动再装依赖）
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable.ps1 `
@@ -114,13 +144,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 | 输出 | 路径 |
 |------|------|
 | 目录 | `build\SD-Trainer-Portable\` |
-| 7z | `build\SD-Trainer-v3.0.0.7z`（当前 lite 脚本仍用此文件名；上传时可改名或说明） |
+| 7z | `build\SD-Trainer-v3.0.0.7z`（当前 lite 脚本仍用此文件名；上传时可改名为 `Next-Trainer-v3.0.0-lite.7z`） |
 
 常用参数：`-Skip7z`、`-SkipTaggerPrefetch`、`-TaggerCacheSource <含 tagger-models 的旧包或仓库>`。
 
-入口：用户双击 **`run_gui.bat`**（首次联网装主环境）。
+入口：用户双击 **`run_gui.bat`**（首次联网装主环境 ≈ 自助装 Kohya）。
 
-### 4.2 kohya-musubi（满配）
+### 4.3 kohya-musubi（可选满配，非默认）
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable_2026_full.ps1 `
@@ -134,19 +164,9 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 | 7z | `build\Next-Trainer-v3.0.0-kohya-musubi.7z` |
 | 日志 | `build\portable-2026-logs\` |
 
-耗时长（装 Torch ×2），需稳定网络。
+仅在需要**开箱 Musubi/Krea2** 且接受双 Torch 体积时构建。耗时长，需稳定网络。
 
-### 4.3 kohya-only
-
-```powershell
-powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable_kohya_only.ps1 `
-  -Clean -Version 3.0.0 `
-  -TaggerCacheSource D:\path\to\seed-with-tagger-models
-```
-
-输出：`build\Next-Trainer-v3.0.0-kohya.7z`。
-
-### 4.4 musubi-only（Krea2 分轨）
+### 4.4 musubi-only（可选 Krea2 分轨）
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable_musubi_only.ps1 `
@@ -155,7 +175,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 ```
 
 输出：`build\Next-Trainer-v3.0.0-musubi.7z`。  
-本包主环境不烤满 Kohya Torch；常规 SDXL/Flux/Anima 请用 kohya 包。
+本包主环境不烤满 Kohya Torch；常规 SDXL/Flux/Anima 请用 **kohya 默认包**。
 
 ---
 
@@ -166,7 +186,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_portable_release.ps1 `
   -PortableRoot .\build\SD-Trainer-Portable `
-  -ArchivePath .\build\Next-Trainer-v3.0.0-kohya-musubi.7z `
+  -ArchivePath .\build\Next-Trainer-v3.0.0-kohya.7z `
   -ExpectedVersion 3.0.0
 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_portable_updaters.ps1
@@ -179,7 +199,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_po
 1. 解压到**干净路径**（非构建目录亦可）。  
 2. 双击入口：lite → `run_gui.bat`；2026 根 → `启动.bat`。  
 3. 打开 `http://127.0.0.1:28000`，侧栏 / `/api/version` = 预期版本。  
-4. 设置 → 引擎状态可读；满配包 Musubi 应为就绪或可修复。  
+4. 设置 → 引擎：Kohya 就绪；Musubi / Fast 可为未安装（默认包预期）  
 5. **P0**：能提交一次训练或至少 `POST /api/run` 不因缺 `config/autosave` 等 500（见打包规范历史教训）。  
 6. 确认包内**无**维护机 `extensions/anima_lora/.venv`、无训练底模、无个人数据。
 
@@ -203,9 +223,9 @@ gh release create v3.0.0 `
   -R wochenlong/lora-scripts-next `
   --title "Next Trainer v3.0.0" `
   --notes-file release-notes.md `
-  .\build\Next-Trainer-v3.0.0-lite.7z `
   .\build\Next-Trainer-v3.0.0-kohya.7z `
-  .\build\Next-Trainer-v3.0.0-kohya-musubi.7z
+  .\build\Next-Trainer-v3.0.0-lite.7z `
+  .\build\Next-Trainer-v3.0.0-musubi.7z
 ```
 
 （文件名以实际产出为准。）
