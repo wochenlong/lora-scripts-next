@@ -18,6 +18,8 @@
 
 本地历史笔记（**不在 Git**）：`build/整合包打包规范.md`（若存在）仅作个人备忘，**以本文与仓库内脚本为准**。
 
+**改进欢迎：** 整合包构建与发布质检方向可请 [@ageless-h](https://github.com/ageless-h) 一并过目。若有更稳、更简单的打包链路、脚本入口或验收门禁，**直接 PR 改本文 / `build-scripts/` 覆盖现稿即可**——不要求迁就当前写法。协作讨论见 [Discussion #257](https://github.com/wochenlong/lora-scripts-next/discussions/257)。
+
 ---
 
 ## 1. 先选包型（需求）
