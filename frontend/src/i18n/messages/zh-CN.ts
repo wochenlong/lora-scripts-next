@@ -194,6 +194,7 @@ export default {
     },
     status: {
       created: "已创建",
+      queued: "排队中",
       running: "运行中",
       finished: "已完成",
       terminated: "已终止",
@@ -227,9 +228,19 @@ export default {
       success: "停止任务成功",
       fail: "停止任务失败",
     },
+    queuePosition: "队列 #{n}",
+    dequeue: {
+      confirm: "确定要把排队任务 {id} 移出队列吗？移出后不会执行。",
+      title: "移出队列",
+      confirmButton: "移出队列",
+      success: "已移出队列",
+      fail: "移出队列失败",
+    },
     detail: {
       stop: "停止任务",
       stopping: "停止中…",
+      dequeue: "移出队列",
+      queuePosition: "队列位置",
       viewLog: "查看日志",
       tensorboard: "TensorBoard",
       empty: "从左侧选择一个任务查看详情",

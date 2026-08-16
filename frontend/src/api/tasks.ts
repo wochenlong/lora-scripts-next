@@ -1,12 +1,14 @@
 import { apiData, apiRequest } from "./client"
 
-export type TaskStatus = "CREATED" | "RUNNING" | "FINISHED" | "TERMINATED" | "FAILED"
+export type TaskStatus = "CREATED" | "QUEUED" | "RUNNING" | "FINISHED" | "TERMINATED" | "FAILED"
 
 export interface TrainingTask {
   id: string
   status: TaskStatus
   metadata: Record<string, unknown>
   returncode?: number | null
+  lane?: "compute" | "maintenance" | string
+  queue_position?: number | null
 }
 
 interface TasksData {

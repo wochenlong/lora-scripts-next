@@ -246,6 +246,22 @@
   background: rgba(217, 119, 6, 0.1);
 }
 
+.task-row[data-status="queued"] .task-status {
+  color: #6d5bd0;
+  background: rgba(109, 91, 208, 0.1);
+}
+
+.task-detail[data-status="queued"] .task-status {
+  color: #6d5bd0;
+  background: rgba(109, 91, 208, 0.1);
+}
+
+.task-queue-pos {
+  justify-self: end;
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
 .task-detail {
   padding: 22px;
   background: var(--surface);

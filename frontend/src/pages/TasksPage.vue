@@ -78,6 +78,7 @@ async function loadInsights(taskId: string) {
 
 const statusLabels = computed<Record<TaskStatus, string>>(() => ({
   CREATED: t("tasks.status.created"),
+  QUEUED: t("tasks.status.queued"),
   RUNNING: t("tasks.status.running"),
   FINISHED: t("tasks.status.finished"),
   TERMINATED: t("tasks.status.terminated"),
@@ -112,7 +113,7 @@ function stageLabelKey(name: string): string {
 }
 
 function isActiveTask(task: TrainingTask): boolean {
-  return task.status === "RUNNING" || task.status === "CREATED"
+  return task.status === "RUNNING" || task.status === "CREATED" || task.status === "QUEUED"
 }
 
 function groupKey(task: TrainingTask): string {
@@ -131,6 +132,8 @@ function pickRepresentative(bucket: TrainingTask[]): TrainingTask {
   if (staged.length < 2) return bucket[0]
   const running = staged.find((task) => task.status === "RUNNING")
   if (running) return running
+  const queued = staged.find((task) => task.status === "QUEUED")
+  if (queued) return queued
   const failed = [...staged].sort((a, b) => stageRank(b) - stageRank(a)).find((task) => task.status === "FAILED" || task.status === "TERMINATED")
   if (failed) return failed
   return [...staged].sort((a, b) => stageRank(b) - stageRank(a))[0]
@@ -239,8 +242,8 @@ watch(() => selected.value?.id, (id) => {
 })
 
 watch(() => selected.value?.status, (status, previous) => {
-  const wasActive = previous === "RUNNING" || previous === "CREATED"
-  const isActive = status === "RUNNING" || status === "CREATED"
+  const wasActive = previous === "RUNNING" || previous === "CREATED" || previous === "QUEUED"
+  const isActive = status === "RUNNING" || status === "CREATED" || status === "QUEUED"
   const id = selected.value?.id
   if (wasActive && status && !isActive && id) loadInsights(id)
 })
@@ -261,16 +264,32 @@ async function terminate(task: TrainingTask) {
   }
 }
 
+async function dequeue(task: TrainingTask) {
+  try {
+    await ElMessageBox.confirm(t("tasks.dequeue.confirm", { id: task.id }), t("tasks.dequeue.title"), {
+      confirmButtonText: t("tasks.dequeue.confirmButton"),
+      cancelButtonText: t("tasks.terminate.cancel"),
+      type: "warning",
+    })
+    await store.terminate(task.id)
+    ElMessage.success(t("tasks.dequeue.success"))
+  } catch (caught) {
+    if (caught !== "cancel" && caught !== "close") {
+      ElMessage.error(caught instanceof Error ? caught.message : t("tasks.dequeue.fail"))
+    }
+  }
+}
+
 onMounted(async () => {
   await store.refresh()
   timer = window.setInterval(() => {
     now.value = Date.now()
-    const hasActive = tasks.value.some((task) => task.status === "RUNNING" || task.status === "CREATED")
+    const hasActive = tasks.value.some((task) => task.status === "RUNNING" || task.status === "CREATED" || task.status === "QUEUED")
     if (!hasActive) return
     store.refresh({ silent: true })
     insightTick += 1
     const task = selected.value
-    if (task && (task.status === "RUNNING" || task.status === "CREATED") && insightTick % 4 === 0) loadInsights(task.id)
+    if (task && (task.status === "RUNNING" || task.status === "CREATED" || task.status === "QUEUED") && insightTick % 4 === 0) loadInsights(task.id)
   }, 2000)
 })
 
@@ -301,6 +320,7 @@ onBeforeUnmount(() => {
         <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
           <span class="task-status">{{ statusLabels[group.representative.status] || group.representative.status }}</span>
           <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code>{{ group.key }}</code></div>
+          <span v-if="group.representative.status === 'QUEUED' && group.representative.queue_position" class="task-queue-pos">{{ t("tasks.queuePosition", { n: group.representative.queue_position }) }}</span>
           <span v-if="kindLabelKey(group.representative)" class="task-kind">{{ t(kindLabelKey(group.representative)) }}</span>
           <div v-if="group.stages.length > 1" class="task-stage-strip">
             <span v-for="stage in group.stages" :key="stage.id" class="task-stage" :data-status="stage.status.toLowerCase()">{{ stageLabelKey(stage.name) ? t(stageLabelKey(stage.name)) : stage.name }}</span>
@@ -312,6 +332,7 @@ onBeforeUnmount(() => {
         <header class="task-detail-header">
           <div class="task-detail-title"><h2>{{ taskName(selected) }}</h2><span class="task-status">{{ statusLabels[selected.status] || selected.status }}</span></div>
           <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
+          <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
         </header>
         <div v-if="progress.total_steps" class="task-progress">
           <div class="task-progress-meta"><span>{{ t("tasks.detail.stepProgress", { step: progress.step, total: progress.total_steps }) }}</span><span v-if="progress.total_epochs">{{ t("tasks.detail.epochProgress", { epoch: progress.epoch, total: progress.total_epochs }) }}</span><b>{{ progress.percent }}%</b></div>
@@ -321,6 +342,7 @@ onBeforeUnmount(() => {
           <div><dt>{{ t("tasks.detail.taskId") }}</dt><dd><code>{{ selected.id }}</code></dd></div>
           <div><dt>{{ t("tasks.detail.config") }}</dt><dd :title="taskDetail(selected)">{{ taskDetail(selected) }}</dd></div>
           <div><dt>{{ t("tasks.detail.returncode") }}</dt><dd>{{ selected.returncode ?? "-" }}</dd></div>
+          <div v-if="selected.status === 'QUEUED' && selected.queue_position"><dt>{{ t("tasks.detail.queuePosition") }}</dt><dd>{{ t("tasks.queuePosition", { n: selected.queue_position }) }}</dd></div>
           <div v-if="metaString(selected, 'backend')"><dt>{{ t("tasks.detail.backend") }}</dt><dd>{{ metaString(selected, "backend") }}</dd></div>
           <div v-if="metaString(selected, 'train_type')"><dt>{{ t("tasks.detail.trainType") }}</dt><dd>{{ metaString(selected, "train_type") }}</dd></div>
           <div v-if="selectedCreatedAt"><dt>{{ t("tasks.detail.createdAt") }}</dt><dd>{{ formatTimestamp(selectedCreatedAt) }}</dd></div>

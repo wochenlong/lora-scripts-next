@@ -194,6 +194,7 @@ export default {
     },
     status: {
       created: "Created",
+      queued: "Queued",
       running: "Running",
       finished: "Finished",
       terminated: "Terminated",
@@ -227,9 +228,19 @@ export default {
       success: "Task stopped",
       fail: "Failed to stop the task",
     },
+    queuePosition: "Queue #{n}",
+    dequeue: {
+      confirm: "Remove queued task {id} from the queue? It will not run.",
+      title: "Remove From Queue",
+      confirmButton: "Remove",
+      success: "Removed from queue",
+      fail: "Failed to remove the task",
+    },
     detail: {
       stop: "Stop Task",
       stopping: "Stopping…",
+      dequeue: "Remove From Queue",
+      queuePosition: "Queue Position",
       viewLog: "View Log",
       tensorboard: "TensorBoard",
       empty: "Select a task on the left to view details",
