@@ -294,6 +294,18 @@
   cursor: pointer;
 }
 
+.task-detail-buttons {
+  display: flex;
+  flex-shrink: 0;
+  gap: 8px;
+}
+
+.task-detail-buttons .primary-action,
+.task-detail-buttons .secondary-action {
+  padding: 0 16px;
+  cursor: pointer;
+}
+
 .task-meta-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));

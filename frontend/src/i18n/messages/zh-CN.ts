@@ -195,6 +195,7 @@ export default {
     status: {
       created: "已创建",
       queued: "排队中",
+      held: "待确认",
       running: "运行中",
       finished: "已完成",
       terminated: "已终止",
@@ -236,10 +237,25 @@ export default {
       success: "已移出队列",
       fail: "移出队列失败",
     },
+    resume: {
+      success: "任务已开始执行",
+      fail: "启动任务失败",
+    },
+    retryTask: {
+      confirm: "确定要重跑任务 {id} 吗？将按原配置回到队列末尾。",
+      title: "重新排队",
+      confirmButton: "重新排队",
+      success: "已重新排队：{id}",
+      fail: "重跑失败",
+    },
     detail: {
       stop: "停止任务",
       stopping: "停止中…",
       dequeue: "移出队列",
+      resume: "开始执行",
+      starting: "启动中…",
+      retry: "重新排队",
+      retrying: "排队中…",
       queuePosition: "队列位置",
       viewLog: "查看日志",
       tensorboard: "TensorBoard",

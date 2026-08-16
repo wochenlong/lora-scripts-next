@@ -85,6 +85,16 @@ const statusLabels = computed<Record<TaskStatus, string>>(() => ({
   FAILED: t("tasks.status.failed"),
 }))
 
+/** Restored-after-restart queued tasks wait for manual confirmation. */
+function isHeld(task: TrainingTask): boolean {
+  return task.status === "QUEUED" && task.metadata.held === true
+}
+
+function statusLabel(task: TrainingTask): string {
+  if (isHeld(task)) return t("tasks.status.held")
+  return statusLabels.value[task.status] || task.status
+}
+
 const activeTab = ref<"running" | "recent">("running")
 const selectedId = ref("")
 
@@ -324,6 +334,41 @@ async function dequeue(task: TrainingTask) {
   }
 }
 
+const actionBusyId = ref("")
+
+async function resume(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    await tasksApi.resume(task.id)
+    await store.refresh({ silent: true })
+    ElMessage.success(t("tasks.resume.success"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.resume.fail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+async function retry(task: TrainingTask) {
+  try {
+    await ElMessageBox.confirm(t("tasks.retryTask.confirm", { id: task.id }), t("tasks.retryTask.title"), {
+      confirmButtonText: t("tasks.retryTask.confirmButton"),
+      cancelButtonText: t("tasks.terminate.cancel"),
+      type: "warning",
+    })
+    actionBusyId.value = task.id
+    const result = await tasksApi.retry(task.id)
+    await store.refresh({ silent: true })
+    ElMessage.success(t("tasks.retryTask.success", { id: result.task_id }))
+  } catch (caught) {
+    if (caught !== "cancel" && caught !== "close") {
+      ElMessage.error(caught instanceof Error ? caught.message : t("tasks.retryTask.fail"))
+    }
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
 onMounted(async () => {
   await store.refresh()
   timer = window.setInterval(() => {
@@ -362,7 +407,7 @@ onBeforeUnmount(() => {
         </div>
         <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
         <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
-          <span class="task-status">{{ statusLabels[group.representative.status] || group.representative.status }}</span>
+          <span class="task-status">{{ statusLabel(group.representative) }}</span>
           <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code>{{ group.key }}</code></div>
           <span v-if="group.representative.status === 'QUEUED' && group.representative.queue_position" class="task-queue-pos">{{ t("tasks.queuePosition", { n: group.representative.queue_position }) }}</span>
           <span v-if="kindLabelKey(group.representative)" class="task-kind">{{ t(kindLabelKey(group.representative)) }}</span>
@@ -374,9 +419,13 @@ onBeforeUnmount(() => {
 
       <section v-if="selected" class="task-detail" :data-status="selected.status.toLowerCase()">
         <header class="task-detail-header">
-          <div class="task-detail-title"><h2>{{ taskName(selected) }}</h2><span class="task-status">{{ statusLabels[selected.status] || selected.status }}</span></div>
-          <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
-          <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
+          <div class="task-detail-title"><h2>{{ taskName(selected) }}</h2><span class="task-status">{{ statusLabel(selected) }}</span></div>
+          <div class="task-detail-buttons">
+            <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
+            <button v-else-if="isHeld(selected)" class="primary-action" :disabled="actionBusyId === selected.id" @click="resume(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.starting") : t("tasks.detail.resume") }}</button>
+            <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
+            <button v-if="(selected.status === 'FAILED' || selected.status === 'TERMINATED') && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
+          </div>
         </header>
         <div v-if="progress.total_steps" class="task-progress">
           <div class="task-progress-meta"><span>{{ t("tasks.detail.stepProgress", { step: progress.step, total: progress.total_steps }) }}</span><span v-if="progress.total_epochs">{{ t("tasks.detail.epochProgress", { epoch: progress.epoch, total: progress.total_epochs }) }}</span><b>{{ progress.percent }}%</b></div>

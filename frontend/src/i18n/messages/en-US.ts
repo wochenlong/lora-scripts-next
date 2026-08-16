@@ -195,6 +195,7 @@ export default {
     status: {
       created: "Created",
       queued: "Queued",
+      held: "Awaiting Confirmation",
       running: "Running",
       finished: "Finished",
       terminated: "Terminated",
@@ -236,10 +237,25 @@ export default {
       success: "Removed from queue",
       fail: "Failed to remove the task",
     },
+    resume: {
+      success: "Task started",
+      fail: "Failed to start the task",
+    },
+    retryTask: {
+      confirm: "Re-queue task {id}? It will be appended to the end of the queue with the same configuration.",
+      title: "Re-queue Task",
+      confirmButton: "Re-queue",
+      success: "Re-queued as {id}",
+      fail: "Failed to re-queue the task",
+    },
     detail: {
       stop: "Stop Task",
       stopping: "Stopping…",
       dequeue: "Remove From Queue",
+      resume: "Start Task",
+      starting: "Starting…",
+      retry: "Re-queue",
+      retrying: "Re-queuing…",
       queuePosition: "Queue Position",
       viewLog: "View Log",
       tensorboard: "TensorBoard",
