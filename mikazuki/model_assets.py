@@ -263,18 +263,18 @@ def start_download_task(train_type: str, items: list[dict], source: str, project
     import threading
     import uuid
 
-    from mikazuki.tasks import Task, tm
+    from mikazuki.tasks import LANE_MAINTENANCE, tm
     from mikazuki.train_log_hub import hub as train_log_hub
 
     task_id = f"assets-download-{uuid.uuid4()}"
-    task = Task(
-        task_id=task_id,
-        command=["assets-download"],
-        environ=os.environ.copy(),
+    task = tm.create_task(
+        ["assets-download"],
+        os.environ.copy(),
         metadata={"kind": "assets_download", "train_type": train_type, "source": source, "items": items},
         cwd=str(project_root),
+        task_id=task_id,
+        lane=LANE_MAINTENANCE,
     )
-    tm.add_task(task_id, task)
     task.start_log_only()
 
     def runner() -> None:
