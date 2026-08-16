@@ -2,6 +2,8 @@
 
 本文记录 Windows 便携整合包的打包契约，以及将整合包改为"保留 `.git`、支持一键 Git 更新"后的实现方案。
 
+> **要自己打 7z / 分轨包？** 请先看协作指南：[**portable-build-guide.md**](portable-build-guide.md)（环境需求、包型、命令、验收、上传权限）。
+
 > **团队约定与变迁记录**：[Discussion #73 — 整合包更新机制](https://github.com/wochenlong/lora-scripts-next/discussions/73)（双通道、bootstrap、`UPDATER_VERSION` 演进索引）
 
 > **v2.5.2 用户**：若出现「能开网页但无法开始训练」，请升级到 **v2.5.3**（见 [`portable-upgrade-2.5.2-to-2.5.3.md`](portable-upgrade-2.5.2-to-2.5.3.md)，[Issue #54](https://github.com/wochenlong/lora-scripts-next/issues/54)）。
