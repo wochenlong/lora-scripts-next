@@ -104,6 +104,10 @@ async def _async_update_check():
 async def app_startup():
     app_config.load_config()
 
+    from mikazuki.tasks import tm
+    tm.enable_persistence()
+    tm.restore_queue()
+
     await load_schemas()
     await load_presets()
     await asyncio.to_thread(check_torch_gpu)
