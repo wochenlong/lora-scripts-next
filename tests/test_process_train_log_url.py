@@ -8,6 +8,7 @@ stub out the heavy modules before importing ``mikazuki.process``.
 from __future__ import annotations
 
 import importlib
+import enum
 import sys
 import types
 import unittest
@@ -68,6 +69,11 @@ def _install_stub_modules() -> None:
     # mikazuki.tasks — provide a stub ``tm`` with ``create_task``.
     tasks_mod = types.ModuleType("mikazuki.tasks")
     tasks_mod.tm = mock.MagicMock()
+
+    class _TaskStatus(enum.Enum):  # process.py only reads TaskStatus.QUEUED
+        QUEUED = 5
+
+    tasks_mod.TaskStatus = _TaskStatus
     sys.modules["mikazuki.tasks"] = tasks_mod
 
     # mikazuki.launch_utils — ``base_dir_path`` is imported but not used in the
@@ -188,7 +194,6 @@ class RunTrainMetadataTests(unittest.TestCase):
         task.task_id = "task-meta"
 
         with mock.patch.object(process.tm, "create_task", return_value=task) as create_task, \
-                mock.patch.object(process, "asyncio") as asyncio_mock, \
                 mock.patch.object(process, "_announce_train_log"), \
                 mock.patch.object(process, "build_train_log_urls", return_value={
                     "base": "http://127.0.0.1:28000",
@@ -196,7 +201,6 @@ class RunTrainMetadataTests(unittest.TestCase):
                     "stream": "http://127.0.0.1:28000/api/train/log/stream/task-meta",
                 }), \
                 mock.patch.object(process, "read_mixed_precision_from_train_toml", return_value="bf16"):
-            asyncio_mock.to_thread.return_value = object()
             response = process.run_train(
                 "config/autosave/test.toml",
                 "./scripts/stable/train_network.py",
@@ -222,7 +226,6 @@ class RunTrainMetadataTests(unittest.TestCase):
         task.task_id = "task-warning"
 
         with mock.patch.object(process.tm, "create_task", return_value=task) as create_task, \
-                mock.patch.object(process, "asyncio") as asyncio_mock, \
                 mock.patch.object(process, "_announce_train_log"), \
                 mock.patch.object(process, "build_train_log_urls", return_value={
                     "base": "http://127.0.0.1:28000",
@@ -230,7 +233,6 @@ class RunTrainMetadataTests(unittest.TestCase):
                     "stream": "http://127.0.0.1:28000/api/train/log/stream/task-warning",
                 }), \
                 mock.patch.object(process, "read_mixed_precision_from_train_toml", return_value="bf16"):
-            asyncio_mock.to_thread.return_value = object()
             response = process.run_train(
                 "config/autosave/test.toml",
                 "./scripts/dev/anima_train_network.py",
@@ -243,8 +245,21 @@ class RunTrainMetadataTests(unittest.TestCase):
         self.assertEqual(metadata["warnings"], ["guardrail active"])
         self.assertEqual(response.data["metadata"]["warnings"], ["guardrail active"])
 
-    def test_run_train_create_task_failure_returns_diagnostic_data(self):
-        with mock.patch.object(process.tm, "create_task", return_value=None), \
+    def test_run_train_queued_when_compute_lane_busy(self):
+        # New scheduling contract: run_train never rejects; a busy compute lane
+        # yields a QUEUED task and a queued response instead of an error.
+        task = mock.MagicMock()
+        task.task_id = "task-queued"
+        task.status = process.TaskStatus.QUEUED
+
+        with mock.patch.object(process.tm, "create_task", return_value=task), \
+                mock.patch.object(process.tm, "submit") as submit, \
+                mock.patch.object(process, "_announce_train_log"), \
+                mock.patch.object(process, "build_train_log_urls", return_value={
+                    "base": "http://127.0.0.1:28000",
+                    "viewer": "http://127.0.0.1:28000/train-log?task_id=task-queued",
+                    "stream": "http://127.0.0.1:28000/api/train/log/stream/task-queued",
+                }), \
                 mock.patch.object(process, "read_mixed_precision_from_train_toml", return_value=None):
             response = process.run_train(
                 "config/autosave/test.toml",
@@ -253,10 +268,11 @@ class RunTrainMetadataTests(unittest.TestCase):
                 cpu_threads=2,
             )
 
-        self.assertEqual(response.status, "error")
-        self.assertIn("trainer_file", response.data)
+        self.assertEqual(response.status, "success")
+        self.assertTrue(response.data["queued"])
+        self.assertIn("队列", response.message)
+        submit.assert_called_once_with(task)
         self.assertIn("config_path", response.data)
-        self.assertEqual(response.data["backend"], "standard")
 
 
 if __name__ == "__main__":
