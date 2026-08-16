@@ -20,6 +20,9 @@ IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 LOSS_TAGS = ("loss/average", "loss/current", "loss/epoch_average", "lr/unet")
 LOSS_POINT_LIMIT = 500
 SINCE_TOLERANCE_SECONDS = 1.0
+# Finished tasks flush TB events/previews shortly before exiting; keep a small
+# upper-bound slack so their own last writes are not cut off.
+UNTIL_TOLERANCE_SECONDS = 5.0
 
 _LIST_CACHE_TTL_SECONDS = 2.0
 _list_cache: dict[tuple, tuple[float, list[Path]]] = {}
@@ -137,10 +140,27 @@ def read_progress(log_lines: list[str]) -> dict:
 
 
 def _since(metadata: dict) -> float:
+    # Prefer the actual process start: with the compute queue, created_at is
+    # the submission time and may long predate the run, leaking the previous
+    # task's late writes into this task's window.
+    for key in ("started_at", "created_at"):
+        try:
+            value = float((metadata or {}).get(key) or 0)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value - SINCE_TOLERANCE_SECONDS
+    return 0.0
+
+
+def _until(metadata: dict) -> float | None:
+    """Upper bound for finished tasks: files written after finished_at belong
+    to later tasks sharing the same output/logging dirs."""
     try:
-        return float((metadata or {}).get("created_at") or 0) - SINCE_TOLERANCE_SECONDS
+        finished = float((metadata or {}).get("finished_at") or 0)
     except (TypeError, ValueError):
-        return 0.0
+        return None
+    return finished + UNTIL_TOLERANCE_SECONDS if finished > 0 else None
 
 
 def _iter_preview_paths(metadata: dict) -> list[Path]:
@@ -150,7 +170,8 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
         return []
     output_name = dirs.get("output_name") or ""
     since = _since(metadata)
-    cache_key = (str(output_dir), output_name, since)
+    until = _until(metadata)
+    cache_key = (str(output_dir), output_name, since, until)
     now = time.monotonic()
     cached = _list_cache.get(cache_key)
     if cached and now - cached[0] < _LIST_CACHE_TTL_SECONDS:
@@ -169,6 +190,8 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
             except OSError:
                 continue
             if since and mtime < since:
+                continue
+            if until and mtime > until:
                 continue
             old = found.get(path.name)
             if old is None or mtime >= old.stat().st_mtime:
@@ -213,6 +236,7 @@ def read_loss_scalars(metadata: dict, limit: int = LOSS_POINT_LIMIT) -> dict:
         return {}
     output_name = dirs.get("output_name") or ""
     since = _since(metadata)
+    until = _until(metadata)
     try:
         from tensorboard.backend.event_processing import event_accumulator
     except Exception:
@@ -230,7 +254,7 @@ def read_loss_scalars(metadata: dict, limit: int = LOSS_POINT_LIMIT) -> dict:
     if not run_mtimes:
         return {}
 
-    chosen = _select_run_dir(run_mtimes, output_name, since)
+    chosen = _select_run_dir(run_mtimes, output_name, since, until)
     if chosen is None:
         return {}
     return _read_run_scalars(chosen, limit)
@@ -246,12 +270,18 @@ def _run_dir_timestamp(name: str) -> float | None:
         return None
 
 
-def _select_run_dir(run_mtimes: dict[Path, float], output_name: str, since: float) -> Path | None:
+def _select_run_dir(run_mtimes: dict[Path, float], output_name: str, since: float, until: float | None = None) -> Path | None:
     if since:
         run_mtimes = {path: mtime for path, mtime in run_mtimes.items() if mtime >= since}
-        if not run_mtimes:
-            return None
-    timed = [(path, ts) for path in run_mtimes if (ts := _run_dir_timestamp(path.name)) is not None and ts >= since]
+    if until:
+        run_mtimes = {path: mtime for path, mtime in run_mtimes.items() if mtime <= until}
+    if not run_mtimes:
+        return None
+    timed = [
+        (path, ts)
+        for path in run_mtimes
+        if (ts := _run_dir_timestamp(path.name)) is not None and ts >= since and (until is None or ts <= until)
+    ]
     if timed:
         if since:
             return min(timed, key=lambda item: item[1])[0]

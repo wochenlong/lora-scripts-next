@@ -17,7 +17,7 @@ from mikazuki.download_sources import (
     install_process_env,
     pytorch_extra_index_url,
 )
-from mikazuki.tasks import Task, tm
+from mikazuki.tasks import LANE_MAINTENANCE, tm
 from mikazuki.train_log_hub import hub as train_log_hub
 
 from .extension_state import (
@@ -491,14 +491,14 @@ def start_install_task(
         return "", {"plan": plan.as_dict()}
 
     task_id = f"musubi-install-{uuid.uuid4()}"
-    task = Task(
-        task_id=task_id,
-        command=["musubi-install"],
-        environ=os.environ.copy(),
+    task = tm.create_task(
+        ["musubi-install"],
+        os.environ.copy(),
         metadata={"kind": "musubi_install", "plan": plan.as_dict()},
         cwd=str(project_root),
+        task_id=task_id,
+        lane=LANE_MAINTENANCE,
     )
-    tm.add_task(task_id, task)
     task.start_log_only()
     write_install_state(plan.layout, STATE_INSTALLING, {"plan": plan.as_dict(), "task_id": task_id}, "install task queued")
 

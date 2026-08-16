@@ -4,7 +4,7 @@ import { tasksApi, type TrainingTask } from "../api/tasks"
 import { i18n } from "../i18n"
 
 function isActiveStatus(status: string) {
-  return status === "RUNNING" || status === "CREATED"
+  return status === "RUNNING" || status === "CREATED" || status === "QUEUED"
 }
 
 export const useTasksStore = defineStore("tasks", () => {

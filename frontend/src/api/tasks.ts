@@ -1,12 +1,14 @@
 import { apiData, apiRequest } from "./client"
 
-export type TaskStatus = "CREATED" | "RUNNING" | "FINISHED" | "TERMINATED" | "FAILED"
+export type TaskStatus = "CREATED" | "QUEUED" | "RUNNING" | "FINISHED" | "TERMINATED" | "FAILED"
 
 export interface TrainingTask {
   id: string
   status: TaskStatus
   metadata: Record<string, unknown>
   returncode?: number | null
+  lane?: "compute" | "maintenance" | string
+  queue_position?: number | null
 }
 
 interface TasksData {
@@ -56,9 +58,17 @@ export interface TaskLogTail {
 
 export const trainLogStreamUrl = (taskId: string) => `/api/train/log/stream/${encodeURIComponent(taskId)}`
 
+export interface TaskRetryResult {
+  task_id: string
+  task_ids: string[]
+  queued: boolean
+}
+
 export const tasksApi = {
   list: async () => (await apiData<TasksData>("/api/tasks")).tasks,
   terminate: (taskId: string) => apiRequest(`/api/tasks/terminate/${encodeURIComponent(taskId)}`),
+  resume: (taskId: string) => apiRequest(`/api/tasks/resume/${encodeURIComponent(taskId)}`),
+  retry: (taskId: string) => apiData<TaskRetryResult>(`/api/tasks/retry/${encodeURIComponent(taskId)}`),
   previews: (taskId: string, signal?: AbortSignal) => apiData<TaskPreviewsData>(`/api/tasks/${encodeURIComponent(taskId)}/previews`, { signal }),
   metrics: (taskId: string, signal?: AbortSignal) => apiData<TaskMetricsData>(`/api/tasks/${encodeURIComponent(taskId)}/metrics`, { signal }),
   logTail: (taskId: string, limit = 240) => apiData<TaskLogTail>(`/api/train/log/tail/${encodeURIComponent(taskId)}?limit=${limit}`),

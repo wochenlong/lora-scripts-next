@@ -78,11 +78,22 @@ async function loadInsights(taskId: string) {
 
 const statusLabels = computed<Record<TaskStatus, string>>(() => ({
   CREATED: t("tasks.status.created"),
+  QUEUED: t("tasks.status.queued"),
   RUNNING: t("tasks.status.running"),
   FINISHED: t("tasks.status.finished"),
   TERMINATED: t("tasks.status.terminated"),
   FAILED: t("tasks.status.failed"),
 }))
+
+/** Restored-after-restart queued tasks wait for manual confirmation. */
+function isHeld(task: TrainingTask): boolean {
+  return task.status === "QUEUED" && task.metadata.held === true
+}
+
+function statusLabel(task: TrainingTask): string {
+  if (isHeld(task)) return t("tasks.status.held")
+  return statusLabels.value[task.status] || task.status
+}
 
 const activeTab = ref<"running" | "recent">("running")
 const selectedId = ref("")
@@ -112,7 +123,7 @@ function stageLabelKey(name: string): string {
 }
 
 function isActiveTask(task: TrainingTask): boolean {
-  return task.status === "RUNNING" || task.status === "CREATED"
+  return task.status === "RUNNING" || task.status === "CREATED" || task.status === "QUEUED"
 }
 
 function groupKey(task: TrainingTask): string {
@@ -131,6 +142,8 @@ function pickRepresentative(bucket: TrainingTask[]): TrainingTask {
   if (staged.length < 2) return bucket[0]
   const running = staged.find((task) => task.status === "RUNNING")
   if (running) return running
+  const queued = staged.find((task) => task.status === "QUEUED")
+  if (queued) return queued
   const failed = [...staged].sort((a, b) => stageRank(b) - stageRank(a)).find((task) => task.status === "FAILED" || task.status === "TERMINATED")
   if (failed) return failed
   return [...staged].sort((a, b) => stageRank(b) - stageRank(a))[0]
@@ -153,12 +166,38 @@ function buildGroups(list: TrainingTask[]): TaskGroup[] {
   })
 }
 
+/** Running groups first (oldest start first), then CREATED, then queued groups in execution order. */
+function groupRank(group: TaskGroup): number {
+  if (group.tasks.some((task) => task.status === "RUNNING")) return 0
+  if (group.tasks.some((task) => task.status === "CREATED")) return 1
+  return 2
+}
+
+function groupCreatedAt(group: TaskGroup): number {
+  return Math.min(...group.tasks.map((task) => Number(task.metadata.created_at) || 0))
+}
+
+function groupQueuePosition(group: TaskGroup): number {
+  const positions = group.tasks.map((task) => task.queue_position ?? 0).filter((n) => n > 0)
+  return positions.length ? Math.min(...positions) : Number.MAX_SAFE_INTEGER
+}
+
 const orderedTasks = computed(() => [...tasks.value].reverse())
 const allGroups = computed(() => buildGroups(orderedTasks.value))
-const runningList = computed(() => allGroups.value.filter((group) => group.tasks.some(isActiveTask)))
+const runningList = computed(() =>
+  allGroups.value
+    .filter((group) => group.tasks.some(isActiveTask))
+    .sort((a, b) => {
+      const rank = groupRank(a) - groupRank(b)
+      if (rank !== 0) return rank
+      if (groupRank(a) === 2) return groupQueuePosition(a) - groupQueuePosition(b)
+      return groupCreatedAt(a) - groupCreatedAt(b)
+    }),
+)
 const recentList = computed(() => allGroups.value.filter((group) => !group.tasks.some(isActiveTask)))
 const visibleList = computed(() => activeTab.value === "running" ? runningList.value : recentList.value)
 const selected = computed(() => allGroups.value.find((group) => group.key === selectedId.value)?.representative)
+const selectedIsMaintenance = computed(() => (selected.value ? isMaintenanceTask(selected.value) : false))
 
 const KIND_LABEL_KEYS: Record<string, string> = {
   musubi_install: "tasks.kind.musubiInstall",
@@ -169,6 +208,22 @@ const KIND_LABEL_KEYS: Record<string, string> = {
 function kindLabelKey(task: TrainingTask): string {
   const kind = task.metadata.kind
   return typeof kind === "string" ? (KIND_LABEL_KEYS[kind] ?? "") : ""
+}
+
+/** Install/download tasks never produce training insights. */
+function isMaintenanceTask(task: TrainingTask): boolean {
+  return task.lane === "maintenance" || Boolean(kindLabelKey(task))
+}
+
+/**
+ * Insights (previews/loss) are resolved by scanning output/logging dirs with an
+ * mtime filter, so a task that has not started yet would pick up files written
+ * by the currently running task. Only fetch insights for training tasks that
+ * have actually run (or are running).
+ */
+function insightsEligible(task: TrainingTask | undefined | null): boolean {
+  if (!task || isMaintenanceTask(task)) return false
+  return task.status !== "QUEUED" && task.status !== "CREATED"
 }
 
 function taskName(task: TrainingTask) {
@@ -235,14 +290,16 @@ watch(() => selected.value?.id, (id) => {
   previewEnabled.value = true
   previewSig = ""
   metricsSig = ""
-  if (id) loadInsights(id)
+  if (id && insightsEligible(selected.value)) loadInsights(id)
 })
 
 watch(() => selected.value?.status, (status, previous) => {
-  const wasActive = previous === "RUNNING" || previous === "CREATED"
-  const isActive = status === "RUNNING" || status === "CREATED"
+  const wasActive = previous === "RUNNING" || previous === "CREATED" || previous === "QUEUED"
+  const isActive = status === "RUNNING" || status === "CREATED" || status === "QUEUED"
   const id = selected.value?.id
-  if (wasActive && status && !isActive && id) loadInsights(id)
+  if (wasActive && status && !isActive && id && insightsEligible(selected.value)) loadInsights(id)
+  // A queued task that just started becomes eligible: load once it is running.
+  if (previous === "QUEUED" && status === "RUNNING" && id && insightsEligible(selected.value)) loadInsights(id)
 })
 
 async function terminate(task: TrainingTask) {
@@ -261,16 +318,67 @@ async function terminate(task: TrainingTask) {
   }
 }
 
+async function dequeue(task: TrainingTask) {
+  try {
+    await ElMessageBox.confirm(t("tasks.dequeue.confirm", { id: task.id }), t("tasks.dequeue.title"), {
+      confirmButtonText: t("tasks.dequeue.confirmButton"),
+      cancelButtonText: t("tasks.terminate.cancel"),
+      type: "warning",
+    })
+    await store.terminate(task.id)
+    ElMessage.success(t("tasks.dequeue.success"))
+  } catch (caught) {
+    if (caught !== "cancel" && caught !== "close") {
+      ElMessage.error(caught instanceof Error ? caught.message : t("tasks.dequeue.fail"))
+    }
+  }
+}
+
+const actionBusyId = ref("")
+
+async function resume(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    await tasksApi.resume(task.id)
+    await store.refresh({ silent: true })
+    ElMessage.success(t("tasks.resume.success"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.resume.fail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+async function retry(task: TrainingTask) {
+  try {
+    await ElMessageBox.confirm(t("tasks.retryTask.confirm", { id: task.id }), t("tasks.retryTask.title"), {
+      confirmButtonText: t("tasks.retryTask.confirmButton"),
+      cancelButtonText: t("tasks.terminate.cancel"),
+      type: "warning",
+    })
+    actionBusyId.value = task.id
+    const result = await tasksApi.retry(task.id)
+    await store.refresh({ silent: true })
+    ElMessage.success(t("tasks.retryTask.success", { id: result.task_id }))
+  } catch (caught) {
+    if (caught !== "cancel" && caught !== "close") {
+      ElMessage.error(caught instanceof Error ? caught.message : t("tasks.retryTask.fail"))
+    }
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
 onMounted(async () => {
   await store.refresh()
   timer = window.setInterval(() => {
     now.value = Date.now()
-    const hasActive = tasks.value.some((task) => task.status === "RUNNING" || task.status === "CREATED")
+    const hasActive = tasks.value.some((task) => task.status === "RUNNING" || task.status === "CREATED" || task.status === "QUEUED")
     if (!hasActive) return
     store.refresh({ silent: true })
     insightTick += 1
     const task = selected.value
-    if (task && (task.status === "RUNNING" || task.status === "CREATED") && insightTick % 4 === 0) loadInsights(task.id)
+    if (task && task.status === "RUNNING" && insightsEligible(task) && insightTick % 4 === 0) loadInsights(task.id)
   }, 2000)
 })
 
@@ -299,8 +407,9 @@ onBeforeUnmount(() => {
         </div>
         <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
         <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
-          <span class="task-status">{{ statusLabels[group.representative.status] || group.representative.status }}</span>
+          <span class="task-status">{{ statusLabel(group.representative) }}</span>
           <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code>{{ group.key }}</code></div>
+          <span v-if="group.representative.status === 'QUEUED' && group.representative.queue_position" class="task-queue-pos">{{ t("tasks.queuePosition", { n: group.representative.queue_position }) }}</span>
           <span v-if="kindLabelKey(group.representative)" class="task-kind">{{ t(kindLabelKey(group.representative)) }}</span>
           <div v-if="group.stages.length > 1" class="task-stage-strip">
             <span v-for="stage in group.stages" :key="stage.id" class="task-stage" :data-status="stage.status.toLowerCase()">{{ stageLabelKey(stage.name) ? t(stageLabelKey(stage.name)) : stage.name }}</span>
@@ -310,8 +419,13 @@ onBeforeUnmount(() => {
 
       <section v-if="selected" class="task-detail" :data-status="selected.status.toLowerCase()">
         <header class="task-detail-header">
-          <div class="task-detail-title"><h2>{{ taskName(selected) }}</h2><span class="task-status">{{ statusLabels[selected.status] || selected.status }}</span></div>
-          <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
+          <div class="task-detail-title"><h2>{{ taskName(selected) }}</h2><span class="task-status">{{ statusLabel(selected) }}</span></div>
+          <div class="task-detail-buttons">
+            <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
+            <button v-else-if="isHeld(selected)" class="primary-action" :disabled="actionBusyId === selected.id" @click="resume(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.starting") : t("tasks.detail.resume") }}</button>
+            <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
+            <button v-if="(selected.status === 'FAILED' || selected.status === 'TERMINATED') && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
+          </div>
         </header>
         <div v-if="progress.total_steps" class="task-progress">
           <div class="task-progress-meta"><span>{{ t("tasks.detail.stepProgress", { step: progress.step, total: progress.total_steps }) }}</span><span v-if="progress.total_epochs">{{ t("tasks.detail.epochProgress", { epoch: progress.epoch, total: progress.total_epochs }) }}</span><b>{{ progress.percent }}%</b></div>
@@ -321,6 +435,7 @@ onBeforeUnmount(() => {
           <div><dt>{{ t("tasks.detail.taskId") }}</dt><dd><code>{{ selected.id }}</code></dd></div>
           <div><dt>{{ t("tasks.detail.config") }}</dt><dd :title="taskDetail(selected)">{{ taskDetail(selected) }}</dd></div>
           <div><dt>{{ t("tasks.detail.returncode") }}</dt><dd>{{ selected.returncode ?? "-" }}</dd></div>
+          <div v-if="selected.status === 'QUEUED' && selected.queue_position"><dt>{{ t("tasks.detail.queuePosition") }}</dt><dd>{{ t("tasks.queuePosition", { n: selected.queue_position }) }}</dd></div>
           <div v-if="metaString(selected, 'backend')"><dt>{{ t("tasks.detail.backend") }}</dt><dd>{{ metaString(selected, "backend") }}</dd></div>
           <div v-if="metaString(selected, 'train_type')"><dt>{{ t("tasks.detail.trainType") }}</dt><dd>{{ metaString(selected, "train_type") }}</dd></div>
           <div v-if="selectedCreatedAt"><dt>{{ t("tasks.detail.createdAt") }}</dt><dd>{{ formatTimestamp(selectedCreatedAt) }}</dd></div>
@@ -334,9 +449,9 @@ onBeforeUnmount(() => {
         </section>
         <div class="task-detail-actions">
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
-          <RouterLink class="ghost-button" to="/tensorboard.html?from=tasks">{{ t("tasks.detail.tensorboard") }}</RouterLink>
+          <RouterLink v-if="selected.status !== 'QUEUED' && !selectedIsMaintenance" class="ghost-button" to="/tensorboard.html?from=tasks">{{ t("tasks.detail.tensorboard") }}</RouterLink>
         </div>
-        <section class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0, collapsed: !previewOpen }">
+        <section v-if="!selectedIsMaintenance" class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0, collapsed: !previewOpen }">
           <header class="task-panel-header" @click="previewOpen = !previewOpen">
             <span>{{ t("tasks.detail.previewTitle") }}</span>
             <button type="button" class="log-toggle" @click.stop="previewOpen = !previewOpen">{{ previewOpen ? t("tasks.log.collapse") : t("tasks.log.expand") }}</button>
@@ -347,7 +462,7 @@ onBeforeUnmount(() => {
             <p v-else>{{ t("tasks.detail.previewEmpty") }}</p>
           </template>
         </section>
-        <section class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss, collapsed: !lossOpen }">
+        <section v-if="!selectedIsMaintenance" class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss, collapsed: !lossOpen }">
           <header class="task-panel-header" @click="lossOpen = !lossOpen">
             <span>{{ t("tasks.detail.lossTitle") }}</span>
             <button type="button" class="log-toggle" @click.stop="lossOpen = !lossOpen">{{ lossOpen ? t("tasks.log.collapse") : t("tasks.log.expand") }}</button>

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import enum
 import sys
 import tempfile
 import types
@@ -65,6 +66,11 @@ def _install_stub_modules() -> None:
 
     tasks_mod = types.ModuleType("mikazuki.tasks")
     tasks_mod.tm = mock.MagicMock()
+
+    class _TaskStatus(enum.Enum):  # process.py only reads TaskStatus.QUEUED
+        QUEUED = 5
+
+    tasks_mod.TaskStatus = _TaskStatus
     sys.modules["mikazuki.tasks"] = tasks_mod
 
     launch_mod = types.ModuleType("mikazuki.launch_utils")
