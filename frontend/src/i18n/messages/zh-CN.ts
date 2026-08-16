@@ -265,7 +265,7 @@ export default {
       epochProgress: "轮次 {epoch}/{total}",
     },
     log: {
-      title: "训练日志",
+      title: "任务日志",
       expand: "展开",
       collapse: "收起",
       errorBadge: "日志中存在报错，请展开查看",

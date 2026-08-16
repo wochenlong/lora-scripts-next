@@ -265,7 +265,7 @@ export default {
       epochProgress: "Epoch {epoch}/{total}",
     },
     log: {
-      title: "Training Log",
+      title: "Task Log",
       expand: "Expand",
       collapse: "Collapse",
       errorBadge: "Errors found in the log, expand to inspect",
