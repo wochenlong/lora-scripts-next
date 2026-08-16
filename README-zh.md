@@ -48,7 +48,7 @@ releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
 
 要求：Windows 10/11，NVIDIA GPU（建议 RTX 20+）。
 
-补充说明：[整合包补充说明](docs/portable-getting-started.md) · [打标模型目录](docs/tagger-models.md)
+补充说明：[整合包补充说明](docs/portable-getting-started.md) · [打标模型目录](docs/tagger-models.md) · [构建与发包（协作）](docs/portable-build-guide.md)
 
 ### B. 从源码运行 `dev`（Vue3）
 
@@ -174,6 +174,7 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 | **开源引用（子页）** | [docs/credits.md](docs/credits.md) |
 | 法律向完整 NOTICE | [NOTICE.md](NOTICE.md) |
 | 整合包补充 | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
+| **整合包构建与发包（协作）** | [docs/portable-build-guide.md](docs/portable-build-guide.md) |
 | 打标模型 | [docs/tagger-models.md](docs/tagger-models.md) |
 | Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
 | **Krea 2 多卡（Linux 部署 + WebUI / `dev`）** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
