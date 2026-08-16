@@ -232,8 +232,10 @@ class TaskManager:
     # ---- queue persistence ----
 
     def enable_persistence(self, path: Optional[Path] = None):
+        """Declare the queue file location only. Must NOT persist here: at
+        startup the task table is still empty, and writing now would wipe the
+        file before restore_queue() reads it."""
         self._persist_path = Path(path) if path else default_queue_path()
-        self._persist()
 
     def _task_record(self, task: Task) -> Dict:
         env = {

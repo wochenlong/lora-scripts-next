@@ -133,8 +133,11 @@ class QueuePersistenceTests(unittest.TestCase):
             self.assertIn("b", payload)
             self.assertEqual(payload["a"]["status"], "RUNNING")
 
-            # Simulate restart while "a" is still running and "b" still queued.
-            tm2 = TaskManager(persist_path=path)
+            # Simulate restart while "a" is still running and "b" still queued,
+            # using the real startup sequence (enable_persistence must not wipe
+            # the file before restore_queue reads it).
+            tm2 = TaskManager()
+            tm2.enable_persistence(path)
             tm2.restore_queue()
 
             # b is restored into the queue and picked up by tm2's worker at once.
