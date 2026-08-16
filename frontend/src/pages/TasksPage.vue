@@ -156,9 +156,34 @@ function buildGroups(list: TrainingTask[]): TaskGroup[] {
   })
 }
 
+/** Running groups first (oldest start first), then CREATED, then queued groups in execution order. */
+function groupRank(group: TaskGroup): number {
+  if (group.tasks.some((task) => task.status === "RUNNING")) return 0
+  if (group.tasks.some((task) => task.status === "CREATED")) return 1
+  return 2
+}
+
+function groupCreatedAt(group: TaskGroup): number {
+  return Math.min(...group.tasks.map((task) => Number(task.metadata.created_at) || 0))
+}
+
+function groupQueuePosition(group: TaskGroup): number {
+  const positions = group.tasks.map((task) => task.queue_position ?? 0).filter((n) => n > 0)
+  return positions.length ? Math.min(...positions) : Number.MAX_SAFE_INTEGER
+}
+
 const orderedTasks = computed(() => [...tasks.value].reverse())
 const allGroups = computed(() => buildGroups(orderedTasks.value))
-const runningList = computed(() => allGroups.value.filter((group) => group.tasks.some(isActiveTask)))
+const runningList = computed(() =>
+  allGroups.value
+    .filter((group) => group.tasks.some(isActiveTask))
+    .sort((a, b) => {
+      const rank = groupRank(a) - groupRank(b)
+      if (rank !== 0) return rank
+      if (groupRank(a) === 2) return groupQueuePosition(a) - groupQueuePosition(b)
+      return groupCreatedAt(a) - groupCreatedAt(b)
+    }),
+)
 const recentList = computed(() => allGroups.value.filter((group) => !group.tasks.some(isActiveTask)))
 const visibleList = computed(() => activeTab.value === "running" ? runningList.value : recentList.value)
 const selected = computed(() => allGroups.value.find((group) => group.key === selectedId.value)?.representative)
