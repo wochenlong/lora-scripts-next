@@ -13,10 +13,10 @@
 
 | 分支 | 用途 | 界面 | 版本号 |
 |------|------|------|--------|
-| **`main`** | 稳定发布 | 旧版前端（预编译 dist） | 当前稳定 **v2.9.1** |
-| **`dev`** | **Vue3 RC 线**（本 README 默认对应此线） | Vue 3 四栏工作台 | **`2.9.x-rc.*`**（如 `2.9.2-rc.1`） |
+| **`main`** | 稳定发布（切换前仍为旧 UI） | 旧版前端（预编译 dist） | **v2.9.1**（即将迁入 `legacy`） |
+| **`dev`** | **Vue3 正式线（本 README）** | Vue 3 四栏工作台 | **`3.0.0`** |
 
-**版本约定：** 预发布一律使用 **`2.9.x`**（内测 `beta` → 候选 **`rc`**）；**正式版才用 `3.0.0`**，便于按版本号定位问题。反馈 Issue 时请附上侧栏显示的完整版本号。
+**版本约定：** 预发布曾使用 **`2.9.x`**（`beta` → `rc`）；**本线正式号为 `3.0.0`**。默认分支切换与正式整合包发布后，请以侧栏版本与 Release 归档名为准。反馈 Issue 时请附上完整版本号。
 
 ---
 
@@ -24,27 +24,27 @@
 
 | 包 | 内容 | 下载 |
 |----|------|------|
-| **lite** | 不含 Anima Fast / Musubi 运行时；内置 WD 打标模型；约 **0.39 GB** | [GitHub Release v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) |
-| **kohya-musubi** | 预装 Kohya 主环境（cu128）+ Musubi；同上打标模型；约 **4.2 GB** | [魔搭数据集 windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
+| **3.0.0 正式包** | 准备中（lite / Kohya / Musubi 分轨） | 即将发布到 GitHub Release `v3.0.0` 与魔搭 |
+| **RC 试用（仍可用）** | lite ~0.39 GB；kohya-musubi ~4.2 GB | [GitHub v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) · [魔搭 windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
 
-魔搭路径：
+RC 魔搭示例路径：
 
 ```text
 releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
 ```
 
-稳定版（旧 UI）整合包仍见 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 中 **v2.9.1** 及更早条目。
+旧 UI 稳定包仍见 [Releases](https://github.com/wochenlong/lora-scripts-next/releases) 中 **v2.9.1**。
 
 ---
 
 ## 怎么用
 
-### A. 整合包（推荐 RC 试用）
+### A. 整合包
 
-1. 下载 **lite**（GitHub）或 **kohya-musubi**（魔搭），用 7-Zip 解压到**非中文、非空格**路径  
-2. **lite：** 双击 **`run_gui.bat`**（首次会联网安装主环境依赖）。**kohya-musubi：** 双击 **`启动.bat`**  
-3. 浏览器打开 **http://127.0.0.1:28000**  
-4. 侧栏确认版本为 **`v2.9.2-rc.1 · RC`**（归档名带日期 **0813**）
+1. **正式 3.0.0 包发布前**：可继续用上表 RC 包试用 Vue3（侧栏可能仍显示 rc；源码 `dev` 已为 `3.0.0`）  
+2. 解压到**非中文、非空格**路径；**lite** 用 `run_gui.bat`，满配/分轨包按包内说明（如 `启动.bat`）  
+3. 打开 **http://127.0.0.1:28000**  
+4. 正式包侧栏应显示 **`v3.0.0`**
 
 要求：Windows 10/11，NVIDIA GPU（建议 RTX 20+）。
 
@@ -56,7 +56,7 @@ releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
 git clone https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
 
-# 切换到 Vue3 RC 分支
+# 切换到 Vue3 正式线（dev）
 git fetch origin
 git checkout dev
 git pull origin dev
@@ -70,7 +70,7 @@ git pull origin dev
 
 ```powershell
 git branch --show-current   # 应为 dev
-Get-Content VERSION         # 如 2.9.2-rc.1
+Get-Content VERSION         # 应为 3.0.0
 ```
 
 前端源码在 `frontend/`（Vue 3 + Vite）。日常开发：
@@ -102,7 +102,7 @@ git pull
 
 ---
 
-## Vue3 RC 功能（`dev`）
+## Vue3 功能（`dev` / 3.0.0）
 
 相对旧版侧栏多页 dist，**`dev` 为 Vue 3 单页工作台**：
 
@@ -112,7 +112,7 @@ git pull
 | **数据集** | 模型打标（内置 WD14）+ **以图为主的标签编辑**（顶栏数据源/加载；筛选与批量编辑在右侧面板） |
 | **任务** | 任务列表、状态、日志、预览 / Loss；日常盯盘以任务页为主 |
 | **设置** | UI 偏好（含浅色/深色主题）、**训练引擎管理**（Kohya / Anima Fast / Musubi）、**下载源**（pip / PyTorch / HF / GitHub 镜像）、关于、更新日志 |
-| **品牌与版本** | 产品名统一为 **Next Trainer**；预发布号显示 **RC** 徽标 |
+| **品牌与版本** | 产品名统一为 **Next Trainer**；正式号 **`3.0.0`**（预发布号仍会显示 RC 徽标） |
 | **开源致谢** | 设置 → 关于；仓库另有 [开源引用](docs/credits.md) 子页 |
 
 训练能力包括：
@@ -126,7 +126,7 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 
 ### 界面预览
 
-截图来自 `dev` / Vue3（`v2.9.2-rc.1` 中文界面）。
+截图来自 `dev` / Vue3（`3.0.0` 线；界面语言为中文）。
 
 #### 训练
 
@@ -185,12 +185,12 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 ## 常见问题（简）
 
 **反馈 Bug 要带什么？**  
-版本号（含 `rc`）、训练类型（模型/引擎/目标）、复现步骤、相关日志。→ [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
+完整版本号（侧栏）、训练类型（模型/引擎/目标）、复现步骤、相关日志。→ [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
 
 **lite 和 kohya-musubi 怎么选？**  
 弱网 / 轻量入口 → lite（首次启动装依赖）。要开箱 Kohya + Musubi（可训 Krea 2）→ **kohya-musubi**（魔搭）。Anima Fast 两包都需在设置页安装。
 
-**RC 和稳定版能混用配置吗？**  
+**3.0.0 和旧稳定版能混用配置吗？**  
 多数 TOML 可导入；导航与存储 key 有差异，以当前页「导入配置」为准。
 
 ---
