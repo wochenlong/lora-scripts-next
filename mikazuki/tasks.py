@@ -312,10 +312,13 @@ class TaskManager:
                     self._compute_queue.append(task_id)
                     restored += 1
                 elif record.get("status") == "RUNNING":
+                    # Keep the stored env: the interrupted task stays retryable,
+                    # and training commands rely on env like PYTHONPATH (#158).
+                    stored_env = record.get("env") or {}
                     task = Task(
                         task_id=task_id,
                         command=record.get("command") or [],
-                        environ=os.environ.copy(),
+                        environ={**os.environ, **stored_env},
                         metadata=record.get("metadata") or {},
                         cwd=record.get("cwd"),
                         lane=LANE_COMPUTE,

@@ -243,6 +243,30 @@ class RetryTests(unittest.TestCase):
         self.assertIsNone(tm.retry_task("m"))
         self.assertTrue(_wait_status(running, {TaskStatus.FINISHED}))
 
+    def test_retry_interrupted_task_keeps_stored_env(self):
+        # Regression: restored RUNNING->FAILED tasks must carry the persisted
+        # env (training needs PYTHONPATH to import mikazuki, issue #158).
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "task_queue.json"
+            path.write_text(json.dumps([{
+                "task_id": "dead",
+                "lane": "compute",
+                "group": None,
+                "command": [sys.executable, "-c", "pass"],
+                "cwd": None,
+                "metadata": {"backend": "standard"},
+                "env": {"PYTHONPATH": "/srv/project"},
+                "status": "RUNNING",
+            }]), encoding="utf-8")
+            tm = TaskManager(persist_path=path)
+            tm.restore_queue()
+
+            self.assertEqual(tm.tasks["dead"].status, TaskStatus.FAILED)
+            retried = tm.retry_task("dead")
+
+            self.assertIsNotNone(retried)
+            self.assertEqual(retried[0].environ["PYTHONPATH"], "/srv/project")
+
 
 if __name__ == "__main__":
     unittest.main()
