@@ -1468,6 +1468,28 @@ async def terminate_task(task_id: str):
     return APIResponseSuccess()
 
 
+@router.get("/tasks/resume/{task_id}", response_model_exclude_none=True)
+async def resume_task(task_id: str):
+    """Release a restored queued task that is waiting for manual confirmation."""
+    if tm.resume_task(task_id):
+        return APIResponseSuccess(data={"resumed": True})
+    return APIResponseFail(message="Task is not a held queued task / 任务不在待确认队列中")
+
+
+@router.get("/tasks/retry/{task_id}", response_model_exclude_none=True)
+async def retry_task(task_id: str):
+    """Re-queue a finished/failed/terminated training task (stage groups are
+    rebuilt as a whole)."""
+    new_tasks = tm.retry_task(task_id)
+    if not new_tasks:
+        return APIResponseFail(message="Task cannot be retried / 任务无法重跑（仅支持已结束的训练任务）")
+    return APIResponseSuccess(data={
+        "task_id": new_tasks[-1].task_id,
+        "task_ids": [t.task_id for t in new_tasks],
+        "queued": any(t.status.name == "QUEUED" for t in new_tasks),
+    })
+
+
 @router.get("/tasks/{task_id}/previews", response_model_exclude_none=True)
 async def task_previews(task_id: str) -> APIResponse:
     task = tm.tasks.get(task_id)

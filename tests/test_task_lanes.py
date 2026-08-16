@@ -140,14 +140,16 @@ class QueuePersistenceTests(unittest.TestCase):
             tm2.enable_persistence(path)
             tm2.restore_queue()
 
-            # b is restored into the queue and picked up by tm2's worker at once.
-            self.assertIn(tm2.tasks["b"].status, (TaskStatus.QUEUED, TaskStatus.RUNNING))
+            # b is restored into the queue but held for manual confirmation.
+            self.assertEqual(tm2.tasks["b"].status, TaskStatus.QUEUED)
+            self.assertTrue(tm2.tasks["b"].metadata.get("held"))
             interrupted = tm2.tasks.get("a")
             self.assertIsNotNone(interrupted)
             self.assertEqual(interrupted.status, TaskStatus.FAILED)
             self.assertIn("restart", interrupted.metadata.get("error", ""))
 
-            # Restored queue is executable: b should run to completion on tm2's worker.
+            # After manual resume the restored queue entry runs to completion.
+            self.assertTrue(tm2.resume_task("b"))
             self.assertTrue(_wait_status(tm2.tasks["b"], {TaskStatus.FINISHED}))
             self.assertTrue(_wait_status(a, {TaskStatus.FINISHED}))
 
@@ -159,6 +161,87 @@ class QueuePersistenceTests(unittest.TestCase):
             tm.restore_queue()  # must not raise
             self.assertEqual(tm.tasks, {})
             self.assertTrue(path.with_suffix(".json.corrupt").is_file())
+
+    def test_restored_task_is_held_until_resumed(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "task_queue.json"
+            tm1 = TaskManager(persist_path=path)
+            a = tm1.create_task(_sleeper(0.5), dict(os.environ), task_id="a")
+            tm1.submit(a)
+            b = tm1.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="b")
+            tm1.submit(b)
+            self.assertTrue(_wait_status(a, {TaskStatus.RUNNING}))
+
+            tm2 = TaskManager()
+            tm2.enable_persistence(path)
+            tm2.restore_queue()
+            restored = tm2.tasks["b"]
+
+            self.assertTrue(restored.metadata.get("held"))
+            time.sleep(1.0)  # worker must not pick up held tasks
+            self.assertEqual(restored.status, TaskStatus.QUEUED)
+            self.assertFalse(hasattr(restored, "process"))
+
+            self.assertTrue(tm2.resume_task("b"))
+            self.assertNotIn("held", restored.metadata)
+            self.assertTrue(_wait_status(restored, {TaskStatus.FINISHED}))
+
+            self.assertFalse(tm2.resume_task("b"))  # no longer held
+
+
+class RetryTests(unittest.TestCase):
+    def test_retry_finished_task_requeues_clean_copy(self):
+        tm = TaskManager()
+        a = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ),
+                           task_id="a", metadata={"output_name": "x"})
+        tm.submit(a)
+        self.assertTrue(_wait_status(a, {TaskStatus.FINISHED}))
+
+        retried = tm.retry_task("a")
+
+        self.assertIsNotNone(retried)
+        new_task = retried[0]
+        self.assertNotEqual(new_task.task_id, "a")
+        self.assertEqual(new_task.metadata["retry_of"], "a")
+        self.assertNotIn("returncode", new_task.metadata)
+        self.assertTrue(_wait_status(new_task, {TaskStatus.FINISHED}))
+
+    def test_retry_rebuilds_stage_group_in_order(self):
+        tm = TaskManager()
+        stages = ["cache_latents", "cache_text_encoder", "train"]
+        old = [
+            tm.create_task([sys.executable, "-c", "pass"], dict(os.environ),
+                           task_id=f"g-{stage}", group="g",
+                           metadata={"stage": stage, "train_task_id": "g"})
+            for stage in stages
+        ]
+        tm.submit_group(old)
+        for task in old:
+            self.assertTrue(_wait_status(task, {TaskStatus.FINISHED}))
+
+        retried = tm.retry_task("g-train")
+
+        self.assertEqual(len(retried), 3)
+        self.assertEqual([t.metadata["stage"] for t in retried], stages)
+        new_group = retried[0].group
+        self.assertTrue(new_group and new_group != "g")
+        self.assertTrue(all(t.group == new_group for t in retried))
+        self.assertTrue(all(t.metadata["train_task_id"] == new_group for t in retried))
+        for task in retried:
+            self.assertTrue(_wait_status(task, {TaskStatus.FINISHED}))
+
+    def test_retry_rejects_running_and_maintenance(self):
+        tm = TaskManager()
+        running = tm.create_task(_sleeper(0.8), dict(os.environ), task_id="r")
+        tm.submit(running)
+        self.assertTrue(_wait_status(running, {TaskStatus.RUNNING}))
+        self.assertIsNone(tm.retry_task("r"))
+
+        m = tm.create_task(["noop"], dict(os.environ), task_id="m", lane=LANE_MAINTENANCE)
+        m.start_log_only()
+        m.finish_log_only(1, "boom")
+        self.assertIsNone(tm.retry_task("m"))
+        self.assertTrue(_wait_status(running, {TaskStatus.FINISHED}))
 
 
 if __name__ == "__main__":

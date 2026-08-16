@@ -305,6 +305,9 @@ class TaskManager:
                         group=record.get("group"),
                     )
                     task.status = TaskStatus.QUEUED
+                    # Restored tasks never auto-start: a restart usually means
+                    # the operator changed something, so require a manual resume.
+                    task.metadata["held"] = True
                     self.tasks[task_id] = task
                     self._compute_queue.append(task_id)
                     restored += 1
@@ -387,13 +390,20 @@ class TaskManager:
     def _worker_loop(self):
         while True:
             with self._cond:
-                while not self._compute_queue:
-                    self._cond.wait()
-                task_id = self._compute_queue.popleft()
-                task = self.tasks.get(task_id)
-            if task is None or task.status not in (TaskStatus.CREATED, TaskStatus.QUEUED):
-                self._persist()
-                continue  # terminated while queued
+                task = None
+                while task is None:
+                    for task_id in list(self._compute_queue):
+                        candidate = self.tasks.get(task_id)
+                        if candidate is None or candidate.status not in (TaskStatus.CREATED, TaskStatus.QUEUED):
+                            self._compute_queue.remove(task_id)
+                            continue
+                        if candidate.metadata.get("held"):
+                            continue  # restored from disk, waiting for manual resume
+                        self._compute_queue.remove(task_id)
+                        task = candidate
+                        break
+                    if task is None:
+                        self._cond.wait()
             self._run_compute_task(task)
             self._persist()
 
@@ -457,6 +467,52 @@ class TaskManager:
             log.info(f"Task {task_id} removed from queue / 排队任务已移出队列")
             return
         task.terminate()
+
+    def resume_task(self, task_id: str) -> bool:
+        """Release a restored (held) queued task so the worker may run it."""
+        task = self.tasks.get(task_id)
+        if task is None or task.status != TaskStatus.QUEUED or not task.metadata.get("held"):
+            return False
+        task.metadata.pop("held", None)
+        with self._cond:
+            self._cond.notify_all()
+        self._persist()
+        log.info(f"Task {task_id} resumed from hold / 排队任务已确认开始")
+        return True
+
+    _RETRY_STRIP_METADATA = ("error", "returncode", "finished_at", "last_log_lines", "held")
+
+    def retry_task(self, task_id: str) -> Optional[List[Task]]:
+        """Re-queue a finished/failed/terminated compute task. Musubi-style
+        stage groups are rebuilt as a whole, in stage order."""
+        origin = self.tasks.get(task_id)
+        if origin is None or origin.lane != LANE_COMPUTE or not origin.command:
+            return None
+        if origin.status not in (TaskStatus.FINISHED, TaskStatus.FAILED, TaskStatus.TERMINATED):
+            return None
+        if origin.group:
+            stage_rank = {"cache_latents": 0, "cache_text_encoder": 1, "train": 2}
+            members = [t for t in self.tasks.values() if t.group == origin.group]
+            members.sort(key=lambda t: (stage_rank.get(str(t.metadata.get("stage")), 99),
+                                        float(t.metadata.get("created_at") or 0)))
+        else:
+            members = [origin]
+        new_group = str(uuid.uuid4()) if origin.group else None
+        new_tasks: List[Task] = []
+        for member in members:
+            metadata = dict(member.metadata)
+            for key in self._RETRY_STRIP_METADATA:
+                metadata.pop(key, None)
+            metadata["retry_of"] = member.task_id
+            if new_group:
+                metadata["train_task_id"] = new_group
+            new_tasks.append(self.create_task(
+                list(member.command), dict(member.environ or os.environ),
+                metadata=metadata, cwd=member.cwd, group=new_group,
+            ))
+        self.submit_group(new_tasks)
+        log.info(f"Task {task_id} re-queued ({len(new_tasks)} task(s)) / 任务已重新排队")
+        return new_tasks
 
     def wait_for_process(self, task_id: str):
         if task_id in self.tasks:
