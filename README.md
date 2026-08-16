@@ -48,7 +48,7 @@ Legacy UI packages: [Releases](https://github.com/wochenlong/lora-scripts-next/r
 
 Requirements: Windows 10/11, NVIDIA GPU (RTX 20+ recommended).
 
-More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md)
+More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md) · [Build & release (collaborators)](docs/portable-build-guide.md)
 
 ### B. Run `dev` from source (Vue 3)
 
@@ -169,6 +169,7 @@ See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 | **Credits (subpage)** | [docs/credits.md](docs/credits.md) |
 | Full legal NOTICE | [NOTICE.md](NOTICE.md) |
 | Portable notes | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
+| **Portable build & release (collaborators)** | [docs/portable-build-guide.md](docs/portable-build-guide.md) |
 | Tagger models | [docs/tagger-models.md](docs/tagger-models.md) |
 | Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
 | **Krea 2 multi-GPU (Linux host + WebUI / `dev`)** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
