@@ -162,6 +162,7 @@ const runningList = computed(() => allGroups.value.filter((group) => group.tasks
 const recentList = computed(() => allGroups.value.filter((group) => !group.tasks.some(isActiveTask)))
 const visibleList = computed(() => activeTab.value === "running" ? runningList.value : recentList.value)
 const selected = computed(() => allGroups.value.find((group) => group.key === selectedId.value)?.representative)
+const selectedIsMaintenance = computed(() => (selected.value ? isMaintenanceTask(selected.value) : false))
 
 const KIND_LABEL_KEYS: Record<string, string> = {
   musubi_install: "tasks.kind.musubiInstall",
@@ -172,6 +173,22 @@ const KIND_LABEL_KEYS: Record<string, string> = {
 function kindLabelKey(task: TrainingTask): string {
   const kind = task.metadata.kind
   return typeof kind === "string" ? (KIND_LABEL_KEYS[kind] ?? "") : ""
+}
+
+/** Install/download tasks never produce training insights. */
+function isMaintenanceTask(task: TrainingTask): boolean {
+  return task.lane === "maintenance" || Boolean(kindLabelKey(task))
+}
+
+/**
+ * Insights (previews/loss) are resolved by scanning output/logging dirs with an
+ * mtime filter, so a task that has not started yet would pick up files written
+ * by the currently running task. Only fetch insights for training tasks that
+ * have actually run (or are running).
+ */
+function insightsEligible(task: TrainingTask | undefined | null): boolean {
+  if (!task || isMaintenanceTask(task)) return false
+  return task.status !== "QUEUED" && task.status !== "CREATED"
 }
 
 function taskName(task: TrainingTask) {
@@ -238,14 +255,16 @@ watch(() => selected.value?.id, (id) => {
   previewEnabled.value = true
   previewSig = ""
   metricsSig = ""
-  if (id) loadInsights(id)
+  if (id && insightsEligible(selected.value)) loadInsights(id)
 })
 
 watch(() => selected.value?.status, (status, previous) => {
   const wasActive = previous === "RUNNING" || previous === "CREATED" || previous === "QUEUED"
   const isActive = status === "RUNNING" || status === "CREATED" || status === "QUEUED"
   const id = selected.value?.id
-  if (wasActive && status && !isActive && id) loadInsights(id)
+  if (wasActive && status && !isActive && id && insightsEligible(selected.value)) loadInsights(id)
+  // A queued task that just started becomes eligible: load once it is running.
+  if (previous === "QUEUED" && status === "RUNNING" && id && insightsEligible(selected.value)) loadInsights(id)
 })
 
 async function terminate(task: TrainingTask) {
@@ -289,7 +308,7 @@ onMounted(async () => {
     store.refresh({ silent: true })
     insightTick += 1
     const task = selected.value
-    if (task && (task.status === "RUNNING" || task.status === "CREATED" || task.status === "QUEUED") && insightTick % 4 === 0) loadInsights(task.id)
+    if (task && task.status === "RUNNING" && insightsEligible(task) && insightTick % 4 === 0) loadInsights(task.id)
   }, 2000)
 })
 
@@ -358,7 +377,7 @@ onBeforeUnmount(() => {
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
           <RouterLink class="ghost-button" to="/tensorboard.html?from=tasks">{{ t("tasks.detail.tensorboard") }}</RouterLink>
         </div>
-        <section class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0, collapsed: !previewOpen }">
+        <section v-if="!selectedIsMaintenance" class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0, collapsed: !previewOpen }">
           <header class="task-panel-header" @click="previewOpen = !previewOpen">
             <span>{{ t("tasks.detail.previewTitle") }}</span>
             <button type="button" class="log-toggle" @click.stop="previewOpen = !previewOpen">{{ previewOpen ? t("tasks.log.collapse") : t("tasks.log.expand") }}</button>
@@ -369,7 +388,7 @@ onBeforeUnmount(() => {
             <p v-else>{{ t("tasks.detail.previewEmpty") }}</p>
           </template>
         </section>
-        <section class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss, collapsed: !lossOpen }">
+        <section v-if="!selectedIsMaintenance" class="task-loss-panel task-placeholder" :class="{ 'has-data': hasLoss, collapsed: !lossOpen }">
           <header class="task-panel-header" @click="lossOpen = !lossOpen">
             <span>{{ t("tasks.detail.lossTitle") }}</span>
             <button type="button" class="log-toggle" @click.stop="lossOpen = !lossOpen">{{ lossOpen ? t("tasks.log.collapse") : t("tasks.log.expand") }}</button>
