@@ -159,6 +159,49 @@ class TaskInsightsTests(unittest.TestCase):
 
         self.metadata["created_at"] = time.time() + 60
         self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})
+    def test_list_preview_images_excludes_files_written_after_finish(self):
+        sample = self.output_dir / "sample"
+        own = sample / "aki_e000001_20260804_110000.png"
+        own.write_bytes(b"png")
+        within = time.time() - 120
+        os.utime(own, (within, within))
+        later = sample / "aki_e000002_20260804_120000.png"
+        later.write_bytes(b"png")  # fresh mtime: belongs to a newer task
+
+        self.metadata["finished_at"] = time.time() - 60
+        images = task_insights.list_preview_images(self.metadata)
+        self.assertEqual([item["name"] for item in images], [own.name])
+
+        # Running tasks (no finished_at) keep the open window.
+        del self.metadata["finished_at"]
+        names = [item["name"] for item in task_insights.list_preview_images(self.metadata)]
+        self.assertEqual(names, [own.name, later.name])
+
+    @unittest.skipUnless(HAS_TENSORBOARD, "tensorboard not available")
+    def test_read_loss_scalars_ignores_runs_written_after_finish(self):
+        own_run = self.logging_dir / "20260801000000"
+        own_writer = SummaryWriter(log_dir=str(own_run))
+        own_writer.add_scalar("loss/average", 99.0, 0)
+        own_writer.close()
+        own_mtime = time.mktime((2026, 8, 1, 0, 1, 0, 0, 0, -1))
+        for event_file in own_run.rglob("events.out.tfevents.*"):
+            os.utime(event_file, (own_mtime, own_mtime))
+
+        # A newer task's run, written "now", must not leak into the old task.
+        later_run = self.logging_dir / "20260804120000"
+        later_writer = SummaryWriter(log_dir=str(later_run))
+        later_writer.add_scalar("loss/average", 0.1, 0)
+        later_writer.close()
+
+        self.metadata["created_at"] = time.mktime((2026, 7, 31, 0, 0, 0, 0, 0, -1))
+        self.metadata["finished_at"] = time.mktime((2026, 8, 2, 0, 0, 0, 0, 0, -1))
+        tags = task_insights.read_loss_scalars(self.metadata)
+        self.assertIn("loss/average", tags)
+        self.assertAlmostEqual(tags["loss/average"][-1]["value"], 99.0)
+
+        # A finished task that never wrote events sees nothing, not the newer run.
+        self.metadata["created_at"] = time.mktime((2026, 8, 3, 0, 0, 0, 0, 0, -1))
+        self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})
 
 
 if __name__ == "__main__":
