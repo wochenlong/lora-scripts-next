@@ -105,6 +105,33 @@ class ComputeLaneQueueTests(unittest.TestCase):
         self.assertEqual(dump["b"]["queue_position"], 1)
         self.assertTrue(_wait_status(b, {TaskStatus.FINISHED}))
 
+    def test_execute_stamps_started_at(self):
+        tm = TaskManager()
+        task = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="s")
+        tm.submit(task)
+        self.assertTrue(_wait_status(task, {TaskStatus.FINISHED}))
+        self.assertGreater(task.metadata.get("started_at", 0), 0)
+        self.assertLess(task.metadata["started_at"], task.metadata["finished_at"] + 1)
+
+    def test_retry_strips_started_at(self):
+        tm = TaskManager()
+        a = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="a")
+        tm.submit(a)
+        self.assertTrue(_wait_status(a, {TaskStatus.FINISHED}))
+        old_started = a.metadata["started_at"]
+
+        # Occupy the lane so the retried task stays QUEUED and un-executed.
+        blocker = tm.create_task(_sleeper(3), dict(os.environ), task_id="blocker")
+        tm.submit(blocker)
+        retried = tm.retry_task("a")
+        self.assertEqual(retried[0].status, TaskStatus.QUEUED)
+        self.assertNotIn("started_at", retried[0].metadata)
+
+        tm.terminate_task("blocker")
+        self.assertTrue(_wait_status(retried[0], {TaskStatus.FINISHED}))
+        # Re-stamped by execute(), later than the original run.
+        self.assertGreaterEqual(retried[0].metadata["started_at"], old_started)
+
 
 class QueuePersistenceTests(unittest.TestCase):
     def test_env_record_filters_sensitive_keys(self):
@@ -121,16 +148,22 @@ class QueuePersistenceTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             path = Path(td) / "task_queue.json"
             tm1 = TaskManager(persist_path=path)
-            a = tm1.create_task(_sleeper(0.8), dict(os.environ), task_id="a")
+            # Long sleeper: under full-suite load the persistence assertions
+            # below must land well before "a" exits.
+            a = tm1.create_task(_sleeper(5), dict(os.environ), task_id="a")
             tm1.submit(a)
             b = tm1.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="b")
             tm1.submit(b)
 
             self.assertTrue(path.is_file())
             self.assertTrue(_wait_status(a, {TaskStatus.RUNNING}))
-            time.sleep(0.2)  # allow post-execute persist to land
-            payload = {r["task_id"]: r for r in json.loads(path.read_text(encoding="utf-8"))}
-            self.assertIn("b", payload)
+            # Wait for the post-execute persist to land (a recorded RUNNING).
+            deadline = time.time() + 10
+            while time.time() < deadline:
+                payload = {r["task_id"]: r for r in json.loads(path.read_text(encoding="utf-8"))}
+                if payload.get("a", {}).get("status") == "RUNNING" and "b" in payload:
+                    break
+                time.sleep(0.05)
             self.assertEqual(payload["a"]["status"], "RUNNING")
 
             # Simulate restart while "a" is still running and "b" still queued,
@@ -151,7 +184,8 @@ class QueuePersistenceTests(unittest.TestCase):
             # After manual resume the restored queue entry runs to completion.
             self.assertTrue(tm2.resume_task("b"))
             self.assertTrue(_wait_status(tm2.tasks["b"], {TaskStatus.FINISHED}))
-            self.assertTrue(_wait_status(a, {TaskStatus.FINISHED}))
+            tm1.terminate_task("a")  # clean up the long sleeper
+            self.assertTrue(_wait_status(a, {TaskStatus.TERMINATED}))
 
     def test_restore_corrupt_file_degrades_to_empty(self):
         with tempfile.TemporaryDirectory() as td:

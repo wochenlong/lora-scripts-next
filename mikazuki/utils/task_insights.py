@@ -140,10 +140,17 @@ def read_progress(log_lines: list[str]) -> dict:
 
 
 def _since(metadata: dict) -> float:
-    try:
-        return float((metadata or {}).get("created_at") or 0) - SINCE_TOLERANCE_SECONDS
-    except (TypeError, ValueError):
-        return 0.0
+    # Prefer the actual process start: with the compute queue, created_at is
+    # the submission time and may long predate the run, leaking the previous
+    # task's late writes into this task's window.
+    for key in ("started_at", "created_at"):
+        try:
+            value = float((metadata or {}).get(key) or 0)
+        except (TypeError, ValueError):
+            continue
+        if value > 0:
+            return value - SINCE_TOLERANCE_SECONDS
+    return 0.0
 
 
 def _until(metadata: dict) -> float | None:

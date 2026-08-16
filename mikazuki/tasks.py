@@ -173,6 +173,9 @@ class Task:
         self.status = TaskStatus.RUNNING
         self.returncode = None
         self.metadata.pop("returncode", None)
+        # Insights use started_at (not created_at) as the lower bound so queued
+        # tasks don't pick up data written by the previous task while waiting.
+        self.metadata["started_at"] = datetime.now().timestamp()
         hub.start_task(self.task_id)
         self._append_disk_log(
             "\n"
@@ -483,7 +486,7 @@ class TaskManager:
         log.info(f"Task {task_id} resumed from hold / 排队任务已确认开始")
         return True
 
-    _RETRY_STRIP_METADATA = ("error", "returncode", "finished_at", "last_log_lines", "held")
+    _RETRY_STRIP_METADATA = ("error", "returncode", "finished_at", "last_log_lines", "held", "started_at")
 
     def retry_task(self, task_id: str) -> Optional[List[Task]]:
         """Re-queue a finished/failed/terminated compute task. Musubi-style

@@ -177,6 +177,34 @@ class TaskInsightsTests(unittest.TestCase):
         names = [item["name"] for item in task_insights.list_preview_images(self.metadata)]
         self.assertEqual(names, [own.name, later.name])
 
+    def test_started_at_anchors_window_for_queued_task(self):
+        # Q was submitted while P was still running; P's late samples (mtime
+        # after Q.created_at but before Q.started_at) must not leak into Q.
+        sample = self.output_dir / "sample"
+        previous = sample / "aki_e000009_20260804_110000.png"
+        previous.write_bytes(b"png")
+        # Written after Q.created_at but before Q.started_at (P's late samples).
+        late = time.time() - 60
+        os.utime(previous, (late, late))
+        self.metadata["created_at"] = time.time() - 600  # submitted 10 min ago
+        self.metadata["started_at"] = time.time()        # started just now
+
+        self.assertEqual(task_insights.list_preview_images(self.metadata), [])
+
+        own = sample / "aki_e000001_20260804_120000.png"
+        own.write_bytes(b"png")  # written after started_at
+        task_insights._list_cache.clear()
+        names = [item["name"] for item in task_insights.list_preview_images(self.metadata)]
+        self.assertEqual(names, [own.name])
+
+    def test_since_falls_back_to_created_at(self):
+        metadata = {"created_at": 1000.0}
+        self.assertAlmostEqual(
+            task_insights._since(metadata), 1000.0 - task_insights.SINCE_TOLERANCE_SECONDS)
+        metadata["started_at"] = 2000.0
+        self.assertAlmostEqual(
+            task_insights._since(metadata), 2000.0 - task_insights.SINCE_TOLERANCE_SECONDS)
+
     @unittest.skipUnless(HAS_TENSORBOARD, "tensorboard not available")
     def test_read_loss_scalars_ignores_runs_written_after_finish(self):
         own_run = self.logging_dir / "20260801000000"
