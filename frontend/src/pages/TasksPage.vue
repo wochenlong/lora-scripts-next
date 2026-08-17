@@ -401,6 +401,7 @@ onBeforeUnmount(() => {
 
     <div v-else class="tasks-columns">
       <aside class="tasks-list-panel">
+        <a class="tasks-monitor-link" href="/train-monitor" target="_blank" rel="noreferrer">{{ t("tasks.trainMonitor") }}</a>
         <div class="tasks-tabs" role="group" :aria-label="t('tasks.filterAria')">
           <button :class="{ active: activeTab === 'running' }" @click="activeTab = 'running'">{{ t("tasks.tabs.running") }}<b>{{ runningList.length }}</b></button>
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>

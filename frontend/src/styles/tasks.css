@@ -122,6 +122,26 @@
   box-shadow: var(--shadow);
 }
 
+.tasks-monitor-link {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  margin-bottom: 12px;
+  color: var(--text-soft);
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.tasks-monitor-link:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .tasks-tabs {
   display: flex;
   gap: 6px;
