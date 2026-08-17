@@ -392,6 +392,7 @@ onBeforeUnmount(() => {
   <div class="tasks-board">
     <header class="tasks-board-header">
       <h1>{{ t("tasks.title") }}</h1>
+      <a class="ghost-button" href="/train-monitor" target="_blank" rel="noreferrer">{{ t("tasks.trainMonitor") }}</a>
       <button class="ghost-button" :disabled="loading" @click="store.refresh()"><el-icon><Refresh /></el-icon>{{ t("tasks.refresh") }}</button>
     </header>
 

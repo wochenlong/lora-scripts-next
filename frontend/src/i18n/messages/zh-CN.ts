@@ -188,6 +188,7 @@ export default {
   tasks: {
     title: "任务",
     refresh: "刷新",
+    trainMonitor: "训练监控",
     tabs: {
       running: "进行中",
       recent: "最近",

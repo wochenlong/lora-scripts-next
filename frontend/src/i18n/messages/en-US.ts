@@ -188,6 +188,7 @@ export default {
   tasks: {
     title: "Tasks",
     refresh: "Refresh",
+    trainMonitor: "Train Monitor",
     tabs: {
       running: "Running",
       recent: "Recent",
