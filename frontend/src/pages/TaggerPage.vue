@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, reactive, ref } from "vue"
+import { computed, onActivated, onBeforeUnmount, onDeactivated, reactive, ref } from "vue"
 import { ElMessage } from "element-plus"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
@@ -39,8 +39,17 @@ async function browsePath() {
     picking.value = false
   }
 }
-onMounted(async () => { await store.refresh(); timer = window.setInterval(store.refresh, 1200) })
-onBeforeUnmount(() => window.clearInterval(timer))
+function stopPolling() {
+  window.clearInterval(timer)
+  timer = undefined
+}
+onActivated(() => {
+  void store.refresh()
+  stopPolling()
+  timer = window.setInterval(store.refresh, 1200)
+})
+onDeactivated(stopPolling)
+onBeforeUnmount(stopPolling)
 </script>
 
 <template><div class="tagger-page"><section class="tagger-form"><header><span class="eyebrow">DATASET TAGGER</span><h1>{{ t("tagger.title") }}</h1><p>{{ t("tagger.subtitle") }}</p></header><div class="tagger-grid"><label>{{ t("tagger.modelLabel") }}<select v-model="form.interrogator_model"><option v-for="model in models" :key="model">{{ model }}</option></select></label><label>{{ t("tagger.pathLabel") }}<span class="path-row"><input v-model="form.path" placeholder="/data/datasets/images" /><button :disabled="picking" @click.prevent="browsePath">{{ t("schemaForm.browse") }}</button></span></label><label>{{ t("tagger.thresholdLabel") }}<input v-model.number="form.threshold" type="number" min="0" max="1" step="0.05" /></label><label>{{ t("tagger.characterThresholdLabel") }}<input v-model.number="form.character_threshold" type="number" min="0" max="1" step="0.05" /></label><label>{{ t("tagger.additionalTagsLabel") }}<input v-model="form.additional_tags" /></label><label>{{ t("tagger.excludeTagsLabel") }}<input v-model="form.exclude_tags" /></label><label>{{ t("tagger.endpointLabel") }}<input v-model="form.download_endpoint" :placeholder="t('tagger.endpointPlaceholder')" /></label><label>{{ t("tagger.conflictLabel") }}<select v-model="form.batch_output_action_on_conflict"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option></select></label></div><div class="check-row"><label><input v-model="form.batch_input_recursive" type="checkbox" />{{ t("tagger.recursive") }}</label><label><input v-model="form.replace_underscore" type="checkbox" />{{ t("tagger.replaceUnderscore") }}</label><label><input v-model="form.escape_tag" type="checkbox" />{{ t("tagger.escapeTag") }}</label><label><input v-model="form.add_rating_tag" type="checkbox" />{{ t("tagger.addRatingTag") }}</label><label><input v-model="form.add_model_tag" type="checkbox" />{{ t("tagger.addModelTag") }}</label></div></section>

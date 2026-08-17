@@ -16,7 +16,9 @@ const { t } = useI18n()
         <RouterLink to="/dataset/editor" :class="{ active: tab === 'editor' }">{{ t("dataset.tab.editor") }}</RouterLink>
       </div>
     </header>
-    <DatasetEditorPage v-if="tab === 'editor'" />
-    <TaggerPage v-else />
+    <KeepAlive>
+      <DatasetEditorPage v-if="tab === 'editor'" />
+      <TaggerPage v-else />
+    </KeepAlive>
   </div>
 </template>
