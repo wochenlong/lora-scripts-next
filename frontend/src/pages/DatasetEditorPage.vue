@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from "vue"
+import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { datasetApi, type ChangedItem, type DatasetHistory, type DatasetItem } from "../api/dataset"
@@ -333,7 +333,13 @@ watch(() => [tagFilter.logic, tagFilter.selectedTags.size, tagFilter.excludeInpu
 watch(pageCount, (count) => {
   if (page.value > count) page.value = count
 })
-onMounted(() => window.addEventListener("keydown", onPreviewKeydown))
+onActivated(() => window.addEventListener("keydown", onPreviewKeydown))
+onDeactivated(() => {
+  window.removeEventListener("keydown", onPreviewKeydown)
+  previewOpen.value = false
+  selectMenuOpen.value = false
+  historyOpen.value = false
+})
 onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
 </script>
 
