@@ -18,9 +18,66 @@ const BASIC_DEFAULTS: FormModel = {
   persistent_data_loader_workers: true,
 }
 
+/**
+ * Fields that must not cross schema boundaries via carry-over / polluted autosave.
+ * See #271: Kohya → Anima Fast leaked model_train_type=anima-lora and cache_*=true.
+ */
+export const CROSS_SCHEMA_DENY_KEYS = [
+  "model_train_type",
+  "lora_type",
+  "method",
+  "methods_subdir",
+  "network_module",
+  "cache_latents",
+  "cache_latents_to_disk",
+  "cache_text_encoder_outputs",
+  "cache_text_encoder_outputs_to_disk",
+] as const
+
+/** schemaName → locked model_train_type for pages that own a single train type. */
+export const SCHEMA_TRAIN_TYPES: Record<string, string> = {
+  "anima-lora-fast": "anima-lora-fast",
+  "sd3-lora": "anima-lora",
+  "anima-finetune": "anima-finetune",
+  "flux-lora": "flux-lora",
+  "lumina2-lora": "lumina2-lora",
+  "krea2-lora": "krea2-lora",
+}
+
 export interface ParamDiagnostics {
   warnings: string[]
   errors: string[]
+}
+
+/** Keep only safe same-name fields when carrying form state across training schemas. */
+export function pickCarryOverFields(
+  carry: FormModel,
+  defaults: FormModel,
+  fieldDefaults?: FormModel,
+): FormModel {
+  const deny = new Set<string>(CROSS_SCHEMA_DENY_KEYS)
+  const carried: FormModel = {}
+  for (const [key, value] of Object.entries(carry)) {
+    if (deny.has(key)) continue
+    if (!(key in defaults)) continue
+    if (fieldDefaults && key in fieldDefaults) continue
+    carried[key] = value
+  }
+  return carried
+}
+
+/**
+ * Drop discriminator / cache fields from a persisted draft when its train type
+ * no longer matches the active schema defaults (poisoned Fast autosave case).
+ */
+export function sanitizePersistedDraft(saved: FormModel, defaults: FormModel): FormModel {
+  const draft = cloneFormModel(saved)
+  const expected = defaults.model_train_type
+  if (expected === undefined || draft.model_train_type === undefined || draft.model_train_type === expected) {
+    return draft
+  }
+  for (const key of CROSS_SCHEMA_DENY_KEYS) delete draft[key]
+  return draft
 }
 
 function values(value: FormValue) {
@@ -33,6 +90,8 @@ function remove(config: FormModel, keys: string[]) {
 
 export function buildTrainingConfig(source: FormModel, schemaName: string) {
   const config: FormModel = schemaName === "lora-basic" ? { ...BASIC_DEFAULTS, ...cloneFormModel(source) } : cloneFormModel(source)
+  const lockedTrainType = SCHEMA_TRAIN_TYPES[schemaName]
+  if (lockedTrainType) config.model_train_type = lockedTrainType
   let networkArgs: string[] = []
   let optimizerArgs: string[] = []
 
