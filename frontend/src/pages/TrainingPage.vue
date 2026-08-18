@@ -11,7 +11,7 @@ import { schemasApi } from "../api/schemas"
 import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/training"
 import { applyReadonlyDefaults, cloneFormModel, createDefaultModel, isFieldActive, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
-import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig } from "../training/params"
+import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
 import { moduleForTrainType } from "../training/modules"
 import { copyText } from "../utils/clipboard"
 import { useTasksStore } from "../stores/tasks"
@@ -111,6 +111,7 @@ async function applyImportedConfig(config: FormModel, successMessage?: string) {
     return
   }
   model.value = { ...createDefaultModel(schema.value!), ...hydrateImportedConfig(result.config || config) }
+  applyReadonlyDefaults(schema.value!, model.value, { ...createDefaultModel(schema.value!), ...props.fieldDefaults })
   if (result.notice) ElMessage.info(result.notice)
   ElMessage.success(successMessage ?? t("training.importMsg.imported"))
 }
@@ -130,14 +131,13 @@ async function load() {
     const defaults = { ...createDefaultModel(loaded), ...props.fieldDefaults }
     const carry = readCarryOver()
     sessionStorage.removeItem("mikazuki-carry-over")
-    const carried: FormModel = {}
-    for (const [key, value] of Object.entries(carry)) {
-      if (key in defaults && !(props.fieldDefaults && key in props.fieldDefaults)) carried[key] = value
-    }
+    const carried = pickCarryOverFields(carry, defaults, props.fieldDefaults)
     const base = { ...defaults, ...carried }
     try {
       const saved = JSON.parse(localStorage.getItem(autosaveKey()) || "null")
-      model.value = saved && typeof saved === "object" ? { ...base, ...saved } : base
+      model.value = saved && typeof saved === "object"
+        ? { ...base, ...sanitizePersistedDraft(saved as FormModel, defaults) }
+        : base
     } catch { model.value = base }
     applyReadonlyDefaults(loaded, model.value, defaults)
     const cards = await schemasApi.graphicCards()
@@ -255,7 +255,16 @@ async function resetConfig() {
   } catch { return }
   localStorage.removeItem(autosaveKey())
   model.value = { ...createDefaultModel(schema.value), ...props.fieldDefaults }
+  applyReadonlyDefaults(schema.value, model.value, { ...createDefaultModel(schema.value), ...props.fieldDefaults })
   ElMessage.success(t("training.actions.resetDone"))
+}
+
+function applyHistory(row: FormModel) {
+  if (!schema.value) return
+  const defaults = { ...createDefaultModel(schema.value), ...props.fieldDefaults }
+  model.value = { ...defaults, ...sanitizePersistedDraft(row, defaults) }
+  applyReadonlyDefaults(schema.value, model.value, defaults)
+  historyOpen.value = false
 }
 
 async function copyToml() {
@@ -328,6 +337,6 @@ onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(a
     </aside>
   </div>
 
-  <el-dialog v-model="historyOpen" :title="t('training.historyDialog.title')" width="min(760px, 92vw)"><div class="config-list"><article v-for="(row, index) in history" :key="`${row.time}-${index}`"><div><strong>{{ row.name || t('training.historyDialog.unnamed') }}</strong><span>{{ row.time }}</span></div><button @click="model = { ...createDefaultModel(schema!), ...row.value }; historyOpen = false">{{ t("training.historyDialog.use") }}</button><button class="danger" @click="deleteHistory(index)">{{ t("training.historyDialog.delete") }}</button></article><p v-if="!history.length">{{ t("training.historyDialog.empty") }}</p></div></el-dialog>
+  <el-dialog v-model="historyOpen" :title="t('training.historyDialog.title')" width="min(760px, 92vw)"><div class="config-list"><article v-for="(row, index) in history" :key="`${row.time}-${index}`"><div><strong>{{ row.name || t('training.historyDialog.unnamed') }}</strong><span>{{ row.time }}</span></div><button @click="applyHistory(row.value)">{{ t("training.historyDialog.use") }}</button><button class="danger" @click="deleteHistory(index)">{{ t("training.historyDialog.delete") }}</button></article><p v-if="!history.length">{{ t("training.historyDialog.empty") }}</p></div></el-dialog>
   <el-dialog v-model="presetsOpen" :title="t('training.presetsDialog.title')" width="min(760px, 92vw)"><div v-loading="presetsLoading" class="config-list"><article v-for="preset in filteredPresets" :key="preset.metadata.name"><div><strong>{{ preset.metadata.name }}</strong><span>{{ preset.metadata.description || `${preset.metadata.author || ''} ${preset.metadata.version || ''}` }}</span></div><button @click="applyPreset(preset)">{{ t("training.presetsDialog.apply") }}</button></article><p v-if="!presetsLoading && !filteredPresets.length">{{ t("training.presetsDialog.empty") }}</p></div></el-dialog>
 </template>
