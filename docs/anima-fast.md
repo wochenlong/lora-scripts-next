@@ -157,7 +157,7 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 
 > 这是便捷的备选方式。WebUI 内安装会把下载/编译日志收进页面下方的日志区，遇到报错时**不如命令行直观**；若安装卡住或失败，建议改用上面的 **CLI 脚本** 重装并把终端报错反馈给我们。
 
-1. 启动 SD Trainer：`run_gui.bat` 或 `python gui.py`
+1. 启动 Next Trainer：`run_gui.bat` 或 `python gui.py`
 2. 打开 **Anima LoRA → Fast 模式**
 3. 阅读页顶说明；状态为 **「进阶插件 · 待开启」** 时，训练按钮为灰色（正常）
 4. 点击 **「开启插件」**，确认对话框后等待安装与审计完成
@@ -307,7 +307,7 @@ Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选�
 
 ## 致谢
 
-Fast 模式训练引擎基于开源项目 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora)。感谢原作者与社区的开发与分享；SD Trainer 以可选插件形式集成，各组件遵循其各自的开源许可。
+Fast 模式训练引擎基于开源项目 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora)。感谢原作者与社区的开发与分享；Next Trainer 以可选插件形式集成，各组件遵循其各自的开源许可。
 
 ## 开源许可
 

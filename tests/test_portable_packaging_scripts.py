@@ -99,6 +99,7 @@ def test_portable_builder_bundles_dual_update_scripts():
 
     assert "Update-SD-Trainer-Release.bat" in script
     assert "update_from_release.bat" in script
+    assert "Next-Trainer-v*.7z" in release_ps1 or "Next-Trainer-v" in release_ps1
     assert "SD-Trainer-v*.7z" in release_ps1 or "SD-Trainer-v" in release_ps1
     assert "extensions" in release_ps1
     assert '"/XD", "config", "sd-models", "output", "logs", "train"' in release_ps1

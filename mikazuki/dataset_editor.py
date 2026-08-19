@@ -1,22 +1,28 @@
 from __future__ import annotations
 
+import io
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
+from PIL import Image
 from pydantic import BaseModel, Field
 
 from mikazuki.app.models import APIResponseSuccess
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+DEFAULT_THUMB_SIZE = 256
+_THUMBNAIL_CACHE_LIMIT = 2000
 
 router = APIRouter()
 _UNDO_STACKS: dict[str, list["EditTransaction"]] = {}
 _REDO_STACKS: dict[str, list["EditTransaction"]] = {}
+_THUMBNAIL_CACHE: dict[tuple[str, float, int], bytes] = {}
 
 
 @dataclass
@@ -52,6 +58,7 @@ class BatchEditRequest(BaseModel):
     root: str
     images: list[str]
     append: list[str] = []
+    append_position: Literal["front", "back"] = "back"
     remove: list[str] = []
     replace: list[TagReplacement] = []
     sort: bool = False
@@ -138,6 +145,30 @@ def read_caption(image_path: Path) -> str:
     if not caption_path.is_file():
         return ""
     return caption_path.read_text(encoding="utf-8").strip()
+
+
+def thumbnail_bytes(image_path: Path, size: int) -> bytes:
+    stat = image_path.stat()
+    key = (str(image_path), stat.st_mtime, size)
+    cached = _THUMBNAIL_CACHE.get(key)
+    if cached is not None:
+        return cached
+    with Image.open(image_path) as source:
+        image = source.copy()
+    image.thumbnail((size, size))
+    if image.mode in ("RGBA", "LA", "P"):
+        image = image.convert("RGBA")
+        background = Image.new("RGBA", image.size, (255, 255, 255, 255))
+        image = Image.alpha_composite(background, image).convert("RGB")
+    elif image.mode != "RGB":
+        image = image.convert("RGB")
+    buffer = io.BytesIO()
+    image.save(buffer, format="JPEG", quality=85)
+    data = buffer.getvalue()
+    if len(_THUMBNAIL_CACHE) >= _THUMBNAIL_CACHE_LIMIT:
+        _THUMBNAIL_CACHE.clear()
+    _THUMBNAIL_CACHE[key] = data
+    return data
 
 
 def capture_caption(root: Path, image_path: Path) -> CaptionSnapshot:
@@ -236,6 +267,7 @@ def scan_dataset(root: Path) -> dict:
                 "caption_exists": caption_path.is_file(),
                 "tags": tags,
                 "image_url": f"/api/dataset-editor/image?{image_query}",
+                "thumb_url": f"/api/dataset-editor/image?{image_query}&thumb=1",
             }
         )
     return {
@@ -256,10 +288,14 @@ async def scan(req: DatasetScanRequest):
 
 
 @router.get("/dataset-editor/image")
-async def image(root: str, image: str):
+async def image(root: str, image: str, thumb: bool = False, size: int = DEFAULT_THUMB_SIZE):
     image_path = resolve_image(dataset_root(root), image)
     if not image_path.is_file():
         raise HTTPException(status_code=404, detail="image not found")
+    if thumb:
+        size = min(max(size, 32), 1024)
+        data = thumbnail_bytes(image_path, size)
+        return Response(content=data, media_type="image/jpeg", headers={"Cache-Control": "private, max-age=3600"})
     return FileResponse(str(image_path))
 
 
@@ -314,9 +350,16 @@ async def batch_edit(req: BatchEditRequest):
             tag = replacements.get(tag, tag)
             if tag and tag not in next_tags:
                 next_tags.append(tag)
-        for tag in append_tags:
-            if tag not in next_tags:
-                next_tags.append(tag)
+        if req.append_position == "front":
+            prefix: list[str] = []
+            for tag in append_tags:
+                if tag not in next_tags and tag not in prefix:
+                    prefix.append(tag)
+            next_tags = [*prefix, *next_tags]
+        else:
+            for tag in append_tags:
+                if tag not in next_tags:
+                    next_tags.append(tag)
         if req.sort:
             next_tags = sorted(next_tags)
         next_caption = format_tags(next_tags)

@@ -11,6 +11,7 @@ from mikazuki.utils.train_utils import ensure_enable_preview_flag
 
 ANIMA_TRAIN_TYPES = frozenset({"anima-lora", "sd3-lora"})
 ANIMA_FAST_TRAIN_TYPES = frozenset({"anima-lora-fast"})
+MUSUBI_TRAIN_TYPES = frozenset({"krea2-lora"})
 FLUX_TRAIN_TYPES = frozenset({"flux-lora", "flux-finetune"})
 LUMINA_TRAIN_TYPES = frozenset({"lumina-lora"})
 SDXL_TRAIN_TYPES = frozenset({"sdxl-lora", "sdxl-finetune"})
@@ -54,6 +55,14 @@ FLUX_CONFIG_MARKERS = frozenset({
     "model_prediction_type",
 })
 
+MUSUBI_CONFIG_MARKERS = frozenset({
+    "dit",
+    "text_encoder",
+    "turbo_dit",
+    "turbo_dit_cache",
+    "fp8_scaled",
+})
+
 LUMINA_CONFIG_MARKERS = frozenset({
     "gemma2",
 })
@@ -74,6 +83,9 @@ MODEL_PATH_KEYS = (
     "clip_l",
     "t5xxl",
     "gemma2",
+    "dit",
+    "text_encoder",
+    "turbo_dit",
     "network_weights",
     "resume",
 )
@@ -98,6 +110,12 @@ SDXL_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"/sdxl/", re.I), "模型路径含 /sdxl/"),
     (re.compile(r"sdxl[-_]", re.I), "主模型路径含 sdxl"),
     (re.compile(r"noobxl|pony|illustrious", re.I), "主模型路径为常见 SDXL 模型"),
+)
+
+MUSUBI_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"/krea2/", re.I), "模型路径含 /krea2/"),
+    (re.compile(r"krea2", re.I), "模型路径含 krea2"),
+    (re.compile(r"qwen3[-_]?vl", re.I), "文本编码器路径含 qwen3-vl"),
 )
 
 LUMINA_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
@@ -140,6 +158,12 @@ PAGE_SPECS: dict[str, dict[str, Any]] = {
         "accepted": FLUX_TRAIN_TYPES,
         "default_train_type": "flux-lora",
     },
+    "krea2-lora": {
+        "label": "Krea 2 LoRA 训练",
+        "path": "/lora/krea2.html",
+        "accepted": MUSUBI_TRAIN_TYPES,
+        "default_train_type": "krea2-lora",
+    },
     "lumina-lora": {
         "label": "Lumina LoRA 训练",
         "path": "/lora/lumina.html",
@@ -176,6 +200,7 @@ TRAIN_TYPE_TARGETS: dict[str, dict[str, str]] = {
     "anima-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "sd3-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "anima-lora-fast": {"path": "/lora/anima-fast.html", "label": "Anima Fast 训练"},
+    "krea2-lora": {"path": "/lora/krea2.html", "label": "Krea 2 LoRA 训练"},
     "flux-lora": {"path": "/lora/flux.html", "label": "Flux LoRA 训练"},
     "flux-finetune": {"path": "/lora/flux.html", "label": "Flux 训练"},
     "lumina-lora": {"path": "/lora/lumina.html", "label": "Lumina LoRA 训练"},
@@ -304,6 +329,13 @@ def analyze_train_type(config: dict) -> TrainTypeAnalysis:
         network_modules=ANIMA_NETWORK_MODULES,
     )
     families.append(("anima-lora", anima_score, anima_reasons))
+
+    musubi_score, musubi_reasons = _score_family(
+        config,
+        marker_keys=MUSUBI_CONFIG_MARKERS,
+        path_rules=MUSUBI_PATH_RULES,
+    )
+    families.append(("krea2-lora", musubi_score, musubi_reasons))
 
     flux_score, flux_reasons = _score_family(
         config,

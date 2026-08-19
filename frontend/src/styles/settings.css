@@ -1,0 +1,280 @@
+/* settings — split from layout.css / features.css (issue #235) */
+.settings-card {
+  display: grid;
+  gap: 10px;
+  margin-top: 30px;
+  padding: 26px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 14px;
+}
+
+.settings-card label {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.settings-card small {
+  color: var(--text-faint);
+  line-height: 1.5;
+}
+
+.settings-card input {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  outline: none;
+}
+
+.settings-card select {
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  outline: none;
+}
+
+.settings-card input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.settings-card select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.meter {
+  margin-top: 28px;
+}
+
+.meter header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 9px;
+  color: var(--text-soft);
+  font-size: 11px;
+}
+
+.meter > div {
+  height: 7px;
+  overflow: hidden;
+  background: var(--surface-inset);
+  border-radius: 99px;
+}
+
+.meter i {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+  border-radius: inherit;
+  transition: width 0.25s ease;
+}
+
+.meter small {
+  display: block;
+  min-height: 17px;
+  margin-top: 7px;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* IA v1 settings section */
+.settings-page {
+  min-height: 100vh;
+  padding: 36px clamp(24px, 4vw, 56px);
+  background: var(--bg);
+}
+
+.settings-page-header {
+  margin-bottom: 22px;
+}
+
+.settings-page-header h1 {
+  margin: 0 0 6px;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+}
+
+.settings-page-header p {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.settings-body {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.settings-nav {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow);
+}
+
+.settings-nav-link {
+  display: block;
+  padding: 10px 12px;
+  color: var(--text-soft);
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.settings-nav-link:hover {
+  color: var(--text);
+  background: var(--surface-soft);
+}
+
+.settings-nav-link.active {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.settings-content {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+
+.settings-content .settings-card {
+  margin-top: 0;
+}
+
+.settings-content .settings-card h2 {
+  margin: 0 0 14px;
+  font-size: 18px;
+}
+
+.settings-content .settings-card select {
+  margin-top: 6px;
+  width: 100%;
+  min-height: 40px;
+  padding: 0 12px;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.settings-field {
+  display: grid;
+  gap: 7px;
+}
+
+.settings-field-label {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.theme-switch {
+  max-width: 320px;
+}
+
+.settings-preview {
+  padding: 18px 20px;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.settings-preview > header {
+  margin-bottom: 14px;
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.settings-preview-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 18px;
+}
+
+.settings-preview-col h3 {
+  margin: 0 0 10px;
+  font-size: 14px;
+}
+
+.settings-about-line {
+  margin: 0 0 8px;
+}
+
+.version-badge {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 2px 8px;
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-radius: 99px;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.settings-about-desc {
+  margin: 0 0 10px;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.settings-release-list {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 10px;
+  padding: 0;
+  list-style: none;
+}
+
+.settings-release-list li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  align-items: baseline;
+  font-size: 12px;
+}
+
+.settings-release-list time {
+  color: var(--text-faint);
+}
+
+.settings-release-list span {
+  color: var(--text-soft);
+}
+
+.settings-more-link {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+@media (max-width: 900px) {
+  .settings-body {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 900px) {
+  .settings-preview-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.settings-card {
+  border-radius: var(--radius-lg);
+}

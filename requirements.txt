@@ -6,13 +6,16 @@ ftfy==6.1.1
 opencv-python==4.8.1.78
 einops==0.7.0
 pytorch-lightning==1.9.0
-bitsandbytes==0.46.0
+# 下限 0.46.0；CUDA 13 的 torch 需要 >=0.48 才带对应二进制，故不设上限
+bitsandbytes>=0.46.0
 lion-pytorch==0.1.2
 schedulefree==1.4
 pytorch-optimizer==3.7.0
 prodigy-plus-schedule-free==1.9.0
 prodigyopt==1.1.2
-tensorboard==2.10.1
+# 2.14+ accepts protobuf>=3.19.6 (needed with protobuf==3.20.3 for Flux/SD3/sentencepiece).
+# Do not pin tensorboard==2.10.1: it requires protobuf<3.20 and modern pip fails the resolve.
+tensorboard==2.14.0
 safetensors==0.4.4
 setuptools<81
 prodigy-plus-schedule-free
@@ -26,6 +29,8 @@ huggingface-hub==0.36.2
 imagesize==1.4.1
 # for T5XXL tokenizer (SD3/FLUX)
 sentencepiece==0.2.0
+# sentencepiece / Flux-SD3 path: keep protobuf>=3.20 (avoid pip landing on 3.19.x).
+protobuf==3.20.3
 # for ui
 rich==13.7.0
 pandas
@@ -44,7 +49,11 @@ open-clip-torch==2.20.0
 lycoris-lora==3.3.0
 dadaptation==3.1
 # tagger (WD14 etc.) — required by dataset tagging; NVIDIA portable build uses GPU build
-onnxruntime-gpu
+# Windows guard installs the GPU build. Linux/macOS onnxruntime is handled by
+# setup_onnxruntime() (GPU build when available, CPU build otherwise), because
+# onnxruntime-gpu has no wheels for some platforms (e.g. aarch64) and a forced
+# install here would abort startup.
+onnxruntime-gpu; sys_platform == "win32"
 # domestic Hugging Face downloads (ModelScope hub patch for transformers / sd-scripts)
 modelscope>=1.20.0
 # triton for Windows — source installs only (portable package skips this)

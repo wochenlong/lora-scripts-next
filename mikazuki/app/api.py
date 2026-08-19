@@ -28,8 +28,9 @@ except ModuleNotFoundError:  # pragma: no cover - lightweight test environment f
             return dump_flat_toml(data)
 
     toml = _TomlFallback()
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi.responses import FileResponse, StreamingResponse
+from urllib.parse import quote
 
 import mikazuki.process as process
 from mikazuki import launch_utils
@@ -55,6 +56,39 @@ from mikazuki.anima_fast_backend.preview import apply_anima_fast_preview
 from mikazuki.anima_fast_backend.preprocess import prepare_anima_fast_dataset, user_left_resized_empty
 from mikazuki.anima_fast_backend.settings import discover_runtime, feature_enabled
 from mikazuki.anima_fast_backend.source_root import InstallSourceError, resolve_install_source_root
+from mikazuki.musubi_backend import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
+from mikazuki.model_assets import (
+    check_assets as check_model_assets,
+    resolve_train_type as resolve_model_asset_train_type,
+    start_download_task as start_model_assets_download_task,
+)
+from mikazuki.musubi_backend.adapter import (
+    AdapterError as MusubiAdapterError,
+    adapt_config as adapt_musubi_config,
+    dump_dataset_toml as dump_musubi_dataset_toml,
+    dump_train_toml as dump_musubi_train_toml,
+)
+from mikazuki.musubi_backend.environment import (
+    audit_environment as audit_musubi_environment,
+    start_install_task as start_musubi_install_task,
+)
+from mikazuki.musubi_backend.extension_state import (
+    STATE_READY as MUSUBI_STATE_READY,
+    default_layout as musubi_default_layout,
+    read_extension_status as read_musubi_extension_status,
+    write_install_state as write_musubi_install_state,
+)
+from mikazuki.musubi_backend.installer import (
+    build_install_plan as build_musubi_install_plan,
+    remove_extension as remove_musubi_extension,
+)
+from mikazuki.musubi_backend.preflight import run_preflight as run_musubi_preflight
+from mikazuki.musubi_backend.settings import (
+    default_upstream_cache as musubi_default_upstream_cache,
+    discover_runtime as discover_musubi_runtime,
+    feature_enabled as musubi_feature_enabled,
+    resolve_install_source_root as resolve_musubi_install_source_root,
+)
 from mikazuki.app.config import app_config
 from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  APIResponseSuccess, TaggerInterrogateRequest,
@@ -66,12 +100,13 @@ from mikazuki.tagger.jobs import run_interrogate_job, run_prefetch_job
 from mikazuki.tagger.progress import tagger_progress
 from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
-from mikazuki.utils import train_utils
+from mikazuki.utils import task_insights, train_utils
 from mikazuki.utils.config_import import validate_config_import
 from mikazuki.utils.config_export import normalize_config_for_export
 from mikazuki.utils.config_args import normalize_custom_args, normalize_kv_arg_list
 from mikazuki.utils.devices import printable_devices
 from mikazuki.portable_utils import flash_attn_stack_usable
+from mikazuki.utils import path_browser as path_browser_utils
 from mikazuki.utils.tk_window import (open_directory_selector,
                                       open_file_selector,
                                       tkinter_available)
@@ -149,6 +184,7 @@ _PATH_FIELDS = {
     "pretrained_model_name_or_path", "vae", "qwen3", "llm_adapter_path",
     "t5_tokenizer_path", "resume", "train_data_dir", "reg_data_dir",
     "output_dir", "logging_dir", "network_weights", "sample_prompts",
+    "dit", "text_encoder", "turbo_dit",
 }
 
 
@@ -573,6 +609,65 @@ def _anima_fast_ready_gate():
     return True, None
 
 
+def _musubi_runtime():
+    return discover_musubi_runtime(lora_next_root=Path.cwd())
+
+
+def _musubi_disabled_response():
+    return APIResponseFail(
+        message="musubi-tuner backend is temporarily disabled by maintainer (LORA_ENABLE_MUSUBI=0)."
+    )
+
+
+def _musubi_ready_gate():
+    layout = musubi_default_layout(Path.cwd())
+    status = read_musubi_extension_status(layout)
+    if status.state != MUSUBI_STATE_READY:
+        return False, APIResponseFail(
+            message="musubi-tuner 插件未就绪。请先在「设置 → 训练引擎」安装或修复 musubi-tuner 插件。",
+            data=status.as_dict(),
+        )
+    audit = (status.facts or {}).get("audit", {})
+    if not audit.get("ok"):
+        return False, APIResponseFail(
+            message="musubi-tuner 环境审计未通过。请先修复插件再训练。",
+            data=status.as_dict(),
+        )
+    drift = audit_musubi_environment(_musubi_runtime())
+    if not drift.ok:
+        write_musubi_install_state(layout, "broken", {"audit": drift.as_dict()}, "; ".join(drift.errors))
+        return False, APIResponseFail(
+            message="musubi-tuner 环境发生漂移。请先修复插件再训练。",
+            data=drift.as_dict(),
+        )
+    return True, None
+
+
+def _musubi_fail_from_preflight(result):
+    errors = list(getattr(result, "errors", None) or [])
+    if errors:
+        detail = "; ".join(errors[:4])
+        if len(errors) > 4:
+            detail += f" …（共 {len(errors)} 项）"
+        message = f"musubi-tuner 预检查失败：{detail}"
+    else:
+        message = "musubi-tuner 预检查失败（未返回具体原因）"
+    return APIResponseFail(message=message, data=result.as_dict())
+
+
+def _musubi_apply_sample_defaults(config: dict) -> None:
+    """Krea 2 sampling defaults: 1024px; Turbo schedule wants CFG off + few steps."""
+    config.setdefault("sample_width", 1024)
+    config.setdefault("sample_height", 1024)
+    turbo = str(config.get("turbo_dit", "") or "").strip()
+    if turbo:
+        config.setdefault("sample_cfg", 1)
+        config.setdefault("sample_steps", 8)
+    else:
+        config.setdefault("sample_cfg", 4.5)
+        config.setdefault("sample_steps", 28)
+
+
 @router.post("/config/validate-import")
 async def validate_import_config(request: Request):
     """Validate imported TOML/JSON config against the current training page."""
@@ -667,6 +762,77 @@ async def create_toml_file(request: Request):
         except Exception as exc:  # noqa: BLE001 - keep API failures structured
             log.error(f"Anima Fast launch failed: {exc}")
             return APIResponseFail(message=f"Anima Fast launch failed: {exc}")
+
+    if model_train_type == MUSUBI_TRAIN_TYPE:
+        if not musubi_feature_enabled():
+            return _musubi_disabled_response()
+        ready, failure = _musubi_ready_gate()
+        if not ready:
+            return failure
+        try:
+            runtime = _musubi_runtime()
+            train_data_dir = str(config.get("train_data_dir") or "").strip()
+            if not train_data_dir:
+                return _missing_standard_train_field("train_data_dir", "训练数据集路径")
+            if not train_utils.validate_data_dir(train_data_dir):
+                return APIResponseFail(message="训练数据集路径不存在或没有图片，请检查目录。")
+
+            if "prompt_file" in config and str(config["prompt_file"]).strip() != "":
+                prompt_file = str(config["prompt_file"]).strip()
+                if not os.path.exists(prompt_file):
+                    return APIResponseFail(message=f"Prompt 文件 {prompt_file} 不存在，请检查路径。")
+                config["sample_prompts"] = prompt_file
+                train_utils.normalize_sample_prompt_file(prompt_file)
+            elif should_generate_sample_prompts(config):
+                _musubi_apply_sample_defaults(config)
+                try:
+                    positive_prompt, sample_prompts_arg = get_sample_prompts(config=config, model_train_type=model_train_type)
+                    if positive_prompt is not None and train_utils.is_promopt_like(sample_prompts_arg):
+                        sample_prompts_file = os.path.join(autosave_dir, f"{timestamp}-promopt.txt")
+                        with open(sample_prompts_file, "w", encoding="utf-8", newline="\n") as f:
+                            f.write(sample_prompts_arg + "\n")
+                        config["sample_prompts"] = sample_prompts_file
+                        log.info(f"Wrote prompts to file {sample_prompts_file}")
+                except ValueError as e:
+                    log.error(f"Error while processing prompts: {e}")
+                    return APIResponseFail(message=str(e))
+            else:
+                train_utils.strip_disabled_preview_fields(config)
+
+            if config.get("sample_prompts"):
+                train_utils.normalize_sample_prompt_file(str(config["sample_prompts"]))
+            else:
+                config.pop("sample_at_first", None)
+                config.pop("sample_every_n_epochs", None)
+                config.pop("sample_every_n_steps", None)
+
+            sanitize_config(config)
+
+            run_id = f"{timestamp}-musubi"
+            adapted = adapt_musubi_config(config, runtime, run_id)
+            preflight = run_musubi_preflight(adapted.values, runtime, adapted.dataset)
+            if not preflight.ok:
+                return _musubi_fail_from_preflight(preflight)
+            toml_file_path = Path(autosave_dir) / f"{run_id}.toml"
+            dataset_file_path = Path(autosave_dir) / f"{run_id}-dataset.toml"
+            dataset_file_path.write_text(dump_musubi_dataset_toml(adapted.dataset), encoding="utf-8")
+            adapted.values["dataset_config"] = dataset_file_path.resolve().as_posix()
+            toml_file_path.write_text(dump_musubi_train_toml(adapted.values), encoding="utf-8")
+
+            metadata = {
+                "output_dir": adapted.values.get("output_dir"),
+                "output_name": adapted.values.get("output_name"),
+                "logging_dir": adapted.values.get("logging_dir"),
+                "warnings": [*adapted.warnings, *preflight.warnings],
+            }
+            return process.run_musubi_train(
+                str(toml_file_path), runtime, adapted.values, gpu_ids, metadata=metadata
+            )
+        except MusubiAdapterError as exc:
+            return APIResponseFail(message=str(exc))
+        except Exception as exc:  # noqa: BLE001 - keep API failures structured
+            log.error(f"musubi-tuner launch failed: {exc}")
+            return APIResponseFail(message=f"musubi-tuner launch failed: {exc}")
 
     if model_train_type not in trainer_mapping:
         return APIResponseFail(
@@ -797,6 +963,217 @@ async def anima_lora_plugin_dry_run(request: Request):
     })
 
 
+@router.get("/plugins/musubi/status")
+async def musubi_plugin_status():
+    layout = musubi_default_layout(Path.cwd())
+    status = read_musubi_extension_status(layout).as_dict()
+    runtime = _musubi_runtime()
+    status["feature_enabled"] = musubi_feature_enabled()
+    status["train_type"] = MUSUBI_TRAIN_TYPE
+    status["runtime"] = {
+        "musubi_root": str(runtime.musubi_root),
+        "python": str(runtime.python),
+        "output_dir": str(runtime.output_dir),
+        "logging_dir": str(runtime.logging_dir),
+        "cache_dir": str(runtime.cache_dir),
+        "external_runtime_exists": runtime.python.is_file()
+        and (runtime.musubi_root / "src" / "musubi_tuner").is_dir(),
+    }
+    return APIResponseSuccess(data=status)
+
+
+@router.post("/plugins/musubi/preflight")
+async def musubi_plugin_preflight(request: Request):
+    if not musubi_feature_enabled():
+        return _musubi_disabled_response()
+    config: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    runtime = _musubi_runtime()
+    run_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-musubi"
+    try:
+        adapted = adapt_musubi_config(config, runtime, run_id)
+    except MusubiAdapterError as exc:
+        return APIResponseFail(message=str(exc))
+    result = run_musubi_preflight(adapted.values, runtime, adapted.dataset)
+    result.warnings = [*adapted.warnings, *result.warnings]
+    if result.ok:
+        return APIResponseSuccess(data=result.as_dict())
+    return _musubi_fail_from_preflight(result)
+
+
+@router.post("/plugins/musubi/dry-run")
+async def musubi_plugin_dry_run(request: Request):
+    if not musubi_feature_enabled():
+        return _musubi_disabled_response()
+    timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
+    os.makedirs(autosave_dir, exist_ok=True)
+    config: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    config.pop("gpu_ids", None)
+    config.pop("model_train_type", None)
+    runtime = _musubi_runtime()
+    run_id = f"{timestamp}-musubi"
+    try:
+        adapted = adapt_musubi_config(config, runtime, run_id)
+    except MusubiAdapterError as exc:
+        return APIResponseFail(message=str(exc))
+    toml_file_path = Path(autosave_dir) / f"{run_id}.toml"
+    dataset_file_path = Path(autosave_dir) / f"{run_id}-dataset.toml"
+    dataset_file_path.write_text(dump_musubi_dataset_toml(adapted.dataset), encoding="utf-8")
+    adapted.values["dataset_config"] = dataset_file_path.resolve().as_posix()
+    toml_file_path.write_text(dump_musubi_train_toml(adapted.values), encoding="utf-8")
+    return APIResponseSuccess(data={
+        "toml_path": str(toml_file_path),
+        "dataset_toml_path": str(dataset_file_path),
+        "config": adapted.values,
+        "dataset": adapted.dataset,
+        "warnings": adapted.warnings,
+    })
+
+
+@router.post("/plugins/musubi/install")
+async def musubi_plugin_install(request: Request):
+    return await _musubi_plugin_install_impl(request, force_install=False)
+
+
+async def _musubi_plugin_install_impl(request: Request, force_install: bool = False):
+    if not musubi_feature_enabled():
+        return _musubi_disabled_response()
+    payload: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    source_commit = str(payload.get("source_commit") or "").strip() or None
+    cuda_extra = str(payload.get("cuda_extra") or "").strip() or None
+    dry_run = payload.get("dry_run", True) is not False
+    project_root = Path.cwd()
+    layout = musubi_default_layout(project_root)
+    current_status = read_musubi_extension_status(layout)
+    if not dry_run and not force_install and current_status.state == MUSUBI_STATE_READY:
+        return APIResponseSuccess(data={
+            "already_ready": True,
+            "status": current_status.as_dict(),
+            "message": "musubi-tuner plugin is already ready",
+        })
+    explicit = payload.get("source_root")
+    try:
+        source_root = resolve_musubi_install_source_root(
+            project_root, Path(str(explicit)) if explicit else None, source_commit
+        )
+    except ValueError as exc:
+        if dry_run:
+            return APIResponseFail(message=str(exc))
+        # Real install: let the background task auto-clone upstream into the cache
+        # (mirrors the Anima Fast installer) so clone output streams to the install log.
+        source_root = musubi_default_upstream_cache(project_root)
+    plan = build_musubi_install_plan(source_root, layout, dry_run=dry_run, source_commit=source_commit)
+    data = {"plan": plan.as_dict()}
+    if dry_run:
+        data["message"] = "Installer dry-run completed"
+        return APIResponseSuccess(data=data)
+    try:
+        from mikazuki.download_sources import parse_download_sources
+
+        task_id, install_data = start_musubi_install_task(
+            project_root,
+            layout,
+            source_root,
+            dry_run=False,
+            source_commit=source_commit,
+            cuda_extra=cuda_extra,
+            download_sources=parse_download_sources(payload),
+        )
+    except Exception as exc:
+        write_musubi_install_state(layout, "broken", {"plan": plan.as_dict()}, str(exc))
+        return APIResponseFail(message=f"musubi-tuner install failed: {exc}")
+    data.update(install_data)
+    data["status"] = read_musubi_extension_status(layout).as_dict()
+    data["message"] = "musubi-tuner install task started"
+    return APIResponseSuccess(data=data)
+
+
+@router.post("/plugins/musubi/repair")
+async def musubi_plugin_repair(request: Request):
+    return await _musubi_plugin_install_impl(request, force_install=True)
+
+
+@router.post("/plugins/musubi/uninstall")
+async def musubi_plugin_uninstall():
+    if not musubi_feature_enabled():
+        return _musubi_disabled_response()
+    layout = musubi_default_layout(Path.cwd())
+    try:
+        remove_musubi_extension(layout, Path.cwd())
+    except Exception as exc:
+        return APIResponseFail(message=f"musubi-tuner uninstall failed: {exc}")
+    return APIResponseSuccess(data={"status": read_musubi_extension_status(layout).as_dict()})
+
+
+@router.post("/assets/check")
+async def model_assets_check(request: Request):
+    payload: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    values = payload.get("values") or {}
+    if not isinstance(values, dict):
+        return APIResponseFail(message="values must be an object")
+    train_type = resolve_model_asset_train_type(str(payload.get("train_type") or ""), values)
+    return APIResponseSuccess(data={
+        "train_type": train_type,
+        "items": check_model_assets(train_type, values, Path.cwd()),
+    })
+
+
+@router.post("/assets/download")
+async def model_assets_download(request: Request):
+    payload: dict = json.loads((await request.body()).decode("utf-8") or "{}")
+    values = payload.get("values") or {}
+    items = payload.get("items") or []
+    source = str(payload.get("source") or "")
+    train_type = resolve_model_asset_train_type(str(payload.get("train_type") or ""), values if isinstance(values, dict) else {})
+    if not items or not isinstance(items, list):
+        return APIResponseFail(message="items must be a non-empty list")
+    if source not in {"huggingface", "modelscope"}:
+        return APIResponseFail(message="source must be huggingface or modelscope")
+    if not train_type:
+        return APIResponseFail(message="missing train_type")
+    try:
+        task_id, data = start_model_assets_download_task(train_type, items, source, Path.cwd())
+    except Exception as exc:
+        return APIResponseFail(message=f"asset download failed to start: {exc}")
+    data["message"] = "asset download task started"
+    return APIResponseSuccess(data=data)
+
+
+@router.get("/plugins/musubi/install/log/stream/{task_id}")
+async def musubi_install_log_stream(task_id: str):
+    """Compatibility alias for plugin install task stdout streams."""
+    return await train_log_stream(task_id)
+
+
+@router.get("/plugins/musubi/install/progress/stream/{task_id}")
+async def musubi_install_progress_stream(task_id: str):
+    """Server-Sent Events: structured musubi-tuner install progress."""
+    if task_id not in tm.tasks:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+
+    async def event_generator():
+        idx = 0
+        while True:
+            await asyncio.sleep(0.08)
+            events, total, done = train_log_hub.snapshot_events_from(task_id, idx)
+            for event in events:
+                yield "data: " + json.dumps(event, ensure_ascii=False) + "\n\n"
+            idx = total
+            if done:
+                yield "data: " + json.dumps({"type": "done", "done": True}, ensure_ascii=False) + "\n\n"
+                break
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )
+
+
 @router.post("/plugins/anima-lora/install")
 async def anima_lora_plugin_install(request: Request):
     return await _anima_lora_plugin_install_impl(request, force_install=False)
@@ -834,7 +1211,16 @@ async def _anima_lora_plugin_install_impl(request: Request, force_install: bool 
         data["message"] = "Installer dry-run completed"
         return APIResponseSuccess(data=data)
     try:
-        task_id, install_data = start_install_task(Path.cwd(), layout, source_root, dry_run=False, source_commit=source_commit)
+        from mikazuki.download_sources import parse_download_sources
+
+        task_id, install_data = start_install_task(
+            Path.cwd(),
+            layout,
+            source_root,
+            dry_run=False,
+            source_commit=source_commit,
+            download_sources=parse_download_sources(payload),
+        )
     except Exception as exc:
         write_install_state(layout, "broken", {"plan": plan.as_dict()}, str(exc))
         return APIResponseFail(message=f"Anima LoRA install failed: {exc}")
@@ -948,10 +1334,12 @@ async def run_interrogate(req: TaggerInterrogateRequest, background_tasks: Backg
 
 @router.get("/pick_file")
 async def pick_file(picker_type: str):
-    if not tkinter_available():
+    """Native tkinter picker (desktop host only). Prefer /api/path_browser on Linux/remote."""
+    if not path_browser_utils.gui_picker_available():
         return APIResponseFail(
-            message="当前环境未安装 tkinter，无法弹出系统文件夹/文件选择框。"
-            "请手动输入路径；整合包用户请使用已打包 tkinter 的版本或重新运行 build_portable.ps1。"
+            message="当前环境无法使用系统文件选择框（无桌面 / 远程访问 / 未安装 tkinter）。"
+            "请使用网页路径浏览器，或手动输入服务器上的路径。",
+            data={"code": "GUI_PICKER_UNAVAILABLE", "web_picker": True},
         )
     if picker_type == "folder":
         coro = asyncio.to_thread(open_directory_selector, "")
@@ -963,11 +1351,43 @@ async def pick_file(picker_type: str):
 
     result = await coro
     if result == "":
-        return APIResponseFail(message="用户取消选择")
+        return APIResponseFail(message="用户取消选择", data={"code": "CANCELLED", "web_picker": True})
 
     return APIResponseSuccess(data={
         "path": result
     })
+
+
+@router.get("/path_browser/capability")
+async def path_browser_capability():
+    return APIResponseSuccess(data={
+        "web_picker": True,
+        "gui_picker": path_browser_utils.gui_picker_available(),
+        "tkinter": tkinter_available(),
+    })
+
+
+@router.get("/path_browser/list")
+async def path_browser_list(
+    path: str = "",
+    mode: str = "folder",
+    name_filter: str = "",
+):
+    """List a server directory for the in-browser path picker (#244)."""
+    try:
+        data = await asyncio.to_thread(
+            path_browser_utils.list_directory,
+            path or None,
+            mode=mode,
+            name_filter=name_filter or None,
+        )
+    except PermissionError as exc:
+        return APIResponseFail(message=str(exc), data={"code": "DENIED"})
+    except FileNotFoundError as exc:
+        return APIResponseFail(message=str(exc), data={"code": "NOT_FOUND"})
+    except (NotADirectoryError, ValueError, OSError) as exc:
+        return APIResponseFail(message=str(exc), data={"code": "BAD_PATH"})
+    return APIResponseSuccess(data=data)
 
 
 @router.get("/get_files")
@@ -1046,6 +1466,73 @@ async def get_tasks() -> APIResponse:
 async def terminate_task(task_id: str):
     tm.terminate_task(task_id)
     return APIResponseSuccess()
+
+
+@router.get("/tasks/resume/{task_id}", response_model_exclude_none=True)
+async def resume_task(task_id: str):
+    """Release a restored queued task that is waiting for manual confirmation."""
+    if tm.resume_task(task_id):
+        return APIResponseSuccess(data={"resumed": True})
+    return APIResponseFail(message="Task is not a held queued task / 任务不在待确认队列中")
+
+
+@router.get("/tasks/retry/{task_id}", response_model_exclude_none=True)
+async def retry_task(task_id: str):
+    """Re-queue a finished/failed/terminated training task (stage groups are
+    rebuilt as a whole)."""
+    new_tasks = tm.retry_task(task_id)
+    if not new_tasks:
+        return APIResponseFail(message="Task cannot be retried / 任务无法重跑（仅支持已结束的训练任务）")
+    return APIResponseSuccess(data={
+        "task_id": new_tasks[-1].task_id,
+        "task_ids": [t.task_id for t in new_tasks],
+        "queued": any(t.status.name == "QUEUED" for t in new_tasks),
+    })
+
+
+@router.get("/tasks/{task_id}/previews", response_model_exclude_none=True)
+async def task_previews(task_id: str) -> APIResponse:
+    task = tm.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    images = [
+        {
+            **item,
+            "url": f"/api/tasks/{quote(task_id)}/previews/{quote(item['name'])}",
+            "thumb_url": f"/api/tasks/{quote(task_id)}/previews/{quote(item['name'])}?thumb=1",
+        }
+        for item in task_insights.list_preview_images(task.metadata)
+    ]
+    config = task_insights.resolve_task_config(task.metadata)
+    preview_enabled = bool(config.get("sample_prompts")) if config else None
+    return APIResponseSuccess(data={"images": images, "preview_enabled": preview_enabled})
+
+
+@router.get("/tasks/{task_id}/previews/{filename}")
+async def task_preview_image(task_id: str, filename: str, thumb: bool = False):
+    task = tm.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    path = task_insights.resolve_preview_image(task.metadata, filename)
+    if path is None:
+        raise HTTPException(status_code=404, detail="Unknown preview image")
+    headers = {"Cache-Control": "private, max-age=30"}
+    if thumb:
+        data = task_insights.preview_thumbnail(path)
+        if data is not None:
+            return Response(content=data, media_type="image/jpeg", headers=headers)
+    return FileResponse(path, headers=headers)
+
+
+@router.get("/tasks/{task_id}/metrics", response_model_exclude_none=True)
+async def task_metrics(task_id: str) -> APIResponse:
+    task = tm.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    return APIResponseSuccess(data={
+        "tags": task_insights.read_loss_scalars(task.metadata),
+        "progress": task_insights.read_progress(train_log_hub.tail(task_id, 300)),
+    })
 
 
 @router.get("/graphic_cards")

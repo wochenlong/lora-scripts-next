@@ -1,0 +1,62 @@
+import { estimateTokenLength } from "./tokenLength"
+
+export type TagFilterLogic = "and" | "or" | "none"
+export type TagSortBy = "alphabetical" | "frequency" | "length" | "tokenLength"
+export type SortOrder = "asc" | "desc"
+export type TagSearchMode = "substring" | "prefix" | "suffix"
+
+export interface TagCount {
+  tag: string
+  count: number
+}
+
+export interface TagFilterState {
+  selectedTags: ReadonlySet<string>
+  logic: TagFilterLogic
+  search: string
+  searchMode: TagSearchMode
+  sortBy: TagSortBy
+  order: SortOrder
+}
+
+export function filterItemsByTags<T extends { tags: string[] }>(items: T[], selectedTags: ReadonlySet<string>, logic: TagFilterLogic, excludedTags: ReadonlySet<string> = new Set()): T[] {
+  const included = !selectedTags.size ? items
+    : logic === "none" ? items.filter((item) => !item.tags.some((tag) => selectedTags.has(tag)))
+    : items.filter((item) => {
+      const owned = new Set(item.tags)
+      return logic === "and" ? [...selectedTags].every((tag) => owned.has(tag)) : [...selectedTags].some((tag) => owned.has(tag))
+    })
+  if (!excludedTags.size) return included
+  return included.filter((item) => !item.tags.some((tag) => excludedTags.has(tag)))
+}
+
+function compareAlphabetical(a: string, b: string): number {
+  return a.toLowerCase().localeCompare(b.toLowerCase())
+}
+
+export function sortTagList(tags: TagCount[], sortBy: TagSortBy, order: SortOrder): TagCount[] {
+  const direction = order === "asc" ? 1 : -1
+  const metric = (entry: TagCount): number => {
+    if (sortBy === "frequency") return entry.count
+    if (sortBy === "length") return entry.tag.length
+    if (sortBy === "tokenLength") return estimateTokenLength(entry.tag)
+    return 0
+  }
+  return [...tags].sort((a, b) => {
+    if (sortBy === "alphabetical") return compareAlphabetical(a.tag, b.tag) * direction
+    return (metric(a) - metric(b)) * direction || compareAlphabetical(a.tag, b.tag)
+  })
+}
+
+export function searchTagList(tags: TagCount[], search: string, mode: TagSearchMode = "substring"): TagCount[] {
+  const terms = search.toLowerCase().split(/[,，\s]+/).filter(Boolean)
+  if (!terms.length) return tags
+  return tags.filter(({ tag }) => {
+    const candidate = tag.toLowerCase()
+    return terms.some((needle) => {
+      if (mode === "prefix") return candidate.startsWith(needle)
+      if (mode === "suffix") return candidate.endsWith(needle)
+      return candidate.includes(needle)
+    })
+  })
+}

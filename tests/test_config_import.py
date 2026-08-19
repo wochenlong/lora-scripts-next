@@ -142,6 +142,42 @@ class ConfigImportTests(unittest.TestCase):
         config = {"network_module": "networks.lora_anima"}
         self.assertEqual(infer_train_type(config), "anima-lora")
 
+    def test_krea2_export_imported_on_krea2_page_ok(self):
+        config = {
+            "model_train_type": "krea2-lora",
+            "dit": "./sd-models/krea2/krea2.safetensors",
+            "vae": "./sd-models/krea2/qwen_image_vae.safetensors",
+            "text_encoder": "./sd-models/krea2/qwen3_vl_4b.safetensors",
+            "fp8_base": True,
+            "fp8_scaled": True,
+            "guidance_scale": 1.0,
+        }
+        result = validate_config_import("krea2-lora", config)
+        self.assertEqual(result["result"], "ok")
+        self.assertEqual(result["config"]["model_train_type"], "krea2-lora")
+
+    def test_krea2_config_on_anima_page_redirects_to_krea2(self):
+        config = {
+            "model_train_type": "krea2-lora",
+            "dit": "./sd-models/krea2/krea2.safetensors",
+            "vae": "./sd-models/krea2/qwen_image_vae.safetensors",
+            "text_encoder": "./sd-models/krea2/qwen3_vl_4b.safetensors",
+            "fp8_scaled": True,
+        }
+        result = validate_config_import("sd3-lora", config)
+        self.assertEqual(result["result"], "redirect")
+        self.assertEqual(result["target_path"], "/lora/krea2.html")
+
+    def test_infer_krea2_from_markers_with_renamed_paths(self):
+        config = {
+            "model_train_type": "krea2-lora",
+            "dit": "./models/base.safetensors",
+            "text_encoder": "./models/te.safetensors",
+            "fp8_scaled": True,
+        }
+        analysis = analyze_train_type(config)
+        self.assertEqual(analysis.train_type, "krea2-lora")
+
     def test_reject_non_object_config(self):
         result = validate_config_import("sd3-lora", "not-a-dict")  # type: ignore[arg-type]
         self.assertEqual(result["result"], "reject")

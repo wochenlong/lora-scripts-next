@@ -1,0 +1,32 @@
+[metadata]
+name = "Krea 2 LoRA - 官方推荐"
+version = "1.0"
+author = "SD-Trainer Next"
+train_type = "krea2-lora"
+description = "Krea 2 官方推荐 LoRA 配置：rank 32 / alpha 32，bf16 + fp8 scaled，AdamW8bit。需要独立 musubi-tuner 插件环境。"
+
+[data]
+model_train_type = "krea2-lora"
+network_dim = 32
+network_alpha = 32
+
+resolution = "1024,1024"
+enable_bucket = true
+train_batch_size = 1
+gradient_checkpointing = true
+
+optimizer_type = "AdamW8bit"
+learning_rate = "1e-4"
+lr_scheduler = "constant"
+
+mixed_precision = "bf16"
+fp8_base = true
+fp8_scaled = true
+
+max_train_epochs = 16
+save_every_n_epochs = 2
+save_precision = "bf16"
+
+timestep_sampling = "sigmoid"
+sigmoid_scale = 1.0
+discrete_flow_shift = 1.0

@@ -26,7 +26,7 @@ echo   SD-Trainer Release Update
 echo   从 GitHub Release 更新整合包
 echo ========================================
 echo.
-echo This downloads the latest SD-Trainer-v*.7z from Releases,
+echo This downloads the latest Next-Trainer-v*.7z from Releases,
 echo merges SD-Trainer code, and keeps your models/output/logs.
 echo 将下载最新 Release 整合包，合并代码并保留你的数据目录。
 echo.

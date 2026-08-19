@@ -1,159 +1,33 @@
-import subprocess
 import unittest
 from pathlib import Path
 
-from scripts import patch_config_import_layout
+
+ROOT = Path(__file__).resolve().parents[1]
 
 
-class TrainSubmitLoadingStaticTests(unittest.TestCase):
-    def test_standard_train_button_shows_immediate_submit_feedback(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
+class TrainSubmitSourceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.page = (ROOT / "frontend/src/pages/TrainingPage.vue").read_text(encoding="utf-8")
+        cls.params = (ROOT / "frontend/src/training/params.ts").read_text(encoding="utf-8")
 
-        self.assertIn("submitLoading=ref(!1)", layout)
-        self.assertIn("setSubmitButtonLoading=", layout)
-        self.assertIn("trainSubmitButton", layout)
-        self.assertIn("if(submitLoading.value)return", layout)
-        self.assertNotIn("submitLoading=ref(!1),submitNotice=null", layout)
-        self.assertIn(
-            "submitLoading.value=!0,setSubmitButtonLoading(!0);const submitNotice=ElMessage(",
-            layout,
-        )
-        self.assertIn("任务正在提交中，请稍等", layout)
-        self.assertIn('duration:0,type:"info"', layout)
-        self.assertIn("submitNotice.close()", layout)
-        self.assertIn('ElMessage.success("训练已开始")', layout)
-        self.assertNotIn('message:"正在提交训练任务...",duration:2e3', layout)
-        self.assertIn("setSubmitButtonLoading(!1)", layout)
-        self.assertIn('try{const _=parseParams(n.value(a.value),t);', layout)
-        self.assertIn("finally{submitNotice.close(),submitLoading.value=!1", layout)
-        self.assertIn("loading:submitLoading.value", layout)
-        self.assertIn("disabled:submitLoading.value", layout)
+    def test_submit_has_immediate_loading_and_finally_restore(self):
+        self.assertIn("submitting.value = true", self.page)
+        self.assertIn("if (!validate() || submitting.value) return", self.page)
+        self.assertIn("finally { submitting.value = false }", self.page)
+        self.assertIn('submitting ? "提交中…" : "开始训练"', self.page)
 
-    def test_submit_notice_statement_executes_without_const_reassignment(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
-        start = layout.index("submitLoading.value=!0")
-        end = layout.index(";try{", start) + 1
-        statement = layout[start:end]
-        setup_start = layout.index("setup(e){let t=null;const ")
-        setup_end = layout.index(",setSubmitButtonLoading=", setup_start)
-        setup_declaration = layout[setup_start:setup_end]
-        inherited_notice = (
-            "const submitNotice=null;" if "submitNotice=null" in setup_declaration else ""
-        )
-        script = (
-            '"use strict";'
-            f"{inherited_notice}"
-            "const submitLoading={value:false};"
-            "const setSubmitButtonLoading=()=>{};"
-            "const ElMessage=()=>({close(){}});"
-            f"async function submit(){{{statement}return submitNotice;}}"
-            'submit().then(()=>process.stdout.write("ok"));'
-        )
+    def test_training_flow_uses_backend_contracts(self):
+        self.assertIn("trainingApi.validateImport", self.page)
+        self.assertIn("trainingApi.normalizeExport", self.page)
+        self.assertIn("trainingApi.animaFastPreflight", self.page)
+        self.assertIn("trainingApi.run", self.page)
 
-        result = subprocess.run(
-            ["node", "-e", script],
-            capture_output=True,
-            text=True,
-            check=False,
-        )
-
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout, "ok")
-
-    def test_imported_string_learning_rates_are_normalized_before_exponential_formatting(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertNotIn("let r=e[t].toExponential()", layout)
-        self.assertIn(
-            'if(typeof v==="string"){const p=parseFloat(v);v=Number.isNaN(p)?v:p}',
-            layout,
-        )
-        self.assertIn('if(typeof v!=="number"||Number.isNaN(v))continue;', layout)
-        self.assertIn("let r=v.toExponential()", layout)
-
-    def test_config_import_validation_does_not_mutate_full_replace_source(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn("let U=findChangedDataBySchema(clone(cfg),schemaFn);", layout)
-        self.assertNotIn("let U=findChangedDataBySchema(cfg,schemaFn);", layout)
-
-    def test_config_import_full_replace_applies_schema_normalized_values(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn("let defaults=schemaFn()||{},applied=Object.assign({},defaults)", layout)
-        self.assertIn(
-            "for(const key in cfg)defaults.hasOwnProperty(key)||(applied[key]=cfg[key])",
-            layout,
-        )
-        self.assertIn("Object.assign(applied,U)", layout)
-        self.assertNotIn("Object.assign({},schemaFn(),cfg)", layout)
-
-    def test_check_params_tolerates_missing_optimizer_during_schema_warmup(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn('(e.optimizer_type||"").startsWith("DAdapt")', layout)
-        self.assertIn('(e.optimizer_type||"").startsWith("prodigy")', layout)
-
-    def test_patch_script_replaces_unsafe_parse_params_re_float_formatting(self):
-        label, old, new = next(
-            item
-            for item in patch_config_import_layout.UPGRADE_REPLACEMENTS
-            if item[0] == "parseParamsRe string learning rates"
-        )
-        original = old + 'if(e.hasOwnProperty("network_args")){}'
-
-        patched = patch_config_import_layout._replace_once(original, label, old, new)
-
-        self.assertNotIn("let r=e[t].toExponential()", patched)
-        self.assertIn(
-            'if(typeof v==="string"){const p=parseFloat(v);v=Number.isNaN(p)?v:p}',
-            patched,
-        )
-        self.assertIn('if(typeof v!=="number"||Number.isNaN(v))continue;', patched)
-        self.assertIn("let r=v.toExponential()", patched)
-
-    def test_layout_preview_infers_enable_preview_from_legacy_fields(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
-
-        self.assertIn('sample_prompts"].some(r=>r in e', layout)
-        self.assertIn("e.enable_preview=!0", layout)
-        self.assertIn("m.enable_preview=!0", layout)
-        self.assertNotIn('"enable_preview","network_args_custom"', layout)
-
-    def test_patch_script_preview_replacements_are_idempotent(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
-        repatched = layout
-        for label, old, new in patch_config_import_layout.PREVIEW_PATCHES:
-            repatched = patch_config_import_layout._replace_once(
-                repatched, label, old, new
-            )
-        self.assertEqual(layout, repatched)
-
-    def test_layout_history_row_unwrap_and_preview_pipeline(self):
-        layout = Path("frontend/dist/assets/layout.96d49288.js").read_text(
-            encoding="utf-8"
-        )
-        self.assertIn("k.time&&!k.model_train_type", layout)
-        self.assertIn("Z=async (_,m)=>{try{const cfg=m==null?null:m.value;", layout)
-        self.assertIn("const prev=clone(a.value);a.value=clone(cfg);const g=x();", layout)
-        self.assertIn('(e.optimizer_type||"").toLowerCase().startsWith("dada")', layout)
-        self.assertIn("filter(Boolean)),e", layout)
+    def test_parameter_conversion_keeps_regression_guards(self):
+        self.assertIn('optimizer.toLowerCase().startsWith("dada")', self.params)
+        self.assertIn("config.enable_preview = true", self.params)
+        self.assertIn("Number.parseFloat", self.params)
+        self.assertIn("hydrateImportedConfig", self.params)
 
 
 if __name__ == "__main__":

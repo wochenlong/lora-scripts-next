@@ -62,7 +62,8 @@
 | **PR Review** | 当前阶段 @wochenlong |
 | **`main`** | 可发布基线；**不直接在 `main` 开发**，功能分支 + PR |
 
-整合包见 [`build/整合包打包规范.md`](../../build/整合包打包规范.md)。
+整合包构建与发包（公开、可协作）：[`docs/portable-build-guide.md`](../portable-build-guide.md)。  
+目录契约与更新机制：[`docs/portable-packaging-git-update.md`](../portable-packaging-git-update.md)。
 
 ---
 

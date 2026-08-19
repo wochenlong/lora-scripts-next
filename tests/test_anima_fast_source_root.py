@@ -8,7 +8,8 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-if "toml" not in sys.modules:
+_had_real_toml = "toml" in sys.modules
+if not _had_real_toml:
     _fake_toml = types.ModuleType("toml")
     _fake_toml.loads = lambda _text: {}
     sys.modules["toml"] = _fake_toml
@@ -21,6 +22,11 @@ from mikazuki.anima_fast_backend.source_root import (  # noqa: E402
     default_upstream_cache,
     resolve_install_source_root,
 )
+
+# Don't leak the fake toml into other test modules (it breaks real TOML
+# parsing in e.g. task_insights tests); the imported module keeps its own ref.
+if not _had_real_toml:
+    sys.modules.pop("toml", None)
 
 
 class AnimaFastSourceRootTests(unittest.TestCase):
