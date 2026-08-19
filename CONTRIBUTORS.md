@@ -35,7 +35,7 @@
         数据集标签筛选与编辑体验 · 任务排队 / 持久化 / 重试 · 任务页训练监控入口 · 打标↔编辑 KeepAlive 状态保留<br />
         支撑 <code>dev</code> 内测线并随 <code>main</code> 3.0.0 转正落地
       </td>
-      <td><a href="https://github.com/wochenlong/lora-scripts-next/pull/209">#209</a>, <a href="https://github.com/wochenlong/lora-scripts-next/pull/232">#232</a>, <a href="https://github.com/wochenlong/lora-scripts-next/pull/234">#234</a>, <a href="https://github.com/wochenlong/lora-scripts-next/pull/264">#264</a>, <a href="https://github.com/wochenlong/lora-scripts-next/pull/269">#269</a>, <a href="https://github.com/wochenlong/lora-scripts-next/pull/270">#270</a></td>
+      <td><a href="https://github.com/wochenlong/lora-scripts-next/pull/209">#209</a></td>
     </tr>
     <tr>
       <td>后端</td>
