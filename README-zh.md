@@ -22,35 +22,23 @@
 
 ---
 
-## `main` 已切换（请先读）
+## `main` 已切换到 Vue 3
 
-**默认分支 `main` 已从旧版多页 UI（v2.9.1）切换为 Vue 3 工作台（`3.0.0`）。**
+默认分支 **`main`** 现在是 **Vue 3 工作台 · v3.0.0**（训练 · 数据集 · 任务 · 设置），不再是旧版多页 UI。
 
-| | |
-|---|---|
-| **改了什么** | 默认检出 / 跟踪 `main` 时，得到的是 **Vue 3 四栏工作台**（训练 · 数据集 · 任务 · 设置），产品正式号为 **`3.0.0`**。旧版侧栏多 HTML 前端不再是 `main` 的默认内容。 |
-| **为什么改** | Vue 3 线在 `dev` 上完成内测与关键门禁后，需要成为**默认稳定基线**：统一品牌（Next Trainer）、统一 IA、降低「默认分支还是旧 UI」的混淆，并让后续修复与正式整合包都落在同一条线上。 |
-| **没改什么** | 整合包内目录名 `SD-Trainer/`、更新脚本文件名等**启动契约**暂时保留，兼容已有安装。训练引擎（Kohya / Anima Fast / Musubi）仍为可选项，按包体与设置页安装。 |
+Vue 3 已在 `dev` 完成内测与关键门禁；转正是为了统一品牌与信息架构，让稳定修复与后续正式包落在同一条默认线上。整合包目录名 `SD-Trainer/`、更新脚本文件名等启动契约暂时保留。
 
-> **合 `main` ≠ 立刻推正式 3.0.0 整合包。** 源码默认线已是 3.0.0；正式 7z / 「点更新」仍以 GitHub Release 为准，建议先浸泡再全量推送。
+正式整合包仍以 [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases) 为准，不会因源码合入 `main` 就立刻全量推送。
 
-### 需要旧版 `main`（v2.9.1 UI）？
+### 需要旧版 UI？
 
-旧稳定线已完整备份，可随时回退对照：
-
-| 资源 | 链接 |
-|------|------|
-| **分支 `legacy/v2.9.1`** | [github.com/…/tree/legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) |
-| **标签 `legacy-v2.9.1-pre-vue3`** | [github.com/…/releases/tag/legacy-v2.9.1-pre-vue3](https://github.com/wochenlong/lora-scripts-next/releases/tag/legacy-v2.9.1-pre-vue3)（与转正前 `main` tip 同一提交） |
-| **旧 UI 整合包** | [Releases → v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) |
-
-源码检出旧线：
+- 源码分支：[legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1)
+- 转正前快照标签：[legacy-v2.9.1-pre-vue3](https://github.com/wochenlong/lora-scripts-next/releases/tag/legacy-v2.9.1-pre-vue3)
+- 旧 UI 整合包：[v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)
 
 ```powershell
 git fetch origin
 git switch legacy/v2.9.1
-# 或固定到标签：
-# git switch --detach legacy-v2.9.1-pre-vue3
 ```
 
 ---
@@ -235,7 +223,7 @@ git pull
 多数 TOML 可导入；导航与本地存储 key 有差异，以当前页「导入配置」为准。
 
 **更新后界面全变了？**  
-这是预期行为：`main` 已是 Vue 3。若必须使用旧 UI，请切到 [`legacy/v2.9.1`](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) 或安装 [v2.9.1 整合包](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)。
+预期行为：`main` 已是 Vue 3。需要旧 UI 请见上方 [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) 或 [v2.9.1 整合包](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)。
 
 ---
 

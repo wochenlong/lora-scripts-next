@@ -22,35 +22,23 @@
 
 ---
 
-## `main` has changed (read this first)
+## `main` is now Vue 3
 
-**The default branch `main` is no longer the legacy multi-page UI (v2.9.1). It is now the Vue 3 workspace (`3.0.0`).**
+The default branch **`main`** is the **Vue 3 workspace · v3.0.0** (Training · Dataset · Tasks · Settings), not the legacy multi-page UI.
 
-| | |
-|---|---|
-| **What changed** | Cloning or tracking `main` now gives you the **Vue 3 four-pane workspace** (Training · Dataset · Tasks · Settings) at product version **`3.0.0`**. The old sidebar multi-HTML frontend is no longer what `main` ships. |
-| **Why** | After soak and gate fixes on `dev`, Vue 3 needs to be the **default stable baseline**: one brand (Next Trainer), one IA, less “default branch is still the old UI” confusion, and one line for fixes plus formal portable builds. |
-| **What did not change** | Portable layout folder `SD-Trainer/` and updater bat **names** stay as launcher contracts for existing installs. Engines (Kohya / Anima Fast / Musubi) remain optional by package and Settings install. |
+Vue 3 soaked on `dev` and cleared the gate fixes; promoting it keeps one brand, one IA, and one default line for fixes and upcoming formal portables. Launcher contracts such as the `SD-Trainer/` folder name and updater bat filenames stay for existing installs.
 
-> **Merging to `main` ≠ shipping a formal 3.0.0 portable the same day.** Source default is already `3.0.0`; user-facing 7z / “check for updates” still follow GitHub Releases after soak.
+Formal portable builds still ship only via [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases) — merging source to `main` does not auto-push a 7z to everyone.
 
-### Need the old `main` (v2.9.1 UI)?
+### Need the old UI?
 
-The previous stable line is fully preserved:
-
-| Resource | Link |
-|----------|------|
-| **Branch `legacy/v2.9.1`** | [github.com/…/tree/legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) |
-| **Tag `legacy-v2.9.1-pre-vue3`** | [github.com/…/releases/tag/legacy-v2.9.1-pre-vue3](https://github.com/wochenlong/lora-scripts-next/releases/tag/legacy-v2.9.1-pre-vue3) (same tip as pre-cutover `main`) |
-| **Legacy UI portable** | [Releases → v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) |
-
-Check out the old line:
+- Source branch: [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1)
+- Pre-cutover snapshot tag: [legacy-v2.9.1-pre-vue3](https://github.com/wochenlong/lora-scripts-next/releases/tag/legacy-v2.9.1-pre-vue3)
+- Legacy portable: [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)
 
 ```sh
 git fetch origin
 git switch legacy/v2.9.1
-# or pin the tag:
-# git switch --detach legacy-v2.9.1-pre-vue3
 ```
 
 ---
@@ -232,7 +220,7 @@ Full sidebar version, train type (model/engine/target), repro steps, logs. → [
 Quick / weak network → lite (deps on first run). Want Kohya + Musubi (Krea 2) ready → **kohya-musubi**. Anima Fast installs from Settings on both.
 
 **UI completely changed after update?**  
-Expected: `main` is Vue 3 now. If you need the old UI, use [`legacy/v2.9.1`](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) or the [v2.9.1 portable](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1).
+Expected: `main` is Vue 3. For the old UI, see [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) or the [v2.9.1 portable](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) above.
 
 ---
 
