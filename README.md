@@ -6,8 +6,8 @@
 
 <p align="center">
   <strong>Local Windows training WebUI</strong><br />
-  Anima · SD 1.5 · SDXL · Flux · Krea 2<br />
-  <sub>GitHub repository: <code>lora-scripts-next</code></sub>
+  Anima, SD 1.5, SDXL, Flux, and Krea 2<br />
+  <sub>GitHub repository <code>lora-scripts-next</code></sub>
 </p>
 
 <p align="center">
@@ -22,19 +22,30 @@
 
 ---
 
-## `main` is now Vue 3
+## Important change first
 
-The default branch **`main`** is the **Vue 3 workspace · v3.0.0** (Training · Dataset · Tasks · Settings), not the legacy multi-page UI.
+The default branch `main` is now the Vue 3 workspace at **3.0.0**.
 
-Vue 3 soaked on `dev` and cleared the gate fixes; promoting it keeps one brand, one IA, and one default line for fixes and upcoming formal portables. Launcher contracts such as the `SD-Trainer/` folder name and updater bat filenames stay for existing installs.
+You get four areas:
 
-Formal portable builds still ship only via [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases) — merging source to `main` does not auto-push a 7z to everyone.
+1. Training  
+2. Dataset  
+3. Tasks  
+4. Settings  
 
-### Need the old UI?
+The old multi-page UI is no longer what `main` shows by default.
 
-- Source branch: [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1)
-- Pre-cutover snapshot tag: [legacy-v2.9.1-pre-vue3](https://github.com/wochenlong/lora-scripts-next/releases/tag/legacy-v2.9.1-pre-vue3)
-- Legacy portable: [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)
+Why this happened: Vue 3 already soaked on `dev`, and the important gate bugs were fixed. Promoting it keeps one default line for stable fixes and later formal portable builds, with one brand and one page structure.
+
+A few launcher contracts stay for now. The portable folder is still named `SD-Trainer/`, and updater bat filenames stay as they are so older installs keep working.
+
+One more note: merging source into `main` does not mean a formal 7z ships the same day. Formal portables still come from [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases).
+
+### Need the old UI
+
+1. Source branch: [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1)  
+2. Pre-cutover snapshot: [legacy-v2.9.1-pre-vue3](https://github.com/wochenlong/lora-scripts-next/releases/tag/legacy-v2.9.1-pre-vue3)  
+3. Legacy portable: [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)
 
 ```sh
 git fetch origin
@@ -43,56 +54,86 @@ git switch legacy/v2.9.1
 
 ---
 
-## What it is
+## What this project is
 
-**Next Trainer** is a local Windows (NVIDIA) WebUI for LoRA and full finetune.  
-It builds on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts), with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner), in an Akegarasu-style workflow.
+Next Trainer is a local Windows training WebUI for NVIDIA GPUs.  
+You can train LoRA, and you can also run full finetune.
 
-Product branding and release archives use **Next Trainer**, with archive names like `Next-Trainer-v*.7z`.
+The main training stack is built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts).  
+For Krea 2, you can optionally install [musubi-tuner](https://github.com/kohya-ss/musubi-tuner).
 
----
-
-## Branches
-
-| Branch | Role | UI | Version |
-|--------|------|----|---------|
-| **`main`** | **Current default stable** | Vue 3 workspace | **`3.0.0`** |
-| **`dev`** | Ongoing experiments / previews | Vue 3 (may lead `main`) | experimental |
-| **`legacy/v2.9.1`** | Old UI backup (not default) | Legacy prebuilt frontend | **v2.9.1** |
-
-When filing issues, include the full sidebar version and branch (or Release archive name).
+The public brand name is **Next Trainer**.  
+Release archives usually look like `Next-Trainer-v*.7z`.
 
 ---
 
-## Portable downloads
+## Which branch to use
 
-| Package | Notes | Get it |
-|---------|-------|--------|
-| **3.0.0 GA** | Preparing lite, Kohya, and Musubi flavors | Coming to GitHub `v3.0.0` and ModelScope |
-| **RC preview** | lite about 0.39 GB; kohya-musubi about 4.2 GB; usable for Vue 3 | [v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) · [ModelScope](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
-| **Legacy UI stable** | Old multi-page UI for v2.9.1 | [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) |
+1. **`main`**  
+   Current default stable line. Vue 3 workspace. Version **3.0.0**.
 
-ModelScope RC example path:
+2. **`dev`**  
+   Where new work lands first. Also Vue 3, and it may move ahead of `main`.
+
+3. **`legacy/v2.9.1`**  
+   Backup of the old UI. Use this only when you need the old frontend.
+
+When you open an Issue, include the full sidebar version, and say which branch or portable package you used.
+
+---
+
+## Downloads
+
+### 3.0.0 formal packages
+
+Still being prepared. Later builds will cover lite, Kohya, Musubi, and similar flavors on GitHub and ModelScope.
+
+### RC packages you can use now
+
+These are fine for trying Vue 3.
+
+- GitHub: [v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813)  
+- ModelScope: [windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable)
+
+Rough sizes:
+
+- lite about 0.39 GB  
+- kohya-musubi about 4.2 GB
+
+Example ModelScope path:
 
 ```text
 releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
 ```
 
-Needs Windows 10 or 11 and an NVIDIA GPU (RTX 20-series or newer recommended). Extract to a path without spaces or non-ASCII characters.
+### Legacy UI package
 
-More: [Portable getting started](docs/portable-getting-started.md), [Tagger models](docs/tagger-models.md), [Build & release (collaborators)](docs/portable-build-guide.md)
+If you want the old UI, download [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1).
+
+### Runtime needs
+
+1. Windows 10 or Windows 11  
+2. NVIDIA GPU, RTX 20-series or newer recommended  
+3. Extract to a path without Chinese characters and without spaces
+
+More reading:
+
+1. [Portable getting started](docs/portable-getting-started.md)  
+2. [Tagger models](docs/tagger-models.md)  
+3. [Build and release](docs/portable-build-guide.md)
 
 ---
 
 ## Quick start
 
-### Portable
+### Portable package
 
-1. Run `run_gui.bat` (or the launcher named in the archive)  
-2. Open **http://127.0.0.1:28000**  
-3. GA builds should show **`v3.0.0`** in the sidebar (RC may still show an rc badge)
+1. Extract the archive  
+2. Run `run_gui.bat`. If the package names another launcher, follow that  
+3. Open http://127.0.0.1:28000  
+4. A formal 3.0.0 build should show `v3.0.0` in the sidebar. RC builds may still show an rc mark
 
-### Run current `main` from source (Vue 3)
+### Run `main` from source
 
 ```sh
 git clone https://github.com/wochenlong/lora-scripts-next.git
@@ -101,22 +142,32 @@ git checkout main
 git pull
 
 ./run_gui.bat
-# or: python gui.py --dev
 ```
+
+Or:
 
 ```sh
-git branch --show-current   # main
-cat VERSION                 # 3.0.0
+python gui.py --dev
 ```
 
-Frontend lives in `frontend/` (Vue 3 + Vite):
+Check the version:
+
+```sh
+git branch --show-current
+cat VERSION
+```
+
+Frontend source lives in `frontend/`. It uses Vue 3 and Vite.
 
 ```sh
 cd frontend
 npm install
-npm run dev      # hot reload (backend must be running)
-npm run build    # writes frontend/dist
+npm run dev
+npm run build
 ```
+
+`npm run dev` needs the backend already running.  
+`npm run build` writes into `frontend/dist`.
 
 ### Follow the experiment line `dev`
 
@@ -126,34 +177,64 @@ git switch dev
 git pull
 ```
 
-> Do not mix uncommitted `frontend/dist` hotfixes across `main`, `dev`, and `legacy`. Portable users should stay on the package version.
+Note: `main`, `dev`, and `legacy` use different frontend layouts.  
+Do not mix uncommitted `frontend/dist` hotfixes across them.  
+Portable users can stay on the package version and skip branch switching.
 
 ---
 
-## Features
+## What you can do
 
-| Area | Capabilities |
-|------|----------------|
-| **Training** | Pick base model, engine, and target; live TOML preview on the right; validate, import/export, and start |
-| **Dataset** | WD14 tagging; image-first tag editor with filters and batch actions on the right |
-| **Tasks** | Task list, status, logs, previews, and Loss — the main place to watch runs |
-| **Settings** | Theme and UI prefs, engine management, download mirrors, About, and changelog |
+### Training
 
-Supports Anima LoRA, Anima Fast, and Anima full finetune, plus SD 1.5, SDXL, and Flux on the Kohya line. **Krea 2** is optional via Musubi. Local tagger, `/train-monitor`, and TensorBoard are also available.
+1. Pick a base model  
+2. Pick an engine  
+3. Pick a training target  
+4. Preview TOML on the right  
+5. Validate, import or export, then start training
 
-- Anima Fast: [docs/anima-fast.md](docs/anima-fast.md)
-- Krea 2 multi-GPU (Linux): [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
+### Dataset
+
+1. Run WD14 tagging  
+2. Edit tags in an image-first editor  
+3. Use filters and batch actions in the right panel
+
+### Tasks
+
+Watch the task list, status, logs, preview images, and Loss. This is the main page for following a run.
+
+### Settings
+
+1. Theme and UI prefs  
+2. Engine management  
+3. Download mirrors  
+4. About and changelog
+
+### Training coverage
+
+1. Anima LoRA  
+2. Anima Fast  
+3. Anima full finetune  
+4. SD 1.5, SDXL, and Flux on the Kohya line  
+5. Optional Krea 2 through Musubi  
+
+You also get local tagging, the train monitor page at `/train-monitor`, and TensorBoard.
+
+Docs:
+
+1. [Anima Fast](docs/anima-fast.md)  
+2. [Krea 2 multi-GPU](docs/krea2-linux-multigpu.md)
 
 ### Screenshots
 
-From the Vue 3 UI (v3.0.0 line, Chinese locale).
+These shots are from the Vue 3 UI with the Chinese locale.
 
 <details open>
 <summary><strong>Training</strong></summary>
 
-| Standard (Kohya or Anima) | Anima Fast | Krea 2 (Musubi) |
+| Kohya or Anima standard | Anima Fast | Krea 2 |
 |---|---|---|
-| ![Training · standard](assets/readme/vue3/01-training-standard.png) | ![Training · Fast](assets/readme/vue3/02-training-fast.png) | ![Training · Krea 2](assets/readme/vue3/08-training-krea2.png) |
+| ![Training standard](assets/readme/vue3/01-training-standard.png) | ![Training Fast](assets/readme/vue3/02-training-fast.png) | ![Training Krea 2](assets/readme/vue3/08-training-krea2.png) |
 
 </details>
 
@@ -178,64 +259,80 @@ From the Vue 3 UI (v3.0.0 line, Chinese locale).
 
 | UI prefs | Engines |
 |---|---|
-| ![Settings · UI](assets/readme/vue3/07-settings-ui.png) | ![Settings · engines](assets/readme/vue3/06-settings-engines.png) |
+| ![Settings UI](assets/readme/vue3/07-settings-ui.png) | ![Settings engines](assets/readme/vue3/06-settings-engines.png) |
 
 </details>
 
 ---
 
-## Supported modes
+## Rough VRAM guidance
 
-| Mode | Notes |
-|------|-------|
-| Anima LoRA | LoRA, LoKr, and T-LoRA; from about 12 GB VRAM |
-| Anima Fast | Optional runtime; 16 GB+ recommended; install in Settings |
-| Anima finetune | Full DiT; about 24 GB recommended |
-| SD 1.5 / SDXL | LoRA and full finetune |
-| Flux | LoRA |
-| Krea 2 | LoRA via Musubi; install the engine in Settings; multi-GPU on Linux |
+1. **Anima LoRA**  
+   Supports LoRA, LoKr, and T-LoRA. Starts around 12 GB.
 
-VRAM tips: [docs/anima-training.md](docs/anima-training.md)
+2. **Anima Fast**  
+   Optional separate runtime. 16 GB or more is recommended. Install it in Settings.
+
+3. **Anima full finetune**  
+   Full DiT. About 24 GB is recommended.
+
+4. **SD 1.5 and SDXL**  
+   LoRA and full finetune.
+
+5. **Flux**  
+   LoRA.
+
+6. **Krea 2**  
+   LoRA through Musubi. Install the engine in Settings. Multi-GPU works on Linux.
+
+More detail: [Anima training docs](docs/anima-training.md).
 
 ---
 
-## Docs
+## Doc index
 
-| Topic | Link |
-|------|------|
-| Credits | [docs/credits.md](docs/credits.md) |
-| NOTICE | [NOTICE.md](NOTICE.md) |
-| Portable notes | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
-| Build & release | [docs/portable-build-guide.md](docs/portable-build-guide.md) |
-| Tagger models | [docs/tagger-models.md](docs/tagger-models.md) |
-| Train monitor | [docs/train-monitor.md](docs/train-monitor.md) |
-| Repo layout | [docs/repo-layout.md](docs/repo-layout.md) |
+1. [Credits](docs/credits.md)  
+2. [NOTICE](NOTICE.md)  
+3. [Portable getting started](docs/portable-getting-started.md)  
+4. [Build and release](docs/portable-build-guide.md)  
+5. [Tagger models](docs/tagger-models.md)  
+6. [Train monitor](docs/train-monitor.md)  
+7. [Repo layout](docs/repo-layout.md)
 
 ---
 
 ## FAQ
 
-**What to include in a bug report?**
+### What should a bug report include
 
 Please include:
 
-- The full version from the sidebar
-- Train type: base model, engine, and target
-- Steps to reproduce
-- Relevant logs
+1. The full version from the sidebar  
+2. The base model, engine, and training target you used  
+3. Steps to reproduce  
+4. Relevant logs  
 
 Then open an [Issue](https://github.com/wochenlong/lora-scripts-next/issues).
 
-**lite vs kohya-musubi?**
+### How do I choose lite vs kohya-musubi
 
-- Weak network, or you want a lighter first launch: use **lite** (dependencies install on first run)
-- You want Kohya ready out of the box and can train Krea 2: use **kohya-musubi**
-- On both packages, Anima Fast still needs a separate install in Settings
+1. If your network is weak, or you want a lighter first launch, pick **lite**. Dependencies install on first run.  
+2. If you want Kohya ready out of the box and need Krea 2, pick **kohya-musubi**.  
+3. On both packages, Anima Fast still needs a separate install in Settings.
 
-**UI completely changed after update?**
+### Can I reuse configs between 3.0.0 and the old stable line
 
-That is expected: `main` is Vue 3 now.  
-If you still need the old UI, use the [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) branch or the [v2.9.1 portable](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) above.
+Most TOML files still import.  
+Navigation and local storage keys differ, so trust what the current import page shows after loading.
+
+### Why did the UI change completely after update
+
+That is expected. Current `main` is Vue 3.
+
+If you want the old UI:
+
+1. Switch to [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1)  
+2. Or install the [v2.9.1 portable](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)
 
 ---
 
