@@ -313,3 +313,22 @@
   gap: 6px;
   align-items: center;
 }
+
+.action-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.action-blocked {
+  color: var(--el-color-warning, #d97706);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.check-row {
+  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}

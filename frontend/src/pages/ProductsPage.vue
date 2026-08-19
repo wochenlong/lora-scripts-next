@@ -286,6 +286,84 @@ async function downloadProduct(product: Product) {
   window.open(productsApi.downloadUrl(product.id), "_blank")
 }
 
+// ---- product actions (resize / merge / extract) ----
+
+const actionOpen = ref(false)
+const actionProduct = ref<Product | null>(null)
+const actionKind = ref<"resize" | "merge" | "extract">("resize")
+const actionOutput = ref("")
+const actionBusy = ref(false)
+const newRank = ref<number | null>(null)
+const newConvRank = ref<number | null>(null)
+const dynamicMethod = ref("")
+const dynamicParam = ref<number | null>(null)
+const mergeOther = ref("")
+const ratioSelf = ref(1)
+const ratioOther = ref(1)
+const mergeConcat = ref(false)
+const extractBase = ref("")
+const extractDim = ref(32)
+
+const actionBlockedReason = computed(() => {
+  const product = actionProduct.value
+  if (!product) return ""
+  if (product.train_type && product.train_type.includes("musubi")) return t("products.actions.musubiBlocked")
+  if (actionKind.value === "resize" && product.is_lycoris) return t("products.actions.lokrBlocked")
+  return ""
+})
+
+const otherProducts = computed(() =>
+  groups.value.flatMap((g) => g.products)
+    .filter((p) => p.status === "present" && p.id !== actionProduct.value?.id),
+)
+
+function openAction(product: Product) {
+  actionProduct.value = product
+  actionKind.value = product.is_lycoris ? "merge" : "resize"
+  actionOutput.value = `${product.path.replace(/\.[^.]+$/, "")}-derived.safetensors`
+  mergeOther.value = ""
+  actionOpen.value = true
+}
+
+async function submitAction() {
+  const product = actionProduct.value
+  const output = actionOutput.value.trim()
+  if (!product || !output) return
+  actionBusy.value = true
+  try {
+    if (actionKind.value === "resize") {
+      await productsApi.resize(product.id, {
+        output_path: output,
+        new_rank: newRank.value,
+        new_conv_rank: newConvRank.value,
+        dynamic_method: dynamicMethod.value || null,
+        dynamic_param: dynamicParam.value,
+      })
+    } else if (actionKind.value === "merge") {
+      if (!mergeOther.value) throw new Error(t("products.actions.otherProduct"))
+      await productsApi.merge({
+        inputs: [product.id, mergeOther.value],
+        ratios: [ratioSelf.value, ratioOther.value],
+        output_path: output,
+        concat: mergeConcat.value,
+      })
+    } else {
+      if (!extractBase.value.trim()) throw new Error(t("products.actions.baseModelPath"))
+      await productsApi.extract(product.id, {
+        model_org: extractBase.value.trim(),
+        output_path: output,
+        dim: extractDim.value,
+      })
+    }
+    ElMessage.success(t("products.actions.submitted"))
+    actionOpen.value = false
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.actions.submitFail"))
+  } finally {
+    actionBusy.value = false
+  }
+}
+
 onMounted(load)
 </script>
 
@@ -382,6 +460,9 @@ onMounted(load)
             <td class="row-actions">
               <el-button size="small" @click="openDetail(product)">{{ t("products.detail") }}</el-button>
               <el-button size="small" @click="copyPath(product.path)">{{ t("products.copyPath") }}</el-button>
+              <el-button v-if="product.status === 'present'" size="small" @click="openAction(product)">
+                {{ t("products.actions.actionLabel") }}
+              </el-button>
               <el-button v-if="product.status === 'present'" size="small" @click="downloadProduct(product)">
                 {{ t("products.detailDialog.download") }}
               </el-button>
@@ -517,6 +598,70 @@ onMounted(load)
           </div>
         </template>
       </div>
+    </el-dialog>
+
+    <el-dialog v-model="actionOpen" :title="t('products.actions.title')" width="560px">
+      <div v-if="actionProduct" class="action-form">
+        <p class="dialog-hint">{{ actionProduct.name }}</p>
+        <label class="dialog-label">{{ t("products.actions.actionLabel") }}</label>
+        <el-select v-model="actionKind">
+          <el-option value="resize" :label="t('products.actions.resize')" />
+          <el-option value="merge" :label="t('products.actions.merge')" />
+          <el-option value="extract" :label="t('products.actions.extract')" />
+        </el-select>
+
+        <p v-if="actionBlockedReason" class="action-blocked">{{ actionBlockedReason }}</p>
+        <template v-else>
+          <template v-if="actionKind === 'resize'">
+            <label class="dialog-label">{{ t("products.actions.newRank") }}</label>
+            <el-input-number v-model="newRank" :min="1" :max="1024" />
+            <label class="dialog-label">{{ t("products.actions.convRank") }}</label>
+            <el-input-number v-model="newConvRank" :min="1" :max="1024" />
+            <label class="dialog-label">{{ t("products.actions.dynamicMethod") }}</label>
+            <el-select v-model="dynamicMethod" clearable :placeholder="t('products.actions.dynamicOff')">
+              <el-option value="sv_ratio" label="sv_ratio" />
+              <el-option value="sv_fro" label="sv_fro" />
+              <el-option value="sv_cumulative" label="sv_cumulative" />
+            </el-select>
+            <template v-if="dynamicMethod">
+              <label class="dialog-label">{{ t("products.actions.dynamicParam") }}</label>
+              <el-input-number v-model="dynamicParam" :min="0" :max="1" :step="0.05" />
+            </template>
+          </template>
+
+          <template v-else-if="actionKind === 'merge'">
+            <label class="dialog-label">{{ t("products.actions.otherProduct") }}</label>
+            <el-select v-model="mergeOther" filterable>
+              <el-option v-for="p in otherProducts" :key="p.id" :label="p.name" :value="p.id" />
+            </el-select>
+            <label class="dialog-label">{{ t("products.actions.ratioSelf") }}</label>
+            <el-input-number v-model="ratioSelf" :min="0" :max="1" :step="0.1" />
+            <label class="dialog-label">{{ t("products.actions.ratioOther") }}</label>
+            <el-input-number v-model="ratioOther" :min="0" :max="1" :step="0.1" />
+            <label class="check-row"><input v-model="mergeConcat" type="checkbox" /> {{ t("products.actions.concat") }}</label>
+          </template>
+
+          <template v-else>
+            <label class="dialog-label">{{ t("products.actions.baseModelPath") }}</label>
+            <el-input v-model="extractBase" placeholder="/path/to/base.safetensors" />
+            <label class="dialog-label">{{ t("products.actions.dim") }}</label>
+            <el-input-number v-model="extractDim" :min="1" :max="1024" />
+          </template>
+
+          <label class="dialog-label">{{ t("products.actions.outputPath") }}</label>
+          <el-input v-model="actionOutput" />
+          <p class="dialog-hint">{{ t("products.actions.outputHint") }}</p>
+        </template>
+      </div>
+      <template #footer>
+        <el-button @click="actionOpen = false">{{ t("training.submitConfirm.cancel") }}</el-button>
+        <el-button
+          type="primary"
+          :loading="actionBusy"
+          :disabled="!!actionBlockedReason || !actionOutput.trim()"
+          @click="submitAction"
+        >{{ t("products.actions.submit") }}</el-button>
+      </template>
     </el-dialog>
 
     <PathPickerDialog

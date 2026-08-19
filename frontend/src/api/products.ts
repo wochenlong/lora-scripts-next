@@ -112,4 +112,26 @@ export const productsApi = {
       method: "PUT",
       body: JSON.stringify({ metadata }),
     }),
+  resize: (id: string, body: {
+    output_path: string
+    new_rank?: number | null
+    new_conv_rank?: number | null
+    dynamic_method?: string | null
+    dynamic_param?: number | null
+    save_precision?: string | null
+  }) =>
+    apiData<{ task_id: string; queued: boolean }>(`/api/products/${encodeURIComponent(id)}/actions/resize`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  merge: (body: { inputs: string[]; ratios: number[]; output_path: string; concat?: boolean; shuffle?: boolean }) =>
+    apiData<{ task_id: string; queued: boolean }>("/api/products/actions/merge", {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
+  extract: (id: string, body: { model_org: string; output_path: string; dim: number; conv_dim?: number | null; sdxl?: boolean; v2?: boolean }) =>
+    apiData<{ task_id: string; queued: boolean }>(`/api/products/${encodeURIComponent(id)}/actions/extract`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    }),
 }

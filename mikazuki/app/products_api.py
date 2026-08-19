@@ -15,6 +15,7 @@ from pydantic import BaseModel, Field
 
 from mikazuki.app.models import APIResponseFail, APIResponseSuccess
 from mikazuki.log import log
+from mikazuki.products import actions as actions_mod
 from mikazuki.products import deploy as deploy_mod
 from mikazuki.products import meta_editor
 from mikazuki.products.registry import default_registry
@@ -44,6 +45,32 @@ class DeployTargetRequest(BaseModel):
 
 class MetadataUpdateRequest(BaseModel):
     metadata: dict
+
+
+class ResizeRequest(BaseModel):
+    output_path: str
+    new_rank: Optional[int] = None
+    new_conv_rank: Optional[int] = None
+    dynamic_method: Optional[str] = None
+    dynamic_param: Optional[float] = None
+    save_precision: Optional[str] = None
+
+
+class MergeRequest(BaseModel):
+    inputs: List[str]
+    ratios: List[float]
+    output_path: str
+    concat: bool = False
+    shuffle: bool = False
+
+
+class ExtractRequest(BaseModel):
+    model_org: str
+    output_path: str
+    dim: int
+    conv_dim: Optional[int] = None
+    sdxl: bool = False
+    v2: bool = False
 
 
 def _find_product(product_id: str) -> Optional[dict]:
@@ -285,4 +312,72 @@ async def update_metadata(product_id: str, req: MetadataUpdateRequest):
     except Exception as exc:  # noqa: BLE001
         log.warning(f"metadata edit failed for {product['path']}: {exc}")
         return APIResponseFail(message=f"metadata 保存失败: {exc}")
+    return APIResponseSuccess(data=result)
+
+
+# ---- product actions (experimental): resize / merge / extract ----
+
+
+@router.post("/products/{product_id}/actions/resize")
+async def resize_product(product_id: str, req: ResizeRequest):
+    product = _find_product(product_id)
+    if product is None or product["status"] != "present":
+        return APIResponseFail(message="制品不存在或文件缺失")
+    if product.get("train_type") and "musubi" in str(product["train_type"]):
+        return APIResponseFail(message="musubi 制品暂不支持 resize")
+    try:
+        result = actions_mod.submit_resize(
+            default_registry(),
+            source=product["path"],
+            output_path=req.output_path,
+            new_rank=req.new_rank,
+            new_conv_rank=req.new_conv_rank,
+            dynamic_method=req.dynamic_method,
+            dynamic_param=req.dynamic_param,
+            save_precision=req.save_precision,
+        )
+    except actions_mod.ActionError as exc:
+        return APIResponseFail(message=str(exc))
+    return APIResponseSuccess(data=result)
+
+
+@router.post("/products/actions/merge")
+async def merge_products(req: MergeRequest):
+    registry = default_registry()
+    sources: List[str] = []
+    for pid in req.inputs:
+        product = _find_product(pid)
+        if product is None or product["status"] != "present":
+            return APIResponseFail(message=f"制品不存在或文件缺失: {pid}")
+        if product.get("is_lycoris"):
+            return APIResponseFail(message=f"{product['name']} 是 LyCORIS 格式，无法直接 merge")
+        sources.append(product["path"])
+    try:
+        result = actions_mod.submit_merge(
+            registry, sources=sources, ratios=req.ratios, output_path=req.output_path,
+            concat=req.concat, shuffle=req.shuffle,
+        )
+    except actions_mod.ActionError as exc:
+        return APIResponseFail(message=str(exc))
+    return APIResponseSuccess(data=result)
+
+
+@router.post("/products/{product_id}/actions/extract")
+async def extract_product(product_id: str, req: ExtractRequest):
+    product = _find_product(product_id)
+    if product is None or product["status"] != "present":
+        return APIResponseFail(message="制品不存在或文件缺失")
+    try:
+        result = actions_mod.submit_extract(
+            default_registry(),
+            model_org=req.model_org,
+            model_tuned=product["path"],
+            output_path=req.output_path,
+            dim=req.dim,
+            conv_dim=req.conv_dim,
+            sdxl=req.sdxl,
+            v2=req.v2,
+        )
+    except actions_mod.ActionError as exc:
+        return APIResponseFail(message=str(exc))
     return APIResponseSuccess(data=result)
