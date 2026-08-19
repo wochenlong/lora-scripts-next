@@ -59,7 +59,25 @@ When redistributing source or portable builds, please keep [NOTICE.md](../NOTICE
 | SmilingWolf / WD Tagger | https://huggingface.co/SmilingWolf/wd-v1-4-convnextv2-tagger-v2 | 默认离线打标模型与标签表 |
 | shigma / schemastery | https://github.com/shigma/schemastery | Vue3 动态表单 Schema 运行时 |
 
-历史参考（非当前主后端）：[WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) — 详见 [NOTICE.md](../NOTICE.md)。
+## 历史参考：早期 Anima 接入
+
+当前 Anima 训练后端是 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)。
+
+在更早的 Anima 接入阶段（旧 `main` 线、尚未以 Kohya 路径作为持续维护后端之前），本仓库**曾参考并改编**：
+
+- [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts)（**SD-reScripts**，AGPL-3.0）
+
+仓库历史中有自该项目的合并记录，以及随后迁到 Kohya 的提交；迁移前 NOTICE 亦写明 Anima 支持改编自该项目。感谢该项目的公开工作。它不是 Next Trainer 当前的 Anima 运行后端，也不是本仓库上游。完整法律说明见 [NOTICE.md](../NOTICE.md) 的 Anima LoRA 节。
+
+### Historical note: early Anima integration
+
+Current Anima training is maintained against [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts).
+
+During an earlier Anima integration stage (before the Kohya-backed path became the maintained backend), this repository **referenced and adapted** work from:
+
+- [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts) (**SD-reScripts**, AGPL-3.0)
+
+History includes a merge from that project and a later migration onto Kohya; pre-migration notices also described Anima support as adapted from SD-reScripts. We thank that project for the open work referenced and adapted then. It is not the current Anima backend for Next Trainer, and it is not an upstream of this repository. Full notice: [NOTICE.md](../NOTICE.md).
 
 ---
 
@@ -71,4 +89,4 @@ When redistributing source or portable builds, please keep [NOTICE.md](../NOTICE
 
 ## English summary
 
-Next Trainer gratefully acknowledges Akegarasu/lora-scripts as part of its UX and packaging lineage, and continues to rely on kohya-ss/sd-scripts for major training backends. Optional Anima Fast uses [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora) (MIT). LoKr/LoHa via LyCORIS; default tagger from SmilingWolf WD models; forms powered by schemastery. Full notices: [NOTICE.md](../NOTICE.md).
+Next Trainer gratefully acknowledges Akegarasu/lora-scripts as part of its UX and packaging lineage, and continues to rely on kohya-ss/sd-scripts for major training backends (including current Anima). Early Anima integration historically referenced and adapted [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts); that is not the current backend. Optional Anima Fast uses [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora) (MIT). LoKr/LoHa via LyCORIS; default tagger from SmilingWolf WD models; forms powered by schemastery. Full notices: [NOTICE.md](../NOTICE.md).

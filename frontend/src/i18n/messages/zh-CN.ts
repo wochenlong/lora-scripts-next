@@ -521,7 +521,7 @@ export default {
   },
   home: {
     heroTitle: "面向未来与 Agent 的本地训练器",
-    heroSubtitle: "熟悉上手，覆盖常见模型；人也好用，Agent 也能接入。",
+    heroSubtitle: "熟悉上手，覆盖常见模型；面向未来，无限扩展。",
     startTraining: "开始配置训练",
     readGuide: "阅读使用指南",
     portalAria: "功能入口",

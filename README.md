@@ -7,7 +7,7 @@
 <p align="center">
   <strong>A local trainer for the future — and for agents</strong><br />
   Familiar UI · One trainer for common models · Kept up to date<br />
-  <sub>For creators and platforms · Backend-free agent hooks · Repo <code>lora-scripts-next</code></sub>
+  <sub>For creators and platforms · Agent hooks planned · Repo <code>lora-scripts-next</code></sub>
 </p>
 
 <p align="center">
@@ -28,7 +28,7 @@
 the UI stays familiar and ready in one unpack, while the product itself is built like a professional workbench — **one trainer for most common models**, kept current as new models and engines arrive.
 
 For people, it is a local trainer: tagging, starting runs, watching tasks, and switching engines live in one professional UI. It runs on Windows and Linux.  
-For platforms and agents, it is modular: use the full package, or **hook in without taking the whole backend**, as one step in an automated workflow.
+For platforms and agents, the goal is a modular surface: use the full package today, and **later** plug training into automated workflows as one step.
 
 You still train LoRA or full finetune on a local NVIDIA GPU.  
 The stack stays grounded in proven backends: the main path is built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts); for Krea 2 you can optionally plug in [musubi-tuner](https://github.com/kohya-ss/musubi-tuner).  
@@ -63,8 +63,8 @@ If other tools force a choice between “familiar” and “ahead,” Next Train
 3. **Pace: kept up to date**  
    New models and common training paths keep landing here, instead of freezing around one script wrapper. Individuals can follow portable releases; developers and platforms can follow `main` / `dev`.
 
-4. **Code: modular, backend-free agent hooks**  
-   The design goal is not “UI only.” Modules can be composed, configs import and export, and tasks plus logs are machine-readable. People can use the full UI; agents and platforms can plug in just the training step.
+4. **Code: modular, with agent hooks planned**  
+   The design goal is not “UI only.” Modules can be composed, configs import and export, and tasks plus logs are machine-readable. People can use the full UI today; agent and platform hooks for plugging in just the training step are on the roadmap.
 
 5. **Process: runs stay visible**  
    Status, logs, previews, and Loss live on the Tasks page. After training starts, you do not need a pile of external windows just to watch the run.

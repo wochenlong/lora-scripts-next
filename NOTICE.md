@@ -36,15 +36,17 @@ The referenced repository is licensed under AGPL-3.0. Its RF training ideas incl
 
 ### Anima LoRA
 
-Active Anima backend maintenance is based on:
+**Current backend:** Anima training is maintained against [`kohya-ss/sd-scripts`](https://github.com/kohya-ss/sd-scripts). Local code is limited to the WebUI compatibility wrapper, config adapter, defaults, and launch orchestration.
 
-- `kohya-ss/sd-scripts`: https://github.com/kohya-ss/sd-scripts
+**Historical note (early Anima integration):** Before the Kohya-backed path became the maintained backend, Anima support on this line **referenced and adapted** work from:
 
-Earlier Anima integration work also referenced:
+- [`WhitecrowAurora/lora-rescripts`](https://github.com/WhitecrowAurora/lora-rescripts) (**SD-reScripts**, AGPL-3.0)
 
-- `WhitecrowAurora/lora-rescripts` (**SD-reScripts** — historical fork / continuation of the LoRA-scripts line): https://github.com/WhitecrowAurora/lora-rescripts
+Repository history records a merge from that project and a later migration (`feat(anima): migrate backend to kohya-ss/sd-scripts`) that moved Anima training onto pinned `kohya-ss/sd-scripts`. Pre-migration notices in this repository also described the Anima support as adapted from SD-reScripts. A legacy local script was retained only as a migration reference and is not an active trainer entrypoint.
 
-The historical reference repository is licensed under AGPL-3.0. Current Anima training should be synchronized from `kohya-ss/sd-scripts`; local code is limited to the WebUI compatibility wrapper, config adapter, defaults, and launch orchestration.
+We thank the authors of that project for the open work that was referenced and adapted in that period. It is **not** the current Anima training backend for Next Trainer, and it is **not** treated as an upstream of this repository. Current Anima maintenance should be synchronized from `kohya-ss/sd-scripts`.
+
+**中文说明：** 当前 Anima 训练以后端 [`kohya-ss/sd-scripts`](https://github.com/kohya-ss/sd-scripts) 为准。早期接入 Anima 时，本仓库**曾参考并改编** [`WhitecrowAurora/lora-rescripts`](https://github.com/WhitecrowAurora/lora-rescripts)（SD-reScripts，AGPL-3.0）：历史中有自该仓库的合并记录，随后有迁到 Kohya 的提交；迁移前 NOTICE 亦写明 Anima 支持改编自该项目。感谢该项目的公开贡献。它不是 Next Trainer 当前的 Anima 运行后端，也不是本仓库的上游。
 
 ### Anima LoRA Fast Mode（进阶插件）
 
