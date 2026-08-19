@@ -132,6 +132,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--source-root", type=Path, default=None, help="Existing sorryhyun/anima_lora clone")
     parser.add_argument("--source-commit", default="", help="Pin upstream commit (default: config/anima_fast_backend.toml)")
     parser.add_argument("--dry-run", action="store_true", help="Print install plan only")
+    parser.add_argument("--pip-index-url", default="", help="PyPI index URL (default: https://pypi.org/simple)")
+    parser.add_argument("--pytorch-index-url", default="", help="PyTorch wheel index base (cu130 appended if missing)")
+    parser.add_argument("--hf-endpoint", default="", help="Hugging Face endpoint (default: installer mirror)")
+    parser.add_argument("--github-url-prefix", default="", help="GitHub URL prefix, e.g. https://ghfast.top/")
     args = parser.parse_args(argv)
 
     project_root = (args.project_root or find_project_root()).resolve()
@@ -141,6 +145,7 @@ def main(argv: list[str] | None = None) -> int:
     from mikazuki.anima_fast_backend.environment import build_environment_install_plan, install_environment
     from mikazuki.anima_fast_backend.extension_state import default_layout, read_extension_status
     from mikazuki.anima_fast_backend.settings import discover_runtime, feature_enabled
+    from mikazuki.download_sources import parse_download_sources
 
     if not feature_enabled():
         raise SystemExit("Anima Fast is disabled (LORA_ENABLE_ANIMA_FAST=0).")
@@ -149,8 +154,21 @@ def main(argv: list[str] | None = None) -> int:
     commit = (args.source_commit or runtime.source_commit or "").strip() or None
     source_root = resolve_source_root(project_root, args.source_root, commit)
     layout = default_layout(project_root)
+    download_sources = parse_download_sources(
+        {
+            "pip_index_url": args.pip_index_url,
+            "pytorch_index_url": args.pytorch_index_url,
+            "hf_endpoint": args.hf_endpoint,
+            "github_url_prefix": args.github_url_prefix,
+        }
+    )
     plan = build_environment_install_plan(
-        project_root, layout, source_root, dry_run=args.dry_run, source_commit=commit
+        project_root,
+        layout,
+        source_root,
+        dry_run=args.dry_run,
+        source_commit=commit,
+        download_sources=download_sources,
     )
 
     print(f"Project root : {project_root}")

@@ -132,7 +132,8 @@ def launch():
     legacy_tageditor_enabled = not args.disable_tageditor
 
     if not args.skip_prepare_environment:
-        prepare_environment(disable_auto_mirror=args.disable_auto_mirror)
+        prepare_environment(disable_auto_mirror=args.disable_auto_mirror,
+                            prepare_onnxruntime=not args.skip_prepare_onnxruntime)
     else:
         # Portable launch skips prepare_environment, so requirements.txt is
         # otherwise never validated. Run a cheap presence-only guard so newly
@@ -181,19 +182,21 @@ def launch():
     from mikazuki.update_check import local_version
     log.info(f"SD-Trainer Version: {local_version()}")
 
+    if args.listen:
+        args.host = "0.0.0.0"
+        args.tensorboard_host = "0.0.0.0"
+
     os.environ["MIKAZUKI_HOST"] = args.host
     os.environ["MIKAZUKI_PORT"] = str(args.port)
     os.environ["MIKAZUKI_TENSORBOARD_HOST"] = args.tensorboard_host
     os.environ["MIKAZUKI_TENSORBOARD_PORT"] = str(args.tensorboard_port)
+    os.environ["TRAIN_MONITOR_HOST"] = args.host
     os.environ["TRAIN_MONITOR_PORT"] = str(args.train_monitor_port)
+    os.environ["TRAIN_MONITOR_ENABLED"] = "0" if args.disable_train_monitor else "1"
     os.environ["MIKAZUKI_TAGEDITOR_PORT"] = str(tageditor_port)
     os.environ["MIKAZUKI_DEV"] = "1" if args.dev else "0"
     if args.browser:
         os.environ["MIKAZUKI_BROWSER"] = args.browser
-
-    if args.listen:
-        args.host = "0.0.0.0"
-        args.tensorboard_host = "0.0.0.0"
 
     if legacy_tageditor_enabled:
         run_tag_editor(tageditor_port)
@@ -208,7 +211,10 @@ def launch():
 
     import uvicorn
     log.info(f"Server started at http://{args.host}:{args.port}")
-    log.info(f"Train monitor at http://{args.host}:{args.train_monitor_port}")
+    if not args.disable_train_monitor:
+        log.info(f"Train monitor at http://{args.host}:{args.train_monitor_port}")
+    else:
+        log.info("Train monitor disabled (--disable-train-monitor)")
     uvicorn.run("mikazuki.app:app", host=args.host, port=args.port, log_level="error", reload=args.dev)
 
 

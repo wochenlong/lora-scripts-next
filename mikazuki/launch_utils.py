@@ -338,6 +338,26 @@ def setup_onnxruntime(
 
     onnx_version = os.environ.get("ONNXRUNTIME_VERSION", onnx_version)
 
+    if sys.platform != "win32":
+        # onnxruntime-gpu only ships wheels for Windows and Linux x86_64, and
+        # both packages provide the same `onnxruntime` module. Prefer the GPU
+        # build, fall back to the CPU build when no wheel matches, and never
+        # abort startup or touch a manually installed build.
+        if is_installed("onnxruntime-gpu") or is_installed("onnxruntime"):
+            return
+        log.info("installing onnxruntime-gpu")
+        try:
+            pip_install("onnxruntime-gpu", onnx_version, index_url=index_url, live=True)
+            return
+        except Exception as e:
+            log.warning(f"onnxruntime-gpu not available for this platform ({e}), trying CPU build")
+        try:
+            pip_install("onnxruntime", onnx_version, index_url=index_url, live=True)
+        except Exception as e:
+            log.warning(f"onnxruntime install failed: {e}. "
+                        "Tagging will be unavailable until onnxruntime is installed manually.")
+        return
+
     if onnx_version and not is_installed(f"onnxruntime-gpu=={onnx_version}"):
         log.info("uninstalling wrong onnxruntime version")
         run_pip(f"uninstall onnxruntime -y", "onnxruntime", live=True)

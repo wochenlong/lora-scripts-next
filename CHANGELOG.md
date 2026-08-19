@@ -1,6 +1,105 @@
 # 更新日志
 
-本文件记录 **wochenlong/lora-scripts-next** 面向镜像与 AutoDL 的发行说明；上游 kohya-ss/sd-scripts 的变更请见其仓库。
+本文件记录 **wochenlong/lora-scripts-next**（产品名 **Next Trainer**）面向镜像与 AutoDL 的发行说明；上游 kohya-ss/sd-scripts 的变更请见其仓库。
+
+---
+## 未发布（dev）
+
+### 修复
+
+- **Anima Fast 引擎切换串台（#271）**：从 Kohya 切到 Anima Fast 时，不再把 `model_train_type=anima-lora` 与 Kohya 默认 `cache_*=true` 带进 Fast；提交时按页面 schema 强制 `anima-lora-fast`，避免静默启动 `anima_train_network.py`
+- 排队任务、插件安装任务不再误显示正在运行任务的 Loss 曲线 / 预览图；运维任务详情隐藏训练专属面板与 TensorBoard 入口
+- 已结束任务的 Loss / 预览数据窗口限定在其运行时段内，不再混入后续任务的数据（含同输出名复跑场景）
+
+### 新增
+
+- **训练任务队列**：训练任务分「算力 / 维护」双通道。算力任务（训练）串行执行，繁忙时自动排队，不再报「无法创建训练任务」；维护任务（插件安装 / 模型下载）与训练并行，互不阻塞
+- 队列**持久化**：排队中的训练在服务重启后不丢失（`logs/task_queue.json`），恢复后需手动确认「开始执行」；重启时正在跑的任务标记为「失败 · 服务重启导致中断」
+- 任务页：排队中 / 待确认状态标签、队列位置角标、「移出队列」「开始执行」「重新排队」（失败/已终止任务可按原配置回队列，Musubi 三阶段整组重排）；进行中列表按 运行中 → 排队顺序 排列
+
+---
+## v3.0.0 — 2026-08-16
+
+> **正式版（Vue3）**：二测训练路径通过后的首个正式号。`VERSION` / 侧栏显示 **`3.0.0`**。整合包与 GitHub Release 归档名使用 `Next-Trainer-v3.0.0-*.7z`（发布时更新下载链接）。  
+> **分支说明**：在默认分支切换完成前，代码仍合入 `dev`；`main` 上的 **v2.9.1 旧 UI** 将迁到 `legacy`（或等价冻结分支），随后 `main` 对齐本线。
+
+### 产品
+
+- Vue 3 四栏工作台：训练 / 数据集 / 任务 / 设置（模型 × 引擎 × 目标）
+- 品牌统一为 **Next Trainer**
+- **Krea 2** LoRA：Musubi 引擎一体化（与 Kohya / Anima Fast 并列管理）
+- 设置 → 训练引擎安装 / 就绪态；下载源偏好（国内镜像友好）
+- 任务页：预览图、Loss、内嵌日志；预览/Loss 可收起；侧栏「任务」角标提示进行中训练
+- Linux / 远程：网页内服务端路径浏览（不再依赖本机文件对话框）
+- 数据集：打标 + 以图为主的标签编辑工作流（Vue3）
+
+### 整合包（发布时）
+
+- **lite**：无 Fast / Musubi 运行时，内置 WD 打标；体积小，适合先开 UI
+- **kohya** / **musubi** 分轨（或 kohya-musubi 满配）：按场景下载，避免 30G 系统盘硬塞三引擎
+- 归档前缀：`Next-Trainer-v3.0.0-`
+
+### 相对 2.9.x RC 的说明
+
+- 内测 / RC（`2.9.2-beta.*` / `2.9.2-rc.1`）功能并入本正式号
+- 旧 UI 用户：继续使用 **v2.9.1** 整合包，或切换后从 `legacy` 获取
+
+---
+## v2.9.2-beta.3 — 2026-08-08
+
+> **内测线（pre-release）**：冷启动依赖安装热修。合入 `dev`，**不替代** `main` 稳定版 v2.9.1。
+
+### 修复
+
+- 将 `tensorboard` 升至 `2.14.0`，与 `protobuf==3.20.3` 兼容；修复整合包首次 `pip install -r requirements.txt` 因现代 pip 严格解析而 **硬失败**（旧钉 `tensorboard==2.10.1` 要求 `protobuf<3.20`）
+
+### 整合包
+
+- 归档名：`Next-Trainer-v2.9.2-beta.3-lite.7z` / `-full.7z`（包内目录仍为 `SD-Trainer/`）
+- **lite** → GitHub Release；**full** → 魔搭 `windsing/next-trainer-portable`
+
+---
+## v2.9.2-beta.2 — 2026-08-07
+
+> **内测线（pre-release）**：在 `2.9.2-beta.1` 上的整合包热修。合入 `dev`，**不替代** `main` 稳定版 v2.9.1。
+
+### 修复
+
+- Windows 启动时不再打开未就绪/未启用的训练监控页（避免空白 `127.0.0.1:6008` / `ERR_CONNECTION_REFUSED`）
+- 仅在监控进程实际启动且端口可连时才打开浏览器标签；也可用 WebUI `/train-monitor`
+
+### 整合包
+
+- 归档名：`Next-Trainer-v2.9.2-beta.2-lite.7z` / `-full.7z`（包内目录仍为 `SD-Trainer/`）
+- **lite** → GitHub Release；**full** → 魔搭 `windsing/next-trainer-portable`
+
+---
+## v2.9.2-beta.1 — 2026-08-07
+
+> **内测线（pre-release）**：Vue3 信息架构重写。合入 `dev`，**不替代** `main` 上的稳定版 v2.9.1。  
+> **版本约定**：内测一律使用 **`2.9.x`**（如 `2.9.2-beta.N`）；**正式版才用 `3.0.0`**，便于按版本号定位问题。界面品牌为 **Next Trainer**。
+
+### 产品
+
+- 四栏 IA：训练 / 数据集 / 任务 / 设置（模型 × 引擎 × 目标工作台）
+- 界面品牌统一为 **Next Trainer**
+- 设置 → 训练引擎管理；Anima Fast 就绪态仅显示「训练环境准备就绪」
+- 任务页：预览图、Loss、内嵌日志；日常盯盘以任务为主（训练监控次要入口见 #217）
+- 关于 / 首页 / Fast 页补充开源致谢与 NOTICE 引用
+
+### 依赖
+
+- 钉死 `protobuf==3.20.3`，避免 Flux/SD3 sentencepiece 落到 3.19.x
+
+### 整合包
+
+- **lite**（GitHub）：不含 Fast 运行时，内置 WD 打标模型，压缩包目标 &lt; 2 GB
+- **full**（网盘）：预装 Anima Fast `.venv` + 同上打标模型
+- 文件名：`Next-Trainer-v2.9.2-beta.1-lite.7z` / `-full.7z`（发布时已从旧前缀 `SD-Trainer-` 更名）
+
+### 说明
+
+- 已知与秋叶旧导航不同；习惯对齐专项在 `dev` 内测后再开
 
 ---
 ## v2.9.1 — 2026-07-28

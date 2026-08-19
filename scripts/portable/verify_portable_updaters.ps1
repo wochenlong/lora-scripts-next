@@ -60,7 +60,7 @@ if (Test-Path $gitUpdater) {
 $ps1 = Join-Path $PortableRoot "SD-Trainer\scripts\portable\update_from_release.ps1"
 if (Test-Path $ps1) {
     $content = Get-Content $ps1 -Raw
-    if ($content -notmatch "SD-Trainer-v") {
+    if ($content -notmatch "Next-Trainer-v" -and $content -notmatch "SD-Trainer-v") {
         $failures += "[FAIL] update_from_release.ps1 missing asset filter"
     }
     $requiredUserDataMarkers = @(

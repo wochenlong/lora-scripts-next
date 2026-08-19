@@ -13,7 +13,13 @@ import time
 import threading
 import uuid
 
-from mikazuki.tasks import Task, tm
+from mikazuki.download_sources import (
+    DownloadSources,
+    apply_github_prefix,
+    install_process_env,
+    pytorch_extra_index_url,
+)
+from mikazuki.tasks import LANE_MAINTENANCE, tm
 from mikazuki.train_log_hub import hub as train_log_hub
 
 from .extension_state import (
@@ -114,6 +120,11 @@ MAIN_EXPECTED = {
 }
 
 
+DEFAULT_PIP_INDEX_URL = "https://pypi.org/simple"
+DEFAULT_PYTORCH_INDEX_BASE = "https://download.pytorch.org/whl"
+ANIMA_CUDA_TAG = "cu130"
+
+
 @dataclass(frozen=True)
 class EnvironmentInstallPlan:
     project_root: Path
@@ -126,6 +137,7 @@ class EnvironmentInstallPlan:
     constraints: Path
     overrides: Path
     dry_run: bool = True
+    download_sources: DownloadSources | None = None
 
     def as_dict(self) -> dict:
         return {
@@ -139,6 +151,7 @@ class EnvironmentInstallPlan:
             "constraints": str(self.constraints),
             "overrides": str(self.overrides),
             "dry_run": self.dry_run,
+            "download_sources": self.download_sources.as_dict() if self.download_sources else None,
         }
 
 
@@ -184,6 +197,7 @@ def build_environment_install_plan(
     source_root: Path,
     dry_run: bool = True,
     source_commit: str | None = None,
+    download_sources: DownloadSources | None = None,
 ) -> EnvironmentInstallPlan:
     root = project_root.resolve()
     extension_root = _resolve_child(root, layout.root)
@@ -208,6 +222,7 @@ def build_environment_install_plan(
         constraints=constraints,
         overrides=overrides,
         dry_run=dry_run,
+        download_sources=download_sources,
     )
 
 
@@ -257,10 +272,15 @@ def _replace_flash_attn_dependency(source_root: Path, platform_marker: str, repl
     return changed
 
 
-def localize_linux_flash_attn_dependency(source_root: Path, log: LogFn = print) -> list[str]:
+def localize_linux_flash_attn_dependency(
+    source_root: Path,
+    log: LogFn = print,
+    github_url_prefix: str | None = None,
+) -> list[str]:
     if not sys.platform.startswith("linux"):
         return []
-    replacement = f'"flash-attn @ {FLASH_ATTN_LINUX_CU130_URL} ; {FLASH_ATTN_LINUX_PLATFORM_MARKER}",'
+    wheel_url = apply_github_prefix(FLASH_ATTN_LINUX_CU130_URL, github_url_prefix)
+    replacement = f'"flash-attn @ {wheel_url} ; {FLASH_ATTN_LINUX_PLATFORM_MARKER}",'
     return _replace_flash_attn_dependency(source_root, FLASH_ATTN_LINUX_PLATFORM_MARKER, replacement, log)
 
 
@@ -422,7 +442,8 @@ def install_environment(
     if plan.source_commit:
         _append(log, f"[source] pinned commit {plan.source_commit}")
     copy_source_snapshot(build_install_plan(plan.source_root, plan.layout, dry_run=False, source_commit=plan.source_commit))
-    localized_direct_urls = localize_linux_flash_attn_dependency(plan.layout.source, log)
+    github_prefix = plan.download_sources.github_url_prefix if plan.download_sources else None
+    localized_direct_urls = localize_linux_flash_attn_dependency(plan.layout.source, log, github_url_prefix=github_prefix)
     if localized_direct_urls:
         facts["localized_direct_url_dependencies"] = localized_direct_urls
     dropped_optional = strip_optional_runtime_dependencies(plan.layout.source, log)
@@ -433,6 +454,20 @@ def install_environment(
         raise FileNotFoundError(f"Anima constraints file missing: {plan.constraints}")
     if not plan.overrides.is_file():
         raise FileNotFoundError(f"Anima overrides file missing: {plan.overrides}")
+
+    process_env = install_process_env(plan.download_sources)
+    pip_index = (
+        plan.download_sources.pip_index_url
+        if plan.download_sources and plan.download_sources.pip_index_url
+        else DEFAULT_PIP_INDEX_URL
+    )
+    torch_index = pytorch_extra_index_url(
+        plan.download_sources.pytorch_index_url if plan.download_sources else None,
+        ANIMA_CUDA_TAG,
+        f"{DEFAULT_PYTORCH_INDEX_BASE}/{ANIMA_CUDA_TAG}",
+    )
+    if plan.download_sources:
+        _append(log, f"[sources] pip={pip_index} pytorch={torch_index} hf={plan.download_sources.hf_endpoint or '(default)'} github_prefix={github_prefix or '(none)'}")
 
     uv = _uv_command()
     facts["phase"] = "python"
@@ -445,6 +480,7 @@ def install_environment(
             [uv, "python", "install", "3.13", "--install-dir", str(plan.python_install_dir), "--reinstall", "--no-cache"],
             plan.project_root,
             log,
+            env=process_env,
         )
         base_python = _find_base_python(plan)
     if not base_python.is_file():
@@ -460,7 +496,12 @@ def install_environment(
     write_install_state(plan.layout, STATE_INSTALLING, facts, "creating Anima extension venv")
     if not plan.venv_python.is_file():
         plan.venv_python.parent.parent.mkdir(parents=True, exist_ok=True)
-        _run_streaming([str(base_python), "-m", "venv", str(plan.venv_python.parent.parent)], plan.project_root, log)
+        _run_streaming(
+            [str(base_python), "-m", "venv", str(plan.venv_python.parent.parent)],
+            plan.project_root,
+            log,
+            env=process_env,
+        )
     else:
         _append(log, f"[skip] Anima venv exists: {plan.venv_python}")
 
@@ -478,9 +519,9 @@ def install_environment(
             "--no-cache",
             "--no-config",
             "--index-url",
-            "https://pypi.org/simple",
+            pip_index,
             "--extra-index-url",
-            "https://download.pytorch.org/whl/cu130",
+            torch_index,
             "--index-strategy",
             "unsafe-best-match",
             "--constraints",
@@ -491,6 +532,7 @@ def install_environment(
         ],
         plan.project_root,
         log,
+        env=process_env,
         retries=int(os.environ.get("ANIMA_FAST_INSTALL_RETRIES", "3")),
     )
 
@@ -718,20 +760,28 @@ def start_install_task(
     source_root: Path,
     dry_run: bool = False,
     source_commit: str | None = None,
+    download_sources: DownloadSources | None = None,
 ) -> tuple[str, dict]:
-    plan = build_environment_install_plan(project_root, layout, source_root, dry_run=dry_run, source_commit=source_commit)
+    plan = build_environment_install_plan(
+        project_root,
+        layout,
+        source_root,
+        dry_run=dry_run,
+        source_commit=source_commit,
+        download_sources=download_sources,
+    )
     if dry_run:
         return "", {"plan": plan.as_dict()}
 
     task_id = f"anima-install-{uuid.uuid4()}"
-    task = Task(
-        task_id=task_id,
-        command=["anima-fast-install"],
-        environ=os.environ.copy(),
+    task = tm.create_task(
+        ["anima-fast-install"],
+        os.environ.copy(),
         metadata={"kind": "anima_fast_install", "plan": plan.as_dict()},
         cwd=str(project_root),
+        task_id=task_id,
+        lane=LANE_MAINTENANCE,
     )
-    tm.add_task(task_id, task)
     task.start_log_only()
     write_install_state(plan.layout, STATE_INSTALLING, {"plan": plan.as_dict(), "task_id": task_id}, "install task queued")
 
@@ -748,8 +798,13 @@ def start_install_task(
             log("[start] Anima Fast plugin installation")
             from .source_root import ensure_install_source_ready
 
+            github_prefix = plan.download_sources.github_url_prefix if plan.download_sources else None
             resolved_source = ensure_install_source_ready(
-                plan.project_root, plan.source_root, plan.source_commit, log=log
+                plan.project_root,
+                plan.source_root,
+                plan.source_commit,
+                log=log,
+                github_url_prefix=github_prefix,
             )
             if resolved_source != plan.source_root:
                 plan = replace(plan, source_root=resolved_source)

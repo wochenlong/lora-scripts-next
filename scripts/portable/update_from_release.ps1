@@ -87,14 +87,21 @@ function Get-ReleaseAsset {
         $uri = "https://api.github.com/repos/$Repository/releases/latest"
     }
     $release = Invoke-RestMethod -Uri $uri -Headers $headers
-    $assets = @($release.assets | Where-Object { $_.name -like "SD-Trainer-v*.7z" })
+    # Prefer Next Trainer archive names; keep legacy SD-Trainer-* for older releases.
+    $assets = @(
+        $release.assets | Where-Object {
+            $_.name -like "Next-Trainer-v*.7z" -or $_.name -like "SD-Trainer-v*.7z"
+        }
+    )
     if ($PreferredAssetName) {
         $match = $assets | Where-Object { $_.name -eq $PreferredAssetName } | Select-Object -First 1
         if ($match) { return $match }
     }
-    $asset = $assets | Sort-Object { $_.name } -Descending | Select-Object -First 1
+    $preferred = @($assets | Where-Object { $_.name -like "Next-Trainer-v*.7z" })
+    $pool = if ($preferred.Count -gt 0) { $preferred } else { $assets }
+    $asset = $pool | Sort-Object { $_.name } -Descending | Select-Object -First 1
     if (-not $asset) {
-        throw "No SD-Trainer-v*.7z asset found in release $($release.tag_name)."
+        throw "No Next-Trainer-v*.7z (or legacy SD-Trainer-v*.7z) asset found in release $($release.tag_name)."
     }
     return $asset
 }
@@ -114,7 +121,7 @@ $updaterVersion = Read-LocalUpdaterVersion $TrainerDir
 $scriptPath = $MyInvocation.MyCommand.Path
 Write-PortableUpdateStatusBanner -PortableRoot $PortableRoot -UpdaterLabel "Release (PowerShell)" -UpdaterFile $scriptPath
 
-$releaseTag = $asset.name -replace '\.7z$','' -replace '^SD-Trainer-v','v'
+$releaseTag = $asset.name -replace '\.7z$','' -replace '^Next-Trainer-v','v' -replace '^SD-Trainer-v','v'
 $syncState = Get-ReleaseSyncState $TrainerDir
 
 Write-Step "--- Target Release / 目标 Release ---"

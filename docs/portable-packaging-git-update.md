@@ -2,6 +2,8 @@
 
 本文记录 Windows 便携整合包的打包契约，以及将整合包改为"保留 `.git`、支持一键 Git 更新"后的实现方案。
 
+> **要自己打 7z / 分轨包？** 请先看协作指南：[**portable-build-guide.md**](portable-build-guide.md)（环境需求、包型、命令、验收、上传权限）。
+
 > **团队约定与变迁记录**：[Discussion #73 — 整合包更新机制](https://github.com/wochenlong/lora-scripts-next/discussions/73)（双通道、bootstrap、`UPDATER_VERSION` 演进索引）
 
 > **v2.5.2 用户**：若出现「能开网页但无法开始训练」，请升级到 **v2.5.3**（见 [`portable-upgrade-2.5.2-to-2.5.3.md`](portable-upgrade-2.5.2-to-2.5.3.md)，[Issue #54](https://github.com/wochenlong/lora-scripts-next/issues/54)）。
@@ -51,9 +53,27 @@
 3. 保留主仓 `.git`。
 4. 确保 remote 指向 `https://github.com/wochenlong/lora-scripts-next.git`。
 5. 不要带入本机 `doc/`、`script/`、`data/`、`benchmark/`、`.vscode/`、`.cursor/`、临时草稿等目录。
-6. **不要**打入 `extensions/anima_lora/`（含 `.venv`、上游源码快照）；Fast 插件由用户在 WebUI 页内首次安装。
+6. 默认 **lite** 包**不要**打入 `extensions/anima_lora/`（含 `.venv`）；Fast 由用户在 WebUI 首次安装。完整 **full** 包见下表 `-BundleAnimaFast`。
 
 `vendor/sd-scripts` 已经是主仓 tracked 普通目录，不是子模块，会随主仓更新。
+
+## 双整合包（lite / full，内测起）
+
+| 包 | 用途 | Fast 运行时 | 打标模型 | 体积目标 |
+|----|------|-------------|----------|----------|
+| **lite** | GitHub Release / 预发布上传 | 不预装 | 内置 `tagger-models/wd14/wd14-convnextv2-v2` | 压缩包 **&lt; 2 GB** |
+| **full** | 百度网盘等大文件渠道 | 预装 `extensions/anima_lora`（含 `.venv`） | 同上 | 数 GB～十余 GB，视 venv 而定 |
+
+```powershell
+# 轻量（默认）
+.\build-scripts\build_portable.ps1 -Version 2.9.2-beta.1 -Clean
+
+# 完整（需本机已有可用 Fast 环境）
+.\build-scripts\build_portable.ps1 -Version 2.9.2-beta.1 -Clean -BundleAnimaFast `
+  -AnimaFastSource "D:\path\to\extensions\anima_lora"
+```
+
+产物文件名：`Next-Trainer-v{Version}-lite.7z` / `Next-Trainer-v{Version}-full.7z`（旧 Release 可能仍为 `SD-Trainer-v*`）；`PORTABLE_BUILD` 含 `flavor=lite|full`。包内项目目录仍为 `SD-Trainer/`（启动契约）。
 
 ## Anima Fast 插件与整合包（v2.7.0+）
 
@@ -61,8 +81,9 @@ Anima LoRA **Fast 模式**使用可选插件 [`sorryhyun/anima_lora`](https://gi
 
 | 项 | 约定 |
 |----|------|
-| 7z 是否预装插件 | **否** — 控制发布体积；用户路径：侧栏 **Anima LoRA → Fast 模式 → 开启插件** |
-| 打包排除 | `build-scripts/build_portable.ps1`、`03-copy-project.ps1` 排除整个 `extensions/` |
+| lite 7z | **不**预装插件；用户路径：设置 → 训练引擎 / Anima Fast 页内安装 |
+| full 7z | `-BundleAnimaFast` 从维护机已就绪环境复制（含 `.venv`） |
+| 打包排除（默认） | `build-scripts/build_portable.ps1`、`03-copy-project.ps1` 排除整个 `extensions/` |
 | 用户数据 | 用户安装后的 `extensions/anima_lora/` 视为本地数据；Git 更新勿覆盖（`.gitignore` 已忽略 `.venv/`、`source/`） |
 | 文档 | [`docs/anima-fast.md`](anima-fast.md)、[`NOTICE.md`](../NOTICE.md) § Anima LoRA Fast Mode |
 
@@ -126,7 +147,7 @@ Release 更新实现：`SD-Trainer/scripts/portable/update_from_release.ps1`
 - 更新开始时会打印：**当前 VERSION / PORTABLE_BUILD**、**线上 main VERSION / 最新 Release**、**本地与线上 UPDATER_VERSION**
 - **自更新（bootstrap）**：`Update-*.bat` 会先从 GitHub `main` 拉取最新更新脚本（含镜像回退），若有变化则自动重启后再执行 Git / Release 更新；网络失败时回退到本地 bundled 脚本
 
-1. 通过 GitHub API 获取最新 `SD-Trainer-v*.7z` 资产
+1. 通过 GitHub API 获取最新 `Next-Trainer-v*.7z` 资产（兼容旧名 `SD-Trainer-v*.7z`）
 2. 下载到 `update/.cache/`（含 ghfast / ghproxy 镜像回退）
 3. 7-Zip 解压到临时目录
 4. `robocopy` 合并 `SD-Trainer/`（使用 `/IS /IT` 强制覆盖，**不用** `/XO`），排除用户数据目录

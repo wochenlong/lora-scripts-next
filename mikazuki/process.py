@@ -1,5 +1,4 @@
 
-import asyncio
 import importlib.util
 import os
 import site
@@ -14,8 +13,13 @@ _VALID_ACCELERATE_MIXED_PRECISION = frozenset({"no", "fp16", "bf16"})
 from mikazuki.app.models import APIResponse
 from mikazuki.anima_fast_backend.launcher import build_launch_spec
 from mikazuki.anima_fast_backend.service_resolver import default_resolver
+from mikazuki.musubi_backend.launcher import (
+    build_cache_latents_spec,
+    build_cache_text_encoder_spec,
+    build_train_spec,
+)
 from mikazuki.log import log
-from mikazuki.tasks import tm
+from mikazuki.tasks import TaskStatus, tm
 from mikazuki.launch_utils import base_dir_path
 from mikazuki.portable_utils import train_env_overrides
 
@@ -243,37 +247,26 @@ def run_train(toml_path: str,
         "command": [str(part) for part in args],
     }
     task_metadata.update(metadata or {})
+    task_metadata["job_label"] = "Training"
 
-    if not (task := tm.create_task(args, customize_env, metadata=task_metadata)):
-        return APIResponse(
-            status="error",
-            message="Failed to create task / 无法创建训练任务",
-            data=task_metadata,
-        )
+    task = tm.create_task(args, customize_env, metadata=task_metadata)
+    queued = task.status == TaskStatus.QUEUED
+    tm.submit(task)
 
     urls = build_train_log_urls(task.task_id)
     _announce_train_log(task.task_id, urls)
 
-    def _run():
-        try:
-            task.execute()
-            task.wait()
-            rc = task.process.returncode if task.process else -1
-            if rc != 0:
-                log.error(f"Training failed / 训练失败 (exit {rc})")
-            else:
-                log.info(f"Training finished / 训练完成")
-        except Exception as e:
-            log.error(f"An error occurred when training / 训练出现致命错误: {e}")
-
-    coro = asyncio.to_thread(_run)
-    asyncio.create_task(coro)
-
+    message = (
+        f"Training queued / 训练已加入队列 ID: {task.task_id}"
+        if queued else
+        f"Training started / 训练开始 ID: {task.task_id}"
+    )
     return APIResponse(
         status="success",
-        message=f"Training started / 训练开始 ID: {task.task_id}",
+        message=message,
         data={
             "task_id": task.task_id,
+            "queued": queued,
             "train_log_path": "/train-log",
             "train_log_query": f"task_id={task.task_id}",
             "train_log_stream": f"/api/train/log/stream/{task.task_id}",
@@ -283,6 +276,93 @@ def run_train(toml_path: str,
             "metadata": task_metadata,
             "config_path": task_metadata["config_path"],
             "trainer_file": trainer_file,
+        },
+    )
+
+
+def run_musubi_train(toml_path: str,
+                     runtime,
+                     values: dict,
+                     gpu_ids: Optional[list] = None,
+                     metadata: Optional[dict] = None):
+    """Launch a musubi-tuner Krea 2 run: cache latents -> cache TE outputs -> train."""
+    from mikazuki.model_assets import krea2_tokenizer_dir, patch_krea2_tokenizer_path
+
+    log.info(f"musubi-tuner training started with config file / musubi 训练开始，使用配置文件: {toml_path}")
+    if gpu_ids:
+        log.info(f"Using GPU(s) / 使用 GPU: {gpu_ids}")
+        if len(gpu_ids) > 1:
+            log.info(
+                "Musubi train will use accelerate --multi_gpu; cache stages stay on GPU %s / "
+                "训练阶段多卡，缓存阶段仍用 GPU %s",
+                gpu_ids[0],
+                gpu_ids[0],
+            )
+    patch_krea2_tokenizer_path(runtime.musubi_root, krea2_tokenizer_dir(runtime.lora_next_root), log=log.info)
+    train_task_id = str(uuid.uuid4())
+    dataset_toml = Path(str(values["dataset_config"]))
+    cache_latents_spec = build_cache_latents_spec(
+        runtime, dataset_toml, str(values["vae"]), f"{train_task_id}-cache_latents", gpu_ids
+    )
+    cache_te_spec = build_cache_text_encoder_spec(
+        runtime, dataset_toml, str(values["text_encoder"]), f"{train_task_id}-cache_text_encoder", gpu_ids
+    )
+    train_spec = build_train_spec(runtime, Path(toml_path), train_task_id, gpu_ids)
+
+    base_metadata = {
+        "backend": "musubi",
+        "train_type": "krea2-lora",
+        "config_path": str(Path(toml_path).resolve()),
+        "dataset_config": str(dataset_toml.resolve()),
+        "musubi_root": str(runtime.musubi_root),
+        "musubi_python": str(runtime.python),
+        "train_task_id": train_task_id,
+    }
+    base_metadata.update(metadata or {})
+
+    stages = [
+        ("cache_latents", cache_latents_spec, "缓存图像 latents"),
+        ("cache_text_encoder", cache_te_spec, "缓存文本编码器输出"),
+        ("train", train_spec, "训练"),
+    ]
+    tasks = []
+    for stage_name, spec, label in stages:
+        stage_metadata = dict(base_metadata)
+        stage_metadata["stage"] = stage_name
+        stage_metadata["stage_label"] = label
+        stage_metadata["job_label"] = f"musubi {label}"
+        stage_metadata["command"] = [str(part) for part in spec.command]
+        task_id = train_task_id if stage_name == "train" else f"{train_task_id}-{stage_name}"
+        task = tm.create_task(spec.command, spec.env, metadata=stage_metadata,
+                              cwd=str(spec.cwd), task_id=task_id, group=train_task_id)
+        tasks.append((label, task))
+
+    queued = any(task.status == TaskStatus.QUEUED for _, task in tasks)
+    tm.submit_group([task for _, task in tasks])
+
+    urls = build_train_log_urls(train_task_id)
+    _announce_train_log(train_task_id, urls)
+
+    message = (
+        f"musubi-tuner training queued / musubi 训练已加入队列 ID: {train_task_id}"
+        if queued else
+        f"musubi-tuner training started / musubi 训练开始 ID: {train_task_id}"
+    )
+    return APIResponse(
+        status="success",
+        message=message,
+        data={
+            "task_id": train_task_id,
+            "queued": queued,
+            "cache_latents_task_id": tasks[0][1].task_id,
+            "cache_te_task_id": tasks[1][1].task_id,
+            "train_log_path": "/train-log",
+            "train_log_query": f"task_id={train_task_id}",
+            "train_log_stream": f"/api/train/log/stream/{train_task_id}",
+            "train_log_url": urls["viewer"],
+            "train_log_stream_url": urls["stream"],
+            "metadata": base_metadata,
+            "config_path": base_metadata["config_path"],
         },
     )
 
@@ -305,9 +385,11 @@ def run_anima_fast_train(toml_path: str,
         "log_file": str(log_file),
     }
     task_metadata.update(metadata or {})
+    task_metadata["job_label"] = "Anima Fast training"
 
-    if not (task := tm.create_task(spec.command, spec.env, metadata=task_metadata, cwd=str(spec.cwd), task_id=task_id)):
-        return APIResponse(status="error", message="Failed to create Anima Fast task / 无法创建 Anima Fast 训练任务")
+    task = tm.create_task(spec.command, spec.env, metadata=task_metadata, cwd=str(spec.cwd), task_id=task_id)
+    queued = task.status == TaskStatus.QUEUED
+    tm.submit(task)
 
     resolver = default_resolver(Path.cwd())
     urls = {
@@ -317,26 +399,17 @@ def run_anima_fast_train(toml_path: str,
     }
     _announce_train_log(task.task_id, urls)
 
-    def _run():
-        try:
-            task.execute()
-            task.wait()
-            rc = task.process.returncode if task.process else -1
-            if rc != 0:
-                log.error(f"Anima Fast training failed / Anima Fast 训练失败 (exit {rc})")
-            else:
-                log.info("Anima Fast training finished / Anima Fast 训练完成")
-        except Exception as e:
-            log.error(f"An error occurred when Anima Fast training / Anima Fast 训练出现致命错误: {e}")
-
-    coro = asyncio.to_thread(_run)
-    asyncio.create_task(coro)
-
+    message = (
+        f"Anima Fast training queued / Anima Fast 训练已加入队列 ID: {task.task_id}"
+        if queued else
+        f"Anima Fast training started / Anima Fast 训练开始 ID: {task.task_id}"
+    )
     return APIResponse(
         status="success",
-        message=f"Anima Fast training started / Anima Fast 训练开始 ID: {task.task_id}",
+        message=message,
         data={
             "task_id": task.task_id,
+            "queued": queued,
             "train_log_path": "/train-log",
             "train_log_query": f"task_id={task.task_id}",
             "train_log_stream": f"/api/train/log/stream/{task.task_id}",

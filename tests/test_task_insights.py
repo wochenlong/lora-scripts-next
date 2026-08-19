@@ -1,0 +1,236 @@
+import io
+import tempfile
+import time
+import os
+import unittest
+from pathlib import Path
+
+from mikazuki.utils import task_insights
+
+try:
+    from tensorboard.summary.writer.event_file_writer import EventFileWriter  # noqa: F401
+    from torch.utils.tensorboard import SummaryWriter
+    HAS_TENSORBOARD = True
+except Exception:
+    HAS_TENSORBOARD = False
+
+try:
+    from PIL import Image
+    HAS_PIL = True
+except Exception:
+    HAS_PIL = False
+
+
+def _write_config(tmp: Path, output_dir: Path, logging_dir: Path, output_name: str = "aki") -> Path:
+    config = tmp / "task.toml"
+    config.write_text(
+        f'output_dir = "{output_dir.as_posix()}"\n'
+        f'logging_dir = "{logging_dir.as_posix()}"\n'
+        f'output_name = "{output_name}"\n',
+        encoding="utf-8",
+    )
+    return config
+
+
+class TaskInsightsTests(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.output_dir = self.tmp / "output"
+        self.logging_dir = self.tmp / "logs"
+        (self.output_dir / "sample").mkdir(parents=True)
+        self.logging_dir.mkdir()
+        self.metadata = {"config_path": str(_write_config(self.tmp, self.output_dir, self.logging_dir))}
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_resolve_task_dirs_reads_autosaved_toml(self):
+        dirs = task_insights.resolve_task_dirs(self.metadata)
+        self.assertEqual(dirs["output_dir"], self.output_dir.resolve())
+        self.assertEqual(dirs["logging_dir"], self.logging_dir.resolve())
+        self.assertEqual(dirs["output_name"], "aki")
+
+    def test_resolve_task_dirs_missing_config_returns_empty_dirs(self):
+        dirs = task_insights.resolve_task_dirs({"config_path": str(self.tmp / "missing.toml")})
+        self.assertIsNone(dirs["output_dir"])
+        self.assertEqual(dirs["output_name"], "")
+
+    def test_list_preview_images_filters_by_name_and_creation_time(self):
+        sample = self.output_dir / "sample"
+        keep = sample / "aki_e000002_20260804_120000.png"
+        keep.write_bytes(b"png")
+        other = sample / "other_e000002_20260804_120000.png"
+        other.write_bytes(b"png")
+        old = sample / "aki_e000001_20260804_110000.png"
+        old.write_bytes(b"png")
+        earlier = time.time() - 120
+        os.utime(old, (earlier, earlier))
+
+        images = task_insights.list_preview_images(self.metadata)
+        self.assertEqual([item["name"] for item in images], [old.name, keep.name])
+        self.assertEqual(images[-1]["epoch"], 2)
+
+        self.metadata["created_at"] = time.time() + 60
+        self.assertEqual(task_insights.list_preview_images(self.metadata), [])
+
+    def test_list_preview_images_without_output_dir_is_empty(self):
+        self.metadata["config_path"] = str(self.tmp / "missing.toml")
+        self.assertEqual(task_insights.list_preview_images(self.metadata), [])
+
+    def test_resolve_preview_image_only_serves_scanned_names(self):
+        sample = self.output_dir / "sample"
+        keep = sample / "aki_e000002_x.png"
+        keep.write_bytes(b"png")
+        secret = self.tmp / "secret.png"
+        secret.write_bytes(b"png")
+
+        self.assertEqual(task_insights.resolve_preview_image(self.metadata, keep.name), keep)
+        self.assertIsNone(task_insights.resolve_preview_image(self.metadata, "../secret.png"))
+        self.assertIsNone(task_insights.resolve_preview_image(self.metadata, "secret.png"))
+        self.assertIsNone(task_insights.resolve_preview_image(self.metadata, "missing.png"))
+
+    def test_downsample_keeps_endpoints_within_limit(self):
+        points = [{"step": i, "value": float(i)} for i in range(1200)]
+        sampled = task_insights.downsample(points, 500)
+        self.assertLessEqual(len(sampled), 501)
+        self.assertEqual(sampled[0], points[0])
+        self.assertEqual(sampled[-1], points[-1])
+        self.assertEqual(task_insights.downsample(points[:10], 500), points[:10])
+
+    def test_parse_step_and_epoch_from_sample_names(self):
+        self.assertEqual(task_insights.parse_step("aki_000100_00_20260804103000_2333.png"), 100)
+        self.assertIsNone(task_insights.parse_epoch("aki_000100_00_20260804103000_2333.png"))
+        self.assertEqual(task_insights.parse_epoch("aki_e000001_00_20260804103000_2333.png"), 1)
+        self.assertIsNone(task_insights.parse_step("aki_e000001_00_20260804103000_2333.png"))
+
+    def test_read_progress_parses_tqdm_lines(self):
+        lines = [
+            "epoch 1/5\n",
+            "steps:   0%|          | 0/1000 [00:00<?, ?it/s]\rsteps:  12%|█▏        | 120/1000 [00:30<03:40, 3.99it/s, avr_loss=0.123]",
+        ]
+        progress = task_insights.read_progress(lines)
+        self.assertEqual(progress["percent"], 12)
+        self.assertEqual(progress["step"], 120)
+        self.assertEqual(progress["total_steps"], 1000)
+        self.assertEqual(progress["epoch"], 1)
+        self.assertEqual(progress["total_epochs"], 5)
+
+    def test_read_progress_ignores_unrelated_bars(self):
+        lines = ["caching latents:  50%|████| 3/6 [00:01<00:01, 2.0it/s]"]
+        self.assertEqual(task_insights.read_progress(lines), {})
+
+    @unittest.skipUnless(HAS_PIL, "Pillow not available")
+    def test_preview_thumbnail_shrinks_and_caches(self):
+        source = self.output_dir / "sample" / "aki_e000001_00_20260804103000.png"
+        Image.new("RGB", (1024, 768), (128, 64, 32)).save(source, "PNG")
+        data = task_insights.preview_thumbnail(source)
+        self.assertIsNotNone(data)
+        with Image.open(io.BytesIO(data)) as thumb:
+            self.assertLessEqual(max(thumb.size), task_insights.THUMB_MAX_SIDE)
+            self.assertEqual(thumb.format, "JPEG")
+        self.assertLess(len(data), source.stat().st_size)
+        self.assertEqual(task_insights.preview_thumbnail(source), data)
+
+    def test_read_loss_scalars_without_event_files_is_empty(self):
+        self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})
+
+    @unittest.skipUnless(HAS_TENSORBOARD, "tensorboard not available")
+    def test_read_loss_scalars_selects_run_started_after_task_creation(self):
+        old_run = self.logging_dir / "20260801000000"
+        old_writer = SummaryWriter(log_dir=str(old_run))
+        old_writer.add_scalar("loss/average", 99.0, 0)
+        old_writer.close()
+
+        new_run = self.logging_dir / "20260804120000"
+        writer = SummaryWriter(log_dir=str(new_run))
+        for step in range(5):
+            writer.add_scalar("loss/average", 1.0 / (step + 1), step)
+            writer.add_scalar("loss/current", 0.5 / (step + 1), step)
+        writer.close()
+
+        tags = task_insights.read_loss_scalars(self.metadata)
+        self.assertIn("loss/average", tags)
+        self.assertAlmostEqual(tags["loss/average"][-1]["value"], 0.2)
+
+        self.metadata["created_at"] = time.mktime((2026, 8, 2, 0, 0, 0, 0, 0, -1))
+        tags = task_insights.read_loss_scalars(self.metadata)
+        self.assertAlmostEqual(tags["loss/average"][-1]["value"], 0.2)
+
+        self.metadata["created_at"] = time.time() + 60
+        self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})
+    def test_list_preview_images_excludes_files_written_after_finish(self):
+        sample = self.output_dir / "sample"
+        own = sample / "aki_e000001_20260804_110000.png"
+        own.write_bytes(b"png")
+        within = time.time() - 120
+        os.utime(own, (within, within))
+        later = sample / "aki_e000002_20260804_120000.png"
+        later.write_bytes(b"png")  # fresh mtime: belongs to a newer task
+
+        self.metadata["finished_at"] = time.time() - 60
+        images = task_insights.list_preview_images(self.metadata)
+        self.assertEqual([item["name"] for item in images], [own.name])
+
+        # Running tasks (no finished_at) keep the open window.
+        del self.metadata["finished_at"]
+        names = [item["name"] for item in task_insights.list_preview_images(self.metadata)]
+        self.assertEqual(names, [own.name, later.name])
+
+    def test_started_at_anchors_window_for_queued_task(self):
+        # Q was submitted while P was still running; P's late samples (mtime
+        # after Q.created_at but before Q.started_at) must not leak into Q.
+        sample = self.output_dir / "sample"
+        previous = sample / "aki_e000009_20260804_110000.png"
+        previous.write_bytes(b"png")
+        # Written after Q.created_at but before Q.started_at (P's late samples).
+        late = time.time() - 60
+        os.utime(previous, (late, late))
+        self.metadata["created_at"] = time.time() - 600  # submitted 10 min ago
+        self.metadata["started_at"] = time.time()        # started just now
+
+        self.assertEqual(task_insights.list_preview_images(self.metadata), [])
+
+        own = sample / "aki_e000001_20260804_120000.png"
+        own.write_bytes(b"png")  # written after started_at
+        task_insights._list_cache.clear()
+        names = [item["name"] for item in task_insights.list_preview_images(self.metadata)]
+        self.assertEqual(names, [own.name])
+
+    def test_since_falls_back_to_created_at(self):
+        metadata = {"created_at": 1000.0}
+        self.assertAlmostEqual(
+            task_insights._since(metadata), 1000.0 - task_insights.SINCE_TOLERANCE_SECONDS)
+        metadata["started_at"] = 2000.0
+        self.assertAlmostEqual(
+            task_insights._since(metadata), 2000.0 - task_insights.SINCE_TOLERANCE_SECONDS)
+
+    @unittest.skipUnless(HAS_TENSORBOARD, "tensorboard not available")
+    def test_read_loss_scalars_ignores_runs_written_after_finish(self):
+        own_run = self.logging_dir / "20260801000000"
+        own_writer = SummaryWriter(log_dir=str(own_run))
+        own_writer.add_scalar("loss/average", 99.0, 0)
+        own_writer.close()
+        own_mtime = time.mktime((2026, 8, 1, 0, 1, 0, 0, 0, -1))
+        for event_file in own_run.rglob("events.out.tfevents.*"):
+            os.utime(event_file, (own_mtime, own_mtime))
+
+        # A newer task's run, written "now", must not leak into the old task.
+        later_run = self.logging_dir / "20260804120000"
+        later_writer = SummaryWriter(log_dir=str(later_run))
+        later_writer.add_scalar("loss/average", 0.1, 0)
+        later_writer.close()
+
+        self.metadata["created_at"] = time.mktime((2026, 7, 31, 0, 0, 0, 0, 0, -1))
+        self.metadata["finished_at"] = time.mktime((2026, 8, 2, 0, 0, 0, 0, 0, -1))
+        tags = task_insights.read_loss_scalars(self.metadata)
+        self.assertIn("loss/average", tags)
+        self.assertAlmostEqual(tags["loss/average"][-1]["value"], 99.0)
+
+        # A finished task that never wrote events sees nothing, not the newer run.
+        self.metadata["created_at"] = time.mktime((2026, 8, 3, 0, 0, 0, 0, 0, -1))
+        self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})
+
+
+if __name__ == "__main__":
+    unittest.main()
