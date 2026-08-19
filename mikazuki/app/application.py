@@ -16,6 +16,7 @@ from starlette.exceptions import HTTPException
 from mikazuki.app.config import app_config
 from mikazuki.app.api import load_schemas, load_presets
 from mikazuki.app.api import router as api_router
+from mikazuki.app.products_api import router as products_router
 # from mikazuki.app.ipc import router as ipc_router
 from mikazuki.app.proxy import router as proxy_router
 from mikazuki.utils.devices import check_torch_gpu
@@ -200,6 +201,7 @@ async def add_cache_control_header(request, call_next):
     return response
 
 app.include_router(api_router, prefix="/api")
+app.include_router(products_router, prefix="/api")
 # app.include_router(ipc_router, prefix="/ipc")
 
 _TRAIN_LOG_HTML = Path(__file__).resolve().parent.parent / "static" / "train_log.html"

@@ -164,9 +164,39 @@ def _add_training_warning(config: dict, message: str) -> None:
 
 def _missing_standard_train_field(field: str, label: str) -> APIResponseFail:
     return APIResponseFail(
-        message=f"缺少 {label} ({field})，无法启动训练。请检查训练参数后重试。",
+        message=f"训练配置缺少 {label}（{field}），请回到训练页面补齐后再提交。",
         data={"field": field},
     )
+
+
+def _register_products_run(result, train_type: str, config_path, output_dir, output_name,
+                           logging_dir=None) -> None:
+    """F1/F2: register the run in the products registry and expose the resolved
+    output directory (F5a). Registry failures must never break training."""
+    try:
+        from mikazuki.products.registry import default_registry
+        from mikazuki.products.scanner import resolve_output_path
+
+        if getattr(result, "status", None) != "success" or not result.data:
+            return
+        task_id = result.data.get("task_id")
+        if not task_id:
+            return
+        default_registry().record_run(
+            task_id=task_id,
+            train_type=train_type,
+            config_path=str(config_path),
+            output_dir=output_dir,
+            output_name=output_name,
+            logging_dir=logging_dir,
+        )
+        resolved = resolve_output_path(output_dir)
+        if resolved:
+            result.data["resolved_output_dir"] = resolved
+            if output_name:
+                result.data["resolved_output_base"] = str(Path(resolved) / str(output_name))
+    except Exception as exc:  # noqa: BLE001 - registry is best-effort
+        log.warning(f"products run registration failed: {exc}")
 
 
 def _is_invalid_value(value) -> bool:
@@ -756,7 +786,13 @@ async def create_toml_file(request: Request):
                 "warnings": warnings,
                 "auto_resized": prepared.auto_resized,
             }
-            return process.run_anima_fast_train(str(toml_file), runtime, gpu_ids, metadata=metadata)
+            result = process.run_anima_fast_train(str(toml_file), runtime, gpu_ids, metadata=metadata)
+            _register_products_run(
+                result, model_train_type, toml_file,
+                adapted_values.get("output_dir"), adapted_values.get("output_name"),
+                adapted_values.get("logging_dir"),
+            )
+            return result
         except AdapterError as exc:
             return APIResponseFail(message=str(exc))
         except Exception as exc:  # noqa: BLE001 - keep API failures structured
@@ -825,9 +861,15 @@ async def create_toml_file(request: Request):
                 "logging_dir": adapted.values.get("logging_dir"),
                 "warnings": [*adapted.warnings, *preflight.warnings],
             }
-            return process.run_musubi_train(
+            result = process.run_musubi_train(
                 str(toml_file_path), runtime, adapted.values, gpu_ids, metadata=metadata
             )
+            _register_products_run(
+                result, model_train_type, toml_file_path,
+                adapted.values.get("output_dir"), adapted.values.get("output_name"),
+                adapted.values.get("logging_dir"),
+            )
+            return result
         except MusubiAdapterError as exc:
             return APIResponseFail(message=str(exc))
         except Exception as exc:  # noqa: BLE001 - keep API failures structured
@@ -901,7 +943,15 @@ async def create_toml_file(request: Request):
     with open(toml_file, "w", encoding="utf-8") as f:
         f.write(toml.dumps(config))
 
-    result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads)
+    result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads, metadata={
+        "output_dir": config.get("output_dir"),
+        "output_name": config.get("output_name"),
+        "logging_dir": config.get("logging_dir"),
+    })
+    _register_products_run(
+        result, model_train_type, toml_file,
+        config.get("output_dir"), config.get("output_name"), config.get("logging_dir"),
+    )
 
     return result
 
