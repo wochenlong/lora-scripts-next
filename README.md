@@ -5,9 +5,9 @@
 </p>
 
 <p align="center">
-  <strong>Local model training manager</strong><br />
-  Familiar training flow · Multi-engine · Agent-ready by design<br />
-  <sub>For serious creators and platforms · GitHub repository <code>lora-scripts-next</code></sub>
+  <strong>A local trainer from the future</strong><br />
+  Familiar UI · One trainer for common models · Kept up to date<br />
+  <sub>For creators and platforms · Backend-free agent hooks · Repo <code>lora-scripts-next</code></sub>
 </p>
 
 <p align="center">
@@ -24,22 +24,23 @@
 
 ## What it is
 
-**Next Trainer** is not another thin webpage wrapped around training scripts.  
-It is a **local model training manager** for serious creators and platforms: it keeps the training operations you already know, puts multiple engines under one workbench, and is designed so **agents can work with it natively**.
+**Next Trainer** aims to be a **local trainer from the future**:  
+the UI stays familiar and ready in one unpack, while the product itself is built like a professional workbench — **one trainer for most common models**, kept current as new models and engines arrive.
 
-You still train LoRA or full finetune on a local Windows machine with an NVIDIA GPU.  
-The difference is that starting runs, watching tasks, managing datasets, and switching engines no longer scatter across script windows and one-off pages. They live in one durable management surface.
+For people, it is a local Windows training manager: tagging, starting runs, watching tasks, and switching engines live in one professional UI.  
+For platforms and agents, it is modular: use the full package, or **hook in without taking the whole backend**, as one step in an automated workflow.
 
-The training stack stays grounded in proven backends: the main path is built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts); for Krea 2 you can optionally plug in [musubi-tuner](https://github.com/kohya-ss/musubi-tuner).  
+You still train LoRA or full finetune on a local NVIDIA GPU.  
+The stack stays grounded in proven backends: the main path is built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts); for Krea 2 you can optionally plug in [musubi-tuner](https://github.com/kohya-ss/musubi-tuner).  
 The public brand is **Next Trainer**, and release archives usually look like `Next-Trainer-v*.7z`. The default UI is the Vue 3 workspace at **3.0.0**, with Training, Dataset, Tasks, and Settings.
 
 ---
 
 ## What you can do
 
-In short: tagging, caption editing, choosing a model, starting training, watching progress, and reading logs can stay in one local manager.
+In short: tagging, caption editing, choosing a model, starting training, watching progress, and reading logs can stay in one local trainer.
 
-Training routes covered:
+Common training routes covered:
 
 1. Anima LoRA  
 2. Anima Fast  
@@ -51,25 +52,25 @@ Local tagging, a train monitor page, and TensorBoard are included too.
 
 ### Why try this over other trainers
 
-If you already know how to train, but are tired of one environment per engine, a pile of windows per run, and humans talking past scripts, Next Trainer is built for that gap.
+If other tools force a choice between “familiar” and “ahead,” Next Trainer wants both.
 
-1. **Familiar operations**  
-   Pick a model, fill parameters, import TOML, start training, watch previews. The path stays close to Akegarasu-style habits, so you do not relearn everything just to get a new shell.
+1. **UI: familiar, ready in one go**  
+   The flow stays close to Akegarasu-style habits. Unpack the portable package and start. Pick a model, fill parameters, import TOML, train, watch previews — no relearning just to get a new shell.
 
-2. **Multiple engines, one management surface**  
-   Kohya is the baseline. Optional engines such as Anima Fast and Musubi install and switch from Settings. Studios and platforms do not need a separate UI for every backend.
+2. **Capability: professional, one trainer for common models**  
+   Anima, SD 1.5, SDXL, Flux, and optional Krea 2 live in one workbench. Kohya is the baseline; engines such as Anima Fast and Musubi install and switch on demand.
 
-3. **Agent-ready by design**  
-   Configs import and export cleanly, tasks and logs are machine-readable, and the workspace stays stable. People can click the UI; agents can follow the same flow instead of bolting automation on afterward.
+3. **Pace: kept up to date**  
+   New models and common training paths keep landing here, instead of freezing around one script wrapper. Individuals can follow portable releases; developers and platforms can follow `main` / `dev`.
 
-4. **Runs stay visible**  
-   Status, logs, previews, and Loss live on the Tasks page. After training starts, you do not need a stack of external windows just to watch the run.
+4. **Code: modular, backend-free agent hooks**  
+   The design goal is not “UI only.” Modules can be composed, configs import and export, and tasks plus logs are machine-readable. People can use the full UI; agents and platforms can plug in just the training step.
 
-5. **For people who train seriously, and for platforms that integrate**  
-   Individuals can stay on the portable package. Teams, platforms, and early testers can build on source, `main`, or `dev` for integration and long-term maintenance.
+5. **Process: runs stay visible**  
+   Status, logs, previews, and Loss live on the Tasks page. After training starts, you do not need a pile of external windows just to watch the run.
 
 This is not a cloud one-click platform, and it does not pretend to replace every specialized tool.  
-What it aims to be is simpler: a professional, extensible manager for local model training that both people and agents can use.
+What it aims to be: professional enough for hands-on creators, open enough for agents, broad enough for common models, and current enough to keep moving.
 
 ---
 
