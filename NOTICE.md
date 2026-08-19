@@ -1,8 +1,31 @@
 ## Open Source Notices
 
+### Acknowledgement to Akegarasu / 秋叶（必读）
+
+**Next Trainer**（仓库 [wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)）向 **秋叶（Akegarasu）** 及其开源项目 **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**（社区常称 **SD-Trainer** / **秋叶一键训练包**）致以明确、持续的感谢。
+
+本项目在历史演进上，受益于秋叶项目在以下方面打下的基础与社区实践：
+
+1. 本地 LoRA / 微调训练 WebUI 的整体使用路径  
+2. 面向普通用户的整合包与启动约定  
+3. 与 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) 等训练后端的对接方式  
+4. 长期公开维护所形成的用户习惯与文档氛围  
+
+**关系说明（请勿误读）：**
+
+1. Next Trainer **不是** Akegarasu/lora-scripts 的官方版本，也 **不代表** 秋叶本人或其团队发言。  
+2. Next Trainer **不是** 对上游的否定、替代宣言或对立项目；我们尊重上游的独立演进与用户选择。  
+3. 喜欢原版体验的用户，请直接使用上游仓库：https://github.com/Akegarasu/lora-scripts  
+4. 本仓库在 AGPL-3.0 等适用许可下维护自有产品品牌、界面与路线图；这 **不减轻** 对上游与其它第三方的致谢与许可义务。  
+5. 本仓库代码与文档中仍保留对上游谱系的引用；再分发源码或整合包时，须一并保留本 NOTICE、本仓库 LICENSE，以及各上游要求的声明。
+
+若致谢表述有疏漏，欢迎通过本仓库 Issues 指出，我们会优先修正。
+
 ### Upstream GUI / community packaging
 
-This repository is maintained as **[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)** and traces its UX and packaging to **Akegarasu SD-Trainer** / **秋叶一键训练包**: **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)** (training backend integration: **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)**).
+This repository is maintained as **[wochenlong/lora-scripts-next](https://github.com/wochenlong/lora-scripts-next)** and **publicly acknowledges** that its UX lineage and packaging culture trace to **Akegarasu SD-Trainer** / **秋叶一键训练包**: **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**.
+
+Training backend integration continues to rely primarily on **[kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)** and other engines documented below. Product branding for this repository is **Next Trainer**.
 
 ### Rectified Flow (SDXL LoRA)
 

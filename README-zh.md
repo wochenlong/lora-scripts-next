@@ -55,7 +55,7 @@
 如果别的工具让你在「熟悉」和「先进」里二选一，Next Trainer 想两边都要。
 
 1. **UI：熟悉，能一键上手**  
-   路径贴近秋叶系习惯。整合包解压即用；选模型、填参数、导入 TOML、开训、看预览，不用为了换壳重新学一遍。
+   路径刻意保留对秋叶系用户熟悉的操作习惯（并向秋叶作者致谢，见 [开源引用](docs/credits.md)）。整合包解压即用；选模型、填参数、导入 TOML、开训、看预览，不用为了换壳重新学一遍。
 
 2. **能力：专业，一个训练器训常见模型**  
    Anima、SD 1.5、SDXL、Flux，以及可选的 Krea 2，收进同一套工作台。Kohya 是基线，Anima Fast、Musubi 等引擎按需安装与切换。
@@ -292,13 +292,19 @@ git switch legacy/v2.9.1
 
 ### 文档入口
 
-1. [开源引用](docs/credits.md)  
+1. [开源引用与致谢秋叶](docs/credits.md)  
 2. [NOTICE](NOTICE.md)  
 3. [整合包说明](docs/portable-getting-started.md)  
 4. [构建与发包](docs/portable-build-guide.md)  
 5. [打标模型](docs/tagger-models.md)  
 6. [训练监控](docs/train-monitor.md)  
 7. [仓库布局](docs/repo-layout.md)
+
+### 致谢秋叶
+
+Next Trainer 感谢 **秋叶（Akegarasu）** 与 [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)（SD-Trainer / 秋叶一键训练包）长期公开的本地训练 WebUI 与整合包实践。本项目在这一谱系上继续演进。
+
+同时请注意：Next Trainer **不是** 秋叶官方版本，也 **不代表** 秋叶本人或其团队；我们 **无意** 否定或取代上游。偏好原版体验请直接使用上游仓库。完整边界说明见 [开源引用](docs/credits.md) 与 [NOTICE.md](NOTICE.md)。
 
 ### 常见问题
 

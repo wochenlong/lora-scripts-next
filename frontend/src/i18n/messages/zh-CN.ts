@@ -531,7 +531,7 @@ export default {
       vue: "Vue 3 训练工作区",
       models: "Stable Diffusion · Flux · Anima",
     },
-    credit: "基于秋叶 lora-scripts 与 kohya-ss/sd-scripts 等开源项目；致谢与许可见 {about} / {notice}。",
+    credit: "感谢秋叶 lora-scripts 与 kohya-ss/sd-scripts 等开源项目；完整致谢与许可见 {about} / {notice}。",
     portals: {
       training: { title: "训练", text: "基础模型 × 训练引擎 × 训练目标，一处完成配置与提交。" },
       dataset: { title: "数据集", text: "标签编辑与模型打标，准备训练所需的 caption。" },
@@ -541,11 +541,13 @@ export default {
   about: {
     tagline: "面向 Stable Diffusion、Flux 与 Anima 的本地训练 WebUI。",
     projectTitle: "关于项目",
-    projectDesc: "Next Trainer 基于秋叶 lora-scripts 生态与 kohya-ss/sd-scripts 训练后端，集中提供训练配置、数据集准备、任务管理和训练监控。动态表单由 {schemastery} 驱动。",
+    projectDesc: "Next Trainer 在秋叶 lora-scripts 生态所奠定的本地训练体验之上继续演进，并依托 kohya-ss/sd-scripts 等训练后端，集中提供训练配置、数据集准备、任务管理和训练监控。动态表单由 {schemastery} 驱动。",
+    lineageTitle: "致谢秋叶",
+    lineageDesc: "我们感谢秋叶（Akegarasu）与 {akegarasu}（SD-Trainer / 秋叶一键训练包）长期公开的本地训练 WebUI 与整合包实践。Next Trainer 不是秋叶官方版本，也不代表秋叶本人或其团队；我们无意否定或取代上游。偏好原版体验请使用上游仓库。完整边界说明见仓库 credits 与 NOTICE。",
     creditsTitle: "开源致谢与引用",
     creditsIntro: "本项目依赖并改编自多个开源组件。使用与再分发时请遵守各组件许可；完整声明见仓库 NOTICE。",
     credits: {
-      akegarasu: "上游 GUI 与社区整合包生态（秋叶 SD-Trainer / lora-scripts）",
+      akegarasu: "体验谱系与社区整合包实践来源（秋叶 SD-Trainer / lora-scripts）；详见上方专节致谢",
       kohya: "训练脚本与 Anima / Flux / SD 系列后端（AGPL-3.0）",
       animaFast: "Anima Fast 可选训练引擎（MIT）",
       lycoris: "LoKr / LoHa 等网络模块（Apache-2.0）",

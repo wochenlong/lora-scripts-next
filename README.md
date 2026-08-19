@@ -55,7 +55,7 @@ Local tagging, a train monitor page, and TensorBoard are included too.
 If other tools force a choice between “familiar” and “ahead,” Next Trainer wants both.
 
 1. **UI: familiar, ready in one go**  
-   The flow stays close to Akegarasu-style habits. Unpack the portable package and start. Pick a model, fill parameters, import TOML, train, watch previews — no relearning just to get a new shell.
+   The flow deliberately keeps habits familiar to Akegarasu-style users (with thanks to Akegarasu; see [Credits](docs/credits.md)). Unpack the portable package and start. Pick a model, fill parameters, import TOML, train, watch previews — no relearning just to get a new shell.
 
 2. **Capability: professional, one trainer for common models**  
    Anima, SD 1.5, SDXL, Flux, and optional Krea 2 live in one workbench. Kohya is the baseline; engines such as Anima Fast and Musubi install and switch on demand.
@@ -292,13 +292,19 @@ git switch legacy/v2.9.1
 
 ### Doc index
 
-1. [Credits](docs/credits.md)  
+1. [Credits and Akegarasu acknowledgement](docs/credits.md)  
 2. [NOTICE](NOTICE.md)  
 3. [Portable getting started](docs/portable-getting-started.md)  
 4. [Build and release](docs/portable-build-guide.md)  
 5. [Tagger models](docs/tagger-models.md)  
 6. [Train monitor](docs/train-monitor.md)  
 7. [Repo layout](docs/repo-layout.md)
+
+### Acknowledgements to Akegarasu
+
+Next Trainer thanks **Akegarasu** and [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) (SD-Trainer) for years of open local-training WebUI and portable packaging work. This project continues from that lineage.
+
+Please also note: Next Trainer is **not** an official Akegarasu release and does **not** speak for Akegarasu or their team. We do **not** claim to replace or diminish upstream. Prefer the original experience? Use the upstream repository. Full boundaries: [Credits](docs/credits.md) and [NOTICE.md](NOTICE.md).
 
 ### FAQ
 

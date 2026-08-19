@@ -531,7 +531,7 @@ export default {
       vue: "Vue 3 training workspace",
       models: "Stable Diffusion · Flux · Anima",
     },
-    credit: "Built on Akegarasu lora-scripts, kohya-ss/sd-scripts, and other open-source projects. Credits and licenses: {about} / {notice}.",
+    credit: "With thanks to Akegarasu lora-scripts, kohya-ss/sd-scripts, and other open-source projects. Full credits and licenses: {about} / {notice}.",
     portals: {
       training: { title: "Training", text: "Base model × engine × target — configure and submit in one place." },
       dataset: { title: "Dataset", text: "Tag editing and model tagging to prepare captions for training." },
@@ -541,11 +541,13 @@ export default {
   about: {
     tagline: "A local training WebUI for Stable Diffusion, Flux, and Anima.",
     projectTitle: "About the Project",
-    projectDesc: "Next Trainer builds on the Akegarasu lora-scripts ecosystem and the kohya-ss/sd-scripts training backend, providing training configuration, dataset preparation, task management, and training monitoring in one place. Dynamic forms are powered by {schemastery}.",
+    projectDesc: "Next Trainer continues from the local-training experience pioneered in the Akegarasu lora-scripts ecosystem, and relies on kohya-ss/sd-scripts and related backends for training. It brings configuration, dataset prep, task management, and monitoring into one place. Dynamic forms are powered by {schemastery}.",
+    lineageTitle: "Acknowledgements to Akegarasu",
+    lineageDesc: "We thank Akegarasu and {akegarasu} (SD-Trainer) for years of open local-training WebUI and portable packaging work. Next Trainer is not an official Akegarasu release and does not speak for Akegarasu or their team. We do not claim to replace or diminish upstream. Prefer the original experience? Use the upstream repository. Full boundaries are in the repository credits and NOTICE.",
     creditsTitle: "Open-Source Credits",
     creditsIntro: "This project depends on and adapts multiple open-source components. Please respect each component's license when using or redistributing. Full notices are in the repository NOTICE file.",
     credits: {
-      akegarasu: "Upstream GUI and community packaging (Akegarasu SD-Trainer / lora-scripts)",
+      akegarasu: "UX lineage and community packaging practice (Akegarasu SD-Trainer / lora-scripts); see the acknowledgement section above",
       kohya: "Training scripts and Anima / Flux / SD backends (AGPL-3.0)",
       animaFast: "Optional Anima Fast training engine (MIT)",
       lycoris: "LoKr / LoHa network modules (Apache-2.0)",
