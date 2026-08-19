@@ -27,7 +27,7 @@
 **Next Trainer** aims to be a **local trainer from the future**:  
 the UI stays familiar and ready in one unpack, while the product itself is built like a professional workbench — **one trainer for most common models**, kept current as new models and engines arrive.
 
-For people, it is a local Windows training manager: tagging, starting runs, watching tasks, and switching engines live in one professional UI.  
+For people, it is a local training manager: tagging, starting runs, watching tasks, and switching engines live in one professional UI. It runs on Windows and Linux.  
 For platforms and agents, it is modular: use the full package, or **hook in without taking the whole backend**, as one step in an automated workflow.
 
 You still train LoRA or full finetune on a local NVIDIA GPU.  
@@ -194,9 +194,9 @@ If you want the old UI, download [v2.9.1](https://github.com/wochenlong/lora-scr
 
 Runtime needs:
 
-1. Windows 10 or Windows 11  
+1. Windows 10 / 11, or Linux  
 2. NVIDIA GPU, RTX 20-series or newer recommended  
-3. Extract to a path without Chinese characters and without spaces
+3. For portable packages, extract to a path without Chinese characters and without spaces (portable builds are mainly for Windows; on Linux, prefer running from source)
 
 More reading:
 
