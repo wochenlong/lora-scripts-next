@@ -521,7 +521,7 @@ export default {
   },
   home: {
     heroTitle: "A local trainer for the future — and for agents.",
-    heroSubtitle: "Familiar to start, broad enough for common models; built for people, ready for agents.",
+    heroSubtitle: "Familiar to start, broad enough for common models; built for the future, endlessly extensible.",
     startTraining: "Configure Training",
     readGuide: "Read the Guide",
     portalAria: "Feature portals",
