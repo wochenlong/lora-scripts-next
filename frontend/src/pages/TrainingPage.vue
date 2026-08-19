@@ -9,6 +9,7 @@ import ModelAssetsTools from "../components/ModelAssetsTools.vue"
 import SectionToc from "../components/SectionToc.vue"
 import { schemasApi } from "../api/schemas"
 import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/training"
+import { productsApi } from "../api/products"
 import { applyReadonlyDefaults, cloneFormModel, createDefaultModel, isFieldActive, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
@@ -226,7 +227,15 @@ async function exportConfig() {
 async function submit() {
   if (!validate() || submitting.value) return
   try {
-    await ElMessageBox.confirm(t("training.submitConfirm.message"), t("training.submitConfirm.title"), { confirmButtonText: t("training.submitConfirm.confirm"), cancelButtonText: t("training.submitConfirm.cancel"), type: "warning" })
+    // F5a: show the absolute output path (resolved server-side) before starting.
+    let outputHint = ""
+    try {
+      const outputDir = String(output.value.output_dir || "./output")
+      const outputName = String(output.value.output_name || "").trim()
+      const { resolved } = await productsApi.resolvePath(outputDir)
+      if (resolved) outputHint = `\n${t("training.submitConfirm.outputPath", { path: outputName ? `${resolved}/${outputName}` : resolved })}`
+    } catch { /* resolution hint is best-effort */ }
+    await ElMessageBox.confirm(t("training.submitConfirm.message") + outputHint, t("training.submitConfirm.title"), { confirmButtonText: t("training.submitConfirm.confirm"), cancelButtonText: t("training.submitConfirm.cancel"), type: "warning" })
     submitting.value = true
     if (props.schemaName === "anima-lora-fast") {
       const preflight = await trainingApi.animaFastPreflight(output.value)

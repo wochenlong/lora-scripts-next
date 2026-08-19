@@ -32,6 +32,8 @@ export interface TrainingStart {
   train_log_url?: string
   train_log_path?: string
   train_log_query?: string
+  resolved_output_dir?: string
+  resolved_output_base?: string
   metadata?: Record<string, unknown>
 }
 

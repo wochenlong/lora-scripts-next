@@ -4,6 +4,7 @@ const HomePage = () => import("./pages/HomePage.vue")
 const IntegrationPage = () => import("./pages/IntegrationPage.vue")
 const NotFoundPage = () => import("./pages/NotFoundPage.vue")
 const TasksPage = () => import("./pages/TasksPage.vue")
+const ProductsPage = () => import("./pages/ProductsPage.vue")
 const ToolsPage = () => import("./pages/ToolsPage.vue")
 const DatasetPage = () => import("./pages/DatasetPage.vue")
 const TrainingWorkbenchPage = () => import("./pages/TrainingWorkbenchPage.vue")
@@ -23,6 +24,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/dataset/editor", component: DatasetPage, props: { tab: "editor" }, meta: { titleKey: "dataset.title" } },
   { path: "/dataset/tagger", component: DatasetPage, props: { tab: "tagger" }, meta: { titleKey: "dataset.title" } },
   { path: "/tasks", component: TasksPage, meta: { titleKey: "tasks.title" } },
+  { path: "/products", component: ProductsPage, meta: { titleKey: "products.title" } },
   { path: "/settings", redirect: "/settings/ui" },
   { path: "/settings/ui", component: SettingsContainerPage, props: { tab: "ui" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/engines", component: SettingsContainerPage, props: { tab: "engines" }, meta: { titleKey: "settings.title" } },

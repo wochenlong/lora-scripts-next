@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { useI18n } from "vue-i18n"
-import { Cpu, DataLine, FolderOpened, Menu as MenuIcon, QuestionFilled, Setting } from "@element-plus/icons-vue"
+import { Cpu, DataLine, FolderOpened, Menu as MenuIcon, QuestionFilled, Setting, Box } from "@element-plus/icons-vue"
 import { storeToRefs } from "pinia"
 import { useAppStore } from "../stores/app"
 import { useTasksStore } from "../stores/tasks"
@@ -24,6 +24,7 @@ const sections = [
   { key: "training", to: "/training", icon: Cpu, match: ["/training", "/lora/", "/dreambooth/"] },
   { key: "dataset", to: "/dataset", icon: FolderOpened, match: ["/dataset", "/tagger.html", "/native-tageditor.html", "/dataset-editor.html", "/tageditor.html"] },
   { key: "tasks", to: "/tasks", icon: DataLine, match: ["/tasks", "/task.html", "/tensorboard.html"] },
+  { key: "manage", to: "/products", icon: Box, match: ["/products"] },
   { key: "settings", to: "/settings", icon: Setting, match: ["/settings", "/other/"] },
 ] as const
 

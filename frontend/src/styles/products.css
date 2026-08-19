@@ -1,0 +1,224 @@
+/* Products (artifact) management page */
+
+.products-page {
+  padding: 24px 28px 48px;
+  max-width: 1200px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.products-page .page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.products-page .page-subtitle {
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
+  line-height: 1.6;
+  margin: 4px 0 0;
+}
+
+.products-page .header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.products-page .family-tabs {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.products-page .family-tab {
+  padding: 6px 14px;
+  border: 1px solid var(--border-color, #d1d5db);
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  text-transform: capitalize;
+}
+
+.products-page .family-tab.active {
+  background: var(--el-color-primary, #2563eb);
+  border-color: var(--el-color-primary, #2563eb);
+  color: #fff;
+}
+
+.products-page .products-total {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+  margin: 0;
+}
+
+.products-page .products-empty {
+  padding: 48px 24px;
+  text-align: center;
+  color: var(--text-secondary, #6b7280);
+  font-size: 14px;
+  line-height: 1.6;
+  border: 1px dashed var(--border-color, #d1d5db);
+  border-radius: 12px;
+}
+
+.product-group {
+  border: 1px solid var(--border-color, #e5e7eb);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.product-group .group-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--bg-soft, #f9fafb);
+  flex-wrap: wrap;
+}
+
+.product-group .group-title {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.product-group .group-meta {
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.product-group .group-run {
+  font-size: 12px;
+}
+
+.group-path {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: copy;
+  word-break: break-all;
+  text-align: left;
+}
+
+.group-path:hover {
+  color: var(--el-color-primary, #2563eb);
+  text-decoration: underline;
+}
+
+.product-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.product-table th,
+.product-table td {
+  text-align: left;
+  padding: 8px 16px;
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  vertical-align: top;
+}
+
+.product-table th {
+  font-weight: 500;
+  color: var(--text-secondary, #6b7280);
+  font-size: 12px;
+}
+
+.product-table .product-name {
+  font-family: ui-monospace, monospace;
+  word-break: break-all;
+}
+
+.product-table .product-version {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.product-table tr.is-missing {
+  opacity: 0.55;
+}
+
+.status-missing {
+  color: var(--el-color-danger, #dc2626);
+  font-size: 12px;
+}
+
+.product-table .row-actions {
+  white-space: nowrap;
+}
+
+.product-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-height: 120px;
+}
+
+.product-detail .detail-row,
+.product-detail .detail-run {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.product-detail .detail-label {
+  font-size: 12px;
+  color: var(--text-secondary, #6b7280);
+}
+
+.metadata-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  max-height: 320px;
+}
+
+.metadata-table td {
+  border-top: 1px solid var(--border-color, #e5e7eb);
+  padding: 6px 8px;
+  vertical-align: top;
+  word-break: break-all;
+}
+
+.metadata-table .metadata-key {
+  font-family: ui-monospace, monospace;
+  white-space: nowrap;
+  color: var(--text-secondary, #6b7280);
+}
+
+.metadata-table .metadata-value {
+  font-family: ui-monospace, monospace;
+}
+
+.dialog-hint {
+  font-size: 13px;
+  color: var(--text-secondary, #6b7280);
+  line-height: 1.6;
+  margin: 0 0 12px;
+}
+
+.dialog-label {
+  display: block;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+
+.scan-input-row {
+  display: flex;
+  gap: 8px;
+}

@@ -19,6 +19,7 @@ ROUTES = (
     "dataset/editor",
     "dataset/tagger",
     "tasks",
+    "products",
     "settings",
     "settings/ui",
     "settings/engines",
