@@ -232,6 +232,60 @@ function versionLabel(product: Product): string {
 
 const metadataEntries = computed(() => Object.entries(detail.value?.metadata ?? {}))
 
+const metaEditing = ref(false)
+const metaDraft = ref<{ key: string; value: string }[]>([])
+const metaSaving = ref(false)
+
+function startMetaEdit() {
+  metaDraft.value = Object.entries(detail.value?.metadata ?? {}).map(([key, value]) => ({ key, value }))
+  metaEditing.value = true
+}
+
+function addMetaRow() {
+  metaDraft.value.push({ key: "", value: "" })
+}
+
+function removeMetaRow(index: number) {
+  metaDraft.value.splice(index, 1)
+}
+
+async function saveMetadata() {
+  if (!detail.value) return
+  metaSaving.value = true
+  try {
+    const metadata: Record<string, string> = {}
+    for (const row of metaDraft.value) {
+      const key = row.key.trim()
+      if (key) metadata[key] = row.value
+    }
+    await productsApi.updateMetadata(detail.value.id, metadata)
+    ElMessage.success(t("products.detailDialog.metaSaved"))
+    metaEditing.value = false
+    await refreshDetail()
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.detailDialog.metaSaveFail"))
+  } finally {
+    metaSaving.value = false
+  }
+}
+
+const LARGE_DOWNLOAD_BYTES = 500 * 1024 * 1024
+
+async function downloadProduct(product: Product) {
+  if ((product.size ?? 0) > LARGE_DOWNLOAD_BYTES) {
+    try {
+      await ElMessageBox.confirm(
+        t("products.detailDialog.downloadLargeHint", { size: formatSize(product.size) }),
+        t("products.detailDialog.download"),
+        { type: "warning" },
+      )
+    } catch {
+      return
+    }
+  }
+  window.open(productsApi.downloadUrl(product.id), "_blank")
+}
+
 onMounted(load)
 </script>
 
@@ -328,6 +382,9 @@ onMounted(load)
             <td class="row-actions">
               <el-button size="small" @click="openDetail(product)">{{ t("products.detail") }}</el-button>
               <el-button size="small" @click="copyPath(product.path)">{{ t("products.copyPath") }}</el-button>
+              <el-button v-if="product.status === 'present'" size="small" @click="downloadProduct(product)">
+                {{ t("products.detailDialog.download") }}
+              </el-button>
             </td>
           </tr>
         </tbody>
@@ -423,9 +480,26 @@ onMounted(load)
             </el-button>
           </div>
           <div class="detail-metadata">
-            <span class="detail-label">{{ t("products.detailDialog.metadata") }}</span>
-            <p v-if="metadataEntries.length === 0" class="dialog-hint">{{ t("products.detailDialog.metadataEmpty") }}</p>
-            <table v-else class="metadata-table">
+            <div class="detail-metadata-header">
+              <span class="detail-label">{{ t("products.detailDialog.metadata") }}</span>
+              <div v-if="!metaEditing" class="row-actions">
+                <el-button v-if="detail.status === 'present'" size="small" @click="downloadProduct(detail)">
+                  {{ t("products.detailDialog.download") }}
+                </el-button>
+                <el-button v-if="detail.status === 'present'" size="small" @click="startMetaEdit">
+                  {{ t("products.detailDialog.editMeta") }}
+                </el-button>
+              </div>
+              <div v-else class="row-actions">
+                <el-button size="small" @click="addMetaRow">{{ t("products.detailDialog.addKey") }}</el-button>
+                <el-button size="small" type="primary" :loading="metaSaving" @click="saveMetadata">
+                  {{ t("products.detailDialog.saveMeta") }}
+                </el-button>
+                <el-button size="small" @click="metaEditing = false">{{ t("products.detailDialog.cancelEdit") }}</el-button>
+              </div>
+            </div>
+            <p v-if="metadataEntries.length === 0 && !metaEditing" class="dialog-hint">{{ t("products.detailDialog.metadataEmpty") }}</p>
+            <table v-if="!metaEditing && metadataEntries.length > 0" class="metadata-table">
               <tbody>
                 <tr v-for="[key, value] in metadataEntries" :key="key">
                   <td class="metadata-key">{{ key }}</td>
@@ -433,6 +507,13 @@ onMounted(load)
                 </tr>
               </tbody>
             </table>
+            <div v-if="metaEditing" class="metadata-edit">
+              <div v-for="(row, index) in metaDraft" :key="index" class="metadata-edit-row">
+                <el-input v-model="row.key" size="small" :placeholder="t('products.detailDialog.keyPlaceholder')" />
+                <el-input v-model="row.value" size="small" :placeholder="t('products.detailDialog.valuePlaceholder')" />
+                <el-button size="small" text :aria-label="t('products.detailDialog.removeKey')" @click="removeMetaRow(index)">×</el-button>
+              </div>
+            </div>
           </div>
         </template>
       </div>

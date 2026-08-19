@@ -107,4 +107,9 @@ export const productsApi = {
     ),
   remove: (id: string) =>
     apiData<{ deleted: string }>(`/api/products/${encodeURIComponent(id)}`, { method: "DELETE" }),
+  updateMetadata: (id: string, metadata: Record<string, string>) =>
+    apiData<{ backup: string; keys: number }>(`/api/products/${encodeURIComponent(id)}/metadata`, {
+      method: "PUT",
+      body: JSON.stringify({ metadata }),
+    }),
 }

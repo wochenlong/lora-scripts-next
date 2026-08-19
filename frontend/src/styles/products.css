@@ -285,3 +285,31 @@
   border-top: 1px dashed var(--border-color, #e5e7eb);
   padding-top: 12px;
 }
+
+.detail-metadata {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-metadata-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.metadata-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.metadata-edit-row {
+  display: grid;
+  grid-template-columns: minmax(160px, 1fr) 2fr auto;
+  gap: 6px;
+  align-items: center;
+}

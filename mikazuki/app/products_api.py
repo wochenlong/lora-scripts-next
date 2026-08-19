@@ -9,12 +9,14 @@ modules (see docs/需求-制品管理.md).
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter
+from fastapi import APIRouter, HTTPException
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from mikazuki.app.models import APIResponseFail, APIResponseSuccess
 from mikazuki.log import log
 from mikazuki.products import deploy as deploy_mod
+from mikazuki.products import meta_editor
 from mikazuki.products.registry import default_registry
 from mikazuki.products.scanner import collect_products, resolve_output_path
 from mikazuki.utils.train_utils import read_safetensors_metadata
@@ -38,6 +40,10 @@ class UndeployRequest(BaseModel):
 class DeployTargetRequest(BaseModel):
     name: str
     path: str
+
+
+class MetadataUpdateRequest(BaseModel):
+    metadata: dict
 
 
 def _find_product(product_id: str) -> Optional[dict]:
@@ -253,3 +259,30 @@ async def delete_product(product_id: str):
             return APIResponseFail(message=f"删除文件失败: {exc}")
     default_registry().clear_product_state(product_id)
     return APIResponseSuccess(data={"deleted": product["path"]})
+
+
+@router.get("/products/{product_id}/download")
+async def download_product(product_id: str):
+    """F14: HTTP download for remote work scenarios. Small files (LoRA, sample
+    images, logs) go through this channel; the UI warns on large files."""
+    product = _find_product(product_id)
+    if product is None or product["status"] != "present":
+        raise HTTPException(status_code=404, detail="product not found")
+    return FileResponse(product["path"], filename=product["name"])
+
+
+@router.put("/products/{product_id}/metadata")
+async def update_metadata(product_id: str, req: MetadataUpdateRequest):
+    """F12': rewrite the safetensors __metadata__ section (tensor bytes are
+    never touched; original backed up to .bak on first edit)."""
+    product = _find_product(product_id)
+    if product is None or product["status"] != "present":
+        return APIResponseFail(message="制品不存在或文件缺失")
+    try:
+        result = meta_editor.write_metadata(product["path"], req.metadata)
+    except meta_editor.MetadataEditError as exc:
+        return APIResponseFail(message=str(exc))
+    except Exception as exc:  # noqa: BLE001
+        log.warning(f"metadata edit failed for {product['path']}: {exc}")
+        return APIResponseFail(message=f"metadata 保存失败: {exc}")
+    return APIResponseSuccess(data=result)
