@@ -9,21 +9,15 @@
 
 ---
 
-## 致谢秋叶（Akegarasu）
+## 致谢 Akegarasu
 
-Next Trainer 向 **秋叶（Akegarasu）** 及其开源项目 **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**（社区常称 **SD-Trainer** / **秋叶一键训练包**）致以感谢。
+Next Trainer 向 **Akegarasu** 及其开源项目 **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**（社区常称 **SD-Trainer** / **秋叶一键训练包**）致以感谢。
 
-我们感谢秋叶项目长期公开维护本地训练 WebUI、整合包体验，以及与训练后端对接的实践。许多用户熟悉的操作路径，正是在这一谱系中形成的。Next Trainer 在此基础上继续演进，并保留对上游的公开致谢。
+我们感谢 Akegarasu 长期公开维护本地训练 WebUI、整合包体验，以及与训练后端对接的实践。许多用户熟悉的操作路径，正是在这一谱系中形成的。Next Trainer 在此基础上继续演进，并保留对上游的公开致谢。
 
-请同时理解以下边界，避免误读：
+项目链接：https://github.com/Akegarasu/lora-scripts
 
-1. Next Trainer **不是** 秋叶官方版本，也 **不代表** 秋叶本人或其团队。  
-2. Next Trainer **无意** 否定、贬低或「取代」上游；上游仓库仍按其自身节奏独立发展。  
-3. 若你更偏好原版体验，请使用上游：https://github.com/Akegarasu/lora-scripts  
-4. 本仓库以自有品牌 **Next Trainer** 发布功能与路线图，同时继续遵守 AGPL 等适用许可，并保留 NOTICE 中的谱系说明。  
-5. 再分发源码或整合包时，请保留本页所指的 [NOTICE.md](../NOTICE.md)、[LICENSE](../LICENSE) 及各上游要求的声明。
-
-秋叶项目链接：https://github.com/Akegarasu/lora-scripts
+再分发源码或整合包时，请保留 [NOTICE.md](../NOTICE.md)、[LICENSE](../LICENSE) 及各上游要求的声明。
 
 ---
 
@@ -33,13 +27,9 @@ Next Trainer gratefully acknowledges **Akegarasu** and **[Akegarasu/lora-scripts
 
 We thank that project for years of open work on local training WebUI workflows, portable packaging, and practical integration with training backends. Much of the familiar operator path that users recognize grew in that lineage. Next Trainer continues from that foundation and keeps this credit public.
 
-Please read these boundaries carefully:
+Upstream project: https://github.com/Akegarasu/lora-scripts
 
-1. Next Trainer is **not** an official Akegarasu release and does **not** speak for Akegarasu or their team.  
-2. Next Trainer does **not** claim to replace, diminish, or oppose upstream; upstream remains independent.  
-3. If you prefer the original experience, use: https://github.com/Akegarasu/lora-scripts  
-4. This repository ships under the **Next Trainer** product name and roadmap, while remaining bound by AGPL and the notices in [NOTICE.md](../NOTICE.md).  
-5. When redistributing source or portable builds, keep NOTICE, LICENSE, and upstream-required notices intact.
+When redistributing source or portable builds, please keep [NOTICE.md](../NOTICE.md), [LICENSE](../LICENSE), and upstream-required notices intact.
 
 ---
 

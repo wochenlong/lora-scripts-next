@@ -15,7 +15,7 @@ const portals = computed(() => [
   <div class="home-page">
     <section class="hero">
       <div class="hero-copy">
-        <span class="eyebrow">LOCAL TRAINING WORKSPACE</span>
+        <span class="eyebrow">FUTURE · AGENT · LOCAL</span>
         <h1>{{ t("home.heroTitle") }}</h1>
         <p>{{ t("home.heroSubtitle") }}</p>
         <div class="hero-actions"><RouterLink class="primary-action" to="/training">{{ t("home.startTraining") }}</RouterLink><RouterLink class="secondary-action" to="/help/guide.html">{{ t("home.readGuide") }}</RouterLink></div>

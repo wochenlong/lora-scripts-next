@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>来自未来的本地训练器</strong><br />
+  <strong>面向未来与 Agent 的本地训练器</strong><br />
   熟悉上手 · 一个训练器覆盖常见模型 · 持续更新<br />
   <sub>专业玩家与平台可用 · 也可无后端接入 Agent 流程 · 仓库 <code>lora-scripts-next</code></sub>
 </p>
@@ -24,10 +24,10 @@
 
 ## 这是什么
 
-**Next Trainer** 想做的是一款**来自未来的本地训练器**：  
+**Next Trainer** 是一款**面向未来与 Agent 的本地训练器**：  
 界面仍然熟悉，解压就能上手；能力上却按专业工作台来设计——**一个训练器覆盖大部分常见模型**，并持续跟上新模型与新引擎。
 
-对人来说，它是本地模型训练管理器：打标、开训、盯任务、换引擎，都在同一套专业 UI 里完成。Windows 与 Linux 都能用。  
+对人来说，它是本地训练器：打标、开训、盯任务、换引擎，都在同一套专业 UI 里完成。Windows 与 Linux 都能用。  
 对平台和 Agent 来说，它是可拆开的模块：可以整包使用，也可以**无后端接入**，直接成为自动化流程里的一环。
 
 你仍在本机 NVIDIA 显卡上训 LoRA 或全量微调。  
@@ -55,7 +55,7 @@
 如果别的工具让你在「熟悉」和「先进」里二选一，Next Trainer 想两边都要。
 
 1. **UI：熟悉，能一键上手**  
-   路径刻意保留对秋叶系用户熟悉的操作习惯（并向秋叶作者致谢，见 [开源引用](docs/credits.md)）。整合包解压即用；选模型、填参数、导入 TOML、开训、看预览，不用为了换壳重新学一遍。
+   路径刻意保留对 Akegarasu / SD-Trainer 用户熟悉的操作习惯（并向 Akegarasu 致谢，见 [开源引用](docs/credits.md)）。整合包解压即用；选模型、填参数、导入 TOML、开训、看预览，不用为了换壳重新学一遍。
 
 2. **能力：专业，一个训练器训常见模型**  
    Anima、SD 1.5、SDXL、Flux，以及可选的 Krea 2，收进同一套工作台。Kohya 是基线，Anima Fast、Musubi 等引擎按需安装与切换。
@@ -70,7 +70,7 @@
    状态、日志、预览和 Loss 收在任务页。训起来之后，盯盘不必再开一堆外部窗口。
 
 它不是云端一键平台，也不假装替代所有专用工具。  
-它要成为：对人手够专业、对 Agent 够开放、对常见模型够全、又能持续更新的本地训练器。
+它要成为：面向未来与 Agent、对常见模型够全、又能持续更新的本地训练器。
 
 ---
 
@@ -292,7 +292,7 @@ git switch legacy/v2.9.1
 
 ### 文档入口
 
-1. [开源引用与致谢秋叶](docs/credits.md)  
+1. [开源引用与致谢 Akegarasu](docs/credits.md)  
 2. [NOTICE](NOTICE.md)  
 3. [整合包说明](docs/portable-getting-started.md)  
 4. [构建与发包](docs/portable-build-guide.md)  
@@ -300,11 +300,9 @@ git switch legacy/v2.9.1
 6. [训练监控](docs/train-monitor.md)  
 7. [仓库布局](docs/repo-layout.md)
 
-### 致谢秋叶
+### 致谢 Akegarasu
 
-Next Trainer 感谢 **秋叶（Akegarasu）** 与 [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)（SD-Trainer / 秋叶一键训练包）长期公开的本地训练 WebUI 与整合包实践。本项目在这一谱系上继续演进。
-
-同时请注意：Next Trainer **不是** 秋叶官方版本，也 **不代表** 秋叶本人或其团队；我们 **无意** 否定或取代上游。偏好原版体验请直接使用上游仓库。完整边界说明见 [开源引用](docs/credits.md) 与 [NOTICE.md](NOTICE.md)。
+Next Trainer 感谢 **Akegarasu** 与 [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)（SD-Trainer / 秋叶一键训练包）长期公开的本地训练 WebUI 与整合包实践。本项目在这一谱系上继续演进。完整说明见 [开源引用](docs/credits.md) 与 [NOTICE.md](NOTICE.md)。
 
 ### 常见问题
 

@@ -5,7 +5,7 @@
 </p>
 
 <p align="center">
-  <strong>A local trainer from the future</strong><br />
+  <strong>A local trainer for the future — and for agents</strong><br />
   Familiar UI · One trainer for common models · Kept up to date<br />
   <sub>For creators and platforms · Backend-free agent hooks · Repo <code>lora-scripts-next</code></sub>
 </p>
@@ -24,10 +24,10 @@
 
 ## What it is
 
-**Next Trainer** aims to be a **local trainer from the future**:  
+**Next Trainer** is a **local trainer for the future — and for agents**:  
 the UI stays familiar and ready in one unpack, while the product itself is built like a professional workbench — **one trainer for most common models**, kept current as new models and engines arrive.
 
-For people, it is a local training manager: tagging, starting runs, watching tasks, and switching engines live in one professional UI. It runs on Windows and Linux.  
+For people, it is a local trainer: tagging, starting runs, watching tasks, and switching engines live in one professional UI. It runs on Windows and Linux.  
 For platforms and agents, it is modular: use the full package, or **hook in without taking the whole backend**, as one step in an automated workflow.
 
 You still train LoRA or full finetune on a local NVIDIA GPU.  
@@ -70,7 +70,7 @@ If other tools force a choice between “familiar” and “ahead,” Next Train
    Status, logs, previews, and Loss live on the Tasks page. After training starts, you do not need a pile of external windows just to watch the run.
 
 This is not a cloud one-click platform, and it does not pretend to replace every specialized tool.  
-What it aims to be: professional enough for hands-on creators, open enough for agents, broad enough for common models, and current enough to keep moving.
+What it aims to be: a local trainer for the future — and for agents — broad enough for common models, and current enough to keep moving.
 
 ---
 
@@ -302,9 +302,7 @@ git switch legacy/v2.9.1
 
 ### Acknowledgements to Akegarasu
 
-Next Trainer thanks **Akegarasu** and [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) (SD-Trainer) for years of open local-training WebUI and portable packaging work. This project continues from that lineage.
-
-Please also note: Next Trainer is **not** an official Akegarasu release and does **not** speak for Akegarasu or their team. We do **not** claim to replace or diminish upstream. Prefer the original experience? Use the upstream repository. Full boundaries: [Credits](docs/credits.md) and [NOTICE.md](NOTICE.md).
+Next Trainer thanks **Akegarasu** and [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts) (SD-Trainer) for years of open local-training WebUI and portable packaging work. This project continues from that lineage. Full credits: [Credits](docs/credits.md) and [NOTICE.md](NOTICE.md).
 
 ### FAQ
 
