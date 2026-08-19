@@ -46,7 +46,9 @@ git switch legacy/v2.9.1
 ## What it is
 
 **Next Trainer** is a local Windows (NVIDIA) WebUI for LoRA and full finetune.  
-Built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts), with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner), in an Akegarasu-style workflow. Product brand and release archives use **Next Trainer** / `Next-Trainer-v*.7z`.
+It builds on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts), with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner), in an Akegarasu-style workflow.
+
+Product branding and release archives use **Next Trainer**, with archive names like `Next-Trainer-v*.7z`.
 
 ---
 
@@ -66,9 +68,9 @@ When filing issues, include the full sidebar version and branch (or Release arch
 
 | Package | Notes | Get it |
 |---------|-------|--------|
-| **3.0.0 GA** | Preparing (lite / Kohya / Musubi flavors) | Coming to GitHub `v3.0.0` and ModelScope |
-| **RC preview** | lite ~0.39 GB; kohya-musubi ~4.2 GB (Vue 3 usable) | [v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) · [ModelScope](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
-| **Legacy UI stable** | Multi-page dist / v2.9.1 | [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) |
+| **3.0.0 GA** | Preparing lite, Kohya, and Musubi flavors | Coming to GitHub `v3.0.0` and ModelScope |
+| **RC preview** | lite about 0.39 GB; kohya-musubi about 4.2 GB; usable for Vue 3 | [v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) · [ModelScope](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
+| **Legacy UI stable** | Old multi-page UI for v2.9.1 | [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) |
 
 ModelScope RC example path:
 
@@ -76,9 +78,9 @@ ModelScope RC example path:
 releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
 ```
 
-Needs Windows 10/11, NVIDIA GPU (RTX 20+ recommended); extract to a path without spaces or non-ASCII.
+Needs Windows 10 or 11 and an NVIDIA GPU (RTX 20-series or newer recommended). Extract to a path without spaces or non-ASCII characters.
 
-More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md) · [Build & release (collaborators)](docs/portable-build-guide.md)
+More: [Portable getting started](docs/portable-getting-started.md), [Tagger models](docs/tagger-models.md), [Build & release (collaborators)](docs/portable-build-guide.md)
 
 ---
 
@@ -124,7 +126,7 @@ git switch dev
 git pull
 ```
 
-> Do not mix uncommitted `frontend/dist` hotfixes across `main` / `dev` / `legacy`. Portable users should stay on the package version.
+> Do not mix uncommitted `frontend/dist` hotfixes across `main`, `dev`, and `legacy`. Portable users should stay on the package version.
 
 ---
 
@@ -132,24 +134,24 @@ git pull
 
 | Area | Capabilities |
 |------|----------------|
-| **Training** | Base model × engine × target; live TOML preview; validate / import-export / start |
-| **Dataset** | WD14 tagging; image-first tag editor (filter & batch on the right) |
-| **Tasks** | List, status, logs, previews / Loss — primary place to watch runs |
-| **Settings** | Theme & UI, engine management (Kohya / Anima Fast / Musubi), download mirrors, About, changelog |
+| **Training** | Pick base model, engine, and target; live TOML preview on the right; validate, import/export, and start |
+| **Dataset** | WD14 tagging; image-first tag editor with filters and batch actions on the right |
+| **Tasks** | Task list, status, logs, previews, and Loss — the main place to watch runs |
+| **Settings** | Theme and UI prefs, engine management, download mirrors, About, and changelog |
 
-Backends: Anima LoRA / Fast / finetune, SD·SDXL, Flux (Kohya); optional **Krea 2** (Musubi). Plus local tagger, `/train-monitor`, TensorBoard.
+Supports Anima LoRA, Anima Fast, and Anima full finetune, plus SD 1.5, SDXL, and Flux on the Kohya line. **Krea 2** is optional via Musubi. Local tagger, `/train-monitor`, and TensorBoard are also available.
 
-- Anima Fast → [docs/anima-fast.md](docs/anima-fast.md)  
-- Krea 2 multi-GPU (Linux) → [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
+- Anima Fast: [docs/anima-fast.md](docs/anima-fast.md)
+- Krea 2 multi-GPU (Linux): [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
 
 ### Screenshots
 
-From the Vue 3 UI (`3.0.0` line, Chinese locale).
+From the Vue 3 UI (v3.0.0 line, Chinese locale).
 
 <details open>
 <summary><strong>Training</strong></summary>
 
-| Standard (Kohya / Anima) | Anima Fast | Krea 2 (Musubi) |
+| Standard (Kohya or Anima) | Anima Fast | Krea 2 (Musubi) |
 |---|---|---|
 | ![Training · standard](assets/readme/vue3/01-training-standard.png) | ![Training · Fast](assets/readme/vue3/02-training-fast.png) | ![Training · Krea 2](assets/readme/vue3/08-training-krea2.png) |
 
@@ -186,12 +188,12 @@ From the Vue 3 UI (`3.0.0` line, Chinese locale).
 
 | Mode | Notes |
 |------|-------|
-| Anima LoRA | LoRA · LoKr · T-LoRA · from ~12 GB VRAM |
-| Anima Fast | Optional runtime · 16 GB+ recommended · install in Settings |
-| Anima finetune | Full DiT · ~24 GB recommended |
-| SD 1.5 / SDXL | LoRA / full finetune |
+| Anima LoRA | LoRA, LoKr, and T-LoRA; from about 12 GB VRAM |
+| Anima Fast | Optional runtime; 16 GB+ recommended; install in Settings |
+| Anima finetune | Full DiT; about 24 GB recommended |
+| SD 1.5 / SDXL | LoRA and full finetune |
 | Flux | LoRA |
-| Krea 2 | LoRA via Musubi · install in Settings · multi-GPU on Linux |
+| Krea 2 | LoRA via Musubi; install the engine in Settings; multi-GPU on Linux |
 
 VRAM tips: [docs/anima-training.md](docs/anima-training.md)
 
@@ -213,14 +215,27 @@ VRAM tips: [docs/anima-training.md](docs/anima-training.md)
 
 ## FAQ
 
-**What to include in a bug report?**  
-Full sidebar version, train type (model/engine/target), repro steps, logs. → [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
+**What to include in a bug report?**
 
-**lite vs kohya-musubi?**  
-Quick / weak network → lite (deps on first run). Want Kohya + Musubi (Krea 2) ready → **kohya-musubi**. Anima Fast installs from Settings on both.
+Please include:
 
-**UI completely changed after update?**  
-Expected: `main` is Vue 3. For the old UI, see [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) or the [v2.9.1 portable](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) above.
+- The full version from the sidebar
+- Train type: base model, engine, and target
+- Steps to reproduce
+- Relevant logs
+
+Then open an [Issue](https://github.com/wochenlong/lora-scripts-next/issues).
+
+**lite vs kohya-musubi?**
+
+- Weak network, or you want a lighter first launch: use **lite** (dependencies install on first run)
+- You want Kohya ready out of the box and can train Krea 2: use **kohya-musubi**
+- On both packages, Anima Fast still needs a separate install in Settings
+
+**UI completely changed after update?**
+
+That is expected: `main` is Vue 3 now.  
+If you still need the old UI, use the [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) branch or the [v2.9.1 portable](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) above.
 
 ---
 

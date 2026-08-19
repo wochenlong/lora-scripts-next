@@ -45,8 +45,10 @@ git switch legacy/v2.9.1
 
 ## 这是什么
 
-**Next Trainer** 面向本地 Windows（NVIDIA）的 LoRA / 全量微调 WebUI。  
-基于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)，可选 [musubi-tuner](https://github.com/kohya-ss/musubi-tuner)；延续秋叶系训练习惯，产品名与发布归档统一为 **Next Trainer** / `Next-Trainer-v*.7z`。
+**Next Trainer** 是面向本地 Windows（NVIDIA）的 LoRA 与全量微调 WebUI。  
+基于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)，也可选装 [musubi-tuner](https://github.com/kohya-ss/musubi-tuner)，整体延续秋叶系训练习惯。
+
+产品品牌与发布归档统一为 **Next Trainer**，压缩包命名形如 `Next-Trainer-v*.7z`。
 
 ---
 
@@ -66,9 +68,9 @@ git switch legacy/v2.9.1
 
 | 包 | 说明 | 获取 |
 |----|------|------|
-| **3.0.0 正式包** | 准备中（lite / Kohya / Musubi 分轨） | 即将发布到 GitHub `v3.0.0` 与魔搭 |
-| **RC 试用** | lite ~0.39 GB；kohya-musubi ~4.2 GB（Vue 3 预览可用） | [v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) · [魔搭](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
-| **旧 UI 稳定包** | 多页 dist / v2.9.1 | [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) |
+| **3.0.0 正式包** | 准备中，将提供 lite、Kohya、Musubi 等分轨 | 即将发布到 GitHub `v3.0.0` 与魔搭 |
+| **RC 试用** | lite 约 0.39 GB；kohya-musubi 约 4.2 GB，可用于体验 Vue 3 | [v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) · [魔搭](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
+| **旧 UI 稳定包** | 旧版多页界面，对应 v2.9.1 | [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1) |
 
 魔搭 RC 示例路径：
 
@@ -76,9 +78,9 @@ git switch legacy/v2.9.1
 releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
 ```
 
-要求：Windows 10/11，NVIDIA GPU（建议 RTX 20+）；解压路径避免中文与空格。
+运行环境：Windows 10 或 11，NVIDIA 显卡（建议 RTX 20 系列及以上）。解压路径请避免中文与空格。
 
-补充：[整合包说明](docs/portable-getting-started.md) · [打标模型](docs/tagger-models.md) · [构建与发包（协作）](docs/portable-build-guide.md)
+更多说明见 [整合包说明](docs/portable-getting-started.md)、[打标模型](docs/tagger-models.md)、[构建与发包（协作）](docs/portable-build-guide.md)。
 
 ---
 
@@ -124,7 +126,7 @@ git switch dev
 git pull
 ```
 
-> `main` / `dev` / `legacy` 前端架构不同，不要混提未提交的 `frontend/dist` 热修。整合包用户以整包版本为准。
+> `main`、`dev`、`legacy` 的前端架构不同，请不要把未提交的 `frontend/dist` 热修混提。整合包用户以整包版本为准即可。
 
 ---
 
@@ -132,24 +134,24 @@ git pull
 
 | 模块 | 能力 |
 |------|------|
-| **训练** | 基础模型 × 引擎 × 目标；右侧 TOML 预览；校验 / 导入导出 / 开训 |
-| **数据集** | WD14 打标；以图为主的标签编辑（筛选与批量在右侧） |
-| **任务** | 列表、状态、日志、预览 / Loss；日常盯盘入口 |
-| **设置** | 主题与 UI、引擎管理（Kohya / Anima Fast / Musubi）、下载源镜像、关于与更新日志 |
+| **训练** | 选择基础模型、引擎与训练目标；右侧实时 TOML 预览；支持校验、导入导出与开始训练 |
+| **数据集** | WD14 模型打标；以图片为主的标签编辑，筛选与批量操作在右侧面板 |
+| **任务** | 查看任务列表、状态、日志、预览图与 Loss，适合日常盯盘 |
+| **设置** | 主题与界面偏好、训练引擎管理、下载源镜像、关于与更新日志 |
 
-训练后端：Anima LoRA / Fast / 全量、SD·SDXL、Flux（Kohya）；可选 **Krea 2**（Musubi）。另有本地打标、`/train-monitor`、TensorBoard。
+支持 Anima LoRA、Anima Fast、Anima 全量微调，以及 SD 1.5、SDXL、Flux（Kohya 线）。也可选装 **Krea 2**（Musubi）。本地还提供打标、训练监控页 `/train-monitor` 与 TensorBoard。
 
-- Anima Fast → [docs/anima-fast.md](docs/anima-fast.md)  
-- Krea 2 多卡（Linux）→ [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
+- Anima Fast 说明：[docs/anima-fast.md](docs/anima-fast.md)
+- Krea 2 多卡（Linux）：[docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
 
 ### 界面预览
 
-截图来自 Vue 3（`3.0.0` 线，中文界面）。
+截图来自 Vue 3（v3.0.0 线，中文界面）。
 
 <details open>
 <summary><strong>训练</strong></summary>
 
-| 标准（Kohya / Anima） | Anima Fast | Krea 2（Musubi） |
+| 标准（Kohya 或 Anima） | Anima Fast | Krea 2（Musubi） |
 |---|---|---|
 | ![训练 · 标准](assets/readme/vue3/01-training-standard.png) | ![训练 · Fast](assets/readme/vue3/02-training-fast.png) | ![训练 · Krea 2](assets/readme/vue3/08-training-krea2.png) |
 
@@ -186,14 +188,14 @@ git pull
 
 | 模式 | 说明 |
 |------|------|
-| Anima LoRA | LoRA · LoKr · T-LoRA · 约 12GB 显存起 |
-| Anima Fast | 可选独立运行时 · 建议 16GB+ · 设置页安装 |
-| Anima 全量 | 完整 DiT · 建议约 24GB |
-| SD 1.5 / SDXL | LoRA / 全量微调 |
+| Anima LoRA | 支持 LoRA、LoKr、T-LoRA，大约 12GB 显存起 |
+| Anima Fast | 可选独立运行时，建议 16GB 及以上，在设置页安装 |
+| Anima 全量 | 完整 DiT，建议大约 24GB 显存 |
+| SD 1.5 / SDXL | LoRA 与全量微调 |
 | Flux | LoRA |
-| Krea 2 | LoRA（Musubi）· 设置页装引擎 · Linux 可多卡 |
+| Krea 2 | 经 Musubi 的 LoRA；在设置页安装引擎；Linux 可多卡 |
 
-显存与参数：[docs/anima-training.md](docs/anima-training.md)
+显存与参数说明见 [docs/anima-training.md](docs/anima-training.md)。
 
 ---
 
@@ -213,17 +215,31 @@ git pull
 
 ## 常见问题
 
-**Bug 反馈要带什么？**  
-侧栏完整版本、训练类型（模型/引擎/目标）、复现步骤、相关日志。→ [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
+**Bug 反馈要带什么？**
 
-**lite 和 kohya-musubi 怎么选？**  
-弱网 / 轻量 → lite（首次装依赖）。要开箱 Kohya + Musubi（可训 Krea 2）→ **kohya-musubi**。Anima Fast 均需在设置页安装。
+请尽量附上：
 
-**3.0.0 和旧稳定版能混用配置吗？**  
-多数 TOML 可导入；导航与本地存储 key 有差异，以当前页「导入配置」为准。
+- 侧栏显示的完整版本号
+- 训练类型：基础模型、引擎、训练目标
+- 复现步骤
+- 相关日志
 
-**更新后界面全变了？**  
-预期行为：`main` 已是 Vue 3。需要旧 UI 请见上方 [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) 或 [v2.9.1 整合包](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)。
+到 [Issues](https://github.com/wochenlong/lora-scripts-next/issues) 提交。
+
+**lite 和 kohya-musubi 怎么选？**
+
+- 网络较弱，或只想先轻量启动：选 **lite**（首次运行会安装依赖）
+- 希望开箱即可使用 Kohya，并训 Krea 2：选 **kohya-musubi**
+- 两种包里，Anima Fast 都需要到设置页单独安装
+
+**3.0.0 和旧稳定版能混用配置吗？**
+
+多数 TOML 仍可导入。导航结构和本地存储的 key 有差异，请以当前页面的「导入配置」结果为准。
+
+**更新后界面全变了？**
+
+这是预期行为：现在的 `main` 已经是 Vue 3。  
+若仍需要旧界面，请使用上方的 [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1) 分支，或安装 [v2.9.1 整合包](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)。
 
 ---
 
