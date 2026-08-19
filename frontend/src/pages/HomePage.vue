@@ -24,7 +24,7 @@ const portals = computed(() => [
     </section>
     <section class="portal-grid" :aria-label="t('home.portalAria')">
       <RouterLink v-for="(portal, index) in portals" :key="portal.to" :to="portal.to" class="portal-card" :data-tone="portal.tone">
-        <span class="portal-index">0{{ index + 1 }}</span><h2>{{ portal.title }}</h2><p>{{ portal.text }}</p><span class="portal-link">{{ t("home.enter") }} <b>â†?/b></span>
+        <span class="portal-index">0{{ index + 1 }}</span><h2>{{ portal.title }}</h2><p>{{ portal.text }}</p><span class="portal-link">{{ t("home.enter") }} <b>â†’</b></span>
       </RouterLink>
     </section>
     <section class="status-strip"><span><i class="status-dot" /> {{ t("home.status.local") }}</span><span>{{ t("home.status.vue") }}</span><span>{{ t("home.status.models") }}</span></section>
