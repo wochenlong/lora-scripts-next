@@ -22,38 +22,6 @@
 
 ---
 
-## 先说一件重要的事
-
-默认分支 `main` 已经换成 Vue 3 工作台，版本是 **3.0.0**。
-
-你现在打开的是四块区域：
-
-1. 训练  
-2. 数据集  
-3. 任务  
-4. 设置  
-
-以前那种多页旧界面，不再是 `main` 的默认样子。
-
-为什么要换：Vue 3 已经在 `dev` 上测过一轮，也修完关键问题。转正之后，稳定修复和后面的正式整合包可以走同一条线，品牌和页面结构也更统一。
-
-有些东西暂时没动：整合包里的目录名还是 `SD-Trainer/`，更新脚本的文件名也先保留，方便老安装继续用。
-
-另外提醒一句：源码合进 `main`，不等于马上推正式 7z。正式整合包仍然看 [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases)。
-
-### 还想用旧界面怎么办
-
-1. 源码分支：[legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1)  
-2. 转正前快照：[legacy-v2.9.1-pre-vue3](https://github.com/wochenlong/lora-scripts-next/releases/tag/legacy-v2.9.1-pre-vue3)  
-3. 旧整合包：[v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)
-
-```powershell
-git fetch origin
-git switch legacy/v2.9.1
-```
-
----
-
 ## 这是什么
 
 Next Trainer 是在本地 Windows 上跑的训练 WebUI，主要给 NVIDIA 显卡用。  
@@ -65,125 +33,48 @@ Next Trainer 是在本地 Windows 上跑的训练 WebUI，主要给 NVIDIA 显�
 对外品牌名是 **Next Trainer**。  
 发布压缩包一般叫 `Next-Trainer-v*.7z`。
 
----
-
-## 分支怎么选
-
-1. **`main`**  
-   当前默认稳定线。Vue 3 工作台，版本 **3.0.0**。
-
-2. **`dev`**  
-   继续试验新功能的地方。也是 Vue 3，可能比 `main` 更新一点。
-
-3. **`legacy/v2.9.1`**  
-   旧界面备份。需要老 UI 时再来这里。
-
-提 Issue 时，请写上侧栏里的完整版本号，并说明你用的是哪个分支，或者哪个整合包。
-
----
-
-## 下载整合包
-
-### 3.0.0 正式包
-
-还在准备。后面会按 lite、Kohya、Musubi 等分轨发布到 GitHub 和魔搭。
-
-### 现在能用的 RC 试用包
-
-可以先体验 Vue 3。
-
-- GitHub：[v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813)  
-- 魔搭：[windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable)
-
-体量大概是：
-
-- lite 约 0.39 GB  
-- kohya-musubi 约 4.2 GB
-
-魔搭上的一个示例路径：
-
-```text
-releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
-```
-
-### 旧 UI 稳定包
-
-还想用老界面，请下 [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)。
-
-### 运行环境
-
-1. Windows 10 或 Windows 11  
-2. NVIDIA 显卡，建议 RTX 20 系列及以上  
-3. 解压路径尽量不要带中文，也不要带空格
-
-更多说明：
-
-1. [整合包说明](docs/portable-getting-started.md)  
-2. [打标模型](docs/tagger-models.md)  
-3. [构建与发包](docs/portable-build-guide.md)
-
----
-
-## 怎么开始用
-
-### 用整合包
-
-1. 解压  
-2. 运行 `run_gui.bat`。如果包里写了别的启动脚本，按包内说明来  
-3. 浏览器打开 http://127.0.0.1:28000  
-4. 正式 3.0.0 包的侧栏应显示 `v3.0.0`。RC 包可能还会带 rc 字样，这是正常的
-
-### 从源码跑 `main`
-
-```powershell
-git clone https://github.com/wochenlong/lora-scripts-next.git
-cd lora-scripts-next
-git checkout main
-git pull
-
-.\run_gui.bat
-```
-
-也可以用：
-
-```powershell
-python gui.py --dev
-```
-
-确认一下版本：
-
-```powershell
-git branch --show-current
-Get-Content VERSION
-```
-
-前端源码在 `frontend/`，技术栈是 Vue 3 和 Vite。
-
-```powershell
-cd frontend
-npm install
-npm run dev
-npm run build
-```
-
-`npm run dev` 需要后端已经启动。  
-`npm run build` 会把产物写到 `frontend/dist`。
-
-### 跟着试验线 `dev`
-
-```powershell
-git fetch origin
-git switch dev
-git pull
-```
-
-注意：`main`、`dev`、`legacy` 的前端不一样。  
-不要把未提交的 `frontend/dist` 热修混着提。  
-整合包用户直接用整包版本就行，不必自己切分支。
+当前默认界面是 Vue 3 工作台，版本是 **3.0.0**。页面分成四块：训练、数据集、任务、设置。
 
 ---
 
 ## 能做什么
+
+一句话：从打标、改标签，到选模型开训、盯进度、看日志，尽量在同一个本地 WebUI 里完成。
+
+覆盖这些训练路线：
+
+1. Anima LoRA  
+2. Anima Fast  
+3. Anima 全量微调  
+4. SD 1.5、SDXL、Flux  
+5. 可选的 Krea 2
+
+也带本地打标、训练监控页，以及 TensorBoard。
+
+### 相比常见训练器，它更适合谁
+
+如果你已经习惯秋叶系流程，又想要更完整的本地工作台，而不是只开一个训练脚本窗口，Next Trainer 会更顺手。
+
+1. **工作台是一体的**  
+   训练、数据集、任务、设置在同一套界面里切换，不用在多个页面和外部工具之间来回跳。
+
+2. **引擎可以按需装**  
+   Kohya 是常见基线。Anima Fast、Musubi 这类可选引擎放在设置页管理，不必一上来就把整套环境装爆。
+
+3. **任务过程看得见**  
+   任务页能看状态、日志、预览和 Loss。训练开始后，盯盘不用再另开一堆窗口。
+
+4. **配置可导入导出**  
+   常用 TOML 可以带走、可以再导回来，方便复用自己的训练参数。
+
+5. **整合包和源码都能跑**  
+   普通用户用整合包。开发者和愿意跟试验线的人，可以直接跑 `main` 或 `dev`。
+
+它不是云端一键平台，也不替代所有专用工具。它的目标很明确：把本地训 LoRA 和相关准备流程，收成一个能长期用的 Windows WebUI。
+
+---
+
+## 有什么功能
 
 ### 训练
 
@@ -210,15 +101,27 @@ git pull
 3. 下载源镜像  
 4. 关于页和更新日志
 
-### 训练能力覆盖
+### 各模式大概要多少显存
 
-1. Anima LoRA  
-2. Anima Fast  
-3. Anima 全量微调  
-4. SD 1.5、SDXL、Flux，走 Kohya 线  
-5. 可选的 Krea 2，走 Musubi  
+1. **Anima LoRA**  
+   支持 LoRA、LoKr、T-LoRA。大约 12GB 起。
 
-本地还带打标、训练监控页 `/train-monitor`，以及 TensorBoard。
+2. **Anima Fast**  
+   可选独立运行时。建议 16GB 及以上。在设置页安装。
+
+3. **Anima 全量**  
+   完整 DiT。建议大约 24GB。
+
+4. **SD 1.5 和 SDXL**  
+   支持 LoRA 和全量微调。
+
+5. **Flux**  
+   支持 LoRA。
+
+6. **Krea 2**  
+   经 Musubi 训 LoRA。引擎在设置页安装。Linux 可以多卡。
+
+更细的显存和参数说明见 [Anima 训练文档](docs/anima-training.md)。
 
 相关文档：
 
@@ -265,31 +168,129 @@ git pull
 
 ---
 
-## 各模式大概要多少显存
+## 下载、安装与其它说明
 
-1. **Anima LoRA**  
-   支持 LoRA、LoKr、T-LoRA。大约 12GB 起。
+### 下载整合包
 
-2. **Anima Fast**  
-   可选独立运行时。建议 16GB 及以上。在设置页安装。
+**3.0.0 正式包**还在准备。后面会按 lite、Kohya、Musubi 等分轨发布到 GitHub 和魔搭。
 
-3. **Anima 全量**  
-   完整 DiT。建议大约 24GB。
+现在可以先用 RC 试用包体验 Vue 3：
 
-4. **SD 1.5 和 SDXL**  
-   支持 LoRA 和全量微调。
+1. GitHub：[v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813)  
+2. 魔搭：[windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable)
 
-5. **Flux**  
-   支持 LoRA。
+体量大概是：
 
-6. **Krea 2**  
-   经 Musubi 训 LoRA。引擎在设置页安装。Linux 可以多卡。
+1. lite 约 0.39 GB  
+2. kohya-musubi 约 4.2 GB
 
-更细的显存和参数说明见 [Anima 训练文档](docs/anima-training.md)。
+魔搭上的一个示例路径：
 
----
+```text
+releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
+```
 
-## 文档入口
+还想用旧界面，请下 [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)。
+
+运行环境：
+
+1. Windows 10 或 Windows 11  
+2. NVIDIA 显卡，建议 RTX 20 系列及以上  
+3. 解压路径尽量不要带中文，也不要带空格
+
+更多说明：
+
+1. [整合包说明](docs/portable-getting-started.md)  
+2. [打标模型](docs/tagger-models.md)  
+3. [构建与发包](docs/portable-build-guide.md)
+
+### 用整合包启动
+
+1. 解压  
+2. 运行 `run_gui.bat`。如果包里写了别的启动脚本，按包内说明来  
+3. 浏览器打开 http://127.0.0.1:28000  
+4. 正式 3.0.0 包的侧栏应显示 `v3.0.0`。RC 包可能还会带 rc 字样，这是正常的
+
+### 从源码跑 `main`
+
+```powershell
+git clone https://github.com/wochenlong/lora-scripts-next.git
+cd lora-scripts-next
+git checkout main
+git pull
+
+.\run_gui.bat
+```
+
+也可以用：
+
+```powershell
+python gui.py --dev
+```
+
+确认一下版本：
+
+```powershell
+git branch --show-current
+Get-Content VERSION
+```
+
+前端源码在 `frontend/`，技术栈是 Vue 3 和 Vite。
+
+```powershell
+cd frontend
+npm install
+npm run dev
+npm run build
+```
+
+`npm run dev` 需要后端已经启动。  
+`npm run build` 会把产物写到 `frontend/dist`。
+
+### 分支怎么选
+
+1. **`main`**  
+   当前默认稳定线。Vue 3 工作台，版本 **3.0.0**。
+
+2. **`dev`**  
+   继续试验新功能的地方。也是 Vue 3，可能比 `main` 更新一点。
+
+3. **`legacy/v2.9.1`**  
+   旧界面备份。需要老 UI 时再来这里。
+
+跟着试验线：
+
+```powershell
+git fetch origin
+git switch dev
+git pull
+```
+
+注意：`main`、`dev`、`legacy` 的前端不一样。  
+不要把未提交的 `frontend/dist` 热修混着提。  
+整合包用户直接用整包版本就行，不必自己切分支。
+
+### `main` 为什么从旧 UI 换成了 Vue 3
+
+Vue 3 已经在 `dev` 上测过一轮，也修完关键问题。  
+转正是为了统一品牌和页面结构，让稳定修复和后面的正式整合包走同一条线。
+
+有些东西暂时没动：整合包里的目录名还是 `SD-Trainer/`，更新脚本的文件名也先保留，方便老安装继续用。
+
+源码合进 `main`，不等于马上推正式 7z。正式整合包仍然看 [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases)。
+
+还想用旧界面：
+
+1. 源码分支：[legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1)  
+2. 转正前快照：[legacy-v2.9.1-pre-vue3](https://github.com/wochenlong/lora-scripts-next/releases/tag/legacy-v2.9.1-pre-vue3)  
+3. 旧整合包：[v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)
+
+```powershell
+git fetch origin
+git switch legacy/v2.9.1
+```
+
+### 文档入口
 
 1. [开源引用](docs/credits.md)  
 2. [NOTICE](NOTICE.md)  
@@ -299,11 +300,9 @@ git pull
 6. [训练监控](docs/train-monitor.md)  
 7. [仓库布局](docs/repo-layout.md)
 
----
+### 常见问题
 
-## 常见问题
-
-### Bug 反馈要带什么
+**Bug 反馈要带什么**
 
 请尽量带上这些：
 
@@ -314,18 +313,18 @@ git pull
 
 然后到 [Issues](https://github.com/wochenlong/lora-scripts-next/issues) 提交。
 
-### lite 和 kohya-musubi 怎么选
+**lite 和 kohya-musubi 怎么选**
 
 1. 网络一般，或者只想先轻量启动，选 **lite**。第一次运行会装依赖。  
 2. 想开箱就有 Kohya，并且要训 Krea 2，选 **kohya-musubi**。  
 3. 两种包里，Anima Fast 都要到设置页单独装。
 
-### 3.0.0 和旧稳定版的配置能一起用吗
+**3.0.0 和旧稳定版的配置能一起用吗**
 
 多数 TOML 还是可以导入的。  
 但导航结构和本地存储的 key 有差别，最终以当前页面导入后的结果为准。
 
-### 更新后界面怎么全变了
+**更新后界面怎么全变了**
 
 这是预期现象。现在的 `main` 就是 Vue 3。
 
@@ -333,6 +332,13 @@ git pull
 
 1. 切到 [legacy/v2.9.1](https://github.com/wochenlong/lora-scripts-next/tree/legacy/v2.9.1)  
 2. 或者安装 [v2.9.1 整合包](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)
+
+---
+
+## 更新日志
+
+完整变更见 [CHANGELOG.md](CHANGELOG.md)。  
+正式发布记录见 [Releases](https://github.com/wochenlong/lora-scripts-next/releases)。
 
 ---
 
