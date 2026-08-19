@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
-import { ElMessage } from "element-plus"
+import { ElMessage, ElMessageBox } from "element-plus"
 import { Refresh, Search } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import { productsApi, type Product, type ProductDetail, type ProductGroup } from "../api/products"
@@ -13,15 +13,22 @@ const { t } = useI18n()
 const groups = ref<ProductGroup[]>([])
 const families = ref<string[]>([])
 const scannedDirs = ref<string[]>([])
+const deployTargets = ref<Record<string, string>>({})
 const activeFamily = ref("")
 const loading = ref(false)
 const scanning = ref(false)
+const reconciling = ref(false)
 const scanOpen = ref(false)
 const scanDir = ref("")
 
 const detailOpen = ref(false)
 const detailLoading = ref(false)
 const detail = ref<ProductDetail | null>(null)
+const deployTarget = ref("")
+const deployMethod = ref<"copy" | "link">("copy")
+const deployBusy = ref(false)
+const newTargetName = ref("")
+const newTargetPath = ref("")
 
 const {
   open: pickerOpen,
@@ -34,6 +41,7 @@ const {
 } = useServerPathPick()
 
 const totalCount = computed(() => groups.value.reduce((n, g) => n + g.products.length, 0))
+const targetNames = computed(() => Object.keys(deployTargets.value))
 
 async function load() {
   loading.value = true
@@ -42,6 +50,7 @@ async function load() {
     groups.value = data.groups
     families.value = data.families
     scannedDirs.value = data.scanned_dirs
+    deployTargets.value = data.deploy_targets ?? {}
   } catch (reason) {
     ElMessage.error(reason instanceof Error ? reason.message : t("products.msg.loadFail"))
   } finally {
@@ -65,9 +74,11 @@ async function scan() {
   }
 }
 
-async function pickScanDir() {
-  const path = await pick({ mode: "folder", initialPath: scanDir.value })
-  if (path) scanDir.value = path
+async function pickFor(purpose: "scan" | "target") {
+  const path = await pick({ mode: "folder", initialPath: purpose === "scan" ? scanDir.value : newTargetPath.value })
+  if (!path) return
+  if (purpose === "scan") scanDir.value = path
+  else newTargetPath.value = path
 }
 
 async function openDetail(product: Product) {
@@ -81,6 +92,114 @@ async function openDetail(product: Product) {
     detailOpen.value = false
   } finally {
     detailLoading.value = false
+  }
+}
+
+function deployStatusText(status: string | undefined): string {
+  if (!status) return ""
+  const key = `products.deploy.status.${status}` as const
+  const text = t(key)
+  return text === key ? status : text
+}
+
+function isConflict(status: string | undefined): boolean {
+  return status === "conflict"
+}
+
+async function refreshDetail() {
+  if (!detail.value) return
+  detail.value = (await productsApi.detail(detail.value.id)).product
+}
+
+async function deployCurrent() {
+  if (!detail.value || !deployTarget.value) return
+  deployBusy.value = true
+  try {
+    await productsApi.deploy(detail.value.id, deployTarget.value, deployMethod.value)
+    ElMessage.success(t("products.deploy.status.deployed"))
+    await refreshDetail()
+    await load()
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.deploy.msg.deployFail"))
+  } finally {
+    deployBusy.value = false
+  }
+}
+
+async function undeployCurrent(target: string) {
+  if (!detail.value) return
+  deployBusy.value = true
+  try {
+    await productsApi.undeploy(detail.value.id, target)
+    ElMessage.success(t("products.deploy.status.removed"))
+    await refreshDetail()
+    await load()
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.deploy.msg.undeployFail"))
+  } finally {
+    deployBusy.value = false
+  }
+}
+
+async function addTarget() {
+  if (!newTargetName.value.trim() || !newTargetPath.value.trim()) return
+  try {
+    const data = await productsApi.addDeployTarget(newTargetName.value.trim(), newTargetPath.value.trim())
+    deployTargets.value = data.targets
+    newTargetName.value = ""
+    newTargetPath.value = ""
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.deploy.msg.targetFail"))
+  }
+}
+
+async function removeTarget(name: string) {
+  try {
+    const data = await productsApi.removeDeployTarget(name)
+    deployTargets.value = data.targets
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.deploy.msg.targetFail"))
+  }
+}
+
+async function reconcileNow() {
+  reconciling.value = true
+  try {
+    const data = await productsApi.reconcile()
+    const problems = data.results.filter((r) => r.status === "conflict" || r.status === "error")
+    if (problems.length) {
+      ElMessage.warning(problems.map((r) => `${r.target}: ${r.message || r.status}`).join("\n"))
+    } else {
+      ElMessage.success(t("products.deploy.reconcileDone"))
+    }
+    await load()
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.deploy.msg.deployFail"))
+  } finally {
+    reconciling.value = false
+  }
+}
+
+async function deleteCurrent() {
+  if (!detail.value) return
+  try {
+    await ElMessageBox.confirm(
+      t("products.deploy.deleteConfirm", { name: detail.value.name }),
+      t("products.deploy.deleteAction"),
+      { type: "warning" },
+    )
+  } catch {
+    return
+  }
+  deployBusy.value = true
+  try {
+    await productsApi.remove(detail.value.id)
+    detailOpen.value = false
+    await load()
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.deploy.msg.deleteFail"))
+  } finally {
+    deployBusy.value = false
   }
 }
 
@@ -126,6 +245,7 @@ onMounted(load)
       </div>
       <div class="header-actions">
         <el-button :icon="Search" @click="scanOpen = true">{{ t("products.scan") }}</el-button>
+        <el-button :loading="reconciling" @click="reconcileNow">{{ t("products.deploy.reconcile") }}</el-button>
         <el-button :icon="Refresh" :loading="loading" @click="load">{{ t("products.refresh") }}</el-button>
       </div>
     </header>
@@ -194,6 +314,16 @@ onMounted(load)
               <span v-if="product.status === 'missing'" class="status-missing" :title="t('products.missingHint')">
                 {{ t("products.missing") }}
               </span>
+              <span
+                v-for="(status, target) in product.deploy_status ?? {}"
+                v-show="!target.endsWith('__message')"
+                :key="target"
+                class="deploy-badge"
+                :class="{ 'deploy-conflict': isConflict(status) }"
+                :title="isConflict(status) ? (product.deploy_status?.[`${target}__message`] || t('products.deploy.conflictHint')) : target"
+              >
+                {{ target }}: {{ deployStatusText(status) }}
+              </span>
             </td>
             <td class="row-actions">
               <el-button size="small" @click="openDetail(product)">{{ t("products.detail") }}</el-button>
@@ -209,7 +339,7 @@ onMounted(load)
       <label class="dialog-label">{{ t("products.scanDirLabel") }}</label>
       <div class="scan-input-row">
         <el-input v-model="scanDir" :placeholder="t('products.scanDirPlaceholder')" />
-        <el-button @click="pickScanDir">{{ t("products.browse") }}</el-button>
+        <el-button @click="pickFor('scan')">{{ t("products.browse") }}</el-button>
       </div>
       <template #footer>
         <el-button @click="scanOpen = false">{{ t("training.submitConfirm.cancel") }}</el-button>
@@ -235,6 +365,62 @@ onMounted(load)
               <span v-if="detail.run.config_exists">{{ detail.run.config_path }}</span>
               <span v-else class="status-missing">{{ t("products.detailDialog.configMissing") }}</span>
             </div>
+          </div>
+          <div class="detail-deploy">
+            <span class="detail-label">{{ t("products.deploy.title") }}</span>
+            <div v-if="Object.keys(detail.deployed_to ?? {}).length" class="deploy-entries">
+              <div v-for="(entry, target) in detail.deployed_to" :key="target" class="deploy-entry">
+                <span class="deploy-target-name">{{ target }}</span>
+                <span
+                  class="deploy-badge"
+                  :class="{ 'deploy-conflict': isConflict(detail.deploy_status?.[target]) }"
+                  :title="detail.deploy_status?.[`${target}__message`] || ''"
+                >{{ deployStatusText(detail.deploy_status?.[target]) }}</span>
+                <span class="group-meta">{{ entry.path }}</span>
+                <el-button
+                  size="small"
+                  :disabled="deployBusy"
+                  @click="undeployCurrent(target)"
+                >{{ t("products.deploy.undeployAction") }}</el-button>
+              </div>
+            </div>
+            <div class="deploy-form">
+              <el-select v-model="deployTarget" :placeholder="t('products.deploy.targetLabel')" size="small">
+                <el-option v-for="name in targetNames" :key="name" :label="`${name} (${deployTargets[name]})`" :value="name" />
+              </el-select>
+              <el-select v-model="deployMethod" size="small">
+                <el-option value="copy" :label="t('products.deploy.methodCopy')" />
+                <el-option value="link" :label="t('products.deploy.methodLink')" />
+              </el-select>
+              <el-button
+                size="small"
+                type="primary"
+                :disabled="deployBusy || !deployTarget || detail.status !== 'present'"
+                :loading="deployBusy"
+                @click="deployCurrent"
+              >{{ t("products.deploy.deployAction") }}</el-button>
+            </div>
+            <div class="deploy-target-admin">
+              <p v-if="targetNames.length === 0" class="dialog-hint">{{ t("products.deploy.targetEmpty") }}</p>
+              <div v-for="name in targetNames" :key="name" class="deploy-target-row">
+                <span class="deploy-target-name">{{ name }}</span>
+                <span class="group-meta">{{ deployTargets[name] }}</span>
+                <el-button size="small" text @click="removeTarget(name)">×</el-button>
+              </div>
+              <div class="deploy-target-row">
+                <el-input v-model="newTargetName" size="small" :placeholder="t('products.deploy.targetNamePlaceholder')" />
+                <el-input v-model="newTargetPath" size="small" :placeholder="t('products.deploy.targetPathPlaceholder')" />
+                <el-button size="small" @click="pickFor('target')">{{ t("products.browse") }}</el-button>
+                <el-button size="small" :disabled="!newTargetName.trim() || !newTargetPath.trim()" @click="addTarget">
+                  {{ t("products.deploy.addTarget") }}
+                </el-button>
+              </div>
+            </div>
+          </div>
+          <div class="detail-danger">
+            <el-button size="small" type="danger" plain :disabled="deployBusy" @click="deleteCurrent">
+              {{ t("products.deploy.deleteAction") }}
+            </el-button>
           </div>
           <div class="detail-metadata">
             <span class="detail-label">{{ t("products.detailDialog.metadata") }}</span>

@@ -2,6 +2,15 @@ import { apiData } from "./client"
 
 export type ProductStatus = "present" | "missing"
 
+export interface DeployEntry {
+  path: string
+  desired: "deployed" | "removed"
+  method?: string
+  size?: number
+  mtime?: number
+  deployed_at?: number
+}
+
 export interface Product {
   id: string
   name: string
@@ -21,7 +30,8 @@ export interface Product {
   run_task_id: string | null
   train_type: string | null
   derived_from: string | null
-  deployed_to: Record<string, string>
+  deployed_to: Record<string, DeployEntry>
+  deploy_status?: Record<string, string>
   status: ProductStatus
 }
 
@@ -39,6 +49,7 @@ export interface ProductListData {
   groups: ProductGroup[]
   families: string[]
   scanned_dirs: string[]
+  deploy_targets: Record<string, string>
 }
 
 export interface ProductRun {
@@ -73,4 +84,27 @@ export const productsApi = {
   resolvePath: (path: string) =>
     apiData<{ path: string; resolved: string | null }>(`/api/products/resolve-path?path=${encodeURIComponent(path)}`),
   downloadUrl: (id: string) => `/api/products/${encodeURIComponent(id)}/download`,
+  addDeployTarget: (name: string, path: string) =>
+    apiData<{ targets: Record<string, string> }>("/api/products/deploy/targets", {
+      method: "POST",
+      body: JSON.stringify({ name, path }),
+    }),
+  removeDeployTarget: (name: string) =>
+    apiData<{ targets: Record<string, string> }>(`/api/products/deploy/targets/${encodeURIComponent(name)}`, { method: "DELETE" }),
+  deploy: (id: string, target: string, method: "copy" | "link" = "copy") =>
+    apiData<{ status: string; path: string; method?: string }>(`/api/products/${encodeURIComponent(id)}/deploy`, {
+      method: "POST",
+      body: JSON.stringify({ target, method }),
+    }),
+  undeploy: (id: string, target: string) =>
+    apiData<{ status: string }>(`/api/products/${encodeURIComponent(id)}/undeploy`, {
+      method: "POST",
+      body: JSON.stringify({ target }),
+    }),
+  reconcile: () =>
+    apiData<{ results: { id: string; target: string; status: string; message?: string }[] }>(
+      "/api/products/deploy/reconcile", { method: "POST", body: "{}" },
+    ),
+  remove: (id: string) =>
+    apiData<{ deleted: string }>(`/api/products/${encodeURIComponent(id)}`, { method: "DELETE" }),
 }

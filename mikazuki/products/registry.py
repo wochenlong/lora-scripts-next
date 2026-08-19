@@ -79,9 +79,13 @@ class Registry:
                 self.scan_dirs.append(path)
         elif kind == "product_state":
             pid = op.get("id")
-            if pid:
-                state = self.product_states.setdefault(pid, {})
-                state.update({k: v for k, v in op.items() if k not in ("op", "id")})
+            if not pid:
+                return
+            if op.get("clear"):
+                self.product_states.pop(pid, None)
+                return
+            state = self.product_states.setdefault(pid, {})
+            state.update({k: v for k, v in op.items() if k not in ("op", "id")})
 
     def _append(self, op: dict) -> None:
         with self._lock:
@@ -145,6 +149,9 @@ class Registry:
 
     def get_product_state(self, product_id: str) -> dict:
         return dict(self.product_states.get(product_id, {}))
+
+    def clear_product_state(self, product_id: str) -> None:
+        self._append({"op": "product_state", "id": product_id, "clear": True})
 
     def list_runs(self) -> List[dict]:
         return sorted(self.runs.values(), key=lambda r: r.get("registered_at", 0), reverse=True)

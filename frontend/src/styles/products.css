@@ -222,3 +222,66 @@
   display: flex;
   gap: 8px;
 }
+
+.deploy-badge {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  background: var(--el-color-success-light-9, #ecfdf5);
+  color: var(--el-color-success, #16a34a);
+  border: 1px solid var(--el-color-success-light-5, #86efac);
+}
+
+.deploy-badge.deploy-conflict {
+  background: var(--el-color-warning-light-9, #fffbeb);
+  color: var(--el-color-warning, #d97706);
+  border-color: var(--el-color-warning-light-5, #fcd34d);
+}
+
+.detail-deploy {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.deploy-entries {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.deploy-entry,
+.deploy-target-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  flex-wrap: wrap;
+}
+
+.deploy-target-name {
+  font-weight: 600;
+  min-width: 64px;
+}
+
+.deploy-form {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.deploy-target-admin {
+  border-top: 1px dashed var(--border-color, #e5e7eb);
+  padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.detail-danger {
+  border-top: 1px dashed var(--border-color, #e5e7eb);
+  padding-top: 12px;
+}
