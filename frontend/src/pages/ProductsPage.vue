@@ -1,14 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue"
+import { useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { Refresh, Search } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import { productsApi, type Product, type ProductDetail, type ProductGroup } from "../api/products"
 import { copyText } from "../utils/clipboard"
+import { moduleForTrainType } from "../training/modules"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import { useServerPathPick } from "../composables/useServerPathPick"
 
 const { t } = useI18n()
+const router = useRouter()
 
 const groups = ref<ProductGroup[]>([])
 const families = ref<string[]>([])
@@ -231,6 +234,33 @@ function versionLabel(product: Product): string {
 }
 
 const metadataEntries = computed(() => Object.entries(detail.value?.metadata ?? {}))
+
+// ---- F11: refill the training form from a product ----
+
+const refillBusy = ref(false)
+
+async function refillTraining() {
+  const product = detail.value
+  if (!product) return
+  refillBusy.value = true
+  try {
+    const { config } = await productsApi.trainingConfig(product.id)
+    // Reuse the import pipeline: TrainingPage picks this up, runs
+    // validate-import and hydrates the form.
+    sessionStorage.setItem("mikazuki-pending-import", JSON.stringify(config))
+    const module_ = moduleForTrainType(String(config.model_train_type || ""))
+    if (module_) {
+      await router.push({ path: "/training", query: { model: module_.model, engine: module_.engine, target: module_.target } })
+    } else {
+      await router.push("/training")
+    }
+    detailOpen.value = false
+  } catch (reason) {
+    ElMessage.error(reason instanceof Error ? reason.message : t("products.refill.fail"))
+  } finally {
+    refillBusy.value = false
+  }
+}
 
 const metaEditing = ref(false)
 const metaDraft = ref<{ key: string; value: string }[]>([])
@@ -556,6 +586,9 @@ onMounted(load)
             </div>
           </div>
           <div class="detail-danger">
+            <el-button size="small" :loading="refillBusy" @click="refillTraining">
+              {{ t("products.refill.action") }}
+            </el-button>
             <el-button size="small" type="danger" plain :disabled="deployBusy" @click="deleteCurrent">
               {{ t("products.deploy.deleteAction") }}
             </el-button>

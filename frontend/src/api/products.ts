@@ -134,4 +134,8 @@ export const productsApi = {
       method: "POST",
       body: JSON.stringify(body),
     }),
+  trainingConfig: (id: string) =>
+    apiData<{ source: "snapshot" | "metadata"; config: Record<string, unknown> }>(
+      `/api/products/${encodeURIComponent(id)}/training-config`,
+    ),
 }

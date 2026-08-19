@@ -1031,5 +1031,9 @@ export default {
         targetFail: "部署目标保存失败",
       },
     },
+    refill: {
+      action: "用这套参数再训",
+      fail: "回填训练参数失败",
+    },
   },
 }

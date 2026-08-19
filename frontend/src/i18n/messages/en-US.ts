@@ -1031,5 +1031,9 @@ export default {
         targetFail: "Failed to save deploy target",
       },
     },
+    refill: {
+      action: "Train again with these params",
+      fail: "Failed to refill the training form",
+    },
   },
 }

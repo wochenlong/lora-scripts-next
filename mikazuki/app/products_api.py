@@ -1,11 +1,12 @@
 """HTTP API for the products (artifact) management feature.
 
-Mounted under ``/api`` alongside the main router. Everything here is
-read-only against the filesystem: listing, manual scan, detail. Actions
-(resize/merge/extract), deploy and metadata editing live in their own
-modules (see docs/需求-制品管理.md).
+Mounted under ``/api`` alongside the main router. Listing/scan/detail are
+read-only; deploy, metadata editing and actions (resize/merge/extract) live
+in their own mikazuki.products modules (see docs/需求-制品管理.md).
 """
 
+import json
+import tomllib
 from pathlib import Path
 from typing import List, Optional
 
@@ -381,3 +382,81 @@ async def extract_product(product_id: str, req: ExtractRequest):
     except actions_mod.ActionError as exc:
         return APIResponseFail(message=str(exc))
     return APIResponseSuccess(data=result)
+
+
+# ---- F11: refill training form from a product ----
+
+_SS_TO_CONFIG = {
+    "ss_network_dim": "network_dim",
+    "ss_network_alpha": "network_alpha",
+    "ss_network_module": "network_module",
+    "ss_learning_rate": "learning_rate",
+    "ss_unet_lr": "unet_lr",
+    "ss_text_encoder_lr": "text_encoder_lr",
+    "ss_lr_scheduler": "lr_scheduler",
+    "ss_optimizer": "optimizer_type",
+    "ss_max_train_epochs": "max_train_epochs",
+    "ss_resolution": "resolution",
+}
+
+_FAMILY_TO_TRAIN_TYPE = {
+    "sdxl": "sdxl-lora",
+    "sd3": "sd3-lora",
+    "flux": "flux-lora",
+    "sd": "sd-lora",
+}
+
+
+def _config_from_ss_metadata(metadata: dict, family: str) -> dict:
+    """Best-effort core-field mapping from ss_* metadata (snapshot absent)."""
+    config: dict = {"model_train_type": _FAMILY_TO_TRAIN_TYPE.get(family, "sd-lora")}
+    for ss_key, config_key in _SS_TO_CONFIG.items():
+        value = metadata.get(ss_key)
+        if value is None:
+            continue
+        if config_key in ("network_dim", "max_train_epochs"):
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                continue
+        elif config_key == "network_alpha":
+            try:
+                value = float(value)
+            except (TypeError, ValueError):
+                continue
+        config[config_key] = value
+    return config
+
+
+@router.get("/products/{product_id}/training-config")
+async def product_training_config(product_id: str):
+    """F11: config for "train again with these params". Prefers the linked
+    run's autosave snapshot (exact); falls back to core ss_* fields."""
+    product = _find_product(product_id)
+    if product is None:
+        return APIResponseFail(message="制品不存在")
+
+    registry = default_registry()
+    run = registry.runs.get(product.get("run_task_id") or "")
+    config_path = (run or {}).get("config_path")
+    if config_path and Path(config_path).is_file():
+        try:
+            with open(config_path, "rb") as f:
+                config = tomllib.load(f)
+            if run.get("train_type"):
+                config["model_train_type"] = run["train_type"]
+            return APIResponseSuccess(data={"source": "snapshot", "config": config})
+        except (tomllib.TOMLDecodeError, OSError) as exc:
+            log.warning(f"failed to parse config snapshot {config_path}: {exc}")
+
+    metadata = {}
+    if product["status"] == "present":
+        try:
+            header = read_safetensors_metadata(product["path"]) or {}
+            metadata = header.get("__metadata__", {}) if isinstance(header, dict) else {}
+        except Exception as exc:  # noqa: BLE001
+            log.warning(f"failed to read metadata for refill: {exc}")
+    if not metadata:
+        return APIResponseFail(message="该制品没有可用的配置快照或 ss_* 参数")
+    config = _config_from_ss_metadata(metadata, product.get("family") or "other")
+    return APIResponseSuccess(data={"source": "metadata", "config": config})
