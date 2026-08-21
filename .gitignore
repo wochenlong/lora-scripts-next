@@ -45,6 +45,9 @@ huggingface/hub/version_diffusers_cache.txt
 build/
 .sd-trainer-portable/
 frontend/node_modules/
+plugin-packages/**/node_modules/
+plugin-packages/**/dist/
+plugin-packages/**/.runtime/
 
 # Update check cache
 config/.update_cache.json
