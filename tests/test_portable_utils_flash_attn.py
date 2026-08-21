@@ -20,7 +20,10 @@ def test_detect_best_attn_mode_uses_xformers_without_flash(monkeypatch: pytest.M
 
 def test_detect_best_attn_mode_uses_torch_without_flash_or_xformers(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("mikazuki.app.api.flash_attn_stack_usable", lambda: False)
-    monkeypatch.delitem(sys.modules, "xformers", raising=False)
+    # A missing sys.modules entry still allows Python to import an installed
+    # xformers package. A None sentinel deterministically simulates an
+    # unavailable module even in full developer environments.
+    monkeypatch.setitem(sys.modules, "xformers", None)
     assert _detect_best_attn_mode() == "torch"
 
 

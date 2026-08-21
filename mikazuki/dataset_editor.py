@@ -351,11 +351,12 @@ async def batch_edit(req: BatchEditRequest):
             if tag and tag not in next_tags:
                 next_tags.append(tag)
         if req.append_position == "front":
-            prefix: list[str] = []
-            for tag in append_tags:
-                if tag not in next_tags and tag not in prefix:
-                    prefix.append(tag)
-            next_tags = [*prefix, *next_tags]
+            # "front" means the requested tags form the ordered prefix, even
+            # when one of them already exists later in the caption. Remove
+            # those existing occurrences before prepending so de-duplication
+            # does not accidentally leave a requested prefix tag at the end.
+            prefix = list(dict.fromkeys(append_tags))
+            next_tags = [*prefix, *(tag for tag in next_tags if tag not in prefix)]
         else:
             for tag in append_tags:
                 if tag not in next_tags:

@@ -65,6 +65,10 @@ git pull origin dev
 # or: python gui.py --dev
 ```
 
+Direct TOML training wrappers are also available from the repository root:
+`train_anima_by_toml.sh` for the standard Anima backend and
+`train_anima_fast_by_toml.sh` for the optional Anima Fast runtime.
+
 ```sh
 git branch --show-current   # should be dev
 cat VERSION                 # should be 3.0.0

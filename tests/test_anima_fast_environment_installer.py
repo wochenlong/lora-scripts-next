@@ -679,7 +679,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                 write_install_state(layout, STATE_READY, {"audit": {"ok": True}})
                 return AuditResult(ok=True)
 
-            def fake_ensure(project_root, preferred, commit, log=None):
+            def fake_ensure(project_root, preferred, commit, log=None, github_url_prefix=None):
                 return cache.resolve()
 
             with mock.patch(

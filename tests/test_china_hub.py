@@ -76,6 +76,9 @@ def test_smilingwolf_download_bypasses_modelscope_patch(monkeypatch: pytest.Monk
 
 
 def test_enable_china_hub_requires_modelscope(monkeypatch: pytest.MonkeyPatch):
+    import mikazuki.china_hub as china_hub
+
+    monkeypatch.setattr(china_hub, "_PATCHED", False)
     monkeypatch.setenv("MIKAZUKI_HUB_BACKEND", "huggingface")
     assert enable_china_hub() is False
 
