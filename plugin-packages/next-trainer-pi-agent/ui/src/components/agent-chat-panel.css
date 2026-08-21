@@ -1,0 +1,197 @@
+.nta-theme-root {
+  width: 100%;
+  height: 100%;
+  color: var(--nta-text);
+  background: var(--nta-bg);
+  font-family: var(--nta-font);
+}
+
+.nta-chat-panel {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: min(520px, 100%);
+  height: min(680px, 100%);
+  min-height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--nta-border);
+  border-radius: var(--nta-radius);
+  background: var(--nta-panel);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 22%);
+}
+
+.nta-chat-header,
+.nta-composer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px;
+  border-color: var(--nta-border);
+}
+
+.nta-chat-header {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--nta-border);
+}
+
+.nta-chat-header div,
+.nta-chat-header nav {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nta-chat-header span,
+.nta-muted,
+.nta-status,
+.nta-empty {
+  color: var(--nta-muted);
+  font-size: 12px;
+}
+
+.nta-chat-header button,
+.nta-markdown-link {
+  padding: 0;
+  border: 0;
+  color: var(--nta-accent);
+  background: transparent;
+  cursor: pointer;
+  font: inherit;
+}
+
+.nta-message-list {
+  overflow: auto;
+  padding: 14px;
+  scrollbar-gutter: stable;
+}
+
+.nta-message {
+  width: fit-content;
+  max-width: 92%;
+  margin: 0 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--nta-border);
+  border-radius: var(--nta-radius);
+  overflow-wrap: anywhere;
+}
+
+.nta-message-user {
+  margin-left: auto;
+  color: var(--nta-accent-text);
+  background: var(--nta-accent);
+  border-color: transparent;
+  white-space: pre-wrap;
+}
+
+.nta-message-assistant,
+.nta-tool-result {
+  background: var(--nta-bg);
+}
+
+.nta-thinking,
+.nta-tool-card {
+  margin-top: 8px;
+  padding: 8px;
+  border: 1px solid var(--nta-border);
+  border-radius: 9px;
+}
+
+.nta-tool-card pre,
+.nta-code-block {
+  max-width: 100%;
+  overflow: auto;
+  font-family: var(--nta-mono);
+  white-space: pre-wrap;
+}
+
+.nta-message-image {
+  display: block;
+  max-width: 100%;
+  max-height: 260px;
+  margin-top: 8px;
+  border-radius: 9px;
+  object-fit: contain;
+}
+
+.nta-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.nta-error,
+.nta-tool-result.is-error {
+  color: var(--nta-danger);
+}
+
+.nta-composer {
+  align-items: stretch;
+  border-top: 1px solid var(--nta-border);
+}
+
+.nta-composer textarea {
+  min-width: 0;
+  flex: 1;
+  resize: none;
+  padding: 9px 10px;
+  border: 1px solid var(--nta-border);
+  border-radius: 9px;
+  color: var(--nta-text);
+  background: var(--nta-bg);
+  font: inherit;
+}
+
+.nta-send,
+.nta-stop {
+  align-self: flex-end;
+  min-width: 64px;
+  padding: 9px 14px;
+  border: 0;
+  border-radius: 9px;
+  color: var(--nta-accent-text);
+  background: var(--nta-accent);
+  cursor: pointer;
+}
+
+.nta-stop {
+  background: var(--nta-danger);
+}
+
+.nta-send:disabled {
+  cursor: default;
+  opacity: .5;
+}
+
+.nta-markdown > :first-child { margin-top: 0; }
+.nta-markdown > :last-child { margin-bottom: 0; }
+
+.nta-provider-settings {
+  display: grid;
+  gap: 12px;
+  width: min(520px, 100%);
+  box-sizing: border-box;
+  padding: 18px;
+  color: var(--nta-text);
+  background: var(--nta-panel);
+}
+
+.nta-provider-settings label {
+  display: grid;
+  gap: 5px;
+  color: var(--nta-muted);
+  font-size: 12px;
+}
+
+.nta-provider-settings input,
+.nta-provider-settings select {
+  padding: 9px 10px;
+  border: 1px solid var(--nta-border);
+  border-radius: 9px;
+  color: var(--nta-text);
+  background: var(--nta-bg);
+  font: inherit;
+}
+
+.nta-provider-actions {
+  display: flex;
+  gap: 8px;
+}

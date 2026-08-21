@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "pi": {
+    "package": "@earendil-works/pi-coding-agent",
+    "version": "0.84.2",
+    "resolution": "npm-lockfile"
+  },
+  "piWebReference": {
+    "repository": "https://github.com/agegr/pi-web.git",
+    "commit": "2a6e53710f6409e0cceb3de839a62f8cdf3ca3ca",
+    "version": "0.8.9",
+    "license": "MIT",
+    "policy": "source-reference-only; slim fork files must be listed when imported"
+  },
+  "build": {
+    "node": "22.19.0",
+    "bun": "1.4.0",
+    "target": "bun-windows-x64-baseline"
+  },
+  "importedFiles": []
+}

@@ -29,6 +29,7 @@ import "./styles/tagger.css"
 import "./styles/settings.css"
 import "./styles/anima-fast.css"
 import "./styles/content-pages.css"
+import "./styles/extensions.css"
 import "./styles/dark-theme.css"
 
 const app = createApp(App)
