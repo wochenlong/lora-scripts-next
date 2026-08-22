@@ -6,9 +6,17 @@ in their own mikazuki.products modules (see docs/需求-制品管理.md).
 """
 
 import json
-import tomllib
 from pathlib import Path
 from typing import List, Optional
+
+try:
+    import tomllib
+
+    _TOMLDecodeError = tomllib.TOMLDecodeError
+except ModuleNotFoundError:  # Python 3.10 runtime
+    import toml as tomllib
+
+    _TOMLDecodeError = tomllib.TomlDecodeError
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import FileResponse
@@ -441,12 +449,11 @@ async def product_training_config(product_id: str):
     config_path = (run or {}).get("config_path")
     if config_path and Path(config_path).is_file():
         try:
-            with open(config_path, "rb") as f:
-                config = tomllib.load(f)
+            config = tomllib.loads(Path(config_path).read_text(encoding="utf-8"))
             if run.get("train_type"):
                 config["model_train_type"] = run["train_type"]
             return APIResponseSuccess(data={"source": "snapshot", "config": config})
-        except (tomllib.TOMLDecodeError, OSError) as exc:
+        except (_TOMLDecodeError, OSError) as exc:
             log.warning(f"failed to parse config snapshot {config_path}: {exc}")
 
     metadata = {}
