@@ -216,6 +216,9 @@ export default {
       musubiInstall: "插件安装 · Musubi-Tuner",
       animaFastInstall: "插件安装 · Anima Fast",
       assetsDownload: "模型资产下载",
+      productResize: "制品动作 · Resize",
+      productMerge: "制品动作 · Merge",
+      productExtract: "制品动作 · Extract",
     },
     stage: {
       cacheLatents: "缓存 Latents",

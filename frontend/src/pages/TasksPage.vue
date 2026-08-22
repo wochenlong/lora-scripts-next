@@ -203,6 +203,9 @@ const KIND_LABEL_KEYS: Record<string, string> = {
   musubi_install: "tasks.kind.musubiInstall",
   anima_fast_install: "tasks.kind.animaFastInstall",
   assets_download: "tasks.kind.assetsDownload",
+  product_resize: "tasks.kind.productResize",
+  product_merge: "tasks.kind.productMerge",
+  product_extract: "tasks.kind.productExtract",
 }
 
 function kindLabelKey(task: TrainingTask): string {
@@ -210,7 +213,7 @@ function kindLabelKey(task: TrainingTask): string {
   return typeof kind === "string" ? (KIND_LABEL_KEYS[kind] ?? "") : ""
 }
 
-/** Install/download tasks never produce training insights. */
+/** Install/download/product-action tasks never produce training insights. */
 function isMaintenanceTask(task: TrainingTask): boolean {
   return task.lane === "maintenance" || Boolean(kindLabelKey(task))
 }

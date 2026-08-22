@@ -9,6 +9,7 @@ as it is scanned.
 """
 
 import os
+import subprocess
 from pathlib import Path
 from typing import List, Optional
 
@@ -23,6 +24,25 @@ NETWORKS_DIR = SCRIPTS_SUBDIR / "networks"
 
 class ActionError(ValueError):
     pass
+
+
+_CUDA_AVAILABLE: Optional[bool] = None
+
+
+def cuda_available() -> bool:
+    """Probe CUDA once with the action interpreter; the shell process itself
+    stays torch-free, so detection happens in a subprocess and is cached."""
+    global _CUDA_AVAILABLE
+    if _CUDA_AVAILABLE is None:
+        try:
+            result = subprocess.run(
+                [str(python_bin), "-c", "import torch; print(torch.cuda.is_available())"],
+                capture_output=True, text=True, timeout=180,
+            )
+            _CUDA_AVAILABLE = result.returncode == 0 and result.stdout.strip() == "True"
+        except Exception:  # noqa: BLE001
+            _CUDA_AVAILABLE = False
+    return _CUDA_AVAILABLE
 
 
 def scripts_root() -> Path:
@@ -52,6 +72,7 @@ def _submit(registry: Registry, *, action: str, script: str, args: List[str],
     command = [str(python_bin), str(Path("networks") / script), *args]
     metadata = {
         "job_label": f"制品动作 {action}",
+        "kind": f"product_{action}",
         "action": action,
         "output_path": str(output),
         "derived_from": derived_from,
@@ -113,6 +134,10 @@ def submit_resize(registry: Registry, *, source: str, output_path: str,
     args = build_resize_args(source, output_path, new_rank=new_rank,
                              new_conv_rank=new_conv_rank, dynamic_method=dynamic_method,
                              dynamic_param=dynamic_param, save_precision=save_precision)
+    if cuda_available():
+        # resize_lora.py defaults to CPU when --device is omitted; per-layer SVD
+        # on CPU takes hours for SDXL-sized LoRAs.
+        args += ["--device", "cuda"]
 
     return _submit(registry, action="resize", script="resize_lora.py", args=args,
                    output_path=output_path, derived_from=[product_id_for_path(source)])

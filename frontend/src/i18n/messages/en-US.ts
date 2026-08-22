@@ -216,6 +216,9 @@ export default {
       musubiInstall: "Plugin Install · Musubi-Tuner",
       animaFastInstall: "Plugin Install · Anima Fast",
       assetsDownload: "Model Assets Download",
+      productResize: "Product Action · Resize",
+      productMerge: "Product Action · Merge",
+      productExtract: "Product Action · Extract",
     },
     stage: {
       cacheLatents: "Cache Latents",
