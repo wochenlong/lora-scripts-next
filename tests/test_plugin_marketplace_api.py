@@ -20,6 +20,7 @@ from mikazuki.plugin_marketplace.api import (
     configure_marketplace,
     configure_marketplace_catalog,
     configure_marketplace_authority,
+    get_confirmation_store,
     host_router,
     router,
 )
@@ -629,6 +630,7 @@ def test_host_confirmation_is_one_shot_expires_and_cannot_be_resolved_by_plugin(
         broker = PluginCapabilityBroker()
         configure_capability_broker(broker)
         now = [datetime(2026, 8, 21, tzinfo=timezone.utc)]
+        original_confirmations = get_confirmation_store()
         confirmations = ConfirmationTicketStore(clock=lambda: now[0])
         configure_confirmation_store(confirmations)
         package = _package(root, confirmation_bridge=True)
@@ -726,3 +728,5 @@ def test_host_confirmation_is_one_shot_expires_and_cannot_be_resolved_by_plugin(
         )
         assert expired.status_code == 410
         assert expired.json()["detail"]["code"] == "CONFIRMATION_EXPIRED"
+        # restore the process-wide store so later suites observe the default
+        configure_confirmation_store(original_confirmations)

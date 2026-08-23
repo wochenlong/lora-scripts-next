@@ -20,6 +20,29 @@ from pathlib import Path
 
 import pytest
 
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--real-provider",
+        action="store",
+        default=None,
+        choices=[None, "deepseek", "qwen"],
+        help="run the limited real-provider acceptance suite for one authorized profile",
+    )
+    parser.addoption(
+        "--civitai-real",
+        action="store_true",
+        default=False,
+        help="run the Stage 3 real public Civitai sample (official API, <=100 records)",
+    )
+    parser.addoption(
+        "--stage4-real",
+        action="store_true",
+        default=False,
+        help="run the Stage 4 real VLM dataset review with the authorized multimodal profile",
+    )
+
+
 _BASE = Path(__file__).resolve().parents[1] / ".runtime" / "pytest-tmp"
 
 
