@@ -241,8 +241,15 @@ def configure_capability_broker(broker: PluginCapabilityBroker) -> None:
 
 
 def configure_confirmation_store(store: ConfirmationTicketStore) -> None:
+    """Swap the trusted confirmation store and keep the tool service in sync.
+
+    The Host Tool gateway and the confirmation REST routes must observe the
+    same live store; reconfiguring only one side would silently split ticket
+    creation from ticket resolution across two stores.
+    """
     global _confirmations
     _confirmations = store
+    configure_agent_tool_service(store)
 
 
 def get_confirmation_store() -> ConfirmationTicketStore:

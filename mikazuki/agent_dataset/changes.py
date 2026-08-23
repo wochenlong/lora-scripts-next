@@ -228,7 +228,11 @@ class CaptionOverlay:
                     self._write_atomic(target, backup.read_bytes())
             failed.append({"code": "DATASET_COMMIT_FAILED", "reason": str(exc)})
             committed = []
-        return CaptionCommitResult("committed" if not failed else "partial-failure", change_set.change_set_hash, tuple(committed), tuple(failed), str(backup_session))
+        restore_hashes = {
+            path: _hash_bytes((backup_session / Path(path)).read_bytes())
+            for path in committed
+        }
+        return CaptionCommitResult("committed" if not failed else "partial-failure", change_set.change_set_hash, tuple(committed), tuple(failed), str(backup_session), restore_hashes)
 
     def restore(self, commit: CaptionCommitResult | str | Path) -> CaptionCommitResult:
         backup_dir = Path(commit.backup_dir if isinstance(commit, CaptionCommitResult) else commit)

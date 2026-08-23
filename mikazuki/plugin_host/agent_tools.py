@@ -17,6 +17,7 @@ from mikazuki.agent_dataset import (
     ActiveModelCapability,
     CaptionChangeSet,
     CaptionOverlay,
+    DatasetReviewError,
     inventory_dataset,
     review_images,
     select_review_sample,
@@ -228,8 +229,10 @@ class AgentToolService:
 
     def _caption_commit(self, session: str, call: str, p: dict[str, Any]) -> Any:
         change_set = self._change_sets.get((session, p["changeSetId"]))
-        if change_set is None or change_set.change_set_hash != p["changeSetHash"]:
-            raise ValueError("unknown or mismatched caption change-set")
+        if change_set is None:
+            raise DatasetReviewError("DATASET_CHANGE_SET_NOT_FOUND", "The caption change-set is unknown or expired.", status_code=404)
+        if change_set.change_set_hash != p["changeSetHash"]:
+            raise DatasetReviewError("DATASET_CONFIRMATION_MISMATCH", "The change-set hash does not match the staged change set.", status_code=409)
         ticket = self.confirmations.projection(p.get("confirmationTicketId", ""))
         overlay = self._overlays[(session, p["root"])]
         return overlay.commit(change_set, confirmation_ticket={**ticket, "changeSetHash": p["changeSetHash"], "sourceRevision": p.get("sourceRevision", change_set.source_revision)})

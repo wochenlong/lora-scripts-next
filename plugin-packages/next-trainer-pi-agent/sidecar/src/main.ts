@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { parseBootstrap } from "./bootstrap.ts"
+import { createImageResolver } from "./image-resources.ts"
 import { startParentMonitor } from "./parent-monitor.ts"
 import { createHostToolFactory } from "./host-tools.ts"
 import { installProviderFetchPolicy } from "./provider-fetch-policy.ts"
@@ -32,6 +33,7 @@ const customToolsFactory = bootstrap.hostToolBaseUrl
 const piRuntime = new ProductionPiRuntimeAdapter({
   agentDir,
   providers,
+  resolveImage: createImageResolver(agentDir),
   ...(customToolsFactory ? { customToolsFactory } : {}),
 })
 const sessions = new SessionRegistry(piRuntime, { storageDir: path.join(agentDir, "sessions") })

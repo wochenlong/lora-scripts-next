@@ -12,6 +12,7 @@ import {
 } from "@earendil-works/pi-coding-agent"
 import type { PromptMode, SessionCreateRequest, SessionSnapshot, ThinkingLevel } from "../contracts.ts"
 import { SidecarError } from "../errors.ts"
+import { decodeInlineImage } from "../image-resources.ts"
 import type { ProviderRegistry } from "./provider-registry.ts"
 import type { RuntimeEvent } from "./terminal-reducer.ts"
 
@@ -21,10 +22,18 @@ export interface RuntimeImage {
   mimeType: string
 }
 
+export interface RuntimeImageRef {
+  resourceId?: string
+  mediaType?: string
+  data?: string
+  mimeType?: string
+  name?: string
+}
+
 export interface RuntimePrompt {
   text: string
   mode: PromptMode
-  images: Array<{ resourceId: string; mediaType: string }>
+  images: RuntimeImageRef[]
   signal: AbortSignal
 }
 
@@ -236,10 +245,19 @@ class ProductionPiSessionHandle implements PiSessionHandle {
     if (!this.#session.model?.input.includes("image")) {
       throw new SidecarError(409, "MODEL_CAPABILITY_UNAVAILABLE", "The active model does not support image input.")
     }
-    if (!this.#resolveImage) {
+    return Promise.all(input.images.map(async (image) => {
+      if (typeof image.data === "string" && typeof image.mimeType === "string") {
+        const bytes = decodeInlineImage(image.data, image.mimeType)
+        return { type: "image" as const, data: Buffer.from(bytes).toString("base64"), mimeType: image.mimeType }
+      }
+      if (typeof image.resourceId === "string" && typeof image.mediaType === "string") {
+        if (!this.#resolveImage) {
+          throw new SidecarError(409, "IMAGE_RESOURCE_UNAVAILABLE", "The selected image resource is unavailable to the sidecar.")
+        }
+        return this.#resolveImage(image.resourceId, image.mediaType, input.signal)
+      }
       throw new SidecarError(409, "IMAGE_RESOURCE_UNAVAILABLE", "The selected image resource is unavailable to the sidecar.")
-    }
-    return Promise.all(input.images.map((image) => this.#resolveImage!(image.resourceId, image.mediaType, input.signal)))
+    }))
   }
 }
 
