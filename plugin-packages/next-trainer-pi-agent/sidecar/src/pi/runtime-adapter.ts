@@ -12,6 +12,7 @@ import {
 } from "@earendil-works/pi-coding-agent"
 import type { PromptMode, SessionCreateRequest, SessionSnapshot, ThinkingLevel } from "../contracts.ts"
 import { SidecarError } from "../errors.ts"
+import { decodeInlineImage } from "../image-resources.ts"
 import type { ProviderRegistry } from "./provider-registry.ts"
 import type { RuntimeEvent } from "./terminal-reducer.ts"
 
@@ -21,10 +22,18 @@ export interface RuntimeImage {
   mimeType: string
 }
 
+export interface RuntimeImageRef {
+  resourceId?: string
+  mediaType?: string
+  data?: string
+  mimeType?: string
+  name?: string
+}
+
 export interface RuntimePrompt {
   text: string
   mode: PromptMode
-  images: Array<{ resourceId: string; mediaType: string }>
+  images: RuntimeImageRef[]
   signal: AbortSignal
 }
 
@@ -59,6 +68,7 @@ export interface ProductionPiRuntimeAdapterOptions {
   customToolsFactory?: (sessionId: string) => Promise<ToolDefinition[]>
   skillPaths?: string[]
   resolveImage?: (resourceId: string, mediaType: string, signal: AbortSignal) => Promise<RuntimeImage>
+  providerTestTimeoutMs?: number
 }
 
 const BUILTIN_TOOL_NAMES = new Set(["read", "bash", "edit", "write", "grep", "find", "ls"])
@@ -88,6 +98,15 @@ function lastAssistantStopReason(session: AgentSession): SessionSnapshot["lastSt
     return "unknown"
   }
   return null
+}
+
+function responseStatus(error: unknown): number | undefined {
+  if (!error || typeof error !== "object") return undefined
+  const value = error as { status?: unknown; statusCode?: unknown; response?: { status?: unknown }; cause?: unknown }
+  for (const candidate of [value.status, value.statusCode, value.response?.status]) {
+    if (typeof candidate === "number" && Number.isInteger(candidate) && candidate >= 100 && candidate <= 599) return candidate
+  }
+  return responseStatus(value.cause)
 }
 
 class ProductionPiSessionHandle implements PiSessionHandle {
@@ -226,10 +245,19 @@ class ProductionPiSessionHandle implements PiSessionHandle {
     if (!this.#session.model?.input.includes("image")) {
       throw new SidecarError(409, "MODEL_CAPABILITY_UNAVAILABLE", "The active model does not support image input.")
     }
-    if (!this.#resolveImage) {
+    return Promise.all(input.images.map(async (image) => {
+      if (typeof image.data === "string" && typeof image.mimeType === "string") {
+        const bytes = decodeInlineImage(image.data, image.mimeType)
+        return { type: "image" as const, data: Buffer.from(bytes).toString("base64"), mimeType: image.mimeType }
+      }
+      if (typeof image.resourceId === "string" && typeof image.mediaType === "string") {
+        if (!this.#resolveImage) {
+          throw new SidecarError(409, "IMAGE_RESOURCE_UNAVAILABLE", "The selected image resource is unavailable to the sidecar.")
+        }
+        return this.#resolveImage(image.resourceId, image.mediaType, input.signal)
+      }
       throw new SidecarError(409, "IMAGE_RESOURCE_UNAVAILABLE", "The selected image resource is unavailable to the sidecar.")
-    }
-    return Promise.all(input.images.map((image) => this.#resolveImage!(image.resourceId, image.mediaType, input.signal)))
+    }))
   }
 }
 
@@ -241,6 +269,7 @@ export class ProductionPiRuntimeAdapter implements PiRuntimeAdapter {
   readonly #customToolsFactory?: ProductionPiRuntimeAdapterOptions["customToolsFactory"]
   readonly #skillPaths: string[]
   readonly #resolveImage?: ProductionPiRuntimeAdapterOptions["resolveImage"]
+  readonly #providerTestTimeoutMs: number
 
   constructor(options: ProductionPiRuntimeAdapterOptions) {
     this.#agentDir = path.resolve(options.agentDir)
@@ -249,6 +278,9 @@ export class ProductionPiRuntimeAdapter implements PiRuntimeAdapter {
     this.#customToolsFactory = options.customToolsFactory
     this.#skillPaths = [...(options.skillPaths ?? [])]
     this.#resolveImage = options.resolveImage
+    this.#providerTestTimeoutMs = Number.isFinite(options.providerTestTimeoutMs) && (options.providerTestTimeoutMs ?? 0) > 0
+      ? Math.floor(options.providerTestTimeoutMs!)
+      : 20_000
     for (const tool of this.#customTools) {
       if (BUILTIN_TOOL_NAMES.has(tool.name)) {
         throw new SidecarError(500, "PI_TOOL_POLICY_INVALID", `Host custom Tool name is reserved: ${tool.name}.`)
@@ -265,7 +297,7 @@ export class ProductionPiRuntimeAdapter implements PiRuntimeAdapter {
     const model = runtime.getModel(binding.runtimeProviderId, binding.modelId)
     if (!model) throw new SidecarError(409, "PROVIDER_MODEL_UNAVAILABLE", "The selected Provider model is not available.")
     const controller = new AbortController()
-    const timeout = setTimeout(() => controller.abort(), 20_000)
+    const timeout = setTimeout(() => controller.abort(), this.#providerTestTimeoutMs)
     const startedAt = performance.now()
     let status: number | undefined
     try {
@@ -293,6 +325,9 @@ export class ProductionPiRuntimeAdapter implements PiRuntimeAdapter {
         stopReason: message.stopReason,
       }
     } catch (error) {
+      // Keep the public response bounded; status extraction is best-effort
+      // because Pi may wrap transport failures in an Error.cause chain.
+      status ??= responseStatus(error)
       await this.#providers.recordTest(profileId, false)
       return {
         ok: false,

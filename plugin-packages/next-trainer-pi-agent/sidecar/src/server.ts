@@ -53,7 +53,7 @@ function requireString(params: Record<string, unknown>, key: string): string {
 function uiState(snapshot: import("./contracts.ts").SessionSnapshot, request?: SessionCreateRequest): Record<string, unknown> {
   return {
     id: snapshot.sessionId,
-    ...(request?.purpose ? { name: request.purpose } : {}),
+    ...(snapshot.name ?? request?.purpose ? { name: snapshot.name ?? request?.purpose } : {}),
     runId: snapshot.runId,
     status: snapshot.state === "error" ? "failed" : snapshot.state === "cancelling" ? "cancelling" : snapshot.state === "running" || snapshot.state === "queued" ? "running" : "idle",
     model: { profileId: snapshot.profileId, modelId: snapshot.modelId ?? request?.modelId ?? "" },
@@ -63,7 +63,7 @@ function uiState(snapshot: import("./contracts.ts").SessionSnapshot, request?: S
 }
 
 function uiSummary(snapshot: import("./contracts.ts").SessionSnapshot): Record<string, unknown> {
-  return { id: snapshot.sessionId, name: snapshot.purpose, createdAt: snapshot.createdAt ?? new Date(0).toISOString(), updatedAt: snapshot.updatedAt ?? snapshot.createdAt ?? new Date(0).toISOString(), messageCount: 0, running: snapshot.state === "running" || snapshot.state === "queued", model: { profileId: snapshot.profileId, modelId: snapshot.modelId ?? "" } }
+  return { id: snapshot.sessionId, name: snapshot.name ?? snapshot.purpose, createdAt: snapshot.createdAt ?? new Date(0).toISOString(), updatedAt: snapshot.updatedAt ?? snapshot.createdAt ?? new Date(0).toISOString(), messageCount: 0, running: snapshot.state === "running" || snapshot.state === "queued", model: { profileId: snapshot.profileId, modelId: snapshot.modelId ?? "" } }
 }
 
 function uiProvider(profile: import("./contracts.ts").ProviderStatus): Record<string, unknown> {
@@ -78,6 +78,7 @@ function uiEvent(event: import("./contracts.ts").AgentEventEnvelope): Record<str
   if (event.type.startsWith("tool_execution_")) return { ...base, type: event.type, ...payload }
   if (event.type === "queue_update") return { ...base, type: event.type, queue: payload.queue ?? { steering: [], followUp: [] } }
   if (event.type === "usage") return { ...base, type: event.type, usage: payload.usage ?? payload }
+  if (event.type === "agent_settled" || event.type === "prompt_done") return { ...base, type: event.type, payload }
   if (event.type === "error") return { ...base, type: "startup_error", message: String(payload.message ?? "Agent run failed") }
   return { ...base, type: event.type }
 }
@@ -107,7 +108,10 @@ async function dispatchBridgeRequest(request: BridgeRequest, deps: ServerDepende
       const thinkingLevel = typeof params.thinkingLevel === "string" ? params.thinkingLevel as SessionCreateRequest["thinkingLevel"] : undefined
       const modelId = model ? requireString(model, "modelId") : deps.providers.status(profileId).modelId
       const requestData = { profileId, modelId, purpose, ...(thinkingLevel ? { thinkingLevel } : {}) }
-      return uiState(await deps.sessions.create(requestData), requestData)
+      const created = await deps.sessions.create(requestData)
+      const name = typeof params.name === "string" && params.name.trim() ? params.name.trim() : undefined
+      if (name) await deps.sessions.rename(created.sessionId, name)
+      return uiState(deps.sessions.snapshot(created.sessionId), requestData)
     }
     case "session.rename":
       await deps.sessions.rename(requireString(params, "sessionId"), requireString(params, "name")); return null
@@ -136,7 +140,7 @@ async function dispatchBridgeRequest(request: BridgeRequest, deps: ServerDepende
       if (streamingBehavior !== undefined && streamingBehavior !== "steer" && streamingBehavior !== "followUp") {
         throw new SidecarError(400, "BRIDGE_PARAMS_INVALID", "streamingBehavior is invalid.")
       }
-      const receipt = deps.sessions.submit(requireString(params, "sessionId"), {
+      const receipt = await deps.sessions.submit(requireString(params, "sessionId"), {
         requestId: clientSubmissionId,
         text,
         ...(streamingBehavior ? { mode: streamingBehavior } : {}),
@@ -186,13 +190,13 @@ function bridgeStreamResponse(request: BridgeRequest, deps: ServerDependencies):
   const sessionId = requireString(request.params, "sessionId")
   let unsubscribe = () => {}
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    async start(controller) {
       const encoder = new TextEncoder()
       const send = (data: unknown): void => {
         const mapped = isRecord(data) && typeof data.type === "string" && typeof data.eventId === "number" ? uiEvent(data as unknown as import("./contracts.ts").AgentEventEnvelope) : data
         controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ok: true, requestId: request.requestId, data: mapped })}\n\n`))
       }
-      unsubscribe = deps.sessions.subscribe(sessionId, send)
+      unsubscribe = await deps.sessions.subscribe(sessionId, send)
       send({ type: "connected", state: uiState(deps.sessions.snapshot(sessionId)) })
     },
     cancel() { unsubscribe() },
@@ -236,7 +240,7 @@ function requireLoopbackHost(request: Request): void {
 function sseResponse(sessionId: string, sessions: SessionRegistry): Response {
   let unsubscribe = () => {}
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    async start(controller) {
       const encoder = new TextEncoder()
       const enqueue = (type: string, data: unknown, id?: number): void => {
         const fields = [id === undefined ? "" : `id: ${id}`, `event: ${type}`, `data: ${JSON.stringify(data)}`]
@@ -245,7 +249,7 @@ function sseResponse(sessionId: string, sessions: SessionRegistry): Response {
         controller.enqueue(encoder.encode(`${fields}\n\n`))
       }
       // Subscribe before publishing connected/snapshot so deltas cannot fall into a setup gap.
-      unsubscribe = sessions.subscribe(sessionId, (event) => enqueue("agent", event, event.eventId))
+      unsubscribe = await sessions.subscribe(sessionId, (event) => enqueue("agent", event, event.eventId))
       enqueue("connected", { protocol: SIDECAR_PROTOCOL, sessionId })
       enqueue("snapshot", sessions.snapshot(sessionId))
     },
@@ -342,7 +346,7 @@ export function createRequestHandler(deps: ServerDependencies): (request: Reques
         if (!body.requestId || !body.text?.trim()) {
           throw new SidecarError(400, "PROMPT_REQUEST_INVALID", "requestId and non-empty text are required.")
         }
-        return jsonSuccess(requestId, deps.sessions.submit(decodeURIComponent(promptMatch[1] ?? ""), body), 202)
+        return jsonSuccess(requestId, await deps.sessions.submit(decodeURIComponent(promptMatch[1] ?? ""), body), 202)
       }
       const cancelMatch = /^\/sessions\/([^/]+)\/cancel$/.exec(path)
       if (request.method === "POST" && cancelMatch) {

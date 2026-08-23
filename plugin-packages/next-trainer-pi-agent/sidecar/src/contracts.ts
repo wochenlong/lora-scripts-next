@@ -15,11 +15,24 @@ export interface SessionCreateRequest {
   thinkingLevel?: ThinkingLevel
 }
 
+/**
+ * An image attachment. The host contract passes inline base64 payloads
+ * (data/mimeType); resourceId/mediaType resolves a file inside the scoped
+ * plugin data root. Both are validated before reaching the model.
+ */
+export interface PromptImageRef {
+  resourceId?: string
+  mediaType?: string
+  data?: string
+  mimeType?: string
+  name?: string
+}
+
 export interface PromptRequest {
   requestId: string
   text: string
   mode?: PromptMode
-  images?: Array<{ resourceId: string; mediaType: string }>
+  images?: PromptImageRef[]
 }
 
 export interface ProviderProfileInput {
@@ -47,6 +60,7 @@ export interface SessionSnapshot {
   modelId?: string
   createdAt?: string
   updatedAt?: string
+  name?: string
   purpose: string
   state: "idle" | "queued" | "running" | "cancelling" | "closed" | "error"
   runId: number

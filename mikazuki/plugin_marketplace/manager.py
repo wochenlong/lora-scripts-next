@@ -93,6 +93,23 @@ class MarketplaceManager:
         plugin_ids = sorted(self.store.snapshot()["plugins"])
         return [self.status(plugin_id) for plugin_id in plugin_ids]
 
+    def plugin_for_host_tool_token(self, supplied_token: str) -> str | None:
+        """Resolve a per-runtime Host Tool token to its enabled plugin.
+
+        Host Tool traffic intentionally does not carry a plugin id supplied by
+        the child process.  The token is the capability, and the runtime
+        controller is the only component allowed to validate it.
+        """
+        if not isinstance(supplied_token, str) or not supplied_token or self.runtime is None:
+            return None
+        for plugin_id in sorted(self.store.snapshot()["plugins"]):
+            try:
+                if self.status(plugin_id).enabled and self.runtime.verify_host_tool_token(plugin_id, supplied_token):
+                    return plugin_id
+            except Exception:
+                continue
+        return None
+
     def enabled_extensions(self) -> list[dict]:
         extensions: list[dict] = []
         for status in self.list_statuses():

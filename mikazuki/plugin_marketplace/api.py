@@ -20,6 +20,7 @@ from mikazuki.plugin_host import (
     ExecutablePluginRuntime,
     PluginCapabilityBroker,
 )
+from mikazuki.plugin_host.agent_tools import configure_agent_tool_service
 
 from .manager import MarketplaceManager
 from .models import MarketplaceEntry
@@ -140,7 +141,9 @@ def _default_manager() -> MarketplaceManager:
         host_version=_host_version(),
         platform=_platform_name(),
         runtime=ExecutablePluginRuntime(
-            host_tool_base_url=f"http://127.0.0.1:{port}/api/internal/agent-tools",
+            # The sidecar appends /internal/agent-tools/... itself; the app
+            # mounts the agent-tools router under the /api prefix.
+            host_tool_base_url=f"http://127.0.0.1:{port}/api",
         ),
     )
 
@@ -148,6 +151,7 @@ def _default_manager() -> MarketplaceManager:
 _manager = _default_manager()
 _catalog = MarketplaceCatalogService(paths=_manager.paths, trust=_manager.trust)
 _confirmations = ConfirmationTicketStore()
+configure_agent_tool_service(_confirmations)
 
 
 def _confirmation_capability_error(exc: ConfirmationError) -> CapabilityBrokerError:
@@ -237,8 +241,15 @@ def configure_capability_broker(broker: PluginCapabilityBroker) -> None:
 
 
 def configure_confirmation_store(store: ConfirmationTicketStore) -> None:
+    """Swap the trusted confirmation store and keep the tool service in sync.
+
+    The Host Tool gateway and the confirmation REST routes must observe the
+    same live store; reconfiguring only one side would silently split ticket
+    creation from ticket resolution across two stores.
+    """
     global _confirmations
     _confirmations = store
+    configure_agent_tool_service(store)
 
 
 def get_confirmation_store() -> ConfirmationTicketStore:

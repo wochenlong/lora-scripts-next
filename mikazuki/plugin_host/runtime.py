@@ -167,7 +167,22 @@ class ExecutablePluginRuntime:
             "SSL_CERT_FILE",
             "NODE_EXTRA_CA_CERTS",
         }
-        return {key: value for key, value in os.environ.items() if key in allowed}
+        environment = {key: value for key, value in os.environ.items() if key in allowed}
+        # Keep the sidecar launch environment deterministic while retaining the
+        # system loader path required by a compiled Windows executable.  Never
+        # inherit the host's PATH: it may expose project tooling or credentials.
+        if os.name == "nt":
+            system_root = environment.get("SystemRoot") or environment.get("WINDIR") or r"C:\Windows"
+            environment["SystemRoot"] = system_root
+            environment["WINDIR"] = system_root
+            environment["PATH"] = f"{system_root}\\System32;{system_root}"
+        # Verifier-only escape hatch: the Host process must explicitly opt in
+        # to HTTP loopback provider endpoints (integration verifiers that use
+        # a fake local Provider).  Production hosts never set this variable,
+        # so the deployed sidecar stays HTTPS-only.
+        if os.environ.get("NEXT_TRAINER_ALLOW_HTTP_LOOPBACK") == "1":
+            environment["NEXT_TRAINER_ALLOW_HTTP_LOOPBACK"] = "1"
+        return environment
 
     def stop(self, plugin_id: str) -> None:
         with self._guard:

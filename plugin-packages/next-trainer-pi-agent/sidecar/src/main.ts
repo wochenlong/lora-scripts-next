@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto"
 import { mkdir } from "node:fs/promises"
 import path from "node:path"
 import { parseBootstrap } from "./bootstrap.ts"
+import { createImageResolver } from "./image-resources.ts"
 import { startParentMonitor } from "./parent-monitor.ts"
 import { createHostToolFactory } from "./host-tools.ts"
 import { installProviderFetchPolicy } from "./provider-fetch-policy.ts"
@@ -19,7 +20,12 @@ const bootstrap = parseBootstrap()
 await mkdir(bootstrap.pluginDataRoot, { recursive: true })
 
 const agentDir = path.join(bootstrap.pluginDataRoot, "pi-agent")
-const providers = await ProviderRegistry.open(agentDir)
+// HTTP is accepted only for explicit loopback verifier runs.  Production
+// Provider profiles remain HTTPS-only; this keeps the standalone verifier
+// self-contained without weakening the deployed endpoint policy.
+const providers = await ProviderRegistry.open(agentDir, {
+  allowHttpLoopback: process.env.NEXT_TRAINER_ALLOW_HTTP_LOOPBACK === "1",
+})
 installProviderFetchPolicy(providers)
 const customToolsFactory = bootstrap.hostToolBaseUrl
   ? createHostToolFactory({ baseUrl: bootstrap.hostToolBaseUrl, token: bootstrap.hostToolToken })
@@ -27,6 +33,7 @@ const customToolsFactory = bootstrap.hostToolBaseUrl
 const piRuntime = new ProductionPiRuntimeAdapter({
   agentDir,
   providers,
+  resolveImage: createImageResolver(agentDir),
   ...(customToolsFactory ? { customToolsFactory } : {}),
 })
 const sessions = new SessionRegistry(piRuntime, { storageDir: path.join(agentDir, "sessions") })

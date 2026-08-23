@@ -326,6 +326,8 @@ def test_runtime_child_environment_does_not_inherit_host_secrets(monkeypatch):
     assert "DEEPSEEK_API_KEY" not in environment
     assert "HTTP_PROXY" not in environment
     assert environment["TEMP"] == r"C:\Temp"
+    assert environment["SystemRoot"].casefold() == environment["WINDIR"].casefold()
+    assert environment["PATH"].casefold() == f"{environment['SystemRoot']}\\System32;{environment['SystemRoot']}".casefold()
 
 
 def test_executable_runtime_forwards_authenticated_request_and_stream_wire_contract():

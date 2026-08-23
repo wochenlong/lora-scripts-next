@@ -7,7 +7,7 @@
   "platforms": ["win32-x64"],
   "runtime": {
     "kind": "executable",
-    "entrypoint": "bin/next-trainer-pi-sidecar.exe",
+    "entrypoint": "bin/next-trainer-pi-agent.exe",
     "buildNode": "22.19.0",
     "embeddedRuntime": "bun-1.4.0"
   },

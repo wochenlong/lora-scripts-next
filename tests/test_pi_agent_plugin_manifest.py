@@ -65,7 +65,7 @@ def test_real_agent_manifest_keeps_runtime_and_ui_in_the_plugin_package():
     assert manifest.protocol_version == "1"
     assert manifest.runtime.build_node == "22.19.0"
     assert manifest.runtime.embedded_runtime == "bun-1.4.0"
-    assert manifest.runtime.entrypoint == "bin/next-trainer-pi-sidecar.exe"
+    assert manifest.runtime.entrypoint == "bin/next-trainer-pi-agent.exe"
     assert manifest.ui.entrypoint == "ui/index.html"
     assert manifest.ui.settings_entrypoint == "ui/settings.html"
     assert manifest.install_hooks == []

@@ -47,15 +47,20 @@ export interface PromptAccepted {
   runId: number
 }
 
+export const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 10 * 60 * 1000
+
 export class SessionRegistry {
   readonly #sessions = new Map<string, SessionRecord>()
   readonly #runtime: PiRuntimeAdapter
   readonly #storageDir: string | null
   readonly #indexPath: string | null
   readonly #index = new Map<string, StoredSession>()
+  readonly #idleTimeoutMs: number
+  readonly #idleTimers = new Map<string, ReturnType<typeof setTimeout>>()
 
-  constructor(runtime: PiRuntimeAdapter, options: { storageDir?: string } = {}) {
+  constructor(runtime: PiRuntimeAdapter, options: { storageDir?: string; idleTimeoutMs?: number } = {}) {
     this.#runtime = runtime
+    this.#idleTimeoutMs = options.idleTimeoutMs ?? DEFAULT_SESSION_IDLE_TIMEOUT_MS
     this.#storageDir = options.storageDir ? path.resolve(options.storageDir) : null
     this.#indexPath = this.#storageDir ? path.join(path.dirname(this.#storageDir), "session-index.json") : null
     if (this.#indexPath && existsSync(this.#indexPath)) {
@@ -87,6 +92,7 @@ export class SessionRegistry {
     }
     record.unsubscribeRuntime = handle.subscribe((event) => this.#onRuntimeEvent(sessionId, record, event))
     this.#sessions.set(sessionId, record)
+    this.#scheduleIdleRelease(sessionId)
     const sessionFile = handle.sessionFile?.()
     const now = new Date().toISOString()
     this.#index.set(sessionId, { sessionId, request: structuredClone(request), ...(sessionFile ? { sessionFile } : {}), createdAt: now, updatedAt: now })
@@ -97,7 +103,7 @@ export class SessionRegistry {
   list(): SessionSnapshot[] {
     return [...this.#index.values()].filter((item) => !item.deleted).map((item) => this.#sessions.has(item.sessionId)
       ? this.snapshot(item.sessionId)
-      : { sessionId: item.sessionId, profileId: item.request.profileId, ...(item.request.modelId ? { modelId: item.request.modelId } : {}), createdAt: item.createdAt, updatedAt: item.updatedAt, purpose: item.request.purpose, state: "idle", runId: 0, activeRunId: null, lastStopReason: null })
+      : { sessionId: item.sessionId, profileId: item.request.profileId, ...(item.request.modelId ? { modelId: item.request.modelId } : {}), ...(item.name ? { name: item.name } : {}), createdAt: item.createdAt, updatedAt: item.updatedAt, purpose: item.request.purpose, state: "idle", runId: 0, activeRunId: null, lastStopReason: null })
   }
 
   snapshot(sessionId: string): SessionSnapshot {
@@ -105,13 +111,14 @@ export class SessionRegistry {
     if (!record) {
       const stored = this.#index.get(sessionId)
       if (!stored || stored.deleted) throw new SidecarError(404, "SESSION_NOT_FOUND", "Session was not found.")
-      return { sessionId, profileId: stored.request.profileId, ...(stored.request.modelId ? { modelId: stored.request.modelId } : {}), createdAt: stored.createdAt, updatedAt: stored.updatedAt, purpose: stored.request.purpose, state: "idle", runId: 0, activeRunId: null, lastStopReason: null }
+      return { sessionId, profileId: stored.request.profileId, ...(stored.request.modelId ? { modelId: stored.request.modelId } : {}), ...(stored.name ? { name: stored.name } : {}), createdAt: stored.createdAt, updatedAt: stored.updatedAt, purpose: stored.request.purpose, state: "idle", runId: 0, activeRunId: null, lastStopReason: null }
     }
     return {
       sessionId,
       profileId: record.request.profileId,
       ...(record.request.modelId ? { modelId: record.request.modelId } : {}),
       ...(this.#index.get(sessionId)?.createdAt ? { createdAt: this.#index.get(sessionId)!.createdAt, updatedAt: this.#index.get(sessionId)!.updatedAt } : {}),
+      ...(this.#index.get(sessionId)?.name ? { name: this.#index.get(sessionId)!.name } : {}),
       purpose: record.request.purpose,
       state: record.state,
       runId: record.allocatedRunId,
@@ -127,7 +134,8 @@ export class SessionRegistry {
     await handle.rename(name)
     const stored = this.#index.get(sessionId)
     if (stored) { stored.name = name; this.#persistIndex() }
-    await this.#deactivate(sessionId)
+    // The wrapper stays active; the idle timer owns the release so the
+    // session remains subscribable and promptable right after a rename.
   }
 
   async history(sessionId: string, options: { cursor?: string; limit?: number; deferThinking?: boolean; deferMedia?: boolean } = {}): Promise<Record<string, unknown>> {
@@ -168,8 +176,9 @@ export class SessionRegistry {
     await handle.assertModel(profileId, modelId)
   }
 
-  submit(sessionId: string, request: PromptRequest): PromptAccepted {
-    const record = this.#get(sessionId)
+  async submit(sessionId: string, request: PromptRequest): Promise<PromptAccepted> {
+    // Resume a wrapper that was released by the idle policy from its JSONL.
+    const record = await this.#ensureActive(sessionId)
     if (record.state === "closed") throw new SidecarError(409, "SESSION_CLOSED", "Session is closed.")
 
     const mode = request.mode ?? "prompt"
@@ -227,31 +236,36 @@ export class SessionRegistry {
         record.activeRunId = null
         record.activeAbort = null
         record.activeReducer = null
+        this.#scheduleIdleRelease(sessionId)
       }
     }
 
     if (record.state !== "running") record.state = "queued"
+    this.#clearIdleRelease(sessionId)
     record.queue = record.queue.then(execute, execute)
     return { accepted: true, promptId, sessionId, runId }
   }
 
   async cancel(sessionId: string, runId: number): Promise<{ cancelled: boolean; runId: number }> {
-    const record = this.#get(sessionId)
-    if (record.activeRunId !== runId || !record.activeAbort) return { cancelled: false, runId }
+    const record = this.#sessions.get(sessionId)
+    if (!record || record.activeRunId !== runId || !record.activeAbort) return { cancelled: false, runId }
+    this.#clearIdleRelease(sessionId)
     record.state = "cancelling"
     record.activeAbort.abort()
     await record.handle.cancel()
     return { cancelled: true, runId }
   }
 
-  subscribe(sessionId: string, listener: EventListener): () => void {
-    const record = this.#get(sessionId)
+  async subscribe(sessionId: string, listener: EventListener): Promise<() => void> {
+    const record = await this.#ensureActive(sessionId)
     record.listeners.add(listener)
+    this.#scheduleIdleRelease(sessionId)
     return () => record.listeners.delete(listener)
   }
 
   async close(sessionId: string): Promise<void> {
     const record = this.#get(sessionId)
+    this.#clearIdleRelease(sessionId)
     record.activeAbort?.abort()
     record.unsubscribeRuntime()
     await record.handle.close()
@@ -307,6 +321,33 @@ export class SessionRegistry {
     return record
   }
 
+  /**
+   * Release the in-process wrapper after the configured idle period.  The
+   * JSONL session file and index entry are preserved; the next prompt or
+   * history access resumes the wrapper from the persisted file.
+   */
+  #scheduleIdleRelease(sessionId: string): void {
+    this.#clearIdleRelease(sessionId)
+    if (this.#idleTimeoutMs <= 0) return
+    const timer = setTimeout(() => {
+      this.#idleTimers.delete(sessionId)
+      const record = this.#sessions.get(sessionId)
+      if (!record || record.state !== "idle" || record.activeRunId !== null) return
+      void this.#deactivate(sessionId)
+    }, this.#idleTimeoutMs)
+    const unref = (timer as unknown as { unref?: () => void }).unref
+    if (typeof unref === "function") unref.call(timer)
+    this.#idleTimers.set(sessionId, timer)
+  }
+
+  #clearIdleRelease(sessionId: string): void {
+    const timer = this.#idleTimers.get(sessionId)
+    if (timer) {
+      clearTimeout(timer)
+      this.#idleTimers.delete(sessionId)
+    }
+  }
+
   async #ensureActive(sessionId: string): Promise<SessionRecord> {
     const active = this.#sessions.get(sessionId)
     if (active) return active
@@ -322,6 +363,7 @@ export class SessionRegistry {
   async #deactivate(sessionId: string): Promise<void> {
     const record = this.#sessions.get(sessionId)
     if (!record) return
+    this.#clearIdleRelease(sessionId)
     record.unsubscribeRuntime()
     await record.handle.close()
     this.#sessions.delete(sessionId)
