@@ -90,6 +90,7 @@ export function SafeMarkdown({ children, host, className }: SafeMarkdownProps) {
         remarkPlugins={[remarkGfm, remarkMath]}
         rehypePlugins={[rehypeRaw, [rehypeSanitize, schema], [rehypeKatex, { throwOnError: false, strict: false }]]}
         components={components}
+        urlTransform={(url) => url}
       >
         {children}
       </ReactMarkdown>

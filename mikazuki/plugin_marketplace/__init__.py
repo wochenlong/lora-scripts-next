@@ -6,6 +6,14 @@ executables through the runtime layer added by later Stage 1 phases.
 """
 
 from .manager import MarketplaceManager
-from .models import MarketplaceEntry, PluginManifest, PluginStatus
+from .models import MarketplaceCatalog, MarketplaceEntry, PluginManifest, PluginStatus
+from .catalog import MarketplaceCatalogService
 
-__all__ = ["MarketplaceEntry", "MarketplaceManager", "PluginManifest", "PluginStatus"]
+__all__ = [
+    "MarketplaceCatalog",
+    "MarketplaceCatalogService",
+    "MarketplaceEntry",
+    "MarketplaceManager",
+    "PluginManifest",
+    "PluginStatus",
+]

@@ -6,7 +6,7 @@ import json
 import re
 from pathlib import Path
 
-from .models import MarketplaceEntry
+from .models import MarketplaceCatalog, MarketplaceEntry
 
 
 class TrustError(ValueError):
@@ -15,6 +15,11 @@ class TrustError(ValueError):
 
 def canonical_entry_payload(entry: MarketplaceEntry) -> bytes:
     value = entry.model_dump(mode="json", exclude={"signature"}, by_alias=True)
+    return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+
+
+def canonical_catalog_payload(catalog: MarketplaceCatalog) -> bytes:
+    value = catalog.model_dump(mode="json", exclude={"signature"}, by_alias=True)
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
 
 
@@ -95,6 +100,19 @@ class TrustStore:
             raise TrustError("package sha256 does not match catalog entry")
         expected = hmac.new(key, canonical_entry_payload(entry), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected.lower(), entry.signature.lower()):
+            raise TrustError("catalog signature verification failed")
+
+    def verify_catalog(self, catalog: MarketplaceCatalog) -> None:
+        if catalog.signing_key_id in self._revoked:
+            raise TrustError(f"revoked catalog signing key: {catalog.signing_key_id}")
+        identity = self._keys.get(catalog.signing_key_id)
+        if identity is None:
+            raise TrustError(f"unknown catalog signing key: {catalog.signing_key_id}")
+        publisher, key = identity
+        if publisher != catalog.publisher_id:
+            raise TrustError("catalog signing key publisher does not match catalog")
+        expected = hmac.new(key, canonical_catalog_payload(catalog), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected.lower(), catalog.signature.lower()):
             raise TrustError("catalog signature verification failed")
 
     @staticmethod

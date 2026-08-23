@@ -23,6 +23,17 @@ test("assistant error and aborted stop reasons fail prompt_done", () => {
   }
 })
 
+test("runtime exceptions derive explicit error or aborted stop reasons", () => {
+  for (const [aborted, stopReason] of [[false, "error"], [true, "aborted"]] as const) {
+    const reducer = new TerminalReducer()
+    reducer.observe({ type: "error", payload: { aborted } })
+    assert.deepEqual(reducer.promptResolved(), {
+      type: "prompt_done",
+      payload: { ok: false, stopReason },
+    })
+  }
+})
+
 test("agent_settled is a distinct idempotent convergence event", () => {
   const reducer = new TerminalReducer()
   reducer.observe({ type: "message_end", payload: { role: "assistant", stopReason: "stop" } })

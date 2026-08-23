@@ -17,7 +17,7 @@ const result = spawnSync(
     "sidecar/src/main.ts",
     "--compile",
     "--target=bun-windows-x64-baseline",
-    "--outfile=dist/bin/next-trainer-pi-sidecar.exe",
+    "--outfile=dist/bin/next-trainer-pi-agent.exe",
   ],
   { cwd: packageRoot, stdio: "inherit" },
 )

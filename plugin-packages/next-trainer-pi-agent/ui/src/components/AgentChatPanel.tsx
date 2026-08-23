@@ -124,7 +124,7 @@ export function AgentChatPanel({
     <section
       className="nta-chat-panel"
       aria-label={t("assistant")}
-      style={{ width: "min(520px, 100%)", height: "min(680px, 100%)" }}
+      style={{ width: "520px", maxWidth: "100%", height: "680px", maxHeight: "100%" }}
     >
       <header className="nta-chat-header">
         <div><strong>{t("assistant")}</strong>{modelLabel && <span>{modelLabel}</span>}</div>
@@ -156,3 +156,5 @@ export function AgentChatPanel({
     </section>
   );
 }
+
+

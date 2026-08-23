@@ -27,6 +27,10 @@ class MarketplacePaths:
         return self.root / "registry.json"
 
     @property
+    def catalog_cache_file(self) -> Path:
+        return self.root / "catalog.json"
+
+    @property
     def packages_root(self) -> Path:
         return self.root / "plugins"
 

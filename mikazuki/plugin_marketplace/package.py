@@ -67,11 +67,21 @@ def inspect_package(package_path: Path, limits: PackageLimits) -> tuple[PluginMa
             manifest.ui.entrypoint.casefold(): "UI entrypoint",
             manifest.package.sbom.casefold(): "SBOM",
         }
+        if manifest.ui.settings_entrypoint:
+            if PurePosixPath(manifest.ui.settings_entrypoint).parent != PurePosixPath(manifest.ui.entrypoint).parent:
+                raise PackageValidationError("settings UI entrypoint must share the plugin UI root")
+            required[manifest.ui.settings_entrypoint.casefold()] = "settings UI entrypoint"
         for required_name, label in required.items():
             if required_name not in names:
                 raise PackageValidationError(f"manifest {label} is missing from package")
         if not any(PurePosixPath(item.filename).name.casefold().startswith("license") for item in members):
             raise PackageValidationError("plugin license inventory is missing")
+        try:
+            sbom = json.loads(archive.read(names[manifest.package.sbom.casefold()]))
+        except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+            raise PackageValidationError("plugin SBOM is not valid JSON") from exc
+        if not isinstance(sbom, dict) or sbom.get("bomFormat") != "CycloneDX":
+            raise PackageValidationError("plugin SBOM must use CycloneDX format")
         return manifest, members
 
 
@@ -106,4 +116,3 @@ def extract_package(package_path: Path, target: Path, members: list[zipfile.ZipI
             destination.parent.mkdir(parents=True, exist_ok=True)
             with archive.open(item, "r") as source, destination.open("xb") as output:
                 shutil.copyfileobj(source, output)
-

@@ -32,10 +32,7 @@ export interface ResourceSummary extends ResourceSelection {
 }
 
 export interface ConfirmationRequest {
-  action: string;
-  title: string;
-  summary: string;
-  artifactIds?: string[];
+  toolCallId: string;
 }
 
 export interface ConfirmationReference {
@@ -69,8 +66,5 @@ export interface HostCapabilities {
   readonly navigation: {
     openExternal(url: string): Promise<void>;
     openPluginRoute(route: string): Promise<void>;
-  };
-  readonly clipboard: {
-    copyText(text: string): Promise<void>;
   };
 }

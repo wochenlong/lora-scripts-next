@@ -1,5 +1,7 @@
 export * from "./components/AgentChatPanel.tsx";
 export * from "./components/ProviderSettingsPanel.tsx";
+export * from "./bridge/bridge-transport.ts";
+export * from "./bridge/plugin-bridge-client.ts";
 export * from "./contracts/agent-transport.ts";
 export * from "./contracts/host-capabilities.ts";
 export * from "./events/conversation-reducer.ts";

@@ -10,6 +10,7 @@ export type StopReason = "stop" | "length" | "toolUse" | "error" | "aborted" | "
 
 export interface SessionCreateRequest {
   profileId: string
+  modelId?: string
   purpose: string
   thinkingLevel?: ThinkingLevel
 }
@@ -43,6 +44,10 @@ export interface ProviderStatus {
 export interface SessionSnapshot {
   sessionId: string
   profileId: string
+  modelId?: string
+  createdAt?: string
+  updatedAt?: string
+  name?: string
   purpose: string
   state: "idle" | "queued" | "running" | "cancelling" | "closed" | "error"
   runId: number

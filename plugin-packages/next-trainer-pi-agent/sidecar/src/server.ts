@@ -30,6 +30,180 @@ export interface ServerDependencies {
   startedAt: string
 }
 
+interface BridgeRequest {
+  requestId: string
+  method: string
+  params: Record<string, unknown>
+}
+
+const CANONICAL_UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value)
+}
+
+function requireString(params: Record<string, unknown>, key: string): string {
+  const value = params[key]
+  if (typeof value !== "string" || !value.trim()) {
+    throw new SidecarError(400, "BRIDGE_PARAMS_INVALID", `${key} must be a non-empty string.`)
+  }
+  return value
+}
+
+function uiState(snapshot: import("./contracts.ts").SessionSnapshot, request?: SessionCreateRequest): Record<string, unknown> {
+  return {
+    id: snapshot.sessionId,
+    ...(snapshot.name ?? request?.purpose ? { name: snapshot.name ?? request?.purpose } : {}),
+    runId: snapshot.runId,
+    status: snapshot.state === "error" ? "failed" : snapshot.state === "cancelling" ? "cancelling" : snapshot.state === "running" || snapshot.state === "queued" ? "running" : "idle",
+    model: { profileId: snapshot.profileId, modelId: snapshot.modelId ?? request?.modelId ?? "" },
+    thinkingLevel: request?.thinkingLevel ?? "auto",
+    queue: { steering: [], followUp: [] },
+  }
+}
+
+function uiSummary(snapshot: import("./contracts.ts").SessionSnapshot): Record<string, unknown> {
+  return { id: snapshot.sessionId, name: snapshot.name ?? snapshot.purpose, createdAt: snapshot.createdAt ?? new Date(0).toISOString(), updatedAt: snapshot.updatedAt ?? snapshot.createdAt ?? new Date(0).toISOString(), messageCount: 0, running: snapshot.state === "running" || snapshot.state === "queued", model: { profileId: snapshot.profileId, modelId: snapshot.modelId ?? "" } }
+}
+
+function uiProvider(profile: import("./contracts.ts").ProviderStatus): Record<string, unknown> {
+  return { id: profile.profileId, label: profile.providerId, endpoint: profile.endpoint, modelId: profile.modelId, configured: profile.configured, fingerprint: profile.fingerprint, capabilities: ["text"], thinkingLevels: ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] }
+}
+
+function uiEvent(event: import("./contracts.ts").AgentEventEnvelope): Record<string, unknown> {
+  const base = { eventId: String(event.eventId), sessionId: event.sessionId, runId: event.runId }
+  const payload = event.payload
+  if (event.type === "message_start" || event.type === "message_end") return { ...base, type: event.type, message: payload.message ?? payload }
+  if (event.type === "message_update") return { ...base, type: event.type, assistantMessageEvent: payload.assistantMessageEvent ?? payload }
+  if (event.type.startsWith("tool_execution_")) return { ...base, type: event.type, ...payload }
+  if (event.type === "queue_update") return { ...base, type: event.type, queue: payload.queue ?? { steering: [], followUp: [] } }
+  if (event.type === "usage") return { ...base, type: event.type, usage: payload.usage ?? payload }
+  if (event.type === "agent_settled" || event.type === "prompt_done") return { ...base, type: event.type, payload }
+  if (event.type === "error") return { ...base, type: "startup_error", message: String(payload.message ?? "Agent run failed") }
+  return { ...base, type: event.type }
+}
+
+function parseBridgeRequest(value: unknown): BridgeRequest {
+  if (!isRecord(value) || Object.keys(value).some((key) => !["requestId", "method", "params"].includes(key))) {
+    throw new SidecarError(400, "BRIDGE_REQUEST_INVALID", "Bridge request fields are invalid.")
+  }
+  if (typeof value.requestId !== "string" || !CANONICAL_UUID.test(value.requestId)) {
+    throw new SidecarError(400, "BRIDGE_REQUEST_INVALID", "Bridge requestId must be a canonical UUID.")
+  }
+  if (typeof value.method !== "string" || !isRecord(value.params)) {
+    throw new SidecarError(400, "BRIDGE_REQUEST_INVALID", "Bridge method and params are required.")
+  }
+  return value as unknown as BridgeRequest
+}
+
+async function dispatchBridgeRequest(request: BridgeRequest, deps: ServerDependencies): Promise<unknown> {
+  const params = request.params
+  switch (request.method) {
+    case "session.list": return deps.sessions.list().map(uiSummary)
+    case "session.create": {
+      const model = isRecord(params.model) ? params.model : null
+      const profileId = model ? requireString(model, "profileId") : (typeof params.profileId === "string" && params.profileId.trim() ? params.profileId : deps.providers.defaultProfileId())
+      if (!profileId) throw new SidecarError(409, "PROVIDER_NOT_CONFIGURED", "No Provider profile is configured.")
+      const purpose = typeof params.purpose === "string" && params.purpose.trim() ? params.purpose : "assistant"
+      const thinkingLevel = typeof params.thinkingLevel === "string" ? params.thinkingLevel as SessionCreateRequest["thinkingLevel"] : undefined
+      const modelId = model ? requireString(model, "modelId") : deps.providers.status(profileId).modelId
+      const requestData = { profileId, modelId, purpose, ...(thinkingLevel ? { thinkingLevel } : {}) }
+      const created = await deps.sessions.create(requestData)
+      const name = typeof params.name === "string" && params.name.trim() ? params.name.trim() : undefined
+      if (name) await deps.sessions.rename(created.sessionId, name)
+      return uiState(deps.sessions.snapshot(created.sessionId), requestData)
+    }
+    case "session.rename":
+      await deps.sessions.rename(requireString(params, "sessionId"), requireString(params, "name")); return null
+    case "session.delete":
+      await deps.sessions.delete(requireString(params, "sessionId")); return null
+    case "session.getState": return uiState(deps.sessions.snapshot(requireString(params, "sessionId")))
+    case "session.getHistory": {
+      const options = {
+        ...(typeof params.cursor === "string" ? { cursor: params.cursor } : {}),
+        ...(Number.isSafeInteger(params.limit) ? { limit: Number(params.limit) } : {}),
+        ...(typeof params.deferThinking === "boolean" ? { deferThinking: params.deferThinking } : {}),
+        ...(typeof params.deferMedia === "boolean" ? { deferMedia: params.deferMedia } : {}),
+      }
+      const historySessionId = requireString(params, "sessionId")
+      const rawHistory = await deps.sessions.history(historySessionId, options)
+      return { session: uiState(deps.sessions.snapshot(historySessionId)), messages: Array.isArray(rawHistory.entries) ? rawHistory.entries.filter((entry) => isRecord(entry) && entry.type === "message").map((entry) => (entry as Record<string, unknown>).message) : [], hasMore: rawHistory.hasMore === true, ...(typeof rawHistory.cursor === "string" ? { cursor: rawHistory.cursor } : {}) }
+    }
+    case "session.getThinking":
+      if (!Number.isSafeInteger(params.blockIndex) || Number(params.blockIndex) < 0) throw new SidecarError(400, "BRIDGE_PARAMS_INVALID", "blockIndex is invalid.")
+       return deps.sessions.thinking(requireString(params, "sessionId"), requireString(params, "entryId"), Number(params.blockIndex))
+    case "session.prompt": {
+      const input = isRecord(params.input) ? params.input : params
+      const text = requireString(input, "text")
+      const clientSubmissionId = requireString(input, "clientSubmissionId")
+      const streamingBehavior = input.streamingBehavior
+      if (streamingBehavior !== undefined && streamingBehavior !== "steer" && streamingBehavior !== "followUp") {
+        throw new SidecarError(400, "BRIDGE_PARAMS_INVALID", "streamingBehavior is invalid.")
+      }
+      const receipt = await deps.sessions.submit(requireString(params, "sessionId"), {
+        requestId: clientSubmissionId,
+        text,
+        ...(streamingBehavior ? { mode: streamingBehavior } : {}),
+      })
+      return { accepted: true, sessionId: receipt.sessionId, runId: receipt.runId, clientSubmissionId, disposition: streamingBehavior ? "queued" : "started" }
+    }
+    case "session.cancel": {
+      const sessionId = requireString(params, "sessionId")
+      const runId = deps.sessions.snapshot(sessionId).activeRunId
+      return runId ? deps.sessions.cancel(sessionId, runId) : { cancelled: false, runId: 0 }
+    }
+    case "session.compact": return deps.sessions.compact(requireString(params, "sessionId"), typeof params.instructions === "string" ? params.instructions : undefined)
+    case "session.setModel": {
+      if (!isRecord(params.model)) throw new SidecarError(400, "BRIDGE_PARAMS_INVALID", "model is invalid.")
+      await deps.sessions.assertModel(requireString(params, "sessionId"), requireString(params.model, "profileId"), requireString(params.model, "modelId"))
+      return null
+    }
+    case "session.setThinkingLevel":
+      await deps.sessions.setThinkingLevel(requireString(params, "sessionId"), requireString(params, "level") as SessionCreateRequest["thinkingLevel"]); return null
+    case "session.recallQueue": return deps.sessions.recallQueue(requireString(params, "sessionId"))
+    case "provider.list": return deps.providers.list().map(uiProvider)
+    case "provider.status": return uiProvider(deps.providers.status(requireString(params, "profileId")))
+    case "provider.saveKey": return uiProvider(await deps.providers.save(requireString(params, "profileId"), {
+      providerId: requireString(params, "profileId"),
+      modelId: requireString(params, "modelId"),
+      endpoint: requireString(params, "endpoint"),
+      apiKey: requireString(params, "key"),
+    }))
+    case "provider.removeKey": {
+      const profileId = requireString(params, "profileId")
+      const previous = deps.providers.status(profileId)
+      await deps.providers.remove(profileId)
+      return uiProvider({ ...previous, configured: false, fingerprint: "" })
+    }
+    case "provider.test": {
+      if (!deps.piRuntime.testProvider) throw new SidecarError(501, "PROVIDER_TEST_UNAVAILABLE", "Provider testing is not available.")
+      return deps.piRuntime.testProvider(requireString(params, "profileId"))
+    }
+    default: throw new SidecarError(404, "BRIDGE_METHOD_NOT_FOUND", "Bridge method was not found.")
+  }
+}
+
+function bridgeStreamResponse(request: BridgeRequest, deps: ServerDependencies): Response {
+  if (request.method !== "session.subscribe") {
+    throw new SidecarError(400, "BRIDGE_STREAM_INVALID", "Only session.subscribe is streamable.")
+  }
+  const sessionId = requireString(request.params, "sessionId")
+  let unsubscribe = () => {}
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const encoder = new TextEncoder()
+      const send = (data: unknown): void => {
+        const mapped = isRecord(data) && typeof data.type === "string" && typeof data.eventId === "number" ? uiEvent(data as unknown as import("./contracts.ts").AgentEventEnvelope) : data
+        controller.enqueue(encoder.encode(`data: ${JSON.stringify({ ok: true, requestId: request.requestId, data: mapped })}\n\n`))
+      }
+      unsubscribe = await deps.sessions.subscribe(sessionId, send)
+      send({ type: "connected", state: uiState(deps.sessions.snapshot(sessionId)) })
+    },
+    cancel() { unsubscribe() },
+  })
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream", "Cache-Control": "no-cache, no-transform" } })
+}
+
 function jsonSuccess<T>(requestId: string, data: T, status = 200): Response {
   const body: ApiSuccess<T> = { ok: true, requestId, data }
   return Response.json(body, { status })
@@ -66,7 +240,7 @@ function requireLoopbackHost(request: Request): void {
 function sseResponse(sessionId: string, sessions: SessionRegistry): Response {
   let unsubscribe = () => {}
   const stream = new ReadableStream<Uint8Array>({
-    start(controller) {
+    async start(controller) {
       const encoder = new TextEncoder()
       const enqueue = (type: string, data: unknown, id?: number): void => {
         const fields = [id === undefined ? "" : `id: ${id}`, `event: ${type}`, `data: ${JSON.stringify(data)}`]
@@ -75,7 +249,7 @@ function sseResponse(sessionId: string, sessions: SessionRegistry): Response {
         controller.enqueue(encoder.encode(`${fields}\n\n`))
       }
       // Subscribe before publishing connected/snapshot so deltas cannot fall into a setup gap.
-      unsubscribe = sessions.subscribe(sessionId, (event) => enqueue("agent", event, event.eventId))
+      unsubscribe = await sessions.subscribe(sessionId, (event) => enqueue("agent", event, event.eventId))
       enqueue("connected", { protocol: SIDECAR_PROTOCOL, sessionId })
       enqueue("snapshot", sessions.snapshot(sessionId))
     },
@@ -96,12 +270,23 @@ function sseResponse(sessionId: string, sessions: SessionRegistry): Response {
 
 export function createRequestHandler(deps: ServerDependencies): (request: Request) => Promise<Response> {
   return async (request: Request): Promise<Response> => {
-    const requestId = request.headers.get("x-request-id") ?? randomUUID()
+    let requestId = request.headers.get("x-request-id") ?? randomUUID()
     try {
       requireLoopbackHost(request)
       requireBearer(request, deps.token)
       const url = new URL(request.url)
       const path = url.pathname.replace(/\/+$/, "") || "/"
+
+      if (request.method === "POST" && path === "/bridge/requests") {
+        const bridgeRequest = parseBridgeRequest(await readJson<unknown>(request))
+        requestId = bridgeRequest.requestId
+        return jsonSuccess(bridgeRequest.requestId, await dispatchBridgeRequest(bridgeRequest, deps))
+      }
+      if (request.method === "POST" && path === "/bridge/streams") {
+        const bridgeRequest = parseBridgeRequest(await readJson<unknown>(request))
+        requestId = bridgeRequest.requestId
+        return bridgeStreamResponse(bridgeRequest, deps)
+      }
 
       if (request.method === "GET" && path === "/health") {
         return jsonSuccess(requestId, {
@@ -130,10 +315,10 @@ export function createRequestHandler(deps: ServerDependencies): (request: Reques
         const profileId = decodeURIComponent(providerMatch[1] ?? "")
         if (request.method === "GET") return jsonSuccess(requestId, deps.providers.status(profileId))
         if (request.method === "PUT") {
-          return jsonSuccess(requestId, deps.providers.save(profileId, await readJson<ProviderProfileInput>(request)))
+          return jsonSuccess(requestId, await deps.providers.save(profileId, await readJson<ProviderProfileInput>(request)))
         }
         if (request.method === "DELETE") {
-          return jsonSuccess(requestId, { removed: deps.providers.remove(profileId) })
+          return jsonSuccess(requestId, { removed: await deps.providers.remove(profileId) })
         }
       }
 
@@ -161,7 +346,7 @@ export function createRequestHandler(deps: ServerDependencies): (request: Reques
         if (!body.requestId || !body.text?.trim()) {
           throw new SidecarError(400, "PROMPT_REQUEST_INVALID", "requestId and non-empty text are required.")
         }
-        return jsonSuccess(requestId, deps.sessions.submit(decodeURIComponent(promptMatch[1] ?? ""), body), 202)
+        return jsonSuccess(requestId, await deps.sessions.submit(decodeURIComponent(promptMatch[1] ?? ""), body), 202)
       }
       const cancelMatch = /^\/sessions\/([^/]+)\/cancel$/.exec(path)
       if (request.method === "POST" && cancelMatch) {
@@ -176,7 +361,7 @@ export function createRequestHandler(deps: ServerDependencies): (request: Reques
         const sessionId = decodeURIComponent(sessionMatch[1] ?? "")
         if (request.method === "GET") return jsonSuccess(requestId, deps.sessions.snapshot(sessionId))
         if (request.method === "DELETE") {
-          await deps.sessions.close(sessionId)
+          await deps.sessions.delete(sessionId)
           return jsonSuccess(requestId, { closed: true })
         }
       }

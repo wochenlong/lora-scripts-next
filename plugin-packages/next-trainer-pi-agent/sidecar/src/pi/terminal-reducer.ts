@@ -25,7 +25,10 @@ export class TerminalReducer {
       const stopReason = event.payload.stopReason
       if (isStopReason(stopReason)) this.#lastStopReason = stopReason
     }
-    if (event.type === "error") this.#runtimeError = true
+    if (event.type === "error") {
+      this.#runtimeError = true
+      this.#lastStopReason = event.payload?.aborted === true ? "aborted" : "error"
+    }
     // `agent_end` deliberately has no terminal effect.
   }
 

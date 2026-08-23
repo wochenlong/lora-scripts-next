@@ -76,3 +76,4 @@ data/
 
 # Optional vendored anima_lora experiments
 vendor/anima_lora/
+plugin-packages/**/.bun-cache/

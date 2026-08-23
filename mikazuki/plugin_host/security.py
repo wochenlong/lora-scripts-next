@@ -117,22 +117,29 @@ class AgentRouteAuthority:
         *,
         require_origin: bool,
         require_json: bool,
+        require_run_token: bool,
     ) -> None:
         self._config = config
         self._require_origin = require_origin
         self._require_json = require_json
+        self._require_run_token = require_run_token
 
     @classmethod
     def for_json_mutation(cls, config: AgentRouteAuthorityConfig) -> "AgentRouteAuthority":
-        return cls(config, require_origin=True, require_json=True)
+        return cls(config, require_origin=True, require_json=True, require_run_token=True)
 
     @classmethod
     def for_stream(cls, config: AgentRouteAuthorityConfig) -> "AgentRouteAuthority":
-        return cls(config, require_origin=True, require_json=False)
+        return cls(config, require_origin=True, require_json=False, require_run_token=True)
 
     @classmethod
     def for_read(cls, config: AgentRouteAuthorityConfig) -> "AgentRouteAuthority":
-        return cls(config, require_origin=False, require_json=False)
+        return cls(config, require_origin=False, require_json=False, require_run_token=True)
+
+    @classmethod
+    def for_bootstrap(cls, config: AgentRouteAuthorityConfig) -> "AgentRouteAuthority":
+        """Authorize the same-origin exchange that places the run token in host memory."""
+        return cls(config, require_origin=True, require_json=True, require_run_token=False)
 
     async def __call__(self, request: Request) -> AgentRouteAuthorityContext:
         client_host = request.client.host if request.client is not None else ""
@@ -158,10 +165,11 @@ class AgentRouteAuthority:
             if media_type != "application/json":
                 _raise_forbidden("content-type")
 
-        supplied_token = request.headers.get(_RUN_TOKEN_HEADER, "")
-        expected_token = self._config.run_token.get_secret_value()
-        if not supplied_token or not secrets.compare_digest(supplied_token, expected_token):
-            _raise_forbidden("run-token")
+        if self._require_run_token:
+            supplied_token = request.headers.get(_RUN_TOKEN_HEADER, "")
+            expected_token = self._config.run_token.get_secret_value()
+            if not supplied_token or not secrets.compare_digest(supplied_token, expected_token):
+                _raise_forbidden("run-token")
 
         return AgentRouteAuthorityContext(host=host, origin=origin, client_host=client_host)
 

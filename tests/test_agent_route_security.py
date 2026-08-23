@@ -73,6 +73,7 @@ class AgentRouteAuthorityTests(unittest.TestCase):
         )
         self.mutation_authority = AgentRouteAuthority.for_json_mutation(config)
         self.stream_authority = AgentRouteAuthority.for_stream(config)
+        self.bootstrap_authority = AgentRouteAuthority.for_bootstrap(config)
 
     def authorize(self, request: Request, *, stream: bool = False):
         authority = self.stream_authority if stream else self.mutation_authority
@@ -128,6 +129,13 @@ class AgentRouteAuthorityTests(unittest.TestCase):
 
     def test_stream_rejects_missing_origin(self):
         self.assert_rejected(make_request(method="GET", origin=None, content_type=None), "origin", stream=True)
+
+    def test_bootstrap_requires_same_origin_json_but_not_an_existing_run_token(self):
+        context = asyncio.run(self.bootstrap_authority(make_request(run_token=None)))
+        self.assertEqual(context.origin, APP_ORIGIN)
+        with self.assertRaises(HTTPException) as raised:
+            asyncio.run(self.bootstrap_authority(make_request(run_token=None, origin="http://127.0.0.1:9")))
+        self.assertEqual(raised.exception.detail["reason"], "origin")
 
     def test_accepts_ipv6_loopback_client(self):
         context = self.authorize(make_request(client_host="::1"))

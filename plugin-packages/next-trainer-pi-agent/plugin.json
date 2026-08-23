@@ -7,14 +7,51 @@
   "platforms": ["win32-x64"],
   "runtime": {
     "kind": "executable",
-    "entrypoint": "bin/next-trainer-pi-sidecar.exe",
+    "entrypoint": "bin/next-trainer-pi-agent.exe",
     "buildNode": "22.19.0",
     "embeddedRuntime": "bun-1.4.0"
   },
   "ui": {
-    "entrypoint": "ui/index.js",
+    "entrypoint": "ui/index.html",
+    "settingsEntrypoint": "ui/settings.html",
     "extensionApi": "1",
     "placements": ["floating-panel", "artifact-detail"]
+  },
+  "bridge": {
+    "requests": [
+      { "method": "session.list", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": {}, "additionalProperties": false } },
+      { "method": "session.create", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "name": { "type": "string", "minLength": 1 }, "model": { "type": "object", "properties": { "profileId": { "type": "string", "minLength": 1 }, "modelId": { "type": "string", "minLength": 1 } }, "required": ["profileId", "modelId"], "additionalProperties": false }, "thinkingLevel": { "type": "string", "enum": ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] } }, "additionalProperties": false } },
+      { "method": "session.rename", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "name": { "type": "string", "minLength": 1 } }, "required": ["sessionId", "name"], "additionalProperties": false } },
+      { "method": "session.delete", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+      { "method": "session.getState", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+      { "method": "session.getHistory", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "cursor": { "type": "string", "minLength": 1 }, "limit": { "type": "integer", "minimum": 1 }, "deferThinking": { "type": "boolean" }, "deferMedia": { "type": "boolean" } }, "required": ["sessionId"], "additionalProperties": false } },
+      { "method": "session.getThinking", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "entryId": { "type": "string", "minLength": 1 }, "blockIndex": { "type": "integer", "minimum": 0 } }, "required": ["sessionId", "entryId", "blockIndex"], "additionalProperties": false } },
+      { "method": "session.prompt", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "input": { "type": "object", "properties": { "text": { "type": "string", "minLength": 1 }, "images": { "type": "array", "items": { "type": "object", "properties": { "data": { "type": "string", "minLength": 1 }, "mimeType": { "type": "string", "minLength": 1 }, "name": { "type": "string" } }, "required": ["data", "mimeType"], "additionalProperties": false } }, "streamingBehavior": { "type": "string", "enum": ["steer", "followUp"] }, "clientSubmissionId": { "type": "string", "minLength": 1 } }, "required": ["text", "clientSubmissionId"], "additionalProperties": false } }, "required": ["sessionId", "input"], "additionalProperties": false } },
+      { "method": "session.cancel", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+      { "method": "session.compact", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "instructions": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+      { "method": "session.setModel", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "model": { "type": "object", "properties": { "profileId": { "type": "string", "minLength": 1 }, "modelId": { "type": "string", "minLength": 1 } }, "required": ["profileId", "modelId"], "additionalProperties": false } }, "required": ["sessionId", "model"], "additionalProperties": false } },
+      { "method": "session.setThinkingLevel", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "level": { "type": "string", "enum": ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] } }, "required": ["sessionId", "level"], "additionalProperties": false } },
+      { "method": "session.recallQueue", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } },
+      { "method": "provider.list", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": {}, "additionalProperties": false } },
+      { "method": "provider.status", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "profileId": { "type": "string", "minLength": 1 } }, "required": ["profileId"], "additionalProperties": false } },
+      { "method": "provider.saveKey", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "profileId": { "type": "string", "minLength": 1 }, "endpoint": { "type": "string", "minLength": 1 }, "modelId": { "type": "string", "minLength": 1 }, "key": { "type": "string", "minLength": 1 } }, "required": ["profileId", "endpoint", "modelId", "key"], "additionalProperties": false } },
+      { "method": "provider.removeKey", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "profileId": { "type": "string", "minLength": 1 } }, "required": ["profileId"], "additionalProperties": false } },
+      { "method": "provider.test", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "profileId": { "type": "string", "minLength": 1 } }, "required": ["profileId"], "additionalProperties": false } },
+      { "method": "resource.pick", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": { "kinds": { "type": "array", "items": { "type": "string", "enum": ["dataset", "training-config", "curve", "knowledge"] }, "minItems": 1 } }, "required": ["kinds"], "additionalProperties": false } },
+      { "method": "resource.getSummary", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": { "resourceId": { "type": "string", "minLength": 1 } }, "required": ["resourceId"], "additionalProperties": false } },
+      { "method": "artifact.open", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": { "artifactId": { "type": "string", "minLength": 1 }, "title": { "type": "string", "minLength": 1 }, "kind": { "type": "string", "minLength": 1 } }, "required": ["artifactId", "title", "kind"], "additionalProperties": false } },
+      { "method": "artifact.download", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": { "artifactId": { "type": "string", "minLength": 1 }, "title": { "type": "string", "minLength": 1 }, "kind": { "type": "string", "minLength": 1 } }, "required": ["artifactId", "title", "kind"], "additionalProperties": false } },
+      { "method": "confirmation.request", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": { "toolCallId": { "type": "string", "minLength": 1 } }, "required": ["toolCallId"], "additionalProperties": false } },
+      { "method": "confirmation.getResult", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": { "ticketId": { "type": "string", "minLength": 1 } }, "required": ["ticketId"], "additionalProperties": false } },
+      { "method": "navigation.openExternal", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": { "url": { "type": "string", "minLength": 1 } }, "required": ["url"], "additionalProperties": false } },
+      { "method": "navigation.openPluginRoute", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": { "route": { "type": "string", "minLength": 1 } }, "required": ["route"], "additionalProperties": false } },
+      { "method": "theme.get", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": {}, "additionalProperties": false } },
+      { "method": "locale.get", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": {}, "additionalProperties": false } },
+      { "method": "context.get", "permission": "artifacts-read", "paramsSchema": { "type": "object", "properties": {}, "additionalProperties": false } }
+    ],
+    "streams": [
+      { "method": "session.subscribe", "permission": "model-provider", "paramsSchema": { "type": "object", "properties": { "sessionId": { "type": "string", "minLength": 1 }, "cursor": { "type": "string", "minLength": 1 } }, "required": ["sessionId"], "additionalProperties": false } }
+    ]
   },
   "capabilities": ["session", "events", "custom-tools", "skills", "images", "scoped-workspaces"],
   "permissions": [

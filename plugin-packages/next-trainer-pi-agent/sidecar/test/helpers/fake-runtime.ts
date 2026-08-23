@@ -10,13 +10,18 @@ export class FakeSessionHandle implements PiSessionHandle {
   prompts: RuntimePrompt[] = []
   cancelled = false
   closed = false
+  readonly filePath: string
   blockPrompts = false
   #releasePrompt: (() => void) | null = null
+
+  constructor(filePath = "C:\\fake\\session.jsonl") { this.filePath = filePath }
 
   async prompt(input: RuntimePrompt): Promise<void> {
     this.prompts.push(input)
     this.emit({ type: "message_start", payload: { role: "assistant" } })
-    if (this.blockPrompts) await new Promise<void>((resolve) => { this.#releasePrompt = resolve })
+    if (this.blockPrompts && input.mode === "prompt") {
+      await new Promise<void>((resolve) => { this.#releasePrompt = resolve })
+    }
     this.emit({ type: "message_end", payload: { role: "assistant", stopReason: input.signal.aborted ? "aborted" : "stop" } })
   }
 
@@ -33,6 +38,11 @@ export class FakeSessionHandle implements PiSessionHandle {
   async close(): Promise<void> {
     this.closed = true
   }
+
+  sessionFile(): string { return this.filePath }
+
+  async history(): Promise<Record<string, unknown>> { return { entries: [], hasMore: false } }
+  async thinking(): Promise<string> { return "" }
 
   async snapshot(): Promise<Record<string, never>> {
     return {}
@@ -55,6 +65,12 @@ export class FakeRuntimeAdapter implements PiRuntimeAdapter {
   async createSession(sessionId: string, _request: SessionCreateRequest): Promise<PiSessionHandle> {
     const handle = new FakeSessionHandle()
     this.sessions.set(sessionId, handle)
+    return handle
+  }
+
+  async resumeSession(sessionId: string, _request: SessionCreateRequest, _sessionFile: string): Promise<PiSessionHandle> {
+    const handle = this.sessions.get(sessionId)
+    if (!handle) throw new Error("missing fake session")
     return handle
   }
 }

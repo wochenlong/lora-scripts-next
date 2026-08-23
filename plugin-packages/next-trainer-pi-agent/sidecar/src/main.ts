@@ -1,8 +1,12 @@
 import { randomUUID } from "node:crypto"
 import { mkdir } from "node:fs/promises"
+import path from "node:path"
 import { parseBootstrap } from "./bootstrap.ts"
+import { startParentMonitor } from "./parent-monitor.ts"
+import { createHostToolFactory } from "./host-tools.ts"
+import { installProviderFetchPolicy } from "./provider-fetch-policy.ts"
 import { ProviderRegistry } from "./pi/provider-registry.ts"
-import { UnavailablePiRuntimeAdapter } from "./pi/runtime-adapter.ts"
+import { ProductionPiRuntimeAdapter } from "./pi/runtime-adapter.ts"
 import { SessionRegistry } from "./pi/session-registry.ts"
 import { createRequestHandler, startServer } from "./server.ts"
 
@@ -14,9 +18,23 @@ declare const Bun: {
 const bootstrap = parseBootstrap()
 await mkdir(bootstrap.pluginDataRoot, { recursive: true })
 
-const piRuntime = new UnavailablePiRuntimeAdapter()
-const providers = new ProviderRegistry()
-const sessions = new SessionRegistry(piRuntime)
+const agentDir = path.join(bootstrap.pluginDataRoot, "pi-agent")
+// HTTP is accepted only for explicit loopback verifier runs.  Production
+// Provider profiles remain HTTPS-only; this keeps the standalone verifier
+// self-contained without weakening the deployed endpoint policy.
+const providers = await ProviderRegistry.open(agentDir, {
+  allowHttpLoopback: process.env.NEXT_TRAINER_ALLOW_HTTP_LOOPBACK === "1",
+})
+installProviderFetchPolicy(providers)
+const customToolsFactory = bootstrap.hostToolBaseUrl
+  ? createHostToolFactory({ baseUrl: bootstrap.hostToolBaseUrl, token: bootstrap.hostToolToken })
+  : undefined
+const piRuntime = new ProductionPiRuntimeAdapter({
+  agentDir,
+  providers,
+  ...(customToolsFactory ? { customToolsFactory } : {}),
+})
+const sessions = new SessionRegistry(piRuntime, { storageDir: path.join(agentDir, "sessions") })
 const instanceId = randomUUID()
 const startedAt = new Date().toISOString()
 
@@ -51,20 +69,24 @@ process.stdout.write(`${JSON.stringify({
   protocolVersion: "1",
 })}\n`)
 
-const parentMonitor = setInterval(() => {
-  if (parentAlive()) return
-  clearInterval(parentMonitor)
-  void sessions.closeAll().finally(() => {
+let shutdownPromise: Promise<void> | null = null
+const shutdown = (): Promise<void> => {
+  if (shutdownPromise) return shutdownPromise
+  shutdownPromise = sessions.closeAll().finally(() => {
     server.stop(true)
-    process.exit(0)
   })
-}, 1_000)
+  return shutdownPromise
+}
+
+const parentMonitor = startParentMonitor(parentAlive, async () => {
+  await shutdown()
+  process.exit(0)
+})
 
 for (const signal of ["SIGINT", "SIGTERM"] as const) {
   process.on(signal, () => {
-    clearInterval(parentMonitor)
-    void sessions.closeAll().finally(() => {
-      server.stop(true)
+    parentMonitor.stop()
+    void shutdown().finally(() => {
       process.exit(0)
     })
   })

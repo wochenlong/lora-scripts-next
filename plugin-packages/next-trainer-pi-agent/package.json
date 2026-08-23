@@ -19,9 +19,10 @@
     "test:ui": "npm run test:ui:logic && npm run test:ui:dom",
     "test": "npm run test:unit && npm run test:contract && npm run test:integration && npm run test:ui",
     "sbom": "node scripts/generate-sbom.mjs",
+    "build:ui": "node scripts/build-ui.mjs",
     "build:sidecar": "node scripts/build-sidecar.mjs",
     "test:isolated": "node scripts/verify-standalone.mjs",
-    "check": "npm run check:runtime && npm run typecheck && npm test && npm run build:sidecar && npm run test:isolated"
+    "check": "npm run check:runtime && npm run typecheck && npm test && npm run build:ui && npm run build:sidecar && npm run test:isolated"
   },
   "dependencies": {
     "@earendil-works/pi-coding-agent": "0.84.2",

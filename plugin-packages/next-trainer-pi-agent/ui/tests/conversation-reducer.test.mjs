@@ -10,7 +10,7 @@ const session = {
   id: "session-1",
   runId: 3,
   status: "running",
-  model: { provider: "provider", modelId: "model" },
+  model: { profileId: "provider", modelId: "model" },
   thinkingLevel: "auto",
   queue: { steering: [], followUp: [] },
 };

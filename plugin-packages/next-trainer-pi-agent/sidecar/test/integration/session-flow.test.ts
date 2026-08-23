@@ -85,3 +85,36 @@ test("cancel propagates to the active runtime prompt and settles as aborted", as
   assert.equal(state, "idle")
   assert.equal(handle.cancelled, true)
 })
+
+test("steer and followUp enter the active Pi run instead of a sidecar queue", async () => {
+  const { handler, runtime } = makeTestServer()
+  await configureProvider(handler)
+  const create = await handler(sidecarRequest("/sessions", { method: "POST" }, { json: {
+    profileId: "deepseek",
+    purpose: "queue-test",
+  } }))
+  const sessionId = (await create.json()).data.sessionId as string
+  const handle = runtime.sessions.get(sessionId)
+  assert.ok(handle)
+  handle.blockPrompts = true
+
+  const first = await handler(sidecarRequest(`/sessions/${sessionId}/prompts`, { method: "POST" }, { json: {
+    requestId: "prompt-active",
+    text: "start",
+  } }))
+  const activeRunId = (await first.json()).data.runId as number
+  await waitFor(() => handle.prompts.length === 1)
+
+  for (const mode of ["steer", "followUp"] as const) {
+    const queued = await handler(sidecarRequest(`/sessions/${sessionId}/prompts`, { method: "POST" }, { json: {
+      requestId: `prompt-${mode}`,
+      text: mode,
+      mode,
+    } }))
+    assert.equal(queued.status, 202)
+    assert.equal((await queued.json()).data.runId, activeRunId)
+  }
+  await waitFor(() => handle.prompts.length === 3)
+  assert.deepEqual(handle.prompts.map((prompt) => prompt.mode), ["prompt", "steer", "followUp"])
+  handle.release()
+})

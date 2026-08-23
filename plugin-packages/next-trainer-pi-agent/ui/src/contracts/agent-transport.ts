@@ -9,7 +9,7 @@ export type RunId = number;
 export type ThinkingLevel = "auto" | "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
 
 export interface ModelSelection {
-  provider: string;
+  profileId: string;
   modelId: string;
 }
 

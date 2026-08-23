@@ -21,8 +21,10 @@ describe("AgentChatPanel", () => {
     renderPanel();
     const panel = screen.getByRole("region", { name: "训练助手" });
     expect(panel.classList.contains("nta-chat-panel")).toBe(true);
-    expect(panel.style.width).toBe("min(520px, 100%)");
-    expect(panel.style.height).toBe("min(680px, 100%)");
+    expect(panel.style.width).toBe("520px");
+    expect(panel.style.maxWidth).toBe("100%");
+    expect(panel.style.height).toBe("680px");
+    expect(panel.style.maxHeight).toBe("100%");
     expect(panel.closest("[data-color-scheme='dark']")).not.toBeNull();
     expect(screen.getByText("remote-model")).not.toBeNull();
   });
@@ -55,3 +57,8 @@ describe("AgentChatPanel", () => {
     expect(screen.getByText("请分析训练参数")).not.toBeNull();
   });
 });
+
+
+
+
+

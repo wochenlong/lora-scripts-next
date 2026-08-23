@@ -96,6 +96,8 @@ from mikazuki.app.models import (APIResponse, APIResponseFail,
 from mikazuki.dataset_editor import router as dataset_editor_router
 from mikazuki.plugin_marketplace.api import host_router as plugin_host_router
 from mikazuki.plugin_marketplace.api import router as plugin_marketplace_router
+from mikazuki.agent_workspace.api import router as agent_workspace_router
+from mikazuki.plugin_host.agent_tools import router as agent_tools_router
 from mikazuki.log import log
 from mikazuki.tagger.interrogator import available_interrogators
 from mikazuki.tagger.jobs import run_interrogate_job, run_prefetch_job
@@ -117,6 +119,8 @@ router = APIRouter()
 router.include_router(dataset_editor_router)
 router.include_router(plugin_marketplace_router)
 router.include_router(plugin_host_router)
+router.include_router(agent_workspace_router)
+router.include_router(agent_tools_router)
 
 ANIMA_TRAIN_TYPES = {"anima-lora", "sd3-lora", "anima-finetune"}
 ANIMA_FINETUNE_TYPE = "anima-finetune"
