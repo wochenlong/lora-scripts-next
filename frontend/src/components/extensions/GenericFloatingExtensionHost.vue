@@ -3,22 +3,27 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
-import { isSafePluginHostUrl, type PluginHostExtension } from "../../api/plugins"
+import { ChatDotRound, Minus } from "@element-plus/icons-vue"
+import {
+  isSafePluginUiUrl,
+  pluginsApi,
+  type PluginConfirmationDecision,
+  type PluginConfirmationProjection,
+  type PluginHostExtension,
+} from "../../api/plugins"
 import { HostPluginBridge, type BridgeFrameTarget } from "../../extensions/pluginBridge"
-import type { BridgeCapability, BridgeRequestEnvelope } from "../../extensions/pluginBridgeSchemas"
+import { createPluginFrameBridge, createPluginFrameInstanceId } from "../../extensions/pluginFrameBridge"
 import { useExtensionsStore } from "../../stores/extensions"
+import HostConfirmationLayer from "./HostConfirmationLayer.vue"
 
 const PREFERENCE_PREFIX = "plugin-floating-panel:"
-const HOST_IMPLEMENTED_CAPABILITIES = new Set<BridgeCapability>([
-  "artifact.open",
-  "navigation.openExternal",
-  "navigation.openPluginRoute",
-  "theme.get",
-  "locale.get",
-  "context.get",
-])
-const THEME_TOKEN_NAMES = ["--bg", "--surface", "--text", "--text-soft", "--border", "--accent", "--danger"] as const
-
+const DEFAULT_PANEL_WIDTH = 520
+const DEFAULT_PANEL_HEIGHT = 680
+const MIN_PANEL_WIDTH = 420
+const MIN_PANEL_HEIGHT = 480
+const MAX_PANEL_WIDTH = 760
+const VIEWPORT_GUTTER = 32
+const VIEWPORT_VERTICAL_RESERVE = 96
 const route = useRoute()
 const router = useRouter()
 const { locale, t } = useI18n()
@@ -28,79 +33,118 @@ const activeExtension = computed(() => floatingExtensions.value[0] ?? null)
 const frame = ref<HTMLIFrameElement | null>(null)
 const frameSrc = ref("about:blank")
 const panelOpen = ref(false)
+const panelWidth = ref(DEFAULT_PANEL_WIDTH)
+const panelHeight = ref(DEFAULT_PANEL_HEIGHT)
+const viewportWidth = ref(window.innerWidth)
+const pendingConfirmations = ref<PluginConfirmationProjection[]>([])
+const confirmation = computed(
+  () => pendingConfirmations.value.find((value) => value.pluginId === activeExtension.value?.pluginId) ?? null,
+)
+const confirmationBusy = ref(false)
+const confirmationError = ref("")
 let bridge: HostPluginBridge | null = null
+let resizeOrigin: { x: number; y: number; width: number; height: number } | null = null
+
+const panelStyle = computed(() =>
+  viewportWidth.value > 768 ? { width: `${panelWidth.value}px`, height: `${panelHeight.value}px` } : undefined,
+)
 
 function preferenceKey(pluginId: string) {
   return `${PREFERENCE_PREFIX}${pluginId}`
 }
 
-function readOpenPreference(pluginId: string) {
+function clamp(value: number, minimum: number, maximum: number) {
+  return Math.min(Math.max(value, minimum), maximum)
+}
+
+function clampPanelSize(width: number, height: number) {
+  const maxWidth = Math.max(1, Math.min(MAX_PANEL_WIDTH, window.innerWidth - VIEWPORT_GUTTER))
+  const maxHeight = Math.max(1, window.innerHeight - VIEWPORT_VERTICAL_RESERVE)
+  return {
+    width: clamp(width, Math.min(MIN_PANEL_WIDTH, maxWidth), maxWidth),
+    height: clamp(height, Math.min(MIN_PANEL_HEIGHT, maxHeight), maxHeight),
+  }
+}
+
+function readPanelPreference(pluginId: string) {
   try {
-    const value = JSON.parse(localStorage.getItem(preferenceKey(pluginId)) || "{}") as { open?: unknown }
-    return value.open === true
+    const value = JSON.parse(localStorage.getItem(preferenceKey(pluginId)) || "{}") as {
+      open?: unknown
+      width?: unknown
+      height?: unknown
+    }
+    const size = clampPanelSize(
+      typeof value.width === "number" && Number.isFinite(value.width) ? value.width : DEFAULT_PANEL_WIDTH,
+      typeof value.height === "number" && Number.isFinite(value.height) ? value.height : DEFAULT_PANEL_HEIGHT,
+    )
+    return { open: value.open === true, ...size }
   } catch {
-    return false
+    return { open: false, ...clampPanelSize(DEFAULT_PANEL_WIDTH, DEFAULT_PANEL_HEIGHT) }
   }
 }
 
 function saveOpenPreference() {
   const extension = activeExtension.value
   if (!extension) return
-  localStorage.setItem(preferenceKey(extension.pluginId), JSON.stringify({ open: panelOpen.value }))
+  localStorage.setItem(
+    preferenceKey(extension.pluginId),
+    JSON.stringify({ open: panelOpen.value, width: panelWidth.value, height: panelHeight.value }),
+  )
 }
 
-function themeTokens() {
-  const styles = getComputedStyle(document.documentElement)
-  return Object.fromEntries(THEME_TOKEN_NAMES.map((name) => [name, styles.getPropertyValue(name).trim()]))
+function applyPanelSize(width: number, height: number) {
+  const size = clampPanelSize(width, height)
+  panelWidth.value = size.width
+  panelHeight.value = size.height
 }
 
-function createInstanceId() {
-  if (typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID()
-  const values = new Uint8Array(16)
-  globalThis.crypto.getRandomValues(values)
-  return Array.from(values, (value) => value.toString(16).padStart(2, "0")).join("")
+function stopResize() {
+  if (!resizeOrigin) return
+  resizeOrigin = null
+  window.removeEventListener("pointermove", onResizeMove)
+  window.removeEventListener("pointerup", stopResize)
+  saveOpenPreference()
 }
 
-function safeExternalUrl(value: unknown) {
-  if (typeof value !== "string") return null
-  try {
-    const url = new URL(value)
-    return ["http:", "https:"].includes(url.protocol) ? url.href : null
-  } catch {
-    return null
+function onResizeMove(event: PointerEvent) {
+  if (!resizeOrigin) return
+  applyPanelSize(
+    resizeOrigin.width + resizeOrigin.x - event.clientX,
+    resizeOrigin.height + resizeOrigin.y - event.clientY,
+  )
+}
+
+function startResize(event: PointerEvent) {
+  if (window.innerWidth <= 768) return
+  event.preventDefault()
+  resizeOrigin = {
+    x: event.clientX,
+    y: event.clientY,
+    width: panelWidth.value,
+    height: panelHeight.value,
   }
+  window.addEventListener("pointermove", onResizeMove)
+  window.addEventListener("pointerup", stopResize)
 }
 
-function isOwnedPluginRoute(pluginId: string, value: unknown): value is string {
-  if (typeof value !== "string" || !value.startsWith("/")) return false
-  const encoded = encodeURIComponent(pluginId)
-  return value === `/settings/plugins/${encoded}` || value.startsWith(`/plugins/${encoded}/`)
+function resizeWithKeyboard(event: KeyboardEvent) {
+  const step = event.shiftKey ? 32 : 16
+  const deltas: Partial<Record<string, [number, number]>> = {
+    ArrowLeft: [step, 0],
+    ArrowRight: [-step, 0],
+    ArrowUp: [0, step],
+    ArrowDown: [0, -step],
+  }
+  const delta = deltas[event.key]
+  if (!delta) return
+  event.preventDefault()
+  applyPanelSize(panelWidth.value + delta[0], panelHeight.value + delta[1])
+  saveOpenPreference()
 }
 
-async function handleBridgeRequest(extension: PluginHostExtension, request: BridgeRequestEnvelope) {
-  if (request.type === "theme.get") return { tokens: themeTokens() }
-  if (request.type === "locale.get") return { locale: locale.value }
-  if (request.type === "context.get") return { route: { name: route.name ?? null, path: route.path } }
-  if (request.type === "artifact.open") {
-    await router.push({
-      name: "plugin-artifact-detail",
-      params: { pluginId: extension.pluginId, artifactId: String(request.payload.artifactId) },
-    })
-    return { opened: true }
-  }
-  if (request.type === "navigation.openPluginRoute") {
-    const destination = request.payload.route
-    if (!isOwnedPluginRoute(extension.pluginId, destination)) throw new Error("Plugin route is outside this extension namespace.")
-    await router.push(destination)
-    return { opened: true }
-  }
-  if (request.type === "navigation.openExternal") {
-    const destination = safeExternalUrl(request.payload.url)
-    if (!destination) throw new Error("External URL is not allowed.")
-    window.open(destination, "_blank", "noopener,noreferrer")
-    return { opened: true }
-  }
-  throw new Error(`Bridge capability is not implemented by the generic host: ${request.type}`)
+function onViewportResize() {
+  viewportWidth.value = window.innerWidth
+  applyPanelSize(panelWidth.value, panelHeight.value)
 }
 
 function disposeBridge() {
@@ -109,28 +153,63 @@ function disposeBridge() {
   frameSrc.value = "about:blank"
 }
 
+function upsertConfirmation(value: PluginConfirmationProjection) {
+  pendingConfirmations.value = [value, ...pendingConfirmations.value.filter((item) => item.ticketId !== value.ticketId)]
+  confirmationError.value = ""
+}
+
+async function refreshPendingConfirmations() {
+  try {
+    pendingConfirmations.value = await pluginsApi.listPendingConfirmations()
+  } catch {
+    pendingConfirmations.value = []
+  }
+}
+
 async function activateExtension(extension: PluginHostExtension | null) {
   disposeBridge()
-  if (!extension || !isSafePluginHostUrl(extension.ui.floatingPanel?.entryUrl)) {
+  if (!extension || !isSafePluginUiUrl(extension.ui.floatingPanel?.entryUrl, extension.pluginId)) {
     panelOpen.value = false
+    pendingConfirmations.value = []
     return
   }
-  panelOpen.value = readOpenPreference(extension.pluginId)
+  const preference = readPanelPreference(extension.pluginId)
+  panelOpen.value = preference.open
+  panelWidth.value = preference.width
+  panelHeight.value = preference.height
   await nextTick()
   const target = frame.value?.contentWindow
   if (!target) return
-  const grantedCapabilities = extension.capabilities.filter((capability) => HOST_IMPLEMENTED_CAPABILITIES.has(capability))
-  bridge = new HostPluginBridge({
-    pluginId: extension.pluginId,
-    instanceId: createInstanceId(),
+  bridge = createPluginFrameBridge({
+    extension,
+    placement: "floating-panel",
+    instanceId: createPluginFrameInstanceId(),
     frameTarget: target as unknown as BridgeFrameTarget,
-    grantedCapabilities,
-    handleRequest: (request) => handleBridgeRequest(extension, request),
+    router,
+    route,
     locale: () => String(locale.value),
-    themeTokens,
+    onConfirmation: upsertConfirmation,
   })
   bridge.start()
   frameSrc.value = extension.ui.floatingPanel.entryUrl
+}
+
+async function resolveConfirmation(decision: PluginConfirmationDecision) {
+  const current = confirmation.value
+  if (!current || confirmationBusy.value) return
+  confirmationBusy.value = true
+  confirmationError.value = ""
+  try {
+    const resolved = await pluginsApi.resolveConfirmation(current.ticketId, decision)
+    if (confirmation.value?.ticketId === current.ticketId && resolved.state === decision) {
+      pendingConfirmations.value = pendingConfirmations.value.filter((item) => item.ticketId !== current.ticketId)
+    }
+    else confirmationError.value = t("extensionHost.confirmation.failed")
+  } catch {
+    confirmationError.value = t("extensionHost.confirmation.failed")
+  } finally {
+    confirmationBusy.value = false
+  }
 }
 
 function togglePanel() {
@@ -162,11 +241,14 @@ watch(frame, (value) => {
 
 onMounted(() => {
   window.addEventListener("keydown", onShortcut)
-  void extensionsStore.ensureLoaded()
+  window.addEventListener("resize", onViewportResize)
+  void extensionsStore.ensureLoaded().then(refreshPendingConfirmations)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onShortcut)
+  window.removeEventListener("resize", onViewportResize)
+  stopResize()
   disposeBridge()
 })
 </script>
@@ -176,15 +258,24 @@ onBeforeUnmount(() => {
     <section
       v-show="panelOpen"
       class="floating-extension-panel"
+      :style="panelStyle"
       :aria-label="activeExtension.displayName"
       data-testid="floating-extension-panel"
     >
+      <button
+        type="button"
+        class="floating-extension-resize"
+        :aria-label="t('extensionHost.resize')"
+        data-testid="floating-extension-resize"
+        @pointerdown="startResize"
+        @keydown="resizeWithKeyboard"
+      />
       <header class="floating-extension-header">
         <div>
           <strong>{{ activeExtension.displayName }}</strong>
           <small>{{ activeExtension.statusText || t(`extensionHost.state.${activeExtension.state}`) }}</small>
         </div>
-        <button type="button" :aria-label="t('extensionHost.minimize')" @click="closePanel">−</button>
+        <button type="button" :aria-label="t('extensionHost.minimize')" @click="closePanel"><Minus aria-hidden="true" /></button>
       </header>
       <iframe
         ref="frame"
@@ -204,10 +295,18 @@ onBeforeUnmount(() => {
       data-testid="floating-extension-launcher"
       @click="togglePanel"
     >
-      <span aria-hidden="true">✦</span>
+      <ChatDotRound aria-hidden="true" />
       <i v-if="activeExtension.unreadCount" class="floating-extension-badge">{{
         activeExtension.unreadCount > 9 ? "9+" : activeExtension.unreadCount
       }}</i>
     </button>
+    <HostConfirmationLayer
+      v-if="confirmation"
+      :confirmation="confirmation"
+      :plugin-name="activeExtension.displayName"
+      :busy="confirmationBusy"
+      :error="confirmationError"
+      @resolve="resolveConfirmation"
+    />
   </div>
 </template>

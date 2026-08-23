@@ -61,4 +61,13 @@ describe("GenericArtifactDetailPage", () => {
     expect(wrapper.find("a").exists()).toBe(false)
     wrapper.unmount()
   })
+
+  it("renders a stable error without exposing backend exception details", async () => {
+    getArtifact.mockRejectedValue(new Error("C:/Users/name/auth.json contained sk-sensitive"))
+    const wrapper = await mountPage()
+    expect(wrapper.text()).toContain("制品暂不可用")
+    expect(wrapper.text()).not.toContain("auth.json")
+    expect(wrapper.text()).not.toContain("sk-sensitive")
+    wrapper.unmount()
+  })
 })

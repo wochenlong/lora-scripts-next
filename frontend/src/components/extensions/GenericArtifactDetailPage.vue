@@ -2,7 +2,13 @@
 import { computed, ref, watch } from "vue"
 import { useRoute } from "vue-router"
 import { useI18n } from "vue-i18n"
-import { isSafePluginHostUrl, pluginsApi, type PluginArtifactProjection } from "../../api/plugins"
+import {
+  isSafePluginHostUrl,
+  isValidArtifactId,
+  isValidPluginId,
+  pluginsApi,
+  type PluginArtifactProjection,
+} from "../../api/plugins"
 
 const route = useRoute()
 const { t } = useI18n()
@@ -16,11 +22,15 @@ const safeDownloadUrl = computed(() => (isSafePluginHostUrl(artifact.value?.down
 async function load() {
   artifact.value = null
   error.value = ""
+  if (!isValidPluginId(pluginId.value) || !isValidArtifactId(artifactId.value)) {
+    error.value = t("extensionHost.artifact.unavailable")
+    return
+  }
   loading.value = true
   try {
     artifact.value = await pluginsApi.getArtifact(pluginId.value, artifactId.value)
-  } catch (reason) {
-    error.value = reason instanceof Error ? reason.message : t("extensionHost.artifact.unavailable")
+  } catch {
+    error.value = t("extensionHost.artifact.unavailable")
   } finally {
     loading.value = false
   }

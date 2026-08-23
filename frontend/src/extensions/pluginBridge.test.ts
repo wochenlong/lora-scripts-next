@@ -1,7 +1,13 @@
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from "vitest"
 import { HostPluginBridge, type BridgeFrameTarget, type BridgeMessageChannel, type BridgeMessagePort } from "./pluginBridge"
-import { PLUGIN_BRIDGE_PROTOCOL, type BridgeRequestEnvelope, type BridgeResponseEnvelope } from "./pluginBridgeSchemas"
+import {
+  BRIDGE_REQUEST_TYPES,
+  PLUGIN_BRIDGE_PROTOCOL,
+  parseBridgeRequestEnvelope,
+  type BridgeRequestEnvelope,
+  type BridgeResponseEnvelope,
+} from "./pluginBridgeSchemas"
 
 class FakePort implements BridgeMessagePort {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null
@@ -173,6 +179,27 @@ describe("HostPluginBridge request validation", () => {
     harness.bridge.dispose()
   })
 
+  it("forwards only correlated session events over the connected MessagePort", () => {
+    const harness = buildHarness()
+    const port = connect(harness)
+    expect(
+      harness.bridge.postEvent({ eventId: "event-1", sessionId: "session-1", runId: 4, type: "prompt_done" }),
+    ).toBe(true)
+    expect(port.sent.at(-1)).toMatchObject({
+      type: "EVENT",
+      eventId: "event-1",
+      sessionId: "session-1",
+      runId: 4,
+      data: { type: "prompt_done" },
+    })
+    expect(harness.bridge.postEvent({ connected: true })).toBe(false)
+    harness.bridge.reset()
+    expect(
+      harness.bridge.postEvent({ eventId: "event-2", sessionId: "session-1", runId: 4, type: "agent_settled" }),
+    ).toBe(false)
+    harness.bridge.dispose()
+  })
+
   it("rejects duplicate sequence and requestId without repeating the side effect", async () => {
     const harness = buildHarness()
     const port = connect(harness)
@@ -273,6 +300,93 @@ describe("HostPluginBridge request validation", () => {
     harness.bridge.dispose()
   })
 
+  it("accepts one canonical payload for every approved request type", () => {
+    const payloads: Record<BridgeRequestEnvelope["type"], Record<string, unknown>> = {
+      "session.list": {},
+      "session.create": {
+        name: "Audit session",
+        model: { profileId: "deepseek", modelId: "deepseek-v4-flash" },
+        thinkingLevel: "high",
+      },
+      "session.rename": { sessionId: "s1", name: "Renamed" },
+      "session.delete": { sessionId: "s1" },
+      "session.getState": { sessionId: "s1" },
+      "session.getHistory": {
+        sessionId: "s1",
+        cursor: "c1",
+        limit: 50,
+        deferThinking: true,
+        deferMedia: true,
+      },
+      "session.getThinking": { sessionId: "s1", entryId: "e1", blockIndex: 0 },
+      "session.prompt": {
+        sessionId: "s1",
+        input: {
+          text: "Review this image",
+          images: [{ data: "base64", mimeType: "image/png", name: "sample.png" }],
+          streamingBehavior: "followUp",
+          clientSubmissionId: "submission-1",
+        },
+      },
+      "session.cancel": { sessionId: "s1" },
+      "session.compact": { sessionId: "s1", instructions: "Keep decisions" },
+      "session.setModel": { sessionId: "s1", model: { profileId: "qwen", modelId: "Qwen/Qwen3.6-27B" } },
+      "session.setThinkingLevel": { sessionId: "s1", level: "medium" },
+      "session.recallQueue": { sessionId: "s1" },
+      "session.subscribe": { sessionId: "s1", cursor: "event-4" },
+      "provider.list": {},
+      "provider.status": { profileId: "deepseek" },
+      "provider.saveKey": {
+        profileId: "deepseek",
+        endpoint: "https://api.deepseek.com/v1/chat/completions",
+        modelId: "deepseek-v4-flash",
+        key: "test-key",
+      },
+      "provider.removeKey": { profileId: "deepseek" },
+      "provider.test": { profileId: "deepseek" },
+      "resource.pick": { kinds: ["dataset", "training-config"] },
+      "resource.getSummary": { resourceId: "dataset-1" },
+      "artifact.open": { artifactId: "artifact-1", title: "Config", kind: "training-config" },
+      "artifact.download": { artifactId: "artifact-1", title: "Config", kind: "training-config" },
+      "confirmation.request": {
+        toolCallId: "tool-1",
+      },
+      "confirmation.getResult": { ticketId: "ticket-1" },
+      "navigation.openExternal": { url: "https://example.com/reference" },
+      "navigation.openPluginRoute": { route: "/plugins/sample-plugin/artifacts/artifact-1" },
+      "theme.get": {},
+      "locale.get": {},
+      "context.get": {},
+    }
+
+    expect(Object.keys(payloads).sort()).toEqual([...BRIDGE_REQUEST_TYPES].sort())
+    BRIDGE_REQUEST_TYPES.forEach((type, index) => {
+      expect(
+        parseBridgeRequestEnvelope(request({ type, payload: payloads[type], seq: index + 1, requestId: `canonical-${index}` })),
+      ).toMatchObject({ ok: true })
+    })
+  })
+
+  it("rejects legacy or incomplete nested DTOs", () => {
+    const invalidRequests: Array<Partial<BridgeRequestEnvelope>> = [
+      { type: "session.create", payload: { model: { provider: "deepseek", modelId: "m1" } } },
+      { type: "session.getHistory", payload: { sessionId: "s1", deferThinking: "yes" } },
+      { type: "session.prompt", payload: { sessionId: "s1", input: { text: "missing submission id" } } },
+      { type: "session.setThinkingLevel", payload: { sessionId: "s1", level: "unbounded" } },
+      { type: "provider.status", payload: {} },
+      { type: "resource.pick", payload: { kind: "dataset" } },
+      { type: "artifact.open", payload: { artifactId: "artifact-1" } },
+      { type: "confirmation.request", payload: { action: "caption.commit", title: "Untrusted", summary: "Untrusted" } },
+    ]
+
+    invalidRequests.forEach((input, index) => {
+      expect(parseBridgeRequestEnvelope(request({ ...input, seq: index + 1, requestId: `invalid-${index}` }))).toMatchObject({
+        ok: false,
+        code: "BRIDGE_SCHEMA_UNSUPPORTED",
+      })
+    })
+  })
+
   it("does not expose handler error details to the plugin frame", async () => {
     const harness = buildHarness()
     harness.handler.mockRejectedValueOnce(new Error("C:/Users/name/auth.json contained sk-sensitive"))
@@ -313,5 +427,35 @@ describe("HostPluginBridge lifecycle", () => {
 
     harness.bridge.acceptWindowMessage(windowMessage(harness.frame, ready()))
     expect(harness.channels).toHaveLength(1)
+  })
+
+  it("drops an async response from a connection that was replaced", async () => {
+    let releaseRequest: (() => void) | undefined
+    const harness = buildHarness()
+    harness.handler.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          releaseRequest = () => resolve({ handled: "theme.get" })
+        }),
+    )
+    const oldPort = connect(harness)
+    oldPort.receive(request())
+    await settle()
+
+    harness.bridge.acceptWindowMessage(windowMessage(harness.frame, ready()))
+    const newPort = harness.channels[1].port1
+    newPort.receive({
+      type: "HELLO",
+      pluginId: "sample-plugin",
+      instanceId: "instance-1",
+      protocolVersion: PLUGIN_BRIDGE_PROTOCOL,
+      nonce: "a".repeat(64),
+    })
+    releaseRequest?.()
+    await settle()
+
+    expect(oldPort.sent).toHaveLength(1)
+    expect(newPort.sent).toHaveLength(1)
+    harness.bridge.dispose()
   })
 })

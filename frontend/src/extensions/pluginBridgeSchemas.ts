@@ -83,6 +83,19 @@ export interface BridgeResponseEnvelope {
   error?: BridgeErrorBody
 }
 
+export interface BridgeEventEnvelope {
+  protocol: typeof PLUGIN_BRIDGE_PROTOCOL
+  pluginId: string
+  instanceId: string
+  seq: number
+  requestId: string
+  type: "EVENT"
+  eventId: string
+  sessionId: string
+  runId: number
+  data: Record<string, unknown>
+}
+
 export interface BridgeWelcomeMessage {
   type: "WELCOME"
   protocolVersion: typeof PLUGIN_BRIDGE_PROTOCOL
@@ -141,12 +154,63 @@ type PayloadValidator = (payload: Record<string, unknown>) => boolean
 
 const emptyPayload: PayloadValidator = (payload) => hasExactKeys(payload, [])
 const optionalSessionName: PayloadValidator = (payload) =>
-  hasOnlyKeys(payload, [], ["name"]) && (payload.name === undefined || nonEmptyString(payload.name))
+  hasOnlyKeys(payload, [], ["name", "model", "thinkingLevel"]) &&
+  (payload.name === undefined || nonEmptyString(payload.name)) &&
+  (payload.model === undefined || isModelSelection(payload.model)) &&
+  (payload.thinkingLevel === undefined || isThinkingLevel(payload.thinkingLevel))
 const sessionIdOnly: PayloadValidator = (payload) => hasExactKeys(payload, ["sessionId"]) && nonEmptyString(payload.sessionId)
 const profileIdOnly: PayloadValidator = (payload) => hasExactKeys(payload, ["profileId"]) && nonEmptyString(payload.profileId)
-const artifactIdOnly: PayloadValidator = (payload) => hasExactKeys(payload, ["artifactId"]) && nonEmptyString(payload.artifactId)
 const nonNegativeInteger = (value: unknown) => Number.isSafeInteger(value) && Number(value) >= 0
 const positiveInteger = (value: unknown) => Number.isSafeInteger(value) && Number(value) > 0
+const THINKING_LEVELS = new Set(["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"])
+const RESOURCE_KINDS = new Set(["dataset", "training-config", "curve", "knowledge"])
+
+function isThinkingLevel(value: unknown) {
+  return nonEmptyString(value) && THINKING_LEVELS.has(value)
+}
+
+function isModelSelection(value: unknown) {
+  return (
+    isRecord(value) &&
+    hasExactKeys(value, ["profileId", "modelId"]) &&
+    nonEmptyString(value.profileId) &&
+    nonEmptyString(value.modelId)
+  )
+}
+
+function isStringArray(value: unknown) {
+  return Array.isArray(value) && value.every(nonEmptyString)
+}
+
+function isImageAttachment(value: unknown) {
+  return (
+    isRecord(value) &&
+    hasOnlyKeys(value, ["data", "mimeType"], ["name"]) &&
+    nonEmptyString(value.data) &&
+    nonEmptyString(value.mimeType) &&
+    value.mimeType.startsWith("image/") &&
+    (value.name === undefined || nonEmptyString(value.name))
+  )
+}
+
+function isPromptInput(value: unknown) {
+  if (!isRecord(value) || !hasOnlyKeys(value, ["text", "clientSubmissionId"], ["images", "streamingBehavior"])) return false
+  if (typeof value.text !== "string" || !nonEmptyString(value.clientSubmissionId)) return false
+  if (value.streamingBehavior !== undefined && value.streamingBehavior !== "steer" && value.streamingBehavior !== "followUp") {
+    return false
+  }
+  if (value.images !== undefined && (!Array.isArray(value.images) || !value.images.every(isImageAttachment))) return false
+  return value.text.trim().length > 0 || (Array.isArray(value.images) && value.images.length > 0)
+}
+
+function isArtifactReference(payload: Record<string, unknown>) {
+  return (
+    hasExactKeys(payload, ["artifactId", "title", "kind"]) &&
+    nonEmptyString(payload.artifactId) &&
+    nonEmptyString(payload.title) &&
+    nonEmptyString(payload.kind)
+  )
+}
 
 export const BRIDGE_PAYLOAD_VALIDATORS: Readonly<Record<BridgeRequestType, PayloadValidator>> = Object.freeze({
   "session.list": emptyPayload,
@@ -156,39 +220,35 @@ export const BRIDGE_PAYLOAD_VALIDATORS: Readonly<Record<BridgeRequestType, Paylo
   "session.delete": sessionIdOnly,
   "session.getState": sessionIdOnly,
   "session.getHistory": (payload) =>
-    hasOnlyKeys(payload, ["sessionId"], ["cursor", "limit"]) &&
+    hasOnlyKeys(payload, ["sessionId"], ["cursor", "limit", "deferThinking", "deferMedia"]) &&
     nonEmptyString(payload.sessionId) &&
     (payload.cursor === undefined || nonEmptyString(payload.cursor)) &&
-    (payload.limit === undefined || positiveInteger(payload.limit)),
+    (payload.limit === undefined || positiveInteger(payload.limit)) &&
+    (payload.deferThinking === undefined || typeof payload.deferThinking === "boolean") &&
+    (payload.deferMedia === undefined || typeof payload.deferMedia === "boolean"),
   "session.getThinking": (payload) =>
     hasExactKeys(payload, ["sessionId", "entryId", "blockIndex"]) &&
     nonEmptyString(payload.sessionId) &&
     nonEmptyString(payload.entryId) &&
     nonNegativeInteger(payload.blockIndex),
   "session.prompt": (payload) =>
-    hasExactKeys(payload, ["sessionId", "input"]) && nonEmptyString(payload.sessionId) && isRecord(payload.input),
+    hasExactKeys(payload, ["sessionId", "input"]) && nonEmptyString(payload.sessionId) && isPromptInput(payload.input),
   "session.cancel": sessionIdOnly,
   "session.compact": (payload) =>
     hasOnlyKeys(payload, ["sessionId"], ["instructions"]) &&
     nonEmptyString(payload.sessionId) &&
     (payload.instructions === undefined || nonEmptyString(payload.instructions)),
   "session.setModel": (payload) =>
-    hasExactKeys(payload, ["sessionId", "model"]) &&
-    nonEmptyString(payload.sessionId) &&
-    isRecord(payload.model) &&
-    hasExactKeys(payload.model, ["profileId", "modelId"]) &&
-    nonEmptyString(payload.model.profileId) &&
-    nonEmptyString(payload.model.modelId),
+    hasExactKeys(payload, ["sessionId", "model"]) && nonEmptyString(payload.sessionId) && isModelSelection(payload.model),
   "session.setThinkingLevel": (payload) =>
-    hasExactKeys(payload, ["sessionId", "level"]) && nonEmptyString(payload.sessionId) && nonEmptyString(payload.level),
+    hasExactKeys(payload, ["sessionId", "level"]) && nonEmptyString(payload.sessionId) && isThinkingLevel(payload.level),
   "session.recallQueue": sessionIdOnly,
   "session.subscribe": (payload) =>
     hasOnlyKeys(payload, ["sessionId"], ["cursor"]) &&
     nonEmptyString(payload.sessionId) &&
     (payload.cursor === undefined || nonEmptyString(payload.cursor)),
   "provider.list": emptyPayload,
-  "provider.status": (payload) =>
-    hasOnlyKeys(payload, [], ["profileId"]) && (payload.profileId === undefined || nonEmptyString(payload.profileId)),
+  "provider.status": profileIdOnly,
   "provider.saveKey": (payload) =>
     hasExactKeys(payload, ["profileId", "endpoint", "modelId", "key"]) &&
     nonEmptyString(payload.profileId) &&
@@ -198,12 +258,14 @@ export const BRIDGE_PAYLOAD_VALIDATORS: Readonly<Record<BridgeRequestType, Paylo
   "provider.removeKey": profileIdOnly,
   "provider.test": profileIdOnly,
   "resource.pick": (payload) =>
-    hasOnlyKeys(payload, ["kind"], ["multiple"]) &&
-    nonEmptyString(payload.kind) &&
-    (payload.multiple === undefined || typeof payload.multiple === "boolean"),
+    hasExactKeys(payload, ["kinds"]) &&
+    isStringArray(payload.kinds) &&
+    payload.kinds.length > 0 &&
+    new Set(payload.kinds).size === payload.kinds.length &&
+    payload.kinds.every((kind) => RESOURCE_KINDS.has(kind)),
   "resource.getSummary": (payload) => hasExactKeys(payload, ["resourceId"]) && nonEmptyString(payload.resourceId),
-  "artifact.open": artifactIdOnly,
-  "artifact.download": artifactIdOnly,
+  "artifact.open": isArtifactReference,
+  "artifact.download": isArtifactReference,
   "confirmation.request": (payload) => hasExactKeys(payload, ["toolCallId"]) && nonEmptyString(payload.toolCallId),
   "confirmation.getResult": (payload) => hasExactKeys(payload, ["ticketId"]) && nonEmptyString(payload.ticketId),
   "navigation.openExternal": (payload) => hasExactKeys(payload, ["url"]) && nonEmptyString(payload.url),

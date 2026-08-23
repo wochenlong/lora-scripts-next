@@ -1,6 +1,6 @@
 import { computed, ref } from "vue"
 import { defineStore } from "pinia"
-import { isSafePluginHostUrl, isValidPluginId, pluginsApi, type PluginHostExtension } from "../api/plugins"
+import { isSafePluginUiUrl, isValidPluginId, pluginsApi, type PluginHostExtension } from "../api/plugins"
 
 const visibleStates = new Set(["starting", "ready", "runtime_error", "provider_error"])
 
@@ -20,7 +20,7 @@ export const useExtensionsStore = defineStore("extensions", () => {
         validExtension(extension) &&
         extension.enabled &&
         visibleStates.has(extension.state) &&
-        isSafePluginHostUrl(extension.ui.floatingPanel?.entryUrl),
+        isSafePluginUiUrl(extension.ui.floatingPanel?.entryUrl, extension.pluginId),
     ),
   )
 
@@ -29,11 +29,13 @@ export const useExtensionsStore = defineStore("extensions", () => {
     loading.value = true
     error.value = ""
     try {
+      await pluginsApi.ensureHostAuthority()
       const result = await pluginsApi.listExtensions()
       extensions.value = result.extensions.filter(validExtension)
     } catch (reason) {
       extensions.value = []
-      error.value = reason instanceof Error ? reason.message : "Plugin host is unavailable."
+      void reason
+      error.value = "Plugin host is unavailable."
     } finally {
       loaded.value = true
       loading.value = false

@@ -5,6 +5,7 @@ import {
   parseBridgeRequestEnvelope,
   type BridgeCapability,
   type BridgeErrorBody,
+  type BridgeEventEnvelope,
   type BridgeRequestEnvelope,
   type BridgeResponseEnvelope,
   type BridgeWelcomeMessage,
@@ -41,6 +42,7 @@ export interface HostPluginBridgeOptions {
   requestIdFactory?: () => string
   channelFactory?: () => BridgeMessageChannel
   onDiagnostic?: (message: string) => void
+  onConnectionClosed?: () => void
 }
 
 function randomHex(bytes: number) {
@@ -148,6 +150,8 @@ export class HostPluginBridge {
   }
 
   private async acceptRequest(value: unknown) {
+    const requestPort = this.port
+    const requestConnection = this.nonce
     const parsed = parseBridgeRequestEnvelope(value)
     if (!parsed.ok) {
       if (parsed.requestId) this.sendError(parsed.requestId, parsed.code, parsed.message)
@@ -170,9 +174,11 @@ export class HostPluginBridge {
     }
     try {
       const data = await this.options.handleRequest(request)
+      if (this.port !== requestPort || this.nonce !== requestConnection || !this.connected) return
       this.sendResponse(request.requestId, true, data)
     } catch (error) {
       void error
+      if (this.port !== requestPort || this.nonce !== requestConnection || !this.connected) return
       this.options.onDiagnostic?.("Bridge request handler failed; details were withheld from the plugin frame.")
       this.sendError(request.requestId, "BRIDGE_REQUEST_FAILED", "The host could not complete this request.")
     }
@@ -198,6 +204,24 @@ export class HostPluginBridge {
     this.port.postMessage(response)
   }
 
+  postEvent(event: unknown): boolean {
+    if (!this.port || !this.connected || !isBridgeEvent(event)) return false
+    const envelope: BridgeEventEnvelope = {
+      protocol: PLUGIN_BRIDGE_PROTOCOL,
+      pluginId: this.options.pluginId,
+      instanceId: this.options.instanceId,
+      seq: ++this.outgoingSeq,
+      requestId: (this.options.requestIdFactory ?? (() => globalThis.crypto.randomUUID()))(),
+      type: "EVENT",
+      eventId: event.eventId,
+      sessionId: event.sessionId,
+      runId: event.runId,
+      data: event,
+    }
+    this.port.postMessage(envelope)
+    return true
+  }
+
   reset() {
     this.closeConnection()
   }
@@ -211,6 +235,7 @@ export class HostPluginBridge {
 
   private closeConnection() {
     const port = this.port
+    const hadConnection = Boolean(port || this.connected)
     this.port = null
     if (port) {
       port.onmessage = null
@@ -221,5 +246,26 @@ export class HostPluginBridge {
     this.lastIncomingSeq = 0
     this.outgoingSeq = 0
     this.requestIds.clear()
+    if (hadConnection) this.options.onConnectionClosed?.()
   }
+}
+
+
+function isBridgeEvent(value: unknown): value is Record<string, unknown> & {
+  eventId: string
+  sessionId: string
+  runId: number
+} {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false
+  const event = value as Record<string, unknown>
+  return (
+    typeof event.eventId === "string" &&
+    event.eventId.length > 0 &&
+    typeof event.sessionId === "string" &&
+    event.sessionId.length > 0 &&
+    Number.isSafeInteger(event.runId) &&
+    Number(event.runId) >= 0 &&
+    typeof event.type === "string" &&
+    event.type.length > 0
+  )
 }

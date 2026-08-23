@@ -49,6 +49,8 @@ async function mountHost(items: PluginHostExtension[]) {
 
 beforeEach(() => {
   localStorage.clear()
+  Object.defineProperty(window, "innerWidth", { configurable: true, value: 1440 })
+  Object.defineProperty(window, "innerHeight", { configurable: true, value: 900 })
 })
 
 describe("GenericFloatingExtensionHost visibility", () => {
@@ -64,6 +66,7 @@ describe("GenericFloatingExtensionHost visibility", () => {
     extension({ state: "absent" }),
     extension({ pluginId: "../sample-plugin" }),
     extension({ ui: { floatingPanel: { entryUrl: "https://untrusted.example/panel" } } }),
+    extension({ ui: { floatingPanel: { entryUrl: "/api/plugin-host/ui/other-plugin/panel.html" } } }),
   ])("renders no launcher for disabled, broken, absent, or unsafe extensions", async (item) => {
     const { wrapper } = await mountHost([item])
     expect(wrapper.find('[data-testid="floating-extension-launcher"]').exists()).toBe(false)
@@ -83,7 +86,7 @@ describe("GenericFloatingExtensionHost visibility", () => {
     await launcher.trigger("click")
     expect(launcher.attributes("aria-expanded")).toBe("true")
     expect(wrapper.get('[data-testid="floating-extension-panel"]').isVisible()).toBe(true)
-    expect(JSON.parse(localStorage.getItem("plugin-floating-panel:sample-plugin") || "{}")).toEqual({ open: true })
+    expect(JSON.parse(localStorage.getItem("plugin-floating-panel:sample-plugin") || "{}")).toMatchObject({ open: true })
     wrapper.unmount()
   })
 })
@@ -107,6 +110,43 @@ describe("GenericFloatingExtensionHost lifecycle", () => {
     window.dispatchEvent(new KeyboardEvent("keydown", { key: "a", ctrlKey: true, shiftKey: true, bubbles: true }))
     await nextTick()
     expect(wrapper.get('[data-testid="floating-extension-launcher"]').attributes("aria-expanded")).toBe("false")
+    wrapper.unmount()
+  })
+
+  it("resizes from the upper-left handle and persists bounded dimensions", async () => {
+    const { wrapper } = await mountHost([extension()])
+    const panel = wrapper.get<HTMLElement>('[data-testid="floating-extension-panel"]')
+    const handle = wrapper.get('[data-testid="floating-extension-resize"]')
+
+    handle.element.dispatchEvent(new MouseEvent("pointerdown", { bubbles: true, clientX: 500, clientY: 400 }))
+    window.dispatchEvent(new MouseEvent("pointermove", { clientX: 400, clientY: 300 }))
+    window.dispatchEvent(new MouseEvent("pointerup", { clientX: 400, clientY: 300 }))
+    await nextTick()
+
+    expect(panel.element.style.width).toBe("620px")
+    expect(panel.element.style.height).toBe("780px")
+    expect(JSON.parse(localStorage.getItem("plugin-floating-panel:sample-plugin") || "{}")).toMatchObject({
+      width: 620,
+      height: 780,
+    })
+    wrapper.unmount()
+  })
+
+  it("supports keyboard resizing and clamps preferences to the viewport", async () => {
+    localStorage.setItem(
+      "plugin-floating-panel:sample-plugin",
+      JSON.stringify({ open: true, width: 900, height: 900 }),
+    )
+    const { wrapper } = await mountHost([extension()])
+    const panel = wrapper.get<HTMLElement>('[data-testid="floating-extension-panel"]')
+    const handle = wrapper.get('[data-testid="floating-extension-resize"]')
+
+    expect(panel.element.style.width).toBe("760px")
+    expect(panel.element.style.height).toBe("804px")
+    await handle.trigger("keydown", { key: "ArrowRight" })
+    await handle.trigger("keydown", { key: "ArrowDown" })
+    expect(panel.element.style.width).toBe("744px")
+    expect(panel.element.style.height).toBe("788px")
     wrapper.unmount()
   })
 

@@ -29,7 +29,10 @@ async function mountPage(entryUrl?: string) {
   })
   await router.push("/settings/plugins/sample-plugin")
   await router.isReady()
-  const wrapper = mount(defineComponent({ template: "<RouterView />" }), { global: { plugins: [pinia, router, i18n] } })
+  const wrapper = mount(defineComponent({ template: "<RouterView />" }), {
+    attachTo: document.body,
+    global: { plugins: [pinia, router, i18n] },
+  })
   await flushPromises()
   return wrapper
 }
@@ -50,6 +53,12 @@ describe("GenericPluginSettingsPage", () => {
     const wrapper = await mountPage("https://untrusted.example/settings")
     expect(wrapper.find("iframe").exists()).toBe(false)
     expect(wrapper.text()).toContain("设置页面不可用")
+    wrapper.unmount()
+  })
+
+  it("does not frame another plugin's settings contribution", async () => {
+    const wrapper = await mountPage("/api/plugin-host/ui/other-plugin/settings.html")
+    expect(wrapper.find("iframe").exists()).toBe(false)
     wrapper.unmount()
   })
 })

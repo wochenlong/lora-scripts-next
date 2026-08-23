@@ -28,9 +28,9 @@
   outline-offset: 3px;
 }
 
-.floating-extension-launcher > span {
-  font-size: 25px;
-  line-height: 1;
+.floating-extension-launcher > svg {
+  width: 25px;
+  height: 25px;
 }
 
 .floating-extension-badge {
@@ -66,6 +66,26 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   box-shadow: 0 24px 70px rgba(8, 15, 24, 0.28);
+}
+
+.floating-extension-resize {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background:
+    linear-gradient(135deg, transparent 45%, var(--text-faint) 46%, var(--text-faint) 54%, transparent 55%) 1px 1px / 8px 8px;
+  border: 0;
+  cursor: nwse-resize;
+  opacity: 0.65;
+}
+
+.floating-extension-resize:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .floating-extension-header {
@@ -104,12 +124,112 @@
   cursor: pointer;
 }
 
+.floating-extension-header button svg {
+  width: 17px;
+  height: 17px;
+}
+
 .floating-extension-frame {
   display: block;
   width: 100%;
   height: calc(100% - 58px);
   background: var(--surface);
   border: 0;
+}
+
+.host-confirmation-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 12, 18, 0.55);
+}
+
+.host-confirmation-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 24px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 28px 80px rgba(4, 9, 15, 0.38);
+}
+
+.host-confirmation-dialog header small,
+.host-confirmation-dialog header h2 {
+  display: block;
+}
+
+.host-confirmation-brand {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.host-confirmation-dialog header small {
+  margin-top: 4px;
+  color: var(--text-faint);
+}
+
+.host-confirmation-dialog h2 {
+  margin: 12px 0 18px;
+  font-size: 20px;
+}
+
+.host-confirmation-dialog dl {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.host-confirmation-dialog dl > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.host-confirmation-dialog dt {
+  color: var(--text-faint);
+}
+
+.host-confirmation-dialog dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.host-confirmation-dialog > p {
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.host-confirmation-error {
+  color: var(--danger);
+}
+
+.host-confirmation-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.host-confirmation-dialog footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 108px;
+}
+
+.host-confirmation-dialog footer button svg {
+  width: 16px;
+  height: 16px;
 }
 
 .plugin-extension-page {
@@ -186,8 +306,34 @@
     border-radius: var(--radius-lg);
   }
 
+  .floating-extension-resize {
+    display: none;
+  }
+
   .plugin-extension-page {
     padding: 24px 16px;
+  }
+
+  .host-confirmation-layer {
+    padding: 16px;
+  }
+
+  .host-confirmation-dialog {
+    max-height: calc(100vh - 32px);
+    padding: 20px;
+  }
+
+  .host-confirmation-dialog dl > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .host-confirmation-dialog footer {
+    flex-direction: column-reverse;
+  }
+
+  .host-confirmation-dialog footer button {
+    width: 100%;
   }
 }
 
