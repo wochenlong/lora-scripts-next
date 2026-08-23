@@ -24,7 +24,7 @@ from mikazuki.plugin_host.agent_tools import configure_agent_tool_service
 
 from .manager import MarketplaceManager
 from .models import MarketplaceEntry
-from .catalog import CatalogError, MarketplaceCatalogService
+from .catalog import CatalogError, FileCatalogSource, LocalPackageAcquirer, MarketplaceCatalogService
 from .paths import MarketplacePaths
 from .store import MarketplaceStore
 from .trust import TrustError, TrustStore
@@ -152,6 +152,57 @@ _manager = _default_manager()
 _catalog = MarketplaceCatalogService(paths=_manager.paths, trust=_manager.trust)
 _confirmations = ConfirmationTicketStore()
 configure_agent_tool_service(_confirmations)
+
+
+def _apply_local_catalog_configuration() -> None:
+    """Opt-in local/test trusted catalog for development runtimes.
+
+    Production releases inject release-governed catalog, trust roots and
+    package sources through the marketplace configuration path.  The local
+    development loop instead points at a signed local catalog file plus a
+    host-approved package URL -> local file map.  All material is still
+    verified (hash, signature, compatibility, permissions); anything missing
+    or invalid keeps the marketplace fail-closed and the core fully usable.
+
+    Environment variables (all optional; all must be set for the wiring to
+    activate):
+      MIKAZUKI_PLUGIN_CATALOG_PATH    signed catalog JSON file
+      MIKAZUKI_PLUGIN_CATALOG_TRUST   trust root JSON: {"keys": {keyId: {"publisherId": str, "keyHex": str}}, "revokedKeys": [str]}
+      MIKAZUKI_PLUGIN_PACKAGE_SOURCES JSON map {package_url: local_file_path}
+    """
+    global _manager, _catalog
+    catalog_path = os.environ.get("MIKAZUKI_PLUGIN_CATALOG_PATH", "").strip()
+    trust_path = os.environ.get("MIKAZUKI_PLUGIN_CATALOG_TRUST", "").strip()
+    sources_path = os.environ.get("MIKAZUKI_PLUGIN_PACKAGE_SOURCES", "").strip()
+    if not (catalog_path and trust_path and sources_path):
+        return
+    try:
+        trust_payload = json.loads(Path(trust_path).read_text(encoding="utf-8"))
+        keys = {
+            key_id: (meta["publisherId"], bytes.fromhex(meta["keyHex"]))
+            for key_id, meta in trust_payload.get("keys", {}).items()
+        }
+        if not keys:
+            raise ValueError("trust root declares no signing keys")
+        trust = TrustStore(keys, revoked_keys=set(trust_payload.get("revokedKeys", [])))
+        sources = json.loads(Path(sources_path).read_text(encoding="utf-8"))
+        acquirer = LocalPackageAcquirer({url: Path(path) for url, path in sources.items()})
+        catalog = MarketplaceCatalogService(
+            paths=_manager.paths,
+            trust=trust,
+            source=FileCatalogSource(Path(catalog_path)),
+            acquirer=acquirer,
+        )
+    except Exception:
+        # Fail closed: keep the default empty trust root and no catalog
+        # source so every install remains rejected and the core app is
+        # unaffected by a broken local configuration.
+        return
+    _manager.trust = trust
+    _catalog = catalog
+
+
+_apply_local_catalog_configuration()
 
 
 def _confirmation_capability_error(exc: ConfirmationError) -> CapabilityBrokerError:

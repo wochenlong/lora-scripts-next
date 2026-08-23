@@ -10,6 +10,7 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import os
 import shutil
 import socket
 import threading
@@ -58,6 +59,29 @@ def free_port() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
         return sock.getsockname()[1]
+
+
+def dev_docs_root() -> Path:
+    """Locate the development-docs workspace root across layouts.
+
+    MIKAZUKI_DEV_DOCS overrides both. The canonical source workspace keeps
+    the docs in the sibling directory lora-scripts-next-agent-development-docs;
+    the isolated backup keeps development-docs next to the repository copy.
+    """
+    override = os.environ.get("MIKAZUKI_DEV_DOCS", "").strip()
+    if override:
+        return Path(override)
+    here = Path(__file__).resolve().parent  # tests/
+    parent = here.parents[0]  # repository root
+    candidates = [
+        parent.parent / "lora-scripts-next-agent-development-docs",
+        parent.parent / "development-docs",
+        parent / "development-docs",
+    ]
+    for candidate in candidates:
+        if (candidate / "00_预检证据").is_dir() or (candidate / "evidence").is_dir():
+            return candidate
+    return candidates[0]
 
 
 def build_package(root: Path, *, version: str = "0.1.0", executable: bytes | None = None, permissions: list[str] | None = None, drop_bridge_permissions: set[str] | None = None) -> Path:

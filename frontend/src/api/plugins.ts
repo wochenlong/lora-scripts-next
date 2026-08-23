@@ -406,6 +406,10 @@ export const pluginsApi = {
     const response = await authorizedFetch("/api/marketplace/plugins", { method: "GET" })
     return hostData<MarketplacePluginStatus[]>(response)
   },
+  refreshCatalog: async (): Promise<MarketplaceEntry[]> => {
+    const response = await authorizedFetch("/api/marketplace/catalog", { method: "GET" })
+    return hostData<MarketplaceEntry[]>(response)
+  },
   installMarketplacePlugin: (entry: MarketplaceEntry, approvedPermissions: string[]) =>
     marketplaceMutation(entry.id, "install", { entry, approvedPermissions }),
   enableMarketplacePlugin: (pluginId: string, permissions: string[]) =>

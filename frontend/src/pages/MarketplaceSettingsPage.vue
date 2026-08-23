@@ -15,6 +15,8 @@ const props = withDefaults(defineProps<{ catalogEntries?: MarketplaceEntry[] }>(
 })
 const { t } = useI18n()
 const extensionsStore = useExtensionsStore()
+const catalog = ref<MarketplaceEntry[]>([])
+const catalogLoading = ref(false)
 const statuses = ref<MarketplacePluginStatus[]>([])
 const selectedId = ref("")
 const loading = ref(false)
@@ -42,8 +44,12 @@ function emptyStatus(id: string): MarketplacePluginStatus {
   }
 }
 
+const resolvedEntries = computed<MarketplaceEntry[]>(() =>
+  catalog.value.length > 0 ? catalog.value : props.catalogEntries,
+)
+
 const records = computed<MarketplaceRecord[]>(() => {
-  const entries = new Map(props.catalogEntries.map((entry) => [entry.id, entry]))
+  const entries = new Map(resolvedEntries.value.map((entry) => [entry.id, entry]))
   const states = new Map(statuses.value.map((status) => [status.id, status]))
   return [...new Set([...entries.keys(), ...states.keys()])]
     .sort((left, right) => (entries.get(left)?.name || left).localeCompare(entries.get(right)?.name || right))
@@ -92,6 +98,19 @@ async function load() {
     error.value = t("marketplace.loadFailed")
   } finally {
     loading.value = false
+  }
+}
+
+async function loadCatalog() {
+  catalogLoading.value = true
+  try {
+    catalog.value = await pluginsApi.refreshCatalog()
+  } catch {
+    // Catalog offline (not configured or unavailable): keep the page usable
+    // and let the notice below explain the state.
+    catalog.value = []
+  } finally {
+    catalogLoading.value = false
   }
 }
 
@@ -166,7 +185,10 @@ watch(
   },
   { immediate: true },
 )
-onMounted(() => void load())
+onMounted(() => {
+  void load()
+  void loadCatalog()
+})
 </script>
 
 <template>
@@ -176,12 +198,12 @@ onMounted(() => void load())
         <h2 id="marketplace-title">{{ t("marketplace.title") }}</h2>
         <p>{{ t("marketplace.subtitle") }}</p>
       </div>
-      <button type="button" class="icon-button" :aria-label="t('marketplace.refresh')" :disabled="loading" @click="load">
+      <button type="button" class="icon-button" :aria-label="t('marketplace.refresh')" :disabled="loading || catalogLoading" @click="() => { void load(); void loadCatalog() }">
         <Refresh aria-hidden="true" />
       </button>
     </header>
 
-    <p v-if="props.catalogEntries.length === 0" class="marketplace-notice" role="status">{{ t("marketplace.catalogUnavailable") }}</p>
+    <p v-if="resolvedEntries.length === 0 && !catalogLoading" class="marketplace-notice" role="status">{{ t("marketplace.catalogUnavailable") }}</p>
     <p v-if="error" class="marketplace-error" role="alert">{{ error }}</p>
     <div v-if="loading" class="marketplace-loading" aria-live="polite">{{ t("marketplace.loading") }}</div>
     <div v-else-if="records.length === 0" class="marketplace-empty">{{ t("marketplace.empty") }}</div>

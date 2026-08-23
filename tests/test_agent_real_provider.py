@@ -41,8 +41,11 @@ from mikazuki.plugin_marketplace.paths import MarketplacePaths
 from mikazuki.plugin_marketplace.store import MarketplaceStore
 from mikazuki.plugin_marketplace.trust import TrustStore
 
-AUTH_DOC = Path(__file__).resolve().parents[2] / "development-docs" / "00_预检证据" / "authorized-development-llm.md"
-EVIDENCE_DIR = Path(__file__).resolve().parents[2] / "development-docs" / "evidence" / "stage-1-pi-plugin"
+from agent_test_support import dev_docs_root
+
+_DOCS = dev_docs_root()
+AUTH_DOC = _DOCS / "00_预检证据" / "authorized-development-llm.md"
+EVIDENCE_DIR = _DOCS / "evidence" / "stage-1-pi-plugin"
 MAX_REQUESTS_PER_PROFILE = 20
 
 PROVIDER_SECTIONS = {

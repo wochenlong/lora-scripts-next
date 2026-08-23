@@ -40,10 +40,11 @@ from mikazuki.plugin_marketplace.manager import MarketplaceManager
 from mikazuki.plugin_marketplace.paths import MarketplacePaths
 from mikazuki.plugin_marketplace.store import MarketplaceStore
 from mikazuki.plugin_marketplace.trust import TrustStore
+from agent_test_support import dev_docs_root
 from test_agent_real_provider import EVIDENCE_DIR as STAGE1_EVIDENCE, parse_authorized_provider
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
-EVIDENCE_DIR = Path(__file__).resolve().parents[2] / "development-docs" / "evidence" / "stage-4-dataset-review"
+EVIDENCE_DIR = dev_docs_root() / "evidence" / "stage-4-dataset-review"
 SESSION = "stage4-session"
 
 

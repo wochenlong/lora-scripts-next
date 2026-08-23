@@ -19,7 +19,9 @@ from mikazuki.agent_skills.cohort import build_cohort_report
 from mikazuki.agent_skills.errors import AgentSkillError
 from mikazuki.agent_skills.skill import draft_skill, run_skill_eval, validate_skill
 
-EVIDENCE_DIR = Path(__file__).resolve().parents[2] / "development-docs" / "evidence" / "stage-3-skills"
+from agent_test_support import dev_docs_root
+
+EVIDENCE_DIR = dev_docs_root() / "evidence" / "stage-3-skills"
 
 
 def _item(model_id, version_id, base, creator, downloads, details, *, model_type="LORA", nsfw=False, published="2026-01-15T00:00:00Z"):

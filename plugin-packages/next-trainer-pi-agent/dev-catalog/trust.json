@@ -1,0 +1,10 @@
+{
+  "keys": {
+    "dev-local-signing": {
+      "publisherId": "next-trainer-project",
+      "keyHex": "6e6578742d747261696e65722d6c6f63616c2d746573742d7369676e696e672d6b6579"
+    }
+  },
+  "revokedKeys": [],
+  "note": "Development/test trust root only. Production signing is release-governed."
+}

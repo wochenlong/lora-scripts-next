@@ -48,6 +48,7 @@ frontend/node_modules/
 plugin-packages/**/node_modules/
 plugin-packages/**/dist/
 plugin-packages/**/.runtime/
+plugin-packages/**/dev-catalog/*.zip
 
 # Update check cache
 config/.update_cache.json

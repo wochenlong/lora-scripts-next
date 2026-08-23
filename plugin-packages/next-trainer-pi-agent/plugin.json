@@ -3,7 +3,7 @@
   "publisher": "next-trainer-project",
   "version": "0.1.0",
   "protocolVersion": "1",
-  "hostCompatibility": ">=2.9.2 <3.0.0",
+  "hostCompatibility": ">=2.9.2 <4.0.0",
   "platforms": ["win32-x64"],
   "runtime": {
     "kind": "executable",

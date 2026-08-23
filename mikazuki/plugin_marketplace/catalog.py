@@ -128,12 +128,12 @@ class MarketplaceCatalogService:
     def catalog(self) -> MarketplaceCatalog:
         try:
             payload = self.paths.catalog_cache_file.read_bytes()
-        except OSError as exc:
-            raise CatalogError(
-                "MARKETPLACE_CATALOG_OFFLINE",
-                "The marketplace catalog is unavailable.",
-                status_code=503,
-            ) from exc
+        except OSError:
+            # The cache is a derived artifact: on a clean runtime the first
+            # read seeds it from the configured source.  The source itself is
+            # still trusted and signature-verified by refresh(); a missing
+            # or broken source degrades to the offline/untrusted errors there.
+            return self.refresh()
         catalog = self._parse(payload)
         try:
             self.trust.verify_catalog(catalog)
