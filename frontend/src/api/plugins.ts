@@ -411,7 +411,9 @@ export const pluginsApi = {
     return hostData<MarketplaceEntry[]>(response)
   },
   installMarketplacePlugin: (entry: MarketplaceEntry, approvedPermissions: string[]) =>
-    marketplaceMutation(entry.id, "install", { entry, approvedPermissions }),
+    // InstallRequest rejects unknown fields (extra=forbid): send only the
+    // contract fields; the server resolves the entry by id + version.
+    marketplaceMutation(entry.id, "install", { version: entry.latest_version, approvedPermissions }),
   enableMarketplacePlugin: (pluginId: string, permissions: string[]) =>
     marketplaceMutation(pluginId, "enable", { permissions }),
   disableMarketplacePlugin: (pluginId: string) => marketplaceMutation(pluginId, "disable", {}),
