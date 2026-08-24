@@ -2,7 +2,7 @@
 # 复制项目文件到便携式环境（排除模型目录）
 
 param(
-    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\sd-trainer-portable"),
+    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\next-trainer-portable"),
     [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent)
 )
 

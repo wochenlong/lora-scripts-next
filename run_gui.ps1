@@ -4,7 +4,7 @@
 Set-Location -LiteralPath $PSScriptRoot
 
 if ((Test-Path -LiteralPath "python_embeded\python.exe") -and
-    (Test-Path -LiteralPath "SD-Trainer\gui.py") -and
+    (Test-Path -LiteralPath "Next-Trainer\gui.py") -and
     (Test-Path -LiteralPath "run_gui_portable.bat")) {
     & ".\run_gui_portable.bat" @args
     exit $LASTEXITCODE

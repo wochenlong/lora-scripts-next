@@ -10,7 +10,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $buildDir = Join-Path $ProjectRoot "build"
-$portableDir = Join-Path $buildDir "sd-trainer-portable"
+$portableDir = Join-Path $buildDir "next-trainer-portable"
 
 $startTime = Get-Date
 

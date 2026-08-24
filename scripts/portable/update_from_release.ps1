@@ -1,4 +1,4 @@
-﻿# Sync portable SD-Trainer from the latest GitHub Release 7z (keeps user data).
+﻿# Sync portable Next-Trainer from the latest GitHub Release 7z (keeps user data).
 param(
     [Parameter(Mandatory = $true)]
     [string]$PortableRoot,
@@ -32,7 +32,7 @@ function Resolve-SevenZip {
 function Invoke-Download([string]$Url, [string]$Destination) {
     $curl = Get-Command curl -ErrorAction SilentlyContinue
     if (-not $curl) {
-        throw "curl not found. Install curl or use Git update (Update-SD-Trainer.bat)."
+        throw "curl not found. Install curl or use Git update (Update-Next-Trainer.bat)."
     }
     if (Test-Path $Destination) { Remove-Item $Destination -Force }
     & curl.exe -fL --retry 3 --retry-delay 2 -o $Destination $Url
@@ -76,7 +76,7 @@ function Get-ReleaseAsset {
         [string]$TagName = "",
         [string]$PreferredAssetName = ""
     )
-    $headers = @{ "User-Agent" = "SD-Trainer-Portable-Updater" }
+    $headers = @{ "User-Agent" = "Next-Trainer-Portable-Updater" }
     $githubToken = if ($env:GITHUB_TOKEN) { $env:GITHUB_TOKEN } else { $env:GH_TOKEN }
     if ($githubToken) {
         $headers["Authorization"] = "Bearer $githubToken"
@@ -108,9 +108,9 @@ function Get-ReleaseAsset {
 
 $PortableRoot = Normalize-PortableRootPath $PortableRoot
 $PortableRoot = (Resolve-Path -LiteralPath $PortableRoot).Path.TrimEnd('\')
-$TrainerDir = Join-Path $PortableRoot "SD-Trainer"
+$TrainerDir = Join-Path $PortableRoot "Next-Trainer"
 if (-not (Test-Path (Join-Path $TrainerDir "gui.py"))) {
-    throw "SD-Trainer not found under: $PortableRoot"
+    throw "Next-Trainer not found under: $PortableRoot"
 }
 
 $repo = "wochenlong/lora-scripts-next"
@@ -186,20 +186,20 @@ if ($LASTEXITCODE -ne 0) {
     throw "7z extract failed."
 }
 
-$stagingTrainer = Join-Path $stagingRoot "SD-Trainer"
+$stagingTrainer = Join-Path $stagingRoot "Next-Trainer"
 if (-not (Test-Path (Join-Path $stagingTrainer "gui.py"))) {
     # Some archives may unpack with a single top folder.
     $nested = Get-ChildItem $stagingRoot -Directory | Select-Object -First 1
-    if ($nested -and (Test-Path (Join-Path $nested.FullName "SD-Trainer\gui.py"))) {
+    if ($nested -and (Test-Path (Join-Path $nested.FullName "Next-Trainer\gui.py"))) {
         $stagingRoot = $nested.FullName
-        $stagingTrainer = Join-Path $stagingRoot "SD-Trainer"
+        $stagingTrainer = Join-Path $stagingRoot "Next-Trainer"
     } else {
-        throw "Extracted package missing SD-Trainer\gui.py"
+        throw "Extracted package missing Next-Trainer\gui.py"
     }
 }
 
 Write-Step ""
-Write-Step "Merging SD-Trainer / 合并项目文件（保留用户数据）..."
+Write-Step "Merging Next-Trainer / 合并项目文件（保留用户数据）..."
 $robocopyArgs = @(
     $stagingTrainer,
     $TrainerDir,
@@ -220,9 +220,9 @@ if (Test-Path $stagingGit) {
         Remove-Item $destGit -Recurse -Force
     }
     Copy-Item $stagingGit $destGit -Recurse -Force
-    Write-Step "Synced SD-Trainer\.git from Release package"
+    Write-Step "Synced Next-Trainer\.git from Release package"
 } else {
-    Write-Step "WARNING: Release package missing SD-Trainer\.git (Git update will not work)"
+    Write-Step "WARNING: Release package missing Next-Trainer\.git (Git update will not work)"
 }
 
 Write-Step ""
@@ -230,8 +230,8 @@ Write-Step "Refreshing root launchers / 刷新根目录启动脚本..."
 $rootFiles = @(
     "run_gui.bat",
     "run_gui_portable.bat",
-    "Update-SD-Trainer.bat",
-    "Update-SD-Trainer-Release.bat",
+    "Update-Next-Trainer.bat",
+    "Update-Next-Trainer-Release.bat",
     "Download-Anima-Model.bat",
     "install_xformers.bat"
 )
@@ -288,10 +288,10 @@ if ($newVersion -and $currentVersion -and $newVersion -eq $currentVersion -and $
 }
 Write-Step ""
 Write-Step 'Preserved / user data kept:'
-Write-Step '  SD-Trainer\sd-models\  SD-Trainer\output\  SD-Trainer\logs\  SD-Trainer\train\'
-Write-Step '  SD-Trainer\config\  SD-Trainer\assets\config.json'
+Write-Step '  Next-Trainer\sd-models\  Next-Trainer\output\  Next-Trainer\logs\  Next-Trainer\train\'
+Write-Step '  Next-Trainer\config\  Next-Trainer\assets\config.json'
 Write-Step '  huggingface\  tagger-models\  (portable root)'
-Write-Step '  SD-Trainer\extensions\  (Anima Fast plugin, if installed)'
+Write-Step '  Next-Trainer\extensions\  (Anima Fast plugin, if installed)'
 Write-Step ""
 if ($newVersion -and $currentVersion -and ($newVersion -ne $currentVersion -or ($newBuild -and $newBuild -ne $currentBuild))) {
     Write-Step 'If WebUI fails to start, run update\update_dependencies.bat'

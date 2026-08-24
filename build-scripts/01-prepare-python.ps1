@@ -2,7 +2,7 @@
 # 准备 Python 嵌入式环境
 
 param(
-    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\sd-trainer-portable")
+    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\next-trainer-portable")
 )
 
 $ErrorActionPreference = "Stop"

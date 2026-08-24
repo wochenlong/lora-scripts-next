@@ -21,17 +21,17 @@ function Ensure-PortablePs1Utf8Bom {
 
 function Get-PortableUpdaterManifest {
     @(
-        @{ Src = "build-scripts/templates/Update-SD-Trainer.bat"; Dest = "Update-SD-Trainer.bat" },
-        @{ Src = "build-scripts/templates/Update-SD-Trainer-Release.bat"; Dest = "Update-SD-Trainer-Release.bat" },
+        @{ Src = "build-scripts/templates/Update-Next-Trainer.bat"; Dest = "Update-Next-Trainer.bat" },
+        @{ Src = "build-scripts/templates/Update-Next-Trainer-Release.bat"; Dest = "Update-Next-Trainer-Release.bat" },
         @{ Src = "build-scripts/templates/Fix-Portable-Bats.bat"; Dest = "Fix-Portable-Bats.bat" },
-        @{ Src = "scripts/portable/update_from_release.ps1"; Dest = "SD-Trainer/scripts/portable/update_from_release.ps1" },
-        @{ Src = "scripts/portable/bootstrap_portable_updaters.ps1"; Dest = "SD-Trainer/scripts/portable/bootstrap_portable_updaters.ps1" },
-        @{ Src = "scripts/portable/show_portable_update_status.ps1"; Dest = "SD-Trainer/scripts/portable/show_portable_update_status.ps1" },
-        @{ Src = "scripts/portable/portable_updater_common.ps1"; Dest = "SD-Trainer/scripts/portable/portable_updater_common.ps1" },
-        @{ Src = "scripts/portable/sync_portable_root_launchers.bat"; Dest = "SD-Trainer/scripts/portable/sync_portable_root_launchers.bat" },
-        @{ Src = "scripts/portable/UPDATER_VERSION"; Dest = "SD-Trainer/scripts/portable/UPDATER_VERSION" },
-        @{ Src = "build-scripts/templates/Update-SD-Trainer.bat"; Dest = "SD-Trainer/scripts/portable/templates/Update-SD-Trainer.bat" },
-        @{ Src = "build-scripts/templates/Update-SD-Trainer-Release.bat"; Dest = "SD-Trainer/scripts/portable/templates/Update-SD-Trainer-Release.bat" }
+        @{ Src = "scripts/portable/update_from_release.ps1"; Dest = "Next-Trainer/scripts/portable/update_from_release.ps1" },
+        @{ Src = "scripts/portable/bootstrap_portable_updaters.ps1"; Dest = "Next-Trainer/scripts/portable/bootstrap_portable_updaters.ps1" },
+        @{ Src = "scripts/portable/show_portable_update_status.ps1"; Dest = "Next-Trainer/scripts/portable/show_portable_update_status.ps1" },
+        @{ Src = "scripts/portable/portable_updater_common.ps1"; Dest = "Next-Trainer/scripts/portable/portable_updater_common.ps1" },
+        @{ Src = "scripts/portable/sync_portable_root_launchers.bat"; Dest = "Next-Trainer/scripts/portable/sync_portable_root_launchers.bat" },
+        @{ Src = "scripts/portable/UPDATER_VERSION"; Dest = "Next-Trainer/scripts/portable/UPDATER_VERSION" },
+        @{ Src = "build-scripts/templates/Update-Next-Trainer.bat"; Dest = "Next-Trainer/scripts/portable/templates/Update-Next-Trainer.bat" },
+        @{ Src = "build-scripts/templates/Update-Next-Trainer-Release.bat"; Dest = "Next-Trainer/scripts/portable/templates/Update-Next-Trainer-Release.bat" }
     )
 }
 
@@ -73,7 +73,7 @@ function Invoke-PortableRawDownload {
 
 function Get-RemoteTextFromMain {
     param([string]$RelativePath)
-    $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("sd-trainer-updater-" + [guid]::NewGuid().ToString("n") + ".txt")
+    $temp = Join-Path ([System.IO.Path]::GetTempPath()) ("next-trainer-updater-" + [guid]::NewGuid().ToString("n") + ".txt")
     try {
         Invoke-PortableRawDownload -RelativePath $RelativePath -Destination $temp | Out-Null
         return ((Get-Content $temp -TotalCount 1 -ErrorAction Stop) -join "").Trim()
@@ -94,7 +94,7 @@ function Get-RemoteUpdaterVersionOnline {
 
 function Get-RemoteLatestReleaseTag {
     try {
-        $headers = @{ "User-Agent" = "SD-Trainer-Portable-Updater" }
+        $headers = @{ "User-Agent" = "Next-Trainer-Portable-Updater" }
         $uri = "https://api.github.com/repos/$($script:PortableUpdaterRepo)/releases/latest"
         $release = Invoke-RestMethod -Uri $uri -Headers $headers
         $tag = [string]$release.tag_name
@@ -172,7 +172,7 @@ function Write-PortableUpdateStatusBanner {
         [string]$UpdaterFile = ""
     )
     $PortableRoot = Normalize-PortableRootPath $PortableRoot
-    $trainerDir = Join-Path $PortableRoot "SD-Trainer"
+    $trainerDir = Join-Path $PortableRoot "Next-Trainer"
     $localVersion = Read-LocalProductVersion $trainerDir
     $localBuild = Read-LocalPortableBuild $trainerDir
     $localUpdater = Read-LocalUpdaterVersion $trainerDir

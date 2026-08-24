@@ -9,8 +9,8 @@ def test_packaged_update_helper_delegates_to_root_updater():
         encoding="utf-8"
     )
 
-    assert "Update-SD-Trainer.bat" in script
-    assert "call `\"%~dp0..\\Update-SD-Trainer.bat`\" %*" in script
+    assert "Update-Next-Trainer.bat" in script
+    assert "call `\"%~dp0..\\Update-Next-Trainer.bat`\" %*" in script
     assert "git pull`r`n" not in script
 
 
@@ -20,7 +20,7 @@ def test_portable_builder_embeds_git_metadata_for_updates():
     )
 
     assert "Clone-SDTrainerGitMetadata" in script
-    assert "SD-Trainer\\.git" in script
+    assert "Next-Trainer\\.git" in script
     assert "--depth=1" in script
 
 
@@ -97,7 +97,7 @@ def test_portable_builder_bundles_dual_update_scripts():
         ROOT / "scripts" / "portable" / "update_from_release.ps1"
     ).read_text(encoding="utf-8")
 
-    assert "Update-SD-Trainer-Release.bat" in script
+    assert "Update-Next-Trainer-Release.bat" in script
     assert "update_from_release.bat" in script
     assert "Next-Trainer-v*.7z" in release_ps1 or "Next-Trainer-v" in release_ps1
     assert "SD-Trainer-v*.7z" in release_ps1 or "SD-Trainer-v" in release_ps1
@@ -138,7 +138,7 @@ def test_portable_builder_writes_portable_build_metadata():
 
 
 def test_portable_git_updater_is_not_legacy_pull_only():
-    bat = (ROOT / "build-scripts" / "templates" / "Update-SD-Trainer.bat").read_text(
+    bat = (ROOT / "build-scripts" / "templates" / "Update-Next-Trainer.bat").read_text(
         encoding="utf-8"
     )
     assert "Pulling latest code" not in bat
@@ -161,12 +161,12 @@ def test_portable_updater_manifest_paths_exist():
     ).read_text(encoding="utf-8")
     assert "Get-PortableUpdaterManifest" in common
     for rel in (
-        "build-scripts/templates/Update-SD-Trainer.bat",
+        "build-scripts/templates/Update-Next-Trainer.bat",
         "scripts/portable/bootstrap_portable_updaters.ps1",
         "scripts/portable/UPDATER_VERSION",
     ):
         assert rel in common
-    bat = (ROOT / "build-scripts" / "templates" / "Update-SD-Trainer.bat").read_text(
+    bat = (ROOT / "build-scripts" / "templates" / "Update-Next-Trainer.bat").read_text(
         encoding="utf-8"
     )
     assert "bootstrap_updater_scripts" in bat

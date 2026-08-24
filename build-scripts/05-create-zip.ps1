@@ -10,7 +10,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host "=== 创建 ZIP 压缩包 ===" -ForegroundColor Cyan
 
-$portableDir = Join-Path $BuildDir "sd-trainer-portable"
+$portableDir = Join-Path $BuildDir "next-trainer-portable"
 $zipFile = Join-Path $BuildDir "Next-Trainer-v$Version.zip"
 
 # 检查源目录

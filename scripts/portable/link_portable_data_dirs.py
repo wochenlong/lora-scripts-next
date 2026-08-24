@@ -1,12 +1,12 @@
-"""Ensure portable user data lives under SD-Trainer/ (file picker cwd).
+"""Ensure portable user data lives under Next-Trainer/ (file picker cwd).
 
 Canonical layout (v2.8.36+):
-  <PortableRoot>/SD-Trainer/{sd-models,output,logs,train}/  — real folders
+  <PortableRoot>/Next-Trainer/{sd-models,output,logs,train}/  — real folders
   <PortableRoot>/{sd-models,output,logs,train}/              — junctions -> above
 
 Legacy layout (pre-#191 flip):
-  data at portable root; SD-Trainer/<name> junction -> ../<name>
-  Migrated on launch/build by moving data into SD-Trainer and reversing junctions.
+  data at portable root; Next-Trainer/<name> junction -> ../<name>
+  Migrated on launch/build by moving data into Next-Trainer and reversing junctions.
 """
 
 from __future__ import annotations
@@ -122,7 +122,7 @@ def ensure_portable_data_dir(
     inner = trainer_dir / name
     outer = portable_root / name
 
-    # --- Legacy: inner junction pointed at outer (data physically outside SD-Trainer) ---
+    # --- Legacy: inner junction pointed at outer (data physically outside Next-Trainer) ---
     if _is_reparse_point(inner):
         existing_inner_tgt = _junction_target(inner)
         points_to_outer = (
@@ -144,7 +144,7 @@ def ensure_portable_data_dir(
                 elif outer.is_dir():
                     shutil.rmtree(outer)
             _create_junction(outer, inner)
-            log(f"[portable] migrated {name}: data now under SD-Trainer (root is junction)")
+            log(f"[portable] migrated {name}: data now under Next-Trainer (root is junction)")
             return "migrated-flip"
         log(
             f"[portable] {name}: keep existing inner junction -> {existing_inner_tgt}; "
@@ -154,14 +154,14 @@ def ensure_portable_data_dir(
 
     inner.mkdir(parents=True, exist_ok=True)
 
-    # --- Outer real folder with data: merge into SD-Trainer without overwriting ---
+    # --- Outer real folder with data: merge into Next-Trainer without overwriting ---
     if outer.exists() and not _is_reparse_point(outer):
         outer_entries = _dir_entries(outer)
         if outer_entries:
             _move_entries_preserving_conflicts(outer, inner)
             shutil.rmtree(outer)
             _create_junction(outer, inner)
-            log(f"[portable] migrated {name}: moved portable-root data into SD-Trainer")
+            log(f"[portable] migrated {name}: moved portable-root data into Next-Trainer")
             return "migrated-outer-to-inner"
 
     # --- Ensure outer junction -> inner ---
@@ -176,7 +176,7 @@ def ensure_portable_data_dir(
         else:
             log(
                 f"[portable] {name}: keep portable-root folder ({len(_dir_entries(outer))} item(s)); "
-                f"file picker uses SD-Trainer\\{name}"
+                f"file picker uses Next-Trainer\\{name}"
             )
             return "skipped"
 
@@ -231,7 +231,7 @@ def main(argv: list[str] | None = None) -> int:
         "--trainer-dir",
         type=Path,
         default=None,
-        help="SD-Trainer directory (default: current working directory)",
+        help="Next-Trainer directory (default: current working directory)",
     )
     args = parser.parse_args(argv)
     link_all_portable_data_dirs(args.trainer_dir)

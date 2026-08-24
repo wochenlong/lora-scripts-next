@@ -30,9 +30,9 @@ if (-not $Version) {
 }
 
 $buildDir = Join-Path $ProjectRoot "build"
-$portableDir = Join-Path $buildDir "SD-Trainer-Portable"
+$portableDir = Join-Path $buildDir "Next-Trainer-Portable"
 $pythonExe = Join-Path $portableDir "python_embeded\python.exe"
-$sdtDir = Join-Path $portableDir "SD-Trainer"
+$sdtDir = Join-Path $portableDir "Next-Trainer"
 $logDir = Join-Path $buildDir "portable-2026-logs"
 New-Item -ItemType Directory -Path $logDir -Force | Out-Null
 $logFile = Join-Path $logDir ("musubi-only-{0:yyyyMMdd-HHmmss}.log" -f (Get-Date))

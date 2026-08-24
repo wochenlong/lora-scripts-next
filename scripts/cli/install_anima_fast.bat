@@ -3,7 +3,7 @@ chcp 65001 >nul 2>&1
 setlocal EnableDelayedExpansion
 title Install Anima Fast (CLI)
 
-:: SD-Trainer/scripts/cli -> project root is ..\..
+:: Next-Trainer/scripts/cli -> project root is ..\..
 set "PROJECT_ROOT=%~dp0..\.."
 cd /d "%PROJECT_ROOT%"
 
