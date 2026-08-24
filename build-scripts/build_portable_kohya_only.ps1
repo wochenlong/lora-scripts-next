@@ -45,8 +45,8 @@ if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
 }
 
 $buildDir = Join-Path $ProjectRoot "build"
-$portableDir = Join-Path $buildDir "SD-Trainer-Portable"
-$sdtDir = Join-Path $portableDir "SD-Trainer"
+$portableDir = Join-Path $buildDir "Next-Trainer-Portable"
+$sdtDir = Join-Path $portableDir "Next-Trainer"
 $builtMusubiName = Join-Path $buildDir "Next-Trainer-v${Version}-kohya-musubi.7z"
 $kohyaName = Join-Path $buildDir "Next-Trainer-v${Version}-kohya.7z"
 

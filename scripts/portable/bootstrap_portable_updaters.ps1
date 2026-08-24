@@ -11,7 +11,7 @@ $ErrorActionPreference = "Stop"
 Initialize-PortableUpdaterConsole
 
 $PortableRoot = Normalize-PortableRootPath $PortableRoot
-$trainerDir = Join-Path $PortableRoot "SD-Trainer"
+$trainerDir = Join-Path $PortableRoot "Next-Trainer"
 $updated = $false
 
 $localUpdater = (Read-LocalUpdaterVersion $trainerDir).Trim()
@@ -42,7 +42,7 @@ function Get-FileSha256([string]$Path) {
 
 if (-not $SkipDownload) {
     Write-Host "Checking latest updater scripts on GitHub / 检查 GitHub 最新更新脚本..."
-    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("sd-trainer-updater-bootstrap-" + [guid]::NewGuid().ToString("n"))
+    $tempRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("next-trainer-updater-bootstrap-" + [guid]::NewGuid().ToString("n"))
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
     try {
         foreach ($item in (Get-PortableUpdaterManifest)) {

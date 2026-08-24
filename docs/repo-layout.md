@@ -7,7 +7,7 @@
 | 路径 | 原因 |
 |------|------|
 | `gui.py` | 服务主程序 |
-| `setup_environment.py` | 整合包首次安装（`SD-Trainer/setup_environment.py`） |
+| `setup_environment.py` | 整合包首次安装（`Next-Trainer/setup_environment.py`） |
 | `run_gui.bat` | Windows 主入口（整合包根目录 + 源码） |
 | `Download-Anima-Model.bat` | 一键下载 Anima 三件套到 `sd-models/anima/`（整合包根 / 源码根） |
 | `requirements.txt` / `VERSION` | 依赖与版本 |
@@ -27,10 +27,10 @@
 <PortableRoot>/
   run_gui.bat
   python_embeded/          # 拼写为 embeded
-  SD-Trainer/                # 项目副本
+  Next-Trainer/                # 项目副本
 ```
 
-启动逻辑：`SD-Trainer/scripts/portable/launch_portable.bat`（随更新变化）。
+启动逻辑：`Next-Trainer/scripts/portable/launch_portable.bat`（随更新变化）。
 
 ### 云镜像（AutoDL 等）
 

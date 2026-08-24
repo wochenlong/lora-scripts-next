@@ -12,11 +12,11 @@ Windows 便携整合包构建脚本。
 | 脚本 | 用途 | 典型产出 |
 |------|------|----------|
 | `build_portable_kohya_only.ps1` | **默认带环境**：预装 Kohya（cu128）；Musubi/Fast 不预装 | `Next-Trainer-v{VER}-kohya.7z` |
-| `build_portable.ps1` | **lite**：骨架 + 打标；无预装 Torch | `SD-Trainer-v{VER}.7z`（可改名 `*-lite.7z`） |
+| `build_portable.ps1` | **lite**：骨架 + 打标；无预装 Torch | `Next-Trainer-v{VER}.7z`（可改名 `*-lite.7z`） |
 | `build_portable_2026_full.ps1` | **可选满配**：Kohya + Musubi（非默认主推） | `Next-Trainer-v{VER}-kohya-musubi.7z` |
 | `build_portable_musubi_only.ps1` | **可选分轨**：仅 Musubi / Krea2 | `Next-Trainer-v{VER}-musubi.7z` |
 | `apply_portable_2026_root.ps1` | 根目录改为 `启动.bat` / `检查更新.bat` / `说明.txt` | （被 full/分轨调用） |
-| `build-all.ps1` | 旧版一键（遗留） | `build/sd-trainer-portable` |
+| `build-all.ps1` | 旧版一键（遗留） | `build/next-trainer-portable` |
 
 产品默认：**带环境包只预装 Kohya**；Musubi 与 Anima Fast 为可选项。详见指南 §1.0。
 

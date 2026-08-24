@@ -1,4 +1,4 @@
-﻿# Full pre-release checklist for SD-Trainer portable package (build/整合包打包规范 §7).
+﻿# Full pre-release checklist for Next-Trainer portable package (build/整合包打包规范 §7).
 param(
     [Parameter(Mandatory = $true)]
     [string]$PortableRoot,
@@ -11,7 +11,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $PortableRoot = (Resolve-Path $PortableRoot).Path.TrimEnd('\')
-$TrainerDir = Join-Path $PortableRoot "SD-Trainer"
+$TrainerDir = Join-Path $PortableRoot "Next-Trainer"
 $PythonExe = Join-Path $PortableRoot "python_embeded\python.exe"
 $passed = 0
 $failed = 0
@@ -38,7 +38,7 @@ function Warn([string]$Message) {
 }
 
 Write-Host ""
-Write-Host "SD-Trainer Portable Release Verification" -ForegroundColor Cyan
+Write-Host "Next-Trainer Portable Release Verification" -ForegroundColor Cyan
 Write-Host "Root: $PortableRoot"
 if ($ArchivePath) { Write-Host "Archive: $ArchivePath" }
 Write-Host ""
@@ -49,29 +49,29 @@ Write-Section "7.1 Structure & size"
 $requiredRoot = @(
     "run_gui.bat",
     "run_gui_portable.bat",
-    "Update-SD-Trainer.bat",
-    "Update-SD-Trainer-Release.bat",
+    "Update-Next-Trainer.bat",
+    "Update-Next-Trainer-Release.bat",
     "Download-Anima-Model.bat",
     "install_xformers.bat",
     "README.txt",
     "python_embeded\python.exe",
-    "SD-Trainer\gui.py",
-    "SD-Trainer\VERSION",
-    "SD-Trainer\scripts\portable\UPDATER_VERSION",
-    "SD-Trainer\scripts\portable\bootstrap_portable_updaters.ps1",
-    "SD-Trainer\scripts\portable\portable_updater_common.ps1",
-    "SD-Trainer\scripts\portable\show_portable_update_status.ps1",
-    "SD-Trainer\scripts\portable\templates\Update-SD-Trainer.bat",
-    "SD-Trainer\sd-models",
-    "SD-Trainer\output",
-    "SD-Trainer\logs",
+    "Next-Trainer\gui.py",
+    "Next-Trainer\VERSION",
+    "Next-Trainer\scripts\portable\UPDATER_VERSION",
+    "Next-Trainer\scripts\portable\bootstrap_portable_updaters.ps1",
+    "Next-Trainer\scripts\portable\portable_updater_common.ps1",
+    "Next-Trainer\scripts\portable\show_portable_update_status.ps1",
+    "Next-Trainer\scripts\portable\templates\Update-Next-Trainer.bat",
+    "Next-Trainer\sd-models",
+    "Next-Trainer\output",
+    "Next-Trainer\logs",
     "sd-models",
     "output",
     "logs",
     "huggingface",
     "tagger-models\wd14",
     "tagger-models\vlm",
-    "update\update_sd_trainer.bat",
+    "update\update_next_trainer.bat",
     "update\update_from_release.bat",
     "update\update_dependencies.bat"
 )
@@ -81,10 +81,10 @@ foreach ($rel in $requiredRoot) {
 }
 
 $batCrlfChecks = @(
-    "Update-SD-Trainer-Release.bat",
-    "Update-SD-Trainer.bat",
+    "Update-Next-Trainer-Release.bat",
+    "Update-Next-Trainer.bat",
     "run_gui.bat",
-    "SD-Trainer\scripts\portable\launch_portable.bat"
+    "Next-Trainer\scripts\portable\launch_portable.bat"
 )
 foreach ($rel in $batCrlfChecks) {
     $full = Join-Path $PortableRoot $rel
@@ -100,7 +100,7 @@ foreach ($rel in $batCrlfChecks) {
 
 $gitHead = Join-Path $TrainerDir ".git\HEAD"
 if (Test-Path $gitHead) {
-    Pass "SD-Trainer\.git\HEAD"
+    Pass "Next-Trainer\.git\HEAD"
     $gitBytes = (Get-ChildItem (Join-Path $TrainerDir ".git") -Recurse -Force -ErrorAction SilentlyContinue |
         Measure-Object -Property Length -Sum).Sum
     $gitMb = [math]::Round($gitBytes / 1MB, 1)
@@ -112,7 +112,7 @@ if (Test-Path $gitHead) {
         Fail ".git size ${gitMb} MB (> 80 MB — likely full history)"
     }
 } else {
-    Fail "SD-Trainer\.git\HEAD missing"
+    Fail "Next-Trainer\.git\HEAD missing"
 }
 
 if ($ExpectedVersion) {
@@ -127,12 +127,12 @@ $extensionsDir = Join-Path $TrainerDir "extensions"
 if (Test-Path $extensionsDir) {
     $extItems = Get-ChildItem $extensionsDir -Force -ErrorAction SilentlyContinue
     if ($extItems.Count -gt 0) {
-        Fail "SD-Trainer\extensions\ should be empty in 7z (found $($extItems.Count) item(s))"
+        Fail "Next-Trainer\extensions\ should be empty in 7z (found $($extItems.Count) item(s))"
     } else {
-        Pass "SD-Trainer\extensions\ empty (Fast plugin not pre-bundled)"
+        Pass "Next-Trainer\extensions\ empty (Fast plugin not pre-bundled)"
     }
 } else {
-    Pass "SD-Trainer\extensions\ absent (OK)"
+    Pass "Next-Trainer\extensions\ absent (OK)"
 }
 
 $hfHub = Join-Path $PortableRoot "huggingface\hub"
@@ -188,8 +188,8 @@ if (Test-Path $launchBat) {
     } else {
         Fail "launch_portable.bat PORTABLE_ROOT path unexpected"
     }
-    if ($launchText -match "sd-trainer-log\.txt" -and $launchText -notmatch '\.\.\\\.\.SD-Trainer') {
-        Pass "Log path sd-trainer-log.txt at portable root"
+    if ($launchText -match "next-trainer-log\.txt" -and $launchText -notmatch '\.\.\\\.\.Next-Trainer') {
+        Pass "Log path next-trainer-log.txt at portable root"
     } else {
         Fail "Log path or broken path concatenation in launch_portable.bat"
     }
@@ -300,8 +300,8 @@ if (-not $SkipPythonTests) {
 # ---- 7.6 Other bat ----
 Write-Section "7.6 Other bat shortcuts"
 $shortcutChecks = @(
-    @{ Path = "update\update_sd_trainer.bat"; Needle = "Update-SD-Trainer.bat" },
-    @{ Path = "update\update_from_release.bat"; Needle = "Update-SD-Trainer-Release.bat" }
+    @{ Path = "update\update_next_trainer.bat"; Needle = "Update-Next-Trainer.bat" },
+    @{ Path = "update\update_from_release.bat"; Needle = "Update-Next-Trainer-Release.bat" }
 )
 foreach ($check in $shortcutChecks) {
     $full = Join-Path $PortableRoot $check.Path

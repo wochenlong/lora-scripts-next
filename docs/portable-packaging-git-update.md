@@ -11,8 +11,8 @@
 ## 目标
 
 - 整合包仍保持双击 `run_gui.bat` 即可启动。
-- 新版整合包内的 `SD-Trainer/` 是一个可更新的 Git 仓库。
-- `Update-SD-Trainer.bat` 面向小白用户，尽量把 Git 错误翻译成明确中文提示。
+- 新版整合包内的 `Next-Trainer/` 是一个可更新的 Git 仓库。
+- `Update-Next-Trainer.bat` 面向小白用户，尽量把 Git 错误翻译成明确中文提示。
 - 用户数据永远优先，更新代码时不能覆盖用户模型、输出、日志、自动保存配置。
 
 ## 稳定目录契约
@@ -23,19 +23,19 @@
 <PortableRoot>/
   run_gui.bat
   run_gui_portable.bat
-  Update-SD-Trainer.bat
-  Update-SD-Trainer-Release.bat
+  Update-Next-Trainer.bat
+  Update-Next-Trainer-Release.bat
   Download-Anima-Model.bat
   install_xformers.bat
   python_embeded/
-  SD-Trainer/
+  Next-Trainer/
     sd-models/          # 模型（内置文件选择器 cwd 相对路径）
     output/             # 训练输出
     logs/
     train/
-  sd-models/            # junction -> SD-Trainer/sd-models（兼容旧路径）
-  output/               # junction -> SD-Trainer/output
-  logs/                 # junction -> SD-Trainer/logs
+  sd-models/            # junction -> Next-Trainer/sd-models（兼容旧路径）
+  output/               # junction -> Next-Trainer/output
+  logs/                 # junction -> Next-Trainer/logs
   huggingface/
   tagger-models/
   tagger-models/wd14/
@@ -73,11 +73,11 @@
   -AnimaFastSource "D:\path\to\extensions\anima_lora"
 ```
 
-产物文件名：`Next-Trainer-v{Version}-lite.7z` / `Next-Trainer-v{Version}-full.7z`（旧 Release 可能仍为 `SD-Trainer-v*`）；`PORTABLE_BUILD` 含 `flavor=lite|full`。包内项目目录仍为 `SD-Trainer/`（启动契约）。
+产物文件名：`Next-Trainer-v{Version}-lite.7z` / `Next-Trainer-v{Version}-full.7z`（旧 Release 可能仍为 `Next-Trainer-v*`）；`PORTABLE_BUILD` 含 `flavor=lite|full`。包内项目目录仍为 `Next-Trainer/`（启动契约）。
 
 ## Anima Fast 插件与整合包（v2.7.0+）
 
-Anima LoRA **Fast 模式**使用可选插件 [`sorryhyun/anima_lora`](https://github.com/sorryhyun/anima_lora)（MIT），运行时安装到 `SD-Trainer/extensions/anima_lora/`，并创建独立 cu130 venv（体积可达数 GB）。
+Anima LoRA **Fast 模式**使用可选插件 [`sorryhyun/anima_lora`](https://github.com/sorryhyun/anima_lora)（MIT），运行时安装到 `Next-Trainer/extensions/anima_lora/`，并创建独立 cu130 venv（体积可达数 GB）。
 
 | 项 | 约定 |
 |----|------|
@@ -124,7 +124,7 @@ config/
 toml/autosave/
 assets/config.json
 config/.update_cache.json
-sd-trainer-log.txt
+next-trainer-log.txt
 ```
 
 其中 `config/` 整体按用户目录处理。后续如果需要发布默认配置，应放在 `assets/defaults/` 或其他只读模板目录，启动时仅在目标不存在时复制到 `config/`，不能覆盖用户已有文件。
@@ -135,36 +135,36 @@ sd-trainer-log.txt
 
 | 方式 | 入口 | 适用场景 |
 |------|------|----------|
-| **Git 更新**（原有） | `Update-SD-Trainer.bat`、`update\update_sd_trainer.bat` | 7z 内含 `SD-Trainer/.git`；网络可访问 Git；日常增量更新 |
-| **Release 更新**（新增） | `Update-SD-Trainer-Release.bat`、`update\update_from_release.bat` | 无 `.git` 的旧包；Git fetch 全部失败；希望与 GitHub Release 7z 完全对齐 |
+| **Git 更新**（原有） | `Update-Next-Trainer.bat`、`update\update_next_trainer.bat` | 7z 内含 `Next-Trainer/.git`；网络可访问 Git；日常增量更新 |
+| **Release 更新**（新增） | `Update-Next-Trainer-Release.bat`、`update\update_from_release.bat` | 无 `.git` 的旧包；Git fetch 全部失败；希望与 GitHub Release 7z 完全对齐 |
 
-Release 更新实现：`SD-Trainer/scripts/portable/update_from_release.ps1`
+Release 更新实现：`Next-Trainer/scripts/portable/update_from_release.ps1`
 
 **版本标识（排障用，长期约定）**：
 
-- 整合包：`SD-Trainer/VERSION`、`SD-Trainer/PORTABLE_BUILD`（构建 commit）
-- 更新器：`SD-Trainer/scripts/portable/UPDATER_VERSION`（更新脚本逻辑版本；改 bat/ps1 行为时递增）
+- 整合包：`Next-Trainer/VERSION`、`Next-Trainer/PORTABLE_BUILD`（构建 commit）
+- 更新器：`Next-Trainer/scripts/portable/UPDATER_VERSION`（更新脚本逻辑版本；改 bat/ps1 行为时递增）
 - 更新开始时会打印：**当前 VERSION / PORTABLE_BUILD**、**线上 main VERSION / 最新 Release**、**本地与线上 UPDATER_VERSION**
 - **自更新（bootstrap）**：`Update-*.bat` 会先从 GitHub `main` 拉取最新更新脚本（含镜像回退），若有变化则自动重启后再执行 Git / Release 更新；网络失败时回退到本地 bundled 脚本
 
 1. 通过 GitHub API 获取最新 `Next-Trainer-v*.7z` 资产（兼容旧名 `SD-Trainer-v*.7z`）
 2. 下载到 `update/.cache/`（含 ghfast / ghproxy 镜像回退）
 3. 7-Zip 解压到临时目录
-4. `robocopy` 合并 `SD-Trainer/`（使用 `/IS /IT` 强制覆盖，**不用** `/XO`），排除用户数据目录
+4. `robocopy` 合并 `Next-Trainer/`（使用 `/IS /IT` 强制覆盖，**不用** `/XO`），排除用户数据目录
 5. 从 Release 包刷新根目录启动脚本与 `update/` 快捷方式
 6. 写入 `config/.portable_release_sync.json` 记录 Release 资产 id，便于同 VERSION 重发时识别
 
-**同 VERSION 重发（hotfix republish）**：若 GitHub Release 仍为 `v2.7.0` 但替换了 7z 资产，请用 **`Update-SD-Trainer-Release.bat`**。旧脚本因 `robocopy /XO` 会跳过「本地较新」文件导致看似更新成功但代码未变；Git 更新（`Update-SD-Trainer.bat`）仅跟随 **commit**，若修复只重打 7z 未 push 到 main，Git 路径也无法获得修复。新包内含 `SD-Trainer/PORTABLE_BUILD`（git short SHA + 构建时间）便于对比是否已同步最新构建。
+**同 VERSION 重发（hotfix republish）**：若 GitHub Release 仍为 `v2.7.0` 但替换了 7z 资产，请用 **`Update-Next-Trainer-Release.bat`**。旧脚本因 `robocopy /XO` 会跳过「本地较新」文件导致看似更新成功但代码未变；Git 更新（`Update-Next-Trainer.bat`）仅跟随 **commit**，若修复只重打 7z 未 push 到 main，Git 路径也无法获得修复。新包内含 `Next-Trainer/PORTABLE_BUILD`（git short SHA + 构建时间）便于对比是否已同步最新构建。
 
 **Release 合并时保留**（不覆盖）：
 
 ```text
-sd-models/  output/  logs/  train/   # 整合包根：junction，指向 SD-Trainer 内同名目录
+sd-models/  output/  logs/  train/   # 整合包根：junction，指向 Next-Trainer 内同名目录
 huggingface/  tagger-models/
-SD-Trainer/sd-models/  SD-Trainer/output/  SD-Trainer/logs/  SD-Trainer/train/  # 实际数据
-SD-Trainer/extensions/          # Anima Fast 插件（若已安装）
-SD-Trainer/config/autosave/
-SD-Trainer/.cache/
+Next-Trainer/sd-models/  Next-Trainer/output/  Next-Trainer/logs/  Next-Trainer/train/  # 实际数据
+Next-Trainer/extensions/          # Anima Fast 插件（若已安装）
+Next-Trainer/config/autosave/
+Next-Trainer/.cache/
 ```
 
 大版本升级后若 WebUI 启动失败，提示用户运行 `update\update_dependencies.bat`。
@@ -173,21 +173,21 @@ SD-Trainer/.cache/
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File `
-  .\SD-Trainer\scripts\portable\verify_portable_updaters.ps1 `
-  -PortableRoot .\build\SD-Trainer-Portable
+  .\Next-Trainer\scripts\portable\verify_portable_updaters.ps1 `
+  -PortableRoot .\build\Next-Trainer-Portable
 ```
 
 ## 更新脚本流程
 
-### Git 更新（`Update-SD-Trainer.bat`）
+### Git 更新（`Update-Next-Trainer.bat`）
 
-`Update-SD-Trainer.bat` 推荐流程：
+`Update-Next-Trainer.bat` 推荐流程：
 
 ```text
-1. 定位 <PortableRoot>/SD-Trainer
-2. 如果不存在 SD-Trainer/.git：
+1. 定位 <PortableRoot>/Next-Trainer
+2. 如果不存在 Next-Trainer/.git：
    - 说明旧版发布包不能 git pull
-   - 引导使用 `Update-SD-Trainer-Release.bat` 或下载最新 Release
+   - 引导使用 `Update-Next-Trainer-Release.bat` 或下载最新 Release
    - 不显示"更新完成"
 3. 检查 git 是否可用
 4. 提示用户先关闭 WebUI
@@ -276,14 +276,14 @@ fast-forward update failed
 发布前至少验证：
 
 - 运行 `scripts/portable/verify_portable_updaters.ps1 -PortableRoot <构建输出>` 全部 PASS
-- 纯旧 7z、无 `.git`：`Update-SD-Trainer.bat` 引导 Release 更新并失败退出；`Update-SD-Trainer-Release.bat` 可 `-DryRun` 探测 API
-- 新 7z、有 `.git`：`Update-SD-Trainer.bat` 能拉取 `origin/main`
+- 纯旧 7z、无 `.git`：`Update-Next-Trainer.bat` 引导 Release 更新并失败退出；`Update-Next-Trainer-Release.bat` 可 `-DryRun` 探测 API
+- 新 7z、有 `.git`：`Update-Next-Trainer.bat` 能拉取 `origin/main`
 - **Release 更新**：下载 + 合并后 `VERSION` 更新，`sd-models/`、`extensions/anima_lora/`（若存在）未丢失
 - **国内无代理网络**：Git 直连失败后自动通过镜像成功拉取；Release 下载镜像回退可用
 - 工作区有用户数据：`sd-models/`、`output/`、`logs/`、`config/` 更新后不丢失
 - 工作区有本地改动：Git 更新脚本能 stash 或给出明确提示
 - `dataset-tag-editor` 子模块更新失败：只 warning，不阻断主更新
-- 更新后根目录 `run_gui.bat`、`Update-SD-Trainer-Release.bat` 被刷新
+- 更新后根目录 `run_gui.bat`、`Update-Next-Trainer-Release.bat` 被刷新
 - 更新后仍能启动 WebUI
 
 ## 后续清理

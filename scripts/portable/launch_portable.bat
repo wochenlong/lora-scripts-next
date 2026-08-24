@@ -1,12 +1,12 @@
 @echo off
 chcp 65001 >nul 2>&1
-title SD-Trainer
+title Next-Trainer
 
-:: Portable launcher logic (lives inside SD-Trainer/, updates with git pull / new 7z copy)
-:: Stable paths relative to PORTABLE_ROOT (parent of SD-Trainer\):
+:: Portable launcher logic (lives inside Next-Trainer/, updates with git pull / new 7z copy)
+:: Stable paths relative to PORTABLE_ROOT (parent of Next-Trainer\):
 ::   python_embeded\python.exe
-::   SD-Trainer\gui.py
-::   SD-Trainer\setup_environment.py
+::   Next-Trainer\gui.py
+::   Next-Trainer\setup_environment.py
 
 set "PORTABLE_ROOT=%~dp0..\..\..\"
 set "BASE_DIR=%PORTABLE_ROOT%"
@@ -17,10 +17,10 @@ set "MIKAZUKI_TOKENIZER_CACHE_DIR=%PORTABLE_ROOT%tokenizer-cache"
 if not defined MIKAZUKI_HUB_BACKEND set "MIKAZUKI_HUB_BACKEND=auto"
 set "PYTHONUTF8=1"
 set "PYTHON_EXE=%PORTABLE_ROOT%python_embeded\python.exe"
-set "LOG_FILE=%PORTABLE_ROOT%sd-trainer-log.txt"
+set "LOG_FILE=%PORTABLE_ROOT%next-trainer-log.txt"
 
 echo ============================================ > "%LOG_FILE%"
-echo  SD-Trainer Launch Log >> "%LOG_FILE%"
+echo  Next-Trainer Launch Log >> "%LOG_FILE%"
 echo  Time: %date% %time% >> "%LOG_FILE%"
 echo  Path: %BASE_DIR% >> "%LOG_FILE%"
 echo  Python: %PYTHON_EXE% >> "%LOG_FILE%"
@@ -49,7 +49,7 @@ echo [setup] Dependency check failed, running setup_environment.py >> "%LOG_FILE
 
 :run_setup
 echo [setup] Starting setup_environment.py >> "%LOG_FILE%"
-"%PYTHON_EXE%" -s "%PORTABLE_ROOT%SD-Trainer\setup_environment.py" 2>> "%LOG_FILE%"
+"%PYTHON_EXE%" -s "%PORTABLE_ROOT%Next-Trainer\setup_environment.py" 2>> "%LOG_FILE%"
 if errorlevel 1 (
     echo [setup] FAILED >> "%LOG_FILE%"
     echo.
@@ -59,11 +59,11 @@ if errorlevel 1 (
 echo [setup] OK >> "%LOG_FILE%"
 
 :launch
-cd /d "%PORTABLE_ROOT%SD-Trainer"
+cd /d "%PORTABLE_ROOT%Next-Trainer"
 if errorlevel 1 goto :no_project
 
 if exist "scripts\portable\link_portable_data_dirs.py" (
-    echo [portable] Ensuring SD-Trainer data dirs for file picker >> "%LOG_FILE%"
+    echo [portable] Ensuring Next-Trainer data dirs for file picker >> "%LOG_FILE%"
     "%PYTHON_EXE%" -s scripts\portable\link_portable_data_dirs.py >> "%LOG_FILE%" 2>&1
 )
 
@@ -79,7 +79,7 @@ if exist "scripts\prefetch_sdxl_tokenizer.py" (
 
 echo [launch] Starting gui.py >> "%LOG_FILE%"
 echo.
-echo  Starting SD-Trainer...
+echo  Starting Next-Trainer...
 echo  运行日志（打标下载进度、错误信息等）将显示在本窗口。
 echo.
 
@@ -90,7 +90,7 @@ echo [launch] gui.py exited with code %EXIT_CODE% >> "%LOG_FILE%"
 if %EXIT_CODE% neq 0 (
     echo.
     echo  ============================================
-    echo   SD-Trainer exited abnormally [code: %EXIT_CODE%]
+    echo   Next-Trainer exited abnormally [code: %EXIT_CODE%]
     echo   Log: %LOG_FILE%
     echo   Please send this log when reporting bugs.
     echo  ============================================
@@ -109,15 +109,15 @@ goto :fail
 
 :no_project
 echo.
-echo  [ERROR] SD-Trainer folder not found!
+echo  [ERROR] Next-Trainer folder not found!
 echo.
-echo [ERROR] Cannot cd to %PORTABLE_ROOT%SD-Trainer >> "%LOG_FILE%"
+echo [ERROR] Cannot cd to %PORTABLE_ROOT%Next-Trainer >> "%LOG_FILE%"
 goto :fail
 
 :fail
 echo.
 echo  ============================================
-echo   SD-Trainer failed to start.
+echo   Next-Trainer failed to start.
 echo   Log: %LOG_FILE%
 echo   Please send this log when reporting bugs.
 echo  ============================================

@@ -1,4 +1,4 @@
-"""Tests for portable SD-Trainer data directory layout helper."""
+"""Tests for portable Next-Trainer data directory layout helper."""
 
 from __future__ import annotations
 
@@ -33,7 +33,7 @@ def _is_junction(path: Path) -> bool:
 @pytest.mark.skipif(os.name != "nt", reason="junctions are Windows-only")
 def test_ensure_creates_inner_dir_and_outer_junction(tmp_path: Path):
     portable_root = tmp_path / "PortableRoot"
-    trainer = portable_root / "SD-Trainer"
+    trainer = portable_root / "Next-Trainer"
     trainer.mkdir(parents=True)
     (trainer / "gui.py").write_text("# test\n", encoding="utf-8")
     (portable_root / "python_embeded").mkdir()
@@ -48,9 +48,9 @@ def test_ensure_creates_inner_dir_and_outer_junction(tmp_path: Path):
 
 @pytest.mark.skipif(os.name != "nt", reason="junctions are Windows-only")
 def test_migrate_legacy_inner_junction_to_outer(tmp_path: Path):
-    """Old layout: SD-Trainer/output -> ../output with data at portable root."""
+    """Old layout: Next-Trainer/output -> ../output with data at portable root."""
     portable_root = tmp_path / "PortableRoot"
-    trainer = portable_root / "SD-Trainer"
+    trainer = portable_root / "Next-Trainer"
     trainer.mkdir(parents=True)
     (trainer / "gui.py").write_text("# test\n", encoding="utf-8")
     (portable_root / "python_embeded").mkdir()
@@ -74,7 +74,7 @@ def test_migrate_legacy_inner_junction_to_outer(tmp_path: Path):
 @pytest.mark.skipif(os.name != "nt", reason="junctions are Windows-only")
 def test_migrate_outer_real_folder_into_trainer(tmp_path: Path):
     portable_root = tmp_path / "PortableRoot"
-    trainer = portable_root / "SD-Trainer"
+    trainer = portable_root / "Next-Trainer"
     trainer.mkdir(parents=True)
     (trainer / "gui.py").write_text("# test\n", encoding="utf-8")
     (portable_root / "python_embeded").mkdir()
@@ -91,7 +91,7 @@ def test_migrate_outer_real_folder_into_trainer(tmp_path: Path):
 @pytest.mark.skipif(os.name != "nt", reason="junctions are Windows-only")
 def test_migrate_merges_nonempty_dirs_and_preserves_name_conflicts(tmp_path: Path):
     portable_root = tmp_path / "PortableRoot"
-    trainer = portable_root / "SD-Trainer"
+    trainer = portable_root / "Next-Trainer"
     trainer.mkdir(parents=True)
     (trainer / "gui.py").write_text("# test\n", encoding="utf-8")
     (portable_root / "python_embeded").mkdir()
@@ -117,7 +117,7 @@ def test_migrate_merges_nonempty_dirs_and_preserves_name_conflicts(tmp_path: Pat
 @pytest.mark.skipif(os.name != "nt", reason="junctions are Windows-only")
 def test_migrate_legacy_layout_after_portable_root_moves(tmp_path: Path):
     old_root = tmp_path / "OldRoot"
-    trainer = old_root / "SD-Trainer"
+    trainer = old_root / "Next-Trainer"
     trainer.mkdir(parents=True)
     (trainer / "gui.py").write_text("# test\n", encoding="utf-8")
     (old_root / "python_embeded").mkdir()
@@ -132,7 +132,7 @@ def test_migrate_legacy_layout_after_portable_root_moves(tmp_path: Path):
 
     portable_root = tmp_path / "MovedRoot"
     shutil.move(str(old_root), str(portable_root))
-    trainer = portable_root / "SD-Trainer"
+    trainer = portable_root / "Next-Trainer"
 
     result = ensure_portable_data_dir(trainer, portable_root, "output", log=lambda *_: None)
     assert result == "migrated-flip"
@@ -144,7 +144,7 @@ def test_migrate_legacy_layout_after_portable_root_moves(tmp_path: Path):
 @pytest.mark.skipif(os.name != "nt", reason="junctions are Windows-only")
 def test_relinks_canonical_outer_junction_after_portable_root_moves(tmp_path: Path):
     old_root = tmp_path / "OldRoot"
-    trainer = old_root / "SD-Trainer"
+    trainer = old_root / "Next-Trainer"
     trainer.mkdir(parents=True)
     (trainer / "gui.py").write_text("# test\n", encoding="utf-8")
     (old_root / "python_embeded").mkdir()
@@ -153,7 +153,7 @@ def test_relinks_canonical_outer_junction_after_portable_root_moves(tmp_path: Pa
 
     portable_root = tmp_path / "MovedRoot"
     shutil.move(str(old_root), str(portable_root))
-    trainer = portable_root / "SD-Trainer"
+    trainer = portable_root / "Next-Trainer"
 
     result = ensure_portable_data_dir(trainer, portable_root, "output", log=lambda *_: None)
     assert result == "linked-outer"
@@ -164,7 +164,7 @@ def test_relinks_canonical_outer_junction_after_portable_root_moves(tmp_path: Pa
 
 def test_is_portable_layout_detects_embedded_python(tmp_path: Path):
     portable_root = tmp_path / "PortableRoot"
-    trainer = portable_root / "SD-Trainer"
+    trainer = portable_root / "Next-Trainer"
     trainer.mkdir(parents=True)
     (trainer / "gui.py").write_text("# test\n", encoding="utf-8")
     (portable_root / "python_embeded").mkdir()
@@ -172,7 +172,7 @@ def test_is_portable_layout_detects_embedded_python(tmp_path: Path):
 
 
 def test_resolve_portable_roots_from_trainer_dir(tmp_path: Path):
-    trainer = tmp_path / "SD-Trainer"
+    trainer = tmp_path / "Next-Trainer"
     trainer.mkdir()
     resolved_trainer, portable_root = resolve_portable_roots(trainer)
     assert resolved_trainer == trainer.resolve()

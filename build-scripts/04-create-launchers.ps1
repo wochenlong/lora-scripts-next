@@ -2,7 +2,7 @@
 # 创建启动脚本
 
 param(
-    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\sd-trainer-portable")
+    [string]$BuildDir = (Join-Path (Split-Path $PSScriptRoot -Parent) "build\next-trainer-portable")
 )
 
 $ErrorActionPreference = "Stop"
@@ -25,7 +25,7 @@ Write-Host "创建 run_gui.bat"
 
 # README.txt
 $readmeContent = @"
-SD-Trainer 便携式整合包
+Next-Trainer 便携式整合包
 ========================
 
 使用方法：

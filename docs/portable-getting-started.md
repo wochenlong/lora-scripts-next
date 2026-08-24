@@ -1,6 +1,6 @@
 # 整合包补充说明
 
-面向 **Next Trainer 便携整合包**（归档名 `Next-Trainer-v*.7z`；包内目录仍为 `SD-Trainer/`）用户的进阶说明。快速上手只需 README 中的三步：下载 → 双击 `run_gui.bat` → 浏览器开练。
+面向 **Next Trainer 便携整合包**（归档名 `Next-Trainer-v*.7z`；包内目录仍为 `Next-Trainer/`）用户的进阶说明。快速上手只需 README 中的三步：下载 → 双击 `run_gui.bat` → 浏览器开练。
 
 当前最新版：**v2.8.2**（[Releases](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.8.2)）。
 
@@ -80,8 +80,8 @@ Anima Fast 在整合包内也可通过侧栏 **Anima LoRA → Fast 模式** 页�
 
 | 方式 | 脚本 | 说明 |
 |------|------|------|
-| Release 合并（推荐） | `Update-SD-Trainer-Release.bat` | 下载最新 Release 7z 并合并 |
-| Git 快进 | `Update-SD-Trainer.bat` | 需 `SD-Trainer/.git` 存在 |
+| Release 合并（推荐） | `Update-Next-Trainer-Release.bat` | 下载最新 Release 7z 并合并 |
+| Git 快进 | `Update-Next-Trainer.bat` | 需 `Next-Trainer/.git` 存在 |
 
 用户数据（`sd-models/`、`output/`、`logs/`、`config/autosave/`）不会被覆盖。
 
