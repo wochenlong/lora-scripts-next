@@ -229,7 +229,12 @@ def test_real_provider_acceptance(request: pytest.FixtureRequest):
     # ---- cumulative budget guard (across reruns of the same profile) ----
     previous_calls = 0
     if evidence_path.exists():
-        match = re.search(r"provider requests this run: (d+)", evidence_path.read_text(encoding="utf-8"))
+        text = evidence_path.read_text(encoding="utf-8")
+        # Prefer the cumulative line (exact running total after the previous
+        # run); fall back to the per-run line for pre-cumulative evidence.
+        match = re.search(r"cumulative provider requests this profile: (\d+)", text)
+        if match is None:
+            match = re.search(r"provider requests this run: (\d+)", text)
         previous_calls = int(match.group(1)) if match else 0
     cumulative_calls = previous_calls + this_run_calls
     assert cumulative_calls <= MAX_REQUESTS_PER_PROFILE, (cumulative_calls, this_run_calls)
