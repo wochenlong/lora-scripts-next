@@ -25,6 +25,12 @@ export interface BridgeWelcome {
   activeSession: string | null;
 }
 
+export interface BridgeHostState {
+  colorScheme: "light" | "dark";
+  themeTokens: Record<string, string>;
+  locale: string;
+}
+
 interface BridgePort {
   onmessage: ((event: MessageEvent<unknown>) => void) | null;
   postMessage(message: unknown): void;
@@ -80,6 +86,18 @@ interface BridgeEventEnvelope {
   data: AgentEvent;
 }
 
+interface BridgeHostStateEnvelope {
+  protocol: typeof PLUGIN_BRIDGE_PROTOCOL;
+  pluginId: string;
+  instanceId: string;
+  seq: number;
+  requestId: string;
+  type: "HOST_STATE";
+  colorScheme: "light" | "dark";
+  themeTokens: Record<string, string>;
+  locale: string;
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return value !== null && typeof value === "object" && !Array.isArray(value);
 }
@@ -124,6 +142,19 @@ function isBridgeEventEnvelope(value: Record<string, unknown>): boolean {
   );
 }
 
+function isBridgeHostStateEnvelope(value: Record<string, unknown>): boolean {
+  return (
+    value.type === "HOST_STATE" &&
+    typeof value.requestId === "string" &&
+    Boolean(value.requestId) &&
+    (value.colorScheme === "light" || value.colorScheme === "dark") &&
+    isRecord(value.themeTokens) &&
+    Object.values(value.themeTokens).every((token) => typeof token === "string") &&
+    typeof value.locale === "string" &&
+    Boolean(value.locale)
+  );
+}
+
 function randomRequestId(): string {
   if (typeof globalThis.crypto?.randomUUID === "function") return globalThis.crypto.randomUUID();
   const bytes = new Uint8Array(16);
@@ -148,6 +179,7 @@ export class PluginBridgeClient {
   private readonly requestIdFactory: () => string;
   private readonly pending = new Map<string, PendingRequest>();
   private readonly eventListeners = new Set<(event: AgentEvent) => void>();
+  private readonly hostStateListeners = new Set<(state: BridgeHostState) => void>();
   private readonly onWindowMessage = (event: MessageEvent<unknown>) => this.acceptChallenge(event);
   private port: BridgePort | null = null;
   private instanceId: string | null = null;
@@ -229,7 +261,8 @@ export class PluginBridgeClient {
     }
     const response = isBridgeResponse(value);
     const event = isBridgeEventEnvelope(value);
-    if (!response && !event) {
+    const hostState = isBridgeHostStateEnvelope(value);
+    if (!response && !event && !hostState) {
       this.options.onDiagnostic?.("Ignored an unsupported or invalid bridge message.");
       return;
     }
@@ -239,7 +272,8 @@ export class PluginBridgeClient {
     }
     this.incomingSeq = value.seq;
     if (response) this.acceptResponse(value as unknown as BridgeResponse);
-    else this.acceptEvent(value as unknown as BridgeEventEnvelope);
+    else if (event) this.acceptEvent(value as unknown as BridgeEventEnvelope);
+    else this.acceptHostState(value as unknown as BridgeHostStateEnvelope);
   }
 
   private acceptWelcome(value: unknown): void {
@@ -284,6 +318,15 @@ export class PluginBridgeClient {
     for (const listener of this.eventListeners) listener(envelope.data);
   }
 
+  private acceptHostState(envelope: BridgeHostStateEnvelope): void {
+    const state: BridgeHostState = {
+      colorScheme: envelope.colorScheme,
+      themeTokens: { ...envelope.themeTokens },
+      locale: envelope.locale,
+    };
+    for (const listener of this.hostStateListeners) listener(state);
+  }
+
   request<T>(type: BridgeRequestType, payload: Record<string, unknown>): Promise<T> {
     if (!this.connected || !this.port || !this.instanceId) {
       return Promise.reject(new PluginBridgeError("The plugin bridge is not connected.", "BRIDGE_NOT_CONNECTED"));
@@ -310,6 +353,11 @@ export class PluginBridgeClient {
   onEvent(listener: (event: AgentEvent) => void): () => void {
     this.eventListeners.add(listener);
     return () => this.eventListeners.delete(listener);
+  }
+
+  onHostState(listener: (state: BridgeHostState) => void): () => void {
+    this.hostStateListeners.add(listener);
+    return () => this.hostStateListeners.delete(listener);
   }
 
   close(): void {

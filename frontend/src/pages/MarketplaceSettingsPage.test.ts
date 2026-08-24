@@ -42,6 +42,7 @@ function status(overrides: Partial<MarketplacePluginStatus> = {}): MarketplacePl
     reason: "",
     runtime_state: null,
     runtime_pid: null,
+    granted_permissions: [],
     ...overrides,
   }
 }
@@ -51,6 +52,8 @@ beforeEach(() => {
   i18n.global.locale.value = "zh-CN"
   vi.spyOn(pluginsApi, "ensureHostAuthority").mockResolvedValue()
   vi.spyOn(pluginsApi, "listMarketplacePlugins").mockResolvedValue([status()])
+  vi.spyOn(pluginsApi, "refreshCatalog").mockResolvedValue([])
+  vi.spyOn(pluginsApi, "reloadCatalog").mockResolvedValue([entry])
   vi.spyOn(pluginsApi, "installMarketplacePlugin").mockResolvedValue(status({ state: "installed", active_version: "1.2.0" }))
   vi.spyOn(pluginsApi, "enableMarketplacePlugin").mockResolvedValue(status({ state: "enabled", active_version: "1.2.0", enabled: true }))
   vi.spyOn(pluginsApi, "disableMarketplacePlugin").mockResolvedValue(status({ state: "installed", active_version: "1.2.0" }))
@@ -81,6 +84,19 @@ describe("MarketplaceSettingsPage", () => {
     wrapper.unmount()
   })
 
+  it("forces a trusted source refresh when the user refreshes the marketplace", async () => {
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    await wrapper.get('button[aria-label="刷新插件状态"]').trigger("click")
+    await flushPromises()
+    expect(pluginsApi.reloadCatalog).toHaveBeenCalledOnce()
+    wrapper.unmount()
+  })
+
   it("shows generic installed lifecycle actions and does not expose internal status detail", async () => {
     vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
       status({ state: "runtime_error", active_version: "1.2.0", enabled: true, reason: "C:/private/auth.json" }),
@@ -94,6 +110,29 @@ describe("MarketplaceSettingsPage", () => {
     expect(wrapper.text()).toContain("禁用")
     expect(wrapper.text()).toContain("重新启动")
     expect(wrapper.text()).not.toContain("auth.json")
+    wrapper.unmount()
+  })
+
+  it("shows persisted permission grants for an enabled plugin", async () => {
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
+      status({
+        state: "enabled",
+        active_version: "1.1.0",
+        enabled: true,
+        granted_permissions: ["model-provider", "training-config"],
+      }),
+    ])
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const checkboxes = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
+    expect(checkboxes).toHaveLength(2)
+    expect(checkboxes.every((checkbox) => checkbox.element.checked)).toBe(true)
+    expect(checkboxes.every((checkbox) => checkbox.attributes("disabled") !== undefined)).toBe(true)
+    expect(wrapper.get("button.primary-action").text()).toContain("更新")
     wrapper.unmount()
   })
 })

@@ -33,6 +33,10 @@ class ComputeLaneQueueTests(unittest.TestCase):
         tm = TaskManager()
         a = tm.create_task(_sleeper(0.8), dict(os.environ), task_id="a")
         tm.submit(a)
+        # Queue position is defined for tasks waiting behind the active
+        # compute task. Under a busy full-suite run the worker may not have
+        # promoted ``a`` before the next assertion unless we synchronize here.
+        self.assertTrue(_wait_status(a, {TaskStatus.RUNNING}))
         b = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="b")
 
         self.assertEqual(b.status, TaskStatus.QUEUED)
@@ -97,6 +101,7 @@ class ComputeLaneQueueTests(unittest.TestCase):
         tm = TaskManager()
         a = tm.create_task(_sleeper(0.8), dict(os.environ), task_id="a")
         tm.submit(a)
+        self.assertTrue(_wait_status(a, {TaskStatus.RUNNING}))
         b = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="b")
         tm.submit(b)
 
@@ -221,6 +226,11 @@ class QueuePersistenceTests(unittest.TestCase):
             self.assertTrue(_wait_status(restored, {TaskStatus.FINISHED}))
 
             self.assertFalse(tm2.resume_task("b"))  # no longer held
+            # The simulated pre-restart manager still owns a daemon worker in
+            # this process. Let it finish before TemporaryDirectory cleanup so
+            # it cannot recreate or write the queue path after removal.
+            self.assertTrue(_wait_status(a, {TaskStatus.FINISHED}))
+            self.assertTrue(_wait_status(tm1.tasks["b"], {TaskStatus.FINISHED}))
 
 
 class RetryTests(unittest.TestCase):

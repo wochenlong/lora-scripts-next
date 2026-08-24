@@ -33,7 +33,10 @@ test("Provider test records HTTP status and successful lastTest", async (context
   context.after(async () => { await server.close(); await rm(root, { recursive: true, force: true }) })
   const providers = await ProviderRegistry.open(root, { allowHttpLoopback: true })
   await providers.save("fixture", { providerId: "fixture", modelId: "test", endpoint: server.endpoint, apiKey: "sk-provider-test-key" })
-  const adapter = new ProductionPiRuntimeAdapter({ agentDir: root, providers, providerTestTimeoutMs: 500 })
+  // Loading the real Pi provider adapter can take a few seconds on a busy
+  // Windows CI/dev host. Keep this bounded while avoiding a false timeout
+  // before the loopback fixture can return its immediate success response.
+  const adapter = new ProductionPiRuntimeAdapter({ agentDir: root, providers, providerTestTimeoutMs: 5_000 })
   const result = await adapter.testProvider("fixture")
   assert.equal(result.ok, true)
   assert.equal(result.status, 200)

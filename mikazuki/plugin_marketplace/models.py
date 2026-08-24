@@ -246,3 +246,4 @@ class PluginStatus(StrictModel):
     reason: str = ""
     runtime_state: Literal["stopped", "starting", "running", "crashed"] | None = None
     runtime_pid: int | None = None
+    granted_permissions: list[str] = Field(default_factory=list)

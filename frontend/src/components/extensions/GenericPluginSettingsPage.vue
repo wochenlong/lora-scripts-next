@@ -16,6 +16,7 @@ const { loading, error } = storeToRefs(extensionsStore)
 const frame = ref<HTMLIFrameElement | null>(null)
 const frameSrc = ref("about:blank")
 let bridge: HostPluginBridge | null = null
+let appearanceObserver: MutationObserver | null = null
 const pluginId = computed(() => String(route.params.pluginId || ""))
 const extension = computed(() => (isValidPluginId(pluginId.value) ? extensionsStore.find(pluginId.value) : undefined))
 const settingsUrl = computed(() => {
@@ -27,6 +28,10 @@ function disposeBridge() {
   bridge?.dispose()
   bridge = null
   frameSrc.value = "about:blank"
+}
+
+function syncHostState() {
+  bridge?.postHostState()
 }
 
 async function activateExtension(value: PluginHostExtension | undefined) {
@@ -54,8 +59,18 @@ watch(
   { immediate: true, flush: "post" },
 )
 
-onMounted(() => void extensionsStore.ensureLoaded())
-onBeforeUnmount(disposeBridge)
+watch(locale, syncHostState)
+
+onMounted(() => {
+  appearanceObserver = new MutationObserver(syncHostState)
+  appearanceObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] })
+  void extensionsStore.ensureLoaded()
+})
+onBeforeUnmount(() => {
+  appearanceObserver?.disconnect()
+  appearanceObserver = null
+  disposeBridge()
+})
 </script>
 
 <template>

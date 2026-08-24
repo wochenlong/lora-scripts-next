@@ -85,6 +85,7 @@ export interface MarketplacePluginStatus {
   reason: string
   runtime_state: "stopped" | "starting" | "running" | "crashed" | null
   runtime_pid: number | null
+  granted_permissions: string[]
 }
 
 interface PluginHostAuthority {
@@ -407,6 +408,15 @@ export const pluginsApi = {
     return hostData<MarketplacePluginStatus[]>(response)
   },
   refreshCatalog: async (): Promise<MarketplaceEntry[]> => {
+    const response = await authorizedFetch("/api/marketplace/catalog", { method: "GET" })
+    return hostData<MarketplaceEntry[]>(response)
+  },
+  reloadCatalog: async (): Promise<MarketplaceEntry[]> => {
+    const refresh = await authorizedFetch("/api/marketplace/catalog/refresh", {
+      method: "POST",
+      body: "{}",
+    })
+    await hostData<{ publisherId: string; generatedAt: string; entries: number }>(refresh)
     const response = await authorizedFetch("/api/marketplace/catalog", { method: "GET" })
     return hostData<MarketplaceEntry[]>(response)
   },

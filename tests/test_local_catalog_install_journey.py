@@ -189,9 +189,10 @@ def test_local_catalog_install_journey_on_real_app_entry():
         assert ext["ui"]["floatingPanel"]["entryUrl"].startswith("/api/plugin-host/ui/")
 
         # 4) plugin UI assets are served through the host
-        status, body = _fetch_text(app.base + f"/api/plugin-host/ui/{PLUGIN_ID}/0.1.0/index.js")
+        version = entry["latest_version"]
+        status, body = _fetch_text(app.base + f"/api/plugin-host/ui/{PLUGIN_ID}/{version}/index.js")
         assert status == 200 and len(body) > 1000, "plugin UI bundle not served"
-        status, body = _fetch_text(app.base + f"/api/plugin-host/ui/{PLUGIN_ID}/0.1.0/settings.html")
+        status, body = _fetch_text(app.base + f"/api/plugin-host/ui/{PLUGIN_ID}/{version}/settings.html")
         assert status == 200 and "<html" in body.lower(), "plugin settings page not served"
 
         # 5) core app remains fully usable with the Agent active

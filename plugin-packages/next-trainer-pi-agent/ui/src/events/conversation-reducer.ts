@@ -32,6 +32,7 @@ export interface ConversationState {
 }
 
 export type ConversationAction =
+  | { type: "session_cleared" }
   | { type: "history_loaded"; history: SessionHistory }
   | { type: "run_started"; session: SessionState; optimisticMessage: AgentMessage }
   | { type: "event"; event: AgentEvent }
@@ -172,9 +173,11 @@ export function conversationReducer(
   action: ConversationAction,
 ): ConversationState {
   switch (action.type) {
+    case "session_cleared":
+      return INITIAL_CONVERSATION_STATE;
     case "history_loaded":
       return {
-        ...state,
+        ...INITIAL_CONVERSATION_STATE,
         session: action.history.session,
         messages: action.history.messages,
         terminal: action.history.session.status === "failed"

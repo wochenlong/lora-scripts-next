@@ -44,7 +44,17 @@ const SETTINGS_REMOTE_CAPABILITIES = new Set<BridgeCapability>([
   "provider.removeKey",
   "provider.test",
 ])
-const THEME_TOKEN_NAMES = ["--bg", "--surface", "--text", "--text-soft", "--border", "--accent", "--danger"] as const
+const THEME_TOKEN_NAMES = [
+  "--bg",
+  "--surface",
+  "--text",
+  "--text-soft",
+  "--border",
+  "--accent",
+  "--accent-contrast",
+  "--danger",
+  "--radius",
+] as const
 
 export function createPluginFrameInstanceId() {
   if (typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID()
@@ -71,6 +81,10 @@ export function bridgeCapabilitiesFor(extension: PluginHostExtension, placement:
 function themeTokens() {
   const styles = getComputedStyle(document.documentElement)
   return Object.fromEntries(THEME_TOKEN_NAMES.map((name) => [name, styles.getPropertyValue(name).trim()]))
+}
+
+function colorScheme(): "light" | "dark" {
+  return document.documentElement.classList.contains("dark") ? "dark" : "light"
 }
 
 function safeExternalUrl(value: unknown) {
@@ -112,7 +126,7 @@ export function createPluginFrameBridge(options: PluginFrameBridgeOptions): Host
       return {
         route: options.route.path,
         locale: options.locale(),
-        colorScheme: document.documentElement.classList.contains("dark") ? "dark" : "light",
+        colorScheme: colorScheme(),
       }
     }
     if (request.type === "artifact.open") {
@@ -174,6 +188,7 @@ export function createPluginFrameBridge(options: PluginFrameBridgeOptions): Host
     handleRequest,
     locale: options.locale,
     themeTokens,
+    colorScheme,
     activeSession: options.activeSession,
     onDiagnostic: options.onDiagnostic,
     onConnectionClosed: closeStreams,

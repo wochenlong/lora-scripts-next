@@ -6,6 +6,7 @@ import {
   type BridgeCapability,
   type BridgeErrorBody,
   type BridgeEventEnvelope,
+  type BridgeHostStateEnvelope,
   type BridgeRequestEnvelope,
   type BridgeResponseEnvelope,
   type BridgeWelcomeMessage,
@@ -38,6 +39,7 @@ export interface HostPluginBridgeOptions {
   handleRequest: BridgeRequestHandler
   locale?: () => string
   themeTokens?: () => Record<string, string>
+  colorScheme?: () => "light" | "dark"
   activeSession?: () => string | null
   nonceFactory?: () => string
   requestIdFactory?: () => string
@@ -225,6 +227,23 @@ export class HostPluginBridge {
       sessionId: event.sessionId,
       runId: event.runId,
       data: event,
+    }
+    this.port.postMessage(envelope)
+    return true
+  }
+
+  postHostState(): boolean {
+    if (!this.port || !this.connected) return false
+    const envelope: BridgeHostStateEnvelope = {
+      protocol: PLUGIN_BRIDGE_PROTOCOL,
+      pluginId: this.options.pluginId,
+      instanceId: this.options.instanceId,
+      seq: ++this.outgoingSeq,
+      requestId: (this.options.requestIdFactory ?? (() => globalThis.crypto.randomUUID()))(),
+      type: "HOST_STATE",
+      colorScheme: this.options.colorScheme?.() ?? "light",
+      themeTokens: this.options.themeTokens?.() ?? {},
+      locale: this.options.locale?.() ?? "zh-CN",
     }
     this.port.postMessage(envelope)
     return true

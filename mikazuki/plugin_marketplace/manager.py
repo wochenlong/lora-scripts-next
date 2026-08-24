@@ -73,6 +73,7 @@ class MarketplaceManager:
                 enabled=False,
                 installed_versions=sorted(versions),
                 reason="active version is missing",
+                granted_permissions=sorted(record.get("granted_permissions") or ()),
             )
         enabled = bool(record.get("enabled"))
         runtime = self._runtime_status(plugin_id) if enabled else RuntimeSnapshot(state="stopped")
@@ -87,6 +88,7 @@ class MarketplaceManager:
             reason=(runtime.reason or record.get("last_runtime_error", "")) if runtime_error else "",
             runtime_state=runtime.state if self.runtime is not None else None,
             runtime_pid=runtime.pid,
+            granted_permissions=sorted(record.get("granted_permissions") or ()),
         )
 
     def list_statuses(self) -> list[PluginStatus]:

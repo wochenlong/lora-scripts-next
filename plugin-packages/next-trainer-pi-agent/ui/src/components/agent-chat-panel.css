@@ -8,16 +8,16 @@
 
 .nta-chat-panel {
   box-sizing: border-box;
+  position: relative;
   display: grid;
   grid-template-rows: auto minmax(0, 1fr) auto;
-  width: min(520px, 100%);
-  height: min(680px, 100%);
-  min-height: 420px;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  border: 1px solid var(--nta-border);
-  border-radius: var(--nta-radius);
+  border: 0;
+  border-radius: 0;
   background: var(--nta-panel);
-  box-shadow: 0 18px 48px rgb(0 0 0 / 22%);
 }
 
 .nta-chat-header,
@@ -167,7 +167,8 @@
 .nta-provider-settings {
   display: grid;
   gap: 12px;
-  width: min(520px, 100%);
+  width: 100%;
+  min-height: 100%;
   box-sizing: border-box;
   padding: 18px;
   color: var(--nta-text);
@@ -194,4 +195,111 @@
 .nta-provider-actions {
   display: flex;
   gap: 8px;
+}
+
+.nta-history-drawer {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  color: var(--nta-text);
+  background: var(--nta-panel);
+}
+
+.nta-history-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--nta-border);
+}
+
+.nta-history-header div,
+.nta-history-actions,
+.nta-history-confirm,
+.nta-history-rename {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.nta-history-header button,
+.nta-history-actions button,
+.nta-history-confirm button,
+.nta-history-rename button {
+  min-height: 32px;
+  padding: 6px 10px;
+  color: var(--nta-text);
+  background: var(--nta-bg);
+  border: 1px solid var(--nta-border);
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.nta-history-list {
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  list-style: none;
+}
+
+.nta-history-item {
+  display: grid;
+  gap: 9px;
+  margin-bottom: 10px;
+  padding: 12px;
+  background: var(--nta-bg);
+  border: 1px solid var(--nta-border);
+  border-radius: 10px;
+}
+
+.nta-history-item.is-active {
+  border-color: var(--nta-accent);
+}
+
+.nta-history-summary {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.nta-history-summary strong,
+.nta-history-summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nta-history-summary small {
+  color: var(--nta-muted);
+}
+
+.nta-history-rename input {
+  min-width: 0;
+  flex: 1;
+  padding: 7px 9px;
+  color: var(--nta-text);
+  background: var(--nta-panel);
+  border: 1px solid var(--nta-border);
+  border-radius: 8px;
+}
+
+.nta-history-actions {
+  flex-wrap: wrap;
+}
+
+.nta-history-actions button:first-child {
+  color: var(--nta-accent);
+}
+
+.nta-history-actions button:last-child,
+.nta-history-confirm button:first-child {
+  color: var(--nta-danger);
+}
+
+.nta-history-empty {
+  color: var(--nta-muted);
+  text-align: center;
 }

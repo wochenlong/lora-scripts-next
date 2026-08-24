@@ -41,6 +41,7 @@ function emptyStatus(id: string): MarketplacePluginStatus {
     reason: "",
     runtime_state: null,
     runtime_pid: null,
+    granted_permissions: [],
   }
 }
 
@@ -61,6 +62,12 @@ const allPermissionsApproved = computed(() => {
   const required = selected.value?.entry?.permissions_summary ?? []
   return required.length > 0 && required.every((permission) => selectedPermissions.value.includes(permission))
 })
+const updateAvailable = computed(() => Boolean(
+  selected.value?.entry &&
+  selected.value.status.active_version &&
+  selected.value.status.state !== "not_installed" &&
+  selected.value.entry.latest_version !== selected.value.status.active_version,
+))
 
 function permissionLabel(permission: string) {
   const key = `marketplace.permissions.${permission}`
@@ -81,10 +88,17 @@ function togglePermission(pluginId: string, permission: string, checked: boolean
   approvedByPlugin[pluginId] = [...current]
 }
 
+function syncStatusPermissions(status: MarketplacePluginStatus, force = false) {
+  if (force || status.enabled || status.granted_permissions.length > 0 || status.state === "not_installed") {
+    approvedByPlugin[status.id] = [...status.granted_permissions]
+  }
+}
+
 function updateStatus(status: MarketplacePluginStatus) {
   const index = statuses.value.findIndex((value) => value.id === status.id)
   if (index < 0) statuses.value.push(status)
   else statuses.value[index] = status
+  syncStatusPermissions(status)
 }
 
 async function load() {
@@ -93,6 +107,7 @@ async function load() {
   error.value = ""
   try {
     statuses.value = await pluginsApi.listMarketplacePlugins()
+    for (const status of statuses.value) syncStatusPermissions(status, true)
   } catch {
     statuses.value = []
     error.value = t("marketplace.loadFailed")
@@ -101,10 +116,10 @@ async function load() {
   }
 }
 
-async function loadCatalog() {
+async function loadCatalog(force = false) {
   catalogLoading.value = true
   try {
-    catalog.value = await pluginsApi.refreshCatalog()
+    catalog.value = force ? await pluginsApi.reloadCatalog() : await pluginsApi.refreshCatalog()
   } catch {
     // Catalog offline (not configured or unavailable): keep the page usable
     // and let the notice below explain the state.
@@ -112,6 +127,11 @@ async function loadCatalog() {
   } finally {
     catalogLoading.value = false
   }
+}
+
+function refreshPage() {
+  void load()
+  void loadCatalog(true)
 }
 
 async function confirmMutation(messageKey: string) {
@@ -152,6 +172,12 @@ async function enable() {
   const record = selected.value
   if (!record?.entry || !allPermissionsApproved.value || !(await confirmMutation("marketplace.confirmEnable"))) return
   await runAction("enable", () => pluginsApi.enableMarketplacePlugin(record.id, selectedPermissions.value))
+}
+
+async function update() {
+  const record = selected.value
+  if (!record?.entry || !allPermissionsApproved.value || !(await confirmMutation("marketplace.confirmUpdate"))) return
+  await runAction("update", () => pluginsApi.installMarketplacePlugin(record.entry!, selectedPermissions.value))
 }
 
 async function disable() {
@@ -198,7 +224,7 @@ onMounted(() => {
         <h2 id="marketplace-title">{{ t("marketplace.title") }}</h2>
         <p>{{ t("marketplace.subtitle") }}</p>
       </div>
-      <button type="button" class="icon-button" :aria-label="t('marketplace.refresh')" :disabled="loading || catalogLoading" @click="() => { void load(); void loadCatalog() }">
+      <button type="button" class="icon-button" :aria-label="t('marketplace.refresh')" :disabled="loading || catalogLoading" @click="refreshPage">
         <Refresh aria-hidden="true" />
       </button>
     </header>
@@ -249,6 +275,7 @@ onMounted(() => {
             <input
               type="checkbox"
               :checked="selectedPermissions.includes(permission)"
+              :disabled="selected.status.enabled"
               @change="togglePermission(selected.id, permission, ($event.target as HTMLInputElement).checked)"
             >
             <span><strong>{{ permissionLabel(permission) }}</strong><small>{{ permission }}</small></span>
@@ -271,6 +298,13 @@ onMounted(() => {
             :disabled="!selected.entry || !allPermissionsApproved || Boolean(busyAction)"
             @click="enable"
           >{{ t("marketplace.enable") }}</button>
+          <button
+            v-if="updateAvailable"
+            type="button"
+            class="primary-action"
+            :disabled="!allPermissionsApproved || Boolean(busyAction)"
+            @click="update"
+          >{{ t("marketplace.update") }}</button>
           <button
             v-if="selected.status.enabled"
             type="button"

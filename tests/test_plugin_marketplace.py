@@ -201,8 +201,12 @@ def test_install_enable_disable_update_rollback_and_uninstall_preserves_user_dat
         assert manager.paths.version_dir(status.id, "0.1.0").is_dir()
 
         permissions = {"model-provider", "training-config"}
-        assert manager.enable(status.id, permissions).enabled is True
-        assert manager.disable(status.id).enabled is False
+        enabled = manager.enable(status.id, permissions)
+        assert enabled.enabled is True
+        assert set(enabled.granted_permissions) == permissions
+        disabled = manager.disable(status.id)
+        assert disabled.enabled is False
+        assert set(disabled.granted_permissions) == permissions
 
         package_v2 = build_package(root, version="0.2.0")
         updated = manager.install(signed_entry(package_v2, key, version="0.2.0"), package_v2)

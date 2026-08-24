@@ -13,3 +13,4 @@ export * from "./testing/memory-transport.ts";
 export * from "./testing/memory-host-capabilities.ts";
 export * from "./testing/SlimUiTestWrapper.tsx";
 export * from "./theme/ThemeProvider.tsx";
+export * from "./theme/host-theme.ts";

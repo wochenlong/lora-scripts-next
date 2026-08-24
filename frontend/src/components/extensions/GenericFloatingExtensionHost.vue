@@ -43,6 +43,7 @@ const confirmation = computed(
 const confirmationBusy = ref(false)
 const confirmationError = ref("")
 let bridge: HostPluginBridge | null = null
+let appearanceObserver: MutationObserver | null = null
 let resizeOrigin: { x: number; y: number; width: number; height: number } | null = null
 
 const panelStyle = computed(() =>
@@ -147,6 +148,10 @@ function onViewportResize() {
   applyPanelSize(panelWidth.value, panelHeight.value)
 }
 
+function syncHostState() {
+  bridge?.postHostState()
+}
+
 function disposeBridge() {
   bridge?.dispose()
   bridge = null
@@ -239,15 +244,21 @@ watch(frame, (value) => {
   if (value && activeExtension.value && !bridge) void activateExtension(activeExtension.value)
 })
 
+watch(locale, syncHostState)
+
 onMounted(() => {
   window.addEventListener("keydown", onShortcut)
   window.addEventListener("resize", onViewportResize)
+  appearanceObserver = new MutationObserver(syncHostState)
+  appearanceObserver.observe(document.documentElement, { attributes: true, attributeFilter: ["class", "style"] })
   void extensionsStore.ensureLoaded().then(refreshPendingConfirmations)
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener("keydown", onShortcut)
   window.removeEventListener("resize", onViewportResize)
+  appearanceObserver?.disconnect()
+  appearanceObserver = null
   stopResize()
   disposeBridge()
 })

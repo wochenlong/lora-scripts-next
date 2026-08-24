@@ -203,4 +203,39 @@ describe("PluginBridgeClient", () => {
     });
     expect(events).toEqual([event]);
   });
+
+  test("delivers monotonic host theme changes over the authenticated port", () => {
+    const { client, diagnostics, port } = connect();
+    const states: unknown[] = [];
+    client.onHostState((state) => states.push(state));
+    port.emit({
+      protocol: PLUGIN_BRIDGE_PROTOCOL,
+      pluginId: "next-trainer-pi-agent",
+      instanceId: "instance-1",
+      seq: 1,
+      requestId: "host-theme-1",
+      type: "HOST_STATE",
+      colorScheme: "dark",
+      themeTokens: { "--bg": "#0d1117", "--surface": "#161b22" },
+      locale: "zh-CN",
+    });
+    expect(states).toEqual([{
+      colorScheme: "dark",
+      themeTokens: { "--bg": "#0d1117", "--surface": "#161b22" },
+      locale: "zh-CN",
+    }]);
+    port.emit({
+      protocol: PLUGIN_BRIDGE_PROTOCOL,
+      pluginId: "next-trainer-pi-agent",
+      instanceId: "instance-1",
+      seq: 1,
+      requestId: "host-theme-replay",
+      type: "HOST_STATE",
+      colorScheme: "light",
+      themeTokens: {},
+      locale: "en",
+    });
+    expect(states).toHaveLength(1);
+    expect(diagnostics.at(-1)).toContain("replayed or stale");
+  });
 });

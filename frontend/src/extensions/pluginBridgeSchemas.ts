@@ -101,6 +101,18 @@ export interface BridgeEventEnvelope {
   data: Record<string, unknown>
 }
 
+export interface BridgeHostStateEnvelope {
+  protocol: typeof PLUGIN_BRIDGE_PROTOCOL
+  pluginId: string
+  instanceId: string
+  seq: number
+  requestId: string
+  type: "HOST_STATE"
+  colorScheme: "light" | "dark"
+  themeTokens: Record<string, string>
+  locale: string
+}
+
 export interface BridgeWelcomeMessage {
   type: "WELCOME"
   protocolVersion: typeof PLUGIN_BRIDGE_PROTOCOL

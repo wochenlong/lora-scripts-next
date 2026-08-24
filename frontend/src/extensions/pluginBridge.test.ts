@@ -77,6 +77,7 @@ function buildHarness(capabilities: BridgeRequestEnvelope["type"][] = ["theme.ge
     },
     locale: () => "en-US",
     themeTokens: () => ({ "--bg": "#fff" }),
+    colorScheme: () => "dark",
     activeSession: () => "session-1",
   })
   bridge.start()
@@ -198,6 +199,23 @@ describe("HostPluginBridge request validation", () => {
     expect(
       harness.bridge.postEvent({ eventId: "event-2", sessionId: "session-1", runId: 4, type: "agent_settled" }),
     ).toBe(false)
+    harness.bridge.dispose()
+  })
+
+  it("pushes the current host theme and locale without reopening the bridge", () => {
+    const harness = buildHarness()
+    const port = connect(harness)
+    expect(harness.bridge.postHostState()).toBe(true)
+    expect(port.sent.at(-1)).toMatchObject({
+      protocol: PLUGIN_BRIDGE_PROTOCOL,
+      type: "HOST_STATE",
+      colorScheme: "dark",
+      themeTokens: { "--bg": "#fff" },
+      locale: "en-US",
+      seq: 1,
+    })
+    harness.bridge.reset()
+    expect(harness.bridge.postHostState()).toBe(false)
     harness.bridge.dispose()
   })
 

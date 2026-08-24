@@ -34,6 +34,7 @@ export function useAgentConversation({
 }: UseAgentConversationOptions) {
   const [state, dispatch] = useReducer(conversationReducer, INITIAL_CONVERSATION_STATE);
   const [ready, setReady] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(initialSessionId);
   const sessionIdRef = useRef<string | null>(initialSessionId);
   const subscriptionRef = useRef<Unsubscribe | null>(null);
   const subscriptionSessionRef = useRef<string | null>(null);
@@ -51,7 +52,9 @@ export function useAgentConversation({
     let active = true;
     const sessionId = initialSessionId;
     sessionIdRef.current = sessionId;
+    setSessionId(sessionId);
     setReady(false);
+    dispatch({ type: "session_cleared" });
     if (!sessionId) {
       subscriptionRef.current?.();
       subscriptionRef.current = null;
@@ -94,6 +97,7 @@ export function useAgentConversation({
     }
     const created = await transport.sessions.create({ model: initialModel, thinkingLevel: "auto" });
     sessionIdRef.current = created.id;
+    setSessionId(created.id);
     // The subscription is deliberately attached before the first prompt.
     attach(created.id);
     return created;
@@ -135,7 +139,7 @@ export function useAgentConversation({
   return {
     state,
     ready,
-    sessionId: sessionIdRef.current,
+    sessionId,
     send,
     cancel,
   };
