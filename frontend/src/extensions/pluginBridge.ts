@@ -10,6 +10,7 @@ import {
   type BridgeResponseEnvelope,
   type BridgeWelcomeMessage,
 } from "./pluginBridgeSchemas"
+import { PluginCapabilityError } from "../api/plugins"
 
 export interface BridgeMessagePort {
   onmessage: ((event: MessageEvent<unknown>) => void) | null
@@ -177,8 +178,15 @@ export class HostPluginBridge {
       if (this.port !== requestPort || this.nonce !== requestConnection || !this.connected) return
       this.sendResponse(request.requestId, true, data)
     } catch (error) {
-      void error
       if (this.port !== requestPort || this.nonce !== requestConnection || !this.connected) return
+      if (error instanceof PluginCapabilityError) {
+        // Stable, public capability-contract error from the typed host
+        // broker / sidecar error channel. Pass the stable code and message
+        // through so the plugin UI can react (e.g. prompt Provider setup).
+        this.sendError(request.requestId, error.code, error.message)
+        return
+      }
+      void error
       this.options.onDiagnostic?.("Bridge request handler failed; details were withheld from the plugin frame.")
       this.sendError(request.requestId, "BRIDGE_REQUEST_FAILED", "The host could not complete this request.")
     }

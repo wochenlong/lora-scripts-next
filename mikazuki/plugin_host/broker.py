@@ -6,6 +6,8 @@ from collections.abc import AsyncIterator, Awaitable, Callable, Iterable
 from dataclasses import dataclass
 from typing import Any, Protocol
 
+from .runtime import PluginRuntimeRequestError
+
 
 _METHOD = re.compile(r"^[a-z][a-z0-9-]*(?:\.[A-Za-z][A-Za-z0-9-]*)+$")
 
@@ -127,7 +129,12 @@ class PluginCapabilityBroker:
         declaration = context.requests.get(method)
         if declaration is not None:
             self._authorize_declaration(context, declaration, params)
-            return await manager.capability_request(plugin_id, request_id, method, params)
+            try:
+                return await manager.capability_request(plugin_id, request_id, method, params)
+            except PluginRuntimeRequestError as exc:
+                raise CapabilityBrokerError(
+                    exc.code, exc.public_message, status_code=exc.status_code, retryable=exc.retryable,
+                ) from exc
         registration = self._requests.get(method)
         if registration is None:
             raise CapabilityBrokerError(
@@ -164,7 +171,12 @@ class PluginCapabilityBroker:
         declaration = context.streams.get(method)
         if declaration is not None:
             self._authorize_declaration(context, declaration, params)
-            return await manager.capability_stream(plugin_id, request_id, method, params)
+            try:
+                return await manager.capability_stream(plugin_id, request_id, method, params)
+            except PluginRuntimeRequestError as exc:
+                raise CapabilityBrokerError(
+                    exc.code, exc.public_message, status_code=exc.status_code, retryable=exc.retryable,
+                ) from exc
         registration = self._streams.get(method)
         if registration is None:
             raise CapabilityBrokerError(

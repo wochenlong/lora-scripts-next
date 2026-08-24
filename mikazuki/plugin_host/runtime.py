@@ -8,6 +8,7 @@ import secrets
 import subprocess
 import threading
 import time
+import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -26,6 +27,29 @@ class RuntimeSnapshot:
     pid: int | None = None
     protocol_version: str | None = None
     reason: str = ""
+
+
+class PluginRuntimeRequestError(Exception):
+    """Typed failure returned by the plugin runtime (sidecar) HTTP API.
+
+    The sidecar's stable error code/message/status are preserved so the
+    capability broker can surface them to the plugin UI instead of a
+    blanket 500.
+    """
+
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        *,
+        status_code: int = 502,
+        retryable: bool = False,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.public_message = message
+        self.status_code = status_code
+        self.retryable = retryable
 
 
 class RuntimeManifest(Protocol):
@@ -307,6 +331,25 @@ class ExecutablePluginRuntime:
         try:
             with opener.open(cls._request(handle, path, payload, request_id), timeout=30.0) as response:
                 value = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            try:
+                body = json.loads(exc.read().decode("utf-8"))
+            except Exception:
+                body = None
+            error = body.get("error") if isinstance(body, dict) else None
+            if isinstance(error, dict) and isinstance(error.get("code"), str):
+                raise PluginRuntimeRequestError(
+                    error["code"],
+                    error.get("message") if isinstance(error.get("message"), str) else "The plugin runtime request failed.",
+                    status_code=exc.code,
+                    retryable=bool(error.get("retryable")),
+                ) from exc
+            raise PluginRuntimeRequestError(
+                "PLUGIN_RUNTIME_UNAVAILABLE",
+                f"The plugin runtime request failed (HTTP {exc.code}).",
+                status_code=exc.code if 400 <= exc.code < 500 else 502,
+                retryable=exc.code >= 500,
+            ) from exc
         except Exception as exc:
             raise RuntimeError("plugin runtime request failed") from exc
         if (

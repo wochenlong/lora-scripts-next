@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "publisherId": "next-trainer-project",
   "signingKeyId": "dev-local-signing",
-  "generatedAt": "2026-08-23T17:08:10.090820+00:00",
+  "generatedAt": "2026-08-24T12:57:30.442191+00:00",
   "entries": [
     {
       "id": "next-trainer-pi-agent",
@@ -16,7 +16,7 @@
       "platforms": [
         "win32-x64"
       ],
-      "package_size": 43255510,
+      "package_size": 43255576,
       "permissions_summary": [
         "model-provider",
         "training-config",
@@ -29,11 +29,11 @@
       "license": "MIT",
       "release_notes_url": null,
       "package_url": "https://dev-catalog.local/next-trainer-pi-agent-0.1.0.zip",
-      "sha256": "da7b4f6eb1c6f377c8b1abdfa887922fef43462db6759351b2a1dd5766d271b1",
-      "signature": "7890b7088b190bfe36318ffa2c74fcfd25b033c0a3505cd39d228946fe205dd2",
+      "sha256": "ca7be800eacf8cc22d39c3dcc17f7ad881ca7bc04e7576398a9ef9b03100e4c1",
+      "signature": "1dcfaa71aa7d446a2a5c0a0c513021b3b75cadb784ed257c74467c5d9f6515e5",
       "signing_key_id": "dev-local-signing",
-      "published_at": "2026-08-23T17:08:10.090820+00:00"
+      "published_at": "2026-08-24T12:57:30.438669+00:00"
     }
   ],
-  "signature": "6e5d6df588f3b128c537afcf1979dc370ba503d37cf1b8dde4d9d60ad74569e0"
+  "signature": "2fd47017b71145aab47e9a7061d47985f4c3b188592db7f240662e0f12cdebaf"
 }

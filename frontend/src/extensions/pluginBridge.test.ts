@@ -8,6 +8,7 @@ import {
   type BridgeRequestEnvelope,
   type BridgeResponseEnvelope,
 } from "./pluginBridgeSchemas"
+import { PluginCapabilityError } from "../api/plugins"
 
 class FakePort implements BridgeMessagePort {
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null
@@ -399,6 +400,21 @@ describe("HostPluginBridge request validation", () => {
     })
     expect(JSON.stringify(port.sent.at(-1))).not.toContain("auth.json")
     expect(JSON.stringify(port.sent.at(-1))).not.toContain("sk-sensitive")
+    harness.bridge.dispose()
+  })
+
+  it("surfaces stable capability-contract errors to the plugin frame", async () => {
+    const harness = buildHarness()
+    harness.handler.mockRejectedValueOnce(
+      new PluginCapabilityError("PROVIDER_NOT_CONFIGURED", "No Provider profile is configured."),
+    )
+    const port = connect(harness)
+    port.receive(request())
+    await settle()
+    expect(port.sent.at(-1)).toMatchObject({
+      ok: false,
+      error: { code: "PROVIDER_NOT_CONFIGURED", message: "No Provider profile is configured." },
+    })
     harness.bridge.dispose()
   })
 })

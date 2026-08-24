@@ -67,6 +67,11 @@ export interface BridgeErrorBody {
     | "BRIDGE_REPLAY_REJECTED"
     | "BRIDGE_CAPABILITY_DENIED"
     | "BRIDGE_REQUEST_FAILED"
+    // Stable capability-broker contract codes (host broker or sidecar,
+    // e.g. PROVIDER_NOT_CONFIGURED) are passed through verbatim so the
+    // plugin UI can react to them. Only typed contract errors travel this
+    // channel; host-internal failures stay sanitized as BRIDGE_REQUEST_FAILED.
+    | (string & {})
   message: string
 }
 

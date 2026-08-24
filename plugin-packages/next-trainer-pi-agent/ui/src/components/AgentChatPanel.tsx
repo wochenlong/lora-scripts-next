@@ -89,6 +89,7 @@ export function AgentChatPanel({
   const { state, ready, send, cancel } = useAgentConversation({ transport, initialSessionId });
   const [draft, setDraft] = useState("");
   const [sending, setSending] = useState(false);
+  const [submitError, setSubmitError] = useState("");
   const running = state.terminal.phase === "running" || state.terminal.phase === "settling";
   const queuedCount = (state.session?.queue.steering.length ?? 0) + (state.session?.queue.followUp.length ?? 0);
   const statusText = useMemo(() => {
@@ -103,12 +104,19 @@ export function AgentChatPanel({
     if (!draft.trim() || sending) return;
     const submitted = draft;
     setSending(true);
+    setSubmitError("");
     try {
       const receipt = await send(submitted, running ? "followUp" : undefined);
       if (receipt.accepted) setDraft("");
     } catch (error) {
-      // Preserve draft on a definitive admission failure.
+      // Preserve draft on a definitive admission failure and surface the
+      // host/sidecar error (e.g. PROVIDER_NOT_CONFIGURED) to the user.
       console.error(error);
+      const message = error instanceof Error ? error.message : String(error);
+      const code = error instanceof Error && typeof (error as { code?: unknown }).code === "string"
+        ? (error as { code?: string }).code
+        : "";
+      setSubmitError(code ? `${message} (${code})` : message);
     } finally {
       setSending(false);
     }
@@ -141,6 +149,7 @@ export function AgentChatPanel({
         {state.error && <p className="nta-error" role="alert">{state.error || t("error")}</p>}
       </div>
 
+      {submitError && <p className="nta-error" role="alert">{submitError}</p>}
       <footer className="nta-composer">
         <textarea
           value={draft}
