@@ -520,12 +520,28 @@ export default {
     moreChangelog: "查看更多更新日志…",
   },
   home: {
-    heroTitle: "面向未来与 Agent 的本地训练器",
-    heroSubtitle: "熟悉上手，覆盖常见模型；面向未来，无限扩展。",
+    heroTitle: "Next 训练器 3.0.0 版本正式发布",
+    heroSubtitle: "四栏训练工作台已就绪：配置、数据集、任务与引擎管理，一处开训。",
     startTraining: "开始配置训练",
     readGuide: "阅读使用指南",
     portalAria: "功能入口",
     enter: "进入工作区",
+    carouselAria: "首页宣传轮播",
+    carouselPrev: "上一帧",
+    carouselNext: "下一帧",
+    carouselDot: "第 {n} 帧",
+    sponsor: {
+      anima: {
+        badge: "解构原典社区｜Anima 官方参与",
+        caption: "Next Trainer · 活动训练技术支持",
+        alt: "Anima 社区活动横屏海报",
+      },
+      tutorial: {
+        badge: "B站教程｜占位",
+        caption: "Anima 训练教程（作者）· 正式片将替换",
+        alt: "Anima 训练教程视频封面（占位）",
+      },
+    },
     status: {
       local: "本地服务架构",
       vue: "Vue 3 训练工作区",

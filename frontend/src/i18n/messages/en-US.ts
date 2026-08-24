@@ -520,12 +520,28 @@ export default {
     moreChangelog: "More changelog…",
   },
   home: {
-    heroTitle: "A local trainer for the future — and for agents.",
-    heroSubtitle: "Familiar to start, broad enough for common models; built for the future, endlessly extensible.",
+    heroTitle: "Next Trainer 3.0.0 is out",
+    heroSubtitle: "The four-pane workbench is ready — configure, dataset, tasks, and engines in one place.",
     startTraining: "Configure Training",
     readGuide: "Read the Guide",
     portalAria: "Feature portals",
     enter: "Enter workspace",
+    carouselAria: "Home promo carousel",
+    carouselPrev: "Previous slide",
+    carouselNext: "Next slide",
+    carouselDot: "Slide {n}",
+    sponsor: {
+      anima: {
+        badge: "解构原典社区 · Anima official involvement",
+        caption: "Next Trainer · Training tech support for the event",
+        alt: "Anima community landscape poster",
+      },
+      tutorial: {
+        badge: "Bilibili tutorial · placeholder",
+        caption: "Anima training tutorial (author) · final video TBA",
+        alt: "Anima training tutorial cover (placeholder)",
+      },
+    },
     status: {
       local: "Local service architecture",
       vue: "Vue 3 training workspace",
