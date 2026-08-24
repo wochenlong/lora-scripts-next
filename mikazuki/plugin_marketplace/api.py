@@ -662,12 +662,22 @@ async def plugin_ui_artifact(plugin_id: str, version: str, asset_path: str):
         return FileResponse(
             _manager.ui_artifact(plugin_id, version, asset_path),
             headers={
+                # The plugin UI iframe is sandboxed without allow-same-origin
+                # (opaque "null" origin). Its ES module scripts therefore load
+                # in CORS mode, so the loopback host must allow the fetch or
+                # the browser blocks the script and the panel renders blank.
+                # The assets are public by design (no credentials are sent),
+                # so a wildcard is safe here.
+                "Access-Control-Allow-Origin": "*",
                 "Content-Security-Policy": (
                     "default-src 'none'; "
                     "script-src 'self'; "
                     "style-src 'self' 'unsafe-inline'; "
                     "img-src 'self' data: blob:; "
-                    "font-src 'self'; "
+                    # data: is required for the plugin UI's inlined font
+                    # payloads (e.g. KaTeX math glyphs); data: fonts make no
+                    # network requests.
+                    "font-src 'self' data:; "
                     "connect-src 'none'; "
                     "object-src 'none'; "
                     "base-uri 'none'; "
