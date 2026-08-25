@@ -213,6 +213,10 @@ class Task:
         self._stdout_thread.start()
 
     def terminate(self):
+        # Mark TERMINATED before killing: the worker's wait() returns as soon
+        # as the process dies and must already see the final status, otherwise
+        # _record_completion() races and logs the -9 exit as a failure.
+        self.status = TaskStatus.TERMINATED
         try:
             # Kill the whole tree, launcher included: accelerate's elastic
             # agent respawns killed workers, so killing only children leaves
@@ -220,9 +224,7 @@ class Task:
             kill_proc_tree(self.process.pid, True)
         except Exception as e:
             log.error(f"Error when killing process: {e}")
-            return
         finally:
-            self.status = TaskStatus.TERMINATED
             self._append_disk_log("[task terminated]")
 
 
