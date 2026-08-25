@@ -488,6 +488,50 @@ class TaskManager:
 
     _RETRY_STRIP_METADATA = ("error", "returncode", "finished_at", "last_log_lines", "held", "started_at")
 
+    _TERMINAL_STATUSES = (TaskStatus.FINISHED, TaskStatus.FAILED, TaskStatus.TERMINATED)
+
+    def delete_task(self, task_id: str) -> bool:
+        """Remove a terminal task from the table. Active tasks are refused so
+        a running training can never be dropped from under the worker."""
+        with self._cond:
+            task = self.tasks.get(task_id)
+            if task is None or task.status not in self._TERMINAL_STATUSES:
+                return False
+            try:
+                self._compute_queue.remove(task_id)
+            except ValueError:
+                pass
+            del self.tasks[task_id]
+            hub.drop_task(task_id)
+            self._persist()
+        log.info(f"Task {task_id} deleted / 任务已删除")
+        return True
+
+    def purge_tasks(self, keep_last: int = 0) -> int:
+        """Bulk-delete terminal tasks, keeping the most recent ``keep_last``."""
+        with self._cond:
+            terminal = [t for t in self.tasks.values() if t.status in self._TERMINAL_STATUSES]
+            terminal.sort(
+                key=lambda t: float(
+                    t.metadata["finished_at"] if t.metadata.get("finished_at") is not None
+                    else (t.metadata.get("created_at") or 0)
+                ),
+                reverse=True,
+            )
+            doomed = terminal[max(0, keep_last):]
+            for task in doomed:
+                try:
+                    self._compute_queue.remove(task.task_id)
+                except ValueError:
+                    pass
+                del self.tasks[task.task_id]
+                hub.drop_task(task.task_id)
+            if doomed:
+                self._persist()
+        if doomed:
+            log.info(f"Purged {len(doomed)} finished task(s) / 已清理 {len(doomed)} 个历史任务")
+        return len(doomed)
+
     def retry_task(self, task_id: str) -> Optional[List[Task]]:
         """Re-queue a finished/failed/terminated compute task. Musubi-style
         stage groups are rebuilt as a whole, in stage order."""

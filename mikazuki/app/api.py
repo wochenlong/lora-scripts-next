@@ -1490,6 +1490,72 @@ async def retry_task(task_id: str):
     })
 
 
+def _task_train_type(task) -> Optional[str]:
+    """Recover the page-level train type for a task so its config can be
+    re-imported into the matching training page."""
+    backend = str(task.metadata.get("backend") or "standard")
+    if backend == "anima-lora-fast":
+        return ANIMA_FAST_TRAIN_TYPE
+    if backend == "musubi":
+        train_type = task.metadata.get("train_type")
+        return str(train_type) if train_type else MUSUBI_TRAIN_TYPE
+    trainer_file = str(task.metadata.get("trainer_file") or "")
+    for train_type, path in trainer_mapping.items():
+        if path == trainer_file:
+            return train_type
+    return None
+
+
+@router.get("/tasks/{task_id}/config", response_model_exclude_none=True)
+async def task_config(task_id: str) -> APIResponse:
+    """Return the task's autosave TOML as JSON for re-import / export."""
+    task = tm.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    config_path = task.metadata.get("config_path")
+    if not config_path:
+        return APIResponseFail(message="Task has no config file / 该任务没有关联的配置文件")
+    path = Path(str(config_path))
+    if not path.is_file():
+        return APIResponseFail(message="Config file no longer exists / 配置文件已不存在（autosave 可能已被清理）")
+    try:
+        config = toml.loads(path.read_text(encoding="utf-8-sig"))
+    except Exception as exc:
+        return APIResponseFail(message=f"配置解析失败: {exc}")
+    train_type = _task_train_type(task)
+    if train_type and not config.get("model_train_type"):
+        config["model_train_type"] = train_type
+    return APIResponseSuccess(data={
+        "config": config,
+        "config_path": str(path),
+        "backend": str(task.metadata.get("backend") or "standard"),
+        "train_type": train_type,
+        "output_name": task.metadata.get("output_name"),
+    })
+
+
+@router.delete("/tasks/{task_id}", response_model_exclude_none=True)
+async def delete_task(task_id: str):
+    """Delete a terminal (finished/failed/terminated) task from the list."""
+    if tm.delete_task(task_id):
+        return APIResponseSuccess(data={"deleted": True})
+    return APIResponseFail(message="Task not found or still active / 任务不存在或仍在进行中")
+
+
+@router.post("/tasks/purge", response_model_exclude_none=True)
+async def purge_tasks(request: Request):
+    """Bulk-delete terminal tasks, keeping the most recent ``keep_last``."""
+    try:
+        payload = json.loads(await request.body() or b"{}")
+    except json.JSONDecodeError:
+        return APIResponseFail(message="请求体必须是 JSON")
+    keep_last = payload.get("keep_last", 0)
+    if isinstance(keep_last, bool) or not isinstance(keep_last, int) or keep_last < 0:
+        return APIResponseFail(message="keep_last 必须是非负整数")
+    removed = tm.purge_tasks(keep_last=keep_last)
+    return APIResponseSuccess(data={"removed": removed})
+
+
 @router.get("/tasks/{task_id}/previews", response_model_exclude_none=True)
 async def task_previews(task_id: str) -> APIResponse:
     task = tm.tasks.get(task_id)

@@ -63,6 +63,13 @@ class TrainLogHub:
         with self._lock:
             self._done[task_id] = True
 
+    def drop_task(self, task_id: str) -> None:
+        """Forget buffered lines/events for a deleted task."""
+        with self._lock:
+            self._lines.pop(task_id, None)
+            self._events.pop(task_id, None)
+            self._done.pop(task_id, None)
+
     def is_done(self, task_id: str) -> bool:
         with self._lock:
             return self._done.get(task_id, False)
