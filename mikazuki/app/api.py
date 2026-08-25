@@ -1534,6 +1534,15 @@ async def task_config(task_id: str) -> APIResponse:
     })
 
 
+@router.post("/tasks/{task_id}/move-to-front", response_model_exclude_none=True)
+async def move_task_to_front(task_id: str):
+    """Move a queued task (held included) right after the running task.
+    Stage groups jump as a whole, preserving stage order."""
+    if tm.move_to_front(task_id):
+        return APIResponseSuccess(data={"moved": True, "queue_position": tm.queue_position(task_id)})
+    return APIResponseFail(message="Task is not in the queue / 任务不在队列中")
+
+
 @router.delete("/tasks/{task_id}", response_model_exclude_none=True)
 async def delete_task(task_id: str):
     """Delete a terminal (finished/failed/terminated) task from the list."""

@@ -137,6 +137,54 @@ class TaskHistoryPersistenceTests(unittest.TestCase):
         self.assertNotIn("done", tm2.tasks)
 
 
+class TaskQueueReorderTests(unittest.TestCase):
+    def _queued(self, tm: TaskManager, task_id: str, group=None, held=False):
+        task = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ),
+                              task_id=task_id, group=group)
+        task.status = TaskStatus.QUEUED
+        if held:
+            task.metadata["held"] = True
+        tm._compute_queue.append(task_id)
+        return task
+
+    def test_move_single_task_to_front(self):
+        tm = TaskManager()
+        self._queued(tm, "a")
+        self._queued(tm, "b")
+        self._queued(tm, "c")
+
+        self.assertTrue(tm.move_to_front("c"))
+        self.assertEqual(list(tm._compute_queue), ["c", "a", "b"])
+        self.assertEqual(tm.queue_position("c"), 1)
+
+    def test_move_held_task_to_front_stays_held(self):
+        tm = TaskManager()
+        self._queued(tm, "a")
+        self._queued(tm, "b", held=True)
+
+        self.assertTrue(tm.move_to_front("b"))
+        self.assertEqual(list(tm._compute_queue), ["b", "a"])
+        self.assertTrue(tm.tasks["b"].metadata["held"])
+
+    def test_move_stage_group_keeps_order_and_contiguity(self):
+        tm = TaskManager()
+        self._queued(tm, "other")
+        self._queued(tm, "s1", group="g")
+        self._queued(tm, "s2", group="g")
+        self._queued(tm, "tail")
+
+        self.assertTrue(tm.move_to_front("s2"))
+        self.assertEqual(list(tm._compute_queue), ["s1", "s2", "other", "tail"])
+
+    def test_move_to_front_refuses_non_queued(self):
+        tm = TaskManager()
+        task = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="done")
+        task.status = TaskStatus.FINISHED
+
+        self.assertFalse(tm.move_to_front("done"))
+        self.assertFalse(tm.move_to_front("missing"))
+
+
 class TaskMaintenanceApiTests(unittest.TestCase):
     def setUp(self):
         self._created: list[str] = []
@@ -231,6 +279,29 @@ class TaskMaintenanceApiTests(unittest.TestCase):
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["train_type"], "krea2-lora")
+
+
+    def test_move_to_front_endpoint(self):
+        first = self._api_task("api-q1", status=TaskStatus.QUEUED)
+        second = self._api_task("api-q2", status=TaskStatus.QUEUED)
+        api.tm._compute_queue.append("api-q1")
+        api.tm._compute_queue.append("api-q2")
+        try:
+            response = asyncio.run(api.move_task_to_front("api-q2"))
+            self.assertEqual(response.status, "success")
+            self.assertEqual(response.data["queue_position"], 1)
+            self.assertEqual(list(api.tm._compute_queue)[:2], ["api-q2", "api-q1"])
+        finally:
+            for tid in ("api-q1", "api-q2"):
+                try:
+                    api.tm._compute_queue.remove(tid)
+                except ValueError:
+                    pass
+
+    def test_move_to_front_endpoint_refuses_terminal(self):
+        self._api_task("api-q-done", status=TaskStatus.FINISHED)
+        response = asyncio.run(api.move_task_to_front("api-q-done"))
+        self.assertEqual(response.status, "fail")
 
 
 if __name__ == "__main__":

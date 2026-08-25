@@ -494,6 +494,31 @@ class TaskManager:
             return
         task.terminate()
 
+    def move_to_front(self, task_id: str) -> bool:
+        """Move a queued compute task (held or not) to the front of the queue,
+        i.e. right after the currently running task. Stage groups move as a
+        whole, preserving stage order and contiguity."""
+        with self._cond:
+            task = self.tasks.get(task_id)
+            if task is None or task_id not in self._compute_queue:
+                return False
+            if task.group:
+                members = [
+                    t for t in self.tasks.values()
+                    if t.group == task.group and t.task_id in self._compute_queue
+                ]
+                members.sort(key=lambda t: list(self._compute_queue).index(t.task_id))
+                ids = [t.task_id for t in members]
+            else:
+                ids = [task_id]
+            for tid in ids:
+                self._compute_queue.remove(tid)
+            for tid in reversed(ids):
+                self._compute_queue.appendleft(tid)
+            self._persist()
+        log.info(f"Task {task_id} moved to queue front ({len(ids)} task(s)) / 任务已提到队列最前")
+        return True
+
     def resume_task(self, task_id: str) -> bool:
         """Release a restored (held) queued task so the worker may run it."""
         task = self.tasks.get(task_id)
