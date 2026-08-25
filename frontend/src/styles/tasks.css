@@ -197,6 +197,29 @@
   font-size: 12px;
 }
 
+.tasks-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.tasks-filters .tasks-filter-keyword {
+  grid-column: 1 / -1;
+  min-height: 30px;
+  padding: 0 10px;
+  color: var(--text);
+  background: var(--surface-inset);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.tasks-filters .tasks-filter-keyword:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
 .purge-form {
   display: grid;
   gap: 10px;

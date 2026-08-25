@@ -208,6 +208,11 @@ export default {
     emptyTitle: "当前没有训练任务",
     emptyDesc: "从训练页提交任务后，将在这里显示状态和日志入口。",
     filterAria: "任务筛选",
+    filters: {
+      allStatuses: "全部状态",
+      allTypes: "全部类型",
+      keywordPlaceholder: "搜索名称 / ID / 路径",
+    },
     tabEmpty: "暂无任务",
     defaultName: "训练任务",
     kind: {

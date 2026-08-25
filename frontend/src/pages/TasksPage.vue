@@ -201,7 +201,45 @@ const runningList = computed(() =>
     }),
 )
 const recentList = computed(() => allGroups.value.filter((group) => !group.tasks.some(isActiveTask)))
-const visibleList = computed(() => activeTab.value === "running" ? runningList.value : recentList.value)
+
+const filterStatus = ref<"" | TaskStatus>("")
+const filterType = ref("")
+const filterKeyword = ref("")
+
+const FILTER_STATUSES: TaskStatus[] = ["RUNNING", "QUEUED", "CREATED", "FINISHED", "FAILED", "TERMINATED"]
+
+function taskTypeLabel(task: TrainingTask): string {
+  return metaString(task, "train_type") || metaString(task, "backend")
+}
+
+const typeOptions = computed(() => {
+  const values = new Set<string>()
+  for (const task of tasks.value) {
+    const label = taskTypeLabel(task)
+    if (label) values.add(label)
+  }
+  return [...values].sort()
+})
+
+function groupMatchesFilters(group: TaskGroup): boolean {
+  if (filterStatus.value && !group.tasks.some((task) => task.status === filterStatus.value)) return false
+  if (filterType.value && !group.tasks.some((task) => taskTypeLabel(task) === filterType.value)) return false
+  const keyword = filterKeyword.value.trim().toLowerCase()
+  if (keyword) {
+    const haystacks = group.tasks.flatMap((task) => [
+      task.id,
+      group.key,
+      taskName(task),
+      metaString(task, "config_path"),
+      metaString(task, "output_dir"),
+      metaString(task, "output_name"),
+    ])
+    if (!haystacks.some((text) => text.toLowerCase().includes(keyword))) return false
+  }
+  return true
+}
+
+const visibleList = computed(() => (activeTab.value === "running" ? runningList.value : recentList.value).filter(groupMatchesFilters))
 const selected = computed(() => allGroups.value.find((group) => group.key === selectedId.value)?.representative)
 const selectedIsMaintenance = computed(() => (selected.value ? isMaintenanceTask(selected.value) : false))
 
@@ -525,6 +563,17 @@ onBeforeUnmount(() => {
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
         <button v-if="activeTab === 'recent' && recentList.length" class="ghost-button tasks-purge-button" @click="purgeOpen = true">{{ t("tasks.purge.button") }}</button>
+        <div class="tasks-filters">
+          <el-select v-model="filterStatus" size="small" class="tasks-filter-status">
+            <el-option value="" :label="t('tasks.filters.allStatuses')" />
+            <el-option v-for="s in FILTER_STATUSES" :key="s" :value="s" :label="statusLabels[s] || s" />
+          </el-select>
+          <el-select v-model="filterType" size="small" class="tasks-filter-type">
+            <el-option value="" :label="t('tasks.filters.allTypes')" />
+            <el-option v-for="tp in typeOptions" :key="tp" :value="tp" :label="tp" />
+          </el-select>
+          <input v-model="filterKeyword" class="tasks-filter-keyword" type="search" :placeholder="t('tasks.filters.keywordPlaceholder')">
+        </div>
         <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
         <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
           <span class="task-status">{{ statusLabel(group.representative) }}</span>

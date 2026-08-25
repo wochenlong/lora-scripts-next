@@ -208,6 +208,11 @@ export default {
     emptyTitle: "No training tasks yet",
     emptyDesc: "Submit a task from the Training page and its status and log entries will appear here.",
     filterAria: "Task filter",
+    filters: {
+      allStatuses: "All statuses",
+      allTypes: "All types",
+      keywordPlaceholder: "Search name / ID / path",
+    },
     tabEmpty: "No tasks",
     defaultName: "Training Task",
     kind: {
