@@ -13,6 +13,8 @@
 <p align="center">
   <a href="README-zh.md">中文</a>
   ·
+  <a href="#roadmap">Roadmap</a>
+  ·
   <a href="docs/credits.md">Credits</a>
   ·
   <a href="CHANGELOG.md">Changelog</a>
@@ -165,6 +167,29 @@ These shots are from the Vue 3 UI with the Chinese locale.
 | ![Settings UI](assets/readme/vue3/07-settings-ui.png) | ![Settings engines](assets/readme/vue3/06-settings-engines.png) |
 
 </details>
+
+---
+
+## Roadmap
+
+Public TODO list — **no hard dates**. Track progress on [Issues](https://github.com/wochenlong/lora-scripts-next/issues). Feedback and use-cases welcome.
+
+### Engines & capabilities
+
+- [ ] Plug in [AI Toolkit](https://github.com/ostris/ai-toolkit) (more training paths for newer models)
+- [ ] Plug in [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio) (e.g. text-to-image LoRA)
+- [ ] **Image-editing** model training
+- [ ] **Video** model training
+
+### Models & data
+
+- [ ] **Model manager**: per base-model-family defaults, local-first, remote ID → engine-native layout
+- [ ] **API tagging** (external / multimodal caption APIs)
+- [ ] **Natural-language tagging** (describe in plain language → captions)
+
+### Automation
+
+- [ ] **Agent / API hooks**: make training and task status callable from other tools (part of the modular goal)
 
 ---
 
