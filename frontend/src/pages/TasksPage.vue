@@ -336,6 +336,48 @@ async function dequeue(task: TrainingTask) {
 
 const actionBusyId = ref("")
 
+function isTerminal(task: TrainingTask): boolean {
+  return task.status === "FINISHED" || task.status === "FAILED" || task.status === "TERMINATED"
+}
+
+async function removeTask(task: TrainingTask) {
+  try {
+    await ElMessageBox.confirm(t("tasks.deleteTask.confirm", { id: task.id }), t("tasks.deleteTask.title"), {
+      confirmButtonText: t("tasks.deleteTask.confirmButton"),
+      cancelButtonText: t("tasks.terminate.cancel"),
+      type: "warning",
+    })
+    actionBusyId.value = task.id
+    await tasksApi.remove(task.id)
+    await store.refresh({ silent: true })
+    ElMessage.success(t("tasks.deleteTask.success"))
+  } catch (caught) {
+    if (caught !== "cancel" && caught !== "close") {
+      ElMessage.error(caught instanceof Error ? caught.message : t("tasks.deleteTask.fail"))
+    }
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+const purgeOpen = ref(false)
+const purgeKeepLast = ref(10)
+const purgeBusy = ref(false)
+
+async function purgeTasks() {
+  purgeBusy.value = true
+  try {
+    const result = await tasksApi.purge(purgeKeepLast.value)
+    await store.refresh({ silent: true })
+    purgeOpen.value = false
+    ElMessage.success(t("tasks.purge.success", { n: result.removed }))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.purge.fail"))
+  } finally {
+    purgeBusy.value = false
+  }
+}
+
 async function resume(task: TrainingTask) {
   actionBusyId.value = task.id
   try {
@@ -406,6 +448,7 @@ onBeforeUnmount(() => {
           <button :class="{ active: activeTab === 'running' }" @click="activeTab = 'running'">{{ t("tasks.tabs.running") }}<b>{{ runningList.length }}</b></button>
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
+        <button v-if="activeTab === 'recent' && recentList.length" class="ghost-button tasks-purge-button" @click="purgeOpen = true">{{ t("tasks.purge.button") }}</button>
         <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
         <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
           <span class="task-status">{{ statusLabel(group.representative) }}</span>
@@ -426,6 +469,7 @@ onBeforeUnmount(() => {
             <button v-else-if="isHeld(selected)" class="primary-action" :disabled="actionBusyId === selected.id" @click="resume(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.starting") : t("tasks.detail.resume") }}</button>
             <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
             <button v-if="(selected.status === 'FAILED' || selected.status === 'TERMINATED') && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
+            <button v-if="isTerminal(selected)" class="danger-action" :disabled="actionBusyId === selected.id" @click="removeTask(selected)">{{ t("tasks.detail.delete") }}</button>
           </div>
         </header>
         <div v-if="progress.total_steps" class="task-progress">
@@ -480,6 +524,21 @@ onBeforeUnmount(() => {
 
     <el-dialog :model-value="!!lightboxImage" :title="lightboxImage ? (imageLabel(lightboxImage) || lightboxImage.name) : ''" align-center class="preview-lightbox" @update:model-value="lightboxImage = null">
       <img v-if="lightboxImage" class="lightbox-image" :src="lightboxImage.url" :alt="lightboxImage.name">
+    </el-dialog>
+
+    <el-dialog v-model="purgeOpen" :title="t('tasks.purge.title')" align-center class="purge-dialog">
+      <div class="purge-form">
+        <label class="purge-keep">
+          <span>{{ t("tasks.purge.keepLabel") }}</span>
+          <el-input-number v-model="purgeKeepLast" :min="0" :max="999" size="small" />
+          <span>{{ t("tasks.purge.keepSuffix") }}</span>
+        </label>
+        <p class="purge-hint">{{ t("tasks.purge.keepHint") }}</p>
+      </div>
+      <template #footer>
+        <button class="ghost-button" @click="purgeOpen = false">{{ t("tasks.purge.cancel") }}</button>
+        <button class="danger-action" :disabled="purgeBusy" @click="purgeTasks">{{ t("tasks.purge.confirmButton") }}</button>
+      </template>
     </el-dialog>
   </div>
 </template>

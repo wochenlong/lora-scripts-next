@@ -190,6 +190,39 @@
   font-size: 12px;
 }
 
+.tasks-purge-button {
+  width: 100%;
+  margin: -4px 0 10px;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.purge-form {
+  display: grid;
+  gap: 10px;
+}
+
+.purge-keep {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.purge-hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.purge-dialog .el-dialog__footer,
+.purge-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .task-row {
   display: grid;
   gap: 6px;

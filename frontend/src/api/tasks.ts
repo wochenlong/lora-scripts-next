@@ -64,11 +64,26 @@ export interface TaskRetryResult {
   queued: boolean
 }
 
+export interface TaskConfigData {
+  config: Record<string, unknown>
+  config_path: string
+  backend: string
+  train_type?: string | null
+  output_name?: string | null
+}
+
+export interface TaskPurgeResult {
+  removed: number
+}
+
 export const tasksApi = {
   list: async () => (await apiData<TasksData>("/api/tasks")).tasks,
   terminate: (taskId: string) => apiRequest(`/api/tasks/terminate/${encodeURIComponent(taskId)}`),
   resume: (taskId: string) => apiRequest(`/api/tasks/resume/${encodeURIComponent(taskId)}`),
   retry: (taskId: string) => apiData<TaskRetryResult>(`/api/tasks/retry/${encodeURIComponent(taskId)}`),
+  remove: (taskId: string) => apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`, { method: "DELETE" }),
+  purge: (keepLast: number) => apiData<TaskPurgeResult>("/api/tasks/purge", { method: "POST", body: JSON.stringify({ keep_last: keepLast }) }),
+  config: (taskId: string) => apiData<TaskConfigData>(`/api/tasks/${encodeURIComponent(taskId)}/config`),
   previews: (taskId: string, signal?: AbortSignal) => apiData<TaskPreviewsData>(`/api/tasks/${encodeURIComponent(taskId)}/previews`, { signal }),
   metrics: (taskId: string, signal?: AbortSignal) => apiData<TaskMetricsData>(`/api/tasks/${encodeURIComponent(taskId)}/metrics`, { signal }),
   logTail: (taskId: string, limit = 240) => apiData<TaskLogTail>(`/api/train/log/tail/${encodeURIComponent(taskId)}?limit=${limit}`),
