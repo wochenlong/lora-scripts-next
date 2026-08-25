@@ -22,16 +22,19 @@ const schema: AdaptedSchema = {
 }
 
 describe("DynamicSchemaForm", () => {
-  it("renders active visible fields and propagates updates", async () => {
+  it("renders active visible fields, passes effective defaults, and propagates updates", async () => {
     const wrapper = mount(DynamicSchemaForm, {
-      props: { schema, modelValue: { mode: "basic" }, errors: {} },
-      global: { plugins: [i18n], stubs: { SchemaField: { props: ["field"], template: "<button @click=\"$emit('update:modelValue', 12)\">{{ field.key }}</button>" } } },
+      props: { schema, modelValue: { mode: "basic" }, errors: {}, effectiveDefaults: { mode: "basic", steps: 8 } },
+      global: { plugins: [i18n], stubs: { SchemaField: { props: ["field", "defaultValue"], template: "<div><button class=\"update\" @click=\"$emit('update:modelValue', 12)\">{{ field.key }}={{ JSON.stringify(defaultValue) }}</button><button class=\"reset\" @click=\"$emit('reset')\">reset {{ field.key }}</button></div>" } } },
     })
 
     expect(wrapper.text()).toContain("mode")
+    expect(wrapper.text()).toContain("\"basic\"")
     expect(wrapper.text()).not.toContain("steps")
     expect(wrapper.text()).not.toContain("secret")
-    await wrapper.get("button").trigger("click")
+    await wrapper.get(".update").trigger("click")
     expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([{ mode: 12 }])
+    await wrapper.get(".reset").trigger("click")
+    expect(wrapper.emitted("reset-field")?.[0]).toEqual(["mode"])
   })
 })

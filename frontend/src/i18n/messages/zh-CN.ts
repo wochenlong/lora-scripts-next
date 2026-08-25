@@ -873,6 +873,8 @@ export default {
     required: "必填",
     emptyOption: "（空）",
     arrayPlaceholder: "每行一项",
+    restoreDefault: "恢复默认值",
+    defaultRestored: "当前值已是默认值",
     browse: "浏览",
     commonPaths: "常用路径",
     catalogTitle: "选择常用路径",

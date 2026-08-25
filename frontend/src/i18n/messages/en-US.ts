@@ -873,6 +873,8 @@ export default {
     required: "Required",
     emptyOption: "(empty)",
     arrayPlaceholder: "One item per line",
+    restoreDefault: "Restore default value",
+    defaultRestored: "Already at the default value",
     browse: "Browse",
     commonPaths: "Common Paths",
     catalogTitle: "Choose a Common Path",

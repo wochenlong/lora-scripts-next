@@ -99,6 +99,13 @@ function description(meta: Schema["meta"] | undefined) {
   return meta?.description?.["zh-CN"] || meta?.description?.[""]
 }
 
+function explicitDefault(schema: SchemaRecord) {
+  if (!Object.prototype.hasOwnProperty.call(schema.meta ?? {}, "default")) return undefined
+  const value = schema.meta.default as FormValue
+  if (schema.type === "array" && Array.isArray(value) && value.length === 0) return undefined
+  return value
+}
+
 function conditionsFrom(schema: SchemaRecord): FormCondition[] {
   if (schema.type === "object") {
     return Object.entries(schema.dict ?? {})
@@ -115,7 +122,7 @@ function fieldFrom(key: string, schema: SchemaRecord, conditions: FormCondition[
       key,
       type: "string",
       description: description(schema.meta),
-      defaultValue: schema.meta.default as FormValue,
+      defaultValue: explicitDefault(schema),
       required: schema.meta.required,
       hidden: schema.meta.hidden,
       disabled: schema.meta.disabled,
@@ -130,7 +137,7 @@ function fieldFrom(key: string, schema: SchemaRecord, conditions: FormCondition[
     description: description(schema.meta),
     role: schema.meta.role,
     extra: schema.meta.extra,
-    defaultValue: (schema.meta.default ?? (schema.type === "array" ? [] : undefined)) as FormValue,
+    defaultValue: explicitDefault(schema),
     constValue: schema.value,
     required: schema.meta.required,
     hidden: schema.meta.hidden,

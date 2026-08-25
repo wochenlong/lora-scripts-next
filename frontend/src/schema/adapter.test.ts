@@ -152,6 +152,32 @@ describe("dynamic schema adapter", () => {
     expect(model).toMatchObject({ model_train_type: "krea2-lora", mode: "musubi", learning_rate: "2e-4" })
   })
 
+  it("does not invent array defaults when the schema omits them", () => {
+    const arraySources = [{
+      name: "arrays",
+      hash: "arrays",
+      schema: "Schema.object({ tags: Schema.array(String), names: Schema.array(String).default(['base']) })",
+    }]
+    const schema = executeSchemaSources(arraySources, "arrays")
+    const defaults = createDefaultModel(schema)
+
+    expect(defaults).not.toHaveProperty("tags")
+    expect(defaults.names).toEqual(["base"])
+  })
+
+  it("clones array defaults for new models", () => {
+    const arraySources = [{
+      name: "arrays",
+      hash: "arrays",
+      schema: "Schema.object({ tags: Schema.array(String).default(['base']) })",
+    }]
+    const schema = executeSchemaSources(arraySources, "arrays")
+    const first = createDefaultModel(schema)
+    ;(first.tags as string[]).push("changed")
+
+    expect(createDefaultModel(schema).tags).toEqual(["base"])
+  })
+
   it("executes every backend training schema", () => {
     const schemaDir = resolve(process.cwd(), "../mikazuki/schema")
     const realSources = readdirSync(schemaDir).filter((name) => name.endsWith(".ts")).map((file) => ({
