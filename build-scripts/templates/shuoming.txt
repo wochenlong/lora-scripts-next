@@ -1,0 +1,35 @@
+Next Trainer 整合包（2026）· 1.5 测
+=================================
+
+版本：2.9.2-beta.3.5（dev 通道）
+定位：一测与二测之间的满配预览包（Kohya + Musubi）
+
+根目录只有三个入口：
+  启动.bat       打开训练 WebUI
+  检查更新.bat   仅用 Git 更新 origin/dev（见下）
+  说明.txt       本文件
+
+本包包含：
+  · 已预装 Kohya 主环境（cu128）
+  · 已预装 Musubi（cu128，可训 Krea 2）
+  · 默认 WD 打标模型 + tokenizer 缓存
+
+本包不含：
+  · Anima Fast 运行时（设置 → 训练引擎 内安装）
+  · 训练底模（请自行放入 Next-Trainer\sd-models\）
+
+更新（重要）：
+  · 日常只用根目录「检查更新.bat」（跟踪 Git 分支 dev）
+  · 不要用 tools\Update-Next-Trainer-Release.bat 合并其它 Release/lite 包，以免环境被冲掉
+  · 代码更新后若依赖变化，可再运行 update\update_dependencies.bat
+
+使用：双击「启动.bat」→ 浏览器打开 http://127.0.0.1:28000
+
+常用目录：
+  Next-Trainer\sd-models\   模型
+  Next-Trainer\output\      训练输出
+  tools\                  高级工具
+
+教程：
+  tools\教程-整合包与Krea2上手.md
+  或魔搭 releases/v2.9.2-beta.3.5/portable-1.5-krea2-guide.md
