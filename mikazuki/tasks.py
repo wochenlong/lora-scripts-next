@@ -112,6 +112,10 @@ class Task:
             if self.metadata.get("error") == "Training process exited with code 0":
                 self.metadata.pop("error", None)
             return
+        if self.status == TaskStatus.TERMINATED:
+            # Manual stop: the nonzero exit (usually -9) is expected, don't
+            # present it as a failure reason in the UI.
+            return
         message = f"Training process exited with code {returncode}"
         self.metadata.setdefault("error", message)
         self.metadata["last_log_lines"] = hub.tail(self.task_id, _FAILURE_LOG_TAIL_LINES)

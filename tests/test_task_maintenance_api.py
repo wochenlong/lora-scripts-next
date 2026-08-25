@@ -168,6 +168,23 @@ class TerminateRunningTaskTests(unittest.TestCase):
         self.assertEqual(second.status, TaskStatus.FINISHED)
         self.assertFalse(psutil.pid_exists(launcher_pid))
 
+    def test_terminated_task_records_no_failure_error(self):
+        tm = TaskManager()
+        task = tm.create_task([sys.executable, "-c", "import time;time.sleep(60)"],
+                              dict(os.environ), task_id="run1")
+        tm.submit(task)
+        deadline = time.time() + 10
+        while time.time() < deadline and not hasattr(task, "process"):
+            time.sleep(0.05)
+
+        tm.terminate_task("run1")
+        deadline = time.time() + 15
+        while time.time() < deadline and not task.metadata.get("finished_at"):
+            time.sleep(0.1)
+
+        self.assertEqual(task.status, TaskStatus.TERMINATED)
+        self.assertNotIn("error", task.metadata)
+
 
 class TaskQueueReorderTests(unittest.TestCase):
     def _queued(self, tm: TaskManager, task_id: str, group=None, held=False):
