@@ -119,7 +119,7 @@
    支持 LoRA。
 
 6. **Krea 2**  
-   经 Musubi 训 LoRA。引擎在设置页安装。Linux 可以多卡。
+   经 Musubi 训 LoRA。推荐直接下 **musubi** 整合包，或在 kohya/lite 包的设置页安装 Musubi。Linux 可以多卡。
 
 更细的显存和参数说明见 [Anima 训练文档](docs/anima-training.md)。
 
@@ -172,25 +172,18 @@
 
 ### 下载整合包
 
-**3.0.0 正式包**还在准备。后面会按 lite、Kohya、Musubi 等分轨发布到 GitHub 和魔搭。
+**正式版 [v3.0.0](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0)** 已发布（Vue 3 工作台）。国内用户优先走魔搭。
 
-现在可以先用 RC 试用包体验 Vue 3：
+| 包 | 预装 | 适合 | 大约体积 | 下载 |
+|----|------|------|----------|------|
+| **kohya**（默认） | Kohya（cu128） | Anima / SD / SDXL / Flux | ~2.5 GB（分两卷） | [GitHub](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0) · [魔搭](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases) |
+| **musubi** | Musubi | **Krea 2** LoRA | ~2.2 GB | **[魔搭](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases)**（`releases/v3.0.0/Next-Trainer-v3.0.0-musubi.7z`） |
+| **lite** | 几乎无训练环境 | 自备依赖 / 源码党 | ~0.4 GB | GitHub · 魔搭 |
 
-1. GitHub：[v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813)  
-2. 魔搭：[windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable)
-
-体量大概是：
-
-1. lite 约 0.39 GB  
-2. kohya-musubi 约 4.2 GB
-
-魔搭上的一个示例路径：
-
-```text
-releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
-```
-
-还想用旧界面，请下 [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)。
+- Kohya 分卷：`Next-Trainer-v3.0.0-kohya.7z.001` + `.002`，**两卷放同一目录**用 7-Zip 解压。  
+- 魔搭数据集：[`Next-Lab/next-trainer-releases`](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases)，路径 `releases/v3.0.0/`。  
+- 训练底模与 Anima Fast **不预装**（Fast 在设置页安装）。Krea 2 步骤见 [Krea 2 上手](docs/portable-1.5-krea2-guide.md)。  
+- 仍想用旧界面：下 [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1)。
 
 运行环境：
 
@@ -207,9 +200,9 @@ releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
 ### 用整合包启动
 
 1. 解压  
-2. 运行 `run_gui.bat`。如果包里写了别的启动脚本，按包内说明来  
+2. 双击根目录 **`启动.bat`**（或 `run_gui.bat`；以包内说明为准）  
 3. 浏览器打开 http://127.0.0.1:28000  
-4. 正式 3.0.0 包的侧栏应显示 `v3.0.0`。RC 包可能还会带 rc 字样，这是正常的
+4. 侧栏版本应显示 **`v3.0.0`**
 
 ### 从源码跑 `main`
 
@@ -277,7 +270,7 @@ Vue 3 已经在 `dev` 上测过一轮，也修完关键问题。
 
 有些东西暂时没动：整合包里的目录名还是 `SD-Trainer/`，更新脚本的文件名也先保留，方便老安装继续用。
 
-源码合进 `main`，不等于马上推正式 7z。正式整合包仍然看 [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases)。
+源码合进 `main`，不等于每次改动都立刻出新 7z。正式整合包看 [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0) 与 [魔搭](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases)；**v3.0.0** 的 lite / kohya / musubi 已上线。
 
 还想用旧界面：
 
@@ -317,11 +310,12 @@ Next Trainer 感谢 **Akegarasu** 与 [Akegarasu/lora-scripts](https://github.co
 
 然后到 [Issues](https://github.com/wochenlong/lora-scripts-next/issues) 提交。
 
-**lite 和 kohya-musubi 怎么选**
+**lite / kohya / musubi 怎么选**
 
 1. 网络一般，或者只想先轻量启动，选 **lite**。第一次运行会装依赖。  
-2. 想开箱就有 Kohya，并且要训 Krea 2，选 **kohya-musubi**。  
-3. 两种包里，Anima Fast 都要到设置页单独装。
+2. 日常 Anima / SD / SDXL / Flux，选 **kohya**（默认）。  
+3. 要训 **Krea 2**，选 **musubi**（魔搭已上；引擎也可用设置页安装）。  
+4. Anima Fast 都要到设置页单独装，任何包都不预装 Fast。
 
 **3.0.0 和旧稳定版的配置能一起用吗**
 

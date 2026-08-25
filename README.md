@@ -119,7 +119,7 @@ Watch the task list, status, logs, preview images, and Loss. This is the main pa
    LoRA.
 
 6. **Krea 2**  
-   LoRA through Musubi. Install the engine in Settings. Multi-GPU works on Linux.
+   LoRA through Musubi. Prefer the **musubi** portable pack, or install Musubi from Settings on a kohya/lite pack. Multi-GPU works on Linux.
 
 More detail: [Anima training docs](docs/anima-training.md).
 
@@ -172,25 +172,18 @@ These shots are from the Vue 3 UI with the Chinese locale.
 
 ### Downloads
 
-**3.0.0 formal packages** are still being prepared. Later builds will cover lite, Kohya, Musubi, and similar flavors on GitHub and ModelScope.
+**Formal [v3.0.0](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0)** is out (Vue 3 workbench). Prefer ModelScope if you are in China.
 
-You can use the RC packages now to try Vue 3:
+| Pack | Preinstalled | Best for | Size (approx.) | Download |
+|------|--------------|----------|----------------|----------|
+| **kohya** (default) | Kohya (cu128) | Anima / SD / SDXL / Flux | ~2.5 GB (two volumes) | [GitHub](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0) · [ModelScope](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases) |
+| **musubi** | Musubi | **Krea 2** LoRA | ~2.2 GB | **[ModelScope](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases)** (`releases/v3.0.0/Next-Trainer-v3.0.0-musubi.7z`) |
+| **lite** | Almost no training env | Bring-your-own deps | ~0.4 GB | GitHub · ModelScope |
 
-1. GitHub: [v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813)  
-2. ModelScope: [windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable)
-
-Rough sizes:
-
-1. lite about 0.39 GB  
-2. kohya-musubi about 4.2 GB
-
-Example ModelScope path:
-
-```text
-releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
-```
-
-If you want the old UI, download [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1).
+- Kohya split: `Next-Trainer-v3.0.0-kohya.7z.001` + `.002` — keep both in one folder and extract with 7-Zip.  
+- ModelScope dataset: [`Next-Lab/next-trainer-releases`](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases), path `releases/v3.0.0/`.  
+- Base checkpoints and Anima Fast are **not** preinstalled (install Fast from Settings). Krea 2 steps: [portable Krea 2 guide](docs/portable-1.5-krea2-guide.md).  
+- Old UI: [v2.9.1](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.1).
 
 Runtime needs:
 
@@ -207,9 +200,9 @@ More reading:
 ### Start from a portable package
 
 1. Extract the archive  
-2. Run `run_gui.bat`. If the package names another launcher, follow that  
+2. Run **`启动.bat`** at the root (or `run_gui.bat`; follow the pack notes)  
 3. Open http://127.0.0.1:28000  
-4. A formal 3.0.0 build should show `v3.0.0` in the sidebar. RC builds may still show an rc mark
+4. The sidebar should show **`v3.0.0`**
 
 ### Run `main` from source
 
@@ -277,7 +270,7 @@ Promoting it keeps one brand and one page structure, and puts stable fixes and l
 
 A few launcher contracts stay for now. The portable folder is still named `SD-Trainer/`, and updater bat filenames stay as they are so older installs keep working.
 
-Merging source into `main` does not mean a formal 7z ships the same day. Formal portables still come from [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases).
+Merging source into `main` does not ship a new 7z for every change. Formal portables are on [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0) and [ModelScope](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases); **v3.0.0** lite / kohya / musubi are available.
 
 If you want the old UI:
 
@@ -317,11 +310,12 @@ Please include:
 
 Then open an [Issue](https://github.com/wochenlong/lora-scripts-next/issues).
 
-**How do I choose lite vs kohya-musubi**
+**How do I choose lite vs kohya vs musubi**
 
 1. If your network is weak, or you want a lighter first launch, pick **lite**. Dependencies install on first run.  
-2. If you want Kohya ready out of the box and need Krea 2, pick **kohya-musubi**.  
-3. On both packages, Anima Fast still needs a separate install in Settings.
+2. For day-to-day Anima / SD / SDXL / Flux, pick **kohya** (default).  
+3. For **Krea 2**, pick **musubi** (on ModelScope; or install Musubi from Settings).  
+4. On every pack, Anima Fast still needs a separate install in Settings.
 
 **Can I reuse configs between 3.0.0 and the old stable line**
 
