@@ -90,6 +90,54 @@ class TaskManagerMaintenanceTests(unittest.TestCase):
         self.assertEqual(tm.purge_tasks(), 2)
         self.assertEqual(tm.tasks, {})
 
+    def _grouped_terminal(self, tm: TaskManager, task_id: str, group: str, finished_at: float):
+        task = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ),
+                              task_id=task_id, group=group)
+        task.status = TaskStatus.FINISHED
+        task.metadata["finished_at"] = finished_at
+        return task
+
+    def test_delete_removes_whole_stage_group(self):
+        tm = TaskManager()
+        for sid in ("s1", "s2", "s3"):
+            self._grouped_terminal(tm, sid, "g", 1.0)
+
+        self.assertTrue(tm.delete_task("s3"))
+        self.assertEqual(tm.tasks, {})
+
+    def test_delete_group_keeps_active_members(self):
+        tm = TaskManager()
+        self._grouped_terminal(tm, "s1", "g", 1.0)
+        self._grouped_terminal(tm, "s2", "g", 2.0)
+        active = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ),
+                                task_id="s3", group="g")
+        active.status = TaskStatus.QUEUED
+
+        self.assertTrue(tm.delete_task("s1"))
+        self.assertEqual(sorted(tm.tasks), ["s3"])
+
+    def test_purge_counts_stage_group_as_single_run(self):
+        tm = TaskManager()
+        for sid in ("a1", "a2", "a3"):
+            self._grouped_terminal(tm, sid, "g1", 1.0)
+        for sid in ("b1", "b2", "b3"):
+            self._grouped_terminal(tm, sid, "g2", 2.0)
+
+        removed = tm.purge_tasks(keep_last=1)
+
+        self.assertEqual(removed, 3)
+        self.assertEqual(sorted(tm.tasks), ["b1", "b2", "b3"])
+
+    def test_purge_never_touches_partially_active_group(self):
+        tm = TaskManager()
+        self._grouped_terminal(tm, "s1", "g", 1.0)
+        active = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ),
+                                task_id="s2", group="g")
+        active.status = TaskStatus.QUEUED
+
+        self.assertEqual(tm.purge_tasks(), 0)
+        self.assertEqual(sorted(tm.tasks), ["s1", "s2"])
+
 
 class TaskHistoryPersistenceTests(unittest.TestCase):
     def test_terminal_tasks_persist_and_restore_as_history(self):
@@ -351,6 +399,15 @@ class TaskMaintenanceApiTests(unittest.TestCase):
         self._api_task("api-q-done", status=TaskStatus.FINISHED)
         response = asyncio.run(api.move_task_to_front("api-q-done"))
         self.assertEqual(response.status, "fail")
+
+    def test_tasks_list_derives_train_type_for_legacy_metadata(self):
+        self._api_task("api-legacy", metadata={
+            "backend": "standard",
+            "trainer_file": "./scripts/stable/train_network.py",
+        })
+        response = asyncio.run(api.get_tasks())
+        item = next(t for t in response.data["tasks"] if t["id"] == "api-legacy")
+        self.assertEqual(item["metadata"]["train_type"], "sd-lora")
 
 
 if __name__ == "__main__":

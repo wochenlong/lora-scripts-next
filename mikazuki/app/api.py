@@ -901,7 +901,8 @@ async def create_toml_file(request: Request):
     with open(toml_file, "w", encoding="utf-8") as f:
         f.write(toml.dumps(config))
 
-    result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads)
+    result = process.run_train(toml_file, trainer_file, gpu_ids, suggest_cpu_threads,
+                               metadata={"train_type": model_train_type})
 
     return result
 
@@ -1457,8 +1458,18 @@ async def get_files(pick_type) -> APIResponse:
 
 @router.get("/tasks", response_model_exclude_none=True)
 async def get_tasks() -> APIResponse:
+    tasks = tm.dump()
+    for item in tasks:
+        # Older tasks never persisted train_type; derive it so the UI
+        # train-type filter works for history as well (#291 review).
+        metadata = item.get("metadata") or {}
+        if not metadata.get("train_type"):
+            task = tm.tasks.get(item["id"])
+            derived = _task_train_type(task) if task is not None else None
+            if derived:
+                metadata["train_type"] = derived
     return APIResponseSuccess(data={
-        "tasks": tm.dump()
+        "tasks": tasks
     })
 
 
