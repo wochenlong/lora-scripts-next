@@ -267,6 +267,15 @@ export default {
       success: "已清理 {n} 个历史任务",
       fail: "清理失败",
     },
+    importTrain: {
+      fail: "导入训练页失败",
+    },
+    exportConfig: {
+      success: "配置已导出",
+      fail: "导出配置失败",
+      copied: "配置 TOML 已复制到剪贴板",
+      copyFail: "复制配置失败",
+    },
     detail: {
       stop: "停止任务",
       stopping: "停止中…",
@@ -279,6 +288,9 @@ export default {
       queuePosition: "队列位置",
       viewLog: "查看日志",
       tensorboard: "TensorBoard",
+      importTrain: "导入再训",
+      exportConfig: "导出 TOML",
+      copyConfig: "复制 TOML",
       empty: "从左侧选择一个任务查看详情",
       taskId: "任务 ID",
       config: "训练配置",

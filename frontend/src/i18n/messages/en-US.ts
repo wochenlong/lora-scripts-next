@@ -267,6 +267,15 @@ export default {
       success: "Removed {n} finished task(s)",
       fail: "Cleanup failed",
     },
+    importTrain: {
+      fail: "Failed to import into the training page",
+    },
+    exportConfig: {
+      success: "Config exported",
+      fail: "Failed to export the config",
+      copied: "Config TOML copied to clipboard",
+      copyFail: "Failed to copy the config",
+    },
     detail: {
       stop: "Stop Task",
       stopping: "Stopping…",
@@ -279,6 +288,9 @@ export default {
       queuePosition: "Queue Position",
       viewLog: "View Log",
       tensorboard: "TensorBoard",
+      importTrain: "Edit & Rerun",
+      exportConfig: "Export TOML",
+      copyConfig: "Copy TOML",
       empty: "Select a task on the left to view details",
       taskId: "Task ID",
       config: "Training Config",

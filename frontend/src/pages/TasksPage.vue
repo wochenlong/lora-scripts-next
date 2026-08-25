@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { Refresh } from "@element-plus/icons-vue"
+import { stringify } from "smol-toml"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useTasksStore } from "../stores/tasks"
 import { tasksApi, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
+import { moduleForTrainType } from "../training/modules"
+import { copyText } from "../utils/clipboard"
 import LossChart from "../components/LossChart.vue"
 import TaskLogPanel from "../components/TaskLogPanel.vue"
+
+const router = useRouter()
 
 const store = useTasksStore()
 const { tasks, loading, error, terminatingId } = storeToRefs(store)
@@ -378,6 +384,60 @@ async function purgeTasks() {
   }
 }
 
+async function importToTraining(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    const data = await tasksApi.config(task.id)
+    sessionStorage.setItem("mikazuki-pending-import", JSON.stringify(data.config))
+    const targetModule = moduleForTrainType(data.train_type)
+    if (targetModule) await router.push({ path: "/training", query: { model: targetModule.model, engine: targetModule.engine, target: targetModule.target } })
+    else await router.push("/training")
+  } catch (caught) {
+    sessionStorage.removeItem("mikazuki-pending-import")
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.importTrain.fail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+async function fetchTaskToml(task: TrainingTask) {
+  const data = await tasksApi.config(task.id)
+  const name = String(data.output_name || data.config.output_name || task.id)
+  return { tomlText: stringify(data.config), name }
+}
+
+async function exportTaskConfig(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    const { tomlText, name } = await fetchTaskToml(task)
+    const blob = new Blob([tomlText], { type: "application/toml;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = `${name}.toml`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(t("tasks.exportConfig.success"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.exportConfig.fail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+async function copyTaskConfig(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    const { tomlText } = await fetchTaskToml(task)
+    await copyText(tomlText)
+    ElMessage.success(t("tasks.exportConfig.copied"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.exportConfig.copyFail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
 async function resume(task: TrainingTask) {
   actionBusyId.value = task.id
   try {
@@ -468,7 +528,7 @@ onBeforeUnmount(() => {
             <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
             <button v-else-if="isHeld(selected)" class="primary-action" :disabled="actionBusyId === selected.id" @click="resume(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.starting") : t("tasks.detail.resume") }}</button>
             <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
-            <button v-if="(selected.status === 'FAILED' || selected.status === 'TERMINATED') && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
+            <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
             <button v-if="isTerminal(selected)" class="danger-action" :disabled="actionBusyId === selected.id" @click="removeTask(selected)">{{ t("tasks.detail.delete") }}</button>
           </div>
         </header>
@@ -495,6 +555,9 @@ onBeforeUnmount(() => {
         <div class="task-detail-actions">
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
           <RouterLink v-if="selected.status !== 'QUEUED' && !selectedIsMaintenance" class="ghost-button" to="/tensorboard.html?from=tasks">{{ t("tasks.detail.tensorboard") }}</RouterLink>
+          <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="importToTraining(selected)">{{ t("tasks.detail.importTrain") }}</button>
+          <button v-if="!selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="exportTaskConfig(selected)">{{ t("tasks.detail.exportConfig") }}</button>
+          <button v-if="!selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="copyTaskConfig(selected)">{{ t("tasks.detail.copyConfig") }}</button>
         </div>
         <section v-if="!selectedIsMaintenance" class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0, collapsed: !previewOpen }">
           <header class="task-panel-header" @click="previewOpen = !previewOpen">
