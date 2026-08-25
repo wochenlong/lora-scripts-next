@@ -101,7 +101,9 @@ function description(meta: Schema["meta"] | undefined) {
 
 function explicitDefault(schema: SchemaRecord) {
   if (!Object.prototype.hasOwnProperty.call(schema.meta ?? {}, "default")) return undefined
-return schema.meta.default as FormValue
+  const value = schema.meta.default as FormValue
+  if (schema.type === "array" && Array.isArray(value) && value.length === 0) return undefined
+  return value
 }
 
 function conditionsFrom(schema: SchemaRecord): FormCondition[] {
