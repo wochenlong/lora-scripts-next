@@ -310,7 +310,43 @@
 }
 
 .field-control {
-  display: contents;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.field-control-wrap {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 0;
+}
+
+.field-reset {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  transition: 0.15s ease;
+}
+
+.field-reset:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.field-reset:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .schema-field--compact {
@@ -329,7 +365,7 @@
   gap: 6px;
 }
 
-.schema-field--compact .field-control {
+.schema-field--compact .field-control-wrap {
   display: flex;
   flex: 0 0 auto;
   align-items: center;
@@ -355,6 +391,12 @@
   .schema-field--compact {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+@media (max-width: 900px) {
+  .schema-field--compact .field-control-wrap {
+    width: 100%;
   }
 }
 

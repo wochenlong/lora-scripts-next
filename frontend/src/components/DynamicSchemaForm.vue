@@ -5,8 +5,8 @@ import type { AdaptedSchema, FormField, FormModel } from "../schema/adapter"
 import { isFieldActive } from "../schema/adapter"
 import SchemaField from "./SchemaField.vue"
 
-const props = defineProps<{ schema: AdaptedSchema; modelValue: FormModel; errors: Record<string, string> }>()
-const emit = defineEmits<{ "update:modelValue": [value: FormModel] }>()
+const props = defineProps<{ schema: AdaptedSchema; modelValue: FormModel; errors: Record<string, string>; effectiveDefaults: FormModel }>()
+const emit = defineEmits<{ "update:modelValue": [value: FormModel]; "reset-field": [key: string] }>()
 const { t } = useI18n()
 
 const selectedFields = computed(() => {
@@ -34,7 +34,16 @@ function update(key: string, value: FormModel[string]) {
       <header><h2>{{ section.title }}</h2><span>{{ t("schemaForm.fieldCount", { n: visibleFields(section.fields).length }) }}</span></header>
       <slot :name="`tools-${section.id}`" />
       <div class="schema-fields">
-        <SchemaField v-for="field in visibleFields(section.fields)" :key="field.key" :field="field" :model-value="modelValue[field.key]" :error="errors[field.key]" @update:model-value="update(field.key, $event)" />
+        <SchemaField
+          v-for="field in visibleFields(section.fields)"
+          :key="field.key"
+          :field="field"
+          :model-value="modelValue[field.key]"
+          :default-value="effectiveDefaults[field.key]"
+          :error="errors[field.key]"
+          @update:model-value="update(field.key, $event)"
+          @reset="emit('reset-field', field.key)"
+        />
       </div>
     </section>
   </div>
