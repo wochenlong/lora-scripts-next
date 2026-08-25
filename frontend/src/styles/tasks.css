@@ -223,6 +223,34 @@
   gap: 8px;
 }
 
+.task-output-dir {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.task-output-dir span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.task-output-dir .copy-button {
+  flex: none;
+  padding: 2px 10px;
+  color: var(--text-soft);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.task-output-dir .copy-button:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
 .task-row {
   display: grid;
   gap: 6px;

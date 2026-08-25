@@ -238,6 +238,22 @@ function taskName(task: TrainingTask) {
   return String(task.metadata.output_name || task.metadata.trainer_file || task.metadata.backend || t("tasks.defaultName"))
 }
 
+/** Short group id for the list row; full id stays in the detail panel. */
+function groupShortId(group: TaskGroup): string {
+  return group.key.length > 12 ? `${group.key.slice(0, 8)}…` : group.key
+}
+
+async function copyOutputDir(task: TrainingTask) {
+  const dir = metaString(task, "output_dir")
+  if (!dir) return
+  try {
+    await copyText(dir)
+    ElMessage.success(t("tasks.detail.outputDirCopied"))
+  } catch {
+    ElMessage.error(t("tasks.detail.outputDirCopyFail"))
+  }
+}
+
 function taskDetail(task: TrainingTask) {
   return String(task.metadata.config_path || task.metadata.command || t("tasks.noDetail"))
 }
@@ -512,7 +528,7 @@ onBeforeUnmount(() => {
         <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
         <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
           <span class="task-status">{{ statusLabel(group.representative) }}</span>
-          <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code>{{ group.key }}</code></div>
+          <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code :title="group.key">{{ groupShortId(group) }}</code></div>
           <span v-if="group.representative.status === 'QUEUED' && group.representative.queue_position" class="task-queue-pos">{{ t("tasks.queuePosition", { n: group.representative.queue_position }) }}</span>
           <span v-if="kindLabelKey(group.representative)" class="task-kind">{{ t(kindLabelKey(group.representative)) }}</span>
           <div v-if="group.stages.length > 1" class="task-stage-strip">
@@ -545,7 +561,7 @@ onBeforeUnmount(() => {
           <div v-if="metaString(selected, 'train_type')"><dt>{{ t("tasks.detail.trainType") }}</dt><dd>{{ metaString(selected, "train_type") }}</dd></div>
           <div v-if="selectedCreatedAt"><dt>{{ t("tasks.detail.createdAt") }}</dt><dd>{{ formatTimestamp(selectedCreatedAt) }}</dd></div>
           <div v-if="selectedCreatedAt"><dt>{{ t("tasks.detail.elapsed") }}</dt><dd>{{ elapsedLabel }}</dd></div>
-          <div v-if="metaString(selected, 'output_dir')"><dt>{{ t("tasks.detail.outputDir") }}</dt><dd :title="metaString(selected, 'output_dir')">{{ metaString(selected, "output_dir") }}</dd></div>
+          <div v-if="metaString(selected, 'output_dir')"><dt>{{ t("tasks.detail.outputDir") }}</dt><dd class="task-output-dir" :title="metaString(selected, 'output_dir')"><span>{{ metaString(selected, "output_dir") }}</span><button type="button" class="copy-button" @click="copyOutputDir(selected)">{{ t("tasks.detail.copyOutputDir") }}</button></dd></div>
         </dl>
         <section v-if="selectedError" class="task-failure">
           <header>{{ t("tasks.detail.errorTitle") }}</header>
