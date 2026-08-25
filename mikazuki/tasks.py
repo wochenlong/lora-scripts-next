@@ -257,13 +257,15 @@ class TaskManager:
         }
 
     def _persist(self):
-        """Snapshot pending compute work (QUEUED/RUNNING) atomically."""
+        """Snapshot the compute lane (pending work AND terminal history)
+        atomically. Terminal tasks stay on disk until an explicit
+        delete_task()/purge_tasks() removes them; there is no auto cleanup."""
         if not self._persist_path:
             return
         try:
             records = [
                 self._task_record(t) for t in self.tasks.values()
-                if t.lane == LANE_COMPUTE and t.status in (TaskStatus.QUEUED, TaskStatus.RUNNING)
+                if t.lane == LANE_COMPUTE and t.status != TaskStatus.CREATED
             ]
             path = self._persist_path
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -274,7 +276,8 @@ class TaskManager:
             log.warning(f"Failed to persist task queue / 任务队列持久化失败: {e}")
 
     def restore_queue(self):
-        """Re-enqueue tasks persisted as QUEUED; mark interrupted RUNNING as FAILED."""
+        """Re-enqueue tasks persisted as QUEUED; mark interrupted RUNNING as
+        FAILED; restore terminal tasks as read-only history (never queued)."""
         path = self._persist_path
         if not path or not path.is_file():
             return
@@ -314,6 +317,23 @@ class TaskManager:
                     self.tasks[task_id] = task
                     self._compute_queue.append(task_id)
                     restored += 1
+                elif record.get("status") in ("FINISHED", "FAILED", "TERMINATED"):
+                    # Terminal history: restore as-is for the workbench list;
+                    # never queued, never held, deletable/retryable as usual.
+                    stored_env = record.get("env") or {}
+                    task = Task(
+                        task_id=task_id,
+                        command=record.get("command") or [],
+                        environ={**os.environ, **stored_env},
+                        metadata=record.get("metadata") or {},
+                        cwd=record.get("cwd"),
+                        lane=LANE_COMPUTE,
+                        group=record.get("group"),
+                    )
+                    task.status = TaskStatus[record["status"]]
+                    returncode = task.metadata.get("returncode")
+                    task.returncode = returncode if isinstance(returncode, int) else None
+                    self.tasks[task_id] = task
                 elif record.get("status") == "RUNNING":
                     # Keep the stored env: the interrupted task stays retryable,
                     # and training commands rely on env like PYTHONPATH (#158).

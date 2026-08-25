@@ -92,6 +92,51 @@ class TaskManagerMaintenanceTests(unittest.TestCase):
         self.assertEqual(tm.tasks, {})
 
 
+class TaskHistoryPersistenceTests(unittest.TestCase):
+    def test_terminal_tasks_persist_and_restore_as_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "task_queue.json"
+            tm1 = TaskManager()
+            tm1.enable_persistence(path)
+            done = tm1.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="done")
+            done.status = TaskStatus.FINISHED
+            done.metadata["finished_at"] = 1.0
+            done.metadata["returncode"] = 0
+            failed = tm1.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="failed")
+            failed.status = TaskStatus.FAILED
+            failed.metadata["returncode"] = 1
+            failed.metadata["finished_at"] = 2.0
+            tm1._persist()
+
+            tm2 = TaskManager()
+            tm2.enable_persistence(path)
+            tm2.restore_queue()
+
+        self.assertEqual(tm2.tasks["done"].status, TaskStatus.FINISHED)
+        self.assertEqual(tm2.tasks["done"].returncode, 0)
+        self.assertEqual(tm2.tasks["failed"].status, TaskStatus.FAILED)
+        self.assertEqual(tm2.tasks["failed"].returncode, 1)
+        # History never enters the compute queue.
+        self.assertIsNone(tm2.queue_position("done"))
+        self.assertIsNone(tm2.queue_position("failed"))
+
+    def test_delete_removes_task_from_persisted_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "task_queue.json"
+            tm1 = TaskManager()
+            tm1.enable_persistence(path)
+            done = tm1.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="done")
+            done.status = TaskStatus.FINISHED
+            done.metadata["finished_at"] = 1.0
+            tm1.delete_task("done")
+
+            tm2 = TaskManager()
+            tm2.enable_persistence(path)
+            tm2.restore_queue()
+
+        self.assertNotIn("done", tm2.tasks)
+
+
 class TaskMaintenanceApiTests(unittest.TestCase):
     def setUp(self):
         self._created: list[str] = []
