@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import type { PluginHostExtension } from "../api/plugins"
-import { bridgeCapabilitiesFor } from "./pluginFrameBridge"
+import type { BridgeRequestEnvelope } from "./pluginBridgeSchemas"
+import { bridgeCapabilitiesFor, startPluginEventStream } from "./pluginFrameBridge"
 
 function extension(overrides: Partial<PluginHostExtension> = {}): PluginHostExtension {
   return {
@@ -50,5 +51,38 @@ describe("plugin frame capability grants", () => {
   it("does not grant artifact navigation when the plugin has no artifact contribution", () => {
     const value = extension({ ui: { floatingPanel: { entryUrl: "/api/plugin-host/ui/sample-plugin/0.1.0/index.html" } } })
     expect(bridgeCapabilitiesFor(value, "floating-panel")).not.toContain("artifact.open")
+  })
+})
+
+describe("plugin event stream admission", () => {
+  it("does not acknowledge a subscription until the Sidecar stream is actually connected", async () => {
+    let publish: ((event: unknown) => void) | undefined
+    const streamCapability = vi.fn(async (
+      _pluginId: string,
+      _request: Pick<BridgeRequestEnvelope, "type" | "payload">,
+      onEvent: (event: unknown) => void,
+    ) => {
+      publish = onEvent
+      await new Promise(() => undefined)
+    })
+    const postEvent = vi.fn()
+    let admitted = false
+    const admission = startPluginEventStream({
+      pluginId: "sample-plugin",
+      request: { type: "session.subscribe", payload: { sessionId: "session-1" } },
+      signal: new AbortController().signal,
+      streamCapability,
+      postEvent,
+    }).then(() => { admitted = true })
+
+    await Promise.resolve()
+    publish?.({ connected: true })
+    await Promise.resolve()
+    expect(admitted).toBe(false)
+
+    publish?.({ type: "connected", state: { id: "session-1", status: "idle" } })
+    await admission
+    expect(admitted).toBe(true)
+    expect(postEvent).not.toHaveBeenCalled()
   })
 })

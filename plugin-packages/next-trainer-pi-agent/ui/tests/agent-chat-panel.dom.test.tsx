@@ -108,6 +108,94 @@ describe("AgentChatPanel", () => {
     expect(screen.getByText("请分析训练参数")).not.toBeNull();
   });
 
+  test("downgrades a stale local follow-up to a normal prompt when the authoritative session is idle", async () => {
+    const transport = new MemoryTransport();
+    const session = await transport.sessions.create({});
+    const originalHistory = transport.sessions.getHistory;
+    const originalPrompt = transport.sessions.prompt;
+    const inputs: Array<{ streamingBehavior?: "steer" | "followUp" }> = [];
+    transport.sessions.getHistory = async (...args) => {
+      const history = await originalHistory(...args);
+      return { ...history, session: { ...history.session, runId: 1, status: "running" as const } };
+    };
+    transport.sessions.getState = async () => ({ ...session, runId: 1, status: "idle" as const });
+    transport.sessions.prompt = async (sessionId, input) => {
+      inputs.push(input);
+      return originalPrompt(sessionId, input);
+    };
+    renderPanel(transport, new MemoryHostCapabilities(), session.id);
+    const composer = await screen.findByPlaceholderText("询问训练参数、数据集或训练结果") as HTMLTextAreaElement;
+    await waitFor(() => expect(screen.getByRole("button", { name: "停止" })).not.toBeNull());
+    await userEvent.type(composer, "第二轮消息{Enter}");
+
+    await waitFor(() => expect(inputs).toHaveLength(1));
+    expect(inputs[0].streamingBehavior).toBeUndefined();
+    expect(screen.queryByText(/SESSION_NOT_RUNNING/)).toBeNull();
+  });
+
+  test("retries once as a normal prompt when the run settles during follow-up admission", async () => {
+    const transport = new MemoryTransport();
+    const session = await transport.sessions.create({});
+    const originalHistory = transport.sessions.getHistory;
+    const originalPrompt = transport.sessions.prompt;
+    let stateReads = 0;
+    const inputs: Array<{ streamingBehavior?: "steer" | "followUp" }> = [];
+    transport.sessions.getHistory = async (...args) => {
+      const history = await originalHistory(...args);
+      return { ...history, session: { ...history.session, runId: 1, status: "running" as const } };
+    };
+    transport.sessions.getState = async () => {
+      stateReads += 1;
+      return { ...session, runId: 1, status: stateReads === 1 ? "running" as const : "idle" as const };
+    };
+    transport.sessions.prompt = async (sessionId, input) => {
+      inputs.push(input);
+      if (input.streamingBehavior) {
+        const error = new Error("followUp requires an active Agent run.") as Error & { code: string };
+        error.code = "SESSION_NOT_RUNNING";
+        throw error;
+      }
+      return originalPrompt(sessionId, input);
+    };
+    renderPanel(transport, new MemoryHostCapabilities(), session.id);
+    const composer = await screen.findByPlaceholderText("询问训练参数、数据集或训练结果") as HTMLTextAreaElement;
+    await waitFor(() => expect(screen.getByRole("button", { name: "停止" })).not.toBeNull());
+    await userEvent.type(composer, "竞态后的新消息{Enter}");
+
+    await waitFor(() => expect(inputs).toHaveLength(2));
+    expect(inputs.map((input) => input.streamingBehavior)).toEqual(["followUp", undefined]);
+    await waitFor(() => expect(composer.value).toBe(""));
+    expect(screen.queryByText(/SESSION_NOT_RUNNING/)).toBeNull();
+  });
+
+  test("reconciles authoritative history when terminal stream frames are missed", async () => {
+    const transport = new MemoryTransport();
+    const session = await transport.sessions.create({});
+    const originalHistory = transport.sessions.getHistory;
+    let historyReads = 0;
+    transport.sessions.getState = async () => ({ ...session, runId: 1, status: "idle" as const });
+    transport.sessions.getHistory = async (...args) => {
+      historyReads += 1;
+      const history = await originalHistory(...args);
+      if (historyReads === 1) return history;
+      return {
+        ...history,
+        session: { ...history.session, runId: 1, status: "idle" as const },
+        messages: [
+          ...history.messages,
+          { role: "assistant" as const, id: "reconciled-assistant", content: [{ type: "text" as const, text: "ROUND_RECOVERED" }] },
+        ],
+      };
+    };
+    renderPanel(transport, new MemoryHostCapabilities(), session.id);
+    const composer = await screen.findByPlaceholderText("询问训练参数、数据集或训练结果") as HTMLTextAreaElement;
+    await userEvent.type(composer, "触发无终态事件的回答{Enter}");
+
+    await waitFor(() => expect(screen.getByText("ROUND_RECOVERED")).not.toBeNull(), { timeout: 2_000 });
+    expect(screen.getByRole("button", { name: "发送" })).not.toBeNull();
+    expect(screen.queryByText(/SESSION_NOT_RUNNING/)).toBeNull();
+  });
+
   test("new sessions cannot inherit messages from the previously selected session", async () => {
     const transport = new MemoryTransport();
     const oldSession = await transport.sessions.create({ name: "旧会话" });

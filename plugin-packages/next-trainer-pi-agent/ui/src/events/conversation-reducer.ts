@@ -33,6 +33,7 @@ export interface ConversationState {
 
 export type ConversationAction =
   | { type: "session_cleared" }
+  | { type: "session_reconciled"; session: SessionState }
   | { type: "history_loaded"; history: SessionHistory }
   | { type: "run_started"; session: SessionState; optimisticMessage: AgentMessage }
   | { type: "event"; event: AgentEvent }
@@ -175,6 +176,19 @@ export function conversationReducer(
   switch (action.type) {
     case "session_cleared":
       return INITIAL_CONVERSATION_STATE;
+    case "session_reconciled":
+      return {
+        ...state,
+        session: action.session,
+        terminal: action.session.status === "failed"
+          ? { runId: action.session.runId, phase: "terminal", outcome: "failed", sawAgentEnd: false }
+          : {
+              runId: action.session.runId,
+              phase: action.session.status === "running" || action.session.status === "cancelling" ? "running" : "idle",
+              outcome: null,
+              sawAgentEnd: false,
+            },
+      };
     case "history_loaded":
       return {
         ...INITIAL_CONVERSATION_STATE,

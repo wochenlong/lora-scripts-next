@@ -25,6 +25,7 @@ function definedRecord(input: Record<string, unknown>): Record<string, unknown> 
 export class BridgeAgentTransport implements AgentTransport {
   private readonly bridge: PluginBridgeClient;
   private readonly listeners = new Map<string, Set<AgentEventListener>>();
+  private readonly subscriptionReadiness = new Map<string, Promise<void>>();
   private readonly unsubscribeEvents: () => void;
 
   constructor(bridge: PluginBridgeClient) {
@@ -53,7 +54,10 @@ export class BridgeAgentTransport implements AgentTransport {
     })),
     getThinking: (sessionId: string, entryId: string, blockIndex: number) =>
       this.bridge.request("session.getThinking", { sessionId, entryId, blockIndex }),
-    prompt: (sessionId: string, input: PromptInput) => this.bridge.request("session.prompt", { sessionId, input }),
+    prompt: async (sessionId: string, input: PromptInput) => {
+      await this.subscriptionReadiness.get(sessionId);
+      return this.bridge.request("session.prompt", { sessionId, input });
+    },
     cancel: (sessionId: string) => this.bridge.request("session.cancel", { sessionId }),
     compact: (sessionId: string, instructions?: string) =>
       this.bridge.request("session.compact", definedRecord({ sessionId, instructions })),
@@ -67,10 +71,17 @@ export class BridgeAgentTransport implements AgentTransport {
       const first = listeners.size === 0;
       listeners.add(listener);
       this.listeners.set(sessionId, listeners);
-      if (first) void this.bridge.request("session.subscribe", { sessionId }).catch(() => undefined);
+      if (first) {
+        const readiness = this.bridge.request("session.subscribe", { sessionId }).then(() => undefined);
+        this.subscriptionReadiness.set(sessionId, readiness);
+        void readiness.catch(() => undefined);
+      }
       return () => {
         listeners.delete(listener);
-        if (listeners.size === 0) this.listeners.delete(sessionId);
+        if (listeners.size === 0) {
+          this.listeners.delete(sessionId);
+          this.subscriptionReadiness.delete(sessionId);
+        }
       };
     },
   };
@@ -90,6 +101,7 @@ export class BridgeAgentTransport implements AgentTransport {
 
   dispose(): void {
     this.listeners.clear();
+    this.subscriptionReadiness.clear();
     this.unsubscribeEvents();
   }
 }

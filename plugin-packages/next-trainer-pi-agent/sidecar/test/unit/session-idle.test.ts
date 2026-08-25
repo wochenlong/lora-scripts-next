@@ -23,6 +23,8 @@ test("idle wrapper is released, JSONL/index retained, and the next prompt resume
   const sessionId = created.sessionId
   const handle = runtime.sessions.get(sessionId)
   assert.ok(handle, "fake runtime should hold the session wrapper")
+  const observedEvents: string[] = []
+  const unsubscribe = await sessions.subscribe(sessionId, (event) => observedEvents.push(event.type))
 
   // A completed prompt returns the session to idle and arms the release timer.
   const receipt = await sessions.submit(sessionId, { requestId: "r1", text: "hello", mode: "prompt" })
@@ -41,10 +43,12 @@ test("idle wrapper is released, JSONL/index retained, and the next prompt resume
   assert.equal(resumed.accepted, true)
   await waitFor(() => sessions.snapshot(sessionId).activeRunId === null && sessions.snapshot(sessionId).state === "idle")
   assert.equal(handle.prompts.length, 2)
+  assert.equal(observedEvents.filter((type) => type === "prompt_done").length, 2)
 
   // History still works after release + resume.
   const history = await sessions.history(sessionId)
   assert.ok(history)
+  unsubscribe()
 })
 
 test("an active run is never released by the idle timer", async (context) => {

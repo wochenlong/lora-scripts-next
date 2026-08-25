@@ -70,6 +70,25 @@ function uiProvider(profile: import("./contracts.ts").ProviderStatus): Record<st
   return { id: profile.profileId, label: profile.providerId, endpoint: profile.endpoint, modelId: profile.modelId, configured: profile.configured, fingerprint: profile.fingerprint, capabilities: ["text"], thinkingLevels: ["auto", "off", "minimal", "low", "medium", "high", "xhigh", "max"] }
 }
 
+export function uiHistoryMessage(
+  entry: Record<string, unknown>,
+  sessionId: string,
+  cursor: string,
+  index: number,
+): Record<string, unknown> {
+  const message = isRecord(entry.message) ? entry.message : {}
+  const existingId = typeof message.id === "string" && message.id ? message.id : null
+  const entryId = typeof entry.id === "string" && entry.id ? entry.id : null
+  const role = typeof message.role === "string" ? message.role : "message"
+  const timestamp = typeof message.timestamp === "number" || typeof message.timestamp === "string"
+    ? String(message.timestamp)
+    : "unknown"
+  return {
+    ...message,
+    id: existingId ?? entryId ?? `history-${sessionId}-${cursor}-${index}-${role}-${timestamp}`,
+  }
+}
+
 function uiEvent(event: import("./contracts.ts").AgentEventEnvelope): Record<string, unknown> {
   const base = { eventId: String(event.eventId), sessionId: event.sessionId, runId: event.runId }
   const payload = event.payload
@@ -127,7 +146,8 @@ async function dispatchBridgeRequest(request: BridgeRequest, deps: ServerDepende
       }
       const historySessionId = requireString(params, "sessionId")
       const rawHistory = await deps.sessions.history(historySessionId, options)
-      return { session: uiState(deps.sessions.snapshot(historySessionId)), messages: Array.isArray(rawHistory.entries) ? rawHistory.entries.filter((entry) => isRecord(entry) && entry.type === "message").map((entry) => (entry as Record<string, unknown>).message) : [], hasMore: rawHistory.hasMore === true, ...(typeof rawHistory.cursor === "string" ? { cursor: rawHistory.cursor } : {}) }
+      const historyCursor = typeof params.cursor === "string" && params.cursor ? params.cursor : "start"
+      return { session: uiState(deps.sessions.snapshot(historySessionId)), messages: Array.isArray(rawHistory.entries) ? rawHistory.entries.filter((entry) => isRecord(entry) && entry.type === "message").map((entry, index) => uiHistoryMessage(entry as Record<string, unknown>, historySessionId, historyCursor, index)) : [], hasMore: rawHistory.hasMore === true, ...(typeof rawHistory.cursor === "string" ? { cursor: rawHistory.cursor } : {}) }
     }
     case "session.getThinking":
       if (!Number.isSafeInteger(params.blockIndex) || Number(params.blockIndex) < 0) throw new SidecarError(400, "BRIDGE_PARAMS_INVALID", "blockIndex is invalid.")

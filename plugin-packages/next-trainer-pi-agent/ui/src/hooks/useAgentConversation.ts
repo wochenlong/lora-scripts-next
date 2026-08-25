@@ -21,6 +21,12 @@ function identifier(prefix: string): string {
   return `${prefix}-${suffix}`;
 }
 
+function errorCode(error: unknown): string {
+  if (!(error instanceof Error)) return "";
+  const candidate = error as Error & { code?: unknown };
+  return typeof candidate.code === "string" ? candidate.code : "";
+}
+
 export interface UseAgentConversationOptions {
   transport: AgentTransport;
   initialSessionId?: string | null;
@@ -89,6 +95,48 @@ export function useAgentConversation({
     };
   }, [attach, initialSessionId, transport]);
 
+  useEffect(() => {
+    const activeSessionId = sessionId;
+    if (!activeSessionId || (state.terminal.phase !== "running" && state.terminal.phase !== "settling")) return;
+    let active = true;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let inFlight = false;
+
+    const reconcile = async () => {
+      if (!active || inFlight) return;
+      inFlight = true;
+      try {
+        const authoritative = await transport.sessions.getState(activeSessionId);
+        if (!active) return;
+        if (authoritative.status === "idle" || authoritative.status === "failed") {
+          try {
+            const history = await transport.sessions.getHistory(activeSessionId, {
+              limit: 200,
+              deferThinking: true,
+              deferMedia: true,
+            });
+            if (active) dispatch({ type: "history_loaded", history });
+          } catch {
+            if (active) dispatch({ type: "session_reconciled", session: authoritative });
+          }
+          return;
+        }
+      } catch {
+        // The authenticated event stream remains the primary channel. A
+        // transient reconciliation read failure must not replace its state.
+      } finally {
+        inFlight = false;
+      }
+      if (active) timer = setTimeout(() => void reconcile(), 500);
+    };
+
+    timer = setTimeout(() => void reconcile(), 500);
+    return () => {
+      active = false;
+      if (timer) clearTimeout(timer);
+    };
+  }, [sessionId, state.terminal.phase, transport]);
+
   const ensureSession = useCallback(async (): Promise<SessionState> => {
     const existingId = sessionIdRef.current;
     if (existingId) {
@@ -110,9 +158,27 @@ export function useAgentConversation({
     const trimmed = text.trim();
     if (!trimmed) throw new Error("Prompt is empty");
     const session = await ensureSession();
+    dispatch({ type: "session_reconciled", session });
     const clientSubmissionId = identifier("submission");
-    const input: PromptInput = { text: trimmed, clientSubmissionId, streamingBehavior };
-    const receipt = await transport.sessions.prompt(session.id, input);
+    const sessionIsRunning = session.status === "running" || session.status === "cancelling";
+    const effectiveStreamingBehavior = sessionIsRunning ? streamingBehavior : undefined;
+    const input: PromptInput = { text: trimmed, clientSubmissionId, streamingBehavior: effectiveStreamingBehavior };
+    let receipt: PromptReceipt;
+    try {
+      receipt = await transport.sessions.prompt(session.id, input);
+    } catch (error) {
+      // The run can settle between the authoritative getState above and the
+      // prompt request. A rejected follow-up was never admitted, so retrying
+      // the same client submission once as a normal prompt is safe.
+      if (!effectiveStreamingBehavior || errorCode(error) !== "SESSION_NOT_RUNNING") throw error;
+      const reconciled = await transport.sessions.getState(session.id);
+      dispatch({ type: "session_reconciled", session: reconciled });
+      if (reconciled.status !== "idle") throw error;
+      receipt = await transport.sessions.prompt(session.id, {
+        text: trimmed,
+        clientSubmissionId,
+      });
+    }
     if (!receipt.accepted) return receipt;
 
     if (receipt.disposition === "queued") return receipt;

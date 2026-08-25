@@ -56,6 +56,58 @@ const THEME_TOKEN_NAMES = [
   "--radius",
 ] as const
 
+interface PluginEventStreamOptions {
+  pluginId: string
+  request: Pick<BridgeRequestEnvelope, "type" | "payload"> & { type: "session.subscribe" }
+  signal: AbortSignal
+  streamCapability: typeof pluginsApi.streamCapability
+  postEvent: (event: unknown) => boolean
+  onDiagnostic?: (message: string) => void
+  onClosed?: () => void
+}
+
+function isSidecarStreamConnected(event: unknown): boolean {
+  if (event === null || typeof event !== "object" || Array.isArray(event)) return false
+  const value = event as Record<string, unknown>
+  return value.type === "connected" && value.state !== null && typeof value.state === "object"
+}
+
+function isBrokerStreamConnected(event: unknown): boolean {
+  return event !== null && typeof event === "object" && !Array.isArray(event) && (event as Record<string, unknown>).connected === true
+}
+
+export function startPluginEventStream(options: PluginEventStreamOptions): Promise<void> {
+  return new Promise((resolve, reject) => {
+    let admitted = false
+    void options.streamCapability(
+      options.pluginId,
+      options.request,
+      (event) => {
+        if (isBrokerStreamConnected(event)) return
+        if (isSidecarStreamConnected(event)) {
+          if (!admitted) {
+            admitted = true
+            resolve()
+          }
+          return
+        }
+        options.postEvent(event)
+      },
+      options.signal,
+    ).then(() => {
+      if (!admitted && !options.signal.aborted) {
+        reject(new Error("Plugin event stream ended before the Sidecar subscription was ready."))
+      }
+    }).catch((error: unknown) => {
+      if (!admitted) {
+        reject(error)
+      } else if (!isAbortError(error)) {
+        options.onDiagnostic?.("Plugin event stream ended unexpectedly; details were withheld.")
+      }
+    }).finally(options.onClosed)
+  })
+}
+
 export function createPluginFrameInstanceId() {
   if (typeof globalThis.crypto.randomUUID === "function") return globalThis.crypto.randomUUID()
   const values = new Uint8Array(16)
@@ -155,18 +207,17 @@ export function createPluginFrameBridge(options: PluginFrameBridgeOptions): Host
       streams.get(sessionId)?.abort()
       const controller = new AbortController()
       streams.set(sessionId, controller)
-      void streamCapability(
-        options.extension.pluginId,
-        { type: request.type, payload: request.payload },
-        (event) => bridge.postEvent(event),
-        controller.signal,
-      )
-        .catch((error: unknown) => {
-          if (!isAbortError(error)) options.onDiagnostic?.("Plugin event stream ended unexpectedly; details were withheld.")
-        })
-        .finally(() => {
+      await startPluginEventStream({
+        pluginId: options.extension.pluginId,
+        request: { type: request.type, payload: request.payload },
+        signal: controller.signal,
+        streamCapability,
+        postEvent: (event) => bridge.postEvent(event),
+        onDiagnostic: options.onDiagnostic,
+        onClosed: () => {
           if (streams.get(sessionId) === controller) streams.delete(sessionId)
-        })
+        },
+      })
       return { subscribed: true }
     }
     const result = await requestCapability(options.extension.pluginId, { type: request.type, payload: request.payload })

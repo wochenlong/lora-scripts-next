@@ -23,7 +23,6 @@ interface SessionRecord {
   activeRunId: number | null
   lastStopReason: StopReason | null
   eventId: number
-  listeners: Set<EventListener>
   unsubscribeRuntime: () => void
   queue: Promise<void>
   activeAbort: AbortController | null
@@ -52,6 +51,7 @@ export const DEFAULT_SESSION_IDLE_TIMEOUT_MS = 10 * 60 * 1000
 export class SessionRegistry {
   readonly #sessions = new Map<string, SessionRecord>()
   readonly #runtime: PiRuntimeAdapter
+  readonly #listeners = new Map<string, Set<EventListener>>()
   readonly #storageDir: string | null
   readonly #indexPath: string | null
   readonly #index = new Map<string, StoredSession>()
@@ -84,7 +84,6 @@ export class SessionRegistry {
       activeRunId: null,
       lastStopReason: null,
       eventId: 0,
-      listeners: new Set(),
       unsubscribeRuntime: () => {},
       queue: Promise.resolve(),
       activeAbort: null,
@@ -139,16 +138,18 @@ export class SessionRegistry {
   }
 
   async history(sessionId: string, options: { cursor?: string; limit?: number; deferThinking?: boolean; deferMedia?: boolean } = {}): Promise<Record<string, unknown>> {
+    const wasActive = this.#sessions.has(sessionId)
     const record = await this.#ensureActive(sessionId)
     const handle = record.handle
     if (!handle.history) throw new SidecarError(501, "SESSION_OPERATION_UNAVAILABLE", "Session history is unavailable.")
-    try { return await handle.history(options) } finally { await this.#deactivate(sessionId) }
+    try { return await handle.history(options) } finally { await this.#finishReadAccess(sessionId, record, wasActive) }
   }
 
   async thinking(sessionId: string, entryId: string, blockIndex: number): Promise<string> {
+    const wasActive = this.#sessions.has(sessionId)
     const record = await this.#ensureActive(sessionId)
     if (!record.handle.thinking) throw new SidecarError(501, "SESSION_OPERATION_UNAVAILABLE", "Thinking content is unavailable.")
-    try { return await record.handle.thinking(entryId, blockIndex) } finally { await this.#deactivate(sessionId) }
+    try { return await record.handle.thinking(entryId, blockIndex) } finally { await this.#finishReadAccess(sessionId, record, wasActive) }
   }
 
   async compact(sessionId: string, instructions?: string): Promise<Record<string, unknown>> {
@@ -257,10 +258,15 @@ export class SessionRegistry {
   }
 
   async subscribe(sessionId: string, listener: EventListener): Promise<() => void> {
-    const record = await this.#ensureActive(sessionId)
-    record.listeners.add(listener)
+    await this.#ensureActive(sessionId)
+    const listeners = this.#listeners.get(sessionId) ?? new Set<EventListener>()
+    listeners.add(listener)
+    this.#listeners.set(sessionId, listeners)
     this.#scheduleIdleRelease(sessionId)
-    return () => record.listeners.delete(listener)
+    return () => {
+      listeners.delete(listener)
+      if (listeners.size === 0) this.#listeners.delete(sessionId)
+    }
   }
 
   async close(sessionId: string): Promise<void> {
@@ -270,7 +276,7 @@ export class SessionRegistry {
     record.unsubscribeRuntime()
     await record.handle.close()
     record.state = "closed"
-    record.listeners.clear()
+    this.#listeners.delete(sessionId)
     this.#sessions.delete(sessionId)
   }
 
@@ -312,7 +318,7 @@ export class SessionRegistry {
       timestamp: new Date().toISOString(),
       payload,
     }
-    for (const listener of record.listeners) listener(envelope)
+    for (const listener of this.#listeners.get(sessionId) ?? []) listener(envelope)
   }
 
   #get(sessionId: string): SessionRecord {
@@ -354,7 +360,7 @@ export class SessionRegistry {
     const stored = this.#index.get(sessionId)
     if (!stored || stored.deleted || !stored.sessionFile || !this.#runtime.resumeSession) throw new SidecarError(404, "SESSION_NOT_FOUND", "Session was not found.")
     const handle = await this.#runtime.resumeSession(sessionId, stored.request, stored.sessionFile)
-    const record: SessionRecord = { request: structuredClone(stored.request), handle, state: "idle", allocatedRunId: 0, activeRunId: null, lastStopReason: null, eventId: 0, listeners: new Set(), unsubscribeRuntime: () => {}, queue: Promise.resolve(), activeAbort: null, activeReducer: null }
+    const record: SessionRecord = { request: structuredClone(stored.request), handle, state: "idle", allocatedRunId: 0, activeRunId: null, lastStopReason: null, eventId: 0, unsubscribeRuntime: () => {}, queue: Promise.resolve(), activeAbort: null, activeReducer: null }
     record.unsubscribeRuntime = handle.subscribe((event) => this.#onRuntimeEvent(sessionId, record, event))
     this.#sessions.set(sessionId, record)
     return record
@@ -367,6 +373,16 @@ export class SessionRegistry {
     record.unsubscribeRuntime()
     await record.handle.close()
     this.#sessions.delete(sessionId)
+  }
+
+  async #finishReadAccess(sessionId: string, record: SessionRecord, wasActive: boolean): Promise<void> {
+    const isCurrent = this.#sessions.get(sessionId) === record
+    const hasListeners = (this.#listeners.get(sessionId)?.size ?? 0) > 0
+    if (!wasActive && isCurrent && !hasListeners && record.state === "idle" && record.activeRunId === null) {
+      await this.#deactivate(sessionId)
+      return
+    }
+    if (isCurrent) this.#scheduleIdleRelease(sessionId)
   }
 
   #persistIndex(): void {
