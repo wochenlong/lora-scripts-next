@@ -210,7 +210,10 @@ class Task:
 
     def terminate(self):
         try:
-            kill_proc_tree(self.process.pid, False)
+            # Kill the whole tree, launcher included: accelerate's elastic
+            # agent respawns killed workers, so killing only children leaves
+            # a zombie that blocks the worker's task.wait() forever (#286).
+            kill_proc_tree(self.process.pid, True)
         except Exception as e:
             log.error(f"Error when killing process: {e}")
             return

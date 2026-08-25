@@ -10,8 +10,7 @@ import types
 import unittest
 from pathlib import Path
 
-if "psutil" not in sys.modules:
-    sys.modules["psutil"] = types.ModuleType("psutil")
+import psutil
 
 stub_interrogator = types.ModuleType("mikazuki.tagger.interrogator")
 stub_interrogator.available_interrogators = {}
@@ -135,6 +134,39 @@ class TaskHistoryPersistenceTests(unittest.TestCase):
             tm2.restore_queue()
 
         self.assertNotIn("done", tm2.tasks)
+
+
+class TerminateRunningTaskTests(unittest.TestCase):
+    def test_terminate_running_task_kills_tree_and_unblocks_queue(self):
+        """Regression (#286): terminating a running task must kill the whole
+        process tree (launcher included). Killing only children left the
+        accelerate launcher alive, the worker blocked in task.wait(), and
+        every queued task behind it stuck in CREATED."""
+        tm = TaskManager()
+        spawn = (
+            "import subprocess,sys,time;"
+            "subprocess.Popen([sys.executable,'-c','import time;time.sleep(60)']);"
+            "time.sleep(60)"
+        )
+        task = tm.create_task([sys.executable, "-c", spawn], dict(os.environ), task_id="run1")
+        tm.submit(task)
+        deadline = time.time() + 10
+        while time.time() < deadline and not hasattr(task, "process"):
+            time.sleep(0.05)
+        time.sleep(1.0)  # let the child spawn
+        launcher_pid = task.process.pid
+
+        tm.terminate_task("run1")
+        self.assertEqual(task.status, TaskStatus.TERMINATED)
+
+        second = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="run2")
+        tm.submit(second)
+        deadline = time.time() + 20
+        while time.time() < deadline and second.status not in (TaskStatus.FINISHED, TaskStatus.FAILED):
+            time.sleep(0.1)
+
+        self.assertEqual(second.status, TaskStatus.FINISHED)
+        self.assertFalse(psutil.pid_exists(launcher_pid))
 
 
 class TaskQueueReorderTests(unittest.TestCase):
