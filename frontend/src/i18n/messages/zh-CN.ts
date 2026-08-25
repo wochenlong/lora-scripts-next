@@ -247,6 +247,10 @@ export default {
       success: "任务已开始执行",
       fail: "启动任务失败",
     },
+    moveToFront: {
+      success: "已提到队列最前",
+      fail: "插队失败",
+    },
     retryTask: {
       confirm: "确定要重跑任务 {id} 吗？将按原配置回到队列末尾。",
       title: "重新排队",
@@ -285,6 +289,7 @@ export default {
       stop: "停止任务",
       stopping: "停止中…",
       dequeue: "移出队列",
+      moveToFront: "提到最前",
       resume: "开始执行",
       starting: "启动中…",
       retry: "重新排队",

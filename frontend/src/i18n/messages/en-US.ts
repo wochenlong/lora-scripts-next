@@ -247,6 +247,10 @@ export default {
       success: "Task started",
       fail: "Failed to start the task",
     },
+    moveToFront: {
+      success: "Moved to the front of the queue",
+      fail: "Failed to reprioritize the task",
+    },
     retryTask: {
       confirm: "Re-queue task {id}? It will be appended to the end of the queue with the same configuration.",
       title: "Re-queue Task",
@@ -285,6 +289,7 @@ export default {
       stop: "Stop Task",
       stopping: "Stopping…",
       dequeue: "Remove From Queue",
+      moveToFront: "Move to Front",
       resume: "Start Task",
       starting: "Starting…",
       retry: "Re-queue",

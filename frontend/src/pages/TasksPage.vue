@@ -505,6 +505,19 @@ async function resume(task: TrainingTask) {
   }
 }
 
+async function moveToFront(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    await tasksApi.moveToFront(task.id)
+    await store.refresh({ silent: true })
+    ElMessage.success(t("tasks.moveToFront.success"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.moveToFront.fail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
 async function retry(task: TrainingTask) {
   try {
     await ElMessageBox.confirm(t("tasks.retryTask.confirm", { id: task.id }), t("tasks.retryTask.title"), {
@@ -593,6 +606,7 @@ onBeforeUnmount(() => {
             <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
             <button v-else-if="isHeld(selected)" class="primary-action" :disabled="actionBusyId === selected.id" @click="resume(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.starting") : t("tasks.detail.resume") }}</button>
             <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
+            <button v-if="selected.status === 'QUEUED'" class="secondary-action" :disabled="actionBusyId === selected.id" @click="moveToFront(selected)">{{ t("tasks.detail.moveToFront") }}</button>
             <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
             <button v-if="isTerminal(selected)" class="danger-action" :disabled="actionBusyId === selected.id" @click="removeTask(selected)">{{ t("tasks.detail.delete") }}</button>
           </div>
