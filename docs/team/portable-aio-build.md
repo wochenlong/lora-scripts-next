@@ -293,11 +293,4 @@ VERSION: 3.0.0
 
 ---
 
-## 7. 范围外（不要擅自做）
 
-- 不要把 AIO 改成「默认推荐下载」文案，除非维护者明确要求改 README  
-- 不要为了减小体积而删掉 Fast venv 却仍自称 `-AIO`  
-- 不要把发布后缀写成 `kohya-musubi-fast`（对外统一 **`-AIO`**）  
-- 不要把应用目录改回 / 写成 `SD-Trainer`  
-- 不要把 `WhitecrowAurora/lora-rescripts` 当上游仓库操作  
-- 不要在未约定时强制上传魔搭 / GitHub
