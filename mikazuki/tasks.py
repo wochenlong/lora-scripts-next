@@ -35,6 +35,13 @@ except ModuleNotFoundError:
 
 def kill_proc_tree(pid, including_parent=True):
     parent = psutil.Process(pid)
+    if including_parent:
+        # Freeze the launcher first so an elastic agent cannot fork a new
+        # worker between the children snapshot and the final kill (#291).
+        try:
+            parent.suspend()
+        except Exception:
+            pass
     children = parent.children(recursive=True)
     for child in children:
         child.kill()
@@ -111,6 +118,10 @@ class Task:
             self.metadata.pop("last_log_lines", None)
             if self.metadata.get("error") == "Training process exited with code 0":
                 self.metadata.pop("error", None)
+            return
+        if self.status == TaskStatus.TERMINATED:
+            # Manual stop: the nonzero exit (usually -9) is expected, don't
+            # present it as a failure reason in the UI.
             return
         message = f"Training process exited with code {returncode}"
         self.metadata.setdefault("error", message)
@@ -209,13 +220,18 @@ class Task:
         self._stdout_thread.start()
 
     def terminate(self):
+        # Mark TERMINATED before killing: the worker's wait() returns as soon
+        # as the process dies and must already see the final status, otherwise
+        # _record_completion() races and logs the -9 exit as a failure.
+        self.status = TaskStatus.TERMINATED
         try:
-            kill_proc_tree(self.process.pid, False)
+            # Kill the whole tree, launcher included: accelerate's elastic
+            # agent respawns killed workers, so killing only children leaves
+            # a zombie that blocks the worker's task.wait() forever (#286).
+            kill_proc_tree(self.process.pid, True)
         except Exception as e:
             log.error(f"Error when killing process: {e}")
-            return
         finally:
-            self.status = TaskStatus.TERMINATED
             self._append_disk_log("[task terminated]")
 
 
@@ -257,13 +273,15 @@ class TaskManager:
         }
 
     def _persist(self):
-        """Snapshot pending compute work (QUEUED/RUNNING) atomically."""
+        """Snapshot the compute lane (pending work AND terminal history)
+        atomically. Terminal tasks stay on disk until an explicit
+        delete_task()/purge_tasks() removes them; there is no auto cleanup."""
         if not self._persist_path:
             return
         try:
             records = [
                 self._task_record(t) for t in self.tasks.values()
-                if t.lane == LANE_COMPUTE and t.status in (TaskStatus.QUEUED, TaskStatus.RUNNING)
+                if t.lane == LANE_COMPUTE and t.status != TaskStatus.CREATED
             ]
             path = self._persist_path
             path.parent.mkdir(parents=True, exist_ok=True)
@@ -274,7 +292,8 @@ class TaskManager:
             log.warning(f"Failed to persist task queue / 任务队列持久化失败: {e}")
 
     def restore_queue(self):
-        """Re-enqueue tasks persisted as QUEUED; mark interrupted RUNNING as FAILED."""
+        """Re-enqueue tasks persisted as QUEUED; mark interrupted RUNNING as
+        FAILED; restore terminal tasks as read-only history (never queued)."""
         path = self._persist_path
         if not path or not path.is_file():
             return
@@ -314,6 +333,23 @@ class TaskManager:
                     self.tasks[task_id] = task
                     self._compute_queue.append(task_id)
                     restored += 1
+                elif record.get("status") in ("FINISHED", "FAILED", "TERMINATED"):
+                    # Terminal history: restore as-is for the workbench list;
+                    # never queued, never held, deletable/retryable as usual.
+                    stored_env = record.get("env") or {}
+                    task = Task(
+                        task_id=task_id,
+                        command=record.get("command") or [],
+                        environ={**os.environ, **stored_env},
+                        metadata=record.get("metadata") or {},
+                        cwd=record.get("cwd"),
+                        lane=LANE_COMPUTE,
+                        group=record.get("group"),
+                    )
+                    task.status = TaskStatus[record["status"]]
+                    returncode = task.metadata.get("returncode")
+                    task.returncode = returncode if isinstance(returncode, int) else None
+                    self.tasks[task_id] = task
                 elif record.get("status") == "RUNNING":
                     # Keep the stored env: the interrupted task stays retryable,
                     # and training commands rely on env like PYTHONPATH (#158).
@@ -474,6 +510,31 @@ class TaskManager:
             return
         task.terminate()
 
+    def move_to_front(self, task_id: str) -> bool:
+        """Move a queued compute task (held or not) to the front of the queue,
+        i.e. right after the currently running task. Stage groups move as a
+        whole, preserving stage order and contiguity."""
+        with self._cond:
+            task = self.tasks.get(task_id)
+            if task is None or task_id not in self._compute_queue:
+                return False
+            if task.group:
+                members = [
+                    t for t in self.tasks.values()
+                    if t.group == task.group and t.task_id in self._compute_queue
+                ]
+                members.sort(key=lambda t: list(self._compute_queue).index(t.task_id))
+                ids = [t.task_id for t in members]
+            else:
+                ids = [task_id]
+            for tid in ids:
+                self._compute_queue.remove(tid)
+            for tid in reversed(ids):
+                self._compute_queue.appendleft(tid)
+            self._persist()
+        log.info(f"Task {task_id} moved to queue front ({len(ids)} task(s)) / 任务已提到队列最前")
+        return True
+
     def resume_task(self, task_id: str) -> bool:
         """Release a restored (held) queued task so the worker may run it."""
         task = self.tasks.get(task_id)
@@ -487,6 +548,70 @@ class TaskManager:
         return True
 
     _RETRY_STRIP_METADATA = ("error", "returncode", "finished_at", "last_log_lines", "held", "started_at")
+
+    _TERMINAL_STATUSES = (TaskStatus.FINISHED, TaskStatus.FAILED, TaskStatus.TERMINATED)
+
+    def delete_task(self, task_id: str) -> bool:
+        """Remove a terminal task from the table. Active tasks are refused so
+        a running training can never be dropped from under the worker. Stage
+        groups are deleted atomically: every terminal member goes together,
+        so no half-deleted group can be retried (#291 review)."""
+        with self._cond:
+            task = self.tasks.get(task_id)
+            if task is None or task.status not in self._TERMINAL_STATUSES:
+                return False
+            if task.group:
+                doomed = [
+                    t for t in self.tasks.values()
+                    if t.group == task.group and t.status in self._TERMINAL_STATUSES
+                ]
+            else:
+                doomed = [task]
+            for member in doomed:
+                try:
+                    self._compute_queue.remove(member.task_id)
+                except ValueError:
+                    pass
+                del self.tasks[member.task_id]
+                hub.drop_task(member.task_id)
+            self._persist()
+        log.info(f"Task {task_id} deleted ({len(doomed)} record(s)) / 任务已删除")
+        return True
+
+    def purge_tasks(self, keep_last: int = 0) -> int:
+        """Bulk-delete terminal tasks, keeping the most recent ``keep_last``
+        logical runs. Stage groups count as one run and are only purged when
+        every member is terminal (#291 review)."""
+        with self._cond:
+            groups: Dict[str, List[Task]] = {}
+            for t in self.tasks.values():
+                groups.setdefault(t.group or t.task_id, []).append(t)
+
+            def finished_at(members: List[Task]) -> float:
+                return max(
+                    float(m.metadata["finished_at"] if m.metadata.get("finished_at") is not None
+                          else (m.metadata.get("created_at") or 0))
+                    for m in members
+                )
+
+            eligible = [
+                members for members in groups.values()
+                if all(t.status in self._TERMINAL_STATUSES for t in members)
+            ]
+            eligible.sort(key=finished_at, reverse=True)
+            doomed = [t for members in eligible[max(0, keep_last):] for t in members]
+            for task in doomed:
+                try:
+                    self._compute_queue.remove(task.task_id)
+                except ValueError:
+                    pass
+                del self.tasks[task.task_id]
+                hub.drop_task(task.task_id)
+            if doomed:
+                self._persist()
+        if doomed:
+            log.info(f"Purged {len(doomed)} finished task record(s) / 已清理 {len(doomed)} 条历史记录")
+        return len(doomed)
 
     def retry_task(self, task_id: str) -> Optional[List[Task]]:
         """Re-queue a finished/failed/terminated compute task. Musubi-style

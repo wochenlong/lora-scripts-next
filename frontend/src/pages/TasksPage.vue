@@ -1,13 +1,19 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
+import { useRouter } from "vue-router"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { Refresh } from "@element-plus/icons-vue"
+import { stringify } from "smol-toml"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useTasksStore } from "../stores/tasks"
 import { tasksApi, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
+import { moduleForTrainType } from "../training/modules"
+import { copyText } from "../utils/clipboard"
 import LossChart from "../components/LossChart.vue"
 import TaskLogPanel from "../components/TaskLogPanel.vue"
+
+const router = useRouter()
 
 const store = useTasksStore()
 const { tasks, loading, error, terminatingId } = storeToRefs(store)
@@ -195,7 +201,45 @@ const runningList = computed(() =>
     }),
 )
 const recentList = computed(() => allGroups.value.filter((group) => !group.tasks.some(isActiveTask)))
-const visibleList = computed(() => activeTab.value === "running" ? runningList.value : recentList.value)
+
+const filterStatus = ref<"" | TaskStatus>("")
+const filterType = ref("")
+const filterKeyword = ref("")
+
+const FILTER_STATUSES: TaskStatus[] = ["RUNNING", "QUEUED", "CREATED", "FINISHED", "FAILED", "TERMINATED"]
+
+function taskTypeLabel(task: TrainingTask): string {
+  return metaString(task, "train_type") || metaString(task, "backend")
+}
+
+const typeOptions = computed(() => {
+  const values = new Set<string>()
+  for (const task of tasks.value) {
+    const label = taskTypeLabel(task)
+    if (label) values.add(label)
+  }
+  return [...values].sort()
+})
+
+function groupMatchesFilters(group: TaskGroup): boolean {
+  if (filterStatus.value && !group.tasks.some((task) => task.status === filterStatus.value)) return false
+  if (filterType.value && !group.tasks.some((task) => taskTypeLabel(task) === filterType.value)) return false
+  const keyword = filterKeyword.value.trim().toLowerCase()
+  if (keyword) {
+    const haystacks = group.tasks.flatMap((task) => [
+      task.id,
+      group.key,
+      taskName(task),
+      metaString(task, "config_path"),
+      metaString(task, "output_dir"),
+      metaString(task, "output_name"),
+    ])
+    if (!haystacks.some((text) => text.toLowerCase().includes(keyword))) return false
+  }
+  return true
+}
+
+const visibleList = computed(() => (activeTab.value === "running" ? runningList.value : recentList.value).filter(groupMatchesFilters))
 const selected = computed(() => allGroups.value.find((group) => group.key === selectedId.value)?.representative)
 const selectedIsMaintenance = computed(() => (selected.value ? isMaintenanceTask(selected.value) : false))
 
@@ -230,6 +274,22 @@ function taskName(task: TrainingTask) {
   const kindKey = kindLabelKey(task)
   if (kindKey) return t(kindKey)
   return String(task.metadata.output_name || task.metadata.trainer_file || task.metadata.backend || t("tasks.defaultName"))
+}
+
+/** Short group id for the list row; full id stays in the detail panel. */
+function groupShortId(group: TaskGroup): string {
+  return group.key.length > 12 ? `${group.key.slice(0, 8)}…` : group.key
+}
+
+async function copyOutputDir(task: TrainingTask) {
+  const dir = metaString(task, "output_dir")
+  if (!dir) return
+  try {
+    await copyText(dir)
+    ElMessage.success(t("tasks.detail.outputDirCopied"))
+  } catch {
+    ElMessage.error(t("tasks.detail.outputDirCopyFail"))
+  }
 }
 
 function taskDetail(task: TrainingTask) {
@@ -336,6 +396,102 @@ async function dequeue(task: TrainingTask) {
 
 const actionBusyId = ref("")
 
+function isTerminal(task: TrainingTask): boolean {
+  return task.status === "FINISHED" || task.status === "FAILED" || task.status === "TERMINATED"
+}
+
+async function removeTask(task: TrainingTask) {
+  try {
+    await ElMessageBox.confirm(t("tasks.deleteTask.confirm", { id: task.id }), t("tasks.deleteTask.title"), {
+      confirmButtonText: t("tasks.deleteTask.confirmButton"),
+      cancelButtonText: t("tasks.terminate.cancel"),
+      type: "warning",
+    })
+    actionBusyId.value = task.id
+    await tasksApi.remove(task.id)
+    await store.refresh({ silent: true })
+    ElMessage.success(t("tasks.deleteTask.success"))
+  } catch (caught) {
+    if (caught !== "cancel" && caught !== "close") {
+      ElMessage.error(caught instanceof Error ? caught.message : t("tasks.deleteTask.fail"))
+    }
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+const purgeOpen = ref(false)
+const purgeKeepLast = ref(10)
+const purgeBusy = ref(false)
+
+async function purgeTasks() {
+  purgeBusy.value = true
+  try {
+    const result = await tasksApi.purge(purgeKeepLast.value)
+    await store.refresh({ silent: true })
+    purgeOpen.value = false
+    ElMessage.success(t("tasks.purge.success", { n: result.removed }))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.purge.fail"))
+  } finally {
+    purgeBusy.value = false
+  }
+}
+
+async function importToTraining(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    const data = await tasksApi.config(task.id)
+    sessionStorage.setItem("mikazuki-pending-import", JSON.stringify(data.config))
+    const targetModule = moduleForTrainType(data.train_type)
+    if (targetModule) await router.push({ path: "/training", query: { model: targetModule.model, engine: targetModule.engine, target: targetModule.target } })
+    else await router.push("/training")
+  } catch (caught) {
+    sessionStorage.removeItem("mikazuki-pending-import")
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.importTrain.fail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+async function fetchTaskToml(task: TrainingTask) {
+  const data = await tasksApi.config(task.id)
+  const name = String(data.output_name || data.config.output_name || task.id)
+  return { tomlText: stringify(data.config), name }
+}
+
+async function exportTaskConfig(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    const { tomlText, name } = await fetchTaskToml(task)
+    const blob = new Blob([tomlText], { type: "application/toml;charset=utf-8" })
+    const url = URL.createObjectURL(blob)
+    const anchor = document.createElement("a")
+    anchor.href = url
+    anchor.download = `${name}.toml`
+    anchor.click()
+    URL.revokeObjectURL(url)
+    ElMessage.success(t("tasks.exportConfig.success"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.exportConfig.fail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+async function copyTaskConfig(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    const { tomlText } = await fetchTaskToml(task)
+    await copyText(tomlText)
+    ElMessage.success(t("tasks.exportConfig.copied"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.exportConfig.copyFail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
 async function resume(task: TrainingTask) {
   actionBusyId.value = task.id
   try {
@@ -344,6 +500,19 @@ async function resume(task: TrainingTask) {
     ElMessage.success(t("tasks.resume.success"))
   } catch (caught) {
     ElMessage.error(caught instanceof Error ? caught.message : t("tasks.resume.fail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+async function moveToFront(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    await tasksApi.moveToFront(task.id)
+    await store.refresh({ silent: true })
+    ElMessage.success(t("tasks.moveToFront.success"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.moveToFront.fail"))
   } finally {
     actionBusyId.value = ""
   }
@@ -406,10 +575,22 @@ onBeforeUnmount(() => {
           <button :class="{ active: activeTab === 'running' }" @click="activeTab = 'running'">{{ t("tasks.tabs.running") }}<b>{{ runningList.length }}</b></button>
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
+        <button v-if="activeTab === 'recent' && recentList.length" class="ghost-button tasks-purge-button" @click="purgeOpen = true">{{ t("tasks.purge.button") }}</button>
+        <div class="tasks-filters">
+          <el-select v-model="filterStatus" size="small" class="tasks-filter-status">
+            <el-option value="" :label="t('tasks.filters.allStatuses')" />
+            <el-option v-for="s in FILTER_STATUSES" :key="s" :value="s" :label="statusLabels[s] || s" />
+          </el-select>
+          <el-select v-model="filterType" size="small" class="tasks-filter-type">
+            <el-option value="" :label="t('tasks.filters.allTypes')" />
+            <el-option v-for="tp in typeOptions" :key="tp" :value="tp" :label="tp" />
+          </el-select>
+          <input v-model="filterKeyword" class="tasks-filter-keyword" type="search" :placeholder="t('tasks.filters.keywordPlaceholder')">
+        </div>
         <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
         <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
           <span class="task-status">{{ statusLabel(group.representative) }}</span>
-          <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code>{{ group.key }}</code></div>
+          <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code :title="group.key">{{ groupShortId(group) }}</code></div>
           <span v-if="group.representative.status === 'QUEUED' && group.representative.queue_position" class="task-queue-pos">{{ t("tasks.queuePosition", { n: group.representative.queue_position }) }}</span>
           <span v-if="kindLabelKey(group.representative)" class="task-kind">{{ t(kindLabelKey(group.representative)) }}</span>
           <div v-if="group.stages.length > 1" class="task-stage-strip">
@@ -425,7 +606,9 @@ onBeforeUnmount(() => {
             <button v-if="selected.status === 'RUNNING'" class="danger-action" :disabled="terminatingId === selected.id" @click="terminate(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.stop") }}</button>
             <button v-else-if="isHeld(selected)" class="primary-action" :disabled="actionBusyId === selected.id" @click="resume(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.starting") : t("tasks.detail.resume") }}</button>
             <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
-            <button v-if="(selected.status === 'FAILED' || selected.status === 'TERMINATED') && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
+            <button v-if="selected.status === 'QUEUED'" class="secondary-action" :disabled="actionBusyId === selected.id" @click="moveToFront(selected)">{{ t("tasks.detail.moveToFront") }}</button>
+            <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
+            <button v-if="isTerminal(selected)" class="danger-action" :disabled="actionBusyId === selected.id" @click="removeTask(selected)">{{ t("tasks.detail.delete") }}</button>
           </div>
         </header>
         <div v-if="progress.total_steps" class="task-progress">
@@ -441,7 +624,7 @@ onBeforeUnmount(() => {
           <div v-if="metaString(selected, 'train_type')"><dt>{{ t("tasks.detail.trainType") }}</dt><dd>{{ metaString(selected, "train_type") }}</dd></div>
           <div v-if="selectedCreatedAt"><dt>{{ t("tasks.detail.createdAt") }}</dt><dd>{{ formatTimestamp(selectedCreatedAt) }}</dd></div>
           <div v-if="selectedCreatedAt"><dt>{{ t("tasks.detail.elapsed") }}</dt><dd>{{ elapsedLabel }}</dd></div>
-          <div v-if="metaString(selected, 'output_dir')"><dt>{{ t("tasks.detail.outputDir") }}</dt><dd :title="metaString(selected, 'output_dir')">{{ metaString(selected, "output_dir") }}</dd></div>
+          <div v-if="metaString(selected, 'output_dir')"><dt>{{ t("tasks.detail.outputDir") }}</dt><dd class="task-output-dir" :title="metaString(selected, 'output_dir')"><span>{{ metaString(selected, "output_dir") }}</span><button type="button" class="copy-button" @click="copyOutputDir(selected)">{{ t("tasks.detail.copyOutputDir") }}</button></dd></div>
         </dl>
         <section v-if="selectedError" class="task-failure">
           <header>{{ t("tasks.detail.errorTitle") }}</header>
@@ -451,6 +634,9 @@ onBeforeUnmount(() => {
         <div class="task-detail-actions">
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
           <RouterLink v-if="selected.status !== 'QUEUED' && !selectedIsMaintenance" class="ghost-button" to="/tensorboard.html?from=tasks">{{ t("tasks.detail.tensorboard") }}</RouterLink>
+          <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="importToTraining(selected)">{{ t("tasks.detail.importTrain") }}</button>
+          <button v-if="!selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="exportTaskConfig(selected)">{{ t("tasks.detail.exportConfig") }}</button>
+          <button v-if="!selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="copyTaskConfig(selected)">{{ t("tasks.detail.copyConfig") }}</button>
         </div>
         <section v-if="!selectedIsMaintenance" class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0, collapsed: !previewOpen }">
           <header class="task-panel-header" @click="previewOpen = !previewOpen">
@@ -480,6 +666,21 @@ onBeforeUnmount(() => {
 
     <el-dialog :model-value="!!lightboxImage" :title="lightboxImage ? (imageLabel(lightboxImage) || lightboxImage.name) : ''" align-center class="preview-lightbox" @update:model-value="lightboxImage = null">
       <img v-if="lightboxImage" class="lightbox-image" :src="lightboxImage.url" :alt="lightboxImage.name">
+    </el-dialog>
+
+    <el-dialog v-model="purgeOpen" :title="t('tasks.purge.title')" align-center class="purge-dialog">
+      <div class="purge-form">
+        <label class="purge-keep">
+          <span>{{ t("tasks.purge.keepLabel") }}</span>
+          <el-input-number v-model="purgeKeepLast" :min="0" :max="999" size="small" />
+          <span>{{ t("tasks.purge.keepSuffix") }}</span>
+        </label>
+        <p class="purge-hint">{{ t("tasks.purge.keepHint") }}</p>
+      </div>
+      <template #footer>
+        <button class="ghost-button" @click="purgeOpen = false">{{ t("tasks.purge.cancel") }}</button>
+        <button class="danger-action" :disabled="purgeBusy" @click="purgeTasks">{{ t("tasks.purge.confirmButton") }}</button>
+      </template>
     </el-dialog>
   </div>
 </template>
