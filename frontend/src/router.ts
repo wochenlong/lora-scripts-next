@@ -26,7 +26,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/settings", redirect: "/settings/ui" },
   { path: "/settings/ui", component: SettingsContainerPage, props: { tab: "ui" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/engines", component: SettingsContainerPage, props: { tab: "engines" }, meta: { titleKey: "settings.title" } },
-  { path: "/settings/engines", component: SettingsContainerPage, props: { tab: "engines" }, meta: { titleKey: "settings.title" } },
+  { path: "/settings/update", component: SettingsContainerPage, props: { tab: "update" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/about", component: SettingsContainerPage, props: { tab: "about" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/changelog", component: SettingsContainerPage, props: { tab: "changelog" }, meta: { titleKey: "settings.title" } },
   { path: "/help/guide.html", component: GuidePage, meta: { titleKey: "guide.title" } },

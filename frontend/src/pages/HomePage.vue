@@ -10,26 +10,29 @@ const portals = computed(() => [
   { title: t("home.portals.tasks.title"), text: t("home.portals.tasks.text"), to: "/tasks", tone: "cyan" },
 ] as const)
 
-/** 1 product · 2 event · 3 tutorial video (placeholder until official upload). */
+/** Promo slides for 3.0.0: intro + ModelScope + remote event poster (not bundled). */
+const EVENT_POSTER_URL =
+  "https://cdn.jsdelivr.net/gh/wochenlong/lora-scripts-next@main/docs/design/assets/home-event-anima.webp"
+
 const slides = computed(() => [
   { id: "intro", kind: "intro" as const },
   {
+    id: "modelscope",
+    kind: "promo" as const,
+    href: "https://www.modelscope.cn/models",
+    eyebrow: t("home.sponsor.modelscope.eyebrow"),
+    title: t("home.sponsor.modelscope.title"),
+    text: t("home.sponsor.modelscope.text"),
+    cta: t("home.sponsor.modelscope.cta"),
+  },
+  {
     id: "anima-event",
     kind: "poster" as const,
-    src: "/assets/home-sponsor-anima.webp",
+    src: EVENT_POSTER_URL,
     href: "https://kusart.com/zh-CN/events/anima",
     alt: t("home.sponsor.anima.alt"),
     badge: t("home.sponsor.anima.badge"),
     caption: t("home.sponsor.anima.caption"),
-  },
-  {
-    id: "anima-tutorial",
-    kind: "poster" as const,
-    src: "/assets/home-sponsor-bilibili-placeholder.jpg",
-    href: "https://www.bilibili.com/video/BV1H3gp68E3R",
-    alt: t("home.sponsor.tutorial.alt"),
-    badge: t("home.sponsor.tutorial.badge"),
-    caption: t("home.sponsor.tutorial.caption"),
   },
 ])
 
@@ -100,6 +103,16 @@ onBeforeUnmount(stopAutoplay)
                 <img src="/assets/home-logo.webp" alt="Next Trainer" />
               </div>
             </div>
+          </template>
+          <template v-else-if="slide.kind === 'promo'">
+            <a class="hero-promo" :href="slide.href" target="_blank" rel="noopener noreferrer">
+              <div class="hero-promo-copy">
+                <span class="eyebrow">{{ slide.eyebrow }}</span>
+                <h2>{{ slide.title }}</h2>
+                <p>{{ slide.text }}</p>
+                <span class="hero-promo-cta">{{ slide.cta }} →</span>
+              </div>
+            </a>
           </template>
           <template v-else>
             <a class="hero-poster" :href="slide.href" target="_blank" rel="noopener noreferrer">
