@@ -13,6 +13,8 @@
 <p align="center">
   <a href="README.md">English</a>
   ·
+  <a href="#计划中roadmap">计划中</a>
+  ·
   <a href="docs/credits.md">开源引用</a>
   ·
   <a href="CHANGELOG.md">更新日志</a>
@@ -165,6 +167,29 @@
 | ![设置界面](assets/readme/vue3/07-settings-ui.png) | ![设置引擎](assets/readme/vue3/06-settings-engines.png) |
 
 </details>
+
+---
+
+## 计划中（Roadmap）
+
+下面是公开路线图，**不保证排期**；具体进度以 [Issues](https://github.com/wochenlong/lora-scripts-next/issues) 为准。欢迎催更或补充场景。
+
+### 引擎与能力
+
+- [ ] 接入 [AI Toolkit](https://github.com/ostris/ai-toolkit)（更多新模型训练路径）
+- [ ] 接入 [DiffSynth-Studio](https://github.com/modelscope/DiffSynth-Studio)（文生图 LoRA 等）
+- [ ] 支持**图像编辑**类模型训练
+- [ ] 支持**视频**类模型训练
+
+### 模型与数据
+
+- [ ] **模型管理器**：按底模族默认推荐、本机优先、远程 ID 一键拉取到引擎原生布局
+- [ ] **API 打标**（对接外部打标 / 多模态接口）
+- [ ] **自然语言打标**（用自然语言描述生成 / 改写 caption）
+
+### 自动化
+
+- [ ] **Agent / API 接入**：把训练、任务状态做成可被程序调用的一环（模块化目标的一部分）
 
 ---
 
