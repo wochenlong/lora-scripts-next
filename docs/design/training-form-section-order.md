@@ -81,7 +81,7 @@
 
 | 场景 | 字段落点 |
 |------|----------|
-| Klein / Kontext / Qwen-Edit 等 | 参考图 → **数据集** 的 `control_data_dirs[]`（与 AI Toolkit 目录格式对齐，见 [`image-edit-dataset-contract.md`](./image-edit-dataset-contract.md)）；预览 control → **训练预览**；不新开「编辑」大分区 |
+| Klein / Kontext / Qwen-Edit 等 | 参考图 → **数据集** 的 `control_data_dirs[]`（与 AI Toolkit 目录格式对齐，见 [`image-edit-dataset-contract.md`](./image-edit-dataset-contract.md)）；预览 control → **训练预览**；不新开「编辑」大分区。Klein 下版本走 **AI Toolkit**（#284 / #299），不挂 Musubi |
 | 视频（Wan 等） | `num_frames` / fps → **数据集** |
 | 音频 | 路径与长度类 → **数据集** |
 | 全量微调 | **网络设置**整段隐藏 |

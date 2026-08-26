@@ -1,14 +1,16 @@
 # 设计约定 — 图像编辑训练数据集前端契约
 
 > **状态**：产品已拍板（2026-08-26）；本文只定**前端 / 磁盘契约**，引擎 adapter 另开实施。  
-> **关联**：[#252](https://github.com/wochenlong/lora-scripts-next/issues/252)（图像编辑训练 UI）；分区排序见 [`training-form-section-order.md`](./training-form-section-order.md)。  
+> **关联**：[#252](https://github.com/wochenlong/lora-scripts-next/issues/252)（图像编辑训练 UI）；分区排序见 [`training-form-section-order.md`](./training-form-section-order.md)；引擎 [#284](https://github.com/wochenlong/lora-scripts-next/issues/284) / Klein [#299](https://github.com/wochenlong/lora-scripts-next/issues/299)。  
 > **参考**：AI Toolkit 工作台 Target Dataset + Control Dataset（多目录同名配对）。
 
 ---
 
 ## 1. 产品口径（一句话）
 
-**不**加「文生图 / 图像编辑」模式切换。只在 **数据集设置** 里用路径是否填写来分流；磁盘布局与 **AI Toolkit 图像编辑数据集格式**对齐。Musubi（及后续引擎）须能消费这同一套目录格式开训。
+**不**加「文生图 / 图像编辑」模式切换。只在 **数据集设置** 里用路径是否填写来分流；磁盘布局与 **AI Toolkit 图像编辑数据集格式**对齐。
+
+**引擎取向（2026-08-26）**：该契约的**首要消费者是 AI Toolkit**（下版本接入，后端先行）。Klein **不**再规划挂到 Musubi；其它引擎若日后消费同一磁盘布局，由各自 adapter 转换，前端不改第二套格式。
 
 ---
 
@@ -41,7 +43,7 @@ control_data_dirs 有 ≥1 个非空路径     → 图像编辑（参考张数 =
 
 - 「文生图 / 图像编辑」Tab 或第四维 `task` 切换。
 - Dataset 工作台内的配对浏览 / 拖拽对齐 UI（仍按 [#252](https://github.com/wochenlong/lora-scripts-next/issues/252)：训练页填路径即可）。
-- 为 Musubi 单独做「单目录 + `name_0.png`」的前端第二种布局。
+- 为其它引擎单独做第二套前端目录布局（一律 AI Toolkit 多目录契约）。
 
 ---
 
@@ -67,8 +69,8 @@ refs_b/                  ← control_data_dirs[1]（多参考时）
 
 | 引擎 | 预期 |
 |------|------|
-| **AI Toolkit** | 前端字段几乎直通：`train_data_dir` → target/`folder_path`；`control_data_dirs` → `control_path` 列表 |
-| **Musubi** | **前端仍用上述契约与 AI Toolkit 目录格式**；adapter 负责把「多目录同名」可靠映射为 musubi 训练所需结构（例如生成 JSONL `control_path_0/1/…` 等）。产品预期：用户无需为 Musubi 另备 `_N` 单目录数据集 |
+| **AI Toolkit（首选）** | 前端字段几乎直通：`train_data_dir` → target/`folder_path`；`control_data_dirs` → `control_path` 列表（见 #284 / #299） |
+| **其它引擎（可选）** | 若消费同一磁盘布局，adapter 自行映射；**不**为 Klein 单独往 Musubi 再叠一套编辑栈 |
 
 上限、是否允许 0 张参考（Klein 可无 control；部分模型强制 control）由引擎 **capability** 下发或文档约定；前端按 capability 做必填/张数校验，不硬编码死在某一个模型名上（首期实现可先写死 Klein/Kontext 表，再收拢）。
 
@@ -85,8 +87,7 @@ refs_b/                  ← control_data_dirs[1]（多参考时）
 - [ ] Schema：对支持编辑的模型（如 Klein）在数据集区增加 `control_data_dirs`（数组 + filepicker）
 - [ ] 文案 / i18n：目标图 vs 参考图；同名配对说明
 - [ ] 提交前轻量校验：目录存在、抽样同名配对
-- [ ] Musubi adapter：消费 AI Toolkit 多目录格式并开训
-- [ ] AI Toolkit 引擎接入后：直通同一字段
+- [ ] AI Toolkit 引擎 + adapter：直通同一字段（#284 / #299，**后端先行**）
 - [ ] 预览路径挂 control（有参考图时）
 
-协作：前端 [@IryNeko](https://github.com/IryNeko)；Musubi / 引擎映射 [@MikumikuDAIFans](https://github.com/MikumikuDAIFans)；产品口径 [@wochenlong](https://github.com/wochenlong)。
+协作：引擎 / 后端 [@MikumikuDAIFans](https://github.com/MikumikuDAIFans)、[@IryNeko](https://github.com/IryNeko)；产品 / 前端 [@wochenlong](https://github.com/wochenlong)。
