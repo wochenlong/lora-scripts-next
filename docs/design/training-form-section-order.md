@@ -30,7 +30,7 @@
 |----|--------|--------|--------|
 | 1 | **训练用模型** | 底模及配套权重路径（VAE / TE / AE…）、resume | 否 |
 | 2 | **训练模型类型** | 身份选择：预测类型、`lora_type`（lora/lokr…）、flux/chroma、`model_version` 等 | 可空（无类型开关时隐藏整段） |
-| 3 | **数据集设置** | 目标图目录、分辨率/桶、caption 后缀；编辑能力时**可选**参考图（Control）目录 | 否 |
+| 3 | **数据集设置** | 目标图目录、分辨率/桶、caption 后缀；编辑能力时用 **`control_data_dirs[]`**（AI Toolkit 多目录同名格式，详见 [`image-edit-dataset-contract.md`](./image-edit-dataset-contract.md)） | 否 |
 | 4 | **保存设置** | output 名/目录、保存频率与精度 | 否 |
 | 5 | **训练过程** | epoch / steps / batch / seed；时间步与损失调度（原「专用」里的 timestep / shift / CFG / token 长度等） | 否 |
 | 6 | **学习率与优化器** | lr、scheduler、optimizer | 否 |
@@ -81,7 +81,7 @@
 
 | 场景 | 字段落点 |
 |------|----------|
-| Klein / Kontext / Qwen-Edit 等 | 参考图路径 → **数据集**；预览 control → **训练预览**；不新开「编辑」大分区 |
+| Klein / Kontext / Qwen-Edit 等 | 参考图 → **数据集** 的 `control_data_dirs[]`（与 AI Toolkit 目录格式对齐，见 [`image-edit-dataset-contract.md`](./image-edit-dataset-contract.md)）；预览 control → **训练预览**；不新开「编辑」大分区 |
 | 视频（Wan 等） | `num_frames` / fps → **数据集** |
 | 音频 | 路径与长度类 → **数据集** |
 | 全量微调 | **网络设置**整段隐藏 |
@@ -107,6 +107,7 @@ Musubi / AI Toolkit 的 CLI 或上游 UI 卡片顺序可以不同；**Next Train
 
 ## 6. 相关
 
+- [`image-edit-dataset-contract.md`](./image-edit-dataset-contract.md) — 图像编辑数据集前端契约（AI Toolkit 多目录格式；Musubi 同格式消费）
 - [`schema-form-single-column.md`](./schema-form-single-column.md) — 表单单列（布局，不改分区语义）
 - [`selector-feedback-and-draft-carryover.md`](./selector-feedback-and-draft-carryover.md) — 选择器与草稿携带
 - 团队分工：产品 IA [@wochenlong](https://github.com/wochenlong)；前端落地 [@IryNeko](https://github.com/IryNeko)；引擎侧字段映射 [@MikumikuDAIFans](https://github.com/MikumikuDAIFans)
