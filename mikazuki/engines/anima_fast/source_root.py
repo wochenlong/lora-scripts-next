@@ -56,12 +56,22 @@ def ensure_upstream_clone(
     return target
 
 
+def _commit_available(path: Path, commit: str) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}"],
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
 def _usable_git_source(path: Path, source_commit: str | None) -> bool:
     if not _has_train_py(path):
         return False
     if source_commit and not _is_git_checkout(path):
         # A vendor-bundle snapshot carries the exact pinned tree without .git.
         return snapshot_matches(path, source_commit)
+    if source_commit and not _commit_available(path, source_commit):
+        return False
     return True
 
 

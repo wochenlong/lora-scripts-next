@@ -15,6 +15,7 @@ from mikazuki.engines.anima_fast.extension_state import (
     write_install_state,
 )
 from mikazuki.engines.anima_fast.installer import build_install_plan, remove_extension
+from mikazuki.engines.anima_fast.manifest import UPSTREAM
 from mikazuki.engines.anima_fast.preflight import run_preflight
 from mikazuki.engines.anima_fast.preview import apply_anima_fast_preview
 from mikazuki.engines.anima_fast.settings import feature_enabled
@@ -83,7 +84,7 @@ async def install(payload: dict, force_install: bool = False):
     if not feature_enabled():
         return anima_fast_disabled_response()
     runtime = anima_fast_runtime()
-    source_commit = str(payload.get("source_commit") or runtime.source_commit or "").strip() or None
+    source_commit = str(payload.get("source_commit") or runtime.source_commit or "").strip() or UPSTREAM["commit"] or None
     dry_run = payload.get("dry_run", True) is not False
     project_root = Path.cwd()
     layout = default_layout(project_root)

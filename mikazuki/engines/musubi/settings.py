@@ -112,14 +112,24 @@ def ensure_upstream_clone(
     return target
 
 
+def _commit_available(path: Path, commit: str) -> bool:
+    result = subprocess.run(
+        ["git", "-C", str(path), "rev-parse", "--verify", "--quiet", f"{commit}^{{commit}}"],
+        capture_output=True,
+    )
+    return result.returncode == 0
+
+
 def _usable_source(path: Path, commit: str | None) -> bool:
-    """Package tree +, when a commit is pinned, either a git checkout or a
-    snapshot whose .source_commit matches the pin."""
+    """Package tree +, when a commit is pinned, either a git checkout that
+    actually has the commit or a snapshot whose .source_commit matches."""
     if not _has_package_tree(path):
         return False
-    if commit and not (path / ".git").exists():
+    if not commit:
+        return True
+    if not (path / ".git").exists():
         return snapshot_matches(path, commit)
-    return True
+    return _commit_available(path, commit)
 
 
 def resolve_install_source_root(
@@ -150,7 +160,11 @@ def resolve_install_source_root(
         if _usable_source(candidate, commit):
             return candidate.resolve()
     cache_root = default_upstream_cache(project_root)
-    if _usable_source(cache_root, commit):
+    if _has_package_tree(cache_root) and (cache_root / ".git").exists() and commit and not _commit_available(cache_root, commit):
+        # Cached clone is behind the pin: refresh it (fetches the commit).
+        if allow_clone:
+            return ensure_upstream_clone(project_root, cache_root, commit, log=log, github_url_prefix=github_url_prefix)
+    elif _usable_source(cache_root, commit):
         return cache_root
     if allow_clone:
         if not shutil.which("git"):

@@ -11,7 +11,9 @@ the network. Packing instructions: ``mikazuki/engines/VENDOR_BUNDLE.md``.
 from __future__ import annotations
 
 import hashlib
+import shutil
 import tarfile
+import threading
 import zipfile
 from collections.abc import Callable
 from pathlib import Path
@@ -24,6 +26,11 @@ BUNDLE_NAMES = (
 )
 
 _EXTRACT_MARKER = ".vendor_bundle_extracted"
+_STAGING_DIR = ".vendor_bundle_staging"
+
+# Serializes extraction inside this process; staging + atomic promotion keeps
+# concurrent readers from ever seeing a half-extracted tree.
+_EXTRACTION_LOCK = threading.Lock()
 
 
 def find_vendor_bundle(project_root: Path) -> Path | None:
@@ -71,24 +78,37 @@ def _bundle_digest(bundle: Path) -> str:
 
 
 def extract_vendor_bundle(bundle: Path, vendor_dir: Path, log: Callable[[str], None] | None = None) -> None:
+    """Extract bundle into a staging dir, then promote entries atomically."""
     vendor_dir.mkdir(parents=True, exist_ok=True)
-    if zipfile.is_zipfile(bundle):
-        with zipfile.ZipFile(bundle) as zf:
-            for info in zf.infolist():
-                _check_within(vendor_dir, info.filename)
-            zf.extractall(vendor_dir)
-    else:
-        with tarfile.open(bundle) as tf:
-            for member in tf.getmembers():
-                _check_within(vendor_dir, member.name)
-                if member.issym() or member.islnk():
-                    # Link targets must also stay inside vendor/.
-                    target = ((vendor_dir / member.name).parent / member.linkname).resolve()
-                    target.relative_to(vendor_dir.resolve())
-            try:
-                tf.extractall(vendor_dir, filter="data")
-            except TypeError:  # Python < 3.11.4 has no filter parameter
-                tf.extractall(vendor_dir)
+    staging = vendor_dir / _STAGING_DIR
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    try:
+        if zipfile.is_zipfile(bundle):
+            with zipfile.ZipFile(bundle) as zf:
+                for info in zf.infolist():
+                    _check_within(staging, info.filename)
+                zf.extractall(staging)
+        else:
+            with tarfile.open(bundle) as tf:
+                for member in tf.getmembers():
+                    _check_within(staging, member.name)
+                    if member.issym() or member.islnk():
+                        # Link targets must also stay inside the staging dir.
+                        target = ((staging / member.name).parent / member.linkname).resolve()
+                        target.relative_to(staging.resolve())
+                try:
+                    tf.extractall(staging, filter="data")
+                except TypeError:  # Python < 3.11.4 has no filter parameter
+                    tf.extractall(staging)
+        for entry in staging.iterdir():
+            destination = vendor_dir / entry.name
+            if destination.exists():
+                continue
+            entry.rename(destination)
+    finally:
+        shutil.rmtree(staging, ignore_errors=True)
     marker = vendor_dir / _EXTRACT_MARKER
     marker.write_text(f"{bundle.name}\n{_bundle_digest(bundle)}\n", encoding="utf-8")
 
@@ -116,12 +136,16 @@ def ensure_vendor_source(
     target = vendor_dir / dirname
     if target.is_dir():
         return target.resolve()
-    bundle = find_vendor_bundle(project_root)
-    if bundle is None or _bundle_already_extracted(bundle, vendor_dir):
-        return None
-    if log:
-        log(f"[vendor] extracting {bundle.name} into vendor/")
-    extract_vendor_bundle(bundle, vendor_dir, log=log)
+    with _EXTRACTION_LOCK:
+        # Re-check under the lock: another thread may have just promoted it.
+        if target.is_dir():
+            return target.resolve()
+        bundle = find_vendor_bundle(project_root)
+        if bundle is None or _bundle_already_extracted(bundle, vendor_dir):
+            return None
+        if log:
+            log(f"[vendor] extracting {bundle.name} into vendor/")
+        extract_vendor_bundle(bundle, vendor_dir, log=log)
     if target.is_dir():
         return target.resolve()
     if log:

@@ -152,6 +152,37 @@ class TestMusubiResolveViaBundle:
         result = resolve_install_source_root(tmp_path, None, None)
         assert result == (tmp_path / "vendor" / "musubi-tuner").resolve()
 
+    def _init_git_source(self, path: Path, sentinel: str) -> str:
+        import subprocess
+
+        (path / "src" / "musubi_tuner").mkdir(parents=True)
+        (path / "src" / "musubi_tuner" / "__init__.py").write_text("", encoding="utf-8")
+        subprocess.run(["git", "init", "-q", str(path)], check=True)
+        subprocess.run(["git", "-C", str(path), "add", "."], check=True)
+        subprocess.run(
+            ["git", "-C", str(path), "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-qm", sentinel],
+            check=True,
+        )
+        return subprocess.run(
+            ["git", "-C", str(path), "rev-parse", "HEAD"], check=True, capture_output=True, text=True
+        ).stdout.strip()
+
+    def test_git_source_missing_pinned_commit_is_skipped(self, tmp_path: Path):
+        repo = tmp_path / "vendor" / "musubi-tuner"
+        self._init_git_source(repo, "seed")
+        from mikazuki.engines.musubi.settings import resolve_install_source_root
+
+        with pytest.raises(ValueError, match="未找到 musubi-tuner 源码"):
+            resolve_install_source_root(tmp_path, None, FULL_SHA)
+
+    def test_git_source_with_commit_available_is_accepted(self, tmp_path: Path):
+        repo = tmp_path / "vendor" / "musubi-tuner"
+        head = self._init_git_source(repo, "seed")
+        from mikazuki.engines.musubi.settings import resolve_install_source_root
+
+        result = resolve_install_source_root(tmp_path, None, head)
+        assert result == repo.resolve()
+
     def test_installer_copies_snapshot_without_git(self, tmp_path: Path):
         _make_bundle(
             tmp_path,

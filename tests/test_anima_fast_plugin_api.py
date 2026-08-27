@@ -123,6 +123,10 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             source = root / "anima"
             source.mkdir()
             (source / "train.py").write_text("", encoding="utf-8")
+            # Non-git explicit source must carry the pinned snapshot marker.
+            from mikazuki.engines.anima_fast.manifest import UPSTREAM
+
+            (source / ".source_commit").write_text(UPSTREAM["commit"] + "\n", encoding="utf-8")
 
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
                 mock.patch(

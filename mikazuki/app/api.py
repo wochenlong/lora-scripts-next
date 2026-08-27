@@ -17,6 +17,7 @@ from mikazuki import launch_utils
 from mikazuki.engines import registry
 from mikazuki.engines.anima_fast import TRAIN_TYPE as ANIMA_FAST_TRAIN_TYPE
 from mikazuki.engines.kohya.run import TRAINER_MAPPING as trainer_mapping
+from mikazuki.engines.manifest import KIND_BUILTIN
 from mikazuki.engines.musubi import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
 from mikazuki.engines.runner import RunContext, dispatch_run
 from mikazuki.model_assets import (
@@ -198,8 +199,12 @@ def _engine_routes_module(engine_id: str):
         raise HTTPException(status_code=404, detail=f"Unknown engine: {engine_id}")
     try:
         return pack.import_module("routes")
-    except ModuleNotFoundError:
-        raise HTTPException(status_code=404, detail=f"Engine {engine_id} exposes no routes")
+    except ModuleNotFoundError as exc:
+        # Only translate a genuinely missing routes module; a nested import
+        # failure inside an existing routes.py must surface as-is.
+        if exc.name and exc.name.rsplit(".", 1)[-1] == "routes" and exc.name.startswith(pack.package):
+            raise HTTPException(status_code=404, detail=f"Engine {engine_id} exposes no routes")
+        raise
 
 
 async def _engine_payload(request: Request) -> dict:
@@ -230,10 +235,15 @@ async def engine_dry_run(engine_id: str, request: Request):
 
 
 async def _engine_install_impl(engine_id: str, request: Request, force_install: bool):
+    pack = registry.get_pack(engine_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail=f"Unknown engine: {engine_id}")
+    if pack.manifest.kind == KIND_BUILTIN:
+        return APIResponseFail(message=f"{engine_id} 为内置引擎，无需安装。")
     routes = _engine_routes_module(engine_id)
     handler = getattr(routes, "install", None)
     if handler is None:
-        return APIResponseFail(message=f"{engine_id} 为内置引擎，无需安装。")
+        return APIResponseFail(message=f"{engine_id} 插件未提供安装接口。")
     return await handler(await _engine_payload(request), force_install=force_install)
 
 
@@ -244,6 +254,11 @@ async def engine_install(engine_id: str, request: Request):
 
 @router.post("/engines/{engine_id}/repair")
 async def engine_repair(engine_id: str, request: Request):
+    pack = registry.get_pack(engine_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail=f"Unknown engine: {engine_id}")
+    if pack.manifest.kind == KIND_BUILTIN:
+        return APIResponseFail(message=f"{engine_id} 为内置引擎，无需修复。")
     routes = _engine_routes_module(engine_id)
     handler = getattr(routes, "repair", None)
     if handler is None:
@@ -253,10 +268,15 @@ async def engine_repair(engine_id: str, request: Request):
 
 @router.post("/engines/{engine_id}/uninstall")
 async def engine_uninstall(engine_id: str):
+    pack = registry.get_pack(engine_id)
+    if pack is None:
+        raise HTTPException(status_code=404, detail=f"Unknown engine: {engine_id}")
+    if pack.manifest.kind == KIND_BUILTIN:
+        return APIResponseFail(message=f"{engine_id} 为内置引擎，不可卸载。")
     routes = _engine_routes_module(engine_id)
     handler = getattr(routes, "uninstall", None)
     if handler is None:
-        return APIResponseFail(message=f"{engine_id} 为内置引擎，不可卸载。")
+        return APIResponseFail(message=f"{engine_id} 插件未提供卸载接口。")
     return await handler()
 
 
