@@ -32,7 +32,7 @@ The optional **Fast mode** (`model_train_type: anima-lora-fast`) integrates the 
 
 Licensed under the **MIT License** (Copyright (c) 2026 Seunghyun Ji).
 
-Next Trainer ships this engine as an **optional plugin** (`extensions/anima_lora/`). On install, the plugin snapshot includes upstream `LICENSE` / `NOTICE` / `README.md` (see `mikazuki/anima_fast_backend/installer.py`). User-facing docs: [`docs/anima-fast.md`](docs/anima-fast.md).
+Next Trainer ships this engine as an **optional plugin** (`extensions/anima_lora/`). On install, the plugin snapshot includes upstream `LICENSE` / `NOTICE` / `README.md` (see `mikazuki/engines/anima_fast/installer.py`). User-facing docs: [`docs/anima-fast.md`](docs/anima-fast.md).
 
 The referenced repository features per-block or full-model `torch.compile`, static-shape token bucketing, and compile-friendly forward paths. On consumer GPUs this yields substantially faster step times than the default Kohya/sd-scripts path at the cost of higher VRAM and a separate Python/CUDA runtime. See **Performance** in `docs/anima-fast.md` for measured comparisons in this repo.
 

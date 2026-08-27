@@ -15,7 +15,7 @@ class TrainSubmitSourceTests(unittest.TestCase):
         self.assertIn("submitting.value = true", self.page)
         self.assertIn("if (!validate() || submitting.value) return", self.page)
         self.assertIn("finally { submitting.value = false }", self.page)
-        self.assertIn('submitting ? "提交中…" : "开始训练"', self.page)
+        self.assertIn('submitting ? t("training.submitting") : t("training.start")', self.page)
 
     def test_training_flow_uses_backend_contracts(self):
         self.assertIn("trainingApi.validateImport", self.page)

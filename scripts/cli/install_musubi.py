@@ -95,10 +95,10 @@ def find_project_root(start: Path | None = None) -> Path:
     candidates.append(here.parent.parent)
     for base in candidates:
         root = base.resolve()
-        if (root / "gui.py").is_file() and (root / "mikazuki" / "musubi_backend").is_dir():
+        if (root / "gui.py").is_file() and (root / "mikazuki" / "engines" / "musubi").is_dir():
             return root
     raise SystemExit(
-        "Cannot locate SD-Trainer project root (need gui.py and mikazuki/musubi_backend). "
+        "Cannot locate SD-Trainer project root (need gui.py and mikazuki/engines/musubi). "
         "Run from repo / SD-Trainer directory or pass --project-root."
     )
 
@@ -122,15 +122,16 @@ def main(argv: list[str] | None = None) -> int:
     ensure_project_import_path(project_root)
     os.chdir(project_root)
 
-    from mikazuki.musubi_backend.environment import build_environment_install_plan, install_environment, resolve_cuda_extra
-    from mikazuki.musubi_backend.extension_state import default_layout, read_extension_status
-    from mikazuki.musubi_backend.settings import feature_enabled, resolve_install_source_root
+    from mikazuki.engines.musubi.environment import build_environment_install_plan, install_environment, resolve_cuda_extra
+    from mikazuki.engines.musubi.extension_state import default_layout, read_extension_status
+    from mikazuki.engines.musubi.manifest import UPSTREAM
+    from mikazuki.engines.musubi.settings import feature_enabled, resolve_install_source_root
     from mikazuki.download_sources import parse_download_sources
 
     if not feature_enabled():
         raise SystemExit("musubi-tuner backend is disabled (LORA_ENABLE_MUSUBI=0).")
 
-    commit = args.source_commit.strip() or None
+    commit = args.source_commit.strip() or UPSTREAM["commit"] or None
     cuda_extra = args.cuda_extra.strip() or resolve_cuda_extra()
     download_sources = parse_download_sources(
         {
@@ -141,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         }
     )
     try:
-        source_root = resolve_install_source_root(project_root, args.source_root)
+        source_root = resolve_install_source_root(project_root, args.source_root, commit)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     layout = default_layout(project_root)

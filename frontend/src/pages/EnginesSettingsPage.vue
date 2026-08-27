@@ -29,8 +29,8 @@ let progressSource: EventSource | undefined
 
 const MANAGED_ENGINES = new Set(["anima-fast", "musubi"])
 const INSTALL_STREAM_BASE: Record<string, string> = {
-  "anima-fast": "/api/plugins/anima-lora/install",
-  musubi: "/api/plugins/musubi/install",
+  "anima-fast": "/api/engines/anima-fast/install",
+  musubi: "/api/engines/musubi/install",
 }
 
 function isManaged(id: string) {

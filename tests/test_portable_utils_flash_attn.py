@@ -3,24 +3,26 @@ import types
 
 import pytest
 
-from mikazuki.app.api import _detect_best_attn_mode
+from mikazuki.app.train_submit import _detect_best_attn_mode
 from mikazuki.portable_utils import train_env_overrides
 
 
 def test_detect_best_attn_mode_prefers_flash_when_stack_usable(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("mikazuki.app.api.flash_attn_stack_usable", lambda: True)
+    monkeypatch.setattr("mikazuki.app.train_submit.flash_attn_stack_usable", lambda: True)
     assert _detect_best_attn_mode() == "flash"
 
 
 def test_detect_best_attn_mode_uses_xformers_without_flash(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("mikazuki.app.api.flash_attn_stack_usable", lambda: False)
+    monkeypatch.setattr("mikazuki.app.train_submit.flash_attn_stack_usable", lambda: False)
     monkeypatch.setitem(sys.modules, "xformers", types.ModuleType("xformers"))
     assert _detect_best_attn_mode() == "xformers"
 
 
 def test_detect_best_attn_mode_uses_torch_without_flash_or_xformers(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setattr("mikazuki.app.api.flash_attn_stack_usable", lambda: False)
-    monkeypatch.delitem(sys.modules, "xformers", raising=False)
+    monkeypatch.setattr("mikazuki.app.train_submit.flash_attn_stack_usable", lambda: False)
+    # sys.modules["xformers"] = None makes `import xformers` raise ImportError
+    # even when xformers is installed in the environment.
+    monkeypatch.setitem(sys.modules, "xformers", None)
     assert _detect_best_attn_mode() == "torch"
 
 

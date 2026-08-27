@@ -40,7 +40,7 @@
 `not_installed | unknown | installing | auditing | ready | broken | disabled | coming_soon`
 
 前端引擎目录声明：`id`、`kind`（`builtin` | `optional` | `planned`）、体积提示、能力标签。  
-当前阶段前端聚合现有 API（如 `/api/plugins/anima-lora/*`）；后续可收敛为 `GET /api/engines`。
+当前前端按统一路由 `/api/engines/<engine-id>/*` 读取各引擎状态（#302 已落地，替代原 `/api/plugins/*`）；后续可再收敛为 `GET /api/engines` 聚合接口。
 
 ## 操作命名（重要）
 

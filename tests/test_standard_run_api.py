@@ -23,11 +23,38 @@ stub_progress.tagger_progress = types.SimpleNamespace(
     is_busy=lambda: False,
     reset_idle=lambda message=None: None,
 )
+_TAGGER_MODULES = (
+    "mikazuki.tagger.interrogator",
+    "mikazuki.tagger.jobs",
+    "mikazuki.tagger.progress",
+)
+_saved_tagger_modules = {name: sys.modules.get(name) for name in _TAGGER_MODULES}
 sys.modules["mikazuki.tagger.interrogator"] = stub_interrogator
 sys.modules["mikazuki.tagger.jobs"] = stub_jobs
 sys.modules["mikazuki.tagger.progress"] = stub_progress
 
 from mikazuki.app import api
+
+# Restore the real tagger modules: the stubs only need to shield this module's
+# ``from mikazuki.app import api`` in minimal environments. Leaving them in
+# sys.modules leaks into later tests that import the real tagger modules.
+for _name in _TAGGER_MODULES:
+    if _saved_tagger_modules[_name] is None:
+        sys.modules.pop(_name, None)
+    else:
+        sys.modules[_name] = _saved_tagger_modules[_name]
+
+# If api was freshly imported through the stubs, its own globals still hold the
+# stub objects. Rebind them from the real modules so later tests never observe
+# collection-order-dependent tagger bindings.
+import mikazuki.tagger.interrogator as _real_interrogator
+import mikazuki.tagger.jobs as _real_jobs
+import mikazuki.tagger.progress as _real_progress
+
+api.available_interrogators = _real_interrogator.available_interrogators
+api.run_interrogate_job = _real_jobs.run_interrogate_job
+api.run_prefetch_job = _real_jobs.run_prefetch_job
+api.tagger_progress = _real_progress.tagger_progress
 
 
 def make_request(payload: dict) -> Request:

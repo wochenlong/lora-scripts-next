@@ -54,11 +54,11 @@ function installBody(downloadSources?: DownloadSourcesPayload) {
 }
 
 export const musubiApi = {
-  status: () => apiData<MusubiStatus>("/api/plugins/musubi/status"),
+  status: () => apiData<MusubiStatus>("/api/engines/musubi/status"),
   install: (downloadSources?: DownloadSourcesPayload) =>
-    apiData<MusubiInstallResult>("/api/plugins/musubi/install", { method: "POST", body: installBody(downloadSources) }),
+    apiData<MusubiInstallResult>("/api/engines/musubi/install", { method: "POST", body: installBody(downloadSources) }),
   repair: (downloadSources?: DownloadSourcesPayload) =>
-    apiData<MusubiInstallResult>("/api/plugins/musubi/repair", { method: "POST", body: installBody(downloadSources) }),
-  uninstall: () => apiData<{ status?: MusubiStatus }>("/api/plugins/musubi/uninstall", { method: "POST", body: "{}" }),
-  preflight: (config: Record<string, unknown>) => apiData<MusubiPreflightResult>("/api/plugins/musubi/preflight", { method: "POST", body: JSON.stringify(config) }),
+    apiData<MusubiInstallResult>("/api/engines/musubi/repair", { method: "POST", body: installBody(downloadSources) }),
+  uninstall: () => apiData<{ status?: MusubiStatus }>("/api/engines/musubi/uninstall", { method: "POST", body: "{}" }),
+  preflight: (config: Record<string, unknown>) => apiData<MusubiPreflightResult>("/api/engines/musubi/preflight", { method: "POST", body: JSON.stringify(config) }),
 }

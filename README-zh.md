@@ -180,6 +180,7 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 | **Krea 2 多卡（Linux 部署 + WebUI / `dev`）** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
 | 训练监控 | [docs/train-monitor.md](docs/train-monitor.md) |
 | 仓库布局契约 | [docs/repo-layout.md](docs/repo-layout.md) |
+| 命令行入口（`train_anima_by_toml.sh` / `train_anima_fast_by_toml.sh`） | [docs/cli-args.md](docs/cli-args.md) |
 
 ---
 

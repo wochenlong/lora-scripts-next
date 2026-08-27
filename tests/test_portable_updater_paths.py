@@ -2,11 +2,19 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 COMMON_PS1 = REPO_ROOT / "scripts" / "portable" / "portable_updater_common.ps1"
+
+requires_powershell = pytest.mark.skipif(
+    shutil.which("powershell") is None,
+    reason="PowerShell not available (Windows-only updater scripts)",
+)
 
 
 def _run_normalize(raw: str) -> str:
@@ -56,12 +64,14 @@ def test_release_updater_uses_github_token_when_available() -> None:
     assert '$headers["Authorization"] = "Bearer $githubToken"' in script
 
 
+@requires_powershell
 def test_normalize_strips_trailing_backslash_and_stray_quote() -> None:
     root = r"D:\pkg\SD-Trainer-v2.8.3"
     assert _run_normalize(root + "\\") == root
     assert _run_normalize(root + '\\"') == root
 
 
+@requires_powershell
 def test_update_from_release_dry_run_accepts_batch_style_path(tmp_path: Path) -> None:
     portable_root = tmp_path / "PortableRoot"
     trainer = portable_root / "SD-Trainer"

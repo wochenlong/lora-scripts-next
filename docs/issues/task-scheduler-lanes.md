@@ -44,8 +44,8 @@ tm = TaskManager()   # 全局单例，所有任务类型共用
 
 安装/下载三处均为同一模式（`add_task` 后门 + 线程执行）：
 
-- `mikazuki/anima_fast_backend/environment.py:784` — Anima Fast 安装（`kind: anima_fast_install`）
-- `mikazuki/musubi_backend/environment.py:501` — musubi-tuner 安装（`kind: musubi_install`）
+- `mikazuki/engines/anima_fast/environment.py` — Anima Fast 安装（`kind: anima_fast_install`）
+- `mikazuki/engines/musubi/environment.py` — musubi-tuner 安装（`kind: musubi_install`）
 - `mikazuki/model_assets.py:277` — 模型资产下载（`kind: assets_download`）
 
 于是现象完全对得上：
@@ -74,7 +74,7 @@ tm = TaskManager()   # 全局单例，所有任务类型共用
 
 - `mikazuki/tasks.py` — TaskManager 增加 lane 概念与队列（核心）
 - `mikazuki/process.py` — 训练三个入口（standard / musubi 三阶段 / 其他）指定 compute lane + 排队语义
-- `mikazuki/anima_fast_backend/environment.py` / `musubi_backend/environment.py` / `model_assets.py` — 安装/下载改走 maintenance lane
+- `mikazuki/engines/anima_fast/environment.py` / `mikazuki/engines/musubi/environment.py` / `model_assets.py` — 安装/下载改走 maintenance lane
 - `frontend/src/api/tasks.ts` / `pages/TasksPage.vue` — `QUEUED` 状态与 lane/kind 展示（可结合 #226 §2 kind 标签一起做）
 
 ## 备注

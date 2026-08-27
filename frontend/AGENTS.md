@@ -133,7 +133,7 @@ frontend/
 
 1. 前端执行 Schema 必填/范围校验和参数冲突诊断。
 2. 用户确认创建后台任务。
-3. Anima Fast 先调用 `/api/anima-fast/preflight`。
+3. Anima Fast 先调用 `/api/engines/anima-fast/preflight`。
 4. 调用 `/api/run`；后端仍执行最终模型类型、路径、feature flag 和环境校验。
 5. 返回 `task_id` 和日志路径。
 6. 任务页轮询 `/api/tasks`；日志页 `/train-log` 通过 `/api/train/log/stream/{task_id}` SSE 读取日志。

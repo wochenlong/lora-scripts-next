@@ -102,7 +102,12 @@ function fromMusubiInstall(result: MusubiInstallResult): EngineActionResult {
 export const enginesApi = {
   async status(id: TrainingEngine): Promise<EngineStatus> {
     if (id === "kohya") {
-      return { id: "kohya", state: "ready", featureEnabled: true }
+      const data = await apiData<{ state?: string; feature_enabled?: boolean }>("/api/engines/kohya/status")
+      return {
+        id: "kohya",
+        state: mapAnimaState(data.state || "ready"),
+        featureEnabled: data.feature_enabled !== false,
+      }
     }
     if (id === "musubi") {
       return fromMusubi(await musubiApi.status())
@@ -134,7 +139,7 @@ export const enginesApi = {
 
   async uninstall(id: TrainingEngine): Promise<EngineStatus> {
     if (id === "anima-fast") {
-      const data = await apiData<{ status?: AnimaFastStatus }>("/api/plugins/anima-lora/uninstall", { method: "POST", body: "{}" })
+      const data = await apiData<{ status?: AnimaFastStatus }>("/api/engines/anima-fast/uninstall", { method: "POST", body: "{}" })
       return data.status ? fromAnima(data.status) : { id: "anima-fast", state: "not_installed", featureEnabled: true }
     }
     if (id === "musubi") {

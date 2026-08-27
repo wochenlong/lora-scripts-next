@@ -7,14 +7,14 @@ from pathlib import Path
 from unittest import mock
 
 from mikazuki.download_sources import DownloadSources
-from mikazuki.musubi_backend.environment import (
+from mikazuki.engines.musubi.environment import (
     AuditResult,
     audit_environment,
     build_environment_install_plan,
     install_environment,
     resolve_cuda_extra,
 )
-from mikazuki.musubi_backend.extension_state import (
+from mikazuki.engines.musubi.extension_state import (
     STATE_BROKEN,
     STATE_INSTALLED_UNVERIFIED,
     STATE_NOT_INSTALLED,
@@ -23,13 +23,13 @@ from mikazuki.musubi_backend.extension_state import (
     read_extension_status,
     write_install_state,
 )
-from mikazuki.musubi_backend.installer import (
+from mikazuki.engines.musubi.installer import (
     build_install_plan,
     copy_source_snapshot,
     remove_extension,
 )
-from mikazuki.musubi_backend.preflight import ProbeFacts, run_preflight
-from mikazuki.musubi_backend.settings import (
+from mikazuki.engines.musubi.preflight import ProbeFacts, run_preflight
+from mikazuki.engines.musubi.settings import (
     RuntimeConfig,
     default_upstream_cache,
     discover_runtime,
@@ -129,7 +129,7 @@ class InstallerTests(unittest.TestCase):
     def test_remove_extension_refuses_outside_extensions(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            from mikazuki.musubi_backend.extension_state import ExtensionLayout
+            from mikazuki.engines.musubi.extension_state import ExtensionLayout
 
             outside = ExtensionLayout(root / "somewhere" / "else")
             with self.assertRaises(ValueError):
@@ -164,7 +164,7 @@ class InstallerTests(unittest.TestCase):
                     (cache / "src" / "musubi_tuner").mkdir(parents=True)
                 return subprocess.CompletedProcess(cmd, 0)
 
-            with mock.patch("mikazuki.musubi_backend.settings.subprocess.run", side_effect=fake_run) as run:
+            with mock.patch("mikazuki.engines.musubi.settings.subprocess.run", side_effect=fake_run) as run:
                 found = resolve_install_source_root(root, allow_clone=True)
             self.assertEqual(found, cache)
             clone_cmd = run.call_args_list[0].args[0]
@@ -175,7 +175,7 @@ class InstallerTests(unittest.TestCase):
             root = Path(td)
             preferred = root / "elsewhere"
             (preferred / "src" / "musubi_tuner").mkdir(parents=True)
-            with mock.patch("mikazuki.musubi_backend.settings.subprocess.run") as run:
+            with mock.patch("mikazuki.engines.musubi.settings.subprocess.run") as run:
                 found = ensure_install_source_ready(root, preferred)
             self.assertEqual(found, preferred.resolve())
             run.assert_not_called()
@@ -211,12 +211,12 @@ class InstallEnvironmentTests(unittest.TestCase):
             plan = build_environment_install_plan(root, layout, source)
             commands: list[list[str]] = []
             audit = AuditResult(ok=True)
-            with mock.patch("mikazuki.musubi_backend.environment.ensure_install_source_ready", return_value=source), \
-                    mock.patch("mikazuki.musubi_backend.environment.copy_source_snapshot"), \
-                    mock.patch("mikazuki.musubi_backend.environment._uv_command", return_value="uv"), \
-                    mock.patch("mikazuki.musubi_backend.environment._find_base_python", return_value=base_python), \
-                    mock.patch("mikazuki.musubi_backend.environment._run_streaming", side_effect=lambda cmd, *_a, **_k: commands.append(cmd)), \
-                    mock.patch("mikazuki.musubi_backend.environment.audit_environment", return_value=audit):
+            with mock.patch("mikazuki.engines.musubi.environment.ensure_install_source_ready", return_value=source), \
+                    mock.patch("mikazuki.engines.musubi.environment.copy_source_snapshot"), \
+                    mock.patch("mikazuki.engines.musubi.environment._uv_command", return_value="uv"), \
+                    mock.patch("mikazuki.engines.musubi.environment._find_base_python", return_value=base_python), \
+                    mock.patch("mikazuki.engines.musubi.environment._run_streaming", side_effect=lambda cmd, *_a, **_k: commands.append(cmd)), \
+                    mock.patch("mikazuki.engines.musubi.environment.audit_environment", return_value=audit):
                 result = install_environment(plan, lambda _line: None)
             self.assertTrue(result.ok)
             pip_installs = [cmd for cmd in commands if cmd[:3] == ["uv", "pip", "install"]]
@@ -248,12 +248,12 @@ class InstallEnvironmentTests(unittest.TestCase):
                 commands.append(cmd)
                 envs.append(env)
 
-            with mock.patch("mikazuki.musubi_backend.environment.ensure_install_source_ready", return_value=source), \
-                    mock.patch("mikazuki.musubi_backend.environment.copy_source_snapshot"), \
-                    mock.patch("mikazuki.musubi_backend.environment._uv_command", return_value="uv"), \
-                    mock.patch("mikazuki.musubi_backend.environment._find_base_python", return_value=base_python), \
-                    mock.patch("mikazuki.musubi_backend.environment._run_streaming", side_effect=_capture), \
-                    mock.patch("mikazuki.musubi_backend.environment.audit_environment", return_value=audit):
+            with mock.patch("mikazuki.engines.musubi.environment.ensure_install_source_ready", return_value=source), \
+                    mock.patch("mikazuki.engines.musubi.environment.copy_source_snapshot"), \
+                    mock.patch("mikazuki.engines.musubi.environment._uv_command", return_value="uv"), \
+                    mock.patch("mikazuki.engines.musubi.environment._find_base_python", return_value=base_python), \
+                    mock.patch("mikazuki.engines.musubi.environment._run_streaming", side_effect=_capture), \
+                    mock.patch("mikazuki.engines.musubi.environment.audit_environment", return_value=audit):
                 result = install_environment(plan, lambda _line: None)
             self.assertTrue(result.ok)
             pip_installs = [cmd for cmd in commands if cmd[:3] == ["uv", "pip", "install"]]
@@ -279,7 +279,7 @@ class AuditEnvironmentTests(unittest.TestCase):
     def test_audit_ok_when_tensorboard_present(self):
         with tempfile.TemporaryDirectory() as td:
             runtime = self._ready_runtime(Path(td))
-            with mock.patch("mikazuki.musubi_backend.environment.subprocess.run", self._fake_probe(True)):
+            with mock.patch("mikazuki.engines.musubi.environment.subprocess.run", self._fake_probe(True)):
                 result = audit_environment(runtime)
             self.assertTrue(result.ok, result.errors)
             self.assertEqual(result.facts["tensorboard_available"], "True")
@@ -287,7 +287,7 @@ class AuditEnvironmentTests(unittest.TestCase):
     def test_audit_fails_when_tensorboard_missing(self):
         with tempfile.TemporaryDirectory() as td:
             runtime = self._ready_runtime(Path(td))
-            with mock.patch("mikazuki.musubi_backend.environment.subprocess.run", self._fake_probe(False)):
+            with mock.patch("mikazuki.engines.musubi.environment.subprocess.run", self._fake_probe(False)):
                 result = audit_environment(runtime)
             self.assertFalse(result.ok)
             self.assertTrue(any("tensorboard" in e for e in result.errors))

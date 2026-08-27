@@ -30,7 +30,7 @@ REPO = Path(__file__).resolve().parent.parent
 if str(REPO) not in sys.path:
     sys.path.insert(0, str(REPO))
 
-from mikazuki.anima_fast_backend.progress import (
+from mikazuki.engines.anima_fast.progress import (
     merge_anima_training_metrics,
     metrics_from_anima_events,
     read_jsonl_events,

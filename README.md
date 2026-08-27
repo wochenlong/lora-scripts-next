@@ -175,6 +175,7 @@ See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 | **Krea 2 multi-GPU (Linux host + WebUI / `dev`)** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
 | Train monitor | [docs/train-monitor.md](docs/train-monitor.md) |
 | Repo layout | [docs/repo-layout.md](docs/repo-layout.md) |
+| CLI entry points (`train_anima_by_toml.sh` / `train_anima_fast_by_toml.sh`) | [docs/cli-args.md](docs/cli-args.md) |
 
 ---
 

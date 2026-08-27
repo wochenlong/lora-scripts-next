@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mikazuki.musubi_backend.adapter import (
+from mikazuki.engines.musubi.adapter import (
     AdapterError,
     NETWORK_MODULE,
     adapt_config,
@@ -17,12 +17,12 @@ from mikazuki.musubi_backend.adapter import (
     normalize_kv_args,
     resolution_pair,
 )
-from mikazuki.musubi_backend.launcher import (
+from mikazuki.engines.musubi.launcher import (
     build_cache_latents_spec,
     build_cache_text_encoder_spec,
     build_train_spec,
 )
-from mikazuki.musubi_backend.settings import RuntimeConfig
+from mikazuki.engines.musubi.settings import RuntimeConfig
 
 
 def make_runtime(root: Path) -> RuntimeConfig:

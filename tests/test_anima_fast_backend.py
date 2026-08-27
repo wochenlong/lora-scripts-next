@@ -6,7 +6,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mikazuki.anima_fast_backend.adapter import (
+from mikazuki.engines.anima_fast.adapter import (
     AdapterError,
     adapt_config,
     dataset_cache_slug,
@@ -14,7 +14,7 @@ from mikazuki.anima_fast_backend.adapter import (
     dump_fast_dataset_toml,
     ensure_fast_run_log_dirs,
 )
-from mikazuki.anima_fast_backend.extension_state import (
+from mikazuki.engines.anima_fast.extension_state import (
     STATE_BROKEN,
     STATE_INSTALLED_UNVERIFIED,
     STATE_NOT_INSTALLED,
@@ -23,11 +23,11 @@ from mikazuki.anima_fast_backend.extension_state import (
     read_extension_status,
     write_install_state,
 )
-from mikazuki.anima_fast_backend.installer import build_install_plan, copy_source_snapshot, remove_extension
-from mikazuki.anima_fast_backend.launcher import build_launch_spec
-from mikazuki.anima_fast_backend.preflight import ProbeFacts, run_preflight
-from mikazuki.anima_fast_backend.service_resolver import LegacyServiceResolverShim, RegistryServiceResolver
-from mikazuki.anima_fast_backend.settings import RuntimeConfig
+from mikazuki.engines.anima_fast.installer import build_install_plan, copy_source_snapshot, remove_extension
+from mikazuki.engines.anima_fast.launcher import build_launch_spec
+from mikazuki.engines.anima_fast.preflight import ProbeFacts, run_preflight
+from mikazuki.engines.anima_fast.service_resolver import LegacyServiceResolverShim, RegistryServiceResolver
+from mikazuki.engines.anima_fast.settings import RuntimeConfig
 
 
 def make_runtime(root: Path) -> RuntimeConfig:

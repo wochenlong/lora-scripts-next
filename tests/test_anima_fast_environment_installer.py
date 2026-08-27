@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 import subprocess
 
-from mikazuki.anima_fast_backend.environment import (
+from mikazuki.engines.anima_fast.environment import (
     ANIMA_OPTIMIZER_PACKAGES,
     AuditResult,
     anima_pip_dependency_targets,
@@ -20,7 +21,7 @@ from mikazuki.anima_fast_backend.environment import (
     _run_streaming,
     start_install_task,
 )
-from mikazuki.anima_fast_backend.extension_state import (
+from mikazuki.engines.anima_fast.extension_state import (
     STATE_BROKEN,
     STATE_INSTALLING,
     STATE_INSTALLED_UNVERIFIED,
@@ -30,6 +31,14 @@ from mikazuki.anima_fast_backend.extension_state import (
     write_install_state,
 )
 from mikazuki.tasks import Task, tm
+
+
+def _fake_discovered_python(plan) -> Path:
+    """Platform-aware fake of the uv-installed base python (matches
+    ``_find_base_python`` glob patterns on the current OS)."""
+    if sys.platform == "win32":
+        return plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+    return plan.python_install_dir / "cpython-3.13.99-linux-x86_64-gnu" / "bin" / "python3"
 
 
 class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
@@ -60,7 +69,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
     def test_install_plan_uses_linux_python_layout_off_windows(self):
         with tempfile.TemporaryDirectory() as td, mock.patch(
-            "mikazuki.anima_fast_backend.environment.sys.platform", "linux"
+            "mikazuki.engines.anima_fast.environment.sys.platform", "linux"
         ):
             project = Path(td)
             source = self._make_source(project)
@@ -77,7 +86,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_runtime_source(layout)
             layout.venv_python.parent.mkdir(parents=True)
             layout.venv_python.write_text("", encoding="utf-8")
-            from mikazuki.anima_fast_backend.extension_state import write_install_state
+            from mikazuki.engines.anima_fast.extension_state import write_install_state
 
             write_install_state(layout, STATE_READY, {"audit": {"ok": False}})
 
@@ -94,7 +103,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False, source_commit="abc123")
 
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
 
             def fake_run(command, cwd, log, env=None, retries=0):
                 if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
@@ -108,11 +117,11 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             def fake_copy(_plan):
                 self._make_runtime_source(layout)
 
-            with mock.patch("mikazuki.anima_fast_backend.environment._uv_command", return_value="uv"), \
-                mock.patch("mikazuki.anima_fast_backend.environment.copy_source_snapshot", side_effect=fake_copy), \
-                mock.patch("mikazuki.anima_fast_backend.environment._run_streaming", side_effect=fake_run), \
+            with mock.patch("mikazuki.engines.anima_fast.environment._uv_command", return_value="uv"), \
+                mock.patch("mikazuki.engines.anima_fast.environment.copy_source_snapshot", side_effect=fake_copy), \
+                mock.patch("mikazuki.engines.anima_fast.environment._run_streaming", side_effect=fake_run), \
                 mock.patch(
-                    "mikazuki.anima_fast_backend.environment.audit_environment",
+                    "mikazuki.engines.anima_fast.environment.audit_environment",
                     return_value=AuditResult(ok=True, facts={"anima": {"torch": "2.11.0+cu130"}}),
                 ):
                 result = install_environment(plan, lambda _line: None)
@@ -132,7 +141,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
 
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
 
             def fake_run(command, cwd, log, env=None, retries=0):
                 if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
@@ -142,10 +151,10 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                     discovered_python.parent.mkdir(parents=True)
                     discovered_python.write_text("", encoding="utf-8")
 
-            with mock.patch("mikazuki.anima_fast_backend.environment._uv_command", return_value="uv"), \
-                mock.patch("mikazuki.anima_fast_backend.environment._run_streaming", side_effect=fake_run), \
+            with mock.patch("mikazuki.engines.anima_fast.environment._uv_command", return_value="uv"), \
+                mock.patch("mikazuki.engines.anima_fast.environment._run_streaming", side_effect=fake_run), \
                 mock.patch(
-                    "mikazuki.anima_fast_backend.environment.audit_environment",
+                    "mikazuki.engines.anima_fast.environment.audit_environment",
                     return_value=AuditResult(ok=False, errors=["missing flash-attn"]),
                 ):
                 result = install_environment(plan, lambda _line: None)
@@ -167,8 +176,8 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             log("[fake] ok")
 
         with tempfile.TemporaryDirectory() as td, \
-            mock.patch("mikazuki.anima_fast_backend.environment._run_streaming_once", side_effect=fake_once), \
-            mock.patch("mikazuki.anima_fast_backend.environment.time.sleep"):
+            mock.patch("mikazuki.engines.anima_fast.environment._run_streaming_once", side_effect=fake_once), \
+            mock.patch("mikazuki.engines.anima_fast.environment.time.sleep"):
             _run_streaming(["uv", "pip", "install"], Path(td), lines.append, retries=2)
 
         self.assertEqual(calls["count"], 2)
@@ -183,7 +192,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             layout.venv_python.write_text("", encoding="utf-8")
 
             with mock.patch(
-                "mikazuki.anima_fast_backend.environment._collect_python_facts",
+                "mikazuki.engines.anima_fast.environment._collect_python_facts",
                 return_value={
                     "python": str(layout.venv_python),
                     "version": "3.13.13",
@@ -194,7 +203,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                     "torch_cuda_available": False,
                 },
             ), mock.patch(
-                "mikazuki.anima_fast_backend.environment._main_facts_in_process",
+                "mikazuki.engines.anima_fast.environment._main_facts_in_process",
                 return_value={
                     "python": str(project / ".venv" / "Scripts" / "python.exe"),
                     "version": "3.12.13",
@@ -229,12 +238,12 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                 layout.venv_python.write_text("", encoding="utf-8")
                 if attempts["count"] == 1:
                     raise KeyboardInterrupt("simulated interrupt")
-                from mikazuki.anima_fast_backend.extension_state import write_install_state
+                from mikazuki.engines.anima_fast.extension_state import write_install_state
 
                 write_install_state(layout, STATE_READY, {"audit": {"ok": True}, "attempt": attempts["count"]})
                 return AuditResult(ok=True)
 
-            with mock.patch("mikazuki.anima_fast_backend.environment.install_environment", side_effect=fake_install):
+            with mock.patch("mikazuki.engines.anima_fast.environment.install_environment", side_effect=fake_install):
                 first_id, _ = start_install_task(project, layout, source, dry_run=False)
                 first_task = tm.tasks[first_id]
                 first_task.lock.acquire()
@@ -277,7 +286,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertIn('triton-windows==3.7.0.post26 ; sys_platform == "win32"', text)
 
     def test_anima_expected_packages_skip_triton_windows_on_linux(self):
-        from mikazuki.anima_fast_backend.environment import _anima_expected_for_platform
+        from mikazuki.engines.anima_fast.environment import _anima_expected_for_platform
 
         linux_expected = _anima_expected_for_platform("linux")
         windows_expected = _anima_expected_for_platform("win32")
@@ -297,7 +306,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
     def test_localize_linux_flash_attn_dependency_uses_cu130_direct_url(self):
         with tempfile.TemporaryDirectory() as td, mock.patch(
-            "mikazuki.anima_fast_backend.environment.sys.platform", "linux"
+            "mikazuki.engines.anima_fast.environment.sys.platform", "linux"
         ):
             source = Path(td) / "source"
             source.mkdir()
@@ -359,7 +368,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self.assertEqual(pyproject.read_text(encoding="utf-8"), original)
 
     def test_install_streaming_defaults_hf_endpoint_mirror(self):
-        from mikazuki.anima_fast_backend.environment import _run_streaming_once, DEFAULT_HF_ENDPOINT
+        from mikazuki.engines.anima_fast.environment import _run_streaming_once, DEFAULT_HF_ENDPOINT
 
         captured: dict = {}
 
@@ -377,14 +386,14 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
         env_without_endpoint = {k: v for k, v in os.environ.items() if k != "HF_ENDPOINT"}
         with tempfile.TemporaryDirectory() as td, \
-            mock.patch("mikazuki.anima_fast_backend.environment.subprocess.Popen", _FakeProc), \
+            mock.patch("mikazuki.engines.anima_fast.environment.subprocess.Popen", _FakeProc), \
             mock.patch.dict("os.environ", env_without_endpoint, clear=True):
             _run_streaming_once(["echo", "hi"], Path(td), lambda _l: None)
 
         self.assertEqual(captured["env"].get("HF_ENDPOINT"), DEFAULT_HF_ENDPOINT)
 
     def test_install_streaming_respects_user_hf_endpoint(self):
-        from mikazuki.anima_fast_backend.environment import _run_streaming_once
+        from mikazuki.engines.anima_fast.environment import _run_streaming_once
 
         captured: dict = {}
 
@@ -401,14 +410,14 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                 return 0
 
         with tempfile.TemporaryDirectory() as td, \
-            mock.patch("mikazuki.anima_fast_backend.environment.subprocess.Popen", _FakeProc), \
+            mock.patch("mikazuki.engines.anima_fast.environment.subprocess.Popen", _FakeProc), \
             mock.patch.dict("os.environ", {"HF_ENDPOINT": "https://modelscope.cn"}, clear=False):
             _run_streaming_once(["echo", "hi"], Path(td), lambda _l: None)
 
         self.assertEqual(captured["env"].get("HF_ENDPOINT"), "https://modelscope.cn")
 
     def test_install_streaming_uses_windows_system_certificates_by_default(self):
-        from mikazuki.anima_fast_backend.environment import _run_streaming_once
+        from mikazuki.engines.anima_fast.environment import _run_streaming_once
 
         captured: dict = {}
 
@@ -430,15 +439,15 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             if key not in {"UV_SYSTEM_CERTS", "UV_NATIVE_TLS"}
         }
         with tempfile.TemporaryDirectory() as td, \
-            mock.patch("mikazuki.anima_fast_backend.environment.subprocess.Popen", _FakeProc), \
-            mock.patch("mikazuki.anima_fast_backend.environment.sys.platform", "win32"), \
+            mock.patch("mikazuki.engines.anima_fast.environment.subprocess.Popen", _FakeProc), \
+            mock.patch("mikazuki.engines.anima_fast.environment.sys.platform", "win32"), \
             mock.patch.dict("os.environ", env_without_uv_certs, clear=True):
             _run_streaming_once(["uv", "pip", "install"], Path(td), lambda _line: None)
 
         self.assertEqual(captured["env"].get("UV_SYSTEM_CERTS"), "true")
 
     def test_install_streaming_explains_unknown_certificate_issuer(self):
-        from mikazuki.anima_fast_backend.environment import _run_streaming_once
+        from mikazuki.engines.anima_fast.environment import _run_streaming_once
 
         lines = iter([
             "error sending request for url\n",
@@ -458,7 +467,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
         logs: list[str] = []
         with tempfile.TemporaryDirectory() as td, \
-            mock.patch("mikazuki.anima_fast_backend.environment.subprocess.Popen", _FakeProc):
+            mock.patch("mikazuki.engines.anima_fast.environment.subprocess.Popen", _FakeProc):
             with self.assertRaises(subprocess.CalledProcessError):
                 _run_streaming_once(["uv", "pip", "install"], Path(td), logs.append)
 
@@ -467,7 +476,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
     def test_audit_environment_skips_triton_windows_on_linux(self):
         with tempfile.TemporaryDirectory() as td, mock.patch(
-            "mikazuki.anima_fast_backend.environment.sys.platform", "linux"
+            "mikazuki.engines.anima_fast.environment.sys.platform", "linux"
         ):
             project = Path(td)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
@@ -501,9 +510,9 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                     "torch_cuda_available": True,
                 }
 
-            with mock.patch("mikazuki.anima_fast_backend.environment._collect_python_facts", side_effect=fake_collect), \
+            with mock.patch("mikazuki.engines.anima_fast.environment._collect_python_facts", side_effect=fake_collect), \
                 mock.patch(
-                    "mikazuki.anima_fast_backend.environment._main_facts_in_process",
+                    "mikazuki.engines.anima_fast.environment._main_facts_in_process",
                     return_value={
                         "python": str(project / ".venv" / "bin" / "python"),
                         "version": "3.13.13",
@@ -532,7 +541,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
             pip_commands: list[list[str]] = []
 
             def fake_run(command, cwd, log, env=None, retries=0):
@@ -545,11 +554,11 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                 if len(command) >= 3 and command[1:3] == ["pip", "install"]:
                     pip_commands.append(list(command))
 
-            with mock.patch("mikazuki.anima_fast_backend.environment._uv_command", return_value="uv"), \
-                mock.patch("mikazuki.anima_fast_backend.environment.copy_source_snapshot"), \
-                mock.patch("mikazuki.anima_fast_backend.environment._run_streaming", side_effect=fake_run), \
+            with mock.patch("mikazuki.engines.anima_fast.environment._uv_command", return_value="uv"), \
+                mock.patch("mikazuki.engines.anima_fast.environment.copy_source_snapshot"), \
+                mock.patch("mikazuki.engines.anima_fast.environment._run_streaming", side_effect=fake_run), \
                 mock.patch(
-                    "mikazuki.anima_fast_backend.environment.audit_environment",
+                    "mikazuki.engines.anima_fast.environment.audit_environment",
                     return_value=AuditResult(ok=True),
                 ):
                 install_environment(plan, lambda _line: None)
@@ -569,7 +578,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
             progress_events: list[dict] = []
 
             def fake_run(command, cwd, log, env=None, retries=0):
@@ -580,11 +589,11 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                     discovered_python.parent.mkdir(parents=True)
                     discovered_python.write_text("", encoding="utf-8")
 
-            with mock.patch("mikazuki.anima_fast_backend.environment._uv_command", return_value="uv"), \
-                mock.patch("mikazuki.anima_fast_backend.environment.copy_source_snapshot"), \
-                mock.patch("mikazuki.anima_fast_backend.environment._run_streaming", side_effect=fake_run), \
+            with mock.patch("mikazuki.engines.anima_fast.environment._uv_command", return_value="uv"), \
+                mock.patch("mikazuki.engines.anima_fast.environment.copy_source_snapshot"), \
+                mock.patch("mikazuki.engines.anima_fast.environment._run_streaming", side_effect=fake_run), \
                 mock.patch(
-                    "mikazuki.anima_fast_backend.environment.audit_environment",
+                    "mikazuki.engines.anima_fast.environment.audit_environment",
                     return_value=AuditResult(ok=False, errors=["anima: iopath expected 0.1.10, got None"]),
                 ):
                 install_environment(plan, lambda _line: None, progress=progress_events.append)
@@ -601,7 +610,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
             write_install_state(layout, STATE_INSTALLING, {"task_id": "anima-install-keep-id", "plan": plan.as_dict()})
 
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
 
             def fake_run(command, cwd, log, env=None, retries=0):
                 if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
@@ -615,11 +624,11 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             def fake_copy(_plan):
                 self._make_runtime_source(layout)
 
-            with mock.patch("mikazuki.anima_fast_backend.environment._uv_command", return_value="uv"), \
-                mock.patch("mikazuki.anima_fast_backend.environment.copy_source_snapshot", side_effect=fake_copy), \
-                mock.patch("mikazuki.anima_fast_backend.environment._run_streaming", side_effect=fake_run), \
+            with mock.patch("mikazuki.engines.anima_fast.environment._uv_command", return_value="uv"), \
+                mock.patch("mikazuki.engines.anima_fast.environment.copy_source_snapshot", side_effect=fake_copy), \
+                mock.patch("mikazuki.engines.anima_fast.environment._run_streaming", side_effect=fake_run), \
                 mock.patch(
-                    "mikazuki.anima_fast_backend.environment.audit_environment",
+                    "mikazuki.engines.anima_fast.environment.audit_environment",
                     return_value=AuditResult(ok=True, facts={"anima": {"torch": "2.11.0+cu130"}}),
                 ):
                 install_environment(plan, lambda _line: None, task_id="anima-install-keep-id")
@@ -674,20 +683,20 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
             def fake_install(plan, log, task_id=None, progress=None):
                 captured["source_root"] = plan.source_root
-                from mikazuki.anima_fast_backend.extension_state import write_install_state
+                from mikazuki.engines.anima_fast.extension_state import write_install_state
 
                 write_install_state(layout, STATE_READY, {"audit": {"ok": True}})
                 return AuditResult(ok=True)
 
-            def fake_ensure(project_root, preferred, commit, log=None):
+            def fake_ensure(project_root, preferred, commit, log=None, github_url_prefix=None):
                 return cache.resolve()
 
             with mock.patch(
-                "mikazuki.anima_fast_backend.source_root.ensure_install_source_ready",
+                "mikazuki.engines.anima_fast.source_root.ensure_install_source_ready",
                 side_effect=fake_ensure,
             ):
                 with mock.patch(
-                    "mikazuki.anima_fast_backend.environment.install_environment",
+                    "mikazuki.engines.anima_fast.environment.install_environment",
                     side_effect=fake_install,
                 ):
                     task_id, _ = start_install_task(project, layout, source, dry_run=False)

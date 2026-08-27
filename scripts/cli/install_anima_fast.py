@@ -110,7 +110,7 @@ def find_project_root(start: Path | None = None) -> Path:
 
 
 def resolve_source_root(project_root: Path, explicit: Path | None, source_commit: str | None) -> Path:
-    from mikazuki.anima_fast_backend.source_root import InstallSourceError, resolve_install_source_root
+    from mikazuki.engines.anima_fast.source_root import InstallSourceError, resolve_install_source_root
 
     try:
         return resolve_install_source_root(
@@ -142,9 +142,9 @@ def main(argv: list[str] | None = None) -> int:
     ensure_project_import_path(project_root)
     os.chdir(project_root)
 
-    from mikazuki.anima_fast_backend.environment import build_environment_install_plan, install_environment
-    from mikazuki.anima_fast_backend.extension_state import default_layout, read_extension_status
-    from mikazuki.anima_fast_backend.settings import discover_runtime, feature_enabled
+    from mikazuki.engines.anima_fast.environment import build_environment_install_plan, install_environment
+    from mikazuki.engines.anima_fast.extension_state import default_layout, read_extension_status
+    from mikazuki.engines.anima_fast.settings import discover_runtime, feature_enabled
     from mikazuki.download_sources import parse_download_sources
 
     if not feature_enabled():

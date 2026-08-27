@@ -2,7 +2,7 @@
 description: Krea2 / Musubi fp8_base 与 fp8_scaled 必须成对
 globs:
   - mikazuki/schema/krea2-lora.ts
-  - mikazuki/musubi_backend/**/*
+  - mikazuki/engines/musubi/**/*
   - config/presets/krea2-lora.toml
   - extensions/musubi_tuner/**/*
 alwaysApply: false
@@ -20,7 +20,7 @@ alwaysApply: false
 
 ## 实现要求
 
-- Adapter（`mikazuki/musubi_backend/adapter.py`）须在提交前把「只开一个」纠正为**成对开启**，并给 warning。
+- Adapter（`mikazuki/engines/musubi/adapter.py`）须在提交前把「只开一个」纠正为**成对开启**，并给 warning。
 - 注意 boolean 序列化：假值常被丢掉，TOML 里可能只剩 `fp8_scaled = true`，adapter 必须覆盖这种半开状态。
 - 改 schema 文案时保持「须同时开启」说明。
 

@@ -5,14 +5,14 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from mikazuki.anima_fast_backend.extension_state import ExtensionLayout
-from mikazuki.anima_fast_backend.settings import discover_runtime
+from mikazuki.engines.anima_fast.extension_state import ExtensionLayout
+from mikazuki.engines.anima_fast.settings import discover_runtime
 
 
 class AnimaFastSettingsTests(unittest.TestCase):
     def test_discover_runtime_prefers_linux_extension_venv_when_config_has_windows_path(self):
         with tempfile.TemporaryDirectory() as td, mock.patch(
-            "mikazuki.anima_fast_backend.extension_state.sys.platform", "linux"
+            "mikazuki.engines.anima_fast.extension_state.sys.platform", "linux"
         ):
             root = Path(td)
             layout = ExtensionLayout(root / "extensions" / "anima_lora")

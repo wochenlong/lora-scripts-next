@@ -166,7 +166,7 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 安装日志在页面下方；也可通过 API 查看：
 
 ```http
-GET /api/plugins/anima-lora/status
+GET /api/engines/anima-fast/status
 ```
 
 维护者紧急关闭（一般用户无需设置）：
@@ -200,13 +200,13 @@ Anima Fast extension is not ready. Install or repair the extension first.
 ### 1. 检查插件状态
 
 ```powershell
-curl http://127.0.0.1:28000/api/plugins/anima-lora/status
+curl http://127.0.0.1:28000/api/engines/anima-fast/status
 ```
 
 ### 2. 安装插件（API，等同页内「开启插件」）
 
 ```powershell
-curl -X POST http://127.0.0.1:28000/api/plugins/anima-lora/install `
+curl -X POST http://127.0.0.1:28000/api/engines/anima-fast/install `
   -H "Content-Type: application/json" `
   -d "{\"dry_run\": false}"
 ```
@@ -214,7 +214,7 @@ curl -X POST http://127.0.0.1:28000/api/plugins/anima-lora/install `
 ### 3. 预检查配置（不启动训练）
 
 ```powershell
-curl -X POST http://127.0.0.1:28000/api/plugins/anima-lora/preflight `
+curl -X POST http://127.0.0.1:28000/api/engines/anima-fast/preflight `
   -H "Content-Type: application/json" `
   -d @your-fast-config.json
 ```
@@ -222,7 +222,7 @@ curl -X POST http://127.0.0.1:28000/api/plugins/anima-lora/preflight `
 ### 4. 生成 TOML（dry-run）
 
 ```powershell
-curl -X POST http://127.0.0.1:28000/api/plugins/anima-lora/dry-run `
+curl -X POST http://127.0.0.1:28000/api/engines/anima-fast/dry-run `
   -H "Content-Type: application/json" `
   -d "{\"model_train_type\":\"anima-lora-fast\", \"train_data_dir\":\"./train/data\", ...}"
 ```
@@ -284,7 +284,7 @@ Fast 页与标准 Kohya 页共用 **LR_OPTIMIZER** 选项（默认 `AdamW8bit`�
 
 Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选项**（不含 `prodigyplus.*` 等 Kohya 专用项）。当前 Fast 插件快照未接入 Automagic 优化器，若导入旧配置选择 `optimizer_type=Automagic`，后端会在启动前拒绝并提示改用 `AdamW8bit` 等 Fast 支持项。`DAdaptAdaGrad` 在 `dadaptation==3.1` 下默认 `eps=0.0` 会报错，Fast 会在用户未填写 `eps=` 时自动补充 `optimizer_args=["eps=1e-8"]`；需要实验其它值时可在自定义 optimizer_args 中显式填写。
 
-若报错 `ImportError: No bitsandbytes` 或 `libbitsandbytes_cuda130.dll not found`，说明插件是在补全优化器依赖前安装的，或 `bitsandbytes` 版本过旧（cu130 需 **≥ 0.49**）：在 Fast 页点击 **「修复插件」**（或 `POST /api/plugins/anima-lora/repair`）重新同步依赖。
+若报错 `ImportError: No bitsandbytes` 或 `libbitsandbytes_cuda130.dll not found`，说明插件是在补全优化器依赖前安装的，或 `bitsandbytes` 版本过旧（cu130 需 **≥ 0.49**）：在 Fast 页点击 **「修复插件」**（或 `POST /api/engines/anima-fast/repair`）重新同步依赖。
 
 ---
 
@@ -293,7 +293,7 @@ Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选�
 | 现象 | 处理 |
 |------|------|
 | 状态「进阶插件 · 待开启」 | 运行 `scripts/cli/install_anima_fast.*` 安装（推荐，终端可见报错）；或在页内点「开启插件」 |
-| 安装失败 / 审计失败 | 优先用 CLI 脚本重装看终端报错；亦可看页内日志或 `POST /api/plugins/anima-lora/repair` |
+| 安装失败 / 审计失败 | 优先用 CLI 脚本重装看终端报错；亦可看页内日志或 `POST /api/engines/anima-fast/repair` |
 | `invalid peer certificate: UnknownIssuer` | Windows 安装器会默认使用系统证书库；若仍失败，请确认代理或杀毒软件的根证书已受 Windows 信任，也可换网络重试。旧版 uv 可在安装前设置 `$env:UV_NATIVE_TLS="true"` |
 | `No bitsandbytes` / 优化器 ImportError | 修复插件；或确认 `optimizer_type=AdamW` 临时绕过 |
 | 末 epoch 报 accelerate / `NoneType is not iterable` | torch 的 `.dist-info` 损坏；**修复插件** 或重装 `torch==2.11.0+cu130` |

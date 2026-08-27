@@ -162,7 +162,9 @@ def test_relinks_canonical_outer_junction_after_portable_root_moves(tmp_path: Pa
     assert (portable_root / "output").resolve() == (trainer / "output").resolve()
 
 
-def test_is_portable_layout_detects_embedded_python(tmp_path: Path):
+def test_is_portable_layout_detects_embedded_python(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    # is_portable_layout is Windows-only by design; simulate nt for the layout check.
+    monkeypatch.setattr("link_portable_data_dirs.os.name", "nt")
     portable_root = tmp_path / "PortableRoot"
     trainer = portable_root / "SD-Trainer"
     trainer.mkdir(parents=True)

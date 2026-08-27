@@ -27,7 +27,7 @@
 
 ### §2 安装任务"假提交中" — 属实
 
-- 后端：`musubi_backend/environment.py:435-441` 创建安装任务，`metadata={"kind": "musubi_install"}`，**kind 元数据已存在**；`start_log_only()` 直接置 RUNNING。
+- 后端：`mikazuki/engines/musubi/environment.py` 创建安装任务，`metadata={"kind": "musubi_install"}`，**kind 元数据已存在**；`start_log_only()` 直接置 RUNNING。
 - 前端：`TasksPage.vue:87` `taskName()` 只认 `output_name/trainer_file/backend`，安装任务三者皆无 → 显示默认名"训练任务"；且按状态进"进行中"标签页，与训练任务无法区分。
 - 修复素材现成：前端读 `metadata.kind` 打标签/分栏即可，无需后端改动。
 
@@ -76,7 +76,7 @@
 
 ### 2. musubi 写入链路源码核实（均兼容）
 
-- TOML 确认含 `log_with = "tensorboard"`、`logging_dir = "/home/brian/lora-scripts-next/logs"`（adapter 无条件写入，`musubi_backend/adapter.py:461-470`）。
+- TOML 确认含 `log_with = "tensorboard"`、`logging_dir = "/home/brian/lora-scripts-next/logs"`（adapter 无条件写入，`mikazuki/engines/musubi/adapter.py`）。
 - musubi `trainer_base.py:124` 每步 `accelerator.log({"loss/current", "loss/average"})`，tag 与 `task_insights.py:20` 的 `LOSS_TAGS` 匹配。
 - 事件目录结构 `<logging_dir>/<ts>/network_train/` 与 `_select_run_dir` 选择逻辑兼容。
 - 训练日志显示 `init_trackers` 无报错、训练正常推进（tqdm 每步有 `avr_loss`）。
@@ -98,7 +98,7 @@ extensions/musubi_tuner/.venv/bin/pip list | grep -iE 'tensorboard|accelerate'
 ### 4. 根因
 
 musubi-tuner 上游 `pyproject.toml` 主依赖**不含 tensorboard**（仅 dev group）；插件安装命令
-`uv pip install "{source}[{cuda_extra}]"`（`musubi_backend/environment.py:380-398`）不带 dev 依赖
+`uv pip install "{source}[{cuda_extra}]"`（`mikazuki/engines/musubi/environment.py`）不带 dev 依赖
 → 子环境天然缺包 → 无事件文件 → §5/§9 空白。
 
 ### 5. 影响面与备注
@@ -114,7 +114,7 @@ musubi-tuner 上游 `pyproject.toml` 主依赖**不含 tensorboard**（仅 dev g
 
 ### §5/§9
 
-1. **插件 installer 补包**（推荐）：`musubi_backend/environment.py` 安装命令追加 `tensorboard`，不动上游。
+1. **插件 installer 补包**（推荐）：`mikazuki/engines/musubi/environment.py` 安装命令追加 `tensorboard`，不动上游。
 2. 上游 pyproject 主依赖加 tensorboard：影响面大，不推荐。
 3. 防御性改进（可选）：`read_loss_scalars` / `tensorboard_loss_scalars` 目前静默返回 `{}`，应暴露"暂无 TB 数据/读取失败原因"的降级文案，对应 §5/§9 的"明确降级"诉求。
 

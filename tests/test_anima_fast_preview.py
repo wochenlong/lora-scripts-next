@@ -4,13 +4,13 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from mikazuki.anima_fast_backend.adapter import adapt_config, dump_flat_toml
-from mikazuki.anima_fast_backend.preview import (
+from mikazuki.engines.anima_fast.adapter import adapt_config, dump_flat_toml
+from mikazuki.engines.anima_fast.preview import (
     apply_anima_fast_preview,
     build_sample_prompt_line,
     is_preview_enabled,
 )
-from mikazuki.anima_fast_backend.settings import RuntimeConfig
+from mikazuki.engines.anima_fast.settings import RuntimeConfig
 
 
 def make_runtime(root: Path) -> RuntimeConfig:

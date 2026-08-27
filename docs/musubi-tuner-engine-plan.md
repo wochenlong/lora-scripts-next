@@ -1,7 +1,7 @@
 # musubi-tuner 引擎接入实现计划（vendor）
 
 > 目标：把 [kohya-ss/musubi-tuner](https://github.com/kohya-ss/musubi-tuner) 作为**新的训练引擎**接入本仓库，首期支持 **Krea 2 LoRA 训练**（`krea2-lora`），架构上为后续其他 musubi 模型铺路。
-> 模式：完全复用 `anima_fast_backend` 已验证的「独立源码树 + 独立 venv + 配置适配器」插件模式，不动主环境。
+> 模式：完全复用 `mikazuki/engines/anima_fast/` 已验证的「独立源码树 + 独立 venv + 配置适配器」插件模式，不动主环境。
 
 ## 0.1 范围与路线图
 
@@ -18,7 +18,7 @@
 - musubi-tuner 依赖与主环境**硬冲突**：accelerate 1.6.0（主环境 0.33.0）、transformers 4.57.6（主环境 4.51.3）、numpy 不设上限（主环境钉死 1.26.4）。**必须独立 venv**，不可能并入主 `requirements.txt`。
 - 本仓库已有两条引擎路径：
   - 标准路径：`mikazuki/app/api.py:110` 的 `trainer_mapping` → `scripts/dev|stable/*.py` → `mikazuki/process.py:98` 的 `build_accelerate_train_command()`（共用主 venv）。
-  - 插件路径：`mikazuki/anima_fast_backend/`（settings/installer/launcher/adapter/preprocess 五件套），独立 venv、独立源码树、独立 Python 启动。**musubi 走这条。**
+  - 插件路径：`mikazuki/engines/anima_fast/`（settings/installer/launcher/adapter/preprocess 五件套），独立 venv、独立源码树、独立 Python 启动。**musubi 走这条。**
 - musubi-tuner 侧关键事实（已核实源码）：
   - 根目录 `krea2_train_network.py` 是薄壳，`from musubi_tuner.krea2_train_network import main`，需 `pip install -e .` 或 PYTHONPATH 指向 `src/`。
   - 训练入口直接 `python xxx_train_network.py --config_file a.toml`（内部自建 Accelerator，无需 accelerate launch 包装）；`--config_file`/`--dataset_config` 解析在 `src/musubi_tuner/training/parser_common.py:37,43`。
@@ -34,7 +34,7 @@
 WebUI (krea2-lora schema)
   → POST /api/train (model_train_type="krea2-lora")
   → mikazuki/app/api.py            分支到 musubi backend
-  → mikazuki/musubi_backend/
+  → mikazuki/engines/musubi/
       adapter.py      GUI 字段 → musubi config toml + dataset toml
       settings.py     RuntimeConfig（root/venv python/目录发现）
       launcher.py     build_launch_spec(cache) + build_launch_spec(train)
@@ -55,10 +55,10 @@ WebUI (krea2-lora schema)
 - [ ] `install.ps1` / `install.bash` / `setup_environment.py`：可选开关（默认不装，避免拖慢主安装）；勾选后创建 `vendor/musubi-tuner/.venv` 并 `uv pip install -e ".[cu128]"`（cu124/cu128/cu130/cu132 按主环境 CUDA 探测结果选择，musubi `pyproject.toml:29-45`）。
 - [ ] Windows 注意：`frontend/dist` 同款 EOL 问题不涉及，但 submodule 更新要走代理（见工作区根 AGENTS.md）。
 
-### 2.2 `mikazuki/musubi_backend/` 新包（仿 anima_fast_backend）
+### 2.2 `mikazuki/engines/musubi/` 新包（仿 `mikazuki/engines/anima_fast/`）
 
-- [ ] `settings.py`：`RuntimeConfig(musubi_root, python, output_dir, logging_dir, cache_dir, hf_home)`；配置文件 `config/musubi_backend.toml`；kill switch 环境变量 `LORA_ENABLE_MUSUBI=0`；discovery 顺序 = 配置文件 → `MUSUBI_ROOT` 环境变量 → `vendor/musubi-tuner`（参照 `anima_fast_backend/settings.py:96`）。
-- [ ] `launcher.py`：`build_launch_spec(runtime, script, args, task_id, gpu_ids)` → `LaunchSpec(command=[venv_python, root/script, *args], cwd=root, env)`；env 处理照 `anima_fast_backend/launcher.py:17`：`PYTHONNOUSERSITE=1`、`PYTHONUNBUFFERED=1`、去掉主项目 `PYTHONPATH`、按需注入 `HF_HOME`/`CUDA_VISIBLE_DEVICES`；**额外**：若未 `pip install -e`，注入 `PYTHONPATH=<root>/src`。
+- [ ] `settings.py`：`RuntimeConfig(musubi_root, python, output_dir, logging_dir, cache_dir, hf_home)`；配置文件 `config/musubi_backend.toml`；kill switch 环境变量 `LORA_ENABLE_MUSUBI=0`；discovery 顺序 = 配置文件 → `MUSUBI_ROOT` 环境变量 → `vendor/musubi-tuner`（参照 `mikazuki/engines/anima_fast/settings.py`）。
+- [ ] `launcher.py`：`build_launch_spec(runtime, script, args, task_id, gpu_ids)` → `LaunchSpec(command=[venv_python, root/script, *args], cwd=root, env)`；env 处理照 `mikazuki/engines/anima_fast/launcher.py`：`PYTHONNOUSERSITE=1`、`PYTHONUNBUFFERED=1`、去掉主项目 `PYTHONPATH`、按需注入 `HF_HOME`/`CUDA_VISIBLE_DEVICES`；**额外**：若未 `pip install -e`，注入 `PYTHONPATH=<root>/src`。
 - [ ] `adapter.py`：GUI payload → 两个 toml：
   - train toml 字段白名单：`dit`、`vae`、`text_encoder`、`output_dir`、`output_name`、`max_train_epochs`、`max_train_steps`、`train_batch_size`、`learning_rate`、`optimizer_type`、`optimizer_args`、`lr_scheduler`、`lr_warmup_steps`、`mixed_precision`、`gradient_checkpointing`、`network_module`（固定 `musubi_tuner.networks.lora_krea2`）、`network_dim`、`network_alpha`、`network_args`、`sample_prompts`、`sample_every_n_epochs`、`sample_at_first`、`seed`、`logging_dir`、`log_with`、`save_precision`、`fp8_base`、`fp8_scaled`、`blocks_to_swap`、`timestep_sampling`、`discrete_flow_shift` 等。
   - 约束校验（产生 `_training_warnings`，仿 `anima_backend/adapter.py` 的 LOKR warning 模式）：
