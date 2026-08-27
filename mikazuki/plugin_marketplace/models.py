@@ -246,3 +246,4 @@ class PluginStatus(StrictModel):
     reason: str = ""
     runtime_state: Literal["stopped", "starting", "running", "crashed"] | None = None
     runtime_pid: int | None = None
+    runtime_ui_url: str | None = None

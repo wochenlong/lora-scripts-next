@@ -5,6 +5,7 @@ import { useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
 import { ChatDotRound, Minus } from "@element-plus/icons-vue"
 import {
+  isSafePluginServerUiUrl,
   isSafePluginUiUrl,
   pluginsApi,
   type PluginConfirmationDecision,
@@ -166,9 +167,22 @@ async function refreshPendingConfirmations() {
   }
 }
 
+function isServerEntry(extension: PluginHostExtension) {
+  const entry = extension.ui.floatingPanel
+  return entry?.mode === "server" && isSafePluginServerUiUrl(entry.entryUrl)
+}
+
 async function activateExtension(extension: PluginHostExtension | null) {
   disposeBridge()
-  if (!extension || !isSafePluginUiUrl(extension.ui.floatingPanel?.entryUrl, extension.pluginId)) {
+  const server = extension ? isServerEntry(extension) : false
+  const entryUrl = server
+    ? extension!.ui.floatingPanel!.entryUrl
+    : extension
+      ? isSafePluginUiUrl(extension.ui.floatingPanel?.entryUrl, extension.pluginId)
+        ? extension.ui.floatingPanel!.entryUrl
+        : ""
+      : ""
+  if (!extension || !entryUrl) {
     panelOpen.value = false
     pendingConfirmations.value = []
     return
@@ -178,6 +192,14 @@ async function activateExtension(extension: PluginHostExtension | null) {
   panelWidth.value = preference.width
   panelHeight.value = preference.height
   await nextTick()
+  if (server) {
+    // Server-mode UI: the runtime's own loopback server (e.g. the embedded
+    // pi-web). No MessageChannel bridge and no sandbox: the page is a full
+    // application that talks to its own origin.
+    pendingConfirmations.value = []
+    frameSrc.value = entryUrl
+    return
+  }
   const target = frame.value?.contentWindow
   if (!target) return
   bridge = createPluginFrameBridge({
@@ -191,7 +213,7 @@ async function activateExtension(extension: PluginHostExtension | null) {
     onConfirmation: upsertConfirmation,
   })
   bridge.start()
-  frameSrc.value = extension.ui.floatingPanel.entryUrl
+  frameSrc.value = entryUrl
 }
 
 async function resolveConfirmation(decision: PluginConfirmationDecision) {
@@ -230,7 +252,10 @@ function onShortcut(event: KeyboardEvent) {
 }
 
 watch(
-  () => (activeExtension.value ? `${activeExtension.value.pluginId}\u0000${activeExtension.value.ui.floatingPanel?.entryUrl ?? ""}` : ""),
+  () =>
+    activeExtension.value
+      ? `${activeExtension.value.pluginId}\u0000${activeExtension.value.ui.floatingPanel?.mode ?? "static"}\u0000${activeExtension.value.ui.floatingPanel?.entryUrl ?? ""}`
+      : "",
   () => void activateExtension(activeExtension.value),
   { immediate: true },
 )
@@ -282,7 +307,7 @@ onBeforeUnmount(() => {
         class="floating-extension-frame"
         :src="frameSrc"
         :title="activeExtension.displayName"
-        sandbox="allow-scripts"
+        :sandbox="activeExtension && activeExtension.ui.floatingPanel?.mode === 'server' ? undefined : 'allow-scripts'"
         referrerpolicy="no-referrer"
       />
     </section>

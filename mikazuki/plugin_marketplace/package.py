@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import stat
 import zipfile
@@ -16,11 +17,72 @@ class PackageValidationError(ValueError):
     pass
 
 
+def _raw_path(path: Path) -> Path:
+    """Windows MAX_PATH guard for deep archive trees.
+
+    Self-contained runtime packages (pi-web's vendored SDKs under
+    node_modules) produce member paths beyond the 260-character Win32
+    limit; the ``\\?\\`` raw prefix is the only supported way to reach
+    them from Python.  No-op on other platforms.
+    """
+    if os.name != "nt":
+        return path
+    text = str(path)
+    return Path(text) if text.startswith("\\\\?\\") else Path(f"\\\\?\\{text}")
+
+
+def remove_tree(path: Path, *, ignore_errors: bool = False) -> None:
+    """Recursive removal that works on trees deeper than MAX_PATH (Windows).
+
+    Mirrors ``shutil.rmtree`` semantics (including ``ignore_errors``) but
+    walks with raw-prefixed paths so deep ``node_modules`` trees are not
+    silently left behind.
+    """
+    root = _raw_path(path)
+    if not root.exists():
+        return
+
+    def _clear(entry: Path) -> None:
+        try:
+            if entry.is_dir() and not entry.is_symlink():
+                entry.rmdir()
+            else:
+                entry.unlink()
+        except OSError:
+            if ignore_errors:
+                return
+            # Read-only artifacts (e.g. npm-staged files) block unlink on
+            # Windows; one chmod retry before surfacing the failure.
+            try:
+                entry.chmod(0o700)
+                if entry.is_dir() and not entry.is_symlink():
+                    entry.rmdir()
+                else:
+                    entry.unlink()
+            except OSError:
+                if ignore_errors:
+                    return
+                raise
+
+    for dirpath, dirnames, filenames in os.walk(root, topdown=False):
+        for name in list(filenames) + list(dirnames):
+            _clear(Path(dirpath) / name)
+    try:
+        root.rmdir()
+    except OSError:
+        if ignore_errors:
+            return
+        raise
+
+
 @dataclass(frozen=True)
 class PackageLimits:
+    # Upper bounds sized for self-contained runtime plugins (e.g. the
+    # verbatim pi-web + pi coding-agent embed: ~291 MB zip, ~1.22 GB
+    # unpacked, ~34.5k files) while still bounding pathological packages.
     max_package_bytes: int = 512 * 1024 * 1024
-    max_unpacked_bytes: int = 1024 * 1024 * 1024
-    max_files: int = 10_000
+    max_unpacked_bytes: int = 2 * 1024 * 1024 * 1024
+    max_files: int = 50_000
 
 
 def _validate_member(name: str) -> PurePosixPath:
@@ -102,7 +164,7 @@ def validate_manifest_entry(manifest: PluginManifest, entry: MarketplaceEntry) -
 
 def extract_package(package_path: Path, target: Path, members: list[zipfile.ZipInfo]) -> None:
     if target.exists():
-        shutil.rmtree(target)
+        remove_tree(target)
     target.mkdir(parents=True, exist_ok=False)
     resolved_target = target.resolve()
     with zipfile.ZipFile(package_path, "r") as archive:
@@ -113,6 +175,8 @@ def extract_package(package_path: Path, target: Path, members: list[zipfile.ZipI
                 destination.relative_to(resolved_target)
             except ValueError as exc:
                 raise PackageValidationError(f"unsafe archive path: {item.filename!r}") from exc
-            destination.parent.mkdir(parents=True, exist_ok=True)
-            with archive.open(item, "r") as source, destination.open("xb") as output:
+            # Raw-prefixed for the filesystem ops: deep member paths can
+            # exceed MAX_PATH on Windows (see _raw_path).
+            _raw_path(destination.parent).mkdir(parents=True, exist_ok=True)
+            with archive.open(item, "r") as source, _raw_path(destination).open("xb") as output:
                 shutil.copyfileobj(source, output)

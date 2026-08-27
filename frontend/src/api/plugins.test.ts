@@ -2,6 +2,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   isSafePluginHostUrl,
+  isSafePluginServerUiUrl,
   isSafePluginUiUrl,
   isValidArtifactId,
   isValidPluginId,
@@ -25,6 +26,27 @@ describe("plugin host URL policy", () => {
     expect(isSafePluginUiUrl("/api/plugin-host/ui/sample-plugin/0.1.0/index.html", "sample-plugin")).toBe(true)
     expect(isSafePluginUiUrl("/api/plugin-host/ui/other-plugin/0.1.0/index.html", "sample-plugin")).toBe(false)
     expect(isSafePluginUiUrl("/api/plugin-host/extensions", "sample-plugin")).toBe(false)
+  })
+
+  it("accepts only explicit 127.0.0.1 loopback root URLs for server-mode UI", () => {
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518")).toBe(true)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:1")).toBe(true)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:65535")).toBe(true)
+    // Hostname, scheme, credentials, path, and query variants must not pass.
+    expect(isSafePluginServerUiUrl("http://localhost:4518")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1")).toBe(false)
+    expect(isSafePluginServerUiUrl("https://127.0.0.1:4518")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://127.0.0.2:4518")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://10.0.0.1:4518")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://user:pass@127.0.0.1:4518")).toBe(false)
+    // Root document: the trailing-slash spelling of the same root passes.
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518/")).toBe(true)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518/admin")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518?x=1")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:99999")).toBe(false)
+    expect(isSafePluginServerUiUrl("javascript:alert(1)")).toBe(false)
+    expect(isSafePluginServerUiUrl("")).toBe(false)
+    expect(isSafePluginServerUiUrl(undefined)).toBe(false)
   })
 
   it("accepts stable logical plugin ids and rejects path-like ids", () => {

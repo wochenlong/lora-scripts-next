@@ -5,6 +5,9 @@ export type PluginHostExtensionState = "absent" | "disabled" | "starting" | "rea
 
 export interface PluginUiEntry {
   entryUrl: string
+  /** "static" (default): host-served plugin file. "server": live loopback
+   * server reported by the plugin runtime (e.g. the embedded pi-web). */
+  mode?: "static" | "server"
 }
 
 export interface PluginUiContributions {
@@ -336,6 +339,36 @@ export function isSafePluginUiUrl(value: string | undefined, pluginId: string): 
   const resolved = new URL(value, base)
   const prefix = `/api/plugin-host/ui/${pluginId}/`
   return resolved.pathname.startsWith(prefix)
+}
+
+/**
+ * Server-mode UI URLs are reported by the plugin runtime (READY line) and
+ * validated by the host before projection.  The frontend re-validates: only
+ * an explicit `http://127.0.0.1:<port>` root document is loadable in the
+ * floating dialog.  No hosts, paths, credentials, or other schemes pass.
+ */
+export function isSafePluginServerUiUrl(value: string | undefined): value is string {
+  if (!value) return false
+  try {
+    const url = new URL(value)
+    const port = Number(url.port)
+    return (
+      url.protocol === "http:" &&
+      url.hostname === "127.0.0.1" &&
+      url.port !== "" &&
+      Number.isInteger(port) &&
+      port >= 1 &&
+      port <= 65535 &&
+      url.username === "" &&
+      url.password === "" &&
+      // Root document only (trailing slash included): no path, query, hash.
+      url.pathname === "/" &&
+      url.search === "" &&
+      url.hash === ""
+    )
+  } catch {
+    return false
+  }
 }
 
 export const pluginsApi = {

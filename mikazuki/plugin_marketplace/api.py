@@ -24,10 +24,10 @@ from mikazuki.plugin_host.agent_tools import configure_agent_tool_service
 
 from .manager import MarketplaceManager
 from .models import MarketplaceEntry
-from .catalog import CatalogError, MarketplaceCatalogService
+from .catalog import CatalogError, FileCatalogSource, LocalPackageAcquirer, MarketplaceCatalogService
 from .paths import MarketplacePaths
 from .store import MarketplaceStore
-from .trust import TrustError, TrustStore
+from .trust import TrustError, TrustStore, load_trust_root
 
 
 router = APIRouter(prefix="/marketplace", tags=["plugin-marketplace"])
@@ -127,6 +127,32 @@ def _platform_name() -> str:
     return f"{sys.platform}-{arch}"
 
 
+def _local_catalog_wiring() -> tuple[TrustStore, FileCatalogSource | None, LocalPackageAcquirer | None]:
+    """Development-only catalog/trust wiring, opt-in via environment.
+
+    Production deployments leave these unset: the manager keeps an empty
+    trust store and no catalog source, so every install fails closed.
+    """
+    catalog_path = os.environ.get("MIKAZUKI_MARKETPLACE_CATALOG", "").strip()
+    trust_path = os.environ.get("MIKAZUKI_MARKETPLACE_TRUST", "").strip()
+    package_root = os.environ.get("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", "").strip()
+    if not catalog_path or not trust_path:
+        return TrustStore({}), None, None
+    trust = load_trust_root(Path(trust_path))
+    acquirer: LocalPackageAcquirer | None = None
+    if package_root:
+        sources: dict[str, Path] = {}
+        root_dir = Path(package_root).resolve()
+        if root_dir.is_dir():
+            # Convention: every *.zip in the package root is addressable as
+            # https://plugins.next-trainer.local/packages/<file name>.
+            for member in sorted(root_dir.iterdir()):
+                if member.is_file() and member.suffix.casefold() == ".zip":
+                    sources[f"https://plugins.next-trainer.local/packages/{member.name}"] = member
+        acquirer = LocalPackageAcquirer(sources)
+    return trust, FileCatalogSource(Path(catalog_path)), acquirer
+
+
 def _default_manager() -> MarketplaceManager:
     configured = os.environ.get("MIKAZUKI_PLUGIN_MARKETPLACE_ROOT", "").strip()
     root = Path(configured).resolve() if configured else (Path.cwd() / ".runtime" / "plugin-marketplace").resolve()
@@ -137,7 +163,7 @@ def _default_manager() -> MarketplaceManager:
     return MarketplaceManager(
         paths=paths,
         store=MarketplaceStore(paths.registry_file),
-        trust=TrustStore({}),
+        trust=_trust,
         host_version=_host_version(),
         platform=_platform_name(),
         runtime=ExecutablePluginRuntime(
@@ -148,8 +174,14 @@ def _default_manager() -> MarketplaceManager:
     )
 
 
+_trust, _catalog_source, _catalog_acquirer = _local_catalog_wiring()
 _manager = _default_manager()
-_catalog = MarketplaceCatalogService(paths=_manager.paths, trust=_manager.trust)
+_catalog = MarketplaceCatalogService(
+    paths=_manager.paths,
+    trust=_trust,
+    source=_catalog_source,
+    acquirer=_catalog_acquirer,
+)
 _confirmations = ConfirmationTicketStore()
 configure_agent_tool_service(_confirmations)
 

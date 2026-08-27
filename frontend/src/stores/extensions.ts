@@ -1,11 +1,24 @@
 import { computed, ref } from "vue"
 import { defineStore } from "pinia"
-import { isSafePluginUiUrl, isValidPluginId, pluginsApi, type PluginHostExtension } from "../api/plugins"
+import {
+  isSafePluginServerUiUrl,
+  isSafePluginUiUrl,
+  isValidPluginId,
+  pluginsApi,
+  type PluginHostExtension,
+} from "../api/plugins"
 
 const visibleStates = new Set(["starting", "ready", "runtime_error", "provider_error"])
 
 function validExtension(extension: PluginHostExtension) {
   return isValidPluginId(extension.pluginId) && Boolean(extension.displayName.trim())
+}
+
+function hasSafeFloatingEntry(extension: PluginHostExtension) {
+  const entry = extension.ui.floatingPanel
+  if (!entry) return false
+  if (entry.mode === "server") return isSafePluginServerUiUrl(entry.entryUrl)
+  return isSafePluginUiUrl(entry.entryUrl, extension.pluginId)
 }
 
 export const useExtensionsStore = defineStore("extensions", () => {
@@ -20,7 +33,7 @@ export const useExtensionsStore = defineStore("extensions", () => {
         validExtension(extension) &&
         extension.enabled &&
         visibleStates.has(extension.state) &&
-        isSafePluginUiUrl(extension.ui.floatingPanel?.entryUrl, extension.pluginId),
+        hasSafeFloatingEntry(extension),
     ),
   )
 

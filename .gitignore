@@ -19,7 +19,7 @@ assets/readme/drafts/
 
 py310
 python
-git
+/git
 wd14_tagger_model
 
 train/*
@@ -48,6 +48,12 @@ frontend/node_modules/
 plugin-packages/**/node_modules/
 plugin-packages/**/dist/
 plugin-packages/**/.runtime/
+# pi-web embed (Goal v9 / CR-011): large build artifacts stay local; the
+# committed build script provisions the bundled Node from .dev-runtimes and
+# rebuilds the package (see scripts/build-pi-web-package.py).
+plugin-packages/next-trainer-pi-agent/bin/
+plugin-packages/next-trainer-pi-agent/runtime/
+plugin-packages/next-trainer-pi-agent/dist-marketplace/
 
 # Update check cache
 config/.update_cache.json

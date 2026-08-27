@@ -13,6 +13,37 @@ class TrustError(ValueError):
     pass
 
 
+def load_trust_root(path: Path) -> TrustStore:
+    """Load a host-supplied trust root file (development/local catalogs).
+
+    Shape: {"keys": {"<id>": {"publisherId": str, "keyHex": str}},
+            "revokedKeys": [str, ...]}
+    """
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise TrustError(f"trust root is unreadable: {path}") from exc
+    if not isinstance(payload, dict):
+        raise TrustError("trust root must be a JSON object")
+    keys_block = payload.get("keys")
+    revoked_block = payload.get("revokedKeys") or []
+    if not isinstance(keys_block, dict) or not isinstance(revoked_block, list):
+        raise TrustError("trust root shape is invalid")
+    keys: dict[str, tuple[str, bytes]] = {}
+    for key_id, record in keys_block.items():
+        if not isinstance(record, dict):
+            raise TrustError(f"trust key entry is invalid: {key_id}")
+        publisher = record.get("publisherId")
+        key_hex = record.get("keyHex")
+        if not isinstance(publisher, str) or not publisher:
+            raise TrustError(f"trust key publisher is invalid: {key_id}")
+        if not isinstance(key_hex, str) or not re.fullmatch(r"[0-9a-fA-F]+", key_hex) or len(key_hex) < 32:
+            raise TrustError(f"trust key material is invalid: {key_id}")
+        keys[str(key_id)] = (publisher, bytes.fromhex(key_hex))
+    revoked = {item for item in revoked_block if isinstance(item, str)}
+    return TrustStore(keys, revoked_keys=revoked)
+
+
 def canonical_entry_payload(entry: MarketplaceEntry) -> bytes:
     value = entry.model_dump(mode="json", exclude={"signature"}, by_alias=True)
     return json.dumps(value, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")

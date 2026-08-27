@@ -26,6 +26,7 @@ class RuntimeSnapshot:
     pid: int | None = None
     protocol_version: str | None = None
     reason: str = ""
+    ui_url: str | None = None
 
 
 class RuntimeManifest(Protocol):
@@ -65,6 +66,22 @@ class _ProcessHandle:
     port: int
     token: str = field(repr=False)
     host_tool_token: str = field(repr=False)
+    ui_url: str | None = None
+    child_pid: int | None = None
+
+
+def _is_loopback_ui_url(value: str) -> bool:
+    try:
+        parsed = urlsplit(value)
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "http"
+        and parsed.hostname == "127.0.0.1"
+        and parsed.port is not None
+        and not parsed.username
+        and not parsed.password
+    )
 
 
 class ExecutablePluginRuntime:
@@ -74,7 +91,7 @@ class ExecutablePluginRuntime:
         self,
         *,
         parent_pid: int | None = None,
-        startup_timeout: float = 15.0,
+        startup_timeout: float = 120.0,
         host_tool_base_url: str | None = None,
     ) -> None:
         self._parent_pid = parent_pid or os.getpid()
@@ -135,6 +152,12 @@ class ExecutablePluginRuntime:
                 port = ready.get("port")
                 if not isinstance(port, int) or not 0 < port <= 65535:
                     raise RuntimeError("plugin runtime READY port is invalid")
+                ui_url = ready.get("uiUrl")
+                if ui_url is not None and (not isinstance(ui_url, str) or not _is_loopback_ui_url(ui_url)):
+                    raise RuntimeError("plugin runtime READY uiUrl is not a loopback URL")
+                child_pid = ready.get("childPid")
+                if child_pid is not None and (not isinstance(child_pid, int) or isinstance(child_pid, bool) or child_pid <= 0):
+                    raise RuntimeError("plugin runtime READY childPid is invalid")
                 handle = _ProcessHandle(
                     process=process,
                     version=manifest.version,
@@ -142,6 +165,8 @@ class ExecutablePluginRuntime:
                     port=port,
                     token=sidecar_token,
                     host_tool_token=host_tool_token,
+                    ui_url=ui_url if isinstance(ui_url, str) else None,
+                    child_pid=child_pid if isinstance(child_pid, int) else None,
                 )
                 self._handles[manifest.id] = handle
                 snapshot = self._probe(handle)
@@ -189,6 +214,7 @@ class ExecutablePluginRuntime:
             handle = self._handles.pop(plugin_id, None)
             if handle is not None:
                 self._terminate(handle.process)
+                self._kill_child_tree(handle)
 
     def status(self, plugin_id: str) -> RuntimeSnapshot:
         with self._guard:
@@ -404,6 +430,36 @@ class ExecutablePluginRuntime:
             process.wait(timeout=5)
 
     @staticmethod
+    def _kill_child_tree(handle: _ProcessHandle) -> None:
+        """Best-effort removal of a runtime's grandchild tree.
+
+        Windows TerminateProcess cannot be intercepted by the sidecar, so a
+        runtime that spawns its own server tree (e.g. pi-web) reports the
+        server PID in READY; the host removes the tree directly.  The
+        sidecar's own parent-liveness monitor covers the host-crash case.
+        """
+        child_pid = handle.child_pid
+        if child_pid is None:
+            return
+        if os.name == "nt":
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(child_pid)],
+                    capture_output=True,
+                    timeout=10,
+                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                )
+            except Exception:
+                return
+        else:
+            import signal
+
+            try:
+                os.kill(child_pid, signal.SIGKILL)
+            except OSError:
+                return
+
+    @staticmethod
     def _probe(handle: _ProcessHandle) -> RuntimeSnapshot:
         if handle.process.poll() is not None:
             return RuntimeSnapshot(
@@ -442,6 +498,7 @@ class ExecutablePluginRuntime:
             version=handle.version,
             pid=handle.process.pid,
             protocol_version=handle.protocol_version,
+            ui_url=handle.ui_url,
         )
 
 

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import copy
-import shutil
 import threading
 import uuid
 from collections.abc import Callable
@@ -13,7 +12,14 @@ from mikazuki.plugin_host.broker import PluginBridgeMethod, PluginCapabilityCont
 from mikazuki.plugin_host.runtime import PluginRuntimeController, RuntimeSnapshot
 
 from .models import MarketplaceEntry, PluginManifest, PluginStatus
-from .package import PackageLimits, PackageValidationError, extract_package, inspect_package, validate_manifest_entry
+from .package import (
+    PackageLimits,
+    PackageValidationError,
+    extract_package,
+    inspect_package,
+    remove_tree,
+    validate_manifest_entry,
+)
 from .paths import MarketplacePaths
 from .store import MarketplaceStore
 from .trust import TrustStore, version_satisfies
@@ -87,6 +93,7 @@ class MarketplaceManager:
             reason=(runtime.reason or record.get("last_runtime_error", "")) if runtime_error else "",
             runtime_state=runtime.state if self.runtime is not None else None,
             runtime_pid=runtime.pid,
+            runtime_ui_url=runtime.ui_url if runtime.state == "running" else None,
         )
 
     def list_statuses(self) -> list[PluginStatus]:
@@ -126,6 +133,22 @@ class MarketplaceManager:
                 for item in (manifest.bridge.requests + manifest.bridge.streams)
                 if item.permission in granted
             ]
+            if "floating-panel" in manifest.ui.placements:
+                if status.runtime_ui_url:
+                    # Server-mode UI: the runtime's READY line reported a live
+                    # loopback server (e.g. the embedded pi-web). The floating
+                    # dialog loads it directly; no host file serving.
+                    floating_panel = {"mode": "server", "entryUrl": status.runtime_ui_url}
+                else:
+                    floating_panel = {
+                        "mode": "static",
+                        "entryUrl": (
+                            f"/api/plugin-host/ui/{status.id}/{status.active_version}/"
+                            f"{PurePosixPath(manifest.ui.entrypoint).name}"
+                        ),
+                    }
+            else:
+                floating_panel = None
             extensions.append(
                 {
                     "pluginId": status.id,
@@ -138,18 +161,7 @@ class MarketplaceManager:
                     # labels never authorize a request.
                     "capabilities": sorted(set(bridge_methods)),
                     "ui": {
-                        **(
-                            {
-                                "floatingPanel": {
-                                    "entryUrl": (
-                                        f"/api/plugin-host/ui/{status.id}/{status.active_version}/"
-                                        f"{PurePosixPath(manifest.ui.entrypoint).name}"
-                                    )
-                                }
-                            }
-                            if "floating-panel" in manifest.ui.placements
-                            else {}
-                        ),
+                        **({"floatingPanel": floating_panel} if floating_panel else {}),
                         **({"artifactDetail": True} if "artifact-detail" in manifest.ui.placements else {}),
                         **(
                             {
@@ -255,7 +267,7 @@ class MarketplaceManager:
                             f"immutable plugin version already exists with different content: "
                             f"{entry.id}@{entry.latest_version}"
                         )
-                    shutil.rmtree(staging)
+                    remove_tree(staging)
                 else:
                     staging.replace(target)
                     target_created = True
@@ -296,18 +308,18 @@ class MarketplaceManager:
                             restored["last_runtime_error"] = "plugin update and rollback runtime activation failed"
                             self.store.set_plugin(entry.id, restored)
                         if target_created:
-                            shutil.rmtree(target, ignore_errors=True)
+                            remove_tree(target, ignore_errors=True)
                         raise RuntimeError("plugin update runtime activation failed") from exc
                 else:
                     try:
                         self.store.set_plugin(entry.id, next_record)
                     except Exception:
                         if target_created:
-                            shutil.rmtree(target, ignore_errors=True)
+                            remove_tree(target, ignore_errors=True)
                         raise
             finally:
                 if staging.exists():
-                    shutil.rmtree(staging, ignore_errors=True)
+                    remove_tree(staging, ignore_errors=True)
                 parent = staging.parent
                 while parent != self.paths.staging_root and parent.exists():
                     try:
@@ -413,13 +425,13 @@ class MarketplaceManager:
                 self.store.set_plugin(plugin_id, record)
             self._runtime_stop(plugin_id)
             if plugin_root.exists():
-                shutil.rmtree(plugin_root)
+                remove_tree(plugin_root)
             if cache.exists():
-                shutil.rmtree(cache)
+                remove_tree(cache)
             if delete_user_data:
                 data = self.paths.user_data_dir(plugin_id)
                 if data.exists():
-                    shutil.rmtree(data)
+                    remove_tree(data)
             self.store.remove_plugin(plugin_id)
             return PluginStatus(id=plugin_id, state="not_installed")
 

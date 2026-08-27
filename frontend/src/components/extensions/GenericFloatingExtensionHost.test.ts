@@ -67,9 +67,24 @@ describe("GenericFloatingExtensionHost visibility", () => {
     extension({ pluginId: "../sample-plugin" }),
     extension({ ui: { floatingPanel: { entryUrl: "https://untrusted.example/panel" } } }),
     extension({ ui: { floatingPanel: { entryUrl: "/api/plugin-host/ui/other-plugin/panel.html" } } }),
+    extension({ ui: { floatingPanel: { entryUrl: "http://localhost:4518", mode: "server" } } }),
+    extension({ ui: { floatingPanel: { entryUrl: "http://127.0.0.1:4518/panel", mode: "server" } } }),
   ])("renders no launcher for disabled, broken, absent, or unsafe extensions", async (item) => {
     const { wrapper } = await mountHost([item])
     expect(wrapper.find('[data-testid="floating-extension-launcher"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it("loads a server-mode UI directly without a sandbox or bridge", async () => {
+    const { wrapper } = await mountHost([
+      extension({
+        displayName: "Next Trainer Pi Agent",
+        ui: { floatingPanel: { entryUrl: "http://127.0.0.1:4518", mode: "server" } },
+      }),
+    ])
+    const frame = wrapper.get("iframe")
+    expect(frame.attributes("src")).toBe("http://127.0.0.1:4518")
+    expect(frame.attributes("sandbox")).toBeUndefined()
     wrapper.unmount()
   })
 
