@@ -21,9 +21,10 @@
   ```
 
 - **行为**：引擎 resolve 源码时发现 `vendor/<dir>` 缺失且 bundle 存在 → 整个包解压到
-  `vendor/`（同一 bundle 只解一次，marker：`vendor/.vendor_bundle_extracted`）→
-  之后按 vendor 源码直通安装。目录内容已是钉版 commit（凭 `.source_commit` 认定），
-  installer 不再要求 git checkout。
+  `vendor/`（同一 bundle 只解一次，marker：`vendor/.vendor_bundle_extracted`，按
+  **包名 + SHA-256 摘要**识别）→ 之后按 vendor 源码直通安装。目录内容已是钉版
+  commit（凭 `.source_commit` 认定，必须为完整 40 位 sha），installer 不再要求
+  git checkout。
 - **优先级**：bundle → `vendor/<dir>` 已有目录 → GitHub clone →（Gitee 镜像，未实现）。
 - **不入 git**：bundle 是分发物（整合包内带 / release 附件），仓库只约定格式。
 
@@ -57,5 +58,5 @@ cp "$BUNDLE/vendor-bundle.zip" /path/to/lora-scripts-next/vendor/
 - `.source_commit` 必须写**完整 sha**（`git rev-parse <commit>` 的输出），安装时按
   前缀比对认定快照版本。
 - 只打包引擎 manifest 钉的版本；版本升级 = 重新打包并替换 bundle
-  （解压 marker 按包名+大小判断是否重解，换新包会自动重解一次）。
+  （解压 marker 按包名 + SHA-256 识别，换新包会自动重解一次）。
 - tar 系格式把最后两步换成 `(cd "$BUNDLE" && tar -czf vendor-bundle.tar.gz .)`。

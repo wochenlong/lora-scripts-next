@@ -14,7 +14,7 @@ except ModuleNotFoundError:  # Python 3.10 runtime
     import toml as tomllib
 
 from mikazuki.download_sources import apply_github_prefix
-from mikazuki.engines.vendor_bundle import ensure_vendor_source
+from mikazuki.engines.vendor_bundle import ensure_vendor_source, snapshot_matches
 
 
 DEFAULT_CONFIG = Path("config/musubi_backend.toml")
@@ -112,6 +112,16 @@ def ensure_upstream_clone(
     return target
 
 
+def _usable_source(path: Path, commit: str | None) -> bool:
+    """Package tree +, when a commit is pinned, either a git checkout or a
+    snapshot whose .source_commit matches the pin."""
+    if not _has_package_tree(path):
+        return False
+    if commit and not (path / ".git").exists():
+        return snapshot_matches(path, commit)
+    return True
+
+
 def resolve_install_source_root(
     project_root: Path,
     explicit: Path | None = None,
@@ -126,6 +136,7 @@ def resolve_install_source_root(
     Priority: explicit → MUSUBI_ROOT → vendor/musubi-tuner → .cache/musubi/upstream
     (git clone when allow_clone is set, mirroring the Anima Fast installer).
     """
+    commit = (source_commit or "").strip() or None
     candidates: list[Path] = []
     if explicit is not None:
         candidates.append(explicit if explicit.is_absolute() else (project_root / explicit))
@@ -136,10 +147,10 @@ def resolve_install_source_root(
     ensure_vendor_source(project_root, "musubi-tuner", log=log)
     candidates.append(project_root / "vendor" / "musubi-tuner")
     for candidate in candidates:
-        if _has_package_tree(candidate):
+        if _usable_source(candidate, commit):
             return candidate.resolve()
     cache_root = default_upstream_cache(project_root)
-    if _has_package_tree(cache_root):
+    if _usable_source(cache_root, commit):
         return cache_root
     if allow_clone:
         if not shutil.which("git"):
@@ -150,7 +161,7 @@ def resolve_install_source_root(
         return ensure_upstream_clone(
             project_root,
             cache_root,
-            (source_commit or "").strip() or None,
+            commit,
             log=log,
             github_url_prefix=github_url_prefix,
         )
@@ -169,7 +180,7 @@ def ensure_install_source_ready(
     github_url_prefix: str | None = None,
 ) -> Path:
     preferred = preferred.resolve()
-    if _has_package_tree(preferred):
+    if _usable_source(preferred, (source_commit or "").strip() or None):
         return preferred
     return resolve_install_source_root(
         project_root,

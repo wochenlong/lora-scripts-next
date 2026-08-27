@@ -22,6 +22,9 @@ class RunContext:
     autosave_dir: str
     gpu_ids: object = None
     model_train_type: str = ""
+    # Canonical variant from the registry's train_type -> (engine, variant)
+    # mapping; multi-variant engines (e.g. Klein base-4b/9b, #299) dispatch on it.
+    variant: str = ""
 
 
 def dispatch_run(model_train_type: str, config: dict, ctx: RunContext):
@@ -29,6 +32,14 @@ def dispatch_run(model_train_type: str, config: dict, ctx: RunContext):
     hit = registry.resolve_train_type(model_train_type)
     if hit is None:
         return None
-    pack, _variant = hit
+    pack, variant = hit
+    if variant and not ctx.variant:
+        ctx = RunContext(
+            timestamp=ctx.timestamp,
+            autosave_dir=ctx.autosave_dir,
+            gpu_ids=ctx.gpu_ids,
+            model_train_type=ctx.model_train_type,
+            variant=variant,
+        )
     handler = pack.import_module("run").handle_run
     return handler(config, ctx)

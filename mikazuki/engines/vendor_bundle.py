@@ -10,6 +10,7 @@ the network. Packing instructions: ``mikazuki/engines/VENDOR_BUNDLE.md``.
 
 from __future__ import annotations
 
+import hashlib
 import tarfile
 import zipfile
 from collections.abc import Callable
@@ -61,6 +62,14 @@ def _check_within(base: Path, name: str) -> None:
     destination.relative_to(base.resolve())
 
 
+def _bundle_digest(bundle: Path) -> str:
+    digest = hashlib.sha256()
+    with bundle.open("rb") as fh:
+        for chunk in iter(lambda: fh.read(1024 * 1024), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
 def extract_vendor_bundle(bundle: Path, vendor_dir: Path, log: Callable[[str], None] | None = None) -> None:
     vendor_dir.mkdir(parents=True, exist_ok=True)
     if zipfile.is_zipfile(bundle):
@@ -72,12 +81,16 @@ def extract_vendor_bundle(bundle: Path, vendor_dir: Path, log: Callable[[str], N
         with tarfile.open(bundle) as tf:
             for member in tf.getmembers():
                 _check_within(vendor_dir, member.name)
+                if member.issym() or member.islnk():
+                    # Link targets must also stay inside vendor/.
+                    target = ((vendor_dir / member.name).parent / member.linkname).resolve()
+                    target.relative_to(vendor_dir.resolve())
             try:
                 tf.extractall(vendor_dir, filter="data")
             except TypeError:  # Python < 3.11.4 has no filter parameter
                 tf.extractall(vendor_dir)
     marker = vendor_dir / _EXTRACT_MARKER
-    marker.write_text(f"{bundle.name}\n{bundle.stat().st_size}\n", encoding="utf-8")
+    marker.write_text(f"{bundle.name}\n{_bundle_digest(bundle)}\n", encoding="utf-8")
 
 
 def _bundle_already_extracted(bundle: Path, vendor_dir: Path) -> bool:
@@ -85,10 +98,12 @@ def _bundle_already_extracted(bundle: Path, vendor_dir: Path) -> bool:
     if not marker.is_file():
         return False
     try:
-        name, size = marker.read_text(encoding="utf-8").splitlines()[:2]
+        name, digest = marker.read_text(encoding="utf-8").splitlines()[:2]
     except ValueError:
         return False
-    return name == bundle.name and int(size) == bundle.stat().st_size
+    if name != bundle.name:
+        return False
+    return digest == _bundle_digest(bundle)
 
 
 def ensure_vendor_source(

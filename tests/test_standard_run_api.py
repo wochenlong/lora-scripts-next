@@ -44,6 +44,18 @@ for _name in _TAGGER_MODULES:
     else:
         sys.modules[_name] = _saved_tagger_modules[_name]
 
+# If api was freshly imported through the stubs, its own globals still hold the
+# stub objects. Rebind them from the real modules so later tests never observe
+# collection-order-dependent tagger bindings.
+import mikazuki.tagger.interrogator as _real_interrogator
+import mikazuki.tagger.jobs as _real_jobs
+import mikazuki.tagger.progress as _real_progress
+
+api.available_interrogators = _real_interrogator.available_interrogators
+api.run_interrogate_job = _real_jobs.run_interrogate_job
+api.run_prefetch_job = _real_jobs.run_prefetch_job
+api.tagger_progress = _real_progress.tagger_progress
+
 
 def make_request(payload: dict) -> Request:
     body = json.dumps(payload).encode("utf-8")

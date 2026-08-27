@@ -89,3 +89,32 @@ def test_virtual_pack_dispatches_without_api_changes(monkeypatch):
     result = dispatch_run("hypo-lora", {"foo": 1}, RunContext(timestamp="t", autosave_dir="/tmp", model_train_type="hypo-lora"))
     assert result == {"dispatched": {"foo": 1}, "train_type": "hypo-lora"}
     assert dispatch_run("no-such-type", {}, RunContext(timestamp="t", autosave_dir="/tmp")) is None
+
+
+def test_dispatch_passes_variant_in_context(monkeypatch):
+    """(engine, variant) contract: the registry variant reaches the handler."""
+    import sys
+    import types
+
+    package = "mikazuki.engines.hypo2"
+    manifest_mod = types.ModuleType(f"{package}.manifest")
+    manifest_mod.ENGINE_ID = "hypo2"
+    manifest_mod.KIND = KIND_PLUGIN
+    manifest_mod.TRAIN_TYPES = {"hypo2-lora": "base-9b"}
+    manifest_mod.UPSTREAM = {"repo": "example/hypo2", "commit": "abc123", "zip": None, "github": "https://github.com/example/hypo2.git", "gitee": None}
+    manifest_mod.FEATURE_FLAG_ENV = "LORA_ENABLE_HYPO2"
+    run_mod = types.ModuleType(f"{package}.run")
+    run_mod.handle_run = lambda config, ctx: {"variant": ctx.variant}
+    monkeypatch.setitem(sys.modules, package, types.ModuleType(package))
+    monkeypatch.setitem(sys.modules, f"{package}.manifest", manifest_mod)
+    monkeypatch.setitem(sys.modules, f"{package}.run", run_mod)
+
+    from mikazuki.engines.manifest import load_manifest
+    from mikazuki.engines.registry import EnginePack
+
+    real_packs = registry.discover_packs()
+    hypo = EnginePack(manifest=load_manifest(manifest_mod), package=package)
+    monkeypatch.setattr(registry, "discover_packs", lambda: {**real_packs, "hypo2": hypo})
+
+    result = dispatch_run("hypo2-lora", {}, RunContext(timestamp="t", autosave_dir="/tmp", model_train_type="hypo2-lora"))
+    assert result == {"variant": "base-9b"}

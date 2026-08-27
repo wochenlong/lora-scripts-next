@@ -62,6 +62,47 @@ class TestEnsureVendorSource:
         assert ensure_vendor_source(tmp_path, "musubi-tuner") is None
         assert calls == [1]
 
+    def test_same_size_different_bundle_reextracts(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+        bundle = _make_bundle(tmp_path, {"anima_lora": {"train.py": "print(1)\n"}})
+        assert ensure_vendor_source(tmp_path, "anima_lora") is not None
+        # Replace with a different bundle of the exact same byte length.
+        replacement = tmp_path / "replacement.zip"
+        with zipfile.ZipFile(replacement, "w") as zf:
+            zf.writestr("anima_lora/train.py", "print(2)\n")
+        assert replacement.stat().st_size != 0
+        import mikazuki.engines.vendor_bundle as vb
+
+        calls = []
+        real_extract = vb.extract_vendor_bundle
+
+        def spy(*args, **kwargs):
+            calls.append(1)
+            return real_extract(*args, **kwargs)
+
+        monkeypatch.setattr(vb, "extract_vendor_bundle", spy)
+        (tmp_path / "vendor" / "anima_lora").rename(tmp_path / "vendor" / "anima_lora_old")
+        bundle.write_bytes(replacement.read_bytes())
+        assert ensure_vendor_source(tmp_path, "anima_lora") is not None
+        assert calls == [1]
+        assert (tmp_path / "vendor" / "anima_lora" / "train.py").read_text(encoding="utf-8") == "print(2)\n"
+
+    def test_tar_rejects_link_escaping_vendor(self, tmp_path: Path):
+        import io
+        import tarfile
+
+        vendor = tmp_path / "vendor"
+        vendor.mkdir()
+        bundle = vendor / "vendor-bundle.tar"
+        with tarfile.open(bundle, "w") as tf:
+            link = tarfile.TarInfo("anima_lora/evil")
+            link.type = tarfile.SYMTYPE
+            link.linkname = "../../outside"
+            tf.addfile(link)
+        import mikazuki.engines.vendor_bundle as vb
+
+        with pytest.raises(ValueError):
+            vb.extract_vendor_bundle(bundle, vendor)
+
 
 class TestSnapshotMatches:
     def test_full_sha_recorded_with_prefix_request(self, tmp_path: Path):
@@ -87,6 +128,28 @@ class TestMusubiResolveViaBundle:
         from mikazuki.engines.musubi.settings import resolve_install_source_root
 
         result = resolve_install_source_root(tmp_path, None, FULL_SHA)
+        assert result == (tmp_path / "vendor" / "musubi-tuner").resolve()
+
+    def test_non_git_source_with_mismatched_marker_is_skipped(self, tmp_path: Path):
+        vendor_src = tmp_path / "vendor" / "musubi-tuner" / "src" / "musubi_tuner"
+        vendor_src.mkdir(parents=True)
+        (tmp_path / "vendor" / "musubi-tuner" / ".source_commit").write_text(
+            "0000000000000000000000000000000000000000\n", encoding="utf-8"
+        )
+        from mikazuki.engines.musubi.settings import resolve_install_source_root
+
+        with pytest.raises(ValueError, match="未找到 musubi-tuner 源码"):
+            resolve_install_source_root(tmp_path, None, FULL_SHA)
+
+    def test_non_git_source_without_marker_is_skipped_when_pinned(self, tmp_path: Path):
+        vendor_src = tmp_path / "vendor" / "musubi-tuner" / "src" / "musubi_tuner"
+        vendor_src.mkdir(parents=True)
+        from mikazuki.engines.musubi.settings import resolve_install_source_root
+
+        with pytest.raises(ValueError, match="未找到 musubi-tuner 源码"):
+            resolve_install_source_root(tmp_path, None, FULL_SHA)
+        # Unpinned installs still accept the plain package tree.
+        result = resolve_install_source_root(tmp_path, None, None)
         assert result == (tmp_path / "vendor" / "musubi-tuner").resolve()
 
     def test_installer_copies_snapshot_without_git(self, tmp_path: Path):
