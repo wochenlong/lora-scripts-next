@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from mikazuki.download_sources import apply_github_prefix
+from mikazuki.engines.vendor_bundle import ensure_vendor_source, snapshot_matches
 
 UPSTREAM_REPO = "https://github.com/sorryhyun/anima_lora.git"
 
@@ -59,7 +60,8 @@ def _usable_git_source(path: Path, source_commit: str | None) -> bool:
     if not _has_train_py(path):
         return False
     if source_commit and not _is_git_checkout(path):
-        return False
+        # A vendor-bundle snapshot carries the exact pinned tree without .git.
+        return snapshot_matches(path, source_commit)
     return True
 
 
@@ -90,7 +92,7 @@ def resolve_install_source_root(
             if not _has_train_py(explicit_path):
                 raise InstallSourceError(f"Anima source root missing train.py: {explicit_path}")
             raise InstallSourceError(
-                f"Anima source root must be a git checkout when source_commit is pinned: {explicit_path}"
+                f"Anima source root must be a git checkout or pinned snapshot when source_commit is pinned: {explicit_path}"
             )
         return explicit_path
 
@@ -105,6 +107,9 @@ def resolve_install_source_root(
     runtime = discover_runtime(lora_next_root=project_root)
     commit = commit or runtime.source_commit
     installed_source = (project_root / "extensions" / "anima_lora" / "source").resolve()
+
+    # Offline distribution: extract vendor/vendor-bundle.* once if present.
+    ensure_vendor_source(project_root, "anima_lora", log=log)
 
     for candidate in (
         runtime.anima_root,

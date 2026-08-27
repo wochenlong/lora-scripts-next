@@ -14,6 +14,7 @@ except ModuleNotFoundError:  # Python 3.10 runtime
     import toml as tomllib
 
 from mikazuki.download_sources import apply_github_prefix
+from mikazuki.engines.vendor_bundle import ensure_vendor_source
 
 
 DEFAULT_CONFIG = Path("config/musubi_backend.toml")
@@ -131,6 +132,8 @@ def resolve_install_source_root(
     env_root = os.environ.get("MUSUBI_ROOT")
     if env_root:
         candidates.append(Path(env_root))
+    # Offline distribution: extract vendor/vendor-bundle.* once if present.
+    ensure_vendor_source(project_root, "musubi-tuner", log=log)
     candidates.append(project_root / "vendor" / "musubi-tuner")
     for candidate in candidates:
         if _has_package_tree(candidate):

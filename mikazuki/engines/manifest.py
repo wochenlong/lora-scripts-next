@@ -7,9 +7,10 @@ Every ``mikazuki/engines/<id>/manifest.py`` data module must define:
   the main environment, always ready — e.g. kohya).
 - ``TRAIN_TYPES``: mapping of UI ``train_type`` -> variant name. This is the
   ``/api/run`` dispatch key; the registry builds the reverse lookup.
-- ``UPSTREAM``: pinned upstream source. Download priority is ``zip`` (repacked
-  distribution bundle) -> ``github`` -> ``gitee`` fallback; ``repo`` and
-  ``commit`` always pin the version regardless of channel::
+- ``UPSTREAM``: pinned upstream source. Download priority is ``zip`` (offline
+  distribution bundle, currently realized as ``vendor/vendor-bundle.*`` — see
+  ``mikazuki/engines/VENDOR_BUNDLE.md``) -> ``github`` -> ``gitee`` fallback;
+  ``repo`` and ``commit`` always pin the version regardless of channel::
 
       UPSTREAM = {
           "repo": "kohya-ss/musubi-tuner",

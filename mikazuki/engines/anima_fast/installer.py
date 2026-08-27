@@ -8,6 +8,7 @@ import tarfile
 import tempfile
 
 from .extension_state import ExtensionLayout
+from mikazuki.engines.vendor_bundle import snapshot_commit, snapshot_matches
 
 
 EXCLUDE_DIRS = {
@@ -130,7 +131,7 @@ def copy_source_snapshot(plan: InstallPlan) -> None:
         return
     if not plan.source_root.is_dir():
         raise FileNotFoundError(f"Anima source root does not exist: {plan.source_root}")
-    if plan.source_commit:
+    if plan.source_commit and not snapshot_matches(plan.source_root, plan.source_commit):
         _extract_git_archive(plan, plan.source_commit)
         return
     if not (plan.source_root / "train.py").is_file():
@@ -148,6 +149,10 @@ def copy_source_snapshot(plan: InstallPlan) -> None:
             shutil.copytree(src, dst, ignore=_ignore)
         else:
             shutil.copy2(src, dst)
+    if plan.source_commit:
+        # Vendor-bundle snapshot: content already matches the pinned commit.
+        recorded = snapshot_commit(plan.source_root) or plan.source_commit
+        (plan.target_source / ".source_commit").write_text(recorded + "\n", encoding="utf-8")
 
 
 def remove_extension(layout: ExtensionLayout, project_root: Path) -> None:
