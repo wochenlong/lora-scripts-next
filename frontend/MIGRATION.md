@@ -69,7 +69,7 @@
 - 恢复 `configs-{type}` 历史与 `configs-{type}-autosave` 草稿，接入后端 `/api/presets` 训练预设。
 - TOML/JSON 导入先调用 `/api/config/validate-import`，支持训练类型识别和跨页面跳转；导出调用 `/api/config/normalize-for-export` 后生成 TOML。
 - 参数面板显示实际提交 TOML，提交前执行 Schema 校验、旧参数冲突检查和确认；成功后展示 task id、同源日志入口和任务页入口。
-- Anima Fast 提交前额外调用 `/api/anima-fast/preflight`，后端 `/api/run` 继续执行 feature flag、ready、audit 漂移和最终 preflight gate。
+- Anima Fast 提交前额外调用 `/api/engines/anima-fast/preflight`，后端 `/api/run` 继续执行 feature flag、ready、audit 漂移和最终 preflight gate。
 
 ### 2026-07-28：数据集增强与生产托管测试
 
