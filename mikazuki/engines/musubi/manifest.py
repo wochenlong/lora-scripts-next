@@ -9,9 +9,9 @@ TRAIN_TYPES = {
 
 UPSTREAM = {
     "repo": "kohya-ss/musubi-tuner",
-    # No repo-wide default pin: the commit comes from config/musubi_backend.toml
-    # or the install API payload at install time.
-    "commit": "",
+    # Default pin (2026-08-13, verified on GB10). config/musubi_backend.toml
+    # or the install API payload may override.
+    "commit": "e0cbd8f3dfe38365b10f8bc790b980f8894e8ba1",
     "zip": None,
     "github": "https://github.com/kohya-ss/musubi-tuner.git",
     "gitee": None,

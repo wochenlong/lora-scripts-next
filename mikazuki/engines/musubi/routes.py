@@ -7,6 +7,7 @@ from pathlib import Path
 
 from mikazuki.app.models import APIResponseFail, APIResponseSuccess
 from mikazuki.engines.musubi import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
+from mikazuki.engines.musubi.manifest import UPSTREAM
 from mikazuki.engines.musubi.adapter import (
     AdapterError as MusubiAdapterError,
     adapt_config as adapt_musubi_config,
@@ -102,7 +103,7 @@ async def dry_run(config: dict):
 async def install(payload: dict, force_install: bool = False):
     if not musubi_feature_enabled():
         return musubi_disabled_response()
-    source_commit = str(payload.get("source_commit") or "").strip() or None
+    source_commit = str(payload.get("source_commit") or "").strip() or UPSTREAM["commit"] or None
     cuda_extra = str(payload.get("cuda_extra") or "").strip() or None
     dry_run = payload.get("dry_run", True) is not False
     project_root = Path.cwd()
