@@ -42,6 +42,26 @@ def test_pack_modules_importable():
     assert adapter is not None
 
 
+def test_template_dir_is_not_registered():
+    assert "_template" not in registry.discover_packs()
+    assert "your-engine" not in registry.discover_packs()
+
+
+def test_template_manifest_is_valid():
+    import importlib.util
+    from pathlib import Path
+
+    from mikazuki.engines.manifest import load_manifest
+
+    spec = importlib.util.spec_from_file_location(
+        "_template_manifest", Path("mikazuki/engines/_template/manifest.py")
+    )
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    manifest = load_manifest(module)
+    assert manifest.engine_id == "your-engine"
+
+
 def test_virtual_pack_dispatches_without_api_changes(monkeypatch):
     """Core criterion: a hypothetical pack (manifest + empty suite) is dispatched
     by /api/run's dispatch path with zero changes outside its own directory."""
