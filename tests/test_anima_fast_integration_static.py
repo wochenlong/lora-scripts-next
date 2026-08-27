@@ -30,7 +30,7 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertIn("留空时按训练分辨率自动设置", schema)
 
     def test_fast_adapter_does_not_whitelist_emosens(self):
-        adapter = Path("mikazuki/anima_fast_backend/adapter.py").read_text(encoding="utf-8")
+        adapter = Path("mikazuki/engines/anima_fast/adapter.py").read_text(encoding="utf-8")
         self.assertIn("FAST_SUPPORTED_OPTIMIZERS", adapter)
         self.assertNotIn('"EmoSens"', adapter)
         self.assertNotIn('"Automagic",', adapter[adapter.index("FAST_SUPPORTED_OPTIMIZERS"): adapter.index("@dataclass")])

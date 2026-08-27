@@ -159,7 +159,7 @@ def patch_krea2_tokenizer_path(source_root: Path, tokenizer_dir: Path, log: Call
 
 def patch_krea2_tokenizer_everywhere(project_root: Path, log: Callable[[str], None] = print) -> bool:
     """Patch every known musubi source root (installed extension, vendor, upstream cache)."""
-    from mikazuki.musubi_backend.extension_state import default_layout as musubi_default_layout
+    from mikazuki.engines.musubi.extension_state import default_layout as musubi_default_layout
 
     tokenizer_dir = krea2_tokenizer_dir(project_root)
     patched = False

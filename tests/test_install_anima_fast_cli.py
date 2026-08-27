@@ -39,12 +39,12 @@ class InstallAnimaFastCliTests(unittest.TestCase):
             with mock.patch.object(cli, "resolve_source_root", return_value=source), mock.patch.object(
                 cli.os, "chdir"
             ), mock.patch(
-                "mikazuki.anima_fast_backend.settings.feature_enabled", return_value=True
+                "mikazuki.engines.anima_fast.settings.feature_enabled", return_value=True
             ), mock.patch(
-                "mikazuki.anima_fast_backend.settings.discover_runtime",
+                "mikazuki.engines.anima_fast.settings.discover_runtime",
                 return_value=mock.Mock(source_commit="abc123"),
             ), mock.patch(
-                "mikazuki.anima_fast_backend.environment.build_environment_install_plan",
+                "mikazuki.engines.anima_fast.environment.build_environment_install_plan",
                 return_value=fake_plan,
             ):
                 rc = cli.main(["--project-root", str(project), "--dry-run"])
@@ -65,7 +65,7 @@ class InstallAnimaFastCliTests(unittest.TestCase):
             (source / "train.py").write_text("print('ok')\n", encoding="utf-8")
 
             def fake_install(_plan, _log):
-                from mikazuki.anima_fast_backend.environment import AuditResult, anima_pip_dependency_targets
+                from mikazuki.engines.anima_fast.environment import AuditResult, anima_pip_dependency_targets
 
                 self.assertIn("iopath==0.1.10", anima_pip_dependency_targets())
                 return AuditResult(ok=True)
@@ -75,12 +75,12 @@ class InstallAnimaFastCliTests(unittest.TestCase):
             ), mock.patch.object(
                 cli, "ensure_uv", return_value="uv"
             ), mock.patch(
-                "mikazuki.anima_fast_backend.settings.feature_enabled", return_value=True
+                "mikazuki.engines.anima_fast.settings.feature_enabled", return_value=True
             ), mock.patch(
-                "mikazuki.anima_fast_backend.settings.discover_runtime",
+                "mikazuki.engines.anima_fast.settings.discover_runtime",
                 return_value=mock.Mock(source_commit=""),
             ), mock.patch(
-                "mikazuki.anima_fast_backend.environment.install_environment",
+                "mikazuki.engines.anima_fast.environment.install_environment",
                 side_effect=fake_install,
             ):
                 rc = cli.main(["--project-root", str(project)])

@@ -24,7 +24,7 @@ except ModuleNotFoundError:  # pragma: no cover - lightweight test environment f
 
         @staticmethod
         def dumps(data: dict):
-            from mikazuki.anima_fast_backend.adapter import dump_flat_toml
+            from mikazuki.engines.anima_fast.adapter import dump_flat_toml
             return dump_flat_toml(data)
 
     toml = _TomlFallback()
@@ -34,56 +34,56 @@ from urllib.parse import quote
 
 import mikazuki.process as process
 from mikazuki import launch_utils
-from mikazuki.anima_fast_backend import TRAIN_TYPE as ANIMA_FAST_TRAIN_TYPE
-from mikazuki.anima_fast_backend.adapter import (
+from mikazuki.engines.anima_fast import TRAIN_TYPE as ANIMA_FAST_TRAIN_TYPE
+from mikazuki.engines.anima_fast.adapter import (
     AdapterError,
     adapt_config,
     dump_fast_dataset_toml,
     dump_flat_toml,
     ensure_fast_run_log_dirs,
 )
-from mikazuki.anima_fast_backend.extension_state import (
+from mikazuki.engines.anima_fast.extension_state import (
     STATE_INSTALLED_UNVERIFIED,
     STATE_READY,
     default_layout,
     read_extension_status,
     write_install_state,
 )
-from mikazuki.anima_fast_backend.environment import audit_environment, start_install_task
-from mikazuki.anima_fast_backend.installer import build_install_plan, copy_source_snapshot, remove_extension
-from mikazuki.anima_fast_backend.preflight import run_preflight
-from mikazuki.anima_fast_backend.preview import apply_anima_fast_preview
-from mikazuki.anima_fast_backend.preprocess import prepare_anima_fast_dataset, user_left_resized_empty
-from mikazuki.anima_fast_backend.settings import discover_runtime, feature_enabled
-from mikazuki.anima_fast_backend.source_root import InstallSourceError, resolve_install_source_root
-from mikazuki.musubi_backend import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
+from mikazuki.engines.anima_fast.environment import audit_environment, start_install_task
+from mikazuki.engines.anima_fast.installer import build_install_plan, copy_source_snapshot, remove_extension
+from mikazuki.engines.anima_fast.preflight import run_preflight
+from mikazuki.engines.anima_fast.preview import apply_anima_fast_preview
+from mikazuki.engines.anima_fast.preprocess import prepare_anima_fast_dataset, user_left_resized_empty
+from mikazuki.engines.anima_fast.settings import discover_runtime, feature_enabled
+from mikazuki.engines.anima_fast.source_root import InstallSourceError, resolve_install_source_root
+from mikazuki.engines.musubi import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
 from mikazuki.model_assets import (
     check_assets as check_model_assets,
     resolve_train_type as resolve_model_asset_train_type,
     start_download_task as start_model_assets_download_task,
 )
-from mikazuki.musubi_backend.adapter import (
+from mikazuki.engines.musubi.adapter import (
     AdapterError as MusubiAdapterError,
     adapt_config as adapt_musubi_config,
     dump_dataset_toml as dump_musubi_dataset_toml,
     dump_train_toml as dump_musubi_train_toml,
 )
-from mikazuki.musubi_backend.environment import (
+from mikazuki.engines.musubi.environment import (
     audit_environment as audit_musubi_environment,
     start_install_task as start_musubi_install_task,
 )
-from mikazuki.musubi_backend.extension_state import (
+from mikazuki.engines.musubi.extension_state import (
     STATE_READY as MUSUBI_STATE_READY,
     default_layout as musubi_default_layout,
     read_extension_status as read_musubi_extension_status,
     write_install_state as write_musubi_install_state,
 )
-from mikazuki.musubi_backend.installer import (
+from mikazuki.engines.musubi.installer import (
     build_install_plan as build_musubi_install_plan,
     remove_extension as remove_musubi_extension,
 )
-from mikazuki.musubi_backend.preflight import run_preflight as run_musubi_preflight
-from mikazuki.musubi_backend.settings import (
+from mikazuki.engines.musubi.preflight import run_preflight as run_musubi_preflight
+from mikazuki.engines.musubi.settings import (
     default_upstream_cache as musubi_default_upstream_cache,
     discover_runtime as discover_musubi_runtime,
     feature_enabled as musubi_feature_enabled,

@@ -95,10 +95,10 @@ def find_project_root(start: Path | None = None) -> Path:
     candidates.append(here.parent.parent)
     for base in candidates:
         root = base.resolve()
-        if (root / "gui.py").is_file() and (root / "mikazuki" / "musubi_backend").is_dir():
+        if (root / "gui.py").is_file() and (root / "mikazuki" / "engines" / "musubi").is_dir():
             return root
     raise SystemExit(
-        "Cannot locate SD-Trainer project root (need gui.py and mikazuki/musubi_backend). "
+        "Cannot locate SD-Trainer project root (need gui.py and mikazuki/engines/musubi). "
         "Run from repo / SD-Trainer directory or pass --project-root."
     )
 
@@ -122,9 +122,9 @@ def main(argv: list[str] | None = None) -> int:
     ensure_project_import_path(project_root)
     os.chdir(project_root)
 
-    from mikazuki.musubi_backend.environment import build_environment_install_plan, install_environment, resolve_cuda_extra
-    from mikazuki.musubi_backend.extension_state import default_layout, read_extension_status
-    from mikazuki.musubi_backend.settings import feature_enabled, resolve_install_source_root
+    from mikazuki.engines.musubi.environment import build_environment_install_plan, install_environment, resolve_cuda_extra
+    from mikazuki.engines.musubi.extension_state import default_layout, read_extension_status
+    from mikazuki.engines.musubi.settings import feature_enabled, resolve_install_source_root
     from mikazuki.download_sources import parse_download_sources
 
     if not feature_enabled():

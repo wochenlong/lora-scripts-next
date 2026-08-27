@@ -10,9 +10,9 @@ from unittest import mock
 
 from starlette.requests import Request
 
-from mikazuki.anima_fast_backend.extension_state import ExtensionLayout, STATE_READY, write_install_state
-from mikazuki.anima_fast_backend.preflight import PreflightResult
-from mikazuki.anima_fast_backend.settings import discover_runtime
+from mikazuki.engines.anima_fast.extension_state import ExtensionLayout, STATE_READY, write_install_state
+from mikazuki.engines.anima_fast.preflight import PreflightResult
+from mikazuki.engines.anima_fast.settings import discover_runtime
 from mikazuki.app import api
 
 
@@ -94,8 +94,8 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             base_python.parent.mkdir(parents=True)
             base_python.write_text("", encoding="utf-8")
 
-            with mock.patch("mikazuki.anima_fast_backend.settings.sys.platform", "linux"), \
-                mock.patch("mikazuki.anima_fast_backend.extension_state.sys.platform", "linux"):
+            with mock.patch("mikazuki.engines.anima_fast.settings.sys.platform", "linux"), \
+                mock.patch("mikazuki.engines.anima_fast.extension_state.sys.platform", "linux"):
                 layout.source.mkdir(parents=True)
                 layout.train_py.write_text("", encoding="utf-8")
                 layout.venv_python.parent.mkdir(parents=True)

@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import unittest
 
-from mikazuki.anima_fast_backend.progress import (
+from mikazuki.engines.anima_fast.progress import (
     merge_anima_training_metrics,
     metrics_from_anima_events,
 )

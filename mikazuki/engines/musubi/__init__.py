@@ -4,4 +4,3 @@ First supported training type: Krea 2 LoRA (krea2-lora).
 """
 
 TRAIN_TYPE = "krea2-lora"
-PLUGIN_ID = "musubi-tuner"

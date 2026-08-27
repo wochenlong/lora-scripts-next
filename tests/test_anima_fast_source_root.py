@@ -17,7 +17,7 @@ if not _had_real_toml:
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT))
 
-from mikazuki.anima_fast_backend.source_root import (  # noqa: E402
+from mikazuki.engines.anima_fast.source_root import (  # noqa: E402
     InstallSourceError,
     default_upstream_cache,
     resolve_install_source_root,
@@ -48,7 +48,7 @@ class AnimaFastSourceRootTests(unittest.TestCase):
             project = Path(td) / "repo"
             project.mkdir()
             with mock.patch(
-                "mikazuki.anima_fast_backend.settings.discover_runtime",
+                "mikazuki.engines.anima_fast.settings.discover_runtime",
                 return_value=mock.Mock(anima_root=project / "missing", source_commit="abc123"),
             ):
                 resolved = resolve_install_source_root(project, None, "abc123", allow_clone=False)
@@ -69,9 +69,9 @@ class AnimaFastSourceRootTests(unittest.TestCase):
             project = Path(td) / "repo"
             project.mkdir()
             with mock.patch(
-                "mikazuki.anima_fast_backend.settings.discover_runtime",
+                "mikazuki.engines.anima_fast.settings.discover_runtime",
                 return_value=mock.Mock(anima_root=project / "missing", source_commit="abc123"),
-            ), mock.patch("mikazuki.anima_fast_backend.source_root.shutil.which", return_value=None):
+            ), mock.patch("mikazuki.engines.anima_fast.source_root.shutil.which", return_value=None):
                 with self.assertRaises(InstallSourceError):
                     resolve_install_source_root(project, None, "abc123", allow_clone=True)
 

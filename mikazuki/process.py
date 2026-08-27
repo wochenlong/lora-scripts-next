@@ -11,9 +11,9 @@ from typing import Any, Optional
 _VALID_ACCELERATE_MIXED_PRECISION = frozenset({"no", "fp16", "bf16"})
 
 from mikazuki.app.models import APIResponse
-from mikazuki.anima_fast_backend.launcher import build_launch_spec
-from mikazuki.anima_fast_backend.service_resolver import default_resolver
-from mikazuki.musubi_backend.launcher import (
+from mikazuki.engines.anima_fast.launcher import build_launch_spec
+from mikazuki.engines.anima_fast.service_resolver import default_resolver
+from mikazuki.engines.musubi.launcher import (
     build_cache_latents_spec,
     build_cache_text_encoder_spec,
     build_train_spec,

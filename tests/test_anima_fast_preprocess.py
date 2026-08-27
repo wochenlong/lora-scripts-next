@@ -5,12 +5,12 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-from mikazuki.anima_fast_backend.preprocess import (
+from mikazuki.engines.anima_fast.preprocess import (
     ensure_output_directories,
     prepare_anima_fast_dataset,
     user_left_resized_empty,
 )
-from mikazuki.anima_fast_backend.settings import RuntimeConfig
+from mikazuki.engines.anima_fast.settings import RuntimeConfig
 
 
 def make_runtime(root: Path) -> RuntimeConfig:
@@ -70,7 +70,7 @@ class AnimaFastPreprocessTests(unittest.TestCase):
                 "resolution": "512,512",
             }
 
-            with mock.patch("mikazuki.anima_fast_backend.preprocess.run_resize_images") as resize:
+            with mock.patch("mikazuki.engines.anima_fast.preprocess.run_resize_images") as resize:
                 result = prepare_anima_fast_dataset(config, runtime, "20260101-test")
                 resize.assert_called_once()
                 self.assertTrue(result.auto_resized)
@@ -98,7 +98,7 @@ class AnimaFastPreprocessTests(unittest.TestCase):
                 "qwen3": "./sd-models/anima/qwen_3_06b_base.safetensors",
             }
 
-            with mock.patch("mikazuki.anima_fast_backend.preprocess.run_resize_images") as resize:
+            with mock.patch("mikazuki.engines.anima_fast.preprocess.run_resize_images") as resize:
                 result = prepare_anima_fast_dataset(config, runtime, "20260101-test")
                 resize.assert_not_called()
                 self.assertFalse(result.auto_resized)
@@ -121,7 +121,7 @@ class AnimaFastPreprocessTests(unittest.TestCase):
                 "qwen3": "./sd-models/anima/qwen_3_06b_base.safetensors",
             }
 
-            with mock.patch("mikazuki.anima_fast_backend.preprocess.run_resize_images") as resize:
+            with mock.patch("mikazuki.engines.anima_fast.preprocess.run_resize_images") as resize:
                 result = prepare_anima_fast_dataset(config, runtime, "20260101-test")
                 resize.assert_not_called()
                 self.assertFalse(result.auto_resized)

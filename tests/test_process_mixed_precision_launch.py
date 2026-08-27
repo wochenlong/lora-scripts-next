@@ -24,8 +24,8 @@ _STUBBED_MODULE_NAMES = (
     "mikazuki.launch_utils",
     "mikazuki.portable_utils",
     "toml",
-    "mikazuki.anima_fast_backend.launcher",
-    "mikazuki.anima_fast_backend.service_resolver",
+    "mikazuki.engines.anima_fast.launcher",
+    "mikazuki.engines.anima_fast.service_resolver",
     "mikazuki.process",
 )
 _SAVED_MODULES: dict[str, types.ModuleType | None] = {}
@@ -97,13 +97,13 @@ def _install_stub_modules() -> None:
         toml_mod.loads = _simple_toml_loads
         sys.modules["toml"] = toml_mod
 
-    fast_mod = types.ModuleType("mikazuki.anima_fast_backend.launcher")
+    fast_mod = types.ModuleType("mikazuki.engines.anima_fast.launcher")
     fast_mod.build_launch_spec = mock.MagicMock()
-    sys.modules["mikazuki.anima_fast_backend.launcher"] = fast_mod
+    sys.modules["mikazuki.engines.anima_fast.launcher"] = fast_mod
 
-    resolver_mod = types.ModuleType("mikazuki.anima_fast_backend.service_resolver")
+    resolver_mod = types.ModuleType("mikazuki.engines.anima_fast.service_resolver")
     resolver_mod.default_resolver = mock.MagicMock()
-    sys.modules["mikazuki.anima_fast_backend.service_resolver"] = resolver_mod
+    sys.modules["mikazuki.engines.anima_fast.service_resolver"] = resolver_mod
 
     sys.modules.pop("mikazuki.process", None)
 
