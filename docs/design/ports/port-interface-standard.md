@@ -104,7 +104,8 @@ http://127.0.0.1:28000/
 | `/tagger/` | Dataset Tag Editor | 否 |
 | `/daemon/` | 本地 daemon RPC | 受限，需要安全评审 |
 | `/plugins/` | 插件页面入口 | 可以，插件页面优先使用 |
-| `/api/plugins/` | 插件 API 入口 | 可以，插件 API 必须使用 |
+| `/api/engines/` | 训练引擎 API 入口 | 训练引擎 API 必须使用（#302 起，统一为 `/api/engines/<engine-id>/*`） |
+| `/api/plugins/` | 插件 API 入口 | 可以，非训练引擎的插件 API 使用 |
 | `/diagnostics/` | 人类可读诊断页面 | 可以，但不得暴露敏感信息 |
 | `/api/diagnostics/` | 机器可读诊断 API | 可以，需要权限控制 |
 

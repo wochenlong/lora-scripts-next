@@ -106,9 +106,9 @@ musubi 训练除本地模型文件外还有隐性 HF 依赖(tokenizer),网络不
    - `KREA2_ASSETS`:dit / vae / text_encoder(+可选 turbo_dit);repo id 由 `config/musubi_backend.toml [assets.krea2.*]` 覆盖(代码不硬编未证实的 repo)
    - `check_assets(values, project_root) -> missing`(按表单实际填的路径判断,相对路径基于 cwd)
    - 下载任务:HF 走 `hf_hub_download(local_dir=…)`;ModelScope 走 `modelscope` SDK;经 tm 任务 + train_log_hub 输出日志/进度(复用 `/api/train/log/stream`)
-2. **`mikazuki/app/api.py`**
-   - `POST /api/plugins/musubi/assets/check` {config} → `missing_assets[]`
-   - `POST /api/plugins/musubi/assets/download` {items, source} → 后台任务 + log_stream
+2. **`mikazuki/app/api.py`**（实际实现落在 `/api/assets/*`，非原拟的 plugins 路径）
+   - `POST /api/assets/check` {config} → `missing_assets[]`
+   - `POST /api/assets/download` {items, source} → 后台任务 + log_stream
 3. **`requirements.txt`**:+ `modelscope`
 4. **前端**
    - `api/musubi.ts`:`assetsCheck` / `assetsDownload` + 类型
