@@ -131,10 +131,30 @@ def ensure_vendor_source(
     dirname: str,
     log: Callable[[str], None] | None = None,
 ) -> Path | None:
-    """Return ``vendor/<dirname>``, extracting the vendor bundle once if needed."""
+    """Return ``vendor/<dirname>``, extracting the vendor bundle once if needed.
+
+    One-shot distribution contract: an existing vendor dir is never
+    overwritten. Dirs we extracted ourselves are trusted as-is; manually
+    placed dirs win over the bundle with a loud warning (DIY at your own
+    risk). Upgrades go through github/gitee clones — a pin bump makes stale
+    snapshots fail the .source_commit check and fall through to clone.
+    """
     vendor_dir = project_root / "vendor"
     target = vendor_dir / dirname
     if target.is_dir():
+        bundle = find_vendor_bundle(project_root)
+        if bundle is not None and not _bundle_already_extracted(bundle, vendor_dir):
+            message = (
+                f"[vendor] {dirname} 已存在且非本 bundle 解压产物（或 bundle 已更换）；"
+                "按一次性分发约定不覆盖。升级请走 GitHub/Gitee，"
+                f"或手动删除 vendor/{dirname} 后重新安装（手动目录 DIY 场景仅告警）。"
+            )
+            if log:
+                log(message)
+            else:
+                from mikazuki.log import log as _log
+
+                _log.warning(message)
         return target.resolve()
     with _EXTRACTION_LOCK:
         # Re-check under the lock: another thread may have just promoted it.

@@ -62,14 +62,9 @@ class TestEnsureVendorSource:
         assert ensure_vendor_source(tmp_path, "musubi-tuner") is None
         assert calls == [1]
 
-    def test_same_size_different_bundle_reextracts(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
+    def test_replaced_bundle_never_overwrites_extracted_dir(self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
         bundle = _make_bundle(tmp_path, {"anima_lora": {"train.py": "print(1)\n"}})
         assert ensure_vendor_source(tmp_path, "anima_lora") is not None
-        # Replace with a different bundle of the exact same byte length.
-        replacement = tmp_path / "replacement.zip"
-        with zipfile.ZipFile(replacement, "w") as zf:
-            zf.writestr("anima_lora/train.py", "print(2)\n")
-        assert replacement.stat().st_size != 0
         import mikazuki.engines.vendor_bundle as vb
 
         calls = []
@@ -80,11 +75,23 @@ class TestEnsureVendorSource:
             return real_extract(*args, **kwargs)
 
         monkeypatch.setattr(vb, "extract_vendor_bundle", spy)
-        (tmp_path / "vendor" / "anima_lora").rename(tmp_path / "vendor" / "anima_lora_old")
-        bundle.write_bytes(replacement.read_bytes())
-        assert ensure_vendor_source(tmp_path, "anima_lora") is not None
-        assert calls == [1]
-        assert (tmp_path / "vendor" / "anima_lora" / "train.py").read_text(encoding="utf-8") == "print(2)\n"
+        bundle.write_bytes(b"different-content-now")
+        result = ensure_vendor_source(tmp_path, "anima_lora")
+        # One-shot contract: existing dir is returned as-is, never re-extracted.
+        assert result == (tmp_path / "vendor" / "anima_lora").resolve()
+        assert calls == []
+        assert (result / "train.py").read_text(encoding="utf-8") == "print(1)\n"
+
+    def test_manual_dir_with_bundle_warns_but_wins(self, tmp_path: Path):
+        manual = tmp_path / "vendor" / "musubi-tuner"
+        manual.mkdir(parents=True)
+        _make_bundle(tmp_path, {"musubi-tuner": {"src/musubi_tuner/__init__.py": ""}})
+        logs: list[str] = []
+        result = ensure_vendor_source(tmp_path, "musubi-tuner", log=logs.append)
+        assert result == manual.resolve()
+        assert any("不覆盖" in line for line in logs)
+        # Bundle was not extracted over the manual dir.
+        assert not (manual / "src").exists()
 
     def test_tar_rejects_link_escaping_vendor(self, tmp_path: Path):
         import io
