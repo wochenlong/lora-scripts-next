@@ -20,7 +20,9 @@ def test_detect_best_attn_mode_uses_xformers_without_flash(monkeypatch: pytest.M
 
 def test_detect_best_attn_mode_uses_torch_without_flash_or_xformers(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setattr("mikazuki.app.train_submit.flash_attn_stack_usable", lambda: False)
-    monkeypatch.delitem(sys.modules, "xformers", raising=False)
+    # sys.modules["xformers"] = None makes `import xformers` raise ImportError
+    # even when xformers is installed in the environment.
+    monkeypatch.setitem(sys.modules, "xformers", None)
     assert _detect_best_attn_mode() == "torch"
 
 

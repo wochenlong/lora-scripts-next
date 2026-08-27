@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -30,6 +31,14 @@ from mikazuki.engines.anima_fast.extension_state import (
     write_install_state,
 )
 from mikazuki.tasks import Task, tm
+
+
+def _fake_discovered_python(plan) -> Path:
+    """Platform-aware fake of the uv-installed base python (matches
+    ``_find_base_python`` glob patterns on the current OS)."""
+    if sys.platform == "win32":
+        return plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+    return plan.python_install_dir / "cpython-3.13.99-linux-x86_64-gnu" / "bin" / "python3"
 
 
 class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
@@ -94,7 +103,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False, source_commit="abc123")
 
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
 
             def fake_run(command, cwd, log, env=None, retries=0):
                 if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
@@ -132,7 +141,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
 
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
 
             def fake_run(command, cwd, log, env=None, retries=0):
                 if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
@@ -532,7 +541,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
             pip_commands: list[list[str]] = []
 
             def fake_run(command, cwd, log, env=None, retries=0):
@@ -569,7 +578,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
             progress_events: list[dict] = []
 
             def fake_run(command, cwd, log, env=None, retries=0):
@@ -601,7 +610,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
             write_install_state(layout, STATE_INSTALLING, {"task_id": "anima-install-keep-id", "plan": plan.as_dict()})
 
-            discovered_python = plan.python_install_dir / "cpython-3.13.99-windows-x86_64-none" / "python.exe"
+            discovered_python = _fake_discovered_python(plan)
 
             def fake_run(command, cwd, log, env=None, retries=0):
                 if len(command) >= 3 and command[0] == str(discovered_python) and command[1:3] == ["-m", "venv"]:
@@ -679,7 +688,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                 write_install_state(layout, STATE_READY, {"audit": {"ok": True}})
                 return AuditResult(ok=True)
 
-            def fake_ensure(project_root, preferred, commit, log=None):
+            def fake_ensure(project_root, preferred, commit, log=None, github_url_prefix=None):
                 return cache.resolve()
 
             with mock.patch(

@@ -23,11 +23,26 @@ stub_progress.tagger_progress = types.SimpleNamespace(
     is_busy=lambda: False,
     reset_idle=lambda message=None: None,
 )
+_TAGGER_MODULES = (
+    "mikazuki.tagger.interrogator",
+    "mikazuki.tagger.jobs",
+    "mikazuki.tagger.progress",
+)
+_saved_tagger_modules = {name: sys.modules.get(name) for name in _TAGGER_MODULES}
 sys.modules["mikazuki.tagger.interrogator"] = stub_interrogator
 sys.modules["mikazuki.tagger.jobs"] = stub_jobs
 sys.modules["mikazuki.tagger.progress"] = stub_progress
 
 from mikazuki.app import api
+
+# Restore the real tagger modules: the stubs only need to shield this module's
+# ``from mikazuki.app import api`` in minimal environments. Leaving them in
+# sys.modules leaks into later tests that import the real tagger modules.
+for _name in _TAGGER_MODULES:
+    if _saved_tagger_modules[_name] is None:
+        sys.modules.pop(_name, None)
+    else:
+        sys.modules[_name] = _saved_tagger_modules[_name]
 
 
 def make_request(payload: dict) -> Request:
