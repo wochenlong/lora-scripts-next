@@ -101,7 +101,7 @@ musubi 训练除本地模型文件外还有隐性 HF 依赖(tokenizer),网络不
 
 ### 改动
 
-1. **`mikazuki/musubi_backend/assets.py`(新)**
+1. **`mikazuki/engines/musubi/assets.py`(新)**
    - `AssetDef { key, label, default_path, hf_repo, hf_file, ms_repo, ms_file }`
    - `KREA2_ASSETS`:dit / vae / text_encoder(+可选 turbo_dit);repo id 由 `config/musubi_backend.toml [assets.krea2.*]` 覆盖(代码不硬编未证实的 repo)
    - `check_assets(values, project_root) -> missing`(按表单实际填的路径判断,相对路径基于 cwd)

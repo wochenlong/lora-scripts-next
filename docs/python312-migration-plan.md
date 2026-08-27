@@ -80,7 +80,7 @@
 ### 阶段 3 · musubi-tuner 对齐（约 0.5 天）
 - 上游本就要求 `>=3.10,<3.13`，当前已用 3.12，主要工作：
   - 确认 musubi 安装流程使用与全局一致的 3.12 来源（uv 或系统）
-  - 环境自检文案/审计断言复核（`mikazuki/engines/musubi/environment.py:194`）
+  - 环境自检文案/审计断言复核（`mikazuki/engines/musubi/environment.py` 的 `audit_environment()`）
   - Krea 2 冒烟训练
 
 ### 阶段 4 · 收尾（约 1 天）

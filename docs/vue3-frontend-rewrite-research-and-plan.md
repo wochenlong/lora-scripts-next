@@ -120,16 +120,13 @@ interface APIResponse<T = Record<string, unknown>> {
 | 方法 | 路径 | 请求/用途 | 当前前端 | Vue 3 归属 |
 |---|---|---|---|---|
 | GET | `/api/engines/anima-fast/status` | 插件状态、feature flag、audit facts、runtime 路径 | 页面进入及每 2 秒轮询 | `animaFastStore` |
-| POST | `/api/engines/anima-fast/preflight` | 训练配置预检 | 当前补丁未直接调用 | 提交前可显式展示 |
-| POST | `/api/engines/anima-fast/dry-run` | 生成适配后 TOML 和 warnings，不启动训练 | 当前补丁未直接调用 | 高级预览/诊断 |
+| POST | `/api/engines/anima-fast/preflight` | 训练配置预检 | `TrainingPage` 提交前已调用 | 提交前显式展示 |
+| POST | `/api/engines/anima-fast/dry-run` | 生成适配后 TOML 和 warnings，不启动训练 | 当前前端未调用 | 高级预览/诊断 |
 | POST | `/api/engines/anima-fast/install` | `{dry_run, source_root?, source_commit?}`；启动安装任务 | 已调用 `{dry_run:false}` | 安装向导 |
 | POST | `/api/engines/anima-fast/repair` | 同 install，强制修复 | 后端已有，当前页面未见入口 | 安装向导 |
 | POST | `/api/engines/anima-fast/uninstall` | 卸载插件 | 后端已有，当前页面未见入口 | 管理入口，需二次确认 |
 | GET/SSE | `/api/engines/anima-fast/install/log/stream/{task_id}` | 安装日志，实际复用训练日志流 | 已调用 | `useInstallLogStream` |
 | GET/SSE | `/api/engines/anima-fast/install/progress/stream/{task_id}` | 结构化安装进度 | 已调用 | `useInstallProgressStream` |
-| POST | `/api/engines/anima-fast/preflight` | Anima Fast preflight | 已调用 | 统一引擎路由 |
-| POST | `/api/engines/anima-fast/dry-run` | Anima Fast dry-run | 已调用 | 统一引擎路由 |
-
 当前补丁还会在全局重写 `window.fetch`，拦截 `/api/run` 并修正不兼容参数组合。Vue 3 中必须将这些规则移入显式的 Anima Fast 表单校验/规范化层，禁止继续全局劫持：
 
 - `flash` 依赖 `flash_attn`。
