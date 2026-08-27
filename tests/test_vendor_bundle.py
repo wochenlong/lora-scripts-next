@@ -64,13 +64,21 @@ class TestEnsureVendorSource:
 
 
 class TestSnapshotMatches:
-    def test_prefix_tolerant(self, tmp_path: Path):
+    def test_full_sha_recorded_with_prefix_request(self, tmp_path: Path):
         (tmp_path / ".source_commit").write_text(FULL_SHA + "\n", encoding="utf-8")
         assert snapshot_matches(tmp_path, FULL_SHA)
         assert snapshot_matches(tmp_path, "8781981")
         assert snapshot_matches(tmp_path, FULL_SHA[:7])
         assert not snapshot_matches(tmp_path, "deadbeef")
         assert not snapshot_matches(tmp_path, "")
+
+    def test_truncated_or_malformed_marker_rejected(self, tmp_path: Path):
+        (tmp_path / ".source_commit").write_text("8781981\n", encoding="utf-8")
+        assert not snapshot_matches(tmp_path, FULL_SHA)
+        (tmp_path / ".source_commit").write_text("8\n", encoding="utf-8")
+        assert not snapshot_matches(tmp_path, FULL_SHA)
+        (tmp_path / ".source_commit").write_text("not-a-sha-at-all-not-a-sha-at-all-1234567\n", encoding="utf-8")
+        assert not snapshot_matches(tmp_path, FULL_SHA)
 
 
 class TestMusubiResolveViaBundle:

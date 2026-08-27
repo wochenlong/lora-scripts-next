@@ -35,6 +35,7 @@ TRAINER_MAPPING = {
     "anima-finetune": "./scripts/dev/anima_train.py",
     "flux-lora": "./scripts/dev/flux_train_network.py",
     "flux-finetune": "./scripts/dev/flux_train.py",
+    "lumina-lora": "./scripts/dev/lumina_train_network.py",
 }
 
 

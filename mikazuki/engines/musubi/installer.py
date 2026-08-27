@@ -157,6 +157,12 @@ def copy_source_snapshot(plan: InstallPlan) -> None:
         # Vendor-bundle snapshot: content already matches the pinned commit.
         recorded = snapshot_commit(plan.source_root) or plan.source_commit
         (plan.target_source / ".source_commit").write_text(recorded + "\n", encoding="utf-8")
+    elif snapshot_commit(plan.source_root):
+        # Preserve provenance when the source is a bundle snapshot even if no
+        # commit was requested this time.
+        (plan.target_source / ".source_commit").write_text(
+            snapshot_commit(plan.source_root) + "\n", encoding="utf-8"
+        )
 
 
 def remove_extension(layout: ExtensionLayout, project_root: Path) -> None:

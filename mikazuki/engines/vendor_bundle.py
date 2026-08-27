@@ -42,11 +42,18 @@ def snapshot_commit(source_root: Path) -> str | None:
 
 
 def snapshot_matches(source_root: Path, commit: str) -> bool:
-    """True when source_root is an exact snapshot of commit (prefix-tolerant)."""
+    """True when source_root is an exact snapshot of commit.
+
+    The recorded marker must be a full 40-hex SHA (the bundle contract); the
+    requested commit may be an unambiguous prefix of it.
+    """
     recorded = snapshot_commit(source_root)
     if not recorded or not commit:
         return False
-    return recorded.startswith(commit) or commit.startswith(recorded)
+    recorded = recorded.lower()
+    if len(recorded) != 40 or any(c not in "0123456789abcdef" for c in recorded):
+        return False
+    return recorded.startswith(commit.strip().lower())
 
 
 def _check_within(base: Path, name: str) -> None:

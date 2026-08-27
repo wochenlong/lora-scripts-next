@@ -27,6 +27,7 @@ def test_train_type_mapping():
     assert mapping["anima-lora-fast"] == ("anima-fast", "anima")
     assert mapping["sd-lora"] == ("kohya", "sd15")
     assert mapping["flux-finetune"] == ("kohya", "flux")
+    assert mapping["lumina-lora"] == ("kohya", "lumina")
 
 
 def test_resolve_train_type_roundtrip():

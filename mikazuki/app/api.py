@@ -244,7 +244,11 @@ async def engine_install(engine_id: str, request: Request):
 
 @router.post("/engines/{engine_id}/repair")
 async def engine_repair(engine_id: str, request: Request):
-    return await _engine_install_impl(engine_id, request, force_install=True)
+    routes = _engine_routes_module(engine_id)
+    handler = getattr(routes, "repair", None)
+    if handler is None:
+        return await _engine_install_impl(engine_id, request, force_install=True)
+    return await handler(await _engine_payload(request))
 
 
 @router.post("/engines/{engine_id}/uninstall")

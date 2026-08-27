@@ -2,8 +2,7 @@
 
 kohya ships inside the main Python environment and is always ready: no
 installer, no patches, dispatch goes straight to the existing trainer_mapping
-pipeline. (No lumina entry exists in trainer_mapping today; capabilities
-mirror the real mapping.)
+pipeline.
 """
 
 ENGINE_ID = "kohya"
@@ -19,6 +18,7 @@ TRAIN_TYPES = {
     "anima-finetune": "anima",
     "flux-lora": "flux",
     "flux-finetune": "flux",
+    "lumina-lora": "lumina",
 }
 
 UPSTREAM = {
@@ -33,9 +33,9 @@ UPSTREAM = {
 FEATURE_FLAG_ENV = ""
 
 CAPABILITIES = {
-    "model_families": ["sd15", "sdxl", "anima", "flux"],
+    "model_families": ["sd15", "sdxl", "anima", "flux", "lumina"],
     "tasks": ["lora", "finetune", "dreambooth"],
-    "variants": ["sd15", "sdxl", "anima", "flux"],
+    "variants": ["sd15", "sdxl", "anima", "flux", "lumina"],
 }
 
 PATCHES = []
