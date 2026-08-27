@@ -127,8 +127,8 @@ interface APIResponse<T = Record<string, unknown>> {
 | POST | `/api/engines/anima-fast/uninstall` | 卸载插件 | 后端已有，当前页面未见入口 | 管理入口，需二次确认 |
 | GET/SSE | `/api/engines/anima-fast/install/log/stream/{task_id}` | 安装日志，实际复用训练日志流 | 已调用 | `useInstallLogStream` |
 | GET/SSE | `/api/engines/anima-fast/install/progress/stream/{task_id}` | 结构化安装进度 | 已调用 | `useInstallProgressStream` |
-| POST | `/api/engines/anima-fast/preflight`（原 `/api/anima-fast/preflight` 兼容别名，已随统一路由并入） | preflight 兼容别名 | 未见当前调用 | 仅兼容，不作为新调用首选 |
-| POST | `/api/engines/anima-fast/dry-run`（原 `/api/anima-fast/dry-run` 兼容别名，已随统一路由并入） | dry-run 兼容别名 | 未见当前调用 | 仅兼容，不作为新调用首选 |
+| POST | `/api/engines/anima-fast/preflight` | Anima Fast preflight | 已调用 | 统一引擎路由 |
+| POST | `/api/engines/anima-fast/dry-run` | Anima Fast dry-run | 已调用 | 统一引擎路由 |
 
 当前补丁还会在全局重写 `window.fetch`，拦截 `/api/run` 并修正不兼容参数组合。Vue 3 中必须将这些规则移入显式的 Anima Fast 表单校验/规范化层，禁止继续全局劫持：
 

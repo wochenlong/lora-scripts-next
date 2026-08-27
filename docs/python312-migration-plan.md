@@ -7,14 +7,14 @@
 | 组件 | 当前 Python | 位置 | 关键约束 |
 |---|---|---|---|
 | 主程序（mikazuki GUI + vendor/sd-scripts） | 3.10（venv 实测 3.10.20） | `venv/`、`setup_environment.py` | torch 2.7.0+cu128、numpy 1.26.4、gradio 3.44.2 |
-| anima-fast（extensions/anima_lora） | **3.13**（上游 `pyproject.toml` 写死 `==3.13.*`） | `mikazuki/anima_fast_backend/` | torch 2.11/2.12 nightly + CUDA 13、transformers>=5.3、numpy>=2 |
-| musubi-tuner | 3.12（`MUSUBI_PYTHON_VERSION = "3.12"`） | `mikazuki/musubi_backend/` | 上游要求 `>=3.10,<3.13`，已是 3.12 |
+| anima-fast（extensions/anima_lora） | **3.13**（上游 `pyproject.toml` 写死 `==3.13.*`） | `mikazuki/engines/anima_fast/` | torch 2.11/2.12 nightly + CUDA 13、transformers>=5.3、numpy>=2 |
+| musubi-tuner | 3.12（`MUSUBI_PYTHON_VERSION = "3.12"`） | `mikazuki/engines/musubi/` | 上游要求 `>=3.10,<3.13`，已是 3.12 |
 
 硬编码 3.10 / 3.13 的位置（必须改）：
 
 - `setup_environment.py:24` — `PYTHON_TAG = "cp310"`，torch wheel 名拼接
 - `build-scripts/01-prepare-python.ps1:13` — 下载 `python-3.10.11-embed-amd64.zip`
-- `mikazuki/anima_fast_backend/environment.py` — `uv python install 3.13`、`cpython-3.13.*` 探测 pattern（:407-409）、审计 `python_major_minor: "3.13"`（:88）
+- `mikazuki/engines/anima_fast/environment.py` — `uv python install 3.13`、`cpython-3.13.*` 探测 pattern（:407-409）、审计 `python_major_minor: "3.13"`（:88）
 - `extensions/anima_lora/source/pyproject.toml:5` — `requires-python = "==3.13.*"`
 - 已存在的 uv 管理解释器 `.python/cpython-3.13.12-*/`（需替换为 3.12）
 - `Dockerfile` 基础镜像 `nvcr.io/nvidia/pytorch:24.07-py3`（内置 py3.10，需换 24.12+ 或改用官方 python:3.12 基底）
@@ -63,7 +63,7 @@
    - `numpy==1.26.4`：3.12 官方支持，但需确认 `lycoris-lora==3.3.0`、`dadaptation` 等下层包不拉 numpy2
 3. **代码兼容性扫描与修复**
    - 全量 grep：`distutils`、`imp`、`pkg_resources`（3.12 需 setuptools）、`asyncio.coroutine`、`datetime.utcnow`、`re` 非法转义告警
-   - `mikazuki/musubi_backend/settings.py` 中 `import tomllib / fallback toml` 分支在 3.12 下恒走 tomllib，可简化
+   - `mikazuki/engines/musubi/settings.py` 中 `import tomllib / fallback toml` 分支在 3.12 下恒走 tomllib，可简化
 4. **回归**：GUI 启动、WD14 打标（onnxruntime）、sd-scripts SDXL/Flux LoRA 冒烟训练
 
 ### 阶段 2 · anima-fast 3.13 → 3.12（约 2–3 天，风险最高）
@@ -72,7 +72,7 @@
    - 确认对应 torch ABI 的 flash-attn 2 预编译 wheel 是否有 cp312 版本（否则按 `docs/optimizations/cuda132.md` 自编译）
 2. **打补丁**
    - `extensions/anima_lora/source/pyproject.toml`：`requires-python` → `==3.12.*`，重新 `uv lock`
-   - `mikazuki/anima_fast_backend/environment.py`：uv 安装 3.13 → 3.12（:474-487）、探测 pattern `cpython-3.13.*` → `cpython-3.12.*`（:407-409）、`base_python` 路径（:206-209）
+   - `mikazuki/engines/anima_fast/environment.py`：uv 安装 3.13 → 3.12（:474-487）、探测 pattern `cpython-3.13.*` → `cpython-3.12.*`（:407-409）、`base_python` 路径（:206-209）
    - 审计期望 `python_major_minor: "3.13"` → `"3.12"`（:88）
    - 清理/重建 `.python/cpython-3.13.12-*` 与 anima-fast `.venv`
 3. **回归**：anima-fast 完整链路（preprocess → cache → train），对比 Loss 曲线无异常
@@ -80,7 +80,7 @@
 ### 阶段 3 · musubi-tuner 对齐（约 0.5 天）
 - 上游本就要求 `>=3.10,<3.13`，当前已用 3.12，主要工作：
   - 确认 musubi 安装流程使用与全局一致的 3.12 来源（uv 或系统）
-  - 环境自检文案/审计断言复核（`musubi_backend/environment.py:194`）
+  - 环境自检文案/审计断言复核（`mikazuki/engines/musubi/environment.py:194`）
   - Krea 2 冒烟训练
 
 ### 阶段 4 · 收尾（约 1 天）

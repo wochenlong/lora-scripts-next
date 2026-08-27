@@ -19,7 +19,7 @@
 | 路径 | 原因 |
 |------|------|
 | `extensions/anima_lora/` | 页内安装器写入；**整合包不预装** `.venv`（见 `docs/portable-packaging-git-update.md`） |
-| `mikazuki/anima_fast_backend/` | Fast 路由、安装器、监控适配（主仓代码） |
+| `mikazuki/engines/anima_fast/` | Fast 引擎包：路由、安装器、监控适配（主仓代码） |
 
 ### 整合包（Portable 7z）
 

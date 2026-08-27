@@ -124,13 +124,14 @@ def main(argv: list[str] | None = None) -> int:
 
     from mikazuki.engines.musubi.environment import build_environment_install_plan, install_environment, resolve_cuda_extra
     from mikazuki.engines.musubi.extension_state import default_layout, read_extension_status
+    from mikazuki.engines.musubi.manifest import UPSTREAM
     from mikazuki.engines.musubi.settings import feature_enabled, resolve_install_source_root
     from mikazuki.download_sources import parse_download_sources
 
     if not feature_enabled():
         raise SystemExit("musubi-tuner backend is disabled (LORA_ENABLE_MUSUBI=0).")
 
-    commit = args.source_commit.strip() or None
+    commit = args.source_commit.strip() or UPSTREAM["commit"] or None
     cuda_extra = args.cuda_extra.strip() or resolve_cuda_extra()
     download_sources = parse_download_sources(
         {
@@ -141,7 +142,7 @@ def main(argv: list[str] | None = None) -> int:
         }
     )
     try:
-        source_root = resolve_install_source_root(project_root, args.source_root)
+        source_root = resolve_install_source_root(project_root, args.source_root, commit)
     except ValueError as exc:
         raise SystemExit(str(exc)) from exc
     layout = default_layout(project_root)
