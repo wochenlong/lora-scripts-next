@@ -36,28 +36,28 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertNotIn('"Automagic",', adapter[adapter.index("FAST_SUPPORTED_OPTIMIZERS"): adapter.index("@dataclass")])
 
     def test_fast_train_type_is_not_legacy_trainer_mapping(self):
-        source = Path("mikazuki/app/api.py").read_text(encoding="utf-8")
+        source = Path("mikazuki/engines/kohya/run.py").read_text(encoding="utf-8")
         module = ast.parse(source)
         mapping = None
         for node in module.body:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
-                    if isinstance(target, ast.Name) and target.id == "trainer_mapping":
+                    if isinstance(target, ast.Name) and target.id == "TRAINER_MAPPING":
                         mapping = ast.literal_eval(node.value)
         self.assertIsNotNone(mapping)
         self.assertNotIn("anima-lora-fast", mapping)
         self.assertEqual(mapping["anima-lora"], "./scripts/dev/anima_train_network.py")
         self.assertEqual(mapping["sd3-lora"], "./scripts/dev/anima_train_network.py")
 
-    def test_api_contains_fast_early_branch_and_plugin_routes(self):
+    def test_api_dispatches_run_via_registry_and_mounts_engine_routes(self):
         source = Path("mikazuki/app/api.py").read_text(encoding="utf-8")
 
-        self.assertIn("model_train_type == ANIMA_FAST_TRAIN_TYPE", source)
-        self.assertIn('"/plugins/anima-lora/status"', source)
-        self.assertIn('"/plugins/anima-lora/preflight"', source)
-        self.assertIn('"/plugins/anima-lora/dry-run"', source)
-        self.assertIn('"/plugins/anima-lora/install/log/stream/{task_id}"', source)
-        self.assertLess(source.index("model_train_type == ANIMA_FAST_TRAIN_TYPE"), source.index("trainer_file = trainer_mapping[model_train_type]"))
+        self.assertIn("dispatch_run(", source)
+        self.assertIn('"/engines/{engine_id}/status"', source)
+        self.assertIn('"/engines/{engine_id}/preflight"', source)
+        self.assertIn('"/engines/{engine_id}/dry-run"', source)
+        self.assertIn('"/engines/{engine_id}/install/log/stream/{task_id}"', source)
+        self.assertNotIn('"/plugins/anima-lora/status"', source)
 
     def test_frontend_dist_registers_anima_fast_entry(self):
         router = Path("frontend/src/router.ts").read_text(encoding="utf-8")

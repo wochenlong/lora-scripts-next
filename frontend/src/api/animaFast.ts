@@ -44,9 +44,9 @@ function installBody(downloadSources?: DownloadSourcesPayload) {
 }
 
 export const animaFastApi = {
-  status: () => apiData<AnimaFastStatus>("/api/plugins/anima-lora/status"),
+  status: () => apiData<AnimaFastStatus>("/api/engines/anima-fast/status"),
   install: (downloadSources?: DownloadSourcesPayload) =>
-    apiData<InstallResult>("/api/plugins/anima-lora/install", { method: "POST", body: installBody(downloadSources) }),
+    apiData<InstallResult>("/api/engines/anima-fast/install", { method: "POST", body: installBody(downloadSources) }),
   repair: (downloadSources?: DownloadSourcesPayload) =>
-    apiData<InstallResult>("/api/plugins/anima-lora/repair", { method: "POST", body: installBody(downloadSources) }),
+    apiData<InstallResult>("/api/engines/anima-fast/repair", { method: "POST", body: installBody(downloadSources) }),
 }

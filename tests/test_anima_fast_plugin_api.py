@@ -13,6 +13,7 @@ from starlette.requests import Request
 from mikazuki.engines.anima_fast.extension_state import ExtensionLayout, STATE_READY, write_install_state
 from mikazuki.engines.anima_fast.preflight import PreflightResult
 from mikazuki.engines.anima_fast.settings import discover_runtime
+from mikazuki.engines.anima_fast import run as anima_run
 from mikazuki.app import api
 
 
@@ -49,7 +50,7 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             ok=False,
             errors=["anima_lora requires Python 3.13.*, got 3.12.0", "torch.cuda is not available"],
         )
-        response = api._anima_fast_fail_from_preflight(result)
+        response = anima_run.anima_fast_fail_from_preflight(result)
         self.assertEqual(response.status, "fail")
         self.assertIn("Python 3.13", response.message)
         self.assertIn("预检查失败", response.message)
@@ -125,11 +126,12 @@ class AnimaFastPluginApiTests(unittest.TestCase):
 
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
                 mock.patch(
-                    "mikazuki.app.api.start_install_task",
-                    return_value=("task-1", {"task_id": "task-1", "log_stream": "/api/plugins/anima-lora/install/log/stream/task-1"}),
+                    "mikazuki.engines.anima_fast.routes.start_install_task",
+                    return_value=("task-1", {"task_id": "task-1", "log_stream": "/api/engines/anima-fast/install/log/stream/task-1"}),
                 ) as starter:
                 response = asyncio.run(
-                    api.anima_lora_plugin_install(
+                    api.engine_install(
+                        "anima-fast",
                         make_request(
                             {
                                 "source_root": str(source),
@@ -164,8 +166,8 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             write_install_state(layout, STATE_READY, {"audit": audit})
 
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
-                mock.patch("mikazuki.app.api.start_install_task") as starter:
-                response = asyncio.run(api.anima_lora_plugin_install(make_request({"dry_run": False})))
+                mock.patch("mikazuki.engines.anima_fast.routes.start_install_task") as starter:
+                response = asyncio.run(api.engine_install("anima-fast", make_request({"dry_run": False})))
 
         self.assertEqual(response.status, "success")
         self.assertTrue(response.data["already_ready"])
@@ -193,7 +195,7 @@ class AnimaFastPluginApiTests(unittest.TestCase):
 
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
                 mock.patch(
-                    "mikazuki.app.api.audit_environment",
+                    "mikazuki.engines.anima_fast.run.audit_environment",
                     return_value=type("Result", (), {"ok": False, "errors": ["main: torch drift"], "as_dict": lambda self: {"ok": False, "errors": self.errors}})(),
                 ):
                 response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
@@ -235,10 +237,10 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             audit = type("Audit", (), {"ok": True, "errors": [], "as_dict": lambda self: {"ok": True}})()
 
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
-                mock.patch("mikazuki.app.api.audit_environment", return_value=audit), \
-                mock.patch("mikazuki.app.api.prepare_anima_fast_dataset", return_value=prepared), \
-                mock.patch("mikazuki.app.api.run_preflight", return_value=preflight), \
-                mock.patch("mikazuki.app.api.process.run_anima_fast_train", return_value=api.APIResponseSuccess(data={"task_id": "train-1"})) as runner:
+                mock.patch("mikazuki.engines.anima_fast.run.audit_environment", return_value=audit), \
+                mock.patch("mikazuki.engines.anima_fast.run.prepare_anima_fast_dataset", return_value=prepared), \
+                mock.patch("mikazuki.engines.anima_fast.run.run_preflight", return_value=preflight), \
+                mock.patch("mikazuki.engines.anima_fast.run.process.run_anima_fast_train", return_value=api.APIResponseSuccess(data={"task_id": "train-1"})) as runner:
                 response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
 
         self.assertEqual(response.status, "success")
@@ -259,11 +261,11 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             preflight = PreflightResult(ok=True, warnings=["runtime warning"])
 
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
-                mock.patch("mikazuki.app.api._anima_fast_runtime", return_value=object()), \
-                mock.patch("mikazuki.app.api.apply_anima_fast_preview", return_value=[]), \
-                mock.patch("mikazuki.app.api.adapt_config", return_value=adapted), \
-                mock.patch("mikazuki.app.api.run_preflight", return_value=preflight):
-                response = asyncio.run(api.anima_lora_plugin_preflight(make_request({"model_train_type": "anima-lora-fast"})))
+                mock.patch("mikazuki.engines.anima_fast.routes.anima_fast_runtime", return_value=object()), \
+                mock.patch("mikazuki.engines.anima_fast.routes.apply_anima_fast_preview", return_value=[]), \
+                mock.patch("mikazuki.engines.anima_fast.routes.adapt_config", return_value=adapted), \
+                mock.patch("mikazuki.engines.anima_fast.routes.run_preflight", return_value=preflight):
+                response = asyncio.run(api.engine_preflight("anima-fast", make_request({"model_train_type": "anima-lora-fast"})))
 
         self.assertEqual(response.status, "success")
         self.assertIn("cache 与 skip_cache_check 已自动关闭", response.data["warnings"])

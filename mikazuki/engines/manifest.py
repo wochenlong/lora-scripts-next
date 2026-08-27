@@ -20,6 +20,7 @@ Every ``mikazuki/engines/<id>/manifest.py`` data module must define:
       }
 
 - ``FEATURE_FLAG_ENV``: maintainer kill-switch env var name (``=0`` hides the engine).
+  May be empty for builtin packs that cannot be disabled.
 - ``CAPABILITIES``: free-form capability matrix (model families x tasks x variants).
 - ``PATCHES``: list of patch entries applied to the upstream snapshot at install
   time (empty for builtin packs).
@@ -84,7 +85,7 @@ def load_manifest(module: ModuleType) -> EngineManifest:
         kind=kind,
         train_types=train_types,
         upstream=upstream,
-        feature_flag_env=str(_require(module, "FEATURE_FLAG_ENV")).strip(),
+        feature_flag_env=str(getattr(module, "FEATURE_FLAG_ENV", "") or "").strip(),
         capabilities=dict(getattr(module, "CAPABILITIES", {}) or {}),
         patches=list(getattr(module, "PATCHES", []) or []),
         requires=dict(getattr(module, "REQUIRES", {}) or {}),

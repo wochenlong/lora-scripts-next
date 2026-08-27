@@ -821,6 +821,6 @@ def start_install_task(
     return task_id, {
         "task_id": task_id,
         "plan": plan.as_dict(),
-        "log_stream": f"/api/plugins/anima-lora/install/log/stream/{task_id}",
-        "progress_stream": f"/api/plugins/anima-lora/install/progress/stream/{task_id}",
+        "log_stream": f"/api/engines/anima-fast/install/log/stream/{task_id}",
+        "progress_stream": f"/api/engines/anima-fast/install/progress/stream/{task_id}",
     }

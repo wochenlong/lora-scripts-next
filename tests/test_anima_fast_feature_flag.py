@@ -51,7 +51,9 @@ class AnimaFastFeatureFlagTests(unittest.TestCase):
         self.assertLess(names.index("shared"), names.index("anima-lora-fast"))
 
     def test_run_rejects_anima_fast_when_plugin_not_ready(self):
-        with mock.patch.object(api, "_anima_fast_ready_gate", return_value=(False, api.APIResponseFail(message="not ready"))):
+        from mikazuki.engines.anima_fast import run as anima_run
+
+        with mock.patch.object(anima_run, "anima_fast_ready_gate", return_value=(False, api.APIResponseFail(message="not ready"))):
             response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
 
         self.assertEqual(response.status, "fail")

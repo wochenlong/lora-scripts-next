@@ -4,14 +4,14 @@ from pathlib import Path
 
 
 def load_trainer_mapping() -> dict[str, str]:
-    source = Path("mikazuki/app/api.py").read_text(encoding="utf-8")
+    source = Path("mikazuki/engines/kohya/run.py").read_text(encoding="utf-8")
     module = ast.parse(source)
     for node in module.body:
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == "trainer_mapping":
+                if isinstance(target, ast.Name) and target.id == "TRAINER_MAPPING":
                     return ast.literal_eval(node.value)
-    raise AssertionError("trainer_mapping not found in mikazuki/app/api.py")
+    raise AssertionError("TRAINER_MAPPING not found in mikazuki/engines/kohya/run.py")
 
 
 class TrainRoutingTests(unittest.TestCase):

@@ -87,7 +87,7 @@ class AnimaTrainingDefaultsTests(unittest.TestCase):
             "attn_mode": "torch",
         }
 
-        with mock.patch("mikazuki.app.api._cuda_bf16_supported", return_value=True):
+        with mock.patch("mikazuki.app.train_submit._cuda_bf16_supported", return_value=True):
             apply_anima_training_defaults(config, "anima-lora")
 
         self.assertEqual(config["mixed_precision"], "bf16")
@@ -120,7 +120,7 @@ class AnimaTrainingDefaultsTests(unittest.TestCase):
             "attn_mode": "torch",
         }
 
-        with mock.patch("mikazuki.app.api._cuda_bf16_supported", return_value=True):
+        with mock.patch("mikazuki.app.train_submit._cuda_bf16_supported", return_value=True):
             apply_anima_training_defaults(config, "anima-lora")
 
         self.assertEqual(config["mixed_precision"], "bf16")
@@ -135,7 +135,7 @@ class AnimaTrainingDefaultsTests(unittest.TestCase):
             "attn_mode": "torch",
         }
 
-        with mock.patch("mikazuki.app.api._cuda_bf16_supported", return_value=False):
+        with mock.patch("mikazuki.app.train_submit._cuda_bf16_supported", return_value=False):
             apply_anima_training_defaults(config, "anima-lora")
 
         self.assertEqual(config["mixed_precision"], "fp16")

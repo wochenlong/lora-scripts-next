@@ -524,6 +524,6 @@ def start_install_task(
     return task_id, {
         "task_id": task_id,
         "plan": plan.as_dict(),
-        "log_stream": f"/api/plugins/musubi/install/log/stream/{task_id}",
-        "progress_stream": f"/api/plugins/musubi/install/progress/stream/{task_id}",
+        "log_stream": f"/api/engines/musubi/install/log/stream/{task_id}",
+        "progress_stream": f"/api/engines/musubi/install/progress/stream/{task_id}",
     }

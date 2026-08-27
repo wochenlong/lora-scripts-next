@@ -53,7 +53,7 @@ function closeStreams() {
 
 function streams(taskId: string, logUrl?: string, progressUrl?: string) {
   closeStreams()
-  logSource = new EventSource(logUrl || `/api/plugins/musubi/install/log/stream/${taskId}`)
+  logSource = new EventSource(logUrl || `/api/engines/musubi/install/log/stream/${taskId}`)
   logSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
@@ -63,7 +63,7 @@ function streams(taskId: string, logUrl?: string, progressUrl?: string) {
       logs.value.push(event.data)
     }
   }
-  progressSource = new EventSource(progressUrl || `/api/plugins/musubi/install/progress/stream/${taskId}`)
+  progressSource = new EventSource(progressUrl || `/api/engines/musubi/install/progress/stream/${taskId}`)
   progressSource.onmessage = (event) => {
     try {
       const data = JSON.parse(event.data)
