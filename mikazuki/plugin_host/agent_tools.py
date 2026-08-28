@@ -38,6 +38,15 @@ from mikazuki.agent_workspace import get_artifact_service, ensure_workspace
 from mikazuki.agent_workspace import redact
 from .confirmation import ConfirmationError, ConfirmationTicketStore, request_hash
 
+_TICKET_HELP = (
+    "Host-issued confirmation ticket id. Two-stage protocol: (1) call this tool "
+    "FIRST without a confirmationTicketId — the host creates the pending ticket "
+    "and returns {\"state\":\"confirmation_required\",\"ticket\":{...}}; present that "
+    "ticket to the user. (2) Only after the user approves it, retry the SAME call "
+    "with the exact ticket id from that response. Never invent, guess, or reuse a "
+    "ticket id; a ticket is bound to this exact tool call and consumed once."
+)
+
 
 router = APIRouter(prefix="/internal/agent-tools", tags=["agent-tools"])
 
@@ -170,8 +179,8 @@ class AgentToolService:
                 _object({"content": _str("The full TOML or JSON draft text to validate (not a file path)."), "format": {"type": "string", "enum": ["toml", "json"], "description": "Draft format; defaults to toml."}, "pageTrainType": _str(), "metadata": {"type": "object"}}, ("content", "pageTrainType")), self._config_validate,
             ),
             "training_config_commit": _Tool(
-                "training_config_commit", "Commit training config", "Commit an approved validated draft as canonical TOML; training is never auto-started.", "training-config", "write",
-                _object({"validationHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str()}, ("validationHash", "confirmationTicketId")), self._config_commit,
+                "training_config_commit", "Commit training config", "Commit an approved validated draft as canonical TOML; training is never auto-started. Write operation: call once WITHOUT confirmationTicketId to obtain the host-issued ticket, get the user's approval, then retry with that exact ticket id.", "training-config", "write",
+                _object({"validationHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str(_TICKET_HELP)}, ("validationHash",)), self._config_commit,
             ),
             "training_config_current": _Tool(
                 "training_config_current", "Current training params", "Read the training parameters the user is currently filling in (or last autosaved) in the Next Trainer frontend, grouped by train type; they usually contain the dataset directory and model/checkpoint paths the user already typed. Whenever a dataset path or model path is needed, call this FIRST and prefer the paths found here (verify they exist on disk); only search the filesystem or ask the user for paths that are missing or invalid.", "training-config", "read",
@@ -190,8 +199,8 @@ class AgentToolService:
                 _object({"root": _str(), "path": _str(), "afterText": _str(), "reason": {"type": "string"}}, ("root", "path", "afterText")), self._caption_stage,
             ),
             "dataset_caption_commit": _Tool(
-                "dataset_caption_commit", "Commit caption edits", "Atomically commit an approved caption change-set with backup and restore support.", "caption-commit", "write",
-                _object({"root": _str(), "changeSetId": _str(), "changeSetHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str()}, ("root", "changeSetId", "changeSetHash", "confirmationTicketId")), self._caption_commit,
+                "dataset_caption_commit", "Commit caption edits", "Atomically commit an approved caption change-set with backup and restore support. Write operation: call once WITHOUT confirmationTicketId to obtain the host-issued ticket, get the user's approval, then retry with that exact ticket id.", "caption-commit", "write",
+                _object({"root": _str(), "changeSetId": _str(), "changeSetHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str(_TICKET_HELP)}, ("root", "changeSetId", "changeSetHash")), self._caption_commit,
             ),
             "knowledge_search": _Tool(
                 "knowledge_search", "Search knowledge", "Rank a set of documents you pass in `documents` (returns source-backed excerpts with evidence + confidence). For the bundled data-root knowledge/templates library, use the `next_trainer_knowledge` tool instead — this tool does NOT read that library unless you pass its documents here.", "artifacts-read", "read",
@@ -227,7 +236,7 @@ class AgentToolService:
                 _object({"artifacts": {"type": "array", "items": {"type": "object"}, "maxItems": 5}, "topK": {"type": "integer", "minimum": 1, "maximum": 5}, "weights": {"type": "object"}}, ("artifacts",)), self._artifact_recommend,
             ),
             "tagger_start": _Tool(
-                "tagger_start", "Start tagger job", "Start the host WD14 batch tagging job for a dataset (writes caption .txt files next to each image). Data write: requires a confirmation ticket; one job at a time.", "caption-commit", "write",
+                "tagger_start", "Start tagger job", "Start the host WD14 batch tagging job for a dataset (writes caption .txt files next to each image). Data write: call once WITHOUT confirmationTicketId to obtain the host-issued ticket, get the user's approval, then retry with that exact ticket id; one job at a time.", "caption-commit", "write",
                 _object({
                     "path": _str("Image directory or glob to tag; caption files are written next to the images."),
                     "interrogator_model": {"type": "string"},
@@ -242,8 +251,8 @@ class AgentToolService:
                     "batch_output_action_on_conflict": {"type": "string"},
                     "replace_underscore": {"type": "boolean"},
                     "replace_underscore_excludes": {"type": "string"},
-                    "confirmationTicketId": _str(),
-                }, ("path", "confirmationTicketId")), self._tagger_start,
+                    "confirmationTicketId": _str(_TICKET_HELP),
+                }, ("path",)), self._tagger_start,
             ),
             "tagger_cancel": _Tool(
                 "tagger_cancel", "Cancel tagger job", "Request a cooperative cancel of the running tagger job; idempotent when no job is running.", "caption-commit", "read",
