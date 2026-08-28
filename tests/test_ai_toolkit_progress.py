@@ -15,6 +15,7 @@ def test_parses_training_bar_with_loss_and_eta():
     assert progress["percent"] == 12
     assert progress["step"] == 240
     assert progress["total_steps"] == 2000
+    assert progress["elapsed"] == "00:30"
     assert progress["eta"] == "03:40"
     assert progress["loss"] == 0.1234
 

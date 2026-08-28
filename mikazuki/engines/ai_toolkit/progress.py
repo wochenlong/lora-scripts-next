@@ -33,9 +33,12 @@ def parse_progress(log_lines: list[str], job_name: str) -> dict:
             "total_steps": total,
         }
         bracket = match.group(4)
-        eta_match = re.search(r"<\s*([^,>\]]+)", bracket)
-        if eta_match:
-            eta = eta_match.group(1).strip()
+        time_match = re.search(r"([^<,\]]+)<\s*([^,>\]]+)", bracket)
+        if time_match:
+            elapsed = time_match.group(1).strip()
+            eta = time_match.group(2).strip()
+            if elapsed:
+                progress["elapsed"] = elapsed
             if eta not in ("", "?", "-"):
                 progress["eta"] = eta
         loss_match = re.search(r"loss:\s*([0-9.eE+-]+)", bracket)

@@ -35,6 +35,7 @@ from mikazuki.engines.anima_fast.progress import (
     metrics_from_anima_events,
     read_jsonl_events,
 )
+from mikazuki.engines.ai_toolkit.progress import parse_progress as parse_ai_toolkit_progress
 
 
 HOST = os.environ.get("TRAIN_MONITOR_HOST", "127.0.0.1")
@@ -1025,6 +1026,20 @@ def anima_fast_progress_metrics(task: dict) -> dict:
     return metrics
 
 
+def ai_toolkit_progress_metrics(task: dict, lines: list[str]) -> dict:
+    metadata = task.get("metadata") or {}
+    if metadata.get("backend") != "ai-toolkit":
+        return {}
+    metrics = parse_ai_toolkit_progress(lines, str(metadata.get("output_name") or ""))
+    if not metrics:
+        return {}
+    loss = metrics.get("loss")
+    if isinstance(loss, float):
+        metrics["loss"] = f"{loss:.4g}"
+    metrics["progress_source"] = "ai_toolkit_stdout"
+    return metrics
+
+
 # ---------------------------------------------------------------------------
 # Status collection
 # ---------------------------------------------------------------------------
@@ -1151,6 +1166,9 @@ def collect_status() -> dict:
             status["model_type"] = infer_model_type(lines)
             try:
                 stdout_metrics = parse_log(lines)
+                aitk_metrics = ai_toolkit_progress_metrics(active, lines)
+                if aitk_metrics:
+                    stdout_metrics.update(aitk_metrics)
                 anima_metrics = anima_fast_progress_metrics(active)
                 if anima_metrics:
                     status["metrics"] = merge_anima_training_metrics(stdout_metrics, anima_metrics)
