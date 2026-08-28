@@ -33,6 +33,18 @@ Pick the scalar tag that is the training loss (often `train/loss` / `loss` /
 `loss_avg`). If several runs exist, choose the run directory matching the run
 name in the current training parameters, and say which run you analyzed.
 
+**`curve_analyze` takes the FLAT point sequence — no per-series wrapper.**
+`series` is an array of `[step, value]` pairs (or `{"x": step, "y": value}`
+objects), one metric per call, named via `metric`:
+
+```text
+curve_analyze { "series": [[0, 0.107], [20, 0.097], [40, 0.091], ...], "metric": "loss", "maxPoints": 200 }
+```
+
+Do NOT send `{"name": ..., "values": [...]}` or `{"points": [...]}` wrappers —
+they fail validation. If you have several metrics (loss, lr, grad norm), call
+the tool once per metric and compare the results.
+
 ## Analyze
 
 - Descent trend, plateaus, sudden increases, divergence, NaN, abnormal oscillation.

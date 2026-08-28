@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -150,6 +151,51 @@ def _assert_valid_tool_schema(schema: dict, path: str = "$") -> None:
         if isinstance(schema.get("properties"), dict):
             for x in required:
                 assert x in schema["properties"], f"{path}: required '{x}' missing from properties"
+
+
+def test_slow_sync_handler_does_not_block_event_loop(monkeypatch):
+    """A blocking sync handler (e.g. the remote vision reviewer, minutes of
+    synchronous HTTP) must not stall the Host event loop: while it runs, the
+    loop must stay free to serve other requests."""
+    _patch_manager(monkeypatch)
+    monkeypatch.setenv("MIKAZUKI_AGENT_WORKSPACE_ROOT", str(Path("tmp") / "loop-check"))
+    service = AgentToolService(ConfirmationTicketStore())
+
+    def slow_handler(self, session, call, params):
+        time.sleep(1.0)
+        return {"ok": True}
+
+    # _tools() rebinds self._config_template on every call, so patch the class
+    monkeypatch.setattr(AgentToolService, "_config_template", slow_handler)
+
+    ticks = 0
+
+    async def probe():
+        nonlocal ticks
+        for _ in range(200):
+            await asyncio.sleep(0.01)
+            ticks += 1
+
+    async def scenario():
+        nonlocal ticks
+        ticks = 0
+        probe_task = asyncio.ensure_future(probe())
+        result = await asyncio.wait_for(
+            service.invoke("plugin", "s-loop", "call-loop", "training_config_template", {"pageTrainType": "sd-lora"}),
+            timeout=10.0,
+        )
+        probe_task.cancel()
+        try:
+            await probe_task
+        except asyncio.CancelledError:
+            pass
+        return result, ticks
+
+    result, ticks = asyncio.run(scenario())
+    assert result == {"ok": True}
+    # A free loop ticks the probe ~100x during the 1.0s handler; a blocked
+    # loop can barely tick at all.
+    assert ticks >= 30, f"event loop was blocked by the sync handler (only {ticks} probe ticks)"
 
 
 def test_every_tool_schema_is_provider_safe(monkeypatch):

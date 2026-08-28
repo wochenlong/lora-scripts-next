@@ -142,9 +142,13 @@ class AgentToolService:
                 return {"state": "confirmation_required", "ticket": ticket.projection(), "tool": tool.name}
         clean_params = dict(params)
         try:
-            value = tool.handler(session_id, tool_call_id, clean_params)
-            if asyncio.iscoroutine(value):
-                value = await value
+            if asyncio.iscoroutinefunction(tool.handler):
+                value = await tool.handler(session_id, tool_call_id, clean_params)
+            else:
+                # Sync handlers may block for minutes (e.g. the remote vision
+                # reviewer).  Run them off the event loop so the rest of the
+                # Host API stays responsive while the Tool call is in flight.
+                value = await asyncio.to_thread(tool.handler, session_id, tool_call_id, clean_params)
         except HTTPException:
             raise
         except Exception as exc:
@@ -212,7 +216,7 @@ class AgentToolService:
             ),
             "curve_analyze": _Tool(
                 "curve_analyze", "Analyze training curve", "Analyze loss/metric curves deterministically, retaining NaN/Inf and never auto-stopping training.", "metrics-read", "read",
-                _object({"series": {"type": "array", "items": {"type": "object"}}, "metric": {"type": "string"}, "maxPoints": {"type": "integer", "minimum": 2, "maximum": 2000}}, ("series",)), self._curve_analyze,
+                _object({"series": {"type": "array", "description": "The metric's point sequence, FLAT: an array of [step, value] pairs, e.g. [[1, 0.9], [2, 0.8]] (objects {\"x\": step, \"y\": value} also work). Do NOT wrap the points in {name, values} — one metric per call, name it with `metric`.", "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}}}, "metric": {"type": "string", "description": "Name of the metric this series is (e.g. \"loss\")."}, "maxPoints": {"type": "integer", "minimum": 2, "maximum": 2000}}, ("series",)), self._curve_analyze,
             ),
             "artifact_compare": _Tool(
                 "artifact_compare", "Compare artifacts", "Compare up to five artifacts under fixed prompts, seed and generation configuration.", "artifacts-read", "read",
