@@ -213,6 +213,16 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
     )
     output_name = str(source.get("output_name") or "").strip() or run_id
 
+    logging_dir_raw = source.get("logging_dir")
+    log_dir = (
+        resolve_path(logging_dir_raw, runtime.lora_next_root)
+        if not is_empty(logging_dir_raw)
+        else runtime.logging_dir.as_posix()
+    )
+    # Upstream logs TB scalars every `logging.log_every` steps (default 100),
+    # which leaves short smoke runs with zero points.
+    log_every = max(1, min(100, steps // 100))
+
     dataset: dict[str, Any] = {
         "folder_path": data_dir.resolve().as_posix(),
         "caption_ext": str(source.get("caption_extension") or ".txt").lstrip("."),
@@ -284,6 +294,8 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
         "type": "sd_trainer",
         "training_folder": training_folder,
         "device": "cuda:0",
+        "log_dir": log_dir,
+        "logging": {"log_every": log_every},
         "network": {
             "type": "lora",
             "linear": int_value(source.get("network_dim"), 16) or 16,

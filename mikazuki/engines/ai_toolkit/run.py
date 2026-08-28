@@ -132,6 +132,7 @@ def handle_run(config: dict, ctx: RunContext):
         metadata = {
             "output_dir": adapted.config["config"]["process"][0]["training_folder"],
             "output_name": adapted.config["config"]["name"],
+            "logging_dir": adapted.config["config"]["process"][0]["log_dir"],
             "text_encoder": adapted.te_path,
             "warnings": [*adapted.warnings, *preflight.warnings],
         }

@@ -75,6 +75,25 @@ def test_basic_mapping_4b(tmp_path):
     assert adapted.warnings == []
 
 
+def test_log_dir_defaults_to_runtime(tmp_path):
+    adapted = adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-4b")
+    process = _process(adapted)
+    assert process["log_dir"] == (tmp_path / "logs" / "ai-toolkit").as_posix()
+    assert process["logging"] == {"log_every": 20}
+
+
+def test_log_dir_ui_override(tmp_path):
+    adapted = adapt_config(_source(tmp_path, logging_dir="my-logs"), _runtime(tmp_path), "run-1", "klein-4b")
+    process = _process(adapted)
+    assert process["log_dir"] == (tmp_path / "my-logs").resolve().as_posix()
+
+
+def test_log_every_floored_for_short_runs(tmp_path):
+    adapted = adapt_config(_source(tmp_path, max_train_steps=50), _runtime(tmp_path), "run-1", "klein-4b")
+    process = _process(adapted)
+    assert process["logging"] == {"log_every": 1}
+
+
 def test_variant_9b(tmp_path):
     adapted = adapt_config(
         _source(tmp_path, pretrained_model_name_or_path="black-forest-labs/FLUX.2-klein-base-9B"),
