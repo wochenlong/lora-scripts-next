@@ -31,3 +31,10 @@
 - 检测：`importlib.metadata.version("lycoris-lora")` 命中问题版本，且 algo 为 lokr（含 network_args `algo=lokr`）。
 - 绕法：monkey-patch 前向修正 dtype。现成实现：`mikazuki/anima_backend/lycoris_patch.py` `patch_lokr_dora_bf16_forward`。
 - 来源：kohya/anima 侧（随 kohya pack）。
+
+## P5. 上游 pin 的依赖在目标平台无 wheel（含 `-r` 嵌套钉版）
+
+- 症状：`uv pip install -r requirements*.txt` 报 "no wheels with a matching platform tag"，且 pin 藏在上游用 `-r` 嵌套引用的基础清单里（如 ai-toolkit 的 `dgx_requirements.txt` → `requirements_base.txt` 里的 `torchcodec==0.9.1` 无 linux aarch64 wheel）。
+- 检测：失败包名确认不在目标训练链路 import 里（torchcodec 仅用于视频/manager，Klein 图像路径不 import）。
+- 绕法：安装期递归剥离平台无 wheel 的 pin（含 `-r` 引用文件的重写），记日志。现成实现：`mikazuki/engines/ai_toolkit/environment.py` `prepare_requirements`。
+- 来源：ai_toolkit pack（2026-08-28，GB10 aarch64 实装命中）。
