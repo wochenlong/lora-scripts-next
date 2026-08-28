@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { assetsApi, type AssetItem, type AssetSource } from "../api/assets"
@@ -97,6 +97,9 @@ async function download() {
 }
 
 onMounted(() => { void check(true) })
+// Variant switch (e.g. klein-4b-lora <-> klein-9b-lora) swaps the asset manifest;
+// refresh silently so the list follows the form's train type.
+watch(trainType, () => { void check(true) })
 onBeforeUnmount(closeStream)
 </script>
 

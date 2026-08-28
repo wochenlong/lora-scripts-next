@@ -246,6 +246,7 @@ const selectedIsMaintenance = computed(() => (selected.value ? isMaintenanceTask
 const KIND_LABEL_KEYS: Record<string, string> = {
   musubi_install: "tasks.kind.musubiInstall",
   anima_fast_install: "tasks.kind.animaFastInstall",
+  ai_toolkit_install: "tasks.kind.aiToolkitInstall",
   assets_download: "tasks.kind.assetsDownload",
 }
 

@@ -27,10 +27,11 @@ let timer: number | undefined
 let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
-const MANAGED_ENGINES = new Set(["anima-fast", "musubi"])
+const MANAGED_ENGINES = new Set(["anima-fast", "musubi", "ai-toolkit"])
 const INSTALL_STREAM_BASE: Record<string, string> = {
   "anima-fast": "/api/engines/anima-fast/install",
   musubi: "/api/engines/musubi/install",
+  "ai-toolkit": "/api/engines/ai-toolkit/install",
 }
 
 function isManaged(id: string) {
@@ -190,7 +191,7 @@ function toggleMenu(engineId: string) {
 }
 
 function runtimePath(status: EngineStatus) {
-  return status.runtime?.animaRoot || status.runtime?.musubiRoot || status.runtime?.environmentPath || ""
+  return status.runtime?.animaRoot || status.runtime?.musubiRoot || status.runtime?.toolkitRoot || status.runtime?.environmentPath || ""
 }
 
 async function copyPath(status: EngineStatus) {

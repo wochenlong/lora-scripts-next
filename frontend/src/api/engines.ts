@@ -1,5 +1,6 @@
 import { animaFastApi, type AnimaFastState, type AnimaFastStatus, type InstallResult } from "./animaFast"
 import { musubiApi, type MusubiInstallResult, type MusubiStatus } from "./musubi"
+import { aiToolkitApi, type AiToolkitInstallResult, type AiToolkitStatus } from "./aiToolkit"
 import { apiData } from "./client"
 import type { EngineRuntimeState } from "../engines/catalog"
 import { resolvedDownloadSourcesPayload } from "../engines/downloadSources"
@@ -17,10 +18,11 @@ export interface EngineStatus {
     cuda?: string
     animaRoot?: string
     musubiRoot?: string
+    toolkitRoot?: string
     externalRuntimeExists?: boolean
   }
   facts?: AnimaFastStatus["facts"]
-  raw?: AnimaFastStatus | MusubiStatus
+  raw?: AnimaFastStatus | MusubiStatus | AiToolkitStatus
 }
 
 export interface EngineActionResult {
@@ -79,6 +81,23 @@ function fromMusubi(status: MusubiStatus): EngineStatus {
   }
 }
 
+function fromAiToolkit(status: AiToolkitStatus): EngineStatus {
+  const runtime = status.runtime || {}
+  return {
+    id: "ai-toolkit",
+    state: mapAnimaState(status.state),
+    featureEnabled: status.feature_enabled !== false,
+    message: status.message || status.reason,
+    facts: status.facts,
+    runtime: {
+      python: runtime.python || status.python,
+      toolkitRoot: runtime.toolkit_root,
+      externalRuntimeExists: runtime.external_runtime_exists,
+    },
+    raw: status,
+  }
+}
+
 function fromInstall(result: InstallResult): EngineActionResult {
   return {
     alreadyReady: result.already_ready,
@@ -99,6 +118,16 @@ function fromMusubiInstall(result: MusubiInstallResult): EngineActionResult {
   }
 }
 
+function fromAiToolkitInstall(result: AiToolkitInstallResult): EngineActionResult {
+  return {
+    alreadyReady: result.already_ready,
+    taskId: result.task_id,
+    logStream: result.log_stream,
+    progressStream: result.progress_stream,
+    status: result.status ? fromAiToolkit(result.status) : undefined,
+  }
+}
+
 export const enginesApi = {
   async status(id: TrainingEngine): Promise<EngineStatus> {
     if (id === "kohya") {
@@ -115,11 +144,14 @@ export const enginesApi = {
     if (id === "anima-fast") {
       return fromAnima(await animaFastApi.status())
     }
+    if (id === "ai-toolkit") {
+      return fromAiToolkit(await aiToolkitApi.status())
+    }
     return { id, state: "unknown", featureEnabled: false }
   },
 
   async list(): Promise<EngineStatus[]> {
-    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi"]
+    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit"]
     return Promise.all(ids.map((id) => this.status(id)))
   },
 
@@ -127,6 +159,7 @@ export const enginesApi = {
     const downloadSources = resolvedDownloadSourcesPayload()
     if (id === "anima-fast") return fromInstall(await animaFastApi.install(downloadSources))
     if (id === "musubi") return fromMusubiInstall(await musubiApi.install(downloadSources))
+    if (id === "ai-toolkit") return fromAiToolkitInstall(await aiToolkitApi.install(downloadSources))
     throw new Error(`Install is not supported for engine: ${id}`)
   },
 
@@ -134,6 +167,7 @@ export const enginesApi = {
     const downloadSources = resolvedDownloadSourcesPayload()
     if (id === "anima-fast") return fromInstall(await animaFastApi.repair(downloadSources))
     if (id === "musubi") return fromMusubiInstall(await musubiApi.repair(downloadSources))
+    if (id === "ai-toolkit") return fromAiToolkitInstall(await aiToolkitApi.repair(downloadSources))
     throw new Error(`Repair is not supported for engine: ${id}`)
   },
 
@@ -145,6 +179,10 @@ export const enginesApi = {
     if (id === "musubi") {
       const data = await musubiApi.uninstall()
       return data.status ? fromMusubi(data.status) : { id: "musubi", state: "not_installed", featureEnabled: true }
+    }
+    if (id === "ai-toolkit") {
+      const data = await aiToolkitApi.uninstall()
+      return data.status ? fromAiToolkit(data.status) : { id: "ai-toolkit", state: "not_installed", featureEnabled: true }
     }
     throw new Error(`Uninstall is not supported for engine: ${id}`)
   },

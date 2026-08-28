@@ -32,6 +32,10 @@ export const CROSS_SCHEMA_DENY_KEYS = [
   "cache_latents_to_disk",
   "cache_text_encoder_outputs",
   "cache_text_encoder_outputs_to_disk",
+  // Engine-specific model asset paths: krea2/musubi `dit` must not leak into
+  // klein/ai-toolkit's DiT dir (and vice versa); kohya pages keep sharing
+  // pretrained_model_name_or_path among themselves.
+  "dit",
 ] as const
 
 /** schemaName → locked model_train_type for pages that own a single train type. */

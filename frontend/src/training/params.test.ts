@@ -119,6 +119,12 @@ describe("cross-schema carry-over (#271)", () => {
     })
   })
 
+  it("denies engine-specific DiT paths from crossing schema boundaries", () => {
+    const defaults = { dit: "./sd-models/klein/flux2-klein-base-4b", train_data_dir: "./train/aki" }
+    const carry = { dit: "./sd-models/krea2/krea2.safetensors", train_data_dir: "./data/oc" }
+    expect(pickCarryOverFields(carry, defaults)).toEqual({ train_data_dir: "./data/oc" })
+  })
+
   it("strips denied keys from poisoned autosave when train type mismatches schema defaults", () => {
     const defaults = { model_train_type: "anima-lora-fast", cache_latents: false }
     const saved = {

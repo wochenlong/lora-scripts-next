@@ -247,6 +247,11 @@ async function submit() {
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
+    if (props.schemaName === "klein-lora") {
+      const preflight = await trainingApi.aiToolkitPreflight(output.value)
+      if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
+      preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
+    }
     started.value = await trainingApi.run(output.value)
     tasksStore.markAttention()
     tasksStore.refresh({ silent: true })

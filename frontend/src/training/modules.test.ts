@@ -75,6 +75,15 @@ describe("training module mapping", () => {
     }
   })
 
+  it("limits ai-toolkit engine to the klein model", () => {
+    expect(isEngineSupported("klein", "ai-toolkit")).toBe(true)
+    expect(resolveModule("klein", "ai-toolkit", "lora")?.schemaName).toBe("klein-lora")
+    for (const model of TRAINING_MODELS) {
+      if (model === "klein") continue
+      expect(isEngineSupported(model, "ai-toolkit")).toBe(false)
+    }
+  })
+
   it("limits master targets to lora and finetune; adapter types live in the form schema", () => {
     expect(TRAINING_TARGETS).toEqual(["lora", "finetune"])
     for (const module of TRAINING_MODULES) expect(["lora", "finetune"]).toContain(module.target)

@@ -1,7 +1,7 @@
 import type { FormModel } from "../schema/adapter"
 
-export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2"
-export type TrainingEngine = "kohya" | "anima-fast" | "musubi"
+export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2" | "klein"
+export type TrainingEngine = "kohya" | "anima-fast" | "musubi" | "ai-toolkit"
 export type TrainingTarget = "lora" | "finetune"
 
 export interface TrainingModule {
@@ -17,8 +17,8 @@ export interface TrainingModule {
   legacyStorageKey?: string
 }
 
-export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2"]
-export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi"]
+export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2", "klein"]
+export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit"]
 export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "finetune"]
 
 export const DEFAULT_SELECTION: { model: TrainingModel; engine: TrainingEngine; target: TrainingTarget } = {
@@ -41,6 +41,7 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
   { model: "flux", engine: "kohya", target: "lora", schemaName: "flux-lora" },
   { model: "lumina", engine: "kohya", target: "lora", schemaName: "lumina2-lora" },
   { model: "krea2", engine: "musubi", target: "lora", schemaName: "krea2-lora" },
+  { model: "klein", engine: "ai-toolkit", target: "lora", schemaName: "klein-lora" },
 ]
 
 export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> = {
@@ -52,6 +53,7 @@ export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> 
   "flux-lora": { titleKey: "training.schemas.flux-lora.title", areaKey: "training.schemas.flux-lora.area" },
   "lumina2-lora": { titleKey: "training.schemas.lumina2-lora.title", areaKey: "training.schemas.lumina2-lora.area" },
   "krea2-lora": { titleKey: "training.schemas.krea2-lora.title", areaKey: "training.schemas.krea2-lora.area" },
+  "klein-lora": { titleKey: "training.schemas.klein-lora.title", areaKey: "training.schemas.klein-lora.area" },
 }
 
 export function normalizeModel(value: unknown): TrainingModel | undefined {

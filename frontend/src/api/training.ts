@@ -53,4 +53,5 @@ export const trainingApi = {
   run: (config: FormModel) => post<TrainingStart>("/api/run", config),
   animaFastPreflight: (config: FormModel) => post<PreflightResult>("/api/engines/anima-fast/preflight", config),
   musubiPreflight: (config: FormModel) => post<PreflightResult>("/api/engines/musubi/preflight", config),
+  aiToolkitPreflight: (config: FormModel) => post<PreflightResult>("/api/engines/ai-toolkit/preflight", config),
 }
