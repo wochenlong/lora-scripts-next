@@ -81,3 +81,44 @@ def test_metrics_endpoint_uses_ai_toolkit_parser(monkeypatch, tmp_path):
         assert response.data["progress"]["total_steps"] == 2000
     finally:
         tm.tasks.pop("t-aitk-progress", None)
+
+
+def test_metrics_endpoint_falls_back_for_packs_without_progress_hook(monkeypatch, tmp_path):
+    from mikazuki.app import api
+    from mikazuki.tasks import tm
+
+    class _Task:
+        metadata = {"backend": "musubi"}
+
+    tm.tasks["t-musubi-progress"] = _Task()
+    try:
+        monkeypatch.setattr(
+            api.train_log_hub,
+            "tail",
+            lambda task_id, n: ["steps:  12%|█▏        | 120/1000 [00:30<03:40, 3.99it/s, avr_loss=0.123]"],
+        )
+        response = asyncio.run(api.task_metrics("t-musubi-progress"))
+        assert response.data["progress"]["step"] == 120
+        assert response.data["progress"]["total_steps"] == 1000
+    finally:
+        tm.tasks.pop("t-musubi-progress", None)
+
+
+def test_metrics_endpoint_unknown_backend_falls_back(monkeypatch, tmp_path):
+    from mikazuki.app import api
+    from mikazuki.tasks import tm
+
+    class _Task:
+        metadata = {"backend": "no-such-engine"}
+
+    tm.tasks["t-unknown-progress"] = _Task()
+    try:
+        monkeypatch.setattr(
+            api.train_log_hub,
+            "tail",
+            lambda task_id, n: ["steps:  50%|█████     | 50/100 [00:10<00:10, 5.0it/s]"],
+        )
+        response = asyncio.run(api.task_metrics("t-unknown-progress"))
+        assert response.data["progress"]["step"] == 50
+    finally:
+        tm.tasks.pop("t-unknown-progress", None)

@@ -703,19 +703,30 @@ async def task_preview_image(task_id: str, filename: str, thumb: bool = False):
     return FileResponse(path, headers=headers)
 
 
+def _pack_progress_reader(backend: str):
+    """Optional pack hook: a pack may ship ``progress.py`` exposing
+    ``read_progress(lines, metadata)``; absent packs fall back to the
+    kohya-style stdout parser."""
+    if not backend or backend == "standard":
+        return None
+    pack = registry.get_pack(backend)
+    if pack is None:
+        return None
+    try:
+        module = pack.import_module("progress")
+    except ImportError:
+        return None
+    return getattr(module, "read_progress", None)
+
+
 @router.get("/tasks/{task_id}/metrics", response_model_exclude_none=True)
 async def task_metrics(task_id: str) -> APIResponse:
     task = tm.tasks.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Unknown task_id")
-    if str(task.metadata.get("backend") or "") == "ai-toolkit":
-        from mikazuki.engines.ai_toolkit.progress import parse_progress as parse_ai_toolkit_progress
-
-        progress = parse_ai_toolkit_progress(
-            train_log_hub.tail(task_id, 300), str(task.metadata.get("output_name") or "")
-        )
-    else:
-        progress = task_insights.read_progress(train_log_hub.tail(task_id, 300))
+    lines = train_log_hub.tail(task_id, 300)
+    reader = _pack_progress_reader(str(task.metadata.get("backend") or ""))
+    progress = reader(lines, task.metadata) if reader else task_insights.read_progress(lines)
     return APIResponseSuccess(data={
         "tags": task_insights.read_loss_scalars(task.metadata),
         "progress": progress,

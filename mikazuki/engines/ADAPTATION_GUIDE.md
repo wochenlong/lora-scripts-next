@@ -31,7 +31,7 @@
 
 ## 纪律
 
-- `api.py` 原则上零改动。唯一已批准的例外是观测面：`task_insights` / `/api/tasks/{id}/metrics` 目前没有 pack 钩子，允许按 `metadata.backend` 加最小分流分支（先例：ai-toolkit 进度解析与目录解析）。发现其它必须改 `api.py` 才能挂上的功能时，停下来——那是框架缺口，先报而不是绕。
+- `api.py` 零改动。发现必须改 `api.py` 才能挂上时，停下来——那是框架缺口，先报而不是绕。观测面进度解析走 pack 可选模块 `progress.py`（暴露 `read_progress(lines, metadata)`），由 registry 按 `metadata.backend` 分发，不算 api.py 改动。
 - 引擎一律 `uv python install` 自己的解释器，不要复用 GUI/主环境解释器当 venv 底座（#251 已否决）。
 - 补丁：unified diff + 头部四要素（见 `_template/patches/README.md`），`git apply --check` 响亮失败。
 - 语义不等价的参数（epoch vs steps 等）禁止在 adapter 里硬并，标注后放行。

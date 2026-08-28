@@ -11,6 +11,11 @@ from __future__ import annotations
 import re
 
 
+def read_progress(log_lines: list[str], metadata: dict) -> dict:
+    """Pack hook for /api/tasks/{id}/metrics, resolved via the engine registry."""
+    return parse_progress(log_lines, str((metadata or {}).get("output_name") or ""))
+
+
 def parse_progress(log_lines: list[str], job_name: str) -> dict:
     job_name = (job_name or "").strip()
     if not job_name:

@@ -313,7 +313,6 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
 
     prompts = _sample_prompt_lines(source.get("sample_prompts"))
     if prompts:
-        width, height = 1024, 1024
         res = _resolution_list(source.get("sample_resolution") or source.get("resolution"))
         width = height = res[0]
         if not is_empty(source.get("sample_width")):

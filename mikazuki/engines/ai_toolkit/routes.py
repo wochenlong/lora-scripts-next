@@ -6,7 +6,7 @@ from datetime import datetime
 from pathlib import Path
 
 from mikazuki.app.models import APIResponseFail, APIResponseSuccess
-from mikazuki.engines.ai_toolkit import TRAIN_TYPES as AI_TOOLKIT_TRAIN_TYPES
+from mikazuki.engines.ai_toolkit import TRAIN_TYPE_MAP as AI_TOOLKIT_TRAIN_TYPE_MAP
 from mikazuki.engines.ai_toolkit.manifest import UPSTREAM
 from mikazuki.engines.ai_toolkit.adapter import (
     AdapterError as AiToolkitAdapterError,
@@ -40,8 +40,8 @@ from mikazuki.engines.ai_toolkit.settings import (
 
 def _resolve_variant(payload: dict) -> str:
     train_type = str(payload.get("model_train_type") or "").strip()
-    if train_type in AI_TOOLKIT_TRAIN_TYPES:
-        return {"klein-4b-lora": "klein-4b", "klein-9b-lora": "klein-9b"}[train_type]
+    if train_type in AI_TOOLKIT_TRAIN_TYPE_MAP:
+        return AI_TOOLKIT_TRAIN_TYPE_MAP[train_type]
     variant = str(payload.get("model_version") or "").strip()
     return variant if variant in VARIANTS else "klein-4b"
 
@@ -51,7 +51,7 @@ async def status():
     data = read_ai_toolkit_extension_status(layout).as_dict()
     runtime = ai_toolkit_runtime()
     data["feature_enabled"] = ai_toolkit_feature_enabled()
-    data["train_types"] = list(AI_TOOLKIT_TRAIN_TYPES)
+    data["train_types"] = list(AI_TOOLKIT_TRAIN_TYPE_MAP)
     data["runtime"] = {
         "toolkit_root": str(runtime.toolkit_root),
         "python": str(runtime.python),

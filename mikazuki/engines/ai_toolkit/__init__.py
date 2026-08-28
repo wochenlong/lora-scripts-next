@@ -3,4 +3,6 @@
 First supported train types: Klein base 4B / 9B LoRA (klein-4b-lora, klein-9b-lora).
 """
 
-TRAIN_TYPES = ("klein-4b-lora", "klein-9b-lora")
+from .manifest import TRAIN_TYPES as TRAIN_TYPE_MAP
+
+TRAIN_TYPES = tuple(TRAIN_TYPE_MAP)
