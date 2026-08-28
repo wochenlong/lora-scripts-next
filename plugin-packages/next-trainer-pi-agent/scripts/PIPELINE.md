@@ -1,4 +1,43 @@
-# 双端打包管线（CR-012，win32-x64 + linux-x64）
+# 插件开发管线（CR-012，win32-x64 + linux-x64）
+
+## 完整开发流程（三层环路，由快到慢）
+
+日常改插件**不要**每次都打包重装。三层环路各管一段：
+
+### Loop A — 快速开发（改 pi-web 源码的日常环路，秒级反馈）
+
+```powershell
+.\.venv-dev\Scripts\python.exe plugin-packages\next-trainer-pi-agent\scripts\dev-pi-web.py
+```
+
+- 直接在**工作树**（`plugin-packages/next-trainer-pi-agent/pi-web/`）跑 Next.js HMR dev server，`http://127.0.0.1:30141/`，改完保存即热更新，**零打包、零重装、脱离宿主**。
+- 默认共享已安装插件实例的会话库（`.runtime/plugin-marketplace/data/next-trainer-pi-agent/pi-agent`，即浮动对话框里看到的那些会话）；`--agent-dir <path>` 可指定，不存在时落隔离目录。
+- HOME/APPDATA/TMP 全部隔离在 `plugin-packages/next-trainer-pi-agent/.runtime/dev/`，不碰你的真实用户目录。
+- `--port N` 换端口。
+- 注意：**dev 运行期间不要跑 `next build` / 打包管线**（pi-web 上游约定：会污染 `.next` 弄坏 HMR）。
+
+### Loop B — 免打包契约预览（改 launcher 时用）
+
+```powershell
+.\.venv-dev\Scripts\python.exe plugin-packages\next-trainer-pi-agent\scripts\dev-pi-web.py --launcher
+```
+
+- 重新编译工作树 `bin/next-trainer-pi-agent.exe`（bun，~40s）→ 以**工作树为包根**跑真实宿主契约：临时端口、READY 行、Bearer /health、uiUrl 探活。
+- Ctrl+C 退出：launcher 的父进程死亡监控会自行拆掉 pi-web 树，脚本最后打印 scoped 残留数（应为 0）。
+- `--built` 是同级的中间档：服务**打包过的 .next**（先跑过 Loop C 或 `npm run build`），不打包就能验证"构建产物"形态的行为（端口 30142）。
+
+### Loop C — 集成发布（满意后，进宿主）
+
+```powershell
+.\.venv-dev\Scripts\python.exe plugin-packages\next-trainer-pi-agent\scripts\build-all-platforms.py
+```
+
+- 一条命令重建双端包 + 双平台 dev catalog（详见下节）。
+- **运行前停掉 Loop A 的 dev server**（共享 `.next`）。
+- 之后：UI 市场页 refresh → uninstall + install 插件 → 浮动对话框里验收；可选 `e2e-pi-web-plugin.py`（Windows 12 步）/ `wsl-contract-test.sh`（Linux 契约）。
+- 打包后想回 Loop A 继续开发：dev server 直接起即可（若 HMR 异常，删 `pi-web/.next` 重来）。
+
+### 打包命令（Loop C 详情）
 
 修改插件后，用**一条命令**重建两个平台的安装包与双平台 dev catalog：
 
