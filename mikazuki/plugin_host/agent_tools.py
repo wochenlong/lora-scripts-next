@@ -248,7 +248,7 @@ class AgentToolService:
                     "exclude_tags": {"type": "string"},
                     "escape_tag": {"type": "boolean"},
                     "batch_input_recursive": {"type": "boolean"},
-                    "batch_output_action_on_conflict": {"type": "string"},
+                    "batch_output_action_on_conflict": {"type": "string", "enum": ["ignore", "copy", "prepend", "append"], "description": "What to do when a caption file already exists for an image. Values are matched EXACTLY (lowercase). 'ignore' = skip that file entirely, NO write (the only safe value when existing captions must be preserved); 'prepend' = new tags in front of the existing caption (file is rewritten); 'append' = new tags after the existing caption (file is rewritten, this is the default behaviour for any other value); 'copy' = replace the existing caption with the new tags. Never pass made-up values like 'Skip' — anything not exactly 'ignore'/'copy'/'prepend' rewrites the file."},
                     "replace_underscore": {"type": "boolean"},
                     "replace_underscore_excludes": {"type": "string"},
                     "confirmationTicketId": _str(_TICKET_HELP),
