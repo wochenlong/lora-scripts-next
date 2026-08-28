@@ -6,7 +6,8 @@
 
 | 日期 | 上游 commit | 变体 | 环境 | 结果 |
 | --- | --- | --- | --- | --- |
-| 2026-08-28 | 5497a001cb8752c665f93907a0393fc612116fd5 | klein-4b / klein-9b | GB10 (aarch64, cu130) | 仅静态：adapter/preflight/routes 单测 + dry-run 出 yaml。**未跑真机训练**（待 GPU 窗口） |
+| 2026-08-28 | 5497a001cb8752c665f93907a0393fc612116fd5 | klein-4b | GB10 (aarch64, cu130) | **真机三跑全通**：10 步实跑出 LoRA + step0/10 预览图；TB event 实产（tags=`loss`/`lr`）；metrics/previews/stdout 进度三通道实证 |
+| 2026-08-28 | 5497a001cb8752c665f93907a0393fc612116fd5 | klein-9b | GB10 (aarch64, cu130) | 仅静态：adapter/preflight/routes 单测 + dry-run 出 yaml。**未跑真机训练**（待 GPU 窗口） |
 
 ## 踩坑流水
 
@@ -22,16 +23,12 @@
 - **2026-08-28 训练冒烟命中 2**：`torchaudio` 上游未声明但 `toolkit/config_modules.py:7` 顶层 import，训练进程 `No module named 'torchaudio'`。安装器 torch 阶段补装 torch torchaudio torchvision 三件套，audit 探测同步覆盖。
 - **2026-08-28 训练冒烟命中 3**：VAE（`ai-toolkit/flux2_vae`，恰好 3 个文件）运行时自动从 HF 拉取时 hf-xet CAS 后端 401（`run.py` 默认开 xet；代理/镜像环境高发）。launcher 默认 `HF_HUB_DISABLE_XET=1` 回退普通 CDN；本地有 `ae.safetensors`（资产组件下载）则完全不走 HF。
 - Linux aarch64（DGX Spark）用 `dgx_requirements.txt`，别用成 win_arm64 的 `spark_requirements.txt`。
-- 进度/loss 日志解析未做：Toolkit stdout 格式要真跑训练才能摸，冒烟后回来补（Task 详情页指标提取依赖它）。
-
-## 待办：日志 / sample / tensorboard 接入（详见外层调研文档 docs/issue-299-plan.md）
-
-冒烟时**必须留存证据**：① 完整 stdout 样例（含 tqdm 进度行、loss 行）；② `training_folder/<name>/` 目录树（samples 落点、tensorboard event 文件位置）；③ 采样预览图的实际文件名规律。回填本文件后再写 `ai_toolkit/progress.py`。
+- **2026-08-28 观测面实证**（anima_char/2/3 三次 klein-4b 实跑）：① TB 仅在 config 设 `log_dir` 时产 event，目录 `<log_dir>/<name>_<YYYYMMDD-HHMMSS>`，tags 只有 `loss`/`lr`（log_every 默认 100，adapter 按 steps 折算写小）；② sample 落 `<training_folder>/<name>/samples/<ms>__<step:09d>_<n>.jpg`（双下划线，上游同时写 `.thumbs/*.jpg.jpg` 缩略图，扫描须跳隐藏目录）；③ tqdm 训练条 desc=job 名，实样 `anima_char3:  40%|████      | 4/10 [05:08<06:09, 61.57s/it, lr: 1.5e-05 loss: 3.039e-01]`，`ai_toolkit/progress.py` 按 output_name 锚定解析（缓存/采样条 desc 不同，不会抢匹配）。
 
 ## 冒烟清单（GPU 窗口时执行）
 
-1. 安装：`POST /api/engines/ai-toolkit/install {"dry_run": false}` → state=ready、audit 全绿。
-2. klein-4b-lora：小数据集（~10 张）+ max_train_steps=20 + 采样预览开 → 出 LoRA safetensors + 预览图。
-3. klein-9b-lora：同上（量化默认开）。
-4. 编辑数据集：train_data_dir + control_data_dirs[] 同名配对 → 训练正常消费 control 图。
-5. 记录 stdout 日志样例 → 回填进度解析。
+1. 安装：`POST /api/engines/ai-toolkit/install {"dry_run": false}` → state=ready、audit 全绿。（GB10 已过）
+2. klein-4b-lora：小数据集（~10 张）+ max_train_steps=20 + 采样预览开 → 出 LoRA safetensors + 预览图。（已过，见验证矩阵）
+3. klein-9b-lora：同上（量化默认开）。（未跑）
+4. 编辑数据集：train_data_dir + control_data_dirs[] 同名配对 → 训练正常消费 control 图。（未跑）
+5. ~~记录 stdout 日志样例 → 回填进度解析~~（已完成，见观测面实证条）
