@@ -13,3 +13,8 @@ test("uses the server-resolved current worktree identity", () => {
   assert.match(source, /if \(currentWorktreePath === path\) setSelectedCwd\(worktreeState\.projectRoot\)/);
   assert.doesNotMatch(source, /const isCurrent = wt\.path === selectedCwd/);
 });
+
+test("does not render the inactive git-root-only worktree hint", () => {
+  assert.doesNotMatch(source, /inactiveWorktreeSelector/);
+  assert.doesNotMatch(source, /sidebar\.gitRepoRootOnly/);
+});
