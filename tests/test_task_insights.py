@@ -231,6 +231,77 @@ class TaskInsightsTests(unittest.TestCase):
         self.metadata["created_at"] = time.mktime((2026, 8, 3, 0, 0, 0, 0, 0, -1))
         self.assertEqual(task_insights.read_loss_scalars(self.metadata), {})
 
+class AiToolkitInsightsTests(unittest.TestCase):
+    """ai-toolkit tasks: YAML config_path is unreadable here, so dirs come from
+    metadata; samples live in <output_dir>/<name>/samples/ with gen-time names."""
+
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.tmp = Path(self._tmp.name)
+        self.output_dir = self.tmp / "output"
+        self.logging_dir = self.tmp / "logs" / "ai-toolkit"
+        self.samples = self.output_dir / "myrun" / "samples"
+        self.samples.mkdir(parents=True)
+        self.logging_dir.mkdir(parents=True)
+        self.metadata = {
+            "backend": "ai-toolkit",
+            "config_path": str(self.tmp / "task.yaml"),  # never read
+            "output_dir": str(self.output_dir),
+            "output_name": "myrun",
+            "logging_dir": str(self.logging_dir),
+        }
+
+    def tearDown(self):
+        self._tmp.cleanup()
+
+    def test_resolve_task_dirs_prefers_metadata(self):
+        dirs = task_insights.resolve_task_dirs(self.metadata)
+        self.assertEqual(dirs["output_dir"], self.output_dir.resolve())
+        self.assertEqual(dirs["logging_dir"], self.logging_dir.resolve())
+        self.assertEqual(dirs["output_name"], "myrun")
+
+    def test_list_preview_images_reads_samples_dir(self):
+        first = self.samples / "1724900000000_000000000_0.jpg"
+        first.write_bytes(b"jpg")
+        earlier = time.time() - 120
+        os.utime(first, (earlier, earlier))
+        latest = self.samples / "1724900060000_000000250_0.jpg"
+        latest.write_bytes(b"jpg")
+
+        images = task_insights.list_preview_images(self.metadata)
+        self.assertEqual([item["name"] for item in images], [first.name, latest.name])
+        self.assertEqual(images[-1]["step"], 250)
+        self.assertIsNone(images[-1]["epoch"])
+
+    def test_parse_ai_toolkit_step(self):
+        self.assertEqual(task_insights.parse_ai_toolkit_step("1724900060000_000000250_0.jpg"), 250)
+        self.assertIsNone(task_insights.parse_ai_toolkit_step("1724900060000_0.jpg"))
+
+    def test_resolve_preview_image_scoped_to_samples_dir(self):
+        own = self.samples / "1724900060000_000000250_0.jpg"
+        own.write_bytes(b"jpg")
+        outside = self.output_dir / "myrun" / "config.png"
+        outside.write_bytes(b"png")
+
+        self.assertEqual(task_insights.resolve_preview_image(self.metadata, own.name), own)
+        self.assertIsNone(task_insights.resolve_preview_image(self.metadata, "config.png"))
+
+    @unittest.skipUnless(HAS_TENSORBOARD, "tensorboard not available")
+    def test_read_loss_scalars_ai_toolkit_tags(self):
+        run_dir = self.logging_dir / "myrun_20260828-153000"
+        writer = SummaryWriter(log_dir=str(run_dir))
+        for step in range(5):
+            writer.add_scalar("loss", 1.0 / (step + 1), step)
+            writer.add_scalar("lr", 1e-4, step)
+        writer.add_scalar("loss/average", 99.0, 0)  # not an ai-toolkit tag
+        writer.close()
+
+        tags = task_insights.read_loss_scalars(self.metadata)
+        self.assertIn("loss", tags)
+        self.assertIn("lr", tags)
+        self.assertNotIn("loss/average", tags)
+        self.assertAlmostEqual(tags["loss"][-1]["value"], 0.2)
+
 
 if __name__ == "__main__":
     unittest.main()

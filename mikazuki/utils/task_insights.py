@@ -18,6 +18,9 @@ except ModuleNotFoundError:  # pragma: no cover - lightweight test environment f
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp"}
 LOSS_TAGS = ("loss/average", "loss/current", "loss/epoch_average", "lr/unet")
+AI_TOOLKIT_BACKEND = "ai-toolkit"
+# ai-toolkit's SDTrainer writes a single-key loss_dict plus lr.
+AI_TOOLKIT_LOSS_TAGS = ("loss", "lr")
 LOSS_POINT_LIMIT = 500
 SINCE_TOLERANCE_SECONDS = 1.0
 # Finished tasks flush TB events/previews shortly before exiting; keep a small
@@ -86,7 +89,19 @@ def _resolve_dir(value: object) -> Path | None:
         return None
 
 
+def _is_ai_toolkit(metadata: dict) -> bool:
+    return str((metadata or {}).get("backend") or "") == AI_TOOLKIT_BACKEND
+
+
 def resolve_task_dirs(metadata: dict) -> dict:
+    # ai-toolkit task configs are YAML (unreadable here); its run handler
+    # carries the resolved dirs in metadata instead.
+    if _is_ai_toolkit(metadata):
+        return {
+            "output_dir": _resolve_dir((metadata or {}).get("output_dir")),
+            "logging_dir": _resolve_dir((metadata or {}).get("logging_dir")),
+            "output_name": str((metadata or {}).get("output_name") or "").strip(),
+        }
     config = resolve_task_config(metadata)
     dirs = {
         "output_dir": _resolve_dir(config.get("output_dir")),
@@ -109,6 +124,17 @@ def parse_epoch(name: str) -> int | None:
 
 def parse_step(name: str) -> int | None:
     match = re.search(r"_(\d{6})_", name)
+    if not match:
+        return None
+    try:
+        return int(match.group(1))
+    except ValueError:
+        return None
+
+
+def parse_ai_toolkit_step(name: str) -> int | None:
+    """ai-toolkit sample names: <gen_time_ms>_<step:09d>_<count>.<ext>."""
+    match = re.search(r"_(\d{9})_", name)
     if not match:
         return None
     try:
@@ -171,19 +197,26 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
     output_name = dirs.get("output_name") or ""
     since = _since(metadata)
     until = _until(metadata)
-    cache_key = (str(output_dir), output_name, since, until)
+    ai_toolkit = _is_ai_toolkit(metadata)
+    # ai-toolkit samples land in <training_folder>/<name>/samples/ and their
+    # filenames start with a gen-time millisecond timestamp, not output_name.
+    if ai_toolkit:
+        roots = [output_dir / output_name / "samples"] if output_name else [output_dir]
+    else:
+        roots = [output_dir / "sample", output_dir]
+    cache_key = (str(output_dir), output_name, since, until, ai_toolkit)
     now = time.monotonic()
     cached = _list_cache.get(cache_key)
     if cached and now - cached[0] < _LIST_CACHE_TTL_SECONDS:
         return cached[1]
     found: dict[str, Path] = {}
-    for root in (output_dir / "sample", output_dir):
+    for root in roots:
         if not root.exists():
             continue
         for path in root.rglob("*"):
             if not path.is_file() or path.suffix.lower() not in IMAGE_EXTENSIONS:
                 continue
-            if output_name and not path.name.startswith(output_name):
+            if not ai_toolkit and output_name and not path.name.startswith(output_name):
                 continue
             try:
                 mtime = path.stat().st_mtime
@@ -202,13 +235,15 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
 
 
 def list_preview_images(metadata: dict) -> list[dict]:
+    ai_toolkit = _is_ai_toolkit(metadata)
     images = []
     for path in _iter_preview_paths(metadata):
         try:
             mtime = path.stat().st_mtime
         except OSError:
             continue
-        images.append({"name": path.name, "epoch": parse_epoch(path.name), "step": parse_step(path.name), "mtime": mtime})
+        step = parse_ai_toolkit_step(path.name) if ai_toolkit else parse_step(path.name)
+        images.append({"name": path.name, "epoch": parse_epoch(path.name), "step": step, "mtime": mtime})
     return images
 
 
@@ -257,7 +292,8 @@ def read_loss_scalars(metadata: dict, limit: int = LOSS_POINT_LIMIT) -> dict:
     chosen = _select_run_dir(run_mtimes, output_name, since, until)
     if chosen is None:
         return {}
-    return _read_run_scalars(chosen, limit)
+    tags = AI_TOOLKIT_LOSS_TAGS if _is_ai_toolkit(metadata) else LOSS_TAGS
+    return _read_run_scalars(chosen, limit, tags)
 
 
 def _run_dir_timestamp(name: str) -> float | None:
@@ -291,7 +327,7 @@ def _select_run_dir(run_mtimes: dict[Path, float], output_name: str, since: floa
     return max(pool, key=lambda path: run_mtimes[path])
 
 
-def _read_run_scalars(run_dir: Path, limit: int) -> dict:
+def _read_run_scalars(run_dir: Path, limit: int, tags=LOSS_TAGS) -> dict:
     try:
         from tensorboard.backend.event_processing import event_accumulator
     except Exception:
@@ -317,7 +353,7 @@ def _read_run_scalars(run_dir: Path, limit: int) -> dict:
         return dict(cached[1]) if cached else {}
 
     series: dict[str, list[dict]] = {}
-    for tag in LOSS_TAGS:
+    for tag in tags:
         if tag not in scalar_tags:
             continue
         try:
