@@ -1,0 +1,18 @@
+[backend]
+extension_root = "extensions/ai_toolkit"
+source_dir = "extensions/ai_toolkit/source"
+venv_python = "extensions/ai_toolkit/.venv/Scripts/python.exe"
+external_root = "../ai-toolkit"
+external_python = "../ai-toolkit/.venv/Scripts/python.exe"
+source_commit = "5497a001cb8752c665f93907a0393fc612116fd5"
+cuda_extra = "cu128"
+preflight_level = "full"
+allow_unsupported = false
+
+[paths]
+output_dir = "output/ai-toolkit"
+logging_dir = "logs/ai-toolkit"
+cache_dir = ".cache/ai-toolkit"
+
+[features]
+enabled_env = "LORA_ENABLE_AI_TOOLKIT"

@@ -19,20 +19,23 @@ def _runtime(tmp_path: Path) -> RuntimeConfig:
 
 def test_spec_runs_driver_with_config(tmp_path, monkeypatch):
     monkeypatch.delenv("AI_TOOLKIT_TE_PATH", raising=False)
-    spec = build_train_spec(_runtime(tmp_path), Path("/tmp/cfg.yaml"), "task-1")
+    config_yaml = tmp_path / "cfg.yaml"
+    spec = build_train_spec(_runtime(tmp_path), config_yaml, "task-1")
     assert spec.command[0].endswith("python")
     assert spec.command[1].endswith("driver.py")
-    assert spec.command[2] == "/tmp/cfg.yaml"
+    assert spec.command[2] == str(config_yaml)
     assert spec.cwd == tmp_path / "toolkit"
     assert "AI_TOOLKIT_TE_PATH" not in spec.env
     assert spec.env["HF_HUB_DISABLE_XET"] == "1"
 
 
 def test_spec_te_path_env(tmp_path):
-    spec = build_train_spec(_runtime(tmp_path), Path("/tmp/cfg.yaml"), "task-1", te_path="/models/qwen3-4b")
+    config_yaml = tmp_path / "cfg.yaml"
+    spec = build_train_spec(_runtime(tmp_path), config_yaml, "task-1", te_path="/models/qwen3-4b")
     assert spec.env["AI_TOOLKIT_TE_PATH"] == "/models/qwen3-4b"
 
 
 def test_spec_gpu_visibility(tmp_path):
-    spec = build_train_spec(_runtime(tmp_path), Path("/tmp/cfg.yaml"), "task-1", gpu_ids=["1"])
+    config_yaml = tmp_path / "cfg.yaml"
+    spec = build_train_spec(_runtime(tmp_path), config_yaml, "task-1", gpu_ids=["1"])
     assert spec.env["CUDA_VISIBLE_DEVICES"] == "1"

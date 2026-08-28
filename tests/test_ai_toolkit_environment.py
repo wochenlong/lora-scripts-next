@@ -5,7 +5,10 @@ from pathlib import Path
 from mikazuki.engines.ai_toolkit import environment
 
 
-def test_prepare_requirements_strips_nested_pin(tmp_path):
+def test_prepare_requirements_strips_nested_pin(tmp_path, monkeypatch):
+    # This is an ARM/Linux compatibility rule; make the test deterministic on Windows.
+    monkeypatch.setattr(environment, "_needs_pin_strip", lambda: True)
+    monkeypatch.setattr(environment, "requirements_file", lambda source_root: source_root / "dgx_requirements.txt")
     (tmp_path / "requirements_base.txt").write_text(
         "torch==2.11.0\ntorchcodec==0.9.1\nnumpy>=2,<3\n", encoding="utf-8"
     )

@@ -129,7 +129,7 @@ def test_control_dirs_blank_rows_ignored(tmp_path):
         "run-1",
         "klein-4b",
     )
-    assert _process(adapted)["datasets"][0]["control_path"] == [str(ctrl.resolve())]
+    assert _process(adapted)["datasets"][0]["control_path"] == [ctrl.resolve().as_posix()]
 
 
 def test_control_dirs_non_list_rejected(tmp_path):
@@ -154,7 +154,7 @@ def test_unknown_variant_rejected(tmp_path):
 
 def test_te_path_side_channel(tmp_path):
     adapted = adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-4b")
-    assert adapted.te_path == str((tmp_path / "models" / "qwen3-4b").resolve())
+    assert adapted.te_path == (tmp_path / "models" / "qwen3-4b").resolve().as_posix()
     # TE path must NOT leak into the yaml (upstream has no such config key)
     text = dump_yaml(adapted.config)
     assert "qwen3-4b" not in text
@@ -180,7 +180,7 @@ def test_local_dit_file_maps_to_parent(tmp_path):
     adapted = adapt_config(
         _source(tmp_path, pretrained_model_name_or_path=str(dit)), _runtime(tmp_path), "run-1", "klein-4b"
     )
-    assert _process(adapted)["model"]["name_or_path"] == str(dit.parent.resolve())
+    assert _process(adapted)["model"]["name_or_path"] == dit.parent.resolve().as_posix()
     assert adapted.warnings == []
 
 
@@ -228,7 +228,7 @@ def test_control_dirs_become_control_path(tmp_path):
     adapted = adapt_config(
         _source(tmp_path, control_data_dirs=[str(ctrl)]), _runtime(tmp_path), "run-1", "klein-4b"
     )
-    assert _process(adapted)["datasets"][0]["control_path"] == [str(ctrl.resolve())]
+    assert _process(adapted)["datasets"][0]["control_path"] == [ctrl.resolve().as_posix()]
 
 
 def test_control_dir_missing_rejected(tmp_path):
