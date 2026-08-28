@@ -46,7 +46,32 @@ QWEN3_VL_REPO = "Qwen/Qwen3-VL-4B-Instruct"
 TOKENIZER_FILES = ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt"]
 TOKENIZER_REQUIRED = ("tokenizer.json", "tokenizer_config.json")
 
+KLEIN_4B_REPO = "black-forest-labs/FLUX.2-klein-base-4B"
+KLEIN_9B_REPO = "black-forest-labs/FLUX.2-klein-base-9B"
+# ai-toolkit auto-loads `<name_or_path>/ae.safetensors` when present (flux2_model.py),
+# so the VAE asset lands next to the DiT file under sd-models/klein/.
+# ModelScope mirror (KanKanKan/flux2-vae, flux2-vae.safetensors) verified 2026-08-28
+# to use the single-file ae key layout (decoder.up.0.block.0.conv1.bias present).
+KLEIN_VAE_REPO = "ai-toolkit/flux2_vae"
+KLEIN_VAE_FILE = "ae.safetensors"
+KLEIN_VAE_MS_REPO = "KanKanKan/flux2-vae"
+KLEIN_VAE_MS_FILE = "flux2-vae.safetensors"
+
+
+def _klein_assets(variant: str, repo: str, dit_file: str) -> tuple[AssetDef, ...]:
+    return (
+        AssetDef("dit", f"Klein {variant} DiT（底模）", f"sd-models/klein/{dit_file}",
+                 hf_repo=repo, hf_file=dit_file,
+                 ms_repo=repo, ms_file=dit_file),
+        AssetDef("vae", "VAE（FLUX.2，ae.safetensors，须与 DiT 同目录）", f"sd-models/klein/{KLEIN_VAE_FILE}",
+                 hf_repo=KLEIN_VAE_REPO, hf_file=KLEIN_VAE_FILE,
+                 ms_repo=KLEIN_VAE_MS_REPO, ms_file=KLEIN_VAE_MS_FILE),
+    )
+
+
 ASSET_REGISTRY: dict[str, tuple[AssetDef, ...]] = {
+    "klein-4b-lora": _klein_assets("base-4B", KLEIN_4B_REPO, "flux-2-klein-base-4b.safetensors"),
+    "klein-9b-lora": _klein_assets("base-9B", KLEIN_9B_REPO, "flux-2-klein-base-9b.safetensors"),
     "krea2-lora": (
         AssetDef("dit", "Krea 2 DiT（RAW 底模）", "sd-models/krea2/krea2.safetensors",
                  hf_repo=KREA2_REPO, hf_file="diffusion_models/krea2_raw_bf16.safetensors",

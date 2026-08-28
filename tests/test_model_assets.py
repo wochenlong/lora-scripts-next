@@ -29,6 +29,28 @@ class ModelAssetsManifestTests(unittest.TestCase):
     def test_unknown_train_type_has_empty_manifest(self):
         self.assertEqual(manifest_for("sd15-lora"), [])
 
+    def test_klein_manifests_have_dit_and_vae(self):
+        for train_type, dit_file in (
+            ("klein-4b-lora", "flux-2-klein-base-4b.safetensors"),
+            ("klein-9b-lora", "flux-2-klein-base-9b.safetensors"),
+        ):
+            assets = {asset.key: asset for asset in manifest_for(train_type)}
+            self.assertEqual(set(assets), {"dit", "vae"})
+            self.assertEqual(assets["dit"].hf_file, dit_file)
+            self.assertTrue(assets["dit"].ms_repo, "ModelScope mirror for DiT")
+            self.assertFalse(assets["dit"].optional)
+            # VAE: HF + ModelScope (KanKanKan/flux2-vae mirror), required
+            self.assertEqual(assets["vae"].hf_repo, "ai-toolkit/flux2_vae")
+            self.assertEqual(assets["vae"].ms_repo, "KanKanKan/flux2-vae")
+            self.assertEqual(assets["vae"].ms_file, "flux2-vae.safetensors")
+            self.assertFalse(assets["vae"].optional)
+
+    def test_klein_vae_lands_next_to_dit(self):
+        # ai-toolkit auto-loads <name_or_path>/ae.safetensors: dit and vae defaults
+        # must share the parent dir.
+        assets = {asset.key: asset for asset in manifest_for("klein-4b-lora")}
+        self.assertEqual(str(Path(assets["dit"].default_path).parent), str(Path(assets["vae"].default_path).parent))
+
     def test_resolve_train_type_prefers_config_value(self):
         self.assertEqual(resolve_train_type("lora-master", {"model_train_type": "krea2-lora"}), "krea2-lora")
         self.assertEqual(resolve_train_type("krea2-lora", {}), "krea2-lora")
