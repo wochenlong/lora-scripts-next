@@ -9,6 +9,7 @@ import {
   isPluginConfirmationProjection,
   pluginsApi,
   resetPluginHostAuthorityForTests,
+  type MarketplaceEntry,
 } from "./plugins"
 
 describe("plugin host URL policy", () => {
@@ -114,6 +115,63 @@ describe("plugin capability broker client", () => {
     })
     expect(localStorage.length).toBe(0)
     expect(sessionStorage.length).toBe(0)
+  })
+
+  it("sends only approvedPermissions in the install body (backend contract forbids extra fields)", async () => {
+    const entry: MarketplaceEntry = {
+      id: "sample-plugin",
+      name: "Sample",
+      publisher_id: "publisher",
+      description: "",
+      icon: null,
+      latest_version: "1.0.0",
+      channel: "stable",
+      host_compatibility: ">=2.9.2 <4.0.0",
+      platforms: ["win32-x64"],
+      package_size: 1,
+      permissions_summary: ["training-config"],
+      license: "MIT",
+      release_notes_url: null,
+      package_url: "https://market.example/sample.zip",
+      sha256: "a".repeat(64),
+      signature: "b".repeat(64),
+      signing_key_id: "test-key",
+      published_at: "2026-08-28T00:00:00Z",
+    }
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ status: "success", data: { runToken: "install-authority-token", header: "X-NextTrainer-Run-Token" } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({
+            status: "success",
+            data: {
+              id: "sample-plugin",
+              state: "installed",
+              active_version: "1.0.0",
+              previous_version: null,
+              enabled: false,
+              installed_versions: ["1.0.0"],
+              reason: "",
+              runtime_state: null,
+              runtime_pid: null,
+            },
+          }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+
+    await pluginsApi.installMarketplacePlugin(entry, ["training-config"])
+
+    const installCall = fetchMock.mock.calls[1]
+    expect(installCall[0]).toBe("/api/marketplace/plugins/sample-plugin/install")
+    const body = JSON.parse(String(installCall[1]?.body))
+    expect(body).toEqual({ approvedPermissions: ["training-config"] })
+    expect("entry" in body).toBe(false)
   })
 
   it("refreshes stale authority once before a broker mutation is accepted", async () => {

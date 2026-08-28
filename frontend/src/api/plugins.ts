@@ -444,8 +444,11 @@ export const pluginsApi = {
     const data = await hostData<MarketplaceEntry[] | null>(response)
     return data ?? []
   },
+  // The backend install contract is strict (extra="forbid"): only version /
+  // approvedPermissions are accepted. The catalog entry is server-trusted
+  // (signature verified) and must not be echoed back in the request body.
   installMarketplacePlugin: (entry: MarketplaceEntry, approvedPermissions: string[]) =>
-    marketplaceMutation(entry.id, "install", { entry, approvedPermissions }),
+    marketplaceMutation(entry.id, "install", { approvedPermissions }),
   enableMarketplacePlugin: (pluginId: string, permissions: string[]) =>
     marketplaceMutation(pluginId, "enable", { permissions }),
   disableMarketplacePlugin: (pluginId: string) => marketplaceMutation(pluginId, "disable", {}),
