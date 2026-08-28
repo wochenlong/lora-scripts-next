@@ -16,6 +16,7 @@ const source = ref<AssetSource>("modelscope")
 const downloading = ref(false)
 const logs = ref<string[]>([])
 let logSource: EventSource | undefined
+let checkGen = 0
 
 const trainType = computed(() => String(props.model.model_train_type || props.schemaName))
 const missing = computed(() => items.value.filter((item) => !item.exists && !item.optional))
@@ -35,9 +36,13 @@ function closeStream() {
 }
 
 async function check(silent = false) {
+  // Variant switches can overlap in-flight checks; only the latest request
+  // may commit, otherwise a slow 4B response overwrites the 9B manifest.
+  const gen = ++checkGen
   checking.value = true
   try {
     const data = await assetsApi.check(trainType.value, props.model)
+    if (gen !== checkGen) return
     items.value = data.items
     const next = new Set(selectedKeys.value)
     for (const item of data.items) {
@@ -52,7 +57,7 @@ async function check(silent = false) {
   } catch (error) {
     if (!silent) ElMessage.error(error instanceof Error ? error.message : t("training.assets.checkFail"))
   } finally {
-    checking.value = false
+    if (gen === checkGen) checking.value = false
   }
 }
 

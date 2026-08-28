@@ -37,6 +37,7 @@ Schema.intersect([
         train_batch_size: Schema.number().min(1).default(1).description("批量大小, 越高显存占用越高"),
         gradient_checkpointing: Schema.boolean().default(true).description("梯度检查点"),
         gradient_accumulation_steps: Schema.number().min(1).default(1).description("梯度累加步数"),
+        max_grad_norm: Schema.number().min(0).step(0.1).default(1.0).description("梯度裁剪阈值（0 或不填走上游默认 1.0）"),
         seed: Schema.number().default(42).description("随机种子"),
     }).description("训练相关参数"),
 
@@ -53,18 +54,26 @@ Schema.intersect([
         network_alpha: Schema.number().min(1).default(16).description("常用值：等于 network_dim 或 network_dim*1/2"),
     }).description("网络设置"),
 
-    Schema.object({
-        enable_preview: Schema.boolean().default(false).description("启用训练中采样预览图"),
-        sample_every_n_steps: Schema.number().min(1).default(250).description("每 N 步生成一次预览图"),
-        positive_prompts: Schema.string().role('textarea').default('masterpiece, best quality, 1girl, solo').description("Prompt"),
-        negative_prompts: Schema.string().role('textarea').description("Negative Prompt（Klein 通常留空）"),
-        sample_width: Schema.number().default(1024).description('预览图宽'),
-        sample_height: Schema.number().default(1024).description('预览图高'),
-        sample_cfg: Schema.number().min(1).max(30).default(4).description('CFG Scale'),
-        sample_seed: Schema.number().default(42).description('种子'),
-        sample_steps: Schema.number().min(1).max(300).default(20).description('迭代步数'),
-        prompt_file: Schema.string().role('textarea').description('预览图 Prompt 文件路径。填写后将采用文件内的 prompt，而下方的选项将失效。'),
-    }).description("采样预览设置"),
+    Schema.intersect([
+        Schema.object({
+            enable_preview: Schema.boolean().default(false).description("启用训练中采样预览图"),
+        }).description("采样预览设置"),
+        Schema.union([
+            Schema.object({
+                enable_preview: Schema.const(true).required(),
+                sample_every_n_steps: Schema.number().min(1).default(250).description("每 N 步生成一次预览图"),
+                positive_prompts: Schema.string().role('textarea').default('masterpiece, best quality, 1girl, solo').description("Prompt"),
+                negative_prompts: Schema.string().role('textarea').description("Negative Prompt（Klein 通常留空）"),
+                sample_width: Schema.number().default(1024).description('预览图宽'),
+                sample_height: Schema.number().default(1024).description('预览图高'),
+                sample_cfg: Schema.number().min(1).max(30).default(4).description('CFG Scale'),
+                sample_seed: Schema.number().default(42).description('种子'),
+                sample_steps: Schema.number().min(1).max(300).default(20).description('迭代步数'),
+                prompt_file: Schema.string().role('textarea').description('预览图 Prompt 文件路径。填写后将采用文件内的 prompt，而下方的选项将失效。'),
+            }),
+            Schema.object({}),
+        ]),
+    ]),
 
     Schema.object({
         logging_dir: Schema.string().default("./logs").description("日志保存文件夹"),
