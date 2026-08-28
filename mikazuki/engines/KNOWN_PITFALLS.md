@@ -38,3 +38,17 @@
 - 检测：失败包名确认不在目标训练链路 import 里（torchcodec 仅用于视频/manager，Klein 图像路径不 import）。
 - 绕法：安装期递归剥离平台无 wheel 的 pin（含 `-r` 引用文件的重写），记日志。现成实现：`mikazuki/engines/ai_toolkit/environment.py` `prepare_requirements`。
 - 来源：ai_toolkit pack（2026-08-28，GB10 aarch64 实装命中）。
+
+## P6. schema 键名撞车：跨引擎配置被前端 carry-over 泄漏
+
+- 症状：从 kohya（SDXL）页面切到插件引擎页面，底模路径等同名字段被自动带进新表单（如 SDXL 底模路径出现在 Klein 的 DiT 目录字段）。
+- 检测：插件 schema 的字段键名与 kohya 方言同名但语义不同（路径指向的模型族不同）；机制是 `frontend/src/training/params.ts` `pickCarryOverFields` 按同名键跨 schema 继承。
+- 绕法：插件 schema 对引擎专属资产路径用**引擎自己的键名**（先例：krea2 用 `dit`/`vae`/`text_encoder`，不与 kohya 的 `pretrained_model_name_or_path` 撞名）；已撞名且确实不该跨界的键加进 `CROSS_SCHEMA_DENY_KEYS`（如 `dit`）。
+- 来源：ai_toolkit pack（2026-08-28，klein-lora schema 初版用 `pretrained_model_name_or_path` 撞名，实机操作命中）。
+
+## P7. 源码快照漏带仓库根目录的隐式顶层模块
+
+- 症状：安装后训练进程 `ModuleNotFoundError: No module named '<x>'`，`<x>` 是上游仓库根目录的散装 `.py`（如 ai-toolkit 的 `info.py`，被 `toolkit/metadata.py` 以 `from info import ...` 顶层导入），包目录（`toolkit/` 等）grep import 路径时漏掉它。
+- 检测：快照装完先静态扫 `grep -rn "^from <name> import\|^import <name>"` 对根目录每个散装 `.py`；或冒烟跑训练入口即现形。
+- 绕法：installer 的 `INCLUDE_TOP_LEVEL` 补上该文件，重装/修复即可。现成实现：`mikazuki/engines/ai_toolkit/installer.py`（含快照完整性测试）。
+- 来源：ai_toolkit pack（2026-08-28，GB10 首次训练冒烟命中）。
