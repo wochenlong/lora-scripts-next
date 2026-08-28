@@ -94,6 +94,25 @@ def test_log_every_floored_for_short_runs(tmp_path):
     assert process["logging"] == {"log_every": 1}
 
 
+def test_gradient_checkpointing_truthy_strings(tmp_path):
+    adapted = adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-4b")
+    assert _process(adapted)["train"]["gradient_checkpointing"] is True
+    adapted = adapt_config(_source(tmp_path, gradient_checkpointing="false"), _runtime(tmp_path), "run-1", "klein-4b")
+    assert _process(adapted)["train"]["gradient_checkpointing"] is False
+    adapted = adapt_config(_source(tmp_path, gradient_checkpointing=0), _runtime(tmp_path), "run-1", "klein-4b")
+    assert _process(adapted)["train"]["gradient_checkpointing"] is False
+
+
+def test_sample_neg_from_negative_prompts(tmp_path):
+    data = _source(tmp_path)
+    prompts = tmp_path / "prompts.txt"
+    prompts.write_text("a cat\n", encoding="utf-8")
+    data["sample_prompts"] = str(prompts)
+    data["negative_prompts"] = "blurry"
+    adapted = adapt_config(data, _runtime(tmp_path), "run-1", "klein-4b")
+    assert _process(adapted)["sample"]["neg"] == "blurry"
+
+
 def test_variant_9b(tmp_path):
     adapted = adapt_config(
         _source(tmp_path, pretrained_model_name_or_path="black-forest-labs/FLUX.2-klein-base-9B"),

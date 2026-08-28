@@ -24,12 +24,14 @@ VARIANTS = {
         "dit_filename": "flux-2-klein-base-4b.safetensors",
         "default_name_or_path": "black-forest-labs/FLUX.2-klein-base-4B",
         "text_encoder": "Qwen/Qwen3-4B",
+        "te_hidden_size": 2560,
     },
     "klein-9b": {
         "arch": "flux2_klein_9b",
         "dit_filename": "flux-2-klein-base-9b.safetensors",
         "default_name_or_path": "black-forest-labs/FLUX.2-klein-base-9B",
         "text_encoder": "Qwen/Qwen3-8B",
+        "te_hidden_size": 4096,
     },
 }
 
@@ -252,7 +254,7 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
         "batch_size": int_value(source.get("train_batch_size") or source.get("batch_size"), 1) or 1,
         "steps": steps,
         "gradient_accumulation_steps": int_value(source.get("gradient_accumulation_steps"), 1) or 1,
-        "gradient_checkpointing": not is_empty(source.get("gradient_checkpointing", True)),
+        "gradient_checkpointing": truthy(source.get("gradient_checkpointing", True)),
         "noise_scheduler": "flowmatch",
         "timestep_type": "weighted",
         "optimizer": _map_optimizer(source.get("optimizer_type"), warnings),
@@ -324,7 +326,6 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
             "width": width,
             "height": height,
             "prompts": prompts,
-            "neg": "",
             "seed": int_value(source.get("sample_seed") or source.get("seed"), 42),
             "walk_seed": True,
             "guidance_scale": float_value(source.get("sample_cfg"), 4.0) or 4.0,

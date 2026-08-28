@@ -155,6 +155,19 @@ def run_preflight(
                 errors.append(f"文本编码器目录缺少 {name}: {te_dir}")
         if not any(te_dir.glob("*.safetensors")):
             errors.append(f"文本编码器目录缺少权重文件（*.safetensors）: {te_dir}")
+        expected_hidden = spec.get("te_hidden_size")
+        config_file = te_dir / "config.json"
+        if expected_hidden and config_file.is_file():
+            try:
+                actual_hidden = json.loads(config_file.read_text(encoding="utf-8")).get("hidden_size")
+            except (json.JSONDecodeError, OSError):
+                actual_hidden = None
+            if isinstance(actual_hidden, int) and actual_hidden != expected_hidden:
+                warnings.append(
+                    f"文本编码器与变体不匹配：{te_dir} 的 hidden_size={actual_hidden}，"
+                    f"变体 {variant} 期望 {spec.get('text_encoder')}（hidden_size={expected_hidden}），"
+                    "训练可能加载失败或产出错误"
+                )
 
     images: list[Path] = []
     for entry in datasets:

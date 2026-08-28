@@ -68,6 +68,22 @@ def test_preflight_ok(tmp_path):
     assert result.facts["text_encoder"] == adapted.te_path
 
 
+def test_preflight_te_variant_mismatch_warns(tmp_path):
+    runtime = _runtime(tmp_path)
+    source = _setup(tmp_path)
+    te_dir = Path(source["text_encoder"])
+    (te_dir / "config.json").write_text('{"hidden_size": 4096}', encoding="utf-8")
+    adapted = adapt_config(source, runtime, "run-1", "klein-4b")
+    result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
+    assert result.ok, result.errors
+    assert any("hidden_size" in w for w in result.warnings)
+
+    (te_dir / "config.json").write_text('{"hidden_size": 2560}', encoding="utf-8")
+    result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
+    assert result.ok, result.errors
+    assert not any("hidden_size" in w for w in result.warnings)
+
+
 def test_preflight_missing_dit(tmp_path):
     runtime = _runtime(tmp_path)
     adapted = adapt_config(_setup(tmp_path, with_dit=False), runtime, "run-1", "klein-4b")
