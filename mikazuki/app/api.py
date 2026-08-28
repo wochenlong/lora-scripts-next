@@ -708,9 +708,17 @@ async def task_metrics(task_id: str) -> APIResponse:
     task = tm.tasks.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Unknown task_id")
+    if str(task.metadata.get("backend") or "") == "ai-toolkit":
+        from mikazuki.engines.ai_toolkit.progress import parse_progress as parse_ai_toolkit_progress
+
+        progress = parse_ai_toolkit_progress(
+            train_log_hub.tail(task_id, 300), str(task.metadata.get("output_name") or "")
+        )
+    else:
+        progress = task_insights.read_progress(train_log_hub.tail(task_id, 300))
     return APIResponseSuccess(data={
         "tags": task_insights.read_loss_scalars(task.metadata),
-        "progress": task_insights.read_progress(train_log_hub.tail(task_id, 300)),
+        "progress": progress,
     })
 
 
