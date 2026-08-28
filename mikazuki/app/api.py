@@ -600,6 +600,9 @@ def _task_train_type(task) -> Optional[str]:
     backend = str(task.metadata.get("backend") or "standard")
     if backend == "anima-lora-fast":
         return ANIMA_FAST_TRAIN_TYPE
+    if backend == "ai-toolkit":
+        train_type = task.metadata.get("train_type")
+        return str(train_type) if train_type else None
     if backend == "musubi":
         train_type = task.metadata.get("train_type")
         return str(train_type) if train_type else MUSUBI_TRAIN_TYPE

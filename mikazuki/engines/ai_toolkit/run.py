@@ -11,6 +11,7 @@ from mikazuki.app.train_submit import (
     get_sample_prompts,
     sanitize_config,
     should_generate_sample_prompts,
+    toml,
 )
 from mikazuki.log import log
 from mikazuki.engines.ai_toolkit.adapter import (
@@ -128,12 +129,18 @@ def handle_run(config: dict, ctx: RunContext):
             return ai_toolkit_fail_from_preflight(preflight)
         yaml_file_path = Path(ctx.autosave_dir) / f"{run_id}.yaml"
         yaml_file_path.write_text(dump_ai_toolkit_yaml(adapted.config), encoding="utf-8")
+        # UI-dialect TOML alongside the engine YAML so /api/tasks/{id}/config
+        # re-import works (it toml-parses config_path and expects UI keys).
+        ui_toml_path = Path(ctx.autosave_dir) / f"{run_id}.toml"
+        ui_toml_path.write_text(toml.dumps(config), encoding="utf-8")
 
         metadata = {
             "output_dir": adapted.config["config"]["process"][0]["training_folder"],
             "output_name": adapted.config["config"]["name"],
             "logging_dir": adapted.config["config"]["process"][0]["log_dir"],
             "text_encoder": adapted.te_path,
+            "config_path": str(ui_toml_path.resolve()),
+            "engine_config_path": str(yaml_file_path.resolve()),
             "warnings": [*adapted.warnings, *preflight.warnings],
         }
         return process.run_ai_toolkit_train(

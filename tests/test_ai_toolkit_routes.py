@@ -117,3 +117,79 @@ def test_run_dispatch_disabled_engine(tmp_path, monkeypatch):
     )
     assert result.status == "fail"
     assert "LORA_ENABLE_AI_TOOLKIT" in result.message
+
+
+def test_handle_run_autosaves_ui_toml_for_reimport(tmp_path, monkeypatch):
+    """config_path must point at a UI-dialect TOML (like kohya) so the
+    /api/tasks/{id}/config re-import endpoint can parse it; the engine YAML
+    stays traceable via engine_config_path."""
+    from mikazuki.app.models import APIResponseSuccess
+    from mikazuki.app.train_submit import toml
+    from mikazuki.engines.ai_toolkit import run as aitk_run
+    from mikazuki.engines.runner import RunContext
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(aitk_run, "ai_toolkit_feature_enabled", lambda: True)
+    monkeypatch.setattr(aitk_run, "ai_toolkit_ready_gate", lambda: (True, None))
+
+    class _Preflight:
+        ok = True
+        errors: list = []
+        warnings: list = []
+
+        def as_dict(self):
+            return {}
+
+    monkeypatch.setattr(aitk_run, "run_ai_toolkit_preflight", lambda *a, **k: _Preflight())
+
+    captured = {}
+
+    def _fake_launch(config_yaml, runtime, variant, gpu_ids, metadata=None, te_path=""):
+        captured["metadata"] = metadata
+        captured["config_yaml"] = config_yaml
+        return APIResponseSuccess(data={"task_id": "t-1"})
+
+    monkeypatch.setattr(aitk_run.process, "run_ai_toolkit_train", _fake_launch)
+
+    data_dir = tmp_path / "train"
+    data_dir.mkdir()
+    (data_dir / "img.png").write_bytes(b"")
+    te_dir = tmp_path / "te"
+    te_dir.mkdir()
+    for name in ("config.json", "tokenizer.json", "tokenizer_config.json"):
+        (te_dir / name).write_text("{}", encoding="utf-8")
+    (te_dir / "model.safetensors").write_bytes(b"")
+
+    config = {
+        "train_data_dir": str(data_dir),
+        "pretrained_model_name_or_path": "black-forest-labs/FLUX.2-klein-base-4B",
+        "text_encoder": str(te_dir),
+        "max_train_steps": 100,
+        "network_dim": 32,
+    }
+    ctx = RunContext(
+        timestamp="20260828-120000",
+        autosave_dir=str(tmp_path / "autosave"),
+        model_train_type="klein-4b-lora",
+        variant="klein-4b",
+    )
+    (tmp_path / "autosave").mkdir()
+    result = aitk_run.handle_run(config, ctx)
+    assert result.status == "success"
+
+    metadata = captured["metadata"]
+    ui_toml = Path(metadata["config_path"])
+    assert ui_toml.suffix == ".toml" and ui_toml.is_file()
+    reloaded = toml.loads(ui_toml.read_text(encoding="utf-8"))
+    assert reloaded["network_dim"] == 32
+    assert reloaded["max_train_steps"] == 100
+    engine_yaml = Path(metadata["engine_config_path"])
+    assert engine_yaml.suffix == ".yaml" and engine_yaml.is_file()
+    assert str(engine_yaml) == captured["config_yaml"]
+
+
+def test_task_train_type_for_ai_toolkit_backend():
+    class _Task:
+        metadata = {"backend": "ai-toolkit", "train_type": "klein-9b-lora"}
+
+    assert api._task_train_type(_Task()) == "klein-9b-lora"
