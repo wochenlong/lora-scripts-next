@@ -3,7 +3,6 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { storeToRefs } from "pinia"
 import { useRoute, useRouter } from "vue-router"
 import { useI18n } from "vue-i18n"
-import { ChatDotRound, Minus } from "@element-plus/icons-vue"
 import {
   isSafePluginServerUiUrl,
   isSafePluginUiUrl,
@@ -12,6 +11,7 @@ import {
   type PluginConfirmationProjection,
   type PluginHostExtension,
 } from "../../api/plugins"
+import agentIcon from "../../assets/svg-256.png"
 import { HostPluginBridge, type BridgeFrameTarget } from "../../extensions/pluginBridge"
 import { createPluginFrameBridge, createPluginFrameInstanceId } from "../../extensions/pluginFrameBridge"
 import { useExtensionsStore } from "../../stores/extensions"
@@ -239,11 +239,6 @@ function togglePanel() {
   saveOpenPreference()
 }
 
-function closePanel() {
-  panelOpen.value = false
-  saveOpenPreference()
-}
-
 function onShortcut(event: KeyboardEvent) {
   if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === "a") {
     event.preventDefault()
@@ -295,13 +290,7 @@ onBeforeUnmount(() => {
         @pointerdown="startResize"
         @keydown="resizeWithKeyboard"
       />
-      <header class="floating-extension-header">
-        <div>
-          <strong>{{ activeExtension.displayName }}</strong>
-          <small>{{ activeExtension.statusText || t(`extensionHost.state.${activeExtension.state}`) }}</small>
-        </div>
-        <button type="button" :aria-label="t('extensionHost.minimize')" @click="closePanel"><Minus aria-hidden="true" /></button>
-      </header>
+      <header class="floating-extension-header" aria-hidden="true" />
       <iframe
         ref="frame"
         class="floating-extension-frame"
@@ -320,7 +309,7 @@ onBeforeUnmount(() => {
       data-testid="floating-extension-launcher"
       @click="togglePanel"
     >
-      <ChatDotRound aria-hidden="true" />
+      <img :src="agentIcon" alt="" aria-hidden="true" />
       <i v-if="activeExtension.unreadCount" class="floating-extension-badge">{{
         activeExtension.unreadCount > 9 ? "9+" : activeExtension.unreadCount
       }}</i>

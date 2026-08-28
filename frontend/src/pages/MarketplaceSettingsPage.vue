@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref, watch } from "vue"
+import { computed, onMounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { Refresh } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
@@ -21,7 +21,6 @@ const selectedId = ref("")
 const loading = ref(false)
 const busyAction = ref("")
 const error = ref("")
-const approvedByPlugin = reactive<Record<string, string[]>>({})
 
 interface MarketplaceRecord {
   id: string
@@ -56,31 +55,14 @@ const records = computed<MarketplaceRecord[]>(() => {
     .map((id) => ({ id, entry: entries.get(id), status: states.get(id) ?? emptyStatus(id) }))
 })
 const selected = computed(() => records.value.find((record) => record.id === selectedId.value) ?? records.value[0] ?? null)
-const selectedPermissions = computed(() => (selected.value ? (approvedByPlugin[selected.value.id] ?? []) : []))
-// A plugin that declares no permissions requires no approval and is
-// installable immediately ([].every() is vacuously true).
-const allPermissionsApproved = computed(() => {
-  const required = selected.value?.entry?.permissions_summary ?? []
-  return required.every((permission) => selectedPermissions.value.includes(permission))
-})
-
-function permissionLabel(permission: string) {
-  const key = `marketplace.permissions.${permission}`
-  const translated = t(key)
-  return translated === key ? permission : translated
-}
+// The permission-approval bar has been removed: every declared permission is
+// auto-approved, so install/enable always sends the full declared set.
+const declaredPermissions = computed(() => selected.value?.entry?.permissions_summary ?? [])
 
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
   return `${(bytes / 1024 / 1024).toFixed(1)} MB`
-}
-
-function togglePermission(pluginId: string, permission: string, checked: boolean) {
-  const current = new Set(approvedByPlugin[pluginId] ?? [])
-  if (checked) current.add(permission)
-  else current.delete(permission)
-  approvedByPlugin[pluginId] = [...current]
 }
 
 function updateStatus(status: MarketplacePluginStatus) {
@@ -140,14 +122,14 @@ async function runAction(action: string, operation: () => Promise<MarketplacePlu
 
 async function install() {
   const record = selected.value
-  if (!record?.entry || !allPermissionsApproved.value || !(await confirmMutation("marketplace.confirmInstall"))) return
-  await runAction("install", () => pluginsApi.installMarketplacePlugin(record.entry!, selectedPermissions.value))
+  if (!record?.entry || !(await confirmMutation("marketplace.confirmInstall"))) return
+  await runAction("install", () => pluginsApi.installMarketplacePlugin(record.entry!, declaredPermissions.value))
 }
 
 async function enable() {
   const record = selected.value
-  if (!record?.entry || !allPermissionsApproved.value || !(await confirmMutation("marketplace.confirmEnable"))) return
-  await runAction("enable", () => pluginsApi.enableMarketplacePlugin(record.id, selectedPermissions.value))
+  if (!record?.entry || !(await confirmMutation("marketplace.confirmEnable"))) return
+  await runAction("enable", () => pluginsApi.enableMarketplacePlugin(record.id, declaredPermissions.value))
 }
 
 async function disable() {
@@ -236,32 +218,20 @@ onMounted(() => void load())
           <div><dt>{{ t("marketplace.platforms") }}</dt><dd>{{ selected.entry?.platforms.join(", ") || "-" }}</dd></div>
         </dl>
 
-        <fieldset v-if="selected.entry?.permissions_summary.length" class="marketplace-permissions">
-          <legend>{{ t("marketplace.permissionsTitle") }}</legend>
-          <label v-for="permission in selected.entry.permissions_summary" :key="permission">
-            <input
-              type="checkbox"
-              :checked="selectedPermissions.includes(permission)"
-              @change="togglePermission(selected.id, permission, ($event.target as HTMLInputElement).checked)"
-            >
-            <span><strong>{{ permissionLabel(permission) }}</strong><small>{{ permission }}</small></span>
-          </label>
-        </fieldset>
-
         <p v-if="selected.status.reason" class="marketplace-error" role="alert">{{ t("marketplace.statusError") }}</p>
         <footer class="marketplace-actions">
           <button
             v-if="selected.status.state === 'not_installed'"
             type="button"
             class="primary-action"
-            :disabled="!selected.entry || !allPermissionsApproved || Boolean(busyAction)"
+            :disabled="!selected.entry || Boolean(busyAction)"
             @click="install"
           >{{ t("marketplace.install") }}</button>
           <button
             v-if="selected.status.state === 'installed' || selected.status.state === 'broken'"
             type="button"
             class="primary-action"
-            :disabled="!selected.entry || !allPermissionsApproved || Boolean(busyAction)"
+            :disabled="!selected.entry || Boolean(busyAction)"
             @click="enable"
           >{{ t("marketplace.enable") }}</button>
           <button

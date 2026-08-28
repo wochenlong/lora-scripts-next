@@ -1,0 +1,24 @@
+{
+  "name": "next-trainer-pi-assets",
+  "version": "0.3.2",
+  "private": true,
+  "description": "Next Trainer Agent assets: host-Tool bridge extension, knowledge/template library tool, and the six Next Trainer skills.",
+  "keywords": [
+    "pi-package"
+  ],
+  "pi": {
+    "extensions": [
+      "./extensions"
+    ],
+    "skills": [
+      "./skills"
+    ]
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-coding-agent": "*",
+    "@earendil-works/pi-agent-core": "*",
+    "@earendil-works/pi-ai": "*",
+    "@earendil-works/pi-tui": "*",
+    "typebox": "*"
+  }
+}

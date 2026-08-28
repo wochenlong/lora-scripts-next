@@ -51,6 +51,8 @@ export const trainingApi = {
   validateImport: (pageTrainType: string, config: FormModel) => post<ImportValidation>("/api/config/validate-import", { page_train_type: pageTrainType, config }),
   normalizeExport: (pageTrainType: string, config: FormModel) => post<NormalizedExport>("/api/config/normalize-for-export", { page_train_type: pageTrainType, config }),
   run: (config: FormModel) => post<TrainingStart>("/api/run", config),
+  saveParams: (pageTrainType: string, config: FormModel) =>
+    apiData<{ ok: boolean; page_train_type: string }>("/api/config/saved_params", { method: "PUT", body: JSON.stringify({ page_train_type: pageTrainType, config }) }),
   animaFastPreflight: (config: FormModel) => post<PreflightResult>("/api/anima-fast/preflight", config),
   musubiPreflight: (config: FormModel) => post<PreflightResult>("/api/plugins/musubi/preflight", config),
 }

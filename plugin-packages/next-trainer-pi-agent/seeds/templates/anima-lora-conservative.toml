@@ -1,0 +1,49 @@
+# Next Trainer empirical template; validate and review before import.
+# Anima base (Qwen-Image-VAE + Qwen3-0.6B text encoder). Conservative first-pass
+# values for a ~100-image character set; sweep upward only with preview evidence.
+template_version = "2026-08-29"
+scope = "anima-lora-conservative"
+model_train_type = "anima-lora"
+lora_type = "lora"
+network_module = "networks.lora_anima"
+network_dim = 16
+network_alpha = 12
+network_dropout = 0.05
+network_train_unet_only = true
+learning_rate = 0.00001
+unet_lr = 0.00001
+text_encoder_lr = 0.0
+lr_scheduler = "cosine_with_restarts"
+lr_scheduler_num_cycles = 2
+lr_warmup_steps = 50
+optimizer_type = "pytorch_optimizer.CAME"
+loss_type = "l2"
+resolution = "1024,1024"
+enable_bucket = true
+min_bucket_reso = 512
+max_bucket_reso = 1024
+train_batch_size = 1
+gradient_accumulation_steps = 2
+gradient_checkpointing = true
+max_train_epochs = 12
+save_every_n_epochs = 1
+save_model_as = "safetensors"
+save_precision = "bf16"
+clip_skip = 2
+mixed_precision = "bf16"
+cache_latents = true
+cache_latents_to_disk = true
+caption_dropout_rate = 0.02
+caption_tag_dropout_rate = 0.05
+# preview / overfit monitor (fixed prompt + seed, sampled every few epochs)
+enable_preview = true
+sample_at_first = true
+sample_every_n_epochs = 2
+sample_width = 1024
+sample_height = 1024
+sample_cfg = 4
+sample_steps = 40
+sample_sampler = "euler"
+sample_scheduler = "simple"
+sample_seed = 42
+log_with = "tensorboard"

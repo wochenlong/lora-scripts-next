@@ -186,6 +186,61 @@ class TrainingConfigArtifactService:
         self._validations[validation_hash] = {"artifactPath": artifact_path, "contentHash": content_hash, "sourceRevision": source_revision, "normalized": normalized, "result": output}
         return output
 
+    def validate_draft_content(
+        self,
+        content: str,
+        *,
+        page_train_type: str,
+        format_hint: str = "toml",
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Validate an Agent-provided draft by its text content (not a file path).
+
+        The Agent cannot write into the host workspace directly, so it hands over
+        the full TOML/JSON text. We persist it into a session-scoped workspace
+        file (workspace-relative, inside the host boundary) and then run the
+        identical path-based validation so commit/hash semantics are unchanged.
+        """
+        if not isinstance(content, str) or not content.strip():
+            raise AgentDomainError("CONFIG_FORMAT_MISMATCH", "Draft content is required (pass the full TOML/JSON text).")
+        fmt = (format_hint or "toml").lower().lstrip(".")
+        if fmt not in {"toml", "json"}:
+            raise AgentDomainError("CONFIG_FORMAT_MISMATCH", "Only TOML and JSON drafts are supported.")
+        relative = f"draft-{uuid.uuid4().hex[:10]}.{fmt}"
+        self.workspace.write_bytes(relative, content.encode("utf-8"))
+        try:
+            output = self.validate_draft(relative, page_train_type=page_train_type, metadata=metadata)
+        except Exception:
+            # Rejected drafts must not leak: the workspace has a small file cap
+            # (max_files=10 by default) and every leaked draft permanently
+            # shrinks the session's budget until validate starts failing with
+            # WORKSPACE_LIMIT_EXCEEDED (HTTP 400).
+            self._unlink_draft(relative)
+            raise
+        # On success validate_draft recorded the draft in self._validations, so
+        # it is kept for commit; older drafts with no pending validation are
+        # pruned to keep the file budget available for the session.
+        self._prune_orphan_drafts()
+        return output
+
+    def _unlink_draft(self, relative: str) -> None:
+        try:
+            self.workspace.writable_root.joinpath(relative).unlink(missing_ok=True)
+        except (OSError, TypeError):
+            pass
+
+    def _prune_orphan_drafts(self) -> None:
+        referenced = {str(value.get("artifactPath") or "") for value in self._validations.values()}
+        root = self.workspace.writable_root
+        if not root.is_dir():
+            return
+        for item in root.rglob("draft-*"):
+            if item.is_file() and item.name not in referenced:
+                try:
+                    item.unlink()
+                except OSError:
+                    pass
+
     def commit_draft(
         self,
         validation_hash: str,
@@ -230,6 +285,10 @@ class TrainingConfigArtifactService:
             raise AgentDomainError("CONFIG_COMMIT_FAILED", "Canonical configuration could not be written.", details={"reason": str(exc)}) from None
         canonical_hash = _hash(canonical)
         audit_id = "audit-" + uuid.uuid4().hex
+        # Release the consumed draft and its validation record so the
+        # workspace file budget is returned to the session.
+        self._validations.pop(validation_hash, None)
+        self._unlink_draft(artifact_path)
         return {
             "state": "committed",
             "configId": config_id,

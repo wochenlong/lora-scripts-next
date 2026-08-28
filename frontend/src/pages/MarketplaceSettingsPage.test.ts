@@ -58,7 +58,7 @@ beforeEach(() => {
 })
 
 describe("MarketplaceSettingsPage", () => {
-  it("renders catalog metadata and requires every declared permission before install", async () => {
+  it("renders catalog metadata and installs with declared permissions auto-approved", async () => {
     const wrapper = mount(MarketplaceSettingsPage, {
       props: { catalogEntries: [entry] },
       global: { plugins: [i18n] },
@@ -71,14 +71,10 @@ describe("MarketplaceSettingsPage", () => {
     expect(wrapper.text()).toContain("宿主兼容性")
     const install = wrapper.get("button.primary-action")
     expect(install.text()).toContain("安装")
-    expect(install.attributes("disabled")).toBeDefined()
-
-    const checkboxes = wrapper.findAll<HTMLInputElement>('input[type="checkbox"]')
-    expect(checkboxes).toHaveLength(2)
-    await checkboxes[0].setValue(true)
-    expect(install.attributes("disabled")).toBeDefined()
-    await checkboxes[1].setValue(true)
+    // The permission-approval bar is gone: install is enabled immediately
+    // and no permission checkboxes are rendered.
     expect(install.attributes("disabled")).toBeUndefined()
+    expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(0)
     wrapper.unmount()
   })
 
@@ -86,7 +82,7 @@ describe("MarketplaceSettingsPage", () => {
     const zeroPermissionEntry: MarketplaceEntry = {
       ...entry,
       id: "next-trainer-pi-agent",
-      name: "Pi Agent (pi-web)",
+      name: "Next Trainer Agent (pi-web)",
       permissions_summary: [],
     }
     vi.mocked(pluginsApi.listMarketplaceCatalog).mockResolvedValueOnce([zeroPermissionEntry])
@@ -98,7 +94,7 @@ describe("MarketplaceSettingsPage", () => {
     })
     await flushPromises()
 
-    expect(wrapper.text()).toContain("Pi Agent (pi-web)")
+    expect(wrapper.text()).toContain("Next Trainer Agent (pi-web)")
     // No catalog notice: the live catalog answered.
     expect(wrapper.find(".marketplace-notice").exists()).toBe(false)
     const install = wrapper.get("button.primary-action")

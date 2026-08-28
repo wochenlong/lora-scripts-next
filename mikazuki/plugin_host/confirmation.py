@@ -1,14 +1,33 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 import secrets
 import threading
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, Mapping
 
 
 ConfirmationStatus = Literal["pending", "presented", "approved", "rejected", "expired"]
+
+
+def request_hash(plugin_id: str, session_id: str, action: str, params: Mapping[str, Any] | None) -> str:
+    """Stable identity of a Tool request (without its confirmationTicketId).
+
+    A ticket authorizes exactly the request it was created for: the same
+    plugin, the same session, the same action and the same parameters.  The
+    volatile pi Tool-call id is deliberately NOT part of the identity, because
+    an agent re-issues the call with a fresh id after the user approves —
+    binding to the call id would make the two-step flow impossible.
+    """
+    clean = {key: value for key, value in dict(params or {}).items() if key != "confirmationTicketId"}
+    canonical = json.dumps(
+        {"pluginId": plugin_id, "sessionId": session_id, "action": action, "params": clean},
+        ensure_ascii=False, sort_keys=True, separators=(",", ":"), default=str, allow_nan=False,
+    )
+    return "sha256:" + hashlib.sha256(canonical.encode("utf-8")).hexdigest()
 
 
 class ConfirmationError(ValueError):
@@ -35,6 +54,8 @@ class ConfirmationTicket:
     status: ConfirmationStatus = "pending"
     resolved_at: datetime | None = None
     resolution_note: str = ""
+    params_hash: str | None = None
+    consumed: bool = False
 
     def projection(self) -> dict[str, Any]:
         return {
@@ -51,6 +72,8 @@ class ConfirmationTicket:
             "expiresAt": self.expires_at.isoformat(),
             "resolvedAt": self.resolved_at.isoformat() if self.resolved_at else None,
             "artifactIds": list(self.artifact_ids),
+            "paramsHash": self.params_hash,
+            "consumed": self.consumed,
         }
 
     def result(self) -> dict[str, Any]:
@@ -83,6 +106,7 @@ class ConfirmationTicketStore:
         details: dict[str, Any] | None = None,
         artifact_ids: list[str] | None = None,
         ttl_seconds: int = 300,
+        params_hash: str | None = None,
     ) -> ConfirmationTicket:
         if not all(
             isinstance(value, str) and value.strip()
@@ -119,6 +143,7 @@ class ConfirmationTicketStore:
                 artifact_ids=artifacts,
                 created_at=now,
                 expires_at=now + timedelta(seconds=ttl_seconds),
+                params_hash=params_hash,
             )
             self._tickets[ticket.ticket_id] = ticket
             self._by_call[key] = ticket.ticket_id
@@ -171,6 +196,17 @@ class ConfirmationTicketStore:
                 raise ConfirmationError("CONFIRMATION_NOT_FOUND", "The confirmation ticket was not found.", status_code=404)
             self._expire(ticket, self._now())
             return ticket.projection()
+
+    def consume(self, ticket_id: str) -> None:
+        """Mark a successfully executed approval as used (one-shot).
+
+        Unknown or unapproved tickets are ignored: consumption is a best-effort
+        bookkeeping step after a successful Tool execution, never a gate.
+        """
+        with self._lock:
+            ticket = self._tickets.get(ticket_id)
+            if ticket is not None and ticket.status == "approved":
+                ticket.consumed = True
 
     def resolve(self, ticket_id: str, decision: Literal["approved", "rejected"], note: str = "") -> dict[str, Any]:
         if decision not in {"approved", "rejected"}:

@@ -28,8 +28,10 @@ from .artifacts import (
     list_artifacts,
     recommend_artifacts,
 )
+from .http_renderer import HttpArtifactRenderer, get_configured_renderer
 
 __all__ = [
+    "HttpArtifactRenderer", "get_configured_renderer",
     "CurvePoint", "CurveSummary", "analyze_curve", "summarize_curve",
     "downsample_series", "get_series", "moving_statistics", "detect_nan_inf",
     "detect_plateaus", "detect_spikes", "ArtifactRecord",

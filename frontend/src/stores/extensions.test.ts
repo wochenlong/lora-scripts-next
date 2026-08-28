@@ -50,7 +50,7 @@ describe("extensions store authority gate", () => {
   it("registers server-mode extensions with a loopback root URL only", async () => {
     const safe = extension({
       pluginId: "next-trainer-pi-agent",
-      displayName: "Next Trainer Pi Agent",
+      displayName: "Next Trainer Agent",
       ui: { floatingPanel: { entryUrl: "http://127.0.0.1:4518", mode: "server" } },
     })
     const untrustedHost = extension({

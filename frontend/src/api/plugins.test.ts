@@ -33,7 +33,7 @@ describe("plugin host URL policy", () => {
     expect(isSafePluginServerUiUrl("http://127.0.0.1:4518")).toBe(true)
     expect(isSafePluginServerUiUrl("http://127.0.0.1:1")).toBe(true)
     expect(isSafePluginServerUiUrl("http://127.0.0.1:65535")).toBe(true)
-    // Hostname, scheme, credentials, path, and query variants must not pass.
+    // Hostname, scheme, credentials, and path variants must not pass.
     expect(isSafePluginServerUiUrl("http://localhost:4518")).toBe(false)
     expect(isSafePluginServerUiUrl("http://127.0.0.1")).toBe(false)
     expect(isSafePluginServerUiUrl("https://127.0.0.1:4518")).toBe(false)
@@ -43,7 +43,14 @@ describe("plugin host URL policy", () => {
     // Root document: the trailing-slash spelling of the same root passes.
     expect(isSafePluginServerUiUrl("http://127.0.0.1:4518/")).toBe(true)
     expect(isSafePluginServerUiUrl("http://127.0.0.1:4518/admin")).toBe(false)
+    // Only a single `cwd` query param (an absolute path) is permitted; any
+    // other param, a relative/traversal path, or extra params must not pass.
     expect(isSafePluginServerUiUrl("http://127.0.0.1:4518?x=1")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518?cwd=C%3A%5Cwork%5Cproj")).toBe(true)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518?cwd=%2Fhome%2Fuser%2Fproj")).toBe(true)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518?cwd=relative%5Cdir")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518?cwd=C%3A%5C..%5C..")).toBe(false)
+    expect(isSafePluginServerUiUrl("http://127.0.0.1:4518?cwd=C%3A%5Cproj&x=1")).toBe(false)
     expect(isSafePluginServerUiUrl("http://127.0.0.1:99999")).toBe(false)
     expect(isSafePluginServerUiUrl("javascript:alert(1)")).toBe(false)
     expect(isSafePluginServerUiUrl("")).toBe(false)

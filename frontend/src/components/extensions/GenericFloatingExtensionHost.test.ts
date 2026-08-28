@@ -78,7 +78,7 @@ describe("GenericFloatingExtensionHost visibility", () => {
   it("loads a server-mode UI directly without a sandbox or bridge", async () => {
     const { wrapper } = await mountHost([
       extension({
-        displayName: "Next Trainer Pi Agent",
+        displayName: "Next Trainer Agent",
         ui: { floatingPanel: { entryUrl: "http://127.0.0.1:4518", mode: "server" } },
       }),
     ])

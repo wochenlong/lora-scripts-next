@@ -27,7 +27,7 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PKG_ROOT.parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-VERSION = "0.2.0"
+VERSION = "0.3.2"
 PLUGIN_ID = "next-trainer-pi-agent"
 PUBLISHER = "next-trainer-project"
 HOST_COMPAT = ">=2.9.2 <4.0.0"
@@ -194,6 +194,16 @@ def main() -> int:
     print("[stage] pi-web (full tree incl. .next and dev node_modules) ...", flush=True)
     copy_tree(PKG_ROOT / "pi-web", STAGE / "pi-web")
 
+    # Drop dev-server leftovers from .next (the dev build tree + the Turbopack
+    # filesystem cache) so the production package stays lean. pi-web.js only
+    # serves .next/server + .next/static + BUILD_ID; `next build` (Turbopack)
+    # reuses .next/cache and does not clear a prior `next dev`'s .next/dev.
+    for _dev_leftover in ("dev", "cache"):
+        _leftover = STAGE / "pi-web" / ".next" / _dev_leftover
+        if _leftover.exists():
+            remove_tree(_leftover)
+            print(f"[stage] removed .next/{_dev_leftover} (dev leftover)", flush=True)
+
     print("[stage] npm prune --omit=dev (runtime-only node_modules) ...", flush=True)
     result = subprocess.run(
         [str(NODE_RUNTIME / "node.exe"), str(NPM_CLI), "prune", "--omit=dev", "--no-audit", "--no-fund"],
@@ -211,6 +221,16 @@ def main() -> int:
     print("[stage] strip dist-types (type declarations, runtime-unneeded) ...", flush=True)
     stripped = strip_dist_types(STAGE / "pi-web" / "node_modules")
     print(f"[stage] removed {stripped} dist-types directories", flush=True)
+
+    # Stage the Next Trainer pi package (extensions + skills + manifest) and the
+    # knowledge/template seeds. Only the runtime assets are shipped — the test/
+    # directory inside pi-package is a dev artifact and is deliberately excluded.
+    print("[stage] pi-package (extensions + skills + package.json) + seeds ...", flush=True)
+    (STAGE / "pi-package").mkdir(parents=True, exist_ok=True)
+    shutil.copy2(PKG_ROOT / "pi-package" / "package.json", STAGE / "pi-package" / "package.json")
+    copy_tree(PKG_ROOT / "pi-package" / "extensions", STAGE / "pi-package" / "extensions")
+    copy_tree(PKG_ROOT / "pi-package" / "skills", STAGE / "pi-package" / "skills")
+    copy_tree(PKG_ROOT / "seeds", STAGE / "seeds")
 
     # 2. License inventory + notice.
     (STAGE / "LICENSES").mkdir()
@@ -239,7 +259,7 @@ def main() -> int:
         encoding="utf-8",
     )
     (STAGE / "NOTICE.md").write_text(
-        "# Next Trainer Pi Agent — third-party components\n\n"
+        "# Next Trainer Agent — third-party components\n\n"
         "This plugin embeds unmodified upstream projects (Goal v9 / CR-011):\n\n"
         "- **pi-web v0.8.9** — `github.com/agegr/pi-web` @ `2a6e53710f6409e0cceb3de839a62f8cdf3ca3ca`, "
         "MIT, Copyright (c) 2026 agegr. See `LICENSES/pi-web-MIT.txt` and `pi-web/LICENSE`.\n"
@@ -275,8 +295,20 @@ def main() -> int:
             "placements": ["floating-panel"],
         },
         "bridge": {"requests": [], "streams": []},
-        "capabilities": ["server-ui"],
-        "permissions": [],
+        # custom-tools + skills: the plugin registers host agent-tools (via the
+        # host gateway) and ships pi skills; server-ui: the floating-panel pi-web.
+        "capabilities": ["server-ui", "custom-tools", "skills"],
+        # Least-privilege set the host grants on enable; these back the 16
+        # agent-tools (training-config, dataset-review, caption-commit, metrics,
+        # artifacts/knowledge, external-civitai). The tagger reuses caption-commit.
+        "permissions": [
+            "training-config",
+            "dataset-review",
+            "caption-commit",
+            "metrics-read",
+            "artifacts-read",
+            "external-civitai-read",
+        ],
         "package": {
             "sha256": "BUILD_TIME_VALUE",
             "signature": "TEST_OR_RELEASE_VALUE",
@@ -364,11 +396,11 @@ def main() -> int:
 
     entry = MarketplaceEntry(
         id=PLUGIN_ID,
-        name="Next Trainer Pi Agent",
+        name="Next Trainer Agent",
         publisher_id=PUBLISHER,
         description=(
-            "Verbatim pi-web (v0.8.9) with the pi coding agent (0.84.2, npm) embedded as a "
-            "loopback server and opened in the cross-page floating dialog (local/test catalog)."
+            "Next Trainer Agent embedded as a loopback server and opened in the cross-page "
+            "floating dialog (local/test catalog)."
         ),
         icon=None,
         latest_version=VERSION,
@@ -376,7 +408,14 @@ def main() -> int:
         host_compatibility=HOST_COMPAT,
         platforms=PLATFORMS,
         package_size=package_bytes,
-        permissions_summary=[],
+        permissions_summary=[
+            "training-config",
+            "dataset-review",
+            "caption-commit",
+            "metrics-read",
+            "artifacts-read",
+            "external-civitai-read",
+        ],
         license="MIT",
         release_notes_url=None,
         package_url=PACKAGE_URL,

@@ -15,11 +15,11 @@
 import { spawn, execSync } from "node:child_process"
 import net from "node:net"
 import path from "node:path"
-import { appendFileSync, createWriteStream, mkdirSync } from "node:fs"
+import { appendFileSync, copyFileSync, createWriteStream, existsSync, mkdirSync, readdirSync } from "node:fs"
 import type { WriteStream } from "node:fs"
 
 const PROTOCOL_VERSION = "1"
-const PLUGIN_VERSION = "0.2.0"
+const PLUGIN_VERSION = "0.3.0"
 
 function fail(code: string, message: string): never {
   process.stderr.write(`[launcher] ${code}: ${message}\n`)
@@ -42,6 +42,10 @@ const requestedPort = Number(process.env.NEXT_TRAINER_SIDECAR_PORT ?? "0")
 if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 65535) {
   fail("BOOTSTRAP_INVALID", "NEXT_TRAINER_SIDECAR_PORT must be an integer from 0 to 65535.")
 }
+// Optional: the main project root the assistant should default to as its
+// workspace. Injected by the host; when present the launcher reports it in the
+// uiUrl (?cwd=) so pi-web opens with the project root as the initial workspace.
+const projectRoot = process.env.NEXT_TRAINER_PROJECT_ROOT?.trim() || ""
 
 const exeDir = path.dirname(process.execPath)
 const packageRoot = path.resolve(exeDir, "..")
@@ -133,10 +137,52 @@ async function waitForPiWeb(port: number, timeoutMs: number): Promise<void> {
   throw new Error(`pi-web did not answer on 127.0.0.1:${port} within ${timeoutMs}ms (${lastError})`)
 }
 
+/**
+ * Seed the user-managed knowledge (md) and template (toml) libraries into the
+ * data root from the package's ``seeds/`` directory. Idempotent: a file is only
+ * written when it does not already exist, so plugin upgrades never overwrite or
+ * delete user content. Returns the number of files copied.
+ */
+function seedDataFiles(): number {
+  const seedsRoot = path.join(packageRoot, "seeds")
+  if (!existsSync(seedsRoot)) return 0
+  let copied = 0
+  const walk = (fromDir: string, toDir: string): void => {
+    let entries: import("node:fs").Dirent[]
+    try {
+      entries = readdirSync(fromDir, { withFileTypes: true })
+    } catch {
+      return
+    }
+    for (const entry of entries) {
+      const from = path.join(fromDir, entry.name)
+      const to = path.join(toDir, entry.name)
+      if (entry.isDirectory()) {
+        mkdirSync(to, { recursive: true })
+        walk(from, to)
+      } else if (entry.isFile()) {
+        if (!existsSync(to)) {
+          mkdirSync(path.dirname(to), { recursive: true })
+          copyFileSync(from, to)
+          copied++
+        }
+      }
+    }
+  }
+  walk(path.join(seedsRoot, "knowledge"), path.join(dataRoot, "knowledge"))
+  walk(path.join(seedsRoot, "templates"), path.join(dataRoot, "templates"))
+  if (copied > 0) log(`seeded ${copied} knowledge/template file(s) into the data root`)
+  return copied
+}
+
 function startPiWeb(port: number): { pid: number } {
   const childEnv: NodeJS.ProcessEnv = {
     ...process.env,
     PI_CODING_AGENT_DIR: agentDir,
+    // Bundled Next Trainer pi package (host-Tool bridge + knowledge tool +
+    // skills). pi-web's bootstrap registers it into user-scope package settings
+    // on first session; the gateway token/base-url already arrive via ...process.env.
+    NEXT_TRAINER_PI_PACKAGE_ROOT: path.join(packageRoot, "pi-package"),
     PI_WEB_NO_OPEN: "1",
     // Contained home so homedir()-based pi-web features (~/pi-cwd-*, skill
     // discovery) stay inside the plugin data root.
@@ -184,6 +230,14 @@ async function main(): Promise<void> {
   const hostPort = requestedPort
   // pi-web port.
   const piWebPort = await pickFreePort()
+
+  // Ensure the user-managed library directories exist and seed the bundled
+  // knowledge/template files (idempotent; never overwrites or deletes user
+  // content). The knowledge tool reads these from disk on every call, so new or
+  // edited files take effect without a restart, reinstall or rebuild.
+  mkdirSync(path.join(dataRoot, "knowledge"), { recursive: true })
+  mkdirSync(path.join(dataRoot, "templates"), { recursive: true })
+  seedDataFiles()
 
   const child = startPiWeb(piWebPort)
   log(`pi-web spawned pid=${child.pid} port=${piWebPort}`)
@@ -241,7 +295,11 @@ async function main(): Promise<void> {
       port: server.port,
       protocolVersion: PROTOCOL_VERSION,
       version: PLUGIN_VERSION,
-      uiUrl: `http://127.0.0.1:${piWebPort}`,
+      // Carry the default workspace (?cwd=) so pi-web opens with the main
+      // project root as the initial cwd (pi-web's native getInitialNavigation).
+      uiUrl: projectRoot
+        ? `http://127.0.0.1:${piWebPort}?cwd=${encodeURIComponent(projectRoot)}`
+        : `http://127.0.0.1:${piWebPort}`,
       piWebUrl: `http://127.0.0.1:${piWebPort}`,
       childPid: child.pid,
     })}\n`,

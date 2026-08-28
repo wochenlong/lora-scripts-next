@@ -1,18 +1,26 @@
 from __future__ import annotations
 
 import json
+import os
+import sys
 import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Callable
 from urllib.parse import urlencode, urlparse
-from urllib.request import Request, urlopen
+from urllib.request import ProxyHandler, Request, build_opener
 
 from .errors import AgentSkillError, ErrorCode
 from .models import CivitaiEvidenceRecord, Confidence, EvidenceType
 
 
 API_ROOT = "https://civitai.com/api/v1"
+# The Civitai edge (WAF) rejects the default Python user agent with 403; a
+# standard browser UA is required for the anonymous public API.
+_USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36"
+)
 _ALLOWED_SORT = {"Most Downloaded", "Highest Rated", "Newest"}
 _ALLOWED_PERIOD = {"AllTime", "Year", "Month", "Week"}
 _PARAMETER_KEYS = {
@@ -51,6 +59,37 @@ class CivitaiQuery:
             raise AgentSkillError(ErrorCode.INVALID_QUERY, "NSFW discovery is disabled")
         if self.cursor is not None and (not isinstance(self.cursor, str) or len(self.cursor) > 512):
             raise AgentSkillError(ErrorCode.INVALID_QUERY, "Civitai cursor is invalid")
+
+
+def _effective_proxy() -> str | None:
+    """Return the HTTP(S) proxy to use for the official host, or ``None`` for a
+    direct connection.
+
+    Explicit environment proxies win. On Windows we additionally fall back to
+    the user's *system* proxy from the registry — the same one browsers and
+    PowerShell use. ``urllib`` does not read that registry value on its own, so
+    on networks where the direct path is DNS-poisoned/blocked but the user's
+    proxy resolves upstream, a plain ``urlopen`` hangs while the proxy works.
+    """
+    for var in ("https_proxy", "HTTPS_PROXY", "http_proxy", "HTTP_PROXY"):
+        value = os.environ.get(var)
+        if value:
+            return value
+    if sys.platform == "win32":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Internet Settings"
+            ) as key:
+                enabled, _ = winreg.QueryValueEx(key, "ProxyEnable")
+                if int(enabled):
+                    server, _ = winreg.QueryValueEx(key, "ProxyServer")
+                    if server:
+                        return server if "://" in server else f"http://{server}"
+        except (OSError, ValueError):
+            pass
+    return None
 
 
 class CivitaiClient:
@@ -116,8 +155,14 @@ class CivitaiClient:
                     status, payload, headers = _unpack_transport_result(result)
                 else:
                     query = urlencode({key: str(value).lower() if isinstance(value, bool) else value for key, value in params.items()})
-                    request = Request(f"{url}?{query}" if query else url, headers={"Accept": "application/json"}, method="GET")
-                    with urlopen(request, timeout=20) as response:  # nosec B310 - fixed official host
+                    request = Request(
+                        f"{url}?{query}" if query else url,
+                        headers={"Accept": "application/json", "User-Agent": _USER_AGENT},
+                        method="GET",
+                    )
+                    proxy = _effective_proxy()
+                    opener = build_opener(ProxyHandler({"http": proxy, "https": proxy})) if proxy else build_opener()
+                    with opener.open(request, timeout=20) as response:  # nosec B310 - fixed official host
                         status = int(response.status)
                         headers = dict(response.headers.items())
                         payload = json.loads(response.read().decode("utf-8"))

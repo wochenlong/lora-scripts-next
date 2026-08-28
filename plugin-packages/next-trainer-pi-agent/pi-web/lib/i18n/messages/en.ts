@@ -1,6 +1,6 @@
 import type { LocalePlugin } from "../types";
 
-/** Pi Web 内置英语语言包。 */
+/** Next Trainer Agent 内置英语语言包。 */
 export const enLocale: LocalePlugin = {
   id: "en",
   label: "English",
@@ -10,7 +10,7 @@ export const enLocale: LocalePlugin = {
     "common.models": "Models",
     "common.skills": "Skills",
     "common.plugins": "Plugins",
-    "appUpdate.releaseNotes": "Pi Web v{version} is available. View release notes",
+    "appUpdate.releaseNotes": "Next Trainer Agent v{version} is available. View release notes",
     "sidebar.hide": "Hide sidebar",
     "sidebar.show": "Show sidebar",
     "theme.light": "Light mode (click for dark)",
@@ -236,7 +236,7 @@ export const enLocale: LocalePlugin = {
     "chat.stop": "Stop",
     "chat.disableSound": "Disable completion sound",
     "chat.enableSound": "Enable completion sound",
-    "chat.thinkingUseDefault": "Use pi default",
+    "chat.thinkingUseDefault": "Use default",
     "chat.thinkingOff": "Reasoning off",
     "chat.thinkingMinimal": "Minimal reasoning",
     "chat.thinkingLow": "Low reasoning",
@@ -479,7 +479,7 @@ export const enLocale: LocalePlugin = {
     "i18n.after": "After",
     "i18n.sessionComplete": "Session complete",
     "i18n.taskFinished": "Task finished.",
-    "i18n.attentionNeeded": "Pi needs your attention",
+    "i18n.attentionNeeded": "Agent needs your attention",
     "i18n.extensionInputNeeded": "An extension is waiting for your input.",
   },
 };

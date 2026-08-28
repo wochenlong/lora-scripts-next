@@ -44,16 +44,21 @@ EXPECTED_FULL_TOOLS = {
     "training_config_template",
     "training_config_validate",
     "training_config_commit",
+    "training_config_current",
     "dataset_inventory",
     "dataset_review_images",
     "dataset_caption_stage",
     "dataset_caption_commit",
     "knowledge_search",
     "civitai_cohort_report",
+    "civitai_fetch_version",
     "artifact_compare",
     "artifact_recommend",
     "civitai_search_loras",
     "curve_analyze",
+    "tagger_start",
+    "tagger_cancel",
+    "tagger_status",
 }
 FORBIDDEN_TOOL_MARKERS = ("provider", "auth", "key", "credential", "endpoint")
 
@@ -133,6 +138,7 @@ def test_edd_host_gates_forged_ticket_permissions_escape_and_catalog():
                     "training_config_template",
                     "training_config_validate",
                     "training_config_commit",
+                    "training_config_current",
                 }, names
                 for tool in catalog["data"]["tools"]:
                     assert not any(marker in tool["name"] for marker in FORBIDDEN_TOOL_MARKERS), tool
@@ -152,7 +158,7 @@ def test_edd_host_gates_forged_ticket_permissions_escape_and_catalog():
                 status, payload = host.catalog(client, "wrong-token")
                 assert status == 401, (status, payload)
 
-                # --- Scenario D: full manifest -> exactly the 13-tool catalog ---
+                # --- Scenario D: full manifest -> exactly the 16-tool catalog ---
                 manager.disable(PLUGIN_ID)
                 package_f = build_package(root, version="0.3.0")
                 entry_f = build_entry(package_f, version="0.3.0")

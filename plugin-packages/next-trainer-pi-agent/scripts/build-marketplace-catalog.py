@@ -29,7 +29,7 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PKG_ROOT.parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-VERSION = "0.2.0"
+VERSION = "0.3.2"
 PLUGIN_ID = "next-trainer-pi-agent"
 PUBLISHER = "next-trainer-project"
 HOST_COMPAT = ">=2.9.2 <4.0.0"
@@ -88,12 +88,11 @@ def main() -> int:
     key = bytes.fromhex(SIGNING_KEY_HEX)
     entry = MarketplaceEntry(
         id=PLUGIN_ID,
-        name="Next Trainer Pi Agent",
+        name="Next Trainer Agent",
         publisher_id=PUBLISHER,
         description=(
-            "Verbatim pi-web (v0.8.9) with the pi coding agent (0.84.2, npm) embedded as a "
-            "loopback server and opened in the cross-page floating dialog. Ships win32-x64 and "
-            "linux-x64 packages (local/test catalog)."
+            "Next Trainer Agent embedded as a loopback server and opened in the cross-page "
+            "floating dialog. Ships win32-x64 and linux-x64 packages (local/test catalog)."
         ),
         icon=None,
         latest_version=VERSION,
@@ -101,7 +100,14 @@ def main() -> int:
         host_compatibility=HOST_COMPAT,
         platforms=PLATFORMS,
         package_size=sizes[primary],
-        permissions_summary=[],
+        permissions_summary=[
+            "training-config",
+            "dataset-review",
+            "caption-commit",
+            "metrics-read",
+            "artifacts-read",
+            "external-civitai-read",
+        ],
         license="MIT",
         release_notes_url=None,
         package_url=urls[primary],

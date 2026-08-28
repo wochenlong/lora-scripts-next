@@ -105,6 +105,12 @@ def isolated_env(agent_dir: Path) -> dict[str, str]:
         {
             "PI_CODING_AGENT_DIR": str(agent_dir),
             "PI_WEB_NO_OPEN": "1",
+            # Next Trainer pi package (extensions + skills) + knowledge/template
+            # data root, so the dev server loads the same assets the packaged
+            # plugin would (pi-web bootstrap registers the package on first
+            # session; the knowledge tool reads the data root on every call).
+            "NEXT_TRAINER_PI_PACKAGE_ROOT": str(PKG_ROOT / "pi-package"),
+            "NEXT_TRAINER_PLUGIN_DATA_ROOT": str(DEV_ROOT / "data-root"),
             "HOME": str(home),
             "USERPROFILE": str(home),
             "APPDATA": str(home / "AppData" / "Roaming"),
@@ -156,9 +162,52 @@ def wait_http(url: str, timeout: float = 120.0) -> int:
 # --dev / --built
 # ---------------------------------------------------------------------------
 
+def seed_dev_data_root() -> None:
+    """Idempotently copy the package's knowledge/template seeds into the dev
+    data root. Never overwrites or deletes user files (same rule as the
+    launcher), so the user can add their own md/toml under .runtime/dev/data-root.
+    """
+    seeds = PKG_ROOT / "seeds"
+    data_root = DEV_ROOT / "data-root"
+    if not seeds.is_dir():
+        return
+    for sub in ("knowledge", "templates"):
+        src = seeds / sub
+        if not src.is_dir():
+            continue
+        for path in sorted(src.rglob("*")):
+            if not path.is_file():
+                continue
+            target = data_root / sub / path.relative_to(src)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            if not target.exists():
+                shutil.copy2(path, target)
+
+
+def register_pi_package(agent_dir: Path) -> None:
+    """Register the Next Trainer pi package into the dev agent dir's pi settings
+    so the Plugins/Skills UI shows it immediately — before the first chat session
+    would trigger the in-process bootstrap. Best-effort: any failure is logged and
+    never blocks dev startup (the in-process bootstrap still runs on first session).
+    """
+    script = PKG_ROOT / "scripts" / "register-dev-pi-package.mjs"
+    if not script.is_file():
+        return
+    try:
+        subprocess.run(
+            [str(require_node()), str(script), "--agent-dir", str(agent_dir)],
+            cwd=str(PIWEB),
+            timeout=90,
+        )
+    except Exception as exc:  # noqa: BLE001 - dev convenience must never break boot
+        print(f"[dev] pi package registration skipped: {exc}", flush=True)
+
+
 def run_server(mode: str, port: int, agent_dir: Path) -> int:
     node = require_node()
     require_node_modules()
+    seed_dev_data_root()
+    register_pi_package(agent_dir)
     env = isolated_env(agent_dir)
 
     if mode == "dev":

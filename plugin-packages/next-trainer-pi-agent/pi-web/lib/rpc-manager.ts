@@ -14,6 +14,7 @@ import {
 } from "./project-command-env";
 import { cacheSessionPath, invalidateSessionListCache } from "./session-reader";
 import { getProjectTrustStatus, projectTrustReloadOptions } from "./project-trust";
+import { ensureNextTrainerPackage } from "./plugin-package-bootstrap";
 import { persistExplicitStartupPreferences } from "./startup-preferences";
 import type { SlashCommandInfo } from "@earendil-works/pi-coding-agent";
 import type { AgentSessionLike, ExtensionUiContextLike, ToolInfo } from "./pi-types";
@@ -1590,6 +1591,12 @@ export async function startRpcSession(
     // Some extensions access the SDK's global theme even outside the terminal UI.
     initTheme();
     const agentDir = getAgentDir();
+
+    // Register the bundled Next Trainer pi package (host-Tool bridge + knowledge
+    // tool + skills) into user-scope package settings before the resource loader
+    // resolves packages for this session. Once per process; no-op without the
+    // launcher-provided NEXT_TRAINER_PI_PACKAGE_ROOT; never throws.
+    await ensureNextTrainerPackage();
 
     // Determine which tools to pass based on requested toolNames.
     // Since v0.68.0, session creation expects string[] tool names instead of Tool[] instances.

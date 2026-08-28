@@ -54,6 +54,7 @@ EXPECTED_HOST_TOOLS = frozenset(
         "training_config_template",
         "training_config_validate",
         "training_config_commit",
+        "training_config_current",
         "dataset_inventory",
         "dataset_review_images",
         "dataset_caption_stage",
@@ -61,9 +62,13 @@ EXPECTED_HOST_TOOLS = frozenset(
         "knowledge_search",
         "civitai_search_loras",
         "civitai_cohort_report",
+        "civitai_fetch_version",
         "curve_analyze",
         "artifact_compare",
         "artifact_recommend",
+        "tagger_start",
+        "tagger_cancel",
+        "tagger_status",
     }
 )
 

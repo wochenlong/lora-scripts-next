@@ -180,17 +180,19 @@ def test_stage2_training_journey_fake_trainer_and_parity():
                 assert template["data"]["pageTrainType"] == "sd-lora"
                 assert template["data"]["allowedFields"]
 
-                # 2. draft in session workspace (relative paths, project-root cwd)
+                # 2. draft content (the tool persists it into the session workspace)
                 draft = _make_draft_files(root)
-                workspace.write_bytes("draft.toml", _draft_toml(draft).encode("utf-8"))
 
                 # 3. validate (real schema + normalize + preflight chain)
-                status, validated = host.host_tool(client, token, "training_config_validate", {"path": "draft.toml", "pageTrainType": "sd-lora"}, session_id=SESSION)
+                status, validated = host.host_tool(client, token, "training_config_validate", {"content": _draft_toml(draft), "pageTrainType": "sd-lora"}, session_id=SESSION)
                 assert status == 200, validated
                 vdata = validated["data"]
                 assert vdata["state"] == "preflight-pass"
                 validation_hash = vdata["validationHash"]
                 source_revision = vdata["sourceRevision"]
+                # Capture the normalized config now: a successful commit consumes
+                # the validation record and releases the draft file.
+                agent_normalized = get_artifact_service(SESSION)._validations[validation_hash]["normalized"]
 
                 # 4. commit without ticket -> confirmation required, zero canonical output.
                 # The ticket is bound to this Tool call, so the approving call
@@ -229,7 +231,6 @@ def test_stage2_training_journey_fake_trainer_and_parity():
                 imported = validate_config_import("sd-lora", dict(draft))
                 assert imported["result"] == "ok", imported
                 manual_normalized, _ = normalize_config_for_export(dict(imported["config"]), page_train_type="sd-lora")
-                agent_normalized = get_artifact_service(SESSION)._validations[validation_hash]["normalized"]
                 assert manual_normalized == agent_normalized
 
                 # 9. negative gates
@@ -253,15 +254,23 @@ def test_stage2_training_journey_fake_trainer_and_parity():
                 }, session_id=SESSION, tool_call_id="stage2-wronghash")
                 assert status == 409, err
                 assert err["detail"]["code"] == "CONFIG_CONFIRMATION_MISMATCH"
-                # draft changed after validation
-                workspace.write_bytes("draft.toml", _draft_toml({**draft, "output_name": "tampered"}).encode("utf-8"))
+                # draft changed after validation: the previous draft was consumed by
+                # the successful commit (record popped + file released), so the
+                # source-change gate is exercised with a fresh validation.
+                status, v2 = host.host_tool(client, token, "training_config_validate", {"content": _draft_toml(draft), "pageTrainType": "sd-lora"}, session_id=SESSION)
+                assert status == 200, v2
+                v2_hash = v2["data"]["validationHash"]
+                v2_revision = v2["data"]["sourceRevision"]
+                draft_files = sorted(workspace.writable_root.rglob("draft-*.toml"))
+                assert len(draft_files) == 1, [p.name for p in draft_files]
+                draft_files[0].write_bytes(_draft_toml({**draft, "output_name": "tampered"}).encode("utf-8"))
                 status, _ = host.host_tool(client, token, "training_config_commit", {
-                    "validationHash": validation_hash, "sourceRevision": source_revision, "confirmationTicketId": "",
+                    "validationHash": v2_hash, "sourceRevision": v2_revision, "confirmationTicketId": "",
                 }, session_id=SESSION, tool_call_id="stage2-tampered")
                 assert status == 200
                 tampered_ticket = _resolve_pending(client, "stage2-tampered")
                 status, err = host.host_tool(client, token, "training_config_commit", {
-                    "validationHash": validation_hash, "sourceRevision": source_revision, "confirmationTicketId": tampered_ticket,
+                    "validationHash": v2_hash, "sourceRevision": v2_revision, "confirmationTicketId": tampered_ticket,
                 }, session_id=SESSION, tool_call_id="stage2-tampered")
                 assert status == 409, err
                 assert err["detail"]["code"] == "CONFIG_SOURCE_CHANGED"
@@ -288,19 +297,18 @@ def test_stage2_zero_short_fresh_path():
                 manifest = _install_enabled(manager, root, client)
                 token = manager.runtime._handles[PLUGIN_ID].host_tool_token
 
-                # catalog: exactly the 13 contracted tools
+                # catalog: exactly the 18 contracted tools (15 domain + 3 tagger)
                 status, catalog = host.catalog(client, token)
                 assert status == 200
                 names = sorted(t["name"] for t in catalog["data"]["tools"])
-                assert len(names) == 13, names
+                assert len(names) == 18, names
                 assert "training_config_commit" in names and "training_config_template" in names
 
                 # fresh-path journey: template -> draft -> validate -> approve -> commit
                 status, template = host.host_tool(client, token, "training_config_template", {"pageTrainType": "sd-lora"}, session_id="zs-session")
                 assert status == 200, template
                 draft = _make_draft_files(root)
-                zs_workspace.write_bytes("draft.toml", _draft_toml(draft).encode("utf-8"))
-                status, validated = host.host_tool(client, token, "training_config_validate", {"path": "draft.toml", "pageTrainType": "sd-lora"}, session_id="zs-session")
+                status, validated = host.host_tool(client, token, "training_config_validate", {"content": _draft_toml(draft), "pageTrainType": "sd-lora"}, session_id="zs-session")
                 assert status == 200, validated
                 vdata = validated["data"]
                 zs_commit_call = "zs-commit-call"

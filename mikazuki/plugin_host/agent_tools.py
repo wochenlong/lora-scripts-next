@@ -18,6 +18,7 @@ from mikazuki.agent_dataset import (
     CaptionChangeSet,
     CaptionOverlay,
     DatasetReviewError,
+    get_configured_reviewer,
     inventory_dataset,
     review_images,
     select_review_sample,
@@ -26,14 +27,16 @@ from mikazuki.agent_metrics import (
     FixedComparisonProtocol,
     analyze_curve,
     compare_artifacts,
+    get_configured_renderer,
     recommend_artifacts,
 )
 from mikazuki.agent_skills import CivitaiClient, CivitaiQuery, KnowledgeStore
 from mikazuki.agent_skills.cohort import build_cohort_report
 from mikazuki.agent_skills.models import KnowledgeDocument, SourceRef
+from mikazuki.agent_tagger import cancel_tagger_job, start_tagger_job, tagger_status
 from mikazuki.agent_workspace import get_artifact_service, ensure_workspace
 from mikazuki.agent_workspace import redact
-from .confirmation import ConfirmationError, ConfirmationTicketStore
+from .confirmation import ConfirmationError, ConfirmationTicketStore, request_hash
 
 
 router = APIRouter(prefix="/internal/agent-tools", tags=["agent-tools"])
@@ -110,12 +113,18 @@ class AgentToolService:
             raise HTTPException(status_code=400, detail={"code": "TOOL_PARAMS_INVALID", "message": "Tool arguments must be an object."})
         ticket_id = params.get("confirmationTicketId")
         if tool.side_effect == "write":
+            request_identity = request_hash(plugin_id, session_id, tool.name, params)
             approved = None
             if isinstance(ticket_id, str) and ticket_id:
                 try:
                     projection = self.confirmations.projection(ticket_id)
-                    if projection.get("pluginId") != plugin_id or projection.get("toolCallId") != tool_call_id:
-                        raise HTTPException(status_code=409, detail={"code": "CONFIRMATION_MISMATCH", "message": "The confirmation ticket is not bound to this Tool call."})
+                    if (
+                        projection.get("pluginId") != plugin_id
+                        or projection.get("action") != tool.name
+                        or projection.get("paramsHash") != request_identity
+                        or projection.get("consumed")
+                    ):
+                        raise HTTPException(status_code=409, detail={"code": "CONFIRMATION_MISMATCH", "message": "The confirmation ticket is not bound to this Tool request."})
                     approved = projection if projection.get("state") == "approved" else None
                 except ConfirmationError as exc:
                     raise _tool_error(exc) from None
@@ -128,6 +137,7 @@ class AgentToolService:
                     title=tool.label,
                     summary=tool.description,
                     details=redact({key: value for key, value in params.items() if key != "confirmationTicketId"}),
+                    params_hash=request_identity,
                 )
                 return {"state": "confirmation_required", "ticket": ticket.projection(), "tool": tool.name}
         clean_params = dict(params)
@@ -135,11 +145,15 @@ class AgentToolService:
             value = tool.handler(session_id, tool_call_id, clean_params)
             if asyncio.iscoroutine(value):
                 value = await value
-            return redact(_as_dict(value))
         except HTTPException:
             raise
         except Exception as exc:
+            # A failed approved attempt does not consume the ticket, so the
+            # same approval can be retried once the underlying fault clears.
             raise _tool_error(exc) from None
+        if tool.side_effect == "write" and isinstance(ticket_id, str) and ticket_id:
+            self.confirmations.consume(ticket_id)
+        return redact(_as_dict(value))
 
     def _tools(self) -> dict[str, _Tool]:
         return {
@@ -148,20 +162,24 @@ class AgentToolService:
                 _object({"pageTrainType": _str()}, ("pageTrainType",)), self._config_template,
             ),
             "training_config_validate": _Tool(
-                "training_config_validate", "Validate training config", "Validate and normalize an Agent-generated TOML or JSON draft without starting training.", "training-config", "read",
-                _object({"path": _str(), "pageTrainType": _str(), "baselinePath": _str(), "metadata": {"type": "object"}}, ("path", "pageTrainType")), self._config_validate,
+                "training_config_validate", "Validate training config", "Validate and normalize an Agent-generated TOML or JSON draft. Pass the draft's full text in `content` (never a file path). Training is never started.", "training-config", "read",
+                _object({"content": _str("The full TOML or JSON draft text to validate (not a file path)."), "format": {"type": "string", "enum": ["toml", "json"], "description": "Draft format; defaults to toml."}, "pageTrainType": _str(), "metadata": {"type": "object"}}, ("content", "pageTrainType")), self._config_validate,
             ),
             "training_config_commit": _Tool(
                 "training_config_commit", "Commit training config", "Commit an approved validated draft as canonical TOML; training is never auto-started.", "training-config", "write",
                 _object({"validationHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str()}, ("validationHash", "confirmationTicketId")), self._config_commit,
+            ),
+            "training_config_current": _Tool(
+                "training_config_current", "Current training params", "Read the training parameters the user is currently filling in (or last autosaved) in the Next Trainer frontend, grouped by train type; they usually contain the dataset directory and model/checkpoint paths the user already typed. Whenever a dataset path or model path is needed, call this FIRST and prefer the paths found here (verify they exist on disk); only search the filesystem or ask the user for paths that are missing or invalid.", "training-config", "read",
+                _object({"trainType": _str("Optional train type filter (e.g. 'lora', 'sdxl-lora'); omit to get all saved types.")}), self._training_config_current,
             ),
             "dataset_inventory": _Tool(
                 "dataset_inventory", "Audit dataset", "Build a deterministic read-only inventory of images, captions, hashes and duplicates.", "dataset-review", "read",
                 _object({"root": _str(), "maxFiles": {"type": "integer", "minimum": 1, "maximum": 100000}}, ("root",)), self._dataset_inventory,
             ),
             "dataset_review_images": _Tool(
-                "dataset_review_images", "Review dataset images", "Review a deterministic sample with the one active remote model; no local model is used.", "dataset-review", "read",
-                _object({"root": _str(), "limit": {"type": "integer", "minimum": 0, "maximum": 100}, "model": _object({"model": _str(), "vision": {"type": "boolean"}, "capabilities": {"type": "array", "items": {"type": "string"}}}, ("model", "vision"))}, ("root", "model")), self._dataset_review,
+                "dataset_review_images", "Review dataset images", "Review a deterministic sample with the host's active remote vision reviewer when configured; otherwise falls back to the model capability you describe in `model` (a text-only capability yields MODEL_CAPABILITY_UNAVAILABLE, never fabricated findings). No local model is used.", "dataset-review", "read",
+                _object({"root": _str(), "limit": {"type": "integer", "minimum": 0, "maximum": 100}, "model": dict(_object({"model": _str("Model id."), "vision": {"type": "boolean", "description": "True only if the model accepts image input."}, "capabilities": {"type": "array", "items": {"type": "string"}}}, ("model", "vision")), **{"description": "Optional active-model descriptor; used only when the host has no vision reviewer configured (pass vision:true for a vision model)."})}, ("root",)), self._dataset_review,
             ),
             "dataset_caption_stage": _Tool(
                 "dataset_caption_stage", "Stage caption edits", "Stage caption-only overlay edits and return a diff/change-set hash for confirmation.", "caption-commit", "read",
@@ -172,16 +190,25 @@ class AgentToolService:
                 _object({"root": _str(), "changeSetId": _str(), "changeSetHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str()}, ("root", "changeSetId", "changeSetHash", "confirmationTicketId")), self._caption_commit,
             ),
             "knowledge_search": _Tool(
-                "knowledge_search", "Search knowledge", "Return source-backed parameter explanations with evidence and confidence metadata.", "artifacts-read", "read",
-                _object({"query": _str(), "topK": {"type": "integer", "minimum": 1, "maximum": 10}, "documents": {"type": "array", "items": {"type": "object"}}}, ("query",)), self._knowledge_search,
+                "knowledge_search", "Search knowledge", "Rank a set of documents you pass in `documents` (returns source-backed excerpts with evidence + confidence). For the bundled data-root knowledge/templates library, use the `next_trainer_knowledge` tool instead — this tool does NOT read that library unless you pass its documents here.", "artifacts-read", "read",
+                _object({"query": _str(), "topK": {"type": "integer", "minimum": 1, "maximum": 10}, "documents": {"type": "array", "items": {"type": "object"}, "description": "Documents to search; each is {sourceId, title, url, text, version?, scope?, tags?}."}}, ("query",)), self._knowledge_search,
             ),
             "civitai_search_loras": _Tool(
-                "civitai_search_loras", "Search Civitai LoRAs", "Query only the official public Civitai API; popularity is discovery evidence, not causality.", "external-civitai-read", "external",
-                _object({"baseModel": {"type": "string"}, "sort": {"type": "string"}, "period": {"type": "string"}, "limit": {"type": "integer", "minimum": 1, "maximum": 100}}, ()), self._civitai_search,
+                "civitai_search_loras", "Search Civitai LoRAs", "Query only the official public Civitai API; popularity is discovery evidence, not causality. `sort` is a RANKING (Most Downloaded | Highest Rated | Newest); `period` is a TIME WINDOW (AllTime | Year | Month | Week). Never put a period value (e.g. 'AllTime') into `sort`.", "external-civitai-read", "external",
+                _object({
+                    "baseModel": {"type": "string", "description": "Optional base-model filter. Use the platform display name: 'SD 1.5', 'SD 2.1', 'SDXL 1.0', 'Pony', 'Illustrious', 'Flux.1 D'. Slugs like 'sd1.5' silently return an empty set."},
+                    "sort": {"type": "string", "enum": ["Most Downloaded", "Highest Rated", "Newest"], "description": "Ranking. NOT a time window (do not use 'AllTime' here)."},
+                    "period": {"type": "string", "enum": ["AllTime", "Year", "Month", "Week"], "description": "Time window. NOT a ranking."},
+                    "limit": {"type": "integer", "minimum": 1, "maximum": 100},
+                }, ()), self._civitai_search,
             ),
             "civitai_cohort_report": _Tool(
                 "civitai_cohort_report", "Build Civitai cohort", "Summarize disclosed LoRA parameters with missingness and popularity-bias flags.", "external-civitai-read", "read",
                 _object({"records": {"type": "array", "items": {"type": "object"}}, "query": {"type": "object"}, "rankings": {"type": "array", "items": {"type": "string"}}, "timeWindows": {"type": "array", "items": {"type": "string"}}}, ("records",)), self._civitai_cohort,
+            ),
+            "civitai_fetch_version": _Tool(
+                "civitai_fetch_version", "Fetch Civitai version details", "Fetch full details (disclosed training parameters, trained words, stats) for up to 5 Civitai model versions by id. Call this for the top candidates from civitai_search_loras BEFORE building the cohort so undisclosed parameters get resolved from the version data.", "external-civitai-read", "external",
+                _object({"versionIds": {"type": "array", "items": {"type": "integer", "minimum": 1}, "minItems": 1, "maxItems": 5, "description": "Civitai model-version ids (the version id, not the model id)."}}, ("versionIds",)), self._civitai_fetch_version,
             ),
             "curve_analyze": _Tool(
                 "curve_analyze", "Analyze training curve", "Analyze loss/metric curves deterministically, retaining NaN/Inf and never auto-stopping training.", "metrics-read", "read",
@@ -195,6 +222,33 @@ class AgentToolService:
                 "artifact_recommend", "Recommend artifact", "Rank artifacts using quality, overfit risk, stability and efficiency evidence with visible coverage.", "artifacts-read", "read",
                 _object({"artifacts": {"type": "array", "items": {"type": "object"}, "maxItems": 5}, "topK": {"type": "integer", "minimum": 1, "maximum": 5}, "weights": {"type": "object"}}, ("artifacts",)), self._artifact_recommend,
             ),
+            "tagger_start": _Tool(
+                "tagger_start", "Start tagger job", "Start the host WD14 batch tagging job for a dataset (writes caption .txt files next to each image). Data write: requires a confirmation ticket; one job at a time.", "caption-commit", "write",
+                _object({
+                    "path": _str("Image directory or glob to tag; caption files are written next to the images."),
+                    "interrogator_model": {"type": "string"},
+                    "threshold": {"type": "number", "minimum": 0, "maximum": 1},
+                    "character_threshold": {"type": "number", "minimum": 0, "maximum": 1},
+                    "add_rating_tag": {"type": "boolean"},
+                    "add_model_tag": {"type": "boolean"},
+                    "additional_tags": {"type": "string"},
+                    "exclude_tags": {"type": "string"},
+                    "escape_tag": {"type": "boolean"},
+                    "batch_input_recursive": {"type": "boolean"},
+                    "batch_output_action_on_conflict": {"type": "string"},
+                    "replace_underscore": {"type": "boolean"},
+                    "replace_underscore_excludes": {"type": "string"},
+                    "confirmationTicketId": _str(),
+                }, ("path", "confirmationTicketId")), self._tagger_start,
+            ),
+            "tagger_cancel": _Tool(
+                "tagger_cancel", "Cancel tagger job", "Request a cooperative cancel of the running tagger job; idempotent when no job is running.", "caption-commit", "read",
+                _object({}, ()), self._tagger_cancel,
+            ),
+            "tagger_status": _Tool(
+                "tagger_status", "Tagger job status", "Return the state (idle/busy) and live progress snapshot of the host tagger job.", "caption-commit", "read",
+                _object({}, ()), self._tagger_status,
+            ),
         }
 
     def _config_template(self, session: str, call: str, p: dict[str, Any]) -> Any:
@@ -203,11 +257,31 @@ class AgentToolService:
 
     def _config_validate(self, session: str, call: str, p: dict[str, Any]) -> Any:
         ensure_workspace(session, purpose="training-config")
-        return get_artifact_service(session).validate_draft(p["path"], page_train_type=p["pageTrainType"], baseline_artifact=p.get("baselinePath"), metadata=p.get("metadata"))
+        return get_artifact_service(session).validate_draft_content(
+            p.get("content", ""), page_train_type=p["pageTrainType"], format_hint=p.get("format", "toml"), metadata=p.get("metadata"),
+        )
 
     def _config_commit(self, session: str, call: str, p: dict[str, Any]) -> Any:
         ticket = self.confirmations.projection(p.get("confirmationTicketId", ""))
         return get_artifact_service(session).commit_draft(p["validationHash"], confirmation_ticket=ticket, source_revision=p.get("sourceRevision"))
+
+    def _training_config_current(self, session: str, call: str, p: dict[str, Any]) -> Any:
+        # Lazy import: mikazuki.app.config is already in sys.modules at runtime,
+        # and importing it at module load would trigger the app package init cycle.
+        from mikazuki.app.config import app_config
+
+        saved = app_config["saved_params"] or {}
+        train_type = p.get("trainType")
+        if isinstance(train_type, str) and train_type.strip():
+            saved = {train_type.strip(): saved.get(train_type.strip())} if train_type.strip() in saved else {}
+        return {
+            "savedParams": _as_dict(saved),
+            "hint": (
+                "These are the training parameters the user is currently filling in (or last autosaved) "
+                "in the Next Trainer frontend. Prefer the dataset / model / checkpoint paths found here "
+                "(verify they exist on disk) before searching the filesystem or asking the user."
+            ),
+        }
 
     def _dataset_inventory(self, session: str, call: str, p: dict[str, Any]) -> Any:
         return inventory_dataset(p["root"], max_files=p.get("maxFiles"))
@@ -215,8 +289,14 @@ class AgentToolService:
     def _dataset_review(self, session: str, call: str, p: dict[str, Any]) -> Any:
         inventory = inventory_dataset(p["root"])
         sample = select_review_sample(inventory, limit=p.get("limit", 12))
-        model = p["model"]
-        capability = ActiveModelCapability(str(model["model"]), bool(model["vision"]), tuple(model.get("capabilities") or ("text",)))
+        reviewer = get_configured_reviewer()
+        if reviewer is not None:
+            # The host's own approved remote reviewer is authoritative for the
+            # capability; the agent-supplied model is only a fallback descriptor.
+            reviewer = reviewer.with_root(inventory.root)
+            return review_images(inventory, sample, reviewer.capability, reviewer)
+        model = p.get("model") or {}
+        capability = ActiveModelCapability(str(model.get("model") or "unknown"), bool(model.get("vision", False)), tuple(model.get("capabilities") or ("text",)))
         return review_images(inventory, sample, capability)
 
     def _caption_stage(self, session: str, call: str, p: dict[str, Any]) -> Any:
@@ -245,7 +325,18 @@ class AgentToolService:
         return [item.as_dict() for item in store.search(p["query"], top_k=p.get("topK", 10))]
 
     def _civitai_search(self, session: str, call: str, p: dict[str, Any]) -> Any:
-        query = CivitaiQuery(base_model=p.get("baseModel"), sort=p.get("sort", "Most Downloaded"), period=p.get("period", "AllTime"), limit=p.get("limit", 20))
+        from mikazuki.agent_skills.civitai import _ALLOWED_PERIOD, _ALLOWED_SORT
+        sort = p.get("sort") or "Most Downloaded"
+        period = p.get("period") or "AllTime"
+        # Lenient correction: agents often put a time-window value into `sort`
+        # (e.g. "AllTime"). Recover intent instead of failing the whole call.
+        if sort not in _ALLOWED_SORT:
+            if sort in _ALLOWED_PERIOD:
+                period = sort
+            sort = "Most Downloaded"
+        if period not in _ALLOWED_PERIOD:
+            period = "AllTime"
+        query = CivitaiQuery(base_model=p.get("baseModel"), sort=sort, period=period, limit=p.get("limit", 20))
         result = CivitaiClient().search_loras(query)
         return {"records": [_as_dict(item) for item in result["records"]], "nextCursor": result.get("next_cursor"), "query": result["query"]}
 
@@ -254,16 +345,36 @@ class AgentToolService:
         records = [normalize_lora_record(dict(item)) for item in p["records"]]
         return build_cohort_report(records, query=p.get("query"), rankings=p.get("rankings"), time_windows=p.get("timeWindows")).as_dict()
 
+    def _civitai_fetch_version(self, session: str, call: str, p: dict[str, Any]) -> Any:
+        client = CivitaiClient()
+        versions = []
+        for raw in p["versionIds"]:
+            record = client.get_version(raw)
+            versions.append(_as_dict(record))
+        return {"versions": versions}
+
     def _curve_analyze(self, session: str, call: str, p: dict[str, Any]) -> Any:
         metric = str(p.get("metric", "loss"))
         return analyze_curve({metric: p["series"]}, max_points=p.get("maxPoints", 200))
 
     def _artifact_compare(self, session: str, call: str, p: dict[str, Any]) -> Any:
         protocol = FixedComparisonProtocol(tuple(p["prompts"]), int(p["seed"]), dict(p["generationConfig"]))
-        return compare_artifacts(p["artifacts"], protocol).as_dict()
+        # Optional operator-configured external renderer (e.g. a ComfyUI bridge);
+        # without one every cell honestly reports renderer_unavailable.
+        renderer = get_configured_renderer()
+        return compare_artifacts(p["artifacts"], protocol, renderer=renderer).as_dict()
 
     def _artifact_recommend(self, session: str, call: str, p: dict[str, Any]) -> Any:
         return recommend_artifacts(p["artifacts"], top_k=p.get("topK", 3), weights=p.get("weights")).copy()
+
+    def _tagger_start(self, session: str, call: str, p: dict[str, Any]) -> Any:
+        return start_tagger_job(dict(p))
+
+    def _tagger_cancel(self, session: str, call: str, p: dict[str, Any]) -> Any:
+        return cancel_tagger_job()
+
+    def _tagger_status(self, session: str, call: str, p: dict[str, Any]) -> Any:
+        return tagger_status()
 
 
 _service: AgentToolService | None = AgentToolService(ConfirmationTicketStore())

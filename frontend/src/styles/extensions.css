@@ -28,9 +28,11 @@
   outline-offset: 3px;
 }
 
-.floating-extension-launcher > svg {
-  width: 25px;
-  height: 25px;
+.floating-extension-launcher > svg,
+.floating-extension-launcher > img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
 }
 
 .floating-extension-badge {
@@ -68,71 +70,48 @@
   box-shadow: 0 24px 70px rgba(8, 15, 24, 0.28);
 }
 
+/* Corner grip: diagonal hatch inside a rounded square. Sized to sit fully
+   within the 24px header strip so it never overlaps the panel content. */
 .floating-extension-resize {
   position: absolute;
   top: 3px;
-  left: 3px;
+  left: 6px;
   z-index: 1;
   width: 18px;
   height: 18px;
   padding: 0;
-  background:
-    linear-gradient(135deg, transparent 45%, var(--text-faint) 46%, var(--text-faint) 54%, transparent 55%) 1px 1px / 8px 8px;
+  background-image: repeating-linear-gradient(135deg, transparent 0 2px, var(--text-faint) 2px 3px);
   border: 0;
+  border-radius: 5px;
   cursor: nwse-resize;
-  opacity: 0.65;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.floating-extension-resize:hover {
+  opacity: 0.95;
+  background-color: color-mix(in srgb, var(--text-faint) 12%, transparent);
 }
 
 .floating-extension-resize:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 2px;
+  outline-offset: 1px;
+  opacity: 0.95;
 }
 
+/* Slim top border: the header is a thin strip (name/status and the minimize
+   control were removed from the panel header). It is tall enough (24px) to
+   contain the 18px resize grip with margin. */
 .floating-extension-header {
-  height: 58px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 0 14px 0 18px;
+  height: 24px;
   background: var(--surface);
   border-bottom: 1px solid var(--border);
-}
-
-.floating-extension-header strong,
-.floating-extension-header small {
-  display: block;
-}
-
-.floating-extension-header strong {
-  font-size: 14px;
-}
-
-.floating-extension-header small {
-  margin-top: 2px;
-  color: var(--text-faint);
-  font-size: 11px;
-}
-
-.floating-extension-header button {
-  width: 34px;
-  height: 34px;
-  color: var(--text-soft);
-  background: transparent;
-  border: 1px solid var(--border);
-  border-radius: 9px;
-  cursor: pointer;
-}
-
-.floating-extension-header button svg {
-  width: 17px;
-  height: 17px;
 }
 
 .floating-extension-frame {
   display: block;
   width: 100%;
-  height: calc(100% - 58px);
+  height: calc(100% - 24px);
   background: var(--surface);
   border: 0;
 }

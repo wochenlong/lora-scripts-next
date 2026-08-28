@@ -914,7 +914,7 @@ export default {
     confirm: "Continue",
     cancel: "Cancel",
     confirmInstall: "The plugin package will be verified and installed. Continue?",
-    confirmEnable: "The plugin will be enabled with the selected permissions. Continue?",
+    confirmEnable: "The plugin will be enabled. Continue?",
     confirmDisable: "Disabling stops the plugin and removes its UI contributions. Continue?",
     confirmRollback: "The plugin will roll back to its previous installed version. Continue?",
     confirmUninstall: "Uninstalling removes runtime files while preserving plugin user data. Continue?",

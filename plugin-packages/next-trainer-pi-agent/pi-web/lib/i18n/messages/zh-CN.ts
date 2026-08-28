@@ -1,6 +1,6 @@
 import type { LocalePlugin } from "../types";
 
-/** Pi Web 内置简体中文语言包。 */
+/** Next Trainer Agent 内置简体中文语言包。 */
 export const zhCNLocale: LocalePlugin = {
   id: "zh-CN",
   label: "简体中文",
@@ -10,7 +10,7 @@ export const zhCNLocale: LocalePlugin = {
     "common.models": "模型",
     "common.skills": "技能",
     "common.plugins": "插件",
-    "appUpdate.releaseNotes": "Pi Web v{version} 可用，查看更新说明",
+    "appUpdate.releaseNotes": "Next Trainer Agent v{version} 可用，查看更新说明",
     "sidebar.hide": "隐藏侧边栏",
     "sidebar.show": "显示侧边栏",
     "theme.light": "浅色模式（点击切换到深色）",
@@ -236,7 +236,7 @@ export const zhCNLocale: LocalePlugin = {
     "chat.stop": "停止",
     "chat.disableSound": "关闭完成提示音",
     "chat.enableSound": "开启完成提示音",
-    "chat.thinkingUseDefault": "使用 pi 默认设置",
+    "chat.thinkingUseDefault": "使用默认设置",
     "chat.thinkingOff": "关闭推理",
     "chat.thinkingMinimal": "最低限度推理",
     "chat.thinkingLow": "低强度推理",
@@ -479,7 +479,7 @@ export const zhCNLocale: LocalePlugin = {
     "i18n.after": "之后",
     "i18n.sessionComplete": "任务完成",
     "i18n.taskFinished": "任务已完成。",
-    "i18n.attentionNeeded": "Pi 需要你的操作",
+    "i18n.attentionNeeded": "Agent 需要你的操作",
     "i18n.extensionInputNeeded": "扩展正在等待你的输入。",
   },
 };

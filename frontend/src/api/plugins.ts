@@ -342,10 +342,31 @@ export function isSafePluginUiUrl(value: string | undefined, pluginId: string): 
 }
 
 /**
+ * A server-mode UI URL may carry exactly one query parameter, `cwd`, whose
+ * value is an absolute filesystem path (Windows drive / UNC or POSIX). This is
+ * the default-workspace hint pi-web reads via `getInitialNavigation`; the
+ * pi-web still validates it against its own file-access policy. Anything else
+ * (extra params, relative paths, traversal, embedded control chars) is refused.
+ */
+function isSafeCwdQuery(url: URL): boolean {
+  if (url.search === "") return true
+  if (url.searchParams.size !== 1 || !url.searchParams.has("cwd")) return false
+  const cwd = url.searchParams.get("cwd") ?? ""
+  if (!cwd) return false
+  if (cwd.includes("://")) return false
+  if (/[\r\n\t]/.test(cwd)) return false
+  const windowsAbsolute = /^[A-Za-z]:[\\/]/.test(cwd) || cwd.startsWith("\\\\")
+  const posixAbsolute = cwd.startsWith("/")
+  if (!windowsAbsolute && !posixAbsolute) return false
+  return !cwd.split(/[\\/]/).includes("..")
+}
+
+/**
  * Server-mode UI URLs are reported by the plugin runtime (READY line) and
  * validated by the host before projection.  The frontend re-validates: only
  * an explicit `http://127.0.0.1:<port>` root document is loadable in the
- * floating dialog.  No hosts, paths, credentials, or other schemes pass.
+ * floating dialog.  A single `cwd` query param (the default workspace) is
+ * permitted.  No other hosts, paths, credentials, or schemes pass.
  */
 export function isSafePluginServerUiUrl(value: string | undefined): value is string {
   if (!value) return false
@@ -361,9 +382,10 @@ export function isSafePluginServerUiUrl(value: string | undefined): value is str
       port <= 65535 &&
       url.username === "" &&
       url.password === "" &&
-      // Root document only (trailing slash included): no path, query, hash.
+      // Root document only (trailing slash included): no path or hash; at most
+      // a single validated `cwd` query param.
       url.pathname === "/" &&
-      url.search === "" &&
+      isSafeCwdQuery(url) &&
       url.hash === ""
     )
   } catch {

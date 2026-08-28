@@ -5,11 +5,14 @@
 # Usage:  bash wsl-stage-linux-package.sh
 # Inputs: /tmp/nt-pi-linux (from wsl-build-pi-web.sh)
 #         <package root>/bin/next-trainer-pi-agent (cross-compiled bun-linux-x64 ELF)
-# Output: <package root>/dist-marketplace/packages/next-trainer-pi-agent-0.2.0-linux-x64.zip
+#         <package root>/plugin.json (version of record — keeps the zip name,
+#         embedded plugin.json and SBOM in lockstep with the working tree)
+# Output: <package root>/dist-marketplace/packages/next-trainer-pi-agent-<version>-linux-x64.zip
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PKG_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
+VERSION="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['version'])" "$PKG_ROOT/plugin.json")"
 
 W=/tmp/nt-pi-linux
 STAGE=$W/stage
@@ -58,7 +61,7 @@ SOFTWARE.
 EOF
 
 cat > "$STAGE/NOTICE.md" <<'EOF'
-# Next Trainer Pi Agent — third-party components
+# Next Trainer Agent — third-party components
 
 This plugin embeds unmodified upstream projects (Goal v9 / CR-011):
 
@@ -75,11 +78,11 @@ The launcher (`bin/next-trainer-pi-agent`, ELF linux-x64) is Next Trainer packag
 host runtime contract (READY/health) and supervises the unmodified pi-web server.
 EOF
 
-cat > "$STAGE/plugin.json" <<'EOF'
+cat > "$STAGE/plugin.json" <<EOF
 {
   "id": "next-trainer-pi-agent",
   "publisher": "next-trainer-project",
-  "version": "0.2.0",
+  "version": "$VERSION",
   "protocolVersion": "1",
   "hostCompatibility": ">=2.9.2 <4.0.0",
   "platforms": ["linux-x64"],
@@ -95,8 +98,8 @@ cat > "$STAGE/plugin.json" <<'EOF'
     "placements": ["floating-panel"]
   },
   "bridge": { "requests": [], "streams": [] },
-  "capabilities": ["server-ui"],
-  "permissions": [],
+  "capabilities": ["server-ui", "custom-tools", "skills"],
+  "permissions": ["training-config", "dataset-review", "caption-commit", "metrics-read", "artifacts-read", "external-civitai-read"],
   "package": {
     "sha256": "BUILD_TIME_VALUE",
     "signature": "TEST_OR_RELEASE_VALUE",
@@ -106,7 +109,7 @@ cat > "$STAGE/plugin.json" <<'EOF'
 }
 EOF
 
-cat > "$STAGE/sbom.cdx.json" <<'EOF'
+cat > "$STAGE/sbom.cdx.json" <<EOF
 {
   "bomFormat": "CycloneDX",
   "specVersion": "1.5",
@@ -115,7 +118,7 @@ cat > "$STAGE/sbom.cdx.json" <<'EOF'
     "component": {
       "type": "application",
       "name": "next-trainer-pi-agent",
-      "version": "0.2.0"
+      "version": "$VERSION"
     }
   },
   "components": [
@@ -141,7 +144,16 @@ EOF
 echo "[stage] copying pi-web tree (source + .next + pruned node_modules) ..."
 cp -a "$W/src/pi-web" "$STAGE/pi-web"
 
-OUT_ZIP=$PKG_ROOT/dist-marketplace/packages/next-trainer-pi-agent-0.2.0-linux-x64.zip
+# Next Trainer pi package (extensions + skills + manifest) + knowledge/template
+# seeds. Dev-only artifacts (pi-package/test) are excluded.
+echo "[stage] pi-package (extensions + skills + package.json) + seeds ..."
+mkdir -p "$STAGE/pi-package"
+cp -a "$PKG_ROOT/pi-package/extensions" "$STAGE/pi-package/extensions"
+cp -a "$PKG_ROOT/pi-package/skills" "$STAGE/pi-package/skills"
+cp "$PKG_ROOT/pi-package/package.json" "$STAGE/pi-package/package.json"
+cp -a "$PKG_ROOT/seeds" "$STAGE/seeds"
+
+OUT_ZIP=$PKG_ROOT/dist-marketplace/packages/next-trainer-pi-agent-${VERSION}-linux-x64.zip
 rm -f "$OUT_ZIP"
 python3 - "$STAGE" "$OUT_ZIP" <<'EOF'
 import os

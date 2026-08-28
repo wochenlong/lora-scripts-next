@@ -24,6 +24,7 @@ from .changes import (
     CaptionOverlay,
     DatasetReviewError,
 )
+from .remote_reviewer import BridgeVisionReviewer, get_configured_reviewer
 
 
 class ImageCapability:
@@ -43,6 +44,7 @@ class ImageCapability:
 
 __all__ = [
     "ActiveModelCapability",
+    "BridgeVisionReviewer",
     "CaptionChange",
     "CaptionChangeSet",
     "CaptionCommitResult",

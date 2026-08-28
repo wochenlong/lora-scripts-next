@@ -125,6 +125,7 @@ class ExecutablePluginRuntime:
                     "NEXT_TRAINER_SIDECAR_TOKEN": sidecar_token,
                     "NEXT_TRAINER_HOST_TOOL_TOKEN": host_tool_token,
                     "NEXT_TRAINER_PLUGIN_DATA_ROOT": str(data_root.resolve()),
+                    "NEXT_TRAINER_PROJECT_ROOT": str(Path.cwd().resolve()),
                     "NEXT_TRAINER_PARENT_PID": str(self._parent_pid),
                 }
             )

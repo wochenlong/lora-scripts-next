@@ -914,7 +914,7 @@ export default {
     confirm: "继续",
     cancel: "取消",
     confirmInstall: "将验证并安装此插件包。继续？",
-    confirmEnable: "将按已勾选权限启用此插件。继续？",
+    confirmEnable: "将启用此插件。继续？",
     confirmDisable: "禁用会停止插件并移除其界面入口。继续？",
     confirmRollback: "将回滚到上一已安装版本。继续？",
     confirmUninstall: "卸载会删除插件运行文件，但保留插件用户数据。继续？",
