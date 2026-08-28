@@ -454,10 +454,19 @@ class ExecutablePluginRuntime:
         else:
             import signal
 
+            # The launcher (POSIX) spawns its server in its own process group,
+            # so killing the group mirrors taskkill /F /T on Windows and also
+            # removes agent-spawned tool processes. Fall back to the single
+            # process when the pid is not a group leader (e.g. older launchers).
             try:
-                os.kill(child_pid, signal.SIGKILL)
-            except OSError:
+                os.killpg(child_pid, signal.SIGKILL)
+            except (ProcessLookupError, PermissionError):
                 return
+            except OSError:
+                try:
+                    os.kill(child_pid, signal.SIGKILL)
+                except OSError:
+                    return
 
     @staticmethod
     def _probe(handle: _ProcessHandle) -> RuntimeSnapshot:

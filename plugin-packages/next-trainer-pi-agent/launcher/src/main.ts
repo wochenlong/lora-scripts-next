@@ -45,7 +45,9 @@ if (!Number.isInteger(requestedPort) || requestedPort < 0 || requestedPort > 655
 
 const exeDir = path.dirname(process.execPath)
 const packageRoot = path.resolve(exeDir, "..")
-const nodeExe = path.join(packageRoot, "runtime", "node", "node.exe")
+// The bundled Node runtime keeps its platform name (node.exe on Windows,
+// node on POSIX).
+const nodeExe = path.join(packageRoot, "runtime", "node", process.platform === "win32" ? "node.exe" : "node")
 const piWebRoot = path.join(packageRoot, "pi-web")
 const piWebEntry = path.join(piWebRoot, "bin", "pi-web.js")
 
@@ -159,6 +161,9 @@ function startPiWeb(port: number): { pid: number } {
       cwd: piWebRoot,
       env: childEnv,
       stdio: ["ignore", outStream ? "pipe" : "ignore", outStream ? "pipe" : "ignore"],
+      // POSIX: put pi-web in its own process group so killTree can remove the
+      // whole tree (pi-web + agent-spawned tools) like taskkill /T on Windows.
+      detached: process.platform !== "win32",
     },
   )
   if (outStream) {

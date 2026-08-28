@@ -26,7 +26,7 @@ class CatalogSource(Protocol):
 
 
 class PackageAcquirer(Protocol):
-    def acquire(self, entry: MarketplaceEntry, destination: Path) -> Path: ...
+    def acquire(self, entry: MarketplaceEntry, destination: Path, platform: str) -> Path: ...
 
 
 class FileCatalogSource:
@@ -50,15 +50,23 @@ class LocalPackageAcquirer:
     def __init__(self, sources: dict[str, Path]) -> None:
         self._sources = {url: path.resolve() for url, path in sources.items()}
 
-    def acquire(self, entry: MarketplaceEntry, destination: Path) -> Path:
-        source = self._sources.get(entry.package_url)
+    def acquire(self, entry: MarketplaceEntry, destination: Path, platform: str) -> Path:
+        try:
+            package_url, package_size, _sha256 = entry.resolve_platform_package(platform)
+        except ValueError as exc:
+            raise CatalogError(
+                "MARKETPLACE_PLATFORM_UNAVAILABLE",
+                "The marketplace has no package for this platform.",
+                status_code=409,
+            ) from exc
+        source = self._sources.get(package_url)
         if source is None or not source.is_file():
             raise CatalogError(
                 "MARKETPLACE_PACKAGE_UNAVAILABLE",
                 "The marketplace package is unavailable.",
                 status_code=503,
             )
-        if source.stat().st_size != entry.package_size:
+        if source.stat().st_size != package_size:
             raise CatalogError(
                 "MARKETPLACE_PACKAGE_SIZE_MISMATCH",
                 "The marketplace package size does not match the catalog.",
@@ -84,7 +92,7 @@ class LocalPackageAcquirer:
 
 
 class UnavailablePackageAcquirer:
-    def acquire(self, entry: MarketplaceEntry, destination: Path) -> Path:
+    def acquire(self, entry: MarketplaceEntry, destination: Path, platform: str) -> Path:
         raise CatalogError(
             "MARKETPLACE_PACKAGE_ACQUISITION_UNAVAILABLE",
             "Marketplace package acquisition is not configured.",
@@ -162,10 +170,10 @@ class MarketplaceCatalogService:
             )
         return matches[0]
 
-    def acquire(self, entry: MarketplaceEntry) -> Path:
+    def acquire(self, entry: MarketplaceEntry, platform: str) -> Path:
         destination = self.paths.quarantine_package(entry.id, entry.latest_version)
         destination.unlink(missing_ok=True)
-        return self.acquirer.acquire(entry, destination)
+        return self.acquirer.acquire(entry, destination, platform)
 
     @staticmethod
     def _parse(payload: bytes) -> MarketplaceCatalog:

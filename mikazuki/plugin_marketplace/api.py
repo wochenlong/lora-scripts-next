@@ -420,7 +420,7 @@ async def install_plugin(
     package = None
     try:
         entry = _catalog.entry(plugin_id, request.version)
-        package = _catalog.acquire(entry)
+        package = _catalog.acquire(entry, _platform_name())
         status = _manager.install(
             entry,
             package,

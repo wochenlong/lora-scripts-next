@@ -224,10 +224,14 @@ class MarketplaceManager:
         with self._plugin_lock(entry.id):
             if package_path.is_file() and package_path.stat().st_size > self.package_limits.max_package_bytes:
                 raise PackageValidationError("package size limit exceeded")
-            self.trust.verify(entry, package_path)
             self.trust.verify_compatibility(entry, host_version=self.host_version, platform=self.platform)
+            try:
+                _package_url, expected_size, expected_sha = entry.resolve_platform_package(self.platform)
+            except ValueError as exc:
+                raise PackageValidationError(str(exc)) from exc
+            self.trust.verify(entry, package_path, package_size=expected_size, sha256=expected_sha)
             manifest, members = inspect_package(package_path, self.package_limits)
-            validate_manifest_entry(manifest, entry)
+            validate_manifest_entry(manifest, entry, platform=self.platform)
             if manifest.protocol_version != self.protocol_version:
                 raise ValueError(f"unsupported plugin protocol: {manifest.protocol_version}")
             if not version_satisfies(self.host_version, manifest.host_compatibility):
@@ -262,7 +266,7 @@ class MarketplaceManager:
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if target.exists():
                     existing = (record.get("versions") or {}).get(entry.latest_version)
-                    if not existing or existing.get("sha256") != entry.sha256:
+                    if not existing or existing.get("sha256") != expected_sha:
                         raise RuntimeError(
                             f"immutable plugin version already exists with different content: "
                             f"{entry.id}@{entry.latest_version}"
@@ -275,7 +279,7 @@ class MarketplaceManager:
                 versions[entry.latest_version] = {
                     "name": entry.name,
                     "manifest": manifest.model_dump(mode="json", by_alias=True),
-                    "sha256": entry.sha256,
+                    "sha256": expected_sha,
                     "installed_at": datetime.now(timezone.utc).isoformat(),
                 }
                 next_record = copy.deepcopy(record)

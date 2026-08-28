@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -92,11 +93,16 @@ def wait_server() -> None:
     raise AssertionError(f"backend did not come up ({last})")
 
 
-def node_pi_web_processes() -> int:
+def node_pi_web_processes(scope: Path | None = None) -> int:
+    """Count pi-web node processes, optionally restricted to this run's data
+    root (other hosts/instances may keep their own pi-web running)."""
+    pattern = "pi-web\\\\bin\\\\pi-web\\.js"
+    if scope is not None:
+        pattern = re.escape(str(scope)) + ".*" + pattern
     result = subprocess.run(
         ["powershell", "-NoProfile", "-Command",
          "(Get-CimInstance Win32_Process -Filter \"Name='node.exe'\" | "
-         f"Where-Object {{ $_.CommandLine -match 'pi-web\\\\bin\\\\pi-web\\.js' }} | Measure-Object).Count"],
+         f"Where-Object {{ $_.CommandLine -match '{pattern}' }} | Measure-Object).Count"],
         capture_output=True, text=True,
     )
     return int(result.stdout.strip() or "0")
@@ -179,7 +185,7 @@ def main() -> int:
         assert status.get("runtime_ui_url", "").startswith("http://127.0.0.1:"), status
         log(f"enabled: runtime={status['runtime_state']} ui={status.get('runtime_ui_url')}")
         ui_url = status["runtime_ui_url"]
-        assert node_pi_web_processes() >= 1, "pi-web node process not running"
+        assert node_pi_web_processes(runtime_root) >= 1, "pi-web node process not running"
 
         log(STEP + "7. extensions projection is server mode with the live URL")
         code, value = http("GET", "/api/plugin-host/extensions", origin=True)
@@ -240,9 +246,9 @@ def main() -> int:
         status = data_of(value)
         assert status["enabled"] is False and status["runtime_state"] in ("stopped", None), status
         deadline = time.time() + 30
-        while time.time() < deadline and node_pi_web_processes() > 0:
+        while time.time() < deadline and node_pi_web_processes(runtime_root) > 0:
             time.sleep(1.0)
-        assert node_pi_web_processes() == 0, "pi-web process survived disable"
+        assert node_pi_web_processes(runtime_root) == 0, "pi-web process survived disable"
         log("disable: runtime stopped, pi-web tree removed")
 
         log(STEP + "12. uninstall -> not_installed")

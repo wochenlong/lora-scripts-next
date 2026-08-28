@@ -324,7 +324,7 @@ def test_local_catalog_wiring_against_dist_artifacts(monkeypatch):
     # signature verifies against the real bytes.
     zip_path = package_root / f"{entry.id}-0.2.0-win32-x64.zip"
     assert zip_path.is_file()
-    acquired = service.acquire(entry)
+    acquired = service.acquire(entry, "win32-x64")
     try:
         trust.verify(entry, acquired)
     finally:
@@ -422,3 +422,127 @@ def test_extract_and_remove_package_survives_max_path_depth(tmp_path):
     assert not target.exists()
     remove_tree(target)
     assert not target.exists()
+
+
+# ---------------------------------------------------------------------------
+# Dual-platform catalog entries (win32-x64 + linux-x64)
+# ---------------------------------------------------------------------------
+
+_SHA_WIN = "a" * 64
+_SHA_LINUX = "c" * 64
+_URL_WIN = "https://plugins.next-trainer.local/packages/dual-plugin-0.2.0-win32-x64.zip"
+_URL_LINUX = "https://plugins.next-trainer.local/packages/dual-plugin-0.2.0-linux-x64.zip"
+
+
+def _dual_entry(**overrides) -> MarketplaceEntry:
+    base: dict = {
+        "id": "dual-plugin",
+        "name": "Dual",
+        "publisher_id": "next-trainer-project",
+        "latest_version": "0.2.0",
+        "host_compatibility": ">=2.9.2 <4.0.0",
+        "platforms": ["win32-x64", "linux-x64"],
+        "package_size": 1000,
+        "permissions_summary": [],
+        "license": "MIT",
+        "package_url": _URL_WIN,
+        "sha256": _SHA_WIN,
+        "signature": "b" * 64,
+        "signing_key_id": "dev-local-signing",
+        "published_at": "2026-08-28T00:00:00Z",
+        "packages": [
+            {"platform": "win32-x64", "package_url": _URL_WIN, "package_size": 1000, "sha256": _SHA_WIN},
+            {"platform": "linux-x64", "package_url": _URL_LINUX, "package_size": 2000, "sha256": _SHA_LINUX},
+        ],
+    }
+    base.update(overrides)
+    return MarketplaceEntry(**base)
+
+
+def test_platform_package_resolution():
+    entry = _dual_entry()
+    assert entry.resolve_platform_package("win32-x64") == (_URL_WIN, 1000, _SHA_WIN)
+    assert entry.resolve_platform_package("linux-x64") == (_URL_LINUX, 2000, _SHA_LINUX)
+    with pytest.raises(ValueError):
+        entry.resolve_platform_package("darwin-arm64")
+    # Legacy single-platform entries (no `packages` field) keep flat semantics.
+    legacy = _dual_entry(packages=None)
+    assert legacy.resolve_platform_package("win32-x64") == (_URL_WIN, 1000, _SHA_WIN)
+
+
+def test_platform_package_signature_coverage():
+    """The entry HMAC must cover the per-platform bindings."""
+    a = _dual_entry()
+    b = _dual_entry(
+        packages=[
+            {"platform": "win32-x64", "package_url": _URL_WIN, "package_size": 1000, "sha256": _SHA_WIN},
+            {"platform": "linux-x64", "package_url": _URL_LINUX, "package_size": 2000, "sha256": "d" * 64},
+        ],
+    )
+    assert canonical_entry_payload(a) != canonical_entry_payload(b)
+
+
+def test_verify_compatibility_requires_platform_package():
+    from mikazuki.plugin_marketplace.trust import TrustError, TrustStore
+
+    trust = TrustStore({"dev-local-signing": ("next-trainer-project", b"key")})
+    # Both platforms are declared; only win32-x64 has a package binding here.
+    entry = _dual_entry(packages=[
+        {"platform": "win32-x64", "package_url": _URL_WIN, "package_size": 1000, "sha256": _SHA_WIN},
+    ])
+    trust.verify_compatibility(entry, host_version=HOST_VERSION, platform="win32-x64")
+    with pytest.raises(TrustError):
+        trust.verify_compatibility(entry, host_version=HOST_VERSION, platform="linux-x64")
+    # Legacy entries without `packages` are unaffected.
+    legacy = _dual_entry(packages=None)
+    trust.verify_compatibility(legacy, host_version=HOST_VERSION, platform="linux-x64")
+
+
+def test_local_acquirer_selects_platform_package(tmp_path):
+    from mikazuki.plugin_marketplace.catalog import CatalogError, LocalPackageAcquirer
+
+    win_zip = tmp_path / "win.zip"
+    linux_zip = tmp_path / "linux.zip"
+    win_zip.write_bytes(b"w" * 1000)
+    linux_zip.write_bytes(b"l" * 2000)
+
+    acquirer = LocalPackageAcquirer({_URL_WIN: win_zip, _URL_LINUX: linux_zip})
+    acquired = acquirer.acquire(_dual_entry(), tmp_path / "dest.zip", "linux-x64")
+    assert acquired.read_bytes() == linux_zip.read_bytes()
+    acquired.unlink()
+    acquired = acquirer.acquire(_dual_entry(), tmp_path / "dest.zip", "win32-x64")
+    assert acquired.read_bytes() == win_zip.read_bytes()
+    acquired.unlink()
+    with pytest.raises(CatalogError) as excinfo:
+        acquirer.acquire(_dual_entry(), tmp_path / "dest.zip", "darwin-arm64")
+    assert excinfo.value.code == "MARKETPLACE_PLATFORM_UNAVAILABLE"
+
+
+def test_manifest_platform_validation_for_platform_packages():
+    from types import SimpleNamespace
+
+    from mikazuki.plugin_marketplace.package import PackageValidationError, validate_manifest_entry
+
+    def manifest(platforms):
+        return SimpleNamespace(
+            id="dual-plugin",
+            publisher="next-trainer-project",
+            version="0.2.0",
+            host_compatibility=">=2.9.2 <4.0.0",
+            platforms=platforms,
+            permissions=[],
+        )
+
+    dual = _dual_entry()
+    # Per-platform: the zip's manifest covers its platform within the entry.
+    validate_manifest_entry(manifest(["linux-x64"]), dual, platform="linux-x64")
+    validate_manifest_entry(manifest(["win32-x64", "linux-x64"]), dual, platform="win32-x64")
+    with pytest.raises(PackageValidationError):
+        validate_manifest_entry(manifest(["linux-x64"]), dual, platform="win32-x64")
+    with pytest.raises(PackageValidationError):
+        validate_manifest_entry(manifest(["freebsd-x64"]), dual, platform="linux-x64")
+    # Legacy (no platform / no packages): exact match required, as before.
+    legacy = _dual_entry(packages=None)
+    validate_manifest_entry(manifest(["win32-x64", "linux-x64"]), legacy)
+    with pytest.raises(PackageValidationError):
+        validate_manifest_entry(manifest(["linux-x64"]), legacy)

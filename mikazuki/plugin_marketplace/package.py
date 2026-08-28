@@ -147,7 +147,11 @@ def inspect_package(package_path: Path, limits: PackageLimits) -> tuple[PluginMa
         return manifest, members
 
 
-def validate_manifest_entry(manifest: PluginManifest, entry: MarketplaceEntry) -> None:
+def validate_manifest_entry(
+    manifest: PluginManifest,
+    entry: MarketplaceEntry,
+    platform: str | None = None,
+) -> None:
     if manifest.id != entry.id:
         raise PackageValidationError("manifest id does not match catalog entry")
     if manifest.publisher != entry.publisher_id:
@@ -156,7 +160,14 @@ def validate_manifest_entry(manifest: PluginManifest, entry: MarketplaceEntry) -
         raise PackageValidationError("manifest version does not match catalog entry")
     if manifest.host_compatibility != entry.host_compatibility:
         raise PackageValidationError("manifest host compatibility does not match catalog entry")
-    if sorted(manifest.platforms) != sorted(entry.platforms):
+    if platform is not None and entry.packages:
+        # Per-platform packages: each zip's manifest declares its own platform
+        # set; it must be covered by the entry and include the host platform.
+        if set(manifest.platforms) - set(entry.platforms):
+            raise PackageValidationError("manifest platforms exceed catalog entry platforms")
+        if platform not in manifest.platforms:
+            raise PackageValidationError(f"manifest has no package for platform: {platform}")
+    elif sorted(manifest.platforms) != sorted(entry.platforms):
         raise PackageValidationError("manifest platforms do not match catalog entry")
     if sorted(manifest.permissions) != sorted(entry.permissions_summary):
         raise PackageValidationError("manifest permissions do not match catalog entry")

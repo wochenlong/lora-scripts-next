@@ -48,6 +48,48 @@ class StrictModel(BaseModel):
             return self.dict(by_alias=by_alias, exclude=exclude)
 
 
+class MarketplacePlatformPackage(StrictModel):
+    """Per-platform package binding for a catalog entry (dual-platform entries
+    such as win32-x64 + linux-x64). Flat entry fields remain the fallback for
+    single-platform (legacy) entries."""
+
+    platform: str
+    package_url: str
+    package_size: int = Field(gt=0)
+    sha256: str
+
+    @validator("platform")
+    def validate_platform(cls, value: str) -> str:
+        if not value or " " in value:
+            raise ValueError("platform package identifier must be a non-empty token")
+        return value
+
+    @validator("package_url")
+    def validate_package_url(cls, value: str) -> str:
+        parsed = urlsplit(value)
+        if (
+            parsed.scheme != "https"
+            or not parsed.hostname
+            or parsed.username is not None
+            or parsed.password is not None
+            or parsed.fragment
+        ):
+            raise ValueError("package_url must be an HTTPS URL without credentials or fragment")
+        try:
+            address = ipaddress.ip_address(parsed.hostname)
+        except ValueError:
+            address = None
+        if address is not None and not address.is_global:
+            raise ValueError("package_url cannot target a non-public IP address")
+        return value
+
+    @validator("sha256")
+    def validate_sha256(cls, value: str) -> str:
+        if not re.fullmatch(r"[a-fA-F0-9]{64}", value):
+            raise ValueError("sha256 must contain exactly 64 hexadecimal characters")
+        return value
+
+
 class MarketplaceEntry(StrictModel):
     id: str
     name: str
@@ -67,6 +109,7 @@ class MarketplaceEntry(StrictModel):
     signature: str
     signing_key_id: str
     published_at: datetime
+    packages: list[MarketplacePlatformPackage] | None = Field(default=None, alias="packages")
 
     @validator("sha256")
     def validate_sha256(cls, value: str) -> str:
@@ -113,6 +156,30 @@ class MarketplaceEntry(StrictModel):
         if not value or len(value) != len(set(value)) or any(not item for item in value):
             raise ValueError("catalog entry platforms must be unique and non-empty")
         return value
+
+    @validator("packages")
+    def validate_packages(cls, value: list[MarketplacePlatformPackage] | None) -> list[MarketplacePlatformPackage] | None:
+        if not value:
+            return value
+        platforms = [package.platform for package in value]
+        if len(platforms) != len(set(platforms)):
+            raise ValueError("catalog entry packages must have unique platforms")
+        return value
+
+    def resolve_platform_package(self, platform: str) -> tuple[str, int, str]:
+        """Resolve (package_url, package_size, sha256) for a host platform.
+
+        Entries with per-platform packages select their binding; legacy
+        single-platform entries fall back to the flat fields.
+        """
+        if self.packages:
+            supported = {package.platform for package in self.packages}
+            if platform not in supported:
+                raise ValueError(f"catalog entry has no package for platform: {platform}")
+            for package in self.packages:
+                if package.platform == platform:
+                    return package.package_url, package.package_size, package.sha256
+        return self.package_url, self.package_size, self.sha256
 
 
 class MarketplaceCatalog(StrictModel):

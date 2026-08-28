@@ -113,7 +113,18 @@ class TrustStore:
         self._keys = dict(keys)
         self._revoked = set(revoked_keys or ())
 
-    def verify(self, entry: MarketplaceEntry, package_path: Path) -> None:
+    def verify(
+        self,
+        entry: MarketplaceEntry,
+        package_path: Path,
+        *,
+        package_size: int | None = None,
+        sha256: str | None = None,
+    ) -> None:
+        # Per-platform entries pass the resolved binding; omitted values fall
+        # back to the flat (legacy) entry fields.
+        expected_size = entry.package_size if package_size is None else package_size
+        expected_sha = entry.sha256 if sha256 is None else sha256
         if entry.signing_key_id in self._revoked:
             raise TrustError(f"revoked signing key: {entry.signing_key_id}")
         identity = self._keys.get(entry.signing_key_id)
@@ -124,10 +135,10 @@ class TrustStore:
             raise TrustError("signing key publisher does not match catalog entry")
         if not package_path.is_file():
             raise TrustError(f"package is missing: {package_path}")
-        if package_path.stat().st_size != entry.package_size:
+        if package_path.stat().st_size != expected_size:
             raise TrustError("package size does not match catalog entry")
         digest = _sha256_file(package_path)
-        if not hmac.compare_digest(digest.lower(), entry.sha256.lower()):
+        if not hmac.compare_digest(digest.lower(), expected_sha.lower()):
             raise TrustError("package sha256 does not match catalog entry")
         expected = hmac.new(key, canonical_entry_payload(entry), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected.lower(), entry.signature.lower()):
@@ -152,3 +163,5 @@ class TrustStore:
             raise TrustError(f"host compatibility failed: {entry.host_compatibility}")
         if platform not in entry.platforms:
             raise TrustError(f"platform is not supported: {platform}")
+        if entry.packages and all(package.platform != platform for package in entry.packages):
+            raise TrustError(f"no package published for platform: {platform}")

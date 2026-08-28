@@ -351,6 +351,11 @@ def main() -> int:
     if package_bytes > MAX_PACKAGE_BYTES:
         raise SystemExit(f"package size {package_bytes} exceeds limit {MAX_PACKAGE_BYTES}")
     print(f"[zip] {OUT_ZIP.name} bytes={package_bytes} sha256={package_sha}", flush=True)
+    # --zip-only: rebuild the platform zip without touching catalog/trust
+    # (the dual-platform catalog is emitted by build-marketplace-catalog.py).
+    if "--zip-only" in sys.argv:
+        print(json.dumps({"zip": str(OUT_ZIP), "bytes": package_bytes, "sha256": package_sha, "files": file_count, "unpacked_bytes": unpacked_bytes}, indent=2))
+        return 0
 
     # 6. Catalog + trust (HMAC test signatures, host modules for canonical form).
     from mikazuki.plugin_marketplace.models import MarketplaceCatalog, MarketplaceEntry
