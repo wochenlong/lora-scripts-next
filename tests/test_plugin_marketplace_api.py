@@ -670,6 +670,8 @@ def test_host_confirmation_is_one_shot_expires_and_cannot_be_resolved_by_plugin(
             "expiresAt": (now[0] + timedelta(seconds=60)).isoformat(),
             "resolvedAt": None,
             "artifactIds": ["provider-profile"],
+            "paramsHash": None,
+            "consumed": False,
         }
         pending = client.get("/api/plugin-host/confirmations/pending", headers=AUTH_HEADERS)
         assert pending.json()["data"]["confirmations"][0]["ticketId"] == ticket.ticket_id
