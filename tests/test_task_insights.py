@@ -267,6 +267,10 @@ class AiToolkitInsightsTests(unittest.TestCase):
         os.utime(first, (earlier, earlier))
         latest = self.samples / "1724900060000_000000250_0.jpg"
         latest.write_bytes(b"jpg")
+        # ai-toolkit writes its own UI thumbnails here; they must not show up.
+        thumbs = self.samples / ".thumbs"
+        thumbs.mkdir()
+        (thumbs / "1724900060000_000000250_0.jpg.jpg").write_bytes(b"jpg")
 
         images = task_insights.list_preview_images(self.metadata)
         self.assertEqual([item["name"] for item in images], [first.name, latest.name])

@@ -216,6 +216,10 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
         for path in root.rglob("*"):
             if not path.is_file() or path.suffix.lower() not in IMAGE_EXTENSIONS:
                 continue
+            # Skip hidden dirs: ai-toolkit writes its own UI thumbnails to
+            # samples/.thumbs/<name>.<ext>.jpg, which would double every entry.
+            if any(part.startswith(".") for part in path.relative_to(root).parts):
+                continue
             if not ai_toolkit and output_name and not path.name.startswith(output_name):
                 continue
             try:
