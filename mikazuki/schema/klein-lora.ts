@@ -2,6 +2,7 @@ Schema.intersect([
     Schema.object({
         model_train_type: Schema.union(["klein-4b-lora", "klein-9b-lora"]).default("klein-4b-lora").description("训练种类（FLUX.2 Klein base 4B / 9B，AI Toolkit 引擎）"),
         dit: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/klein/flux-2-klein-base-4b.safetensors").description("Klein DiT 底模文件（flux-2-klein-base-4b/9b.safetensors，须与训练种类匹配；切换 9B 时改路径），或 HF repo id"),
+        text_encoder: Schema.string().role('filepicker', { type: "folder" }).default("./sd-models/klein/qwen3-4b").description("文本编码器目录（Qwen3-4B；训练种类选 9B 时改为 Qwen3-8B 目录）。可在下方「训练用模型」区下载"),
         trigger_word: Schema.string().description("触发词（可选）。填写后会追加到不含该词的 caption 开头"),
     }).description("训练用模型"),
 

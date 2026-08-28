@@ -27,9 +27,12 @@ def _runtime(tmp_path: Path) -> RuntimeConfig:
 def _source(tmp_path: Path, **overrides) -> dict:
     data = tmp_path / "train" / "klein"
     data.mkdir(parents=True, exist_ok=True)
+    te = tmp_path / "models" / "qwen3-4b"
+    te.mkdir(parents=True, exist_ok=True)
     base = {
         "model_train_type": "klein-4b-lora",
         "pretrained_model_name_or_path": "black-forest-labs/FLUX.2-klein-base-4B",
+        "text_encoder": str(te),
         "train_data_dir": str(data),
         "max_train_steps": 2000,
         "learning_rate": "1e-4",
@@ -85,6 +88,27 @@ def test_variant_9b(tmp_path):
 def test_unknown_variant_rejected(tmp_path):
     with pytest.raises(AdapterError, match="未知 AI Toolkit 变体"):
         adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-2b")
+
+
+def test_te_path_side_channel(tmp_path):
+    adapted = adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-4b")
+    assert adapted.te_path == str((tmp_path / "models" / "qwen3-4b").resolve())
+    # TE path must NOT leak into the yaml (upstream has no such config key)
+    text = dump_yaml(adapted.config)
+    assert "qwen3-4b" not in text
+
+
+def test_missing_te_rejected(tmp_path):
+    source = _source(tmp_path)
+    source["text_encoder"] = ""
+    with pytest.raises(AdapterError, match="文本编码器"):
+        adapt_config(source, _runtime(tmp_path), "run-1", "klein-4b")
+
+
+def test_te_dir_missing_rejected(tmp_path):
+    source = _source(tmp_path, text_encoder=str(tmp_path / "nope"))
+    with pytest.raises(AdapterError, match="文本编码器目录不存在"):
+        adapt_config(source, _runtime(tmp_path), "run-1", "klein-4b")
 
 
 def test_local_dit_file_maps_to_parent(tmp_path):

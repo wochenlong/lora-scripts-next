@@ -67,6 +67,9 @@ SAVE_DTYPE_MAP = {
 class AdaptedConfig:
     config: dict[str, Any]
     warnings: list[str] = field(default_factory=list)
+    # Local TE dir; upstream has no config key, so it travels via the launch
+    # driver's AI_TOOLKIT_TE_PATH env instead of the yaml.
+    te_path: str = ""
 
 
 class AdapterError(ValueError):
@@ -180,6 +183,16 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
     else:
         # not a local path: treat as HF repo id, download happens upstream
         name_or_path = dit_text
+
+    te_raw = source.get("text_encoder")
+    if is_empty(te_raw):
+        raise AdapterError(
+            f"缺少文本编码器路径 (text_encoder)：Klein {variant} 需要本地 Qwen3 目录，"
+            "请在「训练用模型」区探测并下载"
+        )
+    te_path = Path(resolve_path(te_raw, runtime.lora_next_root))
+    if not te_path.is_dir():
+        raise AdapterError(f"文本编码器目录不存在: {te_path}（可在「训练用模型」区下载）")
 
     steps = int_value(source.get("max_train_steps"), 0)
     if steps <= 0:
@@ -312,7 +325,7 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
         warnings.append("未提供 sample_prompts，采样设置已忽略")
 
     known = set(UI_ONLY_FIELDS) | {
-        "pretrained_model_name_or_path", "dit", "train_data_dir", "control_data_dirs",
+        "pretrained_model_name_or_path", "dit", "text_encoder", "train_data_dir", "control_data_dirs",
         "caption_extension", "caption_dropout_rate", "shuffle_caption", "dataset_repeats",
         "resolution", "sample_resolution", "max_train_steps", "max_train_epochs",
         "train_batch_size", "batch_size", "gradient_accumulation_steps", "gradient_checkpointing",
@@ -338,7 +351,7 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
         },
         "meta": {"name": output_name, "version": "1.0"},
     }
-    return AdaptedConfig(config=config, warnings=warnings)
+    return AdaptedConfig(config=config, warnings=warnings, te_path=te_path.resolve().as_posix())
 
 
 def dump_yaml(config: dict[str, Any]) -> str:

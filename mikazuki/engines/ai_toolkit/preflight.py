@@ -103,6 +103,7 @@ def run_preflight(
     config: dict[str, Any],
     runtime: RuntimeConfig,
     variant: str,
+    te_path: str = "",
     probe: DependencyProbe = default_dependency_probe,
 ) -> PreflightResult:
     """Validate an adapted ai-toolkit config tree (post-adapter, absolute paths)."""
@@ -143,12 +144,17 @@ def run_preflight(
             # HF repo id: downloaded upstream at runtime
             facts["dit_source"] = "huggingface"
             warnings.append(f"DiT 将按 HF repo 下载: {name_or_path}（需网络/HF 镜像可达）")
-    facts["text_encoder"] = spec.get("text_encoder", "")
+    facts["text_encoder"] = te_path or spec.get("text_encoder", "")
     facts["vae"] = "ae.safetensors（与 DiT 同目录）"
-    warnings.append(
-        f"TE ({spec.get('text_encoder', '')}) 默认从 HF 拉取；"
-        "本地覆盖路径上游暂无 config 键（见 FIELD_NOTES）"
-    )
+    if not te_path:
+        errors.append("缺少本地文本编码器目录（text_encoder），请在「训练用模型」区下载")
+    else:
+        te_dir = Path(te_path)
+        for name in ("config.json", "tokenizer.json", "tokenizer_config.json"):
+            if not (te_dir / name).is_file():
+                errors.append(f"文本编码器目录缺少 {name}: {te_dir}")
+        if not any(te_dir.glob("*.safetensors")):
+            errors.append(f"文本编码器目录缺少权重文件（*.safetensors）: {te_dir}")
 
     images: list[Path] = []
     for entry in datasets:

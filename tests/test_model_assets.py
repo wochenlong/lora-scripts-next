@@ -35,7 +35,7 @@ class ModelAssetsManifestTests(unittest.TestCase):
             ("klein-9b-lora", "flux-2-klein-base-9b.safetensors"),
         ):
             assets = {asset.key: asset for asset in manifest_for(train_type)}
-            self.assertEqual(set(assets), {"dit", "vae"})
+            self.assertEqual(set(assets), {"dit", "vae", "text_encoder"})
             self.assertEqual(assets["dit"].hf_file, dit_file)
             self.assertTrue(assets["dit"].ms_repo, "ModelScope mirror for DiT")
             self.assertFalse(assets["dit"].optional)
@@ -44,6 +44,18 @@ class ModelAssetsManifestTests(unittest.TestCase):
             self.assertEqual(assets["vae"].ms_repo, "KanKanKan/flux2-vae")
             self.assertEqual(assets["vae"].ms_file, "flux2-vae.safetensors")
             self.assertFalse(assets["vae"].optional)
+            # TE: full model dir, HF + ModelScope same repo id, needs weights
+            te = assets["text_encoder"]
+            self.assertEqual(te.kind, "dir")
+            self.assertTrue(te.hf_repo and te.ms_repo)
+            self.assertTrue(te.dir_needs_weights)
+            self.assertIn("*.safetensors", te.dir_patterns)
+        self.assertEqual(
+            {a.key: a.hf_repo for a in manifest_for("klein-4b-lora")}["text_encoder"], "Qwen/Qwen3-4B"
+        )
+        self.assertEqual(
+            {a.key: a.hf_repo for a in manifest_for("klein-9b-lora")}["text_encoder"], "Qwen/Qwen3-8B"
+        )
 
     def test_klein_vae_lands_next_to_dit(self):
         # ai-toolkit auto-loads <name_or_path>/ae.safetensors: dit and vae defaults
@@ -123,12 +135,12 @@ class ModelAssetsDownloadTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
 
-            def fake_hf_download(repo_id, filename, local_dir):
-                target = Path(local_dir) / filename
-                target.write_text("{}", encoding="utf-8")
-                return str(target)
+            def fake_snapshot_download(repo_id, allow_patterns, local_dir):
+                for name in allow_patterns:
+                    (Path(local_dir) / name).write_text("{}", encoding="utf-8")
+                return str(local_dir)
 
-            with mock.patch("huggingface_hub.hf_hub_download", side_effect=fake_hf_download), \
+            with mock.patch("huggingface_hub.snapshot_download", side_effect=fake_snapshot_download), \
                  mock.patch("mikazuki.model_assets.patch_krea2_tokenizer_everywhere") as patch:
                 logs = []
                 download_assets("krea2-lora", [{"key": "tokenizer"}], "huggingface", root, logs.append)

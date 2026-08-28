@@ -52,9 +52,12 @@ def test_dry_run_emits_yaml(tmp_path, monkeypatch):
     data_dir = tmp_path / "train" / "klein"
     data_dir.mkdir(parents=True)
     (data_dir / "img1.png").write_bytes(b"")
+    te_dir = tmp_path / "models" / "qwen3-8b"
+    te_dir.mkdir(parents=True)
     payload = {
         "model_train_type": "klein-9b-lora",
         "pretrained_model_name_or_path": "black-forest-labs/FLUX.2-klein-base-9B",
+        "text_encoder": str(te_dir),
         "train_data_dir": str(data_dir),
         "max_train_steps": 100,
     }

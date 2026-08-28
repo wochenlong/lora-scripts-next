@@ -19,9 +19,11 @@ def build_train_spec(
     config_yaml: Path,
     task_id: str,
     gpu_ids: list[str] | None = None,
+    te_path: str = "",
 ) -> LaunchSpec:
     """Single-stage launch: ai-toolkit's run.py drives cache/train/sample
-    internally off one YAML config."""
+    internally off one YAML config. Invoked via the pack driver so pack-side
+    overrides (e.g. local TE path) apply before upstream main."""
     env = os.environ.copy()
     env["PYTHONIOENCODING"] = "utf-8"
     env["PYTHONUNBUFFERED"] = "1"
@@ -33,6 +35,8 @@ def build_train_spec(
     # run.py enables hf-xet by default; the xet CAS backend 401s behind
     # proxies/mirrors. Fall back to plain CDN download unless the user opted in.
     env.setdefault("HF_HUB_DISABLE_XET", "1")
+    if te_path:
+        env["AI_TOOLKIT_TE_PATH"] = te_path
     # run.py does sys.path.insert(0, os.getcwd()); keep cwd at the source root
     # and mirror it in PYTHONPATH for child processes.
     src = str(runtime.toolkit_root.resolve())
@@ -46,5 +50,5 @@ def build_train_spec(
     if gpu_ids:
         env["CUDA_VISIBLE_DEVICES"] = ",".join(str(g) for g in gpu_ids)
 
-    command = [str(runtime.python), "run.py", str(config_yaml)]
+    command = [str(runtime.python), str(Path(__file__).resolve().with_name("driver.py")), str(config_yaml)]
     return LaunchSpec(command=command, cwd=runtime.toolkit_root, env=env)

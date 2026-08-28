@@ -425,15 +425,16 @@ def run_ai_toolkit_train(config_yaml: str,
                          runtime,
                          variant: str,
                          gpu_ids: Optional[list] = None,
-                         metadata: Optional[dict] = None):
-    """Launch an ai-toolkit run: single-stage `python run.py <config.yaml>`."""
+                         metadata: Optional[dict] = None,
+                         te_path: str = ""):
+    """Launch an ai-toolkit run: single-stage driver -> `run.py <config.yaml>`."""
     from mikazuki.engines.ai_toolkit.launcher import build_train_spec as build_ai_toolkit_train_spec
 
     log.info(f"ai-toolkit training started with config file / ai-toolkit 训练开始，使用配置文件: {config_yaml}")
     if gpu_ids:
         log.info(f"Using GPU(s) / 使用 GPU: {gpu_ids}")
     task_id = str(uuid.uuid4())
-    spec = build_ai_toolkit_train_spec(runtime, Path(config_yaml), task_id, gpu_ids)
+    spec = build_ai_toolkit_train_spec(runtime, Path(config_yaml), task_id, gpu_ids, te_path=te_path)
     task_metadata = {
         "backend": "ai-toolkit",
         "train_type": f"{variant}-lora",

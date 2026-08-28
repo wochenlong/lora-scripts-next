@@ -39,6 +39,10 @@ class AssetDef:
     hf_file: str = ""
     ms_repo: str = ""
     ms_file: str = ""
+    # kind="dir" only: download allow_patterns and completeness check.
+    dir_patterns: tuple[str, ...] = ()
+    dir_required: tuple[str, ...] = ()
+    dir_needs_weights: bool = False  # require at least one *.safetensors
 
 
 KREA2_REPO = "Comfy-Org/Krea-2"
@@ -57,8 +61,22 @@ KLEIN_VAE_FILE = "ae.safetensors"
 KLEIN_VAE_MS_REPO = "KanKanKan/flux2-vae"
 KLEIN_VAE_MS_FILE = "flux2-vae.safetensors"
 
+# TE for Klein variants: upstream defaults to the HF ids Qwen/Qwen3-4B (4B) /
+# Qwen/Qwen3-8B (9B); both have same-id ModelScope mirrors with full file sets.
+TE_DIR_PATTERNS = ("*.json", "*.safetensors", "*.txt")
+TE_DIR_REQUIRED = ("config.json", "tokenizer.json", "tokenizer_config.json")
 
-def _klein_assets(variant: str, repo: str, dit_file: str) -> tuple[AssetDef, ...]:
+
+def _klein_te_asset(variant_tag: str, te_repo: str, te_dir: str) -> AssetDef:
+    return AssetDef(
+        "text_encoder", f"文本编码器（Qwen3-{variant_tag}，目录）", f"sd-models/klein/{te_dir}",
+        kind="dir",
+        hf_repo=te_repo, ms_repo=te_repo,
+        dir_patterns=TE_DIR_PATTERNS, dir_required=TE_DIR_REQUIRED, dir_needs_weights=True,
+    )
+
+
+def _klein_assets(variant: str, repo: str, dit_file: str, te_repo: str, te_dir: str, te_tag: str) -> tuple[AssetDef, ...]:
     return (
         AssetDef("dit", f"Klein {variant} DiT（底模）", f"sd-models/klein/{dit_file}",
                  hf_repo=repo, hf_file=dit_file,
@@ -66,12 +84,13 @@ def _klein_assets(variant: str, repo: str, dit_file: str) -> tuple[AssetDef, ...
         AssetDef("vae", "VAE（FLUX.2，ae.safetensors，须与 DiT 同目录）", f"sd-models/klein/{KLEIN_VAE_FILE}",
                  hf_repo=KLEIN_VAE_REPO, hf_file=KLEIN_VAE_FILE,
                  ms_repo=KLEIN_VAE_MS_REPO, ms_file=KLEIN_VAE_MS_FILE),
+        _klein_te_asset(te_tag, te_repo, te_dir),
     )
 
 
 ASSET_REGISTRY: dict[str, tuple[AssetDef, ...]] = {
-    "klein-4b-lora": _klein_assets("base-4B", KLEIN_4B_REPO, "flux-2-klein-base-4b.safetensors"),
-    "klein-9b-lora": _klein_assets("base-9B", KLEIN_9B_REPO, "flux-2-klein-base-9b.safetensors"),
+    "klein-4b-lora": _klein_assets("base-4B", KLEIN_4B_REPO, "flux-2-klein-base-4b.safetensors", "Qwen/Qwen3-4B", "qwen3-4b", "4B"),
+    "klein-9b-lora": _klein_assets("base-9B", KLEIN_9B_REPO, "flux-2-klein-base-9b.safetensors", "Qwen/Qwen3-8B", "qwen3-8b", "8B"),
     "krea2-lora": (
         AssetDef("dit", "Krea 2 DiT（RAW 底模）", "sd-models/krea2/krea2.safetensors",
                  hf_repo=KREA2_REPO, hf_file="diffusion_models/krea2_raw_bf16.safetensors",
@@ -116,6 +135,9 @@ def manifest_for(train_type: str) -> list[AssetDef]:
             hf_file=str(extra.get("hf_file") or asset.hf_file),
             ms_repo=str(extra.get("ms_repo") or asset.ms_repo),
             ms_file=str(extra.get("ms_file") or asset.ms_file),
+            dir_patterns=tuple(extra.get("dir_patterns") or asset.dir_patterns),
+            dir_required=tuple(extra.get("dir_required") or asset.dir_required),
+            dir_needs_weights=bool(extra.get("dir_needs_weights", asset.dir_needs_weights)),
         ))
     return resolved
 
@@ -135,6 +157,15 @@ def _target_path(raw: str, project_root: Path) -> Path:
 
 def dir_complete(path: Path) -> bool:
     return all((path / name).is_file() for name in TOKENIZER_REQUIRED)
+
+
+def asset_dir_complete(asset: AssetDef, path: Path) -> bool:
+    required = asset.dir_required or TOKENIZER_REQUIRED
+    if not all((path / name).is_file() for name in required):
+        return False
+    if asset.dir_needs_weights and not any(path.glob("*.safetensors")):
+        return False
+    return True
 
 
 def krea2_tokenizer_dir(project_root: Path) -> Path:
@@ -201,7 +232,7 @@ def check_assets(train_type: str, values: dict[str, Any], project_root: Path) ->
     items = []
     for asset in manifest_for(train_type):
         target = _target_path(str(values.get(asset.key) or asset.default_path), project_root)
-        exists = dir_complete(target) if asset.kind == "dir" else target.is_file()
+        exists = asset_dir_complete(asset, target) if asset.kind == "dir" else target.is_file()
         items.append({
             "key": asset.key,
             "label": asset.label,
@@ -218,22 +249,22 @@ def check_assets(train_type: str, values: dict[str, Any], project_root: Path) ->
 
 def _download_dir_asset(asset: AssetDef, source: str, target_dir: Path, log: Callable[[str], None]) -> None:
     target_dir.mkdir(parents=True, exist_ok=True)
+    patterns = list(asset.dir_patterns or TOKENIZER_FILES)
     if source == "huggingface":
-        log(f"[download] huggingface {asset.hf_repo} (tokenizer files) -> {target_dir}")
-        from huggingface_hub import hf_hub_download
+        log(f"[download] huggingface {asset.hf_repo} {patterns} -> {target_dir}")
+        from huggingface_hub import snapshot_download
 
-        for name in TOKENIZER_FILES:
-            hf_hub_download(repo_id=asset.hf_repo, filename=name, local_dir=str(target_dir))
+        snapshot_download(repo_id=asset.hf_repo, allow_patterns=patterns, local_dir=str(target_dir))
     else:
-        log(f"[download] modelscope {asset.ms_repo} (tokenizer files) -> {target_dir}")
+        log(f"[download] modelscope {asset.ms_repo} {patterns} -> {target_dir}")
         try:
             from modelscope import snapshot_download
         except ImportError as exc:
             raise RuntimeError("ModelScope 下载需要 modelscope 依赖，请先安装 requirements.txt") from exc
 
-        snapshot_download(asset.ms_repo, allow_patterns=TOKENIZER_FILES, local_dir=str(target_dir))
-    if not dir_complete(target_dir):
-        raise FileNotFoundError(f"下载完成但目录缺少 tokenizer 文件: {target_dir}")
+        snapshot_download(asset.ms_repo, allow_patterns=patterns, local_dir=str(target_dir))
+    if not asset_dir_complete(asset, target_dir):
+        raise FileNotFoundError(f"下载完成但目录缺少必要文件: {target_dir}")
 
 
 def download_assets(

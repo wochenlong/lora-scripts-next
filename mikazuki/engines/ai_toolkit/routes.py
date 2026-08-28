@@ -75,7 +75,7 @@ async def preflight(config: dict):
         adapted = adapt_ai_toolkit_config(config, runtime, run_id, variant)
     except AiToolkitAdapterError as exc:
         return APIResponseFail(message=str(exc))
-    result = run_ai_toolkit_preflight(adapted.config, runtime, variant)
+    result = run_ai_toolkit_preflight(adapted.config, runtime, variant, te_path=adapted.te_path)
     result.warnings = [*adapted.warnings, *result.warnings]
     if result.ok:
         return APIResponseSuccess(data=result.as_dict())

@@ -123,7 +123,7 @@ def handle_run(config: dict, ctx: RunContext):
 
         run_id = f"{ctx.timestamp}-ai-toolkit"
         adapted = adapt_ai_toolkit_config(config, runtime, run_id, variant)
-        preflight = run_ai_toolkit_preflight(adapted.config, runtime, variant)
+        preflight = run_ai_toolkit_preflight(adapted.config, runtime, variant, te_path=adapted.te_path)
         if not preflight.ok:
             return ai_toolkit_fail_from_preflight(preflight)
         yaml_file_path = Path(ctx.autosave_dir) / f"{run_id}.yaml"
@@ -132,10 +132,11 @@ def handle_run(config: dict, ctx: RunContext):
         metadata = {
             "output_dir": adapted.config["config"]["process"][0]["training_folder"],
             "output_name": adapted.config["config"]["name"],
+            "text_encoder": adapted.te_path,
             "warnings": [*adapted.warnings, *preflight.warnings],
         }
         return process.run_ai_toolkit_train(
-            str(yaml_file_path), runtime, variant, ctx.gpu_ids, metadata=metadata
+            str(yaml_file_path), runtime, variant, ctx.gpu_ids, metadata=metadata, te_path=adapted.te_path
         )
     except AiToolkitAdapterError as exc:
         return APIResponseFail(message=str(exc))

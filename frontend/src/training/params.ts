@@ -36,6 +36,8 @@ export const CROSS_SCHEMA_DENY_KEYS = [
   // klein/ai-toolkit's DiT dir (and vice versa); kohya pages keep sharing
   // pretrained_model_name_or_path among themselves.
   "dit",
+  // krea2's text_encoder is Qwen3-VL; klein's is Qwen3 — never cross them.
+  "text_encoder",
 ] as const
 
 /** schemaName → locked model_train_type for pages that own a single train type. */
