@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 import json
+import re
 import subprocess
 
 from .adapter import VARIANTS
@@ -11,6 +12,7 @@ from .settings import RuntimeConfig
 
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".avif"}
+HF_REPO_ID_RE = re.compile(r"^[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*$")
 
 
 @dataclass
@@ -141,9 +143,17 @@ def run_preflight(
                     "请在「训练用模型」区下载 VAE（须与 DiT 同目录）"
                 )
         elif not candidate.is_file():
-            # HF repo id: downloaded upstream at runtime
-            facts["dit_source"] = "huggingface"
-            warnings.append(f"DiT 将按 HF repo 下载: {name_or_path}（需网络/HF 镜像可达）")
+            # Anything that is neither an existing path nor a syntactically
+            # valid HF repo id is a typo'd local path; error instead of
+            # silently falling through to a runtime download (P8).
+            if not HF_REPO_ID_RE.match(name_or_path):
+                errors.append(
+                    f"DiT 路径不存在且不是合法的 HF repo id: {name_or_path}。"
+                    "请在「训练用模型」区下载，或检查路径是否写错"
+                )
+            else:
+                facts["dit_source"] = "huggingface"
+                warnings.append(f"DiT 将按 HF repo 下载: {name_or_path}（需网络/HF 镜像可达）")
     facts["text_encoder"] = te_path or spec.get("text_encoder", "")
     facts["vae"] = "ae.safetensors（与 DiT 同目录）"
     if not te_path:

@@ -193,3 +193,78 @@ def test_task_train_type_for_ai_toolkit_backend():
         metadata = {"backend": "ai-toolkit", "train_type": "klein-9b-lora"}
 
     assert api._task_train_type(_Task()) == "klein-9b-lora"
+
+
+def test_handle_run_preserves_preview_settings(tmp_path, monkeypatch):
+    """get_sample_prompts pops preview fields from the dict it gets; the adapter
+    must still see the original sample_width/cfg/seed/steps/negative values."""
+    import yaml
+
+    from mikazuki.app.models import APIResponseSuccess
+    from mikazuki.engines.ai_toolkit import run as aitk_run
+    from mikazuki.engines.runner import RunContext
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(aitk_run, "ai_toolkit_feature_enabled", lambda: True)
+    monkeypatch.setattr(aitk_run, "ai_toolkit_ready_gate", lambda: (True, None))
+
+    class _Preflight:
+        ok = True
+        errors: list = []
+        warnings: list = []
+
+        def as_dict(self):
+            return {}
+
+    monkeypatch.setattr(aitk_run, "run_ai_toolkit_preflight", lambda *a, **k: _Preflight())
+
+    captured = {}
+
+    def _fake_launch(config_yaml, runtime, variant, gpu_ids, metadata=None, te_path=""):
+        captured["config_yaml"] = config_yaml
+        return APIResponseSuccess(data={"task_id": "t-2"})
+
+    monkeypatch.setattr(aitk_run.process, "run_ai_toolkit_train", _fake_launch)
+
+    data_dir = tmp_path / "train"
+    data_dir.mkdir()
+    (data_dir / "img.png").write_bytes(b"")
+    te_dir = tmp_path / "te"
+    te_dir.mkdir()
+    for name in ("config.json", "tokenizer.json", "tokenizer_config.json"):
+        (te_dir / name).write_text("{}", encoding="utf-8")
+    (te_dir / "model.safetensors").write_bytes(b"")
+
+    config = {
+        "train_data_dir": str(data_dir),
+        "pretrained_model_name_or_path": "black-forest-labs/FLUX.2-klein-base-4B",
+        "text_encoder": str(te_dir),
+        "max_train_steps": 100,
+        "enable_preview": True,
+        "positive_prompts": "a cat",
+        "negative_prompts": "blurry",
+        "sample_width": 768,
+        "sample_height": 1152,
+        "sample_cfg": 6.5,
+        "sample_seed": 1234,
+        "sample_steps": 33,
+    }
+    ctx = RunContext(
+        timestamp="20260828-130000",
+        autosave_dir=str(tmp_path / "autosave"),
+        model_train_type="klein-4b-lora",
+        variant="klein-4b",
+    )
+    (tmp_path / "autosave").mkdir()
+    result = aitk_run.handle_run(config, ctx)
+    assert result.status == "success"
+
+    process = yaml.safe_load(Path(captured["config_yaml"]).read_text(encoding="utf-8"))["config"]["process"][0]
+    sample = process["sample"]
+    assert sample["width"] == 768
+    assert sample["height"] == 1152
+    assert sample["guidance_scale"] == 6.5
+    assert sample["seed"] == 1234
+    assert sample["sample_steps"] == 33
+    assert sample["neg"] == "blurry"
+    assert sample["prompts"] == ["a cat"]

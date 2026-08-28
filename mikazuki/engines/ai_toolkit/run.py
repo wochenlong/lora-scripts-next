@@ -107,7 +107,9 @@ def handle_run(config: dict, ctx: RunContext):
             config.setdefault("sample_width", 1024)
             config.setdefault("sample_height", 1024)
             try:
-                positive_prompt, sample_prompts_arg = get_sample_prompts(config=config, model_train_type=model_train_type)
+                # get_sample_prompts pops the preview fields it consumes; give it
+                # a copy so the adapter still sees sample_width/cfg/seed/neg etc.
+                positive_prompt, sample_prompts_arg = get_sample_prompts(config=dict(config), model_train_type=model_train_type)
                 if positive_prompt is not None and train_utils.is_promopt_like(sample_prompts_arg):
                     sample_prompts_file = os.path.join(ctx.autosave_dir, f"{ctx.timestamp}-promopt.txt")
                     with open(sample_prompts_file, "w", encoding="utf-8", newline="\n") as f:

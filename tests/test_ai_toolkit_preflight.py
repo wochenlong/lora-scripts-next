@@ -68,6 +68,17 @@ def test_preflight_ok(tmp_path):
     assert result.facts["text_encoder"] == adapted.te_path
 
 
+def test_preflight_missing_local_dit_path_is_error(tmp_path):
+    """A typo'd local path is not an HF repo id; it must fail the hard gate."""
+    runtime = _runtime(tmp_path)
+    source = _setup(tmp_path)
+    source["pretrained_model_name_or_path"] = "./sd-models/klein/typo.safetensors"
+    adapted = adapt_config(source, runtime, "run-1", "klein-4b")
+    result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
+    assert not result.ok
+    assert any("HF repo id" in e for e in result.errors)
+
+
 def test_preflight_te_variant_mismatch_warns(tmp_path):
     runtime = _runtime(tmp_path)
     source = _setup(tmp_path)

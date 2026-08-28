@@ -113,6 +113,30 @@ def test_sample_neg_from_negative_prompts(tmp_path):
     assert _process(adapted)["sample"]["neg"] == "blurry"
 
 
+def test_max_grad_norm_mapped(tmp_path):
+    adapted = adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-4b")
+    assert "max_grad_norm" not in _process(adapted)["train"]
+    adapted = adapt_config(_source(tmp_path, max_grad_norm=0.5), _runtime(tmp_path), "run-1", "klein-4b")
+    assert _process(adapted)["train"]["max_grad_norm"] == pytest.approx(0.5)
+
+
+def test_control_dirs_blank_rows_ignored(tmp_path):
+    ctrl = tmp_path / "control"
+    ctrl.mkdir()
+    adapted = adapt_config(
+        _source(tmp_path, control_data_dirs=[str(ctrl), "", "   "]),
+        _runtime(tmp_path),
+        "run-1",
+        "klein-4b",
+    )
+    assert _process(adapted)["datasets"][0]["control_path"] == [str(ctrl.resolve())]
+
+
+def test_control_dirs_non_list_rejected(tmp_path):
+    with pytest.raises(AdapterError, match="control_data_dirs"):
+        adapt_config(_source(tmp_path, control_data_dirs=123), _runtime(tmp_path), "run-1", "klein-4b")
+
+
 def test_variant_9b(tmp_path):
     adapted = adapt_config(
         _source(tmp_path, pretrained_model_name_or_path="black-forest-labs/FLUX.2-klein-base-9B"),

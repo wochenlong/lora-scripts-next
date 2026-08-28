@@ -243,6 +243,12 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
     control_dirs = source.get("control_data_dirs")
     if isinstance(control_dirs, str):
         control_dirs = [part.strip() for part in control_dirs.splitlines() if part.strip()]
+    elif control_dirs is not None and not isinstance(control_dirs, list):
+        raise AdapterError("control_data_dirs 必须是目录数组（或每行一个目录的文本）")
+    if control_dirs:
+        # Drop blank table rows: resolve_path("") would resolve to the project
+        # root and pass the is_dir check.
+        control_dirs = [str(d).strip() for d in control_dirs if str(d or "").strip()]
     if control_dirs:
         resolved_dirs = [resolve_path(d, runtime.lora_next_root) for d in control_dirs]
         for d in resolved_dirs:
@@ -263,6 +269,8 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
     }
     if not is_empty(source.get("lr_scheduler")):
         train["lr_scheduler"] = str(source.get("lr_scheduler")).strip()
+    if not is_empty(source.get("max_grad_norm")):
+        train["max_grad_norm"] = float_value(source.get("max_grad_norm"), 1.0) or 1.0
     if not is_empty(source.get("seed")):
         train["seed"] = int_value(source.get("seed"), 42)
     if truthy(source.get("use_ema")):
@@ -341,7 +349,7 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
         "caption_extension", "caption_dropout_rate", "shuffle_caption", "dataset_repeats",
         "resolution", "sample_resolution", "max_train_steps", "max_train_epochs",
         "train_batch_size", "batch_size", "gradient_accumulation_steps", "gradient_checkpointing",
-        "optimizer_type", "learning_rate", "lr_scheduler", "seed", "use_ema", "ema_decay",
+        "optimizer_type", "learning_rate", "lr_scheduler", "max_grad_norm", "seed", "use_ema", "ema_decay",
         "quantize", "quantize_te", "qtype", "low_vram", "layer_offloading",
         "output_dir", "output_name", "save_precision", "save_every_n_steps", "save_every_n_epochs",
         "save_last_n_steps", "network_dim", "network_alpha", "trigger_word",
