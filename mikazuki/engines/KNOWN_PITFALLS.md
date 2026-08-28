@@ -52,3 +52,10 @@
 - 检测：快照装完先静态扫 `grep -rn "^from <name> import\|^import <name>"` 对根目录每个散装 `.py`；或冒烟跑训练入口即现形。
 - 绕法：installer 的 `INCLUDE_TOP_LEVEL` 补上该文件，重装/修复即可。现成实现：`mikazuki/engines/ai_toolkit/installer.py`（含快照完整性测试）。
 - 来源：ai_toolkit pack（2026-08-28，GB10 首次训练冒烟命中）。
+
+## P8. 训练进程运行时自动下载不可信
+
+- 症状：资产没本地化时，训练进程自己触网下载，在代理/镜像环境下失败且报错位置远离根因（hf-xet CAS 401、HF 直连被重置）。
+- 检测：grep 上游训练入口/模型加载路径里的 `snapshot_download`/`from_pretrained`/`hf_hub_download`；凡训练路径能触到网络的都算命中。
+- 绕法：资产一律登记进下载组件 + preflight 硬门槛，训练进程不碰网络；launcher 默认关 xet（`HF_HUB_DISABLE_XET=1`）。镜像源可用性必须实测：probe API + Range 拉 safetensors header 验键布局，仓名不算数。现成实现：`mikazuki/engines/ai_toolkit/launcher.py`、ai_toolkit 资产登记/preflight。
+- 来源：ai_toolkit pack（2026-08-28，hf-xet CAS 401 与 TE 运行时下载两次实证）。
