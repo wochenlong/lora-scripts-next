@@ -51,6 +51,7 @@ beforeEach(() => {
   i18n.global.locale.value = "zh-CN"
   vi.spyOn(pluginsApi, "ensureHostAuthority").mockResolvedValue()
   vi.spyOn(pluginsApi, "listMarketplacePlugins").mockResolvedValue([status()])
+  vi.spyOn(pluginsApi, "listMarketplaceCatalog").mockResolvedValue([])
   vi.spyOn(pluginsApi, "installMarketplacePlugin").mockResolvedValue(status({ state: "installed", active_version: "1.2.0" }))
   vi.spyOn(pluginsApi, "enableMarketplacePlugin").mockResolvedValue(status({ state: "enabled", active_version: "1.2.0", enabled: true }))
   vi.spyOn(pluginsApi, "disableMarketplacePlugin").mockResolvedValue(status({ state: "installed", active_version: "1.2.0" }))
@@ -77,6 +78,31 @@ describe("MarketplaceSettingsPage", () => {
     await checkboxes[0].setValue(true)
     expect(install.attributes("disabled")).toBeDefined()
     await checkboxes[1].setValue(true)
+    expect(install.attributes("disabled")).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it("renders the live catalog and allows zero-permission plugins to install immediately", async () => {
+    const zeroPermissionEntry: MarketplaceEntry = {
+      ...entry,
+      id: "next-trainer-pi-agent",
+      name: "Pi Agent (pi-web)",
+      permissions_summary: [],
+    }
+    vi.mocked(pluginsApi.listMarketplaceCatalog).mockResolvedValueOnce([zeroPermissionEntry])
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
+      status({ id: "next-trainer-pi-agent" }),
+    ])
+    const wrapper = mount(MarketplaceSettingsPage, {
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    expect(wrapper.text()).toContain("Pi Agent (pi-web)")
+    // No catalog notice: the live catalog answered.
+    expect(wrapper.find(".marketplace-notice").exists()).toBe(false)
+    const install = wrapper.get("button.primary-action")
+    expect(install.text()).toContain("安装")
     expect(install.attributes("disabled")).toBeUndefined()
     wrapper.unmount()
   })

@@ -16,6 +16,7 @@ const props = withDefaults(defineProps<{ catalogEntries?: MarketplaceEntry[] }>(
 const { t } = useI18n()
 const extensionsStore = useExtensionsStore()
 const statuses = ref<MarketplacePluginStatus[]>([])
+const liveCatalog = ref<MarketplaceEntry[]>([])
 const selectedId = ref("")
 const loading = ref(false)
 const busyAction = ref("")
@@ -42,8 +43,13 @@ function emptyStatus(id: string): MarketplacePluginStatus {
   }
 }
 
+const catalogUnavailable = computed(
+  () => props.catalogEntries.length === 0 && liveCatalog.value.length === 0,
+)
+
 const records = computed<MarketplaceRecord[]>(() => {
-  const entries = new Map(props.catalogEntries.map((entry) => [entry.id, entry]))
+  const effective = liveCatalog.value.length > 0 ? liveCatalog.value : props.catalogEntries
+  const entries = new Map(effective.map((entry) => [entry.id, entry]))
   const states = new Map(statuses.value.map((status) => [status.id, status]))
   return [...new Set([...entries.keys(), ...states.keys()])]
     .sort((left, right) => (entries.get(left)?.name || left).localeCompare(entries.get(right)?.name || right))
@@ -51,9 +57,11 @@ const records = computed<MarketplaceRecord[]>(() => {
 })
 const selected = computed(() => records.value.find((record) => record.id === selectedId.value) ?? records.value[0] ?? null)
 const selectedPermissions = computed(() => (selected.value ? (approvedByPlugin[selected.value.id] ?? []) : []))
+// A plugin that declares no permissions requires no approval and is
+// installable immediately ([].every() is vacuously true).
 const allPermissionsApproved = computed(() => {
   const required = selected.value?.entry?.permissions_summary ?? []
-  return required.length > 0 && required.every((permission) => selectedPermissions.value.includes(permission))
+  return required.every((permission) => selectedPermissions.value.includes(permission))
 })
 
 function permissionLabel(permission: string) {
@@ -86,7 +94,14 @@ async function load() {
   loading.value = true
   error.value = ""
   try {
-    statuses.value = await pluginsApi.listMarketplacePlugins()
+    const [installed, catalog] = await Promise.all([
+      pluginsApi.listMarketplacePlugins(),
+      // The live catalog may be offline (MARKETPLACE_CATALOG_OFFLINE) or the
+      // host may not ship one; fall back to the injected entries when empty.
+      pluginsApi.listMarketplaceCatalog().catch(() => [] as MarketplaceEntry[]),
+    ])
+    statuses.value = installed
+    liveCatalog.value = catalog
   } catch {
     statuses.value = []
     error.value = t("marketplace.loadFailed")
@@ -181,7 +196,7 @@ onMounted(() => void load())
       </button>
     </header>
 
-    <p v-if="props.catalogEntries.length === 0" class="marketplace-notice" role="status">{{ t("marketplace.catalogUnavailable") }}</p>
+    <p v-if="catalogUnavailable" class="marketplace-notice" role="status">{{ t("marketplace.catalogUnavailable") }}</p>
     <p v-if="error" class="marketplace-error" role="alert">{{ error }}</p>
     <div v-if="loading" class="marketplace-loading" aria-live="polite">{{ t("marketplace.loading") }}</div>
     <div v-else-if="records.length === 0" class="marketplace-empty">{{ t("marketplace.empty") }}</div>
