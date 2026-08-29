@@ -43,6 +43,7 @@ PLATFORM = "win32-x64"
 SIGNING_KEY_ID = "zero-short-test"
 SIGNING_KEY = b"zero-short-test-signing-key"
 PACKAGE_ROOT = Path(__file__).parents[1] / "plugin-packages" / PLUGIN_ID
+from agent_test_support import require_dist
 
 
 def _package(root: Path, *, version: str, executable: bytes | None = None) -> Path:
@@ -112,8 +113,7 @@ def _workspace_tempdir(prefix: str):
 
 def test_fresh_package_marketplace_zero_short_real_sidecar_and_core_survival():
     """Exercise the real dist package through manager/runtime lifecycle from empty state."""
-    assert (PACKAGE_ROOT / "dist" / "bin" / "next-trainer-pi-agent.exe").is_file(), "build sidecar first"
-    assert (PACKAGE_ROOT / "dist" / "ui" / "index.js").is_file(), "build UI first"
+    require_dist()
 
     with _workspace_tempdir("next-trainer-zero-short-") as root:
         package_v1 = _package(root, version="0.1.0")
