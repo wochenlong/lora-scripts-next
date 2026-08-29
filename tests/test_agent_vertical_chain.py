@@ -49,6 +49,7 @@ SIGNING_KEY = b"vertical-chain-test-signing-key"
 API_KEY = "sk-vertical-chain-secret"
 ANSWER = "vertical-chain-ok"
 PACKAGE_ROOT = Path(__file__).parents[1] / "plugin-packages" / PLUGIN_ID
+from agent_test_support import require_dist
 EXPECTED_HOST_TOOLS = frozenset(
     {
         "training_config_template",
@@ -192,8 +193,7 @@ def _entry(package: Path, *, version: str) -> MarketplaceEntry:
 
 
 def test_fastapi_host_sidecar_pi_ui_real_vertical_chain():
-    assert (PACKAGE_ROOT / "dist" / "bin" / "next-trainer-pi-agent.exe").is_file(), "build sidecar first"
-    assert (PACKAGE_ROOT / "dist" / "ui" / "index.js").is_file(), "build UI first"
+    require_dist()
 
     with _workspace_tempdir("next-trainer-vertical-") as root:
         _run_vertical_chain(root)
