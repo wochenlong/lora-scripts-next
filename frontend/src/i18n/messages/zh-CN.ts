@@ -934,6 +934,16 @@ export default {
       runtime_error: "运行异常",
       broken: "安装损坏",
     },
+    installCancelled: "已取消插件安装。",
+    cancelInstall: "取消安装",
+    phase: {
+      acquiring: "正在获取安装包（本地复制或在线下载）…",
+      verifying: "正在校验签名与完整性…",
+      extracting: "正在解包…",
+      health_check: "正在运行插件健康检查…",
+      committing: "正在提交安装记录…",
+      done: "完成",
+    },
     permissions: {
       "model-provider": "模型 Provider",
       "training-config": "训练配置",

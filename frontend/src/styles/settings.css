@@ -496,6 +496,37 @@
   color: var(--text-faint);
 }
 
+.marketplace-install-progress {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.marketplace-install-progress-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  margin-bottom: 8px;
+}
+
+.marketplace-install-progress-head span:last-child {
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
+.marketplace-install-progress .marketplace-error {
+  margin: 10px 0 0;
+}
+
+.marketplace-install-progress-actions {
+  display: flex;
+  margin-top: 12px;
+}
+
 .marketplace-actions {
   display: flex;
   flex-wrap: wrap;

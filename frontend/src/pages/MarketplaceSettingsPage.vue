@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from "vue"
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { Refresh } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import {
   pluginsApi,
   type MarketplaceEntry,
+  type MarketplaceInstallOperation,
   type MarketplacePluginStatus,
 } from "../api/plugins"
 import { useExtensionsStore } from "../stores/extensions"
@@ -120,11 +121,89 @@ async function runAction(action: string, operation: () => Promise<MarketplacePlu
   }
 }
 
+const installOp = ref<MarketplaceInstallOperation | null>(null)
+const installAbort = ref<AbortController | null>(null)
+
+/** Follow an install operation to a terminal state.
+ *
+ * Primary path is the SSE stream; if the stream drops early (host restart,
+ * proxy timeout) we keep polling the snapshot endpoint until it settles.
+ */
+async function followInstall(pluginId: string, operationId: string, signal: AbortSignal) {
+  try {
+    await pluginsApi.streamInstallOperation(pluginId, operationId, (snapshot) => {
+      installOp.value = snapshot
+    }, signal)
+  } catch {
+    // Stream broke early — the polling loop below takes over.
+  }
+  while (!signal.aborted && installOp.value?.state === "running") {
+    await new Promise((resolve) => setTimeout(resolve, 1200))
+    if (signal.aborted) return
+    try {
+      installOp.value = await pluginsApi.getInstallOperation(pluginId, operationId)
+    } catch {
+      // Keep polling through transient read errors.
+    }
+  }
+}
+
+function finishInstall() {
+  const finalOp = installOp.value
+  installOp.value = null
+  if (finalOp?.state === "succeeded" && finalOp.status) {
+    updateStatus(finalOp.status)
+    void extensionsStore.refresh()
+    ElMessage.success(t("marketplace.actionDone"))
+  } else if (finalOp?.state === "cancelled") {
+    ElMessage.info(t("marketplace.installCancelled"))
+  } else if (finalOp?.state === "failed") {
+    error.value = finalOp.errorMessage || t("marketplace.actionFailed")
+  }
+}
+
 async function install() {
   const record = selected.value
-  if (!record?.entry || !(await confirmMutation("marketplace.confirmInstall"))) return
-  await runAction("install", () => pluginsApi.installMarketplacePlugin(record.entry!, declaredPermissions.value))
+  if (!record?.entry || busyAction.value || !(await confirmMutation("marketplace.confirmInstall"))) return
+  busyAction.value = "install"
+  error.value = ""
+  const controller = new AbortController()
+  installAbort.value = controller
+  try {
+    const initial = await pluginsApi.installMarketplacePlugin(record.entry, declaredPermissions.value)
+    installOp.value = initial
+    await followInstall(record.id, initial.operationId, controller.signal)
+    finishInstall()
+    await load()
+  } catch {
+    error.value = t("marketplace.actionFailed")
+  } finally {
+    installAbort.value = null
+    installOp.value = null
+    busyAction.value = ""
+  }
 }
+
+async function cancelInstall() {
+  const record = selected.value
+  const operation = installOp.value
+  if (!record || !operation || operation.state !== "running") return
+  installAbort.value?.abort()
+  try {
+    installOp.value = await pluginsApi.cancelInstallOperation(record.id, operation.operationId)
+  } catch {
+    try {
+      installOp.value = await pluginsApi.getInstallOperation(record.id, operation.operationId)
+    } catch {
+      // Keep the last known state; the operation is terminal or about to be.
+    }
+  }
+  finishInstall()
+}
+
+onBeforeUnmount(() => {
+  installAbort.value?.abort()
+})
 
 async function enable() {
   const record = selected.value
@@ -217,6 +296,28 @@ onMounted(() => void load())
           <div><dt>{{ t("marketplace.compatibility") }}</dt><dd>{{ selected.entry?.host_compatibility || "-" }}</dd></div>
           <div><dt>{{ t("marketplace.platforms") }}</dt><dd>{{ selected.entry?.platforms.join(", ") || "-" }}</dd></div>
         </dl>
+
+        <div v-if="installOp" class="marketplace-install-progress" aria-live="polite">
+          <div class="marketplace-install-progress-head">
+            <span>{{ t(`marketplace.phase.${installOp.phase}`) }}</span>
+            <span v-if="installOp.progress.total > 0">
+              {{ formatBytes(installOp.progress.current) }} / {{ formatBytes(installOp.progress.total) }}
+            </span>
+          </div>
+          <el-progress
+            v-if="installOp.state === 'running'"
+            :percentage="installOp.progress.percent ?? 0"
+            :stroke-width="8"
+          />
+          <p v-if="installOp.state === 'failed' && installOp.errorMessage" class="marketplace-error" role="alert">
+            {{ installOp.errorMessage }}
+          </p>
+          <div v-if="installOp.state === 'running'" class="marketplace-install-progress-actions">
+            <button type="button" class="secondary-action" @click="cancelInstall">
+              {{ t("marketplace.cancelInstall") }}
+            </button>
+          </div>
+        </div>
 
         <p v-if="selected.status.reason" class="marketplace-error" role="alert">{{ t("marketplace.statusError") }}</p>
         <footer class="marketplace-actions">

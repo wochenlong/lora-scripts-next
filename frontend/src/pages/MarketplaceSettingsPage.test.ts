@@ -6,6 +6,7 @@ import MarketplaceSettingsPage from "./MarketplaceSettingsPage.vue"
 import {
   pluginsApi,
   type MarketplaceEntry,
+  type MarketplaceInstallOperation,
   type MarketplacePluginStatus,
 } from "../api/plugins"
 import { i18n } from "../i18n"
@@ -46,13 +47,53 @@ function status(overrides: Partial<MarketplacePluginStatus> = {}): MarketplacePl
   }
 }
 
+function operation(
+  overrides: Partial<MarketplaceInstallOperation> = {},
+): MarketplaceInstallOperation {
+  return {
+    operationId: "op-test",
+    pluginId: "sample-plugin",
+    version: "1.2.0",
+    state: "running",
+    phase: "acquiring",
+    progress: { current: 0, total: 0, percent: null },
+    errorCode: null,
+    errorMessage: null,
+    status: null,
+    startedAt: "2026-08-29T00:00:00Z",
+    finishedAt: null,
+    ...overrides,
+  }
+}
+
 beforeEach(() => {
   setActivePinia(createPinia())
   i18n.global.locale.value = "zh-CN"
   vi.spyOn(pluginsApi, "ensureHostAuthority").mockResolvedValue()
   vi.spyOn(pluginsApi, "listMarketplacePlugins").mockResolvedValue([status()])
   vi.spyOn(pluginsApi, "listMarketplaceCatalog").mockResolvedValue([])
-  vi.spyOn(pluginsApi, "installMarketplacePlugin").mockResolvedValue(status({ state: "installed", active_version: "1.2.0" }))
+  vi.spyOn(pluginsApi, "installMarketplacePlugin").mockResolvedValue(operation())
+  // Default: the stream resolves immediately at a terminal snapshot so tests
+  // that do not exercise progress settle without real timers.
+  vi.spyOn(pluginsApi, "streamInstallOperation").mockImplementation(
+    async (_pluginId, _operationId, onSnapshot) => {
+      onSnapshot(
+        operation({
+          state: "succeeded",
+          phase: "done",
+          progress: { current: 1, total: 1, percent: 100 },
+          status: status({ state: "installed", active_version: "1.2.0" }),
+        }),
+      )
+    },
+  )
+  vi.spyOn(pluginsApi, "getInstallOperation").mockResolvedValue(
+    operation({
+      state: "succeeded",
+      phase: "done",
+      status: status({ state: "installed", active_version: "1.2.0" }),
+    }),
+  )
   vi.spyOn(pluginsApi, "enableMarketplacePlugin").mockResolvedValue(status({ state: "enabled", active_version: "1.2.0", enabled: true }))
   vi.spyOn(pluginsApi, "disableMarketplacePlugin").mockResolvedValue(status({ state: "installed", active_version: "1.2.0" }))
 })
@@ -75,6 +116,66 @@ describe("MarketplaceSettingsPage", () => {
     // and no permission checkboxes are rendered.
     expect(install.attributes("disabled")).toBeUndefined()
     expect(wrapper.findAll('input[type="checkbox"]')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it("follows the install operation, shows progress, and lands on installed", async () => {
+    const { ElMessageBox } = await import("element-plus")
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue(
+      "confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
+    // Hold the stream open until the assertions below release it, so the
+    // progress block is observable while the operation is running.
+    let releaseStream: () => void = () => {}
+    const streamGate = new Promise<void>((resolve) => {
+      releaseStream = resolve
+    })
+    const snapshots: Array<{ state: string; phase: string }> = []
+    vi.mocked(pluginsApi.streamInstallOperation).mockImplementation(
+      async (_pluginId, _operationId, onSnapshot) => {
+        const running = operation({
+          phase: "acquiring",
+          progress: { current: 512 * 1024, total: 1024 * 1024, percent: 50 },
+        })
+        onSnapshot(running)
+        snapshots.push({ state: running.state, phase: running.phase })
+        await streamGate
+        onSnapshot(
+          operation({
+            state: "succeeded",
+            phase: "done",
+            progress: { current: 1024 * 1024, total: 1024 * 1024, percent: 100 },
+            status: status({ state: "installed", active_version: "1.2.0" }),
+          }),
+        )
+      },
+    )
+    vi.mocked(pluginsApi.listMarketplacePlugins)
+      .mockResolvedValueOnce([status()])
+      .mockResolvedValueOnce([status({ state: "installed", active_version: "1.2.0" })])
+
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+    await wrapper.get("button.primary-action").trigger("click")
+    await flushPromises()
+    // While the stream is active the progress block renders the phase label
+    // and the byte counter.
+    const progress = wrapper.find(".marketplace-install-progress")
+    expect(progress.exists()).toBe(true)
+    expect(progress.text()).toContain("正在获取安装包")
+    expect(progress.text()).toContain("512.0 KB")
+    expect(progress.find("button").text()).toContain("取消安装")
+    releaseStream()
+    await flushPromises()
+
+    // The operation settled: progress block is gone, detail shows installed.
+    expect(wrapper.find(".marketplace-install-progress").exists()).toBe(false)
+    expect(wrapper.find("button.primary-action").text()).toContain("启用")
+    expect(wrapper.find("i[data-state='installed']").exists()).toBe(true)
+    expect(snapshots).toEqual([{ state: "running", phase: "acquiring" }])
     wrapper.unmount()
   })
 

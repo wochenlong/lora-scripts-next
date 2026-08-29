@@ -2,15 +2,17 @@ from __future__ import annotations
 
 import json
 import os
-import shutil
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
 
 from pydantic import ValidationError
 
 from .models import MarketplaceCatalog, MarketplaceEntry
 from .paths import MarketplacePaths
 from .trust import TrustError, TrustStore
+
+
+_COPY_CHUNK_BYTES = 8 * 1024 * 1024
 
 
 class CatalogError(ValueError):
@@ -26,7 +28,14 @@ class CatalogSource(Protocol):
 
 
 class PackageAcquirer(Protocol):
-    def acquire(self, entry: MarketplaceEntry, destination: Path, platform: str) -> Path: ...
+    def acquire(
+        self,
+        entry: MarketplaceEntry,
+        destination: Path,
+        platform: str,
+        on_progress: Callable[[int, int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Path: ...
 
 
 class FileCatalogSource:
@@ -50,7 +59,14 @@ class LocalPackageAcquirer:
     def __init__(self, sources: dict[str, Path]) -> None:
         self._sources = {url: path.resolve() for url, path in sources.items()}
 
-    def acquire(self, entry: MarketplaceEntry, destination: Path, platform: str) -> Path:
+    def acquire(
+        self,
+        entry: MarketplaceEntry,
+        destination: Path,
+        platform: str,
+        on_progress: Callable[[int, int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Path:
         try:
             package_url, package_size, _sha256 = entry.resolve_platform_package(platform)
         except ValueError as exc:
@@ -74,12 +90,30 @@ class LocalPackageAcquirer:
             )
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_suffix(destination.suffix + ".part")
+        if on_progress is not None:
+            on_progress(0, package_size)
+        current = 0
         try:
-            shutil.copyfile(source, temporary)
-            with temporary.open("r+b") as handle:
-                handle.flush()
-                os.fsync(handle.fileno())
+            with source.open("rb") as handle_in, temporary.open("wb") as handle_out:
+                while True:
+                    if is_cancelled is not None and is_cancelled():
+                        raise CatalogError(
+                            "MARKETPLACE_OPERATION_CANCELLED",
+                            "The plugin installation was cancelled.",
+                            status_code=409,
+                        )
+                    chunk = handle_in.read(_COPY_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    handle_out.write(chunk)
+                    current += len(chunk)
+                    if on_progress is not None:
+                        on_progress(current, package_size)
+                handle_out.flush()
+                os.fsync(handle_out.fileno())
             os.replace(temporary, destination)
+        except CatalogError:
+            raise
         except OSError as exc:
             raise CatalogError(
                 "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
@@ -92,7 +126,14 @@ class LocalPackageAcquirer:
 
 
 class UnavailablePackageAcquirer:
-    def acquire(self, entry: MarketplaceEntry, destination: Path, platform: str) -> Path:
+    def acquire(
+        self,
+        entry: MarketplaceEntry,
+        destination: Path,
+        platform: str,
+        on_progress: Callable[[int, int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Path:
         raise CatalogError(
             "MARKETPLACE_PACKAGE_ACQUISITION_UNAVAILABLE",
             "Marketplace package acquisition is not configured.",
@@ -170,10 +211,16 @@ class MarketplaceCatalogService:
             )
         return matches[0]
 
-    def acquire(self, entry: MarketplaceEntry, platform: str) -> Path:
+    def acquire(
+        self,
+        entry: MarketplaceEntry,
+        platform: str,
+        on_progress: Callable[[int, int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Path:
         destination = self.paths.quarantine_package(entry.id, entry.latest_version)
         destination.unlink(missing_ok=True)
-        return self.acquirer.acquire(entry, destination, platform)
+        return self.acquirer.acquire(entry, destination, platform, on_progress, is_cancelled)
 
     @staticmethod
     def _parse(payload: bytes) -> MarketplaceCatalog:

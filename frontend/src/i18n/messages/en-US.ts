@@ -934,6 +934,16 @@ export default {
       runtime_error: "Runtime error",
       broken: "Broken install",
     },
+    installCancelled: "Plugin installation cancelled.",
+    cancelInstall: "Cancel install",
+    phase: {
+      acquiring: "Acquiring package (local copy or download)…",
+      verifying: "Verifying signature and integrity…",
+      extracting: "Extracting…",
+      health_check: "Running plugin health check…",
+      committing: "Committing install record…",
+      done: "Done",
+    },
     permissions: {
       "model-provider": "Model provider",
       "training-config": "Training configuration",

@@ -220,10 +220,20 @@ class MarketplaceManager:
         package_path: Path,
         *,
         approved_permissions: set[str] | None = None,
+        on_phase: Callable[[str], None] | None = None,
     ) -> PluginStatus:
+        def _phase(name: str) -> None:
+            if on_phase is None:
+                return
+            try:
+                on_phase(name)
+            except Exception:  # noqa: BLE001 — progress must never break the install
+                pass
+
         with self._plugin_lock(entry.id):
             if package_path.is_file() and package_path.stat().st_size > self.package_limits.max_package_bytes:
                 raise PackageValidationError("package size limit exceeded")
+            _phase("verifying")
             self.trust.verify_compatibility(entry, host_version=self.host_version, platform=self.platform)
             try:
                 _package_url, expected_size, expected_sha = entry.resolve_platform_package(self.platform)
@@ -260,9 +270,12 @@ class MarketplaceManager:
             next_grants = approved if approved else (previous_grants & manifest_permissions)
             target_created = False
             try:
+                _phase("extracting")
                 extract_package(package_path, staging, members)
+                _phase("health_check")
                 if not self.health_check(manifest, staging):
                     raise RuntimeError(f"plugin health check failed: {entry.id}@{entry.latest_version}")
+                _phase("committing")
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if target.exists():
                     existing = (record.get("versions") or {}).get(entry.latest_version)

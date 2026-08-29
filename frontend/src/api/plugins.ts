@@ -90,6 +90,35 @@ export interface MarketplacePluginStatus {
   runtime_pid: number | null
 }
 
+export type MarketplaceInstallState = "running" | "succeeded" | "failed" | "cancelled"
+export type MarketplaceInstallPhase =
+  | "acquiring"
+  | "verifying"
+  | "extracting"
+  | "health_check"
+  | "committing"
+  | "done"
+
+export interface MarketplaceInstallProgress {
+  current: number
+  total: number
+  percent: number | null
+}
+
+export interface MarketplaceInstallOperation {
+  operationId: string
+  pluginId: string
+  version: string
+  state: MarketplaceInstallState
+  phase: MarketplaceInstallPhase
+  progress: MarketplaceInstallProgress
+  errorCode: string | null
+  errorMessage: string | null
+  status: MarketplacePluginStatus | null
+  startedAt: string
+  finishedAt: string | null
+}
+
 interface PluginHostAuthority {
   runToken: string
   header: "X-NextTrainer-Run-Token"
@@ -207,6 +236,70 @@ async function marketplaceMutation(
     { method: "POST", body: JSON.stringify(body) },
   )
   return hostData<MarketplacePluginStatus>(response)
+}
+
+function installOperationPath(pluginId: string, operationId: string, suffix = "") {
+  if (!isValidPluginId(pluginId)) throw new PluginCapabilityError("PLUGIN_ID_INVALID", "Plugin identity is invalid.")
+  if (!/^[a-f0-9]{1,128}$/i.test(operationId)) {
+    throw new PluginCapabilityError("PLUGIN_OPERATION_ID_INVALID", "The install operation id is invalid.")
+  }
+  return `/api/marketplace/plugins/${encodeURIComponent(pluginId)}/operations/${encodeURIComponent(operationId)}${suffix}`
+}
+
+async function streamInstallOperationImpl(
+  pluginId: string,
+  operationId: string,
+  onSnapshot: (operation: MarketplaceInstallOperation) => void,
+  signal?: AbortSignal,
+): Promise<void> {
+  const response = await authorizedFetch(installOperationPath(pluginId, operationId, "/stream"), {
+    method: "GET",
+    signal,
+  })
+  if (!response.ok) {
+    await hostData<never>(response)
+    return
+  }
+  if (!response.body) return
+  const reader = response.body.getReader()
+  const decoder = new TextDecoder()
+  let buffer = ""
+  let terminal = false
+
+  const processFrames = (flush: boolean) => {
+    // When the stream has closed, the tail of the buffer is a complete frame
+    // (the server ends every frame with a blank line, but the final chunk may
+    // carry the last frame together with EOF), so flush it unconditionally.
+    const frames = buffer.split("\n\n")
+    buffer = flush ? "" : (frames.pop() ?? "")
+    for (const frame of frames) {
+      const lines = frame.split("\n")
+      const event = (lines.find((line) => line.startsWith("event:")) ?? "").slice(6).trim()
+      const data = lines
+        .filter((line) => line.startsWith("data:"))
+        .map((line) => line.slice(5).trimStart())
+        .join("\n")
+      if (!data) continue
+      try {
+        const payload = JSON.parse(data) as { status?: string; data?: unknown }
+        if (payload.status !== "success" || !payload.data || typeof payload.data !== "object") continue
+        const snapshot = payload.data as MarketplaceInstallOperation
+        if (!snapshot.operationId) continue
+        if (event === "connected") continue
+        onSnapshot(snapshot)
+        if (snapshot.state !== "running") terminal = true
+      } catch {
+        // Skip malformed frames; the polling fallback recovers state.
+      }
+    }
+  }
+
+  while (!terminal) {
+    const { done, value } = await reader.read()
+    if (value) buffer = (buffer + decoder.decode(value, { stream: !done })).replace(/\r\n/g, "\n")
+    processFrames(done)
+    if (done) break
+  }
 }
 
 function brokerBody(
@@ -469,8 +562,30 @@ export const pluginsApi = {
   // The backend install contract is strict (extra="forbid"): only version /
   // approvedPermissions are accepted. The catalog entry is server-trusted
   // (signature verified) and must not be echoed back in the request body.
-  installMarketplacePlugin: (entry: MarketplaceEntry, approvedPermissions: string[]) =>
-    marketplaceMutation(entry.id, "install", { approvedPermissions }),
+  // Install is asynchronous: the endpoint returns 202 with the operation
+  // snapshot; follow it via getInstallOperation / streamInstallOperation.
+  installMarketplacePlugin: async (entry: MarketplaceEntry, approvedPermissions: string[]) => {
+    if (!isValidPluginId(entry.id)) throw new PluginCapabilityError("PLUGIN_ID_INVALID", "Plugin identity is invalid.")
+    const response = await authorizedFetch(`/api/marketplace/plugins/${encodeURIComponent(entry.id)}/install`, {
+      method: "POST",
+      body: JSON.stringify({ approvedPermissions }),
+    })
+    return hostData<MarketplaceInstallOperation>(response)
+  },
+  getInstallOperation: async (pluginId: string, operationId: string) =>
+    hostData<MarketplaceInstallOperation>(
+      await authorizedFetch(installOperationPath(pluginId, operationId), { method: "GET" }),
+    ),
+  cancelInstallOperation: async (pluginId: string, operationId: string) =>
+    hostData<MarketplaceInstallOperation>(
+      await authorizedFetch(installOperationPath(pluginId, operationId), { method: "DELETE", body: "{}" }),
+    ),
+  streamInstallOperation: (
+    pluginId: string,
+    operationId: string,
+    onSnapshot: (operation: MarketplaceInstallOperation) => void,
+    signal?: AbortSignal,
+  ) => streamInstallOperationImpl(pluginId, operationId, onSnapshot, signal),
   enableMarketplacePlugin: (pluginId: string, permissions: string[]) =>
     marketplaceMutation(pluginId, "enable", { permissions }),
   disableMarketplacePlugin: (pluginId: string) => marketplaceMutation(pluginId, "disable", {}),

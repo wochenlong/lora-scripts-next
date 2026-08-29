@@ -4,6 +4,7 @@ import hashlib
 import hmac
 import json
 import tempfile
+import time
 import zipfile
 from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
@@ -231,6 +232,67 @@ def _configure_catalog(
     return service
 
 
+def _wait_operation(client, plugin_id: str, operation_id: str, *, timeout: float = 20.0) -> dict:
+    deadline = time.monotonic() + timeout
+    last = None
+    while time.monotonic() < deadline:
+        response = client.get(f"/api/marketplace/plugins/{plugin_id}/operations/{operation_id}")
+        assert response.status_code == 200, response.text
+        last = response.json()["data"]
+        if last["state"] != "running":
+            return last
+        time.sleep(0.05)
+    raise AssertionError(f"operation did not settle within {timeout}s: {last}")
+
+
+class _SlowAcquirer:
+    """Acquirer that simulates a long staged download while honoring cancel.
+
+    It bypasses the local copy fast path so install operations take a
+    controllable number of steps — enough time for a test to cancel.
+    """
+
+    def __init__(self, source: Path, *, steps: int = 60, delay: float = 0.02):
+        self._source = source
+        self._steps = steps
+        self._delay = delay
+
+    def acquire(self, entry, destination: Path, platform: str, on_progress=None, is_cancelled=None):
+        from mikazuki.plugin_marketplace.catalog import CatalogError
+
+        total = self._source.stat().st_size
+        for step in range(1, self._steps + 1):
+            if is_cancelled is not None and is_cancelled():
+                raise CatalogError(
+                    "MARKETPLACE_OPERATION_CANCELLED",
+                    "The plugin installation was cancelled.",
+                    status_code=409,
+                )
+            time.sleep(self._delay)
+            if on_progress is not None:
+                on_progress(int(total * step / self._steps), total)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        destination.write_bytes(self._source.read_bytes())
+        return destination
+
+
+def _marketplace_setup(root: Path):
+    paths = MarketplacePaths(root / "marketplace")
+    key = b"mock-key"
+    trust = TrustStore({"mock-key": ("approved-publisher-id", key)})
+    manager = MarketplaceManager(
+        paths=paths,
+        store=MarketplaceStore(paths.registry_file),
+        trust=trust,
+        host_version="2.9.2",
+        platform="win32-x64",
+    )
+    configure_marketplace(manager)
+    package = _package(root)
+    entry = _entry(package, key)
+    return paths, key, trust, manager, package, entry
+
+
 def test_marketplace_and_plugin_host_routes_use_separate_namespaces():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
@@ -276,8 +338,14 @@ def test_marketplace_and_plugin_host_routes_use_separate_namespaces():
             json={},
             headers=AUTH_HEADERS,
         )
-        assert response.status_code == 200, response.text
-        assert response.json()["data"]["active_version"] == "0.1.0"
+        assert response.status_code == 202, response.text
+        operation = response.json()["data"]
+        assert operation["state"] in ("running", "succeeded")
+        assert operation["pluginId"] == entry.id
+        operation = _wait_operation(client, entry.id, operation["operationId"])
+        assert operation["state"] == "succeeded", operation
+        assert operation["status"]["active_version"] == "0.1.0"
+        assert operation["progress"]["total"] > 0
 
         assert client.get("/api/plugin-host/extensions").json()["data"]["extensions"] == []
         response = client.post(
@@ -371,11 +439,14 @@ def test_install_route_rejects_catalog_id_mismatch():
             json={},
             headers=AUTH_HEADERS,
         )
-        assert missing_package.status_code == 503
-        assert missing_package.json()["detail"] == {
-            "code": "MARKETPLACE_PACKAGE_UNAVAILABLE",
-            "message": "The marketplace package is unavailable.",
-        }
+        # Acquisition failures now surface on the operation, not the
+        # synchronous endpoint: the request is accepted (202) and the worker
+        # fails the operation with the acquire error.
+        assert missing_package.status_code == 202, missing_package.text
+        operation = _wait_operation(client, entry.id, missing_package.json()["data"]["operationId"])
+        assert operation["state"] == "failed"
+        assert operation["errorCode"] == "MARKETPLACE_PACKAGE_UNAVAILABLE"
+        assert operation["errorMessage"] == "The marketplace package is unavailable."
         assert str(root) not in missing_package.text
 
 
@@ -732,3 +803,183 @@ def test_host_confirmation_is_one_shot_expires_and_cannot_be_resolved_by_plugin(
         assert expired.json()["detail"]["code"] == "CONFIRMATION_EXPIRED"
         # restore the process-wide store so later suites observe the default
         configure_confirmation_store(original_confirmations)
+
+
+def _configure_slow_catalog(paths: MarketplacePaths, key: bytes, package: Path, steps: int = 8, delay: float = 0.05):
+    from mikazuki.plugin_marketplace.catalog import MarketplaceCatalogService
+    from mikazuki.plugin_marketplace.trust import TrustStore as _Trust
+
+    # The catalog cache was written by _configure_catalog; swap only the
+    # acquirer so install runs in a controllable number of progress steps.
+    service = MarketplaceCatalogService(
+        paths=paths,
+        trust=_Trust({"mock-key": ("approved-publisher-id", key)}),
+        source=None,
+        acquirer=_SlowAcquirer(package, steps=steps, delay=delay),
+    )
+    configure_marketplace_catalog(service)
+    return service
+
+
+def test_install_operation_sse_stream_delivers_progress_and_done():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        paths, key, trust, manager, package, entry = _marketplace_setup(root)
+        _configure_catalog(root, paths, trust, entry, key, package)
+        _configure_slow_catalog(paths, key, package, steps=10, delay=0.05)
+        client = _client(router)
+
+        started = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
+        assert started.status_code == 202
+        operation_id = started.json()["data"]["operationId"]
+
+        url = f"/api/marketplace/plugins/{entry.id}/operations/{operation_id}/stream"
+        frames = []
+        with client.stream("GET", url) as response:
+            assert response.status_code == 200
+            assert response.headers["content-type"].startswith("text/event-stream")
+            for line in response.iter_lines():
+                if line:
+                    frames.append(line)
+        events = [line.removeprefix("event:").strip() for line in frames if line.startswith("event:")]
+        assert events[0] == "connected"
+        assert events[-1] == "done"
+        assert "progress" in events
+        # Every data frame carries a success envelope with a snapshot.
+        data_frames = [line.removeprefix("data:").strip() for line in frames if line.startswith("data:")]
+        for frame in data_frames[1:]:
+            payload = json.loads(frame)
+            assert payload["status"] == "success"
+            assert payload["data"]["operationId"] == operation_id
+        final = json.loads(data_frames[-1])
+        assert final["data"]["state"] == "succeeded"
+        assert final["data"]["status"]["active_version"] == "0.1.0"
+        client.post(f"/api/marketplace/plugins/{entry.id}/uninstall", json={}, headers=AUTH_HEADERS)
+
+
+def test_install_operation_cancel_stops_worker_and_leaves_no_install():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        paths, key, trust, manager, package, entry = _marketplace_setup(root)
+        _configure_catalog(root, paths, trust, entry, key, package)
+        _configure_slow_catalog(paths, key, package, steps=80, delay=0.02)
+        client = _client(router)
+
+        started = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
+        assert started.status_code == 202
+        operation_id = started.json()["data"]["operationId"]
+        time.sleep(0.2)
+
+        cancelled = client.request(
+            "DELETE",
+            f"/api/marketplace/plugins/{entry.id}/operations/{operation_id}",
+            json={},
+            headers=AUTH_HEADERS,
+        )
+        assert cancelled.status_code == 200
+        operation = _wait_operation(client, entry.id, operation_id)
+        assert operation["state"] == "cancelled"
+        assert operation["errorCode"] == "MARKETPLACE_OPERATION_CANCELLED"
+        assert client.get(f"/api/marketplace/plugins/{entry.id}").json()["data"]["state"] == "not_installed"
+
+        # A cancelled operation is not cancellable a second time.
+        replay = client.request(
+            "DELETE",
+            f"/api/marketplace/plugins/{entry.id}/operations/{operation_id}",
+            json={},
+            headers=AUTH_HEADERS,
+        )
+        assert replay.status_code == 409
+        assert replay.json()["detail"]["code"] == "MARKETPLACE_OPERATION_NOT_CANCELLABLE"
+
+
+def test_second_install_while_running_is_conflict_and_recovers():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        paths, key, trust, manager, package, entry = _marketplace_setup(root)
+        _configure_catalog(root, paths, trust, entry, key, package)
+        _configure_slow_catalog(paths, key, package, steps=80, delay=0.02)
+        client = _client(router)
+
+        started = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
+        assert started.status_code == 202
+        first_id = started.json()["data"]["operationId"]
+        time.sleep(0.2)
+
+        blocked = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
+        assert blocked.status_code == 409
+        assert blocked.json()["detail"]["code"] == "MARKETPLACE_INSTALL_IN_PROGRESS"
+
+        # Let the first (slow) install finish; then a fresh install succeeds.
+        first = _wait_operation(client, entry.id, first_id)
+        assert first["state"] == "succeeded"
+        client.post(f"/api/marketplace/plugins/{entry.id}/uninstall", json={}, headers=AUTH_HEADERS)
+
+        retry = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
+        assert retry.status_code == 202
+        retried = _wait_operation(client, entry.id, retry.json()["data"]["operationId"])
+        assert retried["state"] == "succeeded"
+
+
+def test_install_operation_lookup_requires_matching_plugin_and_exists():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        paths, key, trust, manager, package, entry = _marketplace_setup(root)
+        _configure_catalog(root, paths, trust, entry, key, package)
+        client = _client(router)
+
+        unknown = client.get(
+            f"/api/marketplace/plugins/{entry.id}/operations/does-not-exist"
+        )
+        assert unknown.status_code == 404
+        assert unknown.json()["detail"]["code"] == "MARKETPLACE_OPERATION_NOT_FOUND"
+
+        started = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
+        assert started.status_code == 202
+        operation_id = started.json()["data"]["operationId"]
+        _wait_operation(client, entry.id, operation_id)
+
+        mismatched = client.get(
+            f"/api/marketplace/plugins/some-other-plugin/operations/{operation_id}"
+        )
+        assert mismatched.status_code == 404
+        assert mismatched.json()["detail"]["code"] == "MARKETPLACE_OPERATION_NOT_FOUND"
+
+        stream_missing = client.get(
+            f"/api/marketplace/plugins/{entry.id}/operations/nope/stream"
+        )
+        assert stream_missing.status_code == 404
+
+
+def test_local_acquirer_reports_monotonic_progress_and_honors_cancel():
+    from mikazuki.plugin_marketplace.catalog import CatalogError, LocalPackageAcquirer
+
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        _, key, _, _, package, entry = _marketplace_setup(root)
+        acquirer = LocalPackageAcquirer({entry.package_url: package})
+        destination = root / "out" / "pkg.zip"
+
+        samples: list[tuple[int, int]] = []
+        result = acquirer.acquire(entry, destination, "win32-x64", on_progress=lambda c, t: samples.append((c, t)))
+        assert result == destination
+        assert destination.read_bytes() == package.read_bytes()
+        assert samples[0] == (0, package.stat().st_size)
+        assert samples[-1][0] == samples[-1][1] == package.stat().st_size
+        currents = [sample[0] for sample in samples]
+        assert currents == sorted(currents)
+
+        cancel_destination = root / "out" / "cancelled.zip"
+        try:
+            acquirer.acquire(
+                entry,
+                cancel_destination,
+                "win32-x64",
+                on_progress=lambda c, t: None,
+                is_cancelled=lambda: True,
+            )
+            assert False, "cancellation must raise"
+        except CatalogError as exc:
+            assert exc.code == "MARKETPLACE_OPERATION_CANCELLED"
+        assert not cancel_destination.exists()
+        assert not (cancel_destination.with_suffix(".zip.part")).exists()

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import secrets
 import sys
@@ -25,6 +26,14 @@ from mikazuki.plugin_host.agent_tools import configure_agent_tool_service
 from .manager import MarketplaceManager
 from .models import MarketplaceEntry
 from .catalog import CatalogError, FileCatalogSource, LocalPackageAcquirer, MarketplaceCatalogService
+from .operations import (
+    InstallOperation,
+    InstallOperationConflict,
+    InstallOperationRegistry,
+    OperationCancelled,
+    STATE_RUNNING,
+)
+from .package import remove_tree
 from .paths import MarketplacePaths
 from .store import MarketplaceStore
 from .trust import TrustError, TrustStore, load_trust_root
@@ -184,6 +193,67 @@ _catalog = MarketplaceCatalogService(
 )
 _confirmations = ConfirmationTicketStore()
 configure_agent_tool_service(_confirmations)
+
+
+def _install_pipeline(op: InstallOperation, entry: MarketplaceEntry, approved_permissions: set[str]) -> None:
+    """Background install pipeline; runs off the event loop in a worker thread.
+
+    Must finish the operation on every path: success via op.finish_success,
+    or by raising (OperationCancelled / any exception is classified by the
+    registry worker).
+    """
+    def on_progress(current: int, total: int) -> None:
+        if op.cancel_requested:
+            raise OperationCancelled()
+        op.report_progress("acquiring", current, total)
+
+    def is_cancelled() -> bool:
+        return op.cancel_requested
+
+    def on_phase(phase: str) -> None:
+        if not op.cancel_requested:
+            op.report_phase(phase)
+
+    op.report_phase("acquiring")
+    package = _catalog.acquire(entry, _platform_name(), on_progress=on_progress, is_cancelled=is_cancelled)
+    try:
+        status = _manager.install(entry, package, approved_permissions=approved_permissions, on_phase=on_phase)
+    finally:
+        package.unlink(missing_ok=True)
+    if op.cancel_requested:
+        raise OperationCancelled()
+    op.finish_success(status.model_dump(mode="json"))
+
+
+_install_operations = InstallOperationRegistry(_install_pipeline)
+
+
+def configure_install_operations(registry: InstallOperationRegistry) -> None:
+    global _install_operations
+    _install_operations = registry
+
+
+def _cleanup_stale_install_artifacts(paths: MarketplacePaths) -> None:
+    """Remove quarantine zips / staging dirs left behind by a killed mid-install.
+
+    manager.install cleans its own staging in a finally block, so anything
+    still present at startup belongs to a previously interrupted operation.
+    """
+    quarantine = paths.quarantine_root
+    if quarantine.is_dir():
+        for plugin_dir in quarantine.iterdir():
+            if plugin_dir.is_dir():
+                for member in plugin_dir.iterdir():
+                    if member.is_file():
+                        member.unlink(missing_ok=True)
+    staging = paths.staging_root
+    if staging.is_dir():
+        for plugin_dir in staging.iterdir():
+            if plugin_dir.is_dir():
+                remove_tree(plugin_dir, ignore_errors=True)
+
+
+_cleanup_stale_install_artifacts(_manager.paths)
 
 
 def _confirmation_capability_error(exc: ConfirmationError) -> CapabilityBrokerError:
@@ -417,21 +487,102 @@ async def install_plugin(
     request: InstallRequest,
     _authority=Depends(_require_mutation_authority),
 ):
-    package = None
+    """Start an install operation and return 202 with its id.
+
+    The install itself (package acquisition + extraction + health check +
+    commit) runs in a background worker; clients follow progress via
+    GET .../operations/{id} (polling) or GET .../operations/{id}/stream (SSE)
+    and may abort with DELETE .../operations/{id}.
+    """
     try:
         entry = _catalog.entry(plugin_id, request.version)
-        package = _catalog.acquire(entry, _platform_name())
-        status = _manager.install(
-            entry,
-            package,
-            approved_permissions=set(request.approved_permissions),
-        )
-        return _success(status.model_dump(mode="json"))
+        operation = _install_operations.start(plugin_id, entry, set(request.approved_permissions))
+    except InstallOperationConflict as exc:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "MARKETPLACE_INSTALL_IN_PROGRESS",
+                "message": "An install is already running for this plugin.",
+            },
+        ) from exc
     except Exception as exc:
         raise _http_error(exc) from exc
-    finally:
-        if package is not None:
-            package.unlink(missing_ok=True)
+    return JSONResponse(status_code=202, content=_success(operation.snapshot()))
+
+
+@router.get("/plugins/{plugin_id}/operations/{operation_id}")
+async def install_operation_status(plugin_id: str, operation_id: str):
+    operation = _install_operations.get(plugin_id, operation_id)
+    if operation is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "MARKETPLACE_OPERATION_NOT_FOUND",
+                "message": "The install operation was not found.",
+            },
+        )
+    return _success(operation.snapshot())
+
+
+@router.delete("/plugins/{plugin_id}/operations/{operation_id}")
+async def cancel_install_operation(
+    plugin_id: str,
+    operation_id: str,
+    _authority=Depends(_require_mutation_authority),
+):
+    # Mutation authority requires a JSON body (content-type application/json);
+    # clients send an empty object.
+    operation = _install_operations.get(plugin_id, operation_id)
+    if operation is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "MARKETPLACE_OPERATION_NOT_FOUND",
+                "message": "The install operation was not found.",
+            },
+        )
+    if not operation.request_cancel():
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "MARKETPLACE_OPERATION_NOT_CANCELLABLE",
+                "message": "The install operation has already finished.",
+            },
+        )
+    return _success(operation.snapshot())
+
+
+@router.get("/plugins/{plugin_id}/operations/{operation_id}/stream")
+async def install_operation_stream(plugin_id: str, operation_id: str):
+    operation = _install_operations.get(plugin_id, operation_id)
+    if operation is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "MARKETPLACE_OPERATION_NOT_FOUND",
+                "message": "The install operation was not found.",
+            },
+        )
+
+    async def events():
+        yield 'event: connected\ndata: {"status": "success", "data": {"connected": true}}\n\n'
+        last_payload: str | None = None
+        while True:
+            snapshot = operation.snapshot()
+            payload = json.dumps({"status": "success", "data": snapshot}, ensure_ascii=False)
+            if payload != last_payload:
+                event = "progress" if snapshot["state"] == STATE_RUNNING else "done"
+                yield f"event: {event}\ndata: {payload}\n\n"
+                last_payload = payload
+            if snapshot["state"] != STATE_RUNNING:
+                return
+            await asyncio.sleep(0.35)
+
+    return StreamingResponse(
+        events(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache, no-transform", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/plugins/{plugin_id}/enable")

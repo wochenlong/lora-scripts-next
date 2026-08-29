@@ -157,28 +157,102 @@ describe("plugin capability broker client", () => {
           JSON.stringify({
             status: "success",
             data: {
-              id: "sample-plugin",
-              state: "installed",
-              active_version: "1.0.0",
-              previous_version: null,
-              enabled: false,
-              installed_versions: ["1.0.0"],
-              reason: "",
-              runtime_state: null,
-              runtime_pid: null,
+              operationId: "op-123",
+              pluginId: "sample-plugin",
+              version: "1.0.0",
+              state: "running",
+              phase: "acquiring",
+              progress: { current: 0, total: 0, percent: null },
+              errorCode: null,
+              errorMessage: null,
+              status: null,
+              startedAt: "2026-08-29T00:00:00Z",
+              finishedAt: null,
             },
           }),
-          { status: 200, headers: { "Content-Type": "application/json" } },
+          { status: 202, headers: { "Content-Type": "application/json" } },
         ),
       )
 
-    await pluginsApi.installMarketplacePlugin(entry, ["training-config"])
+    const operation = await pluginsApi.installMarketplacePlugin(entry, ["training-config"])
 
+    // Install is now asynchronous: the endpoint answers 202 with an operation
+    // snapshot instead of the final plugin status.
+    expect(operation.operationId).toBe("op-123")
+    expect(operation.state).toBe("running")
     const installCall = fetchMock.mock.calls[1]
     expect(installCall[0]).toBe("/api/marketplace/plugins/sample-plugin/install")
     const body = JSON.parse(String(installCall[1]?.body))
     expect(body).toEqual({ approvedPermissions: ["training-config"] })
     expect("entry" in body).toBe(false)
+  })
+
+  it("reads, cancels, and streams install operations", async () => {
+    const snapshot = {
+      operationId: "a1b2c3d4e5f607182930415263748596",
+      pluginId: "sample-plugin",
+      version: "1.0.0",
+      state: "succeeded" as const,
+      phase: "done" as const,
+      progress: { current: 10, total: 10, percent: 100 },
+      errorCode: null,
+      errorMessage: null,
+      status: {
+        id: "sample-plugin",
+        state: "installed" as const,
+        active_version: "1.0.0",
+        previous_version: null,
+        enabled: false,
+        installed_versions: ["1.0.0"],
+        reason: "",
+        runtime_state: null,
+        runtime_pid: null,
+      },
+      startedAt: "2026-08-29T00:00:00Z",
+      finishedAt: "2026-08-29T00:00:05Z",
+    }
+    const json = (data: unknown, status = 200) =>
+      new Response(JSON.stringify({ status: "success", data }), { status, headers: { "Content-Type": "application/json" } })
+
+    fetchMock
+      .mockResolvedValueOnce(
+        json({ runToken: "ops-authority-token", header: "X-NextTrainer-Run-Token" }),
+      )
+      .mockResolvedValueOnce(json(snapshot))
+      .mockResolvedValueOnce(json(snapshot))
+      .mockResolvedValueOnce(
+        new Response(
+          [
+            'event: connected',
+            'data: {"status": "success", "data": {"connected": true}}',
+            "",
+            "event: progress",
+            `data: ${JSON.stringify({ status: "success", data: { ...snapshot, state: "running", phase: "acquiring" } })}`,
+            "",
+            "event: done",
+            `data: ${JSON.stringify({ status: "success", data: snapshot })}`,
+            "",
+          ].join("\n"),
+          { status: 200, headers: { "Content-Type": "text/event-stream" } },
+        ),
+      )
+
+    const got = await pluginsApi.getInstallOperation("sample-plugin", snapshot.operationId)
+    expect(got.operationId).toBe(snapshot.operationId)
+    const cancelled = await pluginsApi.cancelInstallOperation("sample-plugin", snapshot.operationId)
+    expect(cancelled.state).toBe("succeeded")
+    const cancelCall = fetchMock.mock.calls[2]
+    expect(cancelCall[0]).toBe(`/api/marketplace/plugins/sample-plugin/operations/${snapshot.operationId}`)
+    expect(cancelCall[1]?.method).toBe("DELETE")
+    expect(String(cancelCall[1]?.body)).toBe("{}")
+
+    const seen: string[] = []
+    await pluginsApi.streamInstallOperation("sample-plugin", snapshot.operationId, (op) => {
+      seen.push(`${op.state}:${op.phase}`)
+    })
+    expect(seen).toEqual(["running:acquiring", "succeeded:done"])
+    const streamCall = fetchMock.mock.calls[3]
+    expect(streamCall[0]).toBe(`/api/marketplace/plugins/sample-plugin/operations/${snapshot.operationId}/stream`)
   })
 
   it("refreshes stale authority once before a broker mutation is accepted", async () => {
