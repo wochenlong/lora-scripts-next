@@ -77,6 +77,19 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     version: "plugin",
     updatedAt: "2026-08",
   },
+  {
+    id: "ai-toolkit",
+    kind: "optional",
+    nameKey: "settings.engines.catalog.ai-toolkit.name",
+    summaryKey: "settings.engines.catalog.ai-toolkit.summary",
+    sizeHintKey: "settings.engines.catalog.ai-toolkit.sizeHint",
+    requiresGpu: true,
+    managesRuntime: true,
+    mark: "AT",
+    tags: ["lora", "klein", "nvidia"],
+    version: "plugin",
+    updatedAt: "2026-08",
+  },
 ] as const
 
 export function engineDefinition(id: TrainingEngine): EngineDefinition | undefined {

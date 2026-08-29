@@ -89,6 +89,25 @@ class TrainMonitorStatusTests(unittest.TestCase):
         self.assertEqual(status["metrics"]["progress_source"], "anima_progress_jsonl")
         build_outputs.assert_any_call(None)
 
+    def test_ai_toolkit_stdout_progress_metrics(self):
+        task = {
+            "id": "task-aitk",
+            "status": "RUNNING",
+            "metadata": {"backend": "ai-toolkit", "output_name": "myrun"},
+        }
+        lines = [
+            "Caching latents:  50%|████    | 3/6 [00:01<00:01,  2.00it/s]",
+            "myrun:  12%|█▏        | 240/2000 [00:30<03:40,  3.99it/s, lr: 1.0e-04 loss: 1.234e-01]",
+        ]
+        metrics = server.ai_toolkit_progress_metrics(task, lines)
+        self.assertEqual(metrics["step"], 240)
+        self.assertEqual(metrics["total_steps"], 2000)
+        self.assertEqual(metrics["percent"], 12)
+        self.assertEqual(metrics["eta"], "03:40")
+        self.assertEqual(metrics["loss"], "0.1234")
+        self.assertEqual(metrics["progress_source"], "ai_toolkit_stdout")
+        self.assertEqual(server.ai_toolkit_progress_metrics({"metadata": {"backend": "standard"}}, lines), {})
+
     def test_active_task_metadata_output_dir_overrides_latest_config(self):
         task = {
             "id": "task-1",

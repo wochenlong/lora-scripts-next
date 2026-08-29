@@ -600,6 +600,9 @@ def _task_train_type(task) -> Optional[str]:
     backend = str(task.metadata.get("backend") or "standard")
     if backend == "anima-lora-fast":
         return ANIMA_FAST_TRAIN_TYPE
+    if backend == "ai-toolkit":
+        train_type = task.metadata.get("train_type")
+        return str(train_type) if train_type else None
     if backend == "musubi":
         train_type = task.metadata.get("train_type")
         return str(train_type) if train_type else MUSUBI_TRAIN_TYPE
@@ -703,14 +706,33 @@ async def task_preview_image(task_id: str, filename: str, thumb: bool = False):
     return FileResponse(path, headers=headers)
 
 
+def _pack_progress_reader(backend: str):
+    """Optional pack hook: a pack may ship ``progress.py`` exposing
+    ``read_progress(lines, metadata)``; absent packs fall back to the
+    kohya-style stdout parser."""
+    if not backend or backend == "standard":
+        return None
+    pack = registry.get_pack(backend)
+    if pack is None:
+        return None
+    try:
+        module = pack.import_module("progress")
+    except ImportError:
+        return None
+    return getattr(module, "read_progress", None)
+
+
 @router.get("/tasks/{task_id}/metrics", response_model_exclude_none=True)
 async def task_metrics(task_id: str) -> APIResponse:
     task = tm.tasks.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Unknown task_id")
+    lines = train_log_hub.tail(task_id, 300)
+    reader = _pack_progress_reader(str(task.metadata.get("backend") or ""))
+    progress = reader(lines, task.metadata) if reader else task_insights.read_progress(lines)
     return APIResponseSuccess(data={
         "tags": task_insights.read_loss_scalars(task.metadata),
-        "progress": task_insights.read_progress(train_log_hub.tail(task_id, 300)),
+        "progress": progress,
     })
 
 

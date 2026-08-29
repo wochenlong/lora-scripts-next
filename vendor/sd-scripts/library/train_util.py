@@ -5196,6 +5196,11 @@ def get_optimizer(args, trainable_params) -> tuple[str, str, object]:
             else:
                 raise ValueError(f"Unknown optimizer type: {optimizer_type}")
 
+            # dadaptation>=3.1 rejects its historical default eps=0.0
+            # for the Adam/AdaGrad/Adan variants, while Lion and SGD do
+            # not accept an eps argument at all. Keep explicit args intact.
+            if "eps" in optimizer_class.__init__.__code__.co_varnames:
+                optimizer_kwargs.setdefault("eps", 1e-8)
             optimizer = optimizer_class(trainable_params, lr=lr, **optimizer_kwargs)
         else:
             # Prodigy

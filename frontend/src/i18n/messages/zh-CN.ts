@@ -32,11 +32,13 @@ export default {
         flux: "Flux",
         lumina: "Lumina 2",
         krea2: "Krea 2",
+        klein: "Klein (FLUX.2)",
       },
       engines: {
         kohya: "Kohya-ss",
         "anima-fast": "Anima Fast",
         musubi: "Musubi-Tuner",
+        "ai-toolkit": "AI Toolkit",
       },
       targets: {
         lora: "LoRA",
@@ -175,6 +177,7 @@ export default {
       "flux-lora": { title: "Flux LoRA", area: "Flux · Kohya-ss · LoRA" },
       "lumina2-lora": { title: "Lumina 2 LoRA", area: "Lumina 2 · Kohya-ss · LoRA" },
       "krea2-lora": { title: "Krea 2 LoRA", area: "Krea 2 · Musubi-Tuner · LoRA" },
+      "klein-lora": { title: "Klein LoRA", area: "FLUX.2 Klein · AI Toolkit · LoRA" },
     },
   },
   dataset: {
@@ -217,6 +220,7 @@ export default {
     defaultName: "训练任务",
     kind: {
       musubiInstall: "插件安装 · Musubi-Tuner",
+      aiToolkitInstall: "插件安装 · AI Toolkit",
       animaFastInstall: "插件安装 · Anima Fast",
       assetsDownload: "模型资产下载",
     },
@@ -397,6 +401,7 @@ export default {
         flux: "Flux",
         anima: "Anima",
         krea2: "Krea 2",
+        klein: "Klein",
         nvidia: "NVIDIA",
       },
       downloadSources: {
@@ -487,6 +492,11 @@ export default {
           summary: "可选训练引擎，支持 Krea 2 等图像模型 LoRA。",
           sizeHint: "体积较大（通常数 GB），需额外磁盘与下载时间",
         },
+        "ai-toolkit": {
+          name: "AI Toolkit",
+          summary: "可选训练引擎（ostris/ai-toolkit），支持 FLUX.2 Klein 等图像模型 LoRA。",
+          sizeHint: "体积较大（通常数 GB），需额外磁盘与下载时间",
+        },
       },
       state: {
         ready: "已就绪",
@@ -539,6 +549,7 @@ export default {
         install: {
           "anima-fast": "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           musubi: "Musubi-Tuner 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
+          "ai-toolkit": "AI Toolkit 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
         },
         reinstall: "「重新安装」会完整重装独立运行时，通常需要重新下载数 GB 依赖。仅在环境损坏或安装不完整时使用。确认继续？",
         uninstall: "卸载将移除对应的独立运行时。确认继续？",
@@ -838,6 +849,14 @@ export default {
       fail: "操作失败",
       statusFail: "状态读取失败",
     },
+  },
+  aiToolkitGate: {
+    intro: "FLUX.2 Klein LoRA 训练由 AI Toolkit 独立运行环境承载；完成安装与审计后即可开始训练。",
+    auditTitle: "环境审计",
+    installWorking: "安装进行中",
+    install: "安装插件",
+    consoleIdle: "安装日志",
+    consoleWaiting: "等待安装任务输出…",
   },
   musubiGate: {
     intro: "Krea 2 LoRA 训练由 Musubi-Tuner 独立运行环境承载；完成安装与审计后即可开始训练。",

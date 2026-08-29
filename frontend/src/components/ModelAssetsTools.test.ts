@@ -43,6 +43,26 @@ describe("ModelAssetsTools", () => {
     expect(wrapper.text()).toContain("1 项缺失")
   })
 
+  it("re-checks when the form's train type changes (variant switch)", async () => {
+    check.mockResolvedValue({ train_type: "klein-4b-lora", items: [asset({})] })
+    const wrapper = mount(ModelAssetsTools, {
+      props: { schemaName: "klein-lora", model: { model_train_type: "klein-4b-lora" } },
+      global: { plugins: [i18n], stubs: { ElDialog: { props: ["modelValue"], template: '<div v-if="modelValue"><slot /></div>' } } },
+    })
+    await flushPromises()
+    expect(check).toHaveBeenLastCalledWith("klein-4b-lora", expect.anything())
+
+    check.mockResolvedValue({ train_type: "klein-9b-lora", items: [asset({ path: "/x/flux-2-klein-base-9b.safetensors" })] })
+    await wrapper.setProps({ model: { model_train_type: "klein-9b-lora" } })
+    await flushPromises()
+    expect(check).toHaveBeenLastCalledWith("klein-9b-lora", expect.anything())
+    // asset paths render inside the download dialog
+    await wrapper.findAll(".model-assets-tools button")[1].trigger("click")
+    await flushPromises()
+    expect(wrapper.text()).toContain("/x/flux-2-klein-base-9b.safetensors")
+    wrapper.unmount()
+  })
+
   it("starts a download task with the chosen source", async () => {
     check.mockResolvedValue({ train_type: "krea2-lora", items: [asset({})] })
     download.mockResolvedValue({ task_id: "t-1", log_stream: "/api/train/log/stream/t-1" })

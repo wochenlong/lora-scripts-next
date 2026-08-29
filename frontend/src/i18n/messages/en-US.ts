@@ -32,11 +32,13 @@ export default {
         flux: "Flux",
         lumina: "Lumina 2",
         krea2: "Krea 2",
+        klein: "Klein (FLUX.2)",
       },
       engines: {
         kohya: "Kohya-ss",
         "anima-fast": "Anima Fast",
         musubi: "Musubi-Tuner",
+        "ai-toolkit": "AI Toolkit",
       },
       targets: {
         lora: "LoRA",
@@ -175,6 +177,7 @@ export default {
       "flux-lora": { title: "Flux LoRA", area: "Flux · Kohya-ss · LoRA" },
       "lumina2-lora": { title: "Lumina 2 LoRA", area: "Lumina 2 · Kohya-ss · LoRA" },
       "krea2-lora": { title: "Krea 2 LoRA", area: "Krea 2 · Musubi-Tuner · LoRA" },
+      "klein-lora": { title: "Klein LoRA", area: "FLUX.2 Klein · AI Toolkit · LoRA" },
     },
   },
   dataset: {
@@ -217,6 +220,7 @@ export default {
     defaultName: "Training Task",
     kind: {
       musubiInstall: "Plugin Install · Musubi-Tuner",
+      aiToolkitInstall: "Plugin Install · AI Toolkit",
       animaFastInstall: "Plugin Install · Anima Fast",
       assetsDownload: "Model Assets Download",
     },
@@ -397,6 +401,7 @@ export default {
         flux: "Flux",
         anima: "Anima",
         krea2: "Krea 2",
+        klein: "Klein",
         nvidia: "NVIDIA",
       },
       downloadSources: {
@@ -487,6 +492,11 @@ export default {
           summary: "Optional engine for Krea 2 and other image-model LoRA.",
           sizeHint: "Large download (usually several GB); extra disk space and download time required",
         },
+        "ai-toolkit": {
+          name: "AI Toolkit",
+          summary: "Optional engine (ostris/ai-toolkit) for FLUX.2 Klein LoRA and more image models.",
+          sizeHint: "Large download (usually several GB); extra disk space and download time required",
+        },
       },
       state: {
         ready: "Ready",
@@ -539,6 +549,7 @@ export default {
         install: {
           "anima-fast": "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
           musubi: "Musubi-Tuner downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
+          "ai-toolkit": "AI Toolkit downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
         },
         reinstall: "Reinstall fully replaces the standalone runtime and usually re-downloads several GB. Use only when the environment is broken or incomplete. Continue?",
         uninstall: "Uninstall will remove the standalone runtime. Continue?",
@@ -838,6 +849,14 @@ export default {
       fail: "Operation failed",
       statusFail: "Failed to read status",
     },
+  },
+  aiToolkitGate: {
+    intro: "FLUX.2 Klein LoRA training runs on the standalone AI Toolkit runtime; finish install and audit to start training.",
+    auditTitle: "Environment Audit",
+    installWorking: "Installing",
+    install: "Install Plugin",
+    consoleIdle: "Install Log",
+    consoleWaiting: "Waiting for install task output…",
   },
   musubiGate: {
     intro: "Krea 2 LoRA training runs on the standalone Musubi-Tuner runtime; finish install and audit to start training.",
