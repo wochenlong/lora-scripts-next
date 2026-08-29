@@ -11,7 +11,12 @@ param(
     # Full: bundle extensions/anima_lora including .venv for Baidu Netdisk.
     [switch]$BundleAnimaFast,
     [string]$AnimaFastSource = "",
-    [string]$PackageSuffix = ""
+    [string]$PackageSuffix = "",
+    # Plugin marketplace (A1): bundle dist-marketplace catalog + trust + the
+    # platform package zip so the released one-click package can install the
+    # agent plugin offline (no extra download).
+    [switch]$SkipMarketplace,
+    [string]$MarketplacePlatform = "win32-x64"
 )
 
 $ErrorActionPreference = "Stop"
@@ -515,6 +520,42 @@ if ($BundleAnimaFast) {
 Write-PortableBuildMetadata -TrainerDir $sdtDir -Version $Version -Flavor $packageFlavor
 Write-Host "  Copied root files"
 Write-Host "  Done" -ForegroundColor Green
+
+# ==== Step 2c: Bundle plugin marketplace (A1) ====
+
+if ($SkipMarketplace) {
+    Write-Host ""
+    Write-Host "[2c/6] Skipping plugin marketplace bundle (-SkipMarketplace)" -ForegroundColor Yellow
+} else {
+    Write-Host ""
+    Write-Host "[2c/6] Bundling plugin marketplace (offline plugin install)..." -ForegroundColor Cyan
+    # The portable launcher cd's into SD-Trainer/ before starting the host,
+    # so the host's bundled-autodiscover looks at <cwd>/plugin-marketplace/.
+    $marketplaceSrc = Join-Path $ProjectRoot "plugin-packages\next-trainer-pi-agent\dist-marketplace"
+    $marketplaceDst = Join-Path $sdtDir "plugin-marketplace"
+    $catalogSrc = Join-Path $marketplaceSrc "catalog.json"
+    $trustSrc = Join-Path $marketplaceSrc "trust.json"
+    if (-not (Test-Path $catalogSrc) -or -not (Test-Path $trustSrc)) {
+        Write-Host "  [skip] dist-marketplace catalog.json/trust.json not found" -ForegroundColor Yellow
+        Write-Host "         Build the plugin first (build-all-platforms.py + build-marketplace-catalog.py)" -ForegroundColor Yellow
+    } else {
+        New-Item -ItemType Directory -Path (Join-Path $marketplaceDst "packages") -Force | Out-Null
+        Copy-Item $catalogSrc (Join-Path $marketplaceDst "catalog.json") -Force
+        Copy-Item $trustSrc (Join-Path $marketplaceDst "trust.json") -Force
+        $zipDir = Join-Path $marketplaceSrc "packages"
+        $zipSrc = Get-ChildItem $zipDir -Filter "*-$MarketplacePlatform.zip" -File -ErrorAction SilentlyContinue |
+            Sort-Object LastWriteTime -Descending | Select-Object -First 1
+        if ($zipSrc) {
+            Copy-Item $zipSrc.FullName (Join-Path $marketplaceDst "packages") -Force
+            $zipMB = [math]::Round($zipSrc.Length / 1MB, 1)
+            Write-Host "  Bundled $($zipSrc.Name) ($zipMB MB, $MarketplacePlatform)" -ForegroundColor Green
+        } else {
+            Write-Host "  WARNING: no $MarketplacePlatform package zip under dist-marketplace\packages" -ForegroundColor Yellow
+            Write-Host "           installs of that platform will download at runtime" -ForegroundColor Yellow
+        }
+    }
+    Write-Host "  Done" -ForegroundColor Green
+}
 
 # ==== Step 3: Bundle default WD tagger (offline batch tagging) ====
 

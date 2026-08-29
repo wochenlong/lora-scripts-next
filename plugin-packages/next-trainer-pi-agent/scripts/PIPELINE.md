@@ -84,7 +84,11 @@
 ## 边界与已知约束
 
 - **Linux 验证环境是 WSL2**（x86_64 glibc）；裸机 Linux 未在本机条件下验证。
-- catalog 为 **local/test** 形态（dev HMAC + 本地包根映射）；公网分发（真实 URL/签名/版本门控）属 release 授权事项。
+- catalog 默认 **local/test** 形态（dev HMAC + 本地包根映射）。发布分发的三层能力（A1+B1，均已合入）：
+  1. **在线获取（B1）**：宿主 `HttpPackageAcquirer` 按 catalog 固定 URL 分块下载，边下边算 sha256，完成后校验 size+sha256，网络/5xx 错误自动重试 2 次，支持中途取消；`MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR` 可把 URL 重写到镜像基址（明文 HTTP 仅限回环，用于本地文件服务器做 release dry-run）。`build-marketplace-catalog.py --remote-base <https 基址>` 生成真实 URL 的 release 形态 catalog；`verify-release-distribution.py` 用本地 HTTP 文件服务器端到端验证整条分发路径。
+  2. **发布签名（A1）**：`--signing-key-id/--signing-key-hex`（或 `MIKAZUKI_RELEASE_SIGNING_*` 环境变量）注入 release HMAC 密钥；密钥只存在于 release 操作者手中，不进仓库；对应 trust.json 随发布包分发。
+  3. **一键包捆绑（A1）**：`build_portable.ps1` 步骤 2c 把 `dist-marketplace/{catalog.json,trust.json,packages/<当前平台>.zip}` 打进 `SD-Trainer\plugin-marketplace\`；宿主 `_local_catalog_wiring` 三级查找 env > 捆绑目录（cwd/plugin-marketplace/）> 失败封闭，用户拿到 release 一键包后可直接在市场页离线安装。
+  公网分发（真实 release 资产 + 版本门控）仍是 release 授权事项，本仓库不创建 release。
 - `packages` 字段需要 CR-012 之后的宿主版本；旧宿主会拒绝双平台 catalog（失败封闭，不会装错包）。
 - pi-tui 无 linux native 二进制是上游设计（darwin/win32 平台增强，Linux 纯 JS 路径），无需处理。
 - WSL 侧前置条件：发行版存在、网络可达 nodejs.org 与 registry.npmjs.org；不需要 xz（用 Node .tar.gz）、不需要 build tools（pi 包无 linux 编译步骤）。

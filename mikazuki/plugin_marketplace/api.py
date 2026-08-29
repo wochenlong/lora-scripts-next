@@ -145,23 +145,41 @@ def _platform_name() -> str:
 
 
 def _local_catalog_wiring() -> tuple[TrustStore, FileCatalogSource | None, Any]:
-    """Development-only catalog/trust wiring, opt-in via environment.
+    """Catalog/trust wiring: explicit environment > bundled > fail-closed.
 
-    Production deployments leave these unset: the manager keeps an empty
-    trust store and no catalog source, so every install fails closed.
+    1. Development: MIKAZUKI_MARKETPLACE_CATALOG / _TRUST (plus optional
+       _PACKAGE_ROOT and _PACKAGE_MIRROR) environment variables. An explicit
+       partial env (one of the two set) keeps the legacy fail-closed result.
+    2. Bundled (release one-click package): the portable launcher runs the
+       host with cwd = <root>/SD-Trainer, so a <cwd>/plugin-marketplace/
+       directory containing catalog.json + trust.json (and optionally
+       packages/*.zip) is picked up automatically — no environment needed.
+    3. Neither: empty trust store and no catalog source, so every install
+       fails closed.
 
-    Package acquisition is local-first: catalog URLs mapped into
-    MIKAZUKI_MARKETPLACE_PACKAGE_ROOT are copied from disk; anything else is
+    Package acquisition is local-first: catalog URLs mapped into the package
+    root (env or bundled packages/) are copied from disk; anything else is
     downloaded over HTTP, optionally rewritten onto the loopback
     MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR (release dry-run against a local
     file server). Integrity always comes from the catalog-pinned size+sha256.
     """
-    catalog_path = os.environ.get("MIKAZUKI_MARKETPLACE_CATALOG", "").strip()
-    trust_path = os.environ.get("MIKAZUKI_MARKETPLACE_TRUST", "").strip()
+    env_catalog = os.environ.get("MIKAZUKI_MARKETPLACE_CATALOG", "").strip()
+    env_trust = os.environ.get("MIKAZUKI_MARKETPLACE_TRUST", "").strip()
     package_root = os.environ.get("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", "").strip()
     mirror = os.environ.get("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", "").strip() or None
-    if not catalog_path or not trust_path:
-        return TrustStore({}), None, None
+    if env_catalog or env_trust:
+        catalog_path, trust_path = env_catalog, env_trust
+        if not catalog_path or not trust_path:
+            return TrustStore({}), None, None
+    else:
+        bundled = Path.cwd() / "plugin-marketplace"
+        catalog_candidate = bundled / "catalog.json"
+        trust_candidate = bundled / "trust.json"
+        if not (catalog_candidate.is_file() and trust_candidate.is_file()):
+            return TrustStore({}), None, None
+        catalog_path, trust_path = str(catalog_candidate), str(trust_candidate)
+        if not package_root and (bundled / "packages").is_dir():
+            package_root = str(bundled / "packages")
     trust = load_trust_root(Path(trust_path))
     acquirer: Any = UnavailablePackageAcquirer()
     if package_root:

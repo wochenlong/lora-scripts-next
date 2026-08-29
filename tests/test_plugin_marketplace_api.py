@@ -10,12 +10,14 @@ from collections.abc import AsyncIterator
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
+import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from mikazuki.plugin_host import AgentRouteAuthorityConfig, PluginCapabilityBroker, RuntimeSnapshot
 from mikazuki.plugin_marketplace.api import (
     _default_authority_config,
+    _local_catalog_wiring,
     configure_capability_broker,
     configure_confirmation_store,
     configure_marketplace,
@@ -27,7 +29,12 @@ from mikazuki.plugin_marketplace.api import (
 )
 from mikazuki.plugin_marketplace.manager import MarketplaceManager
 from mikazuki.plugin_marketplace.models import MarketplaceCatalog, MarketplaceEntry
-from mikazuki.plugin_marketplace.catalog import FileCatalogSource, LocalPackageAcquirer, MarketplaceCatalogService
+from mikazuki.plugin_marketplace.catalog import (
+    FileCatalogSource,
+    LocalFirstPackageAcquirer,
+    LocalPackageAcquirer,
+    MarketplaceCatalogService,
+)
 from mikazuki.plugin_marketplace.paths import MarketplacePaths
 from mikazuki.plugin_marketplace.store import MarketplaceStore
 from mikazuki.plugin_marketplace.trust import (
@@ -949,6 +956,115 @@ def test_install_operation_lookup_requires_matching_plugin_and_exists():
             f"/api/marketplace/plugins/{entry.id}/operations/nope/stream"
         )
         assert stream_missing.status_code == 404
+
+
+def _write_bundled_marketplace(root: Path) -> Path:
+    bundled = root / "plugin-marketplace"
+    (bundled / "packages").mkdir(parents=True)
+    key_hex = "cd" * 32
+    (bundled / "trust.json").write_text(
+        json.dumps(
+            {
+                "keys": {"release-key-1": {"publisherId": "approved-publisher-id", "keyHex": key_hex}},
+                "revokedKeys": [],
+            },
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (bundled / "catalog.json").write_text("{}", encoding="utf-8")
+    (bundled / "packages" / "agent-1.0.0-win32-x64.zip").write_bytes(b"zip-bytes")
+    return bundled
+
+
+def test_bundled_marketplace_autodiscover(tmp_path, monkeypatch):
+    bundled = _write_bundled_marketplace(tmp_path)
+    for var in (
+        "MIKAZUKI_MARKETPLACE_CATALOG",
+        "MIKAZUKI_MARKETPLACE_TRUST",
+        "MIKAZUKI_MARKETPLACE_PACKAGE_ROOT",
+        "MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR",
+    ):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.chdir(tmp_path)
+    trust, source, acquirer = _local_catalog_wiring()
+    assert source is not None
+    assert source.path == (bundled / "catalog.json").resolve()
+    assert "release-key-1" in trust._keys
+    assert isinstance(acquirer, LocalFirstPackageAcquirer)
+    assert (
+        "https://plugins.next-trainer.local/packages/agent-1.0.0-win32-x64.zip"
+        in acquirer.local.source_urls
+    )
+
+
+def test_bundled_autodiscover_loses_to_explicit_env(tmp_path, monkeypatch):
+    bundled = _write_bundled_marketplace(tmp_path)
+    env_catalog = tmp_path / "env-catalog.json"
+    env_catalog.write_text("{}", encoding="utf-8")
+    env_trust = bundled / "trust.json"
+    monkeypatch.setenv("MIKAZUKI_MARKETPLACE_CATALOG", str(env_catalog))
+    monkeypatch.setenv("MIKAZUKI_MARKETPLACE_TRUST", str(env_trust))
+    monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", raising=False)
+    monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    _trust, source, acquirer = _local_catalog_wiring()
+    assert source.path == env_catalog.resolve()
+    # Without the env package root the bundled packages/ dir is not picked up:
+    # the env tier is explicit and self-contained, so acquisition fails closed.
+    from mikazuki.plugin_marketplace.catalog import UnavailablePackageAcquirer
+
+    assert isinstance(acquirer, UnavailablePackageAcquirer)
+
+
+def test_partial_env_stays_fail_closed_despite_bundled(tmp_path, monkeypatch):
+    _write_bundled_marketplace(tmp_path)
+    env_catalog = tmp_path / "env-catalog.json"
+    env_catalog.write_text("{}", encoding="utf-8")
+    monkeypatch.setenv("MIKAZUKI_MARKETPLACE_CATALOG", str(env_catalog))
+    monkeypatch.delenv("MIKAZUKI_MARKETPLACE_TRUST", raising=False)
+    monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", raising=False)
+    monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    trust, source, acquirer = _local_catalog_wiring()
+    assert trust is not None and source is None and acquirer is None
+
+
+def test_release_signing_key_injection(tmp_path):
+    import subprocess
+    import sys as _sys
+
+    base = Path(__file__).resolve().parents[1]
+    script = base / "plugin-packages" / "next-trainer-pi-agent" / "scripts" / "build-marketplace-catalog.py"
+    zips = base / "plugin-packages" / "next-trainer-pi-agent" / "dist-marketplace" / "packages"
+    if not script.is_file() or not any(zips.glob("*.zip")):
+        pytest.skip("plugin build artifacts not present")
+    out_dir = tmp_path / "release-catalog"
+    key_hex = "ab" * 32
+    result = subprocess.run(
+        [
+            _sys.executable,
+            str(script),
+            "--remote-base", "https://plugins.example.com/v0.3.2",
+            "--out-dir", str(out_dir),
+            "--signing-key-id", "release-key-1",
+            "--signing-key-hex", key_hex,
+        ],
+        capture_output=True,
+        text=True,
+        timeout=600,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    trust_payload = json.loads((out_dir / "trust.json").read_text(encoding="utf-8"))
+    assert trust_payload["keys"]["release-key-1"]["keyHex"] == key_hex
+    assert "never committed" in trust_payload["note"]
+    catalog_payload = json.loads((out_dir / "catalog.json").read_text(encoding="utf-8"))
+    parsed = MarketplaceCatalog.model_validate(catalog_payload)
+    # The host's own trust stack accepts the release-key signature.
+    TrustStore({"release-key-1": ("next-trainer-project", bytes.fromhex(key_hex))}).verify_catalog(parsed)
+    entry = parsed.entries[0]
+    assert entry.package_url.startswith("https://plugins.example.com/v0.3.2/")
+    assert entry.packages[0].package_url.startswith("https://plugins.example.com/v0.3.2/")
 
 
 def test_local_acquirer_reports_monotonic_progress_and_honors_cancel():

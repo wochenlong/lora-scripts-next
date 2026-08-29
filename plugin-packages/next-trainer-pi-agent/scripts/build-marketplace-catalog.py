@@ -22,6 +22,8 @@ import argparse
 import hashlib
 import hmac as hmac_module
 import json
+import os
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -82,16 +84,49 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="Write catalog.json/trust.json here instead of dist-marketplace/ (zip inputs are still read from dist-marketplace/packages/).",
     )
+    parser.add_argument(
+        "--signing-key-id",
+        default=None,
+        help="Release signing key id (default: dev-local-signing). Also MIKAZUKI_RELEASE_SIGNING_KEY_ID.",
+    )
+    parser.add_argument(
+        "--signing-key-hex",
+        default=None,
+        help=(
+            "Release signing HMAC key, 64+ hex chars (generate with "
+            "python -c \"import secrets; print(secrets.token_hex(32))\"). "
+            "Keep it OUT of the repository; the matching trust.json ships "
+            "inside the release package only. Also MIKAZUKI_RELEASE_SIGNING_KEY_HEX."
+        ),
+    )
     args = parser.parse_args(argv)
     remote_base = args.remote_base.rstrip("/") if args.remote_base else None
     if remote_base is not None:
         parsed = urlsplit(remote_base)
         if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
             raise SystemExit("--remote-base must be a plain HTTPS base URL")
-    global OUT_DIR
+    global OUT_DIR, SIGNING_KEY_ID, SIGNING_KEY_HEX
     if args.out_dir:
         OUT_DIR = Path(args.out_dir).resolve()
         OUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    signing_key_id = args.signing_key_id or os.environ.get("MIKAZUKI_RELEASE_SIGNING_KEY_ID", "").strip()
+    signing_key_hex = (
+        args.signing_key_hex or os.environ.get("MIKAZUKI_RELEASE_SIGNING_KEY_HEX", "").strip()
+    ).casefold()
+    if (signing_key_id and not signing_key_hex) or (signing_key_hex and not signing_key_id):
+        raise SystemExit("release signing requires BOTH --signing-key-id and --signing-key-hex (or the MIKAZUKI_RELEASE_SIGNING_* env pair)")
+    if signing_key_id and signing_key_hex:
+        if not re.fullmatch(r"[0-9a-f]{32,}", signing_key_hex):
+            raise SystemExit("--signing-key-hex must be 64+ hex characters (>=32 bytes)")
+        SIGNING_KEY_ID, SIGNING_KEY_HEX = signing_key_id, signing_key_hex
+        print(f"[signing] release key: {SIGNING_KEY_ID}")
+    elif remote_base:
+        print(
+            "[signing] WARNING: --remote-base catalog signed with the DEV key. "
+            "Use --signing-key-id/--signing-key-hex for public distribution.",
+            file=sys.stderr,
+        )
 
     from mikazuki.plugin_marketplace.models import MarketplaceCatalog, MarketplaceEntry
     from mikazuki.plugin_marketplace.package import PackageLimits, inspect_package, validate_manifest_entry
@@ -177,9 +212,13 @@ def main(argv: list[str] | None = None) -> int:
                 "keys": {SIGNING_KEY_ID: {"publisherId": PUBLISHER, "keyHex": SIGNING_KEY_HEX}},
                 "revokedKeys": [],
                 "note": (
-                    "Release trust root (dev HMAC key) for remote-distribution catalogs."
-                    if remote_base
-                    else "Development/test trust root only. Production signing is release-governed."
+                    f"Release trust root (key {SIGNING_KEY_ID}). The signing key is held by the release operator and never committed to the repository."
+                    if SIGNING_KEY_ID != "dev-local-signing"
+                    else (
+                        "Release trust root (dev HMAC key) for remote-distribution catalogs."
+                        if remote_base
+                        else "Development/test trust root only. Production signing is release-governed."
+                    )
                 ),
             },
             ensure_ascii=False,
