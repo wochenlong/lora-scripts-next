@@ -7,3 +7,6 @@ frontend/index.html text eol=lf
 
 # shell hooks must stay LF to remain executable by sh
 .githooks/* text eol=lf
+
+# WSL/bash scripts stay LF (see agent-assets/.gitattributes same rule)
+*.sh text eol=lf

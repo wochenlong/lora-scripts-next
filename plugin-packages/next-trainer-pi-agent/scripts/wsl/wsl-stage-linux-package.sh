@@ -99,7 +99,7 @@ cat > "$STAGE/plugin.json" <<EOF
   },
   "bridge": { "requests": [], "streams": [] },
   "capabilities": ["server-ui", "custom-tools", "skills"],
-  "permissions": ["training-config", "dataset-review", "caption-commit", "metrics-read", "artifacts-read", "external-civitai-read"],
+  "permissions": ["training-config", "dataset-review", "caption-commit", "metrics-read", "artifacts-read", "external-civitai-read", "content-update"],
   "package": {
     "sha256": "BUILD_TIME_VALUE",
     "signature": "TEST_OR_RELEASE_VALUE",
@@ -144,12 +144,18 @@ EOF
 echo "[stage] copying pi-web tree (source + .next + pruned node_modules) ..."
 cp -a "$W/src/pi-web" "$STAGE/pi-web"
 
-# Next Trainer pi package (extensions + skills + manifest) + knowledge/template
-# seeds. Dev-only artifacts (pi-package/test) are excluded.
-echo "[stage] pi-package (extensions + skills + package.json) + seeds ..."
+# Next Trainer pi package (extensions + manifest) + managed-content seeds
+# (knowledge / templates / SKILLS). Dev-only artifacts (pi-package/test) are
+# excluded. Skills live ONLY under seeds/ (F3-0 decision 1): the launcher
+# copies them to the pi user-scope dir; a pi-package copy would double-load.
+# KEEP THE PERMISSIONS LIST BELOW IN SYNC with build-pi-web-package.py — an
+# agent-assets test pins all three lists (win, wsl, source plugin.json minus
+# model-provider) to equality; the marketplace catalog derives its
+# permissions_summary from the packaged manifest and the host rejects any
+# per-platform mismatch at build time (this exact drift bit us once).
+echo "[stage] pi-package (extensions + package.json) + seeds ..."
 mkdir -p "$STAGE/pi-package"
 cp -a "$PKG_ROOT/pi-package/extensions" "$STAGE/pi-package/extensions"
-cp -a "$PKG_ROOT/pi-package/skills" "$STAGE/pi-package/skills"
 cp "$PKG_ROOT/pi-package/package.json" "$STAGE/pi-package/package.json"
 cp -a "$PKG_ROOT/seeds" "$STAGE/seeds"
 
