@@ -59,6 +59,10 @@ EXPECTED_FULL_TOOLS = {
     "tagger_start",
     "tagger_cancel",
     "tagger_status",
+    # F3-3: only visible when the manifest grants content-update (Scenario B's
+    # restricted manifest must NOT expose it; gateway coverage:
+    # test_agent_tools_gateway.py).
+    "assets_update",
 }
 FORBIDDEN_TOOL_MARKERS = ("provider", "auth", "key", "credential", "endpoint")
 
@@ -158,7 +162,7 @@ def test_edd_host_gates_forged_ticket_permissions_escape_and_catalog():
                 status, payload = host.catalog(client, "wrong-token")
                 assert status == 401, (status, payload)
 
-                # --- Scenario D: full manifest -> exactly the 16-tool catalog ---
+                # --- Scenario D: full manifest -> exactly the full tool catalog ---
                 manager.disable(PLUGIN_ID)
                 package_f = build_package(root, version="0.3.0")
                 entry_f = build_entry(package_f, version="0.3.0")

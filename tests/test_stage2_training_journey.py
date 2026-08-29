@@ -297,11 +297,13 @@ def test_stage2_zero_short_fresh_path():
                 manifest = _install_enabled(manager, root, client)
                 token = manager.runtime._handles[PLUGIN_ID].host_tool_token
 
-                # catalog: exactly the 18 contracted tools (15 domain + 3 tagger)
+                # catalog: exactly the 19 contracted tools (15 domain + 3 tagger
+                # + assets_update, gated on the content-update grant)
                 status, catalog = host.catalog(client, token)
                 assert status == 200
                 names = sorted(t["name"] for t in catalog["data"]["tools"])
-                assert len(names) == 18, names
+                assert len(names) == 19, names
+                assert "assets_update" in names, names
                 assert "training_config_commit" in names and "training_config_template" in names
 
                 # fresh-path journey: template -> draft -> validate -> approve -> commit

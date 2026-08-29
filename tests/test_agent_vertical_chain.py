@@ -69,6 +69,7 @@ EXPECTED_HOST_TOOLS = frozenset(
         "tagger_start",
         "tagger_cancel",
         "tagger_status",
+        "assets_update",  # F3-3: exposed only with the content-update grant
     }
 )
 
