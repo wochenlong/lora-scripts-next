@@ -48,7 +48,7 @@ PKG_ROOT = SCRIPT_DIR.parent
 PROJECT_ROOT = PKG_ROOT.parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-VERSION = "0.3.2"
+VERSION = "0.3.4"
 PLUGIN_ID = "next-trainer-pi-agent"
 BUN_VERSION = "1.4.0"
 WSL_DISTRO = "kali-linux"

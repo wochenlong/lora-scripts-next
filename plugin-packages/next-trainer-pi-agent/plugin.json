@@ -1,7 +1,7 @@
 {
   "id": "next-trainer-pi-agent",
   "publisher": "next-trainer-project",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "protocolVersion": "1",
   "hostCompatibility": ">=2.9.2 <3.0.0",
   "platforms": ["win32-x64"],
@@ -61,7 +61,8 @@
     "caption-commit",
     "metrics-read",
     "artifacts-read",
-    "external-civitai-read"
+    "external-civitai-read",
+    "content-update"
   ],
   "package": {
     "sha256": "BUILD_TIME_VALUE",

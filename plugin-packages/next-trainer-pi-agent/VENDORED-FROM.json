@@ -1,9 +1,9 @@
 {
   "source": "agent-assets",
   "repoPath": "E:\\OpenSourceTeamWork\\Kimi_Agent_lora-scripts-next-agent-dev\\agent-assets",
-  "commit": "a329e48264c1f1f46a73daa4884fb03f128e7703",
-  "dirty": false,
-  "syncedAt": "2026-08-29T08:50:19+00:00",
+  "commit": "deccb0c6e682fee28e564304beb03700277ede9e",
+  "dirty": true,
+  "syncedAt": "2026-08-29T09:31:55+00:00",
   "tool": "scripts/sync-to-project.py",
   "files": 505
 }

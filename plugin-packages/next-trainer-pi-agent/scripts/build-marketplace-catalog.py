@@ -33,7 +33,7 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PKG_ROOT.parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-VERSION = "0.3.3"
+VERSION = "0.3.4"
 PLUGIN_ID = "next-trainer-pi-agent"
 PUBLISHER = "next-trainer-project"
 HOST_COMPAT = ">=2.9.2 <4.0.0"
@@ -154,6 +154,19 @@ def main(argv: list[str] | None = None) -> int:
     # Flat fields carry the win32-x64 binding (legacy readers + display).
     primary = "win32-x64"
 
+    # permissions_summary is DERIVED from the packaged manifest itself. The
+    # host's validate_manifest_entry demands an EXACT match between the
+    # catalog entry and the manifest inside the zip — hardcoding the list a
+    # second time here was pure drift bait, now structurally impossible.
+    import zipfile as _zipfile
+
+    with _zipfile.ZipFile(zips[primary]) as archive:
+        packaged_manifest = json.loads(archive.read("plugin.json").decode("utf-8"))
+    packaged_permissions = list(packaged_manifest.get("permissions") or [])
+    if not packaged_permissions:
+        raise SystemExit("packaged plugin.json carries no permissions — refusing to build a catalog that cannot install")
+    print(f"[manifest] permissions from packaged plugin.json: {packaged_permissions}")
+
     key = bytes.fromhex(SIGNING_KEY_HEX)
     entry = MarketplaceEntry(
         id=PLUGIN_ID,
@@ -169,14 +182,7 @@ def main(argv: list[str] | None = None) -> int:
         host_compatibility=HOST_COMPAT,
         platforms=PLATFORMS,
         package_size=sizes[primary],
-        permissions_summary=[
-            "training-config",
-            "dataset-review",
-            "caption-commit",
-            "metrics-read",
-            "artifacts-read",
-            "external-civitai-read",
-        ],
+        permissions_summary=packaged_permissions,
         license="MIT",
         release_notes_url=None,
         package_url=urls[primary],

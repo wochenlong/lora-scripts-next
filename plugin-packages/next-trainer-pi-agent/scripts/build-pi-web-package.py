@@ -27,7 +27,7 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PKG_ROOT.parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-VERSION = "0.3.3"
+VERSION = "0.3.4"
 PLUGIN_ID = "next-trainer-pi-agent"
 PUBLISHER = "next-trainer-project"
 HOST_COMPAT = ">=2.9.2 <4.0.0"
@@ -232,14 +232,16 @@ def main() -> int:
     stripped = strip_dist_types(STAGE / "pi-web" / "node_modules")
     print(f"[stage] removed {stripped} dist-types directories", flush=True)
 
-    # Stage the Next Trainer pi package (extensions + skills + manifest) and the
-    # knowledge/template seeds. Only the runtime assets are shipped — the test/
-    # directory inside pi-package is a dev artifact and is deliberately excluded.
-    print("[stage] pi-package (extensions + skills + package.json) + seeds ...", flush=True)
+    # Stage the Next Trainer pi package (extensions + manifest) and the
+    # managed-content seeds (knowledge / templates / skills). Only the runtime
+    # assets are shipped — the test/ directory inside pi-package is a dev
+    # artifact and is deliberately excluded. Skills live ONLY in seeds/ (F3-0
+    # decision 1): the launcher copies them to the pi user-scope dir; a copy
+    # under pi-package would make the SDK load both sources.
+    print("[stage] pi-package (extensions + package.json) + seeds ...", flush=True)
     (STAGE / "pi-package").mkdir(parents=True, exist_ok=True)
     shutil.copy2(PKG_ROOT / "pi-package" / "package.json", STAGE / "pi-package" / "package.json")
     copy_tree(PKG_ROOT / "pi-package" / "extensions", STAGE / "pi-package" / "extensions")
-    copy_tree(PKG_ROOT / "pi-package" / "skills", STAGE / "pi-package" / "skills")
     copy_tree(PKG_ROOT / "seeds", STAGE / "seeds")
 
     # 2. License inventory + notice.
@@ -308,9 +310,13 @@ def main() -> int:
         # custom-tools + skills: the plugin registers host agent-tools (via the
         # host gateway) and ships pi skills; server-ui: the floating-panel pi-web.
         "capabilities": ["server-ui", "custom-tools", "skills"],
-        # Least-privilege set the host grants on enable; these back the 16
+        # Least-privilege set the host grants on enable; these back the host
         # agent-tools (training-config, dataset-review, caption-commit, metrics,
-        # artifacts/knowledge, external-civitai). The tagger reuses caption-commit.
+        # artifacts/knowledge, external-civitai, content-update). The tagger
+        # reuses caption-commit; content-update exposes the assets_update tool
+        # (F3-3 managed business-data channel). The marketplace catalog derives
+        # permissions_summary FROM THIS LIST (via the packaged plugin.json) —
+        # keep one source of truth.
         "permissions": [
             "training-config",
             "dataset-review",
@@ -318,6 +324,7 @@ def main() -> int:
             "metrics-read",
             "artifacts-read",
             "external-civitai-read",
+            "content-update",
         ],
         "package": {
             "sha256": "BUILD_TIME_VALUE",
@@ -425,6 +432,7 @@ def main() -> int:
             "metrics-read",
             "artifacts-read",
             "external-civitai-read",
+            "content-update",
         ],
         license="MIT",
         release_notes_url=None,

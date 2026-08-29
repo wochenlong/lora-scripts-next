@@ -19,7 +19,7 @@ import { appendFileSync, copyFileSync, createWriteStream, existsSync, mkdirSync,
 import type { WriteStream } from "node:fs"
 
 const PROTOCOL_VERSION = "1"
-const PLUGIN_VERSION = "0.3.3"
+const PLUGIN_VERSION = "0.3.4"
 
 function fail(code: string, message: string): never {
   process.stderr.write(`[launcher] ${code}: ${message}\n`)
@@ -138,10 +138,16 @@ async function waitForPiWeb(port: number, timeoutMs: number): Promise<void> {
 }
 
 /**
- * Seed the user-managed knowledge (md) and template (toml) libraries into the
- * data root from the package's ``seeds/`` directory. Idempotent: a file is only
- * written when it does not already exist, so plugin upgrades never overwrite or
- * delete user content. Returns the number of files copied.
+ * Seed the user-managed knowledge (md), template (toml) and skill libraries
+ * into the data root from the package's ``seeds/`` directory. Idempotent: a
+ * file is only written when it does not already exist, so plugin upgrades
+ * never overwrite or delete user content. Returns the number of files copied.
+ *
+ * Skills land in ``<dataRoot>/pi-agent/skills`` — the pi SDK user-scope
+ * auto-discovery dir (agentDir above). Per F3-0 decision 1 this is the ONE
+ * skills source; the pi-package must not declare pi.skills. Later revisions
+ * arrive through the host's managed assets channel (F3-3), which adopts these
+ * seeded files on its first apply (backing up any local edits first).
  */
 function seedDataFiles(): number {
   const seedsRoot = path.join(packageRoot, "seeds")
@@ -171,7 +177,8 @@ function seedDataFiles(): number {
   }
   walk(path.join(seedsRoot, "knowledge"), path.join(dataRoot, "knowledge"))
   walk(path.join(seedsRoot, "templates"), path.join(dataRoot, "templates"))
-  if (copied > 0) log(`seeded ${copied} knowledge/template file(s) into the data root`)
+  walk(path.join(seedsRoot, "skills"), path.join(agentDir, "skills"))
+  if (copied > 0) log(`seeded ${copied} knowledge/template/skill file(s) into the data root`)
   return copied
 }
 
