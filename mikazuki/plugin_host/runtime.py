@@ -194,6 +194,14 @@ class ExecutablePluginRuntime:
             "NODE_EXTRA_CA_CERTS",
         }
         environment = {key: value for key, value in os.environ.items() if key in allowed}
+        # Deliberately NOT forwarding HTTP(S)_PROXY here: the host refuses to
+        # launder arbitrary host-environment variables (a proxy URL can embed
+        # credentials) into a plugin child that runs with a different trust
+        # level. Plugins that need egress configure it in their OWN scoped
+        # config — for the bundled npm runtime that is the editable
+        # `<agentDir>/npmrc` (proxy/https-proxy/registry), which npm honors
+        # regardless of the stripped environment. See the plugin's
+        # npm-runtime bootstrap for that config's generation.
         # Keep the sidecar launch environment deterministic while retaining the
         # system loader path required by a compiled Windows executable.  Never
         # inherit the host's PATH: it may expose project tooling or credentials.
