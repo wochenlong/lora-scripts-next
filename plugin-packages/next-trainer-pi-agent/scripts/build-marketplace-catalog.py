@@ -18,12 +18,14 @@ Run with the project venv:
 """
 from __future__ import annotations
 
+import argparse
 import hashlib
 import hmac as hmac_module
 import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlsplit
 
 PKG_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PKG_ROOT.parents[1]
@@ -36,6 +38,7 @@ HOST_COMPAT = ">=2.9.2 <4.0.0"
 PLATFORMS = ["win32-x64", "linux-x64"]
 SIGNING_KEY_ID = "dev-local-signing"
 SIGNING_KEY_HEX = "6e6578742d747261696e65722d6c6f63616c2d746573742d7369676e696e672d6b6579"
+IN_DIR = PKG_ROOT / "dist-marketplace"
 OUT_DIR = PKG_ROOT / "dist-marketplace"
 
 MAX_PACKAGE_BYTES = 1024 * 1024 * 1024
@@ -62,12 +65,39 @@ def _host_version() -> str:
         return "0.0.0"
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--remote-base",
+        default=None,
+        help=(
+            "Base URL for real distribution (e.g. "
+            "https://github.com/<owner>/<repo>/releases/download/v0.3.2). "
+            "When set, catalog URLs become <base>/<file> instead of the "
+            "dev-local placeholder; requires a public HTTPS host."
+        ),
+    )
+    parser.add_argument(
+        "--out-dir",
+        default=None,
+        help="Write catalog.json/trust.json here instead of dist-marketplace/ (zip inputs are still read from dist-marketplace/packages/).",
+    )
+    args = parser.parse_args(argv)
+    remote_base = args.remote_base.rstrip("/") if args.remote_base else None
+    if remote_base is not None:
+        parsed = urlsplit(remote_base)
+        if parsed.scheme != "https" or not parsed.hostname or parsed.username or parsed.password:
+            raise SystemExit("--remote-base must be a plain HTTPS base URL")
+    global OUT_DIR
+    if args.out_dir:
+        OUT_DIR = Path(args.out_dir).resolve()
+        OUT_DIR.mkdir(parents=True, exist_ok=True)
+
     from mikazuki.plugin_marketplace.models import MarketplaceCatalog, MarketplaceEntry
     from mikazuki.plugin_marketplace.package import PackageLimits, inspect_package, validate_manifest_entry
     from mikazuki.plugin_marketplace.trust import TrustStore, canonical_catalog_payload, canonical_entry_payload
 
-    zips = {platform: OUT_DIR / "packages" / f"{PLUGIN_ID}-{VERSION}-{platform}.zip" for platform in PLATFORMS}
+    zips = {platform: IN_DIR / "packages" / f"{PLUGIN_ID}-{VERSION}-{platform}.zip" for platform in PLATFORMS}
     for platform, path in zips.items():
         if not path.is_file():
             raise SystemExit(f"missing platform package: {path}")
@@ -79,7 +109,11 @@ def main() -> int:
             raise SystemExit(f"{platform} package size {size} exceeds limit {MAX_PACKAGE_BYTES}")
 
     urls = {
-        platform: f"https://plugins.next-trainer.local/packages/{PLUGIN_ID}-{VERSION}-{platform}.zip"
+        platform: (
+            f"{remote_base}/{PLUGIN_ID}-{VERSION}-{platform}.zip"
+            if remote_base
+            else f"https://plugins.next-trainer.local/packages/{PLUGIN_ID}-{VERSION}-{platform}.zip"
+        )
         for platform in PLATFORMS
     }
     # Flat fields carry the win32-x64 binding (legacy readers + display).
@@ -142,7 +176,11 @@ def main() -> int:
             {
                 "keys": {SIGNING_KEY_ID: {"publisherId": PUBLISHER, "keyHex": SIGNING_KEY_HEX}},
                 "revokedKeys": [],
-                "note": "Development/test trust root only. Production signing is release-governed.",
+                "note": (
+                    "Release trust root (dev HMAC key) for remote-distribution catalogs."
+                    if remote_base
+                    else "Development/test trust root only. Production signing is release-governed."
+                ),
             },
             ensure_ascii=False,
             indent=2,
@@ -150,6 +188,8 @@ def main() -> int:
         + "\n",
         encoding="utf-8",
     )
+    if remote_base:
+        print(f"[catalog] remote base URL: {remote_base}")
 
     # Self-check every platform binding with the host's own validators.
     limits = PackageLimits(
@@ -184,4 +224,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

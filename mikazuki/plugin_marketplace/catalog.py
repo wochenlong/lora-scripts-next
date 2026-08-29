@@ -1,9 +1,16 @@
 from __future__ import annotations
 
+import hashlib
+import http.client
 import json
 import os
+import socket
+import time
+import urllib.error
+import urllib.request
 from pathlib import Path
 from typing import Callable, Protocol
+from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 
@@ -13,6 +20,9 @@ from .trust import TrustError, TrustStore
 
 
 _COPY_CHUNK_BYTES = 8 * 1024 * 1024
+_HTTP_CHUNK_BYTES = 1 * 1024 * 1024
+_HTTP_TIMEOUT_S = 30
+_HTTP_EXTRA_ATTEMPTS = 2
 
 
 class CatalogError(ValueError):
@@ -58,6 +68,10 @@ class LocalPackageAcquirer:
 
     def __init__(self, sources: dict[str, Path]) -> None:
         self._sources = {url: path.resolve() for url, path in sources.items()}
+
+    @property
+    def source_urls(self) -> frozenset[str]:
+        return frozenset(self._sources)
 
     def acquire(
         self,
@@ -123,6 +137,185 @@ class LocalPackageAcquirer:
         finally:
             temporary.unlink(missing_ok=True)
         return destination
+
+
+def _cancelled_error() -> CatalogError:
+    return CatalogError(
+        "MARKETPLACE_OPERATION_CANCELLED",
+        "The plugin installation was cancelled.",
+        status_code=409,
+    )
+
+
+class HttpPackageAcquirer:
+    """Online acquisition from the catalog's HTTPS package URL.
+
+    The URL may be rewritten onto a host-approved mirror base URL (the
+    ``MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR`` environment value in the default
+    wiring). A plain-HTTP mirror must be loopback-only: it exists for local
+    development and release dry-runs, and integrity still comes from the
+    catalog-pinned size + sha256, so a loopback mirror cannot smuggle a
+    tampered package into the quarantine.
+    """
+
+    def __init__(self, mirror_base_url: str | None = None) -> None:
+        self._mirror = self._validate_mirror(mirror_base_url)
+
+    @staticmethod
+    def _validate_mirror(mirror: str | None) -> str | None:
+        if mirror is None or not mirror.strip():
+            return None
+        mirror = mirror.strip()
+        parsed = urlsplit(mirror)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("mirror base URL must be a plain http(s) URL without credentials")
+        if parsed.scheme == "http" and parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+            raise ValueError("plain-HTTP mirrors must be loopback-only")
+        return mirror.rstrip("/")
+
+    def _resolve(self, entry: MarketplaceEntry, platform: str) -> tuple[str, int, str]:
+        try:
+            package_url, package_size, sha256 = entry.resolve_platform_package(platform)
+        except ValueError as exc:
+            raise CatalogError(
+                "MARKETPLACE_PLATFORM_UNAVAILABLE",
+                "The marketplace has no package for this platform.",
+                status_code=409,
+            ) from exc
+        if self._mirror is None:
+            return package_url, package_size, sha256
+        path = urlsplit(package_url).path
+        return f"{self._mirror}{path}", package_size, sha256
+
+    def acquire(
+        self,
+        entry: MarketplaceEntry,
+        destination: Path,
+        platform: str,
+        on_progress: Callable[[int, int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Path:
+        url, package_size, sha256 = self._resolve(entry, platform)
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        temporary = destination.with_suffix(destination.suffix + ".part")
+        last_error: CatalogError | None = None
+        for attempt in range(_HTTP_EXTRA_ATTEMPTS + 1):
+            if is_cancelled is not None and is_cancelled():
+                raise _cancelled_error()
+            if attempt:
+                time.sleep(0.5 * attempt)
+                if on_progress is not None:
+                    on_progress(0, package_size)
+            try:
+                self._download(url, temporary, package_size, sha256, on_progress, is_cancelled)
+                break
+            except CatalogError as exc:
+                temporary.unlink(missing_ok=True)
+                # Cancellation, integrity failures and 404s are not retryable;
+                # only transient transport / server errors (503 family) are.
+                if exc.code != "MARKETPLACE_PACKAGE_ACQUISITION_FAILED":
+                    raise
+                last_error = exc
+        else:
+            raise last_error or CatalogError(
+                "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
+                "The marketplace package could not be acquired.",
+                status_code=503,
+            )
+        os.replace(temporary, destination)
+        return destination
+
+    def _download(
+        self,
+        url: str,
+        temporary: Path,
+        package_size: int,
+        sha256: str,
+        on_progress: Callable[[int, int], None] | None,
+        is_cancelled: Callable[[], bool] | None,
+    ) -> None:
+        digest = hashlib.sha256()
+        current = 0
+        try:
+            request = urllib.request.Request(url, headers={"User-Agent": "next-trainer-marketplace/1.0"})
+            with urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_S) as handle, temporary.open("wb") as out:
+                if on_progress is not None:
+                    on_progress(0, package_size)
+                while True:
+                    if is_cancelled is not None and is_cancelled():
+                        raise _cancelled_error()
+                    chunk = handle.read(_HTTP_CHUNK_BYTES)
+                    if not chunk:
+                        break
+                    digest.update(chunk)
+                    current += len(chunk)
+                    out.write(chunk)
+                    if on_progress is not None:
+                        on_progress(current, package_size)
+                out.flush()
+                os.fsync(out.fileno())
+        except CatalogError:
+            raise
+        except urllib.error.HTTPError as exc:
+            if exc.code in (401, 403, 404):
+                raise CatalogError(
+                    "MARKETPLACE_PACKAGE_UNAVAILABLE",
+                    "The marketplace package is unavailable.",
+                    status_code=404 if exc.code == 404 else 503,
+                ) from exc
+            raise CatalogError(
+                "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
+                "The marketplace package could not be acquired.",
+                status_code=503,
+            ) from exc
+        except (urllib.error.URLError, http.client.HTTPException, socket.timeout, OSError) as exc:
+            raise CatalogError(
+                "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
+                "The marketplace package could not be acquired.",
+                status_code=503,
+            ) from exc
+        if current != package_size:
+            raise CatalogError(
+                "MARKETPLACE_PACKAGE_SIZE_MISMATCH",
+                "The marketplace package size does not match the catalog.",
+                status_code=400,
+            )
+        if digest.hexdigest().casefold() != sha256.casefold():
+            raise CatalogError(
+                "MARKETPLACE_PACKAGE_CHECKSUM_MISMATCH",
+                "The marketplace package checksum does not match the catalog.",
+                status_code=400,
+            )
+
+
+class LocalFirstPackageAcquirer:
+    """Prefer the host-approved local package map, then fall through to HTTP.
+
+    Development and bundled releases address packages through the local map
+    (fast, offline); release builds whose local map does not cover the
+    catalog URL download it from the mirror/HTTPS origin instead.
+    """
+
+    def __init__(self, local: LocalPackageAcquirer, remote: HttpPackageAcquirer) -> None:
+        self.local = local
+        self.remote = remote
+
+    def acquire(
+        self,
+        entry: MarketplaceEntry,
+        destination: Path,
+        platform: str,
+        on_progress: Callable[[int, int], None] | None = None,
+        is_cancelled: Callable[[], bool] | None = None,
+    ) -> Path:
+        try:
+            return self.local.acquire(entry, destination, platform, on_progress, is_cancelled)
+        except CatalogError as exc:
+            # Only "no local copy" falls through; size/integrity failures of a
+            # local copy are hard errors and must not be masked by a download.
+            if exc.code != "MARKETPLACE_PACKAGE_UNAVAILABLE":
+                raise
+            return self.remote.acquire(entry, destination, platform, on_progress, is_cancelled)
 
 
 class UnavailablePackageAcquirer:
@@ -262,7 +455,10 @@ class MarketplaceCatalogService:
 __all__ = [
     "CatalogError",
     "FileCatalogSource",
+    "HttpPackageAcquirer",
+    "LocalFirstPackageAcquirer",
     "LocalPackageAcquirer",
     "MarketplaceCatalogService",
     "PackageAcquirer",
+    "UnavailablePackageAcquirer",
 ]

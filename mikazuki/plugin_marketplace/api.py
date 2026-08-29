@@ -25,7 +25,15 @@ from mikazuki.plugin_host.agent_tools import configure_agent_tool_service
 
 from .manager import MarketplaceManager
 from .models import MarketplaceEntry
-from .catalog import CatalogError, FileCatalogSource, LocalPackageAcquirer, MarketplaceCatalogService
+from .catalog import (
+    CatalogError,
+    FileCatalogSource,
+    HttpPackageAcquirer,
+    LocalFirstPackageAcquirer,
+    LocalPackageAcquirer,
+    MarketplaceCatalogService,
+    UnavailablePackageAcquirer,
+)
 from .operations import (
     InstallOperation,
     InstallOperationConflict,
@@ -136,19 +144,26 @@ def _platform_name() -> str:
     return f"{sys.platform}-{arch}"
 
 
-def _local_catalog_wiring() -> tuple[TrustStore, FileCatalogSource | None, LocalPackageAcquirer | None]:
+def _local_catalog_wiring() -> tuple[TrustStore, FileCatalogSource | None, Any]:
     """Development-only catalog/trust wiring, opt-in via environment.
 
     Production deployments leave these unset: the manager keeps an empty
     trust store and no catalog source, so every install fails closed.
+
+    Package acquisition is local-first: catalog URLs mapped into
+    MIKAZUKI_MARKETPLACE_PACKAGE_ROOT are copied from disk; anything else is
+    downloaded over HTTP, optionally rewritten onto the loopback
+    MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR (release dry-run against a local
+    file server). Integrity always comes from the catalog-pinned size+sha256.
     """
     catalog_path = os.environ.get("MIKAZUKI_MARKETPLACE_CATALOG", "").strip()
     trust_path = os.environ.get("MIKAZUKI_MARKETPLACE_TRUST", "").strip()
     package_root = os.environ.get("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", "").strip()
+    mirror = os.environ.get("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", "").strip() or None
     if not catalog_path or not trust_path:
         return TrustStore({}), None, None
     trust = load_trust_root(Path(trust_path))
-    acquirer: LocalPackageAcquirer | None = None
+    acquirer: Any = UnavailablePackageAcquirer()
     if package_root:
         sources: dict[str, Path] = {}
         root_dir = Path(package_root).resolve()
@@ -158,7 +173,7 @@ def _local_catalog_wiring() -> tuple[TrustStore, FileCatalogSource | None, Local
             for member in sorted(root_dir.iterdir()):
                 if member.is_file() and member.suffix.casefold() == ".zip":
                     sources[f"https://plugins.next-trainer.local/packages/{member.name}"] = member
-        acquirer = LocalPackageAcquirer(sources)
+        acquirer = LocalFirstPackageAcquirer(LocalPackageAcquirer(sources), HttpPackageAcquirer(mirror))
     return trust, FileCatalogSource(Path(catalog_path)), acquirer
 
 
