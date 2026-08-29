@@ -4,6 +4,7 @@ import os
 import json
 import re
 import threading
+import time
 import uuid
 from collections import deque
 from datetime import datetime
@@ -269,9 +270,31 @@ class TaskManager:
             path.parent.mkdir(parents=True, exist_ok=True)
             tmp = path.with_suffix(path.suffix + ".tmp")
             tmp.write_text(json.dumps(records, ensure_ascii=False, indent=1), encoding="utf-8")
-            os.replace(tmp, path)
+            self._atomic_replace(tmp, path)
         except Exception as e:
             log.warning(f"Failed to persist task queue / 任务队列持久化失败: {e}")
+
+    @staticmethod
+    def _atomic_replace(tmp: Path, path: Path) -> None:
+        """os.replace with a short bounded retry (Windows transient locks).
+
+        Defender / the search indexer can hold a momentary handle on the
+        freshly written target, making the atomic swap fail with WinError 5.
+        Without a retry the snapshot is silently dropped (only a warning log),
+        so a user's QUEUED training task would be lost across a restart. The
+        retry budget is tiny (<100 ms, only on the rare failure path) because
+        callers may hold self._cond while persisting.
+        """
+        last_err: Optional[OSError] = None
+        for delay in (0.0, 0.01, 0.03, 0.06):
+            if delay:
+                time.sleep(delay)
+            try:
+                os.replace(tmp, path)
+                return
+            except OSError as exc:  # WinError 5 / transient sharing violation
+                last_err = exc
+        raise last_err
 
     def restore_queue(self):
         """Re-enqueue tasks persisted as QUEUED; mark interrupted RUNNING as FAILED."""
