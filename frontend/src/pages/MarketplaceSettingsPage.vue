@@ -10,6 +10,7 @@ import {
   type MarketplacePluginStatus,
 } from "../api/plugins"
 import { useExtensionsStore } from "../stores/extensions"
+import { scheduleHostRefresh } from "../extensions/hostRefresh"
 
 const props = withDefaults(defineProps<{ catalogEntries?: MarketplaceEntry[] }>(), {
   catalogEntries: () => [],
@@ -77,14 +78,23 @@ async function load() {
   loading.value = true
   error.value = ""
   try {
-    const [installed, catalog] = await Promise.all([
-      pluginsApi.listMarketplacePlugins(),
-      // The live catalog may be offline (MARKETPLACE_CATALOG_OFFLINE) or the
-      // host may not ship one; fall back to the injected entries when empty.
-      pluginsApi.listMarketplaceCatalog().catch(() => [] as MarketplaceEntry[]),
-    ])
-    statuses.value = installed
-    liveCatalog.value = catalog
+    statuses.value = await pluginsApi.listMarketplacePlugins()
+    try {
+      liveCatalog.value = await pluginsApi.listMarketplaceCatalog()
+    } catch {
+      // A cold host (channel never polled) only has an empty catalog cache and
+      // answers OFFLINE. Trigger the channel poll once before falling back to
+      // the injected entries — otherwise a fresh install would show an empty
+      // catalog forever and the user would never see the install action.
+      try {
+        await pluginsApi.refreshMarketplaceCatalog()
+        liveCatalog.value = await pluginsApi.listMarketplaceCatalog()
+      } catch {
+        // The live catalog may be genuinely offline (MARKETPLACE_CATALOG_OFFLINE)
+        // or the host may not ship one; fall back to the injected entries.
+        liveCatalog.value = []
+      }
+    }
   } catch {
     statuses.value = []
     error.value = t("marketplace.loadFailed")
@@ -106,16 +116,18 @@ async function confirmMutation(messageKey: string) {
   }
 }
 
-async function runAction(action: string, operation: () => Promise<MarketplacePluginStatus>) {
-  if (busyAction.value) return
+async function runAction(action: string, operation: () => Promise<MarketplacePluginStatus>): Promise<boolean> {
+  if (busyAction.value) return false
   busyAction.value = action
   error.value = ""
   try {
     updateStatus(await operation())
     await extensionsStore.refresh()
     ElMessage.success(t("marketplace.actionDone"))
+    return true
   } catch {
     error.value = t("marketplace.actionFailed")
+    return false
   } finally {
     busyAction.value = ""
   }
@@ -155,10 +167,16 @@ function finishInstall() {
     updateStatus(finalOp.status)
     void extensionsStore.refresh()
     ElMessage.success(t("marketplace.actionDone"))
+    scheduleHostRefresh()
   } else if (finalOp?.state === "cancelled") {
     ElMessage.info(t("marketplace.installCancelled"))
   } else if (finalOp?.state === "failed") {
-    error.value = finalOp.errorMessage || t("marketplace.actionFailed")
+    const message = finalOp.errorMessage || t("marketplace.actionFailed")
+    error.value = message
+    // Toast the failure too: the banner sits at the page top and the failed
+    // operation used to vanish without any visible signal ("clicked install,
+    // nothing happens").
+    ElMessage.error(message)
   }
 }
 
@@ -232,7 +250,12 @@ async function rollback() {
 async function uninstall() {
   const record = selected.value
   if (!record || !(await confirmMutation("marketplace.confirmUninstall"))) return
-  await runAction("uninstall", () => pluginsApi.uninstallMarketplacePlugin(record.id))
+  // A successful uninstall must fully tear down the plugin's mounted UI; the
+  // floating panel/iframe can otherwise linger until a manual refresh, so
+  // reload the host to guarantee no stale plugin components survive.
+  if (await runAction("uninstall", () => pluginsApi.uninstallMarketplacePlugin(record.id))) {
+    scheduleHostRefresh()
+  }
 }
 
 watch(

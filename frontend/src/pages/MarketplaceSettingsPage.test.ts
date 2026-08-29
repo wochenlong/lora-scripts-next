@@ -10,6 +10,12 @@ import {
   type MarketplacePluginStatus,
 } from "../api/plugins"
 import { i18n } from "../i18n"
+import { scheduleHostRefresh } from "../extensions/hostRefresh"
+
+// The page reloads the host shell after a successful install/uninstall so the
+// plugin panel mounts/tears down cleanly; assert the schedule call instead of
+// triggering a real jsdom reload.
+vi.mock("../extensions/hostRefresh", () => ({ scheduleHostRefresh: vi.fn() }))
 
 const entry: MarketplaceEntry = {
   id: "sample-plugin",
@@ -73,6 +79,7 @@ beforeEach(() => {
   vi.spyOn(pluginsApi, "listMarketplacePlugins").mockResolvedValue([status()])
   vi.spyOn(pluginsApi, "listMarketplaceCatalog").mockResolvedValue([])
   vi.spyOn(pluginsApi, "installMarketplacePlugin").mockResolvedValue(operation())
+  vi.spyOn(pluginsApi, "refreshMarketplaceCatalog").mockResolvedValue(1)
   // Default: the stream resolves immediately at a terminal snapshot so tests
   // that do not exercise progress settle without real timers.
   vi.spyOn(pluginsApi, "streamInstallOperation").mockImplementation(
@@ -96,6 +103,8 @@ beforeEach(() => {
   )
   vi.spyOn(pluginsApi, "enableMarketplacePlugin").mockResolvedValue(status({ state: "enabled", active_version: "1.2.0", enabled: true }))
   vi.spyOn(pluginsApi, "disableMarketplacePlugin").mockResolvedValue(status({ state: "installed", active_version: "1.2.0" }))
+  vi.spyOn(pluginsApi, "uninstallMarketplacePlugin").mockResolvedValue(status())
+  vi.mocked(scheduleHostRefresh).mockClear()
 })
 
 describe("MarketplaceSettingsPage", () => {
@@ -217,6 +226,93 @@ describe("MarketplaceSettingsPage", () => {
     expect(wrapper.text()).toContain("禁用")
     expect(wrapper.text()).toContain("重新启动")
     expect(wrapper.text()).not.toContain("auth.json")
+    wrapper.unmount()
+  })
+
+  it("recovers a cold OFFLINE catalog by polling the channel once", async () => {
+    // Fresh host: GET /catalog answers OFFLINE until the channel is polled.
+    // load() must trigger refreshMarketplaceCatalog and re-read, so a new user
+    // sees the installable listing instead of a silently empty catalog.
+    vi.mocked(pluginsApi.listMarketplaceCatalog)
+      .mockRejectedValueOnce(new Error("MARKETPLACE_CATALOG_OFFLINE"))
+      .mockResolvedValueOnce([entry])
+    const wrapper = mount(MarketplaceSettingsPage, {
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    expect(pluginsApi.refreshMarketplaceCatalog).toHaveBeenCalledTimes(1)
+    expect(wrapper.find(".marketplace-notice").exists()).toBe(false)
+    expect(wrapper.get("button.primary-action").text()).toContain("安装")
+    wrapper.unmount()
+  })
+
+  it("reloads the host after a successful install so the plugin panel mounts", async () => {
+    const { ElMessageBox } = await import("element-plus")
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue(
+      "confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
+    vi.mocked(pluginsApi.listMarketplacePlugins)
+      .mockResolvedValueOnce([status()])
+      .mockResolvedValueOnce([status({ state: "installed", active_version: "1.2.0" })])
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+    await wrapper.get("button.primary-action").trigger("click")
+    await flushPromises()
+
+    // Default beforeEach stream settles at succeeded → the install schedules a
+    // host reload so the floating panel mounts fresh (no stale "not ready").
+    expect(scheduleHostRefresh).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it("reloads the host after a successful uninstall so no plugin UI lingers", async () => {
+    const { ElMessageBox } = await import("element-plus")
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue(
+      "confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
+      status({ state: "enabled", active_version: "1.2.0", enabled: true }),
+    ])
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const uninstall = wrapper.get("button.danger-action")
+    expect(uninstall.text()).toContain("卸载")
+    await uninstall.trigger("click")
+    await flushPromises()
+
+    expect(pluginsApi.uninstallMarketplacePlugin).toHaveBeenCalledWith("sample-plugin")
+    expect(scheduleHostRefresh).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it("does not reload the host when uninstall fails", async () => {
+    const { ElMessageBox } = await import("element-plus")
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue(
+      "confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
+      status({ state: "enabled", active_version: "1.2.0", enabled: true }),
+    ])
+    vi.mocked(pluginsApi.uninstallMarketplacePlugin).mockRejectedValueOnce(new Error("busy"))
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    await wrapper.get("button.danger-action").trigger("click")
+    await flushPromises()
+
+    expect(scheduleHostRefresh).not.toHaveBeenCalled()
+    expect(wrapper.find(".marketplace-error").exists()).toBe(true)
     wrapper.unmount()
   })
 })

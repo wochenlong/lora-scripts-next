@@ -559,6 +559,14 @@ export const pluginsApi = {
     const data = await hostData<MarketplaceEntry[] | null>(response)
     return data ?? []
   },
+  // GET /catalog only reads the on-disk cache; a fresh host that has never
+  // polled its channel returns MARKETPLACE_CATALOG_OFFLINE (503). This forces
+  // the host to poll its configured channel once, then the next list succeeds.
+  refreshMarketplaceCatalog: async (): Promise<number> => {
+    const response = await authorizedFetch("/api/marketplace/catalog/refresh", { method: "POST", body: "{}" })
+    const data = await hostData<{ entries?: number }>(response)
+    return data?.entries ?? 0
+  },
   // The backend install contract is strict (extra="forbid"): only version /
   // approvedPermissions are accepted. The catalog entry is server-trusted
   // (signature verified) and must not be echoed back in the request body.
