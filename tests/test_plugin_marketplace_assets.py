@@ -173,6 +173,50 @@ def test_second_update_backs_up_user_edits_and_preserves_own_files(channel):
     assert not (data / "knowledge" / "errors" / "common-errors.md").exists()
 
 
+def test_first_update_adopts_launcher_seeded_files(channel):
+    """F3-3 item 4 reconciliation: a fresh install seeds knowledge/templates/
+    skills into the data root (launcher, never registered). The FIRST channel
+    update must ADOPT them — identical content lands as unchanged, a seeded
+    file the user already edited is backed up before the release version
+    lands, the user's own notes stay, and afterwards every release path is
+    tracked so later updates reach them (they no longer behave as user files).
+    """
+    updater = channel["updater"]
+    data = channel["paths"].user_data_dir(PLUGIN_ID)
+    # Simulate the launcher having just seeded the v1 bundle verbatim...
+    for rel, body in V1.items():
+        root = data / "pi-agent" if rel.startswith("skills/") else data
+        dest = root / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes(body)
+    # ...one seeded file was already edited by the user...
+    (data / "knowledge" / "learning-rate.md").write_bytes(b"# user tweaks on day one\n")
+    # ...plus a genuine own note the release does not own.
+    own = data / "knowledge" / "my-own-notes.md"
+    own.write_bytes(b"# mine\n")
+
+    index, payload = release("2026.08.29-1", V1)
+    publish(channel, index, payload)
+    report = updater.update(PLUGIN_ID)
+
+    assert report["backed_up"] == ["knowledge/learning-rate.md"]      # edits protected, then updated
+    assert report["updated"] == ["knowledge/learning-rate.md"]
+    assert sorted(report["unchanged"]) == sorted(set(V1) - {"knowledge/learning-rate.md"})
+    assert not report["added"]
+    assert (data / "knowledge" / "learning-rate.md").read_bytes() == V1["knowledge/learning-rate.md"]
+    backups = list((data / "managed" / "local-backups").rglob("learning-rate.md"))
+    assert backups and backups[0].read_bytes() == b"# user tweaks on day one\n"
+    assert own.read_bytes() == b"# mine\n"                            # own file untouched
+    manifest = json.loads((data / "managed" / "managed-manifest.json").read_text(encoding="utf-8"))
+    assert set(manifest["files"]) == set(V1)                          # adopted: tracked from now on
+    # and a following release DOES reach the previously-seeded content:
+    V2 = dict(V1, **{"knowledge/errors/common-errors.md": b"# errors v2\n"})
+    index2, payload2 = release("2026.08.29-2", V2)
+    publish(channel, index2, payload2)
+    report2 = updater.update(PLUGIN_ID)
+    assert report2["updated"] == ["knowledge/errors/common-errors.md"]
+
+
 def test_repeat_update_is_unchanged(channel):
     updater = channel["updater"]
     index, payload = release("2026.08.29-1", V1)

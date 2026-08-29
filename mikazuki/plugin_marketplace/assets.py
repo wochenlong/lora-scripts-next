@@ -8,12 +8,14 @@ archive into the plugin's data root, inside managed namespaces only
 
 * files tracked by the previously applied manifest are added/updated/deleted
   to match the release;
-* a tracked file that was modified locally (sha differs from the record) is
-  first copied under ``managed/local-backups/<ts>/`` and then updated, and the
-  backup is reported — user work is never silently swallowed;
-* files that were never in any manifest are the user's own: they are never
-  touched, and a tracked-but-locally-modified file removed from the release
-  stays on disk (reported as ``retained_local``);
+* a file the release owns that was modified locally — OR was seeded by the
+  launcher on first install and never registered yet (F3-3 item 4: the first
+  update ADOPTS such files, recording every release path in the manifest) —
+  is first copied under ``managed/local-backups/<ts>/`` and then updated, and
+  the backup is reported: user work is never silently swallowed;
+* files the release does not own at all (user's own notes in the same
+  namespace) are never touched, and a tracked-but-locally-modified file
+  removed from the release stays on disk (reported as ``retained_local``);
 * the manifest swaps LAST. any failure mid-apply undoes every planned
   mutation from in-memory originals and keeps the previous manifest intact —
   a half-applied managed tree cannot be observed.
