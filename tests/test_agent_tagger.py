@@ -55,21 +55,29 @@ class _FakeJob:
         self.calls: list = []
         self.ready = threading.Event()
         self.release = threading.Event()
+        # Terminal-state barrier: the job thread writes the shared progress
+        # singleton; tests MUST wait for it. An autouse teardown reset cannot
+        # un-write a thread that wakes AFTER it — the late finish_* would land
+        # in the next test (observed as the idle-snapshot flake under load).
+        self.finished = threading.Event()
         self.block = True
 
     def run(self, req) -> None:
         self.calls.append(req)
-        if not tagger_progress.try_begin("tagging", req.interrogator_model, "fake"):
+        try:
+            if not tagger_progress.try_begin("tagging", req.interrogator_model, "fake"):
+                self.ready.set()
+                return
+            tagger_progress.begin_tagging(req.interrogator_model, 5)
             self.ready.set()
-            return
-        tagger_progress.begin_tagging(req.interrogator_model, 5)
-        self.ready.set()
-        if self.block:
-            self.release.wait(timeout=10)
-        if tagger_progress.is_cancel_requested():
-            tagger_progress.finish_cancelled()
-        else:
-            tagger_progress.finish_success("done")
+            if self.block:
+                self.release.wait(timeout=10)
+            if tagger_progress.is_cancel_requested():
+                tagger_progress.finish_cancelled()
+            else:
+                tagger_progress.finish_success("done")
+        finally:
+            self.finished.set()
 
     def release_job(self) -> None:
         self.release.set()
@@ -77,6 +85,9 @@ class _FakeJob:
 
 @pytest.fixture(autouse=True)
 def _clean_tagger_state():
+    # Reset on entry as well as exit: a thread leaking out of a previous test
+    # must not decide this test's initial snapshot (setup + teardown = airtight).
+    tagger_progress.reset_idle()
     yield
     # Belt and braces: leave the global singleton idle for the next test even if
     # a test left a job blocked (its thread will finish against a released state).
@@ -116,6 +127,7 @@ def test_start_requires_confirmation_before_job_launches(monkeypatch):
     assert fake.ready.wait(5), "tagger job thread did not start"
     assert len(fake.calls) == 1
     assert fake.calls[0].path == "imgs"
+    assert fake.finished.wait(5), "job thread did not reach a terminal state"
 
 
 def test_start_rejects_unknown_model():
@@ -159,6 +171,7 @@ def test_start_refuses_when_another_job_is_busy(monkeypatch):
         assert len(fake.calls) == 1  # the second start never launched a job
     finally:
         fake.release_job()
+        assert fake.finished.wait(5), "released job thread did not finish before teardown"
 
 
 def test_cancel_is_idempotent_when_idle():
@@ -177,8 +190,12 @@ def test_cancel_requests_cooperative_cancel_when_busy(monkeypatch):
         assert result["cancelled"] is True
         assert result["state"] == "cancelling"
         fake.release_job()
-        # the fake observes the cancel request and reports the cancelled finish
-        tagger_progress.finish_cancelled()
+        # the job thread itself observes the cancel request and writes the
+        # terminal cancelled state — wait for it instead of finishing by hand
+        # (a hand-written finish raced the thread's own finish under load).
+        assert fake.finished.wait(5), "cancelled job thread did not finish"
+        # finish_cancelled() lands the snapshot back on idle (documented contract)
+        assert tagger_status()["snapshot"]["phase"] == "idle"
     finally:
         fake.release_job()
 
