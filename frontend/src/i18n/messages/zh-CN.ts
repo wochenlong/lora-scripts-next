@@ -952,6 +952,7 @@ export default {
       "metrics-read": "训练指标读取",
       "artifacts-read": "训练产物读取",
       "external-civitai-read": "Civitai 资料读取",
+      "content-update": "内容库更新",
     },
   },
   extensionHost: {

@@ -952,6 +952,7 @@ export default {
       "metrics-read": "Training metrics",
       "artifacts-read": "Training artifacts",
       "external-civitai-read": "Civitai reference access",
+      "content-update": "Content library updates",
     },
   },
   extensionHost: {

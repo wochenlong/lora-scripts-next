@@ -8,6 +8,7 @@ session/token boundary, stable Tool schemas and confirmation handling.
 """
 
 import asyncio
+from contextvars import ContextVar
 from dataclasses import dataclass
 from typing import Any, Callable, Mapping
 
@@ -49,6 +50,13 @@ _TICKET_HELP = (
 
 
 router = APIRouter(prefix="/internal/agent-tools", tags=["agent-tools"])
+
+# The plugin id that owns the in-flight Tool call. Handlers that act on the
+# plugin's OWN data root (e.g. the managed business-data update) read it here
+# instead of receiving it as an argument, so every other handler signature —
+# and its session-scoped workspace isolation — stays untouched. asyncio.to_thread
+# copies the current context, so the value is visible in off-loop handlers too.
+_current_plugin: ContextVar[str] = ContextVar("agent_tool_plugin", default="")
 
 
 @dataclass(frozen=True)
@@ -108,6 +116,8 @@ class AgentToolService:
         ]
 
     async def invoke(self, plugin_id: str, session_id: str, tool_call_id: str, name: str, params: dict[str, Any]) -> dict[str, Any]:
+        # Per-request asyncio task => the ContextVar cannot leak across callers.
+        _current_plugin.set(plugin_id)
         if not isinstance(tool_call_id, str) or not tool_call_id.strip():
             raise HTTPException(status_code=400, detail={"code": "TOOL_CALL_ID_REQUIRED", "message": "A Tool call id is required."})
         tool = self._tools().get(name)
@@ -202,8 +212,7 @@ class AgentToolService:
                 "dataset_caption_commit", "Commit caption edits", "Atomically commit an approved caption change-set with backup and restore support. Write operation: call once WITHOUT confirmationTicketId to obtain the host-issued ticket, get the user's approval, then retry with that exact ticket id.", "caption-commit", "write",
                 _object({"root": _str(), "changeSetId": _str(), "changeSetHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str(_TICKET_HELP)}, ("root", "changeSetId", "changeSetHash")), self._caption_commit,
             ),
-            "knowledge_search": _Tool(
-                "knowledge_search", "Search knowledge", "Rank a set of documents you pass in `documents` (returns source-backed excerpts with evidence + confidence). For the bundled data-root knowledge/templates library, use the `next_trainer_knowledge` tool instead — this tool does NOT read that library unless you pass its documents here.", "artifacts-read", "read",
+            "knowledge_search": _Tool(                "knowledge_search", "Search knowledge", "Rank a set of documents you pass in `documents` (returns source-backed excerpts with evidence + confidence). For the bundled data-root knowledge/templates library, use the `next_trainer_knowledge` tool instead — this tool does NOT read that library unless you pass its documents here.", "artifacts-read", "read",
                 _object({"query": _str(), "topK": {"type": "integer", "minimum": 1, "maximum": 10}, "documents": {"type": "array", "items": {"type": "object"}, "description": "Documents to search; each is {sourceId, title, url, text, version?, scope?, tags?}."}}, ("query",)), self._knowledge_search,
             ),
             "civitai_search_loras": _Tool(
@@ -262,7 +271,21 @@ class AgentToolService:
                 "tagger_status", "Tagger job status", "Return the state (idle/busy) and live progress snapshot of the host tagger job.", "caption-commit", "read",
                 _object({}, ()), self._tagger_status,
             ),
+            "assets_update": _Tool(
+                "assets_update", "Update knowledge & templates", "Pull the publisher's signed business-data release (knowledge articles, prompt templates, skills) into this plugin's managed library. Only files the publisher manages change: files YOU edited are copied to a backup folder first, never silently overwritten; your own notes are never touched. No news/offline is a normal report, never fatal to training. Data write: call once WITHOUT confirmationTicketId to obtain the host-issued ticket, get the user's approval, then retry with that exact ticket id.", "content-update", "write",
+                _object({"confirmationTicketId": _str(_TICKET_HELP)}), self._assets_update,
+            ),
         }
+
+    def _assets_update(self, _session: str, _call: str, p: dict[str, Any]) -> Any:
+        # Lazy import keeps plugin_host independent of the marketplace module at
+        # load time (same pattern as _granted_permissions / _resolve_plugin).
+        from mikazuki.plugin_marketplace.api import _assets
+
+        plugin_id = _current_plugin.get()
+        if not plugin_id:
+            raise HTTPException(status_code=409, detail={"code": "PLUGIN_CONTEXT_MISSING", "message": "The plugin context for this Tool call could not be resolved."})
+        return _assets.update(plugin_id)
 
     def _config_template(self, session: str, call: str, p: dict[str, Any]) -> Any:
         ensure_workspace(session, purpose="training-config")

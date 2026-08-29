@@ -1,4 +1,4 @@
-from __future__ import annotations
+﻿from __future__ import annotations
 
 import asyncio
 import json
@@ -21,6 +21,7 @@ ALL_PERMISSIONS = frozenset({
     "metrics-read",
     "artifacts-read",
     "external-civitai-read",
+    "content-update",
 })
 
 
@@ -297,3 +298,73 @@ def test_civitai_fetch_version_returns_normalized_records(monkeypatch):
     assert [v["modelVersionId"] for v in result["versions"]] == [11, 22]
     assert seen == [11, 22]
     assert result["versions"][0]["normalizedParameters"]["learning_rate"] == "0.001"
+
+
+def test_assets_update_tool_requires_content_update_permission():
+    """Least privilege: the business-data update Tool is invisible 鈥?not merely
+    rejected 鈥?unless the plugin was granted the content-update permission."""
+    service = AgentToolService(ConfirmationTicketStore())
+    granted = {item["name"] for item in service.definitions(ALL_PERMISSIONS)}
+    assert "assets_update" in granted
+    without = {item["name"] for item in service.definitions(ALL_PERMISSIONS - {"content-update"})}
+    assert "assets_update" not in without
+
+
+def test_assets_update_is_a_write_tool_flow_with_plugin_scoped_apply(monkeypatch):
+    """Storyline: agent asks to refresh knowledge/templates -> first call asks
+    for user confirmation -> approved retry updates the CALLING plugin's own
+    managed namespaces and returns the publisher report."""
+    import mikazuki.plugin_marketplace.api as marketplace_api
+
+    _patch_manager(monkeypatch)
+    calls: list[str] = []
+
+    class _FakeAssets:
+        def update(self, plugin_id: str):
+            calls.append(plugin_id)
+            return {"assetsVersion": "2026.08.29-2", "updated": ["knowledge/a.md"], "backup": None}
+
+    monkeypatch.setattr(marketplace_api, "_assets", _FakeAssets(), raising=False)
+    service = AgentToolService(ConfirmationTicketStore())
+
+    pending = asyncio.run(service.invoke("plugin", "s-a", "call-A", "assets_update", {}))
+    assert pending["state"] == "confirmation_required"
+    assert pending["tool"] == "assets_update"
+    assert calls == []  # nothing touched before the user approves
+
+    ticket_id = pending["ticket"]["ticketId"]
+    service.confirmations.resolve(ticket_id, "approved")
+    result = asyncio.run(service.invoke("plugin", "s-a", "call-B", "assets_update", {"confirmationTicketId": ticket_id}))
+    assert result["assetsVersion"] == "2026.08.29-2"
+    assert calls == ["plugin"]  # applied against the calling plugin's data root
+
+
+def test_assets_update_denied_without_grant(monkeypatch):
+    """invoke re-checks the live capability context: a plugin that never held
+    content-update cannot reach the updater by naming the tool."""
+    import mikazuki.plugin_marketplace.api as marketplace_api
+
+    class _DeniedManager:
+        def capability_context(self, plugin_id: str):
+            return SimpleNamespace(granted_permissions=frozenset({"model-provider"}))
+
+        def plugin_for_host_tool_token(self, token: str):
+            return "plugin"
+
+    monkeypatch.setattr(marketplace_api, "_manager", _DeniedManager(), raising=False)
+    called: list[str] = []
+
+    class _NeverAssets:
+        def update(self, plugin_id: str):
+            called.append(plugin_id)
+            raise AssertionError("must not be reached")
+
+    monkeypatch.setattr(marketplace_api, "_assets", _NeverAssets(), raising=False)
+    service = AgentToolService(ConfirmationTicketStore())
+    try:
+        asyncio.run(service.invoke("plugin", "s-d", "call-D", "assets_update", {}))
+        raise AssertionError("expected permission denial")
+    except HTTPException as exc:
+        assert exc.status_code == 403
+        assert (exc.detail or {}).get("code") == "TOOL_PERMISSION_DENIED", exc.detail
+    assert called == []

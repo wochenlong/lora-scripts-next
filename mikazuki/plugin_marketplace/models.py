@@ -22,6 +22,7 @@ ALLOWED_PLUGIN_PERMISSIONS = frozenset(
         "metrics-read",
         "artifacts-read",
         "external-civitai-read",
+        "content-update",
     }
 )
 
