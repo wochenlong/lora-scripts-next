@@ -218,6 +218,17 @@ def _local_catalog_wiring() -> tuple[TrustStore, Any, Any]:
                 if member.is_file() and member.suffix.casefold() == ".zip":
                     sources[f"https://plugins.next-trainer.local/packages/{member.name}"] = member
         acquirer = LocalFirstPackageAcquirer(LocalPackageAcquirer(sources), HttpPackageAcquirer(mirror))
+    elif env_catalog_url:
+        # A LIVE HTTPS channel (MIKAZUKI_MARKETPLACE_CATALOG_URL) is installable
+        # BY DESIGN: the entry pins the package's https URL + size + sha256, and
+        # the package is served from the same release as the catalog, so HTTP
+        # acquisition is implicitly available. Without this, uninstall-then-reinstall
+        # failed with MARKETPLACE_PACKAGE_ACQUISITION_UNAVAILABLE while the cached
+        # catalog kept rendering an installable listing ("clicked install, nothing
+        # happens"). A FILE catalog (env_catalog) stays fail-closed without a
+        # package root: the portable one-click bundle must remain self-contained
+        # and never reach the network silently.
+        acquirer = HttpPackageAcquirer(mirror)
     return trust, catalog_source, acquirer
 
 

@@ -204,6 +204,45 @@ def test_catalog_url_only_still_needs_trust(tmp_path, monkeypatch):
     assert source is None and acquirer is None
 
 
+def test_catalog_url_env_wires_http_acquirer(tmp_path, monkeypatch):
+    # Regression (user-reported): with a trusted live channel configured but no
+    # local package root, install-after-uninstall failed with
+    # MARKETPLACE_PACKAGE_ACQUISITION_UNAVAILABLE while the cached catalog kept
+    # showing an installable listing. The catalog pins each package's https URL
+    # + size + sha256, so HTTP acquisition must be wired automatically.
+    trust = tmp_path / "trust.json"
+    _write_trust(trust)
+    monkeypatch.setenv("MIKAZUKI_MARKETPLACE_TRUST", str(trust))
+    monkeypatch.setenv("MIKAZUKI_MARKETPLACE_CATALOG_URL", "https://plugins.example.com/catalog.json")
+    monkeypatch.delenv("MIKAZUKI_MARKETPLACE_CATALOG", raising=False)
+    monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", raising=False)
+    monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
+    monkeypatch.chdir(tmp_path)
+    _trust, source, acquirer = _local_catalog_wiring()
+    assert source is not None
+    from mikazuki.plugin_marketplace.catalog import HttpPackageAcquirer, UnavailablePackageAcquirer
+    assert isinstance(acquirer, HttpPackageAcquirer)
+    assert not isinstance(acquirer, UnavailablePackageAcquirer)
+
+
+def test_bundled_tier_without_packages_dir_stays_unavailable(tmp_path, monkeypatch):
+    # Counter-contract: the offline one-click bundle must NOT gain silent
+    # network acquisition — only an explicit env channel opts into HTTP.
+    bundled = tmp_path / "plugin-marketplace"
+    (bundled).mkdir()
+    (bundled / "catalog.json").write_bytes(b"{}")
+    _write_trust(bundled / "trust.json")
+    for var in ("MIKAZUKI_MARKETPLACE_CATALOG", "MIKAZUKI_MARKETPLACE_TRUST",
+                "MIKAZUKI_MARKETPLACE_CATALOG_URL", "MIKAZUKI_MARKETPLACE_PACKAGE_ROOT",
+                "MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR"):
+        monkeypatch.delenv(var, raising=False)
+    monkeypatch.chdir(tmp_path)
+    _trust, source, acquirer = _local_catalog_wiring()
+    assert source is not None  # bundled catalog is still listed
+    from mikazuki.plugin_marketplace.catalog import UnavailablePackageAcquirer
+    assert isinstance(acquirer, UnavailablePackageAcquirer)
+
+
 def test_catalog_url_invalid_fails_closed(tmp_path, monkeypatch):
     trust = tmp_path / "trust.json"
     _write_trust(trust)
