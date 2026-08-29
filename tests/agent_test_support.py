@@ -20,6 +20,7 @@ from contextlib import contextmanager
 from pathlib import Path
 
 import httpx
+import pytest
 import uvicorn
 from fastapi import FastAPI
 
@@ -61,6 +62,7 @@ def free_port() -> int:
 
 
 def build_package(root: Path, *, version: str = "0.1.0", executable: bytes | None = None, permissions: list[str] | None = None, drop_bridge_permissions: set[str] | None = None) -> Path:
+    require_bridge()
     manifest = json.loads((PACKAGE_ROOT / "plugin.json").read_text(encoding="utf-8"))
     manifest["version"] = version
     if permissions is not None:
@@ -88,6 +90,7 @@ def build_package(root: Path, *, version: str = "0.1.0", executable: bytes | Non
 
 
 def build_entry(package: Path, *, version: str = "0.1.0", signing_key_id: str = SIGNING_KEY_ID, signing_key: bytes = SIGNING_KEY, permissions: list[str] | None = None) -> MarketplaceEntry:
+    require_bridge()
     manifest = json.loads((PACKAGE_ROOT / "plugin.json").read_text(encoding="utf-8"))
     if permissions is not None:
         manifest["permissions"] = list(permissions)
@@ -196,7 +199,22 @@ class HostApp:
         return response.status_code, response.json()
 
 
+# The plugin-packages snapshot and its dist/ artifacts are LOCAL-ONLY dev
+# bridge state (F2-4). Upstream/CI checkouts have neither - skip cleanly.
+BRIDGE_SKIP_REASON = (
+    "plugin-packages/ dev bridge artifacts missing; generated only by "
+    "agent-assets/scripts/sync-to-project.py + a sidecar build (F2-4)"
+)
+
+
+def require_bridge() -> None:
+    if not (PACKAGE_ROOT / "plugin.json").is_file():
+        pytest.skip(BRIDGE_SKIP_REASON)
+
+
 def require_dist() -> None:
-    assert (PACKAGE_ROOT / "dist" / "bin" / "next-trainer-pi-agent.exe").is_file(), "build sidecar first"
-    assert (PACKAGE_ROOT / "dist" / "ui" / "index.js").is_file(), "build UI first"
+    if not (PACKAGE_ROOT / "dist" / "bin" / "next-trainer-pi-agent.exe").is_file():
+        pytest.skip(BRIDGE_SKIP_REASON + ": build sidecar first")
+    if not (PACKAGE_ROOT / "dist" / "ui" / "index.js").is_file():
+        pytest.skip(BRIDGE_SKIP_REASON + ": build UI first")
 

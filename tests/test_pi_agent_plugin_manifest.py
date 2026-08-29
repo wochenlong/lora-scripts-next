@@ -1,11 +1,19 @@
 import json
 from pathlib import Path
 
+import pytest
+
 from mikazuki.plugin_marketplace.models import PluginManifest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PLUGIN_ROOT = REPO_ROOT / "plugin-packages" / "next-trainer-pi-agent"
+
+pytestmark = pytest.mark.skipif(
+    not (PLUGIN_ROOT / "plugin.json").is_file(),
+    reason="plugin-packages/ dev bridge snapshot is local-only (F2-4); "
+    "the release channel is the authoritative distribution",
+)
 
 EXPECTED_BRIDGE_METHODS = {
     "session.list",
