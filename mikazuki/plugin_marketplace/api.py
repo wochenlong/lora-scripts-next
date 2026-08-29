@@ -542,9 +542,34 @@ def _http_error(exc: Exception) -> HTTPException:
     )
 
 
+def _status_payload(status) -> dict:
+    """Plugin status JSON plus the live install operation (if any).
+
+    The marketplace page can be left and re-entered (or the whole host UI
+    reloaded by the post-install refresh) while an install keeps running in
+    the background; surfacing the operation here is what lets the page
+    re-attach its progress UI instead of going blind.
+    """
+    payload = status.model_dump(mode="json")
+    operation = _install_operations.active(status.id)
+    payload["activeOperation"] = operation.snapshot() if operation else None
+    return payload
+
+
 @router.get("/plugins")
 async def list_plugins():
-    return _success([status.model_dump(mode="json") for status in _manager.list_statuses()])
+    payloads = [_status_payload(status) for status in _manager.list_statuses()]
+    # A first-time install has no registry entry yet, so list_statuses omits
+    # the plugin entirely — but the running operation must still surface so a
+    # page that re-attaches (navigation / host reload) can find it here too.
+    listed = {payload["id"] for payload in payloads}
+    for plugin_id in _install_operations.active_plugin_ids():
+        if plugin_id not in listed:
+            try:
+                payloads.append(_status_payload(_manager.status(plugin_id)))
+            except Exception:  # noqa: BLE001 — best-effort; skip unresolvable ids
+                continue
+    return _success(payloads)
 
 
 @router.get("/catalog")
@@ -584,7 +609,7 @@ async def refresh_marketplace_catalog(
 @router.get("/plugins/{plugin_id}")
 async def plugin_status(plugin_id: str):
     try:
-        return _success(_manager.status(plugin_id).model_dump(mode="json"))
+        return _success(_status_payload(_manager.status(plugin_id)))
     except Exception as exc:
         raise _http_error(exc) from exc
 
@@ -604,7 +629,19 @@ async def install_plugin(
     """
     try:
         entry = _catalog.entry(plugin_id, request.version)
-        operation = _install_operations.start(plugin_id, entry, set(request.approved_permissions))
+        try:
+            operation = _install_operations.start(plugin_id, entry, set(request.approved_permissions))
+        except InstallOperationConflict:
+            # A repeated install click (or a client that navigated away and
+            # back) ATTACHES to the in-flight work instead of failing: the
+            # operation is plugin-scoped and already carries the same catalog
+            # entry, so returning the running snapshot is both idempotent and
+            # what the user means by pressing install again. A running
+            # install of a DIFFERENT version stays a conflict.
+            existing = _install_operations.active(plugin_id)
+            if existing is None or existing.version != entry.latest_version:
+                raise
+            operation = existing
     except InstallOperationConflict as exc:
         raise HTTPException(
             status_code=409,

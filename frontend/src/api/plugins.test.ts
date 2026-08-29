@@ -411,4 +411,44 @@ describe("plugin capability broker client", () => {
     expect(fetchMock.mock.calls[1][0]).toBe("/api/plugin-host/confirmations/pending")
     expect(fetchMock.mock.calls[1][1]?.headers).toMatchObject({ "X-NextTrainer-Run-Token": "pending-list-token" })
   })
+
+  it("surfaces the host error code and message from a FastAPI detail envelope", async () => {
+    // Structured route failures (e.g. the install-conflict HTTPException)
+    // arrive as {detail:{code,message}} with a non-2xx status. The client
+    // must forward the real reason instead of the generic "request failed"
+    // text that hid why the marketplace button "did nothing".
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ status: "success", data: { runToken: "authority-token-value", header: "X-NextTrainer-Run-Token" } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ detail: { code: "MARKETPLACE_INSTALL_IN_PROGRESS", message: "An install is already running for this plugin." } }),
+          { status: 409, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+
+    await expect(pluginsApi.uninstallMarketplacePlugin("sample-plugin")).rejects.toMatchObject({
+      code: "MARKETPLACE_INSTALL_IN_PROGRESS",
+      message: "An install is already running for this plugin.",
+    })
+  })
+
+  it("falls back to a generic error when the host failure envelope is unstructured", async () => {
+    fetchMock
+      .mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ status: "success", data: { runToken: "authority-token-value", header: "X-NextTrainer-Run-Token" } }),
+          { status: 200, headers: { "Content-Type": "application/json" } },
+        ),
+      )
+      .mockResolvedValueOnce(new Response("gateway boom", { status: 502 }))
+
+    await expect(pluginsApi.uninstallMarketplacePlugin("sample-plugin")).rejects.toMatchObject({
+      code: "PLUGIN_HOST_RESPONSE_INVALID",
+    })
+  })
 })

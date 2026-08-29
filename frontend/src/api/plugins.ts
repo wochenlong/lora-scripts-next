@@ -88,6 +88,11 @@ export interface MarketplacePluginStatus {
   reason: string
   runtime_state: "stopped" | "starting" | "running" | "crashed" | null
   runtime_pid: number | null
+  /** The install operation still running server-side for this plugin, if any.
+   *  The marketplace page re-attaches its progress UI to this snapshot after a
+   *  navigation or host reload (the operation lives in the host process, not
+   *  in the component). */
+  activeOperation?: MarketplaceInstallOperation | null
 }
 
 export type MarketplaceInstallState = "running" | "succeeded" | "failed" | "cancelled"
@@ -213,14 +218,27 @@ async function brokerResponse<T>(response: Response, expectedRequestId: string):
 }
 
 async function hostData<T>(response: Response): Promise<T> {
-  let payload: { status?: string; data?: T }
+  let payload: { status?: string; data?: T; detail?: { code?: string; message?: string } | string }
   try {
     payload = (await response.json()) as { status?: string; data?: T }
   } catch {
     throw new PluginCapabilityError("PLUGIN_HOST_RESPONSE_INVALID", "The plugin host returned an invalid response.")
   }
   if (!response.ok || payload.status !== "success" || payload.data === undefined) {
-    throw new PluginCapabilityError("PLUGIN_HOST_REQUEST_FAILED", "The plugin host request failed.")
+    // The host reports structured failures two ways: the `{status, error}`
+    // envelope from successful-route handlers, and FastAPI's HTTPException
+    // `{detail: {code, message}}` (e.g. the 409 install-in-progress). Surface
+    // the real reason instead of the generic "request failed" text so the
+    // user learns WHY the action did nothing.
+    const detail = payload.detail
+    const code =
+      (typeof detail === "object" && detail?.code) ||
+      "PLUGIN_HOST_REQUEST_FAILED"
+    const message =
+      (typeof detail === "object" && detail?.message) ||
+      (typeof detail === "string" && detail) ||
+      "The plugin host request failed."
+    throw new PluginCapabilityError(code, message)
   }
   return payload.data
 }

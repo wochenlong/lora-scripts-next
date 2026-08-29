@@ -388,4 +388,60 @@ describe("MarketplaceSettingsPage", () => {
     expect(scheduleHostRefresh).not.toHaveBeenCalled()
     wrapper.unmount()
   })
+
+  it("re-attaches the install progress card to a running operation after navigating back", async () => {
+    // The user flow: install started, user navigated to another page (this
+    // component unmounted), then returned. The host still runs the operation
+    // and reports it via status.activeOperation — the page must show the
+    // progress card again, not a dead install button.
+    const running = operation({
+      operationId: "op-attach",
+      state: "running",
+      phase: "acquiring",
+      progress: { current: 1024 * 1024, total: 10 * 1024 * 1024, percent: 10 },
+    })
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([status({ activeOperation: running })])
+    let settleStream: (snapshot: MarketplaceInstallOperation) => void = () => {}
+    const streamSpy = vi.spyOn(pluginsApi, "streamInstallOperation").mockImplementation(
+      (_pluginId, operationId, onSnapshot) => {
+        expect(operationId).toBe("op-attach")
+        onSnapshot(running)
+        return new Promise<void>((resolve) => {
+          settleStream = (snapshot) => {
+            onSnapshot(snapshot)
+            resolve()
+          }
+        })
+      },
+    )
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    // Progress visible again, following the pre-existing operation…
+    expect(streamSpy).toHaveBeenCalledWith("sample-plugin", "op-attach", expect.any(Function), expect.any(AbortSignal))
+    const card = wrapper.find(".marketplace-install-progress")
+    expect(card.exists()).toBe(true)
+    expect(card.text()).toContain("正在获取安装包")
+    expect(card.text()).toContain("取消安装")
+    // …and the action buttons stay inert while it runs.
+    expect(wrapper.get("button.primary-action").attributes("disabled")).toBeDefined()
+
+    settleStream(
+      operation({
+        operationId: "op-attach",
+        state: "succeeded",
+        phase: "done",
+        progress: { current: 10 * 1024 * 1024, total: 10 * 1024 * 1024, percent: 100 },
+        status: status({ state: "installed", active_version: "1.2.0" }),
+      }),
+    )
+    await flushPromises()
+    expect(wrapper.find(".marketplace-install-progress").exists()).toBe(false)
+    // Completing the re-attached install ends in the usual host reload.
+    expect(scheduleHostRefresh).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
 })

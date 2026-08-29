@@ -243,6 +243,27 @@ class InstallOperationRegistry:
             return None
         return operation
 
+    def active(self, plugin_id: str) -> InstallOperation | None:
+        """The running install operation for a plugin, if any.
+
+        Used to (a) attach a repeated install click to the in-flight work
+        instead of failing it, and (b) surface progress on plugin status so
+        a client that left the page (or reloaded) can re-attach its UI.
+        """
+        with self._lock:
+            for operation in self._operations.values():
+                if operation.plugin_id == plugin_id and operation.state == STATE_RUNNING:
+                    return operation
+        return None
+
+    def active_plugin_ids(self) -> list[str]:
+        """Plugins with a running install operation (including not-yet-
+        installed ones, which list_statuses() would otherwise omit)."""
+        with self._lock:
+            return sorted(
+                {op.plugin_id for op in self._operations.values() if op.state == STATE_RUNNING}
+            )
+
     def _prune_locked(self) -> None:
         terminal = [
             op for op in self._operations.values() if op.state in TERMINAL_STATES

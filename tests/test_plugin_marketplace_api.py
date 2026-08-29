@@ -900,7 +900,7 @@ def test_install_operation_cancel_stops_worker_and_leaves_no_install():
         assert replay.json()["detail"]["code"] == "MARKETPLACE_OPERATION_NOT_CANCELLABLE"
 
 
-def test_second_install_while_running_is_conflict_and_recovers():
+def test_second_install_while_running_attaches_to_inflight_operation():
     with tempfile.TemporaryDirectory() as td:
         root = Path(td)
         paths, key, trust, manager, package, entry = _marketplace_setup(root)
@@ -913,11 +913,13 @@ def test_second_install_while_running_is_conflict_and_recovers():
         first_id = started.json()["data"]["operationId"]
         time.sleep(0.2)
 
-        blocked = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
-        assert blocked.status_code == 409
-        assert blocked.json()["detail"]["code"] == "MARKETPLACE_INSTALL_IN_PROGRESS"
+        # A repeated install click is NOT an error: it attaches to the running
+        # operation (same id) so the client keeps following the work it thinks
+        # it started, instead of failing with a scary generic error.
+        attached = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
+        assert attached.status_code == 202
+        assert attached.json()["data"]["operationId"] == first_id
 
-        # Let the first (slow) install finish; then a fresh install succeeds.
         first = _wait_operation(client, entry.id, first_id)
         assert first["state"] == "succeeded"
         client.post(f"/api/marketplace/plugins/{entry.id}/uninstall", json={}, headers=AUTH_HEADERS)
@@ -926,6 +928,41 @@ def test_second_install_while_running_is_conflict_and_recovers():
         assert retry.status_code == 202
         retried = _wait_operation(client, entry.id, retry.json()["data"]["operationId"])
         assert retried["state"] == "succeeded"
+
+
+def test_plugin_status_surfaces_active_operation_for_progress_reattach():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        paths, key, trust, manager, package, entry = _marketplace_setup(root)
+        _configure_catalog(root, paths, trust, entry, key, package)
+        _configure_slow_catalog(paths, key, package, steps=80, delay=0.02)
+        client = _client(router)
+
+        # No operation yet: the status carries the (null) active operation.
+        before = client.get(f"/api/marketplace/plugins/{entry.id}").json()["data"]
+        assert before["activeOperation"] is None
+
+        started = client.post(f"/api/marketplace/plugins/{entry.id}/install", json={}, headers=AUTH_HEADERS)
+        assert started.status_code == 202
+        operation_id = started.json()["data"]["operationId"]
+        time.sleep(0.2)
+
+        # While running, both the single status and the list expose the live
+        # operation snapshot so a page that navigated away (or a host reload)
+        # can re-attach its progress UI.
+        single = client.get(f"/api/marketplace/plugins/{entry.id}").json()["data"]
+        assert single["activeOperation"]["operationId"] == operation_id
+        assert single["activeOperation"]["state"] == "running"
+        listed = {s["id"]: s for s in client.get("/api/marketplace/plugins").json()["data"]}
+        assert listed[entry.id]["activeOperation"]["operationId"] == operation_id
+
+        operation = _wait_operation(client, entry.id, operation_id)
+        assert operation["state"] == "succeeded"
+
+        # Terminal operations clear from status (no stale progress card).
+        after = client.get(f"/api/marketplace/plugins/{entry.id}").json()["data"]
+        assert after["activeOperation"] is None
+        client.post(f"/api/marketplace/plugins/{entry.id}/uninstall", json={}, headers=AUTH_HEADERS)
 
 
 def test_install_operation_lookup_requires_matching_plugin_and_exists():

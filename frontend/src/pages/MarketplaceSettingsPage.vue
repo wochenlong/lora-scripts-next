@@ -95,6 +95,13 @@ async function load() {
         liveCatalog.value = []
       }
     }
+    // The install operation lives in the host, not in this component: if one is
+    // still running (we navigated away or the host UI reloaded mid-install),
+    // re-attach the progress UI to it instead of showing a dead install button.
+    if (!installOp.value && !busyAction.value) {
+      const active = statuses.value.find((status) => status.activeOperation?.state === "running")
+      if (active?.activeOperation) attachInstall(active.activeOperation)
+    }
   } catch {
     statuses.value = []
     error.value = t("marketplace.loadFailed")
@@ -232,16 +239,37 @@ async function install() {
   }
 }
 
+/** Re-attach the progress UI to an install that is running server-side.
+ *
+ * The operation lives in the host process, so leaving the page (unmounting
+ * this component) or the post-mutation host reload must not lose it: `load()`
+ * feeds every status' `activeOperation` snapshot back into the same
+ * follow/finish flow a fresh install click uses.
+ */
+function attachInstall(operation: MarketplaceInstallOperation) {
+  if (installOp.value || busyAction.value || operation.state !== "running") return
+  installOp.value = operation
+  busyAction.value = "install"
+  const controller = new AbortController()
+  installAbort.value = controller
+  void followInstall(operation.pluginId, operation.operationId, controller.signal).then(() => {
+    if (installAbort.value !== controller) return // cancelled/replaced
+    installAbort.value = null
+    finishInstall()
+    busyAction.value = ""
+    void load()
+  })
+}
+
 async function cancelInstall() {
-  const record = selected.value
   const operation = installOp.value
-  if (!record || !operation || operation.state !== "running") return
+  if (!operation || operation.state !== "running") return
   installAbort.value?.abort()
   try {
-    installOp.value = await pluginsApi.cancelInstallOperation(record.id, operation.operationId)
+    installOp.value = await pluginsApi.cancelInstallOperation(operation.pluginId, operation.operationId)
   } catch {
     try {
-      installOp.value = await pluginsApi.getInstallOperation(record.id, operation.operationId)
+      installOp.value = await pluginsApi.getInstallOperation(operation.pluginId, operation.operationId)
     } catch {
       // Keep the last known state; the operation is terminal or about to be.
     }
