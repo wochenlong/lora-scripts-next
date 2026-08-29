@@ -27,7 +27,9 @@ from .manager import MarketplaceManager
 from .models import MarketplaceEntry
 from .catalog import (
     CatalogError,
+    FallbackCatalogSource,
     FileCatalogSource,
+    HttpCatalogSource,
     HttpPackageAcquirer,
     LocalFirstPackageAcquirer,
     LocalPackageAcquirer,
@@ -144,12 +146,16 @@ def _platform_name() -> str:
     return f"{sys.platform}-{arch}"
 
 
-def _local_catalog_wiring() -> tuple[TrustStore, FileCatalogSource | None, Any]:
+def _local_catalog_wiring() -> tuple[TrustStore, Any, Any]:
     """Catalog/trust wiring: explicit environment > bundled > fail-closed.
 
     1. Development: MIKAZUKI_MARKETPLACE_CATALOG / _TRUST (plus optional
        _PACKAGE_ROOT and _PACKAGE_MIRROR) environment variables. An explicit
        partial env (one of the two set) keeps the legacy fail-closed result.
+       MIKAZUKI_MARKETPLACE_CATALOG_URL additionally pins a live HTTPS catalog
+       (the release update channel); it wins while reachable and an explicit
+       catalog file remains the offline fallback. A URL without a trust root
+       fails closed like any other partial env.
     2. Bundled (release one-click package): the portable launcher runs the
        host with cwd = <root>/SD-Trainer, so a <cwd>/plugin-marketplace/
        directory containing catalog.json + trust.json (and optionally
@@ -165,19 +171,38 @@ def _local_catalog_wiring() -> tuple[TrustStore, FileCatalogSource | None, Any]:
     """
     env_catalog = os.environ.get("MIKAZUKI_MARKETPLACE_CATALOG", "").strip()
     env_trust = os.environ.get("MIKAZUKI_MARKETPLACE_TRUST", "").strip()
+    env_catalog_url = os.environ.get("MIKAZUKI_MARKETPLACE_CATALOG_URL", "").strip()
     package_root = os.environ.get("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", "").strip()
     mirror = os.environ.get("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", "").strip() or None
-    if env_catalog or env_trust:
-        catalog_path, trust_path = env_catalog, env_trust
-        if not catalog_path or not trust_path:
+    catalog_source: Any = None
+    if env_catalog or env_trust or env_catalog_url:
+        # Explicit tier: the trust root is mandatory (partial env fails closed),
+        # and at least one catalog source (live URL and/or file) must resolve.
+        if not env_trust:
             return TrustStore({}), None, None
+        try:
+            if env_catalog_url:
+                catalog_source = HttpCatalogSource(env_catalog_url)
+            if env_catalog:
+                file_source = FileCatalogSource(Path(env_catalog))
+                catalog_source = (
+                    file_source
+                    if catalog_source is None
+                    else FallbackCatalogSource(catalog_source, file_source)
+                )
+        except ValueError:
+            return TrustStore({}), None, None
+        if catalog_source is None:
+            return TrustStore({}), None, None
+        trust_path = env_trust
     else:
         bundled = Path.cwd() / "plugin-marketplace"
         catalog_candidate = bundled / "catalog.json"
         trust_candidate = bundled / "trust.json"
         if not (catalog_candidate.is_file() and trust_candidate.is_file()):
             return TrustStore({}), None, None
-        catalog_path, trust_path = str(catalog_candidate), str(trust_candidate)
+        trust_path = str(trust_candidate)
+        catalog_source = FileCatalogSource(catalog_candidate)
         if not package_root and (bundled / "packages").is_dir():
             package_root = str(bundled / "packages")
     trust = load_trust_root(Path(trust_path))
@@ -192,7 +217,7 @@ def _local_catalog_wiring() -> tuple[TrustStore, FileCatalogSource | None, Any]:
                 if member.is_file() and member.suffix.casefold() == ".zip":
                     sources[f"https://plugins.next-trainer.local/packages/{member.name}"] = member
         acquirer = LocalFirstPackageAcquirer(LocalPackageAcquirer(sources), HttpPackageAcquirer(mirror))
-    return trust, FileCatalogSource(Path(catalog_path)), acquirer
+    return trust, catalog_source, acquirer
 
 
 def _default_manager() -> MarketplaceManager:

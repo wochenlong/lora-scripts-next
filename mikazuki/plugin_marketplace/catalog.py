@@ -63,6 +63,74 @@ class FileCatalogSource:
             ) from exc
 
 
+class HttpCatalogSource:
+    """Online catalog fetch (the release update channel).
+
+    Transport is untrusted by design: the service verifies the catalog
+    signature on every refresh and only replaces the local cache after the
+    signature passes, so a hostile path can only ever deliver payloads that
+    fail verification. Plain HTTP is accepted loopback-only, mirroring the
+    package-mirror rule for local development and release dry-runs.
+    """
+
+    max_response_bytes = 4 * 1024 * 1024  # catalogs are tiny; cap defensively
+
+    def __init__(self, url: str, *, timeout_seconds: float = 15.0) -> None:
+        url = url.strip()
+        parsed = urlsplit(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname or parsed.username or parsed.password:
+            raise ValueError("catalog URL must be a plain http(s) URL without credentials")
+        if parsed.scheme == "http" and parsed.hostname not in ("127.0.0.1", "localhost", "::1"):
+            raise ValueError("plain-HTTP catalog URLs must be loopback-only")
+        self.url = url
+        self.timeout_seconds = timeout_seconds
+
+    def read(self) -> bytes:
+        try:
+            request = urllib.request.Request(self.url, headers={"Accept": "application/json"})
+            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+                payload = response.read(self.max_response_bytes + 1)
+        except (urllib.error.URLError, OSError) as exc:
+            raise CatalogError(
+                "MARKETPLACE_CATALOG_OFFLINE",
+                "The marketplace catalog could not be downloaded.",
+                status_code=503,
+            ) from exc
+        if len(payload) > self.max_response_bytes:
+            raise CatalogError(
+                "MARKETPLACE_CATALOG_TOO_LARGE",
+                "The downloaded marketplace catalog exceeds the size limit.",
+                status_code=502,
+            )
+        return payload
+
+
+class FallbackCatalogSource:
+    """Try each source in priority order and return the first readable payload.
+
+    The default wiring composes [HttpCatalogSource, FileCatalogSource] so a
+    bundled release catalog keeps a fresh offline install working while the
+    live signed catalog wins whenever it is reachable. When every source
+    fails, the first error is re-raised so the offline code stays intact.
+    """
+
+    def __init__(self, *sources: CatalogSource | None) -> None:
+        self.sources = [source for source in sources if source is not None]
+
+    def read(self) -> bytes:
+        first_error: CatalogError | None = None
+        for source in self.sources:
+            try:
+                return source.read()
+            except CatalogError as exc:
+                first_error = first_error or exc
+        raise first_error or CatalogError(
+            "MARKETPLACE_CATALOG_OFFLINE",
+            "The marketplace catalog is unavailable.",
+            status_code=503,
+        )
+
+
 class LocalPackageAcquirer:
     """Stage 1/offline acquisition from a Host-approved immutable URL map."""
 
