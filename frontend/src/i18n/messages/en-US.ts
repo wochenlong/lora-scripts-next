@@ -944,6 +944,15 @@ export default {
       committing: "Committing install record…",
       done: "Done",
     },
+    busy: {
+      install: "Starting installation…",
+      enable: "Enabling plugin — starting its runtime (may take up to 2 minutes)…",
+      disable: "Disabling plugin — stopping its runtime…",
+      restart: "Restarting plugin runtime…",
+      rollback: "Rolling the plugin back…",
+      uninstall: "Uninstalling plugin — stopping its runtime and removing files…",
+    },
+    elapsed: "{seconds}s elapsed",
     permissions: {
       "model-provider": "Model provider",
       "training-config": "Training configuration",

@@ -944,6 +944,15 @@ export default {
       committing: "正在提交安装记录…",
       done: "完成",
     },
+    busy: {
+      install: "正在启动安装…",
+      enable: "正在启用插件——启动插件运行时（最长约需 2 分钟）…",
+      disable: "正在禁用插件——停止插件运行时…",
+      restart: "正在重启插件运行时…",
+      rollback: "正在回滚插件…",
+      uninstall: "正在卸载插件——停止运行时并移除文件…",
+    },
+    elapsed: "已耗时 {seconds} 秒",
     permissions: {
       "model-provider": "模型 Provider",
       "training-config": "训练配置",

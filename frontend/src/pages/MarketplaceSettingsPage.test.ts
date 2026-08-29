@@ -315,4 +315,77 @@ describe("MarketplaceSettingsPage", () => {
     expect(wrapper.find(".marketplace-error").exists()).toBe(true)
     wrapper.unmount()
   })
+
+  it("shows busy progress while enabling and reloads the host when done", async () => {
+    const { ElMessageBox } = await import("element-plus")
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue(
+      "confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
+      status({ state: "installed", active_version: "1.2.0" }),
+    ])
+    // Enable blocks server-side until the plugin runtime boots; hold it so the
+    // busy strip is observable — the user-reported "click enable, nothing
+    // happens" window.
+    let releaseEnable: () => void = () => {}
+    const gate = new Promise<void>((resolve) => {
+      releaseEnable = resolve
+    })
+    vi.mocked(pluginsApi.enableMarketplacePlugin).mockImplementation(async () => {
+      await gate
+      return status({ state: "enabled", active_version: "1.2.0", enabled: true })
+    })
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    const enable = wrapper.get("button.primary-action")
+    expect(enable.text()).toContain("启用")
+    await enable.trigger("click")
+    await flushPromises()
+
+    const busy = wrapper.find("[data-test='busy-progress']")
+    expect(busy.exists()).toBe(true)
+    expect(busy.text()).toContain("正在启用插件")
+    expect(busy.text()).toContain("已耗时")
+    // The action bar is inert while an operation runs (no double submits).
+    expect(wrapper.get("button.primary-action").attributes("disabled")).toBeDefined()
+
+    releaseEnable()
+    await flushPromises()
+    expect(wrapper.find("[data-test='busy-progress']").exists()).toBe(false)
+    // Enable also reloads the host: the floating panel must mount fresh.
+    expect(scheduleHostRefresh).toHaveBeenCalledTimes(1)
+    wrapper.unmount()
+  })
+
+  it("surfaces an enable failure as a toast and does not reload", async () => {
+    const { ElMessage, ElMessageBox } = await import("element-plus")
+    const errorToast = vi.spyOn(ElMessage, "error").mockImplementation(() => ({ close: () => {} }) as never)
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue(
+      "confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>,
+    )
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
+      status({ state: "installed", active_version: "1.2.0" }),
+    ])
+    vi.mocked(pluginsApi.enableMarketplacePlugin).mockRejectedValueOnce(
+      new Error("plugin runtime failed to start"),
+    )
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    await wrapper.get("button.primary-action").trigger("click")
+    await flushPromises()
+
+    expect(errorToast).toHaveBeenCalledWith("plugin runtime failed to start")
+    expect(wrapper.find(".marketplace-error").text()).toContain("plugin runtime failed to start")
+    expect(wrapper.find("[data-test='busy-progress']").exists()).toBe(false)
+    expect(scheduleHostRefresh).not.toHaveBeenCalled()
+    wrapper.unmount()
+  })
 })

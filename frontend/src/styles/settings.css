@@ -527,6 +527,43 @@
   margin-top: 12px;
 }
 
+/* Indeterminate bar for synchronous lifecycle actions (enable/disable/
+   restart/rollback/uninstall): the request blocks until the plugin runtime
+   answers, and without this the click looked dead. */
+.marketplace-busy-bar {
+  position: relative;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--border);
+  overflow: hidden;
+}
+
+.marketplace-busy-bar i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 38%;
+  border-radius: inherit;
+  background: var(--accent);
+  animation: marketplace-busy-slide 1.1s ease-in-out infinite;
+}
+
+@keyframes marketplace-busy-slide {
+  0% {
+    transform: translateX(-100%);
+  }
+  100% {
+    transform: translateX(320%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .marketplace-busy-bar i {
+    animation-duration: 2.6s;
+  }
+}
+
 .marketplace-actions {
   display: flex;
   flex-wrap: wrap;

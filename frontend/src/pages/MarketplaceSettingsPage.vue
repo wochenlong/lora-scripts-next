@@ -124,9 +124,17 @@ async function runAction(action: string, operation: () => Promise<MarketplacePlu
     updateStatus(await operation())
     await extensionsStore.refresh()
     ElMessage.success(t("marketplace.actionDone"))
+    // Every lifecycle mutation changes what the floating plugin panel must
+    // show (mount after enable, unmount after disable/uninstall, new entry
+    // URL after restart/rollback); one host reload guarantees no stale state.
+    scheduleHostRefresh()
     return true
-  } catch {
-    error.value = t("marketplace.actionFailed")
+  } catch (cause) {
+    // Surface the reason as a toast too: the banner sits at the page top and
+    // scrolls out of view, which read as "clicked, nothing happens".
+    const message = cause instanceof Error && cause.message ? cause.message : t("marketplace.actionFailed")
+    error.value = message
+    ElMessage.error(message)
     return false
   } finally {
     busyAction.value = ""
@@ -135,6 +143,26 @@ async function runAction(action: string, operation: () => Promise<MarketplacePlu
 
 const installOp = ref<MarketplaceInstallOperation | null>(null)
 const installAbort = ref<AbortController | null>(null)
+
+// Enable/disable/restart/rollback/uninstall are synchronous host calls: the
+// enable round-trip in particular waits for the plugin runtime to boot (up to
+// its full startup timeout), which felt like the click doing nothing. Show an
+// indeterminate progress strip with the action phase and an elapsed counter
+// for every busy action that is not already covered by the install card.
+const busyElapsed = ref(0)
+let busyTimer: number | null = null
+watch(busyAction, (value) => {
+  if (busyTimer !== null) {
+    window.clearInterval(busyTimer)
+    busyTimer = null
+  }
+  if (value) {
+    busyElapsed.value = 0
+    busyTimer = window.setInterval(() => {
+      busyElapsed.value += 1
+    }, 1000)
+  }
+})
 
 /** Follow an install operation to a terminal state.
  *
@@ -193,8 +221,10 @@ async function install() {
     await followInstall(record.id, initial.operationId, controller.signal)
     finishInstall()
     await load()
-  } catch {
-    error.value = t("marketplace.actionFailed")
+  } catch (cause) {
+    const message = cause instanceof Error && cause.message ? cause.message : t("marketplace.actionFailed")
+    error.value = message
+    ElMessage.error(message)
   } finally {
     installAbort.value = null
     installOp.value = null
@@ -221,6 +251,10 @@ async function cancelInstall() {
 
 onBeforeUnmount(() => {
   installAbort.value?.abort()
+  if (busyTimer !== null) {
+    window.clearInterval(busyTimer)
+    busyTimer = null
+  }
 })
 
 async function enable() {
@@ -250,12 +284,10 @@ async function rollback() {
 async function uninstall() {
   const record = selected.value
   if (!record || !(await confirmMutation("marketplace.confirmUninstall"))) return
-  // A successful uninstall must fully tear down the plugin's mounted UI; the
-  // floating panel/iframe can otherwise linger until a manual refresh, so
-  // reload the host to guarantee no stale plugin components survive.
-  if (await runAction("uninstall", () => pluginsApi.uninstallMarketplacePlugin(record.id))) {
-    scheduleHostRefresh()
-  }
+  // Success schedules the host reload inside runAction: the floating
+  // panel/iframe can otherwise linger until a manual refresh, and no stale
+  // plugin component may survive an uninstall.
+  await runAction("uninstall", () => pluginsApi.uninstallMarketplacePlugin(record.id))
 }
 
 watch(
@@ -340,6 +372,14 @@ onMounted(() => void load())
               {{ t("marketplace.cancelInstall") }}
             </button>
           </div>
+        </div>
+
+        <div v-else-if="busyAction" class="marketplace-install-progress" role="status" aria-live="polite" data-test="busy-progress">
+          <div class="marketplace-install-progress-head">
+            <span>{{ t(`marketplace.busy.${busyAction}`) }}</span>
+            <span>{{ t("marketplace.elapsed", { seconds: busyElapsed }) }}</span>
+          </div>
+          <div class="marketplace-busy-bar" aria-hidden="true"><i></i></div>
         </div>
 
         <p v-if="selected.status.reason" class="marketplace-error" role="alert">{{ t("marketplace.statusError") }}</p>
