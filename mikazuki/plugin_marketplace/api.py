@@ -25,6 +25,7 @@ from mikazuki.plugin_host.agent_tools import configure_agent_tool_service
 
 from .manager import MarketplaceManager
 from .models import MarketplaceEntry
+from .assets import AssetsUpdater
 from .catalog import (
     CatalogError,
     FallbackCatalogSource,
@@ -249,6 +250,28 @@ _catalog = MarketplaceCatalogService(
     source=_catalog_source,
     acquirer=_catalog_acquirer,
 )
+
+
+def _build_assets_updater() -> AssetsUpdater:
+    """Managed business-data channel wiring (F3-3).
+
+    NEXT_TRAINER_ASSETS_INDEX_URL pins the signed assets index (env mirror of
+    the release channel; NEXT_TRAINER_ASSETS_MIRROR rewrites its zip URL onto
+    a loopback file server for dry-runs). A malformed URL disables ONLY the
+    assets channel — marketplace and training stay fully functional.
+    """
+    try:
+        return AssetsUpdater(
+            _manager.paths,
+            _trust,
+            index_url=os.environ.get("NEXT_TRAINER_ASSETS_INDEX_URL", "").strip() or None,
+            mirror_base_url=os.environ.get("NEXT_TRAINER_ASSETS_MIRROR", "").strip() or None,
+        )
+    except ValueError:
+        return AssetsUpdater(_manager.paths, _trust)
+
+
+_assets = _build_assets_updater()
 _confirmations = ConfirmationTicketStore()
 configure_agent_tool_service(_confirmations)
 
@@ -687,6 +710,47 @@ async def restart_plugin(
 ):
     try:
         return _success(_manager.restart(plugin_id).model_dump(mode="json"))
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.get("/plugins/{plugin_id}/assets/status")
+async def assets_status(plugin_id: str):
+    """Managed business-data channel state; never touches the network."""
+    try:
+        status = _manager.status(plugin_id)
+        if status.state == "not_installed":
+            raise CatalogError(
+                "MARKETPLACE_PLUGIN_MISSING",
+                "The plugin is not installed.",
+                status_code=404,
+            )
+        return _success(_assets.status(plugin_id))
+    except Exception as exc:
+        raise _http_error(exc) from exc
+
+
+@router.post("/plugins/{plugin_id}/assets/update")
+async def assets_update(
+    plugin_id: str,
+    request: RestartRequest,
+    _authority=Depends(_require_mutation_authority),
+):
+    """Pull the signed assets release into the managed namespaces (F3-3).
+
+    Updates only knowledge/, templates/ and pi-agent skills/ trees tracked by
+    the managed manifest; user files are sovereign (see assets.AssetsUpdater).
+    Any failure is reported and leaves both the tree and the manifest whole.
+    """
+    try:
+        status = _manager.status(plugin_id)
+        if status.state == "not_installed":
+            raise CatalogError(
+                "MARKETPLACE_PLUGIN_MISSING",
+                "The plugin is not installed.",
+                status_code=404,
+            )
+        return _success(_assets.update(plugin_id))
     except Exception as exc:
         raise _http_error(exc) from exc
 

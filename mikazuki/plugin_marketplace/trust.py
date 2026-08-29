@@ -96,6 +96,28 @@ def version_satisfies(version: str, expression: str) -> bool:
     return True
 
 
+def canonical_assets_index_payload(index: dict) -> bytes:
+    """Canonical bytes for a managed-assets index envelope.
+
+    Mirrors canonical_catalog_payload: the signed fields are a fixed set, the
+    signature itself is excluded, and the same HMAC keys from trust.json sign
+    it. Field set is pinned here so publisher and verifier can never disagree.
+    """
+    signed_fields = (
+        "schemaVersion",
+        "assetsVersion",
+        "file",
+        "url",
+        "size",
+        "sha256",
+        "generatedAt",
+        "publisherId",
+        "signingKeyId",
+    )
+    body = {key: index.get(key) for key in signed_fields}
+    return json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
 class TrustStore:
     """Stage 1 trust root using deterministic HMAC test signatures.
 
@@ -156,6 +178,29 @@ class TrustStore:
         expected = hmac.new(key, canonical_catalog_payload(catalog), hashlib.sha256).hexdigest()
         if not hmac.compare_digest(expected.lower(), catalog.signature.lower()):
             raise TrustError("catalog signature verification failed")
+
+    def verify_assets_index(self, index: dict) -> None:
+        """Verify a managed-assets index envelope with the same key material.
+
+        Deliberately not a separate trust root: assets ship from the same
+        governed publisher as the plugin catalog, so one key/revocation story
+        covers both channels.
+        """
+        key_id = str(index.get("signingKeyId") or "")
+        if key_id in self._revoked:
+            raise TrustError(f"revoked assets signing key: {key_id}")
+        identity = self._keys.get(key_id)
+        if identity is None:
+            raise TrustError(f"unknown assets signing key: {key_id}")
+        publisher, key = identity
+        if publisher != index.get("publisherId"):
+            raise TrustError("assets signing key publisher does not match index")
+        signature = str(index.get("signature") or "")
+        if not re.fullmatch(r"[0-9a-fA-F]{64}", signature):
+            raise TrustError("assets index signature must contain exactly 64 hexadecimal characters")
+        expected = hmac.new(key, canonical_assets_index_payload(index), hashlib.sha256).hexdigest()
+        if not hmac.compare_digest(expected.lower(), signature.lower()):
+            raise TrustError("assets index signature verification failed")
 
     @staticmethod
     def verify_compatibility(entry: MarketplaceEntry, *, host_version: str, platform: str) -> None:
