@@ -14,8 +14,8 @@
  *
  *   node scripts/register-dev-pi-package.mjs [--agent-dir <dir>] [--package-root <dir>]
  *
- * Run with the project Node runtime (from project/):
- *   E:\OpenSourceTeamWork\.dev-runtimes\node-v22.19.0\node.exe \
+ * Run with the project Node runtime (from project/; see PI_WEB_NODE_RUNTIME):
+ *   <PI_WEB_NODE_RUNTIME>\node.exe \
  *     plugin-packages\next-trainer-pi-agent\scripts\register-dev-pi-package.mjs
  */
 import { createRequire } from "node:module";

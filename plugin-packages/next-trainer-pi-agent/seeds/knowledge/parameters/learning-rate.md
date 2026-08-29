@@ -11,7 +11,7 @@
 |---|---|---|
 | SD 1.5 LoRA | `learning_rate = 1e-4` | common community start (layer 1) |
 | SDXL LoRA | `1e-5` … `5e-5` | more divergence-sensitive than 1.5; on failure halve lr first (layer 1) |
-| Anima character LoRA | `learning_rate = 3e-5` (unet) | observed in two real local runs (`AellaStella_v1`/`v2`, layer 2), with `text_encoder_lr = 0` (UNet-only) |
+| Anima character LoRA | `learning_rate = 3e-5` (unet) | observed in two real local runs (anonymized v1/v2 character runs, layer 2), with `text_encoder_lr = 0` (UNet-only) |
 
 - unet/text-encoder split: text encoder usually runs lower than unet (e.g. `5e-5`) or is frozen (`0`).
 - Small datasets (tens of images): prefer the low end; large well-regularized sets tolerate more.

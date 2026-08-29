@@ -53,7 +53,17 @@ PLUGIN_ID = "next-trainer-pi-agent"
 BUN_VERSION = "1.4.0"
 WSL_DISTRO = "kali-linux"
 
-NODE_RUNTIME = Path(r"E:\OpenSourceTeamWork\.dev-runtimes\node-v22.19.0")
+def _node_runtime() -> Path:
+    """Node directory (node.exe + node_modules/npm/bin/npm-cli.js layout).
+    Set PI_WEB_NODE_RUNTIME, or keep Node >= 22 on PATH."""
+    import shutil
+    raw = os.environ.get("PI_WEB_NODE_RUNTIME", "").strip()
+    if raw:
+        return Path(raw)
+    found = shutil.which("node")
+    return Path(found).resolve().parent if found else Path(".")
+
+NODE_RUNTIME = _node_runtime()
 NPM_CLI = NODE_RUNTIME / "node_modules" / "npm" / "bin" / "npm-cli.js"
 
 WSL_BUILD_SH = SCRIPT_DIR / "wsl" / "wsl-build-pi-web.sh"

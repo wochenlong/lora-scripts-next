@@ -2,7 +2,7 @@
 
 - Version: `2026-08-29`
 - Scope: Anima base (`anima-base-V1.0.safetensors`, Qwen-Image-VAE + Qwen3-0.6B text encoder) character/style LoRA.
-- Evidence status: **real local training run** — `AellaStella_v2_anima_char_sfw_refined` (started 2026-08-16, 97-image character dataset, 36 epochs, per-epoch checkpoints). This is a local project observation, not a causal claim.
+- Evidence status: **real local training run**（发布脱敏：run 名以 `oc_char_v2_anima_char` 代称，机器路径未收录；参数保持真实观察值）— started 2026-08-16, 97-image character dataset, 36 epochs, per-epoch checkpoints. This is a local project observation, not a causal claim.
 
 ## Parameters of the reference run
 

@@ -1,20 +1,20 @@
-# Anima 角色 LoRA 实战案例 v1（AellaStella，anima-lora）
+# Anima 角色 LoRA 实战案例 v1（oc_char，anima-lora）
 
 - Version: `2026-08-29`
-- Scope: 单角色 OC 训练的真实完整参数案例（角色 AellaStella，页面 `anima-lora`，底模三元组 anima-base + qwen3-0.6B + qwen_image_vae，1024 分辨率）。
+- Scope: 单角色 OC 训练的真实完整参数案例（角色 oc_char，页面 `anima-lora`，底模三元组 anima-base + qwen3-0.6B + qwen_image_vae，1024 分辨率）。
 - Evidence status: **real local training run**（v1 案列完整参数原样保留）。与 `model-families/anima-lora-parameter-baseline.md`（v2 run）互为姊妹案例；两案差异见文末。本条是观察，不是因果结论。
-- Aliases / 检索关键词: 角色案例, AellaStella, 完整参数, 实战, OC, character case, 参考配置
+- Aliases / 检索关键词: 角色案例, oc_char, 完整参数, 实战, OC, character case, 参考配置
 
-> 来源：用户真实训练案例 `AllaStella_anima_lora_character_params.toml`（案例机器路径 `E:\AI_Artwork\loraTraining\OC_lora\`）。本文件原被误放在 `pi-agent/knowledge/templates/`（工具不可见的遗留位置），2026-08-29 归并进知识库并补齐规范头。
+> 来源：用户真实训练案例。**发布脱敏说明**：角色触发词已替换为 `oc_char`，案例机器路径已替换为 `X:/lora_resources/...` 占位符；参数数值与结构保持原样（真实观察值）。本文件原被误放在 `pi-agent/knowledge/templates/`（工具不可见的遗留位置），2026-08-29 归并进知识库并补齐规范头。
 
 ## 完整参数（原案例值）
 
 ```toml
 model_train_type = "anima-lora"
 lora_type = "lora"
-pretrained_model_name_or_path = "E:/RealTrainTest/resources/anima-base-V1.0.safetensors"
-vae = "E:/RealTrainTest/resources/qwen_image_vae.safetensors"
-qwen3 = "E:/RealTrainTest/resources/qwen_3_06b_base.safetensors"
+pretrained_model_name_or_path = "X:/lora_resources/anima-base-V1.0.safetensors"
+vae = "X:/lora_resources/qwen_image_vae.safetensors"
+qwen3 = "X:/lora_resources/qwen_3_06b_base.safetensors"
 qwen3_max_token_length = 512
 t5_max_token_length = 512
 timestep_sampling = "sigmoid"
@@ -25,7 +25,7 @@ attn_mode = ""
 split_attn = false
 vae_disable_cache = false
 unsloth_offload_checkpointing = false
-train_data_dir = "E:/RealTrainTest/resources/_OC_Data_AellaStella"
+train_data_dir = "X:/lora_resources/_OC_Data_oc_char"
 reg_data_dir = ""
 prior_loss_weight = 1.0
 resolution = "1024,1024"
@@ -34,8 +34,8 @@ min_bucket_reso = 512
 max_bucket_reso = 2048
 bucket_reso_steps = 64
 bucket_no_upscale = false
-output_name = "AellaStella_v1_anima_char"
-output_dir = "E:/RealTrainTest/resources/lora_output"
+output_name = "oc_char_v1_anima_char"
+output_dir = "X:/lora_resources/lora_output"
 save_model_as = "safetensors"
 save_precision = "bf16"
 save_every_n_epochs = 1
@@ -84,7 +84,7 @@ cache_text_encoder_outputs_to_disk = false
 persistent_data_loader_workers = false
 max_data_loader_n_workers = 0
 enable_preview = true
-positive_prompts = "AellaStella, 1girl, solo, looking at viewer, upper body, simple background"
+positive_prompts = "oc_char, 1girl, solo, looking at viewer, upper body, simple background"
 negative_prompts = "worst quality, low quality, lowres, blurry, jpeg artifacts, bad anatomy, bad hands, text, watermark, signature, artist name"
 sample_width = 1024
 sample_height = 1024
@@ -96,7 +96,7 @@ sample_scheduler = "simple"
 sample_at_first = true
 sample_every_n_epochs = 4
 log_with = "tensorboard"
-logging_dir = "E:/RealTrainTest/resources/lora_logs"
+logging_dir = "X:/lora_resources/lora_logs"
 seed = 3139060772
 ```
 
@@ -122,7 +122,7 @@ seed = 3139060772
 
 ## 复用规则（Agent 起草时必须遵守）
 
-1. 所有 `E:/RealTrainTest/...` 是案例机器路径，**必须替换**为用户机器上真实存在的路径；替换不了就问用户，不得照抄。
+1. 所有 `X:/lora_resources/...` 是发布脱敏后的占位路径，**必须替换**为用户机器上真实存在的路径；替换不了就问用户，不得照抄。
 2. `output_name` 按角色名+版本重命名；`positive_prompts` 的角色触发词换成目标角色 token；其余 prompt 结构（质量词/负面词）可保留。
 3. 本模板是"已验证起点"，不是唯一正确答案；偏离值域（如 network_dim>64、lr>1e-4）必须显式提示风险。
 4. 起草后仍须走 `training_config_validate` → 用户确认 → `training_config_commit` 全流程；案例不替代任何校验。
