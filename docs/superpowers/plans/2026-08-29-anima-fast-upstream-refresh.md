@@ -18,11 +18,11 @@
 - Test: `tests/test_anima_fast_backend.py`
 - Test: `tests/test_anima_fast_routes.py`
 
-- [ ] **Step 1: Write the failing pin/provenance tests**
+- [x] **Step 1: Write the failing pin/provenance tests**
 
 Add assertions that the manifest and backend config use the selected upstream stable commit, and that the installer preserves that commit in `.source_commit`.
 
-- [ ] **Step 2: Run the focused tests and verify the expected failure**
+- [x] **Step 2: Run the focused tests and verify the expected failure**
 
 Run:
 
@@ -32,7 +32,7 @@ pytest tests/test_anima_fast_backend.py tests/test_anima_fast_routes.py -q
 
 Expected: the new commit assertions fail because the repository still pins `87819818975e08167cda8a6f615776e46e889f80`.
 
-- [ ] **Step 3: Update the source pin**
+- [x] **Step 3: Update the source pin**
 
 Set both project pins to the verified `v1.17.1` stable commit:
 
@@ -42,7 +42,7 @@ b43928b5e4b82b907bfca1a322383a33088d0bdd
 
 Do not point the shipped plugin at the moving upstream `main`.
 
-- [ ] **Step 4: Run the focused tests**
+- [x] **Step 4: Run the focused tests**
 
 Run:
 
@@ -69,7 +69,7 @@ git commit -m "feat(anima-fast): refresh upstream source pin"
 - Test: `tests/test_anima_fast_backend.py`
 - Test: `tests/test_anima_fast_integration_static.py`
 
-- [ ] **Step 1: Write the failing adapter/schema tests**
+- [x] **Step 1: Write the failing adapter/schema tests**
 
 Cover these exact behaviors:
 
@@ -87,7 +87,7 @@ def test_unknown_fast_variant_is_rejected():
 
 The schema test must confirm that the UI exposes only `lora` and `tlora`, while `turbo` and arbitrary upstream methods are absent.
 
-- [ ] **Step 2: Run the new tests and verify they fail**
+- [x] **Step 2: Run the new tests and verify they fail**
 
 Run:
 
@@ -97,17 +97,17 @@ pytest tests/test_anima_fast_backend.py tests/test_anima_fast_integration_static
 
 Expected: the new variant assertions fail because the current schema has a hidden constant `lora_type = "lora"` and the adapter rejects non-MVP variants.
 
-- [ ] **Step 3: Implement the minimal curated variant mapping**
+- [x] **Step 3: Implement the minimal curated variant mapping**
 
-Use a project-facing `fast_variant` field with values `lora` and `tlora`. Keep the upstream invocation as `method = "lora"` and `network_module = "networks.lora_anima`; enable T-LoRA through the exact upstream network/config flags required by the pinned source.
+Use a project-facing `fast_variant` field with values `lora` and `tlora`. Keep the upstream invocation as `method = "lora"` and `network_module = "networks.lora_anima"; enable T-LoRA through the exact upstream network/config flags required by the pinned source.
 
 Reject `lokr`, `turbo`, `controlnet`, and unknown values before launch. Do not turn the existing custom network argument field into an unrestricted pass-through.
 
-- [ ] **Step 4: Add separate character/style T-LoRA presets**
+- [x] **Step 4: Add separate character/style T-LoRA presets**
 
 Add T-LoRA presets that inherit the existing Fast LoRA defaults and explicitly set the curated timestep-mask options. Preserve the current basic LoRA presets unchanged for backward compatibility.
 
-- [ ] **Step 5: Run the focused tests**
+- [x] **Step 5: Run the focused tests**
 
 Run:
 
@@ -342,7 +342,7 @@ The PR body must include:
 - Keeps the plugin environment separate from the main GUI environment.
 - Prunes upstream GUI/ComfyUI/SAM3-only content from the plugin install.
 
-## Explicitly not included
+## Explicitly not included in this PR
 - LoKr
 - Turbo/distillation
 - ControlNet, EasyControl, Qwen Image editing

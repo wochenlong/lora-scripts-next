@@ -1,6 +1,8 @@
 # Anima Fast 模式 — 合并前检查清单
 
-面向维护者：在将 `integrate-anima-fast` 合并进 `main` 前核对下列项。
+面向维护者：在将 Anima Fast 上游升级 PR 合并进 `dev` 前核对下列项。
+
+> 本 PR 是受控的 Fast 后端升级，不是上游全量功能搬运。覆盖标准 LoRA、T-LoRA 和 Anima 2.9B；LoKr、Turbo/distillation、ControlNet、EasyControl、Qwen Image editing、上游 GUI、ComfyUI custom nodes、SAM3、Tagger、模型下载 GUI 及其他实验性能力明确留待后续 PR。
 
 ## 1. 许可证与归属
 

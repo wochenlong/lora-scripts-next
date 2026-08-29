@@ -11,6 +11,7 @@ Schema.intersect([
     Schema.object({
         method: Schema.const("lora").default("lora").hidden(),
         methods_subdir: Schema.const("gui-methods").default("gui-methods").hidden(),
+        fast_variant: Schema.union(["lora", "tlora"]).default("lora").description("Fast 训练变体：标准 LoRA 或 T-LoRA（按扩散时间步动态调整有效 rank）"),
         qwen3_max_token_length: Schema.number().step(1).default(512).description("Qwen3 最大 token 长度"),
         timestep_sampling: Schema.union(["sigma", "uniform", "sigmoid", "shift", "flux_shift"]).default("shift").description("时间步采样"),
         discrete_flow_shift: Schema.number().step(0.001).default(3.0).description("Rectified Flow 位移"),

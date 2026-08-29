@@ -34,7 +34,7 @@ Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_l
 
 | 选 **标准模式**（`/lora/sd3.html`） | 选 **Fast 模式**（本页） |
 |-----------------------------------|-------------------------|
-| 需要 LoKr、T-LoRA 等 Kohya 网络 | **仅标准 LoRA**，追求训练吞吐 |
+| 需要 LoKr、Turbo 等当前未接入的网络 | **标准 LoRA 或 T-LoRA**，追求训练吞吐 |
 | 显存约 12GB，依赖 gradient checkpointing | **建议 16GB+**，可关闭部分省显存选项 |
 | 开箱即用，无需额外安装 | 可接受首次 **数 GB** 插件环境下载 |
 | Windows 主环境 PyTorch cu124 即可 | 需要 **CUDA 13** 插件 venv（cu130） |
@@ -79,7 +79,7 @@ Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_l
 - **按 block 或全模型 compile** +（可选）CUDAGraph → 降低 kernel 启动开销
 - **独立 cu130 栈** + Flash Attention 4 等在 anima_lora 内深度适配
 
-代价：**更高显存**、**仅 LoRA**、**需安装插件**、首次 compile **epoch 边界有秒级抖动**。
+代价：**更高显存**、**仅 LoRA 家族中的标准 LoRA/T-LoRA**、**需安装插件**、首次 compile **epoch 边界有秒级抖动**。
 
 ### 复现对标训练
 
@@ -133,7 +133,7 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 | | 标准模式 | Fast 模式（插件） |
 |---|---------|-------------------|
 | 后端 | kohya sd-scripts | anima_lora 独立 runtime |
-| 适配器 | LoRA / LoKr / T-LoRA 等 | **仅 LoRA** |
+| 适配器 | LoRA / LoKr / T-LoRA 等 | **标准 LoRA / T-LoRA** |
 | 显存 | ~12GB+（可 checkpoint） | **建议 16GB+** |
 | 速度 | 常规（本测 ≈7 s/step） | **更快**（本测 ≈2.8 s/step 起） |
 | 安装 | 开箱即用 | **需先安装插件（推荐 CLI 脚本）** |
@@ -150,6 +150,17 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 > **依赖范围与就绪判定**：安装只拉取**核心可训练依赖**，状态「插件已就绪」即代表训练所需依赖齐全。
 > 遮罩相关的 `sam3`（`facebookresearch/sam3`，体积大且 HF 权重受限）**已降为可选**，不在安装中拉取、也**不影响就绪状态**，需要遮罩功能时再按需安装。
 > 下载默认走 **HF 镜像**（`HF_ENDPOINT=https://hf-mirror.com`，与 CLI 训练脚本一致）；如需 **魔搭** 优先，安装前设置 `HF_ENDPOINT=https://modelscope.cn` 即可。
+
+## Fast 当前支持范围
+
+当前 Fast 插件只在项目侧开放两个训练变体：
+
+- **标准 LoRA**：固定使用 `networks.lora_anima`
+- **T-LoRA**：仍使用 `networks.lora_anima`，由后端固定注入上游 `v1.17.1` 的时间步 mask 配置，并使用 `weight_svd` 初始化
+
+T-LoRA 适合数据量较小、担心过拟合的场景；它通常需要比标准 LoRA 更高的 `network_dim`，收敛也可能更慢。上游参数由插件控制，用户自定义 `network_args` 不能覆盖 T-LoRA 的关键开关。
+
+本次升级明确**未覆盖**：LoKr、Turbo/distillation、ControlNet、EasyControl、Qwen Image editing、上游 standalone GUI、ComfyUI custom nodes、SAM3、Tagger、上游模型下载/Hugging Face GUI，以及其他实验性或仅推理功能。它们可以在后续 PR 中分别评估，不属于本次 Fast 后端更新的隐含承诺。
 
 ---
 

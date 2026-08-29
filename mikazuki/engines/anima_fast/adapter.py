@@ -12,6 +12,7 @@ from .settings import RuntimeConfig
 UI_ONLY_FIELDS = {
     "model_train_type",
     "anima_backend",
+    "fast_variant",
     "anima_fast_root",
     "anima_fast_python",
     "anima_fast_preflight_level",
@@ -49,6 +50,12 @@ PATH_FIELDS = {
 }
 
 SUPPORTED_LORA_TYPES = {"lora"}
+SUPPORTED_FAST_VARIANTS = {"lora", "tlora"}
+TLORA_NETWORK_ARGS = {
+    "use_timestep_mask": "true",
+    "min_rank": "1",
+    "alpha_rank_scale": "1.0",
+}
 UNSUPPORTED_FAST_MEMORY_FIELDS = {
     "blocks_to_swap",
     "cpu_offload_checkpointing",
@@ -221,9 +228,14 @@ def has_kv_arg(values: Any, key: str) -> bool:
     return False
 
 
-def normalize_fast_network_args(values: Any) -> list[str]:
+def normalize_fast_network_args(
+    values: Any,
+    *,
+    allowed_keys: set[str] | None = None,
+) -> list[str]:
     if not isinstance(values, list):
         return []
+    allowed = allowed_keys or FAST_NETWORK_ARGS_ALLOWLIST
     out: list[str] = []
     key_index: dict[str, int] = {}
     unsupported: list[str] = []
@@ -239,7 +251,7 @@ def normalize_fast_network_args(values: Any) -> list[str]:
         if not key or value.lower() in {"undefined", "null", "nan"}:
             malformed.append(str(raw))
             continue
-        if key not in FAST_NETWORK_ARGS_ALLOWLIST:
+        if key not in allowed:
             unsupported.append(key)
             continue
         item = f"{key}={value}"
@@ -255,11 +267,11 @@ def normalize_fast_network_args(values: Any) -> list[str]:
             + ", ".join(malformed[:5])
         )
     if unsupported:
-        allowed = ", ".join(sorted(FAST_NETWORK_ARGS_ALLOWLIST))
+        allowed_text = ", ".join(sorted(allowed))
         raise AdapterError(
             "network_args_custom contains unsupported Anima Fast key(s): "
             + ", ".join(sorted(set(unsupported)))
-            + f". Allowed keys: {allowed}"
+            + f". Allowed keys: {allowed_text}"
         )
     return out
 
@@ -306,6 +318,15 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     lora_type = str(source.get("lora_type", "lora")).lower()
     if lora_type not in SUPPORTED_LORA_TYPES:
         raise AdapterError(f"lora_type={lora_type} is not supported by anima-lora-fast MVP")
+    fast_variant = str(source.get("fast_variant", "lora")).strip().lower()
+    if fast_variant not in SUPPORTED_FAST_VARIANTS:
+        raise AdapterError(
+            f"fast_variant={fast_variant} is not supported by anima-lora-fast; "
+            "choose one of: lora, tlora"
+        )
+    allowed_network_args = set(FAST_NETWORK_ARGS_ALLOWLIST)
+    if fast_variant == "tlora":
+        allowed_network_args.update(TLORA_NETWORK_ARGS)
 
     output_dir = source.get("output_dir") or runtime.output_dir
     logging_dir = source.get("logging_dir") or (runtime.logging_dir / run_id)
@@ -340,11 +361,18 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
         if is_empty(value):
             continue
         if key in {"network_args", "network_args_custom"}:
-            normalized = normalize_fast_network_args(value)
+            normalized = normalize_fast_network_args(value, allowed_keys=allowed_network_args)
             target = "network_args"
             if normalized:
                 existing = values.get(target, [])
-                values[target] = normalize_fast_network_args([*existing, *normalized]) if existing else normalized
+                values[target] = (
+                    normalize_fast_network_args(
+                        [*existing, *normalized],
+                        allowed_keys=allowed_network_args,
+                    )
+                    if existing
+                    else normalized
+                )
             continue
         if key in {"optimizer_args", "optimizer_args_custom"}:
             normalized = normalize_kv_args(value)
@@ -410,6 +438,19 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
         values["attn_mode"] = "torch"
         warnings.append("attn_mode 留空时使用 torch 保底；如需 flash 请先确认插件环境已安装 flash-attn")
     values.setdefault("network_module", "networks.lora_anima")
+    if fast_variant == "tlora":
+        existing_args = normalize_fast_network_args(
+            values.get("network_args", []),
+            allowed_keys=allowed_network_args,
+        )
+        for key, value in TLORA_NETWORK_ARGS.items():
+            existing_args = [
+                item for item in existing_args
+                if not item.lower().startswith(f"{key.lower()}=")
+            ]
+            existing_args.append(f"{key}={value}")
+        values["network_args"] = existing_args
+        values["down_init"] = "weight_svd"
 
     if not is_empty(source.get("max_train_epochs")) and not is_empty(source.get("max_train_steps")):
         warnings.append("max_train_epochs is set; anima_lora derives max_train_steps from epochs and dataloader length")

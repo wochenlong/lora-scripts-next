@@ -199,6 +199,55 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(adapted.values["network_args"], ["rank_dropout=0.1"])
         self.assertIn('method = "lora"', dump_flat_toml(adapted.values))
 
+    def test_tlora_variant_injects_curated_upstream_flags(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config(
+                {
+                    "fast_variant": "tlora",
+                    "network_args_custom": ["rank_dropout=0.1"],
+                },
+                runtime,
+                "run-1",
+            )
+
+        self.assertEqual(adapted.values["method"], "lora")
+        self.assertEqual(adapted.values["network_module"], "networks.lora_anima")
+        self.assertIn("use_timestep_mask=true", adapted.values["network_args"])
+        self.assertIn("min_rank=1", adapted.values["network_args"])
+        self.assertIn("alpha_rank_scale=1.0", adapted.values["network_args"])
+        self.assertIn("rank_dropout=0.1", adapted.values["network_args"])
+        self.assertEqual(adapted.values["down_init"], "weight_svd")
+
+    def test_tlora_variant_cannot_be_overridden_by_custom_network_args(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config(
+                {
+                    "fast_variant": "tlora",
+                    "network_args_custom": [
+                        "use_timestep_mask=false",
+                        "min_rank=8",
+                        "alpha_rank_scale=0.25",
+                    ],
+                },
+                runtime,
+                "run-1",
+            )
+
+        self.assertIn("use_timestep_mask=true", adapted.values["network_args"])
+        self.assertIn("min_rank=1", adapted.values["network_args"])
+        self.assertIn("alpha_rank_scale=1.0", adapted.values["network_args"])
+        self.assertNotIn("use_timestep_mask=false", adapted.values["network_args"])
+        self.assertNotIn("min_rank=8", adapted.values["network_args"])
+        self.assertNotIn("alpha_rank_scale=0.25", adapted.values["network_args"])
+
+    def test_unknown_fast_variant_is_rejected(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            with self.assertRaisesRegex(AdapterError, "fast_variant=turbo"):
+                adapt_config({"fast_variant": "turbo"}, runtime, "run-1")
+
     def test_adapt_config_uses_stable_dataset_cache_paths(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
