@@ -1,3 +1,0 @@
-#!/bin/sh
-echo "备份施工区禁止 git push；只允许本地 commit。" >&2
-exit 1
