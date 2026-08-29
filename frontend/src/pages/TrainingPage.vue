@@ -288,11 +288,29 @@ async function stopTraining() {
   }
 }
 
+// Mirror the current form to the host so the agent side (training_config_current
+// host tool) can read the paths the user already filled in. Debounced; silent.
+let hostSyncTimer: number | undefined
+function currentForm() { return schema.value ? rawConfig.value : model.value }
+function pushParamsToHost() {
+  void trainingApi.saveParams(props.schemaName, currentForm()).catch(() => {})
+}
+function scheduleHostSync() {
+  if (hostSyncTimer) window.clearTimeout(hostSyncTimer)
+  hostSyncTimer = window.setTimeout(() => { hostSyncTimer = undefined; pushParamsToHost() }, 800)
+}
+
 watch(() => props.schemaName, () => { started.value = undefined; loadHistory(); load() })
-watch(model, (value) => localStorage.setItem(autosaveKey(), JSON.stringify(value)), { deep: true })
+watch(model, (value) => { localStorage.setItem(autosaveKey(), JSON.stringify(value)); scheduleHostSync() }, { deep: true })
 watch(previewCollapsed, (value) => persistPreviewCollapsed(value))
 onMounted(() => { migrateLegacyStorage(); loadHistory(); load(); tasksStore.refresh(); tasksTimer = window.setInterval(() => tasksStore.refresh({ silent: true }), 2000) })
-onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(autosaveKey(), JSON.stringify(model.value)); sessionStorage.setItem("mikazuki-carry-over", JSON.stringify(model.value)) })
+onBeforeUnmount(() => {
+  window.clearInterval(tasksTimer)
+  if (hostSyncTimer) { window.clearTimeout(hostSyncTimer); hostSyncTimer = undefined }
+  localStorage.setItem(autosaveKey(), JSON.stringify(model.value))
+  sessionStorage.setItem("mikazuki-carry-over", JSON.stringify(model.value))
+  pushParamsToHost()
+})
 </script>
 
 <template>

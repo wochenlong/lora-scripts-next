@@ -179,7 +179,7 @@ def test_dataset_editor_batch_prepend_appends_tags_at_front(tmp_path):
     ) == "masterpiece, best quality, 1girl, solo"
     assert (tmp_path / "beta.txt").read_text(
         encoding="utf-8"
-    ) == "best quality, 1girl, masterpiece, solo"
+    ) == "masterpiece, best quality, 1girl, solo"
 
 
 def test_dataset_editor_batch_cleans_obvious_caption_noise(tmp_path):
@@ -343,7 +343,7 @@ def test_dataset_editor_vue_source_exposes_enhanced_workflow():
     source = (ROOT / "frontend/src/pages/DatasetEditorPage.vue").read_text(encoding="utf-8")
     api = (ROOT / "frontend/src/api/dataset.ts").read_text(encoding="utf-8")
 
-    for marker in ("selectedPaths", "togglePageSelection", "quickTags", "pageSize", "replaceFrom", "sessionHistory"):
+    for marker in ("selectedPaths", "selectCurrentPageOnly", "tagFilter", "pageSize", "replaceFrom", "sessionHistory"):
         assert marker in source
     for endpoint in ("/batch", "/undo", "/redo", "/history"):
         assert endpoint in api

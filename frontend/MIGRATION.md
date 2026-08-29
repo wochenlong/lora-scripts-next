@@ -102,6 +102,23 @@
 - 新增 Node 22 锁定的 `00-build-frontend.ps1`，两个 Windows 便携构建入口均在复制项目之前执行 `npm ci` 和完整前端检查/构建。
 - Playwright 业务流程需要后端或稳定 mock 服务联调，本阶段暂不实施。
 
+### 2026-08-28：插件市场页接入实时 catalog（Goal v9 / CR-011 实测修复）
+
+- `pluginsApi` 新增 `listMarketplaceCatalog()`（`GET /api/marketplace/catalog`，只读，失败/离线返回空列表）。
+- `MarketplaceSettingsPage.vue`：加载时同时拉取实时 catalog 与已安装状态；实时 catalog 非空时优先使用，否则回退到注入的 `catalogEntries` prop（既有测试与注入式用法不变）。
+- 零权限插件（`permissions_summary: []`，如 next-trainer-pi-agent 0.2.0）现在可直接安装：`allPermissionsApproved` 对空权限集合按 vacuously true 处理（原先要求至少一个权限，导致无权限插件的安装按钮永远禁用）。
+- `catalogUnavailable` 提示仅在实时 catalog 与注入条目都为空时显示。
+- 验证：Node 22.17.1 `npm run check`（typecheck、ESLint、Vitest 含新增零权限/实时 catalog 用例、生产构建）。
+
+### 2026-08-28：插件 server 模式浮动对话框（Goal v9 / CR-011）
+
+- `PluginUiEntry` 新增可选 `mode`（`"static"` 默认 / `"server"`）；`/api/plugin-host/extensions` 的 `floatingPanel` 投影在运行时 READY 上报了 `uiUrl` 时为 `mode: "server"`，`entryUrl` 为宿主校验过的 `http://127.0.0.1:<port>` 根地址。
+- 新增 `isSafePluginServerUiUrl()`：只接受显式 `http://127.0.0.1:<port>`（含尾斜杠的根写法），拒绝其他主机名、https、凭据、路径、查询和非法端口。
+- `stores/extensions.ts`：`floatingExtensions` 按 mode 分别用静态/ server URL 策略过滤。
+- `GenericFloatingExtensionHost.vue`：server 模式直接加载运行时的环回地址，不创建 MessageChannel Bridge、不设置 `sandbox`（该页面是与自身源通信的完整应用，例如内嵌 pi-web）；静态模式行为不变（`sandbox="allow-scripts"` + Bridge）。
+- 设置页无需改动：无 `settingsEntrypoint` 的插件继续显示“不可用”状态。
+- 验证：Node 22.17.1 `npm run check` 全绿（typecheck、ESLint 0 error、28 个测试文件、生产构建）。
+
 ## 已完成
 
 - [x] 重写期间保留旧前端作为迁移参考，完成后删除临时备份

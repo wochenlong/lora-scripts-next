@@ -241,6 +241,11 @@ git pull
 ```
 
 也可以用：
+仓库根目录还提供直接使用 TOML 的训练入口：标准 Anima 后端使用
+`train_anima_by_toml.sh`，可选 Anima Fast 运行时使用
+`train_anima_fast_by_toml.sh`。
+
+查看当前分支与版本：
 
 ```powershell
 python gui.py --dev

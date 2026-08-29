@@ -1,0 +1,323 @@
+.floating-extension-host {
+  position: relative;
+  z-index: 60;
+}
+
+.floating-extension-launcher {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 61;
+  display: grid;
+  place-items: center;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  color: #fff;
+  background: var(--accent);
+  border: 0;
+  border-radius: 50%;
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 35%, transparent);
+  cursor: pointer;
+}
+
+.floating-extension-launcher:hover,
+.floating-extension-launcher:focus-visible,
+.floating-extension-launcher.is-open {
+  outline: 3px solid color-mix(in srgb, var(--accent) 25%, transparent);
+  outline-offset: 3px;
+}
+
+.floating-extension-launcher > svg,
+.floating-extension-launcher > img {
+  width: 50px;
+  height: 50px;
+  object-fit: contain;
+}
+
+.floating-extension-badge {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  display: grid;
+  place-items: center;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  color: #fff;
+  background: var(--danger);
+  border: 2px solid var(--surface);
+  border-radius: 999px;
+  font-size: 10px;
+  font-style: normal;
+  font-weight: 750;
+}
+
+.floating-extension-panel {
+  position: fixed;
+  right: 20px;
+  bottom: 80px;
+  z-index: 62;
+  width: min(520px, calc(100vw - 32px));
+  min-width: min(420px, calc(100vw - 32px));
+  max-width: min(760px, calc(100vw - 32px));
+  height: min(680px, calc(100vh - 96px));
+  min-height: min(480px, calc(100vh - 96px));
+  overflow: hidden;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 24px 70px rgba(8, 15, 24, 0.28);
+}
+
+/* Corner grip: diagonal hatch inside a rounded square. Sized to sit fully
+   within the 24px header strip so it never overlaps the panel content. */
+.floating-extension-resize {
+  position: absolute;
+  top: 3px;
+  left: 6px;
+  z-index: 1;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  background-image: repeating-linear-gradient(135deg, transparent 0 2px, var(--text-faint) 2px 3px);
+  border: 0;
+  border-radius: 5px;
+  cursor: nwse-resize;
+  opacity: 0.5;
+  transition: opacity 0.15s ease, background-color 0.15s ease;
+}
+
+.floating-extension-resize:hover {
+  opacity: 0.95;
+  background-color: color-mix(in srgb, var(--text-faint) 12%, transparent);
+}
+
+.floating-extension-resize:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  opacity: 0.95;
+}
+
+/* Slim top border: the header is a thin strip (name/status and the minimize
+   control were removed from the panel header). It is tall enough (24px) to
+   contain the 18px resize grip with margin. */
+.floating-extension-header {
+  height: 24px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+}
+
+.floating-extension-frame {
+  display: block;
+  width: 100%;
+  height: calc(100% - 24px);
+  background: var(--surface);
+  border: 0;
+}
+
+.host-confirmation-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(7, 12, 18, 0.55);
+}
+
+.host-confirmation-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 40px);
+  overflow: auto;
+  padding: 24px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 28px 80px rgba(4, 9, 15, 0.38);
+}
+
+.host-confirmation-dialog header small,
+.host-confirmation-dialog header h2 {
+  display: block;
+}
+
+.host-confirmation-brand {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 750;
+  text-transform: uppercase;
+}
+
+.host-confirmation-dialog header small {
+  margin-top: 4px;
+  color: var(--text-faint);
+}
+
+.host-confirmation-dialog h2 {
+  margin: 12px 0 18px;
+  font-size: 20px;
+}
+
+.host-confirmation-dialog dl {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 16px;
+}
+
+.host-confirmation-dialog dl > div {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr);
+  gap: 12px;
+}
+
+.host-confirmation-dialog dt {
+  color: var(--text-faint);
+}
+
+.host-confirmation-dialog dd {
+  min-width: 0;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.host-confirmation-dialog > p {
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.host-confirmation-error {
+  color: var(--danger);
+}
+
+.host-confirmation-dialog footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.host-confirmation-dialog footer button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  min-width: 108px;
+}
+
+.host-confirmation-dialog footer button svg {
+  width: 16px;
+  height: 16px;
+}
+
+.plugin-extension-page {
+  min-height: 100vh;
+  padding: 36px clamp(24px, 4vw, 56px);
+  background: var(--bg);
+}
+
+.plugin-extension-page > header {
+  margin-bottom: 22px;
+}
+
+.plugin-extension-page h1 {
+  margin: 6px 0;
+  font-size: 28px;
+}
+
+.plugin-extension-page > header p,
+.plugin-extension-state p,
+.plugin-artifact-card > p {
+  color: var(--text-soft);
+  line-height: 1.6;
+}
+
+.plugin-extension-state,
+.plugin-artifact-card {
+  padding: 24px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+.plugin-extension-state.is-error {
+  border-color: color-mix(in srgb, var(--danger) 35%, var(--border));
+}
+
+.plugin-artifact-card dl {
+  display: grid;
+  gap: 10px;
+  margin: 0 0 18px;
+}
+
+.plugin-artifact-card dl > div {
+  display: grid;
+  grid-template-columns: 120px 1fr;
+  gap: 14px;
+}
+
+.plugin-artifact-card dt {
+  color: var(--text-faint);
+}
+
+.plugin-artifact-card dd {
+  margin: 0;
+}
+
+.plugin-settings-frame {
+  width: 100%;
+  min-height: calc(100vh - 170px);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+}
+
+@media (max-width: 768px) {
+  .floating-extension-panel {
+    inset: 16px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    height: auto;
+    min-height: 0;
+    max-height: none;
+    border-radius: var(--radius-lg);
+  }
+
+  .floating-extension-resize {
+    display: none;
+  }
+
+  .plugin-extension-page {
+    padding: 24px 16px;
+  }
+
+  .host-confirmation-layer {
+    padding: 16px;
+  }
+
+  .host-confirmation-dialog {
+    max-height: calc(100vh - 32px);
+    padding: 20px;
+  }
+
+  .host-confirmation-dialog dl > div {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+
+  .host-confirmation-dialog footer {
+    flex-direction: column-reverse;
+  }
+
+  .host-confirmation-dialog footer button {
+    width: 100%;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .floating-extension-launcher {
+    transition: none;
+  }
+}

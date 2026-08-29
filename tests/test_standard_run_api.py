@@ -11,23 +11,39 @@ from unittest import mock
 
 from starlette.requests import Request
 
-stub_interrogator = types.ModuleType("mikazuki.tagger.interrogator")
-stub_interrogator.available_interrogators = {}
-stub_jobs = types.ModuleType("mikazuki.tagger.jobs")
-stub_jobs.run_interrogate_job = lambda *args, **kwargs: None
-stub_jobs.run_prefetch_job = lambda *args, **kwargs: None
-stub_progress = types.ModuleType("mikazuki.tagger.progress")
-stub_progress.tagger_progress = types.SimpleNamespace(
-    get=lambda: {},
-    request_cancel=lambda: False,
-    is_busy=lambda: False,
-    reset_idle=lambda message=None: None,
+_STUB_NAMES = (
+    "mikazuki.tagger.interrogator",
+    "mikazuki.tagger.jobs",
+    "mikazuki.tagger.progress",
 )
-sys.modules["mikazuki.tagger.interrogator"] = stub_interrogator
-sys.modules["mikazuki.tagger.jobs"] = stub_jobs
-sys.modules["mikazuki.tagger.progress"] = stub_progress
+_MISSING = object()
+_saved_modules = {name: sys.modules.get(name, _MISSING) for name in _STUB_NAMES}
+try:
+    stub_interrogator = types.ModuleType("mikazuki.tagger.interrogator")
+    stub_interrogator.available_interrogators = {}
+    stub_jobs = types.ModuleType("mikazuki.tagger.jobs")
+    stub_jobs.run_interrogate_job = lambda *args, **kwargs: None
+    stub_jobs.run_prefetch_job = lambda *args, **kwargs: None
+    stub_progress = types.ModuleType("mikazuki.tagger.progress")
+    stub_progress.tagger_progress = types.SimpleNamespace(
+        get=lambda: {},
+        request_cancel=lambda: False,
+        is_busy=lambda: False,
+        reset_idle=lambda message=None: None,
+    )
+    sys.modules["mikazuki.tagger.interrogator"] = stub_interrogator
+    sys.modules["mikazuki.tagger.jobs"] = stub_jobs
+    sys.modules["mikazuki.tagger.progress"] = stub_progress
 
-from mikazuki.app import api
+    from mikazuki.app import api
+finally:
+    # Pytest imports all test modules during collection. Restore these stubs
+    # immediately so later modules collect the real tagger implementations.
+    for name, original in _saved_modules.items():
+        if original is _MISSING:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
 
 
 def make_request(payload: dict) -> Request:

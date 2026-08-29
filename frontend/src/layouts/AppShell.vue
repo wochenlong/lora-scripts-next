@@ -6,6 +6,7 @@ import { Cpu, DataLine, FolderOpened, Menu as MenuIcon, QuestionFilled, Setting 
 import { storeToRefs } from "pinia"
 import { useAppStore } from "../stores/app"
 import { useTasksStore } from "../stores/tasks"
+import GenericFloatingExtensionHost from "../components/extensions/GenericFloatingExtensionHost.vue"
 
 const route = useRoute()
 const { t } = useI18n()
@@ -95,5 +96,6 @@ onBeforeUnmount(() => {
       </footer>
     </aside>
     <main class="app-content"><RouterView /></main>
+    <GenericFloatingExtensionHost />
   </div>
 </template>

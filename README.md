@@ -241,6 +241,9 @@ git pull
 ```
 
 Or:
+Direct TOML training wrappers are also available from the repository root:
+`train_anima_by_toml.sh` for the standard Anima backend and
+`train_anima_fast_by_toml.sh` for the optional Anima Fast runtime.
 
 ```sh
 python gui.py --dev
