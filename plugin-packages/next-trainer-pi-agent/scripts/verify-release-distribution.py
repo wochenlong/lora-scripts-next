@@ -34,10 +34,12 @@ PKG_ROOT = Path(__file__).resolve().parents[1]
 PROJECT_ROOT = PKG_ROOT.parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
 
-VERSION = "0.3.2"
 PLUGIN_ID = "next-trainer-pi-agent"
-REMOTE_BASE = "https://plugins.next-trainer.example.com/releases/download/v0.3.2"
-REL_PATH = "/releases/download/v0.3.2"
+# Version is read from the plugin's own plugin.json so this dry-run never drifts
+# behind a release bump (the release-form catalog URL follows the same value).
+VERSION = json.loads((PKG_ROOT / "plugin.json").read_text(encoding="utf-8"))["version"]
+REMOTE_BASE = f"https://plugins.next-trainer.example.com/releases/download/v{VERSION}"
+REL_PATH = f"/releases/download/v{VERSION}"
 
 
 def main() -> int:

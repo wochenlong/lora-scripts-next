@@ -1,7 +1,7 @@
 {
   "id": "next-trainer-pi-agent",
   "publisher": "next-trainer-project",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "protocolVersion": "1",
   "hostCompatibility": ">=2.9.2 <3.0.0",
   "platforms": ["win32-x64"],

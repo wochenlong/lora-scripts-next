@@ -19,7 +19,7 @@ import { appendFileSync, copyFileSync, createWriteStream, existsSync, mkdirSync,
 import type { WriteStream } from "node:fs"
 
 const PROTOCOL_VERSION = "1"
-const PLUGIN_VERSION = "0.3.2"
+const PLUGIN_VERSION = "0.3.3"
 
 function fail(code: string, message: string): never {
   process.stderr.write(`[launcher] ${code}: ${message}\n`)

@@ -1,6 +1,6 @@
 {
   "name": "next-trainer-pi-assets",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "private": true,
   "description": "Next Trainer Agent assets: host-Tool bridge extension, knowledge/template library tool, and the six Next Trainer skills.",
   "keywords": [
