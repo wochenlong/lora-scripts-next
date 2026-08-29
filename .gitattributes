@@ -4,3 +4,6 @@ frontend/dist/**/*.html text eol=lf
 frontend/dist/**/*.js text eol=lf
 frontend/dist/**/*.css text eol=lf
 frontend/index.html text eol=lf
+
+# shell hooks must stay LF to remain executable by sh
+.githooks/* text eol=lf
