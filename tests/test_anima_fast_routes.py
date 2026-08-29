@@ -6,6 +6,9 @@ from mikazuki.engines.anima_fast import routes
 from mikazuki.engines.anima_fast.manifest import UPSTREAM
 
 
+UPSTREAM_V1_17_1_COMMIT = "b43928b5e4b82b907bfca1a322383a33088d0bdd"
+
+
 class _Runtime:
     source_commit = ""
     anima_root = None
@@ -47,6 +50,10 @@ def test_install_falls_back_to_manifest_pin(monkeypatch, tmp_path):
 
     assert response.status == "success"
     assert captured["source_commit"] == UPSTREAM["commit"]
+
+
+def test_manifest_pins_upstream_v1_17_1():
+    assert UPSTREAM["commit"] == UPSTREAM_V1_17_1_COMMIT
 
 
 def test_install_config_commit_beats_manifest_pin(monkeypatch, tmp_path):

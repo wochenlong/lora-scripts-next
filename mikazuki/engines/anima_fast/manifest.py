@@ -10,7 +10,7 @@ TRAIN_TYPES = {
 UPSTREAM = {
     "repo": "sorryhyun/anima_lora",
     # Shipped default pin; config/anima_fast_backend.toml source_commit overrides.
-    "commit": "87819818975e08167cda8a6f615776e46e889f80",
+    "commit": "b43928b5e4b82b907bfca1a322383a33088d0bdd",
     "zip": None,
     "github": "https://github.com/sorryhyun/anima_lora.git",
     "gitee": None,
