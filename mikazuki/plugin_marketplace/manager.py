@@ -401,6 +401,43 @@ class MarketplaceManager:
                 raise
             return self.status(plugin_id)
 
+    def resume_enabled(self) -> list[str]:
+        """Re-activate persisted-enabled plugins after a host process restart.
+
+        The registry keeps the user's enable intent, but the runtime is a
+        child process of THIS process: after the host restarts (or the runtime
+        dies with it) every enabled plugin would otherwise sit in
+        runtime_error until the user pressed restart — the floating panel
+        shows "not ready" for a plugin the user never disabled. Best-effort
+        per plugin: stop-then-start clears any stale handle; a failure only
+        records last_runtime_error (status surfaces it) and never raises, so
+        one broken plugin cannot block application startup. Returns the ids
+        that are running again.
+        """
+        resumed: list[str] = []
+        for plugin_id in sorted(self.store.snapshot().get("plugins", {})):
+            with self._plugin_lock(plugin_id):
+                record = self.store.get_plugin(plugin_id)
+                if record is None or not record.get("enabled"):
+                    continue
+                try:
+                    manifest, directory = self._active_manifest(plugin_id, record)
+                    try:
+                        self._runtime_stop(plugin_id)
+                    except Exception:
+                        pass
+                    self._runtime_start(manifest, directory)
+                    record["last_runtime_error"] = ""
+                    self.store.set_plugin(plugin_id, record)
+                    resumed.append(plugin_id)
+                except Exception:
+                    try:
+                        record["last_runtime_error"] = "plugin runtime failed to resume after host restart"
+                        self.store.set_plugin(plugin_id, record)
+                    except Exception:
+                        pass
+        return resumed
+
     def rollback(self, plugin_id: str, version: str | None = None) -> PluginStatus:
         with self._plugin_lock(plugin_id):
             record = self._required_record(plugin_id)

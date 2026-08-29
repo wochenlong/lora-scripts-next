@@ -556,3 +556,53 @@ def test_runtime_lifecycle_reports_crash_restarts_and_recovers_failed_update():
         manager.uninstall(recovered.id)
         assert auth.is_file()
         assert runtime.running is None
+
+
+def test_resume_enabled_restarts_runtime_after_host_restart():
+    """User-reported "plugin not ready after the app restarts".
+
+    The enable intent lives in the registry on disk, but the runtime is a
+    child of the host process: a restarted host must re-activate enabled
+    plugins itself (resume_enabled), not leave them at runtime_error until
+    the user presses restart. Disabled plugins are not started; a broken
+    runtime degrades to a recorded reason instead of raising at startup.
+    """
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        runtime = FakeRuntime()
+        manager, key = manager_for(root, runtime=runtime)
+        permissions = {"model-provider", "training-config"}
+        package = build_package(root, version="0.1.0")
+        manager.install(signed_entry(package, key, version="0.1.0"), package)
+        manager.enable("next-trainer-pi-agent", permissions)
+        assert manager.status("next-trainer-pi-agent").runtime_state == "running"
+
+        # Host process restart: fresh manager + fresh (empty) runtime
+        # controller reading the SAME on-disk registry.
+        restarted_runtime = FakeRuntime()
+        restarted, _ = manager_for(root, runtime=restarted_runtime)
+        stale = restarted.status("next-trainer-pi-agent")
+        assert stale.state == "runtime_error" and stale.runtime_state == "stopped"
+        assert restarted.resume_enabled() == ["next-trainer-pi-agent"]
+        assert restarted_runtime.starts == ["0.1.0"]
+        revived = restarted.status("next-trainer-pi-agent")
+        assert revived.state == "enabled" and revived.runtime_state == "running"
+        assert not revived.reason
+
+        # A broken runtime must not raise at startup; the reason is recorded
+        # and status keeps surfacing runtime_error. (enabled intent already in
+        # the registry from the successful pass above.)
+        restarted.disable("next-trainer-pi-agent")
+        idle_runtime = FakeRuntime()
+        idle, _ = manager_for(root, runtime=idle_runtime)
+        assert idle.resume_enabled() == []
+        assert idle_runtime.starts == []
+        idle.enable("next-trainer-pi-agent", permissions)
+
+        broken_runtime = FakeRuntime()
+        broken_runtime.fail_versions.add("0.1.0")
+        broken, _ = manager_for(root, runtime=broken_runtime)
+        assert broken.resume_enabled() == []
+        errored = broken.status("next-trainer-pi-agent")
+        assert errored.state == "runtime_error"
+        assert "resume" in errored.reason

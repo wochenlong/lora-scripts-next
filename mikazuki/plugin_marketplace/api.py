@@ -263,6 +263,22 @@ _catalog = MarketplaceCatalogService(
 )
 
 
+def startup_resume_enabled() -> list[str]:
+    """Re-activate persisted-enabled plugins on application startup.
+
+    Plugin runtimes are child processes of the host process, so a host restart
+    ends them while the registry still records `enabled`; without this the
+    floating panel shows a plugin the user never disabled as "not ready" until
+    they press restart. Fire-and-forget from the app lifespan: best-effort,
+    returns the resumed ids, and NEVER raises so a broken plugin cannot block
+    application startup.
+    """
+    try:
+        return _manager.resume_enabled()
+    except Exception:
+        return []
+
+
 def _build_assets_updater() -> AssetsUpdater:
     """Managed business-data channel wiring (F3-3).
 
