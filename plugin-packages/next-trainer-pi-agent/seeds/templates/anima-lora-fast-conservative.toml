@@ -1,0 +1,43 @@
+# Next Trainer empirical template; validate and review before import.
+# Evidence: shipped project preset anima-fast-lora-character.toml (contract default)
+#   + knowledge/engines/anima-fast-vs-standard.md (engine differences).
+# Replace every machine path with real paths on the training machine before use.
+# The fast page keeps its dataset wiring in a separate dataset TOML referenced by dataset_config.
+template_version = "2026-08-29"
+scope = "anima-lora-fast-conservative"
+base_model = "anima-base"
+model_train_type = "anima-lora-fast"
+lora_type = "lora"
+network_module = "networks.lora_anima"
+network_dim = 16
+network_alpha = 16
+resolution = "1024,1024"
+enable_bucket = true
+train_batch_size = 1
+gradient_checkpointing = true
+optimizer_type = "AdamW8bit"
+learning_rate = 0.0001
+mixed_precision = "bf16"
+cache_latents = false
+cache_latents_to_disk = false
+cache_text_encoder_outputs = false
+cache_text_encoder_outputs_to_disk = false
+skip_cache_check = true
+torch_compile = true
+static_token_count = 4096
+compile_mode = "blocks"
+dynamo_backend = "inductor"
+attn_mode = "flash"
+max_train_epochs = 12
+save_every_n_epochs = 1
+save_model_as = "safetensors"
+save_precision = "bf16"
+enable_preview = true
+sample_width = 1024
+sample_height = 1024
+sample_cfg = 4
+sample_steps = 40
+sample_sampler = "euler"
+sample_scheduler = "simple"
+sample_seed = 42
+log_with = "tensorboard"
