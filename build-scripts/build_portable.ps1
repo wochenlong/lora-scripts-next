@@ -575,14 +575,13 @@ if ($SkipMarketplace) {
             # The host fail-closes a pure FILE catalog by design; a URL channel is
             # installable (catalog pins size+sha256, package downloads verified).
             # Baked channel env + bundled catalog/trust as offline fallback.
-            $envBat = @(
-                "@echo off",
-                ":: Written by build_portable.ps1 (-MarketplaceCatalogOnly): live plugin release channel.",
-                'set "MIKAZUKI_MARKETPLACE_CATALOG_URL=' + '$MarketplaceCatalogUrl' + '"',
-                'set "MIKAZUKI_MARKETPLACE_CATALOG=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\catalog.json"',
-                'set "MIKAZUKI_MARKETPLACE_TRUST=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\trust.json"'
-            ) -join "`r`n"
-            Set-Content -LiteralPath (Join-Path $portableDir "marketplace-env.bat") -Value $envBat -Encoding ASCII
+            $envBatLines = New-Object System.Collections.Generic.List[string]
+            $envBatLines.Add("@echo off")
+            $envBatLines.Add(":: Written by build_portable.ps1 (-MarketplaceCatalogOnly): live plugin release channel.")
+            $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_CATALOG_URL=' + $MarketplaceCatalogUrl + '"')
+            $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_CATALOG=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\catalog.json"')
+            $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_TRUST=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\trust.json"')
+            [System.IO.File]::WriteAllLines((Join-Path $portableDir "marketplace-env.bat"), $envBatLines, [System.Text.Encoding]::ASCII)
             Write-Host "  marketplace-env.bat wired to the release channel" -ForegroundColor Green
             if ($catalogForm -ne "remote") {
                 Write-Host "  WARNING: catalog-only bundle with a LOCAL-form catalog; installs need" ;
