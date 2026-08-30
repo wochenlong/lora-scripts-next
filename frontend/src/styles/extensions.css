@@ -3,11 +3,19 @@
   z-index: 60;
 }
 
-.floating-extension-launcher {
+.floating-extension-launchers {
   position: fixed;
   right: 20px;
   bottom: 20px;
   z-index: 61;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-end;
+  gap: 10px;
+}
+
+.floating-extension-launcher {
+  position: relative;
   display: grid;
   place-items: center;
   width: 56px;
@@ -19,6 +27,10 @@
   border-radius: 50%;
   box-shadow: 0 12px 28px color-mix(in srgb, var(--accent) 35%, transparent);
   cursor: pointer;
+}
+
+.floating-extension-launcher.is-active {
+  background: color-mix(in srgb, var(--accent) 88%, #fff);
 }
 
 .floating-extension-launcher:hover,

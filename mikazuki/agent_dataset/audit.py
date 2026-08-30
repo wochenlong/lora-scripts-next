@@ -243,6 +243,8 @@ def select_review_sample(inventory: DatasetInventory, *, limit: int = 12, seed: 
     """Select deterministic samples, prioritising failures and duplicate groups."""
     if limit < 0:
         raise DatasetReviewError("DATASET_SAMPLE_INVALID", "Sample limit must be non-negative.")
+    if limit == 0:
+        return ()
     images = list(inventory.images)
     priority = [item for item in images if item.decode_error or item.caption_path is None]
     duplicate_paths = {path for group in inventory.duplicate_groups for path in group}
