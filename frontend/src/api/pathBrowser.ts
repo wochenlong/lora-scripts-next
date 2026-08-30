@@ -40,4 +40,9 @@ export const pathBrowserApi = {
     if (nameFilter) params.set("name_filter", nameFilter)
     return apiData<PathBrowserList>(`/api/path_browser/list?${params.toString()}`)
   },
+  imageUrl: (path: string, thumb = true) => {
+    const params = new URLSearchParams({ path })
+    if (thumb) params.set("thumb", "1")
+    return `/api/path_browser/image?${params.toString()}`
+  },
 }

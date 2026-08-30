@@ -11,7 +11,7 @@ import { schemasApi } from "../api/schemas"
 import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/training"
 import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultModel, isFieldActive, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
-import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
+import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, migrateLegacyDefaultValues, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
 import { moduleForTrainType } from "../training/modules"
 import { copyText } from "../utils/clipboard"
 import { useTasksStore } from "../stores/tasks"
@@ -139,7 +139,14 @@ async function load() {
     try {
       const saved = JSON.parse(localStorage.getItem(autosaveKey()) || "null")
       model.value = saved && typeof saved === "object"
-        ? { ...base, ...sanitizePersistedDraft(saved as FormModel, defaults) }
+        ? {
+            ...base,
+            ...migrateLegacyDefaultValues(
+              sanitizePersistedDraft(saved as FormModel, defaults),
+              defaults,
+              props.schemaName === "klein-lora" ? { train_data_dir: "./train/aki" } : {},
+            ),
+          }
         : base
     } catch { model.value = base }
     applyReadonlyDefaults(loaded, model.value, defaults)
@@ -330,7 +337,7 @@ onBeforeUnmount(() => { window.clearInterval(tasksTimer); localStorage.setItem(a
           <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
           <DynamicSchemaForm v-else-if="schema" v-model="model" :schema="schema" :errors="errors" :effective-defaults="effectiveDefaults" @reset-field="resetField">
         <template #[modelToolsSlot]>
-          <ModelAssetsTools :schema-name="schemaName" :model="model" />
+          <ModelAssetsTools v-if="schemaName !== 'klein-lora'" :schema-name="schemaName" :model="model" />
         </template>
       </DynamicSchemaForm>
         </div>

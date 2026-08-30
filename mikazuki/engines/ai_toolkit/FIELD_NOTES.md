@@ -7,6 +7,7 @@
 | 日期 | 上游 commit | 变体 | 环境 | 结果 |
 | --- | --- | --- | --- | --- |
 | 2026-08-28 | 5497a001cb8752c665f93907a0393fc612116fd5 | klein-4b | GB10 (aarch64, cu130) | **真机三跑全通**：10 步实跑出 LoRA + step0/10 预览图；TB event 实产（tags=`loss`/`lr`）；metrics/previews/stdout 进度三通道实证 |
+| 2026-08-29 | 5497a001cb8752c665f93907a0393fc612116fd5 | klein-4b 编辑数据集 | RTX 4090 24GB (Windows, cu128) | **真机 100 步全通**：20 张目标图 + 20 张同名参考图全部配对；真实训练正常消费 `control_path`；进程退出码 0；生成并成功读取 44 MB LoRA checkpoint（160 个 LoRA 张量）。本次未配置采样提示词，尚未验证训练后推理效果 |
 | 2026-08-28 | 5497a001cb8752c665f93907a0393fc612116fd5 | klein-9b | GB10 (aarch64, cu130) | 仅静态：adapter/preflight/routes 单测 + dry-run 出 yaml。**未跑真机训练**（待 GPU 窗口） |
 
 ## 踩坑流水
@@ -30,5 +31,5 @@
 1. 安装：`POST /api/engines/ai-toolkit/install {"dry_run": false}` → state=ready、audit 全绿。（GB10 已过）
 2. klein-4b-lora：小数据集（~10 张）+ max_train_steps=20 + 采样预览开 → 出 LoRA safetensors + 预览图。（已过，见验证矩阵）
 3. klein-9b-lora：同上（量化默认开）。（未跑）
-4. 编辑数据集：train_data_dir + control_data_dirs[] 同名配对 → 训练正常消费 control 图。（未跑）
+4. 编辑数据集：train_data_dir + control_data_dirs[] 同名配对 → 训练正常消费 control 图。（**已过：Windows RTX 4090，20 对数据，100 步；尚未做训练后推理效果验证**）
 5. ~~记录 stdout 日志样例 → 回填进度解析~~（已完成，见观测面实证条）

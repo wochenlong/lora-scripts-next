@@ -4,6 +4,7 @@ import {
   buildTrainingConfig,
   checkTrainingConfig,
   hydrateImportedConfig,
+  migrateLegacyDefaultValues,
   pickCarryOverFields,
   sanitizePersistedDraft,
 } from "./params"
@@ -42,6 +43,17 @@ describe("training parameter conversion", () => {
       model_type: "flux",
       network_module: "networks.lora_flux",
     })
+  })
+
+  it("keeps the UI-only training task out of the backend config", () => {
+    const result = buildTrainingConfig({
+      task: "image-edit",
+      train_data_dir: "./images",
+      control_data_dirs: ["./controls"],
+    }, "klein-lora")
+
+    expect(result).not.toHaveProperty("task")
+    expect(result.control_data_dirs).toEqual(["./controls"])
   })
 
   it("forces anima-lora-fast train type even when form still has Kohya anima-lora (#271)", () => {
@@ -145,5 +157,25 @@ describe("cross-schema carry-over (#271)", () => {
       train_data_dir: "./data/oc",
     }
     expect(sanitizePersistedDraft(saved, defaults)).toEqual(saved)
+  })
+
+  it("migrates an autosaved value only when it matches a former schema default", () => {
+    const defaults = { train_data_dir: "./train/data" }
+    const legacyDefaults = { train_data_dir: "./train/aki" }
+
+    expect(migrateLegacyDefaultValues(
+      { train_data_dir: "./train/aki", output_dir: "./my-output" },
+      defaults,
+      legacyDefaults,
+    )).toEqual({
+      train_data_dir: "./train/data",
+      output_dir: "./my-output",
+    })
+
+    expect(migrateLegacyDefaultValues(
+      { train_data_dir: "./my-training-data" },
+      defaults,
+      legacyDefaults,
+    )).toEqual({ train_data_dir: "./my-training-data" })
   })
 })

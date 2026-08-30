@@ -484,6 +484,25 @@ async def path_browser_list(
     return APIResponseSuccess(data=data)
 
 
+@router.get("/path_browser/image")
+async def path_browser_image(path: str, thumb: bool = True):
+    """Serve a selected local image, using a thumbnail by default."""
+    try:
+        image_path = await asyncio.to_thread(path_browser_utils.resolve_image_path, path)
+    except PermissionError as exc:
+        raise HTTPException(status_code=403, detail=str(exc)) from exc
+    except FileNotFoundError as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    headers = {"Cache-Control": "private, max-age=60"}
+    if thumb:
+        data = await asyncio.to_thread(task_insights.preview_thumbnail, image_path)
+        if data is not None:
+            return Response(content=data, media_type="image/jpeg", headers=headers)
+    return FileResponse(str(image_path), headers=headers)
+
+
 @router.get("/get_files")
 async def get_files(pick_type) -> APIResponse:
     pick_preset = {

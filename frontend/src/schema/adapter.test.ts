@@ -165,6 +165,81 @@ describe("dynamic schema adapter", () => {
     expect(defaults.names).toEqual(["base"])
   })
 
+  it("exposes schema capabilities and task metadata", () => {
+    const capabilitySources = [{
+      name: "klein",
+      hash: "klein",
+      schema: `Schema.object({
+        task: Schema.union(['text-to-image', 'image-edit']).default('text-to-image'),
+        train_data_dir: Schema.string(),
+        control_data_dirs: Schema.array(String).role('paired-directories'),
+      }).role('training-schema', { capabilities: ['lora', 'text-to-image', 'image-edit'], task: 'text-to-image' })`,
+    }]
+    const schema = executeSchemaSources(capabilitySources, "klein")
+
+    expect(schema.capabilities).toEqual(["lora", "text-to-image", "image-edit"])
+    expect(schema.task).toBe("text-to-image")
+    expect(schema.sections.flatMap((section) => section.fields).find((field) => field.key === "control_data_dirs")?.role)
+      .toBe("paired-directories")
+  })
+
+  it("serializes task-specific reference directories only for image editing", () => {
+    const capabilitySources = [{
+      name: "klein",
+      hash: "klein",
+      schema: `Schema.intersect([
+        Schema.object({
+          task: Schema.union(['text-to-image', 'image-edit']).default('text-to-image'),
+          train_data_dir: Schema.string(),
+        }),
+        Schema.union([
+          Schema.object({
+            task: Schema.const('image-edit').required(),
+            control_data_dirs: Schema.array(String).role('paired-directories'),
+          }),
+          Schema.object({ task: Schema.const('text-to-image') }),
+        ]),
+      ])`,
+    }]
+    const schema = executeSchemaSources(capabilitySources, "klein")
+    const model = { task: "text-to-image", train_data_dir: "./images", control_data_dirs: ["./controls"] }
+
+    expect(serializeModel(schema, model)).not.toHaveProperty("control_data_dirs")
+    expect(serializeModel(schema, { ...model, task: "image-edit" })).toMatchObject({
+      control_data_dirs: ["./controls"],
+    })
+  })
+
+  it("does not serialize blank paired reference directories", () => {
+    const capabilitySources = [{
+      name: "klein",
+      hash: "klein",
+      schema: `Schema.object({
+        task: Schema.union(['text-to-image', 'image-edit']).default('image-edit'),
+        control_data_dirs: Schema.array(String).role('paired-directories'),
+      })`,
+    }]
+    const schema = executeSchemaSources(capabilitySources, "klein")
+
+    expect(serializeModel(schema, { task: "image-edit", control_data_dirs: ["", "  ", "./controls"] }))
+      .toMatchObject({ control_data_dirs: ["./controls"] })
+  })
+
+  it("orders sections by shared training groups", () => {
+    const orderedSources = [{
+      name: "ordered",
+      hash: "ordered",
+      schema: `Schema.intersect([
+        Schema.object({ save: Schema.string() }).role('section', { group: 'save' }).description('保存设置'),
+        Schema.object({ model: Schema.string() }).role('section', { group: 'model' }).description('训练用模型'),
+        Schema.object({ dataset: Schema.string() }).role('section', { group: 'dataset' }).description('数据集设置'),
+      ])`,
+    }]
+    const schema = executeSchemaSources(orderedSources, "ordered")
+
+    expect(schema.sections.map((section) => section.title)).toEqual(["训练用模型", "数据集设置", "保存设置"])
+  })
+
   it("clones array defaults for new models", () => {
     const arraySources = [{
       name: "arrays",
@@ -229,5 +304,63 @@ describe("dynamic schema adapter", () => {
       methods_subdir: "gui-methods",
       network_module: "networks.lora_anima",
     })
+
+    const klein = executeSchemaSources(realSources, "klein-lora")
+    expect(klein.capabilities).toEqual(["lora", "text-to-image", "image-edit"])
+    const modelFields = klein.sections.find((section) => section.title === "训练用模型")!.fields
+    expect(modelFields.find((field) => field.key === "model_source")).toMatchObject({
+      role: "model-source-selector",
+      defaultValue: "local-file",
+      options: ["local-file", "local-directory", "hf-repo"],
+    })
+    expect(modelFields.find((field) => field.key === "dit")?.role).toBe("model-path")
+    expect(modelFields.find((field) => field.key === "vae_source")).toMatchObject({
+      role: "vae-source-selector",
+      defaultValue: "follow-dit",
+      options: ["follow-dit", "custom"],
+    })
+    expect(klein.sections.map((section) => section.title)).toEqual([
+      "训练用模型",
+      "训练模型类型",
+      "数据集设置",
+      "保存设置",
+      "训练过程",
+      "学习率与优化器",
+      "网络设置",
+      "训练预览图设置",
+      "省显存",
+      "日志 / caption / 噪声 / 数据增强",
+      "其他",
+    ])
+    expect(klein.sections.flatMap((section) => section.fields).find((field) => field.key === "task")?.role)
+      .toBe("task-selector")
+    const memoryFields = klein.sections.find((section) => section.title === "省显存")!.fields
+    expect(memoryFields.map((field) => field.key)).toEqual([
+      "quantize",
+      "quantize_te",
+      "qtype",
+      "qtype_te",
+      "low_vram",
+      "layer_offloading",
+    ])
+    expect(memoryFields.find((field) => field.key === "low_vram")?.defaultValue).toBe(true)
+    expect(klein.sections.flatMap((section) => section.fields).some((field) => field.key === "prompt_file"))
+      .toBe(false)
+    const kleinDefaults = createDefaultModel(klein)
+    expect(kleinDefaults.train_data_dir).toBe("./train/data")
+    const datasetFields = klein.sections.find((section) => section.title === "数据集设置")!.fields
+    expect(datasetFields.map((field) => field.key).slice(0, 3)).toEqual([
+      "task",
+      "train_data_dir",
+      "control_data_dirs",
+    ])
+    const resolution = datasetFields.find((field) => field.key === "resolution")!
+    expect(resolution.type).toBe("array")
+    expect(resolution.role).toBe("resolution-selector")
+    expect(resolution.defaultValue).toEqual([512, 768, 1024])
+    expect(datasetFields.find((field) => field.key === "dataset_repeats")?.defaultValue).toBe(1)
+    expect(serializeModel(klein, kleinDefaults)).not.toHaveProperty("control_data_dirs")
+    expect(serializeModel(klein, { ...kleinDefaults, task: "image-edit", control_data_dirs: ["./controls"] }))
+      .toHaveProperty("control_data_dirs", ["./controls"])
   })
 })

@@ -11,6 +11,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
+import json
 import re
 
 import yaml
@@ -112,18 +113,24 @@ def resolve_path(value: Any, base: Path) -> str:
 
 
 def _resolution_list(value: Any, default: int = 1024) -> list[int]:
-    """kohya single resolution ("1024" / "1024,1024" / "1024x768") -> toolkit
-    resolution array. Non-square input collapses to the long side; buckets do
-    the rest upstream. Never fabricates a multi-resolution list."""
+    """Normalize Klein resolutions to AI Toolkit's list-of-target-sizes format."""
     if value is None:
         return [default]
     if isinstance(value, int):
         return [value]
-    text = str(value).replace("x", ",").replace(" ", "")
-    parts = [p for p in text.split(",") if p]
-    if not parts:
+    if isinstance(value, (list, tuple)):
+        parts = list(value)
+    else:
+        text = str(value).replace("x", ",").replace(" ", "")
+        parts = [p for p in text.split(",") if p]
+    result = []
+    for part in parts:
+        resolution = int_value(part, 0)
+        if resolution > 0 and resolution not in result:
+            result.append(resolution)
+    if not result:
         return [default]
-    return [max(int_value(p, default) for p in parts)]
+    return result
 
 
 def _sample_prompt_lines(value: Any) -> list[str]:
@@ -141,6 +148,66 @@ def _sample_prompt_lines(value: Any) -> list[str]:
         if line:
             lines.append(line)
     return lines
+
+
+def _sample_control_images(value: Any, base: Path) -> list[str]:
+    if is_empty(value):
+        return []
+    values = [value] if isinstance(value, str) else value
+    if not isinstance(values, list):
+        raise AdapterError("sample_control_images 必须是图片路径数组")
+    result = []
+    for raw in values[:3]:
+        if is_empty(raw):
+            continue
+        path = Path(resolve_path(raw, base))
+        if not path.is_file():
+            raise AdapterError(f"预览参考图不存在: {path}")
+        if path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}:
+            raise AdapterError(f"预览参考图不是支持的图片文件: {path}")
+        result.append(path.as_posix())
+    return result
+
+
+def _preview_sample_items(value: Any, base: Path) -> list[dict[str, Any]]:
+    if is_empty(value):
+        return []
+    values = [value] if isinstance(value, dict) or isinstance(value, str) else value
+    if not isinstance(values, list):
+        raise AdapterError("preview_samples 必须是 Sample 数组")
+    result = []
+    for raw in values:
+        item = raw
+        if isinstance(raw, str):
+            try:
+                item = json.loads(raw)
+            except json.JSONDecodeError as exc:
+                raise AdapterError("preview_samples 包含无效的 JSON") from exc
+        if not isinstance(item, dict):
+            raise AdapterError("preview_samples 的每项必须是对象")
+        prompt = str(item.get("prompt") or "").strip()
+        if not prompt:
+            continue
+        sampler = str(item.get("sampler") or "flowmatch").strip().lower()
+        if sampler != "flowmatch":
+            raise AdapterError("Klein 预览目前只支持 flowmatch 采样器")
+        sample: dict[str, Any] = {
+            "prompt": prompt,
+            "width": max(64, int_value(item.get("width"), 1024)),
+            "height": max(64, int_value(item.get("height"), 1024)),
+            "seed": int_value(item.get("seed"), 42),
+            "guidance_scale": float_value(item.get("guidance_scale"), 4.0),
+            "sample_steps": max(1, int_value(item.get("sample_steps"), 20)),
+            "network_multiplier": float_value(item.get("network_multiplier"), 1.0),
+            "sampler": sampler,
+        }
+        negative_prompt = str(item.get("neg") or "").strip()
+        if negative_prompt:
+            sample["neg"] = negative_prompt
+        control_images = _sample_control_images(item.get("control_images"), base)
+        sample.update({f"ctrl_img_{index}": path for index, path in enumerate(control_images, start=1)})
+        result.append(sample)
+    return result
 
 
 def _map_optimizer(value: Any, warnings: list[str]) -> str:
@@ -168,10 +235,19 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
     dit_raw = source.get("dit") or source.get("pretrained_model_name_or_path")
     if is_empty(dit_raw):
         raise AdapterError("缺少 Klein DiT 路径 (dit)：模型目录或 HF repo")
+    model_source = str(source.get("model_source") or "").strip().lower()
+    if model_source not in {"", "local-file", "local-directory", "hf-repo"}:
+        raise AdapterError(f"不支持的模型来源: {model_source}")
     dit_text = str(dit_raw).strip()
     dit_path = Path(dit_text)
     if not dit_path.is_absolute():
         dit_path = (runtime.lora_next_root / dit_path).resolve()
+    if model_source == "local-file" and dit_path.exists() and not dit_path.is_file():
+        raise AdapterError(f"模型来源选择为本地模型文件，但路径不是文件: {dit_path}")
+    if model_source == "local-directory" and dit_path.exists() and not dit_path.is_dir():
+        raise AdapterError(f"模型来源选择为本地模型目录，但路径不是目录: {dit_path}")
+    if model_source == "hf-repo" and dit_path.exists():
+        raise AdapterError(f"模型来源选择为仓库 ID，但填写的是本地路径: {dit_text}")
     if dit_path.is_file():
         # Toolkit wants the containing folder (or HF repo); a direct file works
         # when the filename matches the variant's expected DiT filename.
@@ -185,6 +261,13 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
     else:
         # not a local path: treat as HF repo id, download happens upstream
         name_or_path = dit_text
+
+    vae_raw = source.get("vae")
+    vae_path: Path | None = None
+    if not is_empty(vae_raw):
+        vae_path = Path(resolve_path(vae_raw, runtime.lora_next_root))
+        if not vae_path.is_file():
+            raise AdapterError(f"VAE 文件不存在: {vae_path}")
 
     te_raw = source.get("text_encoder")
     if is_empty(te_raw):
@@ -285,9 +368,12 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
         "quantize": truthy(source.get("quantize", True)),
         "quantize_te": truthy(source.get("quantize_te", source.get("quantize", True))),
         "qtype": str(source.get("qtype") or "qfloat8"),
-        "low_vram": truthy(source.get("low_vram", False)),
+        "qtype_te": str(source.get("qtype_te") or "qfloat8"),
+        "low_vram": truthy(source.get("low_vram", True)),
         "model_kwargs": {"match_target_res": False},
     }
+    if vae_path is not None:
+        model["vae_path"] = vae_path.as_posix()
     if truthy(source.get("layer_offloading")):
         model["layer_offloading"] = True
 
@@ -319,7 +405,8 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
     if not is_empty(source.get("trigger_word")):
         process["trigger_word"] = str(source.get("trigger_word")).strip()
 
-    prompts = _sample_prompt_lines(source.get("sample_prompts"))
+    preview_samples = _preview_sample_items(source.get("preview_samples"), runtime.lora_next_root)
+    prompts = [item["prompt"] for item in preview_samples] or _sample_prompt_lines(source.get("sample_prompts"))
     if prompts:
         res = _resolution_list(source.get("sample_resolution") or source.get("resolution"))
         width = height = res[0]
@@ -327,35 +414,57 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
             width = int_value(source.get("sample_width"), 1024)
         if not is_empty(source.get("sample_height")):
             height = int_value(source.get("sample_height"), 1024)
-        process["sample"] = {
-            "sampler": "flowmatch",
+        first_sample = preview_samples[0] if preview_samples else {}
+        sampler = str(first_sample.get("sampler") or "flowmatch")
+        if preview_samples and any(item.get("sampler") != sampler for item in preview_samples):
+            raise AdapterError("Klein 预览的所有 Sample 必须使用同一个采样器；当前仅支持 flowmatch")
+        sample = {
+            "sampler": sampler,
             "sample_every": int_value(source.get("sample_every_n_steps"), save["save_every"]) or save["save_every"],
-            "width": width,
-            "height": height,
+            "width": first_sample.get("width", width),
+            "height": first_sample.get("height", height),
             "prompts": prompts,
-            "seed": int_value(source.get("sample_seed") or source.get("seed"), 42),
+            "seed": first_sample.get("seed", int_value(source.get("sample_seed") or source.get("seed"), 42)),
             "walk_seed": True,
-            "guidance_scale": float_value(source.get("sample_cfg"), 4.0) or 4.0,
-            "sample_steps": int_value(source.get("sample_steps"), 20) or 20,
-            "neg": str(source.get("negative_prompts") or ""),
+            "guidance_scale": first_sample.get("guidance_scale", float_value(source.get("sample_cfg"), 4.0) or 4.0),
+            "sample_steps": first_sample.get("sample_steps", int_value(source.get("sample_steps"), 20) or 20),
         }
+        first_negative = first_sample.get("neg")
+        if first_negative or not preview_samples:
+            sample["neg"] = str(first_negative or source.get("negative_prompts") or "")
+        if preview_samples:
+            sample["samples"] = preview_samples
+            sample.pop("prompts", None)
+        else:
+            control_images = _sample_control_images(source.get("sample_control_images"), runtime.lora_next_root)
+            if control_images:
+                sample.pop("prompts", None)
+                sample["samples"] = [
+                    {
+                        "prompt": prompt,
+                        **{f"ctrl_img_{index}": image for index, image in enumerate(control_images, start=1)},
+                    }
+                    for prompt in prompts
+                ]
+        process["sample"] = sample
         if not is_empty(source.get("sample_sampler")) and str(source.get("sample_sampler")).strip() != "flowmatch":
             warnings.append("Klein 训练采样仅支持 flowmatch，sample_sampler 已忽略")
     elif not is_empty(source.get("sample_sampler")) or not is_empty(source.get("sample_every_n_steps")):
         warnings.append("未提供 sample_prompts，采样设置已忽略")
 
     known = set(UI_ONLY_FIELDS) | {
-        "pretrained_model_name_or_path", "dit", "text_encoder", "train_data_dir", "control_data_dirs",
+        "pretrained_model_name_or_path", "dit", "model_source", "vae_source", "vae", "text_encoder", "train_data_dir", "control_data_dirs",
         "caption_extension", "caption_dropout_rate", "shuffle_caption", "dataset_repeats",
         "resolution", "sample_resolution", "max_train_steps", "max_train_epochs",
         "train_batch_size", "batch_size", "gradient_accumulation_steps", "gradient_checkpointing",
         "optimizer_type", "learning_rate", "lr_scheduler", "max_grad_norm", "seed", "use_ema", "ema_decay",
-        "quantize", "quantize_te", "qtype", "low_vram", "layer_offloading",
+        "quantize", "quantize_te", "qtype", "qtype_te", "low_vram", "layer_offloading",
         "output_dir", "output_name", "save_precision", "save_every_n_steps", "save_every_n_epochs",
         "save_last_n_steps", "network_dim", "network_alpha", "trigger_word",
         "sample_prompts", "sample_width", "sample_height", "sample_seed", "sample_cfg",
         "sample_steps", "sample_every_n_steps", "sample_sampler", "sample_at_first",
-        "positive_prompts", "negative_prompts",
+        "positive_prompts", "negative_prompts", "sample_control_images",
+        "preview_samples",
         "logging_dir", "gpu_ids",
     }
     for key in source:

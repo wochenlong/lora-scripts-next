@@ -60,7 +60,8 @@ def test_basic_mapping_4b(tmp_path):
     assert process["model"]["arch"] == "flux2_klein_4b"
     assert process["model"]["name_or_path"] == "black-forest-labs/FLUX.2-klein-base-4B"
     assert process["model"]["quantize"] is True
-    assert process["model"]["low_vram"] is False
+    assert process["model"]["low_vram"] is True
+    assert process["model"]["qtype_te"] == "qfloat8"
     assert process["network"] == {"type": "lora", "linear": 32, "linear_alpha": 32}
     assert process["train"]["steps"] == 2000
     assert process["train"]["lr"] == pytest.approx(1e-4)
@@ -73,6 +74,39 @@ def test_basic_mapping_4b(tmp_path):
     assert process["datasets"][0]["cache_latents_to_disk"] is True
     assert process["save"]["save_every"] == 250
     assert adapted.warnings == []
+
+
+def test_resolution_uses_toolkit_resolution_list(tmp_path):
+    adapted = adapt_config(
+        _source(tmp_path, resolution=[512, 768, 1024]),
+        _runtime(tmp_path),
+        "run-1",
+        "klein-4b",
+    )
+    assert _process(adapted)["datasets"][0]["resolution"] == [512, 768, 1024]
+
+
+def test_resolution_keeps_legacy_string_compatibility(tmp_path):
+    adapted = adapt_config(
+        _source(tmp_path, resolution="512,768,1024"),
+        _runtime(tmp_path),
+        "run-1",
+        "klein-4b",
+    )
+    assert _process(adapted)["datasets"][0]["resolution"] == [512, 768, 1024]
+
+
+def test_model_quantization_types_are_configured_independently(tmp_path):
+    adapted = adapt_config(
+        _source(tmp_path, qtype="qint4", qtype_te="qint8", low_vram=False),
+        _runtime(tmp_path),
+        "run-1",
+        "klein-4b",
+    )
+    model = _process(adapted)["model"]
+    assert model["qtype"] == "qint4"
+    assert model["qtype_te"] == "qint8"
+    assert model["low_vram"] is False
 
 
 def test_log_dir_defaults_to_runtime(tmp_path):
@@ -111,6 +145,105 @@ def test_sample_neg_from_negative_prompts(tmp_path):
     data["negative_prompts"] = "blurry"
     adapted = adapt_config(data, _runtime(tmp_path), "run-1", "klein-4b")
     assert _process(adapted)["sample"]["neg"] == "blurry"
+
+
+def test_sample_control_images_map_to_toolkit_sample_fields(tmp_path):
+    data = _source(tmp_path, task="image-edit")
+    prompts = tmp_path / "prompts.txt"
+    prompts.write_text("edit this image\n", encoding="utf-8")
+    control_one = tmp_path / "control-one.png"
+    control_two = tmp_path / "control-two.jpg"
+    control_one.write_bytes(b"png")
+    control_two.write_bytes(b"jpg")
+    data.update(
+        sample_prompts=str(prompts),
+        sample_control_images=[str(control_one), str(control_two), ""],
+    )
+
+    adapted = adapt_config(data, _runtime(tmp_path), "run-1", "klein-4b")
+
+    sample = _process(adapted)["sample"]
+    assert sample["samples"] == [{
+        "prompt": "edit this image",
+        "ctrl_img_1": control_one.resolve().as_posix(),
+        "ctrl_img_2": control_two.resolve().as_posix(),
+    }]
+    assert "prompts" not in sample
+
+
+def test_preview_samples_map_each_prompt_and_control_images(tmp_path):
+    data = _source(tmp_path, task="image-edit")
+    control_one = tmp_path / "control-one.png"
+    control_two = tmp_path / "control-two.jpg"
+    control_three = tmp_path / "control-three.webp"
+    for path in (control_one, control_two, control_three):
+        path.write_bytes(b"image")
+    data["preview_samples"] = [
+        {"prompt": "first edit", "control_images": [str(control_one)]},
+        {"prompt": "second edit", "control_images": [str(control_two), str(control_three)]},
+    ]
+
+    adapted = adapt_config(data, _runtime(tmp_path), "run-1", "klein-4b")
+
+    assert _process(adapted)["sample"]["samples"] == [
+        {
+            "prompt": "first edit",
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "guidance_scale": 4.0,
+            "sample_steps": 20,
+            "network_multiplier": 1.0,
+            "sampler": "flowmatch",
+            "ctrl_img_1": control_one.resolve().as_posix(),
+        },
+        {
+            "prompt": "second edit",
+            "width": 1024,
+            "height": 1024,
+            "seed": 42,
+            "guidance_scale": 4.0,
+            "sample_steps": 20,
+            "network_multiplier": 1.0,
+            "sampler": "flowmatch",
+            "ctrl_img_1": control_two.resolve().as_posix(),
+            "ctrl_img_2": control_three.resolve().as_posix(),
+        },
+    ]
+
+
+def test_preview_samples_map_independent_generation_settings(tmp_path):
+    data = _source(tmp_path)
+    data["preview_samples"] = [
+        {
+            "prompt": "first",
+            "control_images": [],
+            "width": 768,
+            "height": 1024,
+            "seed": 11,
+            "guidance_scale": 3,
+            "sample_steps": 18,
+            "network_multiplier": 0.8,
+            "sampler": "flowmatch",
+            "neg": "blurry, low quality",
+        }
+    ]
+
+    adapted = adapt_config(data, _runtime(tmp_path), "run-1", "klein-4b")
+
+    assert _process(adapted)["sample"]["samples"] == [
+        {
+            "prompt": "first",
+            "width": 768,
+            "height": 1024,
+            "seed": 11,
+            "guidance_scale": 3,
+            "sample_steps": 18,
+            "network_multiplier": 0.8,
+            "sampler": "flowmatch",
+            "neg": "blurry, low quality",
+        }
+    ]
 
 
 def test_max_grad_norm_mapped(tmp_path):
@@ -192,6 +325,41 @@ def test_local_dit_file_wrong_name_warns(tmp_path):
         _source(tmp_path, pretrained_model_name_or_path=str(dit)), _runtime(tmp_path), "run-1", "klein-4b"
     )
     assert any("不一致" in w for w in adapted.warnings)
+
+
+def test_explicit_vae_file_is_mapped_to_model_config(tmp_path):
+    vae = tmp_path / "assets" / "custom-vae.safetensors"
+    vae.parent.mkdir(parents=True)
+    vae.write_bytes(b"")
+
+    adapted = adapt_config(_source(tmp_path, vae=str(vae)), _runtime(tmp_path), "run-1", "klein-4b")
+
+    assert _process(adapted)["model"]["vae_path"] == vae.resolve().as_posix()
+
+
+def test_model_source_directory_keeps_repository_directory(tmp_path):
+    model_dir = tmp_path / "models" / "FLUX.2-klein-base-4B"
+    model_dir.mkdir(parents=True)
+
+    adapted = adapt_config(
+        _source(tmp_path, model_source="local-directory", dit=str(model_dir)),
+        _runtime(tmp_path),
+        "run-1",
+        "klein-4b",
+    )
+
+    assert _process(adapted)["model"]["name_or_path"] == model_dir.resolve().as_posix()
+
+
+def test_model_source_hf_repo_keeps_repository_id(tmp_path):
+    adapted = adapt_config(
+        _source(tmp_path, model_source="hf-repo", dit="black-forest-labs/FLUX.2-klein-base-4B"),
+        _runtime(tmp_path),
+        "run-1",
+        "klein-4b",
+    )
+
+    assert _process(adapted)["model"]["name_or_path"] == "black-forest-labs/FLUX.2-klein-base-4B"
 
 
 def test_epochs_rejected_without_steps(tmp_path):

@@ -40,6 +40,8 @@ export interface FormSection {
   id: string
   title: string
   fields: FormField[]
+  group?: string
+  order?: number
 }
 
 export interface AdaptedSchema {
@@ -47,6 +49,8 @@ export interface AdaptedSchema {
   hash: string
   schema: Schema
   sections: FormSection[]
+  capabilities: string[]
+  task?: string
 }
 
 type SchemaRecord = Schema & {
@@ -85,12 +89,19 @@ export function executeSchemaSources(sources: SchemaSource[], name: string): Ada
   const shared = sharedSource ? execute(sharedSource.schema) : undefined
   const schema = execute(target.schema, shared) as SchemaRecord
   if (typeof schema !== "function" || !schema.type) throw new Error(i18n.global.t("schema.invalid", { name }))
+  const extra = schema.meta?.extra
+  const metadata = extra && typeof extra === "object" ? extra as Record<string, unknown> : {}
+  const capabilities = Array.isArray(metadata.capabilities)
+    ? metadata.capabilities.filter((value): value is string => typeof value === "string")
+    : []
 
   return {
     name,
     hash: target.hash,
     schema,
     sections: buildSections(schema),
+    capabilities,
+    task: typeof metadata.task === "string" ? metadata.task : undefined,
   }
 }
 
@@ -122,6 +133,8 @@ function fieldFrom(key: string, schema: SchemaRecord, conditions: FormCondition[
       key,
       type: "string",
       description: description(schema.meta),
+      role: schema.meta.role,
+      extra: schema.meta.extra,
       defaultValue: explicitDefault(schema),
       required: schema.meta.required,
       hidden: schema.meta.hidden,
@@ -171,7 +184,15 @@ function buildSections(schema: SchemaRecord) {
   const roots = schema.type === "intersect" ? schema.list ?? [] : [schema]
   const sections: FormSection[] = []
   let unnamed = 0
-  const push = (title: string | undefined, fields: FormField[]) => {
+  const sectionMeta = (node: SchemaRecord) => {
+    const extra = node.meta?.extra
+    const metadata = extra && typeof extra === "object" ? extra as Record<string, unknown> : {}
+    return {
+      group: typeof metadata.group === "string" ? metadata.group : undefined,
+      order: typeof metadata.order === "number" ? metadata.order : undefined,
+    }
+  }
+  const push = (title: string | undefined, fields: FormField[], node: SchemaRecord) => {
     if (!fields.length) return
     const previous = sections.at(-1)
     if (!title && previous) {
@@ -179,7 +200,7 @@ function buildSections(schema: SchemaRecord) {
       return
     }
     const resolved = title || i18n.global.t("schema.advancedSection")
-    sections.push({ id: `${resolved}-${unnamed++}`, title: resolved, fields })
+    sections.push({ id: `${resolved}-${unnamed++}`, title: resolved, fields, ...sectionMeta(node) })
   }
   const walk = (node: SchemaRecord) => {
     const title = description(node.meta)
@@ -187,10 +208,31 @@ function buildSections(schema: SchemaRecord) {
       for (const child of node.list ?? []) walk(child)
       return
     }
-    push(title, collectFields(node))
+    push(title, collectFields(node), node)
   }
   for (const root of roots) walk(root)
+  const defaultOrder: Record<string, number> = {
+    model: 10,
+    model_type: 20,
+    dataset: 30,
+    save: 40,
+    training: 50,
+    optimizer: 60,
+    network: 70,
+    preview: 80,
+    memory: 90,
+    logs: 100,
+    advanced: 110,
+    distributed: 120,
+  }
   return sections
+    .map((section, index) => ({ section, index }))
+    .sort((left, right) => {
+      const leftOrder = left.section.order ?? defaultOrder[left.section.group || ""] ?? 1000
+      const rightOrder = right.section.order ?? defaultOrder[right.section.group || ""] ?? 1000
+      return leftOrder - rightOrder || left.index - right.index
+    })
+    .map(({ section }) => section)
 }
 
 export function isFieldActive(field: FormField, model: FormModel) {
@@ -225,8 +267,11 @@ export function serializeModel(schema: AdaptedSchema, model: FormModel) {
   for (const field of schema.sections.flatMap((section) => section.fields)) {
     if (!isFieldActive(field, model)) continue
     const value = field.type === "const" ? field.constValue : model[field.key]
-    if (value === undefined || value === "" || (Array.isArray(value) && !value.length)) continue
-    output[field.key] = cloneFormValue(value)
+    const normalizedValue = field.role === "paired-directories" && Array.isArray(value)
+      ? value.filter((item) => typeof item !== "string" || item.trim())
+      : value
+    if (normalizedValue === undefined || normalizedValue === "" || (Array.isArray(normalizedValue) && !normalizedValue.length)) continue
+    output[field.key] = cloneFormValue(normalizedValue)
   }
   return output
 }

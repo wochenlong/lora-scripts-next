@@ -135,12 +135,13 @@ def run_preflight(
             dit_file = candidate / spec.get("dit_filename", "")
             if not dit_file.is_file():
                 errors.append(f"DiT 文件不存在: {dit_file}（变体 {variant} 期望 {spec.get('dit_filename')}）")
-            # VAE is a required local asset: runtime auto-download via hf-xet
-            # proved unreliable (CAS 401); toolkit consumes <name_or_path>/ae.safetensors.
-            if not (candidate / "ae.safetensors").is_file():
+            # Without an explicit model.vae_path, keep the legacy colocated
+            # VAE convention for old configs.
+            colocated_vae = candidate / "ae.safetensors"
+            if not model.get("vae_path") and not colocated_vae.is_file():
                 errors.append(
-                    f"VAE 未就位: {candidate / 'ae.safetensors'}。"
-                    "请在「训练用模型」区下载 VAE（须与 DiT 同目录）"
+                    f"VAE 未就位: {colocated_vae}。"
+                    "请在「训练用模型」区填写或下载 VAE"
                 )
         elif not candidate.is_file():
             # Anything that is neither an existing path nor a syntactically
@@ -155,7 +156,14 @@ def run_preflight(
                 facts["dit_source"] = "huggingface"
                 warnings.append(f"DiT 将按 HF repo 下载: {name_or_path}（需网络/HF 镜像可达）")
     facts["text_encoder"] = te_path or spec.get("text_encoder", "")
-    facts["vae"] = "ae.safetensors（与 DiT 同目录）"
+    vae_path = str(model.get("vae_path") or "").strip()
+    if vae_path:
+        vae_file = Path(vae_path)
+        facts["vae"] = vae_path
+        if not vae_file.is_file():
+            errors.append(f"VAE 文件不存在: {vae_file}")
+    else:
+        facts["vae"] = "ae.safetensors（旧配置：与 DiT 同目录）"
     if not te_path:
         errors.append("缺少本地文本编码器目录（text_encoder），请在「训练用模型」区下载")
     else:

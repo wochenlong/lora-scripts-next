@@ -19,6 +19,7 @@ _LINUX_DENY_PREFIXES = (
 )
 
 _MODEL_NAME_RE = re.compile(r"\.(safetensors|ckpt|pt)$", re.IGNORECASE)
+_IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
 
 
 def gui_picker_available() -> bool:
@@ -125,6 +126,29 @@ def resolve_list_path(raw: Optional[str]) -> Path:
         if resolved.parent.exists():
             return resolved.parent.resolve()
         raise NotADirectoryError(f"不是目录: {resolved}")
+    return resolved
+
+
+def resolve_image_path(raw: str) -> Path:
+    """Resolve a local image path using the same deny rules as the web picker."""
+    text = str(raw or "").strip().replace("\\", "/")
+    if not text:
+        raise FileNotFoundError("图片路径为空")
+    path = Path(text)
+    if not path.is_absolute():
+        path = _project_cwd() / path
+    try:
+        resolved = path.resolve()
+    except OSError as exc:
+        raise ValueError(f"无法解析图片路径: {text}") from exc
+    if _is_denied(resolved):
+        raise PermissionError(f"不允许读取该图片: {resolved}")
+    if not resolved.exists():
+        raise FileNotFoundError(f"图片不存在: {resolved}")
+    if not resolved.is_file():
+        raise ValueError(f"图片路径不是文件: {resolved}")
+    if resolved.suffix.lower() not in _IMAGE_EXTENSIONS:
+        raise ValueError(f"只支持图片文件: {', '.join(sorted(_IMAGE_EXTENSIONS))}")
     return resolved
 
 

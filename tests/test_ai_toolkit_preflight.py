@@ -111,6 +111,20 @@ def test_preflight_missing_vae_is_error(tmp_path):
     assert any("ae.safetensors" in e for e in result.errors)
 
 
+def test_preflight_accepts_explicit_vae_path_outside_dit_directory(tmp_path):
+    source = _setup(tmp_path, with_vae=False)
+    vae = tmp_path / "assets" / "custom-vae.safetensors"
+    vae.parent.mkdir(parents=True)
+    vae.write_bytes(b"")
+    source["vae"] = str(vae)
+
+    adapted = adapt_config(source, _runtime(tmp_path), "run-1", "klein-4b")
+    result = run_preflight(adapted.config, _runtime(tmp_path), "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
+
+    assert result.ok, result.errors
+    assert result.facts["vae"] == vae.resolve().as_posix()
+
+
 def test_preflight_missing_te_weights_is_error(tmp_path):
     runtime = _runtime(tmp_path)
     source = _setup(tmp_path)

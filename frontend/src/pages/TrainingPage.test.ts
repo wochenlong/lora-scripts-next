@@ -55,6 +55,7 @@ const schema: AdaptedSchema = {
   name: "training",
   hash: "training",
   schema: Schema.object({}),
+  capabilities: [],
   sections: [{
     id: "main",
     title: "Main",
@@ -118,7 +119,7 @@ function mountPage() {
       directives: { loading: {} },
       stubs: {
         DynamicSchemaForm: DynamicSchemaFormStub,
-        ModelAssetsTools: { template: "<div />" },
+        ModelAssetsTools: { template: "<div class='model-assets-tools-stub' />" },
         SectionToc: { template: "<div />" },
         RouterLink: { props: ["to"], template: "<a><slot /></a>" },
         "el-dialog": { template: "<div><slot /></div>" },
@@ -142,6 +143,26 @@ afterEach(() => {
 })
 
 describe("TrainingPage single-field reset", () => {
+  it("does not render model asset actions for Klein", async () => {
+    const wrapper = mount(TrainingPage, {
+      props: { title: "Klein", area: "AI Toolkit", schemaName: "klein-lora" },
+      global: {
+        plugins: [i18n, createPinia()],
+        stubs: {
+          DynamicSchemaForm: DynamicSchemaFormStub,
+          ModelAssetsTools: { template: "<div class='model-assets-tools-stub' />" },
+          SectionToc: { template: "<div />" },
+          RouterLink: { props: ["to"], template: "<a><slot /></a>" },
+          "el-dialog": { template: "<div><slot /></div>" },
+        },
+      },
+    })
+    await flushPromises()
+
+    expect(wrapper.find(".model-assets-tools-stub").exists()).toBe(false)
+    wrapper.unmount()
+  })
+
   it("restores module override defaults and clears stale field errors without changing other values", async () => {
     const wrapper = mountPage()
     await flushPromises()

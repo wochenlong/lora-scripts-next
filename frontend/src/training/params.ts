@@ -1,11 +1,11 @@
-import { cloneFormModel, type FormModel, type FormValue } from "../schema/adapter"
+import { cloneFormModel, cloneFormValue, type FormModel, type FormValue } from "../schema/adapter"
 import { i18n } from "../i18n"
 import { parse } from "smol-toml"
 
 const FLOAT_PARAMS = ["learning_rate", "unet_lr", "text_encoder_lr", "learning_rate_te", "learning_rate_te1", "learning_rate_te2", "sigmoid_scale", "guidance_scale"]
 const OPTIONAL_PARAMS = ["vae", "reg_data_dir", "network_weights", "noise_offset", "multires_noise_iterations", "multires_noise_discount", "caption_dropout_rate", "network_dropout", "scale_weight_norms", "gpu_ids"]
 const PATH_PARAMS = ["pretrained_model_name_or_path", "vae", "qwen3", "llm_adapter_path", "t5_tokenizer_path", "resume", "train_data_dir", "reg_data_dir", "output_dir", "logging_dir", "network_weights", "sample_prompts"]
-const UI_PARAMS = ["lycoris_algo", "conv_dim", "conv_alpha", "dropout", "dylora_unit", "lokr_factor", "train_norm", "down_lr_weight", "mid_lr_weight", "up_lr_weight", "block_lr_zero_threshold", "enable_block_weights", "network_args_custom", "optimizer_args_custom", "enable_base_weight", "prodigy_d0", "prodigy_d_coef", "ui_custom_params"]
+const UI_PARAMS = ["task", "lycoris_algo", "conv_dim", "conv_alpha", "dropout", "dylora_unit", "lokr_factor", "train_norm", "down_lr_weight", "mid_lr_weight", "up_lr_weight", "block_lr_zero_threshold", "enable_block_weights", "network_args_custom", "optimizer_args_custom", "enable_base_weight", "prodigy_d0", "prodigy_d_coef", "ui_custom_params"]
 const SD_PARAMS = ["v2", "v_parameterization", "scale_v_pred_loss_like_noise_pred", "clip_skip", "learning_rate_te", "stop_text_encoder_training"]
 const SDXL_PARAMS = ["learning_rate_te1", "learning_rate_te2"]
 const PREVIEW_PARAMS = ["prompt_file", "sample_width", "sample_height", "sample_cfg", "sample_seed", "sample_steps", "sample_sampler", "randomly_choice_prompt", "sample_at_first", "sample_every_n_epochs", "sample_every_n_steps", "positive_prompts", "negative_prompts", "sample_prompts"]
@@ -84,6 +84,21 @@ export function sanitizePersistedDraft(saved: FormModel, defaults: FormModel): F
   }
   for (const key of CROSS_SCHEMA_DENY_KEYS) delete draft[key]
   return draft
+}
+
+/** Move values that were left at a known old default to the current default. */
+export function migrateLegacyDefaultValues(
+  saved: FormModel,
+  defaults: FormModel,
+  legacyDefaults: FormModel,
+): FormModel {
+  const migrated = cloneFormModel(saved)
+  for (const [key, legacyValue] of Object.entries(legacyDefaults)) {
+    if (key in defaults && migrated[key] === legacyValue) {
+      migrated[key] = cloneFormValue(defaults[key])
+    }
+  }
+  return migrated
 }
 
 function values(value: FormValue) {
