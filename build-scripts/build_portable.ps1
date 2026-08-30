@@ -21,7 +21,9 @@ param(
     # release URL (GitHub release assets), verified against the catalog-pinned
     # sha256. Set MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR=<base> for intranet mirrors.
     [switch]$MarketplaceCatalogOnly,
-    [string]$MarketplacePlatform = "win32-x64"
+    [string]$MarketplacePlatform = "win32-x64",
+    # Catalog-only bundles: the live release channel the host should trust.
+    [string]$MarketplaceCatalogUrl = "https://github.com/MikumikuDAIFans/next-trainer-agent-assets/releases/download/v0.3.8/catalog.json"
 )
 
 $ErrorActionPreference = "Stop"
@@ -570,6 +572,18 @@ if ($SkipMarketplace) {
                 "Intranet mirror: MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR serves <mirror>/<file>."
             ) -join "`r`n"
             Set-Content -LiteralPath (Join-Path $marketplaceDst "README-install.txt") -Value $note -Encoding UTF8
+            # The host fail-closes a pure FILE catalog by design; a URL channel is
+            # installable (catalog pins size+sha256, package downloads verified).
+            # Baked channel env + bundled catalog/trust as offline fallback.
+            $envBat = @(
+                "@echo off",
+                ":: Written by build_portable.ps1 (-MarketplaceCatalogOnly): live plugin release channel.",
+                'set "MIKAZUKI_MARKETPLACE_CATALOG_URL=' + '$MarketplaceCatalogUrl' + '"',
+                'set "MIKAZUKI_MARKETPLACE_CATALOG=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\catalog.json"',
+                'set "MIKAZUKI_MARKETPLACE_TRUST=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\trust.json"'
+            ) -join "`r`n"
+            Set-Content -LiteralPath (Join-Path $portableDir "marketplace-env.bat") -Value $envBat -Encoding ASCII
+            Write-Host "  marketplace-env.bat wired to the release channel" -ForegroundColor Green
             if ($catalogForm -ne "remote") {
                 Write-Host "  WARNING: catalog-only bundle with a LOCAL-form catalog; installs need" ;
                 Write-Host "           MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR at runtime." -ForegroundColor Yellow
