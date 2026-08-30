@@ -62,3 +62,9 @@ triton-windows<3.4; sys_platform == "win32" # skip_verify
 
 optimum-quanto
 nvidia-ml-py
+
+# marketplace trust-v2: Ed25519 verification for the plugin catalog and the managed-assets
+# index (mikazuki/plugin_marketplace/trust.py). Security-critical verify path: declared
+# explicitly, never relied on as a transitive dependency.
+cryptography>=41
+

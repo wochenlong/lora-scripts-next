@@ -120,8 +120,11 @@ class MarketplaceEntry(StrictModel):
 
     @validator("signature")
     def validate_signature(cls, value: str) -> str:
-        if value and not re.fullmatch(r"[a-fA-F0-9]{64}", value):
-            raise ValueError("signature must contain exactly 64 hexadecimal characters")
+        # 64 hex = HMAC-SHA256 (trust v1 keys), 128 hex = Ed25519 (trust v2).
+        # The trust root pins each key's algorithm; the verifier enforces the
+        # exact shape, so a wrong-length signature never reaches the check.
+        if value and not re.fullmatch(r"[a-fA-F0-9]{64}([a-fA-F0-9]{64})?", value):
+            raise ValueError("signature must contain 64 (HMAC) or 128 (Ed25519) hexadecimal characters")
         return value
 
     @validator("package_url")
@@ -193,8 +196,9 @@ class MarketplaceCatalog(StrictModel):
 
     @validator("signature")
     def validate_catalog_signature(cls, value: str) -> str:
-        if value and not re.fullmatch(r"[a-fA-F0-9]{64}", value):
-            raise ValueError("catalog signature must contain exactly 64 hexadecimal characters")
+        # 64 hex = HMAC-SHA256 (trust v1 keys), 128 hex = Ed25519 (trust v2).
+        if value and not re.fullmatch(r"[a-fA-F0-9]{64}([a-fA-F0-9]{64})?", value):
+            raise ValueError("catalog signature must contain 64 (HMAC) or 128 (Ed25519) hexadecimal characters")
         return value
 
     @validator("entries")
