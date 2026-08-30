@@ -1,8 +1,10 @@
 # 整合包补充说明
 
-面向 **Next Trainer 便携整合包**（归档名 `Next-Trainer-v*.7z`；包内目录仍为 `SD-Trainer/`）用户的进阶说明。快速上手只需 README 中的三步：下载 → 双击 `run_gui.bat` → 浏览器开练。
+面向 **Next Trainer 便携整合包**（归档名 `Next-Trainer-v*.7z`）用户的进阶说明。快速上手：下载 → 双击 `启动.bat` → 浏览器开练。
 
-当前最新版：**v2.8.2**（[Releases](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.8.2)）。
+当前最新正式版：**v3.0.0**（[GitHub Release](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0) · [魔搭 Next-Lab/next-trainer-releases](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases)）。
+
+> **Krea 2**：请用 **musubi** 包（魔搭 `releases/v3.0.0/Next-Trainer-v3.0.0-musubi.7z`），步骤见 **[portable-1.5-krea2-guide.md](portable-1.5-krea2-guide.md)**。
 
 ---
 
@@ -80,8 +82,8 @@ Anima Fast 在整合包内也可通过侧栏 **Anima LoRA → Fast 模式** 页�
 
 | 方式 | 脚本 | 说明 |
 |------|------|------|
-| Release 合并（推荐） | `Update-SD-Trainer-Release.bat` | 下载最新 Release 7z 并合并 |
-| Git 快进 | `Update-SD-Trainer.bat` | 需 `SD-Trainer/.git` 存在 |
+| Release 合并（推荐） | `Update-Next-Trainer-Release.bat` | 下载最新 Release 7z 并合并 |
+| Git 快进 | `Update-Next-Trainer.bat` | 需 `Next-Trainer/.git` 存在 |
 
 用户数据（`sd-models/`、`output/`、`logs/`、`config/autosave/`）不会被覆盖。
 

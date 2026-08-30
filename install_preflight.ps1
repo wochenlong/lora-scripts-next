@@ -30,7 +30,7 @@ function Test-InstallPython {
     if (-not (Get-Command python -ErrorAction SilentlyContinue)) {
         Write-Host ""
         Write-Host "[错误] 找不到 python 命令。请安装 Python 3.10 64 位并加入 PATH。" -ForegroundColor Red
-        Write-Host "  或直接使用 Releases 里的 SD-Trainer 整合包（无需自己装 Python）。"
+        Write-Host "  或直接使用 Releases 里的 Next-Trainer 整合包（无需自己装 Python）。"
         Write-Host ""
         return $false
     }

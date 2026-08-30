@@ -143,8 +143,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 
 | 输出 | 路径 |
 |------|------|
-| 目录 | `build\SD-Trainer-Portable\` |
-| 7z | `build\SD-Trainer-v3.0.0.7z`（当前 lite 脚本仍用此文件名；上传时可改名为 `Next-Trainer-v3.0.0-lite.7z`） |
+| 目录 | `build\Next-Trainer-Portable\` |
+| 7z | `build\Next-Trainer-v3.0.0.7z`（当前 lite 脚本仍用此文件名；上传时可改名为 `Next-Trainer-v3.0.0-lite.7z`） |
 
 常用参数：`-Skip7z`、`-SkipTaggerPrefetch`、`-TaggerCacheSource <含 tagger-models 的旧包或仓库>`。
 
@@ -160,7 +160,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 
 | 输出 | 路径 |
 |------|------|
-| 目录 | `build\SD-Trainer-Portable\`（根目录为 `启动.bat` / `检查更新.bat` / `说明.txt`） |
+| 目录 | `build\Next-Trainer-Portable\`（根目录为 `启动.bat` / `检查更新.bat` / `说明.txt`） |
 | 7z | `build\Next-Trainer-v3.0.0-kohya-musubi.7z` |
 | 日志 | `build\portable-2026-logs\` |
 
@@ -185,7 +185,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_portable_release.ps1 `
-  -PortableRoot .\build\SD-Trainer-Portable `
+  -PortableRoot .\build\Next-Trainer-Portable `
   -ArchivePath .\build\Next-Trainer-v3.0.0-kohya.7z `
   -ExpectedVersion 3.0.0
 
@@ -234,7 +234,7 @@ gh release create v3.0.0 `
 
 ## 7. 禁止事项
 
-- 改名/移动契约：`python_embeded/`、`SD-Trainer/`、`gui.py`、`run_gui.bat` 等（见 [`repo-layout.md`](repo-layout.md)）  
+- 改名/移动契约：`python_embeded/`、`Next-Trainer/`、`gui.py`、`run_gui.bat` 等（见 [`repo-layout.md`](repo-layout.md)）  
 - 把完整 `.git` 历史打进包（应用浅克隆元数据；体积异常大要返工）  
 - 用脏工作区、本机模型、Token、`doc/local` 私货进包  
 - 预装 Fast venv「图省事」  

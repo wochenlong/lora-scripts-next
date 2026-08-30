@@ -98,8 +98,8 @@ def find_project_root(start: Path | None = None) -> Path:
         if (root / "gui.py").is_file() and (root / "mikazuki" / "musubi_backend").is_dir():
             return root
     raise SystemExit(
-        "Cannot locate SD-Trainer project root (need gui.py and mikazuki/musubi_backend). "
-        "Run from repo / SD-Trainer directory or pass --project-root."
+        "Cannot locate Next-Trainer project root (need gui.py and mikazuki/musubi_backend). "
+        "Run from repo / Next-Trainer directory or pass --project-root."
     )
 
 
@@ -107,7 +107,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description="Install musubi-tuner plugin (extensions/musubi_tuner) for Krea 2 training."
     )
-    parser.add_argument("--project-root", type=Path, default=None, help="SD-Trainer root (default: auto-detect)")
+    parser.add_argument("--project-root", type=Path, default=None, help="Next-Trainer root (default: auto-detect)")
     parser.add_argument("--source-root", type=Path, default=None, help="Existing kohya-ss/musubi-tuner clone")
     parser.add_argument("--source-commit", default="", help="Pin upstream commit/tag")
     parser.add_argument("--cuda-extra", default="", help="Torch wheel flavor: cu124/cu128/cu130/cu132 (default: cu128)")

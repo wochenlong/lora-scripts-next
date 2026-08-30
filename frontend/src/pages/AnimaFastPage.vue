@@ -144,7 +144,7 @@ onBeforeUnmount(() => {
             <a href="https://github.com/sorryhyun/anima_lora" target="_blank" rel="noreferrer">sorryhyun/anima_lora</a>
           </template>
           <template #notice>
-            <a href="https://github.com/wochenlong/lora-scripts-next/blob/dev/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
+            <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
           </template>
         </i18n-t>
       </p>
@@ -174,7 +174,7 @@ onBeforeUnmount(() => {
               <a href="https://github.com/sorryhyun/anima_lora" target="_blank" rel="noreferrer">sorryhyun/anima_lora</a>
             </template>
             <template #notice>
-              <a href="https://github.com/wochenlong/lora-scripts-next/blob/dev/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
+              <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
             </template>
           </i18n-t>
         </p>

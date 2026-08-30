@@ -26,7 +26,7 @@ def _run_normalize(raw: str) -> str:
 
 def test_portable_update_batch_templates_use_crlf() -> None:
     templates = REPO_ROOT / "build-scripts" / "templates"
-    for name in ("Update-SD-Trainer-Release.bat", "Update-SD-Trainer.bat"):
+    for name in ("Update-Next-Trainer-Release.bat", "Update-Next-Trainer.bat"):
         data = (templates / name).read_bytes()
         assert b"\r\n" in data, f"{name} must use CRLF for Windows cmd.exe"
         assert data.count(b"\n") == data.count(b"\r\n"), f"{name} must not use LF-only endings"
@@ -64,7 +64,7 @@ def test_normalize_strips_trailing_backslash_and_stray_quote() -> None:
 
 def test_update_from_release_dry_run_accepts_batch_style_path(tmp_path: Path) -> None:
     portable_root = tmp_path / "PortableRoot"
-    trainer = portable_root / "SD-Trainer"
+    trainer = portable_root / "Next-Trainer"
     trainer.mkdir(parents=True)
     (trainer / "gui.py").write_text("# stub\n", encoding="utf-8")
 

@@ -9,7 +9,7 @@
 | 7z 打入本机 `config/autosave`、私有 preset、日志 | 用户隐私泄露、配置串号 | 打包前确认来源为干净 worktree；`7z l` 抽查；规范禁止带入 `doc/`、`data/` |
 | 整合包缺 `frontend/dist` 图片或静态资源 | 主页裂图、引导异常 | 对照 `assets/readme`、发布 checklist |
 | 整合包 `mikazuki` 与 main 不同步 | 缺 API（如 train tasks）、P0 行为不一致 | 热修后同步 main + 重打 7z；或明确版本说明 |
-| 用户 `git pull` 与纯 7z 用户路径不一致 | 更新后仍旧 bug | Release 说明写清「需新 7z」或 `Update-SD-Trainer.bat` |
+| 用户 `git pull` 与纯 7z 用户路径不一致 | 更新后仍旧 bug | Release 说明写清「需新 7z」或 `Update-Next-Trainer.bat` |
 | 根目录契约 bat/sh 被改名或删除 | 双击无法启动、AutoDL 开机失败 | [repo-layout.md](../repo-layout.md)；PR 需主维护者审批 |
 
 ## 端口与子服务

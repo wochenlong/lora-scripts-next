@@ -1718,12 +1718,12 @@ async def list_train_tasks():
 
 
 @router.get("/check_update")
-async def check_update():
-    """Non-blocking update check against GitHub Releases."""
+async def check_update(force: bool = False):
+    """Update check against GitHub Releases (stable channel only)."""
     from mikazuki.update_check import get_cached_result, check_update as do_check
-    result = get_cached_result()
+    result = None if force else get_cached_result()
     if result is None:
-        result = await asyncio.to_thread(do_check)
+        result = await asyncio.to_thread(do_check, force=force)
     return APIResponseSuccess(data=result)
 
 

@@ -79,9 +79,9 @@ class ConfigImportTests(unittest.TestCase):
     def test_infer_anima_from_model_paths_only(self):
         config = {
             "model_train_type": "sdxl-lora",
-            "pretrained_model_name_or_path": "E:/SD-Trainer/sd-models/anima/anima-base-v1.0.safetensors",
-            "vae": "E:/SD-Trainer/sd-models/anima/qwen_image_vae.safetensors",
-            "qwen3": "E:/SD-Trainer/sd-models/anima/qwen_3_06b_base.safetensors",
+            "pretrained_model_name_or_path": "E:/Next-Trainer/sd-models/anima/anima-base-v1.0.safetensors",
+            "vae": "E:/Next-Trainer/sd-models/anima/qwen_image_vae.safetensors",
+            "qwen3": "E:/Next-Trainer/sd-models/anima/qwen_3_06b_base.safetensors",
         }
         analysis = analyze_train_type(config)
         self.assertEqual(analysis.train_type, "anima-lora")

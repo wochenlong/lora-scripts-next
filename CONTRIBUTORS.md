@@ -30,7 +30,11 @@
     <tr>
       <td>前端</td>
       <td><a href="https://github.com/IryNeko">@IryNeko</a></td>
-      <td>Vue3 前端重写 · 公开 frontend 源码 · 训练 / 数据集 / 任务 / 设置工作台 · 支撑 dev 内测线</td>
+      <td>
+        Vue3 前端重写与持续迭代 · 公开 <code>frontend</code> 源码 · 训练 / 数据集 / 任务 / 设置工作台<br />
+        数据集标签筛选与编辑体验 · 任务排队 / 持久化 / 重试 · 任务页训练监控入口 · 打标↔编辑 KeepAlive 状态保留<br />
+        支撑 <code>dev</code> 内测线并随 <code>main</code> 3.0.0 转正落地
+      </td>
       <td><a href="https://github.com/wochenlong/lora-scripts-next/pull/209">#209</a></td>
     </tr>
     <tr>

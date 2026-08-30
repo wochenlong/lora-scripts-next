@@ -58,6 +58,15 @@ const credits = [
     </section>
 
     <section>
+      <h2>{{ t("about.lineageTitle") }}</h2>
+      <i18n-t keypath="about.lineageDesc" tag="p" scope="global">
+        <template #akegarasu>
+          <a href="https://github.com/Akegarasu/lora-scripts" target="_blank" rel="noreferrer">Akegarasu/lora-scripts</a>
+        </template>
+      </i18n-t>
+    </section>
+
+    <section>
       <h2>{{ t("about.creditsTitle") }}</h2>
       <p>{{ t("about.creditsIntro") }}</p>
       <ul class="about-credits">
@@ -69,10 +78,10 @@ const credits = [
       <p>
         <i18n-t keypath="about.creditsNotice" tag="span" scope="global">
           <template #notice>
-            <a href="https://github.com/wochenlong/lora-scripts-next/blob/dev/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
+            <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/NOTICE.md" target="_blank" rel="noreferrer">NOTICE.md</a>
           </template>
           <template #license>
-            <a href="https://github.com/wochenlong/lora-scripts-next/blob/dev/LICENSE" target="_blank" rel="noreferrer">LICENSE</a>
+            <a href="https://github.com/wochenlong/lora-scripts-next/blob/main/LICENSE" target="_blank" rel="noreferrer">LICENSE</a>
           </template>
         </i18n-t>
       </p>

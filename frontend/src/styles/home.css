@@ -1,27 +1,257 @@
 /* home — split from layout.css / features.css (issue #235) */
 .home-page {
-  max-width: 1240px;
+  /* Mid size: wider than the old postcard, not full-bleed. */
+  max-width: 1320px;
+  width: 100%;
   margin: 0 auto;
-  padding: 64px 6vw 38px;
+  padding: 28px 28px 24px;
+  box-sizing: border-box;
+}
+
+.hero-carousel {
+  position: relative;
+  overflow: hidden;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 18px;
+  box-shadow: var(--shadow);
+}
+
+.hero-track {
+  display: flex;
+  height: 100%;
+  transition: transform 0.45s ease;
+  will-change: transform;
+}
+
+.hero-slide {
+  flex: 0 0 100%;
+  min-width: 100%;
+  height: 100%;
 }
 
 .hero {
   position: relative;
   display: grid;
-  grid-template-columns: 1.3fr 0.7fr;
-  min-height: 430px;
+  grid-template-columns: 1.25fr 0.75fr;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
   overflow: hidden;
-  background: var(--surface);
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.hero-poster {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+  color: inherit;
+  text-decoration: none;
+  background: #0b1218;
+}
+
+.hero-promo {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+  height: 100%;
+  min-height: 0;
+  padding: clamp(28px, 5vw, 56px);
+  box-sizing: border-box;
+  overflow: hidden;
+  color: #1a1630;
+  text-decoration: none;
+  /* ModelScope community poster: light paper + purple + mint */
+  background:
+    radial-gradient(ellipse 55% 60% at 88% 18%, rgba(93, 76, 232, 0.1), transparent 62%),
+    radial-gradient(ellipse 40% 50% at 12% 85%, rgba(72, 209, 204, 0.14), transparent 58%),
+    linear-gradient(180deg, #f7f6fb 0%, #f3f1f8 48%, #eef2f6 100%);
+}
+
+.hero-promo::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(93, 76, 232, 0.045) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(93, 76, 232, 0.045) 1px, transparent 1px);
+  background-size: 44px 44px;
+  mask-image: linear-gradient(125deg, transparent 8%, #000 70%);
+  pointer-events: none;
+  opacity: 0.55;
+}
+
+.hero-promo-copy {
+  position: relative;
+  z-index: 1;
+  max-width: 40rem;
+}
+
+.hero-promo-copy .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  margin-bottom: 16px;
+  padding: 0 12px;
+  color: #fff;
+  border-radius: 999px;
+  background: #5d4ce8;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: none;
+}
+
+.hero-promo-copy h2 {
+  margin: 0 0 14px;
+  color: #5d4ce8;
+  font-size: clamp(1.75rem, 3.4vw, 2.75rem);
+  font-weight: 800;
+  line-height: 1.15;
+  letter-spacing: -0.02em;
+}
+
+.hero-promo-copy p {
+  margin: 0 0 22px;
+  max-width: 34rem;
+  color: #3a3558;
+  font-size: clamp(0.95rem, 1.4vw, 1.1rem);
+  line-height: 1.55;
+}
+
+.hero-promo-cta {
+  display: inline-flex;
+  align-items: center;
+  height: 40px;
+  padding: 0 18px;
+  color: #fff;
+  border-radius: 999px;
+  background: #5d4ce8;
+  box-shadow: 0 8px 20px rgba(93, 76, 232, 0.28);
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: transform 0.2s ease, background 0.2s ease, box-shadow 0.2s ease;
+}
+
+.hero-promo:hover .hero-promo-cta,
+.hero-promo:focus-visible .hero-promo-cta {
+  background: #4b3ad6;
+  box-shadow: 0 10px 24px rgba(93, 76, 232, 0.36);
+  transform: translateX(3px);
+}
+
+.hero-poster img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* Full art visible; non-16:9 (e.g. 2:1 event art) letterboxes. */
+  object-fit: contain;
+  object-position: center;
+}
+
+.poster-meta {
+  position: absolute;
+  left: 22px;
+  right: 22px;
+  bottom: 18px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+}
+
+.poster-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 12px;
+  color: #f4fbff;
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  border-radius: 999px;
+  background: rgba(12, 24, 32, 0.55);
+  backdrop-filter: blur(8px);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.hero-controls {
+  position: absolute;
+  right: 18px;
+  bottom: 16px;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.hero-nav {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  color: var(--text);
   border: 1px solid var(--border);
-  border-radius: 22px;
-  box-shadow: var(--shadow);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(8px);
+  cursor: pointer;
+  font-size: 18px;
+  line-height: 1;
+}
+
+.hero-nav:hover {
+  border-color: var(--accent);
+  color: var(--accent-dark);
+}
+
+.hero-dots {
+  display: flex;
+  gap: 6px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--surface) 86%, transparent);
+  backdrop-filter: blur(8px);
+}
+
+.hero-dot {
+  width: 8px;
+  height: 8px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: var(--text-faint);
+  cursor: pointer;
+  opacity: 0.45;
+}
+
+.hero-dot[aria-selected="true"] {
+  width: 18px;
+  background: var(--accent);
+  opacity: 1;
 }
 
 .hero-copy {
   z-index: 2;
   align-self: center;
-  max-width: 680px;
-  padding: 62px;
+  max-width: 720px;
+  padding: clamp(36px, 4.5vw, 56px);
 }
 
 .hero h1 {
@@ -49,6 +279,8 @@
 .hero-visual {
   position: relative;
   overflow: hidden;
+  height: 100%;
+  min-height: 0;
   background: #102833;
 }
 
@@ -100,77 +332,72 @@
   transform: translate(-50%, -50%) rotate(35deg);
 }
 
-.portal-grid {
+.portal-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
-  gap: 16px;
-  margin-top: 18px;
+  gap: 8px;
+  margin-top: 10px;
 }
 
-.portal-card {
-  position: relative;
-  min-height: 220px;
-  padding: 28px;
-  overflow: hidden;
+.portal-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 44px;
+  padding: 8px 12px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-radius: 16px;
-  transition: 0.2s ease;
+  border-radius: 10px;
+  transition: 0.15s ease;
+  text-decoration: none;
+  color: inherit;
 }
 
-.portal-card:hover {
-  transform: translateY(-3px);
+.portal-chip:hover {
   border-color: var(--accent);
   box-shadow: var(--shadow);
 }
 
-.portal-card:after {
-  content: "";
-  position: absolute;
-  right: -30px;
-  bottom: -45px;
-  width: 130px;
-  height: 130px;
-  border: 26px solid var(--accent-soft);
-  border-radius: 50%;
-}
-
-.portal-index {
+.portal-chip .portal-index {
   color: var(--text-faint);
   font:
-    11px/1 ui-monospace,
+    10px/1 ui-monospace,
     monospace;
 }
 
-.portal-card h2 {
-  margin: 34px 0 10px;
-  font-size: 20px;
+.portal-chip .portal-title {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.2;
 }
 
-.portal-card p {
-  max-width: 270px;
-  color: var(--text-soft);
-  font-size: 13px;
-  line-height: 1.65;
-}
-
-.portal-link {
-  position: absolute;
-  bottom: 26px;
+.portal-chip .portal-go {
   color: var(--accent-dark);
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
+  white-space: nowrap;
 }
 
-.portal-link b {
-  margin-left: 7px;
+/* kill old tall portal cards if any stale markup/CSS remains */
+.portal-grid,
+.portal-card,
+.portal-link {
+  display: none !important;
+}
+
+.hero-actions .primary-action,
+.hero-actions .secondary-action {
+  min-height: 34px;
+  padding: 0 14px;
+  font-size: 12px;
 }
 
 .status-strip {
   display: flex;
   justify-content: space-between;
-  margin-top: 18px;
-  padding: 14px 18px;
+  margin-top: 10px;
+  padding: 8px 12px;
   color: var(--text-faint);
   border-top: 1px solid var(--border);
   font-size: 11px;
@@ -206,6 +433,24 @@
 @media (max-width: 900px) {
   .hero {
     grid-template-columns: 1fr;
+    grid-template-rows: 1fr auto;
+    align-content: center;
+  }
+
+  .hero-visual {
+    min-height: 180px;
+    height: 40%;
+  }
+
+  .poster-meta {
+    left: 14px;
+    right: 14px;
+    bottom: 52px;
+  }
+
+  .hero-controls {
+    right: 12px;
+    bottom: 12px;
   }
 }
 
@@ -216,13 +461,7 @@
 }
 
 @media (max-width: 900px) {
-  .hero-visual {
-    min-height: 220px;
-  }
-}
-
-@media (max-width: 900px) {
-  .portal-grid {
+  .portal-strip {
     grid-template-columns: 1fr;
   }
 }
@@ -248,10 +487,6 @@
 }
 
 .hero p {
-  line-height: 1.55;
-}
-
-.portal-card p {
   line-height: 1.55;
 }
 

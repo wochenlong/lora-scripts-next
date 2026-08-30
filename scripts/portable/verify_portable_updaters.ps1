@@ -24,40 +24,40 @@ Write-Host "Portable updater verification" -ForegroundColor Cyan
 Write-Host "Root: $PortableRoot"
 Write-Host ""
 
-Test-FileExists "Update-SD-Trainer.bat" "Git updater" | Out-Null
-Test-FileExists "Update-SD-Trainer-Release.bat" "Release updater" | Out-Null
-Test-FileExists "update\update_sd_trainer.bat" "update_sd_trainer shortcut" | Out-Null
+Test-FileExists "Update-Next-Trainer.bat" "Git updater" | Out-Null
+Test-FileExists "Update-Next-Trainer-Release.bat" "Release updater" | Out-Null
+Test-FileExists "update\update_next_trainer.bat" "update_next_trainer shortcut" | Out-Null
 Test-FileExists "update\update_from_release.bat" "update_from_release shortcut" | Out-Null
-Test-FileExists "SD-Trainer\scripts\portable\update_from_release.ps1" "update_from_release.ps1" | Out-Null
-Test-FileExists "SD-Trainer\scripts\portable\UPDATER_VERSION" "UPDATER_VERSION" | Out-Null
-Test-FileExists "SD-Trainer\scripts\portable\bootstrap_portable_updaters.ps1" "bootstrap_portable_updaters.ps1" | Out-Null
-Test-FileExists "SD-Trainer\scripts\portable\portable_updater_common.ps1" "portable_updater_common.ps1" | Out-Null
-Test-FileExists "SD-Trainer\scripts\portable\show_portable_update_status.ps1" "show_portable_update_status.ps1" | Out-Null
+Test-FileExists "Next-Trainer\scripts\portable\update_from_release.ps1" "update_from_release.ps1" | Out-Null
+Test-FileExists "Next-Trainer\scripts\portable\UPDATER_VERSION" "UPDATER_VERSION" | Out-Null
+Test-FileExists "Next-Trainer\scripts\portable\bootstrap_portable_updaters.ps1" "bootstrap_portable_updaters.ps1" | Out-Null
+Test-FileExists "Next-Trainer\scripts\portable\portable_updater_common.ps1" "portable_updater_common.ps1" | Out-Null
+Test-FileExists "Next-Trainer\scripts\portable\show_portable_update_status.ps1" "show_portable_update_status.ps1" | Out-Null
 
-$gitHead = Join-Path $PortableRoot "SD-Trainer\.git\HEAD"
+$gitHead = Join-Path $PortableRoot "Next-Trainer\.git\HEAD"
 if (Test-Path $gitHead) {
-    Write-Host '[OK] SD-Trainer\.git\HEAD'
+    Write-Host '[OK] Next-Trainer\.git\HEAD'
 } else {
-    $failures += "[FAIL] SD-Trainer\.git\HEAD missing (git update will not work)"
+    $failures += "[FAIL] Next-Trainer\.git\HEAD missing (git update will not work)"
 }
 
-$gitUpdater = Join-Path $PortableRoot "Update-SD-Trainer.bat"
+$gitUpdater = Join-Path $PortableRoot "Update-Next-Trainer.bat"
 if (Test-Path $gitUpdater) {
     $bat = Get-Content $gitUpdater -Raw
     if ($bat -match 'Pulling latest code') {
-        $failures += "[FAIL] Update-SD-Trainer.bat is legacy (git pull without .git check); replace from Release or scripts\portable\templates"
+        $failures += "[FAIL] Update-Next-Trainer.bat is legacy (git pull without .git check); replace from Release or scripts\portable\templates"
     } elseif ($bat -notmatch 'not exist "\.git\\"') {
-        $failures += "[FAIL] Update-SD-Trainer.bat missing .git pre-check"
+        $failures += "[FAIL] Update-Next-Trainer.bat missing .git pre-check"
     } elseif ($bat -notmatch 'bootstrap_updater_scripts') {
-        $failures += "[FAIL] Update-SD-Trainer.bat missing updater bootstrap"
+        $failures += "[FAIL] Update-Next-Trainer.bat missing updater bootstrap"
     } elseif ($bat -notmatch 'show_portable_update_status') {
-        $failures += "[FAIL] Update-SD-Trainer.bat missing show_portable_update_status"
+        $failures += "[FAIL] Update-Next-Trainer.bat missing show_portable_update_status"
     } else {
-        Write-Host '[OK] Update-SD-Trainer.bat is current (not legacy pull-only)'
+        Write-Host '[OK] Update-Next-Trainer.bat is current (not legacy pull-only)'
     }
 }
 
-$ps1 = Join-Path $PortableRoot "SD-Trainer\scripts\portable\update_from_release.ps1"
+$ps1 = Join-Path $PortableRoot "Next-Trainer\scripts\portable\update_from_release.ps1"
 if (Test-Path $ps1) {
     $content = Get-Content $ps1 -Raw
     if ($content -notmatch "Next-Trainer-v" -and $content -notmatch "SD-Trainer-v") {

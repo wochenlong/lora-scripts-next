@@ -30,9 +30,9 @@ $ErrorActionPreference = "Stop"
 $startTime = Get-Date
 
 $buildDir    = Join-Path $ProjectRoot "build"
-$portableDir = Join-Path $buildDir "SD-Trainer-Portable"
+$portableDir = Join-Path $buildDir "Next-Trainer-Portable"
 $pythonDir   = Join-Path $portableDir "python_embeded"
-$sdtDir      = Join-Path $portableDir "SD-Trainer"
+$sdtDir      = Join-Path $portableDir "Next-Trainer"
 $tempGitCloneDir = Join-Path $buildDir "_portable_git_metadata"
 
 $7zExe = "C:\Program Files\7-Zip\7z.exe"
@@ -111,7 +111,7 @@ function Initialize-DatasetTagEditor {
 
 function Clone-SDTrainerGitMetadata {
     param([string]$Destination)
-    Write-Host "  Embedding shallow .git metadata for Update-SD-Trainer.bat..."
+    Write-Host "  Embedding shallow .git metadata for Update-Next-Trainer.bat..."
     if (Test-Path $tempGitCloneDir) {
         Remove-Item $tempGitCloneDir -Recurse -Force
     }
@@ -124,7 +124,7 @@ function Clone-SDTrainerGitMetadata {
     if ($LASTEXITCODE -ne 0) {
         throw "failed to clone shallow git metadata from $remote"
     }
-    $dstGit = Join-Path $Destination "SD-Trainer\.git"
+    $dstGit = Join-Path $Destination "Next-Trainer\.git"
     if (Test-Path $dstGit) {
         Remove-Item $dstGit -Recurse -Force
     }
@@ -132,7 +132,7 @@ function Clone-SDTrainerGitMetadata {
     Remove-Item $tempGitCloneDir -Recurse -Force
 
     if (-not (Test-Path (Join-Path $dstGit "HEAD"))) {
-        throw "embedded SD-Trainer\.git is missing HEAD"
+        throw "embedded Next-Trainer\.git is missing HEAD"
     }
 }
 
@@ -218,7 +218,7 @@ function Resolve-TaggerCacheSource {
     $modelDirName = "models--SmilingWolf--wd-v1-4-convnextv2-tagger-v2"
     $candidates = @()
     foreach ($dir in Get-ChildItem $BuildDirectory -Directory -ErrorAction SilentlyContinue) {
-        if ($dir.Name -notlike "SD-Trainer*") { continue }
+        if ($dir.Name -notlike "Next-Trainer*") { continue }
         $hubModel = Join-Path $dir.FullName "huggingface\hub\$modelDirName"
         if (Test-Path $hubModel) {
             $candidates += $dir.FullName
@@ -292,8 +292,8 @@ if (Test-Path $pythonExe) {
 
 # python310._pth (include Lib/ so bundled tkinter is importable)
 $pthLines = @(
-    "../SD-Trainer",
-    "../SD-Trainer/vendor/sd-scripts",
+    "../Next-Trainer",
+    "../Next-Trainer/vendor/sd-scripts",
     "python310.zip",
     "Lib",
     "Lib/site-packages",
@@ -755,7 +755,7 @@ foreach ($bundle in $tokenizerBundles) {
 Write-Host ""
 Write-Host "[4/6] Creating launcher scripts..." -ForegroundColor Cyan
 
-# run_gui_portable.bat — root shim (logic lives in SD-Trainer/scripts/portable/, updates with project)
+# run_gui_portable.bat — root shim (logic lives in Next-Trainer/scripts/portable/, updates with project)
 $shimSrc = Join-Path $ProjectRoot "scripts\portable\run_gui_portable_shim.bat"
 if (Test-Path $shimSrc) {
     Copy-PortableBatchFile $shimSrc (Join-Path $portableDir "run_gui_portable.bat")
@@ -779,16 +779,16 @@ $updateDir = Join-Path $portableDir "update"
 New-Item -ItemType Directory -Path $updateDir -Force | Out-Null
 
 $updateBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`n"
-$updateBat += "call `"%~dp0..\Update-SD-Trainer.bat`" %*`r`n"
+$updateBat += "call `"%~dp0..\Update-Next-Trainer.bat`" %*`r`n"
 $updateBat += "exit /b %errorlevel%`r`n"
 [System.IO.File]::WriteAllText(
-    (Join-Path $updateDir "update_sd_trainer.bat"),
+    (Join-Path $updateDir "update_next_trainer.bat"),
     $updateBat,
     (New-Object System.Text.UTF8Encoding $false)
 )
 
 $updateReleaseBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`n"
-$updateReleaseBat += "call `"%~dp0..\Update-SD-Trainer-Release.bat`" %*`r`n"
+$updateReleaseBat += "call `"%~dp0..\Update-Next-Trainer-Release.bat`" %*`r`n"
 $updateReleaseBat += "exit /b %errorlevel%`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $updateDir "update_from_release.bat"),
@@ -799,7 +799,7 @@ $updateReleaseBat += "exit /b %errorlevel%`r`n"
 $updateDepsBat = "@echo off`r`nchcp 65001 >nul 2>&1`r`ncd /d `"%~dp0..`"`r`n"
 $updateDepsBat += "echo Updating Python dependencies...`r`n"
 $updateDepsBat += "`"python_embeded\python.exe`" -s -m pip install --upgrade torch torchvision --index-url https://download.pytorch.org/whl/cu128`r`n"
-$updateDepsBat += "`"python_embeded\python.exe`" -s -m pip install --upgrade -r `"SD-Trainer\requirements.txt`"`r`n"
+$updateDepsBat += "`"python_embeded\python.exe`" -s -m pip install --upgrade -r `"Next-Trainer\requirements.txt`"`r`n"
 $updateDepsBat += "echo Done.`r`npause`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $updateDir "update_dependencies.bat"),
@@ -831,7 +831,14 @@ Write-Host "  Created install_xformers.bat"
 $templateDir = Join-Path $PSScriptRoot "templates"
 $portableTemplateDir = Join-Path $sdtDir "scripts\portable\templates"
 New-Item -ItemType Directory -Path $portableTemplateDir -Force | Out-Null
-foreach ($bat in @("Update-SD-Trainer.bat", "Update-SD-Trainer-Release.bat", "Download-Anima-Model.bat", "Fix-Portable-Bats.bat")) {
+foreach ($bat in @(
+        "Update-Next-Trainer.bat",
+        "Update-Next-Trainer-Release.bat",
+        "Update-SD-Trainer.bat",
+        "Update-SD-Trainer-Release.bat",
+        "Download-Anima-Model.bat",
+        "Fix-Portable-Bats.bat"
+    )) {
     $src = Join-Path $templateDir $bat
     if (-not (Test-Path $src)) {
         $src = Join-Path $ProjectRoot $bat
@@ -865,7 +872,7 @@ foreach ($d in @("huggingface", "tagger-models", "tagger-models\wd14", "tagger-m
 
 $linkScript = Join-Path $sdtDir "scripts\portable\link_portable_data_dirs.py"
 if (Test-Path $linkScript) {
-    Write-Host "  Ensuring SD-Trainer data dirs + portable-root junctions..." -ForegroundColor Green
+    Write-Host "  Ensuring Next-Trainer data dirs + portable-root junctions..." -ForegroundColor Green
     & $pythonExe -s $linkScript --trainer-dir $sdtDir
     if ($LASTEXITCODE -ne 0) {
         Write-Host "  WARNING: portable data-dir junction step failed (exit $LASTEXITCODE)" -ForegroundColor Yellow
@@ -885,22 +892,22 @@ $readme += "  Future VLM caption models can be placed under tagger-models/vlm/<m
 $readme += "  with the files required by that model, such as model.onnx and selected_tags.csv.`r`n`r`n"
 $readme += "Directories:`r`n"
 $readme += "  run_gui.bat      - Stable entrypoint for portable users`r`n"
-$readme += "  run_gui_portable.bat - Legacy shim (logic in SD-Trainer/scripts/portable/)`r`n"
+$readme += "  run_gui_portable.bat - Legacy shim (logic in Next-Trainer/scripts/portable/)`r`n"
 $readme += "  python_embeded/  - Python runtime`r`n"
-$readme += "  SD-Trainer/      - Project files`r`n"
-$readme += "  SD-Trainer\\sd-models\\  - Models (file picker; put models here)`r`n"
-$readme += "  SD-Trainer\\output\\    - Training output`r`n"
-$readme += "  SD-Trainer\\logs\\       - Logs`r`n"
-$readme += "  sd-models\\ / output\\ / logs\\ at package root - junctions to SD-Trainer (legacy paths)`r`n"
+$readme += "  Next-Trainer/      - Project files`r`n"
+$readme += "  Next-Trainer\\sd-models\\  - Models (file picker; put models here)`r`n"
+$readme += "  Next-Trainer\\output\\    - Training output`r`n"
+$readme += "  Next-Trainer\\logs\\       - Logs`r`n"
+$readme += "  sd-models\\ / output\\ / logs\\ at package root - junctions to Next-Trainer (legacy paths)`r`n"
 $readme += "  tagger-models/   - Local tagger models`r`n`r`n"
 $readme += "Update:`r`n"
-$readme += "  Update-SD-Trainer.bat                - Git update (recommended if .git exists)`r`n"
-$readme += "  Update-SD-Trainer-Release.bat      - Download latest Release 7z and merge`r`n"
+$readme += "  Update-Next-Trainer.bat                - Git update (recommended if .git exists)`r`n"
+$readme += "  Update-Next-Trainer-Release.bat      - Download latest Release 7z and merge`r`n"
+$readme += "  update\update_next_trainer.bat       - Shortcut to Update-Next-Trainer.bat`r`n"
+$readme += "  update\update_from_release.bat     - Shortcut to Update-Next-Trainer-Release.bat`r`n"
 $readme += "  plugin-marketplace\                - Agent plugin catalog; catalog-only bundles download the`r`n"
 $readme += "                                       plugin zip at install time (sha256-verified). Intranet:`r`n"
 $readme += "                                       MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR=<https base>`r`n"
-$readme += "  update\update_sd_trainer.bat       - Shortcut to Update-SD-Trainer.bat`r`n"
-$readme += "  update\update_from_release.bat     - Shortcut to Update-SD-Trainer-Release.bat`r`n"
 $readme += "  update\update_dependencies.bat     - Update Python packages`r`n`r`n"
 $readme += "Requirements:`r`n"
 $readme += "  - Windows 10/11 64-bit`r`n"
@@ -911,7 +918,7 @@ $readme += "  If xformers is missing, double-click install_xformers.bat to insta
 $readme += "  xformers provides faster attention than PyTorch SDPA on most GPUs.`r`n`r`n"
 $readme += "Flash Attention 2:`r`n"
 $readme += "  This portable package does NOT use flash-attn (uses xformers / PyTorch SDPA).`r`n"
-$readme += "  Do not pip install flash-attn into python_embeded. See README in SD-Trainer/.`r`n"
+$readme += "  Do not pip install flash-attn into python_embeded. See README in Next-Trainer/.`r`n"
 [System.IO.File]::WriteAllText(
     (Join-Path $portableDir "README.txt"),
     $readme,
@@ -935,7 +942,7 @@ if (-not $Skip7z) {
         if (Test-Path $archivePath) { Remove-Item $archivePath -Force }
 
         # 7-Zip follows Windows directory junctions and its recursive exclude
-        # patterns also match same-named canonical dirs under SD-Trainer.
+        # patterns also match same-named canonical dirs under Next-Trainer.
         # Temporarily remove only the portable-root compatibility junctions.
         $archiveJunctionNames = @("sd-models", "output", "logs", "train")
         foreach ($name in $archiveJunctionNames) {

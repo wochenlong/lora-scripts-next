@@ -8,14 +8,14 @@ set "TRAINER_DIR="
 
 if exist "%SCRIPT_DIR%gui.py" (
     set "TRAINER_DIR=%SCRIPT_DIR%"
-) else if exist "%SCRIPT_DIR%SD-Trainer\gui.py" (
-    set "TRAINER_DIR=%SCRIPT_DIR%SD-Trainer\"
+) else if exist "%SCRIPT_DIR%Next-Trainer\gui.py" (
+    set "TRAINER_DIR=%SCRIPT_DIR%Next-Trainer\"
 ) else (
-    echo [Error] SD-Trainer directory not found.
+    echo [Error] Next-Trainer directory not found.
     echo.
     echo Put this bat file in one of these locations:
     echo   1. The portable package root, next to run_gui.bat
-    echo   2. The SD-Trainer folder, next to gui.py
+    echo   2. The Next-Trainer folder, next to gui.py
     echo.
     pause
     exit /b 1

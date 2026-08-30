@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-SD-Trainer First-Run Environment Setup
+Next-Trainer First-Run Environment Setup
 
 Detects network, configures mirrors, installs PyTorch + dependencies.
 Uses only Python stdlib -- runs before pip is available.
@@ -70,7 +70,7 @@ DISK_SPACE_REQUIRED_GB = 7
 
 
 def _base_dir():
-    """Portable package root (parent of SD-Trainer/)."""
+    """Portable package root (parent of Next-Trainer/)."""
     return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 
@@ -95,7 +95,7 @@ def _banner():
     w = 50
     print()
     print("╔" + "═" * w + "╗")
-    print("║" + "SD-Trainer 环境安装向导".center(w - 6) + "║")
+    print("║" + "Next-Trainer 环境安装向导".center(w - 6) + "║")
     print("╚" + "═" * w + "╝")
     print()
 
@@ -272,7 +272,7 @@ def _probe_url(source, timeout=15):
     request = urllib.request.Request(
         wheel_url,
         headers={
-            "User-Agent": "SD-Trainer installer",
+            "User-Agent": "Next-Trainer installer",
             "Range": f"bytes=0-{PROBE_BYTES - 1}",
         },
     )
@@ -542,7 +542,7 @@ def main():
 
     print()
     print("  ══════════════════════════════════════════════")
-    print("    环境安装完成！正在启动 SD-Trainer...")
+    print("    环境安装完成！正在启动 Next-Trainer...")
     print("  ══════════════════════════════════════════════")
     print()
     return 0

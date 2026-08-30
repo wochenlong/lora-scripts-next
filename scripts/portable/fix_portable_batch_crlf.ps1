@@ -26,8 +26,8 @@ function Write-PortableBatchFile {
 }
 
 $PortableRoot = Normalize-PortableRootPath $PortableRoot
-if (-not (Test-Path (Join-Path $PortableRoot "SD-Trainer\gui.py"))) {
-    throw "SD-Trainer not found under: $PortableRoot"
+if (-not (Test-Path (Join-Path $PortableRoot "Next-Trainer\gui.py"))) {
+    throw "Next-Trainer not found under: $PortableRoot"
 }
 
 $count = 0
@@ -48,5 +48,5 @@ Get-ChildItem -Path $PortableRoot -Filter "*.bat" -Recurse -File | ForEach-Objec
 if ($count -eq 0) {
     Write-Host "All .bat files already use CRLF without BOM."
 } else {
-    Write-Host "Repaired $count .bat file(s). Re-run Update-SD-Trainer-Release.bat."
+    Write-Host "Repaired $count .bat file(s). Re-run Update-Next-Trainer-Release.bat."
 }
