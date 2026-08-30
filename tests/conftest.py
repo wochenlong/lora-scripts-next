@@ -63,10 +63,16 @@ tempfile.mkdtemp = _mkdtemp
 
 
 class _SafeTemporaryDirectory(tempfile.TemporaryDirectory):
+    """TemporaryDirectory whose directory is created (and thus cleaned up) by the patched mkdtemp.
+
+    Pre-fix note: this class used to pre-create its own directory and pass it as
+    the positional ``suffix`` argument, so the patched ``mkdtemp`` built a second
+    orphan directory that nothing ever removed — one leak per use.
+    """
+
     def __init__(self, suffix=None, prefix=None, dir=None, ignore_cleanup_errors: bool = False) -> None:
-        del suffix, dir
-        self._safe_path = _workspace_tmpdir((prefix or "tmp") + "-")
-        super().__init__(str(self._safe_path), ignore_cleanup_errors=ignore_cleanup_errors)
+        del suffix, dir  # names are generated inside the safe base
+        super().__init__(prefix=(prefix or "tmp") + "-", ignore_cleanup_errors=ignore_cleanup_errors)
 
 
 tempfile.TemporaryDirectory = _SafeTemporaryDirectory  # type: ignore[misc,assignment]

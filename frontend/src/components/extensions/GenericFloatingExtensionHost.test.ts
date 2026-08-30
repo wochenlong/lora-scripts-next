@@ -88,6 +88,31 @@ describe("GenericFloatingExtensionHost visibility", () => {
     wrapper.unmount()
   })
 
+  it("renders one launcher per extension and switches the active panel on click", async () => {
+    const alpha = extension({ pluginId: "alpha", displayName: "Alpha", ui: { floatingPanel: { entryUrl: "/api/plugin-host/ui/alpha/panel.html" } } })
+    const beta = extension({ pluginId: "beta", displayName: "Beta", unreadCount: 3, ui: { floatingPanel: { entryUrl: "/api/plugin-host/ui/beta/panel.html" } } })
+    const { wrapper } = await mountHost([alpha, beta])
+    const launchers = wrapper.findAll('[data-testid="floating-extension-launcher"]')
+    expect(launchers).toHaveLength(2)
+    expect(wrapper.get("iframe").attributes("src")).toBe("/api/plugin-host/ui/alpha/panel.html")
+    expect(launchers[0].find(".floating-extension-badge").exists()).toBe(false)
+    expect(launchers[1].get(".floating-extension-badge").text()).toBe("3")
+
+    await launchers[1].trigger("click")
+    await flushPromises()
+    expect(wrapper.get("iframe").attributes("src")).toBe("/api/plugin-host/ui/beta/panel.html")
+    expect(launchers[1].attributes("aria-expanded")).toBe("true")
+    expect(launchers[0].attributes("aria-expanded")).toBe("false")
+    expect(JSON.parse(localStorage.getItem("plugin-floating-panel:beta") || "{}")).toMatchObject({ open: true })
+
+    // clicking the now-active launcher minimizes, and does not drop the selection
+    await launchers[1].trigger("click")
+    await flushPromises()
+    expect(launchers[1].attributes("aria-expanded")).toBe("false")
+    expect(wrapper.get("iframe").attributes("src")).toBe("/api/plugin-host/ui/beta/panel.html")
+    wrapper.unmount()
+  })
+
   it("renders an enabled launcher and an exact allow-scripts sandbox", async () => {
     const { wrapper } = await mountHost([extension({ unreadCount: 12 })])
     const launcher = wrapper.get('[data-testid="floating-extension-launcher"]')

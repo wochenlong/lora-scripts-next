@@ -324,12 +324,14 @@ def _install_pipeline(op: InstallOperation, entry: MarketplaceEntry, approved_pe
 
     op.report_phase("acquiring")
     package = _catalog.acquire(entry, _platform_name(), on_progress=on_progress, is_cancelled=is_cancelled)
+    # Cancellation is honored while acquiring. manager.install() runs under the
+    # plugin lock and deliberately swallows every on_phase exception ("progress
+    # must never break the install"), so once install() returns the plugin IS
+    # committed — reporting "cancelled" there would be false (Copilot C-9).
     try:
         status = _manager.install(entry, package, approved_permissions=approved_permissions, on_phase=on_phase)
     finally:
         package.unlink(missing_ok=True)
-    if op.cancel_requested:
-        raise OperationCancelled()
     op.finish_success(status.model_dump(mode="json"))
 
 

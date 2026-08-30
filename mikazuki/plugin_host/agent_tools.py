@@ -81,6 +81,13 @@ def _str(description: str = "") -> dict[str, Any]:
     return value
 
 
+def _ticket_property() -> dict[str, Any]:
+    # Declared shape of the confirmation ticket key on write Tools. Unlike _str
+    # it accepts the empty string: the two-stage protocol sends "" (or omits the
+    # key) on the first attempt to obtain the pending ticket.
+    return {"type": "string", "description": _TICKET_HELP}
+
+
 def _tool_error(exc: Exception) -> HTTPException:
     code = getattr(exc, "code", "TOOL_FAILED")
     message = getattr(exc, "public_message", None) or getattr(exc, "message", None) or "The Host Tool request failed."
@@ -96,6 +103,76 @@ def _as_dict(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_as_dict(child) for child in value]
     return value
+
+
+def _validate_tool_params(schema: dict[str, Any], value: Any, path: str = "params") -> list[str]:
+    """Enforce the tool's DECLARED JSON-Schema subset on every invocation.
+
+    The published Tool definitions advertise bounds (max review samples, max
+    version ids, max files, …); without this gate they are decorative and a
+    plugin could drive unbounded filesystem/network work. Supports exactly the
+    subset the tool table uses: object(properties/required/
+    additionalProperties:false — open objects pass through), string(minLength,
+    enum), integer/number(minimum/maximum, bool excluded), boolean,
+    array(items/minItems/maxItems).
+    """
+    errors: list[str] = []
+    kind = schema.get("type")
+    if one_of := schema.get("oneOf"):
+        # Any-match union (permissive for agents): accepted when one branch validates.
+        branch_errors = [_validate_tool_params(branch, value, path) for branch in one_of]
+        return [] if any(not errors for errors in branch_errors) else [f"{path}: matches no allowed shape"]
+    if enum := schema.get("enum"):
+        if value not in enum:
+            errors.append(f"{path}: must be one of {sorted(map(str, enum))}")
+        return errors
+    if kind == "object":
+        if not isinstance(value, dict):
+            return [f"{path}: expected object"]
+        properties: dict[str, Any] = schema.get("properties") or {}
+        for required in schema.get("required") or ():
+            if required not in value:
+                errors.append(f"{path}.{required}: required")
+        if schema.get("additionalProperties") is False:
+            for key in value:
+                if key not in properties:
+                    errors.append(f"{path}.{key}: unknown property")
+        for key, child_schema in properties.items():
+            if key in value:
+                errors.extend(_validate_tool_params(child_schema, value[key], f"{path}.{key}"))
+        return errors
+    if kind == "string":
+        if not isinstance(value, str):
+            return [f"{path}: expected string"]
+        if isinstance(schema.get("minLength"), int) and len(value) < int(schema["minLength"]):
+            errors.append(f"{path}: shorter than minLength {schema['minLength']}")
+        return errors
+    if kind in {"integer", "number"}:
+        if isinstance(value, bool) or not isinstance(value, (int, float)):
+            return [f"{path}: expected {kind}"]
+        if kind == "integer" and not float(value).is_integer():
+            return [f"{path}: expected integer"]
+        minimum, maximum = schema.get("minimum"), schema.get("maximum")
+        if isinstance(minimum, (int, float)) and not isinstance(minimum, bool) and value < minimum:
+            errors.append(f"{path}: below minimum {minimum}")
+        if isinstance(maximum, (int, float)) and not isinstance(maximum, bool) and value > maximum:
+            errors.append(f"{path}: above maximum {maximum}")
+        return errors
+    if kind == "boolean":
+        return [f"{path}: expected boolean"] if not isinstance(value, bool) else errors
+    if kind == "array":
+        if not isinstance(value, list):
+            return [f"{path}: expected array"]
+        min_items, max_items = schema.get("minItems"), schema.get("maxItems")
+        if isinstance(min_items, int) and len(value) < min_items:
+            errors.append(f"{path}: fewer than minItems {min_items}")
+        if isinstance(max_items, int) and len(value) > max_items:
+            errors.append(f"{path}: exceeds maxItems {max_items}")
+        if item_schema := schema.get("items"):
+            for index, item in enumerate(value):
+                errors.extend(_validate_tool_params(item_schema, item, f"{path}[{index}]"))
+        return errors
+    return errors
 
 
 class AgentToolService:
@@ -130,24 +207,25 @@ class AgentToolService:
             )
         if not isinstance(params, dict):
             raise HTTPException(status_code=400, detail={"code": "TOOL_PARAMS_INVALID", "message": "Tool arguments must be an object."})
+        violations = _validate_tool_params(tool.parameters, params)
+        if violations:
+            raise HTTPException(
+                status_code=400,
+                detail={"code": "TOOL_PARAMS_INVALID", "message": "Tool arguments violate the declared schema.", "violations": violations[:8]},
+            )
         ticket_id = params.get("confirmationTicketId")
+        claimed = False
         if tool.side_effect == "write":
             request_identity = request_hash(plugin_id, session_id, tool.name, params)
-            approved = None
             if isinstance(ticket_id, str) and ticket_id:
+                # Claim atomically BEFORE dispatch: two concurrent retries of one
+                # approved ticket must never both execute the side-effecting handler.
                 try:
-                    projection = self.confirmations.projection(ticket_id)
-                    if (
-                        projection.get("pluginId") != plugin_id
-                        or projection.get("action") != tool.name
-                        or projection.get("paramsHash") != request_identity
-                        or projection.get("consumed")
-                    ):
-                        raise HTTPException(status_code=409, detail={"code": "CONFIRMATION_MISMATCH", "message": "The confirmation ticket is not bound to this Tool request."})
-                    approved = projection if projection.get("state") == "approved" else None
+                    self.confirmations.claim(ticket_id, plugin_id=plugin_id, action=tool.name, params_hash=request_identity)
+                    claimed = True
                 except ConfirmationError as exc:
                     raise _tool_error(exc) from None
-            if approved is None:
+            if not claimed:
                 ticket = self.confirmations.create_pending(
                     plugin_id=plugin_id,
                     tool_call_id=tool_call_id,
@@ -169,12 +247,16 @@ class AgentToolService:
                 # Host API stays responsive while the Tool call is in flight.
                 value = await asyncio.to_thread(tool.handler, session_id, tool_call_id, clean_params)
         except HTTPException:
+            if claimed:
+                self.confirmations.release(ticket_id)
             raise
         except Exception as exc:
             # A failed approved attempt does not consume the ticket, so the
             # same approval can be retried once the underlying fault clears.
+            if claimed:
+                self.confirmations.release(ticket_id)
             raise _tool_error(exc) from None
-        if tool.side_effect == "write" and isinstance(ticket_id, str) and ticket_id:
+        if claimed:
             self.confirmations.consume(ticket_id)
         return redact(_as_dict(value))
 
@@ -190,7 +272,7 @@ class AgentToolService:
             ),
             "training_config_commit": _Tool(
                 "training_config_commit", "Commit training config", "Commit an approved validated draft as canonical TOML; training is never auto-started. Write operation: call once WITHOUT confirmationTicketId to obtain the host-issued ticket, get the user's approval, then retry with that exact ticket id.", "training-config", "write",
-                _object({"validationHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str(_TICKET_HELP)}, ("validationHash",)), self._config_commit,
+                _object({"validationHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _ticket_property()}, ("validationHash",)), self._config_commit,
             ),
             "training_config_current": _Tool(
                 "training_config_current", "Current training params", "Read the training parameters the user is currently filling in (or last autosaved) in the Next Trainer frontend, grouped by train type; they usually contain the dataset directory and model/checkpoint paths the user already typed. Whenever a dataset path or model path is needed, call this FIRST and prefer the paths found here (verify they exist on disk); only search the filesystem or ask the user for paths that are missing or invalid.", "training-config", "read",
@@ -210,7 +292,7 @@ class AgentToolService:
             ),
             "dataset_caption_commit": _Tool(
                 "dataset_caption_commit", "Commit caption edits", "Atomically commit an approved caption change-set with backup and restore support. Write operation: call once WITHOUT confirmationTicketId to obtain the host-issued ticket, get the user's approval, then retry with that exact ticket id.", "caption-commit", "write",
-                _object({"root": _str(), "changeSetId": _str(), "changeSetHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _str(_TICKET_HELP)}, ("root", "changeSetId", "changeSetHash")), self._caption_commit,
+                _object({"root": _str(), "changeSetId": _str(), "changeSetHash": _str(), "sourceRevision": _str(), "confirmationTicketId": _ticket_property()}, ("root", "changeSetId", "changeSetHash")), self._caption_commit,
             ),
             "knowledge_search": _Tool(                "knowledge_search", "Search knowledge", "Rank a set of documents you pass in `documents` (returns source-backed excerpts with evidence + confidence). For the bundled data-root knowledge/templates library, use the `next_trainer_knowledge` tool instead — this tool does NOT read that library unless you pass its documents here.", "artifacts-read", "read",
                 _object({"query": _str(), "topK": {"type": "integer", "minimum": 1, "maximum": 10}, "documents": {"type": "array", "items": {"type": "object"}, "description": "Documents to search; each is {sourceId, title, url, text, version?, scope?, tags?}."}}, ("query",)), self._knowledge_search,
@@ -234,7 +316,7 @@ class AgentToolService:
             ),
             "curve_analyze": _Tool(
                 "curve_analyze", "Analyze training curve", "Analyze loss/metric curves deterministically, retaining NaN/Inf and never auto-stopping training.", "metrics-read", "read",
-                _object({"series": {"type": "array", "description": "The metric's point sequence, FLAT: an array of [step, value] pairs, e.g. [[1, 0.9], [2, 0.8]] (objects {\"x\": step, \"y\": value} also work). Do NOT wrap the points in {name, values} — one metric per call, name it with `metric`.", "items": {"type": "array", "minItems": 2, "maxItems": 2, "items": {"type": "number"}}}, "metric": {"type": "string", "description": "Name of the metric this series is (e.g. \"loss\")."}, "maxPoints": {"type": "integer", "minimum": 2, "maximum": 2000}}, ("series",)), self._curve_analyze,
+                _object({"series": {"type": "array", "description": "The metric's point sequence: each point is a two-or-more number array [step, value] or an object carrying step/x/epoch plus value/y/metric (e.g. {\"step\": 1, \"value\": 0.9}). One metric per call, name it with `metric`.", "items": {"oneOf": [{"type": "array", "minItems": 2, "items": {"type": "number"}}, {"type": "object"}]}}, "metric": {"type": "string", "description": "Name of the metric this series is (e.g. \"loss\")."}, "maxPoints": {"type": "integer", "minimum": 2, "maximum": 2000}}, ("series",)), self._curve_analyze,
             ),
             "artifact_compare": _Tool(
                 "artifact_compare", "Compare artifacts", "Compare up to five artifacts under fixed prompts, seed and generation configuration.", "artifacts-read", "read",
@@ -260,7 +342,7 @@ class AgentToolService:
                     "batch_output_action_on_conflict": {"type": "string", "enum": ["ignore", "copy", "prepend", "append"], "description": "What to do when a caption file already exists for an image. Values are matched EXACTLY (lowercase). 'ignore' = skip that file entirely, NO write (the only safe value when existing captions must be preserved); 'prepend' = new tags in front of the existing caption (file is rewritten); 'append' = new tags after the existing caption (file is rewritten, this is the default behaviour for any other value); 'copy' = replace the existing caption with the new tags. Never pass made-up values like 'Skip' — anything not exactly 'ignore'/'copy'/'prepend' rewrites the file."},
                     "replace_underscore": {"type": "boolean"},
                     "replace_underscore_excludes": {"type": "string"},
-                    "confirmationTicketId": _str(_TICKET_HELP),
+                    "confirmationTicketId": _ticket_property(),
                 }, ("path",)), self._tagger_start,
             ),
             "tagger_cancel": _Tool(
@@ -273,7 +355,7 @@ class AgentToolService:
             ),
             "assets_update": _Tool(
                 "assets_update", "Update knowledge & templates", "Pull the publisher's signed business-data release (knowledge articles, prompt templates, skills) into this plugin's managed library. Only files the publisher manages change: files YOU edited are copied to a backup folder first, never silently overwritten; your own notes are never touched. No news/offline is a normal report, never fatal to training. Data write: call once WITHOUT confirmationTicketId to obtain the host-issued ticket, get the user's approval, then retry with that exact ticket id.", "content-update", "write",
-                _object({"confirmationTicketId": _str(_TICKET_HELP)}), self._assets_update,
+                _object({"confirmationTicketId": _ticket_property()}), self._assets_update,
             ),
         }
 

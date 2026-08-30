@@ -56,6 +56,7 @@ class ConfirmationTicket:
     resolution_note: str = ""
     params_hash: str | None = None
     consumed: bool = False
+    claimed: bool = False
 
     def projection(self) -> dict[str, Any]:
         return {
@@ -207,6 +208,54 @@ class ConfirmationTicketStore:
             ticket = self._tickets.get(ticket_id)
             if ticket is not None and ticket.status == "approved":
                 ticket.consumed = True
+
+    def claim(
+        self,
+        ticket_id: str,
+        *,
+        plugin_id: str | None = None,
+        action: str | None = None,
+        params_hash: str | None = None,
+    ) -> dict[str, Any]:
+        """Atomically gate-approve an approved ticket BEFORE executing its side effect.
+
+        Unlike ``projection()`` + a later ``consume()``, this validates existence,
+        expiry, binding (when supplied), the approved state and the one-shot
+        status, and flips ``claimed``, all inside one lock section. Two concurrent
+        executors of the same ticket can therefore never both pass the gate: the
+        loser observes ``claimed`` and is rejected. The executor must call
+        ``consume()`` on success and ``release()`` on failure (keeping the
+        documented "a failed attempt may be retried" semantics).
+        """
+        with self._lock:
+            ticket = self._tickets.get(ticket_id)
+            if ticket is None:
+                raise ConfirmationError("CONFIRMATION_NOT_FOUND", "The confirmation ticket was not found.", status_code=404)
+            self._expire(ticket, self._now())
+            if ticket.status == "expired":
+                raise ConfirmationError("CONFIRMATION_EXPIRED", "The confirmation ticket has expired.", status_code=410)
+            if (
+                ticket.status != "approved"
+                or ticket.consumed
+                or ticket.claimed
+                or (plugin_id is not None and ticket.plugin_id != plugin_id)
+                or (action is not None and ticket.action != action)
+                or (params_hash is not None and ticket.params_hash != params_hash)
+            ):
+                raise ConfirmationError(
+                    "CONFIRMATION_MISMATCH",
+                    "The confirmation ticket is not bound to this Tool request.",
+                    status_code=409,
+                )
+            ticket.claimed = True
+            return ticket.projection()
+
+    def release(self, ticket_id: str) -> None:
+        """Undo a claim after a failed execution so the approved request stays retryable."""
+        with self._lock:
+            ticket = self._tickets.get(ticket_id)
+            if ticket is not None and not ticket.consumed:
+                ticket.claimed = False
 
     def resolve(self, ticket_id: str, decision: Literal["approved", "rejected"], note: str = "") -> dict[str, Any]:
         if decision not in {"approved", "rejected"}:

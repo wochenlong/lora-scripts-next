@@ -157,16 +157,43 @@ async def training_config_validate(session_id: str, request: Request):
 
 @router.post("/workspaces/{session_id}/training-config/commit-draft")
 async def training_config_commit(session_id: str, request: Request):
+    # The confirmation ticket is host-owned and never caller-supplied: the
+    # caller names a ticket id and the host resolves, atomically claims and
+    # consumes the real server-side ticket. Inline ticket objects are rejected
+    # outright so a caller can never forge {"state": "approved"}; possession of
+    # an unguessable, user-approved ticket id is the authorization.
+    raw = await request.body() or b"{}"
+    if b'"confirmationTicket"' in raw:
+        raise HTTPException(status_code=400, detail={"code": "CONFIG_TICKET_INLINE_FORBIDDEN", "message": "Commit requires a host-issued confirmationTicketId; inline confirmation ticket objects are not accepted."})
     try:
-        payload = json.loads(await request.body() or b"{}")
-        # The canonical output directory is host-owned. A plugin may approve a
-        # validated draft but cannot choose an arbitrary filesystem destination.
-        data = _service(session_id).commit_draft(payload.get("validationHash") or payload.get("validation_hash"), confirmation_ticket=payload.get("confirmationTicket"), source_revision=payload.get("sourceRevision"))
-        return {"status": "success", "data": data}
+        payload = json.loads(raw or b"{}")
     except (json.JSONDecodeError, TypeError, ValueError):
         raise HTTPException(status_code=400, detail={"code": "CONFIG_REQUEST_INVALID", "message": "Training configuration request is invalid."}) from None
+    ticket_id = payload.get("confirmationTicketId")
+    if not isinstance(ticket_id, str) or not ticket_id.strip():
+        raise HTTPException(status_code=400, detail={"code": "CONFIG_CONFIRMATION_REQUIRED", "message": "A host-issued confirmationTicketId is required to commit a validated draft."})
+    from mikazuki.plugin_host.confirmation import ConfirmationError
+    from mikazuki.plugin_marketplace.api import get_confirmation_store
+
+    confirmations = get_confirmation_store()
+    try:
+        # action-bind the claim: only a ticket the user approved FOR this commit
+        # may commit; a ticket approved for another write action is rejected.
+        projection = confirmations.claim(ticket_id, action="training_config_commit")
+    except ConfirmationError as exc:
+        raise HTTPException(status_code=exc.status_code, detail={"code": exc.code, "message": exc.public_message}) from None
+    try:
+        # The canonical output directory is host-owned. A plugin may approve a
+        # validated draft but cannot choose an arbitrary filesystem destination.
+        data = _service(session_id).commit_draft(payload.get("validationHash") or payload.get("validation_hash"), confirmation_ticket=projection, source_revision=payload.get("sourceRevision"))
     except AgentDomainError as exc:
+        confirmations.release(ticket_id)
         raise _error(exc) from None
+    except (json.JSONDecodeError, TypeError, ValueError):
+        confirmations.release(ticket_id)
+        raise HTTPException(status_code=400, detail={"code": "CONFIG_REQUEST_INVALID", "message": "Training configuration request is invalid."}) from None
+    confirmations.consume(ticket_id)
+    return {"status": "success", "data": data}
 
 
 __all__ = ["router", "ensure_workspace", "get_artifact_service", "get_workspace"]

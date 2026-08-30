@@ -543,8 +543,13 @@ if ($SkipMarketplace) {
     $catalogSrc = Join-Path $marketplaceSrc "catalog.json"
     $trustSrc = Join-Path $marketplaceSrc "trust.json"
     if (-not (Test-Path $catalogSrc) -or -not (Test-Path $trustSrc)) {
-        Write-Host "  [skip] dist-marketplace catalog.json/trust.json not found" -ForegroundColor Yellow
-        Write-Host "         Build the plugin first (build-all-platforms.py + build-marketplace-catalog.py)" -ForegroundColor Yellow
+        # Fail closed (Copilot C-3): marketplace bundling is ON by default, and
+        # dist-marketplace/ is gitignored — silently shipping without it would
+        # produce a "marketplace bundled" build that has no marketplace at all.
+        Write-Host "  [FAIL] catalog.json/trust.json missing under $marketplaceSrc" -ForegroundColor Red
+        Write-Host "         Build the plugin first (build-all-platforms.py + build-marketplace-catalog.py)," -ForegroundColor Red
+        Write-Host "         or pass -SkipMarketplace to intentionally ship without the marketplace." -ForegroundColor Red
+        exit 1
     } else {
         New-Item -ItemType Directory -Path $marketplaceDst -Force | Out-Null
         Copy-Item $catalogSrc (Join-Path $marketplaceDst "catalog.json") -Force

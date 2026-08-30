@@ -30,7 +30,16 @@ const router = useRouter()
 const { locale, t } = useI18n()
 const extensionsStore = useExtensionsStore()
 const { floatingExtensions } = storeToRefs(extensionsStore)
-const activeExtension = computed(() => floatingExtensions.value[0] ?? null)
+// Every enabled floating-panel extension gets its own launcher (Copilot C-4);
+// this tracks which plugin the user selected. An unknown/removed id falls back
+// to the first extension so the panel is never orphaned.
+const selectedPluginId = ref<string>("")
+const activeExtension = computed(
+  () =>
+    floatingExtensions.value.find((item) => item.pluginId === selectedPluginId.value) ??
+    floatingExtensions.value[0] ??
+    null,
+)
 const frame = ref<HTMLIFrameElement | null>(null)
 const frameSrc = ref("about:blank")
 const panelOpen = ref(false)
@@ -239,6 +248,22 @@ function togglePanel() {
   saveOpenPreference()
 }
 
+function onLauncherClick(extension: PluginHostExtension) {
+  if (activeExtension.value?.pluginId === extension.pluginId) {
+    togglePanel()
+    return
+  }
+  // Selecting a different plugin re-points the single panel/frame/bridge via the
+  // activeExtension watcher; force it open so the click is always honoured, even
+  // when that plugin's persisted preference was "closed".
+  const preference = readPanelPreference(extension.pluginId)
+  localStorage.setItem(
+    preferenceKey(extension.pluginId),
+    JSON.stringify({ open: true, width: preference.width, height: preference.height }),
+  )
+  selectedPluginId.value = extension.pluginId
+}
+
 function onShortcut(event: KeyboardEvent) {
   if (event.ctrlKey && event.shiftKey && !event.altKey && !event.metaKey && event.key.toLowerCase() === "a") {
     event.preventDefault()
@@ -300,20 +325,32 @@ onBeforeUnmount(() => {
         referrerpolicy="no-referrer"
       />
     </section>
-    <button
-      type="button"
-      class="floating-extension-launcher"
-      :class="{ 'is-open': panelOpen }"
-      :aria-label="panelOpen ? t('extensionHost.minimize') : t('extensionHost.open', { name: activeExtension.displayName })"
-      :aria-expanded="panelOpen"
-      data-testid="floating-extension-launcher"
-      @click="togglePanel"
-    >
-      <img :src="agentIcon" alt="" aria-hidden="true" />
-      <i v-if="activeExtension.unreadCount" class="floating-extension-badge">{{
-        activeExtension.unreadCount > 9 ? "9+" : activeExtension.unreadCount
-      }}</i>
-    </button>
+    <div class="floating-extension-launchers">
+      <button
+        v-for="extension in floatingExtensions"
+        :key="extension.pluginId"
+        type="button"
+        class="floating-extension-launcher"
+        :class="{
+          'is-open': panelOpen && activeExtension?.pluginId === extension.pluginId,
+          'is-active': activeExtension?.pluginId === extension.pluginId,
+        }"
+        :title="extension.displayName"
+        :aria-label="
+          panelOpen && activeExtension?.pluginId === extension.pluginId
+            ? t('extensionHost.minimize')
+            : t('extensionHost.open', { name: extension.displayName })
+        "
+        :aria-expanded="panelOpen && activeExtension?.pluginId === extension.pluginId"
+        data-testid="floating-extension-launcher"
+        @click="onLauncherClick(extension)"
+      >
+        <img :src="agentIcon" alt="" aria-hidden="true" />
+        <i v-if="extension.unreadCount" class="floating-extension-badge">{{
+          extension.unreadCount > 9 ? "9+" : extension.unreadCount
+        }}</i>
+      </button>
+    </div>
     <HostConfirmationLayer
       v-if="confirmation"
       :confirmation="confirmation"

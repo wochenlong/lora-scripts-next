@@ -35,6 +35,7 @@ try:
     sys.modules["mikazuki.tagger.jobs"] = stub_jobs
     sys.modules["mikazuki.tagger.progress"] = stub_progress
 
+    _api_pre_cached = "mikazuki.app.api" in sys.modules
     from mikazuki.app import api
 finally:
     # Pytest imports all test modules during collection. Restore these stubs
@@ -44,6 +45,16 @@ finally:
             sys.modules.pop(name, None)
         else:
             sys.modules[name] = original
+    # Restoring sys.modules does not rebind the tagger symbols that
+    # mikazuki.app.api already imported (Copilot C-7). When THIS import was
+    # the first one, the cached module is stub-bound; evict it (module table
+    # AND the package attribute) so later collectors re-import real bindings,
+    # while this file keeps its local `api` reference for its own tests.
+    if not _api_pre_cached:
+        sys.modules.pop("mikazuki.app.api", None)
+        _app_package = sys.modules.get("mikazuki.app")
+        if _app_package is not None and getattr(_app_package, "api", None) is api:
+            delattr(_app_package, "api")
 
 
 def make_request(payload: dict) -> Request:
