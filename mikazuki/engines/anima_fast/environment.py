@@ -477,7 +477,7 @@ def install_environment(
     if not base_python.is_file():
         plan.python_install_dir.mkdir(parents=True, exist_ok=True)
         _run_streaming(
-            [uv, "python", "install", "3.13", "--install-dir", str(plan.python_install_dir), "--reinstall", "--no-cache"],
+            [uv, "python", "install", "3.13", "--install-dir", str(plan.python_install_dir), "--reinstall"],
             plan.project_root,
             log,
             env=process_env,
@@ -516,7 +516,6 @@ def install_environment(
             "install",
             "--python",
             str(plan.venv_python),
-            "--no-cache",
             "--no-config",
             "--index-url",
             pip_index,

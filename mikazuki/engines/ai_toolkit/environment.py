@@ -458,7 +458,7 @@ def install_environment(
     if not base_python.is_file():
         plan.python_install_dir.mkdir(parents=True, exist_ok=True)
         _run_streaming(
-            [uv, "python", "install", TOOLKIT_PYTHON_VERSION, "--install-dir", str(plan.python_install_dir), "--no-cache"],
+            [uv, "python", "install", TOOLKIT_PYTHON_VERSION, "--install-dir", str(plan.python_install_dir)],
             plan.project_root,
             log,
             env=process_env,
@@ -497,7 +497,6 @@ def install_environment(
             "install",
             "--python",
             str(plan.venv_python),
-            "--no-cache",
             "--no-config",
             "--index-url",
             torch_index,
@@ -520,7 +519,6 @@ def install_environment(
             "install",
             "--python",
             str(plan.venv_python),
-            "--no-cache",
             "--no-config",
             "--index-url",
             pip_index,
