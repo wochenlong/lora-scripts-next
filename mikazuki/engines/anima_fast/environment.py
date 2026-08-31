@@ -6,6 +6,8 @@ from typing import Callable
 import importlib.metadata
 import json
 import os
+import platform
+import queue
 import shutil
 import subprocess
 import sys
@@ -39,9 +41,18 @@ ANIMA_OVERRIDES = ENVIRONMENT_DIR / "anima-overrides-cu130.txt"
 MAIN_CONSTRAINTS = ENVIRONMENT_DIR / "main-constraints-cu130.txt"
 FLASH_ATTN_WINDOWS_MARKER = "flash-attn @ https://"
 FLASH_ATTN_LINUX_PLATFORM_MARKER = "sys_platform == 'linux'"
+FLASH_ATTN_LINUX_AARCH64_PLATFORM_MARKER = "sys_platform == 'linux' and platform_machine == 'aarch64'"
 FLASH_ATTN_LINUX_CU130_URL = (
     "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.4/"
     "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl"
+)
+# GB10 (DGX Spark, sm_121) local source build; no aarch64 wheel exists on PyPI
+# or upstream releases. sm_121 SASS only — not for other aarch64 devices
+# (Jetson, Grace, etc.).
+FLASH_ATTN_LINUX_CU130_URL_AARCH64 = (
+    "https://github.com/IryNeko/patched-flash_attn-2.8.3-for-dgx-spark/releases/download/"
+    "torch2.11-cu130-sm121-cp313-arm64/"
+    "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_aarch64.whl"
 )
 
 # Optional, masking-only dependencies that core LoRA training never imports.
@@ -276,12 +287,54 @@ def localize_linux_flash_attn_dependency(
     source_root: Path,
     log: LogFn = print,
     github_url_prefix: str | None = None,
+    machine: str | None = None,
 ) -> list[str]:
     if not sys.platform.startswith("linux"):
         return []
-    wheel_url = apply_github_prefix(FLASH_ATTN_LINUX_CU130_URL, github_url_prefix)
-    replacement = f'"flash-attn @ {wheel_url} ; {FLASH_ATTN_LINUX_PLATFORM_MARKER}",'
+    machine = (machine or platform.machine()).lower()
+    if machine in ("aarch64", "arm64"):
+        wheel_url = FLASH_ATTN_LINUX_CU130_URL_AARCH64
+        marker = FLASH_ATTN_LINUX_AARCH64_PLATFORM_MARKER
+    else:
+        wheel_url = FLASH_ATTN_LINUX_CU130_URL
+        marker = FLASH_ATTN_LINUX_PLATFORM_MARKER
+    wheel_url = apply_github_prefix(wheel_url, github_url_prefix)
+    replacement = f'"flash-attn @ {wheel_url} ; {marker}",'
     return _replace_flash_attn_dependency(source_root, FLASH_ATTN_LINUX_PLATFORM_MARKER, replacement, log)
+
+
+def patch_comfyui_checkpoint_prefix(source_root: Path, log: LogFn = print) -> list[str]:
+    """Accept ComfyUI-layout checkpoints (model.diffusion_model.* keys) as DiT input.
+
+    Patch registration (engines/_template/patches/README.md):
+    - target: library/anima/weights.py (_strip_net_prefix)
+    - symptom: ComfyUI-convention merges (e.g. tekitoMix) carry every DiT key
+      under `model.diffusion_model.`; the loader only strips `net.`, so
+      load_state_dict misses everything and aborts with "Missing keys in
+      checkpoint" even though the weights are all present.
+    - removal: upstream weights.py strips/handles the ComfyUI prefix itself.
+    - source: DGX Spark run report 2026-08-31; verified 0 missing/unexpected
+      keys for tekitoMix_v30beta after stripping + existing rename/concat hooks.
+    """
+    target = source_root / "library" / "anima" / "weights.py"
+    anchor = '    return key[len("net.") :] if key.startswith("net.") else key'
+    patched_body = (
+        '    for prefix in ("net.", "model.diffusion_model."):\n'
+        "        if key.startswith(prefix):\n"
+        "            return key[len(prefix):]\n"
+        "    return key"
+    )
+    text = target.read_text(encoding="utf-8") if target.is_file() else ""
+    if patched_body in text:
+        return []
+    if anchor not in text:
+        raise RuntimeError(
+            f"ComfyUI checkpoint prefix patch anchor not found in {target}; "
+            "upstream weights.py changed — re-evaluate the patch"
+        )
+    target.write_text(text.replace(anchor, patched_body, 1), encoding="utf-8")
+    _append(log, "[patch] accept ComfyUI-layout checkpoints (strip model.diffusion_model. prefix)")
+    return ["library/anima/weights.py:_strip_net_prefix"]
 
 
 def strip_optional_runtime_dependencies(source_root: Path, log: LogFn = print) -> list[str]:
@@ -325,7 +378,13 @@ def _anima_expected_for_platform(platform: str | None = None) -> dict:
     return expected
 
 
-def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str, str] | None = None) -> None:
+def _run_streaming_once(
+    command: list[str],
+    cwd: Path,
+    log: LogFn,
+    env: dict[str, str] | None = None,
+    heartbeat_seconds: float = 30.0,
+) -> None:
     _append(log, "[cmd] " + " ".join(command))
     merged_env = os.environ.copy()
     if env:
@@ -359,9 +418,31 @@ def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str
         bufsize=1,
     )
     assert completed.stdout is not None
+    # uv (and other tools) go fully silent on non-TTY between resolve/download
+    # milestones; pump output on a thread and emit heartbeat lines so a
+    # multi-GB download never looks like a dead install.
+    output: queue.Queue[str | None] = queue.Queue()
+
+    def _pump() -> None:
+        assert completed.stdout is not None
+        for raw in iter(completed.stdout.readline, ""):
+            output.put(raw)
+        output.put(None)
+
+    threading.Thread(target=_pump, daemon=True).start()
     unknown_certificate_issuer = False
-    for line in iter(completed.stdout.readline, ""):
-        clean_line = line.rstrip("\r\n")
+    silent_since = time.monotonic()
+    while True:
+        try:
+            raw_line = output.get(timeout=heartbeat_seconds)
+        except queue.Empty:
+            silent = int(time.monotonic() - silent_since)
+            _append(log, f"[wait] no output for {silent}s; still running: {Path(command[0]).name}")
+            continue
+        if raw_line is None:
+            break
+        silent_since = time.monotonic()
+        clean_line = raw_line.rstrip("\r\n")
         if "unknownissuer" in clean_line.lower():
             unknown_certificate_issuer = True
         _append(log, clean_line)
@@ -449,6 +530,9 @@ def install_environment(
     dropped_optional = strip_optional_runtime_dependencies(plan.layout.source, log)
     if dropped_optional:
         facts["dropped_optional_dependencies"] = dropped_optional
+    applied_patches = patch_comfyui_checkpoint_prefix(plan.layout.source, log)
+    if applied_patches:
+        facts["applied_source_patches"] = applied_patches
 
     if not plan.constraints.is_file():
         raise FileNotFoundError(f"Anima constraints file missing: {plan.constraints}")
@@ -514,6 +598,10 @@ def install_environment(
             uv,
             "pip",
             "install",
+            # uv's resolver prints nothing until done; on slow links that is a
+            # silent 15+ minutes. Verbose mode streams every metadata GET so
+            # the install log shows real activity during resolution.
+            "-v",
             "--python",
             str(plan.venv_python),
             "--no-config",
