@@ -1,6 +1,7 @@
 """ai-toolkit adapter: UI (kohya-dialect) -> toolkit YAML tree, Klein variants."""
 
 from pathlib import Path
+import json
 
 import pytest
 import yaml
@@ -210,6 +211,18 @@ def test_preview_samples_map_each_prompt_and_control_images(tmp_path):
             "ctrl_img_2": control_three.resolve().as_posix(),
         },
     ]
+
+
+def test_preview_samples_accept_frontend_camel_case_control_images(tmp_path):
+    data = _source(tmp_path, task="image-edit")
+    control_one = tmp_path / "control-one.png"
+    control_one.write_bytes(b"image")
+    # PreviewSampleField serializes each sample as a JSON string with camelCase keys
+    data["preview_samples"] = [json.dumps({"prompt": "edit", "controlImages": [str(control_one)]})]
+
+    adapted = adapt_config(data, _runtime(tmp_path), "run-1", "klein-4b")
+
+    assert _process(adapted)["sample"]["samples"][0]["ctrl_img_1"] == control_one.resolve().as_posix()
 
 
 def test_preview_samples_map_independent_generation_settings(tmp_path):

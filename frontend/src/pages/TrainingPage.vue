@@ -11,7 +11,7 @@ import { schemasApi } from "../api/schemas"
 import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/training"
 import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultModel, isFieldActive, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
-import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, migrateLegacyDefaultValues, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
+import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, migrateLegacyDefaultValues, pickCarryOverFields, sanitizePersistedDraft, acceptedSchemaTrainTypes } from "../training/params"
 import { moduleForTrainType } from "../training/modules"
 import { copyText } from "../utils/clipboard"
 import { useTasksStore } from "../stores/tasks"
@@ -142,7 +142,7 @@ async function load() {
         ? {
             ...base,
             ...migrateLegacyDefaultValues(
-              sanitizePersistedDraft(saved as FormModel, defaults),
+              sanitizePersistedDraft(saved as FormModel, defaults, acceptedSchemaTrainTypes(loaded, defaults)),
               defaults,
               props.schemaName === "klein-lora" ? { train_data_dir: "./train/aki" } : {},
             ),
@@ -291,7 +291,7 @@ function resetField(key: string) {
 function applyHistory(row: FormModel) {
   if (!schema.value) return
   const defaults = effectiveDefaults.value
-  model.value = { ...cloneFormModel(defaults), ...sanitizePersistedDraft(row, defaults) }
+  model.value = { ...cloneFormModel(defaults), ...sanitizePersistedDraft(row, defaults, acceptedSchemaTrainTypes(schema.value, defaults)) }
   applyReadonlyDefaults(schema.value, model.value, defaults)
   historyOpen.value = false
 }

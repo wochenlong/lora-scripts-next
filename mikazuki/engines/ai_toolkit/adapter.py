@@ -204,7 +204,9 @@ def _preview_sample_items(value: Any, base: Path) -> list[dict[str, Any]]:
         negative_prompt = str(item.get("neg") or "").strip()
         if negative_prompt:
             sample["neg"] = negative_prompt
-        control_images = _sample_control_images(item.get("control_images"), base)
+        control_images = _sample_control_images(
+            item.get("controlImages", item.get("control_images")), base
+        )
         sample.update({f"ctrl_img_{index}": path for index, path in enumerate(control_images, start=1)})
         result.append(sample)
     return result

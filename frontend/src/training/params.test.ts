@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { reactive } from "vue"
 import {
+  acceptedSchemaTrainTypes,
   buildTrainingConfig,
   checkTrainingConfig,
   hydrateImportedConfig,
@@ -157,6 +158,44 @@ describe("cross-schema carry-over (#271)", () => {
       train_data_dir: "./data/oc",
     }
     expect(sanitizePersistedDraft(saved, defaults)).toEqual(saved)
+  })
+
+  it("keeps union-schema drafts whose train type differs from the schema default", () => {
+    const defaults = { model_train_type: "klein-4b-lora", dit: "./sd-models/klein/4b", text_encoder: "./sd-models/qwen3-4b" }
+    const saved = {
+      model_train_type: "klein-9b-lora",
+      dit: "./sd-models/klein/9b",
+      text_encoder: "./sd-models/qwen3-8b",
+    }
+    const accepted = ["klein-4b-lora", "klein-9b-lora"]
+    expect(sanitizePersistedDraft(saved, defaults, accepted)).toEqual(saved)
+  })
+
+  it("still strips denied keys when the train type is outside the accepted union", () => {
+    const defaults = { model_train_type: "klein-4b-lora", dit: "./sd-models/klein/4b", text_encoder: "./sd-models/qwen3-4b" }
+    const saved = {
+      model_train_type: "anima-lora-fast",
+      dit: "./sd-models/klein/9b",
+      text_encoder: "./sd-models/qwen3-8b",
+      train_data_dir: "./data/oc",
+    }
+    const accepted = ["klein-4b-lora", "klein-9b-lora"]
+    expect(sanitizePersistedDraft(saved, defaults, accepted)).toEqual({
+      train_data_dir: "./data/oc",
+    })
+  })
+
+  it("extracts accepted train types from the schema field options", () => {
+    const schema = {
+      sections: [
+        { id: "basic", title: "", fields: [
+          { key: "model_train_type", type: "string", options: ["klein-4b-lora", "klein-9b-lora"], conditions: [] },
+        ] },
+      ],
+    } as unknown as Parameters<typeof acceptedSchemaTrainTypes>[0]
+    expect(acceptedSchemaTrainTypes(schema, { model_train_type: "klein-4b-lora" })).toEqual(["klein-4b-lora", "klein-9b-lora"])
+    const withoutOptions = { sections: [{ id: "basic", title: "", fields: [] }] } as unknown as Parameters<typeof acceptedSchemaTrainTypes>[0]
+    expect(acceptedSchemaTrainTypes(withoutOptions, { model_train_type: "anima-lora-fast" })).toEqual(["anima-lora-fast"])
   })
 
   it("migrates an autosaved value only when it matches a former schema default", () => {

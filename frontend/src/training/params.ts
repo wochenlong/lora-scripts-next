@@ -1,4 +1,4 @@
-import { cloneFormModel, cloneFormValue, type FormModel, type FormValue } from "../schema/adapter"
+import { cloneFormModel, cloneFormValue, type AdaptedSchema, type FormModel, type FormValue } from "../schema/adapter"
 import { i18n } from "../i18n"
 import { parse } from "smol-toml"
 
@@ -73,13 +73,27 @@ export function pickCarryOverFields(
 }
 
 /**
+ * All model_train_type values a schema accepts. Union schemas (klein 4B/9B
+ * share one schema) list every member in the field options; single-type
+ * schemas fall back to the default.
+ */
+export function acceptedSchemaTrainTypes(schema: AdaptedSchema, defaults: FormModel): string[] | undefined {
+  const field = schema.sections.flatMap((section) => section.fields).find((item) => item.key === "model_train_type")
+  const options = field?.options?.map(String).filter(Boolean)
+  if (options && options.length > 0) return options
+  const fallback = defaults.model_train_type
+  return fallback === undefined ? undefined : [String(fallback)]
+}
+
+/**
  * Drop discriminator / cache fields from a persisted draft when its train type
  * no longer matches the active schema defaults (poisoned Fast autosave case).
  */
-export function sanitizePersistedDraft(saved: FormModel, defaults: FormModel): FormModel {
+export function sanitizePersistedDraft(saved: FormModel, defaults: FormModel, acceptedTrainTypes?: readonly string[]): FormModel {
   const draft = cloneFormModel(saved)
   const expected = defaults.model_train_type
-  if (expected === undefined || draft.model_train_type === undefined || draft.model_train_type === expected) {
+  const accepted = acceptedTrainTypes?.length ? acceptedTrainTypes : expected === undefined ? undefined : [String(expected)]
+  if (accepted === undefined || draft.model_train_type === undefined || accepted.includes(String(draft.model_train_type))) {
     return draft
   }
   for (const key of CROSS_SCHEMA_DENY_KEYS) delete draft[key]
