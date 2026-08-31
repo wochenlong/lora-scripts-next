@@ -23,7 +23,11 @@ param(
     [switch]$MarketplaceCatalogOnly,
     [string]$MarketplacePlatform = "win32-x64",
     # Catalog-only bundles: the live release channel the host should trust.
-    [string]$MarketplaceCatalogUrl = "https://github.com/MikumikuDAIFans/next-trainer-agent-assets/releases/download/v0.3.8/catalog.json"
+    [string]$MarketplaceCatalogUrl = "https://github.com/MikumikuDAIFans/next-trainer-agent-assets/releases/download/v0.3.9/catalog.json",
+    # Managed content channel (knowledge/templates/skills signed index). When
+    # set, marketplace-env.bat also pins NEXT_TRAINER_ASSETS_INDEX_URL so the
+    # bundled host consumes the trust-v2 assets channel out of the box.
+    [string]$AssetsIndexUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -584,6 +588,9 @@ if ($SkipMarketplace) {
             $envBatLines.Add("@echo off")
             $envBatLines.Add(":: Written by build_portable.ps1 (-MarketplaceCatalogOnly): live plugin release channel.")
             $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_CATALOG_URL=' + $MarketplaceCatalogUrl + '"')
+            if ($AssetsIndexUrl) {
+                $envBatLines.Add('set "NEXT_TRAINER_ASSETS_INDEX_URL=' + $AssetsIndexUrl + '"')
+            }
             $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_CATALOG=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\catalog.json"')
             $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_TRUST=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\trust.json"')
             [System.IO.File]::WriteAllLines((Join-Path $portableDir "marketplace-env.bat"), $envBatLines, [System.Text.Encoding]::ASCII)
