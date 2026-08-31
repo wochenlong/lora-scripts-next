@@ -181,10 +181,10 @@ def run_preflight(
             except (json.JSONDecodeError, OSError):
                 actual_hidden = None
             if isinstance(actual_hidden, int) and actual_hidden != expected_hidden:
-                warnings.append(
+                errors.append(
                     f"文本编码器与变体不匹配：{te_dir} 的 hidden_size={actual_hidden}，"
                     f"变体 {variant} 期望 {spec.get('text_encoder')}（hidden_size={expected_hidden}），"
-                    "训练可能加载失败或产出错误"
+                    "请更换为与变体对应的文本编码器"
                 )
 
     images: list[Path] = []
@@ -194,9 +194,29 @@ def run_preflight(
         images.extend(found)
         if not found:
             errors.append(f"数据集目录没有图片: {folder}")
-        for control_dir in entry.get("control_path") or []:
-            if not Path(str(control_dir)).is_dir():
+        control_dirs = [Path(str(d)) for d in entry.get("control_path") or []]
+        existing_controls: list[Path] = []
+        for control_dir in control_dirs:
+            if not control_dir.is_dir():
                 errors.append(f"参考图目录不存在: {control_dir}")
+            else:
+                existing_controls.append(control_dir)
+        if existing_controls and found:
+            control_stems = {
+                d: {p.stem for p in d.iterdir() if p.is_file() and p.suffix.lower() in IMAGE_EXTS}
+                for d in existing_controls
+            }
+            missing: list[str] = []
+            for image in found:
+                for control_dir in existing_controls:
+                    if image.stem not in control_stems[control_dir]:
+                        missing.append(f"{image.name} → {control_dir}")
+            if missing:
+                shown = "、".join(missing[:3])
+                errors.append(
+                    f"参考图与训练图同名配对缺失 {len(missing)} 项（如 {shown}）："
+                    "图像编辑训练要求每张训练图在各参考图目录中有同名图片"
+                )
     facts["dataset_image_count"] = len(images)
     if images and datasets:
         caption_ext = "." + str(datasets[0].get("caption_ext", "txt")).lstrip(".")

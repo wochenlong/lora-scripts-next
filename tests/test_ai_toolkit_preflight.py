@@ -79,20 +79,25 @@ def test_preflight_missing_local_dit_path_is_error(tmp_path):
     assert any("HF repo id" in e for e in result.errors)
 
 
-def test_preflight_te_variant_mismatch_warns(tmp_path):
+def test_preflight_te_variant_mismatch_is_error(tmp_path):
     runtime = _runtime(tmp_path)
     source = _setup(tmp_path)
     te_dir = Path(source["text_encoder"])
     (te_dir / "config.json").write_text('{"hidden_size": 4096}', encoding="utf-8")
     adapted = adapt_config(source, runtime, "run-1", "klein-4b")
     result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
-    assert result.ok, result.errors
-    assert any("hidden_size" in w for w in result.warnings)
+    assert not result.ok
+    assert any("hidden_size" in e for e in result.errors)
 
     (te_dir / "config.json").write_text('{"hidden_size": 2560}', encoding="utf-8")
     result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
     assert result.ok, result.errors
-    assert not any("hidden_size" in w for w in result.warnings)
+    assert not any("hidden_size" in e for e in result.errors)
+
+    # hidden_size unreadable stays a soft case: no hard error
+    (te_dir / "config.json").write_text('{"n": "o hidden"}', encoding="utf-8")
+    result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
+    assert result.ok, result.errors
 
 
 def test_preflight_missing_dit(tmp_path):
@@ -164,6 +169,43 @@ def test_preflight_caption_warning(tmp_path):
     result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
     assert result.ok
     assert any("caption" in w for w in result.warnings)
+
+
+def test_preflight_control_pairing_ok(tmp_path):
+    runtime = _runtime(tmp_path)
+    source = _setup(tmp_path)
+    control = tmp_path / "control"
+    control.mkdir()
+    (control / "img1.png").write_bytes(b"")
+    source["control_data_dirs"] = [str(control)]
+    adapted = adapt_config(source, runtime, "run-1", "klein-4b")
+    result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
+    assert result.ok, result.errors
+
+
+def test_preflight_control_pairing_accepts_different_extension(tmp_path):
+    runtime = _runtime(tmp_path)
+    source = _setup(tmp_path)
+    control = tmp_path / "control"
+    control.mkdir()
+    (control / "img1.jpg").write_bytes(b"")  # same stem, different extension
+    source["control_data_dirs"] = [str(control)]
+    adapted = adapt_config(source, runtime, "run-1", "klein-4b")
+    result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
+    assert result.ok, result.errors
+
+
+def test_preflight_control_pairing_missing_reference_is_error(tmp_path):
+    runtime = _runtime(tmp_path)
+    source = _setup(tmp_path)
+    control = tmp_path / "control"
+    control.mkdir()
+    (control / "other.png").write_bytes(b"")  # no img1 counterpart
+    source["control_data_dirs"] = [str(control)]
+    adapted = adapt_config(source, runtime, "run-1", "klein-4b")
+    result = run_preflight(adapted.config, runtime, "klein-4b", te_path=adapted.te_path, probe=_ok_probe)
+    assert not result.ok
+    assert any("同名配对" in e and "img1.png" in e for e in result.errors)
 
 
 def test_preflight_probe_no_cuda(tmp_path):
