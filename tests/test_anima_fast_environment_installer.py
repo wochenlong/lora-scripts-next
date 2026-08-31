@@ -446,6 +446,38 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
         self.assertEqual(captured["env"].get("HF_ENDPOINT"), "https://modelscope.cn")
 
+    def test_install_streaming_emits_heartbeat_when_command_is_silent(self):
+        from mikazuki.engines.anima_fast.environment import _run_streaming_once
+
+        lines: list[str] = []
+        with tempfile.TemporaryDirectory() as td:
+            _run_streaming_once(
+                [sys.executable, "-c", "import time; time.sleep(1.0)"],
+                Path(td),
+                lines.append,
+                heartbeat_seconds=0.2,
+            )
+
+        waits = [line for line in lines if line.startswith("[wait]")]
+        self.assertTrue(waits, "expected heartbeat lines while the command was silent")
+        self.assertIn("still running", waits[0])
+        self.assertTrue(any(line == "[exit] returncode=0" for line in lines))
+
+    def test_install_streaming_silent_fast_command_emits_no_heartbeat(self):
+        from mikazuki.engines.anima_fast.environment import _run_streaming_once
+
+        lines: list[str] = []
+        with tempfile.TemporaryDirectory() as td:
+            _run_streaming_once(
+                [sys.executable, "-c", "pass"],
+                Path(td),
+                lines.append,
+                heartbeat_seconds=30.0,
+            )
+
+        self.assertFalse(any(line.startswith("[wait]") for line in lines))
+        self.assertTrue(any(line == "[exit] returncode=0" for line in lines))
+
     def test_install_streaming_uses_windows_system_certificates_by_default(self):
         from mikazuki.engines.anima_fast.environment import _run_streaming_once
 

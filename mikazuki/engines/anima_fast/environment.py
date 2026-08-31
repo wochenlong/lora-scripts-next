@@ -7,6 +7,7 @@ import importlib.metadata
 import json
 import os
 import platform
+import queue
 import shutil
 import subprocess
 import sys
@@ -343,7 +344,13 @@ def _anima_expected_for_platform(platform: str | None = None) -> dict:
     return expected
 
 
-def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str, str] | None = None) -> None:
+def _run_streaming_once(
+    command: list[str],
+    cwd: Path,
+    log: LogFn,
+    env: dict[str, str] | None = None,
+    heartbeat_seconds: float = 30.0,
+) -> None:
     _append(log, "[cmd] " + " ".join(command))
     merged_env = os.environ.copy()
     if env:
@@ -377,9 +384,31 @@ def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str
         bufsize=1,
     )
     assert completed.stdout is not None
+    # uv (and other tools) go fully silent on non-TTY between resolve/download
+    # milestones; pump output on a thread and emit heartbeat lines so a
+    # multi-GB download never looks like a dead install.
+    output: queue.Queue[str | None] = queue.Queue()
+
+    def _pump() -> None:
+        assert completed.stdout is not None
+        for raw in iter(completed.stdout.readline, ""):
+            output.put(raw)
+        output.put(None)
+
+    threading.Thread(target=_pump, daemon=True).start()
     unknown_certificate_issuer = False
-    for line in iter(completed.stdout.readline, ""):
-        clean_line = line.rstrip("\r\n")
+    silent_since = time.monotonic()
+    while True:
+        try:
+            raw_line = output.get(timeout=heartbeat_seconds)
+        except queue.Empty:
+            silent = int(time.monotonic() - silent_since)
+            _append(log, f"[wait] no output for {silent}s; still running: {Path(command[0]).name}")
+            continue
+        if raw_line is None:
+            break
+        silent_since = time.monotonic()
+        clean_line = raw_line.rstrip("\r\n")
         if "unknownissuer" in clean_line.lower():
             unknown_certificate_issuer = True
         _append(log, clean_line)
