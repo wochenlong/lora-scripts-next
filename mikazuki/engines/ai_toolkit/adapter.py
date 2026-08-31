@@ -244,16 +244,21 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str, va
     dit_path = Path(dit_text)
     if not dit_path.is_absolute():
         dit_path = (runtime.lora_next_root / dit_path).resolve()
-    if model_source == "local-file" and dit_path.exists() and not dit_path.is_file():
-        raise AdapterError(f"模型来源选择为本地模型文件，但路径不是文件: {dit_path}")
-    if model_source == "local-directory" and dit_path.exists() and not dit_path.is_dir():
-        raise AdapterError(f"模型来源选择为本地模型目录，但路径不是目录: {dit_path}")
+    if model_source == "local-file" and not dit_path.is_file():
+        raise AdapterError(f"模型来源选择为本地模型文件，但路径不存在或不是文件: {dit_path}")
+    if model_source == "local-directory" and not dit_path.is_dir():
+        raise AdapterError(f"模型来源选择为本地模型目录，但路径不存在或不是目录: {dit_path}")
     if model_source == "hf-repo" and dit_path.exists():
         raise AdapterError(f"模型来源选择为仓库 ID，但填写的是本地路径: {dit_text}")
     if dit_path.is_file():
         # Toolkit wants the containing folder (or HF repo); a direct file works
         # when the filename matches the variant's expected DiT filename.
         if dit_path.name != spec["dit_filename"]:
+            if model_source == "local-file":
+                raise AdapterError(
+                    f"DiT 文件名 {dit_path.name} 与变体期望的 {spec['dit_filename']} 不一致；"
+                    "AI Toolkit 按变体文件名加载，请改用模型目录或重命名文件"
+                )
             warnings.append(
                 f"DiT 文件名 {dit_path.name} 与变体期望的 {spec['dit_filename']} 不一致，上游加载可能失败"
             )

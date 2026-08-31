@@ -375,6 +375,52 @@ def test_model_source_hf_repo_keeps_repository_id(tmp_path):
     assert _process(adapted)["model"]["name_or_path"] == "black-forest-labs/FLUX.2-klein-base-4B"
 
 
+def test_model_source_local_file_missing_path_rejected(tmp_path):
+    with pytest.raises(AdapterError, match="本地模型文件"):
+        adapt_config(
+            _source(tmp_path, model_source="local-file", dit=str(tmp_path / "models" / "missing.safetensors")),
+            _runtime(tmp_path),
+            "run-1",
+            "klein-4b",
+        )
+
+
+def test_model_source_local_directory_missing_path_rejected(tmp_path):
+    with pytest.raises(AdapterError, match="本地模型目录"):
+        adapt_config(
+            _source(tmp_path, model_source="local-directory", dit="models/klein"),
+            _runtime(tmp_path),
+            "run-1",
+            "klein-4b",
+        )
+
+
+def test_model_source_local_file_wrong_filename_rejected(tmp_path):
+    dit = tmp_path / "models" / "whatever.safetensors"
+    dit.parent.mkdir(parents=True)
+    dit.write_bytes(b"")
+    with pytest.raises(AdapterError, match="与变体期望的"):
+        adapt_config(
+            _source(tmp_path, model_source="local-file", dit=str(dit)),
+            _runtime(tmp_path),
+            "run-1",
+            "klein-4b",
+        )
+
+
+def test_model_source_local_file_matching_filename_accepted(tmp_path):
+    dit = tmp_path / "models" / "flux-2-klein-base-4b.safetensors"
+    dit.parent.mkdir(parents=True)
+    dit.write_bytes(b"")
+    adapted = adapt_config(
+        _source(tmp_path, model_source="local-file", dit=str(dit)),
+        _runtime(tmp_path),
+        "run-1",
+        "klein-4b",
+    )
+    assert _process(adapted)["model"]["name_or_path"] == dit.parent.resolve().as_posix()
+
+
 def test_epochs_rejected_without_steps(tmp_path):
     with pytest.raises(AdapterError, match="只支持按步数"):
         adapt_config(
