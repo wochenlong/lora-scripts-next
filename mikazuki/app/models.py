@@ -38,8 +38,8 @@ class TaggerInterrogateRequest(BaseModel):
 
 class APIResponse(BaseModel):
     status: str
-    message: Optional[str]
-    data: Optional[Dict]
+    message: Optional[str] = None
+    data: Optional[Dict] = None
 
 
 class APIResponseSuccess(APIResponse):
