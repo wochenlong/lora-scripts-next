@@ -303,6 +303,40 @@ def localize_linux_flash_attn_dependency(
     return _replace_flash_attn_dependency(source_root, FLASH_ATTN_LINUX_PLATFORM_MARKER, replacement, log)
 
 
+def patch_comfyui_checkpoint_prefix(source_root: Path, log: LogFn = print) -> list[str]:
+    """Accept ComfyUI-layout checkpoints (model.diffusion_model.* keys) as DiT input.
+
+    Patch registration (engines/_template/patches/README.md):
+    - target: library/anima/weights.py (_strip_net_prefix)
+    - symptom: ComfyUI-convention merges (e.g. tekitoMix) carry every DiT key
+      under `model.diffusion_model.`; the loader only strips `net.`, so
+      load_state_dict misses everything and aborts with "Missing keys in
+      checkpoint" even though the weights are all present.
+    - removal: upstream weights.py strips/handles the ComfyUI prefix itself.
+    - source: DGX Spark run report 2026-08-31; verified 0 missing/unexpected
+      keys for tekitoMix_v30beta after stripping + existing rename/concat hooks.
+    """
+    target = source_root / "library" / "anima" / "weights.py"
+    anchor = '    return key[len("net.") :] if key.startswith("net.") else key'
+    patched_body = (
+        '    for prefix in ("net.", "model.diffusion_model."):\n'
+        "        if key.startswith(prefix):\n"
+        "            return key[len(prefix):]\n"
+        "    return key"
+    )
+    text = target.read_text(encoding="utf-8") if target.is_file() else ""
+    if patched_body in text:
+        return []
+    if anchor not in text:
+        raise RuntimeError(
+            f"ComfyUI checkpoint prefix patch anchor not found in {target}; "
+            "upstream weights.py changed — re-evaluate the patch"
+        )
+    target.write_text(text.replace(anchor, patched_body, 1), encoding="utf-8")
+    _append(log, "[patch] accept ComfyUI-layout checkpoints (strip model.diffusion_model. prefix)")
+    return ["library/anima/weights.py:_strip_net_prefix"]
+
+
 def strip_optional_runtime_dependencies(source_root: Path, log: LogFn = print) -> list[str]:
     """Drop masking-only deps (sam3) from the copied snapshot's pyproject.
 
@@ -496,6 +530,9 @@ def install_environment(
     dropped_optional = strip_optional_runtime_dependencies(plan.layout.source, log)
     if dropped_optional:
         facts["dropped_optional_dependencies"] = dropped_optional
+    applied_patches = patch_comfyui_checkpoint_prefix(plan.layout.source, log)
+    if applied_patches:
+        facts["applied_source_patches"] = applied_patches
 
     if not plan.constraints.is_file():
         raise FileNotFoundError(f"Anima constraints file missing: {plan.constraints}")

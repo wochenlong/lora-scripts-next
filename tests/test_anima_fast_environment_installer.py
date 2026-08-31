@@ -49,6 +49,13 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         (layout.source / "configs" / "base.toml").write_text("", encoding="utf-8")
         (layout.source / "preprocess").mkdir(exist_ok=True)
         (layout.source / "preprocess" / "resize_images.py").write_text("", encoding="utf-8")
+        weights_dir = layout.source / "library" / "anima"
+        weights_dir.mkdir(parents=True, exist_ok=True)
+        (weights_dir / "weights.py").write_text(
+            'def _strip_net_prefix(key: str) -> str:\n'
+            '    return key[len("net.") :] if key.startswith("net.") else key\n',
+            encoding="utf-8",
+        )
 
     def _make_source(self, root: Path) -> Path:
         source = root / "anima_source"
@@ -59,6 +66,13 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         (source / "configs" / "base.toml").write_text("", encoding="utf-8")
         (source / "preprocess").mkdir()
         (source / "preprocess" / "resize_images.py").write_text("", encoding="utf-8")
+        weights_dir = source / "library" / "anima"
+        weights_dir.mkdir(parents=True)
+        (weights_dir / "weights.py").write_text(
+            'def _strip_net_prefix(key: str) -> str:\n'
+            '    return key[len("net.") :] if key.startswith("net.") else key\n',
+            encoding="utf-8",
+        )
         return source
 
     def _make_constraints(self, project: Path) -> None:
@@ -397,6 +411,66 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self.assertEqual(removed, [])
             self.assertEqual(pyproject.read_text(encoding="utf-8"), original)
 
+    def test_patch_comfyui_checkpoint_prefix_rewrites_strip_net_prefix(self):
+        from mikazuki.engines.anima_fast.environment import patch_comfyui_checkpoint_prefix
+
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source"
+            weights = source / "library" / "anima"
+            weights.mkdir(parents=True)
+            target = weights / "weights.py"
+            target.write_text(
+                'def _strip_net_prefix(key: str) -> str:\n'
+                '    return key[len("net.") :] if key.startswith("net.") else key\n',
+                encoding="utf-8",
+            )
+            lines: list[str] = []
+
+            changed = patch_comfyui_checkpoint_prefix(source, lines.append)
+            text = target.read_text(encoding="utf-8")
+
+        self.assertEqual(changed, ["library/anima/weights.py:_strip_net_prefix"])
+        self.assertIn('"model.diffusion_model."', text)
+        self.assertTrue(any("ComfyUI" in line for line in lines))
+
+        # Patched helper accepts both legacy net.* and ComfyUI model.diffusion_model.* keys
+        namespace: dict = {}
+        exec(compile(text, "weights.py", "exec"), namespace)
+        strip = namespace["_strip_net_prefix"]
+        self.assertEqual(strip("net.blocks.0.x"), "blocks.0.x")
+        self.assertEqual(strip("model.diffusion_model.blocks.0.x"), "blocks.0.x")
+        self.assertEqual(strip("blocks.0.x"), "blocks.0.x")
+
+    def test_patch_comfyui_checkpoint_prefix_is_idempotent(self):
+        from mikazuki.engines.anima_fast.environment import patch_comfyui_checkpoint_prefix
+
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source"
+            weights = source / "library" / "anima"
+            weights.mkdir(parents=True)
+            (weights / "weights.py").write_text(
+                'def _strip_net_prefix(key: str) -> str:\n'
+                '    return key[len("net.") :] if key.startswith("net.") else key\n',
+                encoding="utf-8",
+            )
+            first = patch_comfyui_checkpoint_prefix(source, lambda _l: None)
+            second = patch_comfyui_checkpoint_prefix(source, lambda _l: None)
+
+        self.assertTrue(first)
+        self.assertEqual(second, [])
+
+    def test_patch_comfyui_checkpoint_prefix_fails_loudly_when_anchor_missing(self):
+        from mikazuki.engines.anima_fast.environment import patch_comfyui_checkpoint_prefix
+
+        with tempfile.TemporaryDirectory() as td:
+            source = Path(td) / "source"
+            weights = source / "library" / "anima"
+            weights.mkdir(parents=True)
+            (weights / "weights.py").write_text("# upstream rewrote everything\n", encoding="utf-8")
+
+            with self.assertRaises(RuntimeError):
+                patch_comfyui_checkpoint_prefix(source, lambda _l: None)
+
     def test_install_streaming_defaults_hf_endpoint_mirror(self):
         from mikazuki.engines.anima_fast.environment import _run_streaming_once, DEFAULT_HF_ENDPOINT
 
@@ -603,6 +677,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
+            self._make_runtime_source(layout)
             discovered_python = _fake_discovered_python(plan)
             pip_commands: list[list[str]] = []
 
@@ -640,6 +715,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
+            self._make_runtime_source(layout)
             discovered_python = _fake_discovered_python(plan)
             progress_events: list[dict] = []
 
