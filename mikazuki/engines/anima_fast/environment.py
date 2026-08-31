@@ -598,6 +598,10 @@ def install_environment(
             uv,
             "pip",
             "install",
+            # uv's resolver prints nothing until done; on slow links that is a
+            # silent 15+ minutes. Verbose mode streams every metadata GET so
+            # the install log shows real activity during resolution.
+            "-v",
             "--python",
             str(plan.venv_python),
             "--no-cache",
