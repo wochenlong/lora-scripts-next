@@ -6,6 +6,7 @@ from typing import Callable
 import importlib.metadata
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -39,9 +40,18 @@ ANIMA_OVERRIDES = ENVIRONMENT_DIR / "anima-overrides-cu130.txt"
 MAIN_CONSTRAINTS = ENVIRONMENT_DIR / "main-constraints-cu130.txt"
 FLASH_ATTN_WINDOWS_MARKER = "flash-attn @ https://"
 FLASH_ATTN_LINUX_PLATFORM_MARKER = "sys_platform == 'linux'"
+FLASH_ATTN_LINUX_AARCH64_PLATFORM_MARKER = "sys_platform == 'linux' and platform_machine == 'aarch64'"
 FLASH_ATTN_LINUX_CU130_URL = (
     "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.4/"
     "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl"
+)
+# GB10 (DGX Spark, sm_121) local source build; no aarch64 wheel exists on PyPI
+# or upstream releases. sm_121 SASS only — not for other aarch64 devices
+# (Jetson, Grace, etc.).
+FLASH_ATTN_LINUX_CU130_URL_AARCH64 = (
+    "https://github.com/IryNeko/patched-flash_attn-2.8.3-for-dgx-spark/releases/download/"
+    "torch2.11-cu130-sm121-cp313-arm64/"
+    "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_aarch64.whl"
 )
 
 # Optional, masking-only dependencies that core LoRA training never imports.
@@ -276,11 +286,19 @@ def localize_linux_flash_attn_dependency(
     source_root: Path,
     log: LogFn = print,
     github_url_prefix: str | None = None,
+    machine: str | None = None,
 ) -> list[str]:
     if not sys.platform.startswith("linux"):
         return []
-    wheel_url = apply_github_prefix(FLASH_ATTN_LINUX_CU130_URL, github_url_prefix)
-    replacement = f'"flash-attn @ {wheel_url} ; {FLASH_ATTN_LINUX_PLATFORM_MARKER}",'
+    machine = (machine or platform.machine()).lower()
+    if machine in ("aarch64", "arm64"):
+        wheel_url = FLASH_ATTN_LINUX_CU130_URL_AARCH64
+        marker = FLASH_ATTN_LINUX_AARCH64_PLATFORM_MARKER
+    else:
+        wheel_url = FLASH_ATTN_LINUX_CU130_URL
+        marker = FLASH_ATTN_LINUX_PLATFORM_MARKER
+    wheel_url = apply_github_prefix(wheel_url, github_url_prefix)
+    replacement = f'"flash-attn @ {wheel_url} ; {marker}",'
     return _replace_flash_attn_dependency(source_root, FLASH_ATTN_LINUX_PLATFORM_MARKER, replacement, log)
 
 

@@ -320,13 +320,43 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             )
             lines: list[str] = []
 
-            changed = localize_linux_flash_attn_dependency(source, lines.append)
+            changed = localize_linux_flash_attn_dependency(source, lines.append, machine="x86_64")
             text = pyproject.read_text(encoding="utf-8")
 
         self.assertEqual(len(changed), 1)
         self.assertIn("flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl", text)
+        self.assertIn("sys_platform == 'linux'\",", text)
         self.assertIn("windows.whl", text)
         self.assertTrue(any("localized Linux cu130 flash-attn" in line for line in lines))
+
+    def test_localize_linux_flash_attn_dependency_uses_dgx_spark_wheel_on_aarch64(self):
+        with tempfile.TemporaryDirectory() as td, mock.patch(
+            "mikazuki.engines.anima_fast.environment.sys.platform", "linux"
+        ):
+            source = Path(td) / "source"
+            source.mkdir()
+            pyproject = source / "pyproject.toml"
+            pyproject.write_text(
+                '[project]\ndependencies = [\n'
+                '    "flash-attn @ https://example.invalid/linux-cu132.whl ; sys_platform == \'linux\'",\n'
+                '    "flash-attn @ https://example.invalid/windows.whl ; sys_platform == \'win32\'",\n'
+                ']\n',
+                encoding="utf-8",
+            )
+            lines: list[str] = []
+
+            changed = localize_linux_flash_attn_dependency(source, lines.append, machine="aarch64")
+            text = pyproject.read_text(encoding="utf-8")
+
+        self.assertEqual(len(changed), 1)
+        self.assertIn(
+            "https://github.com/IryNeko/patched-flash_attn-2.8.3-for-dgx-spark/releases/download/"
+            "torch2.11-cu130-sm121-cp313-arm64/"
+            "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_aarch64.whl",
+            text,
+        )
+        self.assertIn("platform_machine == 'aarch64'", text)
+        self.assertIn("windows.whl", text)
 
     def test_strip_optional_runtime_dependencies_removes_sam3_git_build(self):
         with tempfile.TemporaryDirectory() as td:
