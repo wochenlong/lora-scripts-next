@@ -43,3 +43,20 @@ def test_readme_and_cli_docs_explain_anima_cli_entrypoints():
 
     assert "qwen3" in cli_docs
     assert "qwen3" in anima_docs
+
+
+def test_engine_installers_use_uv_cache_by_default():
+    for path in (
+        "mikazuki/engines/anima_fast/environment.py",
+        "mikazuki/engines/musubi/environment.py",
+        "mikazuki/engines/ai_toolkit/environment.py",
+    ):
+        assert '"--no-cache"' not in read(path), path
+
+
+def test_clear_cache_scripts_exist_and_call_uv_cache_clean():
+    sh = read("clear_cache.sh")
+    bat = read("clear_cache.bat")
+
+    assert "uv cache clean" in sh
+    assert "uv cache clean" in bat
