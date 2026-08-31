@@ -14,10 +14,19 @@ class TrustError(ValueError):
 
 
 def load_trust_root(path: Path) -> TrustStore:
-    """Load a host-supplied trust root file (development/local catalogs).
+    """Load a host-supplied trust root file.
 
-    Shape: {"keys": {"<id>": {"publisherId": str, "keyHex": str}},
-            "revokedKeys": [str, ...]}
+    v1 shape:  {"keys": {"<id>": {"publisherId": str, "keyHex": str}},
+                "revokedKeys": [str, ...]}
+    v2 shape:  {"keys": {"<id>": {"publisherId": str, "algorithm": "ed25519",
+                                  "publicKeyHex": <64 hex>}},
+                "revokedKeys": [str, ...]}
+
+    The ALGORITHM IS PART OF THE TRUST ROOT, never of the signed artifact:
+    an artifact can never negotiate which algorithm verifies it (downgrade
+    and substitution attacks are structurally impossible). A v2 root ships
+    public keys only — extracting a shipped trust.json grants verification,
+    never signing power.
     """
     try:
         payload = json.loads(path.read_text(encoding="utf-8"))
@@ -29,17 +38,30 @@ def load_trust_root(path: Path) -> TrustStore:
     revoked_block = payload.get("revokedKeys") or []
     if not isinstance(keys_block, dict) or not isinstance(revoked_block, list):
         raise TrustError("trust root shape is invalid")
-    keys: dict[str, tuple[str, bytes]] = {}
+    keys: dict[str, tuple[str, bytes, str]] = {}
     for key_id, record in keys_block.items():
         if not isinstance(record, dict):
             raise TrustError(f"trust key entry is invalid: {key_id}")
         publisher = record.get("publisherId")
-        key_hex = record.get("keyHex")
         if not isinstance(publisher, str) or not publisher:
             raise TrustError(f"trust key publisher is invalid: {key_id}")
-        if not isinstance(key_hex, str) or not re.fullmatch(r"[0-9a-fA-F]+", key_hex) or len(key_hex) < 32:
-            raise TrustError(f"trust key material is invalid: {key_id}")
-        keys[str(key_id)] = (publisher, bytes.fromhex(key_hex))
+        algorithm = record.get("algorithm") or "hmac-sha256"
+        if not isinstance(algorithm, str):
+            raise TrustError(f"trust key algorithm is invalid: {key_id}")
+        if algorithm == "ed25519":
+            if "keyHex" in record:
+                raise TrustError(f"ed25519 trust key must not carry keyHex: {key_id}")
+            public_hex = record.get("publicKeyHex")
+            if not isinstance(public_hex, str) or not re.fullmatch(r"[0-9a-fA-F]{64}", public_hex):
+                raise TrustError(f"ed25519 public key must be exactly 64 hexadecimal characters: {key_id}")
+            keys[str(key_id)] = (publisher, bytes.fromhex(public_hex), "ed25519")
+        elif algorithm == "hmac-sha256":
+            key_hex = record.get("keyHex")
+            if not isinstance(key_hex, str) or not re.fullmatch(r"[0-9a-fA-F]+", key_hex) or len(key_hex) < 32:
+                raise TrustError(f"trust key material is invalid: {key_id}")
+            keys[str(key_id)] = (publisher, bytes.fromhex(key_hex), "hmac-sha256")
+        else:
+            raise TrustError(f"unknown trust key algorithm: {key_id}: {algorithm}")
     revoked = {item for item in revoked_block if isinstance(item, str)}
     return TrustStore(keys, revoked_keys=revoked)
 
@@ -118,22 +140,55 @@ def canonical_assets_index_payload(index: dict) -> bytes:
     return json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
 
 
-class TrustStore:
-    """Stage 1 trust root using deterministic HMAC test signatures.
+def _ed25519_public_key(material: bytes):
+    try:
+        from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PublicKey
+    except ImportError as exc:  # pragma: no cover - shipped via requirements.txt
+        raise TrustError("ed25519 verification requires the cryptography package") from exc
+    return Ed25519PublicKey.from_public_bytes(material)
 
-    Production signing keys and catalog publication remain release-governed.
-    This scheme exists so every trust/hash/revocation gate is executable before
-    production key material is authorized.
+
+class TrustStore:
+    """Signature verifier dispatching on the ALGORITHM STORED IN THE TRUST ROOT.
+
+    v1 HMAC keys keep the historical Stage-1 behavior (deterministic test
+    signatures); v2 Ed25519 keys ship public material only, so a client can
+    verify without ever holding signing power.
     """
 
     def __init__(
         self,
-        keys: dict[str, tuple[str, bytes]],
+        keys: dict[str, tuple[str, bytes] | tuple[str, bytes, str]],
         *,
         revoked_keys: set[str] | None = None,
     ):
-        self._keys = dict(keys)
+        # Two-tuples are HMAC keys (legacy call sites keep working verbatim);
+        # three-tuples carry an explicit algorithm from the trust root.
+        self._keys: dict[str, tuple[str, bytes, str]] = {
+            key_id: (identity[0], identity[1], identity[2] if len(identity) > 2 else "hmac-sha256")
+            for key_id, identity in keys.items()
+        }
         self._revoked = set(revoked_keys or ())
+
+    def _signature_matches(self, identity: tuple[str, bytes, str], signature: str, payload: bytes) -> bool:
+        _, material, algorithm = identity
+        signature = signature.strip().lower()
+        if algorithm == "ed25519":
+            if not re.fullmatch(r"[0-9a-f]{128}", signature):
+                return False
+            try:
+                _ed25519_public_key(material).verify(bytes.fromhex(signature), payload)
+                return True
+            except TrustError:
+                raise
+            except Exception:
+                return False
+        if algorithm == "hmac-sha256":
+            if not re.fullmatch(r"[0-9a-f]{64}", signature):
+                return False
+            expected = hmac.new(material, payload, hashlib.sha256).hexdigest()
+            return hmac.compare_digest(expected, signature)
+        return False  # unknown algorithm in a hand-built store: fail closed
 
     def verify(
         self,
@@ -152,7 +207,7 @@ class TrustStore:
         identity = self._keys.get(entry.signing_key_id)
         if identity is None:
             raise TrustError(f"unknown signing key: {entry.signing_key_id}")
-        publisher, key = identity
+        publisher, _material, _algorithm = identity
         if publisher != entry.publisher_id:
             raise TrustError("signing key publisher does not match catalog entry")
         if not package_path.is_file():
@@ -162,8 +217,7 @@ class TrustStore:
         digest = _sha256_file(package_path)
         if not hmac.compare_digest(digest.lower(), expected_sha.lower()):
             raise TrustError("package sha256 does not match catalog entry")
-        expected = hmac.new(key, canonical_entry_payload(entry), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected.lower(), entry.signature.lower()):
+        if not self._signature_matches(identity, entry.signature, canonical_entry_payload(entry)):
             raise TrustError("catalog signature verification failed")
 
     def verify_catalog(self, catalog: MarketplaceCatalog) -> None:
@@ -172,11 +226,10 @@ class TrustStore:
         identity = self._keys.get(catalog.signing_key_id)
         if identity is None:
             raise TrustError(f"unknown catalog signing key: {catalog.signing_key_id}")
-        publisher, key = identity
+        publisher, _material, _algorithm = identity
         if publisher != catalog.publisher_id:
             raise TrustError("catalog signing key publisher does not match catalog")
-        expected = hmac.new(key, canonical_catalog_payload(catalog), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected.lower(), catalog.signature.lower()):
+        if not self._signature_matches(identity, catalog.signature, canonical_catalog_payload(catalog)):
             raise TrustError("catalog signature verification failed")
 
     def verify_assets_index(self, index: dict) -> None:
@@ -192,14 +245,11 @@ class TrustStore:
         identity = self._keys.get(key_id)
         if identity is None:
             raise TrustError(f"unknown assets signing key: {key_id}")
-        publisher, key = identity
+        publisher, _material, _algorithm = identity
         if publisher != index.get("publisherId"):
             raise TrustError("assets signing key publisher does not match index")
         signature = str(index.get("signature") or "")
-        if not re.fullmatch(r"[0-9a-fA-F]{64}", signature):
-            raise TrustError("assets index signature must contain exactly 64 hexadecimal characters")
-        expected = hmac.new(key, canonical_assets_index_payload(index), hashlib.sha256).hexdigest()
-        if not hmac.compare_digest(expected.lower(), signature.lower()):
+        if not self._signature_matches(identity, signature, canonical_assets_index_payload(index)):
             raise TrustError("assets index signature verification failed")
 
     @staticmethod
