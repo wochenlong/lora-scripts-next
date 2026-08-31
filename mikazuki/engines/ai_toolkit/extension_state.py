@@ -140,10 +140,33 @@ def _missing_runtime_files(layout: ExtensionLayout) -> list[str]:
 def read_extension_status(layout: ExtensionLayout) -> ExtensionStatus:
     if not layout.root.exists():
         return ExtensionStatus(STATE_NOT_INSTALLED, str(layout.source), str(layout.venv_python), "extension root missing")
+
+    # The installer records installing/auditing before source/ or the venv
+    # exist, so an active install state must be reconciled before the
+    # completed-runtime filesystem checks below; otherwise status polling
+    # reports not_installed mid-install and a second install can start.
+    payload: dict | None = None
+    if layout.install_state.is_file():
+        try:
+            payload = json.loads(layout.install_state.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return ExtensionStatus(STATE_BROKEN, str(layout.source), str(layout.venv_python), "install_state invalid json")
+    if payload is not None:
+        active_state = payload.get("state") or STATE_INSTALLED_UNVERIFIED
+        active_facts = payload.get("facts") or {}
+        if active_state in {STATE_INSTALLING, STATE_AUDITING}:
+            reason = payload.get("reason", "")
+            active_state, active_facts, reason = _reconcile_stale_install_state(layout, active_state, active_facts, reason)
+            if active_state in {STATE_INSTALLING, STATE_AUDITING}:
+                return ExtensionStatus(active_state, str(layout.source), str(layout.venv_python), "", active_facts)
+            if active_state == STATE_BROKEN:
+                return ExtensionStatus(STATE_BROKEN, str(layout.source), str(layout.venv_python), reason, active_facts)
+            # Reconciled to READY: fall through to the filesystem checks.
+
     if not layout.source.exists():
         return ExtensionStatus(STATE_NOT_INSTALLED, str(layout.source), str(layout.venv_python), "source missing")
     missing = _missing_runtime_files(layout)
-    if missing and not layout.install_state.is_file():
+    if missing and payload is None:
         return ExtensionStatus(
             STATE_BROKEN,
             str(layout.source),
@@ -152,23 +175,11 @@ def read_extension_status(layout: ExtensionLayout) -> ExtensionStatus:
         )
     if not layout.venv_python.is_file():
         return ExtensionStatus(STATE_INSTALLED_UNVERIFIED, str(layout.source), str(layout.venv_python), "python missing")
-    if not layout.install_state.is_file():
+    if payload is None:
         return ExtensionStatus(STATE_INSTALLED_UNVERIFIED, str(layout.source), str(layout.venv_python), "install_state missing")
-
-    try:
-        payload = json.loads(layout.install_state.read_text(encoding="utf-8"))
-    except json.JSONDecodeError:
-        return ExtensionStatus(STATE_BROKEN, str(layout.source), str(layout.venv_python), "install_state invalid json")
 
     state = payload.get("state") or STATE_INSTALLED_UNVERIFIED
     facts = payload.get("facts") or {}
-    if state in {STATE_INSTALLING, STATE_AUDITING}:
-        reason = payload.get("reason", "")
-        state, facts, reason = _reconcile_stale_install_state(layout, state, facts, reason)
-        if state in {STATE_INSTALLING, STATE_AUDITING}:
-            return ExtensionStatus(state, str(layout.source), str(layout.venv_python), "", facts)
-        if state == STATE_BROKEN:
-            return ExtensionStatus(STATE_BROKEN, str(layout.source), str(layout.venv_python), reason, facts)
     if missing:
         return ExtensionStatus(
             STATE_BROKEN,
