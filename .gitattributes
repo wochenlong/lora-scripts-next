@@ -4,3 +4,7 @@ frontend/dist/**/*.html text eol=lf
 frontend/dist/**/*.js text eol=lf
 frontend/dist/**/*.css text eol=lf
 frontend/index.html text eol=lf
+
+
+# WSL/bash scripts stay LF (see agent-assets/.gitattributes same rule)
+*.sh text eol=lf

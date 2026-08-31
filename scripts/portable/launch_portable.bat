@@ -16,6 +16,8 @@ set "MIKAZUKI_TOKENIZER_CACHE_DIR=%PORTABLE_ROOT%tokenizer-cache"
 :: Bundled tagger-models/tokenizer-cache first; do not force ModelScope (WD taggers are HF-only).
 if not defined MIKAZUKI_HUB_BACKEND set "MIKAZUKI_HUB_BACKEND=auto"
 set "PYTHONUTF8=1"
+:: Release-channel marketplace wiring (written by build_portable -MarketplaceCatalogOnly)
+if exist "%PORTABLE_ROOT%marketplace-env.bat" call "%PORTABLE_ROOT%marketplace-env.bat"
 set "PYTHON_EXE=%PORTABLE_ROOT%python_embeded\python.exe"
 set "LOG_FILE=%PORTABLE_ROOT%sd-trainer-log.txt"
 

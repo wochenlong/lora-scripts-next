@@ -4,7 +4,8 @@ import json
 import os
 import re
 
-from datetime import datetime
+from glob import glob
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -52,6 +53,10 @@ from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  APIResponseSuccess, TaggerInterrogateRequest,
                                  TaggerPrefetchRequest)
 from mikazuki.dataset_editor import router as dataset_editor_router
+from mikazuki.plugin_marketplace.api import host_router as plugin_host_router
+from mikazuki.plugin_marketplace.api import router as plugin_marketplace_router
+from mikazuki.agent_workspace.api import router as agent_workspace_router
+from mikazuki.plugin_host.agent_tools import router as agent_tools_router
 from mikazuki.log import log
 from mikazuki.tagger.interrogator import available_interrogators
 from mikazuki.tagger.jobs import run_interrogate_job, run_prefetch_job
@@ -70,6 +75,10 @@ from mikazuki.utils.tk_window import (open_directory_selector,
 
 router = APIRouter()
 router.include_router(dataset_editor_router)
+router.include_router(plugin_marketplace_router)
+router.include_router(plugin_host_router)
+router.include_router(agent_workspace_router)
+router.include_router(agent_tools_router)
 
 avaliable_scripts = [
     "networks/extract_lora_from_models.py",
@@ -785,6 +794,37 @@ async def get_presets() -> APIResponse:
 async def get_saved_params() -> APIResponse:
     saved_params = app_config["saved_params"]
     return APIResponseSuccess(data=saved_params)
+
+
+@router.put("/config/saved_params")
+async def put_saved_params(request: Request) -> APIResponse:
+    """Persist the training parameters the user is currently filling in the frontend.
+
+    Called by the TrainingPage autosave so the agent side (host tools) can read
+    the paths the user already filled in (dataset dir, model/checkpoint, ...).
+    Body: {"page_train_type": str, "config": {<form model>}}
+    Stored per train type as {"form": <config>, "savedAt": <iso8601 utc>}.
+    """
+    try:
+        payload = json.loads(await request.body())
+    except json.JSONDecodeError:
+        return APIResponseFail(message="请求体必须是 JSON")
+
+    page_train_type = payload.get("page_train_type")
+    config = payload.get("config")
+    if not isinstance(page_train_type, str) or not page_train_type.strip():
+        return APIResponseFail(message="缺少 page_train_type")
+    if not isinstance(config, dict):
+        return APIResponseFail(message="缺少 config 对象")
+
+    saved = dict(app_config["saved_params"] or {})
+    saved[page_train_type.strip()] = {
+        "form": config,
+        "savedAt": datetime.now(timezone.utc).isoformat(),
+    }
+    app_config["saved_params"] = saved
+    app_config.save_config()
+    return APIResponseSuccess(data={"ok": True, "page_train_type": page_train_type.strip()})
 
 
 @router.get("/train/log/stream/{task_id}")

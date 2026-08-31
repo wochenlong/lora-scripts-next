@@ -10,6 +10,8 @@ const TrainingWorkbenchPage = () => import("./pages/TrainingWorkbenchPage.vue")
 const SettingsContainerPage = () => import("./pages/SettingsContainerPage.vue")
 const GuidePage = () => import("./pages/GuidePage.vue")
 const ParamsPage = () => import("./pages/ParamsPage.vue")
+const GenericArtifactDetailPage = () => import("./components/extensions/GenericArtifactDetailPage.vue")
+const GenericPluginSettingsPage = () => import("./components/extensions/GenericPluginSettingsPage.vue")
 
 const trainingQuery = (model: string, engine: string, target: string) => ({
   path: "/training",
@@ -26,7 +28,13 @@ const routes: RouteRecordRaw[] = [
   { path: "/settings", redirect: "/settings/ui" },
   { path: "/settings/ui", component: SettingsContainerPage, props: { tab: "ui" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/engines", component: SettingsContainerPage, props: { tab: "engines" }, meta: { titleKey: "settings.title" } },
-  { path: "/settings/engines", component: SettingsContainerPage, props: { tab: "engines" }, meta: { titleKey: "settings.title" } },
+  { path: "/settings/plugins", component: SettingsContainerPage, props: { tab: "plugins" }, meta: { titleKey: "marketplace.title" } },
+  {
+    path: "/settings/plugins/:pluginId",
+    name: "plugin-settings",
+    component: GenericPluginSettingsPage,
+    meta: { titleKey: "extensionHost.settings.title" },
+  },
   { path: "/settings/about", component: SettingsContainerPage, props: { tab: "about" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/changelog", component: SettingsContainerPage, props: { tab: "changelog" }, meta: { titleKey: "settings.title" } },
   { path: "/help/guide.html", component: GuidePage, meta: { titleKey: "guide.title" } },
@@ -65,6 +73,12 @@ const routes: RouteRecordRaw[] = [
     component: IntegrationPage,
     props: { titleKey: "integration.legacyTagEditor", src: "/proxy/tageditor/" },
     meta: { titleKey: "integration.legacyTagEditor" },
+  },
+  {
+    path: "/plugins/:pluginId/artifacts/:artifactId",
+    name: "plugin-artifact-detail",
+    component: GenericArtifactDetailPage,
+    meta: { titleKey: "extensionHost.artifact.title" },
   },
   { path: "/:pathMatch(.*)*", component: NotFoundPage, meta: { titleKey: "notFound.title" } },
 ]

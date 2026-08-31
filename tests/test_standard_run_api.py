@@ -11,42 +11,59 @@ from unittest import mock
 
 from starlette.requests import Request
 
-stub_interrogator = types.ModuleType("mikazuki.tagger.interrogator")
-stub_interrogator.available_interrogators = {}
-stub_jobs = types.ModuleType("mikazuki.tagger.jobs")
-stub_jobs.run_interrogate_job = lambda *args, **kwargs: None
-stub_jobs.run_prefetch_job = lambda *args, **kwargs: None
-stub_progress = types.ModuleType("mikazuki.tagger.progress")
-stub_progress.tagger_progress = types.SimpleNamespace(
-    get=lambda: {},
-    request_cancel=lambda: False,
-    is_busy=lambda: False,
-    reset_idle=lambda message=None: None,
-)
-_TAGGER_MODULES = (
+_STUB_NAMES = (
     "mikazuki.tagger.interrogator",
     "mikazuki.tagger.jobs",
     "mikazuki.tagger.progress",
 )
-_saved_tagger_modules = {name: sys.modules.get(name) for name in _TAGGER_MODULES}
-sys.modules["mikazuki.tagger.interrogator"] = stub_interrogator
-sys.modules["mikazuki.tagger.jobs"] = stub_jobs
-sys.modules["mikazuki.tagger.progress"] = stub_progress
+_MISSING = object()
+_saved_modules = {name: sys.modules.get(name, _MISSING) for name in _STUB_NAMES}
+try:
+    stub_interrogator = types.ModuleType("mikazuki.tagger.interrogator")
+    stub_interrogator.available_interrogators = {}
+    stub_jobs = types.ModuleType("mikazuki.tagger.jobs")
+    stub_jobs.run_interrogate_job = lambda *args, **kwargs: None
+    stub_jobs.run_prefetch_job = lambda *args, **kwargs: None
+    stub_progress = types.ModuleType("mikazuki.tagger.progress")
+    stub_progress.tagger_progress = types.SimpleNamespace(
+        get=lambda: {},
+        request_cancel=lambda: False,
+        is_busy=lambda: False,
+        reset_idle=lambda message=None: None,
+    )
+    sys.modules["mikazuki.tagger.interrogator"] = stub_interrogator
+    sys.modules["mikazuki.tagger.jobs"] = stub_jobs
+    sys.modules["mikazuki.tagger.progress"] = stub_progress
 
-from mikazuki.app import api
+    _api_pre_cached = "mikazuki.app.api" in sys.modules
+    from mikazuki.app import api
+finally:
+    # Pytest imports all test modules during collection. Restore these stubs
+    # immediately so later modules collect the real tagger implementations.
+    for name, original in _saved_modules.items():
+        if original is _MISSING:
+            sys.modules.pop(name, None)
+        else:
+            sys.modules[name] = original
+    # Restoring sys.modules does not rebind the tagger symbols that
+    # mikazuki.app.api already imported (Copilot C-7). When THIS import was
+    # the first one, the cached module is stub-bound; evict it (module table
+    # AND the package attribute) so later collectors re-import real bindings,
+    # while this file keeps its local `api` reference for its own tests.
+    if not _api_pre_cached:
+        sys.modules.pop("mikazuki.app.api", None)
+        _app_package = sys.modules.get("mikazuki.app")
+        if _app_package is not None and getattr(_app_package, "api", None) is api:
+            delattr(_app_package, "api")
 
-# Restore the real tagger modules: the stubs only need to shield this module's
-# ``from mikazuki.app import api`` in minimal environments. Leaving them in
-# sys.modules leaks into later tests that import the real tagger modules.
-for _name in _TAGGER_MODULES:
-    if _saved_tagger_modules[_name] is None:
-        sys.modules.pop(_name, None)
-    else:
-        sys.modules[_name] = _saved_tagger_modules[_name]
+# (The tagger stubs themselves were already restored in the ``finally`` block
+# above; the earlier second restore pass is subsumed by it.)
 
 # If api was freshly imported through the stubs, its own globals still hold the
 # stub objects. Rebind them from the real modules so later tests never observe
-# collection-order-dependent tagger bindings.
+# collection-order-dependent tagger bindings. This pass also covers the case
+# where ``mikazuki.app.api`` was ALREADY cached by an earlier collector (the
+# C-7 eviction below the finally-block only fires for first-time imports).
 import mikazuki.tagger.interrogator as _real_interrogator
 import mikazuki.tagger.jobs as _real_jobs
 import mikazuki.tagger.progress as _real_progress

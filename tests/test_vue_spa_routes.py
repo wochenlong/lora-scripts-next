@@ -24,6 +24,8 @@ ROUTES = (
     "settings/engines",
     "settings/about",
     "settings/changelog",
+    "settings/plugins/sample-plugin",
+    "plugins/sample-plugin/artifacts/sample-artifact",
     "lora/basic.html",
     "lora/master.html",
     "lora/flux.html",
