@@ -130,9 +130,17 @@ def _validate_unique_permissions(value: list[str]) -> list[str]:
 
 
 def _host_version() -> str:
+    """Read the host version from the VERSION file next to the code root.
+
+    ``utf-8-sig`` deliberately strips a UTF-8 BOM: Windows tooling (PowerShell
+    5.1 ``Set-Content -Encoding UTF8``, Notepad "Save As UTF-8") writes BOMs by
+    default, and a BOM-prefixed version string ("\\ufeff3.0.0-rc.4") used to
+    blow up ``version_satisfies`` with a generic MARKETPLACE_TRUST_FAILED on
+    every install (rc.4 live acceptance, V30).
+    """
     version_file = Path(__file__).resolve().parents[2] / "VERSION"
     try:
-        return version_file.read_text(encoding="utf-8").strip() or "0.0.0"
+        return version_file.read_text(encoding="utf-8-sig").strip() or "0.0.0"
     except OSError:
         return "0.0.0"
 
