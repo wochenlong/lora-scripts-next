@@ -76,9 +76,20 @@ class MarketplacePaths:
         return self._contained(self.data_root / plugin_id)
 
     def quarantine_package(self, plugin_id: str, version: str) -> Path:
+        """Cached package zip for one plugin version (persistent download cache).
+
+        Semantics (V30): the file at this location survives cancelled/failed
+        installs and is reused by later installs of the same pinned
+        size+sha256, so a cancelled extraction never costs a second download.
+        """
         plugin_id = _safe_identifier(plugin_id, _PLUGIN_ID, "plugin id")
         version = _safe_identifier(version, _VERSION, "version")
         return self._contained(self.quarantine_root / plugin_id / f"{version}.zip")
+
+    def quarantine_packages(self, plugin_id: str) -> Path:
+        """Directory holding the cached zips of one plugin (all versions)."""
+        plugin_id = _safe_identifier(plugin_id, _PLUGIN_ID, "plugin id")
+        return self._contained(self.quarantine_root / plugin_id)
 
     def _contained(self, path: Path) -> Path:
         resolved = path.resolve()

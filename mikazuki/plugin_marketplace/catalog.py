@@ -479,9 +479,61 @@ class MarketplaceCatalogService:
         on_progress: Callable[[int, int], None] | None = None,
         is_cancelled: Callable[[], bool] | None = None,
     ) -> Path:
+        """Fetch the platform package into the PERSISTENT package cache.
+
+        The cache location (``paths.quarantine_package``) outlives the install
+        operation: a cancelled or failed install leaves the verified zip in
+        place, and a later install of the same catalog-pinned package reuses
+        it without any network or local-copy traffic (V30 UX fix: cancelling
+        during extraction must not cost a second download).
+        """
         destination = self.paths.quarantine_package(entry.id, entry.latest_version)
+        try:
+            _url, expected_size, expected_sha = entry.resolve_platform_package(platform)
+        except ValueError:
+            _url, expected_size, expected_sha = None, None, None
+        if destination.is_file() and expected_sha is not None:
+            try:
+                if destination.stat().st_size == expected_size and self._file_sha256(destination) == expected_sha.lower():
+                    if on_progress is not None:
+                        try:
+                            on_progress(expected_size, expected_size)
+                        except Exception:  # noqa: BLE001 — cached hit must never break the install
+                            pass
+                    self._prune_package_caches(entry.id, keep=destination.name)
+                    return destination
+            except OSError:
+                pass  # unreadable cache file -> re-acquire below
         destination.unlink(missing_ok=True)
-        return self.acquirer.acquire(entry, destination, platform, on_progress, is_cancelled)
+        acquired = self.acquirer.acquire(entry, destination, platform, on_progress, is_cancelled)
+        self._prune_package_caches(entry.id, keep=destination.name)
+        return acquired
+
+    @staticmethod
+    def _file_sha256(path: Path) -> str:
+        digest = hashlib.sha256()
+        with path.open("rb") as handle:
+            for chunk in iter(lambda: handle.read(_COPY_CHUNK_BYTES), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def _prune_package_caches(self, plugin_id: str, *, keep: str) -> None:
+        """Drop cached zips of superseded versions of the same plugin.
+
+        Best-effort only: the cache is a UX optimization, pruning must never
+        fail an install, and the KEEP file is never touched.
+        """
+        directory = self.paths.quarantine_packages(plugin_id)
+        try:
+            members = sorted(directory.iterdir())
+        except OSError:
+            return
+        for member in members:
+            try:
+                if member.name != keep and member.is_file() and member.suffix == ".zip":
+                    member.unlink(missing_ok=True)
+            except OSError:
+                continue
 
     @staticmethod
     def _parse(payload: bytes) -> MarketplaceCatalog:

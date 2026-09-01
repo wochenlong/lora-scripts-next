@@ -92,10 +92,12 @@ class ExecutablePluginRuntime:
         *,
         parent_pid: int | None = None,
         startup_timeout: float = 120.0,
+        ui_ready_timeout: float = 120.0,
         host_tool_base_url: str | None = None,
     ) -> None:
         self._parent_pid = parent_pid or os.getpid()
         self._startup_timeout = startup_timeout
+        self._ui_ready_timeout = ui_ready_timeout
         if host_tool_base_url is not None:
             parsed = urlsplit(host_tool_base_url)
             if parsed.scheme != "http" or parsed.hostname != "127.0.0.1" or not parsed.port:
@@ -173,6 +175,15 @@ class ExecutablePluginRuntime:
                 snapshot = self._probe(handle)
                 if snapshot.state != "running":
                     raise RuntimeError(snapshot.reason or "plugin runtime health check failed")
+                # V30 UX gate: the launcher's own readiness wait only proves the
+                # UI port answers ANY http status; the first real page render
+                # (what the floating panel loads) can lag behind. Block the
+                # enable/restart operation until the UI actually serves a
+                # non-empty document, so the user never opens a blank panel.
+                # Timeout raises into the same except path below: the runtime
+                # is torn down and enable reports the failure honestly.
+                if handle.ui_url is not None:
+                    self._wait_ui_ready(handle)
                 return snapshot
             except Exception:
                 self._terminate(process)
@@ -476,6 +487,44 @@ class ExecutablePluginRuntime:
                     os.kill(child_pid, signal.SIGKILL)
                 except OSError:
                     return
+
+    def _wait_ui_ready(
+        self,
+        handle: _ProcessHandle,
+        *,
+        poll_interval: float = 0.5,
+        read_cap_bytes: int = 64 * 1024,
+        attempt_timeout: float = 10.0,
+    ) -> None:
+        """Block until the plugin UI serves a real, non-empty document.
+
+        Ready means a completed HTTP response with a 2xx/3xx status AND a
+        non-empty body on the UI origin (query stripped: the panel's ``?cwd=``
+        parameter is irrelevant to boot). Connection errors, idle timeouts and
+        empty responses are retried until ``self._ui_ready_timeout`` expires,
+        at which point a RuntimeError tears the runtime down via start()'s
+        except path.
+        """
+        parsed = urlsplit(handle.ui_url or "")
+        origin = f"{parsed.scheme}://{parsed.netloc}"
+        target = origin + (parsed.path or "/")
+        deadline = time.monotonic() + self._ui_ready_timeout
+        last_error = "no response"
+        while True:
+            try:
+                request = urllib.request.Request(target, headers={"Accept": "text/html"})
+                with urllib.request.urlopen(request, timeout=attempt_timeout) as response:
+                    body = response.read(read_cap_bytes)
+                    if 200 <= response.status < 400 and body:
+                        return
+                    last_error = f"HTTP {response.status} with empty body" if response.status < 400 else f"HTTP {response.status}"
+            except Exception as exc:  # noqa: BLE001 — any network error means "not ready yet"
+                last_error = str(exc) or exc.__class__.__name__
+            if time.monotonic() >= deadline:
+                raise RuntimeError(
+                    f"plugin UI did not become ready within {self._ui_ready_timeout:.0f}s ({last_error})"
+                ) from None
+            time.sleep(poll_interval)
 
     @staticmethod
     def _probe(handle: _ProcessHandle) -> RuntimeSnapshot:
