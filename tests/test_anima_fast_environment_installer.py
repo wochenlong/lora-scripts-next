@@ -537,6 +537,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
+            self._make_runtime_source(layout)
             discovered_python = _fake_discovered_python(plan)
             pip_commands: list[list[str]] = []
 
@@ -583,6 +584,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
             self._make_constraints(project)
             layout = ExtensionLayout(project / "extensions" / "anima_lora")
             plan = build_environment_install_plan(project, layout, source, dry_run=False)
+            self._make_runtime_source(layout)
             discovered_python = _fake_discovered_python(plan)
             progress_events: list[dict] = []
 
