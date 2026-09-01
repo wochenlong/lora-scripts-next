@@ -323,15 +323,16 @@ def _install_pipeline(op: InstallOperation, entry: MarketplaceEntry, approved_pe
             op.report_phase(phase)
 
     op.report_phase("acquiring")
+    # acquire() lands the zip in the PERSISTENT package cache (V30): the file
+    # is deliberately NOT unlinked here. Cancelling (or failing) after the
+    # download keeps the verified zip on disk, so the next install of the same
+    # pinned package skips the download entirely.
     package = _catalog.acquire(entry, _platform_name(), on_progress=on_progress, is_cancelled=is_cancelled)
     # Cancellation is honored while acquiring. manager.install() runs under the
     # plugin lock and deliberately swallows every on_phase exception ("progress
     # must never break the install"), so once install() returns the plugin IS
     # committed — reporting "cancelled" there would be false (Copilot C-9).
-    try:
-        status = _manager.install(entry, package, approved_permissions=approved_permissions, on_phase=on_phase)
-    finally:
-        package.unlink(missing_ok=True)
+    status = _manager.install(entry, package, approved_permissions=approved_permissions, on_phase=on_phase)
     op.finish_success(status.model_dump(mode="json"))
 
 
@@ -344,17 +345,20 @@ def configure_install_operations(registry: InstallOperationRegistry) -> None:
 
 
 def _cleanup_stale_install_artifacts(paths: MarketplacePaths) -> None:
-    """Remove quarantine zips / staging dirs left behind by a killed mid-install.
+    """Remove incomplete download temps / staging dirs left by a killed install.
 
-    manager.install cleans its own staging in a finally block, so anything
-    still present at startup belongs to a previously interrupted operation.
+    Verified package zips in the quarantine cache are INTENTIONALLY KEPT (V30):
+    they are the persistent download cache that makes a cancelled or failed
+    install free to retry. Only ``*.part`` temps (aborted mid-download) and
+    stale staging trees (manager.install cleans its own in a finally block)
+    are removed at startup.
     """
     quarantine = paths.quarantine_root
     if quarantine.is_dir():
         for plugin_dir in quarantine.iterdir():
             if plugin_dir.is_dir():
                 for member in plugin_dir.iterdir():
-                    if member.is_file():
+                    if member.is_file() and member.name.endswith(".part"):
                         member.unlink(missing_ok=True)
     staging = paths.staging_root
     if staging.is_dir():
