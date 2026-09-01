@@ -1,9 +1,11 @@
 import argparse
+import importlib.util
 import locale
 import os
 import platform
 import subprocess
 import sys
+import time
 
 from mikazuki.launch_utils import (base_dir_path, catch_exception, git_tag,
                                    prepare_environment, check_port_avaliable,
@@ -18,11 +20,11 @@ parser.add_argument("--listen", action="store_true")
 parser.add_argument("--skip-prepare-environment", action="store_true")
 parser.add_argument("--skip-prepare-onnxruntime", action="store_true")
 parser.add_argument("--disable-tensorboard", action="store_true", default=False)
-parser.add_argument("--disable-tageditor", action="store_true")
+parser.add_argument("--disable-tageditor", action="store_true", help=argparse.SUPPRESS)
 parser.add_argument(
     "--enable-legacy-tageditor",
     action="store_true",
-    help="Deprecated compatibility flag. Legacy Gradio Dataset Tag Editor now starts by default.",
+    help="Start the optional legacy Gradio Dataset Tag Editor.",
 )
 parser.add_argument("--disable-train-monitor", action="store_true")
 parser.add_argument("--disable-auto-mirror", action="store_true")
@@ -34,6 +36,17 @@ parser.add_argument("--browser", type=str, default=None,
                     choices=["chrome", "edge", "default"],
                     help="Browser to open GUI: chrome, edge, or default (system default)")
 parser.add_argument("--dev", action="store_true")
+
+
+def _popen(command: list[str], **kwargs) -> subprocess.Popen:
+    if sys.platform.startswith("linux"):
+        command = [
+            sys.executable,
+            str(base_dir_path() / "mikazuki" / "child_process.py"),
+            str(os.getpid()),
+            *command,
+        ]
+    return subprocess.Popen(command, **kwargs)
 
 
 def ensure_port_available(
@@ -63,14 +76,14 @@ def ensure_port_available(
 @catch_exception
 def run_train_monitor():
     env = os.environ.copy()
-    subprocess.Popen([sys.executable, str(base_dir_path() / "train_monitor" / "server.py")], env=env)
+    return _popen([sys.executable, str(base_dir_path() / "train_monitor" / "server.py")], env=env)
 
 
 @catch_exception
 def run_tensorboard():
     log.info("Starting tensorboard...")
-    subprocess.Popen([sys.executable, "-m", "tensorboard.main", "--logdir", "logs",
-                     "--host", args.tensorboard_host, "--port", str(args.tensorboard_port)])
+    return _popen([sys.executable, "-m", "tensorboard.main", "--logdir", "logs",
+                   "--host", args.tensorboard_host, "--port", str(args.tensorboard_port)])
 
 
 @catch_exception
@@ -97,6 +110,12 @@ def run_tag_editor(port: int):
                 "自动初始化失败，请手动执行 git submodule update --init。"
             )
             return
+    if importlib.util.find_spec("gradio") is None:
+        log.error(
+            "Legacy Dataset Tag Editor requires the optional Gradio dependency. "
+            "Install mikazuki/dataset-tag-editor/requirements.txt before enabling it."
+        )
+        return None
     log.info("Starting tageditor...")
     tag_args = [
         "--port", str(port),
@@ -115,7 +134,53 @@ def run_tag_editor(port: int):
         f"sys.argv = [{str(launch_script)!r}] + {tag_args!r};"
         f"exec(compile(open({str(launch_script)!r}).read(), {str(launch_script)!r}, 'exec'))"
     )
-    subprocess.Popen([sys.executable, "-s", "-c", bootstrap])
+    return _popen([sys.executable, "-s", "-c", bootstrap])
+
+
+def stop_child_processes(
+    processes: list[tuple[str, subprocess.Popen]], timeout: float = 5.0
+) -> None:
+    running = []
+    for name, process in processes:
+        try:
+            if process.poll() is None:
+                running.append((name, process))
+        except Exception as e:
+            log.warning(f"Could not inspect {name} process: {e}")
+    if not running:
+        return
+
+    for name, process in running:
+        log.info(f"Stopping {name} (PID {process.pid})...")
+        try:
+            process.terminate()
+        except Exception as e:
+            log.warning(f"Could not terminate {name} (PID {process.pid}): {e}")
+
+    deadline = time.monotonic() + timeout
+    remaining = []
+    for name, process in running:
+        try:
+            process.wait(timeout=max(0, deadline - time.monotonic()))
+        except subprocess.TimeoutExpired:
+            remaining.append((name, process))
+        except Exception as e:
+            log.warning(f"Could not wait for {name} (PID {process.pid}): {e}")
+            remaining.append((name, process))
+
+    for name, process in remaining:
+        log.warning(f"{name} did not stop in time; killing PID {process.pid}.")
+        try:
+            process.kill()
+        except ProcessLookupError:
+            continue
+        except Exception as e:
+            log.warning(f"Could not kill {name} (PID {process.pid}): {e}")
+            continue
+        try:
+            process.wait()
+        except Exception as e:
+            log.warning(f"Could not reap {name} (PID {process.pid}): {e}")
 
 
 def launch():
@@ -129,7 +194,7 @@ def launch():
     log.info("Starting SD-Trainer Mikazuki GUI...")
     log.info(f"Base directory: {base_dir_path()}, Working directory: {os.getcwd()}")
     log.info(f"{platform.system()} Python {platform.python_version()} {sys.executable}")
-    legacy_tageditor_enabled = not args.disable_tageditor
+    legacy_tageditor_enabled = args.enable_legacy_tageditor and not args.disable_tageditor
 
     if not args.skip_prepare_environment:
         prepare_environment(disable_auto_mirror=args.disable_auto_mirror,
@@ -198,24 +263,34 @@ def launch():
     if args.browser:
         os.environ["MIKAZUKI_BROWSER"] = args.browser
 
-    if legacy_tageditor_enabled:
-        run_tag_editor(tageditor_port)
-    else:
-        log.info("Using native dataset editor at /dataset-editor.html; legacy Gradio tag editor is disabled.")
+    child_processes: list[tuple[str, subprocess.Popen]] = []
+    try:
+        if legacy_tageditor_enabled:
+            process = run_tag_editor(tageditor_port)
+            if process is not None:
+                child_processes.append(("legacy tag editor", process))
+        else:
+            log.info("Using native dataset editor at /dataset-editor.html; legacy Gradio tag editor is disabled.")
 
-    if not args.disable_tensorboard:
-        run_tensorboard()
+        if not args.disable_tensorboard:
+            process = run_tensorboard()
+            if process is not None:
+                child_processes.append(("TensorBoard", process))
 
-    if not args.disable_train_monitor:
-        run_train_monitor()
+        if not args.disable_train_monitor:
+            process = run_train_monitor()
+            if process is not None:
+                child_processes.append(("train monitor", process))
 
-    import uvicorn
-    log.info(f"Server started at http://{args.host}:{args.port}")
-    if not args.disable_train_monitor:
-        log.info(f"Train monitor at http://{args.host}:{args.train_monitor_port}")
-    else:
-        log.info("Train monitor disabled (--disable-train-monitor)")
-    uvicorn.run("mikazuki.app:app", host=args.host, port=args.port, log_level="error", reload=args.dev)
+        import uvicorn
+        log.info(f"Server started at http://{args.host}:{args.port}")
+        if not args.disable_train_monitor:
+            log.info(f"Train monitor at http://{args.host}:{args.train_monitor_port}")
+        else:
+            log.info("Train monitor disabled (--disable-train-monitor)")
+        uvicorn.run("mikazuki.app:app", host=args.host, port=args.port, log_level="error", reload=args.dev)
+    finally:
+        stop_child_processes(child_processes)
 
 
 if __name__ == "__main__":

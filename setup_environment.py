@@ -144,7 +144,7 @@ def _missing_requirements():
         "    if name:\n"
         "        installed.add(name)\n"
         "missing = []\n"
-        "with open(sys.argv[1], 'r', encoding='utf-8') as f:\n"
+        "with open(sys.argv[1], 'r', encoding='utf-8-sig') as f:\n"
         "    for raw in f:\n"
         "        line = raw.strip()\n"
         "        if not line or line.startswith('#') or line.startswith('-'):\n"
@@ -195,7 +195,7 @@ def check_already_installed(quiet=False):
     if not os.path.isdir(torch_dir):
         return False
 
-    core_modules = ("torch", "torchvision", "accelerate", "diffusers", "gradio")
+    core_modules = ("torch", "torchvision", "accelerate", "diffusers")
     for module in core_modules:
         try:
             __import__(module)
@@ -374,7 +374,7 @@ def _filter_requirements(req_file):
     """Read requirements.txt, filtering out packages incompatible with embedded Python."""
     skip_packages = {"triton-windows", "triton"}
     filtered_path = req_file + ".filtered"
-    with open(req_file, "r", encoding="utf-8") as f:
+    with open(req_file, "r", encoding="utf-8-sig") as f:
         lines = f.readlines()
     with open(filtered_path, "w", encoding="utf-8") as f:
         for line in lines:
@@ -438,7 +438,7 @@ def _core_modules_ok():
     )
     if not os.path.isdir(torch_dir):
         return False
-    for module in ("torch", "torchvision", "accelerate", "diffusers", "gradio"):
+    for module in ("torch", "torchvision", "accelerate", "diffusers"):
         try:
             __import__(module)
         except Exception:
@@ -527,7 +527,7 @@ def main():
 
     # 4 — requirements
     _separator()
-    _step(4, "安装训练组件 (transformers, diffusers, gradio ...)")
+    _step(4, "安装训练组件 (transformers, diffusers ...)")
     print()
     if not install_requirements(region):
         _fail("训练组件安装失败，请检查网络连接后重新运行 run_gui.bat")
