@@ -95,9 +95,9 @@ def test_linux_child_exits_when_parent_is_killed_from_another_directory(tmp_path
             sys.executable,
             "-c",
             (
-                "import os,signal,sys,time; from gui import _popen; "
+                "import os,signal,subprocess,sys,time; from gui import _popen; "
                 "signal.pthread_sigmask(signal.SIG_BLOCK,{signal.SIGTERM}); "
-                "child=_popen([sys.executable,'-c','import time; time.sleep(60)']); "
+                "child=_popen([sys.executable,'-c','import time; time.sleep(60)'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL); "
                 "print(child.pid, flush=True); time.sleep(0.2); os._exit(0)"
             ),
         ],
