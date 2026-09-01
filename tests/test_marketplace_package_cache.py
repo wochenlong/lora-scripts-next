@@ -214,6 +214,57 @@ def test_prune_never_touches_other_plugins(tmp_path: Path):
     assert foreign.is_file()
 
 
+class _LeakyPartAcquirer(_CountingAcquirer):
+    """Simulates the platform file-lock race observed on Windows live
+    acceptance (V30): the acquirer's own ``.part`` cleanup fails, so the
+    temp file survives the cancelled/failing acquire. The SERVICE layer must
+    still sweep it so a stray ``.part`` never lingers beside the cache."""
+
+    def acquire(
+        self,
+        entry: MarketplaceEntry,
+        destination: Path,
+        platform: str,
+        on_progress=None,
+        is_cancelled=None,
+    ) -> Path:
+        self.calls += 1
+        temporary = destination.with_suffix(destination.suffix + ".part")
+        temporary.parent.mkdir(parents=True, exist_ok=True)
+        temporary.write_bytes(self.payload[:100])
+        # the .part is deliberately left behind
+        raise CatalogError("MARKETPLACE_OPERATION_CANCELLED", "The plugin installation was cancelled.")
+
+
+def test_cancelled_download_with_leaky_part_is_swept(tmp_path: Path):
+    acquirer = _LeakyPartAcquirer()
+    service, paths = _service(tmp_path, acquirer)
+    entry = _build_entry()
+    cache = paths.quarantine_package("cache-plugin", "1.0.0")
+
+    with pytest.raises(CatalogError) as excinfo:
+        service.acquire(entry, "win32-x64")
+    assert excinfo.value.code == "MARKETPLACE_OPERATION_CANCELLED"
+    assert not cache.exists()
+    assert not cache.with_suffix(".zip.part").exists()  # service swept the acquirer leak
+
+
+def test_cache_hit_sweeps_stale_part(tmp_path: Path):
+    acquirer = _CountingAcquirer()
+    service, paths = _service(tmp_path, acquirer)
+    entry = _build_entry()
+    cache = paths.quarantine_package("cache-plugin", "1.0.0")
+    cache.parent.mkdir(parents=True, exist_ok=True)
+    cache.write_bytes(PAYLOAD)
+    part = cache.with_suffix(".zip.part")
+    part.write_bytes(PAYLOAD[:10])
+
+    result = service.acquire(entry, "win32-x64")
+    assert result == cache
+    assert acquirer.calls == 0  # pure cache hit
+    assert not part.exists()
+
+
 def test_startup_cleanup_keeps_verified_zip_removes_part(tmp_path: Path):
     from mikazuki.plugin_marketplace.api import _cleanup_stale_install_artifacts
 

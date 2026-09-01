@@ -500,14 +500,39 @@ class MarketplaceCatalogService:
                             on_progress(expected_size, expected_size)
                         except Exception:  # noqa: BLE001 — cached hit must never break the install
                             pass
+                    self._drop_stale_part(destination)
                     self._prune_package_caches(entry.id, keep=destination.name)
                     return destination
             except OSError:
                 pass  # unreadable cache file -> re-acquire below
         destination.unlink(missing_ok=True)
-        acquired = self.acquirer.acquire(entry, destination, platform, on_progress, is_cancelled)
+        try:
+            acquired = self.acquirer.acquire(entry, destination, platform, on_progress, is_cancelled)
+        except BaseException:
+            # Belt-and-braces for platform file-lock races in the acquirer's own
+            # .part cleanup (observed once on Windows live acceptance, V30): a
+            # stray .part must never linger next to the persistent cache.
+            self._drop_stale_part(destination)
+            raise
+        self._drop_stale_part(destination)
         self._prune_package_caches(entry.id, keep=destination.name)
         return acquired
+
+    @staticmethod
+    def _drop_stale_part(destination: Path) -> None:
+        """Best-effort removal of the acquirer's ``<name>.part`` temp file.
+
+        The acquirer normally unlinks its own temp on cancel/failure; this
+        closes the residual race on platforms where a transient lock makes
+        that unlink fail (Windows live acceptance, V30: a 3 MiB .part
+        survived a cancelled download). Cache zip and other plugins' files
+        are never touched; failures are swallowed by design (cache hygiene,
+        never install-critical).
+        """
+        try:
+            (destination.parent / (destination.name + ".part")).unlink(missing_ok=True)
+        except OSError:
+            pass
 
     @staticmethod
     def _file_sha256(path: Path) -> str:
