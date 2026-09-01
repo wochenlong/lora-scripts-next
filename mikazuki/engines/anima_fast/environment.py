@@ -82,12 +82,15 @@ ANIMA_CORE_PIP_TARGETS = (
     "numpy", "Pillow", "psutil", "packaging",
 )
 ANIMA_EXTRA_PIP_TARGETS = ("iopath==0.1.10", "optimum-quanto>=0.2.0")
+ANIMA_WINDOWS_TRITON_TARGET = "triton-windows==3.7.0.post26"
 
 
 def anima_pip_dependency_targets(platform: str | None = None) -> list[str]:
     platform = platform or sys.platform
     targets = list(ANIMA_CORE_PIP_TARGETS)
     targets.append("opencv-python-headless" if platform.startswith("linux") else "opencv-python")
+    if platform == "win32":
+        targets.append(ANIMA_WINDOWS_TRITON_TARGET)
     targets.extend(f"{name}=={version}" for name, version in ANIMA_OPTIMIZER_PACKAGES.items())
     targets.extend(ANIMA_EXTRA_PIP_TARGETS)
     return targets

@@ -523,6 +523,13 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertIn("optimum-quanto>=0.2.0", targets)
         self.assertIn("iopath==0.1.10", targets)
 
+    def test_anima_pip_dependency_targets_install_triton_on_windows_only(self):
+        windows_targets = anima_pip_dependency_targets("win32")
+        linux_targets = anima_pip_dependency_targets("linux")
+
+        self.assertIn("triton-windows==3.7.0.post26", windows_targets)
+        self.assertNotIn("triton-windows==3.7.0.post26", linux_targets)
+
     def test_install_environment_pip_install_includes_explicit_optimizer_targets(self):
         with tempfile.TemporaryDirectory() as td:
             project = Path(td)
@@ -544,6 +551,10 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                     pip_commands.append(list(command))
 
             with mock.patch("mikazuki.engines.anima_fast.environment._uv_command", return_value="uv"), \
+                mock.patch(
+                    "mikazuki.engines.anima_fast.environment.anima_pip_dependency_targets",
+                    return_value=anima_pip_dependency_targets("win32"),
+                ), \
                 mock.patch("mikazuki.engines.anima_fast.environment.copy_source_snapshot"), \
                 mock.patch("mikazuki.engines.anima_fast.environment._run_streaming", side_effect=fake_run), \
                 mock.patch(
@@ -559,6 +570,7 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertIn("dadaptation==3.1", pip_cmd)
         self.assertIn("optimum-quanto>=0.2.0", pip_cmd)
         self.assertIn("iopath==0.1.10", pip_cmd)
+        self.assertIn("triton-windows==3.7.0.post26", pip_cmd)
         self.assertIn("torch", pip_cmd)
         self.assertIn("--no-deps", pip_commands[1])
         self.assertIn("--verbose", pip_commands[1])
