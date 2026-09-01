@@ -26,6 +26,21 @@
   border-radius: 14px;
 }
 
+.preview-lightbox .el-dialog__body {
+  max-height: calc(100vh - 160px);
+  overflow: auto;
+}
+
+.preview-lightbox .lightbox-image {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  height: auto;
+  max-height: calc(100vh - 190px);
+  margin: 0 auto;
+  object-fit: contain;
+}
+
 .task-empty strong {
   color: var(--text);
   font-size: 18px;

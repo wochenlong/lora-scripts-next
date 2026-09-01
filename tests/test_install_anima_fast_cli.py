@@ -28,8 +28,8 @@ class InstallAnimaFastCliTests(unittest.TestCase):
             )
             env_dir = project / "config" / "anima_fast_environment"
             env_dir.mkdir()
-            (env_dir / "anima-constraints-cu130.txt").write_text("torch\n", encoding="utf-8")
-            (env_dir / "anima-overrides-cu130.txt").write_text("numpy\n", encoding="utf-8")
+            (env_dir / "anima-constraints-cu132.txt").write_text("torch\n", encoding="utf-8")
+            (env_dir / "anima-overrides-cu132.txt").write_text("numpy\n", encoding="utf-8")
             source = project / "upstream"
             source.mkdir()
             (source / "train.py").write_text("print('ok')\n", encoding="utf-8")
@@ -58,8 +58,8 @@ class InstallAnimaFastCliTests(unittest.TestCase):
             (project / "config" / "anima_fast_backend.toml").write_text("[backend]\n", encoding="utf-8")
             env_dir = project / "config" / "anima_fast_environment"
             env_dir.mkdir()
-            (env_dir / "anima-constraints-cu130.txt").write_text("iopath==0.1.10\n", encoding="utf-8")
-            (env_dir / "anima-overrides-cu130.txt").write_text("numpy>=2\n", encoding="utf-8")
+            (env_dir / "anima-constraints-cu132.txt").write_text("iopath==0.1.10\n", encoding="utf-8")
+            (env_dir / "anima-overrides-cu132.txt").write_text("numpy>=2\n", encoding="utf-8")
             source = project / "upstream"
             source.mkdir()
             (source / "train.py").write_text("print('ok')\n", encoding="utf-8")

@@ -57,7 +57,7 @@ def ensure_output_directories(values: dict) -> list[str]:
 
 
 def run_resize_images(runtime: RuntimeConfig, src: Path, dst: Path, resolution: int) -> None:
-    script = runtime.anima_root / "preprocess" / "resize_images.py"
+    script = runtime.anima_root / "scripts" / "preprocess" / "resize_images.py"
     if not script.is_file():
         raise AdapterError(f"Anima resize script missing: {script}")
     if not src.is_dir():
@@ -70,7 +70,7 @@ def run_resize_images(runtime: RuntimeConfig, src: Path, dst: Path, resolution: 
         str(src.resolve()),
         "--dst",
         str(dst.resolve()),
-        "--resolution",
+        "--target_res",
         str(resolution),
         "--recursive",
         "--min_pixels",

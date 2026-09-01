@@ -20,14 +20,10 @@ optimizer_type = "AdamW8bit"
 learning_rate = 0.00005
 
 mixed_precision = "bf16"
-cache_latents = false
-cache_latents_to_disk = false
-cache_text_encoder_outputs = false
-cache_text_encoder_outputs_to_disk = false
+use_vae_cache = false
+use_text_cache = false
 skip_cache_check = true
 
 torch_compile = true
-static_token_count = 4096
-compile_mode = "blocks"
-dynamo_backend = "inductor"
+compile_dynamic_seq = true
 attn_mode = "flash"

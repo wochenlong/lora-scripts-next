@@ -364,6 +364,23 @@ class TaskMaintenanceApiTests(unittest.TestCase):
         self.assertEqual(response.status, "fail")
         self.assertIn("不存在", response.message)
 
+    def test_task_config_prefers_anima_fast_source_config(self):
+        self._api_task("api-cfg-anima-source", metadata={
+            "config_path": "/nonexistent/adapted.toml",
+            "backend": "anima-lora-fast",
+            "source_config": {
+                "model_train_type": "anima-lora-fast",
+                "fast_variant": "tlora",
+                "network_dim": 32,
+            },
+        })
+
+        response = asyncio.run(api.task_config("api-cfg-anima-source"))
+
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["config"]["fast_variant"], "tlora")
+        self.assertEqual(response.data["config"]["network_dim"], 32)
+
     def test_task_config_musubi_train_type(self):
         with tempfile.TemporaryDirectory() as tmp:
             config_path = Path(tmp) / "task.toml"

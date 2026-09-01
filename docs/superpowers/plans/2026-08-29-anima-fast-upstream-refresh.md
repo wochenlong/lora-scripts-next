@@ -191,8 +191,8 @@ git commit -m "feat(anima-fast): support Anima 2.9B model identity"
 ### Task 4: Refresh and prune the isolated runtime dependencies
 
 **Files:**
-- Modify: `config/anima_fast_environment/anima-constraints-cu130.txt`
-- Modify: `config/anima_fast_environment/anima-overrides-cu130.txt`
+- Modify: `config/anima_fast_environment/anima-constraints-cu132.txt`
+- Modify: `config/anima_fast_environment/anima-overrides-cu132.txt`
 - Modify: `mikazuki/engines/anima_fast/installer.py`
 - Modify: `mikazuki/engines/anima_fast/environment.py`
 - Test: `tests/test_anima_fast_environment_installer.py`

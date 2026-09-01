@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any, Callable
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -13,6 +14,9 @@ from .settings import RuntimeConfig
 
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".avif"}
+DIT_BLOCK_RE = re.compile(r"^blocks\.(\d+)\.")
+DIT_PREFIXES = ("net.", "model.diffusion_model.")
+MODEL_CHANNELS_TO_HEADS = {1280: 20, 2048: 16, 5120: 40}
 
 
 @dataclass
@@ -49,6 +53,56 @@ class PreflightResult:
 
 
 DependencyProbe = Callable[[RuntimeConfig], ProbeFacts]
+
+
+def probe_dit_checkpoint(path: Path) -> dict[str, Any] | None:
+    # Tiny placeholder files are common in unit tests and cannot contain a
+    # safetensors header. Real checkpoints are always much larger.
+    if path.suffix.lower() != ".safetensors" or path.stat().st_size < 16:
+        return None
+    from safetensors import safe_open
+
+    files = [path]
+    shard_match = re.match(r"^(.*)-\d{5}-of-\d{5}(\.safetensors)$", path.name)
+    if shard_match:
+        files = sorted(path.parent.glob(f"{shard_match.group(1)}-*-of-*{shard_match.group(2)}"))
+
+    max_idx = -1
+    width: int | None = None
+    for file in files:
+        with safe_open(file, framework="pt", device="cpu") as handle:
+            for key in handle.keys():
+                clean = key
+                for prefix in DIT_PREFIXES:
+                    if clean.startswith(prefix):
+                        clean = clean[len(prefix):]
+                        break
+                match = DIT_BLOCK_RE.match(clean)
+                if match:
+                    max_idx = max(max_idx, int(match.group(1)))
+                elif clean == "x_embedder.proj.1.weight":
+                    width = int(handle.get_slice(key).get_shape()[0])
+    if max_idx < 0:
+        raise ValueError("no top-level Anima DiT blocks found")
+    if width not in MODEL_CHANNELS_TO_HEADS:
+        raise ValueError(f"unsupported Anima DiT width: {width}")
+    num_blocks = max_idx + 1
+    return {
+        "num_blocks": num_blocks,
+        "model_channels": width,
+        "num_heads": MODEL_CHANNELS_TO_HEADS[width],
+        "model_variant": "anima-2.9b" if num_blocks == 40 and width == 2048 else "anima-base" if num_blocks == 28 and width == 2048 else "anima-compatible",
+    }
+
+
+def read_network_num_blocks(path: Path) -> int | None:
+    if path.suffix.lower() != ".safetensors" or not path.is_file() or path.stat().st_size < 16:
+        return None
+    from safetensors import safe_open
+
+    with safe_open(path, framework="pt", device="cpu") as handle:
+        value = (handle.metadata() or {}).get("ss_num_blocks")
+    return int(value) if value else None
 
 
 def default_dependency_probe(runtime: RuntimeConfig) -> ProbeFacts:
@@ -205,6 +259,43 @@ def _has_files(root: Path | None, suffixes: set[str] | None = None) -> bool:
     return False
 
 
+def _v117_latent_cache_stems(root: Path | None) -> set[str]:
+    if root is None or not root.is_dir():
+        return set()
+    import numpy as np
+
+    valid: set[str] = set()
+    for path in root.rglob("*_anima.npz"):
+        try:
+            with np.load(path, allow_pickle=False) as data:
+                if any(key.startswith("latents_") for key in data.files):
+                    match = re.match(r"^(.*)_\d{4}x\d{4}_anima$", path.stem)
+                    if match:
+                        valid.add(match.group(1))
+        except Exception:
+            continue
+    return valid
+
+
+def _v117_text_cache_stems(root: Path | None) -> set[str]:
+    if root is None or not root.is_dir():
+        return set()
+    from safetensors import safe_open
+
+    required = {"prompt_embeds", "attn_mask", "t5_input_ids", "t5_attn_mask"}
+    valid: set[str] = set()
+    for path in root.rglob("*_anima_te.safetensors"):
+        try:
+            with safe_open(path, framework="pt", device="cpu") as handle:
+                keys = set(handle.keys())
+            has_variants = "num_variants" in keys and any(key.startswith("prompt_embeds_v") or key.startswith("crossattn_emb_v") for key in keys)
+            if "crossattn_emb" in keys or required.issubset(keys) or has_variants:
+                valid.add(path.name.removesuffix("_anima_te.safetensors"))
+        except Exception:
+            continue
+    return valid
+
+
 def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: DependencyProbe = default_dependency_probe) -> PreflightResult:
     errors: list[str] = []
     warnings: list[str] = []
@@ -225,12 +316,41 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
     if not (runtime.anima_root / "configs" / "base.toml").is_file():
         errors.append("anima_lora configs/base.toml missing")
 
+    model_path: Path | None = None
     for field in ("pretrained_model_name_or_path", "vae", "qwen3"):
         path = _resolve(config.get(field), runtime.lora_next_root)
         if path is None:
             errors.append(f"required model field missing: {field}")
         elif not path.is_file():
             errors.append(f"required model file does not exist: {field}={path}")
+        elif field == "pretrained_model_name_or_path":
+            model_path = path
+
+    model_arch: dict[str, Any] | None = None
+    if model_path is not None:
+        try:
+            model_arch = probe_dit_checkpoint(model_path)
+            if model_arch:
+                facts["anima_model"] = model_arch
+                if model_arch["model_variant"] == "anima-2.9b":
+                    warnings.append("Anima-2.9B is a 40-block checkpoint and requires more VRAM than Anima base")
+        except Exception as exc:
+            errors.append(f"invalid Anima DiT checkpoint: {exc}")
+
+    if model_arch:
+        for field in ("network_weights", "resume"):
+            candidate = _resolve(config.get(field), runtime.lora_next_root)
+            if candidate is None or not candidate.is_file():
+                continue
+            try:
+                trained_blocks = read_network_num_blocks(candidate)
+            except Exception as exc:
+                errors.append(f"cannot read {field} metadata: {exc}")
+                continue
+            if trained_blocks and trained_blocks != model_arch["num_blocks"]:
+                errors.append(
+                    f"{field} was trained for {trained_blocks} Anima blocks but the selected checkpoint has {model_arch['num_blocks']}"
+                )
 
     train_dir = _resolve(config.get("train_data_dir") or config.get("source_image_dir"), runtime.lora_next_root)
     if train_dir is None:
@@ -254,32 +374,21 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
         if images and captioned < len(images):
             warnings.append(f"{len(images) - captioned} image(s) do not have .txt captions")
 
-    compile_mode = str(config.get("compile_mode", "blocks"))
-    gradient_checkpointing = _truthy(config.get("gradient_checkpointing"))
     blocks_to_swap = _int_value(config.get("blocks_to_swap"), 0)
     cpu_offload = _truthy(config.get("cpu_offload_checkpointing"))
     unsloth = _truthy(config.get("unsloth_offload_checkpointing"))
     torch_compile = _truthy(config.get("torch_compile", True))
-    static_token_count = _int_value(config.get("static_token_count"), 0)
 
-    if compile_mode == "full" and gradient_checkpointing:
-        errors.append("compile_mode=full is incompatible with gradient_checkpointing")
-    if compile_mode == "full" and blocks_to_swap > 0:
-        errors.append("compile_mode=full is incompatible with blocks_to_swap")
     if blocks_to_swap > 0 and cpu_offload:
         errors.append("blocks_to_swap is incompatible with cpu_offload_checkpointing")
     if unsloth and cpu_offload:
         errors.append("unsloth_offload_checkpointing is incompatible with cpu_offload_checkpointing")
     if unsloth and blocks_to_swap > 0:
         errors.append("unsloth_offload_checkpointing is incompatible with blocks_to_swap")
-    if torch_compile and static_token_count <= 0:
-        errors.append("torch_compile requires static_token_count")
     tokens = _resolution_tokens(config)
     facts["resolution_tokens"] = tokens
-    if _truthy(config.get("enable_bucket", True)) and 0 < static_token_count < 4096:
-        warnings.append("enable_bucket may create high-resolution Anima buckets; use static_token_count=4096 or higher")
-    if torch_compile and tokens and static_token_count and tokens > static_token_count:
-        errors.append(f"static_token_count={static_token_count} is smaller than resolution token count {tokens}")
+    if torch_compile and not _truthy(config.get("compile_dynamic_seq", True)):
+        errors.append("torch_compile requires compile_dynamic_seq with Anima v1.17.1 free-fit buckets")
 
     optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
     if optimizer_type == "automagic":
@@ -288,28 +397,31 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
             "use AdamW8bit or another Fast optimizer"
         )
 
-    cache_latents = _truthy(config.get("cache_latents"))
-    cache_text_encoder = _truthy(config.get("cache_text_encoder_outputs"))
+    cache_latents = _truthy(config.get("use_vae_cache"))
+    cache_text_encoder = _truthy(config.get("use_text_cache"))
     skip_cache_check = _truthy(config.get("skip_cache_check"))
     resized_dir = _resolve(config.get("resized_image_dir") or config.get("source_image_dir"), runtime.lora_next_root)
     lora_cache_dir = _resolve(config.get("lora_cache_dir"), runtime.lora_next_root)
-    facts["cache_latents"] = cache_latents
-    facts["cache_text_encoder_outputs"] = cache_text_encoder
+    facts["use_vae_cache"] = cache_latents
+    facts["use_text_cache"] = cache_text_encoder
     facts["skip_cache_check"] = skip_cache_check
     if resized_dir is not None:
         facts["resized_image_dir"] = str(resized_dir)
     if lora_cache_dir is not None:
         facts["lora_cache_dir"] = str(lora_cache_dir)
     if not skip_cache_check:
-        if cache_latents and not _has_files(resized_dir, {".npz", ".safetensors", ".pt", ".pth"}):
+        expected_stems = {image.stem for image in _dataset_images(resized_dir)} if resized_dir and resized_dir.is_dir() else set()
+        latent_stems = _v117_latent_cache_stems(lora_cache_dir)
+        text_stems = _v117_text_cache_stems(lora_cache_dir)
+        if cache_latents and (not latent_stems or expected_stems - latent_stems):
             errors.append(
-                "cache_latents=true requires completed Anima preprocess/cache files; "
-                "disable cache_latents for live VAE encoding or run preprocess first"
+                "use_vae_cache=true requires completed Anima preprocess/cache files; "
+                "disable use_vae_cache for live VAE encoding or run preprocess first"
             )
-        if cache_text_encoder and not _has_files(lora_cache_dir, {".npz", ".safetensors", ".pt", ".pth"}):
+        if cache_text_encoder and (not text_stems or expected_stems - text_stems):
             errors.append(
-                "cache_text_encoder_outputs=true requires completed Anima text encoder cache; "
-                "disable cache_text_encoder_outputs for live encoding or run preprocess first"
+                "use_text_cache=true requires completed Anima text encoder cache; "
+                "disable use_text_cache for live encoding or run preprocess first"
             )
 
     if not errors:
@@ -334,7 +446,7 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
                 "请改用 torch/xformers，或先修复插件环境"
             )
         if torch_compile and dep.vram_total_mb and dep.vram_total_mb < 14000:
-            warnings.append(f"VRAM {dep.vram_total_mb} MB may be low for torch_compile + static_token_count={static_token_count}")
+            warnings.append(f"VRAM {dep.vram_total_mb} MB may be low for torch_compile with free-fit buckets")
         if config.get("sample_prompts"):
             warnings.append(
                 "sample_prompts is enabled; sampling loads VAE/Qwen3 during training and increases VRAM/time"

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 import os
+import platform
 
 from .settings import RuntimeConfig
 
@@ -30,6 +31,10 @@ def build_launch_spec(runtime: RuntimeConfig, config_path: Path, task_id: str, g
     env["FORCE_COLOR"] = "0"
     env["TERM"] = "dumb"
     env["ANIMA_FAST_PARENT_TASK_ID"] = task_id
+    if platform.system() == "Linux" and platform.machine().lower() in {"aarch64", "arm64"}:
+        # bitsandbytes 0.49.2 has no cuda132 binary yet. Its bundled cuda130
+        # backend works on GB10 alongside the cu132 PyTorch runtime.
+        env.setdefault("BNB_CUDA_VERSION", "130")
     env.pop("PYTHONPATH", None)
     if runtime.hf_home is not None:
         env["HF_HOME"] = str(runtime.hf_home)

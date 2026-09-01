@@ -2,7 +2,7 @@
 
 面向维护者：在将 Anima Fast 上游升级 PR 合并进 `dev` 前核对下列项。
 
-> 本 PR 是受控的 Fast 后端升级，不是上游全量功能搬运。覆盖标准 LoRA、T-LoRA 和 Anima 2.9B；LoKr、Turbo/distillation、ControlNet、EasyControl、Qwen Image editing、上游 GUI、ComfyUI custom nodes、SAM3、Tagger、模型下载 GUI 及其他实验性能力明确留待后续 PR。
+> 本 PR 是受控的 Fast 后端升级，不是上游全量功能搬运。覆盖标准 LoRA、T-LoRA，以及同架构的社区 Anima-2.9B checkpoint；LoKr、Turbo/distillation、ControlNet、EasyControl、Qwen Image editing、上游 GUI、ComfyUI custom nodes、SAM3、Tagger、模型下载 GUI 及其他实验性能力明确留待后续 PR。
 
 ## 1. 许可证与归属
 
@@ -66,7 +66,7 @@
 ```markdown
 ## Summary
 
-- 集成 **Anima LoRA Fast 模式**（可选插件 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora)，MIT）：页内安装、独立 cu130 venv、`anima-lora-fast` 训练路由。
+- 集成 **Anima LoRA Fast 模式**（可选插件 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora)，MIT）：页内安装、独立 cu132 venv、`anima-lora-fast` 训练路由。
 - 训练监控：Fast Loss / ETA / Epoch、`*.progress.jsonl` 与预览图按活动任务 output 同步。
 - 文档、NOTICE、benchmark 示例与 v2.7.0 发版条目；整合包**不预装**插件 venv。
 

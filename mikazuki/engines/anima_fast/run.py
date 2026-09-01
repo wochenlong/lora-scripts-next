@@ -1,5 +1,6 @@
 """Anima Fast /api/run handler (gate -> adapt -> preflight -> dump -> launch)."""
 
+import copy
 import sys
 
 from pathlib import Path
@@ -105,6 +106,7 @@ def handle_run(config: dict, ctx: RunContext):
     if not ready:
         return failure
     try:
+        source_config = copy.deepcopy(config)
         runtime = anima_fast_runtime()
         run_id = f"{ctx.timestamp}-anima-fast"
         preview_warnings = apply_anima_fast_preview(config, ctx.autosave_dir, run_id)
@@ -123,6 +125,7 @@ def handle_run(config: dict, ctx: RunContext):
             "logging_dir": adapted_values.get("logging_dir"),
             "warnings": warnings,
             "auto_resized": prepared.auto_resized,
+            "source_config": source_config,
         }
         return process.run_anima_fast_train(str(toml_file), runtime, ctx.gpu_ids, metadata=metadata)
     except AdapterError as exc:

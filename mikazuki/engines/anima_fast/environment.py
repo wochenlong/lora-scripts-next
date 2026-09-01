@@ -6,7 +6,7 @@ from typing import Callable
 import importlib.metadata
 import json
 import os
-import platform
+import platform as platform_module
 import queue
 import shutil
 import subprocess
@@ -36,32 +36,21 @@ from .installer import build_install_plan, copy_source_snapshot
 
 
 ENVIRONMENT_DIR = Path("config/anima_fast_environment")
-ANIMA_CONSTRAINTS = ENVIRONMENT_DIR / "anima-constraints-cu130.txt"
-ANIMA_OVERRIDES = ENVIRONMENT_DIR / "anima-overrides-cu130.txt"
+ANIMA_CONSTRAINTS = ENVIRONMENT_DIR / "anima-constraints-cu132.txt"
+ANIMA_OVERRIDES = ENVIRONMENT_DIR / "anima-overrides-cu132.txt"
 MAIN_CONSTRAINTS = ENVIRONMENT_DIR / "main-constraints-cu130.txt"
-FLASH_ATTN_WINDOWS_MARKER = "flash-attn @ https://"
-FLASH_ATTN_LINUX_PLATFORM_MARKER = "sys_platform == 'linux'"
-FLASH_ATTN_LINUX_AARCH64_PLATFORM_MARKER = "sys_platform == 'linux' and platform_machine == 'aarch64'"
-FLASH_ATTN_LINUX_CU130_URL = (
-    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.4/"
-    "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl"
+FLASH_ATTN_LINUX_CU132_URL_X86_64 = (
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.17/"
+    "flash_attn-2.8.3%2Bcu132torch2.12-cp313-cp313-linux_x86_64.whl"
 )
-# GB10 (DGX Spark, sm_121) local source build; no aarch64 wheel exists on PyPI
-# or upstream releases. sm_121 SASS only — not for other aarch64 devices
-# (Jetson, Grace, etc.).
-FLASH_ATTN_LINUX_CU130_URL_AARCH64 = (
-    "https://github.com/IryNeko/patched-flash_attn-2.8.3-for-dgx-spark/releases/download/"
-    "torch2.11-cu130-sm121-cp313-arm64/"
-    "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_aarch64.whl"
+FLASH_ATTN_LINUX_CU132_URL_AARCH64 = (
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.22/"
+    "flash_attn-2.8.3%2Bcu132torch2.12-cp313-cp313-linux_aarch64.whl"
 )
-
-# Optional, masking-only dependencies that core LoRA training never imports.
-# sam3 is a heavy git build (facebookresearch/sam3) whose HF weights are gated;
-# pulling it during install is slow and frequently fails, which blocks READY even
-# though it is irrelevant to training. We strip it from the copied snapshot and
-# leave it to be installed on demand. The audit list already excludes it, so the
-# plugin reaches READY on the core trainable dependency set alone.
-OPTIONAL_RUNTIME_DEPENDENCY_MARKERS = ("sam3 @ git+",)
+FLASH_ATTN_WINDOWS_CU132_URL = (
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.25/"
+    "flash_attn-2.8.3%2Bcu132torch2.12-cp313-cp313-win_amd64.whl"
+)
 
 # Mirror endpoint applied to install/runtime so HuggingFace fetches prefer a
 # China-friendly mirror first (matches the CLI training scripts). Override by
@@ -86,35 +75,38 @@ ANIMA_OPTIMIZER_IMPORTS = [
     "optimum.quanto",
 ]
 
-# Constraints pin versions but do not install these; uv must receive explicit targets.
+ANIMA_CORE_PIP_TARGETS = (
+    "torch", "torchvision", "accelerate", "transformers", "diffusers",
+    "einops", "toml", "voluptuous", "safetensors", "imagesize",
+    "sentencepiece", "huggingface-hub", "tensorboard", "rich", "tqdm",
+    "numpy", "Pillow", "psutil", "packaging",
+)
 ANIMA_EXTRA_PIP_TARGETS = ("iopath==0.1.10", "optimum-quanto>=0.2.0")
 
 
-def anima_pip_dependency_targets() -> list[str]:
-    targets = [f"{name}=={version}" for name, version in ANIMA_OPTIMIZER_PACKAGES.items()]
+def anima_pip_dependency_targets(platform: str | None = None) -> list[str]:
+    platform = platform or sys.platform
+    targets = list(ANIMA_CORE_PIP_TARGETS)
+    targets.append("opencv-python-headless" if platform.startswith("linux") else "opencv-python")
+    targets.extend(f"{name}=={version}" for name, version in ANIMA_OPTIMIZER_PACKAGES.items())
     targets.extend(ANIMA_EXTRA_PIP_TARGETS)
     return targets
 
 ANIMA_EXPECTED = {
     "python_major_minor": "3.13",
     "exact": {
-        "torch": "2.11.0+cu130",
-        "torchvision": "0.26.0+cu130",
-        "flash-attn": "2.8.3+cu130torch2.11",
+        "torch": "2.12.0+cu132",
+        "torchvision": "0.27.0+cu132",
+        "flash-attn": "2.8.3+cu132torch2.12",
         "triton-windows": "3.7.0.post26",
-        "transformers": "5.9.0",
-        "diffusers": "0.37.1",
+        "transformers": "5.10.1",
+        "diffusers": "0.39.0",
         "accelerate": "1.13.0",
-        "safetensors": "0.7.0",
+        "safetensors": "0.8.0",
         "iopath": "0.1.10",
         "bitsandbytes": ANIMA_OPTIMIZER_PACKAGES["bitsandbytes"],
         "dadaptation": ANIMA_OPTIMIZER_PACKAGES["dadaptation"],
     },
-}
-
-ANIMA_LINUX_EXACT_OVERRIDES = {
-    "torch": "2.12.0+cu130",
-    "torchvision": "0.27.0+cu130",
 }
 
 ANIMA_WINDOWS_ONLY_EXACT = {"triton-windows"}
@@ -133,7 +125,7 @@ MAIN_EXPECTED = {
 
 DEFAULT_PIP_INDEX_URL = "https://pypi.org/simple"
 DEFAULT_PYTORCH_INDEX_BASE = "https://download.pytorch.org/whl"
-ANIMA_CUDA_TAG = "cu130"
+ANIMA_CUDA_TAG = "cu132"
 
 
 @dataclass(frozen=True)
@@ -257,65 +249,25 @@ def _emit_progress(progress: ProgressFn | None, phase: str, message: str, percen
         pass
 
 
-def _replace_flash_attn_dependency(source_root: Path, platform_marker: str, replacement: str, log: LogFn) -> list[str]:
-    pyproject = source_root / "pyproject.toml"
-    if not pyproject.is_file():
-        return []
-    lines = pyproject.read_text(encoding="utf-8").splitlines(keepends=True)
-    changed: list[str] = []
-    patched: list[str] = []
-    for line in lines:
-        stripped = line.lstrip()
-        if (
-            not stripped.startswith("#")
-            and FLASH_ATTN_WINDOWS_MARKER in line
-            and platform_marker in line
-        ):
-            indent = line[: len(line) - len(stripped)]
-            patched.append(indent + replacement + ("\n" if line.endswith("\n") else ""))
-            changed.append(line.strip())
-            continue
-        patched.append(line)
-    if changed:
-        pyproject.write_text("".join(patched), encoding="utf-8")
-        for dependency in changed:
-            _append(log, f"[patch] localized Linux cu130 flash-attn dependency: {dependency}")
-    return changed
-
-
-def localize_linux_flash_attn_dependency(
-    source_root: Path,
-    log: LogFn = print,
-    github_url_prefix: str | None = None,
+def flash_attn_dependency_target(
+    platform: str | None = None,
     machine: str | None = None,
-) -> list[str]:
-    if not sys.platform.startswith("linux"):
-        return []
-    machine = (machine or platform.machine()).lower()
-    if machine in ("aarch64", "arm64"):
-        wheel_url = FLASH_ATTN_LINUX_CU130_URL_AARCH64
-        marker = FLASH_ATTN_LINUX_AARCH64_PLATFORM_MARKER
+    github_url_prefix: str | None = None,
+) -> str | None:
+    platform = platform or sys.platform
+    machine = (machine or platform_module.machine()).lower()
+    if platform == "win32" and machine in {"amd64", "x86_64"}:
+        url = FLASH_ATTN_WINDOWS_CU132_URL
+    elif platform.startswith("linux") and machine in {"aarch64", "arm64"}:
+        url = FLASH_ATTN_LINUX_CU132_URL_AARCH64
+    elif platform.startswith("linux") and machine in {"amd64", "x86_64"}:
+        url = FLASH_ATTN_LINUX_CU132_URL_X86_64
     else:
-        wheel_url = FLASH_ATTN_LINUX_CU130_URL
-        marker = FLASH_ATTN_LINUX_PLATFORM_MARKER
-    wheel_url = apply_github_prefix(wheel_url, github_url_prefix)
-    replacement = f'"flash-attn @ {wheel_url} ; {marker}",'
-    return _replace_flash_attn_dependency(source_root, FLASH_ATTN_LINUX_PLATFORM_MARKER, replacement, log)
+        return None
+    return "flash-attn @ " + apply_github_prefix(url, github_url_prefix)
 
 
 def patch_comfyui_checkpoint_prefix(source_root: Path, log: LogFn = print) -> list[str]:
-    """Accept ComfyUI-layout checkpoints (model.diffusion_model.* keys) as DiT input.
-
-    Patch registration (engines/_template/patches/README.md):
-    - target: library/anima/weights.py (_strip_net_prefix)
-    - symptom: ComfyUI-convention merges (e.g. tekitoMix) carry every DiT key
-      under `model.diffusion_model.`; the loader only strips `net.`, so
-      load_state_dict misses everything and aborts with "Missing keys in
-      checkpoint" even though the weights are all present.
-    - removal: upstream weights.py strips/handles the ComfyUI prefix itself.
-    - source: DGX Spark run report 2026-08-31; verified 0 missing/unexpected
-      keys for tekitoMix_v30beta after stripping + existing rename/concat hooks.
-    """
     target = source_root / "library" / "anima" / "weights.py"
     anchor = '    return key[len("net.") :] if key.startswith("net.") else key'
     patched_body = (
@@ -330,39 +282,11 @@ def patch_comfyui_checkpoint_prefix(source_root: Path, log: LogFn = print) -> li
     if anchor not in text:
         raise RuntimeError(
             f"ComfyUI checkpoint prefix patch anchor not found in {target}; "
-            "upstream weights.py changed — re-evaluate the patch"
+            "upstream weights.py changed - re-evaluate the patch"
         )
     target.write_text(text.replace(anchor, patched_body, 1), encoding="utf-8")
     _append(log, "[patch] accept ComfyUI-layout checkpoints (strip model.diffusion_model. prefix)")
     return ["library/anima/weights.py:_strip_net_prefix"]
-
-
-def strip_optional_runtime_dependencies(source_root: Path, log: LogFn = print) -> list[str]:
-    """Drop masking-only deps (sam3) from the copied snapshot's pyproject.
-
-    Keeps the Fast install scoped to the core trainable dependency set so a slow
-    or gated sam3 git build cannot block the plugin from reaching READY. Editing
-    the *copied* snapshot leaves the upstream source untouched.
-    """
-    pyproject = source_root / "pyproject.toml"
-    if not pyproject.is_file():
-        return []
-    lines = pyproject.read_text(encoding="utf-8").splitlines(keepends=True)
-    removed: list[str] = []
-    kept: list[str] = []
-    for line in lines:
-        stripped = line.lstrip()
-        if not stripped.startswith("#") and any(
-            marker in line for marker in OPTIONAL_RUNTIME_DEPENDENCY_MARKERS
-        ):
-            removed.append(line.strip().rstrip(","))
-            continue
-        kept.append(line)
-    if removed:
-        pyproject.write_text("".join(kept), encoding="utf-8")
-        for dependency in removed:
-            _append(log, f"[patch] dropped optional masking dependency (install on demand): {dependency}")
-    return removed
 
 
 def _anima_expected_for_platform(platform: str | None = None) -> dict:
@@ -374,7 +298,6 @@ def _anima_expected_for_platform(platform: str | None = None) -> dict:
     if platform.startswith("linux"):
         for package in ANIMA_WINDOWS_ONLY_EXACT:
             expected["exact"].pop(package, None)
-        expected["exact"].update(ANIMA_LINUX_EXACT_OVERRIDES)
     return expected
 
 
@@ -418,9 +341,6 @@ def _run_streaming_once(
         bufsize=1,
     )
     assert completed.stdout is not None
-    # uv (and other tools) go fully silent on non-TTY between resolve/download
-    # milestones; pump output on a thread and emit heartbeat lines so a
-    # multi-GB download never looks like a dead install.
     output: queue.Queue[str | None] = queue.Queue()
 
     def _pump() -> None:
@@ -434,15 +354,15 @@ def _run_streaming_once(
     silent_since = time.monotonic()
     while True:
         try:
-            raw_line = output.get(timeout=heartbeat_seconds)
+            line = output.get(timeout=heartbeat_seconds)
         except queue.Empty:
             silent = int(time.monotonic() - silent_since)
             _append(log, f"[wait] no output for {silent}s; still running: {Path(command[0]).name}")
             continue
-        if raw_line is None:
+        if line is None:
             break
         silent_since = time.monotonic()
-        clean_line = raw_line.rstrip("\r\n")
+        clean_line = line.rstrip("\r\n")
         if "unknownissuer" in clean_line.lower():
             unknown_certificate_issuer = True
         _append(log, clean_line)
@@ -524,16 +444,9 @@ def install_environment(
         _append(log, f"[source] pinned commit {plan.source_commit}")
     copy_source_snapshot(build_install_plan(plan.source_root, plan.layout, dry_run=False, source_commit=plan.source_commit))
     github_prefix = plan.download_sources.github_url_prefix if plan.download_sources else None
-    localized_direct_urls = localize_linux_flash_attn_dependency(plan.layout.source, log, github_url_prefix=github_prefix)
-    if localized_direct_urls:
-        facts["localized_direct_url_dependencies"] = localized_direct_urls
-    dropped_optional = strip_optional_runtime_dependencies(plan.layout.source, log)
-    if dropped_optional:
-        facts["dropped_optional_dependencies"] = dropped_optional
     applied_patches = patch_comfyui_checkpoint_prefix(plan.layout.source, log)
     if applied_patches:
         facts["applied_source_patches"] = applied_patches
-
     if not plan.constraints.is_file():
         raise FileNotFoundError(f"Anima constraints file missing: {plan.constraints}")
     if not plan.overrides.is_file():
@@ -592,16 +505,19 @@ def install_environment(
     facts["phase"] = "dependencies"
     _emit_progress(progress, "dependencies", "Installing Anima Fast Python dependencies")
     write_install_state(plan.layout, STATE_INSTALLING, facts, "installing Anima dependencies")
-    pip_targets = [*anima_pip_dependency_targets(), str(plan.layout.source)]
+    pip_targets = anima_pip_dependency_targets()
+    flash_target = flash_attn_dependency_target(github_url_prefix=github_prefix)
+    if flash_target:
+        pip_targets.append(flash_target)
+        facts["flash_attn_dependency"] = flash_target
+    else:
+        _append(log, "[info] no verified FlashAttention wheel for this platform; using torch attention")
     _run_streaming(
         [
             uv,
             "pip",
             "install",
-            # uv's resolver prints nothing until done; on slow links that is a
-            # silent 15+ minutes. Verbose mode streams every metadata GET so
-            # the install log shows real activity during resolution.
-            "-v",
+            "--verbose",
             "--python",
             str(plan.venv_python),
             "--no-config",
@@ -616,6 +532,23 @@ def install_environment(
             "--overrides",
             str(plan.overrides),
             *pip_targets,
+        ],
+        plan.project_root,
+        log,
+        env=process_env,
+        retries=int(os.environ.get("ANIMA_FAST_INSTALL_RETRIES", "3")),
+    )
+    _run_streaming(
+        [
+            uv,
+            "pip",
+            "install",
+            "--verbose",
+            "--python",
+            str(plan.venv_python),
+            "--no-config",
+            "--no-deps",
+            str(plan.layout.source),
         ],
         plan.project_root,
         log,
