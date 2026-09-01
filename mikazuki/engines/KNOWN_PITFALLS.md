@@ -8,14 +8,20 @@
 
 - 症状：上游 `pyproject.toml` 声明的 flash-attn 在本机 CUDA/torch 组合下无预编译 wheel，安装卡源码编译数小时或失败。
 - 检测：上游依赖含 `flash-attn` 且目标平台 Linux；比对本机 torch/CUDA 与可用 wheel（如 mjun0812/flash-attention-prebuild-wheels）。
-- 绕法：安装期把依赖行替换为平台标记 + 预编译 wheel URL。现成实现：`mikazuki/engines/anima_fast/environment.py` `localize_linux_flash_attn_dependency`。
+- 绕法：由项目按平台/架构显式选择预编译 wheel，source 包使用 `--no-deps` 安装。现成实现：`mikazuki/engines/anima_fast/environment.py` `flash_attn_dependency_target`。
 - 来源：anima_fast pack。
 
 ## P2. 可选/平台限定依赖把安装拖死
 
 - 症状：上游声明的可选运行时依赖（掩膜/可视化/平台限定包）在目标平台装不上，整个 `uv pip install` 失败。
 - 检测：安装日志失败包名不在训练链路 import 里。
-- 绕法：安装前从依赖清单剥离，记日志「按需自装」。现成实现：anima_fast `environment.py` `strip_optional_runtime_dependencies`。
+- 绕法：不要安装上游混合依赖表；项目显式维护训练闭包，并用 `--no-deps` 安装 source 包。现成实现：anima_fast `environment.py` `anima_pip_dependency_targets`。
+
+### bitsandbytes 暂无 CUDA 13.2 binary
+
+- bitsandbytes 0.49.2 的 Linux wheel 最高只带 `libbitsandbytes_cuda130.so`，在 torch cu132 下直接使用 AdamW8bit 会报缺少 `libbitsandbytes_cuda132.so`。
+- Linux aarch64 暂时由 Anima Fast launcher 设置 `BNB_CUDA_VERSION=130`，复用包内 cuda130 backend；torch 和 FlashAttention 仍保持 cu132。
+- 这是临时兼容方案，不是长期 ABI 承诺。bitsandbytes 发布可用 cu132 binary 后，应删除 launcher override 并增加对应 native optimizer smoke。
 - 来源：anima_fast pack。
 
 ## P3. 子进程 PYTHONPATH / 编码污染

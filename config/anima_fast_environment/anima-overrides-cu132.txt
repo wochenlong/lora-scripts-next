@@ -1,0 +1,3 @@
+# Keep the isolated runtime on NumPy 2 and avoid GUI OpenCV packages on Linux.
+numpy>=2.0.0
+opencv-python-headless==4.13.0.92 ; sys_platform == "linux"

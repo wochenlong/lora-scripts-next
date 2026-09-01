@@ -18,7 +18,8 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertNotIn("prodigyplus.ProdigyPlusScheduleFree", fast_optimizer)
         self.assertNotIn('"EmoSens"', fast_optimizer)
         self.assertIn('"EmoSens"', shared[: shared.index("ANIMA_FAST_LR_OPTIMIZER")])
-        self.assertIn('Schema.const("lora")', schema)
+        self.assertIn('fast_variant: Schema.union(["lora", "tlora"])', schema)
+        self.assertNotIn('"turbo"', schema)
 
     def test_fast_schema_exposes_bucket_resolution_controls(self):
         schema = Path("mikazuki/schema/anima-lora-fast.ts").read_text(encoding="utf-8")
@@ -28,6 +29,17 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertIn("bucket_reso_steps:", schema)
         self.assertIn("bucket_no_upscale:", schema)
         self.assertIn("留空时按训练分辨率自动设置", schema)
+
+    def test_fast_tlora_presets_are_curated_variants(self):
+        presets = Path("config/presets")
+        for name in (
+            "anima-fast-lora-character-tlora.toml",
+            "anima-fast-lora-style-tlora.toml",
+        ):
+            text = (presets / name).read_text(encoding="utf-8")
+            self.assertIn('train_type = "anima-lora-fast"', text)
+            self.assertIn('fast_variant = "tlora"', text)
+            self.assertNotIn('fast_variant = "turbo"', text)
 
     def test_fast_adapter_does_not_whitelist_emosens(self):
         adapter = Path("mikazuki/engines/anima_fast/adapter.py").read_text(encoding="utf-8")

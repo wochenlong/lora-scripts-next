@@ -1,15 +1,16 @@
 [metadata]
-name = "Anima Fast LoRA - 画风通用"
+name = "Anima Fast T-LoRA - 画风通用"
 version = "1.0"
 author = "SD-Trainer Next"
 train_type = "anima-lora-fast"
-description = "适合需要更快产出的画风 LoRA。Fast 插件当前不支持 Automagic，因此使用 AdamW8bit。"
+description = "Anima Fast 的受控 T-LoRA 画风预设；通过时间步动态 rank 降低小数据集过拟合风险。"
 
 [data]
+fast_variant = "tlora"
 method = "lora"
 network_module = "networks.lora_anima"
 network_dim = 32
-network_alpha = 16
+network_alpha = 32
 
 resolution = "1024,1024"
 enable_bucket = true

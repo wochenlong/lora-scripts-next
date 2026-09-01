@@ -19,8 +19,8 @@ def make_runtime(root: Path) -> RuntimeConfig:
     (anima / "train.py").write_text("print('train')", encoding="utf-8")
     (anima / "configs").mkdir()
     (anima / "configs" / "base.toml").write_text("", encoding="utf-8")
-    (anima / "preprocess").mkdir()
-    (anima / "preprocess" / "resize_images.py").write_text("print('resize')", encoding="utf-8")
+    (anima / "scripts" / "preprocess").mkdir(parents=True)
+    (anima / "scripts" / "preprocess" / "resize_images.py").write_text("print('resize')", encoding="utf-8")
     python = root / "extensions" / "anima_lora" / ".venv" / "Scripts" / "python.exe"
     python.parent.mkdir(parents=True)
     python.write_text("", encoding="utf-8")

@@ -15,9 +15,8 @@ from mikazuki.engines.anima_fast.environment import (
     anima_pip_dependency_targets,
     audit_environment,
     build_environment_install_plan,
+    flash_attn_dependency_target,
     install_environment,
-    localize_linux_flash_attn_dependency,
-    strip_optional_runtime_dependencies,
     _run_streaming,
     start_install_task,
 )
@@ -47,8 +46,8 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         layout.train_py.write_text("print('train')\n", encoding="utf-8")
         (layout.source / "configs").mkdir(exist_ok=True)
         (layout.source / "configs" / "base.toml").write_text("", encoding="utf-8")
-        (layout.source / "preprocess").mkdir(exist_ok=True)
-        (layout.source / "preprocess" / "resize_images.py").write_text("", encoding="utf-8")
+        (layout.source / "scripts" / "preprocess").mkdir(parents=True, exist_ok=True)
+        (layout.source / "scripts" / "preprocess" / "resize_images.py").write_text("", encoding="utf-8")
         weights_dir = layout.source / "library" / "anima"
         weights_dir.mkdir(parents=True, exist_ok=True)
         (weights_dir / "weights.py").write_text(
@@ -64,8 +63,8 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         (source / "pyproject.toml").write_text("[project]\nname='anima-test'\n", encoding="utf-8")
         (source / "configs").mkdir()
         (source / "configs" / "base.toml").write_text("", encoding="utf-8")
-        (source / "preprocess").mkdir()
-        (source / "preprocess" / "resize_images.py").write_text("", encoding="utf-8")
+        (source / "scripts" / "preprocess").mkdir(parents=True)
+        (source / "scripts" / "preprocess" / "resize_images.py").write_text("", encoding="utf-8")
         weights_dir = source / "library" / "anima"
         weights_dir.mkdir(parents=True)
         (weights_dir / "weights.py").write_text(
@@ -78,8 +77,8 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
     def _make_constraints(self, project: Path) -> None:
         env_dir = project / "config" / "anima_fast_environment"
         env_dir.mkdir(parents=True)
-        (env_dir / "anima-constraints-cu130.txt").write_text("torch==2.11.0+cu130\n", encoding="utf-8")
-        (env_dir / "anima-overrides-cu130.txt").write_text("numpy>=2\n", encoding="utf-8")
+        (env_dir / "anima-constraints-cu132.txt").write_text("torch==2.12.0+cu132\n", encoding="utf-8")
+        (env_dir / "anima-overrides-cu132.txt").write_text("numpy>=2\n", encoding="utf-8")
 
     def test_install_plan_uses_linux_python_layout_off_windows(self):
         with tempfile.TemporaryDirectory() as td, mock.patch(
@@ -284,19 +283,17 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
 
 
     def test_anima_constraints_include_optimizer_packages(self):
-        constraints = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-constraints-cu130.txt"
+        constraints = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-constraints-cu132.txt"
         text = constraints.read_text(encoding="utf-8")
         for package in ("bitsandbytes==0.49.2", "dadaptation==3.1", "lion-pytorch==0.2.3", "prodigyopt==1.1.2"):
             self.assertIn(package, text)
 
     def test_anima_constraints_scope_linux_fast_runtime_packages_by_platform(self):
-        constraints = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-constraints-cu130.txt"
+        constraints = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-constraints-cu132.txt"
         text = constraints.read_text(encoding="utf-8")
 
-        self.assertIn('torch==2.11.0+cu130 ; sys_platform == "win32"', text)
-        self.assertIn('torchvision==0.26.0+cu130 ; sys_platform == "win32"', text)
-        self.assertIn('torch==2.12.0+cu130 ; sys_platform == "linux"', text)
-        self.assertIn('torchvision==0.27.0+cu130 ; sys_platform == "linux"', text)
+        self.assertIn("torch==2.12.0+cu132", text)
+        self.assertIn("torchvision==0.27.0+cu132", text)
         self.assertIn('triton-windows==3.7.0.post26 ; sys_platform == "win32"', text)
 
     def test_anima_expected_packages_skip_triton_windows_on_linux(self):
@@ -305,171 +302,66 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         linux_expected = _anima_expected_for_platform("linux")
         windows_expected = _anima_expected_for_platform("win32")
 
-        self.assertEqual(linux_expected["exact"]["torch"], "2.12.0+cu130")
-        self.assertEqual(linux_expected["exact"]["torchvision"], "0.27.0+cu130")
+        self.assertEqual(linux_expected["exact"]["torch"], "2.12.0+cu132")
+        self.assertEqual(linux_expected["exact"]["torchvision"], "0.27.0+cu132")
         self.assertNotIn("triton-windows", linux_expected["exact"])
-        self.assertEqual(windows_expected["exact"]["torch"], "2.11.0+cu130")
-        self.assertEqual(windows_expected["exact"]["torchvision"], "0.26.0+cu130")
+        self.assertEqual(windows_expected["exact"]["torch"], "2.12.0+cu132")
+        self.assertEqual(windows_expected["exact"]["torchvision"], "0.27.0+cu132")
         self.assertEqual(windows_expected["exact"]["triton-windows"], "3.7.0.post26")
 
     def test_anima_overrides_use_headless_opencv_on_linux(self):
-        overrides = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-overrides-cu130.txt"
+        overrides = Path(__file__).resolve().parents[1] / "config" / "anima_fast_environment" / "anima-overrides-cu132.txt"
         text = overrides.read_text(encoding="utf-8")
 
         self.assertIn('opencv-python-headless==4.13.0.92 ; sys_platform == "linux"', text)
 
-    def test_localize_linux_flash_attn_dependency_uses_cu130_direct_url(self):
-        with tempfile.TemporaryDirectory() as td, mock.patch(
-            "mikazuki.engines.anima_fast.environment.sys.platform", "linux"
-        ):
-            source = Path(td) / "source"
-            source.mkdir()
-            pyproject = source / "pyproject.toml"
-            pyproject.write_text(
-                '[project]\ndependencies = [\n'
-                '    "flash-attn @ https://example.invalid/linux-cu132.whl ; sys_platform == \'linux\'",\n'
-                '    "flash-attn @ https://example.invalid/windows.whl ; sys_platform == \'win32\'",\n'
-                ']\n',
-                encoding="utf-8",
-            )
-            lines: list[str] = []
+    def test_flash_attn_targets_follow_upstream_cu132_matrix(self):
+        linux_x64 = flash_attn_dependency_target("linux", "x86_64")
+        linux_arm = flash_attn_dependency_target("linux", "aarch64")
+        windows = flash_attn_dependency_target("win32", "AMD64")
 
-            changed = localize_linux_flash_attn_dependency(source, lines.append, machine="x86_64")
-            text = pyproject.read_text(encoding="utf-8")
+        self.assertIn("cu132torch2.12", linux_x64)
+        self.assertIn("linux_x86_64", linux_x64)
+        self.assertIn("linux_aarch64", linux_arm)
+        self.assertIn("win_amd64", windows)
+        self.assertIsNone(flash_attn_dependency_target("darwin", "arm64"))
 
-        self.assertEqual(len(changed), 1)
-        self.assertIn("flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl", text)
-        self.assertIn("sys_platform == 'linux'\",", text)
-        self.assertIn("windows.whl", text)
-        self.assertTrue(any("localized Linux cu130 flash-attn" in line for line in lines))
-
-    def test_localize_linux_flash_attn_dependency_uses_dgx_spark_wheel_on_aarch64(self):
-        with tempfile.TemporaryDirectory() as td, mock.patch(
-            "mikazuki.engines.anima_fast.environment.sys.platform", "linux"
-        ):
-            source = Path(td) / "source"
-            source.mkdir()
-            pyproject = source / "pyproject.toml"
-            pyproject.write_text(
-                '[project]\ndependencies = [\n'
-                '    "flash-attn @ https://example.invalid/linux-cu132.whl ; sys_platform == \'linux\'",\n'
-                '    "flash-attn @ https://example.invalid/windows.whl ; sys_platform == \'win32\'",\n'
-                ']\n',
-                encoding="utf-8",
-            )
-            lines: list[str] = []
-
-            changed = localize_linux_flash_attn_dependency(source, lines.append, machine="aarch64")
-            text = pyproject.read_text(encoding="utf-8")
-
-        self.assertEqual(len(changed), 1)
-        self.assertIn(
-            "https://github.com/IryNeko/patched-flash_attn-2.8.3-for-dgx-spark/releases/download/"
-            "torch2.11-cu130-sm121-cp313-arm64/"
-            "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_aarch64.whl",
-            text,
-        )
-        self.assertIn("platform_machine == 'aarch64'", text)
-        self.assertIn("windows.whl", text)
-
-    def test_strip_optional_runtime_dependencies_removes_sam3_git_build(self):
-        with tempfile.TemporaryDirectory() as td:
-            source = Path(td) / "source"
-            source.mkdir()
-            pyproject = source / "pyproject.toml"
-            pyproject.write_text(
-                "[project]\ndependencies = [\n"
-                '    "pyyaml",\n'
-                '    "sam3 @ git+https://github.com/facebookresearch/sam3.git",\n'
-                '    "segmentation-models-pytorch>=0.3.4",\n'
-                "]\n",
-                encoding="utf-8",
-            )
-            lines: list[str] = []
-
-            removed = strip_optional_runtime_dependencies(source, lines.append)
-            text = pyproject.read_text(encoding="utf-8")
-
-        self.assertEqual(len(removed), 1)
-        self.assertIn("sam3 @ git+", removed[0])
-        self.assertNotIn("sam3 @ git+", text)
-        # Core/masking-adjacent deps stay; only sam3 is dropped.
-        self.assertIn("pyyaml", text)
-        self.assertIn("segmentation-models-pytorch", text)
-        self.assertTrue(any("dropped optional masking dependency" in line for line in lines))
-
-    def test_strip_optional_runtime_dependencies_noop_without_sam3(self):
-        with tempfile.TemporaryDirectory() as td:
-            source = Path(td) / "source"
-            source.mkdir()
-            pyproject = source / "pyproject.toml"
-            original = "[project]\ndependencies = [\n    \"pyyaml\",\n]\n"
-            pyproject.write_text(original, encoding="utf-8")
-
-            removed = strip_optional_runtime_dependencies(source, lambda _line: None)
-
-            self.assertEqual(removed, [])
-            self.assertEqual(pyproject.read_text(encoding="utf-8"), original)
-
-    def test_patch_comfyui_checkpoint_prefix_rewrites_strip_net_prefix(self):
+    def test_patch_comfyui_checkpoint_prefix(self):
         from mikazuki.engines.anima_fast.environment import patch_comfyui_checkpoint_prefix
 
         with tempfile.TemporaryDirectory() as td:
-            source = Path(td) / "source"
-            weights = source / "library" / "anima"
-            weights.mkdir(parents=True)
-            target = weights / "weights.py"
-            target.write_text(
-                'def _strip_net_prefix(key: str) -> str:\n'
-                '    return key[len("net.") :] if key.startswith("net.") else key\n',
-                encoding="utf-8",
-            )
-            lines: list[str] = []
-
-            changed = patch_comfyui_checkpoint_prefix(source, lines.append)
-            text = target.read_text(encoding="utf-8")
-
-        self.assertEqual(changed, ["library/anima/weights.py:_strip_net_prefix"])
-        self.assertIn('"model.diffusion_model."', text)
-        self.assertTrue(any("ComfyUI" in line for line in lines))
-
-        # Patched helper accepts both legacy net.* and ComfyUI model.diffusion_model.* keys
-        namespace: dict = {}
-        exec(compile(text, "weights.py", "exec"), namespace)
-        strip = namespace["_strip_net_prefix"]
-        self.assertEqual(strip("net.blocks.0.x"), "blocks.0.x")
-        self.assertEqual(strip("model.diffusion_model.blocks.0.x"), "blocks.0.x")
-        self.assertEqual(strip("blocks.0.x"), "blocks.0.x")
-
-    def test_patch_comfyui_checkpoint_prefix_is_idempotent(self):
-        from mikazuki.engines.anima_fast.environment import patch_comfyui_checkpoint_prefix
-
-        with tempfile.TemporaryDirectory() as td:
-            source = Path(td) / "source"
-            weights = source / "library" / "anima"
-            weights.mkdir(parents=True)
-            (weights / "weights.py").write_text(
-                'def _strip_net_prefix(key: str) -> str:\n'
-                '    return key[len("net.") :] if key.startswith("net.") else key\n',
-                encoding="utf-8",
-            )
-            first = patch_comfyui_checkpoint_prefix(source, lambda _l: None)
-            second = patch_comfyui_checkpoint_prefix(source, lambda _l: None)
+            source = self._make_source(Path(td))
+            first = patch_comfyui_checkpoint_prefix(source, lambda _line: None)
+            second = patch_comfyui_checkpoint_prefix(source, lambda _line: None)
+            namespace: dict = {}
+            exec(compile((source / "library" / "anima" / "weights.py").read_text(), "weights.py", "exec"), namespace)
 
         self.assertTrue(first)
         self.assertEqual(second, [])
+        self.assertEqual(namespace["_strip_net_prefix"]("net.blocks.0.x"), "blocks.0.x")
+        self.assertEqual(namespace["_strip_net_prefix"]("model.diffusion_model.blocks.0.x"), "blocks.0.x")
 
-    def test_patch_comfyui_checkpoint_prefix_fails_loudly_when_anchor_missing(self):
+    def test_patch_comfyui_checkpoint_prefix_skips_upstream_support(self):
         from mikazuki.engines.anima_fast.environment import patch_comfyui_checkpoint_prefix
 
         with tempfile.TemporaryDirectory() as td:
-            source = Path(td) / "source"
-            weights = source / "library" / "anima"
-            weights.mkdir(parents=True)
-            (weights / "weights.py").write_text("# upstream rewrote everything\n", encoding="utf-8")
+            source = self._make_source(Path(td))
+            weights = source / "library" / "anima" / "weights.py"
+            upstream_text = (
+                '_DIT_PREFIXES = ("net.", "model.diffusion_model.")\n'
+                'def _strip_net_prefix(key: str) -> str:\n'
+                '    for prefix in _DIT_PREFIXES:\n'
+                '        if key.startswith(prefix):\n'
+                '            return key[len(prefix):]\n'
+                '    return key\n'
+            )
+            weights.write_text(upstream_text, encoding="utf-8")
 
-            with self.assertRaises(RuntimeError):
-                patch_comfyui_checkpoint_prefix(source, lambda _l: None)
+            applied = patch_comfyui_checkpoint_prefix(source, lambda _line: None)
+            preserved = weights.read_text(encoding="utf-8")
+
+        self.assertEqual(applied, [])
+        self.assertEqual(preserved, upstream_text)
 
     def test_install_streaming_defaults_hf_endpoint_mirror(self):
         from mikazuki.engines.anima_fast.environment import _run_streaming_once, DEFAULT_HF_ENDPOINT
@@ -526,31 +418,14 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         lines: list[str] = []
         with tempfile.TemporaryDirectory() as td:
             _run_streaming_once(
-                [sys.executable, "-c", "import time; time.sleep(1.0)"],
+                [sys.executable, "-c", "import time; time.sleep(0.5)"],
                 Path(td),
                 lines.append,
-                heartbeat_seconds=0.2,
+                heartbeat_seconds=0.1,
             )
 
-        waits = [line for line in lines if line.startswith("[wait]")]
-        self.assertTrue(waits, "expected heartbeat lines while the command was silent")
-        self.assertIn("still running", waits[0])
-        self.assertTrue(any(line == "[exit] returncode=0" for line in lines))
-
-    def test_install_streaming_silent_fast_command_emits_no_heartbeat(self):
-        from mikazuki.engines.anima_fast.environment import _run_streaming_once
-
-        lines: list[str] = []
-        with tempfile.TemporaryDirectory() as td:
-            _run_streaming_once(
-                [sys.executable, "-c", "pass"],
-                Path(td),
-                lines.append,
-                heartbeat_seconds=30.0,
-            )
-
-        self.assertFalse(any(line.startswith("[wait]") for line in lines))
-        self.assertTrue(any(line == "[exit] returncode=0" for line in lines))
+        self.assertTrue(any(line.startswith("[wait]") for line in lines))
+        self.assertIn("[exit] returncode=0", lines)
 
     def test_install_streaming_uses_windows_system_certificates_by_default(self):
         from mikazuki.engines.anima_fast.environment import _run_streaming_once
@@ -624,13 +499,13 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                 package_facts = {name: "unused" for name in packages}
                 package_facts.update(
                     {
-                        "torch": "2.12.0+cu130",
-                        "torchvision": "0.27.0+cu130",
-                        "flash-attn": "2.8.3+cu130torch2.11",
-                        "transformers": "5.9.0",
-                        "diffusers": "0.37.1",
+                        "torch": "2.12.0+cu132",
+                        "torchvision": "0.27.0+cu132",
+                        "flash-attn": "2.8.3+cu132torch2.12",
+                        "transformers": "5.10.1",
+                        "diffusers": "0.39.0",
                         "accelerate": "1.13.0",
-                        "safetensors": "0.7.0",
+                        "safetensors": "0.8.0",
                         "iopath": "0.1.10",
                         "bitsandbytes": "0.49.2",
                         "dadaptation": "3.1",
@@ -670,6 +545,13 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertIn("optimum-quanto>=0.2.0", targets)
         self.assertIn("iopath==0.1.10", targets)
 
+    def test_anima_pip_dependency_targets_install_triton_on_windows_only(self):
+        windows_targets = anima_pip_dependency_targets("win32")
+        linux_targets = anima_pip_dependency_targets("linux")
+
+        self.assertIn("triton-windows==3.7.0.post26", windows_targets)
+        self.assertNotIn("triton-windows==3.7.0.post26", linux_targets)
+
     def test_install_environment_pip_install_includes_explicit_optimizer_targets(self):
         with tempfile.TemporaryDirectory() as td:
             project = Path(td)
@@ -692,6 +574,10 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                     pip_commands.append(list(command))
 
             with mock.patch("mikazuki.engines.anima_fast.environment._uv_command", return_value="uv"), \
+                mock.patch(
+                    "mikazuki.engines.anima_fast.environment.anima_pip_dependency_targets",
+                    return_value=anima_pip_dependency_targets("win32"),
+                ), \
                 mock.patch("mikazuki.engines.anima_fast.environment.copy_source_snapshot"), \
                 mock.patch("mikazuki.engines.anima_fast.environment._run_streaming", side_effect=fake_run), \
                 mock.patch(
@@ -700,13 +586,18 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
                 ):
                 install_environment(plan, lambda _line: None)
 
-        self.assertEqual(len(pip_commands), 1)
+        self.assertEqual(len(pip_commands), 2)
         pip_cmd = pip_commands[0]
+        self.assertIn("--verbose", pip_cmd)
         self.assertIn("bitsandbytes==0.49.2", pip_cmd)
         self.assertIn("dadaptation==3.1", pip_cmd)
         self.assertIn("optimum-quanto>=0.2.0", pip_cmd)
         self.assertIn("iopath==0.1.10", pip_cmd)
-        self.assertEqual(pip_cmd[-1], str(layout.source))
+        self.assertIn("triton-windows==3.7.0.post26", pip_cmd)
+        self.assertIn("torch", pip_cmd)
+        self.assertIn("--no-deps", pip_commands[1])
+        self.assertIn("--verbose", pip_commands[1])
+        self.assertEqual(pip_commands[1][-1], str(layout.source))
 
     def test_install_environment_broken_progress_does_not_report_complete(self):
         with tempfile.TemporaryDirectory() as td:

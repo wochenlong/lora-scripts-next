@@ -48,7 +48,7 @@ class ExtensionLayout:
 
     @property
     def resize_script(self) -> Path:
-        return self.source / "preprocess" / "resize_images.py"
+        return self.source / "scripts" / "preprocess" / "resize_images.py"
 
 
 @dataclass(frozen=True)
@@ -136,7 +136,7 @@ def _missing_runtime_files(layout: ExtensionLayout) -> list[str]:
     required = (
         (layout.train_py, "train.py"),
         (layout.base_config, "configs/base.toml"),
-        (layout.resize_script, "preprocess/resize_images.py"),
+        (layout.resize_script, "scripts/preprocess/resize_images.py"),
     )
     return [label for path, label in required if not path.is_file()]
 

@@ -665,7 +665,7 @@ onBeforeUnmount(() => {
       <section v-else class="task-detail task-detail-empty"><p>{{ t("tasks.detail.empty") }}</p></section>
     </div>
 
-    <el-dialog :model-value="!!lightboxImage" :title="lightboxImage ? (imageLabel(lightboxImage) || lightboxImage.name) : ''" align-center class="preview-lightbox" @update:model-value="lightboxImage = null">
+    <el-dialog :model-value="!!lightboxImage" :title="lightboxImage ? (imageLabel(lightboxImage) || lightboxImage.name) : ''" width="min(1100px, 94vw)" align-center class="preview-lightbox" @update:model-value="lightboxImage = null">
       <img v-if="lightboxImage" class="lightbox-image" :src="lightboxImage.url" :alt="lightboxImage.name">
     </el-dialog>
 

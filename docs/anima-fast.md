@@ -34,10 +34,10 @@ Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_l
 
 | 选 **标准模式**（`/lora/sd3.html`） | 选 **Fast 模式**（本页） |
 |-----------------------------------|-------------------------|
-| 需要 LoKr、T-LoRA 等 Kohya 网络 | **仅标准 LoRA**，追求训练吞吐 |
+| 需要 LoKr、Turbo 等当前未接入的网络 | **标准 LoRA 或 T-LoRA**，追求训练吞吐 |
 | 显存约 12GB，依赖 gradient checkpointing | **建议 16GB+**，可关闭部分省显存选项 |
 | 开箱即用，无需额外安装 | 可接受首次 **数 GB** 插件环境下载 |
-| Windows 主环境 PyTorch cu124 即可 | 需要 **CUDA 13** 插件 venv（cu130） |
+| Windows 主环境 PyTorch cu124 即可 | 需要 **CUDA 13.2** 插件 venv（cu132） |
 
 **速度**：同数据集、同 LoRA 维度下，Fast 在本仓库 RTX 4090 实测约为标准模式的 **2.5×**（见下）；开启 UI 默认的 `torch_compile` 后通常更快。
 
@@ -75,11 +75,11 @@ Anima Fast 是基于 [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_l
 
 ### 为什么 Fast 更快？
 
-- **静态 token 形状**（bucket + padding 至 `static_token_count`）→ `torch.compile` 少重编译
+- **free-fit bucket + 动态序列 compile** → 每个分辨率层级复用编译图并减少裁切
 - **按 block 或全模型 compile** +（可选）CUDAGraph → 降低 kernel 启动开销
-- **独立 cu130 栈** + Flash Attention 4 等在 anima_lora 内深度适配
+- **独立 cu132 / torch 2.12 栈** + Flash Attention 2 等在 anima_lora 内深度适配
 
-代价：**更高显存**、**仅 LoRA**、**需安装插件**、首次 compile **epoch 边界有秒级抖动**。
+代价：**更高显存**、**仅 LoRA 家族中的标准 LoRA/T-LoRA**、**需安装插件**、首次 compile **epoch 边界有秒级抖动**。
 
 ### 复现对标训练
 
@@ -133,7 +133,7 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 | | 标准模式 | Fast 模式（插件） |
 |---|---------|-------------------|
 | 后端 | kohya sd-scripts | anima_lora 独立 runtime |
-| 适配器 | LoRA / LoKr / T-LoRA 等 | **仅 LoRA** |
+| 适配器 | LoRA / LoKr / T-LoRA 等 | **标准 LoRA / T-LoRA** |
 | 显存 | ~12GB+（可 checkpoint） | **建议 16GB+** |
 | 速度 | 常规（本测 ≈7 s/step） | **更快**（本测 ≈2.8 s/step 起） |
 | 安装 | 开箱即用 | **需先安装插件（推荐 CLI 脚本）** |
@@ -150,6 +150,19 @@ scripts\cli\train_anima_fast_by_toml.bat docs\examples\anima-lora-benchmark-fast
 > **依赖范围与就绪判定**：安装只拉取**核心可训练依赖**，状态「插件已就绪」即代表训练所需依赖齐全。
 > 遮罩相关的 `sam3`（`facebookresearch/sam3`，体积大且 HF 权重受限）**已降为可选**，不在安装中拉取、也**不影响就绪状态**，需要遮罩功能时再按需安装。
 > 下载默认走 **HF 镜像**（`HF_ENDPOINT=https://hf-mirror.com`，与 CLI 训练脚本一致）；如需 **魔搭** 优先，安装前设置 `HF_ENDPOINT=https://modelscope.cn` 即可。
+
+## Fast 当前支持范围
+
+当前 Fast 插件只在项目侧开放两个训练变体：
+
+- **标准 LoRA**：固定使用 `networks.lora_anima`
+- **T-LoRA**：仍使用 `networks.lora_anima`，由后端固定注入上游 `v1.17.1` 的时间步 mask 配置，并使用 `weight_svd` 初始化
+
+T-LoRA 适合数据量较小、担心过拟合的场景；它通常需要比标准 LoRA 更高的 `network_dim`，收敛也可能更慢。上游参数由插件控制，用户自定义 `network_args` 不能覆盖 T-LoRA 的关键开关。
+
+Anima-2.9B 是社区提供的 40-block Anima checkpoint，与 28-block base 使用相同 Qwen3 文本编码器、Qwen-Image VAE 和预处理缓存。Fast 会从 safetensors header 自动识别深度，无需额外开关。LoRA 权重与模型深度绑定：28-block 与 40-block LoRA 不能混用；preflight 会在 metadata 可用时提前阻止不匹配的续训。2.9B 显存需求更高，在完成更多硬件验证前建议使用 24GB 以上显存。
+
+本次升级明确**未覆盖**：LoKr、Turbo/distillation、ControlNet、EasyControl、Qwen Image editing、上游 standalone GUI、ComfyUI custom nodes、SAM3、Tagger、上游模型下载/Hugging Face GUI，以及其他实验性或仅推理功能。它们可以在后续 PR 中分别评估，不属于本次 Fast 后端更新的隐含承诺。
 
 ---
 
@@ -180,7 +193,7 @@ python gui.py
 
 ## 前端训练
 
-1. 在 Fast 模式页填写参数（与标准 Anima LoRA 部分字段不同，含 `torch_compile`、`static_token_count` 等）
+1. 在 Fast 模式页填写参数（与标准 Anima LoRA 部分字段不同，含 `torch_compile`、`compile_dynamic_seq` 等）
 2. 打开 **「启用训练预览图」** 可在训练过程中定期出图（写入 `output_dir/sample/`，训练监控页 `/train-monitor` 可查看）
 3. 插件 **已就绪** 后点击 **「开始训练」**
 4. 训练日志：`/train-log?task_id=...`；监控页 `/train-monitor` 会识别 `Anima Fast LoRA`
@@ -270,7 +283,7 @@ $env:LORA_ANIMA_FAST_DEV_MODE = "1"
 
 ## 优化器依赖
 
-Fast 页与标准 Kohya 页共用 **LR_OPTIMIZER** 选项（默认 `AdamW8bit`）。插件独立 venv 会安装以下包（见 `config/anima_fast_environment/anima-constraints-cu130.txt`）：
+Fast 页与标准 Kohya 页共用 **LR_OPTIMIZER** 选项（默认 `AdamW8bit`）。插件独立 venv 会安装以下包（见 `config/anima_fast_environment/anima-constraints-cu132.txt`）：
 
 | 优化器示例 | 依赖包 |
 |-----------|--------|
@@ -284,7 +297,9 @@ Fast 页与标准 Kohya 页共用 **LR_OPTIMIZER** 选项（默认 `AdamW8bit`�
 
 Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选项**（不含 `prodigyplus.*` 等 Kohya 专用项）。当前 Fast 插件快照未接入 Automagic 优化器，若导入旧配置选择 `optimizer_type=Automagic`，后端会在启动前拒绝并提示改用 `AdamW8bit` 等 Fast 支持项。`DAdaptAdaGrad` 在 `dadaptation==3.1` 下默认 `eps=0.0` 会报错，Fast 会在用户未填写 `eps=` 时自动补充 `optimizer_args=["eps=1e-8"]`；需要实验其它值时可在自定义 optimizer_args 中显式填写。
 
-若报错 `ImportError: No bitsandbytes` 或 `libbitsandbytes_cuda130.dll not found`，说明插件是在补全优化器依赖前安装的，或 `bitsandbytes` 版本过旧（cu130 需 **≥ 0.49**）：在 Fast 页点击 **「修复插件」**（或 `POST /api/engines/anima-fast/repair`）重新同步依赖。
+若报错 `ImportError: No bitsandbytes`，说明插件是在补全优化器依赖前安装的，或 `bitsandbytes` 版本过旧：在 Fast 页点击 **「修复插件」**（或 `POST /api/engines/anima-fast/repair`）重新同步依赖。
+
+> **Linux aarch64 临时兼容说明**：bitsandbytes 0.49.2 尚未提供 CUDA 13.2 native binary。Anima Fast 在 DGX Spark 等 aarch64 Linux 设备上临时设置 `BNB_CUDA_VERSION=130`，让 bitsandbytes 使用包内的 `libbitsandbytes_cuda130.so`；PyTorch 与 FlashAttention 仍运行在 CUDA 13.2。该组合已通过 AdamW8bit 单步验证，但它只是上游 cu132 binary 发布前的过渡方案，届时应移除此 override。
 
 ---
 
@@ -296,7 +311,7 @@ Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选�
 | 安装失败 / 审计失败 | 优先用 CLI 脚本重装看终端报错；亦可看页内日志或 `POST /api/engines/anima-fast/repair` |
 | `invalid peer certificate: UnknownIssuer` | Windows 安装器会默认使用系统证书库；若仍失败，请确认代理或杀毒软件的根证书已受 Windows 信任，也可换网络重试。旧版 uv 可在安装前设置 `$env:UV_NATIVE_TLS="true"` |
 | `No bitsandbytes` / 优化器 ImportError | 修复插件；或确认 `optimizer_type=AdamW` 临时绕过 |
-| 末 epoch 报 accelerate / `NoneType is not iterable` | torch 的 `.dist-info` 损坏；**修复插件** 或重装 `torch==2.11.0+cu130` |
+| 末 epoch 报 accelerate / `NoneType is not iterable` | torch 的 `.dist-info` 损坏；**修复插件** 或重装 `torch==2.12.0+cu132` |
 | 训练按钮灰色 | 插件未就绪；先安装 |
 | CUDA / 显存报错 | 改用标准模式，或降低分辨率 / batch |
 | 维护者禁用 | 环境变量 `LORA_ENABLE_ANIMA_FAST=0` |

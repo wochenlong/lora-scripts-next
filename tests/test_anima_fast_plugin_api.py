@@ -42,8 +42,8 @@ class AnimaFastPluginApiTests(unittest.TestCase):
         layout.train_py.write_text("", encoding="utf-8")
         (layout.source / "configs").mkdir()
         (layout.source / "configs" / "base.toml").write_text("", encoding="utf-8")
-        (layout.source / "preprocess").mkdir()
-        (layout.source / "preprocess" / "resize_images.py").write_text("", encoding="utf-8")
+        (layout.source / "scripts" / "preprocess").mkdir(parents=True)
+        (layout.source / "scripts" / "preprocess" / "resize_images.py").write_text("", encoding="utf-8")
 
     def test_preflight_fail_message_includes_errors(self):
         result = PreflightResult(
@@ -183,7 +183,10 @@ class AnimaFastPluginApiTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root):
-                response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
+                response = asyncio.run(api.create_toml_file(make_request({
+                    "model_train_type": "anima-lora-fast",
+                    "fast_variant": "tlora",
+                })))
 
         self.assertEqual(response.status, "fail")
         self.assertIn("not ready", response.message)
@@ -202,7 +205,10 @@ class AnimaFastPluginApiTests(unittest.TestCase):
                     "mikazuki.engines.anima_fast.run.audit_environment",
                     return_value=type("Result", (), {"ok": False, "errors": ["main: torch drift"], "as_dict": lambda self: {"ok": False, "errors": self.errors}})(),
                 ):
-                response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
+                response = asyncio.run(api.create_toml_file(make_request({
+                    "model_train_type": "anima-lora-fast",
+                    "fast_variant": "tlora",
+                })))
 
         self.assertEqual(response.status, "fail")
         self.assertIn("drift", response.message)
@@ -245,11 +251,15 @@ class AnimaFastPluginApiTests(unittest.TestCase):
                 mock.patch("mikazuki.engines.anima_fast.run.prepare_anima_fast_dataset", return_value=prepared), \
                 mock.patch("mikazuki.engines.anima_fast.run.run_preflight", return_value=preflight), \
                 mock.patch("mikazuki.engines.anima_fast.run.process.run_anima_fast_train", return_value=api.APIResponseSuccess(data={"task_id": "train-1"})) as runner:
-                response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
+                response = asyncio.run(api.create_toml_file(make_request({
+                    "model_train_type": "anima-lora-fast",
+                    "fast_variant": "tlora",
+                })))
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["task_id"], "train-1")
         runner.assert_called_once()
+        self.assertEqual(runner.call_args.kwargs["metadata"]["source_config"]["fast_variant"], "tlora")
 
     def test_preflight_response_includes_adapter_warnings(self):
         with tempfile.TemporaryDirectory() as td:

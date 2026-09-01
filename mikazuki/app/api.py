@@ -619,6 +619,19 @@ async def task_config(task_id: str) -> APIResponse:
     task = tm.tasks.get(task_id)
     if task is None:
         raise HTTPException(status_code=404, detail="Unknown task_id")
+    source_config = task.metadata.get("source_config")
+    if isinstance(source_config, dict):
+        config = dict(source_config)
+        train_type = _task_train_type(task)
+        if train_type and not config.get("model_train_type"):
+            config["model_train_type"] = train_type
+        return APIResponseSuccess(data={
+            "config": config,
+            "config_path": str(task.metadata.get("config_path") or ""),
+            "backend": str(task.metadata.get("backend") or "standard"),
+            "train_type": train_type,
+            "output_name": task.metadata.get("output_name"),
+        })
     config_path = task.metadata.get("config_path")
     if not config_path:
         return APIResponseFail(message="Task has no config file / 该任务没有关联的配置文件")

@@ -12,6 +12,7 @@ from .settings import RuntimeConfig
 UI_ONLY_FIELDS = {
     "model_train_type",
     "anima_backend",
+    "fast_variant",
     "anima_fast_root",
     "anima_fast_python",
     "anima_fast_preflight_level",
@@ -49,6 +50,12 @@ PATH_FIELDS = {
 }
 
 SUPPORTED_LORA_TYPES = {"lora"}
+SUPPORTED_FAST_VARIANTS = {"lora", "tlora"}
+TLORA_NETWORK_ARGS = {
+    "use_timestep_mask": "true",
+    "min_rank": "1",
+    "alpha_rank_scale": "1.0",
+}
 UNSUPPORTED_FAST_MEMORY_FIELDS = {
     "blocks_to_swap",
     "cpu_offload_checkpointing",
@@ -83,10 +90,17 @@ FAST_SUPPORTED_OPTIMIZERS = {
     "pytorch_optimizer.CAME",
 }
 
-FAST_CACHE_PAIRS = (
-    ("cache_latents", "cache_latents_to_disk"),
-    ("cache_text_encoder_outputs", "cache_text_encoder_outputs_to_disk"),
-)
+LEGACY_CACHE_FIELDS = {
+    "cache_latents", "cache_latents_to_disk",
+    "cache_text_encoder_outputs", "cache_text_encoder_outputs_to_disk",
+}
+REMOVED_V117_FIELDS = {"static_token_count", "compile_mode", "dynamo_backend"}
+CURATED_TOP_LEVEL_FIELDS = {
+    "method", "methods_subdir", "network_module", "down_init",
+    "use_timestep_mask", "min_rank", "alpha_rank_scale",
+    "use_moe_style", "route_per_layer", "router_source",
+    "use_ortho", "use_ortho_init", "num_registers",
+}
 
 FAST_DATASET_REPEAT_FIELDS = {"dataset_repeats", "num_repeats", "repeats", "repeat"}
 
@@ -221,9 +235,14 @@ def has_kv_arg(values: Any, key: str) -> bool:
     return False
 
 
-def normalize_fast_network_args(values: Any) -> list[str]:
+def normalize_fast_network_args(
+    values: Any,
+    *,
+    allowed_keys: set[str] | None = None,
+) -> list[str]:
     if not isinstance(values, list):
         return []
+    allowed = allowed_keys or FAST_NETWORK_ARGS_ALLOWLIST
     out: list[str] = []
     key_index: dict[str, int] = {}
     unsupported: list[str] = []
@@ -239,7 +258,7 @@ def normalize_fast_network_args(values: Any) -> list[str]:
         if not key or value.lower() in {"undefined", "null", "nan"}:
             malformed.append(str(raw))
             continue
-        if key not in FAST_NETWORK_ARGS_ALLOWLIST:
+        if key not in allowed:
             unsupported.append(key)
             continue
         item = f"{key}={value}"
@@ -255,11 +274,11 @@ def normalize_fast_network_args(values: Any) -> list[str]:
             + ", ".join(malformed[:5])
         )
     if unsupported:
-        allowed = ", ".join(sorted(FAST_NETWORK_ARGS_ALLOWLIST))
+        allowed_text = ", ".join(sorted(allowed))
         raise AdapterError(
             "network_args_custom contains unsupported Anima Fast key(s): "
             + ", ".join(sorted(set(unsupported)))
-            + f". Allowed keys: {allowed}"
+            + f". Allowed keys: {allowed_text}"
         )
     return out
 
@@ -306,10 +325,25 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     lora_type = str(source.get("lora_type", "lora")).lower()
     if lora_type not in SUPPORTED_LORA_TYPES:
         raise AdapterError(f"lora_type={lora_type} is not supported by anima-lora-fast MVP")
+    fast_variant = str(source.get("fast_variant", "lora")).strip().lower()
+    if fast_variant not in SUPPORTED_FAST_VARIANTS:
+        raise AdapterError(
+            f"fast_variant={fast_variant} is not supported by anima-lora-fast; "
+            "choose one of: lora, tlora"
+        )
+    allowed_network_args = set(FAST_NETWORK_ARGS_ALLOWLIST)
+    if fast_variant == "tlora":
+        allowed_network_args.update(TLORA_NETWORK_ARGS)
 
     output_dir = source.get("output_dir") or runtime.output_dir
     logging_dir = source.get("logging_dir") or (runtime.logging_dir / run_id)
     source_dir = source.get("source_image_dir") or source.get("train_data_dir")
+    use_vae_cache = source.get("use_vae_cache")
+    if use_vae_cache is None:
+        use_vae_cache = source.get("cache_latents", source.get("cache_latents_to_disk", False))
+    use_text_cache = source.get("use_text_cache")
+    if use_text_cache is None:
+        use_text_cache = source.get("cache_text_encoder_outputs", source.get("cache_text_encoder_outputs_to_disk", False))
 
     values: dict[str, Any] = {
         "base_config": (runtime.anima_root / "configs" / "base.toml").resolve().as_posix(),
@@ -326,12 +360,23 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
             source.get("resized_image_dir") or default_dataset_cache_dir(str(source_dir) if source_dir else None, runtime, run_id, "resized"),
             runtime.lora_next_root,
         ),
+        "use_vae_cache": truthy(use_vae_cache),
+        "use_text_cache": truthy(use_text_cache),
     }
     if source_dir:
         values["source_image_dir"] = resolve_path(source_dir, runtime.lora_next_root)
 
     for key, value in source.items():
         if key in UI_ONLY_FIELDS:
+            continue
+        if key in LEGACY_CACHE_FIELDS:
+            continue
+        if key in REMOVED_V117_FIELDS:
+            warnings.append(f"{key} was removed by Anima v1.17.1 and was ignored")
+            continue
+        if key in CURATED_TOP_LEVEL_FIELDS:
+            if key not in {"method", "methods_subdir", "network_module"}:
+                warnings.append(f"{key} is controlled by fast_variant and was ignored")
             continue
         if key in UNSUPPORTED_FAST_MEMORY_FIELDS:
             if (key == "blocks_to_swap" and int_value(value) > 0) or (key != "blocks_to_swap" and truthy(value)):
@@ -340,11 +385,18 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
         if is_empty(value):
             continue
         if key in {"network_args", "network_args_custom"}:
-            normalized = normalize_fast_network_args(value)
+            normalized = normalize_fast_network_args(value, allowed_keys=allowed_network_args)
             target = "network_args"
             if normalized:
                 existing = values.get(target, [])
-                values[target] = normalize_fast_network_args([*existing, *normalized]) if existing else normalized
+                values[target] = (
+                    normalize_fast_network_args(
+                        [*existing, *normalized],
+                        allowed_keys=allowed_network_args,
+                    )
+                    if existing
+                    else normalized
+                )
             continue
         if key in {"optimizer_args", "optimizer_args_custom"}:
             normalized = normalize_kv_args(value)
@@ -373,50 +425,50 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     normalize_bucket_resolution(values, warnings)
 
     values.setdefault("torch_compile", True)
-    values.setdefault("static_token_count", 4096)
-    if truthy(values.get("torch_compile")):
-        tokens = resolution_tokens(values.get("resolution"))
-        static_token_count = int_value(values.get("static_token_count"), 0)
-        if tokens and tokens > static_token_count:
-            values["static_token_count"] = tokens
-            warnings.append(
-                f"static_token_count 已按 resolution 自动提高到 {tokens}；"
-                "高分辨率 Fast compile 会显著增加显存占用"
-            )
-    for cache_key, disk_key in FAST_CACHE_PAIRS:
-        values.setdefault(cache_key, False)
-        if not truthy(values.get(cache_key)):
-            values[disk_key] = False
-        else:
-            values.setdefault(disk_key, True)
+    values.setdefault("compile_dynamic_seq", True)
+    if truthy(values.get("torch_compile")) and not truthy(values.get("compile_dynamic_seq")):
+        values["compile_dynamic_seq"] = True
+        warnings.append("Anima v1.17.1 free-fit bucket requires compile_dynamic_seq; enabled automatically")
     values.setdefault("skip_cache_check", False)
 
-    cache_keys = tuple(cache_key for cache_key, _disk_key in FAST_CACHE_PAIRS)
-    if truthy(values.get("skip_cache_check")) and any(truthy(values.get(key)) for key in cache_keys):
-        for key in (*cache_keys, *(disk_key for _cache_key, disk_key in FAST_CACHE_PAIRS), "skip_cache_check"):
+    if truthy(values.get("skip_cache_check")) and any(
+        truthy(values.get(key)) for key in ("use_vae_cache", "use_text_cache")
+    ):
+        for key in ("use_vae_cache", "use_text_cache", "skip_cache_check"):
             values[key] = False
         warnings.append(
-            "cache_latents/cache_text_encoder_outputs 不能与 skip_cache_check 同时开启；"
+            "use_vae_cache/use_text_cache 不能与 skip_cache_check 同时开启；"
             "已自动关闭缓存读取和跳过检查，改用 live encoding"
         )
-    values.setdefault("compile_mode", "blocks")
-    if str(values.get("compile_mode", "blocks")) == "full" and truthy(values.get("gradient_checkpointing")):
-        values["compile_mode"] = "blocks"
-        warnings.append("compile_mode=full 与 gradient_checkpointing 不兼容，已自动改为 blocks")
-    values.setdefault("dynamo_backend", "inductor")
     values.setdefault("log_prefix", "af_")
     values.setdefault("log_tracker_name", "tb")
     if is_empty(values.get("attn_mode")):
         values["attn_mode"] = "torch"
         warnings.append("attn_mode 留空时使用 torch 保底；如需 flash 请先确认插件环境已安装 flash-attn")
-    values.setdefault("network_module", "networks.lora_anima")
+    values["method"] = "lora"
+    values["methods_subdir"] = "gui-methods"
+    values["network_module"] = "networks.lora_anima"
+    if fast_variant == "tlora":
+        existing_args = normalize_fast_network_args(
+            values.get("network_args", []),
+            allowed_keys=allowed_network_args,
+        )
+        for key, value in TLORA_NETWORK_ARGS.items():
+            existing_args = [
+                item for item in existing_args
+                if not item.lower().startswith(f"{key.lower()}=")
+            ]
+            existing_args.append(f"{key}={value}")
+        values["network_args"] = existing_args
+        values["down_init"] = "weight_svd"
+    else:
+        values.pop("down_init", None)
 
     if not is_empty(source.get("max_train_epochs")) and not is_empty(source.get("max_train_steps")):
         warnings.append("max_train_epochs is set; anima_lora derives max_train_steps from epochs and dataloader length")
 
     if source.get("network_module") and source["network_module"] != "networks.lora_anima":
         warnings.append(f"network_module={source['network_module']} was replaced by networks.lora_anima")
-        values["network_module"] = "networks.lora_anima"
 
     optimizer_type = str(values.get("optimizer_type", source.get("optimizer_type", "AdamW8bit"))).strip()
     if optimizer_type and optimizer_type not in FAST_SUPPORTED_OPTIMIZERS:
@@ -455,13 +507,11 @@ def dump_fast_dataset_toml(values: dict[str, Any]) -> str:
     batch_size = int_value(values.get("batch_size") or values.get("train_batch_size"), 1) or 1
     repeats = int_value(values.get("dataset_repeats") or values.get("num_repeats"), 1) or 1
     dataset_values = {
-        "resolution": resolution_pair(values.get("resolution", "1024,1024")),
         "batch_size": batch_size,
-        "enable_bucket": values.get("enable_bucket", True),
         "validation_split_num": int_value(values.get("validation_split_num"), 16),
         "validation_seed": int_value(values.get("validation_seed"), 42),
     }
-    for key in ("min_bucket_reso", "max_bucket_reso", "bucket_reso_steps", "bucket_no_upscale", "validation_split"):
+    for key in ("validation_split",):
         if not is_empty(values.get(key)):
             dataset_values[key] = values[key]
 
@@ -476,10 +526,6 @@ def dump_fast_dataset_toml(values: dict[str, Any]) -> str:
 
     lines = ["[general]\n"]
     lines.append(f"caption_extension = {toml_scalar(values.get('caption_extension', '.txt'))}\n")
-    if not is_empty(values.get("keep_tokens")):
-        lines.append(f"keep_tokens = {toml_scalar(values['keep_tokens'])}\n")
-    else:
-        lines.append("keep_tokens = 3\n")
     lines.append("\n[[datasets]]\n")
     lines.extend(f"{key} = {toml_scalar(value)}\n" for key, value in dataset_values.items())
     lines.append("\n  [[datasets.subsets]]\n")
