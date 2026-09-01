@@ -341,6 +341,28 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertEqual(namespace["_strip_net_prefix"]("net.blocks.0.x"), "blocks.0.x")
         self.assertEqual(namespace["_strip_net_prefix"]("model.diffusion_model.blocks.0.x"), "blocks.0.x")
 
+    def test_patch_comfyui_checkpoint_prefix_skips_upstream_support(self):
+        from mikazuki.engines.anima_fast.environment import patch_comfyui_checkpoint_prefix
+
+        with tempfile.TemporaryDirectory() as td:
+            source = self._make_source(Path(td))
+            weights = source / "library" / "anima" / "weights.py"
+            upstream_text = (
+                '_DIT_PREFIXES = ("net.", "model.diffusion_model.")\n'
+                'def _strip_net_prefix(key: str) -> str:\n'
+                '    for prefix in _DIT_PREFIXES:\n'
+                '        if key.startswith(prefix):\n'
+                '            return key[len(prefix):]\n'
+                '    return key\n'
+            )
+            weights.write_text(upstream_text, encoding="utf-8")
+
+            applied = patch_comfyui_checkpoint_prefix(source, lambda _line: None)
+            preserved = weights.read_text(encoding="utf-8")
+
+        self.assertEqual(applied, [])
+        self.assertEqual(preserved, upstream_text)
+
     def test_install_streaming_defaults_hf_endpoint_mirror(self):
         from mikazuki.engines.anima_fast.environment import _run_streaming_once, DEFAULT_HF_ENDPOINT
 

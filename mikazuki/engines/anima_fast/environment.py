@@ -280,7 +280,11 @@ def patch_comfyui_checkpoint_prefix(source_root: Path, log: LogFn = print) -> li
         "    return key"
     )
     text = target.read_text(encoding="utf-8") if target.is_file() else ""
-    if patched_body in text:
+    if patched_body in text or (
+        "def _strip_net_prefix" in text
+        and "for prefix in _DIT_PREFIXES" in text
+        and '"model.diffusion_model."' in text
+    ):
         return []
     if anchor not in text:
         raise RuntimeError(
