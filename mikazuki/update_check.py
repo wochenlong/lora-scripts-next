@@ -20,10 +20,15 @@ _last_result: Optional[dict] = None
 
 
 def local_version() -> str:
-    """Read version from VERSION file, fall back to git describe."""
+    """Read version from VERSION file, fall back to git describe.
+
+    utf-8-sig: a BOM-prefixed VERSION (PowerShell 5.1 / Notepad default) must
+    not leak into the version string (same failure class as the marketplace
+    host-version read, rc.4 live acceptance V30).
+    """
     version_file = Path(__file__).resolve().parent.parent / "VERSION"
     if version_file.is_file():
-        v = version_file.read_text(encoding="utf-8").strip()
+        v = version_file.read_text(encoding="utf-8-sig").strip()
         if v:
             return v
 
