@@ -1,0 +1,2 @@
+{"case_id":"cited-range","expected_source_ids":["civitai:model:101:version:1001"]}
+{"case_id":"unknown-disclosure","expect_unknown":true}

@@ -7,6 +7,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from mikazuki.tasks import LANE_MAINTENANCE, TaskManager, TaskStatus
 
@@ -163,6 +164,48 @@ class QueuePersistenceTests(unittest.TestCase):
         record = tm._task_record(task)
         self.assertNotIn("HF_TOKEN", record["env"])
         self.assertEqual(record["env"]["NORMAL"], "ok")
+
+    def test_atomic_replace_recovers_from_transient_windows_lock(self):
+        """WinError 5 on the queue rename must not silently drop the snapshot.
+
+        Defender / the indexer can hold a momentary handle on the freshly
+        written target; _atomic_replace retries briefly and lands the swap.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            tmp = Path(td) / "task_queue.json.tmp"
+            path = Path(td) / "task_queue.json"
+            tmp.write_text("[snapshotted]", encoding="utf-8")
+
+            attempts = {"n": 0}
+            real_replace = os.replace
+
+            def flaky_replace(src, dst):
+                attempts["n"] += 1
+                if attempts["n"] <= 2:  # two "Defender is scanning" misses
+                    raise PermissionError(5, "Access is denied", str(dst))
+                real_replace(src, dst)
+
+            with patch("mikazuki.tasks.os.replace", flaky_replace):
+                TaskManager._atomic_replace(tmp, path)
+            self.assertEqual(attempts["n"], 3)
+            self.assertEqual(path.read_text(encoding="utf-8"), "[snapshotted]")
+            self.assertFalse(tmp.exists())
+
+    def test_atomic_replace_exhausts_budget_and_persist_stays_quiet(self):
+        with tempfile.TemporaryDirectory() as td:
+            path = Path(td) / "task_queue.json"
+            tmp = path.with_name("task_queue.json.tmp")
+            tmp.write_text("x", encoding="utf-8")
+
+            def always_locked(src, dst):
+                raise PermissionError(5, "Access is denied", str(dst))
+
+            with patch("mikazuki.tasks.os.replace", always_locked):
+                with self.assertRaises(PermissionError):
+                    TaskManager._atomic_replace(tmp, path)
+                # End-to-end: _persist converts the exhausted retry into a
+                # warning log, never an exception escaping task submission.
+                TaskManager(persist_path=path)._persist()
 
     def test_queued_task_survives_restore(self):
         with tempfile.TemporaryDirectory() as td:

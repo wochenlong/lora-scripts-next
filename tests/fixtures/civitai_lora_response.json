@@ -1,0 +1,34 @@
+{
+  "items": [
+    {
+      "id": 101,
+      "name": "Declared character LoRA",
+      "type": "LORA",
+      "nsfw": false,
+      "creator": {"username": "creator-a"},
+      "baseModel": "SDXL",
+      "stats": {"downloadCount": 12000, "ratingCount": 40, "rating": 4.8},
+      "publishedAt": "2026-01-01T00:00:00Z",
+      "modelVersions": [
+        {
+          "id": 1001,
+          "baseModel": "SDXL",
+          "createdAt": "2026-01-01T00:00:00Z",
+          "trainedWords": ["character_token"],
+          "trainingDetails": {"rank": 32, "alpha": 16, "learningRate": 0.0001, "epochs": 10, "imageCount": 42}
+        }
+      ]
+    },
+    {
+      "id": 102,
+      "name": "Undisclosed style LoRA",
+      "type": "LORA",
+      "nsfw": false,
+      "creator": {"username": "creator-b"},
+      "baseModel": "SDXL",
+      "stats": {"downloadCount": 8000},
+      "modelVersions": [{"id": 1002, "baseModel": "SDXL", "trainingDetails": null}]
+    }
+  ],
+  "metadata": {"nextCursor": "cursor-2"}
+}
