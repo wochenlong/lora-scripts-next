@@ -196,7 +196,10 @@ def _donor_matches_member(donor: Path, item: zipfile.ZipInfo, archive: zipfile.Z
     new trust surface (the installed tree is not re-verified by design).
     """
     try:
-        donor_stat = donor.stat()
+        # Raw-prefixed stat: deep node_modules members can exceed MAX_PATH on
+        # Windows, where a plain-path stat raises and would silently degrade
+        # reuse to a full re-extract for every deep member.
+        donor_stat = _raw_path(donor).stat()
     except OSError:
         return False
     if not stat.S_ISREG(donor_stat.st_mode) or donor_stat.st_size != item.file_size:

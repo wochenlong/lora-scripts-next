@@ -134,6 +134,35 @@ def test_donor_tree_is_never_modified(tmp_path: Path) -> None:
     assert donor_paths["shared"].read_bytes() == SHARED_BIG
 
 
+def test_deep_beyond_max_path_member_is_reused(tmp_path: Path) -> None:
+    """Deep node_modules-style members whose plain path exceeds Windows
+    MAX_PATH must still be detected as reusable: the donor stat has to run
+    through the raw (\\?\\) path or every deep member silently degrades to a
+    full re-extract (caught by the 0.3.10 loopback E2E census: 8,590 deep
+    files unlinked before the fix)."""
+    deep_rel = "/".join("abcdefghijklmno" for _ in range(12)) + "/deep-file.bin"
+    content = b"deep-shared-content-" * 500
+    pkg1 = _make_package(tmp_path / "v1.zip", {"shallow.txt": b"x", deep_rel: content})
+    donor = tmp_path / "donor"
+    extract_package(pkg1, donor, _members(pkg1))
+    # On Windows the plain donor path is longer than MAX_PATH (that is the
+    # point of this test); on POSIX it is a legal path and the assertions
+    # below hold trivially.
+    donor_file = donor / Path(*deep_rel.split("/"))
+    if os.name == "nt":
+        assert len(str(donor_file)) > 260
+    pkg2 = _make_package(tmp_path / "v2.zip", {"shallow.txt": b"changed", deep_rel: content})
+    target = tmp_path / "target"
+    reused = extract_package(pkg2, target, _members(pkg2), reuse_from=donor)
+
+    from mikazuki.plugin_marketplace.package import _raw_path
+
+    dest = target / Path(*deep_rel.split("/"))
+    assert reused == 1
+    assert os.stat(_raw_path(dest)).st_ino == os.stat(_raw_path(donor_file)).st_ino
+    assert os.stat(_raw_path(dest)).st_nlink >= 2
+
+
 def test_manager_upgrade_hardlinks_shared_members_between_version_dirs(tmp_path: Path) -> None:
     root = tmp_path / "marketplace-root"
     manager, key = manager_for(root, runtime=FakeRuntime())
