@@ -11,7 +11,23 @@ param(
     # Full: bundle extensions/anima_lora including .venv for Baidu Netdisk.
     [switch]$BundleAnimaFast,
     [string]$AnimaFastSource = "",
-    [string]$PackageSuffix = ""
+    [string]$PackageSuffix = "",
+    # Plugin marketplace (A1): bundle dist-marketplace catalog + trust + the
+    # platform package zip so the released one-click package can install the
+    # agent plugin offline (no extra download).
+    [switch]$SkipMarketplace,
+    # F2-2 catalog-only: bundle ONLY catalog.json + trust.json (KB-sized). The
+    # platform zip is then downloaded at install time from the catalog's HTTPS
+    # release URL (GitHub release assets), verified against the catalog-pinned
+    # sha256. Set MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR=<base> for intranet mirrors.
+    [switch]$MarketplaceCatalogOnly,
+    [string]$MarketplacePlatform = "win32-x64",
+    # Catalog-only bundles: the live release channel the host should trust.
+    [string]$MarketplaceCatalogUrl = "https://github.com/MikumikuDAIFans/next-trainer-agent-assets/releases/download/v0.3.9/catalog.json",
+    # Managed content channel (knowledge/templates/skills signed index). When
+    # set, marketplace-env.bat also pins NEXT_TRAINER_ASSETS_INDEX_URL so the
+    # bundled host consumes the trust-v2 assets channel out of the box.
+    [string]$AssetsIndexUrl = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -516,6 +532,94 @@ Write-PortableBuildMetadata -TrainerDir $sdtDir -Version $Version -Flavor $packa
 Write-Host "  Copied root files"
 Write-Host "  Done" -ForegroundColor Green
 
+# ==== Step 2c: Bundle plugin marketplace (A1) ====
+
+if ($SkipMarketplace) {
+    Write-Host ""
+    Write-Host "[2c/6] Skipping plugin marketplace bundle (-SkipMarketplace)" -ForegroundColor Yellow
+} else {
+    Write-Host ""
+    Write-Host "[2c/6] Bundling plugin marketplace (offline plugin install)..." -ForegroundColor Cyan
+    # The portable launcher cd's into SD-Trainer/ before starting the host,
+    # so the host's bundled-autodiscover looks at <cwd>/plugin-marketplace/.
+    $marketplaceSrc = Join-Path $ProjectRoot "plugin-packages\next-trainer-pi-agent\dist-marketplace"
+    $marketplaceDst = Join-Path $sdtDir "plugin-marketplace"
+    $catalogSrc = Join-Path $marketplaceSrc "catalog.json"
+    $trustSrc = Join-Path $marketplaceSrc "trust.json"
+    if (-not (Test-Path $catalogSrc) -or -not (Test-Path $trustSrc)) {
+        # Fail closed (Copilot C-3): marketplace bundling is ON by default, and
+        # dist-marketplace/ is gitignored — silently shipping without it would
+        # produce a "marketplace bundled" build that has no marketplace at all.
+        Write-Host "  [FAIL] catalog.json/trust.json missing under $marketplaceSrc" -ForegroundColor Red
+        Write-Host "         Build the plugin first (build-all-platforms.py + build-marketplace-catalog.py)," -ForegroundColor Red
+        Write-Host "         or pass -SkipMarketplace to intentionally ship without the marketplace." -ForegroundColor Red
+        exit 1
+    } else {
+        New-Item -ItemType Directory -Path $marketplaceDst -Force | Out-Null
+        Copy-Item $catalogSrc (Join-Path $marketplaceDst "catalog.json") -Force
+        Copy-Item $trustSrc (Join-Path $marketplaceDst "trust.json") -Force
+        $catalogForm = "local"
+        try {
+            $catObj = Get-Content -LiteralPath $catalogSrc -Raw -Encoding UTF8 | ConvertFrom-Json
+            $firstUrl = $catObj.entries[0].packages[0].package_url
+            # dev-placeholder catalogs use https://plugins.next-trainer.local/...
+            if ($firstUrl -match '^https?://' -and $firstUrl -notmatch '\.local(/|$)') { $catalogForm = "remote" }
+        } catch { }
+        if ($MarketplaceCatalogOnly) {
+            # Expected shape: catalog + trust only (KB-sized). Installs fetch the
+            # platform zip over HTTPS at install time (sha256-checked).
+            $note = @(
+                "Plugin marketplace catalog snapshot (catalog-only bundle).",
+                "This bundle contains NO package zips on purpose:",
+                "  - catalog.json is signed and pins each platform zip's URL, size and sha256;",
+                "  - installing from the marketplace downloads the zip over HTTPS and",
+                "    verifies it against the catalog pins before use.",
+                "Catalog form detected: $catalogForm",
+                "  remote  -> downloads come from the release asset URLs in catalog.json.",
+                "  local   -> set MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR=<https base> on the",
+                "             host machine, or rebuild with the bundled-zip mode.",
+                "Intranet mirror: MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR serves <mirror>/<file>."
+            ) -join "`r`n"
+            Set-Content -LiteralPath (Join-Path $marketplaceDst "README-install.txt") -Value $note -Encoding UTF8
+            # The host fail-closes a pure FILE catalog by design; a URL channel is
+            # installable (catalog pins size+sha256, package downloads verified).
+            # Baked channel env + bundled catalog/trust as offline fallback.
+            $envBatLines = New-Object System.Collections.Generic.List[string]
+            $envBatLines.Add("@echo off")
+            $envBatLines.Add(":: Written by build_portable.ps1 (-MarketplaceCatalogOnly): live plugin release channel.")
+            $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_CATALOG_URL=' + $MarketplaceCatalogUrl + '"')
+            if ($AssetsIndexUrl) {
+                $envBatLines.Add('set "NEXT_TRAINER_ASSETS_INDEX_URL=' + $AssetsIndexUrl + '"')
+            }
+            $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_CATALOG=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\catalog.json"')
+            $envBatLines.Add('set "MIKAZUKI_MARKETPLACE_TRUST=%PORTABLE_ROOT%' + (Split-Path $sdtDir -Leaf) + '\plugin-marketplace\trust.json"')
+            [System.IO.File]::WriteAllLines((Join-Path $portableDir "marketplace-env.bat"), $envBatLines, [System.Text.Encoding]::ASCII)
+            Write-Host "  marketplace-env.bat wired to the release channel" -ForegroundColor Green
+            if ($catalogForm -ne "remote") {
+                Write-Host "  WARNING: catalog-only bundle with a LOCAL-form catalog; installs need" ;
+                Write-Host "           MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR at runtime." -ForegroundColor Yellow
+            } else {
+                Write-Host "  Catalog-only bundle (remote-form catalog; zips download at install time)" -ForegroundColor Green
+            }
+        } else {
+            New-Item -ItemType Directory -Path (Join-Path $marketplaceDst "packages") -Force | Out-Null
+            $zipDir = Join-Path $marketplaceSrc "packages"
+            $zipSrc = Get-ChildItem $zipDir -Filter "*-$MarketplacePlatform.zip" -File -ErrorAction SilentlyContinue |
+                Sort-Object LastWriteTime -Descending | Select-Object -First 1
+            if ($zipSrc) {
+                Copy-Item $zipSrc.FullName (Join-Path $marketplaceDst "packages") -Force
+                $zipMB = [math]::Round($zipSrc.Length / 1MB, 1)
+                Write-Host "  Bundled $($zipSrc.Name) ($zipMB MB, $MarketplacePlatform)" -ForegroundColor Green
+            } else {
+                Write-Host "  WARNING: no $MarketplacePlatform package zip under dist-marketplace\packages" -ForegroundColor Yellow
+                Write-Host "           installs of that platform will download at runtime" -ForegroundColor Yellow
+                Write-Host "           (or rebuild with -MarketplaceCatalogOnly for the intended slim form)" -ForegroundColor Yellow
+            }
+        }
+    }
+    Write-Host "  Done" -ForegroundColor Green
+}
+
 # ==== Step 3: Bundle default WD tagger (offline batch tagging) ====
 
 Write-Host ""
@@ -804,6 +908,9 @@ $readme += "  tagger-models/   - Local tagger models`r`n`r`n"
 $readme += "Update:`r`n"
 $readme += "  Update-SD-Trainer.bat                - Git update (recommended if .git exists)`r`n"
 $readme += "  Update-SD-Trainer-Release.bat      - Download latest Release 7z and merge`r`n"
+$readme += "  plugin-marketplace\                - Agent plugin catalog; catalog-only bundles download the`r`n"
+$readme += "                                       plugin zip at install time (sha256-verified). Intranet:`r`n"
+$readme += "                                       MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR=<https base>`r`n"
 $readme += "  update\update_sd_trainer.bat       - Shortcut to Update-SD-Trainer.bat`r`n"
 $readme += "  update\update_from_release.bat     - Shortcut to Update-SD-Trainer-Release.bat`r`n"
 $readme += "  update\update_dependencies.bat     - Update Python packages`r`n`r`n"

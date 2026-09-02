@@ -174,12 +174,17 @@ def test_dataset_editor_batch_prepend_appends_tags_at_front(tmp_path):
     payload = response.json()
     assert payload["status"] == "success"
     assert payload["data"]["changed"] == 2
+    # Merge note (dev + feat): both branches had independently added this test
+    # with different front-append semantics. The merged code follows the
+    # feat-side semantics (requested tags form the ordered prefix; existing
+    # occurrences are removed, see dataset_editor.batch_edit), so both
+    # assertions use the prefix-slot expectation.
     assert (tmp_path / "alpha.txt").read_text(
         encoding="utf-8"
-    ) == "masterpiece, best quality, solo, 1girl"
+    ) == "masterpiece, best quality, 1girl, solo"
     assert (tmp_path / "beta.txt").read_text(
         encoding="utf-8"
-    ) == "best quality, 1girl, masterpiece, solo"
+    ) == "masterpiece, best quality, 1girl, solo"
 
 
 def test_dataset_editor_batch_cleans_obvious_caption_noise(tmp_path):
@@ -343,7 +348,7 @@ def test_dataset_editor_vue_source_exposes_enhanced_workflow():
     source = (ROOT / "frontend/src/pages/DatasetEditorPage.vue").read_text(encoding="utf-8")
     api = (ROOT / "frontend/src/api/dataset.ts").read_text(encoding="utf-8")
 
-    for marker in ("selectedPaths", "clearSelection", "pageSize", "replaceFrom", "sessionHistory"):
+    for marker in ("selectedPaths", "clearSelection", "selectCurrentPageOnly", "tagFilter", "pageSize", "replaceFrom", "sessionHistory",):
         assert marker in source
     for endpoint in ("/batch", "/undo", "/redo", "/history"):
         assert endpoint in api

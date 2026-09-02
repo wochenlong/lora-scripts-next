@@ -47,6 +47,13 @@ def test_tagger_html_serves_progress_script():
     assert r.status_code == 200
     assert 'id="app"' in r.text
 
+def test_legacy_tagger_html_serves_vue_spa_entry():
+    client = TestClient(app)
+    r = client.get("/tagger.html")
+    assert r.status_code == 200
+    assert '<div id="app"></div>' in r.text
+    assert "/assets/" in r.text
+
 
 def test_tagger_default_download_endpoint_preserves_existing_hf_endpoint(monkeypatch):
     monkeypatch.setenv("HF_ENDPOINT", "https://hf-mirror.com")
