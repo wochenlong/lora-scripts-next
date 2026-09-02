@@ -424,6 +424,33 @@
   font-size: 12px;
 }
 
+.marketplace-update-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-left: 5px;
+  border-radius: 50%;
+  background: var(--warning, #d97706);
+  vertical-align: 1px;
+}
+
+.marketplace-update-badge {
+  flex: none;
+  padding: 4px 10px;
+  border: 1px solid color-mix(in srgb, var(--warning, #d97706) 45%, var(--border));
+  border-radius: 999px;
+  color: var(--warning, #d97706);
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .marketplace-update-badge {
+    white-space: normal;
+    text-align: left;
+  }
+}
+
 .marketplace-metadata {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

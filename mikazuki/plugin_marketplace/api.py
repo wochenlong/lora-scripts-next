@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import secrets
 import sys
 import json
@@ -556,17 +557,94 @@ def _http_error(exc: Exception) -> HTTPException:
     )
 
 
+def _compare_marketplace_versions(candidate: str, current: str) -> int | None:
+    """Order two marketplace versions for update detection.
+
+    Returns >0 when ``candidate`` is newer, <0 when older, 0 when equal, and
+    None when either version cannot be parsed (callers must treat that as
+    "unknown", never as an update). Numeric parts compare numerically; a
+    pre-release suffix (e.g. ``-rc.1``) orders BEFORE the corresponding
+    release, per semver.
+    """
+    def _parts(version: str) -> tuple[tuple[int, ...], str] | None:
+        text = version.strip()
+        match = re.match(r"^(\d+(?:\.\d+)*)(.*)$", text)
+        if not match:
+            return None
+        numbers = tuple(int(part) for part in match.group(1).split("."))
+        return numbers, match.group(2).strip()
+
+    left = _parts(candidate)
+    right = _parts(current)
+    if left is None or right is None:
+        return None
+    (left_numbers, left_suffix), (right_numbers, right_suffix) = left, right
+    padded_left = left_numbers + (0,) * (len(right_numbers) - len(left_numbers))
+    padded_right = right_numbers + (0,) * (len(left_numbers) - len(right_numbers))
+    if padded_left != padded_right:
+        return 1 if padded_left > padded_right else -1
+    # Equal numeric core: a pre-release sorts before the release.
+    if left_suffix == right_suffix:
+        return 0
+    if not left_suffix:
+        return 1
+    if not right_suffix:
+        return -1
+    return 1 if left_suffix > right_suffix else -1
+
+
+def _update_info(status) -> dict:
+    """Honest update availability for an installed plugin (P0-3).
+
+    Every field is present on every response so clients can rely on the keys:
+    no catalog entry (cold/offline host) or an unparseable version keeps the
+    fields at their "unknown" defaults instead of inventing an update.
+    """
+    info = {
+        "update_available": False,
+        "latest_version": None,
+        "update_size_bytes": None,
+        "update_permissions_added": None,
+        "update_permissions_removed": None,
+    }
+    if not status.active_version:
+        return info
+    try:
+        entry = _catalog.entry(status.id)
+    except Exception:  # noqa: BLE001 — a cold/offline catalog is an "unknown"
+        return info
+    comparison = _compare_marketplace_versions(entry.latest_version, status.active_version)
+    if comparison is None or comparison <= 0:
+        return info
+    # Permission diff is VERSION to VERSION (task book P0-3): the newest
+    # summary against the currently active version's manifest, so the update
+    # confirmation can demand re-approval of every changed grant. Fall back
+    # to the granted set when the active manifest is missing from the record.
+    record = _manager.store.get_plugin(status.id) or {}
+    active_manifest = ((record.get("versions") or {}).get(status.active_version) or {}).get("manifest") or {}
+    current_permissions = set(active_manifest.get("permissions") or record.get("granted_permissions") or ())
+    new_permissions = set(entry.permissions_summary)
+    info["update_available"] = True
+    info["latest_version"] = entry.latest_version
+    info["update_size_bytes"] = entry.package_size
+    info["update_permissions_added"] = sorted(new_permissions - current_permissions)
+    info["update_permissions_removed"] = sorted(current_permissions - new_permissions)
+    return info
+
+
 def _status_payload(status) -> dict:
     """Plugin status JSON plus the live install operation (if any).
 
     The marketplace page can be left and re-entered (or the whole host UI
     reloaded by the post-install refresh) while an install keeps running in
     the background; surfacing the operation here is what lets the page
-    re-attach its progress UI instead of going blind.
+    re-attach its progress UI instead of going blind. Also carries the
+    update-availability fields (P0-3) computed against the latest catalog.
     """
     payload = status.model_dump(mode="json")
     operation = _install_operations.active(status.id)
     payload["activeOperation"] = operation.snapshot() if operation else None
+    payload.update(_update_info(status))
     return payload
 
 

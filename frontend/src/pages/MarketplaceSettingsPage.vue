@@ -61,6 +61,20 @@ const selected = computed(() => records.value.find((record) => record.id === sel
 // auto-approved, so install/enable always sends the full declared set.
 const declaredPermissions = computed(() => selected.value?.entry?.permissions_summary ?? [])
 
+// P0-3: host-computed update availability for the selected plugin. Null means
+// "no update" or "catalog unknown" — the badge and update button stay hidden
+// (honest defaults: a cold catalog never invents an update).
+const updateInfo = computed(() => {
+  const status = selected.value?.status
+  if (!status?.update_available || !status.latest_version) return null
+  return {
+    version: status.latest_version,
+    size: status.update_size_bytes != null ? formatBytes(status.update_size_bytes) : "",
+    added: status.update_permissions_added ?? [],
+    removed: status.update_permissions_removed ?? [],
+  }
+})
+
 function formatBytes(bytes: number) {
   if (bytes < 1024) return `${bytes} B`
   if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
@@ -110,9 +124,9 @@ async function load() {
   }
 }
 
-async function confirmMutation(messageKey: string) {
+async function confirmMessage(message: string) {
   try {
-    await ElMessageBox.confirm(t(messageKey), t("marketplace.confirmTitle"), {
+    await ElMessageBox.confirm(message, t("marketplace.confirmTitle"), {
       confirmButtonText: t("marketplace.confirm"),
       cancelButtonText: t("marketplace.cancel"),
       type: "warning",
@@ -121,6 +135,10 @@ async function confirmMutation(messageKey: string) {
   } catch {
     return false
   }
+}
+
+function confirmMutation(messageKey: string) {
+  return confirmMessage(t(messageKey))
 }
 
 async function runAction(action: string, operation: () => Promise<MarketplacePluginStatus>): Promise<boolean> {
@@ -217,7 +235,19 @@ function finishInstall() {
 
 async function install() {
   const record = selected.value
-  if (!record?.entry || busyAction.value || !(await confirmMutation("marketplace.confirmInstall"))) return
+  if (!record?.entry || busyAction.value) return
+  // An update re-uses the install operation (upgrade path) but asks for an
+  // explicit re-approval when the newest version's permission summary differs
+  // from the granted set — the confirmation names every added/removed grant.
+  if (record.status.update_available && updateInfo.value) {
+    const info = updateInfo.value
+    let message = t("marketplace.confirmUpdate", { version: info.version, size: info.size })
+    if (info.added.length > 0) message += t("marketplace.updateAddsPermissions", { list: info.added.join(", ") })
+    if (info.removed.length > 0) message += t("marketplace.updateRemovesPermissions", { list: info.removed.join(", ") })
+    if (!(await confirmMessage(message))) return
+  } else if (!(await confirmMutation("marketplace.confirmInstall"))) {
+    return
+  }
   busyAction.value = "install"
   error.value = ""
   const controller = new AbortController()
@@ -358,7 +388,15 @@ onMounted(() => void load())
             <strong>{{ record.entry?.name || record.id }}</strong>
             <small>{{ record.entry?.publisher_id || t("marketplace.publisherUnknown") }}</small>
           </span>
-          <i :data-state="record.status.state">{{ t(`marketplace.state.${record.status.state}`) }}</i>
+          <i :data-state="record.status.state">
+            {{ t(`marketplace.state.${record.status.state}`) }}
+            <em
+              v-if="record.status.update_available"
+              class="marketplace-update-dot"
+              :aria-label="t('marketplace.updateMarker')"
+              :title="t('marketplace.updateMarker')"
+            ></em>
+          </i>
         </button>
       </nav>
 
@@ -369,6 +407,9 @@ onMounted(() => void load())
             <p>{{ selected.entry?.description || t("marketplace.metadataUnavailable") }}</p>
           </div>
           <span class="marketplace-version">{{ selected.status.active_version || selected.entry?.latest_version || "-" }}</span>
+          <span v-if="updateInfo" class="marketplace-update-badge" role="status">
+            {{ t("marketplace.updateBadge", { version: updateInfo.version, size: updateInfo.size }) }}
+          </span>
         </header>
 
         <dl class="marketplace-metadata">
@@ -419,6 +460,13 @@ onMounted(() => void load())
             :disabled="!selected.entry || Boolean(busyAction)"
             @click="install"
           >{{ t("marketplace.install") }}</button>
+          <button
+            v-if="selected.status.update_available && selected.status.state !== 'not_installed'"
+            type="button"
+            class="primary-action"
+            :disabled="!selected.entry || Boolean(busyAction)"
+            @click="install"
+          >{{ t("marketplace.update") }}</button>
           <button
             v-if="selected.status.state === 'installed' || selected.status.state === 'broken'"
             type="button"

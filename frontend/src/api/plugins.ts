@@ -93,6 +93,16 @@ export interface MarketplacePluginStatus {
    *  navigation or host reload (the operation lives in the host process, not
    *  in the component). */
   activeOperation?: MarketplaceInstallOperation | null
+  /** P0-3 update availability, computed host-side against the latest catalog.
+   *  All keys are always present; a cold/offline catalog keeps them at their
+   *  honest "unknown" defaults (no invented updates). */
+  update_available?: boolean
+  latest_version?: string | null
+  update_size_bytes?: number | null
+  /** Permission summary delta of the newest version versus the granted set,
+   *  so the update confirmation can demand re-approval of changed grants. */
+  update_permissions_added?: string[] | null
+  update_permissions_removed?: string[] | null
 }
 
 export type MarketplaceInstallState = "running" | "succeeded" | "failed" | "cancelled"
