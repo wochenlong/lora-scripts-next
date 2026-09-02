@@ -271,7 +271,14 @@ class MarketplaceManager:
             target_created = False
             try:
                 _phase("extracting")
-                extract_package(package_path, staging, members)
+                # P0-2: on an upgrade, byte-identical members are hard-linked
+                # from the previous version's installed directory (same volume
+                # by construction: staging and versions share one root). The
+                # old directory is only ever read, so rollback is untouched.
+                reuse_from = None
+                if previous_active:
+                    reuse_from = self.paths.version_dir(entry.id, previous_active)
+                extract_package(package_path, staging, members, reuse_from=reuse_from)
                 _phase("health_check")
                 if not self.health_check(manifest, staging):
                     raise RuntimeError(f"plugin health check failed: {entry.id}@{entry.latest_version}")
