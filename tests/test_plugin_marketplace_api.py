@@ -18,6 +18,7 @@ from mikazuki.plugin_host import AgentRouteAuthorityConfig, PluginCapabilityBrok
 from mikazuki.plugin_marketplace.api import (
     _default_authority_config,
     _local_catalog_wiring,
+    _marketplace_paths,
     configure_capability_broker,
     configure_confirmation_store,
     configure_marketplace,
@@ -1024,7 +1025,8 @@ def test_bundled_marketplace_autodiscover(tmp_path, monkeypatch):
     ):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.chdir(tmp_path)
-    trust, source, acquirer = _local_catalog_wiring()
+    trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
+    assert _trust_seq == 0
     assert source is not None
     assert source.path == (bundled / "catalog.json").resolve()
     assert "release-key-1" in trust._keys
@@ -1045,7 +1047,7 @@ def test_bundled_autodiscover_loses_to_explicit_env(tmp_path, monkeypatch):
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", raising=False)
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
     monkeypatch.chdir(tmp_path)
-    _trust, source, acquirer = _local_catalog_wiring()
+    _trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
     assert source.path == env_catalog.resolve()
     # Without the env package root the bundled packages/ dir is not picked up:
     # the env tier is explicit and self-contained, so acquisition fails closed.
@@ -1063,7 +1065,7 @@ def test_partial_env_stays_fail_closed_despite_bundled(tmp_path, monkeypatch):
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", raising=False)
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
     monkeypatch.chdir(tmp_path)
-    trust, source, acquirer = _local_catalog_wiring()
+    trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
     assert trust is not None and source is None and acquirer is None
 
 

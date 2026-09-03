@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import re
 import secrets
@@ -48,8 +49,18 @@ from .operations import (
 from .package import remove_tree
 from .paths import MarketplacePaths
 from .store import MarketplaceStore
-from .trust import TrustError, TrustStore, load_trust_root
+from .trust import (
+    _APPLIED_TRUST_FILE,
+    TrustError,
+    TrustStore,
+    load_applied_trust,
+    load_trust_root,
+    verify_trust_update,
+    write_applied_trust,
+)
 
+
+logger = logging.getLogger("mikazuki.plugin_marketplace.api")
 
 router = APIRouter(prefix="/marketplace", tags=["plugin-marketplace"])
 host_router = APIRouter(prefix="/plugin-host", tags=["plugin-host"])
@@ -156,7 +167,7 @@ def _platform_name() -> str:
     return f"{sys.platform}-{arch}"
 
 
-def _local_catalog_wiring() -> tuple[TrustStore, Any, Any]:
+def _local_catalog_wiring(paths: MarketplacePaths) -> tuple[TrustStore, int, Any, Any]:
     """Catalog/trust wiring: explicit environment > bundled > fail-closed.
 
     1. Development: MIKAZUKI_MARKETPLACE_CATALOG / _TRUST (plus optional
@@ -189,7 +200,7 @@ def _local_catalog_wiring() -> tuple[TrustStore, Any, Any]:
         # Explicit tier: the trust root is mandatory (partial env fails closed),
         # and at least one catalog source (live URL and/or file) must resolve.
         if not env_trust:
-            return TrustStore({}), None, None
+            return TrustStore({}), 0, None, None
         try:
             if env_catalog_url:
                 catalog_source = HttpCatalogSource(env_catalog_url)
@@ -201,16 +212,16 @@ def _local_catalog_wiring() -> tuple[TrustStore, Any, Any]:
                     else FallbackCatalogSource(catalog_source, file_source)
                 )
         except ValueError:
-            return TrustStore({}), None, None
+            return TrustStore({}), 0, None, None
         if catalog_source is None:
-            return TrustStore({}), None, None
+            return TrustStore({}), 0, None, None
         trust_path = env_trust
     else:
         bundled = Path.cwd() / "plugin-marketplace"
         catalog_candidate = bundled / "catalog.json"
         trust_candidate = bundled / "trust.json"
         if not (catalog_candidate.is_file() and trust_candidate.is_file()):
-            return TrustStore({}), None, None
+            return TrustStore({}), 0, None, None
         trust_path = str(trust_candidate)
         catalog_source = FileCatalogSource(catalog_candidate)
         if not package_root and (bundled / "packages").is_dir():
@@ -238,13 +249,38 @@ def _local_catalog_wiring() -> tuple[TrustStore, Any, Any]:
         # package root: the portable one-click bundle must remain self-contained
         # and never reach the network silently.
         acquirer = HttpPackageAcquirer(mirror)
-    return trust, catalog_source, acquirer
+    # P1-5: an APPLIED trust update (rotation/revocation from a governed
+    # release, chain-verified at apply time) takes precedence over the
+    # shipped root. A corrupted applied file falls back to the shipped root
+    # — the host is never bricked by its own trust state.
+    trust_seq = 0
+    applied_file = paths.root / _APPLIED_TRUST_FILE
+    if applied_file.is_file():
+        try:
+            trust, trust_seq = load_applied_trust(applied_file)
+            logger.info(
+                "marketplace: effective trust = applied update (seq %d, fingerprint %s)",
+                trust_seq,
+                trust.fingerprint(),
+            )
+        except TrustError as exc:
+            logger.warning("marketplace: applied trust root is invalid (%s); using the shipped root", exc)
+    return trust, trust_seq, catalog_source, acquirer
+
+
+def _marketplace_paths() -> MarketplacePaths:
+    """The host-writable marketplace root (env override or <cwd>/.runtime).
+
+    Resolved before catalog wiring: the applied-trust file (P1-5) lives in
+    this root, so the wiring must know it.
+    """
+    configured = os.environ.get("MIKAZUKI_PLUGIN_MARKETPLACE_ROOT", "").strip()
+    root = Path(configured).resolve() if configured else (Path.cwd() / ".runtime" / "plugin-marketplace").resolve()
+    return MarketplacePaths(root)
 
 
 def _default_manager() -> MarketplaceManager:
-    configured = os.environ.get("MIKAZUKI_PLUGIN_MARKETPLACE_ROOT", "").strip()
-    root = Path(configured).resolve() if configured else (Path.cwd() / ".runtime" / "plugin-marketplace").resolve()
-    paths = MarketplacePaths(root)
+    paths = _marketplace_paths()
     port = os.environ.get("MIKAZUKI_PORT", "28000").strip()
     # Production trust roots are release-governed.  An empty root keeps status,
     # uninstall and core startup available while making every install fail closed.
@@ -262,7 +298,7 @@ def _default_manager() -> MarketplaceManager:
     )
 
 
-_trust, _catalog_source, _catalog_acquirer = _local_catalog_wiring()
+_trust, _trust_seq, _catalog_source, _catalog_acquirer = _local_catalog_wiring(_marketplace_paths())
 _manager = _default_manager()
 _catalog = MarketplaceCatalogService(
     paths=_manager.paths,
@@ -270,6 +306,63 @@ _catalog = MarketplaceCatalogService(
     source=_catalog_source,
     acquirer=_catalog_acquirer,
 )
+
+
+def _apply_pending_trust_update() -> bool:
+    """P1-5: apply a pending ``trust-update.json`` from the marketplace root.
+
+    Chain of trust: the update is signed by a key the CURRENT effective
+    trust already trusts (never by a key the update itself introduces), and
+    ``seq`` must strictly advance past the applied seq — replays and
+    rollbacks are rejected. On success the applied root is persisted
+    (restart-proof), the update file is archived for audit, and the
+    manager/catalog trust references are swapped so ALL subsequent
+    catalog/update verification uses the new trust. On ANY failure the
+    current trust stays in force (the host is never bricked) and the event
+    is logged.
+    """
+    global _trust, _trust_seq
+    paths = _manager.paths
+    update_file = paths.root / "trust-update.json"
+    try:
+        if not update_file.is_file():
+            return False
+        payload = update_file.read_bytes()
+    except OSError as exc:
+        logger.warning("trust update unreadable, keeping current trust: %s", exc)
+        return False
+    try:
+        candidate, seq = verify_trust_update(_trust, _trust_seq, payload)
+    except TrustError as exc:
+        logger.warning("trust update rejected, keeping current trust: %s", exc)
+        return False
+    try:
+        update = json.loads(payload)
+        source = {
+            "signingKeyId": update.get("signingKeyId"),
+            "signature": update.get("signature"),
+            "origin": "trust-update.json",
+        }
+        write_applied_trust(paths.root / _APPLIED_TRUST_FILE, candidate, seq, source=source)
+        update_file.replace(paths.root / f"trust-update.json.applied.{seq}")
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
+        logger.error("trust update persistence failed, keeping current trust: %s", exc)
+        return False
+    _trust = candidate
+    _trust_seq = seq
+    _manager.trust = _trust
+    _catalog.trust = _trust
+    logger.info("trust update applied: seq %d, fingerprint %s", seq, _trust.fingerprint())
+    return True
+
+
+def startup_apply_trust_update() -> bool:
+    """P1-5 startup hook (best-effort): a broken trust update must never
+    block application startup — it is logged and the shipped trust stays."""
+    try:
+        return _apply_pending_trust_update()
+    except Exception:  # noqa: BLE001 — never block startup on cache/trust hygiene
+        return False
 
 
 def startup_resume_enabled() -> list[str]:
@@ -704,12 +797,35 @@ async def marketplace_catalog_detail(plugin_id: str, version: str | None = None)
         raise _http_error(exc) from exc
 
 
+@router.get("/trust")
+async def trust_status():
+    """P1-5: the effective trust root state (fingerprint + seq + key ids).
+
+    UI display surface for "which trust verifies the marketplace right now"
+    — after a rotation the fingerprint changes and the seq advances; the
+    fingerprint is a one-way digest, never key material.
+    """
+    return _success(
+        {
+            "fingerprint": _trust.fingerprint(),
+            "seq": _trust_seq,
+            "source": "applied" if _trust_seq > 0 else "shipped",
+            "keyIds": _trust.key_ids,
+            "revokedKeyIds": _trust.revoked_key_ids,
+        }
+    )
+
+
 @router.post("/catalog/refresh")
 async def refresh_marketplace_catalog(
     request: RestartRequest,
     _authority=Depends(_require_mutation_authority),
 ):
     try:
+        # P1-5: a trust update may have landed (release sync) while the host
+        # was running — apply it (chain-verified, best-effort) so the refresh
+        # below verifies the catalog with the NEW effective trust.
+        _apply_pending_trust_update()
         catalog = _catalog.refresh()
         _prune_package_cache_best_effort()
         return _success(
@@ -717,6 +833,9 @@ async def refresh_marketplace_catalog(
                 "publisherId": catalog.publisher_id,
                 "generatedAt": catalog.generated_at.isoformat(),
                 "entries": len(catalog.entries),
+                "trustSeq": _trust_seq,
+                "trustFingerprint": _trust.fingerprint(),
+                "trustSource": "applied" if _trust_seq > 0 else "shipped",
             }
         )
     except Exception as exc:

@@ -30,7 +30,7 @@ from mikazuki.plugin_host.runtime import (
     _ProcessHandle,
     _is_loopback_ui_url,
 )
-from mikazuki.plugin_marketplace.api import _local_catalog_wiring
+from mikazuki.plugin_marketplace.api import _local_catalog_wiring, _marketplace_paths
 from mikazuki.plugin_marketplace.catalog import (
     FileCatalogSource,
     LocalFirstPackageAcquirer,
@@ -300,7 +300,7 @@ def test_local_catalog_wiring_against_dist_artifacts(monkeypatch):
     monkeypatch.setenv("MIKAZUKI_MARKETPLACE_CATALOG", str(catalog_path))
     monkeypatch.setenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", str(package_root))
 
-    trust, source, acquirer = _local_catalog_wiring()
+    trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
     assert isinstance(source, FileCatalogSource)
     # Acquisition is local-first (B1/A1): a local zip map with an HTTP/mirror
     # fallback, wrapped as LocalFirstPackageAcquirer when a package root is set.
@@ -345,7 +345,7 @@ def test_local_catalog_wiring_fails_closed_without_env(monkeypatch):
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_TRUST", raising=False)
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_CATALOG", raising=False)
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", raising=False)
-    trust, source, acquirer = _local_catalog_wiring()
+    trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
     assert not getattr(trust, "_keys")
     assert source is None
     assert acquirer is None
