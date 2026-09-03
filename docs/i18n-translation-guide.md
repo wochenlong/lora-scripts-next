@@ -106,7 +106,16 @@ npm run typecheck
 | en-US | stable | 持续 | 核心维护者 |
 | 其余语言 | beta | 机器初稿，待母语校对 | 待登记 |
 
-## 8. 边界
+## 8. 训练表单字段说明（schema description）
+
+训练表单中的字段说明和分区标题来自后端 `mikazuki/schema/*.ts` 的 `.description("中文原文")`，不走 `messages/*` 命名空间，而是走 `frontend/src/i18n/schema-desc/<locale>.ts` 的**中文原文 → 译文**映射：
+
+- `frontend/src/schema/adapter.ts` 的 `description()` 按当前 locale 查映射，缺失时回退中文原文；locale 字典形态（`description({...})`）同样按当前 locale 解析，再回退 `zh-CN` → `""`。
+- parity 门禁：`src/i18n/schema-desc/index.test.ts` 直接从 `mikazuki/schema/*.ts` 提取全部 description 字符串，要求每个已注册 locale 的映射 key 集合与之一致。**在 schema 文件中新增/修改 `.description()` 文案后，必须同步补齐所有已注册语言的映射**，否则测试失败。
+- 字段说明在切换语言后于下次进入训练页时刷新（schema 在执行期解析，非模板内响应式 `t()`）。
+- 中文枚举值（如 `pissa_export_mode`、tagger 的 `download_endpoint`）是提交进 TOML 的配置值，不属于本机制，不可翻译。
+
+## 9. 边界
 
 - 后端返回的错误文本、训练日志、命令输出保持原文，前端不做改写或翻译。
 - 代码、日志、路径、TOML 预览、图表坐标在 RTL 语言下显式保持 LTR（见 `frontend/src/styles/` 中的 `direction: ltr` 保护）。
