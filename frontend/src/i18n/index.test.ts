@@ -165,6 +165,13 @@ describe("matchLocaleCandidate", () => {
     expect(matchLocaleCandidate("ru-BY")).toBe("ru-RU")
   })
 
+  it("maps Portuguese regions exactly", () => {
+    expect(matchLocaleCandidate("pt-BR")).toBe("pt-BR")
+    expect(matchLocaleCandidate("pt")).toBe("pt-PT")
+    expect(matchLocaleCandidate("pt-PT")).toBe("pt-PT")
+    expect(matchLocaleCandidate("pt-AO")).toBe("pt-PT")
+  })
+
   it("returns undefined for unknown languages", () => {
     expect(matchLocaleCandidate("xx-XX")).toBeUndefined()
     expect(matchLocaleCandidate("!!!")).toBeUndefined()

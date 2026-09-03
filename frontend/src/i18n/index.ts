@@ -9,6 +9,8 @@ import epEsES from "element-plus/es/locale/lang/es"
 import epFrFR from "element-plus/es/locale/lang/fr"
 import epDeDE from "element-plus/es/locale/lang/de"
 import epRuRU from "element-plus/es/locale/lang/ru"
+import epPtPT from "element-plus/es/locale/lang/pt"
+import epPtBR from "element-plus/es/locale/lang/pt-br"
 import zhCN from "./messages/zh-CN"
 import enUS from "./messages/en-US"
 import zhTW from "./messages/zh-TW"
@@ -19,6 +21,8 @@ import esES from "./messages/es-ES"
 import frFR from "./messages/fr-FR"
 import deDE from "./messages/de-DE"
 import ruRU from "./messages/ru-RU"
+import ptPT from "./messages/pt-PT"
+import ptBR from "./messages/pt-BR"
 
 export type LocaleStatus = "stable" | "beta"
 export type LocaleDirection = "ltr" | "rtl"
@@ -38,6 +42,8 @@ export const SUPPORTED_LOCALES = [
   defineLocale({ value: "fr-FR", label: "Français", status: "beta", direction: "ltr" }),
   defineLocale({ value: "de-DE", label: "Deutsch", status: "beta", direction: "ltr" }),
   defineLocale({ value: "ru-RU", label: "Русский", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "pt-PT", label: "Português (Portugal)", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "pt-BR", label: "Português (Brasil)", status: "beta", direction: "ltr" }),
 ]
 
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]["value"]
@@ -58,6 +64,8 @@ export const localeMessages: Record<AppLocale, AppMessages> = {
   "fr-FR": frFR,
   "de-DE": deDE,
   "ru-RU": ruRU,
+  "pt-PT": ptPT,
+  "pt-BR": ptBR,
 }
 
 const elementPlusLocales: Record<AppLocale, ElementPlusMessages> = {
@@ -71,6 +79,8 @@ const elementPlusLocales: Record<AppLocale, ElementPlusMessages> = {
   "fr-FR": epFrFR,
   "de-DE": epDeDE,
   "ru-RU": epRuRU,
+  "pt-PT": epPtPT,
+  "pt-BR": epPtBR,
 }
 
 function readUiConfigs(): Record<string, unknown> {
@@ -119,6 +129,8 @@ const LOCALE_MATCH_RULES: ReadonlyArray<{ locale: AppLocale; test: (tag: string)
   { locale: "fr-FR", test: (t) => t === "fr" || t.startsWith("fr-") },
   { locale: "de-DE", test: (t) => t === "de" || t.startsWith("de-") },
   { locale: "ru-RU", test: (t) => t === "ru" || t.startsWith("ru-") },
+  { locale: "pt-BR", test: (t) => t === "pt-br" },
+  { locale: "pt-PT", test: (t) => t === "pt" || t.startsWith("pt-") },
   { locale: "en-US", test: (t) => t === "en" || t.startsWith("en-") },
 ]
 
