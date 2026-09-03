@@ -604,11 +604,24 @@ def configure_marketplace_authority(config: AgentRouteAuthorityConfig | None) ->
     _authority_config = config
 
 
+_DISABLED_AUTHORITY_MESSAGE = (
+    "Marketplace/Agent routes are disabled on this host: MIKAZUKI_HOST is not a "
+    "loopback address, so no Agent route authority exists (by design, the run-"
+    "token exchange is loopback-only). Restart the host with the default "
+    "MIKAZUKI_HOST=127.0.0.1, or reach the host through a loopback tunnel "
+    "(e.g. ssh -L 28000:127.0.0.1:28000)."
+)
+
+
 async def _require_mutation_authority(request: Request):
     if _authority_config is None:
         raise HTTPException(
             status_code=403,
-            detail={"code": "AGENT_ROUTE_FORBIDDEN", "reason": "disabled"},
+            detail={
+                "code": "AGENT_ROUTE_FORBIDDEN",
+                "reason": "disabled",
+                "message": _DISABLED_AUTHORITY_MESSAGE,
+            },
         )
     return await AgentRouteAuthority.for_json_mutation(_authority_config)(request)
 
@@ -617,7 +630,11 @@ async def _require_bootstrap_authority(request: Request):
     if _authority_config is None:
         raise HTTPException(
             status_code=403,
-            detail={"code": "AGENT_ROUTE_FORBIDDEN", "reason": "disabled"},
+            detail={
+                "code": "AGENT_ROUTE_FORBIDDEN",
+                "reason": "disabled",
+                "message": _DISABLED_AUTHORITY_MESSAGE,
+            },
         )
     return await AgentRouteAuthority.for_bootstrap(_authority_config)(request)
 
@@ -626,7 +643,11 @@ async def _require_read_authority(request: Request):
     if _authority_config is None:
         raise HTTPException(
             status_code=403,
-            detail={"code": "AGENT_ROUTE_FORBIDDEN", "reason": "disabled"},
+            detail={
+                "code": "AGENT_ROUTE_FORBIDDEN",
+                "reason": "disabled",
+                "message": _DISABLED_AUTHORITY_MESSAGE,
+            },
         )
     return await AgentRouteAuthority.for_read(_authority_config)(request)
 
@@ -1211,7 +1232,11 @@ async def plugin_ui_artifact(plugin_id: str, version: str, asset_path: str):
     if _authority_config is None:
         raise HTTPException(
             status_code=403,
-            detail={"code": "AGENT_ROUTE_FORBIDDEN", "reason": "disabled"},
+            detail={
+                "code": "AGENT_ROUTE_FORBIDDEN",
+                "reason": "disabled",
+                "message": _DISABLED_AUTHORITY_MESSAGE,
+            },
         )
     try:
         return FileResponse(

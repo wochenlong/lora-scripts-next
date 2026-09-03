@@ -511,7 +511,13 @@ def test_default_authority_disables_remote_listen_and_supports_bracketed_ipv6(mo
     assert remote_client.get("/api/plugin-host/extensions").json()["data"]["extensions"] == []
     artifact = remote_client.get("/api/plugin-host/ui/next-trainer-pi-agent/0.1.0/index.js")
     assert artifact.status_code == 403
-    assert artifact.json()["detail"]["reason"] == "disabled"
+    detail = artifact.json()["detail"]
+    assert detail["reason"] == "disabled"
+    # The 403 must be actionable: it must tell the operator that the routes
+    # only exist in loopback mode and how to get there (the run-token
+    # exchange is loopback-only by design).
+    assert "MIKAZUKI_HOST" in detail["message"]
+    assert "127.0.0.1" in detail["message"]
 
 
 def test_generic_broker_checks_grants_and_sanitizes_request_and_stream_failures():
@@ -1303,3 +1309,39 @@ def test_marketplace_version_ordering_for_updates():
     assert _compare_marketplace_versions("0.3.10-rc.1", "0.3.10") < 0  # pre-release < release
     assert _compare_marketplace_versions("0.3.10", "0.3.10-rc.1") > 0
     assert _compare_marketplace_versions("garbage", "0.1.0") is None  # unparseable -> unknown
+
+
+def test_failed_install_operation_logs_failure_to_host_log(caplog):
+    import logging
+
+    from mikazuki.plugin_marketplace.operations import (
+        InstallOperationRegistry,
+        STATE_FAILED,
+    )
+
+    def failing_pipeline(operation, entry, approved_permissions):
+        raise PermissionError("approved permissions must exactly match the plugin manifest")
+
+    class _Entry:
+        latest_version = "0.1.0"
+
+    with caplog.at_level(logging.WARNING, logger="mikazuki.plugin_marketplace.operations"):
+        registry = InstallOperationRegistry(failing_pipeline)
+        operation = registry.start("demo-plugin", _Entry(), {"anything"})
+        deadline = time.time() + 10.0
+        while operation.running and time.time() < deadline:
+            time.sleep(0.02)
+        # The state flip (inside the lock) precedes the logger.warning call on
+        # the worker thread, so give the log record a bounded chance to land.
+        wait_until = time.time() + 5.0
+        while "demo-plugin" not in caplog.text and time.time() < wait_until:
+            time.sleep(0.02)
+
+    # The operation still surfaces its classified error to pollers...
+    assert operation.state == STATE_FAILED
+    assert operation.error_code == "MARKETPLACE_PERMISSION_REJECTED"
+    # ...and the host log (where operators look) now carries it too, with
+    # the original exception attached via exc_info.
+    assert "demo-plugin" in caplog.text
+    assert "MARKETPLACE_PERMISSION_REJECTED" in caplog.text
+    assert "PermissionError" in caplog.text

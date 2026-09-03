@@ -21,10 +21,13 @@ no installed version behind (manager.install cleans its staging).
 
 from __future__ import annotations
 
+import logging
 import threading
 import time
 import uuid
 from typing import Any, Callable
+
+logger = logging.getLogger("mikazuki.plugin_marketplace.operations")
 
 # Machine-facing phase ids.  The frontend translates these for display.
 PHASE_ACQUIRING = "acquiring"
@@ -131,7 +134,12 @@ class InstallOperation:
             self.status = status
             self.finished_at = _now_iso()
 
-    def finish_failure(self, error_code: str, error_message: str) -> None:
+    def finish_failure(
+        self,
+        error_code: str,
+        error_message: str,
+        exc: BaseException | None = None,
+    ) -> None:
         with self._lock:
             if self.state != STATE_RUNNING:
                 return
@@ -140,6 +148,18 @@ class InstallOperation:
             self.error_code = error_code
             self.error_message = error_message
             self.finished_at = _now_iso()
+        # Failures used to be visible only through the polling endpoint; the
+        # host log is where operators actually look, so surface them here.
+        # exc_info keeps the full traceback (e.g. the exact URLError behind a
+        # transient download failure) without a second log line.
+        logger.warning(
+            "plugin %s install operation %s failed: %s: %s",
+            self.plugin_id,
+            self.id[:8],
+            error_code,
+            error_message,
+            exc_info=exc,
+        )
 
     def finish_cancelled(self) -> None:
         with self._lock:
@@ -230,11 +250,14 @@ class InstallOperationRegistry:
             operation.finish_cancelled()
         except Exception as exc:  # noqa: BLE001 — surfaced as the operation error
             code, message = classify_install_error(exc)
-            operation.finish_failure(code, message)
+            operation.finish_failure(code, message, exc=exc)
         if operation.running:
             # A pipeline that returns without finishing its operation is a bug;
             # never leave the client waiting on a running state.
-            operation.finish_failure("MARKETPLACE_INSTALL_INCOMPLETE", "The install pipeline did not complete.")
+            operation.finish_failure(
+                "MARKETPLACE_INSTALL_INCOMPLETE",
+                "The install pipeline did not complete.",
+            )
 
     def get(self, plugin_id: str, operation_id: str) -> InstallOperation | None:
         with self._lock:
