@@ -444,4 +444,100 @@ describe("MarketplaceSettingsPage", () => {
     expect(scheduleHostRefresh).toHaveBeenCalledTimes(1)
     wrapper.unmount()
   })
+
+  it("shows the update badge and update button, and names the permission delta in the confirmation", async () => {
+    const { ElMessageBox } = await import("element-plus")
+    const confirmSpy = vi
+      .spyOn(ElMessageBox, "confirm")
+      .mockResolvedValue("confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    // A previous test may have spied the same method; drop its call history
+    // so the counts below are this test's.
+    confirmSpy.mockClear()
+    const updateEntry: MarketplaceEntry = {
+      ...entry,
+      latest_version: "1.3.0",
+      package_size: 2 * 1024 * 1024,
+      permissions_summary: ["model-provider", "training-config", "dataset-review"],
+    }
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
+      status({
+        state: "enabled",
+        enabled: true,
+        active_version: "1.2.0",
+        installed_versions: ["1.2.0"],
+        update_available: true,
+        latest_version: "1.3.0",
+        update_size_bytes: 2 * 1024 * 1024,
+        update_permissions_added: ["dataset-review"],
+        update_permissions_removed: [],
+      }),
+    ])
+
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [updateEntry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    // Badge with the new version and the download size; list marker present.
+    const badge = wrapper.find(".marketplace-update-badge")
+    expect(badge.exists()).toBe(true)
+    expect(badge.text()).toContain("有新版本 1.3.0")
+    expect(badge.text()).toContain("2.0 MB")
+    expect(wrapper.find(".marketplace-update-dot").exists()).toBe(true)
+    // The update button appears next to the lifecycle actions and is enabled.
+    const update = wrapper
+      .findAll("button.primary-action")
+      .map((button) => button.text())
+      .find((text) => text.includes("更新"))
+    expect(update).toBeTypeOf("string")
+    expect(wrapper.find(".marketplace-version").text()).toContain("1.2.0")
+
+    // The confirmation is the UPDATE message (not the install one) and names
+    // every added permission so the user re-approves the changed grants.
+    await wrapper
+      .findAll("button.primary-action")
+      .find((button) => button.text().includes("更新"))!
+      .trigger("click")
+    await flushPromises()
+    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    const message = String(confirmSpy.mock.calls[0][0])
+    expect(message).toContain("1.3.0")
+    expect(message).toContain("2.0 MB")
+    expect(message).toContain("dataset-review")
+    expect(message).not.toContain("将验证并安装此插件包")
+    // The update rides the install operation with the full declared set.
+    expect(pluginsApi.installMarketplacePlugin).toHaveBeenCalledWith(updateEntry, [
+      "model-provider",
+      "training-config",
+      "dataset-review",
+    ])
+    wrapper.unmount()
+  })
+
+  it("stays silent about updates when the catalog is unknown (honest defaults)", async () => {
+    vi.mocked(pluginsApi.listMarketplacePlugins).mockResolvedValueOnce([
+      status({
+        state: "enabled",
+        enabled: true,
+        active_version: "1.2.0",
+        update_available: false,
+        latest_version: null,
+        update_size_bytes: null,
+        update_permissions_added: null,
+        update_permissions_removed: null,
+      }),
+    ])
+    const wrapper = mount(MarketplaceSettingsPage, {
+      props: { catalogEntries: [entry] },
+      global: { plugins: [i18n] },
+    })
+    await flushPromises()
+
+    expect(wrapper.find(".marketplace-update-badge").exists()).toBe(false)
+    expect(wrapper.find(".marketplace-update-dot").exists()).toBe(false)
+    const labels = wrapper.findAll("button").map((button) => button.text())
+    expect(labels.some((text) => text.includes("更新"))).toBe(false)
+    wrapper.unmount()
+  })
 })

@@ -5,6 +5,7 @@ import os
 import shutil
 import stat
 import zipfile
+import zlib
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -173,11 +174,89 @@ def validate_manifest_entry(
         raise PackageValidationError("manifest permissions do not match catalog entry")
 
 
-def extract_package(package_path: Path, target: Path, members: list[zipfile.ZipInfo]) -> None:
+_SAMPLE_BYTES = 64 * 1024
+_CRC_CHUNK_BYTES = 8 * 1024 * 1024
+
+
+def _donor_matches_member(donor: Path, item: zipfile.ZipInfo, archive: zipfile.ZipFile) -> bool:
+    """Decide whether an installed file from a previous version is byte-identical
+    to this package member, so it can be hard-linked instead of re-written.
+
+    Pipeline (cheapest first):
+      1. donor exists as a file and the sizes agree (stat only);
+      2. the first 64 KB agree (pre-filter: avoids full reads of files whose
+         content changed at the head);
+      3. the donor's full CRC32 equals the member's CRC32 (decisive; the zip
+         CRC covers the whole file, so a middle-of-file change is caught even
+         when head and tail are identical).
+
+    Trust note: the donor tree is a previously installed, host-validated
+    version directory; the new package itself was sha256-verified against the
+    catalog pin before extraction. Reusing donor bytes via hard link adds no
+    new trust surface (the installed tree is not re-verified by design).
+    """
+    try:
+        # Raw-prefixed stat: deep node_modules members can exceed MAX_PATH on
+        # Windows, where a plain-path stat raises and would silently degrade
+        # reuse to a full re-extract for every deep member.
+        donor_stat = _raw_path(donor).stat()
+    except OSError:
+        return False
+    if not stat.S_ISREG(donor_stat.st_mode) or donor_stat.st_size != item.file_size:
+        return False
+    try:
+        with _raw_path(donor).open("rb") as donor_file:
+            head = donor_file.read(_SAMPLE_BYTES)
+            if head != _member_prefix(archive, item, _SAMPLE_BYTES):
+                return False
+            # The decisive check covers the WHOLE file, including the head
+            # sample just read.
+            donor_file.seek(0)
+            digest = _crc32_stream(donor_file)
+    except OSError:
+        return False
+    return digest == (item.CRC & 0xFFFFFFFF)
+
+
+def _member_prefix(archive: zipfile.ZipFile, item: zipfile.ZipInfo, count: int) -> bytes:
+    with archive.open(item, "r") as source:
+        return source.read(count)
+
+
+def _crc32_stream(handle) -> int:
+    value = 0
+    while True:
+        block = handle.read(_CRC_CHUNK_BYTES)
+        if not block:
+            return value
+        value = zlib.crc32(block, value) & 0xFFFFFFFF
+
+
+def extract_package(
+    package_path: Path,
+    target: Path,
+    members: list[zipfile.ZipInfo],
+    *,
+    reuse_from: Path | None = None,
+) -> int:
+    """Extract the (already verified) package into ``target``.
+
+    With ``reuse_from`` (a previous version's installed directory on the same
+    volume), members byte-identical to files there are hard-linked instead of
+    re-written: version upgrades stop paying the full unpack I/O and disk for
+    unchanged files, and the old version directory is never modified
+    (rollback keeps working). Any mismatch or link failure falls back to a
+    normal extraction of that member — reuse is an optimization that can
+    never change the resulting tree.
+
+    Returns the number of members satisfied by hard links.
+    """
     if target.exists():
         remove_tree(target)
     target.mkdir(parents=True, exist_ok=False)
     resolved_target = target.resolve()
+    reuse_root = reuse_from.resolve() if reuse_from is not None and reuse_from.is_dir() else None
+    reused = 0
     with zipfile.ZipFile(package_path, "r") as archive:
         for item in members:
             relative = _validate_member(item.filename)
@@ -189,5 +268,17 @@ def extract_package(package_path: Path, target: Path, members: list[zipfile.ZipI
             # Raw-prefixed for the filesystem ops: deep member paths can
             # exceed MAX_PATH on Windows (see _raw_path).
             _raw_path(destination.parent).mkdir(parents=True, exist_ok=True)
+            if (
+                reuse_root is not None
+                and item.file_size > 0
+                and _donor_matches_member(reuse_root / Path(*relative.parts), item, archive)
+            ):
+                try:
+                    os.link(_raw_path(reuse_root / Path(*relative.parts)), _raw_path(destination))
+                    reused += 1
+                    continue
+                except OSError:
+                    pass  # cross-volume / permission: extract normally
             with archive.open(item, "r") as source, _raw_path(destination).open("xb") as output:
                 shutil.copyfileobj(source, output)
+    return reused

@@ -21,8 +21,10 @@ from .trust import TrustError, TrustStore
 
 _COPY_CHUNK_BYTES = 8 * 1024 * 1024
 _HTTP_CHUNK_BYTES = 1 * 1024 * 1024
-_HTTP_TIMEOUT_S = 30
-_HTTP_EXTRA_ATTEMPTS = 2
+_HTTP_MAX_ATTEMPTS = 6
+_HTTP_BACKOFF_BASE_S = 1.0
+_HTTP_BACKOFF_CAP_S = 16.0
+_HTTP_STALL_TIMEOUT_S = 60.0
 
 
 class CatalogError(ValueError):
@@ -224,10 +226,39 @@ class HttpPackageAcquirer:
     development and release dry-runs, and integrity still comes from the
     catalog-pinned size + sha256, so a loopback mirror cannot smuggle a
     tampered package into the quarantine.
+
+    Transient failures (transport errors, 5xx, stalled connections) are
+    retried with exponential backoff and **Range resumption**: a partial
+    ``.part`` file is kept and the next attempt requests ``bytes=N-``.
+    Resumption never weakens integrity — the final sha256 always covers the
+    whole object (the retained prefix is re-hashed when seeding a resumed
+    digest), and any integrity failure drops the ``.part`` for a clean
+    full re-download. Servers that ignore ``Range`` (200 instead of 206) or
+    reject it (416) fall back to a full re-download.
+
+    A stalled connection is detected by the socket timeout (``stall_timeout_s``):
+    if no bytes arrive for that whole window the read raises and the attempt
+    is treated as a transient interruption. Reads run on the calling thread
+    (no worker thread) so the socket is always closed by its owner — a
+    cross-thread close would block on Windows until the remote end closes.
+    Cancellation is therefore observed between chunks: instant on a live
+    transfer, within one stall window on a dead one.
     """
 
-    def __init__(self, mirror_base_url: str | None = None) -> None:
+    def __init__(
+        self,
+        mirror_base_url: str | None = None,
+        *,
+        max_attempts: int = _HTTP_MAX_ATTEMPTS,
+        backoff_base_s: float = _HTTP_BACKOFF_BASE_S,
+        backoff_cap_s: float = _HTTP_BACKOFF_CAP_S,
+        stall_timeout_s: float = _HTTP_STALL_TIMEOUT_S,
+    ) -> None:
         self._mirror = self._validate_mirror(mirror_base_url)
+        self._max_attempts = max_attempts
+        self._backoff_base_s = backoff_base_s
+        self._backoff_cap_s = backoff_cap_s
+        self._stall_timeout_s = stall_timeout_s
 
     @staticmethod
     def _validate_mirror(mirror: str | None) -> str | None:
@@ -267,24 +298,33 @@ class HttpPackageAcquirer:
         destination.parent.mkdir(parents=True, exist_ok=True)
         temporary = destination.with_suffix(destination.suffix + ".part")
         last_error: CatalogError | None = None
-        for attempt in range(_HTTP_EXTRA_ATTEMPTS + 1):
+        for attempt in range(1, self._max_attempts + 1):
             if is_cancelled is not None and is_cancelled():
                 raise _cancelled_error()
-            if attempt:
-                time.sleep(0.5 * attempt)
-                if on_progress is not None:
-                    on_progress(0, package_size)
+            if attempt > 1:
+                delay = min(self._backoff_base_s * 2 ** (attempt - 2), self._backoff_cap_s)
+                if delay > 0:
+                    time.sleep(delay)
             try:
                 self._download(url, temporary, package_size, sha256, on_progress, is_cancelled)
                 break
             except CatalogError as exc:
-                temporary.unlink(missing_ok=True)
-                # Cancellation, integrity failures and 404s are not retryable;
-                # only transient transport / server errors (503 family) are.
+                # Integrity failures mean the bytes on disk cannot be trusted:
+                # drop the partial file so any later attempt starts clean.
+                # On transient failures the .part is KEPT for Range resume.
+                if exc.code in ("MARKETPLACE_PACKAGE_SIZE_MISMATCH", "MARKETPLACE_PACKAGE_CHECKSUM_MISMATCH"):
+                    temporary.unlink(missing_ok=True)
+                # Cancellation, unavailability and final integrity errors are
+                # not retryable; only transient transport / server errors are
+                # (resumable). The acquirer still cleans its own .part before
+                # surfacing a terminal failure (the service-layer sweep stays
+                # as the lock-race backstop from the V30 .part finding).
                 if exc.code != "MARKETPLACE_PACKAGE_ACQUISITION_FAILED":
+                    temporary.unlink(missing_ok=True)
                     raise
                 last_error = exc
         else:
+            temporary.unlink(missing_ok=True)
             raise last_error or CatalogError(
                 "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
                 "The marketplace package could not be acquired.",
@@ -302,26 +342,99 @@ class HttpPackageAcquirer:
         on_progress: Callable[[int, int], None] | None,
         is_cancelled: Callable[[], bool] | None,
     ) -> None:
+        # Resume from a retained partial file when the pin still fits it.
+        # (The quarantine path is per plugin+version, so a .part here always
+        # belongs to the same pinned object; a stale object's bytes are
+        # caught by the final whole-object sha256 below.)
+        resume_from = 0
+        if temporary.is_file():
+            existing = temporary.stat().st_size
+            if 0 < existing < package_size:
+                resume_from = existing
+        start_current = resume_from
+        # Whether the retained prefix is still the basis of this attempt.
+        # Fallbacks below (server ignored / rejected the range) restart from
+        # zero, which invalidates the prefix for checksum semantics.
+        prefix_active = resume_from > 0
         digest = hashlib.sha256()
-        current = 0
-        try:
-            request = urllib.request.Request(url, headers={"User-Agent": "next-trainer-marketplace/1.0"})
-            with urllib.request.urlopen(request, timeout=_HTTP_TIMEOUT_S) as handle, temporary.open("wb") as out:
-                if on_progress is not None:
-                    on_progress(0, package_size)
+        if resume_from:
+            # Seed the digest with the retained prefix so the final sha256
+            # still covers the whole object — resumption never skips checks.
+            with temporary.open("rb") as handle:
                 while True:
-                    if is_cancelled is not None and is_cancelled():
-                        raise _cancelled_error()
-                    chunk = handle.read(_HTTP_CHUNK_BYTES)
-                    if not chunk:
+                    block = handle.read(_COPY_CHUNK_BYTES)
+                    if not block:
                         break
-                    digest.update(chunk)
-                    current += len(chunk)
-                    out.write(chunk)
+                    digest.update(block)
+        headers = {"User-Agent": "next-trainer-marketplace/1.0"}
+        if resume_from:
+            headers["Range"] = f"bytes={resume_from}-"
+        request = urllib.request.Request(url, headers=headers)
+        declared_length: int | None = None
+        try:
+            # The socket timeout IS the stall detector: no bytes for the whole
+            # window raises socket.timeout, which maps to a transient failure
+            # below (the .part is kept for resumption). It also bounds the
+            # header/connect wait.
+            with urllib.request.urlopen(request, timeout=self._stall_timeout_s) as handle:
+                status = getattr(handle, "status", None)
+                if status is None:
+                    status = handle.getcode()
+                length_raw = handle.headers.get("Content-Length")
+                if length_raw is not None:
+                    try:
+                        declared_length = int(length_raw)
+                    except ValueError:
+                        declared_length = None
+                current = resume_from
+                # Append only when a validated prefix is being resumed;
+                # otherwise truncate so a stale/oversized .part can never
+                # contaminate the new object.
+                mode = "ab" if resume_from > 0 else "wb"
+                if status == 200 and resume_from:
+                    # Server ignored Range: it re-sends from zero, so the
+                    # retained prefix must not be appended to.
+                    current = 0
+                    start_current = 0
+                    mode = "wb"
+                    digest = hashlib.sha256()
+                    prefix_active = False
+                elif status == 206 and resume_from:
+                    content_range = (handle.headers.get("Content-Range") or "").strip()
+                    if content_range and f"/{package_size}" not in content_range:
+                        # The server's object is a different size than the
+                        # catalog pin: the retained prefix is invalid.
+                        current = 0
+                        start_current = 0
+                        mode = "wb"
+                        digest = hashlib.sha256()
+                        prefix_active = False
+                with temporary.open(mode) as out:
                     if on_progress is not None:
                         on_progress(current, package_size)
-                out.flush()
-                os.fsync(out.fileno())
+                    while True:
+                        if is_cancelled is not None and is_cancelled():
+                            raise _cancelled_error()
+                        try:
+                            chunk = handle.read(_HTTP_CHUNK_BYTES)
+                        except socket.timeout:
+                            # No bytes for the whole stall window: the
+                            # connection is dead or frozen. Transient — the
+                            # .part is kept and the next attempt resumes.
+                            raise CatalogError(
+                                "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
+                                "The marketplace package could not be acquired.",
+                                status_code=503,
+                            )
+                        if not chunk:
+                            break
+                        digest.update(chunk)
+                        current += len(chunk)
+                        out.write(chunk)
+                        if on_progress is not None:
+                            on_progress(current, package_size)
+                    out.flush()
+                    os.fsync(out.fileno())
         except CatalogError:
             raise
         except urllib.error.HTTPError as exc:
@@ -331,6 +444,11 @@ class HttpPackageAcquirer:
                     "The marketplace package is unavailable.",
                     status_code=404 if exc.code == 404 else 503,
                 ) from exc
+            if exc.code == 416:
+                # Resume range no longer satisfiable (object changed on the
+                # server): the retained prefix is invalid — drop it so the
+                # next attempt restarts from zero.
+                temporary.unlink(missing_ok=True)
             raise CatalogError(
                 "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
                 "The marketplace package could not be acquired.",
@@ -342,13 +460,37 @@ class HttpPackageAcquirer:
                 "The marketplace package could not be acquired.",
                 status_code=503,
             ) from exc
+        received = current - start_current
         if current != package_size:
+            # A *complete* response whose declared body length was honored
+            # means the object is genuinely short: the catalog pin is wrong
+            # and retrying cannot fix it. Anything else (declared body cut
+            # short, undeclared/chunked EOF) is an interrupted transfer —
+            # transient, and the .part is kept for resumption.
+            if declared_length is not None and received == declared_length:
+                raise CatalogError(
+                    "MARKETPLACE_PACKAGE_SIZE_MISMATCH",
+                    "The marketplace package size does not match the catalog.",
+                    status_code=400,
+                )
             raise CatalogError(
-                "MARKETPLACE_PACKAGE_SIZE_MISMATCH",
-                "The marketplace package size does not match the catalog.",
-                status_code=400,
+                "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
+                "The marketplace package could not be acquired.",
+                status_code=503,
             )
         if digest.hexdigest().casefold() != sha256.casefold():
+            if prefix_active:
+                # The failure happened on top of a retained prefix: the
+                # prefix (or the resumed tail) may be locally corrupted, so
+                # dropping it and re-downloading from zero can succeed.
+                # Surface it as transient; the next attempt starts fresh,
+                # and a fresh-attempt mismatch below is terminal.
+                temporary.unlink(missing_ok=True)
+                raise CatalogError(
+                    "MARKETPLACE_PACKAGE_ACQUISITION_FAILED",
+                    "The marketplace package could not be acquired.",
+                    status_code=503,
+                )
             raise CatalogError(
                 "MARKETPLACE_PACKAGE_CHECKSUM_MISMATCH",
                 "The marketplace package checksum does not match the catalog.",
