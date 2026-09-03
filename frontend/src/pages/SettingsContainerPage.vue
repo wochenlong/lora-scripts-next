@@ -80,7 +80,7 @@ function reset() {
             <h2>{{ t("settings.nav.ui") }}</h2>
             <label>{{ t("settings.ui.language") }}
               <select :value="language" @change="changeLanguage(($event.target as HTMLSelectElement).value as AppLocale)">
-                <option v-for="locale in SUPPORTED_LOCALES" :key="locale.value" :value="locale.value">{{ locale.label }}</option>
+                <option v-for="locale in SUPPORTED_LOCALES" :key="locale.value" :value="locale.value">{{ locale.status === "beta" ? `${locale.label} (Beta)` : locale.label }}</option>
               </select>
             </label>
             <div class="settings-field">

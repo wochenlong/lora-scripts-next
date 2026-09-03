@@ -2,18 +2,42 @@
 import { beforeEach, describe, expect, it } from "vitest"
 import {
   DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
   UI_CONFIGS_KEY,
   getElementPlusLocale,
   getStoredLocale,
   i18n,
+  localeMessages,
   matchLocaleCandidate,
   normalizeLocaleTag,
   resolveInitialLocale,
   setLocale,
   setStoredLocale,
+  type AppLocale,
 } from "./index"
-import zhCN from "./messages/zh-CN"
-import enUS from "./messages/en-US"
+
+function flattenLeafKeys(obj: Record<string, unknown>, prefix = ""): string[] {
+  return Object.entries(obj).flatMap(([key, value]) =>
+    value && typeof value === "object"
+      ? flattenLeafKeys(value as Record<string, unknown>, `${prefix}${key}.`)
+      : [`${prefix}${key}`],
+  )
+}
+
+function leafValues(obj: Record<string, unknown>, prefix = ""): Record<string, string> {
+  return Object.entries(obj).reduce<Record<string, string>>((acc, [key, value]) => {
+    if (value && typeof value === "object") {
+      Object.assign(acc, leafValues(value as Record<string, unknown>, `${prefix}${key}.`))
+    } else {
+      acc[`${prefix}${key}`] = String(value)
+    }
+    return acc
+  }, {})
+}
+
+function interpolationParams(text: string): string[] {
+  return [...text.matchAll(/\{([^{}]+)\}/g)].map((match) => match[1]).sort()
+}
 
 describe("i18n infrastructure", () => {
   beforeEach(() => {
@@ -48,21 +72,53 @@ describe("i18n infrastructure", () => {
     expect(i18n.global.t("nav.training")).toBe("Training")
   })
 
-  it("keeps en-US keys in parity with zh-CN", () => {
-    const flatten = (obj: Record<string, unknown>, prefix = ""): string[] =>
-      Object.entries(obj).flatMap(([key, value]) =>
-        value && typeof value === "object"
-          ? flatten(value as Record<string, unknown>, `${prefix}${key}.`)
-          : [`${prefix}${key}`],
-      )
-    const zhKeys = flatten(zhCN).sort()
-    const enKeys = flatten(enUS).sort()
-    expect(enKeys).toEqual(zhKeys)
-  })
-
   it("maps app locales to Element Plus locale packs", () => {
     expect(getElementPlusLocale("zh-CN").el.messagebox.confirm).toBe("确定")
     expect(getElementPlusLocale("en-US").el.messagebox.confirm).toBe("OK")
+  })
+})
+
+describe("locale registry", () => {
+  const registeredLocales = SUPPORTED_LOCALES.map((entry) => entry.value)
+
+  it("declares native label, status and direction for every locale", () => {
+    for (const entry of SUPPORTED_LOCALES) {
+      expect(entry.label.length).toBeGreaterThan(0)
+      expect(["stable", "beta"]).toContain(entry.status)
+      expect(["ltr", "rtl"]).toContain(entry.direction)
+    }
+  })
+
+  it("registers app messages and Element Plus packs for every locale", () => {
+    for (const locale of registeredLocales) {
+      expect(localeMessages[locale], `messages for ${locale}`).toBeDefined()
+      expect(getElementPlusLocale(locale).name, `Element Plus locale for ${locale}`).toBeDefined()
+    }
+  })
+
+  it("keeps leaf keys in parity with zh-CN for every locale", () => {
+    const baseline = flattenLeafKeys(localeMessages[DEFAULT_LOCALE] as Record<string, unknown>).sort()
+    for (const locale of registeredLocales) {
+      const keys = flattenLeafKeys(localeMessages[locale] as Record<string, unknown>).sort()
+      expect(keys, `key parity for ${locale}`).toEqual(baseline)
+    }
+  })
+
+  it("keeps interpolation parameters in parity with zh-CN for every locale", () => {
+    const baseline = leafValues(localeMessages[DEFAULT_LOCALE] as Record<string, unknown>)
+    for (const locale of registeredLocales) {
+      const values = leafValues(localeMessages[locale] as Record<string, unknown>)
+      for (const [key, text] of Object.entries(values)) {
+        expect(interpolationParams(text), `interpolation parity for ${locale}:${key}`)
+          .toEqual(interpolationParams(baseline[key]))
+      }
+    }
+  })
+
+  it("resolves every registered locale to itself", () => {
+    for (const locale of registeredLocales) {
+      expect(matchLocaleCandidate(locale)).toBe(locale)
+    }
   })
 })
 

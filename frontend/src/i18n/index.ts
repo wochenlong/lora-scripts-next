@@ -4,14 +4,34 @@ import epEnUS from "element-plus/es/locale/lang/en"
 import zhCN from "./messages/zh-CN"
 import enUS from "./messages/en-US"
 
+export type LocaleStatus = "stable" | "beta"
+export type LocaleDirection = "ltr" | "rtl"
+
+function defineLocale<L extends string>(meta: { value: L; label: string; status: LocaleStatus; direction: LocaleDirection }) {
+  return meta
+}
+
 export const SUPPORTED_LOCALES = [
-  { value: "zh-CN", label: "简体中文", direction: "ltr" },
-  { value: "en-US", label: "English", direction: "ltr" },
-] as const
+  defineLocale({ value: "zh-CN", label: "简体中文", status: "stable", direction: "ltr" }),
+  defineLocale({ value: "en-US", label: "English", status: "stable", direction: "ltr" }),
+]
 
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]["value"]
 export const DEFAULT_LOCALE: AppLocale = "zh-CN"
 export const UI_CONFIGS_KEY = "ui-configs"
+
+export type AppMessages = typeof zhCN
+type ElementPlusMessages = typeof epZhCN
+
+export const localeMessages: Record<AppLocale, AppMessages> = {
+  "zh-CN": zhCN,
+  "en-US": enUS,
+}
+
+const elementPlusLocales: Record<AppLocale, ElementPlusMessages> = {
+  "zh-CN": epZhCN,
+  "en-US": epEnUS,
+}
 
 function readUiConfigs(): Record<string, unknown> {
   try {
@@ -90,7 +110,7 @@ export const i18n = createI18n({
   legacy: false,
   locale: initialLocale,
   fallbackLocale: DEFAULT_LOCALE,
-  messages: { "zh-CN": zhCN, "en-US": enUS },
+  messages: localeMessages,
 })
 
 export function setLocale(locale: AppLocale) {
@@ -99,8 +119,6 @@ export function setLocale(locale: AppLocale) {
   setStoredLocale(locale)
 }
 
-const elementPlusLocales = { "zh-CN": epZhCN, "en-US": epEnUS } as const
-
 export function getElementPlusLocale(locale: AppLocale) {
-  return elementPlusLocales[locale] ?? epZhCN
+  return elementPlusLocales[locale]
 }
