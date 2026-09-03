@@ -4,8 +4,10 @@ import json
 import os
 import shutil
 import stat
+import threading
 import zipfile
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
@@ -176,6 +178,12 @@ def validate_manifest_entry(
 
 _SAMPLE_BYTES = 64 * 1024
 _CRC_CHUNK_BYTES = 8 * 1024 * 1024
+# Extraction copy buffer: 1 MB (copyfileobj default) costs ~1000 loop
+# iterations per 1 GB of large binaries; 8 MB cuts that ~8x with no memory
+# cost that matters (one buffer per worker thread).
+_EXTRACT_CHUNK_BYTES = 8 * 1024 * 1024
+_EXTRACT_WORKERS_ENV = "MIKAZUKI_EXTRACT_WORKERS"
+_EXTRACT_WORKERS_CAP = 16
 
 
 def _donor_matches_member(donor: Path, item: zipfile.ZipInfo, archive: zipfile.ZipFile) -> bool:
@@ -232,12 +240,50 @@ def _crc32_stream(handle) -> int:
         value = zlib.crc32(block, value) & 0xFFFFFFFF
 
 
+def _extraction_worker_count(total: int, *, default: int = 8, cap: int = 16) -> int:
+    """Adaptive fan-out for extraction (P1-2).
+
+    Tiny packages gain nothing from a thread pool (zip open + scheduling cost
+    would dominate); large trees are dominated by per-file system/AV overhead
+    (P0 census: clean CRC pass ~161s vs ~9s for the links on a 36.8k-file
+    upgrade), which is per-handle and parallelizes well, so the pool scales
+    from the 8-worker default up to the 16-worker cap as the tree grows.
+    """
+    if total <= 0:
+        return 1
+    if total < 256:
+        return max(1, min(default, (total + 31) // 32))
+    return min(cap, default + (total - 256) // 4096)
+
+
+def _extraction_workers_from_env() -> int | None:
+    """Explicit operator opt-in for parallel extraction (P1-2 bench lesson).
+
+    On the acceptance machine (NVMe + AV real-time scanning + a live host),
+    the 16-worker pool measured ~2.3x SLOWER than serial (65-69s vs 110-193s
+    for the 282MB / 36.8k-member package): per-file AV scans contend harder
+    under concurrent writes than the CPU work parallelizes. The DEFAULT stays
+    serial — identical to the pre-P1 behavior, zero regression risk — and
+    parallel extraction is an opt-in: ``MIKAZUKI_EXTRACT_WORKERS=2..16``
+    (clamped; invalid values fall back to the serial default).
+    """
+    raw = os.environ.get(_EXTRACT_WORKERS_ENV, "").strip()
+    if not raw:
+        return None
+    try:
+        value = int(raw)
+    except ValueError:
+        return None
+    return max(1, min(value, _EXTRACT_WORKERS_CAP))
+
+
 def extract_package(
     package_path: Path,
     target: Path,
     members: list[zipfile.ZipInfo],
     *,
     reuse_from: Path | None = None,
+    max_workers: int | None = None,
 ) -> int:
     """Extract the (already verified) package into ``target``.
 
@@ -249,6 +295,20 @@ def extract_package(
     normal extraction of that member — reuse is an optimization that can
     never change the resulting tree.
 
+    P1-2: extraction concurrency. The DEFAULT is serial (the exact pre-P1
+    behavior). ``max_workers`` (or the ``MIKAZUKI_EXTRACT_WORKERS`` env,
+    clamped to 1..16) opts into a thread pool: each worker keeps its own
+    ``zipfile.ZipFile`` handle, and ``_extraction_worker_count`` sizes the
+    pool adaptively for small packages. Bench note: on the acceptance
+    machine (AV real-time scanning, live host) 16 workers measured ~2.3x
+    SLOWER than serial — per-file AV scan contention under concurrent
+    writes — so parallel stays an explicit opt-in, never a surprise.
+
+    Every safety check still runs for every member before any file is
+    written; a failure in any member fails the whole extraction (the first
+    error is raised) and the caller's staging cleanup removes the partial
+    tree — no half-finished version is ever left behind.
+
     Returns the number of members satisfied by hard links.
     """
     if target.exists():
@@ -256,29 +316,110 @@ def extract_package(
     target.mkdir(parents=True, exist_ok=False)
     resolved_target = target.resolve()
     reuse_root = reuse_from.resolve() if reuse_from is not None and reuse_from.is_dir() else None
-    reused = 0
-    with zipfile.ZipFile(package_path, "r") as archive:
-        for item in members:
-            relative = _validate_member(item.filename)
-            destination = (resolved_target / Path(*relative.parts)).resolve()
-            try:
-                destination.relative_to(resolved_target)
-            except ValueError as exc:
-                raise PackageValidationError(f"unsafe archive path: {item.filename!r}") from exc
+
+    # Pre-validate every member up front, single-threaded, before any
+    # fan-out: an unsafe member fails the whole package exactly as the
+    # serial loop did — and before any parallel file writes begin.
+    prepared: list[tuple[zipfile.ZipInfo, Path, Path]] = []
+    for item in members:
+        relative = _validate_member(item.filename)
+        destination = (resolved_target / Path(*relative.parts)).resolve()
+        try:
+            destination.relative_to(resolved_target)
+        except ValueError as exc:
+            raise PackageValidationError(f"unsafe archive path: {item.filename!r}") from exc
+        prepared.append((item, relative, destination))
+
+    reused_box = [0]
+    reused_lock = threading.Lock()
+    worker_state = threading.local()
+    worker_archives: list[zipfile.ZipFile] = []
+    archives_lock = threading.Lock()
+
+    def _worker_archive() -> zipfile.ZipFile:
+        # zipfile.ZipFile is not thread-safe; each worker thread keeps its
+        # own read-only instance (the OS allows shared read handles).
+        archive = getattr(worker_state, "archive", None)
+        if archive is None:
+            archive = zipfile.ZipFile(package_path, "r")
+            worker_state.archive = archive
+            with archives_lock:
+                worker_archives.append(archive)
+        return archive
+
+    def _extract_one(item: zipfile.ZipInfo, relative: PurePosixPath, destination: Path) -> None:
+        try:
             # Raw-prefixed for the filesystem ops: deep member paths can
             # exceed MAX_PATH on Windows (see _raw_path).
             _raw_path(destination.parent).mkdir(parents=True, exist_ok=True)
-            if (
-                reuse_root is not None
-                and item.file_size > 0
-                and _donor_matches_member(reuse_root / Path(*relative.parts), item, archive)
-            ):
+            linked = False
+            if reuse_root is not None and item.file_size > 0:
+                donor = reuse_root / Path(*relative.parts)
+                if _donor_matches_member(donor, item, _worker_archive()):
+                    try:
+                        os.link(_raw_path(donor), _raw_path(destination))
+                        linked = True
+                    except OSError:
+                        linked = False  # cross-volume / permission: extract normally
+            if linked:
+                with reused_lock:
+                    reused_box[0] += 1
+                return
+            with _worker_archive().open(item, "r") as source, _raw_path(destination).open("xb") as output:
+                shutil.copyfileobj(source, output, _EXTRACT_CHUNK_BYTES)
+        except BaseException:
+            # A worker that dies with an open handle would keep the zip busy;
+            # close it on the error path (the success path is closed at the
+            # end of the pool / by the serial context manager).
+            archive = getattr(worker_state, "archive", None)
+            if archive is not None:
                 try:
-                    os.link(_raw_path(reuse_root / Path(*relative.parts)), _raw_path(destination))
-                    reused += 1
-                    continue
-                except OSError:
-                    pass  # cross-volume / permission: extract normally
-            with archive.open(item, "r") as source, _raw_path(destination).open("xb") as output:
-                shutil.copyfileobj(source, output)
-    return reused
+                    archive.close()
+                except Exception:
+                    pass
+                worker_state.archive = None
+                with archives_lock:
+                    if archive in worker_archives:
+                        worker_archives.remove(archive)
+            raise
+
+    if max_workers is not None:
+        workers = max_workers
+    elif len(prepared) < 256:
+        # Small packages: the pool would cost more than it saves (adaptive
+        # sizing would pick 1 for these anyway).
+        workers = 1
+    else:
+        # Default = serial (see docstring: AV-contention bench lesson).
+        # MIKAZUKI_EXTRACT_WORKERS opts into the pool explicitly.
+        workers = _extraction_workers_from_env() or 1
+    workers = max(1, min(workers, _EXTRACT_WORKERS_CAP))
+
+    try:
+        if workers == 1:
+            # Small packages: the exact legacy serial path (no pool, one
+            # archive handle).
+            with zipfile.ZipFile(package_path, "r") as archive:
+                worker_state.archive = archive
+                for item, relative, destination in prepared:
+                    _extract_one(item, relative, destination)
+        else:
+            first_error: list[BaseException] = []
+            with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="plugin-extract") as pool:
+                futures = [pool.submit(_extract_one, item, relative, destination) for item, relative, destination in prepared]
+                for future in futures:
+                    try:
+                        future.result()
+                    except BaseException as exc:  # noqa: B035 - re-raised below
+                        if not first_error:
+                            first_error.append(exc)
+            if first_error:
+                raise first_error[0]
+    finally:
+        with archives_lock:
+            for archive in worker_archives:
+                try:
+                    archive.close()
+                except Exception:
+                    pass
+    return reused_box[0]
