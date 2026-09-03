@@ -128,6 +128,19 @@
   border: 0;
 }
 
+/* P1-6①: hidden prewarm frames for inactive server-mode panel origins.
+   Zero-size + absolute: they occupy no visible UI but the browser still
+   loads the origin (HTML + JS into cache, connection pooled), so opening
+   the panel later costs ~0 network wait. */
+.floating-extension-prewarm {
+  position: absolute;
+  width: 0;
+  height: 0;
+  border: 0;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 .host-confirmation-layer {
   position: fixed;
   inset: 0;

@@ -25,6 +25,14 @@ const MIN_PANEL_HEIGHT = 480
 const MAX_PANEL_WIDTH = 760
 const VIEWPORT_GUTTER = 32
 const VIEWPORT_VERTICAL_RESERVE = 96
+// P1-6①: how often the host re-asks the plugin host for extension state while
+// an enabled plugin's server UI has not yet reported (cold runtime start is
+// ~15 s). The extension only enters the floating list once its entryUrl is
+// safe, so WITHOUT this poll a page loaded before the runtime came up never
+// loads the panel (about:blank until a manual reload).
+const PREWARM_POLL_MS = 4000
+// Bounded: a permanently broken runtime must not poll forever (~15 minutes).
+const PREWARM_MAX_POLLS = 225
 const route = useRoute()
 const router = useRouter()
 const { locale, t } = useI18n()
@@ -181,6 +189,73 @@ function isServerEntry(extension: PluginHostExtension) {
   return entry?.mode === "server" && isSafePluginServerUiUrl(entry.entryUrl)
 }
 
+// ---------------------------------------------------------------------------
+// P1-6①: hidden-iframe prewarm for INACTIVE server-mode panel origins.
+//
+// When the user opens the floating dialog, the visible frame must not pay a
+// cold pi-web boot (7.2 MB / 204 assets). The ACTIVE extension already
+// preloads through the visible (v-show) frame as soon as its entryUrl exists;
+// INACTIVE ones get a hidden zero-size frame here. One frame per origin
+// (v-for keyed by origin): the browser loads each origin once per page
+// session, reuses the cached assets + connection when the panel opens
+// ("0 network wait"), and the frame is reclaimed automatically when the
+// extension leaves the floating list (plugin stopped/disabled) or on unmount.
+// No bridge, no postMessage, no token injection — a plain same-origin load
+// of the host-validated loopback entryUrl.
+// ---------------------------------------------------------------------------
+
+function serverEntryOrigin(extension: PluginHostExtension): string {
+  const entry = extension.ui.floatingPanel
+  if (!entry || entry.mode !== "server" || !isSafePluginServerUiUrl(entry.entryUrl)) return ""
+  const parsed = new URL(entry.entryUrl, window.location.origin)
+  return `${parsed.protocol}//${parsed.host}`
+}
+
+const prewarmTargets = computed(() => {
+  const seen = new Set<string>()
+  const targets: { key: string; src: string; pluginId: string }[] = []
+  for (const item of floatingExtensions.value) {
+    if (item.pluginId === activeExtension.value?.pluginId) continue
+    const entry = item.ui.floatingPanel
+    if (!entry || entry.mode !== "server" || !isSafePluginServerUiUrl(entry.entryUrl)) continue
+    const origin = serverEntryOrigin(item)
+    if (!origin || seen.has(origin)) continue
+    seen.add(origin)
+    targets.push({ key: origin, src: entry.entryUrl, pluginId: item.pluginId })
+  }
+  return targets
+})
+
+function hasPendingServerEntry() {
+  // An enabled extension that is not (yet) in the floating list: its runtime
+  // is still starting (no safe entryUrl yet) — or it is unrecoverably broken.
+  return extensionsStore.extensions.some(
+    (item) => item.enabled && !floatingExtensions.value.some((f) => f.pluginId === item.pluginId),
+  )
+}
+
+let prewarmTimer: ReturnType<typeof setTimeout> | null = null
+let prewarmPolls = 0
+
+function schedulePrewarmPoll() {
+  if (prewarmTimer !== null || prewarmPolls >= PREWARM_MAX_POLLS) return
+  if (!hasPendingServerEntry()) return
+  prewarmTimer = setTimeout(async () => {
+    prewarmTimer = null
+    prewarmPolls += 1
+    if (!hasPendingServerEntry()) return
+    await extensionsStore.refresh()
+    if (hasPendingServerEntry() && prewarmPolls < PREWARM_MAX_POLLS) schedulePrewarmPoll()
+  }, PREWARM_POLL_MS)
+}
+
+function stopPrewarmPoll() {
+  if (prewarmTimer !== null) {
+    clearTimeout(prewarmTimer)
+    prewarmTimer = null
+  }
+}
+
 async function activateExtension(extension: PluginHostExtension | null) {
   disposeBridge()
   const server = extension ? isServerEntry(extension) : false
@@ -284,6 +359,18 @@ watch(frame, (value) => {
   if (value && activeExtension.value && !bridge) void activateExtension(activeExtension.value)
 })
 
+// P1-6①: poll the extension list until every enabled plugin either shows up
+// in the floating list (server entryUrl safe) or stops being enabled. The
+// floatingExtensions watcher also re-fires after each refresh, which is what
+// flips the active frame's src (activateExtension) once the entryUrl exists.
+watch(
+  floatingExtensions,
+  () => {
+    if (extensionsStore.loaded) schedulePrewarmPoll()
+  },
+  { immediate: true },
+)
+
 onMounted(() => {
   window.addEventListener("keydown", onShortcut)
   window.addEventListener("resize", onViewportResize)
@@ -294,6 +381,7 @@ onBeforeUnmount(() => {
   window.removeEventListener("keydown", onShortcut)
   window.removeEventListener("resize", onViewportResize)
   stopResize()
+  stopPrewarmPoll()
   disposeBridge()
 })
 </script>
@@ -325,6 +413,20 @@ onBeforeUnmount(() => {
         referrerpolicy="no-referrer"
       />
     </section>
+    <!-- P1-6①: hidden prewarm frames for INACTIVE server-mode origins (one
+         per origin; zero-size, no UI, reclaimed when the extension leaves
+         the floating list or the component unmounts). -->
+    <template v-for="target in prewarmTargets" :key="target.key">
+      <iframe
+        class="floating-extension-prewarm"
+        :src="target.src"
+        :title="`${target.pluginId} prewarm`"
+        referrerpolicy="no-referrer"
+        aria-hidden="true"
+        tabindex="-1"
+        data-testid="floating-extension-prewarm"
+      />
+    </template>
     <div class="floating-extension-launchers">
       <button
         v-for="extension in floatingExtensions"

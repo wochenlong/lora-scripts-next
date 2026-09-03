@@ -3,7 +3,7 @@ import { createPinia, setActivePinia } from "pinia"
 import { flushPromises, mount } from "@vue/test-utils"
 import { defineComponent, nextTick } from "vue"
 import { createMemoryHistory, createRouter } from "vue-router"
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import GenericFloatingExtensionHost from "./GenericFloatingExtensionHost.vue"
 import { i18n } from "../../i18n"
 import { useExtensionsStore } from "../../stores/extensions"
@@ -198,5 +198,151 @@ describe("GenericFloatingExtensionHost lifecycle", () => {
     expect(wrapper.find('[data-testid="floating-extension-host"]').exists()).toBe(false)
     expect(wrapper.find("iframe").exists()).toBe(false)
     wrapper.unmount()
+  })
+})
+
+// ---------------------------------------------------------------------------
+// P1-6①: hidden-iframe prewarm (trigger / dedupe / reclaim) + running poll
+// ---------------------------------------------------------------------------
+
+describe("GenericFloatingExtensionHost prewarm (P1-6①)", () => {
+  const agentA = extension({
+    pluginId: "next-trainer-pi-agent",
+    displayName: "Next Trainer Agent",
+    ui: { floatingPanel: { entryUrl: "http://127.0.0.1:5980", mode: "server" } },
+  })
+  const agentB = extension({
+    pluginId: "other-agent",
+    displayName: "Other Agent",
+    ui: { floatingPanel: { entryUrl: "http://127.0.0.1:5981", mode: "server" } },
+  })
+
+  it("prewarms the INACTIVE server origin in a hidden frame and never touches the active frame", async () => {
+    // active = first floating extension (agent A); agent B must be prewarmed.
+    const { wrapper } = await mountHost([agentA, agentB])
+    const prewarms = wrapper.findAll('[data-testid="floating-extension-prewarm"]')
+    expect(prewarms).toHaveLength(1)
+    expect(prewarms[0].attributes("src")).toBe("http://127.0.0.1:5981")
+    expect(prewarms[0].attributes("aria-hidden")).toBe("true")
+    // The visible frame keeps the ACTIVE origin (no cross-contamination).
+    const visible = wrapper.get('[data-testid="floating-extension-panel"] iframe')
+    expect(visible.attributes("src")).toBe("http://127.0.0.1:5980")
+    wrapper.unmount()
+  })
+
+  it("dedupes prewarm frames by origin (two plugins, one origin)", async () => {
+    const sameOrigin = extension({
+      pluginId: "twin-agent",
+      displayName: "Twin Agent",
+      ui: { floatingPanel: { entryUrl: "http://127.0.0.1:5981", mode: "server" } },
+    })
+    const { wrapper } = await mountHost([agentA, agentB, sameOrigin])
+    const prewarms = wrapper.findAll('[data-testid="floating-extension-prewarm"]')
+    expect(prewarms).toHaveLength(1)
+    expect(prewarms[0].attributes("src")).toBe("http://127.0.0.1:5981")
+    wrapper.unmount()
+  })
+
+  it("does not prewarm static-mode or unsafe server entries", async () => {
+    const staticC = extension({
+      pluginId: "static-c",
+      displayName: "Static C",
+      ui: { floatingPanel: { entryUrl: "/api/plugin-host/ui/static-c/panel.html" } },
+    })
+    const unsafeD = extension({
+      pluginId: "unsafe-d",
+      displayName: "Unsafe D",
+      ui: { floatingPanel: { entryUrl: "http://untrusted.example:5982", mode: "server" } },
+    })
+    const { wrapper } = await mountHost([agentA, staticC, unsafeD])
+    expect(wrapper.findAll('[data-testid="floating-extension-prewarm"]')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it("reclaims the prewarm frame when the plugin leaves the floating list", async () => {
+    const { wrapper, store } = await mountHost([agentA, agentB])
+    expect(wrapper.findAll('[data-testid="floating-extension-prewarm"]')).toHaveLength(1)
+    // Plugin B stops (disabled) — its hidden frame must be reclaimed.
+    store.extensions = [agentA, { ...agentB, enabled: false, state: "disabled" }]
+    await flushPromises()
+    expect(wrapper.findAll('[data-testid="floating-extension-prewarm"]')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it("always holds exactly one prewarm frame per origin across plugin switches (no duplicate loads)", async () => {
+    const { wrapper } = await mountHost([agentA, agentB])
+    // Default active = A; exactly B's origin is prewarmed.
+    expect(wrapper.get("iframe").attributes("src")).toBe("http://127.0.0.1:5980")
+    let prewarms = wrapper.findAll('[data-testid="floating-extension-prewarm"]')
+    expect(prewarms.map((el) => el.attributes("src"))).toEqual(["http://127.0.0.1:5981"])
+    const launchers = wrapper.findAll('[data-testid="floating-extension-launcher"]')
+    // Select B: B becomes active (visible frame); exactly A's origin is prewarmed.
+    await launchers[1].trigger("click")
+    await flushPromises()
+    expect(wrapper.get("iframe").attributes("src")).toBe("http://127.0.0.1:5981")
+    prewarms = wrapper.findAll('[data-testid="floating-extension-prewarm"]')
+    expect(prewarms.map((el) => el.attributes("src"))).toEqual(["http://127.0.0.1:5980"])
+    // Switch back to A: again exactly one prewarm frame, for B's origin.
+    await launchers[0].trigger("click")
+    await flushPromises()
+    expect(wrapper.get("iframe").attributes("src")).toBe("http://127.0.0.1:5980")
+    prewarms = wrapper.findAll('[data-testid="floating-extension-prewarm"]')
+    expect(prewarms.map((el) => el.attributes("src"))).toEqual(["http://127.0.0.1:5981"])
+    wrapper.unmount()
+  })
+
+  it("polls the extension list until a starting server plugin reports its entryUrl", async () => {
+    vi.useFakeTimers()
+    try {
+      const pinia = createPinia()
+      setActivePinia(pinia)
+      const store = useExtensionsStore()
+      // The agent is enabled but still starting: not in the floating list yet.
+      const starting = extension({
+        pluginId: "next-trainer-pi-agent",
+        state: "starting",
+        ui: { floatingPanel: { entryUrl: "", mode: "server" } },
+      })
+      store.extensions = [starting]
+      store.loaded = true
+      let refreshCalls = 0
+      store.refresh = async () => {
+        refreshCalls += 1
+        if (refreshCalls >= 2) {
+          store.extensions = [
+            extension({
+              pluginId: "next-trainer-pi-agent",
+              ui: { floatingPanel: { entryUrl: "http://127.0.0.1:5980", mode: "server" } },
+            }),
+          ]
+        }
+      }
+      const router = createRouter({
+        history: createMemoryHistory(),
+        routes: [{ path: "/one", component: Page }],
+      })
+      await router.push("/one")
+      await router.isReady()
+      const wrapper = mount(GenericFloatingExtensionHost, {
+        attachTo: document.body,
+        global: { plugins: [pinia, router, i18n] },
+      })
+      await flushPromises()
+      // No launcher yet (the starting plugin has no safe entry).
+      expect(wrapper.find('[data-testid="floating-extension-launcher"]').exists()).toBe(false)
+      // Poll 1 at +4s: still starting (no list change). Poll 2 at +8s flips
+      // the list to the running plugin with its safe entryUrl.
+      await vi.advanceTimersByTimeAsync(8000)
+      expect(refreshCalls).toBe(2)
+      // The refreshed list made the plugin floating: the frame now points at
+      // the server origin WITHOUT any user interaction.
+      expect(wrapper.get("iframe").attributes("src")).toBe("http://127.0.0.1:5980")
+      // No further polling: nothing pending any more.
+      await vi.advanceTimersByTimeAsync(16000)
+      expect(refreshCalls).toBe(2)
+      wrapper.unmount()
+    } finally {
+      vi.useRealTimers()
+    }
   })
 })
