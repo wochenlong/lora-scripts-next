@@ -11,6 +11,7 @@ import epDeDE from "element-plus/es/locale/lang/de"
 import epRuRU from "element-plus/es/locale/lang/ru"
 import epPtPT from "element-plus/es/locale/lang/pt"
 import epPtBR from "element-plus/es/locale/lang/pt-br"
+import epAr from "element-plus/es/locale/lang/ar"
 import zhCN from "./messages/zh-CN"
 import enUS from "./messages/en-US"
 import zhTW from "./messages/zh-TW"
@@ -23,6 +24,7 @@ import deDE from "./messages/de-DE"
 import ruRU from "./messages/ru-RU"
 import ptPT from "./messages/pt-PT"
 import ptBR from "./messages/pt-BR"
+import ar from "./messages/ar"
 
 export type LocaleStatus = "stable" | "beta"
 export type LocaleDirection = "ltr" | "rtl"
@@ -44,6 +46,7 @@ export const SUPPORTED_LOCALES = [
   defineLocale({ value: "ru-RU", label: "Русский", status: "beta", direction: "ltr" }),
   defineLocale({ value: "pt-PT", label: "Português (Portugal)", status: "beta", direction: "ltr" }),
   defineLocale({ value: "pt-BR", label: "Português (Brasil)", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "ar", label: "العربية", status: "beta", direction: "rtl" }),
 ]
 
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]["value"]
@@ -66,6 +69,7 @@ export const localeMessages: Record<AppLocale, AppMessages> = {
   "ru-RU": ruRU,
   "pt-PT": ptPT,
   "pt-BR": ptBR,
+  "ar": ar,
 }
 
 const elementPlusLocales: Record<AppLocale, ElementPlusMessages> = {
@@ -81,6 +85,7 @@ const elementPlusLocales: Record<AppLocale, ElementPlusMessages> = {
   "ru-RU": epRuRU,
   "pt-PT": epPtPT,
   "pt-BR": epPtBR,
+  "ar": epAr,
 }
 
 function readUiConfigs(): Record<string, unknown> {
@@ -131,6 +136,7 @@ const LOCALE_MATCH_RULES: ReadonlyArray<{ locale: AppLocale; test: (tag: string)
   { locale: "ru-RU", test: (t) => t === "ru" || t.startsWith("ru-") },
   { locale: "pt-BR", test: (t) => t === "pt-br" },
   { locale: "pt-PT", test: (t) => t === "pt" || t.startsWith("pt-") },
+  { locale: "ar", test: (t) => t === "ar" || t.startsWith("ar-") },
   { locale: "en-US", test: (t) => t === "en" || t.startsWith("en-") },
 ]
 

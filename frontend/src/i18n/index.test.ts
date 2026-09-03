@@ -172,6 +172,12 @@ describe("matchLocaleCandidate", () => {
     expect(matchLocaleCandidate("pt-AO")).toBe("pt-PT")
   })
 
+  it("maps Arabic variants to ar", () => {
+    expect(matchLocaleCandidate("ar")).toBe("ar")
+    expect(matchLocaleCandidate("ar-SA")).toBe("ar")
+    expect(matchLocaleCandidate("ar-EG")).toBe("ar")
+  })
+
   it("returns undefined for unknown languages", () => {
     expect(matchLocaleCandidate("xx-XX")).toBeUndefined()
     expect(matchLocaleCandidate("!!!")).toBeUndefined()
@@ -223,6 +229,17 @@ describe("document locale sync", () => {
     expect(document.documentElement.dir).toBe("ltr")
     setLocale("zh-CN")
     expect(document.documentElement.lang).toBe("zh-CN")
+    expect(document.documentElement.dir).toBe("ltr")
+  })
+
+  it("switches to rtl for Arabic and back without residue", () => {
+    setLocale("ar")
+    expect(document.documentElement.lang).toBe("ar")
+    expect(document.documentElement.dir).toBe("rtl")
+    expect(i18n.global.t("nav.training")).not.toBe("")
+    setLocale("en-US")
+    expect(document.documentElement.dir).toBe("ltr")
+    setLocale("zh-CN")
     expect(document.documentElement.dir).toBe("ltr")
   })
 })

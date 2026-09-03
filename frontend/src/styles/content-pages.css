@@ -180,7 +180,7 @@
 
 .about-credits {
   margin: 0;
-  padding-left: 1.2em;
+  padding-inline-start: 1.2em;
   display: grid;
   gap: 10px;
 }
@@ -293,7 +293,7 @@
 }
 .release-list ul {
   margin-bottom: 0;
-  padding-left: 20px;
+  padding-inline-start: 20px;
 }
 @media (max-width: 600px) {
   .content-cards {

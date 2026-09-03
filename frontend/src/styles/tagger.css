@@ -60,7 +60,7 @@
   height: 100vh;
   padding: 46px 28px;
   background: var(--surface);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
 }
 
 .tagger-status h2 {
@@ -101,7 +101,7 @@
     height: auto;
     min-height: 480px;
     border-top: 1px solid var(--border);
-    border-left: 0;
+    border-inline-start: 0;
   }
 }
 

@@ -52,7 +52,7 @@
 }
 
 .task-error {
-  border-left: 3px solid #dc2626;
+  border-inline-start: 3px solid #dc2626;
 }
 
 .task-error button {
@@ -90,7 +90,7 @@
 
 @media (max-width: 900px) {
   .task-meta {
-    text-align: left;
+    text-align: start;
   }
 }
 
@@ -499,19 +499,19 @@
 .task-loss-panel.collapsed {
   min-height: 0;
   place-content: unset;
-  text-align: left;
+  text-align: start;
 }
 
 .task-placeholder.has-data {
   display: block;
   place-content: unset;
-  text-align: left;
+  text-align: start;
 }
 
 .task-placeholder.has-data header,
 .task-placeholder.collapsed header {
   margin-bottom: 10px;
-  text-align: left;
+  text-align: start;
 }
 
 .task-placeholder.collapsed header {
@@ -603,7 +603,7 @@
 }
 
 .log-count {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text-faint);
   font-size: 10px;
 }
@@ -621,6 +621,8 @@
   margin: 0;
   padding: 12px 14px;
   overflow: auto;
+  direction: ltr;
+  text-align: left;
   white-space: pre;
   color: var(--text);
   background: var(--surface-inset);
@@ -645,7 +647,7 @@
 }
 
 .task-progress-meta b {
-  margin-left: auto;
+  margin-inline-start: auto;
   color: var(--text);
 }
 
@@ -669,6 +671,7 @@
   width: 100%;
   height: auto;
   max-height: 200px;
+  direction: ltr;
 }
 
 .loss-chart .axis {
@@ -699,7 +702,7 @@
   display: inline-block;
   width: 10px;
   height: 3px;
-  margin-right: 6px;
+  margin-inline-end: 6px;
   vertical-align: middle;
 }
 
