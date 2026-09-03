@@ -7,7 +7,7 @@ import AboutPage from "./AboutPage.vue"
 import ChangelogPage from "./ChangelogPage.vue"
 import EnginesSettingsPage from "./EnginesSettingsPage.vue"
 import MarketplaceSettingsPage from "./MarketplaceSettingsPage.vue"
-import { SUPPORTED_LOCALES, UI_CONFIGS_KEY, getStoredLocale, setLocale, type AppLocale } from "../i18n"
+import { SUPPORTED_LOCALES, UI_CONFIGS_KEY, i18n, setLocale, type AppLocale } from "../i18n"
 import { getTheme, setTheme, type ThemeName } from "../utils/theme"
 import { releases } from "../content/releases"
 import { useAppStore } from "../stores/app"
@@ -17,7 +17,7 @@ const { t } = useI18n()
 const appStore = useAppStore()
 const { version } = storeToRefs(appStore)
 
-const language = ref<AppLocale>(getStoredLocale())
+const language = ref<AppLocale>(i18n.global.locale.value as AppLocale)
 const theme = ref<ThemeName>(getTheme())
 const latestReleases = computed(() => releases.slice(0, 3))
 
