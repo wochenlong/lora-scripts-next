@@ -10,6 +10,7 @@ import deDE from "./de-DE"
 import ruRU from "./ru-RU"
 import ptPT from "./pt-PT"
 import ptBR from "./pt-BR"
+import ar from "./ar"
 
 export const schemaDescMessages: Partial<Record<AppLocale, Record<string, string>>> = {
   "en-US": enUS,
@@ -23,4 +24,5 @@ export const schemaDescMessages: Partial<Record<AppLocale, Record<string, string
   "ru-RU": ruRU,
   "pt-PT": ptPT,
   "pt-BR": ptBR,
+  "ar": ar,
 }
