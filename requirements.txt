@@ -1,4 +1,4 @@
-accelerate==0.33.0
+﻿accelerate==0.33.0
 transformers==4.51.3
 diffusers[torch]==0.33.1
 ftfy==6.1.1
@@ -38,10 +38,9 @@ scipy
 requests
 pillow
 numpy==1.26.4
-# <=2.0.0
-gradio==3.44.2
 fastapi==0.95.1
 uvicorn==0.22.0
+websockets==11.0.3
 wandb==0.16.2
 httpx==0.24.1
 # extra

@@ -207,7 +207,7 @@ def _parse_env_marker(line: str):
 
 
 def validate_requirements(requirements_file: str):
-    with open(requirements_file, 'r', encoding='utf8') as f:
+    with open(requirements_file, 'r', encoding='utf-8-sig') as f:
         lines = [
             line.strip()
             for line in f.readlines()
@@ -252,7 +252,7 @@ def ensure_requirements_installed(requirements_file: str = "requirements.txt") -
         return
 
     try:
-        with open(req_path, "r", encoding="utf8") as f:
+        with open(req_path, "r", encoding="utf-8-sig") as f:
             raw_lines = f.readlines()
     except OSError as e:
         log.warning(f"could not read {req_path}: {e}")
