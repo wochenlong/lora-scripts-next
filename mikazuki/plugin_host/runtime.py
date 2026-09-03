@@ -5,6 +5,7 @@ import json
 import logging
 import os
 import queue
+import re
 import secrets
 import subprocess
 import threading
@@ -777,6 +778,34 @@ class ExecutablePluginRuntime:
                 except OSError:
                     return
 
+    @staticmethod
+    def _first_static_asset_url(html: str, origin: str) -> str | None:
+        """P1-6: the first ``/_next/static/`` asset referenced in an HTML
+        document, resolved against the UI origin.
+
+        Next.js serves the HTML shell as soon as the server boots — BEFORE
+        its static chunks are guaranteed reachable. A panel that hydrates
+        against a 404-ing chunk renders blank (the rc.4 diagnosis: ~10 s of
+        blank panel). Requiring the first referenced chunk to answer 200 is
+        what makes "document served" actually mean "page can render".
+        Returns None for non-Next UIs (no such reference) — the gate then
+        keeps its classic document-only semantics.
+        """
+        # Match the whole attribute VALUE containing a /_next/static/ ref so
+        # same-origin paths, absolute URLs and protocol-relative URLs are all
+        # resolved correctly (Next.js assetPrefix can point at a CDN).
+        match = re.search(r"""(?:"|')?([^"'<> ]*_next/static/[^"'<> ]+)""", html)
+        if match is None:
+            return None
+        ref = match.group(1)
+        if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", ref) or ref.startswith("//"):
+            if ref.startswith("//"):
+                return "http:" + ref  # protocol-relative: UI origin is http loopback
+            return ref
+        if not ref.startswith("/"):
+            ref = "/" + ref
+        return origin + ref
+
     def _wait_ui_ready(
         self,
         handle: _ProcessHandle,
@@ -785,13 +814,23 @@ class ExecutablePluginRuntime:
         read_cap_bytes: int = 64 * 1024,
         attempt_timeout: float = 10.0,
     ) -> None:
-        """Block until the plugin UI serves a real, non-empty document.
+        """Block until the plugin UI can actually render a page.
 
-        Ready means a completed HTTP response with a 2xx/3xx status AND a
-        non-empty body on the UI origin (query stripped: the panel's ``?cwd=``
-        parameter is irrelevant to boot). Connection errors, idle timeouts and
-        empty responses are retried until ``self._ui_ready_timeout`` expires,
-        at which point a RuntimeError tears the runtime down via start()'s
+        Three stages (P1-6③ extended the V30 document gate):
+
+        1. OPTIONAL manifest ``ui.healthProbe`` (takes priority when
+           declared): the plugin's own authoritative readiness endpoint
+           must answer 2xx on the UI origin.
+        2. The V30 document gate: a 2xx/3xx response with a non-empty body
+           on the UI origin (query stripped: the panel's ``?cwd=`` parameter
+           is irrelevant to boot).
+        3. NEW for Next.js UIs: the FIRST ``/_next/static/`` chunk referenced
+           by that document must answer 200 — the shell can arrive before
+           its chunks, and hydrating against a 404 chunk is exactly the
+           blank-panel bug. Non-Next documents (no reference) skip stage 3.
+
+        Every stage retries until ``self._ui_ready_timeout`` expires, at
+        which point a RuntimeError tears the runtime down via start()'s
         except path.
         """
         parsed = urlsplit(handle.ui_url or "")
@@ -799,14 +838,53 @@ class ExecutablePluginRuntime:
         target = origin + (parsed.path or "/")
         deadline = time.monotonic() + self._ui_ready_timeout
         last_error = "no response"
+
+        # Stage 1: the manifest-declared health probe (priority when set).
+        manifest = handle.manifest
+        if manifest is not None:
+            ui_declaration = getattr(manifest, "ui", None)
+            probe_path = getattr(ui_declaration, "health_probe", None)
+            if isinstance(probe_path, str) and probe_path.startswith("/"):
+                probe_url = origin + probe_path
+                while True:
+                    try:
+                        request = urllib.request.Request(probe_url, headers={"Accept": "application/json"})
+                        with urllib.request.urlopen(request, timeout=attempt_timeout) as response:
+                            if 200 <= response.status < 400:
+                                break
+                            last_error = f"health probe HTTP {response.status}"
+                    except Exception as exc:  # noqa: BLE001 — "not ready yet"
+                        last_error = str(exc) or exc.__class__.__name__
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(
+                            f"plugin UI health probe did not become ready within {self._ui_ready_timeout:.0f}s ({last_error})"
+                        ) from None
+                    time.sleep(poll_interval)
+
+        # Stages 2 + 3: the document, then its first static chunk.
         while True:
             try:
                 request = urllib.request.Request(target, headers={"Accept": "text/html"})
                 with urllib.request.urlopen(request, timeout=attempt_timeout) as response:
                     body = response.read(read_cap_bytes)
                     if 200 <= response.status < 400 and body:
-                        return
-                    last_error = f"HTTP {response.status} with empty body" if response.status < 400 else f"HTTP {response.status}"
+                        asset_url = self._first_static_asset_url(
+                            body.decode("utf-8", "replace"), origin
+                        )
+                        if asset_url is None:
+                            return
+                        try:
+                            asset_request = urllib.request.Request(asset_url, headers={"Accept": "*/*"})
+                            with urllib.request.urlopen(asset_request, timeout=attempt_timeout) as asset_response:
+                                if 200 <= asset_response.status < 300:
+                                    return
+                                last_error = f"first static chunk HTTP {asset_response.status}"
+                        except Exception as exc:  # noqa: BLE001 — chunk not up yet
+                            last_error = f"first static chunk unreachable: {str(exc) or exc.__class__.__name__}"
+                    else:
+                        last_error = (
+                            f"HTTP {response.status} with empty body" if response.status < 400 else f"HTTP {response.status}"
+                        )
             except Exception as exc:  # noqa: BLE001 — any network error means "not ready yet"
                 last_error = str(exc) or exc.__class__.__name__
             if time.monotonic() >= deadline:
