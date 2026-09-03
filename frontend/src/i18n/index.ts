@@ -1,8 +1,16 @@
 import { createI18n } from "vue-i18n"
 import epZhCN from "element-plus/es/locale/lang/zh-cn"
 import epEnUS from "element-plus/es/locale/lang/en"
+import epZhTW from "element-plus/es/locale/lang/zh-tw"
+import epZhHK from "element-plus/es/locale/lang/zh-hk"
+import epJaJP from "element-plus/es/locale/lang/ja"
+import epKoKR from "element-plus/es/locale/lang/ko"
 import zhCN from "./messages/zh-CN"
 import enUS from "./messages/en-US"
+import zhTW from "./messages/zh-TW"
+import zhHK from "./messages/zh-HK"
+import jaJP from "./messages/ja-JP"
+import koKR from "./messages/ko-KR"
 
 export type LocaleStatus = "stable" | "beta"
 export type LocaleDirection = "ltr" | "rtl"
@@ -14,6 +22,10 @@ function defineLocale<L extends string>(meta: { value: L; label: string; status:
 export const SUPPORTED_LOCALES = [
   defineLocale({ value: "zh-CN", label: "简体中文", status: "stable", direction: "ltr" }),
   defineLocale({ value: "en-US", label: "English", status: "stable", direction: "ltr" }),
+  defineLocale({ value: "zh-TW", label: "繁體中文（台灣）", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "zh-HK", label: "繁體中文（香港）", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "ja-JP", label: "日本語", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "ko-KR", label: "한국어", status: "beta", direction: "ltr" }),
 ]
 
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]["value"]
@@ -26,11 +38,19 @@ type ElementPlusMessages = typeof epZhCN
 export const localeMessages: Record<AppLocale, AppMessages> = {
   "zh-CN": zhCN,
   "en-US": enUS,
+  "zh-TW": zhTW,
+  "zh-HK": zhHK,
+  "ja-JP": jaJP,
+  "ko-KR": koKR,
 }
 
 const elementPlusLocales: Record<AppLocale, ElementPlusMessages> = {
   "zh-CN": epZhCN,
   "en-US": epEnUS,
+  "zh-TW": epZhTW,
+  "zh-HK": epZhHK,
+  "ja-JP": epJaJP,
+  "ko-KR": epKoKR,
 }
 
 function readUiConfigs(): Record<string, unknown> {
@@ -69,14 +89,21 @@ export function normalizeLocaleTag(tag: string): string | undefined {
   }
 }
 
+const LOCALE_MATCH_RULES: ReadonlyArray<{ locale: AppLocale; test: (tag: string) => boolean }> = [
+  { locale: "zh-TW", test: (t) => t === "zh-tw" || t === "zh-hant-tw" },
+  { locale: "zh-HK", test: (t) => t === "zh-hk" || t === "zh-mo" || t === "zh-hant-hk" || t === "zh-hant-mo" },
+  { locale: "zh-CN", test: (t) => t === "zh" || t.startsWith("zh-") },
+  { locale: "ja-JP", test: (t) => t === "ja" || t.startsWith("ja-") },
+  { locale: "ko-KR", test: (t) => t === "ko" || t.startsWith("ko-") },
+  { locale: "en-US", test: (t) => t === "en" || t.startsWith("en-") },
+]
+
 export function matchLocaleCandidate(candidate: string): AppLocale | undefined {
   const tag = normalizeLocaleTag(candidate)
   if (!tag) return undefined
   if (isAppLocale(tag)) return tag
   const lower = tag.toLowerCase()
-  if (lower === "zh" || lower.startsWith("zh-")) return "zh-CN"
-  if (lower === "en" || lower.startsWith("en-")) return "en-US"
-  return undefined
+  return LOCALE_MATCH_RULES.find((rule) => rule.test(lower))?.locale
 }
 
 function browserLocaleCandidates(): string[] {

@@ -13,7 +13,6 @@ import {
   resolveInitialLocale,
   setLocale,
   setStoredLocale,
-  type AppLocale,
 } from "./index"
 
 function flattenLeafKeys(obj: Record<string, unknown>, prefix = ""): string[] {
@@ -145,7 +144,18 @@ describe("matchLocaleCandidate", () => {
   it("maps regional variants of supported languages", () => {
     expect(matchLocaleCandidate("en-GB")).toBe("en-US")
     expect(matchLocaleCandidate("zh-Hans-CN")).toBe("zh-CN")
-    expect(matchLocaleCandidate("zh-TW")).toBe("zh-CN")
+    expect(matchLocaleCandidate("zh-SG")).toBe("zh-CN")
+    expect(matchLocaleCandidate("zh")).toBe("zh-CN")
+  })
+
+  it("maps Traditional Chinese and CJK variants to their locales", () => {
+    expect(matchLocaleCandidate("zh-TW")).toBe("zh-TW")
+    expect(matchLocaleCandidate("zh-Hant-TW")).toBe("zh-TW")
+    expect(matchLocaleCandidate("zh-HK")).toBe("zh-HK")
+    expect(matchLocaleCandidate("zh-MO")).toBe("zh-HK")
+    expect(matchLocaleCandidate("zh-Hant-MO")).toBe("zh-HK")
+    expect(matchLocaleCandidate("ja")).toBe("ja-JP")
+    expect(matchLocaleCandidate("ko-KP")).toBe("ko-KR")
   })
 
   it("returns undefined for unknown languages", () => {
