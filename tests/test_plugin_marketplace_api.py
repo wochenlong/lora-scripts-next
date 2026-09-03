@@ -1136,3 +1136,168 @@ def test_local_acquirer_reports_monotonic_progress_and_honors_cancel():
             assert exc.code == "MARKETPLACE_OPERATION_CANCELLED"
         assert not cancel_destination.exists()
         assert not (cancel_destination.with_suffix(".zip.part")).exists()
+
+
+# --- P0-3: update availability (API + honest defaults) ----------------------
+
+
+def _package_with_permissions(
+    root: Path, *, version: str, permissions: list[str]
+) -> Path:
+    path = root / f"agent-{version}.zip"
+    with zipfile.ZipFile(_package(root, version="0.0.0")) as probe:
+        manifest = json.loads(probe.read("plugin.json"))
+    manifest["version"] = version
+    manifest["permissions"] = permissions
+    with zipfile.ZipFile(path, "w") as archive:
+        archive.writestr("plugin.json", json.dumps(manifest))
+        for name in ("bin/sidecar.exe", "ui/index.js", "ui/settings.js", "sbom.cdx.json", "LICENSE"):
+            archive.writestr(name, f"content-{version}")
+    return path
+
+
+def _entry_with_permissions(
+    package: Path, key: bytes, *, version: str, permissions: list[str]
+) -> MarketplaceEntry:
+    value = {
+        "id": "next-trainer-pi-agent",
+        "name": "Agent",
+        "publisher_id": "approved-publisher-id",
+        "latest_version": version,
+        "channel": "stable",
+        "host_compatibility": ">=2.9.2 <3.0.0",
+        "platforms": ["win32-x64"],
+        "package_size": package.stat().st_size,
+        "permissions_summary": permissions,
+        "license": "MIT",
+        "package_url": f"https://market.invalid/agent-{version}.zip",
+        "sha256": hashlib.sha256(package.read_bytes()).hexdigest(),
+        "signature": "",
+        "signing_key_id": "mock-key",
+        "published_at": "2026-08-21T00:00:00Z",
+    }
+    unsigned = MarketplaceEntry.model_validate(value)
+    value["signature"] = hmac.new(key, canonical_entry_payload(unsigned), hashlib.sha256).hexdigest()
+    return MarketplaceEntry.model_validate(value)
+
+
+def _configure_catalog_multi(
+    root: Path,
+    paths: MarketplacePaths,
+    trust: TrustStore,
+    entries: list[MarketplaceEntry],
+    key: bytes,
+    url_to_package: dict[str, Path],
+) -> MarketplaceCatalogService:
+    value = {
+        "schemaVersion": 1,
+        "publisherId": "approved-publisher-id",
+        "signingKeyId": "mock-key",
+        "generatedAt": "2026-08-21T00:00:00Z",
+        "entries": [entry.model_dump(mode="json") for entry in entries],
+        "signature": "",
+    }
+    unsigned = MarketplaceCatalog.model_validate(value)
+    value["signature"] = hmac.new(key, canonical_catalog_payload(unsigned), hashlib.sha256).hexdigest()
+    catalog = MarketplaceCatalog.model_validate(value)
+    source = root / "catalog-multi.json"
+    source.write_text(json.dumps(catalog.model_dump(mode="json", by_alias=True)), encoding="utf-8")
+    service = MarketplaceCatalogService(
+        paths=paths,
+        trust=trust,
+        source=FileCatalogSource(source),
+        acquirer=LocalPackageAcquirer(url_to_package),
+    )
+    service.refresh()
+    configure_marketplace_catalog(service)
+    return service
+
+
+def test_update_fields_appear_when_catalog_publishes_newer_version():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        paths, key, trust, manager, package1, entry1 = _marketplace_setup(root)
+        _configure_catalog(root, paths, trust, entry1, key, package1)
+        client = _client(router)
+
+        response = client.post(f"/api/marketplace/plugins/{entry1.id}/install", json={}, headers=AUTH_HEADERS)
+        assert response.status_code == 202, response.text
+        operation = _wait_operation(client, entry1.id, response.json()["data"]["operationId"])
+        assert operation["state"] == "succeeded", operation
+
+        # Baseline: catalog matches the installed version -> no update.
+        record = client.get("/api/marketplace/plugins").json()["data"][0]
+        assert record["update_available"] is False
+        assert record["latest_version"] is None
+        assert record["update_size_bytes"] is None
+        assert record["update_permissions_added"] is None
+        assert record["update_permissions_removed"] is None
+
+        # A newer release with one added permission publishes.
+        package2 = _package_with_permissions(root, version="0.2.0", permissions=["model-provider", "dataset-review"])
+        entry2 = _entry_with_permissions(package2, key, version="0.2.0", permissions=["model-provider", "dataset-review"])
+        _configure_catalog_multi(root, paths, trust, [entry2], key, {entry2.package_url: package2})
+
+        listing = client.get("/api/marketplace/plugins").json()["data"]
+        record = next(item for item in listing if item["id"] == entry1.id)
+        assert record["update_available"] is True
+        assert record["latest_version"] == "0.2.0"
+        assert record["update_size_bytes"] == package2.stat().st_size
+        assert record["update_permissions_added"] == ["dataset-review"]
+        assert record["update_permissions_removed"] == []
+
+        # The single-plugin endpoint carries the same honest fields.
+        detail = client.get(f"/api/marketplace/plugins/{entry1.id}").json()["data"]
+        assert detail["update_available"] is True
+        assert detail["latest_version"] == "0.2.0"
+        assert detail["update_size_bytes"] == package2.stat().st_size
+        assert detail["update_permissions_added"] == ["dataset-review"]
+
+
+def test_update_fields_stay_honest_when_catalog_omits_or_matches_plugin():
+    with tempfile.TemporaryDirectory() as td:
+        root = Path(td)
+        paths, key, trust, manager, package1, entry1 = _marketplace_setup(root)
+        _configure_catalog(root, paths, trust, entry1, key, package1)
+        client = _client(router)
+
+        response = client.post(f"/api/marketplace/plugins/{entry1.id}/install", json={}, headers=AUTH_HEADERS)
+        assert response.status_code == 202, response.text
+        operation = _wait_operation(client, entry1.id, response.json()["data"]["operationId"])
+        assert operation["state"] == "succeeded", operation
+
+        # Catalog republished WITHOUT our plugin (e.g. another publisher's
+        # catalog is configured): no invented update, all keys present.
+        foreign = _entry_with_permissions(package1, key, version="0.2.0", permissions=["model-provider"])
+        foreign_value = foreign.model_dump(mode="json")
+        foreign_value["id"] = "other-plugin"
+        foreign = MarketplaceEntry.model_validate(foreign_value)
+        _configure_catalog_multi(root, paths, trust, [foreign], key, {foreign.package_url: package1})
+
+        record = next(
+            item for item in client.get("/api/marketplace/plugins").json()["data"] if item["id"] == entry1.id
+        )
+        assert record["update_available"] is False
+        assert record["latest_version"] is None
+        assert record["update_size_bytes"] is None
+
+        # Catalog republishes the SAME version: still no update.
+        _configure_catalog_multi(root, paths, trust, [entry1], key, {entry1.package_url: package1})
+        record = next(
+            item for item in client.get("/api/marketplace/plugins").json()["data"] if item["id"] == entry1.id
+        )
+        assert record["update_available"] is False
+        assert record["latest_version"] is None
+
+
+def test_marketplace_version_ordering_for_updates():
+    from mikazuki.plugin_marketplace.api import _compare_marketplace_versions
+
+    assert _compare_marketplace_versions("0.2.0", "0.1.0") > 0
+    assert _compare_marketplace_versions("0.1.0", "0.2.0") < 0
+    assert _compare_marketplace_versions("0.1.0", "0.1.0") == 0
+    assert _compare_marketplace_versions("0.10.0", "0.9.9") > 0  # numeric, not lexicographic
+    assert _compare_marketplace_versions("2.0.0", "2.0.0.1") < 0  # padding: 2.0.0 < 2.0.0.1
+    assert _compare_marketplace_versions("0.3.10-rc.1", "0.3.10") < 0  # pre-release < release
+    assert _compare_marketplace_versions("0.3.10", "0.3.10-rc.1") > 0
+    assert _compare_marketplace_versions("garbage", "0.1.0") is None  # unparseable -> unknown
