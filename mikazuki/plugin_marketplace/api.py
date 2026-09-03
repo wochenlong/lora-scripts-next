@@ -342,7 +342,31 @@ def _install_pipeline(op: InstallOperation, entry: MarketplaceEntry, approved_pe
     # must never break the install"), so once install() returns the plugin IS
     # committed — reporting "cancelled" there would be false (Copilot C-9).
     status = _manager.install(entry, package, approved_permissions=approved_permissions, on_phase=on_phase)
+    _prune_package_cache_best_effort({package})
     op.finish_success(status.model_dump(mode="json"))
+
+
+def _prune_package_cache_best_effort(keep: set[Path] = frozenset()) -> None:
+    """P1-4 trigger: global package-cache LRU after install/uninstall/refresh.
+
+    Protects every installed plugin's ACTIVE-version quarantine zip (the
+    rollback/reinstall path reuses it) plus the caller's keep set (the
+    just-acquired package). Never raises — cache hygiene must not break the
+    operation it follows (the prune method itself is best-effort too).
+    """
+    try:
+        protected: set[Path] = set(keep)
+        plugins = (_manager.store.snapshot() or {}).get("plugins") or {}
+        for plugin_id, record in plugins.items():
+            active = (record or {}).get("active_version")
+            if active:
+                try:
+                    protected.add(_manager.paths.quarantine_package(plugin_id, active))
+                except Exception:  # noqa: BLE001 — an odd id must not kill the sweep
+                    continue
+        _catalog.prune_global_package_cache(protected)
+    except Exception:  # noqa: BLE001
+        pass
 
 
 _install_operations = InstallOperationRegistry(_install_pipeline)
@@ -687,6 +711,7 @@ async def refresh_marketplace_catalog(
 ):
     try:
         catalog = _catalog.refresh()
+        _prune_package_cache_best_effort()
         return _success(
             {
                 "publisherId": catalog.publisher_id,
@@ -919,6 +944,7 @@ async def uninstall_plugin(
 ):
     try:
         status = _manager.uninstall(plugin_id)
+        _prune_package_cache_best_effort()
         return _success(status.model_dump(mode="json"))
     except Exception as exc:
         raise _http_error(exc) from exc
