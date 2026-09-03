@@ -50,7 +50,7 @@ describe("i18n infrastructure", () => {
   })
 
   it("ignores unknown or corrupted stored values", () => {
-    localStorage.setItem(UI_CONFIGS_KEY, JSON.stringify({ language: "fr-FR" }))
+    localStorage.setItem(UI_CONFIGS_KEY, JSON.stringify({ language: "xx-XX" }))
     expect(getStoredLocale()).toBeUndefined()
     localStorage.setItem(UI_CONFIGS_KEY, "not-json")
     expect(getStoredLocale()).toBeUndefined()
@@ -158,8 +158,15 @@ describe("matchLocaleCandidate", () => {
     expect(matchLocaleCandidate("ko-KP")).toBe("ko-KR")
   })
 
+  it("maps European language variants to their locales", () => {
+    expect(matchLocaleCandidate("es-MX")).toBe("es-ES")
+    expect(matchLocaleCandidate("fr-CA")).toBe("fr-FR")
+    expect(matchLocaleCandidate("de-AT")).toBe("de-DE")
+    expect(matchLocaleCandidate("ru-BY")).toBe("ru-RU")
+  })
+
   it("returns undefined for unknown languages", () => {
-    expect(matchLocaleCandidate("fr-FR")).toBeUndefined()
+    expect(matchLocaleCandidate("xx-XX")).toBeUndefined()
     expect(matchLocaleCandidate("!!!")).toBeUndefined()
   })
 })
@@ -179,11 +186,11 @@ describe("resolveInitialLocale", () => {
   })
 
   it("keeps matching later candidates when the first is unknown", () => {
-    expect(resolveInitialLocale(["fr-FR", "en-US"])).toBe("en-US")
+    expect(resolveInitialLocale(["xx-XX", "en-US"])).toBe("en-US")
   })
 
   it("skips invalid candidates and falls back to zh-CN", () => {
-    expect(resolveInitialLocale(["!!!", "fr-FR"])).toBe("zh-CN")
+    expect(resolveInitialLocale(["!!!", "xx-XX"])).toBe("zh-CN")
     expect(resolveInitialLocale([])).toBe("zh-CN")
   })
 

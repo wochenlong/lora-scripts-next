@@ -5,12 +5,20 @@ import epZhTW from "element-plus/es/locale/lang/zh-tw"
 import epZhHK from "element-plus/es/locale/lang/zh-hk"
 import epJaJP from "element-plus/es/locale/lang/ja"
 import epKoKR from "element-plus/es/locale/lang/ko"
+import epEsES from "element-plus/es/locale/lang/es"
+import epFrFR from "element-plus/es/locale/lang/fr"
+import epDeDE from "element-plus/es/locale/lang/de"
+import epRuRU from "element-plus/es/locale/lang/ru"
 import zhCN from "./messages/zh-CN"
 import enUS from "./messages/en-US"
 import zhTW from "./messages/zh-TW"
 import zhHK from "./messages/zh-HK"
 import jaJP from "./messages/ja-JP"
 import koKR from "./messages/ko-KR"
+import esES from "./messages/es-ES"
+import frFR from "./messages/fr-FR"
+import deDE from "./messages/de-DE"
+import ruRU from "./messages/ru-RU"
 
 export type LocaleStatus = "stable" | "beta"
 export type LocaleDirection = "ltr" | "rtl"
@@ -26,6 +34,10 @@ export const SUPPORTED_LOCALES = [
   defineLocale({ value: "zh-HK", label: "繁體中文（香港）", status: "beta", direction: "ltr" }),
   defineLocale({ value: "ja-JP", label: "日本語", status: "beta", direction: "ltr" }),
   defineLocale({ value: "ko-KR", label: "한국어", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "es-ES", label: "Español", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "fr-FR", label: "Français", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "de-DE", label: "Deutsch", status: "beta", direction: "ltr" }),
+  defineLocale({ value: "ru-RU", label: "Русский", status: "beta", direction: "ltr" }),
 ]
 
 export type AppLocale = (typeof SUPPORTED_LOCALES)[number]["value"]
@@ -42,6 +54,10 @@ export const localeMessages: Record<AppLocale, AppMessages> = {
   "zh-HK": zhHK,
   "ja-JP": jaJP,
   "ko-KR": koKR,
+  "es-ES": esES,
+  "fr-FR": frFR,
+  "de-DE": deDE,
+  "ru-RU": ruRU,
 }
 
 const elementPlusLocales: Record<AppLocale, ElementPlusMessages> = {
@@ -51,6 +67,10 @@ const elementPlusLocales: Record<AppLocale, ElementPlusMessages> = {
   "zh-HK": epZhHK,
   "ja-JP": epJaJP,
   "ko-KR": epKoKR,
+  "es-ES": epEsES,
+  "fr-FR": epFrFR,
+  "de-DE": epDeDE,
+  "ru-RU": epRuRU,
 }
 
 function readUiConfigs(): Record<string, unknown> {
@@ -95,6 +115,10 @@ const LOCALE_MATCH_RULES: ReadonlyArray<{ locale: AppLocale; test: (tag: string)
   { locale: "zh-CN", test: (t) => t === "zh" || t.startsWith("zh-") },
   { locale: "ja-JP", test: (t) => t === "ja" || t.startsWith("ja-") },
   { locale: "ko-KR", test: (t) => t === "ko" || t.startsWith("ko-") },
+  { locale: "es-ES", test: (t) => t === "es" || t.startsWith("es-") },
+  { locale: "fr-FR", test: (t) => t === "fr" || t.startsWith("fr-") },
+  { locale: "de-DE", test: (t) => t === "de" || t.startsWith("de-") },
+  { locale: "ru-RU", test: (t) => t === "ru" || t.startsWith("ru-") },
   { locale: "en-US", test: (t) => t === "en" || t.startsWith("en-") },
 ]
 
