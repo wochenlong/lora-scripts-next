@@ -163,7 +163,7 @@
 }
 
 .portal-link b {
-  margin-left: 7px;
+  margin-inline-start: 7px;
 }
 
 .status-strip {
@@ -180,7 +180,7 @@
   display: inline-block;
   width: 7px;
   height: 7px;
-  margin-right: 8px;
+  margin-inline-end: 8px;
   background: #16a085;
   border-radius: 50%;
 }

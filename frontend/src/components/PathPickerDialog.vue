@@ -191,10 +191,10 @@ watch(
   gap: 6px;
   overflow: auto;
   max-height: 460px;
-  padding-right: 4px;
+  padding-inline-end: 4px;
 }
 .path-picker-root {
-  text-align: left;
+  text-align: start;
   border: 1px solid var(--el-border-color);
   background: var(--el-fill-color-blank);
   border-radius: 8px;
@@ -207,6 +207,8 @@ watch(
 }
 .path-picker-root span {
   display: block;
+  direction: ltr;
+  text-align: start;
   font-size: 11px;
   color: var(--el-text-color-secondary);
   word-break: break-all;
@@ -230,6 +232,8 @@ watch(
 .path-picker-current {
   flex: 1;
   min-width: 0;
+  direction: ltr;
+  text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -252,7 +256,7 @@ watch(
   grid-template-columns: 52px 1fr auto;
   gap: 8px;
   align-items: center;
-  text-align: left;
+  text-align: start;
   border: 0;
   border-bottom: 1px solid var(--el-border-color-lighter);
   background: transparent;

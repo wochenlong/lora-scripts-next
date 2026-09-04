@@ -41,7 +41,7 @@
   flex-direction: column;
   padding: 38px 28px 28px;
   background: var(--surface);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
 }
 
 .panel-copy h2 {
@@ -82,6 +82,8 @@
   height: 100%;
   margin: 0;
   padding: 18px;
+  direction: ltr;
+  text-align: left;
   color: var(--text);
   background: var(--surface-inset);
   font:
@@ -100,7 +102,7 @@
 .control-panel.collapsed {
   padding: 16px 8px 18px;
   background: var(--surface);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
 }
 
 .training-layout.bare .control-panel.collapsed {
@@ -225,7 +227,7 @@
 }
 
 .form-canvas.with-schema-toc {
-  padding-left: 0;
+  padding-inline-start: 0;
   padding-top: 0;
 }
 
@@ -300,7 +302,7 @@
   max-height: 100vh;
   color: var(--text);
   background: var(--surface);
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
 }
 
 .schema-toc.open .schema-toc-panel {
@@ -368,7 +370,7 @@
   background: transparent;
   border: 0;
   border-radius: 9px;
-  text-align: left;
+  text-align: start;
   font-size: 12px;
   font-weight: 600;
   line-height: 1.35;
@@ -413,7 +415,7 @@
 
 @media (max-width: 900px) {
   .form-canvas.with-schema-toc {
-    padding-left: clamp(28px, 5vw, 72px);
+    padding-inline-start: clamp(28px, 5vw, 72px);
     padding-top: 50px;
   }
 }
@@ -478,7 +480,7 @@
     height: auto;
     min-height: 500px;
     border-top: 1px solid var(--border);
-    border-left: 0;
+    border-inline-start: 0;
   }
 }
 

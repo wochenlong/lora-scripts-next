@@ -217,7 +217,7 @@
 
 .version-badge {
   display: inline-block;
-  margin-left: 6px;
+  margin-inline-start: 6px;
   padding: 2px 8px;
   color: var(--accent);
   background: var(--accent-soft);
@@ -299,13 +299,13 @@
   padding: 12px 14px;
   color: var(--text-soft);
   background: var(--surface-soft);
-  border-left: 3px solid var(--border);
+  border-inline-start: 3px solid var(--border);
   line-height: 1.55;
 }
 
 .marketplace-error {
   color: var(--danger);
-  border-left-color: var(--danger);
+  border-inline-start-color: var(--danger);
 }
 
 .marketplace-workspace {
@@ -322,7 +322,7 @@
   align-content: start;
   gap: 6px;
   padding: 10px;
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
 }
 
 .marketplace-list-item {
@@ -334,7 +334,7 @@
   min-height: 62px;
   padding: 10px 12px;
   color: var(--text);
-  text-align: left;
+  text-align: start;
   background: transparent;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -419,6 +419,7 @@
 
 .marketplace-version {
   flex: none;
+  direction: ltr;
   color: var(--text-soft);
   font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
   font-size: 12px;
@@ -428,7 +429,7 @@
   display: inline-block;
   width: 7px;
   height: 7px;
-  margin-left: 5px;
+  margin-inline-start: 5px;
   border-radius: 50%;
   background: var(--warning, #d97706);
   vertical-align: 1px;
@@ -447,7 +448,7 @@
 @media (max-width: 720px) {
   .marketplace-update-badge {
     white-space: normal;
-    text-align: left;
+    text-align: start;
   }
 }
 
@@ -605,7 +606,7 @@
 
   .marketplace-list {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-    border-right: 0;
+    border-inline-end: 0;
     border-bottom: 1px solid var(--border);
   }
 }

@@ -69,7 +69,7 @@
   flex-wrap: wrap;
   gap: 6px;
   align-items: center;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .dataset-toolbar-actions > button,
@@ -123,12 +123,12 @@
   min-height: 0;
   overflow: hidden;
   background: var(--surface);
-  border-left: 1px solid var(--border);
+  border-inline-start: 1px solid var(--border);
 }
 
 .dataset-tool-panel.glass {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
-  border-left-color: color-mix(in srgb, var(--border) 70%, transparent);
+  border-inline-start-color: color-mix(in srgb, var(--border) 70%, transparent);
   box-shadow: -12px 0 40px rgb(0 0 0 / 18%);
   backdrop-filter: blur(18px) saturate(1.15);
   -webkit-backdrop-filter: blur(18px) saturate(1.15);
@@ -248,14 +248,16 @@
 
 .dataset-select-main {
   padding: 0 12px;
-  border-radius: 8px 0 0 8px;
-  border-right: 0;
+  border-start-start-radius: 8px;
+  border-end-start-radius: 8px;
+  border-inline-end: 0;
   font-weight: 600;
 }
 
 .dataset-select-caret {
   padding: 0 8px;
-  border-radius: 0 8px 8px 0;
+  border-start-end-radius: 8px;
+  border-end-end-radius: 8px;
   font-size: 10px;
 }
 
@@ -268,7 +270,7 @@
 .dataset-select-menu {
   position: absolute;
   top: calc(100% + 4px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: 20;
   display: grid;
   min-width: 180px;
@@ -283,7 +285,7 @@
 .dataset-select-menu button {
   padding: 8px 10px;
   color: var(--text);
-  text-align: left;
+  text-align: start;
   background: transparent;
   border: 0;
   border-radius: 6px;
@@ -322,7 +324,7 @@
 }
 
 .dataset-side {
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
 }
 
 .dataset-side h1 {
@@ -438,7 +440,7 @@
 }
 
 .dataset-gallery header button {
-  margin-left: 7px;
+  margin-inline-start: 7px;
   padding: 6px 10px;
   color: var(--text-soft);
   background: var(--surface);
@@ -457,7 +459,7 @@
 .image-grid button {
   overflow: hidden;
   padding: 0;
-  text-align: left;
+  text-align: start;
   background: var(--surface);
   border: 2px solid transparent;
   border-radius: 10px;
@@ -486,7 +488,7 @@
 }
 
 .caption-panel {
-  border-left: 0;
+  border-inline-start: 0;
 }
 
 .dataset-tool-panel.is-caption:not(.glass) {
@@ -509,6 +511,8 @@
 .caption-filename {
   display: block;
   overflow: hidden;
+  direction: ltr;
+  text-align: start;
   color: var(--text-faint);
   font-size: 11px;
   text-overflow: ellipsis;
@@ -549,7 +553,7 @@
   .caption-panel {
     grid-column: 1/-1;
     border-top: 1px solid var(--border);
-    border-left: 0;
+    border-inline-start: 0;
   }
 }
 

@@ -737,7 +737,7 @@ export default {
       empty: "无匹配 tag",
     },
     gallery: {
-      count: "{filtered} / {total} 张，已选 {selected} 张",
+      count: "{filtered} / {total} 张，{selected}",
       selectAll: "全选（{n}）",
       deselectAll: "取消全选（{n}）",
       selectEntire: "全部图片（{n}）",
