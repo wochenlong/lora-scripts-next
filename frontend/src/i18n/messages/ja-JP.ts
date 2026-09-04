@@ -737,7 +737,7 @@ export default {
       empty: "一致するタグがありません",
     },
     gallery: {
-      count: "{filtered} / {total} 枚、{selected} 枚選択中",
+      count: "{filtered} / {total} 枚、{selected}",
       selectAll: "すべて選択（{n}）",
       deselectAll: "すべて解除（{n}）",
       selectEntire: "データセット全体（{n}）",

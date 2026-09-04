@@ -409,7 +409,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
 
       <main class="dataset-gallery">
         <header class="dataset-gallery-bar">
-          <strong>{{ t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size }) }}</strong>
+          <strong>{{ t("datasetEditor.gallery.count", { n: items.length, filtered: filtered.length, total: items.length, selected: t("datasetEditor.batch.selected", { n: selectedPaths.size }) }) }}</strong>
           <div class="dataset-select-scope" :class="{ open: selectMenuOpen }">
             <button
               type="button"

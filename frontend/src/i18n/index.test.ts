@@ -35,7 +35,7 @@ function leafValues(obj: Record<string, unknown>, prefix = ""): Record<string, s
 }
 
 function interpolationParams(text: string): string[] {
-  return [...text.matchAll(/\{([^{}]+)\}/g)].map((match) => match[1]).sort()
+  return [...new Set([...text.matchAll(/\{([^{}]+)\}/g)].map((match) => match[1]))].sort()
 }
 
 describe("i18n infrastructure", () => {
@@ -69,6 +69,27 @@ describe("i18n infrastructure", () => {
     setLocale("en-US")
     expect(i18n.global.locale.value).toBe("en-US")
     expect(i18n.global.t("nav.training")).toBe("Training")
+  })
+
+  it("executes locale-specific plural rules", () => {
+    setLocale("en-US")
+    expect(i18n.global.t("tasks.purge.success", { n: 1 })).toBe("Removed 1 finished task")
+    expect(i18n.global.t("tasks.purge.success", { n: 2 })).toBe("Removed 2 finished tasks")
+
+    setLocale("fr-FR")
+    expect(i18n.global.t("tasks.purge.success", { n: 0 })).toBe("0 tâche terminée supprimée")
+    expect(i18n.global.t("tasks.purge.success", { n: 2 })).toBe("2 tâches terminées supprimées")
+
+    setLocale("ru-RU")
+    expect(i18n.global.t("tasks.purge.success", { n: 1 })).toBe("Удалена 1 завершённая задача")
+    expect(i18n.global.t("tasks.purge.success", { n: 2 })).toBe("Удалены 2 завершённые задачи")
+    expect(i18n.global.t("tasks.purge.success", { n: 5 })).toBe("Удалено 5 завершённых задач")
+
+    setLocale("ar")
+    expect(i18n.global.t("tasks.purge.success", { n: 0 })).toBe("لم تُحذف أي مهمة منتهية")
+    expect(i18n.global.t("tasks.purge.success", { n: 2 })).toBe("تم حذف مهمتين منتهيتين")
+    expect(i18n.global.t("tasks.purge.success", { n: 3 })).toBe("تم حذف 3 مهام منتهية")
+    expect(i18n.global.t("tasks.purge.success", { n: 11 })).toBe("تم حذف 11 مهمة منتهية")
   })
 
   it("maps app locales to Element Plus locale packs", () => {
@@ -114,8 +135,8 @@ describe("locale registry", () => {
     }
   })
 
-  it("resolves every registered locale to itself", () => {
-    for (const locale of registeredLocales) {
+  it("resolves registered locales to themselves except Portuguese auto-detection", () => {
+    for (const locale of registeredLocales.filter((locale) => locale !== "pt-PT")) {
       expect(matchLocaleCandidate(locale)).toBe(locale)
     }
   })
@@ -151,6 +172,8 @@ describe("matchLocaleCandidate", () => {
   it("maps Traditional Chinese and CJK variants to their locales", () => {
     expect(matchLocaleCandidate("zh-TW")).toBe("zh-TW")
     expect(matchLocaleCandidate("zh-Hant-TW")).toBe("zh-TW")
+    expect(matchLocaleCandidate("zh-Hant")).toBe("zh-TW")
+    expect(matchLocaleCandidate("zh-Hant-SG")).toBe("zh-TW")
     expect(matchLocaleCandidate("zh-HK")).toBe("zh-HK")
     expect(matchLocaleCandidate("zh-MO")).toBe("zh-HK")
     expect(matchLocaleCandidate("zh-Hant-MO")).toBe("zh-HK")
@@ -165,11 +188,11 @@ describe("matchLocaleCandidate", () => {
     expect(matchLocaleCandidate("ru-BY")).toBe("ru-RU")
   })
 
-  it("maps Portuguese regions exactly", () => {
+  it("maps all Portuguese browser tags to pt-BR", () => {
+    expect(matchLocaleCandidate("pt")).toBe("pt-BR")
     expect(matchLocaleCandidate("pt-BR")).toBe("pt-BR")
-    expect(matchLocaleCandidate("pt")).toBe("pt-PT")
-    expect(matchLocaleCandidate("pt-PT")).toBe("pt-PT")
-    expect(matchLocaleCandidate("pt-AO")).toBe("pt-PT")
+    expect(matchLocaleCandidate("pt-PT")).toBe("pt-BR")
+    expect(matchLocaleCandidate("pt-AO")).toBe("pt-BR")
   })
 
   it("maps Arabic variants to ar", () => {

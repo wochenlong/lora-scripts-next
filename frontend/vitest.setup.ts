@@ -1,9 +1,8 @@
 if (typeof localStorage !== "undefined") {
-  localStorage.setItem("ui-configs", JSON.stringify({ language: "zh-CN" }))
-} else if (typeof navigator !== "undefined") {
-  Object.defineProperty(globalThis, "navigator", {
-    value: { language: "zh-CN", languages: ["zh-CN"] },
-    configurable: true,
-    writable: true,
-  })
+  localStorage.removeItem("ui-configs")
+}
+
+if (typeof navigator !== "undefined") {
+  Object.defineProperty(navigator, "language", { value: "zh-CN", configurable: true })
+  Object.defineProperty(navigator, "languages", { value: ["zh-CN"], configurable: true })
 }

@@ -737,7 +737,7 @@ export default {
       empty: "일치하는 태그가 없습니다",
     },
     gallery: {
-      count: "{filtered} / {total}개 이미지, {selected}개 선택됨",
+      count: "{filtered} / {total}개 이미지, {selected}",
       selectAll: "모두 선택 ({n})",
       deselectAll: "모두 선택 해제 ({n})",
       selectEntire: "전체 데이터셋 ({n})",

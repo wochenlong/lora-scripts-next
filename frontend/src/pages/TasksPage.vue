@@ -674,7 +674,7 @@ onBeforeUnmount(() => {
         <label class="purge-keep">
           <span>{{ t("tasks.purge.keepLabel") }}</span>
           <el-input-number v-model="purgeKeepLast" :min="0" :max="999" size="small" />
-          <span>{{ t("tasks.purge.keepSuffix") }}</span>
+          <span>{{ t("tasks.purge.keepSuffix", { n: purgeKeepLast }) }}</span>
         </label>
         <p class="purge-hint">{{ t("tasks.purge.keepHint") }}</p>
       </div>

@@ -1,4 +1,4 @@
-import { createI18n } from "vue-i18n"
+import { createI18n, type PluralizationRule } from "vue-i18n"
 import epZhCN from "element-plus/es/locale/lang/zh-cn"
 import epEnUS from "element-plus/es/locale/lang/en"
 import epZhTW from "element-plus/es/locale/lang/zh-tw"
@@ -125,8 +125,8 @@ export function normalizeLocaleTag(tag: string): string | undefined {
 }
 
 const LOCALE_MATCH_RULES: ReadonlyArray<{ locale: AppLocale; test: (tag: string) => boolean }> = [
-  { locale: "zh-TW", test: (t) => t === "zh-tw" || t === "zh-hant-tw" },
   { locale: "zh-HK", test: (t) => t === "zh-hk" || t === "zh-mo" || t === "zh-hant-hk" || t === "zh-hant-mo" },
+  { locale: "zh-TW", test: (t) => t === "zh-tw" || t === "zh-hant" || t.startsWith("zh-hant-") },
   { locale: "zh-CN", test: (t) => t === "zh" || t.startsWith("zh-") },
   { locale: "ja-JP", test: (t) => t === "ja" || t.startsWith("ja-") },
   { locale: "ko-KR", test: (t) => t === "ko" || t.startsWith("ko-") },
@@ -134,8 +134,6 @@ const LOCALE_MATCH_RULES: ReadonlyArray<{ locale: AppLocale; test: (tag: string)
   { locale: "fr-FR", test: (t) => t === "fr" || t.startsWith("fr-") },
   { locale: "de-DE", test: (t) => t === "de" || t.startsWith("de-") },
   { locale: "ru-RU", test: (t) => t === "ru" || t.startsWith("ru-") },
-  { locale: "pt-BR", test: (t) => t === "pt-br" },
-  { locale: "pt-PT", test: (t) => t === "pt" || t.startsWith("pt-") },
   { locale: "ar", test: (t) => t === "ar" || t.startsWith("ar-") },
   { locale: "en-US", test: (t) => t === "en" || t.startsWith("en-") },
 ]
@@ -143,8 +141,9 @@ const LOCALE_MATCH_RULES: ReadonlyArray<{ locale: AppLocale; test: (tag: string)
 export function matchLocaleCandidate(candidate: string): AppLocale | undefined {
   const tag = normalizeLocaleTag(candidate)
   if (!tag) return undefined
-  if (isAppLocale(tag)) return tag
   const lower = tag.toLowerCase()
+  if (lower === "pt" || lower.startsWith("pt-")) return "pt-BR"
+  if (isAppLocale(tag)) return tag
   return LOCALE_MATCH_RULES.find((rule) => rule.test(lower))?.locale
 }
 
@@ -172,6 +171,22 @@ export function applyDocumentLocale(locale: AppLocale) {
   document.documentElement.dir = meta?.direction ?? "ltr"
 }
 
+type PluralCategory = "zero" | "one" | "two" | "few" | "many" | "other"
+
+function intlPluralRule(locale: string, categories: PluralCategory[]): PluralizationRule {
+  const rules = new Intl.PluralRules(locale)
+  return (choice, choicesLength) => {
+    const index = categories.indexOf(rules.select(choice))
+    return index >= 0 ? Math.min(index, choicesLength - 1) : choicesLength - 1
+  }
+}
+
+const pluralRules: Partial<Record<AppLocale, PluralizationRule>> = {
+  "fr-FR": intlPluralRule("fr-FR", ["one", "other"]),
+  "ru-RU": intlPluralRule("ru-RU", ["one", "few", "many"]),
+  ar: intlPluralRule("ar", ["zero", "one", "two", "few", "many", "other"]),
+}
+
 const initialLocale = resolveInitialLocale()
 applyDocumentLocale(initialLocale)
 
@@ -180,6 +195,7 @@ export const i18n = createI18n({
   locale: initialLocale,
   fallbackLocale: DEFAULT_LOCALE,
   messages: localeMessages,
+  pluralRules,
 })
 
 export function setLocale(locale: AppLocale) {
