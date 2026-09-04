@@ -2,19 +2,24 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import queue
+import re
 import secrets
 import subprocess
 import threading
 import time
 import urllib.request
+from collections import deque
 from dataclasses import dataclass, field
 from pathlib import Path
 from collections.abc import AsyncIterator
 from typing import Any, Literal, Protocol
 from urllib.parse import urlsplit
 
+
+logger = logging.getLogger("mikazuki.plugin_host.runtime")
 
 RuntimeState = Literal["stopped", "starting", "running", "crashed"]
 
@@ -27,6 +32,8 @@ class RuntimeSnapshot:
     protocol_version: str | None = None
     reason: str = ""
     ui_url: str | None = None
+    # P1-1: auto-restarts already spent from the crash budget (0 = none).
+    crash_count: int = 0
 
 
 class RuntimeManifest(Protocol):
@@ -68,6 +75,44 @@ class _ProcessHandle:
     host_tool_token: str = field(repr=False)
     ui_url: str | None = None
     child_pid: int | None = None
+    # P1-1: launch context kept on the handle so the crash supervisor can
+    # restart the plugin without any other component holding the manifest.
+    manifest: Any = None
+    package_root: Path | None = None
+    data_root: Path | None = None
+
+
+@dataclass
+class _CrashLedger:
+    """P1-1 bounded auto-restart bookkeeping for one plugin.
+
+    ``restart_times`` holds the monotonic timestamps of every auto-restart
+    SCHEDULED inside the rolling window (budget = at most
+    ``crash_budget_max`` entries). The ledger is reset when the plugin has
+    stayed up for ``crash_stable_reset_seconds`` after its last crash, or
+    whenever the plugin is stopped by a user action (a fresh enable/restart
+    is a fresh lifecycle; manual restarts never count against the budget).
+    """
+
+    version: str
+    restart_times: deque[float] = field(default_factory=deque)
+    last_crash_at: float | None = None
+    last_exit: int | None = None
+    last_reason: str = ""
+    terminal: bool = False
+    terminal_summary: str = ""
+
+
+@dataclass
+class _PendingRestart:
+    """A scheduled (backed-off) auto-restart awaiting its deadline."""
+
+    plugin_id: str
+    manifest: Any
+    package_root: Path
+    data_root: Path
+    run_at: float
+    attempt: int
 
 
 def _is_loopback_ui_url(value: str) -> bool:
@@ -94,6 +139,12 @@ class ExecutablePluginRuntime:
         startup_timeout: float = 120.0,
         ui_ready_timeout: float = 120.0,
         host_tool_base_url: str | None = None,
+        crash_supervision: bool = True,
+        crash_backoff_seconds: tuple[float, ...] = (2.0, 5.0, 15.0),
+        crash_budget_max: int = 3,
+        crash_window_seconds: float = 600.0,
+        crash_stable_reset_seconds: float = 300.0,
+        supervisor_poll_seconds: float = 1.0,
     ) -> None:
         self._parent_pid = parent_pid or os.getpid()
         self._startup_timeout = startup_timeout
@@ -105,10 +156,32 @@ class ExecutablePluginRuntime:
         self._host_tool_base_url = host_tool_base_url
         self._guard = threading.RLock()
         self._handles: dict[str, _ProcessHandle] = {}
+        # P1-1: crash-bounded auto-restart. A single supervisor thread polls
+        # every handle; an unexpected child exit (while the plugin is still
+        # supposed to run) is restarted with a bounded budget instead of
+        # staying crashed until a human intervenes.
+        self._crash_supervision = crash_supervision
+        self._crash_backoff_seconds = tuple(crash_backoff_seconds) or (2.0,)
+        self._crash_budget_max = max(0, crash_budget_max)
+        self._crash_window_seconds = crash_window_seconds
+        self._crash_stable_reset_seconds = crash_stable_reset_seconds
+        self._supervisor_poll_seconds = max(0.05, supervisor_poll_seconds)
+        self._crash_ledgers: dict[str, _CrashLedger] = {}
+        self._pending_restarts: dict[str, _PendingRestart] = {}
+        if self._crash_supervision:
+            self._supervisor_stop = threading.Event()
+            threading.Thread(target=self._supervisor_loop, daemon=True, name="plugin-runtime-supervisor").start()
 
     def start(self, manifest: RuntimeManifest, package_root: Path, data_root: Path) -> RuntimeSnapshot:
+        # Public (user-initiated) start: a fresh lifecycle, so any prior crash
+        # bookkeeping for this plugin is cleared (manual restarts never count
+        # against the auto-restart budget).
         with self._guard:
-            self.stop(manifest.id)
+            self._stop_internal(manifest.id, reset_crash_state=True)
+            return self._launch_locked(manifest, package_root, data_root)
+
+    def _launch_locked(self, manifest: RuntimeManifest, package_root: Path, data_root: Path) -> RuntimeSnapshot:
+        with self._guard:
             executable = (package_root / manifest.runtime.entrypoint).resolve()
             try:
                 executable.relative_to(package_root.resolve())
@@ -133,19 +206,7 @@ class ExecutablePluginRuntime:
             )
             if self._host_tool_base_url is not None:
                 child_env["NEXT_TRAINER_HOST_TOOL_BASE_URL"] = self._host_tool_base_url
-            creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
-            process = subprocess.Popen(
-                [str(executable)],
-                cwd=str(data_root.resolve()),
-                env=child_env,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                creationflags=creation_flags,
-            )
+            process = self._spawn_process(executable, data_root, child_env)
             try:
                 ready = self._wait_ready(process)
                 if ready.get("host") != "127.0.0.1":
@@ -170,6 +231,9 @@ class ExecutablePluginRuntime:
                     host_tool_token=host_tool_token,
                     ui_url=ui_url if isinstance(ui_url, str) else None,
                     child_pid=child_pid if isinstance(child_pid, int) else None,
+                    manifest=manifest,
+                    package_root=package_root,
+                    data_root=data_root,
                 )
                 self._handles[manifest.id] = handle
                 snapshot = self._probe(handle)
@@ -189,6 +253,22 @@ class ExecutablePluginRuntime:
                 self._terminate(process)
                 self._handles.pop(manifest.id, None)
                 raise
+
+    def _spawn_process(self, executable: Path, data_root: Path, child_env: dict[str, str]) -> subprocess.Popen[str]:
+        """Single seam where the sidecar is spawned (P1-1 tests override this)."""
+        creation_flags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0
+        return subprocess.Popen(
+            [str(executable)],
+            cwd=str(data_root.resolve()),
+            env=child_env,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            creationflags=creation_flags,
+        )
 
     @staticmethod
     def _child_environment() -> dict[str, str]:
@@ -230,22 +310,232 @@ class ExecutablePluginRuntime:
         return environment
 
     def stop(self, plugin_id: str) -> None:
+        # User-facing stop: fresh lifecycle, crash bookkeeping cleared.
         with self._guard:
-            handle = self._handles.pop(plugin_id, None)
-            if handle is not None:
-                self._terminate(handle.process)
-                self._kill_child_tree(handle)
+            self._stop_internal(plugin_id, reset_crash_state=True)
+
+    def _stop_internal(self, plugin_id: str, *, reset_crash_state: bool) -> None:
+        handle = self._handles.pop(plugin_id, None)
+        self._pending_restarts.pop(plugin_id, None)
+        if reset_crash_state:
+            self._crash_ledgers.pop(plugin_id, None)
+        if handle is not None:
+            self._terminate(handle.process)
+            self._kill_child_tree(handle)
 
     def status(self, plugin_id: str) -> RuntimeSnapshot:
         with self._guard:
             handle = self._handles.get(plugin_id)
-            if handle is None:
-                return RuntimeSnapshot(state="stopped")
+            pending = self._pending_restarts.get(plugin_id)
+            ledger = self._crash_ledgers.get(plugin_id)
+            supervision = self._crash_supervision
+        if handle is not None:
             snapshot = self._probe(handle)
-            if snapshot.state == "crashed":
+            if snapshot.state == "crashed" and not supervision:
+                # Legacy behavior (supervision disabled): the first crashed
+                # status tears the handle down.
                 self._handles.pop(plugin_id, None)
                 self._terminate(handle.process)
+                return snapshot
+            if snapshot.state == "crashed":
+                # P1-1: under supervision the supervisor OWNS dead processes
+                # (bounded restart within one poll interval) and a
+                # live-but-unhealthy process stays visible as crashed for a
+                # manual restart. status() must NEVER tear down here — doing
+                # so from a racy status() call (e.g. a momentary health-check
+                # timeout on a still-live process) would destroy the crash
+                # bookkeeping and silently kill self-healing.
+                return RuntimeSnapshot(
+                    state="crashed",
+                    version=handle.version,
+                    pid=handle.process.pid,
+                    protocol_version=handle.protocol_version,
+                    reason=snapshot.reason,
+                    crash_count=len(ledger.restart_times) if ledger is not None else 0,
+                )
             return snapshot
+        if pending is not None:
+            return RuntimeSnapshot(
+                state="starting",
+                version=ledger.version if ledger is not None else None,
+                reason=f"auto-restart in progress (attempt {pending.attempt})",
+                crash_count=len(ledger.restart_times) if ledger is not None else 0,
+            )
+        if ledger is not None and ledger.terminal:
+            return RuntimeSnapshot(
+                state="crashed",
+                version=ledger.version,
+                reason=ledger.terminal_summary,
+                crash_count=len(ledger.restart_times),
+            )
+        return RuntimeSnapshot(state="stopped")
+
+    # ------------------------------------------------------------------
+    # P1-1: crash-bounded auto-restart supervisor
+    # ------------------------------------------------------------------
+
+    def _supervisor_loop(self) -> None:
+        while not self._supervisor_stop.wait(self._supervisor_poll_seconds):
+            try:
+                self._supervisor_tick()
+            except Exception:
+                # The supervisor must never die silently: a dead supervisor
+                # would silently disable self-healing while the UI still
+                # shows "enabled". Log and keep polling.
+                logger.exception("plugin runtime supervisor tick failed")
+
+    def _supervisor_tick(self) -> None:
+        now = time.monotonic()
+        due: list[_PendingRestart] = []
+        with self._guard:
+            # 1) Budget reset: stable running after a crash.
+            for plugin_id, ledger in list(self._crash_ledgers.items()):
+                if ledger.terminal or ledger.last_crash_at is None:
+                    continue
+                if now - ledger.last_crash_at < self._crash_stable_reset_seconds:
+                    continue
+                handle = self._handles.get(plugin_id)
+                if handle is not None and handle.process.poll() is None:
+                    self._crash_ledgers.pop(plugin_id, None)
+                    logger.info(
+                        "plugin %s stable for %.0fs after crash; auto-restart budget reset",
+                        plugin_id,
+                        self._crash_stable_reset_seconds,
+                    )
+            # 2) Unexpected child exits while the plugin is still registered.
+            for plugin_id, handle in list(self._handles.items()):
+                ledger = self._crash_ledgers.get(plugin_id)
+                if ledger is not None and ledger.terminal:
+                    continue
+                exit_code = handle.process.poll()
+                if exit_code is None:
+                    continue
+                self._schedule_crash_response(plugin_id, handle, exit_code, now)
+            # 3) Backed-off restarts whose deadline has arrived.
+            due = [entry for entry in self._pending_restarts.values() if now >= entry.run_at]
+        for entry in due:
+            self._run_pending_restart(entry)
+
+    def _schedule_crash_response(self, plugin_id: str, handle: _ProcessHandle, exit_code: int, now: float) -> None:
+        """Record the crash and schedule the bounded restart (or terminal).
+
+        Called with the guard held. The dead handle is removed here so
+        ``status()`` and the manager never act on it a second time.
+        """
+        ledger = self._crash_ledgers.get(plugin_id)
+        if ledger is None or ledger.version != handle.version:
+            ledger = _CrashLedger(version=handle.version)
+        cutoff = now - self._crash_window_seconds
+        while ledger.restart_times and ledger.restart_times[0] <= cutoff:
+            ledger.restart_times.popleft()
+        ledger.last_crash_at = now
+        ledger.last_exit = exit_code
+        self._crash_ledgers[plugin_id] = ledger
+
+        self._handles.pop(plugin_id, None)
+        self._pending_restarts.pop(plugin_id, None)
+        self._terminate(handle.process)
+        self._kill_child_tree(handle)
+
+        if len(ledger.restart_times) >= self._crash_budget_max:
+            summary = (
+                f"plugin runtime process exited (exit code {exit_code}); "
+                f"{len(ledger.restart_times)} auto-restart(s) already used in the last "
+                f"{self._crash_window_seconds / 60:.0f} minutes - auto-restart budget "
+                f"exhausted, manual restart required"
+            )
+            ledger.terminal = True
+            ledger.terminal_summary = summary
+            ledger.last_reason = summary
+            logger.error("plugin %s %s", plugin_id, summary)
+            return
+
+        if handle.manifest is None or handle.package_root is None or handle.data_root is None:
+            summary = "plugin runtime auto-restart impossible (launch context unknown)"
+            ledger.terminal = True
+            ledger.terminal_summary = summary
+            ledger.last_reason = summary
+            logger.error("plugin %s %s", plugin_id, summary)
+            return
+
+        attempt = len(ledger.restart_times) + 1
+        backoff = self._crash_backoff_seconds[min(attempt - 1, len(self._crash_backoff_seconds) - 1)]
+        ledger.restart_times.append(now)
+        ledger.last_reason = f"plugin runtime process exited (exit code {exit_code})"
+        self._pending_restarts[plugin_id] = _PendingRestart(
+            plugin_id=plugin_id,
+            manifest=handle.manifest,
+            package_root=handle.package_root,
+            data_root=handle.data_root,
+            run_at=now + backoff,
+            attempt=attempt,
+        )
+        logger.warning(
+            "plugin %s child process exited (exit code %s); scheduling auto-restart %d/%d in %.1fs",
+            plugin_id,
+            exit_code,
+            attempt,
+            self._crash_budget_max,
+            backoff,
+        )
+
+    def _launch_supervised(self, entry: _PendingRestart) -> RuntimeSnapshot | None:
+        """Restart worker for one scheduled auto-restart (own thread).
+
+        Returns None when a user action (stop/start) intervened.
+        """
+        with self._guard:
+            if self._pending_restarts.get(entry.plugin_id) is not entry:
+                return None
+            # Supervised relaunch is a CONTINUATION of the crash loop: the
+            # ledger must survive, so only the process is torn down.
+            self._stop_internal(entry.plugin_id, reset_crash_state=False)
+            return self._launch_locked(entry.manifest, entry.package_root, entry.data_root)
+
+    def _run_pending_restart(self, entry: _PendingRestart) -> None:
+        logger.info("plugin %s auto-restart attempt %d starting", entry.plugin_id, entry.attempt)
+        try:
+            snapshot = self._launch_supervised(entry)
+        except Exception as exc:
+            self._record_restart_failure(entry, str(exc))
+            return
+        if snapshot is None:
+            return  # user stop/start intervened; the user action owns the lifecycle
+        with self._guard:
+            ledger = self._crash_ledgers.get(entry.plugin_id)
+        if ledger is not None:
+            logger.info("plugin %s auto-restart attempt %d recovered (pid %s)", entry.plugin_id, entry.attempt, snapshot.pid)
+
+    def _record_restart_failure(self, entry: _PendingRestart, reason: str) -> None:
+        """A failed relaunch consumes budget like any crash (no silent loops)."""
+        logger.error("plugin %s auto-restart attempt %d failed: %s", entry.plugin_id, entry.attempt, reason)
+        now = time.monotonic()
+        with self._guard:
+            ledger = self._crash_ledgers.get(entry.plugin_id)
+            if ledger is None:
+                return  # user stop intervened
+            ledger.last_reason = reason
+            if len(ledger.restart_times) >= self._crash_budget_max:
+                summary = (
+                    f"plugin runtime auto-restart failed {len(ledger.restart_times)} time(s) in the last "
+                    f"{self._crash_window_seconds / 60:.0f} minutes ({reason}) - auto-restart budget "
+                    f"exhausted, manual restart required"
+                )
+                ledger.terminal = True
+                ledger.terminal_summary = summary
+                logger.error("plugin %s %s", entry.plugin_id, summary)
+                return
+            attempt = len(ledger.restart_times) + 1
+            backoff = self._crash_backoff_seconds[min(attempt - 1, len(self._crash_backoff_seconds) - 1)]
+            ledger.restart_times.append(now)
+            self._pending_restarts[entry.plugin_id] = _PendingRestart(
+                plugin_id=entry.plugin_id,
+                manifest=entry.manifest,
+                package_root=entry.package_root,
+                data_root=entry.data_root,
+                run_at=now + backoff,
+                attempt=attempt,
+            )
 
     async def request(self, plugin_id: str, request_id: str, method: str, params: dict[str, Any]) -> Any:
         handle = self._running_handle(plugin_id)
@@ -488,6 +778,34 @@ class ExecutablePluginRuntime:
                 except OSError:
                     return
 
+    @staticmethod
+    def _first_static_asset_url(html: str, origin: str) -> str | None:
+        """P1-6: the first ``/_next/static/`` asset referenced in an HTML
+        document, resolved against the UI origin.
+
+        Next.js serves the HTML shell as soon as the server boots — BEFORE
+        its static chunks are guaranteed reachable. A panel that hydrates
+        against a 404-ing chunk renders blank (the rc.4 diagnosis: ~10 s of
+        blank panel). Requiring the first referenced chunk to answer 200 is
+        what makes "document served" actually mean "page can render".
+        Returns None for non-Next UIs (no such reference) — the gate then
+        keeps its classic document-only semantics.
+        """
+        # Match the whole attribute VALUE containing a /_next/static/ ref so
+        # same-origin paths, absolute URLs and protocol-relative URLs are all
+        # resolved correctly (Next.js assetPrefix can point at a CDN).
+        match = re.search(r"""(?:"|')?([^"'<> ]*_next/static/[^"'<> ]+)""", html)
+        if match is None:
+            return None
+        ref = match.group(1)
+        if re.match(r"^[A-Za-z][A-Za-z0-9+.-]*:", ref) or ref.startswith("//"):
+            if ref.startswith("//"):
+                return "http:" + ref  # protocol-relative: UI origin is http loopback
+            return ref
+        if not ref.startswith("/"):
+            ref = "/" + ref
+        return origin + ref
+
     def _wait_ui_ready(
         self,
         handle: _ProcessHandle,
@@ -496,13 +814,23 @@ class ExecutablePluginRuntime:
         read_cap_bytes: int = 64 * 1024,
         attempt_timeout: float = 10.0,
     ) -> None:
-        """Block until the plugin UI serves a real, non-empty document.
+        """Block until the plugin UI can actually render a page.
 
-        Ready means a completed HTTP response with a 2xx/3xx status AND a
-        non-empty body on the UI origin (query stripped: the panel's ``?cwd=``
-        parameter is irrelevant to boot). Connection errors, idle timeouts and
-        empty responses are retried until ``self._ui_ready_timeout`` expires,
-        at which point a RuntimeError tears the runtime down via start()'s
+        Three stages (P1-6③ extended the V30 document gate):
+
+        1. OPTIONAL manifest ``ui.healthProbe`` (takes priority when
+           declared): the plugin's own authoritative readiness endpoint
+           must answer 2xx on the UI origin.
+        2. The V30 document gate: a 2xx/3xx response with a non-empty body
+           on the UI origin (query stripped: the panel's ``?cwd=`` parameter
+           is irrelevant to boot).
+        3. NEW for Next.js UIs: the FIRST ``/_next/static/`` chunk referenced
+           by that document must answer 200 — the shell can arrive before
+           its chunks, and hydrating against a 404 chunk is exactly the
+           blank-panel bug. Non-Next documents (no reference) skip stage 3.
+
+        Every stage retries until ``self._ui_ready_timeout`` expires, at
+        which point a RuntimeError tears the runtime down via start()'s
         except path.
         """
         parsed = urlsplit(handle.ui_url or "")
@@ -510,14 +838,53 @@ class ExecutablePluginRuntime:
         target = origin + (parsed.path or "/")
         deadline = time.monotonic() + self._ui_ready_timeout
         last_error = "no response"
+
+        # Stage 1: the manifest-declared health probe (priority when set).
+        manifest = handle.manifest
+        if manifest is not None:
+            ui_declaration = getattr(manifest, "ui", None)
+            probe_path = getattr(ui_declaration, "health_probe", None)
+            if isinstance(probe_path, str) and probe_path.startswith("/"):
+                probe_url = origin + probe_path
+                while True:
+                    try:
+                        request = urllib.request.Request(probe_url, headers={"Accept": "application/json"})
+                        with urllib.request.urlopen(request, timeout=attempt_timeout) as response:
+                            if 200 <= response.status < 400:
+                                break
+                            last_error = f"health probe HTTP {response.status}"
+                    except Exception as exc:  # noqa: BLE001 — "not ready yet"
+                        last_error = str(exc) or exc.__class__.__name__
+                    if time.monotonic() >= deadline:
+                        raise RuntimeError(
+                            f"plugin UI health probe did not become ready within {self._ui_ready_timeout:.0f}s ({last_error})"
+                        ) from None
+                    time.sleep(poll_interval)
+
+        # Stages 2 + 3: the document, then its first static chunk.
         while True:
             try:
                 request = urllib.request.Request(target, headers={"Accept": "text/html"})
                 with urllib.request.urlopen(request, timeout=attempt_timeout) as response:
                     body = response.read(read_cap_bytes)
                     if 200 <= response.status < 400 and body:
-                        return
-                    last_error = f"HTTP {response.status} with empty body" if response.status < 400 else f"HTTP {response.status}"
+                        asset_url = self._first_static_asset_url(
+                            body.decode("utf-8", "replace"), origin
+                        )
+                        if asset_url is None:
+                            return
+                        try:
+                            asset_request = urllib.request.Request(asset_url, headers={"Accept": "*/*"})
+                            with urllib.request.urlopen(asset_request, timeout=attempt_timeout) as asset_response:
+                                if 200 <= asset_response.status < 300:
+                                    return
+                                last_error = f"first static chunk HTTP {asset_response.status}"
+                        except Exception as exc:  # noqa: BLE001 — chunk not up yet
+                            last_error = f"first static chunk unreachable: {str(exc) or exc.__class__.__name__}"
+                    else:
+                        last_error = (
+                            f"HTTP {response.status} with empty body" if response.status < 400 else f"HTTP {response.status}"
+                        )
             except Exception as exc:  # noqa: BLE001 — any network error means "not ready yet"
                 last_error = str(exc) or exc.__class__.__name__
             if time.monotonic() >= deadline:

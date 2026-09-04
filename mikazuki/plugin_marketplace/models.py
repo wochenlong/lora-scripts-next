@@ -223,6 +223,25 @@ class UIExtensionDeclaration(StrictModel):
     settings_entrypoint: str | None = Field(default=None, alias="settingsEntrypoint")
     extension_api: str = Field(alias="extensionApi")
     placements: list[Literal["floating-panel", "artifact-detail"]]
+    # P1-6③: the plugin's own readiness endpoint (absolute path on the UI
+    # origin, e.g. "/health"). When declared, the host's UI-ready gate waits
+    # for it BEFORE the document/chunk gate — the plugin's authoritative
+    # "I can serve this page" signal. Must stay on the UI origin: the probe
+    # is appended to the loopback-validated uiUrl, never an arbitrary URL.
+    health_probe: str | None = Field(default=None, alias="healthProbe")
+
+    @validator("health_probe")
+    def validate_health_probe(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+        if not isinstance(value, str) or not value.startswith("/"):
+            raise ValueError("ui healthProbe must be an absolute path on the UI origin (e.g. /health)")
+        if value.startswith("//") or "\x00" in value:
+            raise ValueError("ui healthProbe must be a plain absolute path")
+        parsed = urlsplit(value)
+        if parsed.scheme or parsed.netloc:
+            raise ValueError("ui healthProbe must not carry a scheme or host")
+        return value
 
 
 class PackageDeclaration(StrictModel):

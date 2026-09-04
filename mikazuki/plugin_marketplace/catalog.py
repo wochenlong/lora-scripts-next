@@ -3,6 +3,7 @@ from __future__ import annotations
 import hashlib
 import http.client
 import json
+import logging
 import os
 import socket
 import time
@@ -19,12 +20,35 @@ from .paths import MarketplacePaths
 from .trust import TrustError, TrustStore
 
 
+logger = logging.getLogger("mikazuki.plugin_marketplace.catalog")
+
 _COPY_CHUNK_BYTES = 8 * 1024 * 1024
 _HTTP_CHUNK_BYTES = 1 * 1024 * 1024
 _HTTP_MAX_ATTEMPTS = 6
 _HTTP_BACKOFF_BASE_S = 1.0
 _HTTP_BACKOFF_CAP_S = 16.0
 _HTTP_STALL_TIMEOUT_S = 60.0
+
+# P1-4: global package-cache capacity governance.
+_CACHE_MAX_BYTES_DEFAULT = 4 * 1024 * 1024 * 1024
+# Zips modified within this window are never evicted: a same-age zip is
+# almost certainly owned by an in-flight install/upgrade on another thread
+# (its "keep" is only known to that operation), and deleting a half-observed
+# file mid-operation would break that install.
+_CACHE_RECENT_PROTECT_SECONDS = 300.0
+
+
+def _cache_max_bytes() -> int:
+    """Global package-cache cap; env-overridable for small-disk hosts."""
+    raw = os.environ.get("MIKAZUKI_MARKETPLACE_CACHE_MAX_BYTES", "").strip()
+    if not raw:
+        return _CACHE_MAX_BYTES_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError:
+        logger.warning("MIKAZUKI_MARKETPLACE_CACHE_MAX_BYTES is not an integer; using the default cap")
+        return _CACHE_MAX_BYTES_DEFAULT
+    return value if value > 0 else _CACHE_MAX_BYTES_DEFAULT
 
 
 class CatalogError(ValueError):
@@ -701,6 +725,84 @@ class MarketplaceCatalogService:
                     member.unlink(missing_ok=True)
             except OSError:
                 continue
+
+    def prune_global_package_cache(
+        self,
+        keep: set[Path] = frozenset(),
+        *,
+        max_bytes: int | None = None,
+    ) -> int:
+        """P1-4: global LRU capacity governance for the package zip cache.
+
+        The same-plugin prune only sees one plugin; in the multi-plugin era
+        the quarantine cache would grow without bound. This evicts the
+        oldest (by mtime) zips ACROSS all plugins until the total fits
+        under the cap (default 4 GB, ``MIKAZUKI_MARKETPLACE_CACHE_MAX_BYTES``
+        override).
+
+        Never evicted:
+          - zips in ``keep`` (the in-flight operation's target and the
+            caller-protected set, e.g. active-version zips);
+          - zips modified within the recent window (other in-flight
+            operations whose keep set this call cannot know);
+          - anything that is not a regular ``.zip`` file.
+
+        Best-effort by contract: this method never raises and a single
+        unlink failure (file lock) skips that file and keeps evicting.
+        Returns the number of bytes actually freed (0 when nothing ran or
+        the cache already fit).
+        """
+        cap = max_bytes if max_bytes is not None else _cache_max_bytes()
+        try:
+            root = self.paths.quarantine_root
+            if not root.is_dir():
+                return 0
+            protected = {str(path.resolve()) for path in keep}
+            wall = time.time()
+            total = 0
+            candidates: list[tuple[float, int, Path]] = []
+            for dirpath, _dirnames, filenames in os.walk(root):
+                for name in filenames:
+                    if not name.endswith(".zip"):
+                        continue
+                    full = Path(dirpath) / name
+                    try:
+                        info = full.stat()
+                    except OSError:
+                        continue
+                    # The cap counts the WHOLE cache (protected zips included:
+                    # they still occupy the disk budget) — but only
+                    # unprotected, non-recent zips are eviction candidates.
+                    total += info.st_size
+                    if str(full.resolve()) in protected:
+                        continue
+                    if wall - info.st_mtime < _CACHE_RECENT_PROTECT_SECONDS:
+                        continue
+                    candidates.append((info.st_mtime, info.st_size, full))
+            if total <= cap or not candidates:
+                return 0
+            freed = 0
+            for _mtime, size, full in sorted(candidates):
+                if total <= cap:
+                    break  # minimal eviction: stop as soon as the cap fits
+                try:
+                    full.unlink()
+                except OSError:
+                    continue  # locked/vanishing: skip, evict the next oldest
+                total -= size
+                freed += size
+            if freed:
+                logger.info(
+                    "marketplace package cache pruned: %d bytes freed (cap %d, before %d, after %d)",
+                    freed,
+                    cap,
+                    total + freed,
+                    total,
+                )
+            return freed
+        except Exception as exc:  # noqa: BLE001 — cache hygiene must never break the main flow
+            logger.warning("global package cache pruning skipped: %s", exc)
+            return 0
 
     @staticmethod
     def _parse(payload: bytes) -> MarketplaceCatalog:

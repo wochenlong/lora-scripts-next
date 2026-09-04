@@ -3,10 +3,16 @@ from __future__ import annotations
 import hashlib
 import hmac
 import json
+import logging
+import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 
 from .models import MarketplaceCatalog, MarketplaceEntry
+
+
+logger = logging.getLogger("mikazuki.plugin_marketplace.trust")
 
 
 class TrustError(ValueError):
@@ -32,6 +38,12 @@ def load_trust_root(path: Path) -> TrustStore:
         payload = json.loads(path.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
         raise TrustError(f"trust root is unreadable: {path}") from exc
+    return _parse_trust_root_payload(payload)
+
+
+def _parse_trust_root_payload(payload: dict) -> TrustStore:
+    """Build the verifier from a trust-root JSON object (shape contract
+    documented on load_trust_root)."""
     if not isinstance(payload, dict):
         raise TrustError("trust root must be a JSON object")
     keys_block = payload.get("keys")
@@ -260,3 +272,158 @@ class TrustStore:
             raise TrustError(f"platform is not supported: {platform}")
         if entry.packages and all(package.platform != platform for package in entry.packages):
             raise TrustError(f"no package published for platform: {platform}")
+
+    @property
+    def key_ids(self) -> list[str]:
+        return sorted(self._keys)
+
+    @property
+    def revoked_key_ids(self) -> list[str]:
+        return sorted(self._revoked)
+
+    def fingerprint(self) -> str:
+        """Stable sha256 fingerprint of the effective trust root.
+
+        UI-facing (status display): it is a one-way digest of the canonical
+        root, so it identifies the effective trust without exposing key
+        material (v1 HMAC roots carry secret bytes).
+        """
+        return hashlib.sha256(trust_root_payload(self)).hexdigest()
+
+
+def trust_root_payload(store: TrustStore) -> bytes:
+    """Canonical bytes of a trust root (sorted, compact) — the fingerprint
+    input. HMAC material is included by design (the digest is one-way)."""
+    keys = {}
+    for key_id, (publisher, material, algorithm) in sorted(store._keys.items()):
+        if algorithm == "ed25519":
+            keys[key_id] = {"publisherId": publisher, "algorithm": "ed25519", "publicKeyHex": material.hex()}
+        else:
+            keys[key_id] = {"publisherId": publisher, "algorithm": "hmac-sha256", "keyHex": material.hex()}
+    body = {"keys": keys, "revokedKeys": sorted(store._revoked)}
+    return json.dumps(body, ensure_ascii=False, separators=(",", ":"), sort_keys=True).encode("utf-8")
+
+
+# ---------------------------------------------------------------------------
+# P1-5: trust update channel (rotation/revocation without a host re-release)
+# ---------------------------------------------------------------------------
+#
+# trust-update.json (shipped by a governed release, e.g. in the assets
+# release):  {"seq": int, "trust": <trust root object>,
+#              "signingKeyId": str, "signature": str}
+# The signature is made over canonical_trust_update_payload (seq + trust +
+# signingKeyId) with a key that is already TRUSTED by the host — the chain
+# of trust never skips a link. The host applies the update only when the
+# signature verifies AND seq strictly advances past the applied seq; every
+# other outcome keeps the current trust (the host is never bricked).
+
+
+def canonical_trust_update_payload(update: dict) -> bytes:
+    """The signed fields of a trust update (the signature itself excluded)."""
+    signed_fields = ("seq", "trust", "signingKeyId")
+    body = {key: update.get(key) for key in signed_fields}
+    return json.dumps(body, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def build_trust_update(new_root: dict, seq: int, signing_key_id: str, signature: str) -> bytes:
+    """Release-side builder for the trust-update artifact (pure function).
+
+    ``signature`` is computed by the caller (the release pipeline holds the
+    private key material); it must cover canonical_trust_update_payload of
+    the resulting object.
+    """
+    _parse_trust_root_payload(new_root)  # fail closed on a malformed root
+    if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
+        raise TrustError("trust update seq must be a positive integer")
+    if not isinstance(signing_key_id, str) or not signing_key_id:
+        raise TrustError("trust update signingKeyId is invalid")
+    if not isinstance(signature, str) or not signature:
+        raise TrustError("trust update signature is invalid")
+    update = {"seq": seq, "trust": new_root, "signingKeyId": signing_key_id, "signature": signature}
+    return json.dumps(update, ensure_ascii=False, indent=2, sort_keys=True).encode("utf-8")
+
+
+def verify_trust_update(current: TrustStore, current_seq: int, payload: bytes) -> tuple[TrustStore, int]:
+    """Verify a trust update against the CURRENT effective trust.
+
+    Returns the (candidate store, new seq) on success and raises TrustError
+    on ANY violation (malformed JSON, bad shape, unknown/revoked signing
+    key, signature mismatch, non-advancing seq). Callers must keep the
+    current trust on TrustError — a bad update must never brick the host.
+    """
+    try:
+        update = json.loads(payload.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise TrustError("trust update is not valid JSON") from exc
+    if not isinstance(update, dict):
+        raise TrustError("trust update must be a JSON object")
+    seq = update.get("seq")
+    if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
+        raise TrustError("trust update seq is invalid")
+    if seq <= current_seq:
+        raise TrustError(
+            f"trust update seq {seq} does not advance past the applied seq {current_seq} (downgrade/rollback rejected)"
+        )
+    if not isinstance(update.get("trust"), dict):
+        raise TrustError("trust update trust block is invalid")
+    candidate = _parse_trust_root_payload(update["trust"])  # raises on bad key shapes
+    key_id = str(update.get("signingKeyId") or "")
+    if key_id in current._revoked:
+        raise TrustError(f"trust update signed with revoked key: {key_id}")
+    identity = current._keys.get(key_id)
+    if identity is None:
+        raise TrustError(f"trust update signed with unknown key: {key_id}")
+    if not current._signature_matches(identity, str(update.get("signature") or ""), canonical_trust_update_payload(update)):
+        raise TrustError("trust update signature verification failed")
+    return candidate, seq
+
+
+_APPLIED_TRUST_FILE = "trust-applied.json"
+
+
+def write_applied_trust(path: Path, store: TrustStore, seq: int, *, source: dict) -> None:
+    """Persist the applied trust root (atomic) so it survives restarts."""
+    payload = {
+        "schemaVersion": 1,
+        "seq": seq,
+        "trust": trust_root_object(store),
+        "appliedAt": datetime.now(timezone.utc).isoformat(),
+        "source": source,
+    }
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".tmp")
+    try:
+        with temporary.open("w", encoding="utf-8", newline="\n") as handle:
+            json.dump(payload, handle, ensure_ascii=False, indent=2, sort_keys=True)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary, path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def trust_root_object(store: TrustStore) -> dict:
+    """Re-materialize the trust root OBJECT (file shape) from a store."""
+    keys = {}
+    for key_id in sorted(store._keys):
+        publisher, material, algorithm = store._keys[key_id]
+        if algorithm == "ed25519":
+            keys[key_id] = {"publisherId": publisher, "algorithm": "ed25519", "publicKeyHex": material.hex()}
+        else:
+            keys[key_id] = {"publisherId": publisher, "algorithm": "hmac-sha256", "keyHex": material.hex()}
+    return {"keys": keys, "revokedKeys": sorted(store._revoked)}
+
+
+def load_applied_trust(path: Path) -> tuple[TrustStore, int]:
+    """Load a previously applied trust root; TrustError on any corruption."""
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, UnicodeDecodeError) as exc:
+        raise TrustError(f"applied trust root is unreadable: {path}") from exc
+    if not isinstance(payload, dict) or payload.get("schemaVersion") != 1:
+        raise TrustError("applied trust root schema is invalid")
+    seq = payload.get("seq")
+    if not isinstance(seq, int) or isinstance(seq, bool) or seq < 1:
+        raise TrustError("applied trust root seq is invalid")
+    store = _parse_trust_root_payload(payload.get("trust"))
+    return store, seq

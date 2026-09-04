@@ -16,7 +16,7 @@ from pathlib import Path
 
 import pytest
 
-from mikazuki.plugin_marketplace.api import _local_catalog_wiring
+from mikazuki.plugin_marketplace.api import _local_catalog_wiring, _marketplace_paths
 from mikazuki.plugin_marketplace.catalog import (
     CatalogError,
     FallbackCatalogSource,
@@ -186,7 +186,7 @@ def test_catalog_url_env_composes_fallback_over_file(tmp_path, monkeypatch):
     monkeypatch.setenv("MIKAZUKI_MARKETPLACE_CATALOG_URL", "https://plugins.example.com/catalog.json")
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", raising=False)
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
-    _trust, source, _acquirer = _local_catalog_wiring()
+    _trust, _trust_seq, source, _acquirer = _local_catalog_wiring(_marketplace_paths())
     assert isinstance(source, FallbackCatalogSource)
     kinds = [type(s).__name__ for s in source.sources]
     assert kinds == ["HttpCatalogSource", "FileCatalogSource"]  # live first, file as offline fallback
@@ -199,7 +199,7 @@ def test_catalog_url_only_still_needs_trust(tmp_path, monkeypatch):
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
     monkeypatch.setenv("MIKAZUKI_MARKETPLACE_CATALOG_URL", "https://plugins.example.com/catalog.json")
     monkeypatch.chdir(tmp_path)
-    trust, source, acquirer = _local_catalog_wiring()
+    trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
     # URL without a trust root is a partial env -> fail closed.
     assert source is None and acquirer is None
 
@@ -218,7 +218,7 @@ def test_catalog_url_env_wires_http_acquirer(tmp_path, monkeypatch):
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_ROOT", raising=False)
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
     monkeypatch.chdir(tmp_path)
-    _trust, source, acquirer = _local_catalog_wiring()
+    _trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
     assert source is not None
     from mikazuki.plugin_marketplace.catalog import HttpPackageAcquirer, UnavailablePackageAcquirer
     assert isinstance(acquirer, HttpPackageAcquirer)
@@ -237,7 +237,7 @@ def test_bundled_tier_without_packages_dir_stays_unavailable(tmp_path, monkeypat
                 "MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR"):
         monkeypatch.delenv(var, raising=False)
     monkeypatch.chdir(tmp_path)
-    _trust, source, acquirer = _local_catalog_wiring()
+    _trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
     assert source is not None  # bundled catalog is still listed
     from mikazuki.plugin_marketplace.catalog import UnavailablePackageAcquirer
     assert isinstance(acquirer, UnavailablePackageAcquirer)
@@ -252,5 +252,5 @@ def test_catalog_url_invalid_fails_closed(tmp_path, monkeypatch):
     monkeypatch.delenv("MIKAZUKI_MARKETPLACE_PACKAGE_MIRROR", raising=False)
     monkeypatch.setenv("MIKAZUKI_MARKETPLACE_CATALOG_URL", "http://10.0.0.5/catalog.json")
     monkeypatch.chdir(tmp_path)
-    _trust, source, acquirer = _local_catalog_wiring()
+    _trust, _trust_seq, source, acquirer = _local_catalog_wiring(_marketplace_paths())
     assert source is None and acquirer is None
