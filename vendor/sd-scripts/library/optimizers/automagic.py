@@ -268,12 +268,16 @@ class Automagic(torch.optim.Optimizer):
         }
         super().load_state_dict(stripped)
 
-        current_params = [p for g in self.param_groups for p in g['params'] if p.requires_grad]
-        saved_ids = list(state_dict['state'].keys())
-        for i, param in enumerate(current_params):
-            if i >= len(saved_ids):
-                break
-            saved = state_dict['state'][saved_ids[i]]
+        # torch packs optimizer state with dense indices over ALL params in
+        # param_groups order; params that never received a gradient (e.g. text
+        # encoder LoRA with cached TE outputs) have no entry. Map lr_mask by the
+        # same packed index, never by a requires_grad-filtered position, or every
+        # param after a skipped one gets the previous param's mask.
+        all_params = [p for g in self.param_groups for p in g['params']]
+        for i, param in enumerate(all_params):
+            if i not in state_dict['state']:
+                continue
+            saved = state_dict['state'][i]
             if 'lr_mask' not in saved:
                 continue
             if param not in self.state:
@@ -281,9 +285,17 @@ class Automagic(torch.optim.Optimizer):
             try:
                 lm = saved['lr_mask']
                 if 'quantized' in lm and lm['quantized'].shape == param.shape:
-                    self.state[param]['lr_mask'] = Auto8bitTensor(lm)
+                    # accelerate loads optimizer state with map_location="cpu"; the
+                    # reconstructed mask must follow the param device or the next
+                    # step() crashes with a cuda/cpu device mismatch
+                    mask = Auto8bitTensor(lm)
+                    mask.quantized = mask.quantized.to(param.device)
+                    self.state[param]['lr_mask'] = mask
                 else:
-                    raise ValueError("shape mismatch")
+                    raise ValueError(
+                        f"shape mismatch (saved {tuple(lm['quantized'].shape) if 'quantized' in lm else 'unknown'}"
+                        f" vs current {tuple(param.shape)})"
+                    )
             except Exception as e:
                 print(f"Automagic: reinit lr_mask for param {i}: {e}")
                 self.state[param]['lr_mask'] = Auto8bitTensor(
