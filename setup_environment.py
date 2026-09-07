@@ -429,6 +429,51 @@ def verify_installation():
     return False
 
 
+def _mcp_sidecar_venv_python():
+    if sys.platform == "win32":
+        return os.path.join(_sd_trainer_dir(), "mcp", ".venv", "Scripts", "python.exe")
+    return os.path.join(_sd_trainer_dir(), "mcp", ".venv", "bin", "python")
+
+
+def install_mcp_sidecar():
+    """Best-effort install of the MCP sidecar into its own venv (mcp/.venv).
+
+    The sidecar is a zero-dependency add-on (agent control plane). Any failure
+    here only skips the MCP feature and must never affect the main install.
+    Mirrors are inherited from os.environ (write_mirror_env already ran).
+    """
+    mcp_dir = os.path.join(_sd_trainer_dir(), "mcp")
+    if not os.path.isfile(os.path.join(mcp_dir, "pyproject.toml")):
+        return True  # repo without mcp/ — nothing to do
+    venv_python = _mcp_sidecar_venv_python()
+    if os.path.isfile(venv_python):
+        return True  # already installed
+
+    _separator()
+    print("  [+] 安装 MCP sidecar（agent 操控面挂件，独立于主环境）...")
+    try:
+        venv_dir = os.path.join(mcp_dir, ".venv")
+        if subprocess.call([sys.executable, "-m", "venv", venv_dir]) != 0:
+            raise RuntimeError("venv 创建失败")
+        if subprocess.call(
+            [venv_python, "-m", "pip", "install", "-q", "--no-warn-script-location", mcp_dir]
+        ) != 0:
+            raise RuntimeError("依赖安装失败")
+        probe = subprocess.call(
+            [venv_python, "-c", "import next_trainer_mcp"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        if probe != 0:
+            raise RuntimeError("安装后导入校验失败")
+    except Exception as exc:
+        print(f"  [!] MCP sidecar 安装失败（不影响主程序使用）: {exc}")
+        print("      可稍后手动安装: python -m venv mcp/.venv && mcp/.venv/bin/pip install -e mcp")
+        return False
+    _ok("MCP sidecar 安装完成（随主程序自动启动，可用 --disable-mcp 关闭）")
+    return True
+
+
 # ──────────────────── Main ────────────────────
 
 
@@ -469,12 +514,16 @@ def main():
 
     if check_already_installed():
         print("  环境已安装，跳过安装步骤。")
+        install_mcp_sidecar()
         return 0
 
     # Lightweight repair: PyTorch + core deps are fine, only some
     # requirements.txt packages are missing. Avoid the full ~3GB PyTorch path.
     if _core_modules_ok() and _missing_requirements():
-        return repair_requirements_only()
+        rc = repair_requirements_only()
+        if rc == 0:
+            install_mcp_sidecar()
+        return rc
 
     # GPU check — warn AMD users early
     gpu = detect_gpu()
@@ -539,6 +588,8 @@ def main():
     print("  验证安装...")
     if not verify_installation():
         return 1
+
+    install_mcp_sidecar()
 
     print()
     print("  ══════════════════════════════════════════════")

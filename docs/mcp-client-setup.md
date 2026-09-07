@@ -10,16 +10,16 @@ sidecar 是**独立进程 + 独立虚拟环境**，主程序代码零改动；�
 
 主程序（`gui.py`）启动时会自动拉起 sidecar（和 TensorBoard 同级管理，退出时自动回收）：
 
-- 前提：`mcp/.venv` 已安装（见下）；没装则打一行 info 日志跳过，不影响主程序
+- 前提：`mcp/.venv` 已安装。**首次环境安装（`setup_environment.py`）会自动装**——best-effort 步骤，失败只打警告、不影响主程序；装过就幂等跳过
+- 没装上的手动补装：
+
+  ```bash
+  python3 -m venv mcp/.venv
+  mcp/.venv/bin/pip install -e "mcp[dev]"   # dev 仅跑测试需要
+  ```
+
 - 默认端口 **28002**，**始终绑 127.0.0.1**（无鉴权，即使 `--listen` 也不对外；远程用 `ssh -L 28002:127.0.0.1:28002`）
 - 关闭：`--disable-mcp`；改端口：`--mcp-port`
-
-首次安装：
-
-```bash
-python3 -m venv mcp/.venv
-mcp/.venv/bin/pip install -e "mcp[dev]"   # dev 仅跑测试需要
-```
 
 ### 手动启动（调试/独立部署）
 
