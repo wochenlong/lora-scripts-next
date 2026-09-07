@@ -639,6 +639,15 @@ class NetworkTrainer:
         # 差分追加学習のためにモデルを読み込む
         sys.path.append(os.path.dirname(__file__))
         accelerator.print("import network module:", args.network_module)
+        if "lycoris" in str(args.network_module).lower():
+            try:
+                # mikazuki: align third-party lycoris bypass dtypes (issue #323).
+                # Guarded so standalone sd-scripts usage without mikazuki still works.
+                from mikazuki.lycoris_patches import apply_lycoris_patches
+
+                apply_lycoris_patches()
+            except Exception:
+                pass
         network_module = importlib.import_module(args.network_module)
 
         if args.base_weights is not None:
