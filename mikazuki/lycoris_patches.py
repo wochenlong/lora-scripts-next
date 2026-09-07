@@ -2,8 +2,8 @@
 
 ``lycoris.kohya`` is a pip dependency (not vendored) and its upstream is
 unmaintained, so bugs cannot be fixed at the source. The training subprocess
-entry (``mikazuki/accelerate_launch.py``) applies these patches before the
-trainer script imports lycoris.
+applies these patches from ``vendor/sd-scripts/train_network.py`` right
+before importing the network module.
 
 Currently patched:
 
@@ -15,15 +15,34 @@ Currently patched:
   the bypass path align the weights to the incoming activation dtype, which
   is a no-op when dtypes already match. Casts keep autograd connectivity, so
   fp32 master weights for optimizers like Automagic are untouched.
+
+The patched body mirrors lycoris-lora **3.3.0** (verified byte-identical in
+3.2.0.post2) with two additional upstream conv-bypass fixes: the batch-size
+variable shadowing the ``b`` weight, and the Tucker closing 1x1 conv getting
+``w2_a`` in its stored ``(dim, vp)`` orientation instead of the required
+``(vp, dim)``. Application is gated on the verified versions because the
+copied body is version-specific; unknown versions are skipped with a warning
+(same policy as ``mikazuki/anima_backend/lycoris_patch.py``).
 """
 
 from __future__ import annotations
 
+import importlib.metadata
 import logging
 
 logger = logging.getLogger(__name__)
 
 _PATCH_MARK = "_mikazuki_dtype_aligned"
+
+# bypass_forward_diff bodies verified identical across these releases.
+_SUPPORTED_LYCORIS_VERSIONS = {"3.3.0", "3.2.0.post2"}
+
+
+def _lycoris_lora_version() -> str | None:
+    try:
+        return importlib.metadata.version("lycoris-lora")
+    except importlib.metadata.PackageNotFoundError:
+        return None
 
 
 def _make_patched_bypass_forward_diff():
@@ -31,8 +50,8 @@ def _make_patched_bypass_forward_diff():
     import torch.nn.functional as F
 
     def bypass_forward_diff(self, h, scale=1):
-        # Body mirrors lycoris_lora 3.2.0.post2 lycoris/modules/lokr.py, with
-        # every weight tensor aligned to the activation dtype before use.
+        # Body mirrors lycoris-lora 3.3.0 lycoris/modules/lokr.py, with every
+        # weight tensor aligned to the activation dtype before use.
         dtype = h.dtype
         is_conv = self.module_type.startswith("conv")
         if self.use_w2:
@@ -43,8 +62,12 @@ def _make_patched_bypass_forward_diff():
 
             if self.tucker:
                 t = self.lokr_t2.to(dtype)
+                # Upstream bugs fixed here: ``b`` was later shadowed by the
+                # batch size, and w2_a is stored (dim, vp) while the closing
+                # 1x1 conv needs (vp, dim) - see rebuild_tucker's einsum.
+                b = b.mT
                 a = a.view(*a.shape, *[1] * (len(t.shape) - 2))
-                b = b.view(*b.shape, *[1] * (len(t.shape) - 2))
+                b = b.reshape(*b.shape, *[1] * (len(t.shape) - 2))
             elif is_conv:
                 a = a.view(*a.shape, *self.shape[2:])
                 b = b.view(*b.shape, *[1] * (len(self.shape) - 2))
@@ -57,9 +80,6 @@ def _make_patched_bypass_forward_diff():
 
         if is_conv:
             # (b, uq), vq, ...
-            # NOTE: upstream rebinds ``b`` here (``b, _, *rest = h.shape``),
-            # shadowing the w2_a weight and making conv bypass crash; we use a
-            # distinct name so the weight stays reachable below.
             bsz, _, *rest = h.shape
             h_in_group = h.reshape(bsz * uq, -1, *rest)
         else:
@@ -108,17 +128,28 @@ def _make_patched_bypass_forward_diff():
 
         return self.drop(h * scale * self.scalar)
 
-    bypass_forward_diff._mikazuki_dtype_aligned_src = "lycoris_lora-3.2.0.post2"  # type: ignore[attr-defined]
+    bypass_forward_diff._mikazuki_dtype_aligned_src = "lycoris-lora-3.3.0"  # type: ignore[attr-defined]
     return bypass_forward_diff
 
 
 def apply_lycoris_patches() -> None:
-    """Best-effort, defensive: never blocks training when lycoris is absent
-    or its layout drifts from the known version."""
+    """Best-effort, defensive: never blocks training when lycoris is absent,
+    its layout drifts from the known version, or the release is unverified."""
+    version = _lycoris_lora_version()
+    if version is None:
+        return  # lycoris not installed; nothing to patch
+    if version not in _SUPPORTED_LYCORIS_VERSIONS:
+        logger.warning(
+            "lycoris-lora %s is not a verified version for the LoKr bypass dtype "
+            "patch (verified: %s); skipping. LoKr bypass_mode may crash on dtype "
+            "mismatch (issue #323)",
+            version,
+            ", ".join(sorted(_SUPPORTED_LYCORIS_VERSIONS)),
+        )
+        return
+
     try:
         from lycoris.modules import lokr as lycoris_lokr
-    except ImportError:
-        return
     except Exception:  # noqa: BLE001 - a broken lycoris install must not kill launch
         logger.warning("lycoris import failed unexpectedly; skipping lycoris patches", exc_info=True)
         return
