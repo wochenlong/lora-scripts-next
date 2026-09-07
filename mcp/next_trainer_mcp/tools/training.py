@@ -106,6 +106,32 @@ def register(mcp: FastMCP, backend: BackendClient) -> None:
         }
 
     @mcp.tool()
+    def submit_from_preset(preset_name: str, overrides: Optional[dict] = None, confirm_queue: bool = False) -> dict:
+        """以预设为底 + 覆盖字段提交训练。⚠️ 需要用户确认：占用 GPU。
+
+        参数：
+        - preset_name: 预设名（list_presets 返回的 metadata.name）
+        - overrides: 要覆盖的字段字典，如 {"output_name": "x", "max_train_epochs": 1}
+        - confirm_queue: 同 submit_training 的排队确认
+        预设只提供参数底子；底模/数据集路径等仍需在预设或 overrides 里齐全。
+        """
+        data = backend.request("GET", "/api/presets")
+        presets = data.get("presets") if isinstance(data, dict) else None
+        if not isinstance(presets, list):
+            raise BackendError("后端未返回预设列表")
+        base = None
+        for p in presets:
+            if isinstance(p, dict) and (p.get("metadata") or {}).get("name") == preset_name:
+                base = p
+                break
+        if base is None:
+            names = [(p.get("metadata") or {}).get("name") for p in presets if isinstance(p, dict)]
+            raise BackendError(f"未找到预设: {preset_name}。可用: {names}")
+        config = dict(base.get("data") or {})
+        config.update(overrides or {})
+        return submit_training(config=config, confirm_queue=confirm_queue)
+
+    @mcp.tool()
     def list_tasks(status: str = "", limit: int = 10) -> dict:
         """列出训练任务（紧凑版，剥掉 command/env/日志等大字段）。
 

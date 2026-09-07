@@ -6,7 +6,7 @@ from mcp.server.fastmcp import FastMCP
 
 from . import __version__
 from .backend import BackendClient
-from .tools import dataset, discovery, docs, monitor, training
+from .tools import dataset, discovery, docs, monitor, training, workflows
 
 SERVER_INSTRUCTIONS = """\
 Next Trainer（lora-scripts-next）训练管理器的 agent 操控面。
@@ -40,6 +40,7 @@ def create_server(
 
     discovery.register(mcp, backend)
     monitor.register(mcp, backend)
+    workflows.register(mcp, backend)
     docs.register(mcp)
     if not read_only:
         training.register(mcp, backend)
