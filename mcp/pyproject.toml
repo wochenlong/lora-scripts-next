@@ -1,0 +1,30 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "next-trainer-mcp"
+version = "0.1.0"
+description = "MCP sidecar for Next Trainer (lora-scripts-next): agent control plane over the local HTTP API"
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.12,<2",
+    "httpx>=0.27",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+]
+
+[project.scripts]
+next-trainer-mcp = "next_trainer_mcp.__main__:main"
+
+[tool.setuptools.packages.find]
+include = ["next_trainer_mcp*"]
+
+[tool.setuptools.package-data]
+next_trainer_mcp = ["docs_content/*.md"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
