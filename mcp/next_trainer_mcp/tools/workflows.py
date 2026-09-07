@@ -1,17 +1,19 @@
 """Composite workflow tools: one call instead of many round-trips.
 
 These bundle the sequences agents repeatedly hand-roll (status + metrics +
-log tail + previews; log grepping; latest-task lookup; bounded waiting).
+log tail + previews; log grepping; latest-task lookup).
+
+No blocking waits here by design: MCP is request-response and clients time
+out long before training finishes, so a sleeping tool only wedges the
+session. Poll with get_task_status / get_task_overview between turns.
 """
 
 from __future__ import annotations
 
-import time
-
 from mcp.server.fastmcp import FastMCP
 
 from ..backend import BackendClient, BackendError
-from .training import TERMINAL_STATUSES, _compact_task, _fetch_tasks
+from .training import _compact_task, _fetch_tasks
 
 LOG_TAIL_CAP = 2000
 
@@ -110,31 +112,5 @@ def register(mcp: FastMCP, backend: BackendClient) -> None:
         if not tasks:
             raise BackendError("当前没有任何任务")
         if any(created(t) > 0 for t in tasks):
-            return _compact_task(max(tasks, key=created))
+             return _compact_task(max(tasks, key=created))
         return _compact_task(tasks[-1])
-
-    @mcp.tool()
-    def wait_task(task_id: str, timeout: int = 120, interval: int = 5) -> dict:
-        """有界等待任务进入终态（FINISHED/FAILED/TERMINATED），返回紧凑状态。
-
-        参数：
-        - timeout: 最长等待秒数，默认 120，上限 600。超时返回当前状态（不报错）。
-        - interval: 轮询间隔秒数，默认 5，下限 2。
-        训练以小时计，这个工具只用于短等待（如等启动失败暴露）；长任务用
-        get_task_overview 间隔轮询。
-        """
-        timeout = max(1, min(int(timeout), 600))
-        interval = max(2, int(interval))
-        deadline = time.monotonic() + timeout
-        while True:
-            for t in _fetch_tasks(backend):
-                if isinstance(t, dict) and t.get("id") == task_id:
-                    status = t.get("status")
-                    if status in TERMINAL_STATUSES or time.monotonic() >= deadline:
-                        out = _compact_task(t)
-                        out["wait_timed_out"] = status not in TERMINAL_STATUSES
-                        return out
-                    break
-            else:
-                raise BackendError(f"未知任务: {task_id}")
-            time.sleep(interval)

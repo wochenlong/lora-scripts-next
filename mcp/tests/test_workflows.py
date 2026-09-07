@@ -78,7 +78,8 @@ def mcp(monkeypatch):
 
 def test_workflow_tools_registered(mcp):
     names = tool_names(mcp)
-    assert {"get_task_overview", "grep_task_log", "get_task_config", "get_last_task", "wait_task", "submit_from_preset"} <= names
+    assert {"get_task_overview", "grep_task_log", "get_task_config", "get_last_task", "submit_from_preset"} <= names
+    assert "wait_task" not in names
 
 
 def test_overview_bundles_status_metrics_logs_previews(mcp):
@@ -129,18 +130,6 @@ def test_get_last_task_falls_back_to_list_order_without_created_at(monkeypatch):
     mcp = create_server()
     data = json.loads(tool_text(run(mcp.call_tool("get_last_task", {}))))
     assert data["id"] == "restored-new"
-
-
-def test_wait_task_returns_immediately_for_terminal(mcp):
-    data = json.loads(tool_text(run(mcp.call_tool("wait_task", {"task_id": "t-old", "timeout": 5}))))
-    assert data["status"] == "FINISHED"
-    assert data["wait_timed_out"] is False
-
-
-def test_wait_task_times_out_with_current_status(mcp):
-    data = json.loads(tool_text(run(mcp.call_tool("wait_task", {"task_id": "t-run", "timeout": 1, "interval": 2}))))
-    assert data["status"] == "RUNNING"
-    assert data["wait_timed_out"] is True
 
 
 def test_submit_from_preset_merges_overrides(monkeypatch):
