@@ -116,6 +116,12 @@ def build_accelerate_train_command(
     if mixed_precision:
         launch_opts.extend(["--mixed_precision", mixed_precision])
 
+    if gpu_ids and len(gpu_ids) > 1:
+        multi_gpu_args = ["--multi_gpu", "--num_processes", str(len(gpu_ids))]
+        if sys.platform == "win32":
+            multi_gpu_args = ["--rdzv_backend", "c10d", *multi_gpu_args]
+        launch_opts.extend(multi_gpu_args)
+
     launch_entry = Path(__file__).resolve().parent / "accelerate_launch.py"
     args = [
         sys.executable,
@@ -153,12 +159,8 @@ def build_accelerate_train_command(
 
     if gpu_ids:
         customize_env["CUDA_VISIBLE_DEVICES"] = ",".join(gpu_ids)
-        if len(gpu_ids) > 1:
-            multi_gpu_args = ["--multi_gpu", "--num_processes", str(len(gpu_ids))]
-            if sys.platform == "win32":
-                customize_env["USE_LIBUV"] = "0"
-                multi_gpu_args = ["--rdzv_backend", "c10d", *multi_gpu_args]
-            args[3:3] = multi_gpu_args
+        if len(gpu_ids) > 1 and sys.platform == "win32":
+            customize_env["USE_LIBUV"] = "0"
 
     return args, customize_env, mixed_precision
 
