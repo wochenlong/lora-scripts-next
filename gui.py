@@ -27,6 +27,10 @@ parser.add_argument(
     help="Start the optional legacy Gradio Dataset Tag Editor.",
 )
 parser.add_argument("--disable-train-monitor", action="store_true")
+parser.add_argument("--disable-mcp", action="store_true", default=False,
+                    help="Disable the MCP sidecar (agent control plane, mcp/.venv)")
+parser.add_argument("--mcp-port", type=int, default=28002,
+                    help="Port for the MCP sidecar (always bound to 127.0.0.1; no auth, keep local)")
 parser.add_argument("--disable-auto-mirror", action="store_true")
 parser.add_argument("--tensorboard-host", type=str, default="127.0.0.1", help="Port to run the tensorboard")
 parser.add_argument("--tensorboard-port", type=int, default=6006, help="Port to run the tensorboard")
@@ -84,6 +88,32 @@ def run_tensorboard():
     log.info("Starting tensorboard...")
     return _popen([sys.executable, "-m", "tensorboard.main", "--logdir", "logs",
                    "--host", args.tensorboard_host, "--port", str(args.tensorboard_port)])
+
+
+@catch_exception
+def run_mcp_sidecar():
+    """Launch the MCP sidecar (mcp/ package, own venv) next to the main app.
+
+    Always bound to 127.0.0.1: the sidecar exposes training control without
+    auth, so it must not follow --listen. Remote access goes through ssh
+    port forwarding, see docs/mcp-client-setup.md.
+    """
+    sidecar_dir = base_dir_path() / "mcp"
+    if sys.platform.startswith("win"):
+        sidecar_python = sidecar_dir / ".venv" / "Scripts" / "python.exe"
+    else:
+        sidecar_python = sidecar_dir / ".venv" / "bin" / "python"
+    if not sidecar_python.exists():
+        log.info("MCP sidecar not installed (mcp/.venv missing), skipping. "
+                 "Install: python3 -m venv mcp/.venv && mcp/.venv/bin/pip install -e mcp")
+        return None
+    log.info("Starting MCP sidecar...")
+    return _popen([
+        str(sidecar_python), "-m", "next_trainer_mcp",
+        "--base-url", f"http://127.0.0.1:{args.port}",
+        "--host", "127.0.0.1",
+        "--port", str(args.mcp_port),
+    ])
 
 
 @catch_exception
@@ -215,6 +245,8 @@ def launch():
         protected_default_ports.add(args.tensorboard_port)
     if not args.disable_train_monitor:
         protected_default_ports.add(args.train_monitor_port)
+    if not args.disable_mcp:
+        protected_default_ports.add(args.mcp_port)
 
     reserved_ports: set[int] = set(protected_default_ports)
     tageditor_port = 28001
@@ -242,6 +274,15 @@ def launch():
             "Train monitor",
             reserved_ports,
             preferred_reserved_port=args.train_monitor_port,
+        )
+    if not args.disable_mcp:
+        args.mcp_port = ensure_port_available(
+            args.mcp_port,
+            args.mcp_port,
+            args.mcp_port + 20,
+            "MCP sidecar",
+            reserved_ports,
+            preferred_reserved_port=args.mcp_port,
         )
 
     from mikazuki.update_check import local_version
@@ -282,8 +323,16 @@ def launch():
             if process is not None:
                 child_processes.append(("train monitor", process))
 
+        mcp_process = None
+        if not args.disable_mcp:
+            mcp_process = run_mcp_sidecar()
+            if mcp_process is not None:
+                child_processes.append(("MCP sidecar", mcp_process))
+
         import uvicorn
         log.info(f"Server started at http://{args.host}:{args.port}")
+        if mcp_process is not None:
+            log.info(f"MCP sidecar at http://127.0.0.1:{args.mcp_port}/mcp (local only)")
         if not args.disable_train_monitor:
             log.info(f"Train monitor at http://{args.host}:{args.train_monitor_port}")
         else:
