@@ -4,30 +4,9 @@ import httpx
 import pytest
 from mcp.server.fastmcp.exceptions import ToolError
 
-from next_trainer_mcp import server as server_module
 from next_trainer_mcp.server import create_server
 
-
-def run(coro):
-    return asyncio.run(coro)
-
-
-def patch_backend(monkeypatch, handler):
-    from next_trainer_mcp.backend import BackendClient
-
-    def factory(base_url, timeout=10.0):
-        backend = BackendClient(base_url, timeout=timeout)
-        backend._client = httpx.Client(
-            base_url=base_url,
-            transport=httpx.MockTransport(handler),
-        )
-        return backend
-
-    monkeypatch.setattr(server_module, "BackendClient", factory)
-
-
-def tool_names(mcp):
-    return {t.name for t in run(mcp.list_tools())}
+from conftest import patch_backend, run, tool_names, tool_text
 
 
 IDLE_TASKS = {"status": "success", "data": {"tasks": []}}
@@ -58,7 +37,7 @@ class TestValidateConfig:
         patch_backend(monkeypatch, handler)
         mcp = create_server()
         result = run(mcp.call_tool("validate_config", {"page_train_type": "sd-lora", "config": {"a": 1}}))
-        assert '"errors": []' in result[0].text
+        assert '"errors": []' in tool_text(result)
         assert '"page_train_type": "sd-lora"' in seen["body"]
 
 
@@ -79,7 +58,7 @@ class TestSubmitTrainingGate:
         mcp = create_server()
         result = run(mcp.call_tool("submit_training", {"config": {"model_train_type": "sd-lora"}}))
         assert seen.get("submitted") is True
-        assert "new-1" in result[0].text
+        assert "new-1" in tool_text(result)
 
     def test_submit_blocked_when_busy_without_confirm(self, monkeypatch):
         seen = {}
@@ -134,4 +113,4 @@ class TestMonitorTools:
         patch_backend(monkeypatch, handler)
         mcp = create_server()
         result = run(mcp.call_tool("get_task_metrics", {"task_id": "t1"}))
-        assert "tags" in result[0].text
+        assert "tags" in tool_text(result)

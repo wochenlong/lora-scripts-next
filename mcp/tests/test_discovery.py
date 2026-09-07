@@ -3,31 +3,9 @@ import asyncio
 import httpx
 import pytest
 
-from next_trainer_mcp import server as server_module
 from next_trainer_mcp.server import create_server
 
-
-def run(coro):
-    return asyncio.run(coro)
-
-
-def patch_backend(monkeypatch, handler):
-    """Swap the BackendClient constructor for a MockTransport-backed one."""
-    from next_trainer_mcp.backend import BackendClient
-
-    def factory(base_url, timeout=10.0):
-        backend = BackendClient(base_url, timeout=timeout)
-        backend._client = httpx.Client(
-            base_url=base_url,
-            transport=httpx.MockTransport(handler),
-        )
-        return backend
-
-    monkeypatch.setattr(server_module, "BackendClient", factory)
-
-
-def tool_names(mcp) -> set[str]:
-    return {t.name for t in run(mcp.list_tools())}
+from conftest import patch_backend, run, tool_names, tool_text
 
 
 class TestDiscoveryTools:
@@ -45,7 +23,7 @@ class TestDiscoveryTools:
         patch_backend(monkeypatch, handler)
         mcp = create_server()
         result = run(mcp.call_tool("get_version", {}))
-        assert "9.9.9" in result[0].text
+        assert "9.9.9" in tool_text(result)
 
     def test_backend_fail_surfaces_as_tool_error(self, monkeypatch):
         from mcp.server.fastmcp.exceptions import ToolError
