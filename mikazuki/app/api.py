@@ -768,6 +768,56 @@ async def list_avaliable_cards() -> APIResponse:
     })
 
 
+@router.get("/graphic_cards/live")
+async def list_cards_live() -> APIResponse:
+    """Per-card live VRAM usage, for agents deciding whether a GPU is free
+    enough to submit training onto."""
+    try:
+        import torch
+    except ImportError:
+        return APIResponseFail(message="torch 不可用")
+    if not torch.cuda.is_available():
+        return APIResponse(status="pending")
+
+    cards = []
+    for index in range(torch.cuda.device_count()):
+        free, total = torch.cuda.mem_get_info(index)
+        cards.append({
+            "index": index,
+            "name": torch.cuda.get_device_name(index),
+            "vram_total_gb": round(total / (1024**3), 2),
+            "vram_used_gb": round((total - free) / (1024**3), 2),
+            "vram_free_gb": round(free / (1024**3), 2),
+        })
+    return APIResponseSuccess(data={"cards": cards})
+
+
+@router.get("/tasks/{task_id}/outputs", response_model_exclude_none=True)
+async def task_outputs(task_id: str) -> APIResponse:
+    task = tm.tasks.get(task_id)
+    if task is None:
+        raise HTTPException(status_code=404, detail="Unknown task_id")
+    return APIResponseSuccess(data={"files": task_insights.list_output_files(task.metadata)})
+
+
+@router.post("/dataset/validate")
+async def dataset_validate(request: Request) -> APIResponse:
+    """Structural validation of a kohya-format dataset config TOML, so
+    schema/field mistakes fail at submit time instead of at trainer start."""
+    try:
+        payload = json.loads(await request.body())
+    except json.JSONDecodeError:
+        return APIResponseFail(message="请求体必须是 JSON")
+
+    path = payload.get("path")
+    if not isinstance(path, str) or not path.strip():
+        return APIResponseFail(message="缺少 path")
+
+    from mikazuki.utils.dataset_validate import validate_dataset_toml
+
+    return APIResponseSuccess(data=validate_dataset_toml(path))
+
+
 @router.get("/schemas/hashes")
 async def list_schema_hashes() -> APIResponse:
     if os.environ.get("MIKAZUKI_SCHEMA_HOT_RELOAD", "0") == "1":
