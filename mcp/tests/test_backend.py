@@ -74,3 +74,12 @@ def test_response_without_data_key_returned_as_is():
 
     backend = make_backend(handler)
     assert backend.request("GET", "/api/graphic_cards") == {"status": "pending"}
+
+
+def test_non_json_error_includes_body_snippet():
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(500, text="<html>Traceback: ValueError: gpu_ids boom</html>")
+
+    backend = make_backend(handler)
+    with pytest.raises(Exception, match="gpu_ids boom"):
+        backend.request("POST", "/api/run", json_body={})

@@ -15,6 +15,26 @@ from mcp.server.fastmcp import FastMCP
 from ..backend import BackendClient, BackendError
 
 BUSY_STATUSES = {"RUNNING", "QUEUED"}
+TERMINAL_STATUSES = {"FINISHED", "FAILED", "TERMINATED"}
+
+_TASK_KEEP_FIELDS = ("id", "status", "lane", "returncode", "created_at", "finished_at")
+
+
+def _fetch_tasks(backend: BackendClient) -> list[dict]:
+    data = backend.request("GET", "/api/tasks")
+    tasks = data.get("tasks") if isinstance(data, dict) else None
+    return tasks if isinstance(tasks, list) else []
+
+
+def _compact_task(t: dict) -> dict:
+    """Strip bulky fields (command/env/last_log_lines) agents never need."""
+    out = {k: t.get(k) for k in _TASK_KEEP_FIELDS if t.get(k) is not None}
+    metadata = t.get("metadata") or {}
+    if metadata.get("train_type"):
+        out["train_type"] = metadata["train_type"]
+    if metadata.get("error"):
+        out["error"] = metadata["error"]
+    return out
 
 
 def _busy_tasks(backend: BackendClient) -> list[dict]:
@@ -22,13 +42,9 @@ def _busy_tasks(backend: BackendClient) -> list[dict]:
 
     Tagger/install tasks live on other lanes and must not block submission.
     """
-    data = backend.request("GET", "/api/tasks")
-    tasks = data.get("tasks") if isinstance(data, dict) else None
-    if not isinstance(tasks, list):
-        return []
     return [
         t
-        for t in tasks
+        for t in _fetch_tasks(backend)
         if isinstance(t, dict)
         and t.get("status") in BUSY_STATUSES
         and t.get("lane", "compute") == "compute"
@@ -46,6 +62,10 @@ def register(mcp: FastMCP, backend: BackendClient) -> None:
         - config: 完整训练配置字典
 
         返回校验结果（错误/警告列表）。有错误时修正后重新校验，不要直接提交。
+
+        注意：校验只查训练页匹配与字段类型，不检查数据集 toml 内容、不试跑；
+        校验通过 ≠ 训练能跑（数据集字段兼容性、优化器参数类型等问题仍可能在
+        启动后暴露，启动失败时用 get_task_log_tail 看 traceback）。
         """
         return backend.request(
             "POST",
@@ -78,12 +98,41 @@ def register(mcp: FastMCP, backend: BackendClient) -> None:
                 "请向用户确认排队意图后，以 confirm_queue=true 重新调用。"
             )
 
-        return backend.request("POST", "/api/run", json_body=config)
+        result = backend.request("POST", "/api/run", json_body=config)
+        return {
+            "task_id": result.get("task_id"),
+            "queued": result.get("queued"),
+            "hint": "用 get_task_log_tail / get_task_metrics 轮询进度（间隔 >= 30 秒）；排错加大 log limit",
+        }
 
     @mcp.tool()
-    def list_tasks() -> dict:
-        """列出全部训练任务（含状态 RUNNING/QUEUED/FINISHED/FAILED/TERMINATED 与 metadata）。"""
-        return backend.request("GET", "/api/tasks")
+    def list_tasks(status: str = "", limit: int = 10) -> dict:
+        """列出训练任务（紧凑版，剥掉 command/env/日志等大字段）。
+
+        参数：
+        - status: "active" = 只看 RUNNING/QUEUED；"finished" = 只看已结束
+          （FINISHED/FAILED/TERMINATED）；"all" = 全部；默认 "" = active + 最近几条已结束。
+        - limit: 最多返回条数（按创建时间取最新），默认 10。
+        """
+        tasks = [t for t in _fetch_tasks(backend) if isinstance(t, dict)]
+        if status == "active":
+            tasks = [t for t in tasks if t.get("status") not in TERMINAL_STATUSES]
+        elif status == "finished":
+            tasks = [t for t in tasks if t.get("status") in TERMINAL_STATUSES]
+        elif not status:
+            active = [t for t in tasks if t.get("status") not in TERMINAL_STATUSES]
+            finished = [t for t in tasks if t.get("status") in TERMINAL_STATUSES]
+            tasks = active + finished[-limit:]
+        tasks = tasks[-limit:] if limit > 0 else tasks
+        return {"tasks": [_compact_task(t) for t in tasks], "returned": len(tasks)}
+
+    @mcp.tool()
+    def get_task_status(task_id: str) -> dict:
+        """查单个任务的紧凑状态（id/status/returncode/error），不用拉全量列表。"""
+        for t in _fetch_tasks(backend):
+            if isinstance(t, dict) and t.get("id") == task_id:
+                return _compact_task(t)
+        raise BackendError(f"未知任务: {task_id}（用 list_tasks 看现有任务）")
 
     @mcp.tool()
     def terminate_task(task_id: str) -> dict:

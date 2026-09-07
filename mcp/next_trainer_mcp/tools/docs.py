@@ -38,6 +38,16 @@ COOKBOOK = """\
 - 配置类报错先用 `validate_config` 复现，比真跑训练快得多。
 - 预览图相关：`list_task_previews` 看采样是否产出。
 
+## 实战坑位（复现 issue 踩出，别再踩）
+- `learning_rate` 传 JSON 数值（如 1e-6），**不要传字符串**——Automagic 对字符串 lr 直接 TypeError。
+- `gpu_ids` 字段可能触发后端 500（非 JSON 响应）；单卡环境建议不传该字段，让后端默认分配。
+- 数据集 toml 各引擎**不通用**：kohya 系（anima-lora 等）不收 `validation_split_num`、
+  `subsets[].recursive`、`cache_dir`（这些是 anima-fast 字段），会直接 voluptuous 报错。
+- kohya 数据集 subset 的 `image_dir` 必须直指含图片的目录（每目录一个 subset），
+  不支持递归父目录。
+- Anima 训练选 Automagic/CAME 时，后端会把 mixed_precision 从 fp16 静默翻转为 bf16
+  （防 nan 护栏），任务 metadata 里以翻转后的值为准。
+
 ## 红线
 - submit/terminate/resume/retry 必须先获得用户明确确认。
 - 不要高频轮询（>= 30 秒间隔）。

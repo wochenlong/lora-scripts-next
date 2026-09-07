@@ -70,12 +70,14 @@ class BackendClient:
         try:
             payload = resp.json()
         except ValueError:
-            raise BackendError(f"后端返回非 JSON (HTTP {resp.status_code})")
+            raise BackendError(
+                f"后端返回非 JSON (HTTP {resp.status_code}): {resp.text[:500]}"
+            )
 
         if resp.status_code >= 400:
             detail = payload.get("detail") if isinstance(payload, dict) else None
             raise BackendError(
-                f"后端 HTTP {resp.status_code}: {detail or resp.text[:200]}"
+                f"后端 HTTP {resp.status_code}: {detail or resp.text[:500]}"
             )
 
         if isinstance(payload, dict) and payload.get("status") == "fail":

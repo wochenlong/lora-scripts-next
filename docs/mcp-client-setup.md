@@ -46,14 +46,14 @@ Claude Desktop / Cursor：在各自 MCP 配置中加入同样的 URL（streamabl
 
 调试：`npx @modelcontextprotocol/inspector` 连 `http://127.0.0.1:28001/mcp` 手动点工具。
 
-## 3. 工具面（约 22 个）
+## 3. 工具面（23 个）
 
 - 发现：`get_schemas` / `list_presets` / `list_gpus` / `get_version` / `list_saved_params`
-- 配置：`validate_config`（提交前必走）
-- 训练控制：`submit_training` ⚠️ / `list_tasks` / `terminate_task` ⚠️ / `resume_task` ⚠️ / `retry_task` ⚠️
-- 监控（快照式）：`get_task_metrics` / `get_task_log_tail` / `list_task_previews`
+- 配置：`validate_config`（提交前必走；仅查页面/类型匹配，通过 ≠ 能跑）
+- 训练控制：`submit_training` ⚠️ / `list_tasks`（紧凑裁剪，支持 status/limit 过滤）/ `get_task_status` / `terminate_task` ⚠️ / `resume_task` ⚠️ / `retry_task` ⚠️
+- 监控（快照式）：`get_task_metrics`（`max_points` 降采样）/ `get_task_log_tail` / `list_task_previews`
 - 数据集：`scan_dataset` / `interrogate` / `get_tagger_status` / `browse_server_path` / `list_files`
-- 文档：`list_docs` / `get_doc` / `get_training_cookbook`（首次使用必读）
+- 文档：`list_docs` / `get_doc` / `get_training_cookbook`（首次使用必读，含实战坑位清单）
 
 安全闸门：
 

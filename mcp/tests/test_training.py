@@ -59,6 +59,9 @@ class TestSubmitTrainingGate:
         result = run(mcp.call_tool("submit_training", {"config": {"model_train_type": "sd-lora"}}))
         assert seen.get("submitted") is True
         assert "new-1" in tool_text(result)
+        # slim response: no SSE/url noise
+        assert "stream" not in tool_text(result)
+        assert "get_task_log_tail" in tool_text(result)
 
     def test_submit_blocked_when_busy_without_confirm(self, monkeypatch):
         seen = {}
@@ -114,3 +117,93 @@ class TestMonitorTools:
         mcp = create_server()
         result = run(mcp.call_tool("get_task_metrics", {"task_id": "t1"}))
         assert "tags" in tool_text(result)
+
+    def test_metrics_downsamples_long_series(self, monkeypatch):
+        series = [{"step": i, "value": float(i)} for i in range(200)]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"status": "success", "data": {"tags": {"loss": series}, "progress": {"step": 200}}})
+
+        patch_backend(monkeypatch, handler)
+        mcp = create_server()
+        result = run(mcp.call_tool("get_task_metrics", {"task_id": "t1", "max_points": 10}))
+        import json as _json
+        data = _json.loads(tool_text(result))
+        assert len(data["tags"]["loss"]) == 10
+        assert data["tags"]["loss"][-1]["step"] == 199  # latest point always kept
+        assert data["progress"]["step"] == 200
+
+    def test_metrics_short_series_untouched(self, monkeypatch):
+        series = [{"step": i, "value": float(i)} for i in range(5)]
+
+        def handler(request: httpx.Request) -> httpx.Response:
+            return httpx.Response(200, json={"status": "success", "data": {"tags": {"loss": series}, "progress": {}}})
+
+        patch_backend(monkeypatch, handler)
+        mcp = create_server()
+        result = run(mcp.call_tool("get_task_metrics", {"task_id": "t1"}))
+        import json as _json
+        data = _json.loads(tool_text(result))
+        assert len(data["tags"]["loss"]) == 5
+
+
+TASKS_FIXTURE = {
+    "status": "success",
+    "data": {
+        "tasks": [
+            {"id": "old-ok", "status": "FINISHED", "lane": "compute", "returncode": 0,
+             "created_at": 1.0, "metadata": {"train_type": "sd-lora", "command": ["x"] * 50}},
+            {"id": "old-bad", "status": "FAILED", "lane": "compute", "returncode": 1,
+             "created_at": 2.0, "metadata": {"train_type": "anima-lora", "error": "exit 1", "last_log_lines": ["x"] * 500}},
+            {"id": "now-running", "status": "RUNNING", "lane": "compute",
+             "created_at": 3.0, "metadata": {"train_type": "anima-lora"}},
+        ]
+    },
+}
+
+
+class TestListTasks:
+    def _mcp(self, monkeypatch):
+        patch_backend(monkeypatch, lambda req: httpx.Response(200, json=TASKS_FIXTURE))
+        return create_server()
+
+    def test_compact_fields_and_default_mix(self, monkeypatch):
+        import json as _json
+        mcp = self._mcp(monkeypatch)
+        data = _json.loads(tool_text(run(mcp.call_tool("list_tasks", {}))))
+        ids = [t["id"] for t in data["tasks"]]
+        assert "now-running" in ids and "old-bad" in ids
+        for t in data["tasks"]:
+            assert "command" not in t.get("metadata", {}) and "metadata" not in t
+            assert set(t) <= {"id", "status", "lane", "returncode", "created_at", "finished_at", "train_type", "error"}
+        bad = next(t for t in data["tasks"] if t["id"] == "old-bad")
+        assert bad["train_type"] == "anima-lora" and bad["error"] == "exit 1"
+
+    def test_status_filters(self, monkeypatch):
+        import json as _json
+        mcp = self._mcp(monkeypatch)
+        active = _json.loads(tool_text(run(mcp.call_tool("list_tasks", {"status": "active"}))))
+        assert [t["id"] for t in active["tasks"]] == ["now-running"]
+        finished = _json.loads(tool_text(run(mcp.call_tool("list_tasks", {"status": "finished"}))))
+        assert {t["id"] for t in finished["tasks"]} == {"old-ok", "old-bad"}
+
+    def test_limit_keeps_most_recent(self, monkeypatch):
+        import json as _json
+        mcp = self._mcp(monkeypatch)
+        data = _json.loads(tool_text(run(mcp.call_tool("list_tasks", {"status": "all", "limit": 2}))))
+        assert [t["id"] for t in data["tasks"]] == ["old-bad", "now-running"]
+
+
+class TestGetTaskStatus:
+    def test_found(self, monkeypatch):
+        import json as _json
+        patch_backend(monkeypatch, lambda req: httpx.Response(200, json=TASKS_FIXTURE))
+        mcp = create_server()
+        data = _json.loads(tool_text(run(mcp.call_tool("get_task_status", {"task_id": "now-running"}))))
+        assert data["status"] == "RUNNING"
+
+    def test_unknown_task_id(self, monkeypatch):
+        patch_backend(monkeypatch, lambda req: httpx.Response(200, json=TASKS_FIXTURE))
+        mcp = create_server()
+        with pytest.raises(ToolError, match="未知任务"):
+            run(mcp.call_tool("get_task_status", {"task_id": "nope"}))
