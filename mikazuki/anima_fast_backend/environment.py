@@ -327,6 +327,18 @@ def _anima_expected_for_platform(platform: str | None = None) -> dict:
     return expected
 
 
+def _terminate_and_reap(process: subprocess.Popen, timeout_seconds: float = 5.0) -> None:
+    if process.poll() is not None:
+        process.wait()
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
 def _run_streaming_once(
     command: list[str],
     cwd: Path,
@@ -383,27 +395,34 @@ def _run_streaming_once(
     unknown_certificate_issuer = False
     reader_error: BaseException | None = None
     silent_since = time.monotonic()
-    while True:
+    try:
+        while True:
+            try:
+                line = output.get(timeout=heartbeat_seconds)
+            except queue.Empty:
+                silent = int(time.monotonic() - silent_since)
+                _append(log, f"[wait] no output for {silent}s; still running: {Path(command[0]).name}")
+                continue
+            if line is None:
+                break
+            if isinstance(line, BaseException):
+                reader_error = line
+                continue
+            silent_since = time.monotonic()
+            clean_line = line.rstrip("\r\n")
+            if "unknownissuer" in clean_line.lower():
+                unknown_certificate_issuer = True
+            _append(log, clean_line)
+        if reader_error is not None:
+            raise reader_error
+    except BaseException:
         try:
-            line = output.get(timeout=heartbeat_seconds)
-        except queue.Empty:
-            silent = int(time.monotonic() - silent_since)
-            _append(log, f"[wait] no output for {silent}s; still running: {Path(command[0]).name}")
-            continue
-        if line is None:
-            break
-        if isinstance(line, BaseException):
-            reader_error = line
-            continue
-        silent_since = time.monotonic()
-        clean_line = line.rstrip("\r\n")
-        if "unknownissuer" in clean_line.lower():
-            unknown_certificate_issuer = True
-        _append(log, clean_line)
+            _terminate_and_reap(completed)
+        except BaseException:
+            pass
+        raise
     returncode = completed.wait()
     _append(log, f"[exit] returncode={returncode}")
-    if reader_error is not None:
-        raise reader_error
     if returncode != 0:
         if unknown_certificate_issuer:
             _append(log, "[hint] HTTPS certificate verification failed (UnknownIssuer).")

@@ -602,62 +602,76 @@ class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
         self.assertTrue(any(line.startswith("[wait]") for line in lines))
         self.assertIn("[exit] returncode=0", lines)
 
-    def test_install_streaming_propagates_reader_errors_and_queues_sentinel(self):
-        queue_instances = []
+    def test_install_streaming_reaps_live_process_before_propagating_callback_errors(self):
+        for failure_source in ("reader", "log"):
+            with self.subTest(failure_source=failure_source):
+                original_error = (
+                    OSError("simulated read failure")
+                    if failure_source == "reader"
+                    else ValueError("simulated log failure")
+                )
+                events = []
+                process_holder = {}
 
-        class _InspectableQueue:
-            def __init__(self):
-                self.items = []
-                self.history = []
-                queue_instances.append(self)
+                class _FakeStdout:
+                    def __init__(self):
+                        self.reads = 0
 
-            def put(self, item):
-                self.items.append(item)
-                self.history.append(item)
+                    def readline(self):
+                        if failure_source == "reader":
+                            raise original_error
+                        self.reads += 1
+                        return "output\n" if self.reads == 1 else ""
 
-            def get(self, timeout=None):
-                if not self.items:
-                    raise AssertionError("reader exited without queueing a result")
-                return self.items.pop(0)
+                class _LiveProcess:
+                    def __init__(self, *args, **kwargs):
+                        self.stdout = _FakeStdout()
+                        self.killed = False
+                        self.reaped = False
+                        process_holder["process"] = self
 
-        class _ImmediateThread:
-            def __init__(self, target, daemon):
-                self.target = target
+                    def poll(self):
+                        return None if not self.reaped else -9
 
-            def start(self):
-                try:
-                    self.target()
-                except Exception:
-                    pass
+                    def terminate(self):
+                        events.append("terminate")
 
-        class _BrokenStdout:
-            def readline(self):
-                raise OSError("simulated read failure")
+                    def kill(self):
+                        events.append("kill")
+                        self.killed = True
 
-        class _FakeProc:
-            def __init__(self, *args, **kwargs):
-                self.stdout = _BrokenStdout()
+                    def wait(self, timeout=None):
+                        events.append(("wait", timeout))
+                        if not self.killed:
+                            if timeout is None:
+                                raise AssertionError(
+                                    "blocking wait called while subprocess is still alive"
+                                )
+                            raise subprocess.TimeoutExpired(["uv"], timeout)
+                        self.reaped = True
+                        return -9
 
-            def wait(self):
-                return 0
+                def log(line):
+                    if failure_source == "log" and line == "output":
+                        raise original_error
 
-        with tempfile.TemporaryDirectory() as td, \
-            mock.patch(
-                "mikazuki.anima_fast_backend.environment.queue.Queue",
-                _InspectableQueue,
-            ), \
-            mock.patch(
-                "mikazuki.anima_fast_backend.environment.threading.Thread",
-                _ImmediateThread,
-            ), \
-            mock.patch(
-                "mikazuki.anima_fast_backend.environment.subprocess.Popen",
-                _FakeProc,
-            ):
-            with self.assertRaisesRegex(OSError, "simulated read failure"):
-                _run_streaming_once(["uv", "pip", "install"], Path(td), lambda _line: None)
+                with tempfile.TemporaryDirectory() as td, mock.patch(
+                    "mikazuki.anima_fast_backend.environment.subprocess.Popen",
+                    _LiveProcess,
+                ):
+                    with self.assertRaises(type(original_error)) as raised:
+                        _run_streaming_once(
+                            ["uv", "pip", "install"],
+                            Path(td),
+                            log,
+                            heartbeat_seconds=0.01,
+                        )
 
-        self.assertIn(None, queue_instances[0].history)
+                self.assertIs(raised.exception, original_error)
+                self.assertEqual(events[0], "terminate")
+                self.assertIsNotNone(events[1][1])
+                self.assertEqual(events[2:], ["kill", ("wait", None)])
+                self.assertTrue(process_holder["process"].reaped)
 
     def test_install_streaming_uses_windows_system_certificates_by_default(self):
         from mikazuki.anima_fast_backend.environment import _run_streaming_once
