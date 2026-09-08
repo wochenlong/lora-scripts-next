@@ -459,7 +459,7 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
     cache_latents = _truthy(config.get("use_vae_cache"))
     cache_text_encoder = _truthy(config.get("use_text_cache"))
     cache_llm_adapter_outputs = _truthy(
-        config.get("cache_llm_adapter_outputs", True)
+        config.get("cache_llm_adapter_outputs", False)
     )
     skip_cache_check = _truthy(config.get("skip_cache_check"))
     resized_dir = _resolve(config.get("resized_image_dir") or config.get("source_image_dir"), runtime.lora_next_root)

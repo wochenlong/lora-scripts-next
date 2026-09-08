@@ -571,7 +571,7 @@ class PreflightLauncherTests(unittest.TestCase):
     def _run_text_cache_preflight(
         self,
         *,
-        cache_llm_adapter_outputs: bool,
+        cache_llm_adapter_outputs: bool | None,
         adapter_cache: bool,
     ):
         import torch
@@ -607,19 +607,22 @@ class PreflightLauncherTests(unittest.TestCase):
                 )
             save_file(tensors, cache / "a_anima_te.safetensors")
 
+            config = {
+                "pretrained_model_name_or_path": str(root / "model.safetensors"),
+                "vae": str(root / "vae.safetensors"),
+                "qwen3": str(root / "qwen.safetensors"),
+                "train_data_dir": str(dataset),
+                "resized_image_dir": str(resized),
+                "lora_cache_dir": str(cache),
+                "use_text_cache": True,
+                "torch_compile": False,
+                "attn_mode": "torch",
+            }
+            if cache_llm_adapter_outputs is not None:
+                config["cache_llm_adapter_outputs"] = cache_llm_adapter_outputs
+
             return run_preflight(
-                {
-                    "pretrained_model_name_or_path": str(root / "model.safetensors"),
-                    "vae": str(root / "vae.safetensors"),
-                    "qwen3": str(root / "qwen.safetensors"),
-                    "train_data_dir": str(dataset),
-                    "resized_image_dir": str(resized),
-                    "lora_cache_dir": str(cache),
-                    "use_text_cache": True,
-                    "cache_llm_adapter_outputs": cache_llm_adapter_outputs,
-                    "torch_compile": False,
-                    "attn_mode": "torch",
-                },
+                config,
                 runtime,
                 lambda _runtime: ProbeFacts(
                     "3.13.11",
@@ -887,6 +890,26 @@ class PreflightLauncherTests(unittest.TestCase):
                 )
 
                 self.assertTrue(result.ok, result.errors)
+
+    def test_preflight_missing_cache_mode_accepts_plain_text_cache(self):
+        result = self._run_text_cache_preflight(
+            cache_llm_adapter_outputs=None,
+            adapter_cache=False,
+        )
+
+        self.assertTrue(result.ok, result.errors)
+
+    def test_preflight_missing_cache_mode_rejects_adapter_text_cache(self):
+        result = self._run_text_cache_preflight(
+            cache_llm_adapter_outputs=None,
+            adapter_cache=True,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("use_text_cache=true" in error for error in result.errors),
+            result.errors,
+        )
 
     def test_preflight_rejects_incomplete_v117_cache_sets(self):
         import numpy as np
