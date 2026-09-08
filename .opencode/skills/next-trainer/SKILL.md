@@ -32,7 +32,10 @@ python3 $NT stop                   # ⚠️ SIGTERM 停止应用，会中断训�
 
 ```bash
 NT=.opencode/skills/next-trainer/scripts/nt.py   # 路径以实际 skill 安装位置为准
+python3 $NT --help                               # 全部子命令+一句话说明（自描述，不用翻脚本）
 python3 $NT schemas                              # 1. 查目标训练页的参数字段/默认值
+python3 $NT params sd3-lora                      #    或：单页字段紧凑表（name/default/description）
+python3 $NT search learning_rate                 #    或：跨全部 schema + 文档聚合检索关键字
 python3 $NT validate anima-lora config.json      # 2. 校验配置，有错改了再验
 python3 $NT dataset-validate /path/dataset.toml  # 3. 配了 dataset_config 时校验数据集 toml
 python3 $NT gpu-status                           # 4. 看各卡实时显存，决定 gpu_ids
@@ -65,7 +68,9 @@ python3 $NT outputs <task_id>                    # 产出的 safetensors 清单
   （会占用 GPU、杀死训练进程或停止整个应用）。
 - 已有任务在跑时 submit 会被闸门拦下；用户确认排队后加 `--confirm-queue` 重试。
 - 数据集大文件投递走 ssh/rsync，本技能只操作已在服务器上的路径。
-- 参数含义不清时先读 `reference/` 文档，再向用户提问。
+- **schemas 原文很大**：优先用 `params <page>`（紧凑字段表，公共字段在 `shared` 页）
+  和 `search <关键字>`（跨 schema + SKILL.md + reference/ 聚合检索，一次定位参数含义与文档出处）。
+- 参数含义不清时先读 `reference/` 文档（`search` 命中后按行号 Read），再向用户提问。
 
 ## 实战坑位（复现 issue 踩出，别再踩）
 

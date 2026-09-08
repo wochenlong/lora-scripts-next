@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 import tempfile
 import urllib.error
@@ -166,6 +167,124 @@ def cmd_version(c, a):
 
 def cmd_schemas(c, a):
     return c.request("GET", "/api/schemas/all")
+
+
+# ------------------------------------------------------------ schema helpers
+
+SCHEMA_FIELD_RE = re.compile(r"^\s*(\w+)\s*:\s*Schema\.")
+SKILL_ROOT = Path(__file__).resolve().parent.parent
+
+
+def schema_pages(client: Client) -> list[dict]:
+    data = client.request("GET", "/api/schemas/all")
+    pages = data.get("schemas") if isinstance(data, dict) else data
+    if not isinstance(pages, list):
+        raise ApiError(f"schemas 响应格式异常: {type(data).__name__}")
+    return [p for p in pages if isinstance(p, dict) and p.get("name") and p.get("schema")]
+
+
+def _extract_call_arg(text: str, marker: str, start: int) -> str:
+    """Extract raw arg of .marker( ... ) starting at start, paren-balanced."""
+    i = text.find(marker, start)
+    if i < 0:
+        return ""
+    i += len(marker)
+    depth, j = 1, i
+    while j < len(text) and depth:
+        if text[j] == "(":
+            depth += 1
+        elif text[j] == ")":
+            depth -= 1
+        j += 1
+    return text[i : j - 1].strip() if depth == 0 else ""
+
+
+def extract_schema_fields(schema_text: str) -> list[dict]:
+    """Pull compact field info (name / default / description) out of schema JS text."""
+    fields = []
+    for line in schema_text.splitlines():
+        m = SCHEMA_FIELD_RE.match(line)
+        if not m:
+            continue
+        name = m.group(1)
+        body = line[m.end():]
+        field = {"name": name}
+        default = _extract_call_arg(body, ".default(", 0)
+        if default:
+            field["default"] = default[:120]
+        dm = re.search(r"\.description\(\s*([\"'])(.*?)\1", body)
+        if dm:
+            field["description"] = dm.group(2)
+        if ".required()" in body:
+            field["required"] = True
+        if ".hidden()" in body:
+            field["hidden"] = True
+        um = re.search(r"Schema\.union\(\[(.*?)\]\)", body)
+        if um:
+            choices = re.findall(r"[\"']([^\"']+)[\"']", um.group(1))
+            if choices:
+                field["choices"] = choices
+        fields.append(field)
+    return fields
+
+
+def find_page(pages: list[dict], name: str) -> dict:
+    for p in pages:
+        if p["name"] == name:
+            return p
+    lowered = name.lower()
+    hits = [p for p in pages if lowered in p["name"].lower()]
+    if len(hits) == 1:
+        return hits[0]
+    names = [p["name"] for p in pages]
+    raise ApiError(f"页面 {name!r} 不唯一或不存在（命中 {len(hits)} 个）；可选: {names}")
+
+
+def cmd_params(c, a):
+    pages = schema_pages(c)
+    if a.page == "":
+        return {"pages": [p["name"] for p in pages], "hint": "params <page> 看字段紧凑表，--filter 过滤"}
+    page = find_page(pages, a.page)
+    fields = extract_schema_fields(page["schema"])
+    seen = set()
+    fields = [f for f in fields if (key := (f["name"], f.get("default"), f.get("description"))) not in seen and not seen.add(key)]
+    if a.filter:
+        kw = a.filter.lower()
+        fields = [f for f in fields if kw in json.dumps(f, ensure_ascii=False).lower()]
+    return {"page": page["name"], "count": len(fields), "fields": fields}
+
+
+def cmd_search(c, a):
+    kw = a.keyword.lower()
+    out = {"keyword": a.keyword}
+
+    param_hits = []
+    seen = set()
+    for p in schema_pages(c):
+        for f in extract_schema_fields(p["schema"]):
+            key = (p["name"], f["name"], f.get("default"), f.get("description"))
+            if key in seen:
+                continue
+            seen.add(key)
+            if kw in json.dumps(f, ensure_ascii=False).lower():
+                param_hits.append({"page": p["name"], **f})
+                if len(param_hits) >= a.max_matches:
+                    break
+    out["schema_params"] = param_hits
+
+    doc_hits = []
+    docs = [SKILL_ROOT / "SKILL.md"] + sorted((SKILL_ROOT / "reference").glob("*.md"))
+    for doc in docs:
+        if not doc.is_file():
+            continue
+        for lineno, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), 1):
+            if kw in line.lower():
+                doc_hits.append({"file": doc.name, "line": lineno, "text": line.strip()[:200]})
+                if len(doc_hits) >= a.max_matches:
+                    break
+    out["docs"] = doc_hits
+    out["hint"] = "字段详情: params <page> --filter <关键字>；文档原文: Read reference/<file>"
+    return out
 
 
 def cmd_presets(c, a):
@@ -512,39 +631,49 @@ def build_parser() -> argparse.ArgumentParser:
         p.set_defaults(fn=fn)
         return p
 
-    add("version", cmd_version)
-    add("schemas", cmd_schemas, help="全部训练页参数 schema")
-    add("presets", cmd_presets)
-    add("saved-params", cmd_saved_params)
-    add("gpus", cmd_gpus)
+    add("version", cmd_version, help="后端版本号")
+    add("schemas", cmd_schemas, help="全部训练页参数 schema 原文（很大，建议用 params/search）")
+    p = add("params", cmd_params, help="训练页字段紧凑表：params <page> [--filter 关键字]；不带 page 列出全部页面")
+    p.add_argument("page", nargs="?", default="")
+    p.add_argument("--filter", default="", help="按字段名/描述/默认值过滤")
+    p = add("search", cmd_search, help="聚合检索：跨全部 schema 参数 + SKILL.md + reference/ 文档")
+    p.add_argument("keyword")
+    p.add_argument("--max-matches", type=int, default=50)
+    add("presets", cmd_presets, help="训练预设清单")
+    add("saved-params", cmd_saved_params, help="WebUI 保存的参数")
+    add("gpus", cmd_gpus, help="GPU 列表")
     add("gpu-status", cmd_gpu_status, help="各 GPU 实时显存占用")
 
-    p = add("tasks", cmd_tasks)
+    p = add("tasks", cmd_tasks, help="任务列表（紧凑版）")
     p.add_argument("--status", choices=["", "active", "finished", "all"], default="")
     p.add_argument("--limit", type=int, default=10)
-    add("last-task", cmd_last_task)
+    add("last-task", cmd_last_task, help="最近一次任务")
 
-    for name, fn in (("status", cmd_status), ("config", cmd_config), ("outputs", cmd_outputs),
-                     ("previews", cmd_previews), ("terminate", cmd_terminate),
-                     ("resume", cmd_resume), ("retry", cmd_retry)):
-        p = add(name, fn)
+    for name, fn, helptext in (("status", cmd_status, "任务状态原文"),
+                               ("config", cmd_config, "任务完整 autosave 配置（复现/对照用）"),
+                               ("outputs", cmd_outputs, "产出的 safetensors 清单"),
+                               ("previews", cmd_previews, "预览图文件名清单"),
+                               ("terminate", cmd_terminate, "⚠️ 终止任务，先获得用户确认"),
+                               ("resume", cmd_resume, "⚠️ 恢复任务，先获得用户确认"),
+                               ("retry", cmd_retry, "⚠️ 重试任务，先获得用户确认")):
+        p = add(name, fn, help=helptext)
         p.add_argument("task_id")
 
-    p = add("metrics", cmd_metrics)
+    p = add("metrics", cmd_metrics, help="loss 曲线数据点")
     p.add_argument("task_id")
     p.add_argument("--max-points", type=int, default=50)
 
-    p = add("log-tail", cmd_log_tail)
+    p = add("log-tail", cmd_log_tail, help="日志尾部（排错加大 --limit）")
     p.add_argument("task_id")
     p.add_argument("--limit", type=int, default=200)
 
-    p = add("grep-log", cmd_grep_log)
+    p = add("grep-log", cmd_grep_log, help="关键词搜日志")
     p.add_argument("task_id")
     p.add_argument("pattern")
     p.add_argument("--limit", type=int, default=2000)
     p.add_argument("--max-matches", type=int, default=50)
 
-    p = add("overview", cmd_overview)
+    p = add("overview", cmd_overview, help="状态+最新loss+进度+日志尾+预览数 一次拿全")
     p.add_argument("task_id")
     p.add_argument("--log-lines", type=int, default=30)
 
@@ -553,7 +682,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("name", nargs="?", default="")
     p.add_argument("--out", default="")
 
-    p = add("validate", cmd_validate)
+    p = add("validate", cmd_validate, help="校验训练配置（不提交）")
     p.add_argument("page_train_type")
     p.add_argument("config", help="JSON 文件路径 / '-' 读 stdin / 内联 JSON")
 
@@ -566,7 +695,7 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--overrides", default="", help="JSON 文件路径 / '-' / 内联 JSON")
     p.add_argument("--confirm-queue", action="store_true")
 
-    p = add("dataset-scan", cmd_dataset_scan)
+    p = add("dataset-scan", cmd_dataset_scan, help="数据集目录图片+caption 清单")
     p.add_argument("path")
     p = add("dataset-validate", cmd_dataset_validate, help="校验 kohya 格式数据集 toml")
     p.add_argument("path")
@@ -575,14 +704,14 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("path")
     p.add_argument("--model", default="wd14-convnextv2-v2")
     p.add_argument("--threshold", type=float, default=0.35)
-    add("tagger-status", cmd_tagger_status)
+    add("tagger-status", cmd_tagger_status, help="打标任务状态")
 
-    p = add("browse", cmd_browse)
+    p = add("browse", cmd_browse, help="服务器文件浏览")
     p.add_argument("path", nargs="?", default="")
     p.add_argument("--mode", choices=["folder", "file"], default="folder")
     p.add_argument("--name-filter", default="")
 
-    p = add("list-files", cmd_list_files)
+    p = add("list-files", cmd_list_files, help="列出可选择的文件（模型/数据集等）")
     p.add_argument("pick_type", help="model-file / model-saved-file / train-dir 等")
 
     add("health", cmd_health, help="探活：alive=false 时退出码为 1")
