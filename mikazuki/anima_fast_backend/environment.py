@@ -197,6 +197,24 @@ def _resolve_child(root: Path, child: Path) -> Path:
     return resolved
 
 
+def _supported_runtime(
+    platform: str | None = None,
+    machine: str | None = None,
+) -> tuple[str, str]:
+    platform = platform or sys.platform
+    machine = (machine or platform_module.machine()).lower()
+    if platform == "win32" and machine in {"amd64", "x86_64"}:
+        return "windows", "x86_64"
+    if platform.startswith("linux") and machine in {"amd64", "x86_64"}:
+        return "linux", "x86_64"
+    if platform.startswith("linux") and machine in {"aarch64", "arm64"}:
+        return "linux", "aarch64"
+    raise RuntimeError(
+        "Anima Fast CUDA 13.2 runtime supports only Windows x86_64, "
+        f"Linux x86_64, and Linux aarch64; got {platform} {machine}"
+    )
+
+
 def build_environment_install_plan(
     project_root: Path,
     layout: ExtensionLayout,
@@ -208,11 +226,12 @@ def build_environment_install_plan(
     root = project_root.resolve()
     extension_root = _resolve_child(root, layout.root)
     python_dir = _resolve_child(root, root / ".python")
-    if sys.platform == "win32":
+    runtime_platform, runtime_arch = _supported_runtime()
+    if runtime_platform == "windows":
         base_python = python_dir / "cpython-3.13.13-windows-x86_64-none" / "python.exe"
         venv_python = extension_root / ".venv" / "Scripts" / "python.exe"
     else:
-        base_python = python_dir / "cpython-3.13.13-linux-x86_64-gnu" / "bin" / "python3"
+        base_python = python_dir / f"cpython-3.13.13-linux-{runtime_arch}-gnu" / "bin" / "python3"
         venv_python = extension_root / ".venv" / "bin" / "python"
     env_dir = root / ENVIRONMENT_DIR
     constraints = env_dir / ANIMA_CONSTRAINTS.name
@@ -348,16 +367,21 @@ def _run_streaming_once(
         bufsize=1,
     )
     assert completed.stdout is not None
-    output: queue.Queue[str | None] = queue.Queue()
+    output: queue.Queue[str | BaseException | None] = queue.Queue()
 
     def _pump() -> None:
         assert completed.stdout is not None
-        for raw in iter(completed.stdout.readline, ""):
-            output.put(raw)
-        output.put(None)
+        try:
+            for raw in iter(completed.stdout.readline, ""):
+                output.put(raw)
+        except BaseException as exc:
+            output.put(exc)
+        finally:
+            output.put(None)
 
     threading.Thread(target=_pump, daemon=True).start()
     unknown_certificate_issuer = False
+    reader_error: BaseException | None = None
     silent_since = time.monotonic()
     while True:
         try:
@@ -368,6 +392,9 @@ def _run_streaming_once(
             continue
         if line is None:
             break
+        if isinstance(line, BaseException):
+            reader_error = line
+            continue
         silent_since = time.monotonic()
         clean_line = line.rstrip("\r\n")
         if "unknownissuer" in clean_line.lower():
@@ -375,6 +402,8 @@ def _run_streaming_once(
         _append(log, clean_line)
     returncode = completed.wait()
     _append(log, f"[exit] returncode={returncode}")
+    if reader_error is not None:
+        raise reader_error
     if returncode != 0:
         if unknown_certificate_issuer:
             _append(log, "[hint] HTTPS certificate verification failed (UnknownIssuer).")
@@ -412,9 +441,14 @@ def _uv_command() -> str:
 def _find_base_python(plan: EnvironmentInstallPlan) -> Path:
     if plan.base_python.is_file():
         return plan.base_python
-    patterns = ["cpython-3.13.*-windows-*/python.exe"]
-    if sys.platform != "win32":
-        patterns = ["cpython-3.13.*-linux*/bin/python3", "cpython-3.13.*-linux*/bin/python"]
+    runtime_platform, runtime_arch = _supported_runtime()
+    if runtime_platform == "windows":
+        patterns = ["cpython-3.13.*-windows-x86_64-*/python.exe"]
+    else:
+        patterns = [
+            f"cpython-3.13.*-linux-{runtime_arch}-*/bin/python3",
+            f"cpython-3.13.*-linux-{runtime_arch}-*/bin/python",
+        ]
     for pattern in patterns:
         candidates = sorted(plan.python_install_dir.glob(pattern), reverse=True)
         for candidate in candidates:
@@ -440,6 +474,7 @@ def install_environment(
     task_id: str | None = None,
     progress: ProgressFn | None = None,
 ) -> AuditResult:
+    _supported_runtime()
     task_id = task_id or _install_task_id_from_state(plan.layout)
     facts: dict = {"plan": plan.as_dict(), "phase": "source"}
     if task_id:
@@ -615,6 +650,16 @@ except Exception as exc:
     facts["torch_error"] = repr(exc)
 print(json.dumps(facts, ensure_ascii=False))
 """
+    audit_env = {
+        **os.environ,
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONNOUSERSITE": "1",
+    }
+    if (
+        sys.platform.startswith("linux")
+        and platform_module.machine().lower() in {"aarch64", "arm64"}
+    ):
+        audit_env["BNB_CUDA_VERSION"] = "130"
     completed = subprocess.run(
         [str(python), "-c", script],
         cwd=str(cwd),
@@ -623,7 +668,7 @@ print(json.dumps(facts, ensure_ascii=False))
         encoding="utf-8",
         errors="replace",
         timeout=180,
-        env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONNOUSERSITE": "1"},
+        env=audit_env,
     )
     if completed.returncode != 0:
         return {
