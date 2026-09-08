@@ -366,6 +366,138 @@ def cmd_list_files(c, a):
     return c.request("GET", "/api/get_files", params={"pick_type": a.pick_type})
 
 
+# ---------------------------------------------------------------- lifecycle
+
+
+def _port_from_base_url(base_url: str) -> int:
+    from urllib.parse import urlparse
+
+    parsed = urlparse(base_url)
+    return parsed.port or (443 if parsed.scheme == "https" else 80)
+
+
+def _find_pid_by_port(port: int) -> int | None:
+    """Listener pid bound to the port. POSIX via ss, Windows via netstat."""
+    import subprocess
+
+    if sys.platform == "win32":
+        try:
+            out = subprocess.run(
+                ["netstat", "-ano"], capture_output=True, text=True, timeout=10
+            ).stdout
+        except (OSError, subprocess.SubprocessError):
+            return None
+        for line in out.splitlines():
+            parts = line.split()
+            if (
+                len(parts) >= 5
+                and parts[0].startswith("TCP")
+                and parts[1].endswith(f":{port}")
+                and parts[3].upper() == "LISTENING"
+            ):
+                return int(parts[4])
+        return None
+    try:
+        out = subprocess.run(["ss", "-tlnp"], capture_output=True, text=True, timeout=10).stdout
+    except (OSError, subprocess.SubprocessError):
+        return None
+    import re
+
+    for line in out.splitlines():
+        if f":{port} " in line or f":{port}\t" in line:
+            match = re.search(r"pid=(\d+)", line)
+            if match:
+                return int(match.group(1))
+    return None
+
+
+def _repo_root(a) -> Path:
+    override = getattr(a, "repo", "") or os.environ.get("NT_REPO", "")
+    if override:
+        return Path(override)
+    # default: <repo>/.opencode/skills/next-trainer/scripts/nt.py
+    candidate = Path(__file__).resolve().parents[4]
+    if (candidate / "run_gui.sh").is_file():
+        return candidate
+    raise ApiError("定位不到仓库根目录（run_gui.sh 不在默认推导位置），请用 --repo 或 NT_REPO 指定")
+
+
+def cmd_health(c, a):
+    """探活：API 有响应即视为活着。alive=false 时退出码为 1。"""
+    try:
+        data = c.request("GET", "/api/version")
+        return {"alive": True, "version": data.get("version")}
+    except ApiError as exc:
+        return {"alive": False, "reason": str(exc)}
+
+
+def cmd_start(c, a):
+    """后台启动应用（run_gui.sh / run_gui.bat）。已活着则直接返回。"""
+    alive = cmd_health(c, a)
+    if alive["alive"]:
+        return {"started": False, "already_running": True, "version": alive.get("version")}
+
+    import subprocess
+
+    root = _repo_root(a)
+    script = root / ("run_gui.bat" if sys.platform == "win32" else "run_gui.sh")
+    if not script.is_file():
+        raise ApiError(f"启动脚本不存在: {script}")
+    log_path = root / "logs" / "gui-agent.log"
+    log_path.parent.mkdir(parents=True, exist_ok=True)
+    log_file = open(log_path, "ab")
+
+    if sys.platform == "win32":
+        proc = subprocess.Popen(
+            ["cmd", "/c", str(script)],
+            cwd=str(root),
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            creationflags=subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "DETACHED_PROCESS", 0),
+        )
+    else:
+        proc = subprocess.Popen(
+            ["bash", str(script)],
+            cwd=str(root),
+            stdout=log_file,
+            stderr=subprocess.STDOUT,
+            stdin=subprocess.DEVNULL,
+            start_new_session=True,
+        )
+    return {
+        "started": True,
+        "pid": proc.pid,
+        "log": str(log_path),
+        "hint": "首次启动可能装依赖要数分钟；用 health 轮询直到 alive=true",
+    }
+
+
+def cmd_stop(c, a):
+    """停止应用：按 base-url 端口找监听进程，发 SIGTERM（等价 Ctrl+C，应用会自清理子进程）。
+
+    ⚠️ 会中断正在进行的训练，调用前必须获得用户明确确认。
+    """
+    port = _port_from_base_url(c.base_url)
+    pid = _find_pid_by_port(port)
+    if pid is None:
+        return {"stopped": False, "reason": f"端口 {port} 没有监听进程（应用未在运行？）"}
+
+    import signal
+    import time
+
+    os.kill(pid, signal.SIGTERM)
+    # Wait for the port to be released rather than the pid to vanish: the pid
+    # may linger as an unreaped zombie, but the app closing its listener is
+    # the semantically relevant "stopped" signal.
+    deadline = time.monotonic() + a.wait
+    while time.monotonic() < deadline:
+        if _find_pid_by_port(port) is None:
+            return {"stopped": True, "pid": pid}
+        time.sleep(0.5)
+    raise ApiError(f"SIGTERM 后 {a.wait}s 内端口 {port} 仍被进程 {pid} 占用；请人工检查后决定是否强杀")
+
+
+
 # ---------------------------------------------------------------- entry
 
 
@@ -453,6 +585,13 @@ def build_parser() -> argparse.ArgumentParser:
     p = add("list-files", cmd_list_files)
     p.add_argument("pick_type", help="model-file / model-saved-file / train-dir 等")
 
+    add("health", cmd_health, help="探活：alive=false 时退出码为 1")
+    p = add("start", cmd_start, help="后台启动应用（run_gui.sh/bat）")
+    p.add_argument("--repo", default="", help="仓库根目录（默认从 skill 位置推导）")
+    p = add("stop", cmd_stop, help="⚠️ 停止应用，会中断训练，先获得用户确认")
+    p.add_argument("--wait", type=int, default=15, help="SIGTERM 后等待退出的秒数")
+    p.add_argument("--repo", default="", help="保留参数，与 start 对齐")
+
     return parser
 
 
@@ -465,6 +604,8 @@ def main(argv=None) -> int:
         print(json.dumps({"error": str(exc)}, ensure_ascii=False), file=sys.stderr)
         return 1
     print(json.dumps(result, ensure_ascii=False, indent=2))
+    if isinstance(result, dict) and result.get("alive") is False:
+        return 1
     return 0
 
 

@@ -184,5 +184,94 @@ class NtCliTests(unittest.TestCase):
         self.assertEqual(json.loads(err)["error"], "boom")
 
 
+class LifecycleTests(unittest.TestCase):
+    def setUp(self):
+        self.posts = []
+        self.routes = {}
+        self.server = ThreadingHTTPServer(("127.0.0.1", 0), make_handler(self.routes, self.posts))
+        self.thread = threading.Thread(target=self.server.serve_forever, daemon=True)
+        self.thread.start()
+        self.port = self.server.server_address[1]
+        self.base_url = f"http://127.0.0.1:{self.port}"
+
+    def tearDown(self):
+        self.server.shutdown()
+        self.server.server_close()
+
+    def run_cli(self, *argv):
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = nt.main(["--base-url", self.base_url, *argv])
+        return code, out.getvalue(), err.getvalue()
+
+    def test_health_alive(self):
+        self.routes[("GET", "/api/version")] = (200, {"status": "success", "data": {"version": "3.0.0"}})
+        code, out, _ = self.run_cli("health")
+        self.assertEqual(code, 0)
+        self.assertTrue(json.loads(out)["alive"])
+
+    def test_health_dead_exit_1(self):
+        self.server.shutdown()
+        self.server.server_close()
+        code, out, _ = self.run_cli("health")
+        self.assertEqual(code, 1)
+        self.assertFalse(json.loads(out)["alive"])
+
+    def test_start_short_circuits_when_already_running(self):
+        self.routes[("GET", "/api/version")] = (200, {"status": "success", "data": {"version": "3.0.0"}})
+        code, out, _ = self.run_cli("start", "--repo", "/nonexistent")
+        self.assertEqual(code, 0)
+        data = json.loads(out)
+        self.assertFalse(data["started"])
+        self.assertTrue(data["already_running"])
+
+    @unittest.skipIf(sys.platform == "win32", "POSIX signal semantics")
+    def test_stop_terminates_listener_process(self):
+        import socket
+        import subprocess
+
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        sleeper = subprocess.Popen(
+            [sys.executable, "-m", "http.server", str(port), "--bind", "127.0.0.1"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        try:
+            import time
+
+            for _ in range(50):
+                if nt._find_pid_by_port(port) == sleeper.pid:
+                    break
+                time.sleep(0.1)
+            else:
+                self.fail("could not discover sleeper listener pid")
+
+            out, err = io.StringIO(), io.StringIO()
+            with redirect_stdout(out), redirect_stderr(err):
+                code = nt.main(["--base-url", f"http://127.0.0.1:{port}", "stop", "--wait", "10"])
+            self.assertEqual(code, 0, err.getvalue())
+            self.assertTrue(json.loads(out.getvalue())["stopped"])
+            self.assertEqual(sleeper.wait(timeout=5), -15)
+        finally:
+            if sleeper.poll() is None:
+                sleeper.kill()
+                sleeper.wait()
+
+    def test_stop_reports_when_nothing_listening(self):
+        import socket
+
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            port = s.getsockname()[1]
+        out, err = io.StringIO(), io.StringIO()
+        with redirect_stdout(out), redirect_stderr(err):
+            code = nt.main(["--base-url", f"http://127.0.0.1:{port}", "stop"])
+        self.assertEqual(code, 0)
+        self.assertFalse(json.loads(out.getvalue())["stopped"])
+
+
 if __name__ == "__main__":
     unittest.main()
+

@@ -14,6 +14,20 @@ description: 操控 Next Trainer（lora-scripts-next）训练管理器——查�
   （远程机器走 ssh 端口转发或直接 LAN URL）。
 - 主 app API 无鉴权，只在本机/可信网络使用。
 
+## 应用生命周期（本机操作，不走 API）
+
+```bash
+python3 $NT health                 # 探活：alive=false 时退出码 1（可直接进脚本逻辑）
+python3 $NT start                  # 后台拉起 run_gui.sh（Windows 用 run_gui.bat），
+                                   # 日志写到 <repo>/logs/gui-agent.log；已活着则直接返回
+python3 $NT start --repo /path/to/lora-scripts-next   # skill 装在全局位置时指定仓库根
+python3 $NT stop                   # ⚠️ SIGTERM 停止应用，会中断训练，先获得用户确认
+```
+
+- `start` 首次运行可能装依赖要数分钟，用 `health` 轮询直到 `alive=true`。
+- `stop` 以"端口释放"为停止判据，应用会自清理 TensorBoard 等子进程；
+  超时未退出会提示人工处理，不要自动强杀。
+
 ## 标准训练流程
 
 ```bash
@@ -47,8 +61,8 @@ python3 $NT outputs <task_id>                    # 产出的 safetensors 清单
 
 ## 红线
 
-- **submit / submit-preset / terminate / resume / retry 必须先获得用户明确确认**
-  （会占用或杀死 GPU 任务）。
+- **submit / submit-preset / terminate / resume / retry / stop 必须先获得用户明确确认**
+  （会占用 GPU、杀死训练进程或停止整个应用）。
 - 已有任务在跑时 submit 会被闸门拦下；用户确认排队后加 `--confirm-queue` 重试。
 - 数据集大文件投递走 ssh/rsync，本技能只操作已在服务器上的路径。
 - 参数含义不清时先读 `reference/` 文档，再向用户提问。
@@ -72,7 +86,8 @@ python3 $NT outputs <task_id>                    # 产出的 safetensors 清单
       "*nt.py submit*": "ask",
       "*nt.py terminate*": "ask",
       "*nt.py resume*": "ask",
-      "*nt.py retry*": "ask"
+      "*nt.py retry*": "ask",
+      "*nt.py stop*": "ask"
     }
   }
 }
