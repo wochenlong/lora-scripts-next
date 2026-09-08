@@ -16,6 +16,9 @@ from .settings import RuntimeConfig
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".avif"}
 DIT_BLOCK_RE = re.compile(r"^blocks\.(\d+)\.")
 DIT_PREFIXES = ("net.", "model.diffusion_model.")
+DIT_SHARD_RE = re.compile(
+    r"^(?P<prefix>.*)-(?P<index>\d{5})-of-(?P<total>\d{5})\.safetensors$"
+)
 MODEL_CHANNELS_TO_HEADS = {1280: 20, 2048: 16, 5120: 40}
 
 
@@ -55,15 +58,45 @@ class PreflightResult:
 DependencyProbe = Callable[[RuntimeConfig], ProbeFacts]
 
 
+def _dit_checkpoint_files(path: Path) -> list[Path]:
+    match = DIT_SHARD_RE.match(path.name)
+    if not match:
+        return [path]
+
+    prefix = match.group("prefix")
+    total = int(match.group("total"))
+    index = int(match.group("index"))
+    if total < 1 or not 1 <= index <= total:
+        raise ValueError(f"invalid checkpoint shard declaration: {path.name}")
+
+    declared_totals = {
+        int(candidate_match.group("total"))
+        for candidate in path.parent.glob(f"{prefix}-*-of-*.safetensors")
+        if (candidate_match := DIT_SHARD_RE.match(candidate.name))
+        and candidate_match.group("prefix") == prefix
+    }
+    if declared_totals != {total}:
+        raise ValueError(
+            "mixed checkpoint shard totals: "
+            + ", ".join(f"{value:05d}" for value in sorted(declared_totals))
+        )
+
+    files = [
+        path.parent / f"{prefix}-{shard_index:05d}-of-{total:05d}.safetensors"
+        for shard_index in range(1, total + 1)
+    ]
+    missing = next((candidate for candidate in files if not candidate.is_file()), None)
+    if missing is not None:
+        raise ValueError(f"missing checkpoint shard: {missing}")
+    return files
+
+
 def probe_dit_checkpoint(path: Path) -> dict[str, Any] | None:
     if path.suffix.lower() != ".safetensors" or path.stat().st_size < 16:
         return None
     from safetensors import safe_open
 
-    files = [path]
-    shard_match = re.match(r"^(.*)-\d{5}-of-\d{5}(\.safetensors)$", path.name)
-    if shard_match:
-        files = sorted(path.parent.glob(f"{shard_match.group(1)}-*-of-*{shard_match.group(2)}"))
+    files = _dit_checkpoint_files(path)
 
     max_idx = -1
     width: int | None = None
@@ -107,15 +140,6 @@ def read_network_num_blocks(path: Path) -> int | None:
     with safe_open(path, framework="pt", device="cpu") as handle:
         value = (handle.metadata() or {}).get("ss_num_blocks")
     return int(value) if value else None
-
-
-def _resume_network_path(path: Path) -> Path | None:
-    if path.is_file():
-        return path
-    if not path.is_dir() or not path.name.endswith("-state"):
-        return None
-    checkpoint = path.with_name(path.name.removesuffix("-state") + ".safetensors")
-    return checkpoint if checkpoint.is_file() else None
 
 
 def default_dependency_probe(runtime: RuntimeConfig) -> ProbeFacts:
@@ -278,10 +302,26 @@ def _v117_latent_cache_stems(root: Path | None) -> set[str]:
             height = int(match.group(3))
             if width % 8 or height % 8:
                 continue
-            expected_key = f"latents_{height // 8}x{width // 8}"
+            suffix = f"_{height // 8}x{width // 8}"
+            latent_key = f"latents{suffix}"
+            original_size_key = f"original_size{suffix}"
+            crop_ltrb_key = f"crop_ltrb{suffix}"
             with np.load(path, allow_pickle=False) as data:
-                if expected_key in data.files:
-                    valid.add(match.group(1))
+                if not {
+                    latent_key,
+                    original_size_key,
+                    crop_ltrb_key,
+                }.issubset(data.files):
+                    continue
+                latents = data[latent_key]
+                if (
+                    latents.ndim < 3
+                    or latents.shape[-2:] != (height // 8, width // 8)
+                    or data[original_size_key].shape != (2,)
+                    or data[crop_ltrb_key].shape != (4,)
+                ):
+                    continue
+                valid.add(match.group(1))
         except Exception:
             continue
     return valid
@@ -392,14 +432,36 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
         except Exception as exc:
             errors.append(f"invalid Anima DiT checkpoint: {exc}")
 
+    metadata_paths: dict[str, Path] = {}
+    for field in ("network_weights", "resume"):
+        candidate = _resolve(config.get(field), runtime.lora_next_root)
+        if candidate is None:
+            continue
+        if not candidate.exists():
+            errors.append(f"{field} does not exist: {candidate}")
+            continue
+        if field == "network_weights":
+            if not candidate.is_file() or candidate.suffix.lower() != ".safetensors":
+                errors.append(f"network_weights must be a .safetensors file: {candidate}")
+                continue
+            metadata_paths[field] = candidate
+            continue
+        if not candidate.is_dir():
+            errors.append(f"resume must be an Accelerate state directory: {candidate}")
+            continue
+        if not candidate.name.endswith("-state"):
+            errors.append(f"resume must use the supported *-state directory layout: {candidate}")
+            continue
+        companion = candidate.with_name(
+            candidate.name.removesuffix("-state") + ".safetensors"
+        )
+        if not companion.is_file():
+            errors.append(f"resume companion safetensors does not exist: {companion}")
+            continue
+        metadata_paths[field] = companion
+
     if model_arch:
-        for field in ("network_weights", "resume"):
-            candidate = _resolve(config.get(field), runtime.lora_next_root)
-            if candidate is None:
-                continue
-            metadata_path = _resume_network_path(candidate) if field == "resume" else candidate
-            if metadata_path is None or not metadata_path.is_file():
-                continue
+        for field, metadata_path in metadata_paths.items():
             try:
                 trained_blocks = read_network_num_blocks(metadata_path)
             except Exception as exc:
@@ -471,12 +533,21 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
         facts["resized_image_dir"] = str(resized_dir)
     if lora_cache_dir is not None:
         facts["lora_cache_dir"] = str(lora_cache_dir)
-    if not skip_cache_check:
-        expected_stems = (
-            {image.stem for image in _dataset_images(resized_dir)}
-            if resized_dir and resized_dir.is_dir()
-            else set()
-        )
+    cache_enabled = cache_latents or cache_text_encoder
+    resized_images: list[Path] = []
+    if cache_enabled:
+        if resized_dir is None:
+            errors.append("resized_image_dir is required when cache loading is enabled")
+        elif not resized_dir.is_dir():
+            errors.append(f"resized_image_dir does not exist: {resized_dir}")
+        else:
+            resized_images = _dataset_images(resized_dir)
+            if not resized_images:
+                errors.append(
+                    f"resized_image_dir contains no supported images: {resized_dir}"
+                )
+    if not skip_cache_check and resized_images:
+        expected_stems = {image.stem for image in resized_images}
         latent_stems = _v117_latent_cache_stems(lora_cache_dir)
         text_stems = _v117_text_cache_stems(
             lora_cache_dir,

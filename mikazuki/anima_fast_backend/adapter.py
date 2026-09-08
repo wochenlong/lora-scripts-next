@@ -445,15 +445,6 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
         warnings.append("Anima v1.17.1 free-fit bucket requires compile_dynamic_seq; enabled automatically")
     values.setdefault("skip_cache_check", False)
 
-    if truthy(values.get("skip_cache_check")) and any(
-        truthy(values.get(key)) for key in ("use_vae_cache", "use_text_cache")
-    ):
-        for key in ("use_vae_cache", "use_text_cache", "skip_cache_check"):
-            values[key] = False
-        warnings.append(
-            "use_vae_cache/use_text_cache 不能与 skip_cache_check 同时开启；"
-            "已自动关闭缓存读取和跳过检查，改用 live encoding"
-        )
     values.setdefault("log_prefix", "af_")
     values.setdefault("log_tracker_name", "tb")
     if is_empty(values.get("attn_mode")):
