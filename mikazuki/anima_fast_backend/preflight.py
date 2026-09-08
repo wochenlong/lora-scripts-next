@@ -92,7 +92,7 @@ def _dit_checkpoint_files(path: Path) -> list[Path]:
 
 
 def probe_dit_checkpoint(path: Path) -> dict[str, Any] | None:
-    if path.suffix.lower() != ".safetensors" or path.stat().st_size < 16:
+    if path.suffix.lower() != ".safetensors":
         return None
     from safetensors import safe_open
 
@@ -133,13 +133,59 @@ def probe_dit_checkpoint(path: Path) -> dict[str, Any] | None:
 
 
 def read_network_num_blocks(path: Path) -> int | None:
-    if path.suffix.lower() != ".safetensors" or not path.is_file() or path.stat().st_size < 16:
+    if path.suffix.lower() != ".safetensors" or not path.is_file():
         return None
     from safetensors import safe_open
 
     with safe_open(path, framework="pt", device="cpu") as handle:
         value = (handle.metadata() or {}).get("ss_num_blocks")
     return int(value) if value else None
+
+
+def _validate_resume_state(path: Path) -> list[str]:
+    errors: list[str] = []
+    safe_model = path / "model.safetensors"
+    legacy_model = path / "pytorch_model.bin"
+    if safe_model.exists():
+        try:
+            from safetensors import safe_open
+
+            with safe_open(safe_model, framework="pt", device="cpu") as handle:
+                if not list(handle.keys()):
+                    errors.append(
+                        f"resume state model has no tensors: {safe_model}"
+                    )
+        except Exception as exc:
+            errors.append(f"resume state model is invalid: {safe_model}: {exc}")
+    elif not legacy_model.is_file() or legacy_model.stat().st_size == 0:
+        errors.append(
+            "resume state is missing model.safetensors or pytorch_model.bin: "
+            + str(path)
+        )
+
+    for name in ("optimizer.bin", "scheduler.bin"):
+        state_file = path / name
+        if not state_file.is_file() or state_file.stat().st_size == 0:
+            errors.append(f"resume state is missing {name}: {state_file}")
+
+    train_state_file = path / "train_state.json"
+    if not train_state_file.is_file():
+        errors.append(
+            f"resume state is missing train_state.json: {train_state_file}"
+        )
+    else:
+        try:
+            train_state = json.loads(train_state_file.read_text(encoding="utf-8"))
+            current_step = train_state["current_step"]
+            if (
+                not isinstance(current_step, int)
+                or isinstance(current_step, bool)
+                or current_step < 0
+            ):
+                raise ValueError("current_step must be a non-negative integer")
+        except Exception as exc:
+            errors.append(f"resume train_state.json is invalid: {exc}")
+    return errors
 
 
 def default_dependency_probe(runtime: RuntimeConfig) -> ProbeFacts:
@@ -327,6 +373,15 @@ def _v117_latent_cache_stems(root: Path | None) -> set[str]:
     return valid
 
 
+def _v117_latent_cache_file_stems(root: Path) -> set[str]:
+    stems: set[str] = set()
+    for path in root.rglob("*_anima.npz"):
+        match = re.match(r"^(.*)_(\d+)x(\d+)_anima$", path.stem)
+        if path.is_file() and match:
+            stems.add(match.group(1))
+    return stems
+
+
 def _v117_text_cache_layout(
     keys: set[str],
     cache_llm_adapter_outputs: bool,
@@ -387,6 +442,14 @@ def _v117_text_cache_stems(
         except Exception:
             continue
     return valid
+
+
+def _v117_text_cache_file_stems(root: Path) -> set[str]:
+    return {
+        path.name.removesuffix("_anima_te.safetensors")
+        for path in root.rglob("*_anima_te.safetensors")
+        if path.is_file()
+    }
 
 
 def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: DependencyProbe = default_dependency_probe) -> PreflightResult:
@@ -452,6 +515,7 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
         if not candidate.name.endswith("-state"):
             errors.append(f"resume must use the supported *-state directory layout: {candidate}")
             continue
+        errors.extend(_validate_resume_state(candidate))
         companion = candidate.with_name(
             candidate.name.removesuffix("-state") + ".safetensors"
         )
@@ -460,18 +524,21 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
             continue
         metadata_paths[field] = companion
 
-    if model_arch:
-        for field, metadata_path in metadata_paths.items():
-            try:
-                trained_blocks = read_network_num_blocks(metadata_path)
-            except Exception as exc:
-                errors.append(f"cannot read {field} metadata: {exc}")
-                continue
-            if trained_blocks and trained_blocks != model_arch["num_blocks"]:
-                errors.append(
-                    f"{field} was trained for {trained_blocks} Anima blocks "
-                    f"but the selected checkpoint has {model_arch['num_blocks']}"
-                )
+    for field, metadata_path in metadata_paths.items():
+        try:
+            trained_blocks = read_network_num_blocks(metadata_path)
+        except Exception as exc:
+            errors.append(f"cannot read {field} metadata: {exc}")
+            continue
+        if (
+            model_arch
+            and trained_blocks
+            and trained_blocks != model_arch["num_blocks"]
+        ):
+            errors.append(
+                f"{field} was trained for {trained_blocks} Anima blocks "
+                f"but the selected checkpoint has {model_arch['num_blocks']}"
+            )
 
     train_dir = _resolve(config.get("train_data_dir") or config.get("source_image_dir"), runtime.lora_next_root)
     if train_dir is None:
@@ -535,6 +602,7 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
         facts["lora_cache_dir"] = str(lora_cache_dir)
     cache_enabled = cache_latents or cache_text_encoder
     resized_images: list[Path] = []
+    cache_dir_ready = False
     if cache_enabled:
         if resized_dir is None:
             errors.append("resized_image_dir is required when cache loading is enabled")
@@ -546,23 +614,45 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
                 errors.append(
                     f"resized_image_dir contains no supported images: {resized_dir}"
                 )
-    if not skip_cache_check and resized_images:
+        if lora_cache_dir is None:
+            errors.append("lora_cache_dir is required when cache loading is enabled")
+        elif not lora_cache_dir.is_dir():
+            errors.append(f"lora_cache_dir does not exist: {lora_cache_dir}")
+        else:
+            cache_dir_ready = True
+    if resized_images and cache_dir_ready:
         expected_stems = {image.stem for image in resized_images}
-        latent_stems = _v117_latent_cache_stems(lora_cache_dir)
-        text_stems = _v117_text_cache_stems(
-            lora_cache_dir,
-            cache_llm_adapter_outputs=cache_llm_adapter_outputs,
-        )
-        if cache_latents and (not latent_stems or expected_stems - latent_stems):
-            errors.append(
-                "use_vae_cache=true requires completed Anima preprocess/cache files; "
-                "disable use_vae_cache for live VAE encoding or run preprocess first"
-            )
-        if cache_text_encoder and (not text_stems or expected_stems - text_stems):
-            errors.append(
-                "use_text_cache=true requires completed Anima text encoder cache; "
-                "disable use_text_cache for live encoding or run preprocess first"
-            )
+        if cache_latents:
+            missing = expected_stems - _v117_latent_cache_file_stems(lora_cache_dir)
+            if missing:
+                errors.append(
+                    "use_vae_cache=true is missing cache files for resized images: "
+                    + ", ".join(sorted(missing)[:8])
+                )
+            elif not skip_cache_check:
+                latent_stems = _v117_latent_cache_stems(lora_cache_dir)
+                if expected_stems - latent_stems:
+                    errors.append(
+                        "use_vae_cache=true requires completed Anima preprocess/cache files; "
+                        "disable use_vae_cache for live VAE encoding or run preprocess first"
+                    )
+        if cache_text_encoder:
+            missing = expected_stems - _v117_text_cache_file_stems(lora_cache_dir)
+            if missing:
+                errors.append(
+                    "use_text_cache=true is missing cache files for resized images: "
+                    + ", ".join(sorted(missing)[:8])
+                )
+            elif not skip_cache_check:
+                text_stems = _v117_text_cache_stems(
+                    lora_cache_dir,
+                    cache_llm_adapter_outputs=cache_llm_adapter_outputs,
+                )
+                if expected_stems - text_stems:
+                    errors.append(
+                        "use_text_cache=true requires completed Anima text encoder cache; "
+                        "disable use_text_cache for live encoding or run preprocess first"
+                    )
 
     if not errors:
         dep = probe(runtime)
