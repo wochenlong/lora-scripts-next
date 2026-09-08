@@ -588,7 +588,7 @@ class PreflightLauncherTests(unittest.TestCase):
                 self.assertEqual(arch["model_channels"], 2048)
                 self.assertEqual(arch["model_variant"], variant)
 
-    def test_preflight_rejects_network_and_resume_block_metadata_mismatch(self):
+    def test_preflight_rejects_network_block_metadata_mismatch(self):
         import torch
         from safetensors.torch import save_file
 
@@ -609,36 +609,190 @@ class PreflightLauncherTests(unittest.TestCase):
             dataset.mkdir()
             (dataset / "a.png").write_bytes(b"png")
             (dataset / "a.txt").write_text("caption", encoding="utf-8")
-            for field in ("network_weights", "resume"):
-                network = root / f"{field}.safetensors"
-                save_file(
-                    {"network.weight": torch.zeros(1)},
-                    network,
-                    metadata={"ss_num_blocks": "28"},
-                )
-                result = run_preflight(
-                    {
-                        "pretrained_model_name_or_path": str(model),
-                        "vae": str(root / "vae.safetensors"),
-                        "qwen3": str(root / "qwen.safetensors"),
-                        "train_data_dir": str(dataset),
-                        field: str(network),
-                        "torch_compile": False,
-                        "attn_mode": "torch",
-                    },
-                    runtime,
-                    lambda _runtime: ProbeFacts(
-                        "3.13.11",
-                        torch_metadata_version="2.11.0+cu130",
-                        cuda_available=True,
-                    ),
-                )
+            network = root / "network_weights.safetensors"
+            save_file(
+                {"network.weight": torch.zeros(1)},
+                network,
+                metadata={"ss_num_blocks": "28"},
+            )
+            result = run_preflight(
+                {
+                    "pretrained_model_name_or_path": str(model),
+                    "vae": str(root / "vae.safetensors"),
+                    "qwen3": str(root / "qwen.safetensors"),
+                    "train_data_dir": str(dataset),
+                    "network_weights": str(network),
+                    "torch_compile": False,
+                    "attn_mode": "torch",
+                },
+                runtime,
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                ),
+            )
 
-                self.assertFalse(result.ok)
-                self.assertTrue(
-                    any(field in error and "28" in error and "40" in error for error in result.errors),
-                    result.errors,
-                )
+            self.assertFalse(result.ok)
+            self.assertTrue(
+                any("network_weights" in error and "28" in error and "40" in error for error in result.errors),
+                result.errors,
+            )
+
+    def test_preflight_rejects_resume_state_directory_block_metadata_mismatch(self):
+        import torch
+        from safetensors.torch import save_file
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            model = root / "anima-2.9b.safetensors"
+            save_file(
+                {
+                    "net.x_embedder.proj.1.weight": torch.zeros((2048, 1)),
+                    **{f"net.blocks.{index}.marker": torch.zeros(1) for index in range(40)},
+                },
+                model,
+            )
+            for name in ("vae.safetensors", "qwen.safetensors"):
+                (root / name).write_bytes(b"x")
+            dataset = root / "dataset"
+            dataset.mkdir()
+            (dataset / "a.png").write_bytes(b"png")
+            (dataset / "a.txt").write_text("caption", encoding="utf-8")
+
+            resume = root / "run-step00000028-state"
+            resume.mkdir()
+            save_file({"state.weight": torch.zeros(1)}, resume / "model.safetensors")
+            (resume / "optimizer.bin").write_bytes(b"optimizer")
+            (resume / "random_states_0.pkl").write_bytes(b"random")
+            (resume / "train_state.json").write_text("{}", encoding="utf-8")
+            save_file(
+                {"network.weight": torch.zeros(1)},
+                root / "run-step00000028.safetensors",
+                metadata={"ss_num_blocks": "28"},
+            )
+
+            result = run_preflight(
+                {
+                    "pretrained_model_name_or_path": str(model),
+                    "vae": str(root / "vae.safetensors"),
+                    "qwen3": str(root / "qwen.safetensors"),
+                    "train_data_dir": str(dataset),
+                    "resume": str(resume),
+                    "torch_compile": False,
+                    "attn_mode": "torch",
+                },
+                runtime,
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                ),
+            )
+
+            self.assertFalse(result.ok)
+            self.assertTrue(
+                any("resume" in error and "28" in error and "40" in error for error in result.errors),
+                result.errors,
+            )
+
+    def test_v117_latent_cache_requires_bucket_specific_key(self):
+        import numpy as np
+
+        with tempfile.TemporaryDirectory() as td:
+            cache = Path(td)
+            np.savez(
+                cache / "a_1024x1024_anima.npz",
+                latents_96x128=np.zeros((1,)),
+            )
+
+            self.assertEqual(preflight_module._v117_latent_cache_stems(cache), set())
+
+    def test_v117_latent_cache_accepts_matching_non_square_bucket_key(self):
+        import numpy as np
+
+        with tempfile.TemporaryDirectory() as td:
+            cache = Path(td)
+            np.savez(
+                cache / "a_1024x768_anima.npz",
+                latents_96x128=np.zeros((1,)),
+            )
+
+            self.assertEqual(preflight_module._v117_latent_cache_stems(cache), {"a"})
+
+    def test_v117_text_cache_requires_t5_attention_mask(self):
+        import torch
+        from safetensors.torch import save_file
+
+        with tempfile.TemporaryDirectory() as td:
+            cache = Path(td)
+            save_file(
+                {
+                    "crossattn_emb": torch.zeros(1),
+                    "caption_dropout_rate": torch.zeros(1),
+                },
+                cache / "a_anima_te.safetensors",
+            )
+
+            self.assertEqual(preflight_module._v117_text_cache_stems(cache), set())
+
+    def test_v117_text_cache_requires_caption_dropout_rate(self):
+        import torch
+        from safetensors.torch import save_file
+
+        with tempfile.TemporaryDirectory() as td:
+            cache = Path(td)
+            save_file(
+                {
+                    "prompt_embeds": torch.zeros(1),
+                    "attn_mask": torch.zeros(1),
+                    "t5_input_ids": torch.zeros(1),
+                    "t5_attn_mask": torch.zeros(1),
+                },
+                cache / "a_anima_te.safetensors",
+            )
+
+            self.assertEqual(preflight_module._v117_text_cache_stems(cache), set())
+
+    def test_v117_text_cache_requires_complete_variant_key_groups(self):
+        import torch
+        from safetensors.torch import save_file
+
+        with tempfile.TemporaryDirectory() as td:
+            cache = Path(td)
+            save_file(
+                {
+                    "num_variants": torch.tensor(2),
+                    "caption_dropout_rate": torch.zeros(1),
+                    "crossattn_emb_v0": torch.zeros(1),
+                    "t5_attn_mask_v0": torch.zeros(1),
+                    "crossattn_emb_v1": torch.zeros(1),
+                },
+                cache / "a_anima_te.safetensors",
+            )
+
+            self.assertEqual(preflight_module._v117_text_cache_stems(cache), set())
+
+    def test_v117_text_cache_accepts_complete_variant_key_groups(self):
+        import torch
+        from safetensors.torch import save_file
+
+        with tempfile.TemporaryDirectory() as td:
+            cache = Path(td)
+            save_file(
+                {
+                    "num_variants": torch.tensor(2),
+                    "caption_dropout_rate": torch.zeros(1),
+                    "crossattn_emb_v0": torch.zeros(1),
+                    "t5_attn_mask_v0": torch.zeros(1),
+                    "crossattn_emb_v1": torch.zeros(1),
+                    "t5_attn_mask_v1": torch.zeros(1),
+                },
+                cache / "a_anima_te.safetensors",
+            )
+
+            self.assertEqual(preflight_module._v117_text_cache_stems(cache), {"a"})
 
     def test_preflight_rejects_incomplete_v117_cache_sets(self):
         import numpy as np

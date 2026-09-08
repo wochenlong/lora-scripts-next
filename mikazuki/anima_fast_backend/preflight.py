@@ -109,6 +109,15 @@ def read_network_num_blocks(path: Path) -> int | None:
     return int(value) if value else None
 
 
+def _resume_network_path(path: Path) -> Path | None:
+    if path.is_file():
+        return path
+    if not path.is_dir() or not path.name.endswith("-state"):
+        return None
+    checkpoint = path.with_name(path.name.removesuffix("-state") + ".safetensors")
+    return checkpoint if checkpoint.is_file() else None
+
+
 def default_dependency_probe(runtime: RuntimeConfig) -> ProbeFacts:
     script = r"""
 import importlib.metadata, importlib.util, json, platform
@@ -262,14 +271,33 @@ def _v117_latent_cache_stems(root: Path | None) -> set[str]:
     valid: set[str] = set()
     for path in root.rglob("*_anima.npz"):
         try:
+            match = re.match(r"^(.*)_(\d+)x(\d+)_anima$", path.stem)
+            if not match:
+                continue
+            width = int(match.group(2))
+            height = int(match.group(3))
+            if width % 8 or height % 8:
+                continue
+            expected_key = f"latents_{height // 8}x{width // 8}"
             with np.load(path, allow_pickle=False) as data:
-                if any(key.startswith("latents_") for key in data.files):
-                    match = re.match(r"^(.*)_\d{4}x\d{4}_anima$", path.stem)
-                    if match:
-                        valid.add(match.group(1))
+                if expected_key in data.files:
+                    valid.add(match.group(1))
         except Exception:
             continue
     return valid
+
+
+def _v117_text_cache_layout(keys: set[str], suffix: str = "") -> tuple[str, ...] | None:
+    adapter = tuple(f"{stem}{suffix}" for stem in ("crossattn_emb", "t5_attn_mask"))
+    plain = tuple(
+        f"{stem}{suffix}"
+        for stem in ("prompt_embeds", "attn_mask", "t5_input_ids", "t5_attn_mask")
+    )
+    if set(adapter).issubset(keys):
+        return adapter
+    if set(plain).issubset(keys):
+        return plain
+    return None
 
 
 def _v117_text_cache_stems(root: Path | None) -> set[str]:
@@ -277,17 +305,32 @@ def _v117_text_cache_stems(root: Path | None) -> set[str]:
         return set()
     from safetensors import safe_open
 
-    required = {"prompt_embeds", "attn_mask", "t5_input_ids", "t5_attn_mask"}
     valid: set[str] = set()
     for path in root.rglob("*_anima_te.safetensors"):
         try:
             with safe_open(path, framework="pt", device="cpu") as handle:
                 keys = set(handle.keys())
-            has_variants = "num_variants" in keys and any(
-                key.startswith("prompt_embeds_v") or key.startswith("crossattn_emb_v")
-                for key in keys
-            )
-            if "crossattn_emb" in keys or required.issubset(keys) or has_variants:
+                if "caption_dropout_rate" not in keys:
+                    continue
+                if "num_variants" not in keys:
+                    complete = _v117_text_cache_layout(keys) is not None
+                else:
+                    num_variants = int(handle.get_tensor("num_variants"))
+                    layout = _v117_text_cache_layout(keys, "_v0")
+                    complete = num_variants > 0 and layout is not None
+                    if complete:
+                        stems = tuple(key.removesuffix("_v0") for key in layout)
+                        complete = all(
+                            all(f"{stem}_v{index}" in keys for stem in stems)
+                            for index in range(num_variants)
+                        )
+                        if complete and "num_randomized" in keys:
+                            num_randomized = int(handle.get_tensor("num_randomized"))
+                            complete = num_randomized > 0 and all(
+                                all(f"{stem}_r{index}" in keys for stem in stems)
+                                for index in range(1, num_randomized + 1)
+                            )
+            if complete:
                 valid.add(path.name.removesuffix("_anima_te.safetensors"))
         except Exception:
             continue
@@ -340,10 +383,13 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
     if model_arch:
         for field in ("network_weights", "resume"):
             candidate = _resolve(config.get(field), runtime.lora_next_root)
-            if candidate is None or not candidate.is_file():
+            if candidate is None:
+                continue
+            metadata_path = _resume_network_path(candidate) if field == "resume" else candidate
+            if metadata_path is None or not metadata_path.is_file():
                 continue
             try:
-                trained_blocks = read_network_num_blocks(candidate)
+                trained_blocks = read_network_num_blocks(metadata_path)
             except Exception as exc:
                 errors.append(f"cannot read {field} metadata: {exc}")
                 continue
