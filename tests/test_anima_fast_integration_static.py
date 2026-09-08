@@ -18,7 +18,15 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertNotIn("prodigyplus.ProdigyPlusScheduleFree", fast_optimizer)
         self.assertNotIn('"EmoSens"', fast_optimizer)
         self.assertIn('"EmoSens"', shared[: shared.index("ANIMA_FAST_LR_OPTIMIZER")])
-        self.assertIn('Schema.const("lora")', schema)
+        self.assertIn('fast_variant: Schema.union(["lora", "tlora"])', schema)
+        self.assertIn('.default("lora")', schema)
+        self.assertNotIn('"turbo"', schema)
+        self.assertIn("compile_dynamic_seq:", schema)
+        self.assertIn("use_vae_cache:", schema)
+        self.assertIn("use_text_cache:", schema)
+        self.assertNotIn("static_token_count:", schema)
+        self.assertNotIn("compile_mode:", schema)
+        self.assertNotIn("cache_latents:", schema)
 
     def test_fast_schema_exposes_bucket_resolution_controls(self):
         schema = Path("mikazuki/schema/anima-lora-fast.ts").read_text(encoding="utf-8")
@@ -29,11 +37,31 @@ class AnimaFastStaticIntegrationTests(unittest.TestCase):
         self.assertIn("bucket_no_upscale:", schema)
         self.assertIn("留空时按训练分辨率自动设置", schema)
 
+    def test_fast_presets_use_explicit_curated_variants_and_v117_fields(self):
+        presets = Path("config/presets")
+        expected = {
+            "anima-fast-lora-character.toml": "lora",
+            "anima-fast-lora-style.toml": "lora",
+            "anima-fast-lora-character-tlora.toml": "tlora",
+            "anima-fast-lora-style-tlora.toml": "tlora",
+        }
+        for name, variant in expected.items():
+            text = (presets / name).read_text(encoding="utf-8")
+            self.assertIn('train_type = "anima-lora-fast"', text)
+            self.assertIn(f'fast_variant = "{variant}"', text)
+            self.assertIn("use_vae_cache = false", text)
+            self.assertIn("use_text_cache = false", text)
+            self.assertIn("compile_dynamic_seq = true", text)
+            self.assertNotIn("static_token_count", text)
+            self.assertNotIn("compile_mode", text)
+            self.assertNotIn("dynamo_backend", text)
+
     def test_fast_adapter_does_not_whitelist_emosens(self):
         adapter = Path("mikazuki/anima_fast_backend/adapter.py").read_text(encoding="utf-8")
         self.assertIn("FAST_SUPPORTED_OPTIMIZERS", adapter)
         self.assertNotIn('"EmoSens"', adapter)
         self.assertNotIn('"Automagic",', adapter[adapter.index("FAST_SUPPORTED_OPTIMIZERS"): adapter.index("@dataclass")])
+        self.assertNotIn("mikazuki.engines", adapter)
 
     def test_fast_train_type_is_not_legacy_trainer_mapping(self):
         source = Path("mikazuki/app/api.py").read_text(encoding="utf-8")

@@ -11,13 +11,13 @@ Schema.intersect([
     Schema.object({
         method: Schema.const("lora").default("lora").hidden(),
         methods_subdir: Schema.const("gui-methods").default("gui-methods").hidden(),
+        fast_variant: Schema.union(["lora", "tlora"]).default("lora").description("Fast 训练变体：标准 LoRA 或 T-LoRA（按扩散时间步动态调整有效 rank）"),
         qwen3_max_token_length: Schema.number().step(1).default(512).description("Qwen3 最大 token 长度"),
         timestep_sampling: Schema.union(["sigma", "uniform", "sigmoid", "shift", "flux_shift"]).default("shift").description("时间步采样"),
         discrete_flow_shift: Schema.number().step(0.001).default(3.0).description("Rectified Flow 位移"),
         attn_mode: Schema.union(["", "torch", "xformers", "sageattn", "flash"]).default("").description("Attention 加速实现。留空使用 torch 保底，避免 flash-attn 缺失导致预检查失败；手动选择 flash 需要插件环境已安装 flash-attn 且显卡支持"),
         torch_compile: Schema.boolean().default(true).description("启用 torch.compile"),
-        static_token_count: Schema.number().min(1).default(4096).description("静态 token 上限；1024×1024 为 4096，1536×1536 为 9216。torch.compile 开启时后端会按分辨率自动抬高，但高分辨率会显著增加显存占用"),
-        compile_mode: Schema.union(["blocks", "full"]).default("blocks").description("compile 模式（推荐 blocks）。full 与「梯度检查点」互斥，不能同时开启"),
+        compile_dynamic_seq: Schema.boolean().default(true).description("按 free-fit bucket 动态编译序列长度；开启 torch.compile 时必须启用"),
     }).description("Anima Fast 参数"),
 
     Schema.object({
@@ -25,10 +25,8 @@ Schema.intersect([
         source_image_dir: Schema.string().role('filepicker', { type: "folder" }).description("Anima 原图目录；不填时使用「训练图片目录」"),
         resized_image_dir: Schema.string().role('filepicker', { type: "folder" }).description("训练实际读取的 resized 目录。留空则自动使用 .cache/anima_fast/<数据集路径>/resized 并可复用"),
         lora_cache_dir: Schema.string().role('filepicker', { type: "folder" }).description("Anima LoRA cache 目录；不填时自动使用 .cache/anima_fast"),
-        cache_latents: Schema.boolean().default(false).description("使用已预处理的 latent cache；全新训练默认关闭，开启前必须先完成 preprocess"),
-        cache_latents_to_disk: Schema.boolean().default(false).description("将 latent cache 写入磁盘"),
-        cache_text_encoder_outputs: Schema.boolean().default(false).description("使用已预处理的文本编码 cache；全新训练默认关闭，开启前必须先完成 preprocess"),
-        cache_text_encoder_outputs_to_disk: Schema.boolean().default(false).description("将文本编码 cache 写入磁盘"),
+        use_vae_cache: Schema.boolean().default(false).description("使用已预处理的 VAE latent cache；开启前必须完成 preprocess"),
+        use_text_cache: Schema.boolean().default(false).description("使用已预处理的文本编码 cache；开启前必须完成 preprocess"),
         skip_cache_check: Schema.boolean().default(false).description("跳过缓存完整性检查；仅用于已确认缓存完整的高级场景"),
         caption_extension: Schema.string().default(".txt").description("caption 后缀"),
         resolution: Schema.string().default("1024,1024").description("训练图片分辨率"),
@@ -51,7 +49,7 @@ Schema.intersect([
         max_train_steps: Schema.number().min(1).description("最大训练 step；仅在 max_train_epochs 为空时按 step 控制"),
         train_batch_size: Schema.number().min(1).default(1).description("批量大小"),
         dataset_repeats: Schema.number().min(1).default(1).description("数据集重复次数"),
-        gradient_checkpointing: Schema.boolean().default(true).description("梯度检查点（省显存）。开启时请勿选 compile_mode=full"),
+        gradient_checkpointing: Schema.boolean().default(true).description("梯度检查点（省显存）"),
         gradient_accumulation_steps: Schema.number().min(1).default(1).description("梯度累加步数"),
         seed: Schema.number().step(1).default(42).description("随机种子"),
     }).description("训练相关参数"),
@@ -90,14 +88,4 @@ Schema.intersect([
         network_dropout: Schema.number().step(0.01).default(0).description("LoRA dropout"),
         network_args_custom: Schema.array(String).role('table').description("高级项：自定义 network_args，一行一个 key=value；这是传给 anima_lora LoRA 网络模块的参数列表，不是顶层 TOML。新手谨慎使用；Fast 仅允许 rank_dropout、module_dropout、loraplus_lr_ratio、loraplus_unet_lr_ratio、loraplus_text_encoder_lr_ratio，不支持的 key 会中止训练"),
     }).description("网络设置"),
-
-    Schema.union([
-        Schema.object({
-            compile_mode: Schema.const("full").required(),
-            gradient_checkpointing: Schema.const(false).default(false).description(
-                "compile_mode=full 时必须关闭；与 full compile 不兼容"
-            ),
-        }),
-        Schema.object({}),
-    ]),
 ])

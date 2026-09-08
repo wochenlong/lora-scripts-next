@@ -6,6 +6,7 @@ train_type = "anima-lora-fast"
 description = "适合需要更快产出的画风 LoRA。Fast 插件当前不支持 Automagic，因此使用 AdamW8bit。"
 
 [data]
+fast_variant = "lora"
 method = "lora"
 network_module = "networks.lora_anima"
 network_dim = 32
@@ -20,14 +21,10 @@ optimizer_type = "AdamW8bit"
 learning_rate = 0.00005
 
 mixed_precision = "bf16"
-cache_latents = false
-cache_latents_to_disk = false
-cache_text_encoder_outputs = false
-cache_text_encoder_outputs_to_disk = false
+use_vae_cache = false
+use_text_cache = false
 skip_cache_check = true
 
 torch_compile = true
-static_token_count = 4096
-compile_mode = "blocks"
-dynamo_backend = "inductor"
+compile_dynamic_seq = true
 attn_mode = "flash"
