@@ -264,6 +264,20 @@ def load_dit_model(
         lora_weights_list=lora_weights_list,
         lora_multipliers=args.lora_multiplier,
     )
+
+    # LyCORIS: merge adapter weights into the freshly loaded DiT (loading_device is CPU)
+    if args.lycoris and args.lora_weight is not None and len(args.lora_weight) > 0:
+        lycoris_multipliers = list(args.lora_multiplier) if isinstance(args.lora_multiplier, list) else [args.lora_multiplier]
+        while len(lycoris_multipliers) < len(args.lora_weight):
+            lycoris_multipliers.append(1.0)
+        for lora_weight, multiplier in zip(args.lora_weight, lycoris_multipliers):
+            logger.info(f"Merging LyCORIS weight from: {lora_weight} (multiplier={multiplier})")
+            weights_sd = load_file(lora_weight)
+            network, _ = create_network_from_weights(multiplier, lora_weight, None, None, model, for_inference=True)
+            network.merge_to(None, model, weights_sd, torch.bfloat16, device)
+        del network, weights_sd
+        clean_memory_on_device(device)
+
     if not args.fp8_scaled:
         # simple cast to dit_weight_dtype
         target_dtype = None  # load as-is (dit_weight_dtype == dtype of the weights in state_dict)
