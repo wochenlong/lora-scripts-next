@@ -287,20 +287,25 @@ def _v117_latent_cache_stems(root: Path | None) -> set[str]:
     return valid
 
 
-def _v117_text_cache_layout(keys: set[str], suffix: str = "") -> tuple[str, ...] | None:
-    adapter = tuple(f"{stem}{suffix}" for stem in ("crossattn_emb", "t5_attn_mask"))
-    plain = tuple(
-        f"{stem}{suffix}"
-        for stem in ("prompt_embeds", "attn_mask", "t5_input_ids", "t5_attn_mask")
+def _v117_text_cache_layout(
+    keys: set[str],
+    cache_llm_adapter_outputs: bool,
+    suffix: str = "",
+) -> tuple[str, ...] | None:
+    stems = (
+        ("crossattn_emb", "t5_attn_mask")
+        if cache_llm_adapter_outputs
+        else ("prompt_embeds", "attn_mask", "t5_input_ids", "t5_attn_mask")
     )
-    if set(adapter).issubset(keys):
-        return adapter
-    if set(plain).issubset(keys):
-        return plain
-    return None
+    required = tuple(f"{stem}{suffix}" for stem in stems)
+    return required if set(required).issubset(keys) else None
 
 
-def _v117_text_cache_stems(root: Path | None) -> set[str]:
+def _v117_text_cache_stems(
+    root: Path | None,
+    *,
+    cache_llm_adapter_outputs: bool = True,
+) -> set[str]:
     if root is None or not root.is_dir():
         return set()
     from safetensors import safe_open
@@ -313,10 +318,17 @@ def _v117_text_cache_stems(root: Path | None) -> set[str]:
                 if "caption_dropout_rate" not in keys:
                     continue
                 if "num_variants" not in keys:
-                    complete = _v117_text_cache_layout(keys) is not None
+                    complete = (
+                        _v117_text_cache_layout(keys, cache_llm_adapter_outputs)
+                        is not None
+                    )
                 else:
                     num_variants = int(handle.get_tensor("num_variants"))
-                    layout = _v117_text_cache_layout(keys, "_v0")
+                    layout = _v117_text_cache_layout(
+                        keys,
+                        cache_llm_adapter_outputs,
+                        "_v0",
+                    )
                     complete = num_variants > 0 and layout is not None
                     if complete:
                         stems = tuple(key.removesuffix("_v0") for key in layout)
@@ -446,6 +458,9 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
 
     cache_latents = _truthy(config.get("use_vae_cache"))
     cache_text_encoder = _truthy(config.get("use_text_cache"))
+    cache_llm_adapter_outputs = _truthy(
+        config.get("cache_llm_adapter_outputs", True)
+    )
     skip_cache_check = _truthy(config.get("skip_cache_check"))
     resized_dir = _resolve(config.get("resized_image_dir") or config.get("source_image_dir"), runtime.lora_next_root)
     lora_cache_dir = _resolve(config.get("lora_cache_dir"), runtime.lora_next_root)
@@ -463,7 +478,10 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
             else set()
         )
         latent_stems = _v117_latent_cache_stems(lora_cache_dir)
-        text_stems = _v117_text_cache_stems(lora_cache_dir)
+        text_stems = _v117_text_cache_stems(
+            lora_cache_dir,
+            cache_llm_adapter_outputs=cache_llm_adapter_outputs,
+        )
         if cache_latents and (not latent_stems or expected_stems - latent_stems):
             errors.append(
                 "use_vae_cache=true requires completed Anima preprocess/cache files; "

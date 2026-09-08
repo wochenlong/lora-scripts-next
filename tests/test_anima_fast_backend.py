@@ -568,6 +568,66 @@ class AdapterTests(unittest.TestCase):
 
 
 class PreflightLauncherTests(unittest.TestCase):
+    def _run_text_cache_preflight(
+        self,
+        *,
+        cache_llm_adapter_outputs: bool,
+        adapter_cache: bool,
+    ):
+        import torch
+        from safetensors.torch import save_file
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            for name in ("model.safetensors", "vae.safetensors", "qwen.safetensors"):
+                (root / name).write_bytes(b"x")
+            dataset = root / "dataset"
+            resized = root / "resized"
+            cache = root / "cache"
+            dataset.mkdir()
+            resized.mkdir()
+            cache.mkdir()
+            (dataset / "a.png").write_bytes(b"png")
+            (dataset / "a.txt").write_text("caption", encoding="utf-8")
+            (resized / "a.png").write_bytes(b"png")
+            tensors = {
+                "caption_dropout_rate": torch.zeros(1),
+                "t5_attn_mask": torch.zeros(1),
+            }
+            if adapter_cache:
+                tensors["crossattn_emb"] = torch.zeros(1)
+            else:
+                tensors.update(
+                    {
+                        "prompt_embeds": torch.zeros(1),
+                        "attn_mask": torch.zeros(1),
+                        "t5_input_ids": torch.zeros(1),
+                    }
+                )
+            save_file(tensors, cache / "a_anima_te.safetensors")
+
+            return run_preflight(
+                {
+                    "pretrained_model_name_or_path": str(root / "model.safetensors"),
+                    "vae": str(root / "vae.safetensors"),
+                    "qwen3": str(root / "qwen.safetensors"),
+                    "train_data_dir": str(dataset),
+                    "resized_image_dir": str(resized),
+                    "lora_cache_dir": str(cache),
+                    "use_text_cache": True,
+                    "cache_llm_adapter_outputs": cache_llm_adapter_outputs,
+                    "torch_compile": False,
+                    "attn_mode": "torch",
+                },
+                runtime,
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                ),
+            )
+
     def test_probe_dit_checkpoint_recognizes_base_and_29b_depth(self):
         import torch
         from safetensors.torch import save_file
@@ -793,6 +853,40 @@ class PreflightLauncherTests(unittest.TestCase):
             )
 
             self.assertEqual(preflight_module._v117_text_cache_stems(cache), {"a"})
+
+    def test_preflight_adapter_cache_mode_rejects_plain_text_cache(self):
+        result = self._run_text_cache_preflight(
+            cache_llm_adapter_outputs=True,
+            adapter_cache=False,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("use_text_cache=true" in error for error in result.errors),
+            result.errors,
+        )
+
+    def test_preflight_plain_cache_mode_rejects_adapter_text_cache(self):
+        result = self._run_text_cache_preflight(
+            cache_llm_adapter_outputs=False,
+            adapter_cache=True,
+        )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("use_text_cache=true" in error for error in result.errors),
+            result.errors,
+        )
+
+    def test_preflight_text_cache_mode_accepts_matching_layout(self):
+        for cache_llm_adapter_outputs in (False, True):
+            with self.subTest(cache_llm_adapter_outputs=cache_llm_adapter_outputs):
+                result = self._run_text_cache_preflight(
+                    cache_llm_adapter_outputs=cache_llm_adapter_outputs,
+                    adapter_cache=cache_llm_adapter_outputs,
+                )
+
+                self.assertTrue(result.ok, result.errors)
 
     def test_preflight_rejects_incomplete_v117_cache_sets(self):
         import numpy as np
