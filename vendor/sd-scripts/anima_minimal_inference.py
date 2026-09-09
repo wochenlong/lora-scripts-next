@@ -273,7 +273,15 @@ def load_dit_model(
         for lora_weight, multiplier in zip(args.lora_weight, lycoris_multipliers):
             logger.info(f"Merging LyCORIS weight from: {lora_weight} (multiplier={multiplier})")
             weights_sd = load_file(lora_weight)
-            network, _ = create_network_from_weights(multiplier, lora_weight, None, None, model, for_inference=True)
+            network, _ = create_network_from_weights(
+                multiplier=multiplier,
+                file=None,
+                vae=None,
+                text_encoder=None,
+                unet=model,
+                weights_sd=weights_sd,
+                for_inference=True,
+            )
             network.merge_to(None, model, weights_sd, torch.bfloat16, device)
         del network, weights_sd
         clean_memory_on_device(device)
