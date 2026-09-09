@@ -142,6 +142,10 @@ def submit_config(client: Client, config: dict, confirm_queue: bool) -> dict:
     if not isinstance(config, dict) or not config.get("model_train_type"):
         raise ApiError("config 必须是包含 model_train_type 的字典；先 schemas 查字段、validate 校验")
 
+    warnings = check_config_warnings(config)
+    if warnings:
+        raise ApiError("配置存在已知坑位: " + "；".join(warnings) + "（修正后再提交）")
+
     busy = busy_tasks(client)
     if busy and not confirm_queue:
         summary = [{"id": t.get("id"), "status": t.get("status")} for t in busy]
@@ -413,11 +417,31 @@ def cmd_outputs(c, a):
     return c.request("GET", f"/api/tasks/{a.task_id}/outputs")
 
 
+def check_config_warnings(config: dict) -> list[str]:
+    """Client-side sanity warnings for known pitfalls (non-blocking)."""
+    warnings = []
+    prompts = config.get("sample_prompts")
+    if config.get("enable_preview") and isinstance(prompts, str) and prompts:
+        if not Path(prompts).is_file():
+            warnings.append(
+                "sample_prompts 不是存在的文件路径——Anima 后端按文件路径解析，"
+                "内联文本会导致采样静默失败（No prompt file）。先把 prompt 写成文件再传路径。"
+            )
+    if isinstance(config.get("learning_rate"), str):
+        warnings.append("learning_rate 是字符串——Automagic 对字符串 lr 会 TypeError，请传 JSON 数值。")
+    return warnings
+
+
 def cmd_validate(c, a):
-    return c.request(
+    config = load_json_arg(a.config)
+    result = c.request(
         "POST", "/api/config/validate-import",
-        body={"page_train_type": a.page_train_type, "config": load_json_arg(a.config)},
+        body={"page_train_type": a.page_train_type, "config": config},
     )
+    warnings = check_config_warnings(config)
+    if warnings and isinstance(result, dict):
+        result["client_warnings"] = warnings
+    return result
 
 
 def cmd_submit(c, a):
