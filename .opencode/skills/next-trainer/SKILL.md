@@ -74,7 +74,12 @@ python3 $NT outputs <task_id>                    # 产出的 safetensors 清单
 
 ## 实战坑位（复现 issue 踩出，别再踩）
 
+- **Anima LoKr 专项经验（CFG 几何 / 触发词 / dropout / TE 冻结 / 容量）必读
+  `reference/anima-lokr-sd-scripts.md`**——配置 LoKr 训练前先读它。
 - `learning_rate` 传 JSON 数值（如 1e-6），**不要传字符串**——Automagic 对字符串 lr 直接 TypeError。
+- Anima 的 `sample_prompts` 必须传**prompt 文件路径**（每行一条 `--n/--w/--h` 格式），
+  传内联文本会被当文件路径解析，采样静默失败（日志报 `No prompt file`，preview_count 恒 0）。
+  WebUI 是先把文本框内容落成 `config/autosave/*-promopt.txt` 再传路径；API 提交要自己写文件。
 - `gpu_ids` 字段可能触发后端 500（非 JSON 响应）；单卡环境建议不传该字段，让后端默认分配。
 - 数据集 toml 各引擎**不通用**：kohya 系（anima-lora 等）不收 `validation_split_num`、
   `subsets[].recursive`、`cache_dir`（这些是 anima-fast 字段）——`dataset-validate` 会点名。
