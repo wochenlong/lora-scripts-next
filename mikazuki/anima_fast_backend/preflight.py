@@ -333,53 +333,46 @@ def _validate_plugin_python(runtime: RuntimeConfig, errors: list[str]) -> None:
             )
 
 
-def _v117_latent_cache_stems(root: Path | None) -> set[str]:
-    if root is None or not root.is_dir():
-        return set()
+def _image_pixel_size(path: Path) -> tuple[int, int] | None:
+    try:
+        import imagesize
+
+        width, height = imagesize.get(path)
+        if width > 0 and height > 0:
+            return int(width), int(height)
+    except Exception:
+        pass
+    try:
+        from PIL import Image
+
+        with Image.open(path) as image:
+            return int(image.width), int(image.height)
+    except Exception:
+        return None
+
+
+def _v117_latent_cache_ok(path: Path, width: int, height: int) -> bool:
     import numpy as np
 
-    valid: set[str] = set()
-    for path in root.rglob("*_anima.npz"):
-        try:
-            match = re.match(r"^(.*)_(\d+)x(\d+)_anima$", path.stem)
-            if not match:
-                continue
-            width = int(match.group(2))
-            height = int(match.group(3))
-            if width % 8 or height % 8:
-                continue
-            suffix = f"_{height // 8}x{width // 8}"
-            latent_key = f"latents{suffix}"
-            original_size_key = f"original_size{suffix}"
-            crop_ltrb_key = f"crop_ltrb{suffix}"
-            with np.load(path, allow_pickle=False) as data:
-                if not {
-                    latent_key,
-                    original_size_key,
-                    crop_ltrb_key,
-                }.issubset(data.files):
-                    continue
-                latents = data[latent_key]
-                if (
-                    latents.ndim < 3
-                    or latents.shape[-2:] != (height // 8, width // 8)
-                    or data[original_size_key].shape != (2,)
-                    or data[crop_ltrb_key].shape != (4,)
-                ):
-                    continue
-                valid.add(match.group(1))
-        except Exception:
-            continue
-    return valid
-
-
-def _v117_latent_cache_file_stems(root: Path) -> set[str]:
-    stems: set[str] = set()
-    for path in root.rglob("*_anima.npz"):
-        match = re.match(r"^(.*)_(\d+)x(\d+)_anima$", path.stem)
-        if path.is_file() and match:
-            stems.add(match.group(1))
-    return stems
+    if width % 8 or height % 8:
+        return False
+    suffix = f"_{height // 8}x{width // 8}"
+    latent_key = f"latents{suffix}"
+    original_size_key = f"original_size{suffix}"
+    crop_ltrb_key = f"crop_ltrb{suffix}"
+    try:
+        with np.load(path, allow_pickle=False) as data:
+            if not {latent_key, original_size_key, crop_ltrb_key}.issubset(data.files):
+                return False
+            latents = data[latent_key]
+            return bool(
+                latents.ndim >= 3
+                and latents.shape[-2:] == (height // 8, width // 8)
+                and data[original_size_key].shape == (2,)
+                and data[crop_ltrb_key].shape == (4,)
+            )
+    except Exception:
+        return False
 
 
 def _v117_text_cache_layout(
@@ -396,60 +389,43 @@ def _v117_text_cache_layout(
     return required if set(required).issubset(keys) else None
 
 
-def _v117_text_cache_stems(
-    root: Path | None,
+def _v117_text_cache_ok(
+    path: Path,
     *,
-    cache_llm_adapter_outputs: bool = True,
-) -> set[str]:
-    if root is None or not root.is_dir():
-        return set()
+    cache_llm_adapter_outputs: bool,
+) -> bool:
     from safetensors import safe_open
 
-    valid: set[str] = set()
-    for path in root.rglob("*_anima_te.safetensors"):
-        try:
-            with safe_open(path, framework="pt", device="cpu") as handle:
-                keys = set(handle.keys())
-                if "caption_dropout_rate" not in keys:
-                    continue
-                if "num_variants" not in keys:
-                    complete = (
-                        _v117_text_cache_layout(keys, cache_llm_adapter_outputs)
-                        is not None
-                    )
-                else:
-                    num_variants = int(handle.get_tensor("num_variants"))
-                    layout = _v117_text_cache_layout(
-                        keys,
-                        cache_llm_adapter_outputs,
-                        "_v0",
-                    )
-                    complete = num_variants > 0 and layout is not None
-                    if complete:
-                        stems = tuple(key.removesuffix("_v0") for key in layout)
-                        complete = all(
-                            all(f"{stem}_v{index}" in keys for stem in stems)
-                            for index in range(num_variants)
-                        )
-                        if complete and "num_randomized" in keys:
-                            num_randomized = int(handle.get_tensor("num_randomized"))
-                            complete = num_randomized > 0 and all(
-                                all(f"{stem}_r{index}" in keys for stem in stems)
-                                for index in range(1, num_randomized + 1)
-                            )
-            if complete:
-                valid.add(path.name.removesuffix("_anima_te.safetensors"))
-        except Exception:
-            continue
-    return valid
-
-
-def _v117_text_cache_file_stems(root: Path) -> set[str]:
-    return {
-        path.name.removesuffix("_anima_te.safetensors")
-        for path in root.rglob("*_anima_te.safetensors")
-        if path.is_file()
-    }
+    try:
+        with safe_open(path, framework="pt", device="cpu") as handle:
+            keys = set(handle.keys())
+            if "caption_dropout_rate" not in keys:
+                return False
+            if "num_variants" not in keys:
+                return (
+                    _v117_text_cache_layout(keys, cache_llm_adapter_outputs)
+                    is not None
+                )
+            num_variants = int(handle.get_tensor("num_variants"))
+            layout = _v117_text_cache_layout(keys, cache_llm_adapter_outputs, "_v0")
+            if num_variants <= 0 or layout is None:
+                return False
+            stems = tuple(key.removesuffix("_v0") for key in layout)
+            if not all(
+                all(f"{stem}_v{index}" in keys for stem in stems)
+                for index in range(num_variants)
+            ):
+                return False
+            if "num_randomized" in keys:
+                num_randomized = int(handle.get_tensor("num_randomized"))
+                if num_randomized <= 0 or not all(
+                    all(f"{stem}_r{index}" in keys for stem in stems)
+                    for index in range(1, num_randomized + 1)
+                ):
+                    return False
+            return True
+    except Exception:
+        return False
 
 
 def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: DependencyProbe = default_dependency_probe) -> PreflightResult:
@@ -550,14 +526,6 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
         facts["dataset_image_count"] = len(images)
         if not images:
             errors.append(f"no training images found under {train_dir}")
-        stems: dict[str, Path] = {}
-        duplicates: list[str] = []
-        for image in images:
-            if image.stem in stems:
-                duplicates.append(image.stem)
-            stems[image.stem] = image
-        if duplicates:
-            errors.append("duplicate image stems would collide in anima_lora flat cache: " + ", ".join(sorted(set(duplicates))[:8]))
         captioned = sum(1 for image in images if image.with_suffix(".txt").is_file())
         if images and captioned < len(images):
             warnings.append(f"{len(images) - captioned} image(s) do not have .txt captions")
@@ -621,38 +589,66 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
         else:
             cache_dir_ready = True
     if resized_images and cache_dir_ready:
-        expected_stems = {image.stem for image in resized_images}
-        if cache_latents:
-            missing = expected_stems - _v117_latent_cache_file_stems(lora_cache_dir)
-            if missing:
-                errors.append(
-                    "use_vae_cache=true is missing cache files for resized images: "
-                    + ", ".join(sorted(missing)[:8])
-                )
-            elif not skip_cache_check:
-                latent_stems = _v117_latent_cache_stems(lora_cache_dir)
-                if expected_stems - latent_stems:
-                    errors.append(
-                        "use_vae_cache=true requires completed Anima preprocess/cache files; "
-                        "disable use_vae_cache for live VAE encoding or run preprocess first"
+        missing_latents: list[str] = []
+        invalid_latents: list[str] = []
+        missing_text: list[str] = []
+        invalid_text: list[str] = []
+        unreadable: list[str] = []
+        for image in resized_images:
+            rel = image.relative_to(resized_dir).with_suffix("")
+            identity = rel.as_posix()
+            if cache_latents:
+                size = _image_pixel_size(image)
+                if size is None:
+                    unreadable.append(identity)
+                else:
+                    width, height = size
+                    npz = (
+                        lora_cache_dir
+                        / rel.parent
+                        / f"{rel.name}_{width:04d}x{height:04d}_anima.npz"
                     )
-        if cache_text_encoder:
-            missing = expected_stems - _v117_text_cache_file_stems(lora_cache_dir)
-            if missing:
-                errors.append(
-                    "use_text_cache=true is missing cache files for resized images: "
-                    + ", ".join(sorted(missing)[:8])
-                )
-            elif not skip_cache_check:
-                text_stems = _v117_text_cache_stems(
-                    lora_cache_dir,
-                    cache_llm_adapter_outputs=cache_llm_adapter_outputs,
-                )
-                if expected_stems - text_stems:
-                    errors.append(
-                        "use_text_cache=true requires completed Anima text encoder cache; "
-                        "disable use_text_cache for live encoding or run preprocess first"
-                    )
+                    if not npz.is_file():
+                        missing_latents.append(identity)
+                    elif not skip_cache_check and not _v117_latent_cache_ok(
+                        npz, width, height
+                    ):
+                        invalid_latents.append(identity)
+            if cache_text_encoder:
+                te = lora_cache_dir / rel.parent / f"{rel.name}_anima_te.safetensors"
+                if not te.is_file():
+                    missing_text.append(identity)
+                elif not skip_cache_check and not _v117_text_cache_ok(
+                    te, cache_llm_adapter_outputs=cache_llm_adapter_outputs
+                ):
+                    invalid_text.append(identity)
+        if unreadable:
+            errors.append(
+                "cannot read image dimensions for resized images: "
+                + ", ".join(sorted(unreadable)[:8])
+            )
+        if missing_latents:
+            errors.append(
+                "use_vae_cache=true is missing cache files for resized images: "
+                + ", ".join(sorted(missing_latents)[:8])
+            )
+        elif invalid_latents:
+            errors.append(
+                "use_vae_cache=true requires completed Anima preprocess/cache files; "
+                "disable use_vae_cache for live VAE encoding or run preprocess first: "
+                + ", ".join(sorted(invalid_latents)[:8])
+            )
+        if missing_text:
+            errors.append(
+                "use_text_cache=true is missing cache files for resized images: "
+                + ", ".join(sorted(missing_text)[:8])
+            )
+        elif invalid_text:
+            errors.append(
+                "use_text_cache=true requires completed Anima text encoder cache; "
+                "disable use_text_cache for live encoding or run preprocess first: "
+                + ", ".join(sorted(invalid_text)[:8])
+            )
 
     if not errors:
         dep = probe(runtime)
