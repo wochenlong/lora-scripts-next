@@ -17,6 +17,7 @@ import os
 import re
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -138,6 +139,29 @@ def downsample(points: list, max_points: int) -> list:
     return picked
 
 
+SUBMIT_MIN_INTERVAL_S = 2.5
+
+
+def _submit_stamp_path(base_url: str) -> Path:
+    import hashlib
+
+    key = hashlib.md5(base_url.encode()).hexdigest()[:8]
+    return Path(tempfile.gettempdir()) / f"nt-last-submit-{key}.stamp"
+
+
+def submit_throttle(client: Client):
+    """Backend autosaves configs to second-resolution filenames; submits within the
+    same second overwrite each other and tasks read back the wrong config.
+    Enforce a minimum interval between submits (stateless CLI → stamp file)."""
+    stamp = _submit_stamp_path(client.base_url)
+    if stamp.exists():
+        elapsed = time.time() - stamp.stat().st_mtime
+        if elapsed < SUBMIT_MIN_INTERVAL_S:
+            wait = SUBMIT_MIN_INTERVAL_S - elapsed
+            time.sleep(wait)
+    stamp.write_text(str(time.time()))
+
+
 def submit_config(client: Client, config: dict, confirm_queue: bool) -> dict:
     if not isinstance(config, dict) or not config.get("model_train_type"):
         raise ApiError("config 必须是包含 model_train_type 的字典；先 schemas 查字段、validate 校验")
@@ -154,6 +178,7 @@ def submit_config(client: Client, config: dict, confirm_queue: bool) -> dict:
             "向用户确认排队意图后加 --confirm-queue 重试。"
         )
 
+    submit_throttle(client)
     result = client.request("POST", "/api/run", body=config)
     return {
         "task_id": result.get("task_id"),

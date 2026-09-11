@@ -76,6 +76,9 @@ python3 $NT outputs <task_id>                    # 产出的 safetensors 清单
 
 - **Anima LoKr 专项经验（CFG 几何 / 触发词 / dropout / TE 冻结 / 容量）必读
   `reference/anima-lokr-sd-scripts.md`**——配置 LoKr 训练前先读它。
+- **禁止秒级连续提交任务**：后端把提交配置快照到秒级命名的 autosave 文件，同秒提交互相覆盖，
+  任务会拿到别人的配置（静默串炉）。nt.py 的 submit/submit-preset 已内置 ≥2.5s 节流；
+  绕过 CLI 直接打 `/api/run` 时必须自行间隔 ≥2s，并回读任务 config 核对。
 - `learning_rate` 传 JSON 数值（如 1e-6），**不要传字符串**——Automagic 对字符串 lr 直接 TypeError。
 - Anima 的 `sample_prompts` 必须传**prompt 文件路径**（每行一条 `--n/--w/--h` 格式），
   传内联文本会被当文件路径解析，采样静默失败（日志报 `No prompt file`，preview_count 恒 0）。
