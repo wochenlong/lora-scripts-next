@@ -236,14 +236,18 @@ class AnimaFastPluginApiTests(unittest.TestCase):
 
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
                 mock.patch("mikazuki.app.api.audit_environment", return_value=audit), \
-                mock.patch("mikazuki.app.api.prepare_anima_fast_dataset", return_value=prepared), \
+                mock.patch("mikazuki.app.api.prepare_anima_fast_dataset", return_value=prepared) as preparer, \
                 mock.patch("mikazuki.app.api.run_preflight", return_value=preflight), \
                 mock.patch("mikazuki.app.api.process.run_anima_fast_train", return_value=api.APIResponseSuccess(data={"task_id": "train-1"})) as runner:
-                response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "anima-lora-fast"})))
+                response = asyncio.run(api.create_toml_file(make_request({
+                    "model_train_type": "anima-lora-fast",
+                    "fast_variant": "tlora",
+                })))
 
         self.assertEqual(response.status, "success")
         self.assertEqual(response.data["task_id"], "train-1")
         runner.assert_called_once()
+        self.assertEqual(preparer.call_args.args[0]["fast_variant"], "tlora")
 
     def test_preflight_response_includes_adapter_warnings(self):
         with tempfile.TemporaryDirectory() as td:
@@ -261,13 +265,17 @@ class AnimaFastPluginApiTests(unittest.TestCase):
             with mock.patch("mikazuki.app.api.Path.cwd", return_value=root), \
                 mock.patch("mikazuki.app.api._anima_fast_runtime", return_value=object()), \
                 mock.patch("mikazuki.app.api.apply_anima_fast_preview", return_value=[]), \
-                mock.patch("mikazuki.app.api.adapt_config", return_value=adapted), \
+                mock.patch("mikazuki.app.api.adapt_config", return_value=adapted) as adapter, \
                 mock.patch("mikazuki.app.api.run_preflight", return_value=preflight):
-                response = asyncio.run(api.anima_lora_plugin_preflight(make_request({"model_train_type": "anima-lora-fast"})))
+                response = asyncio.run(api.anima_lora_plugin_preflight(make_request({
+                    "model_train_type": "anima-lora-fast",
+                    "fast_variant": "tlora",
+                })))
 
         self.assertEqual(response.status, "success")
         self.assertIn("cache 与 skip_cache_check 已自动关闭", response.data["warnings"])
         self.assertIn("runtime warning", response.data["warnings"])
+        self.assertEqual(adapter.call_args.args[0]["fast_variant"], "tlora")
 
 
 if __name__ == "__main__":

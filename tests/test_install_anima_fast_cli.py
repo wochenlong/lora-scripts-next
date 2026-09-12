@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import sys
 import tempfile
 import unittest
@@ -18,6 +20,19 @@ class InstallAnimaFastCliTests(unittest.TestCase):
         self.assertTrue((root / "gui.py").is_file())
         self.assertTrue((root / "config" / "anima_fast_backend.toml").is_file())
 
+    def test_default_config_pins_anima_v1171_snapshot(self):
+        config = (ROOT / "config" / "anima_fast_backend.toml").read_text(encoding="utf-8")
+
+        self.assertIn('source_commit = "b43928b5e4b82b907bfca1a322383a33088d0bdd"', config)
+
+    def test_help_describes_cuda_132_pytorch_index(self):
+        output = io.StringIO()
+        with contextlib.redirect_stdout(output), self.assertRaises(SystemExit) as raised:
+            cli.main(["--help"])
+
+        self.assertEqual(raised.exception.code, 0)
+        self.assertIn("cu132 appended if missing", output.getvalue())
+
     def test_dry_run_prints_plan(self):
         with tempfile.TemporaryDirectory() as td:
             project = Path(td)
@@ -28,8 +43,8 @@ class InstallAnimaFastCliTests(unittest.TestCase):
             )
             env_dir = project / "config" / "anima_fast_environment"
             env_dir.mkdir()
-            (env_dir / "anima-constraints-cu130.txt").write_text("torch\n", encoding="utf-8")
-            (env_dir / "anima-overrides-cu130.txt").write_text("numpy\n", encoding="utf-8")
+            (env_dir / "anima-constraints-cu132.txt").write_text("torch\n", encoding="utf-8")
+            (env_dir / "anima-overrides-cu132.txt").write_text("numpy\n", encoding="utf-8")
             source = project / "upstream"
             source.mkdir()
             (source / "train.py").write_text("print('ok')\n", encoding="utf-8")
@@ -58,8 +73,8 @@ class InstallAnimaFastCliTests(unittest.TestCase):
             (project / "config" / "anima_fast_backend.toml").write_text("[backend]\n", encoding="utf-8")
             env_dir = project / "config" / "anima_fast_environment"
             env_dir.mkdir()
-            (env_dir / "anima-constraints-cu130.txt").write_text("iopath==0.1.10\n", encoding="utf-8")
-            (env_dir / "anima-overrides-cu130.txt").write_text("numpy>=2\n", encoding="utf-8")
+            (env_dir / "anima-constraints-cu132.txt").write_text("iopath==0.1.10\n", encoding="utf-8")
+            (env_dir / "anima-overrides-cu132.txt").write_text("numpy>=2\n", encoding="utf-8")
             source = project / "upstream"
             source.mkdir()
             (source / "train.py").write_text("print('ok')\n", encoding="utf-8")

@@ -27,6 +27,7 @@ INCLUDE_TOP_LEVEL = {
     "pyproject.toml",
     "uv.lock",
     "configs",
+    "anima_lora",
     "library",
     "networks",
     "preprocess",

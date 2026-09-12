@@ -103,6 +103,29 @@ class AnimaFastPreprocessTests(unittest.TestCase):
                 resize.assert_not_called()
                 self.assertFalse(result.auto_resized)
 
+    def test_prepare_preserves_tlora_variant_during_adaptation(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            resized = root / "cache" / "resized"
+            resized.mkdir(parents=True)
+            (resized / "1.png").write_bytes(b"png")
+
+            with mock.patch("mikazuki.anima_fast_backend.preprocess.run_resize_images") as resize:
+                result = prepare_anima_fast_dataset(
+                    {
+                        "fast_variant": "tlora",
+                        "train_data_dir": "./data/demo",
+                        "resized_image_dir": str(resized),
+                    },
+                    runtime,
+                    "20260101-test",
+                )
+
+        resize.assert_not_called()
+        self.assertEqual(result.adapted.values["down_init"], "weight_svd")
+        self.assertIn("use_timestep_mask=true", result.adapted.values["network_args"])
+
     def test_prepare_reuses_existing_stable_resized_cache(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)

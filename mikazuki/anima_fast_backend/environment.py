@@ -6,6 +6,8 @@ from typing import Callable
 import importlib.metadata
 import json
 import os
+import platform as platform_module
+import queue
 import shutil
 import subprocess
 import sys
@@ -34,23 +36,21 @@ from .installer import build_install_plan, copy_source_snapshot
 
 
 ENVIRONMENT_DIR = Path("config/anima_fast_environment")
-ANIMA_CONSTRAINTS = ENVIRONMENT_DIR / "anima-constraints-cu130.txt"
-ANIMA_OVERRIDES = ENVIRONMENT_DIR / "anima-overrides-cu130.txt"
+ANIMA_CONSTRAINTS = ENVIRONMENT_DIR / "anima-constraints-cu132.txt"
+ANIMA_OVERRIDES = ENVIRONMENT_DIR / "anima-overrides-cu132.txt"
 MAIN_CONSTRAINTS = ENVIRONMENT_DIR / "main-constraints-cu130.txt"
-FLASH_ATTN_WINDOWS_MARKER = "flash-attn @ https://"
-FLASH_ATTN_LINUX_PLATFORM_MARKER = "sys_platform == 'linux'"
-FLASH_ATTN_LINUX_CU130_URL = (
-    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.4/"
-    "flash_attn-2.8.3%2Bcu130torch2.11-cp313-cp313-linux_x86_64.whl"
+FLASH_ATTN_LINUX_CU132_URL_X86_64 = (
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.17/"
+    "flash_attn-2.8.3%2Bcu132torch2.12-cp313-cp313-linux_x86_64.whl"
 )
-
-# Optional, masking-only dependencies that core LoRA training never imports.
-# sam3 is a heavy git build (facebookresearch/sam3) whose HF weights are gated;
-# pulling it during install is slow and frequently fails, which blocks READY even
-# though it is irrelevant to training. We strip it from the copied snapshot and
-# leave it to be installed on demand. The audit list already excludes it, so the
-# plugin reaches READY on the core trainable dependency set alone.
-OPTIONAL_RUNTIME_DEPENDENCY_MARKERS = ("sam3 @ git+",)
+FLASH_ATTN_LINUX_CU132_URL_AARCH64 = (
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.22/"
+    "flash_attn-2.8.3%2Bcu132torch2.12-cp313-cp313-linux_aarch64.whl"
+)
+FLASH_ATTN_WINDOWS_CU132_URL = (
+    "https://github.com/mjun0812/flash-attention-prebuild-wheels/releases/download/v0.9.25/"
+    "flash_attn-2.8.3%2Bcu132torch2.12-cp313-cp313-win_amd64.whl"
+)
 
 # Mirror endpoint applied to install/runtime so HuggingFace fetches prefer a
 # China-friendly mirror first (matches the CLI training scripts). Override by
@@ -75,35 +75,41 @@ ANIMA_OPTIMIZER_IMPORTS = [
     "optimum.quanto",
 ]
 
-# Constraints pin versions but do not install these; uv must receive explicit targets.
+ANIMA_CORE_PIP_TARGETS = (
+    "torch", "torchvision", "accelerate", "transformers", "diffusers",
+    "einops", "toml", "voluptuous", "safetensors", "imagesize",
+    "sentencepiece", "huggingface-hub", "tensorboard", "rich", "tqdm",
+    "numpy", "Pillow", "psutil", "packaging",
+)
 ANIMA_EXTRA_PIP_TARGETS = ("iopath==0.1.10", "optimum-quanto>=0.2.0")
+ANIMA_WINDOWS_TRITON_TARGET = "triton-windows==3.7.0.post26"
 
 
-def anima_pip_dependency_targets() -> list[str]:
-    targets = [f"{name}=={version}" for name, version in ANIMA_OPTIMIZER_PACKAGES.items()]
+def anima_pip_dependency_targets(platform: str | None = None) -> list[str]:
+    platform = platform or sys.platform
+    targets = list(ANIMA_CORE_PIP_TARGETS)
+    targets.append("opencv-python-headless" if platform.startswith("linux") else "opencv-python")
+    if platform == "win32":
+        targets.append(ANIMA_WINDOWS_TRITON_TARGET)
+    targets.extend(f"{name}=={version}" for name, version in ANIMA_OPTIMIZER_PACKAGES.items())
     targets.extend(ANIMA_EXTRA_PIP_TARGETS)
     return targets
 
 ANIMA_EXPECTED = {
     "python_major_minor": "3.13",
     "exact": {
-        "torch": "2.11.0+cu130",
-        "torchvision": "0.26.0+cu130",
-        "flash-attn": "2.8.3+cu130torch2.11",
+        "torch": "2.12.0+cu132",
+        "torchvision": "0.27.0+cu132",
+        "flash-attn": "2.8.3+cu132torch2.12",
         "triton-windows": "3.7.0.post26",
-        "transformers": "5.9.0",
-        "diffusers": "0.37.1",
+        "transformers": "5.10.1",
+        "diffusers": "0.39.0",
         "accelerate": "1.13.0",
-        "safetensors": "0.7.0",
+        "safetensors": "0.8.0",
         "iopath": "0.1.10",
         "bitsandbytes": ANIMA_OPTIMIZER_PACKAGES["bitsandbytes"],
         "dadaptation": ANIMA_OPTIMIZER_PACKAGES["dadaptation"],
     },
-}
-
-ANIMA_LINUX_EXACT_OVERRIDES = {
-    "torch": "2.12.0+cu130",
-    "torchvision": "0.27.0+cu130",
 }
 
 ANIMA_WINDOWS_ONLY_EXACT = {"triton-windows"}
@@ -122,7 +128,7 @@ MAIN_EXPECTED = {
 
 DEFAULT_PIP_INDEX_URL = "https://pypi.org/simple"
 DEFAULT_PYTORCH_INDEX_BASE = "https://download.pytorch.org/whl"
-ANIMA_CUDA_TAG = "cu130"
+ANIMA_CUDA_TAG = "cu132"
 
 
 @dataclass(frozen=True)
@@ -191,6 +197,24 @@ def _resolve_child(root: Path, child: Path) -> Path:
     return resolved
 
 
+def _supported_runtime(
+    platform: str | None = None,
+    machine: str | None = None,
+) -> tuple[str, str]:
+    platform = platform or sys.platform
+    machine = (machine or platform_module.machine()).lower()
+    if platform == "win32" and machine in {"amd64", "x86_64"}:
+        return "windows", "x86_64"
+    if platform.startswith("linux") and machine in {"amd64", "x86_64"}:
+        return "linux", "x86_64"
+    if platform.startswith("linux") and machine in {"aarch64", "arm64"}:
+        return "linux", "aarch64"
+    raise RuntimeError(
+        "Anima Fast CUDA 13.2 runtime supports only Windows x86_64, "
+        f"Linux x86_64, and Linux aarch64; got {platform} {machine}"
+    )
+
+
 def build_environment_install_plan(
     project_root: Path,
     layout: ExtensionLayout,
@@ -202,11 +226,12 @@ def build_environment_install_plan(
     root = project_root.resolve()
     extension_root = _resolve_child(root, layout.root)
     python_dir = _resolve_child(root, root / ".python")
-    if sys.platform == "win32":
+    runtime_platform, runtime_arch = _supported_runtime()
+    if runtime_platform == "windows":
         base_python = python_dir / "cpython-3.13.13-windows-x86_64-none" / "python.exe"
         venv_python = extension_root / ".venv" / "Scripts" / "python.exe"
     else:
-        base_python = python_dir / "cpython-3.13.13-linux-x86_64-gnu" / "bin" / "python3"
+        base_python = python_dir / f"cpython-3.13.13-linux-{runtime_arch}-gnu" / "bin" / "python3"
         venv_python = extension_root / ".venv" / "bin" / "python"
     env_dir = root / ENVIRONMENT_DIR
     constraints = env_dir / ANIMA_CONSTRAINTS.name
@@ -246,70 +271,48 @@ def _emit_progress(progress: ProgressFn | None, phase: str, message: str, percen
         pass
 
 
-def _replace_flash_attn_dependency(source_root: Path, platform_marker: str, replacement: str, log: LogFn) -> list[str]:
-    pyproject = source_root / "pyproject.toml"
-    if not pyproject.is_file():
-        return []
-    lines = pyproject.read_text(encoding="utf-8").splitlines(keepends=True)
-    changed: list[str] = []
-    patched: list[str] = []
-    for line in lines:
-        stripped = line.lstrip()
-        if (
-            not stripped.startswith("#")
-            and FLASH_ATTN_WINDOWS_MARKER in line
-            and platform_marker in line
-        ):
-            indent = line[: len(line) - len(stripped)]
-            patched.append(indent + replacement + ("\n" if line.endswith("\n") else ""))
-            changed.append(line.strip())
-            continue
-        patched.append(line)
-    if changed:
-        pyproject.write_text("".join(patched), encoding="utf-8")
-        for dependency in changed:
-            _append(log, f"[patch] localized Linux cu130 flash-attn dependency: {dependency}")
-    return changed
-
-
-def localize_linux_flash_attn_dependency(
-    source_root: Path,
-    log: LogFn = print,
+def flash_attn_dependency_target(
+    platform: str | None = None,
+    machine: str | None = None,
     github_url_prefix: str | None = None,
-) -> list[str]:
-    if not sys.platform.startswith("linux"):
+) -> str | None:
+    platform = platform or sys.platform
+    machine = (machine or platform_module.machine()).lower()
+    if platform == "win32" and machine in {"amd64", "x86_64"}:
+        url = FLASH_ATTN_WINDOWS_CU132_URL
+    elif platform.startswith("linux") and machine in {"aarch64", "arm64"}:
+        url = FLASH_ATTN_LINUX_CU132_URL_AARCH64
+    elif platform.startswith("linux") and machine in {"amd64", "x86_64"}:
+        url = FLASH_ATTN_LINUX_CU132_URL_X86_64
+    else:
+        return None
+    return "flash-attn @ " + apply_github_prefix(url, github_url_prefix)
+
+
+def patch_comfyui_checkpoint_prefix(source_root: Path, log: LogFn = print) -> list[str]:
+    target = source_root / "library" / "anima" / "weights.py"
+    anchor = '    return key[len("net.") :] if key.startswith("net.") else key'
+    patched_body = (
+        '    for prefix in ("net.", "model.diffusion_model."):\n'
+        "        if key.startswith(prefix):\n"
+        "            return key[len(prefix):]\n"
+        "    return key"
+    )
+    text = target.read_text(encoding="utf-8") if target.is_file() else ""
+    if patched_body in text or (
+        "def _strip_net_prefix" in text
+        and "for prefix in _DIT_PREFIXES" in text
+        and '"model.diffusion_model."' in text
+    ):
         return []
-    wheel_url = apply_github_prefix(FLASH_ATTN_LINUX_CU130_URL, github_url_prefix)
-    replacement = f'"flash-attn @ {wheel_url} ; {FLASH_ATTN_LINUX_PLATFORM_MARKER}",'
-    return _replace_flash_attn_dependency(source_root, FLASH_ATTN_LINUX_PLATFORM_MARKER, replacement, log)
-
-
-def strip_optional_runtime_dependencies(source_root: Path, log: LogFn = print) -> list[str]:
-    """Drop masking-only deps (sam3) from the copied snapshot's pyproject.
-
-    Keeps the Fast install scoped to the core trainable dependency set so a slow
-    or gated sam3 git build cannot block the plugin from reaching READY. Editing
-    the *copied* snapshot leaves the upstream source untouched.
-    """
-    pyproject = source_root / "pyproject.toml"
-    if not pyproject.is_file():
-        return []
-    lines = pyproject.read_text(encoding="utf-8").splitlines(keepends=True)
-    removed: list[str] = []
-    kept: list[str] = []
-    for line in lines:
-        stripped = line.lstrip()
-        if not stripped.startswith("#") and any(
-            marker in line for marker in OPTIONAL_RUNTIME_DEPENDENCY_MARKERS
-        ):
-            removed.append(line.strip().rstrip(","))
-            continue
-        kept.append(line)
-    if removed:
-        pyproject.write_text("".join(kept), encoding="utf-8")
-        for dependency in removed:
-            _append(log, f"[patch] dropped optional masking dependency (install on demand): {dependency}")
-    return removed
+    if anchor not in text:
+        raise RuntimeError(
+            f"ComfyUI checkpoint prefix patch anchor not found in {target}; "
+            "upstream weights.py changed - re-evaluate the patch"
+        )
+    target.write_text(text.replace(anchor, patched_body, 1), encoding="utf-8")
+    _append(log, "[patch] accept ComfyUI-layout checkpoints (strip model.diffusion_model. prefix)")
+    return ["library/anima/weights.py:_strip_net_prefix"]
 
 
 def _anima_expected_for_platform(platform: str | None = None) -> dict:
@@ -321,11 +324,28 @@ def _anima_expected_for_platform(platform: str | None = None) -> dict:
     if platform.startswith("linux"):
         for package in ANIMA_WINDOWS_ONLY_EXACT:
             expected["exact"].pop(package, None)
-        expected["exact"].update(ANIMA_LINUX_EXACT_OVERRIDES)
     return expected
 
 
-def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str, str] | None = None) -> None:
+def _terminate_and_reap(process: subprocess.Popen, timeout_seconds: float = 5.0) -> None:
+    if process.poll() is not None:
+        process.wait()
+        return
+    process.terminate()
+    try:
+        process.wait(timeout=timeout_seconds)
+    except subprocess.TimeoutExpired:
+        process.kill()
+        process.wait()
+
+
+def _run_streaming_once(
+    command: list[str],
+    cwd: Path,
+    log: LogFn,
+    env: dict[str, str] | None = None,
+    heartbeat_seconds: float = 30.0,
+) -> None:
     _append(log, "[cmd] " + " ".join(command))
     merged_env = os.environ.copy()
     if env:
@@ -359,12 +379,48 @@ def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str
         bufsize=1,
     )
     assert completed.stdout is not None
+    output: queue.Queue[str | BaseException | None] = queue.Queue()
+
+    def _pump() -> None:
+        assert completed.stdout is not None
+        try:
+            for raw in iter(completed.stdout.readline, ""):
+                output.put(raw)
+        except BaseException as exc:
+            output.put(exc)
+        finally:
+            output.put(None)
+
+    threading.Thread(target=_pump, daemon=True).start()
     unknown_certificate_issuer = False
-    for line in iter(completed.stdout.readline, ""):
-        clean_line = line.rstrip("\r\n")
-        if "unknownissuer" in clean_line.lower():
-            unknown_certificate_issuer = True
-        _append(log, clean_line)
+    reader_error: BaseException | None = None
+    silent_since = time.monotonic()
+    try:
+        while True:
+            try:
+                line = output.get(timeout=heartbeat_seconds)
+            except queue.Empty:
+                silent = int(time.monotonic() - silent_since)
+                _append(log, f"[wait] no output for {silent}s; still running: {Path(command[0]).name}")
+                continue
+            if line is None:
+                break
+            if isinstance(line, BaseException):
+                reader_error = line
+                continue
+            silent_since = time.monotonic()
+            clean_line = line.rstrip("\r\n")
+            if "unknownissuer" in clean_line.lower():
+                unknown_certificate_issuer = True
+            _append(log, clean_line)
+        if reader_error is not None:
+            raise reader_error
+    except BaseException:
+        try:
+            _terminate_and_reap(completed)
+        except BaseException:
+            pass
+        raise
     returncode = completed.wait()
     _append(log, f"[exit] returncode={returncode}")
     if returncode != 0:
@@ -404,9 +460,14 @@ def _uv_command() -> str:
 def _find_base_python(plan: EnvironmentInstallPlan) -> Path:
     if plan.base_python.is_file():
         return plan.base_python
-    patterns = ["cpython-3.13.*-windows-*/python.exe"]
-    if sys.platform != "win32":
-        patterns = ["cpython-3.13.*-linux*/bin/python3", "cpython-3.13.*-linux*/bin/python"]
+    runtime_platform, runtime_arch = _supported_runtime()
+    if runtime_platform == "windows":
+        patterns = ["cpython-3.13.*-windows-x86_64-*/python.exe"]
+    else:
+        patterns = [
+            f"cpython-3.13.*-linux-{runtime_arch}-*/bin/python3",
+            f"cpython-3.13.*-linux-{runtime_arch}-*/bin/python",
+        ]
     for pattern in patterns:
         candidates = sorted(plan.python_install_dir.glob(pattern), reverse=True)
         for candidate in candidates:
@@ -432,6 +493,7 @@ def install_environment(
     task_id: str | None = None,
     progress: ProgressFn | None = None,
 ) -> AuditResult:
+    _supported_runtime()
     task_id = task_id or _install_task_id_from_state(plan.layout)
     facts: dict = {"plan": plan.as_dict(), "phase": "source"}
     if task_id:
@@ -443,12 +505,9 @@ def install_environment(
         _append(log, f"[source] pinned commit {plan.source_commit}")
     copy_source_snapshot(build_install_plan(plan.source_root, plan.layout, dry_run=False, source_commit=plan.source_commit))
     github_prefix = plan.download_sources.github_url_prefix if plan.download_sources else None
-    localized_direct_urls = localize_linux_flash_attn_dependency(plan.layout.source, log, github_url_prefix=github_prefix)
-    if localized_direct_urls:
-        facts["localized_direct_url_dependencies"] = localized_direct_urls
-    dropped_optional = strip_optional_runtime_dependencies(plan.layout.source, log)
-    if dropped_optional:
-        facts["dropped_optional_dependencies"] = dropped_optional
+    applied_patches = patch_comfyui_checkpoint_prefix(plan.layout.source, log)
+    if applied_patches:
+        facts["applied_source_patches"] = applied_patches
 
     if not plan.constraints.is_file():
         raise FileNotFoundError(f"Anima constraints file missing: {plan.constraints}")
@@ -477,7 +536,7 @@ def install_environment(
     if not base_python.is_file():
         plan.python_install_dir.mkdir(parents=True, exist_ok=True)
         _run_streaming(
-            [uv, "python", "install", "3.13", "--install-dir", str(plan.python_install_dir), "--reinstall", "--no-cache"],
+            [uv, "python", "install", "3.13", "--install-dir", str(plan.python_install_dir), "--reinstall"],
             plan.project_root,
             log,
             env=process_env,
@@ -508,15 +567,21 @@ def install_environment(
     facts["phase"] = "dependencies"
     _emit_progress(progress, "dependencies", "Installing Anima Fast Python dependencies")
     write_install_state(plan.layout, STATE_INSTALLING, facts, "installing Anima dependencies")
-    pip_targets = [*anima_pip_dependency_targets(), str(plan.layout.source)]
+    pip_targets = anima_pip_dependency_targets()
+    flash_target = flash_attn_dependency_target(github_url_prefix=github_prefix)
+    if flash_target:
+        pip_targets.append(flash_target)
+        facts["flash_attn_dependency"] = flash_target
+    else:
+        _append(log, "[info] no verified FlashAttention wheel for this platform; using torch attention")
     _run_streaming(
         [
             uv,
             "pip",
             "install",
+            "--verbose",
             "--python",
             str(plan.venv_python),
-            "--no-cache",
             "--no-config",
             "--index-url",
             pip_index,
@@ -529,6 +594,23 @@ def install_environment(
             "--overrides",
             str(plan.overrides),
             *pip_targets,
+        ],
+        plan.project_root,
+        log,
+        env=process_env,
+        retries=int(os.environ.get("ANIMA_FAST_INSTALL_RETRIES", "3")),
+    )
+    _run_streaming(
+        [
+            uv,
+            "pip",
+            "install",
+            "--verbose",
+            "--python",
+            str(plan.venv_python),
+            "--no-config",
+            "--no-deps",
+            str(plan.layout.source),
         ],
         plan.project_root,
         log,
@@ -587,6 +669,16 @@ except Exception as exc:
     facts["torch_error"] = repr(exc)
 print(json.dumps(facts, ensure_ascii=False))
 """
+    audit_env = {
+        **os.environ,
+        "PYTHONIOENCODING": "utf-8",
+        "PYTHONNOUSERSITE": "1",
+    }
+    if (
+        sys.platform.startswith("linux")
+        and platform_module.machine().lower() in {"aarch64", "arm64"}
+    ):
+        audit_env["BNB_CUDA_VERSION"] = "130"
     completed = subprocess.run(
         [str(python), "-c", script],
         cwd=str(cwd),
@@ -595,7 +687,7 @@ print(json.dumps(facts, ensure_ascii=False))
         encoding="utf-8",
         errors="replace",
         timeout=180,
-        env={**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONNOUSERSITE": "1"},
+        env=audit_env,
     )
     if completed.returncode != 0:
         return {
