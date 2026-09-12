@@ -438,7 +438,7 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
 
     normalize_bucket_resolution(values, warnings)
 
-    values.setdefault("torch_compile", True)
+    values.setdefault("torch_compile", False)
     values.setdefault("compile_dynamic_seq", True)
     if truthy(values.get("torch_compile")) and not truthy(values.get("compile_dynamic_seq")):
         values["compile_dynamic_seq"] = True
@@ -450,6 +450,14 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     if is_empty(values.get("attn_mode")):
         values["attn_mode"] = "torch"
         warnings.append("attn_mode 留空时使用 torch 保底；如需 flash 请先确认插件环境已安装 flash-attn")
+    if values["attn_mode"] == "torch" and truthy(values.get("torch_compile")):
+        if truthy(source.get("torch_compile")):
+            raise AdapterError(
+                "attn_mode=torch cannot be combined with torch_compile=true in Anima Fast "
+                "(#336); disable torch_compile or choose a supported attention mode"
+            )
+        values["torch_compile"] = False
+        warnings.append("torch_compile was disabled because attn_mode=torch is incompatible with #336")
     values["method"] = "lora"
     values["methods_subdir"] = "gui-methods"
     values["network_module"] = "networks.lora_anima"

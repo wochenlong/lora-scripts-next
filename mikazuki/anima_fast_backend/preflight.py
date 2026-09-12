@@ -533,7 +533,7 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
     blocks_to_swap = _int_value(config.get("blocks_to_swap"), 0)
     cpu_offload = _truthy(config.get("cpu_offload_checkpointing"))
     unsloth = _truthy(config.get("unsloth_offload_checkpointing"))
-    torch_compile = _truthy(config.get("torch_compile", True))
+    torch_compile = _truthy(config.get("torch_compile", False))
 
     if blocks_to_swap > 0 and cpu_offload:
         errors.append("blocks_to_swap is incompatible with cpu_offload_checkpointing")
@@ -545,6 +545,15 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
     facts["resolution_tokens"] = tokens
     if torch_compile and not _truthy(config.get("compile_dynamic_seq", True)):
         errors.append("torch_compile requires compile_dynamic_seq with Anima v1.17.1 free-fit buckets")
+    raw_attn_mode = config.get("attn_mode")
+    attn_mode = str(raw_attn_mode or "").strip()
+    if attn_mode.lower() in {"", "undefined", "null", "nan"}:
+        attn_mode = "torch"
+    if attn_mode == "torch" and torch_compile:
+        errors.append(
+            "attn_mode=torch cannot be combined with torch_compile=true in Anima Fast "
+            "(#336); disable torch_compile or choose a supported attention mode"
+        )
 
     optimizer_type = str(config.get("optimizer_type", "")).strip().lower()
     if optimizer_type == "automagic":
