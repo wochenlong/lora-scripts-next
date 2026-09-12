@@ -508,7 +508,7 @@ def dump_fast_dataset_toml(values: dict[str, Any]) -> str:
     repeats = int_value(values.get("dataset_repeats") or values.get("num_repeats"), 1) or 1
     dataset_values = {
         "batch_size": batch_size,
-        "validation_split_num": int_value(values.get("validation_split_num"), 16),
+        "validation_split_num": int_value(values.get("validation_split_num"), 0),
         "validation_seed": int_value(values.get("validation_seed"), 42),
     }
     for key in ("validation_split",):

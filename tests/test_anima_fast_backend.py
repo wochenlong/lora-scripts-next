@@ -324,6 +324,27 @@ class AdapterTests(unittest.TestCase):
         self.assertIn("[[datasets.subsets]]", text)
         self.assertIn("num_repeats = 7", text)
 
+    def test_dump_fast_dataset_toml_defaults_to_no_validation_split(self):
+        text = dump_fast_dataset_toml(
+            {
+                "resized_image_dir": "D:/data/resized",
+                "lora_cache_dir": "D:/data/lora",
+            }
+        )
+
+        self.assertIn("validation_split_num = 0", text)
+
+    def test_dump_fast_dataset_toml_respects_explicit_validation_split_num(self):
+        text = dump_fast_dataset_toml(
+            {
+                "resized_image_dir": "D:/data/resized",
+                "lora_cache_dir": "D:/data/lora",
+                "validation_split_num": 8,
+            }
+        )
+
+        self.assertIn("validation_split_num = 8", text)
+
     def test_dataset_cache_slug_from_relative_path(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
