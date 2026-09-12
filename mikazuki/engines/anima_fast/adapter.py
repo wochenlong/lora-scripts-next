@@ -424,7 +424,10 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
 
     normalize_bucket_resolution(values, warnings)
 
-    values.setdefault("torch_compile", True)
+    if is_empty(values.get("torch_compile")):
+        values["torch_compile"] = False
+    else:
+        values.setdefault("torch_compile", False)
     values.setdefault("compile_dynamic_seq", True)
     if truthy(values.get("torch_compile")) and not truthy(values.get("compile_dynamic_seq")):
         values["compile_dynamic_seq"] = True
@@ -445,6 +448,11 @@ def adapt_config(source: dict[str, Any], runtime: RuntimeConfig, run_id: str) ->
     if is_empty(values.get("attn_mode")):
         values["attn_mode"] = "torch"
         warnings.append("attn_mode 留空时使用 torch 保底；如需 flash 请先确认插件环境已安装 flash-attn")
+    if values["attn_mode"] == "torch" and truthy(values.get("torch_compile")):
+        raise AdapterError(
+            "attn_mode=torch 与 torch_compile=true 组合存在兼容性风险；"
+            "请改用 flash/xformers，或关闭 torch_compile"
+        )
     values["method"] = "lora"
     values["methods_subdir"] = "gui-methods"
     values["network_module"] = "networks.lora_anima"

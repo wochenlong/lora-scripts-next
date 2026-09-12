@@ -352,6 +352,34 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(adapted.values["attn_mode"], "torch")
         self.assertTrue(any("attn_mode" in warning for warning in adapted.warnings))
 
+    def test_adapt_config_defaults_torch_compile_to_false(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config({"lora_type": "lora"}, runtime, "run-1")
+
+        self.assertFalse(adapted.values["torch_compile"])
+
+    def test_adapt_config_rejects_torch_attention_with_torch_compile(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            with self.assertRaisesRegex(AdapterError, "attn_mode=torch.*torch_compile=true"):
+                adapt_config({
+                    "lora_type": "lora",
+                    "attn_mode": "torch",
+                    "torch_compile": True,
+                }, runtime, "run-1")
+
+    def test_adapt_config_treats_empty_compile_values_as_disabled(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            for empty_value in (None, "", "null"):
+                adapted = adapt_config({
+                    "lora_type": "lora",
+                    "attn_mode": "torch",
+                    "torch_compile": empty_value,
+                }, runtime, "run-1")
+                self.assertFalse(adapted.values["torch_compile"], empty_value)
+
     def test_adapt_config_ignores_removed_static_token_count(self):
         with tempfile.TemporaryDirectory() as td:
             runtime = make_runtime(Path(td))
@@ -359,6 +387,7 @@ class AdapterTests(unittest.TestCase):
                 "lora_type": "lora",
                 "resolution": "1536,1536",
                 "torch_compile": True,
+                "attn_mode": "flash",
                 "static_token_count": 4096,
             }, runtime, "run-1")
 
@@ -629,6 +658,30 @@ class PreflightLauncherTests(unittest.TestCase):
         self.assertFalse(result.ok)
         self.assertTrue(any("compile_dynamic_seq" in error for error in result.errors))
 
+    def test_preflight_rejects_torch_attention_with_torch_compile(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            for file in ("model.safetensors", "vae.safetensors", "qwen.safetensors"):
+                (root / file).write_text("", encoding="utf-8")
+            dataset = root / "dataset"
+            dataset.mkdir()
+            (dataset / "a.png").write_text("", encoding="utf-8")
+            (dataset / "a.txt").write_text("caption", encoding="utf-8")
+
+            result = run_preflight({
+                "pretrained_model_name_or_path": "model.safetensors",
+                "vae": "vae.safetensors",
+                "qwen3": "qwen.safetensors",
+                "train_data_dir": "dataset",
+                "resolution": "64,64",
+                "attn_mode": "torch",
+                "torch_compile": True,
+            }, runtime, lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True))
+
+        self.assertFalse(result.ok)
+        self.assertTrue(any("attn_mode=torch" in error and "torch_compile=true" in error for error in result.errors))
+
     def test_preflight_rejects_cache_flags_without_preprocess_cache(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
@@ -798,10 +851,15 @@ class PreflightLauncherTests(unittest.TestCase):
                     "gradient_checkpointing": True,
                     "torch_compile": True,
                     "compile_dynamic_seq": True,
-                    "attn_mode": "torch",
+                    "attn_mode": "flash",
                 },
                 runtime,
-                lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True),
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                    flash_attn_importable=True,
+                ),
             )
 
         self.assertTrue(result.ok, result.errors)

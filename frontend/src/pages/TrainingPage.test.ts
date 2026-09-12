@@ -105,12 +105,12 @@ const DynamicSchemaFormStub = defineComponent({
   `,
 })
 
-function mountPage() {
+function mountPage(schemaName = "test-schema") {
   return mount(TrainingPage, {
     props: {
       title: "Training",
       area: "Area",
-      schemaName: "test-schema",
+      schemaName,
       fieldDefaults: { sample_cfg: 5, tags: ["module-tag"] },
     },
     global: {
@@ -191,6 +191,30 @@ describe("TrainingPage single-field reset", () => {
     await flushPromises()
     expect(wrapper.get(".preview-panel pre").text()).not.toContain("advanced_only =")
     expect(wrapper.get(".preview-panel pre").text()).toContain('mode = "basic"')
+    wrapper.unmount()
+  })
+
+  it("normalizes unsafe carry-over when autosave JSON is malformed", async () => {
+    const animaFastSchema: AdaptedSchema = {
+      ...schema,
+      name: "anima-lora-fast",
+      sections: [{
+        ...schema.sections[0],
+        fields: [
+          ...schema.sections[0].fields,
+          { key: "attn_mode", type: "string", defaultValue: "", conditions: [] },
+          { key: "torch_compile", type: "boolean", defaultValue: false, conditions: [] },
+        ],
+      }],
+    }
+    vi.mocked(loadTrainingSchema).mockResolvedValue(animaFastSchema)
+    sessionStorage.setItem("mikazuki-carry-over", JSON.stringify({ attn_mode: "torch", torch_compile: true }))
+    localStorage.setItem("configs-anima-lora-fast-autosave", "{malformed")
+
+    const wrapper = mountPage("anima-lora-fast")
+    await flushPromises()
+
+    expect(wrapper.get(".model").text()).toContain('"torch_compile":false')
     wrapper.unmount()
   })
 })

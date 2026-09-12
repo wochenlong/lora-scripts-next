@@ -2,7 +2,7 @@
 import { computed } from "vue"
 import { useI18n } from "vue-i18n"
 import type { AdaptedSchema, FormField, FormModel } from "../schema/adapter"
-import { isFieldActive } from "../schema/adapter"
+import { isAnimaFastTorchCompileBlocked, isFieldActive } from "../schema/adapter"
 import SchemaField from "./SchemaField.vue"
 
 const props = defineProps<{ schema: AdaptedSchema; modelValue: FormModel; errors: Record<string, string>; effectiveDefaults: FormModel }>()
@@ -23,8 +23,17 @@ function visibleFields(fields: FormField[]) {
   return fields.filter((field) => !field.hidden && selectedFields.value.get(field.key) === field)
 }
 
+function effectiveField(field: FormField) {
+  return field.key === "torch_compile" && isAnimaFastTorchCompileBlocked(props.schema, props.modelValue)
+    ? { ...field, disabled: true }
+    : field
+}
+
 function update(key: string, value: FormModel[string]) {
-  emit("update:modelValue", { ...props.modelValue, [key]: value })
+  const next = { ...props.modelValue, [key]: value }
+  if (key === "attn_mode" && isAnimaFastTorchCompileBlocked(props.schema, next)) next.torch_compile = false
+  if (key === "torch_compile" && isAnimaFastTorchCompileBlocked(props.schema, next)) next.torch_compile = false
+  emit("update:modelValue", next)
 }
 </script>
 
@@ -37,7 +46,7 @@ function update(key: string, value: FormModel[string]) {
         <SchemaField
           v-for="field in visibleFields(section.fields)"
           :key="field.key"
-          :field="field"
+          :field="effectiveField(field)"
           :model-value="modelValue[field.key]"
           :default-value="effectiveDefaults[field.key]"
           :error="errors[field.key]"
