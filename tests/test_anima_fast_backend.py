@@ -2159,12 +2159,17 @@ class PreflightLauncherTests(unittest.TestCase):
                     "qwen3": str(root / "qwen.safetensors"),
                     "train_data_dir": str(root / "data"),
                     "gradient_checkpointing": True,
-                    "torch_compile": False,
+                    "torch_compile": True,
                     "compile_dynamic_seq": True,
-                    "attn_mode": "torch",
+                    "attn_mode": "flash",
                 },
                 runtime,
-                lambda _runtime: ProbeFacts("3.13.11", torch_metadata_version="2.11.0+cu130", cuda_available=True),
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                    flash_attn_importable=True,
+                ),
             )
 
         self.assertTrue(result.ok, result.errors)
@@ -2189,6 +2194,41 @@ class PreflightLauncherTests(unittest.TestCase):
                     "torch_compile": True,
                     "compile_dynamic_seq": True,
                     "attn_mode": "torch",
+                },
+                runtime,
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                ),
+            )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("#336" in error and "torch_compile" in error for error in result.errors),
+            result.errors,
+        )
+
+    def test_preflight_rejects_empty_attention_with_compile(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            (root / "data").mkdir()
+            (root / "data" / "1.png").write_bytes(b"png")
+            (root / "data" / "1.txt").write_text("test", encoding="utf-8")
+            save_anima_model(root / "dit.safetensors")
+            for name in ("vae.safetensors", "qwen.safetensors"):
+                (root / name).write_bytes(b"x")
+
+            result = run_preflight(
+                {
+                    "pretrained_model_name_or_path": str(root / "dit.safetensors"),
+                    "vae": str(root / "vae.safetensors"),
+                    "qwen3": str(root / "qwen.safetensors"),
+                    "train_data_dir": str(root / "data"),
+                    "torch_compile": True,
+                    "compile_dynamic_seq": True,
+                    "attn_mode": "",
                 },
                 runtime,
                 lambda _runtime: ProbeFacts(

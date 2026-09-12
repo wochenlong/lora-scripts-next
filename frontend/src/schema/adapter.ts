@@ -191,7 +191,8 @@ export function isFieldActive(field: FormField, model: FormModel) {
 }
 
 export function isAnimaFastTorchCompileBlocked(model: FormModel) {
-  return model.attn_mode === "torch"
+  const attnMode = typeof model.attn_mode === "string" ? model.attn_mode.trim() : ""
+  return !attnMode || attnMode === "torch"
 }
 
 export function createDefaultModel(schema: AdaptedSchema): FormModel {

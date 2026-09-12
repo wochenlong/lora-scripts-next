@@ -71,4 +71,35 @@ describe("DynamicSchemaForm", () => {
     await wrapper.setProps({ modelValue: { attn_mode: "torch", torch_compile: false } })
     expect(wrapper.get('[data-key="torch_compile"]').attributes("data-disabled")).toBe("true")
   })
+
+  it("treats empty attention as torch when guarding torch_compile", () => {
+    const guardedSchema: AdaptedSchema = {
+      ...schema,
+      sections: [{
+        ...schema.sections[0],
+        fields: [
+          { key: "attn_mode", type: "string", options: ["", "torch", "flash"], conditions: [] },
+          { key: "torch_compile", type: "boolean", conditions: [] },
+        ],
+      }],
+    }
+    const wrapper = mount(DynamicSchemaForm, {
+      props: {
+        schema: guardedSchema,
+        modelValue: { attn_mode: "", torch_compile: true },
+        errors: {},
+      },
+      global: {
+        plugins: [i18n],
+        stubs: {
+          SchemaField: {
+            props: ["field"],
+            template: "<button :data-key=\"field.key\" :data-disabled=\"field.disabled\">{{ field.key }}</button>",
+          },
+        },
+      },
+    })
+
+    expect(wrapper.get('[data-key="torch_compile"]').attributes("data-disabled")).toBe("true")
+  })
 })

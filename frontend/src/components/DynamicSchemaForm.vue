@@ -34,7 +34,7 @@ function presentedField(field: FormField): FormField {
 
 function update(key: string, value: FormModel[string]) {
   const next = { ...props.modelValue, [key]: value }
-  if (key === "attn_mode" && value === "torch") next.torch_compile = false
+  if (key === "attn_mode" && isAnimaFastTorchCompileBlocked(next)) next.torch_compile = false
   emit("update:modelValue", next)
 }
 </script>
