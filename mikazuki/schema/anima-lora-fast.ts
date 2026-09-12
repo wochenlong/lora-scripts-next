@@ -16,7 +16,7 @@ Schema.intersect([
         timestep_sampling: Schema.union(["sigma", "uniform", "sigmoid", "shift", "flux_shift"]).default("shift").description("时间步采样"),
         discrete_flow_shift: Schema.number().step(0.001).default(3.0).description("Rectified Flow 位移"),
         attn_mode: Schema.union(["", "torch", "xformers", "sageattn", "flash"]).default("").description("Attention 加速实现。留空使用 torch 保底，避免 flash-attn 缺失导致预检查失败；手动选择 flash 需要插件环境已安装 flash-attn 且显卡支持"),
-        torch_compile: Schema.boolean().default(true).description("启用 torch.compile"),
+        torch_compile: Schema.boolean().default(false).description("启用 torch.compile；attn_mode=torch 或留空时禁止组合"),
         compile_dynamic_seq: Schema.boolean().default(true).description("按 free-fit bucket 动态编译序列长度；开启 torch.compile 时必须启用"),
     }).description("Anima Fast 参数"),
 

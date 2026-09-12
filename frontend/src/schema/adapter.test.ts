@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest"
 import { readdirSync, readFileSync } from "node:fs"
 import { resolve } from "node:path"
-import { applyReadonlyDefaults, createDefaultModel, executeSchemaSources, serializeModel } from "./adapter"
+import { applyReadonlyDefaults, createDefaultModel, executeSchemaSources, normalizeModelForSchema, serializeModel, validateModel } from "./adapter"
 
 const sources = [
   {
@@ -229,5 +229,24 @@ describe("dynamic schema adapter", () => {
       methods_subdir: "gui-methods",
       network_module: "networks.lora_anima",
     })
+  })
+
+  it("blocks the Anima Fast torch attention and torch compile combination", () => {
+    const schema = executeSchemaSources(
+      [{
+        name: "anima-lora-fast",
+        hash: "anima-lora-fast",
+        schema: `Schema.object({
+          attn_mode: Schema.union(["", "torch", "flash"]).default(""),
+          torch_compile: Schema.boolean().default(false),
+        })`,
+      }],
+      "anima-lora-fast",
+    )
+    const model = { attn_mode: "torch", torch_compile: true }
+
+    expect(serializeModel(schema, model)).toMatchObject({ attn_mode: "torch", torch_compile: false })
+    expect(Object.values(validateModel(schema, model)).join(" ")).toContain("attn_mode=torch")
+    expect(normalizeModelForSchema(schema, model)).toMatchObject({ attn_mode: "torch", torch_compile: false })
   })
 })

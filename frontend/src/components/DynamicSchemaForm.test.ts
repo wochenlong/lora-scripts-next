@@ -37,4 +37,39 @@ describe("DynamicSchemaForm", () => {
     await wrapper.get(".reset").trigger("click")
     expect(wrapper.emitted("reset-field")?.[0]).toEqual(["mode"])
   })
+
+  it("disables Anima Fast torch compile and clears it when torch attention is selected", async () => {
+    const animaSchema: AdaptedSchema = {
+      ...schema,
+      name: "anima-lora-fast",
+      sections: [{
+        ...schema.sections[0],
+        fields: [
+          { key: "attn_mode", type: "string", options: ["", "torch", "flash"], conditions: [] },
+          { key: "torch_compile", type: "boolean", conditions: [] },
+        ],
+      }],
+    }
+    const wrapper = mount(DynamicSchemaForm, {
+      props: {
+        schema: animaSchema,
+        modelValue: { attn_mode: "torch", torch_compile: true },
+        errors: {},
+        effectiveDefaults: { attn_mode: "", torch_compile: false },
+      },
+      global: {
+        plugins: [i18n],
+        stubs: {
+          SchemaField: {
+            props: ["field"],
+            template: "<button class='field' :data-key='field.key' :data-disabled='field.disabled' @click='$emit(\"update:modelValue\", field.key === \"attn_mode\" ? \"torch\" : false)' />",
+          },
+        },
+      },
+    })
+
+    expect(wrapper.get("[data-key='torch_compile']").attributes("data-disabled")).toBe("true")
+    await wrapper.get("[data-key='attn_mode']").trigger("click")
+    expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([{ attn_mode: "torch", torch_compile: false }])
+  })
 })

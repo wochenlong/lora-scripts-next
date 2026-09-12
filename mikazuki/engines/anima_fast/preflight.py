@@ -377,7 +377,10 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
     blocks_to_swap = _int_value(config.get("blocks_to_swap"), 0)
     cpu_offload = _truthy(config.get("cpu_offload_checkpointing"))
     unsloth = _truthy(config.get("unsloth_offload_checkpointing"))
-    torch_compile = _truthy(config.get("torch_compile", True))
+    torch_compile = _truthy(config.get("torch_compile", False))
+    attn_mode = str(config.get("attn_mode", "") or "").strip().lower()
+    if not attn_mode:
+        attn_mode = "torch"
 
     if blocks_to_swap > 0 and cpu_offload:
         errors.append("blocks_to_swap is incompatible with cpu_offload_checkpointing")
@@ -385,6 +388,11 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
         errors.append("unsloth_offload_checkpointing is incompatible with cpu_offload_checkpointing")
     if unsloth and blocks_to_swap > 0:
         errors.append("unsloth_offload_checkpointing is incompatible with blocks_to_swap")
+    if attn_mode == "torch" and torch_compile:
+        errors.append(
+            "attn_mode=torch 与 torch_compile=true 组合存在兼容性风险；"
+            "请改用 flash/xformers，或关闭 torch_compile"
+        )
     tokens = _resolution_tokens(config)
     facts["resolution_tokens"] = tokens
     if torch_compile and not _truthy(config.get("compile_dynamic_seq", True)):
@@ -440,7 +448,7 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
                 "torch package metadata is missing (dist-info corrupt); "
                 "repair the Anima Fast plugin before training"
             )
-        if str(config.get("attn_mode", "")).strip() == "flash" and not dep.flash_attn_importable:
+        if attn_mode == "flash" and not dep.flash_attn_importable:
             errors.append(
                 "attn_mode=flash 需要 Fast 插件环境可导入 flash_attn；"
                 "请改用 torch/xformers，或先修复插件环境"

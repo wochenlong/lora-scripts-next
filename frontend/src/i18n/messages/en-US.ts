@@ -167,6 +167,7 @@ export default {
       prodigyLr: "Prodigy works best with unet_lr and text_encoder_lr set to 1",
       oftSdxl: "OFT is currently only available for SDXL",
       conflict: "Parameters {left} and {right} conflict; enable only one of them",
+      animaFastTorchCompile: "torch_compile cannot be enabled when attn_mode is torch or empty",
     },
     schemas: {
       "sd3-lora": { title: "Anima LoRA", area: "Anima DiT · Kohya-ss · LoRA" },

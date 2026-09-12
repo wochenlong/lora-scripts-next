@@ -9,7 +9,7 @@ import ModelAssetsTools from "../components/ModelAssetsTools.vue"
 import SectionToc from "../components/SectionToc.vue"
 import { schemasApi } from "../api/schemas"
 import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/training"
-import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultModel, isFieldActive, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
+import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultModel, isFieldActive, normalizeModelForSchema, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
 import { moduleForTrainType } from "../training/modules"
@@ -112,7 +112,7 @@ async function applyImportedConfig(config: FormModel, successMessage?: string) {
     return
   }
   const defaults = effectiveDefaults.value
-  model.value = { ...cloneFormModel(defaults), ...hydrateImportedConfig(result.config || config) }
+  model.value = normalizeModelForSchema(schema.value!, { ...cloneFormModel(defaults), ...hydrateImportedConfig(result.config || config) })
   applyReadonlyDefaults(schema.value!, model.value, defaults)
   if (result.notice) ElMessage.info(result.notice)
   ElMessage.success(successMessage ?? t("training.importMsg.imported"))
@@ -141,7 +141,8 @@ async function load() {
       model.value = saved && typeof saved === "object"
         ? { ...base, ...sanitizePersistedDraft(saved as FormModel, defaults) }
         : base
-    } catch { model.value = base }
+      model.value = normalizeModelForSchema(loaded, model.value)
+    } catch { model.value = normalizeModelForSchema(loaded, base) }
     applyReadonlyDefaults(loaded, model.value, defaults)
     const cards = await schemasApi.graphicCards()
     if (cards.length > 1) {
@@ -198,7 +199,7 @@ async function openPresets() {
 }
 
 function applyPreset(preset: TrainingPreset) {
-  model.value = { ...model.value, ...preset.data }
+  model.value = normalizeModelForSchema(schema.value!, { ...model.value, ...preset.data })
   presetsOpen.value = false
   ElMessage.success(t("training.presetsDialog.applied", { name: preset.metadata.name }))
 }
@@ -268,7 +269,7 @@ async function resetConfig() {
     await ElMessageBox.confirm(t("training.actions.resetConfirm"), t("training.resetDialog.title"), { confirmButtonText: t("training.actions.reset"), cancelButtonText: t("training.resetDialog.cancel"), type: "warning" })
   } catch { return }
   localStorage.removeItem(autosaveKey())
-  model.value = cloneFormModel(effectiveDefaults.value)
+  model.value = normalizeModelForSchema(schema.value, effectiveDefaults.value)
   applyReadonlyDefaults(schema.value, model.value, effectiveDefaults.value)
   ElMessage.success(t("training.actions.resetDone"))
 }
@@ -277,14 +278,14 @@ function resetField(key: string) {
   if (!schema.value) return
   const next = { ...model.value, [key]: cloneFormValue(effectiveDefaults.value[key]) }
   applyReadonlyDefaults(schema.value, next, effectiveDefaults.value)
-  model.value = next
+  model.value = normalizeModelForSchema(schema.value, next)
   errors.value = validateModel(schema.value, model.value)
 }
 
 function applyHistory(row: FormModel) {
   if (!schema.value) return
   const defaults = effectiveDefaults.value
-  model.value = { ...cloneFormModel(defaults), ...sanitizePersistedDraft(row, defaults) }
+  model.value = normalizeModelForSchema(schema.value, { ...cloneFormModel(defaults), ...sanitizePersistedDraft(row, defaults) })
   applyReadonlyDefaults(schema.value, model.value, defaults)
   historyOpen.value = false
 }

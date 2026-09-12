@@ -197,6 +197,18 @@ export function isFieldActive(field: FormField, model: FormModel) {
   return field.conditions.every((condition) => model[condition.key] === condition.value)
 }
 
+export function isAnimaFastTorchCompileBlocked(schema: AdaptedSchema, model: FormModel) {
+  if (schema.name !== "anima-lora-fast") return false
+  const attnMode = String(model.attn_mode ?? "").trim().toLowerCase()
+  return attnMode === "" || attnMode === "torch"
+}
+
+export function normalizeModelForSchema(schema: AdaptedSchema, model: FormModel) {
+  const normalized = cloneFormModel(model)
+  if (isAnimaFastTorchCompileBlocked(schema, normalized)) normalized.torch_compile = false
+  return normalized
+}
+
 export function createDefaultModel(schema: AdaptedSchema): FormModel {
   const model: FormModel = {}
   for (const field of schema.sections.flatMap((section) => section.fields)) {
@@ -224,6 +236,10 @@ export function serializeModel(schema: AdaptedSchema, model: FormModel) {
   const output: FormModel = {}
   for (const field of schema.sections.flatMap((section) => section.fields)) {
     if (!isFieldActive(field, model)) continue
+    if (field.key === "torch_compile" && isAnimaFastTorchCompileBlocked(schema, model)) {
+      output[field.key] = false
+      continue
+    }
     const value = field.type === "const" ? field.constValue : model[field.key]
     if (value === undefined || value === "" || (Array.isArray(value) && !value.length)) continue
     output[field.key] = cloneFormValue(value)
@@ -243,6 +259,9 @@ export function validateModel(schema: AdaptedSchema, model: FormModel) {
     } else if (typeof value === "number" && field.max !== undefined && value > field.max) {
       errors[field.key] = i18n.global.t("schema.tooLarge", { max: field.max })
     }
+  }
+  if (isAnimaFastTorchCompileBlocked(schema, model) && model.torch_compile === true) {
+    errors.torch_compile = i18n.global.t("training.diagnostics.animaFastTorchCompile")
   }
   return errors
 }
