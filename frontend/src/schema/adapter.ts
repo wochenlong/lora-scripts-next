@@ -190,6 +190,10 @@ export function isFieldActive(field: FormField, model: FormModel) {
   return field.conditions.every((condition) => model[condition.key] === condition.value)
 }
 
+export function isAnimaFastTorchCompileBlocked(model: FormModel) {
+  return model.attn_mode === "torch"
+}
+
 export function createDefaultModel(schema: AdaptedSchema): FormModel {
   const model: FormModel = {}
   for (const field of schema.sections.flatMap((section) => section.fields)) {
@@ -217,6 +221,10 @@ export function serializeModel(schema: AdaptedSchema, model: FormModel) {
   const output: FormModel = {}
   for (const field of schema.sections.flatMap((section) => section.fields)) {
     if (!isFieldActive(field, model)) continue
+    if (field.key === "torch_compile" && isAnimaFastTorchCompileBlocked(model)) {
+      output[field.key] = false
+      continue
+    }
     const value = field.type === "const" ? field.constValue : model[field.key]
     if (value === undefined || value === "" || (Array.isArray(value) && !value.length)) continue
     output[field.key] = cloneFormValue(value)
@@ -236,6 +244,9 @@ export function validateModel(schema: AdaptedSchema, model: FormModel) {
     } else if (typeof value === "number" && field.max !== undefined && value > field.max) {
       errors[field.key] = i18n.global.t("schema.tooLarge", { max: field.max })
     }
+  }
+  if (isAnimaFastTorchCompileBlocked(model) && model.torch_compile === true) {
+    errors.torch_compile = "attn_mode=torch cannot be combined with torch_compile=true (#336); disable torch_compile or choose a supported attention mode"
   }
   return errors
 }

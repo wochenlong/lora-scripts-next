@@ -34,4 +34,41 @@ describe("DynamicSchemaForm", () => {
     await wrapper.get("button").trigger("click")
     expect(wrapper.emitted("update:modelValue")?.[0]).toEqual([{ mode: 12 }])
   })
+
+  it("disables and clears torch_compile when torch attention is selected", async () => {
+    const guardedSchema: AdaptedSchema = {
+      ...schema,
+      sections: [{
+        ...schema.sections[0],
+        fields: [
+          { key: "attn_mode", type: "string", options: ["torch", "flash"], conditions: [] },
+          { key: "torch_compile", type: "boolean", conditions: [] },
+        ],
+      }],
+    }
+    const wrapper = mount(DynamicSchemaForm, {
+      props: {
+        schema: guardedSchema,
+        modelValue: { attn_mode: "flash", torch_compile: true },
+        errors: {},
+      },
+      global: {
+        plugins: [i18n],
+        stubs: {
+          SchemaField: {
+            props: ["field", "modelValue"],
+            template: "<button :data-key=\"field.key\" :data-disabled=\"field.disabled\" @click=\"$emit('update:modelValue', field.key === 'attn_mode' ? 'torch' : false)\">{{ field.key }}</button>",
+          },
+        },
+      },
+    })
+
+    await wrapper.get('[data-key="attn_mode"]').trigger("click")
+
+    expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([
+      { attn_mode: "torch", torch_compile: false },
+    ])
+    await wrapper.setProps({ modelValue: { attn_mode: "torch", torch_compile: false } })
+    expect(wrapper.get('[data-key="torch_compile"]').attributes("data-disabled")).toBe("true")
+  })
 })

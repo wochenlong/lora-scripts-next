@@ -432,10 +432,41 @@ class AdapterTests(unittest.TestCase):
             adapted = adapt_config({
                 "lora_type": "lora",
                 "attn_mode": "",
+                "torch_compile": False,
             }, runtime, "run-1")
 
         self.assertEqual(adapted.values["attn_mode"], "torch")
         self.assertTrue(any("attn_mode" in warning for warning in adapted.warnings))
+
+    def test_adapt_config_rejects_torch_attention_with_compile(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+
+            with self.assertRaisesRegex(AdapterError, r"attn_mode=torch.*torch_compile"):
+                adapt_config(
+                    {
+                        "attn_mode": "torch",
+                        "torch_compile": True,
+                        "compile_dynamic_seq": True,
+                    },
+                    runtime,
+                    "run-1",
+                )
+
+    def test_adapt_config_allows_torch_attention_without_compile(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config(
+                {
+                    "attn_mode": "torch",
+                    "torch_compile": False,
+                },
+                runtime,
+                "run-1",
+            )
+
+        self.assertEqual(adapted.values["attn_mode"], "torch")
+        self.assertFalse(adapted.values["torch_compile"])
 
     def test_adapt_config_ignores_v117_removed_fields(self):
         with tempfile.TemporaryDirectory() as td:
@@ -444,6 +475,7 @@ class AdapterTests(unittest.TestCase):
                 "lora_type": "lora",
                 "resolution": "1536,1536",
                 "torch_compile": True,
+                "attn_mode": "flash",
                 "static_token_count": 4096,
                 "compile_mode": "full",
                 "dynamo_backend": "eager",
@@ -460,6 +492,7 @@ class AdapterTests(unittest.TestCase):
                 {
                     "torch_compile": True,
                     "compile_dynamic_seq": False,
+                    "attn_mode": "flash",
                     "cache_latents": True,
                     "cache_text_encoder_outputs": True,
                 },
@@ -2126,7 +2159,7 @@ class PreflightLauncherTests(unittest.TestCase):
                     "qwen3": str(root / "qwen.safetensors"),
                     "train_data_dir": str(root / "data"),
                     "gradient_checkpointing": True,
-                    "torch_compile": True,
+                    "torch_compile": False,
                     "compile_dynamic_seq": True,
                     "attn_mode": "torch",
                 },
@@ -2135,6 +2168,41 @@ class PreflightLauncherTests(unittest.TestCase):
             )
 
         self.assertTrue(result.ok, result.errors)
+
+    def test_preflight_rejects_torch_attention_with_compile(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            (root / "data").mkdir()
+            (root / "data" / "1.png").write_bytes(b"png")
+            (root / "data" / "1.txt").write_text("test", encoding="utf-8")
+            save_anima_model(root / "dit.safetensors")
+            for name in ("vae.safetensors", "qwen.safetensors"):
+                (root / name).write_bytes(b"x")
+
+            result = run_preflight(
+                {
+                    "pretrained_model_name_or_path": str(root / "dit.safetensors"),
+                    "vae": str(root / "vae.safetensors"),
+                    "qwen3": str(root / "qwen.safetensors"),
+                    "train_data_dir": str(root / "data"),
+                    "torch_compile": True,
+                    "compile_dynamic_seq": True,
+                    "attn_mode": "torch",
+                },
+                runtime,
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                ),
+            )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("#336" in error and "torch_compile" in error for error in result.errors),
+            result.errors,
+        )
 
     def test_adapt_config_ignores_removed_compile_mode(self):
         with tempfile.TemporaryDirectory() as td:
