@@ -468,6 +468,28 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(adapted.values["attn_mode"], "torch")
         self.assertFalse(adapted.values["torch_compile"])
 
+    def test_adapt_config_defaults_torch_compile_to_false(self):
+        with tempfile.TemporaryDirectory() as td:
+            runtime = make_runtime(Path(td))
+            adapted = adapt_config({"attn_mode": "flash"}, runtime, "run-1")
+
+        self.assertFalse(adapted.values["torch_compile"])
+
+    def test_adapt_config_ignores_empty_torch_compile_values(self):
+        for empty_value in (None, "", "null"):
+            with self.subTest(empty_value=empty_value), tempfile.TemporaryDirectory() as td:
+                runtime = make_runtime(Path(td))
+                adapted = adapt_config(
+                    {
+                        "attn_mode": "torch",
+                        "torch_compile": empty_value,
+                    },
+                    runtime,
+                    "run-1",
+                )
+
+                self.assertFalse(adapted.values["torch_compile"])
+
     def test_adapt_config_ignores_v117_removed_fields(self):
         with tempfile.TemporaryDirectory() as td:
             runtime = make_runtime(Path(td))
@@ -2229,6 +2251,41 @@ class PreflightLauncherTests(unittest.TestCase):
                     "torch_compile": True,
                     "compile_dynamic_seq": True,
                     "attn_mode": "",
+                },
+                runtime,
+                lambda _runtime: ProbeFacts(
+                    "3.13.11",
+                    torch_metadata_version="2.11.0+cu130",
+                    cuda_available=True,
+                ),
+            )
+
+        self.assertFalse(result.ok)
+        self.assertTrue(
+            any("#336" in error and "torch_compile" in error for error in result.errors),
+            result.errors,
+        )
+
+    def test_preflight_rejects_none_attention_with_compile(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            (root / "data").mkdir()
+            (root / "data" / "1.png").write_bytes(b"png")
+            (root / "data" / "1.txt").write_text("test", encoding="utf-8")
+            save_anima_model(root / "dit.safetensors")
+            for name in ("vae.safetensors", "qwen.safetensors"):
+                (root / name).write_bytes(b"x")
+
+            result = run_preflight(
+                {
+                    "pretrained_model_name_or_path": str(root / "dit.safetensors"),
+                    "vae": str(root / "vae.safetensors"),
+                    "qwen3": str(root / "qwen.safetensors"),
+                    "train_data_dir": str(root / "data"),
+                    "torch_compile": True,
+                    "compile_dynamic_seq": True,
+                    "attn_mode": None,
                 },
                 runtime,
                 lambda _runtime: ProbeFacts(

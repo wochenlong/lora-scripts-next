@@ -545,7 +545,10 @@ def run_preflight(config: dict[str, Any], runtime: RuntimeConfig, probe: Depende
     facts["resolution_tokens"] = tokens
     if torch_compile and not _truthy(config.get("compile_dynamic_seq", True)):
         errors.append("torch_compile requires compile_dynamic_seq with Anima v1.17.1 free-fit buckets")
-    attn_mode = str(config.get("attn_mode", "")).strip() or "torch"
+    raw_attn_mode = config.get("attn_mode")
+    attn_mode = str(raw_attn_mode or "").strip()
+    if attn_mode.lower() in {"", "undefined", "null", "nan"}:
+        attn_mode = "torch"
     if attn_mode == "torch" and torch_compile:
         errors.append(
             "attn_mode=torch cannot be combined with torch_compile=true in Anima Fast "
