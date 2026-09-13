@@ -112,7 +112,7 @@ class AnimaFastPreprocessTests(unittest.TestCase):
             (resized / "1.png").write_bytes(b"png")
             dataset = root / "data" / "demo" / "10_style"
             dataset.mkdir(parents=True)
-            (dataset / "2.png").write_bytes(b"png")
+            (dataset / "1.png").write_bytes(b"png")
 
             config = {
                 "train_data_dir": "./data/demo",
@@ -126,6 +126,57 @@ class AnimaFastPreprocessTests(unittest.TestCase):
                 resize.assert_not_called()
                 self.assertFalse(result.auto_resized)
                 self.assertTrue(any("using existing resized dataset" in w for w in result.warnings))
+
+    def test_prepare_reruns_resize_when_source_grows(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            resized = root / ".cache" / "anima_fast" / "data_demo" / "resized" / "10_style"
+            resized.mkdir(parents=True)
+            (resized / "a.png").write_bytes(b"png")
+            dataset = root / "data" / "demo" / "10_style"
+            dataset.mkdir(parents=True)
+            for name in ("a.png", "b.png", "c.png"):
+                (dataset / name).write_bytes(b"png")
+
+            config = {
+                "train_data_dir": "./data/demo",
+                "pretrained_model_name_or_path": "./sd-models/anima/anima-base-v1.0.safetensors",
+                "vae": "./sd-models/anima/qwen_image_vae.safetensors",
+                "qwen3": "./sd-models/anima/qwen_3_06b_base.safetensors",
+            }
+
+            with mock.patch("mikazuki.engines.anima_fast.preprocess.run_resize_images") as resize:
+                result = prepare_anima_fast_dataset(config, runtime, "20260101-test")
+                resize.assert_called_once()
+                self.assertTrue(result.auto_resized)
+                self.assertTrue(any("新增 2 张" in w for w in result.warnings))
+
+    def test_prepare_warns_when_cache_has_removed_images(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            runtime = make_runtime(root)
+            resized = root / ".cache" / "anima_fast" / "data_demo" / "resized" / "10_style"
+            resized.mkdir(parents=True)
+            for name in ("a.png", "b.png", "old.png"):
+                (resized / name).write_bytes(b"png")
+            dataset = root / "data" / "demo" / "10_style"
+            dataset.mkdir(parents=True)
+            for name in ("a.png", "b.png"):
+                (dataset / name).write_bytes(b"png")
+
+            config = {
+                "train_data_dir": "./data/demo",
+                "pretrained_model_name_or_path": "./sd-models/anima/anima-base-v1.0.safetensors",
+                "vae": "./sd-models/anima/qwen_image_vae.safetensors",
+                "qwen3": "./sd-models/anima/qwen_3_06b_base.safetensors",
+            }
+
+            with mock.patch("mikazuki.engines.anima_fast.preprocess.run_resize_images") as resize:
+                result = prepare_anima_fast_dataset(config, runtime, "20260101-test")
+                resize.assert_not_called()
+                self.assertFalse(result.auto_resized)
+                self.assertTrue(any("已不在源目录" in w for w in result.warnings))
 
 
 if __name__ == "__main__":

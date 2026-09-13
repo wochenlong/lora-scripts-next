@@ -42,6 +42,16 @@ def _has_images(root: Path | None) -> bool:
     return False
 
 
+def _image_keys(root: Path) -> set[str]:
+    if not root.is_dir():
+        return set()
+    return {
+        str(path.relative_to(root).with_suffix(""))
+        for path in root.rglob("*")
+        if path.is_file() and path.suffix.lower() in IMAGE_EXTS
+    }
+
+
 def ensure_output_directories(values: dict) -> list[str]:
     created: list[str] = []
     for key in OUTPUT_DIR_KEYS:
@@ -107,21 +117,37 @@ def prepare_anima_fast_dataset(source: dict, runtime: RuntimeConfig, run_id: str
         return DatasetPrepareResult(adapted=AdaptedConfig(values=values, warnings=warnings))
 
     source_dir = Path(str(source_dir_raw))
-    if auto_resize and not _has_images(resized_dir):
+    if auto_resize:
         if not _has_images(source_dir):
             raise AdapterError(f"训练图片目录中没有可用图片: {source_dir}")
-        resolution = _parse_resolution(source.get("resolution") or values.get("resolution"))
-        run_resize_images(runtime, source_dir, resized_dir, resolution)
-        warnings.append(
-            f"auto-resized images from {source_dir} to {resized_dir} at resolution {resolution}"
-        )
-        return DatasetPrepareResult(
-            adapted=AdaptedConfig(values=values, warnings=warnings),
-            warnings=warnings,
-            auto_resized=True,
-        )
-
-    if auto_resize:
+        resized_keys = _image_keys(resized_dir)
+        source_keys = _image_keys(source_dir)
+        missing = source_keys - resized_keys
+        extra = resized_keys - source_keys
+        if not resized_keys or missing:
+            resolution = _parse_resolution(source.get("resolution") or values.get("resolution"))
+            run_resize_images(runtime, source_dir, resized_dir, resolution)
+            if not resized_keys:
+                warnings.append(
+                    f"auto-resized images from {source_dir} to {resized_dir} at resolution {resolution}"
+                )
+            else:
+                warnings.append(
+                    f"源目录新增 {len(missing)} 张图片（resized 为历史任务快照），已增量补充 preprocess: {resized_dir}"
+                )
+            if extra:
+                warnings.append(
+                    f"resized 缓存中 {len(extra)} 张图片已不在源目录，仍会参与训练；如已弃用请清理 {resized_dir}"
+                )
+            return DatasetPrepareResult(
+                adapted=AdaptedConfig(values=values, warnings=warnings),
+                warnings=warnings,
+                auto_resized=True,
+            )
+        if extra:
+            warnings.append(
+                f"resized 缓存中 {len(extra)} 张图片已不在源目录，仍会参与训练；如已弃用请清理 {resized_dir}"
+            )
         warnings.append(f"using existing resized dataset at {resized_dir}")
 
     return DatasetPrepareResult(adapted=AdaptedConfig(values=values, warnings=warnings), warnings=warnings)
