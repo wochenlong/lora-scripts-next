@@ -127,6 +127,13 @@ def prepare_anima_fast_dataset(source: dict, runtime: RuntimeConfig, run_id: str
         if not resized_keys or missing:
             resolution = _parse_resolution(source.get("resolution") or values.get("resolution"))
             run_resize_images(runtime, source_dir, resized_dir, resolution)
+            remaining = missing - _image_keys(resized_dir)
+            if remaining:
+                examples = ", ".join(sorted(remaining)[:3])
+                raise AdapterError(
+                    f"resize 后仍缺少 {len(remaining)} 个训练图片缓存"
+                    f"（示例: {examples}）"
+                )
             if not resized_keys:
                 warnings.append(
                     f"auto-resized images from {source_dir} to {resized_dir} at resolution {resolution}"
