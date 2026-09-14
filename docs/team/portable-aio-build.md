@@ -4,14 +4,14 @@
 > 仓库：[`wochenlong/lora-scripts-next`](https://github.com/wochenlong/lora-scripts-next)  
 > 产品名：Next Trainer  
 > **系列后缀：`AIO`**（**A**ll **I**n **O**ne）  
-> 目标制品名：`Next-Trainer-v3.0.0-AIO.7z`  
+> 目标制品名：`Next-Trainer-v{VERSION}-AIO.7z`
 > 分发渠道：**百度网盘**（体积常约 **数 GB～10GB+**，不适合 GitHub / 魔搭整包强传）
 
 ### 命名硬约束（必读）
 
 | 项 | 正确写法 |
 |----|----------|
-| 完整包系列后缀 | **`AIO`**（All In One），例：`Next-Trainer-v3.0.0-AIO.7z` |
+| 完整包系列后缀 | **`AIO`**（All In One），例：`Next-Trainer-v{VERSION}-AIO.7z` |
 | 未压缩构建目录 | `build\Next-Trainer-Portable\` |
 | 应用副本（含 `gui.py`） | `build\Next-Trainer-Portable\Next-Trainer\` |
 | 更新脚本（进 tools） | `Update-Next-Trainer.bat` / `Update-Next-Trainer-Release.bat` |
@@ -23,7 +23,7 @@
 
 ## 0. 给 Codex 的一句话任务卡（复制即用）
 
-> 读 `docs/team/portable-aio-build.md`，按文档从干净 `main` 工作树打出 **AIO**（All In One = Kohya + Musubi + Anima Fast）整合包。路径一律用 **`Next-Trainer-Portable` / `Next-Trainer`**。发布文件命名 **`Next-Trainer-v3.0.0-AIO.7z`**，算 SHA256，整理百度网盘上传说明；禁止打入训练底模、个人数据、Token、`doc/local`。所有 `gh` 若用到必须 `-R wochenlong/lora-scripts-next`。
+> 读 `docs/team/portable-aio-build.md`，按文档从干净 `main` 工作树打出 **AIO**（All In One = Kohya + Musubi + Anima Fast）整合包。路径一律用 **`Next-Trainer-Portable` / `Next-Trainer`**。发布文件命名 **`Next-Trainer-v{VERSION}-AIO.7z`**，算 SHA256，整理百度网盘上传说明；禁止打入训练底模、个人数据、Token、`doc/local`。所有 `gh` 若用到必须 `-R wochenlong/lora-scripts-next`。
 
 ---
 
@@ -60,18 +60,21 @@
 
 ### 2.2 源码基线
 
-- 以发布基线为准：分支 **`main`**，版本号与 `VERSION` 文件一致（例如 `3.0.0`）
+- 以发布基线为准：分支 **`main`**，版本号与 `VERSION` 文件一致
 - **不要**在脏工作区（有大量未提交改动的日常目录）上直接打正式包
 - 推荐：单独 worktree / 干净 clone，例如：
 
 ```powershell
 cd D:\ai
-git clone https://github.com/wochenlong/lora-scripts-next.git lora-scripts-next-aio-3.0.0
-cd lora-scripts-next-aio-3.0.0
+git clone https://github.com/wochenlong/lora-scripts-next.git lora-scripts-next-aio
+cd lora-scripts-next-aio
 git checkout main
 git pull
 # 核对：git rev-parse HEAD；Get-Content VERSION
 # 核对脚本：Select-String -Path .\build-scripts\build_portable.ps1 -Pattern 'Next-Trainer-Portable'
+$version = (Get-Content .\VERSION -Raw).Trim()
+if ([string]::IsNullOrWhiteSpace($version)) { throw "VERSION is empty" }
+Write-Host "Building version $version"
 ```
 
 可选加速：若本机已有默认打标模型缓存，构建时可传 `-TaggerCacheSource`（见下文）。
@@ -103,13 +106,13 @@ git pull
 在**干净源码根**执行：
 
 ```powershell
-cd D:\ai\lora-scripts-next-aio-3.0.0   # 换成你的干净树
+cd D:\ai\lora-scripts-next-aio   # 换成你的干净树
 
 # 可选：Clean 清掉旧 build\Next-Trainer-Portable
 # 可选：-TaggerCacheSource 'D:\path\to\tagger-models' 复用打标缓存
 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable_2026_full.ps1 `
-  -Version '3.0.0' `
+  -Version $version `
   -Clean `
   -Skip7z
 ```
@@ -125,7 +128,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\resume_portable_2026_full.ps1 `
-  -Version '3.0.0' `
+  -Version $version `
   -Skip7z
 ```
 
@@ -136,7 +139,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\resume_porta
 把「项目根」指到便携包里的 **`Next-Trainer`**，用旁边的 `python_embeded` 跑安装脚本（与用户页内安装同源逻辑）：
 
 ```powershell
-$portable = 'D:\ai\lora-scripts-next-aio-3.0.0\build\Next-Trainer-Portable'
+$portable = 'D:\ai\lora-scripts-next-aio\build\Next-Trainer-Portable'
 $app = Join-Path $portable 'Next-Trainer'
 $py = Join-Path $portable 'python_embeded\python.exe'
 
@@ -214,8 +217,8 @@ AIO 包务必改说明，避免用户以为「不含 Fast」：
 ### 3.5 打 7z（solid，利于重复 torch 树压缩）
 
 ```powershell
-$portable = 'D:\ai\lora-scripts-next-aio-3.0.0\build\Next-Trainer-Portable'
-$out = 'D:\ai\lora-scripts-next-aio-3.0.0\build\Next-Trainer-v3.0.0-AIO.7z'
+$portable = 'D:\ai\lora-scripts-next-aio\build\Next-Trainer-Portable'
+$out = "D:\ai\lora-scripts-next-aio\build\Next-Trainer-v$version-AIO.7z"
 $7z = 'C:\Program Files\7-Zip\7z.exe'
 
 if (Test-Path $out) { Remove-Item $out -Force }
@@ -229,13 +232,13 @@ Get-FileHash $out -Algorithm SHA256
 ```
 
 预期：压缩包体积常在 **数 GB～约 10GB+**（视 Fast / Torch 重复与压缩率而定）。  
-若单文件对某网盘不友好，可用 7z 分卷（例如 `-v4g`），文件名保持 `Next-Trainer-v3.0.0-AIO.7z.001` 这类分卷，并在回报里写清列表与校验方式。
+若单文件对某网盘不友好，可用 7z 分卷（例如 `-v4g`），文件名保持 `Next-Trainer-v{VERSION}-AIO.7z.001` 这类分卷，并在回报里写清列表与校验方式。
 
 ---
 
 ## 4. 验收清单（上传前）
 
-- [ ] 文件名：`Next-Trainer-v3.0.0-AIO.7z`（后缀必须是 **AIO**）
+- [ ] 文件名：`Next-Trainer-v{VERSION}-AIO.7z`（后缀必须是 **AIO**）
 - [ ] 解压根目录可见：`启动.bat`、`检查更新.bat`、`说明.txt`（说明写明 AIO / 含 Fast）
 - [ ] 应用目录名是 **`Next-Trainer\`**（不是 `SD-Trainer\`）
 - [ ] Kohya：能 `启动.bat` 打开 WebUI（`http://127.0.0.1:28000`）
@@ -248,19 +251,19 @@ Get-FileHash $out -Algorithm SHA256
 
 ## 5. 分发：百度网盘（主渠道）
 
-1. 上传 `Next-Trainer-v3.0.0-AIO.7z`（或分卷）到合作者 / 项目约定网盘目录。  
+1. 上传 `Next-Trainer-v{VERSION}-AIO.7z`（或分卷）到合作者 / 项目约定网盘目录。
 2. 开启可分享链接（按项目习惯设提取码）。  
 3. 向维护者 [@wochenlong](https://github.com/wochenlong) 回报（Issue / Discussion / 群均可），模板：
 
 ```text
 AIO 整合包已上传（百度网盘）
 
-文件: Next-Trainer-v3.0.0-AIO.7z
+文件: Next-Trainer-v{VERSION}-AIO.7z
 含义: All In One = Kohya + Musubi + Anima Fast
 大小: <bytes 与 GiB>
 SHA256: <哈希>
 源码: main @ <完整 commit SHA>
-VERSION: 3.0.0
+VERSION: {VERSION}
 布局: Next-Trainer-Portable / Next-Trainer（非 SD-Trainer）
 预装: Kohya cu128 + Musubi cu128 + Anima Fast (.venv cu130)
 网盘链接: <URL>

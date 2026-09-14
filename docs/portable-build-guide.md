@@ -67,7 +67,7 @@ Next-Trainer-v{VERSION}-kohya-musubi.7z    # 可选满配
 Next-Trainer-v{VERSION}-musubi.7z          # 可选 Krea2 分轨
 ```
 
-`VERSION` 必须与仓库根目录 **`VERSION` 文件**及侧栏一致（正式如 `3.0.0`；候选可用 `3.0.0-rc.1` / 带日期后缀，须在 Release 说明写清）。
+`VERSION` 必须与仓库根目录 **`VERSION` 文件**及侧栏一致。构建命令会从该文件读取版本号，避免手工复制旧版本；候选版本可用 `3.1.0-rc.1` / 带日期后缀，须在 Release 说明写清。
 
 ---
 
@@ -93,7 +93,7 @@ Next-Trainer-v{VERSION}-musubi.7z          # 可选 Krea2 分轨
 ```powershell
 git fetch origin
 # 正式稳定包（切 main 之后）：跟踪 main
-# Vue3 / 3.0.0 候选与当前内测：跟踪 dev
+# Vue3 候选与当前内测：跟踪 dev
 git switch dev
 git pull origin dev
 git status   # 必须干净
@@ -120,31 +120,37 @@ cd D:\build\lora-scripts-next-portable
 
 ## 4. 构建命令
 
-以下均在**仓库根目录**执行。把 `3.0.0` 换成实际版本号。
+以下均在**仓库根目录**执行。先从 `VERSION` 文件读取本次版本号：
+
+```powershell
+$version = (Get-Content .\VERSION -Raw).Trim()
+if ([string]::IsNullOrWhiteSpace($version)) { throw "VERSION is empty" }
+Write-Host "Building version $version"
+```
 
 ### 4.1 kohya（**默认带环境，优先打这个**）
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable_kohya_only.ps1 `
-  -Clean -Version 3.0.0 `
+  -Clean -Version $version `
   -TaggerCacheSource D:\path\to\seed-with-tagger-models
 ```
 
-输出：`build\Next-Trainer-v3.0.0-kohya.7z`。  
+输出：`build\Next-Trainer-v{VERSION}-kohya.7z`。
 入口一般为 2026 根：`启动.bat` / `检查更新.bat` / `说明.txt`。Musubi / Fast 需用户在设置页另装。
 
 ### 4.2 lite（体积小、首次启动再装依赖）
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable.ps1 `
-  -Clean -Version 3.0.0 `
+  -Clean -Version $version `
   -TaggerCacheSource D:\path\to\seed-with-tagger-models
 ```
 
 | 输出 | 路径 |
 |------|------|
 | 目录 | `build\Next-Trainer-Portable\` |
-| 7z | `build\Next-Trainer-v3.0.0.7z`（当前 lite 脚本仍用此文件名；上传时可改名为 `Next-Trainer-v3.0.0-lite.7z`） |
+| 7z | `build\Next-Trainer-v{VERSION}.7z`（当前 lite 脚本仍用此文件名；上传时可改名为 `Next-Trainer-v{VERSION}-lite.7z`） |
 
 常用参数：`-Skip7z`、`-SkipTaggerPrefetch`、`-TaggerCacheSource <含 tagger-models 的旧包或仓库>`。
 
@@ -154,14 +160,14 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable_2026_full.ps1 `
-  -Clean -Version 3.0.0 `
+  -Clean -Version $version `
   -TaggerCacheSource D:\path\to\seed-with-tagger-models
 ```
 
 | 输出 | 路径 |
 |------|------|
 | 目录 | `build\Next-Trainer-Portable\`（根目录为 `启动.bat` / `检查更新.bat` / `说明.txt`） |
-| 7z | `build\Next-Trainer-v3.0.0-kohya-musubi.7z` |
+| 7z | `build\Next-Trainer-v{VERSION}-kohya-musubi.7z` |
 | 日志 | `build\portable-2026-logs\` |
 
 仅在需要**开箱 Musubi/Krea2** 且接受双 Torch 体积时构建。耗时长，需稳定网络。
@@ -170,11 +176,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portable_musubi_only.ps1 `
-  -Clean -Version 3.0.0 `
+  -Clean -Version $version `
   -TaggerCacheSource D:\path\to\seed-with-tagger-models
 ```
 
-输出：`build\Next-Trainer-v3.0.0-musubi.7z`。  
+输出：`build\Next-Trainer-v{VERSION}-musubi.7z`。
 本包主环境不烤满 Kohya Torch；常规 SDXL/Flux/Anima 请用 **kohya 默认包**。
 
 ---
@@ -186,8 +192,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 ```powershell
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_portable_release.ps1 `
   -PortableRoot .\build\Next-Trainer-Portable `
-  -ArchivePath .\build\Next-Trainer-v3.0.0-kohya.7z `
-  -ExpectedVersion 3.0.0
+  -ArchivePath ".\build\Next-Trainer-v$version-kohya.7z" `
+  -ExpectedVersion $version
 
 powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_portable_updaters.ps1
 ```
@@ -211,7 +217,7 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_po
 
 | 渠道 | 谁 | 怎么做 |
 |------|-----|--------|
-| GitHub Release | 默认 **@wochenlong**；获授权维护者可用 `gh release` | tag 如 `v3.0.0`；资产挂 7z；正文写包型与体积 |
+| GitHub Release | 默认 **@wochenlong**；获授权维护者可用 `gh release` | tag 为 `v$version`；资产挂 7z；正文写包型与体积 |
 | 魔搭数据集 | 需有 `windsing/next-trainer-portable`（或指定仓库）写权限 | 路径建议 `releases/v{VERSION}/Next-Trainer-v{VERSION}-*.7z` |
 
 **未获 Release 权限的成员**：把验收过的 7z + SHA256 + 构建 commit 交给有权限者上传，或开 Discussion/Issue 交接。
@@ -219,13 +225,13 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_po
 `gh` 示例（有权限时）：
 
 ```powershell
-gh release create v3.0.0 `
+gh release create "v$version" `
   -R wochenlong/lora-scripts-next `
-  --title "Next Trainer v3.0.0" `
+  --title "Next Trainer v$version" `
   --notes-file release-notes.md `
-  .\build\Next-Trainer-v3.0.0-kohya.7z `
-  .\build\Next-Trainer-v3.0.0-lite.7z `
-  .\build\Next-Trainer-v3.0.0-musubi.7z
+  ".\build\Next-Trainer-v$version-kohya.7z" `
+  ".\build\Next-Trainer-v$version-lite.7z" `
+  ".\build\Next-Trainer-v$version-musubi.7z"
 ```
 
 （文件名以实际产出为准。）
@@ -254,7 +260,7 @@ gh release create v3.0.0 `
 
 ---
 
-## 9. 3.0.0 阶段建议节奏
+## 9. 正式版本阶段建议节奏
 
 1. `dev` 技术验收（Discussion 协作清单）无阻断  
 2. 按本文打 **候选包**（版本号可带 rc/日期）→ **内测群**  
