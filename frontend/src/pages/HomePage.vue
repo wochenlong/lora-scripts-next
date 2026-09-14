@@ -10,7 +10,7 @@ const portals = computed(() => [
   { title: t("home.portals.tasks.title"), text: t("home.portals.tasks.text"), to: "/tasks", tone: "cyan" },
 ] as const)
 
-/** Promo slides for 3.0.0: intro + ModelScope + remote event poster (not bundled). */
+/** Release promo slides: intro + ModelScope + remote event poster (not bundled). */
 const EVENT_POSTER_URL =
   "https://cdn.jsdelivr.net/gh/wochenlong/lora-scripts-next@main/docs/design/assets/home-event-anima.webp"
 

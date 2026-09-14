@@ -283,7 +283,7 @@ $env:LORA_ANIMA_FAST_DEV_MODE = "1"
 
 ## 优化器依赖
 
-Fast 页与标准 Kohya 页共用 **LR_OPTIMIZER** 选项（默认 `AdamW8bit`）。插件独立 venv 会安装以下包（见 `config/anima_fast_environment/anima-constraints-cu132.txt`）：
+Fast 页提供经过 Anima Fast 后端筛选的 **LR_OPTIMIZER** 选项，默认使用无需额外依赖的 `AdamW`。`AdamW8bit` 等 8bit 优化器仍可手动选择；插件独立 venv 会安装以下包（见 `config/anima_fast_environment/anima-constraints-cu132.txt`）：
 
 | 优化器示例 | 依赖包 |
 |-----------|--------|
@@ -295,7 +295,7 @@ Fast 页与标准 Kohya 页共用 **LR_OPTIMIZER** 选项（默认 `AdamW8bit`�
 | `pytorch_optimizer.CAME` 等 | `pytorch-optimizer` |
 | `AdamW` | 无额外依赖（PyTorch 内置） |
 
-Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选项**（不含 `prodigyplus.*` 等 Kohya 专用项）。当前 Fast 插件快照未接入 Automagic 优化器，若导入旧配置选择 `optimizer_type=Automagic`，后端会在启动前拒绝并提示改用 `AdamW8bit` 等 Fast 支持项。`DAdaptAdaGrad` 在 `dadaptation==3.1` 下默认 `eps=0.0` 会报错，Fast 会在用户未填写 `eps=` 时自动补充 `optimizer_args=["eps=1e-8"]`；需要实验其它值时可在自定义 optimizer_args 中显式填写。
+Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选项**（不含 `prodigyplus.*` 等 Kohya 专用项）。当前 Fast 插件快照未接入 Automagic 优化器，若导入旧配置选择 `optimizer_type=Automagic`，后端会在启动前拒绝并提示改用 `AdamW` 等 Fast 支持项。`DAdaptAdaGrad` 在 `dadaptation==3.1` 下默认 `eps=0.0` 会报错，Fast 会在用户未填写 `eps=` 时自动补充 `optimizer_args=["eps=1e-8"]`；需要实验其它值时可在自定义 optimizer_args 中显式填写。
 
 若报错 `ImportError: No bitsandbytes`，说明插件是在补全优化器依赖前安装的，或 `bitsandbytes` 版本过旧：在 Fast 页点击 **「修复插件」**（或 `POST /api/engines/anima-fast/repair`）重新同步依赖。
 
@@ -310,7 +310,7 @@ Fast 页优化器下拉**仅列出当前 anima_lora 插件快照已支持的选�
 | 状态「进阶插件 · 待开启」 | 运行 `scripts/cli/install_anima_fast.*` 安装（推荐，终端可见报错）；或在页内点「开启插件」 |
 | 安装失败 / 审计失败 | 优先用 CLI 脚本重装看终端报错；亦可看页内日志或 `POST /api/engines/anima-fast/repair` |
 | `invalid peer certificate: UnknownIssuer` | Windows 安装器会默认使用系统证书库；若仍失败，请确认代理或杀毒软件的根证书已受 Windows 信任，也可换网络重试。旧版 uv 可在安装前设置 `$env:UV_NATIVE_TLS="true"` |
-| `No bitsandbytes` / 优化器 ImportError | 修复插件；或确认 `optimizer_type=AdamW` 临时绕过 |
+| `No bitsandbytes` / 优化器 ImportError | 修复插件；不需要 8bit 优化器时可改用默认的 `optimizer_type=AdamW` |
 | 末 epoch 报 accelerate / `NoneType is not iterable` | torch 的 `.dist-info` 损坏；**修复插件** 或重装 `torch==2.12.0+cu132` |
 | 训练按钮灰色 | 插件未就绪；先安装 |
 | CUDA / 显存报错 | 改用标准模式，或降低分辨率 / batch |

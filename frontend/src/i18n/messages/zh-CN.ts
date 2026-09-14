@@ -604,8 +604,8 @@ export default {
     moreChangelog: "查看更多更新日志…",
   },
   home: {
-    heroTitle: "Next 训练器 3.0.0 版本正式发布",
-    heroSubtitle: "四栏训练工作台已就绪：配置、数据集、任务与引擎管理，一处开训。",
+    heroTitle: "Next 训练器 3.1.0",
+    heroSubtitle: "Anima Fast、AI Toolkit、插件市场与任务工作台完成新一轮更新。",
     startTraining: "开始配置训练",
     readGuide: "阅读使用指南",
     portalAria: "功能入口",

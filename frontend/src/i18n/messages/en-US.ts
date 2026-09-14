@@ -604,8 +604,8 @@ export default {
     moreChangelog: "More changelog…",
   },
   home: {
-    heroTitle: "Next Trainer 3.0.0 is out",
-    heroSubtitle: "The four-pane workbench is ready — configure, dataset, tasks, and engines in one place.",
+    heroTitle: "Next Trainer 3.1.0",
+    heroSubtitle: "Anima Fast, AI Toolkit, the plugin marketplace, and task workflows move forward together.",
     startTraining: "Configure Training",
     readGuide: "Read the Guide",
     portalAria: "Feature portals",

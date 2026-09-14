@@ -1,7 +1,7 @@
 ﻿# Next Trainer
 
 **Next Trainer** is a local Windows training WebUI (GitHub repo: `lora-scripts-next`).  
-LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / Krea 2, built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) (and optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner)) with an Akegarasu-style workflow.
+LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / **FLUX.2 Klein** / Krea 2, built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) and [AI Toolkit](https://github.com/ostris/ai-toolkit), following an Akegarasu-style workflow.
 
 > Product brand and release archives use **Next Trainer** / `Next-Trainer-v*.7z`. The portable layout folder `SD-Trainer/` (and updater bat names) stay as launcher contracts for existing installs.
 
@@ -13,10 +13,10 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / Krea 2, built on [kohy
 
 | Branch | Role | UI | Version |
 |--------|------|----|---------|
-| **`main`** | Stable (legacy UI until cutover) | Legacy prebuilt frontend | **v2.9.1** (moving to `legacy`) |
-| **`dev`** | **Vue 3 formal line** (this README) | Vue 3 four-pane workspace | **`3.0.0`** |
+| **`main`** | Stable release | Vue 3 workspace | **`3.1.0`** |
+| **`dev`** | Next-version integration and acceptance | Vue 3 workspace | Follows development |
 
-**Versioning:** pre-releases used **`2.9.x`** (`beta` → `rc`); **formal Vue 3 release is `3.0.0`**. After default-branch cutover and portable GA, trust the sidebar version and Release archive names. Include the full version when filing issues.
+Include the full version shown in the sidebar or `VERSION` when filing issues. The old UI baseline remains available on `legacy/v2.9.1` for rollback and comparison.
 
 ---
 
@@ -24,16 +24,8 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / Krea 2, built on [kohy
 
 | Package | Contents | Download |
 |---------|----------|----------|
-| **3.0.0 GA** | Preparing (lite / Kohya / Musubi flavors) | Coming to GitHub Release `v3.0.0` and ModelScope |
-| **RC (still usable)** | lite ~0.39 GB; kohya-musubi ~4.2 GB | [GitHub v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) · [ModelScope windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
-
-RC ModelScope example path:
-
-```text
-releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
-```
-
-Legacy UI packages: [Releases](https://github.com/wochenlong/lora-scripts-next/releases) → **v2.9.1**.
+| **3.0.0 GA** | lite / Kohya flavors | [GitHub Release v3.0.0](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0) |
+| **3.1.0** | Source release candidate; portable packages follow acceptance | [Releases](https://github.com/wochenlong/lora-scripts-next/releases) |
 
 ---
 
@@ -41,24 +33,20 @@ Legacy UI packages: [Releases](https://github.com/wochenlong/lora-scripts-next/r
 
 ### A. Portable
 
-1. **Until 3.0.0 packs ship:** keep using the RC packages above for Vue 3 (sidebar may still say rc; source `dev` is already `3.0.0`)
-2. Extract to a path **without spaces or non-ASCII**; **lite** → `run_gui.bat`; full/split packs → follow in-archive launcher
+1. Download a formal package and extract it to a path **without spaces or non-ASCII**
+2. **lite** → `run_gui.bat`; full/split packs → follow the in-archive launcher
 3. Open **http://127.0.0.1:28000**
-4. GA builds should show **`v3.0.0`** in the sidebar
+4. The sidebar version should match the downloaded Release
 
 Requirements: Windows 10/11, NVIDIA GPU (RTX 20+ recommended).
 
 More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md) · [Build & release (collaborators)](docs/portable-build-guide.md)
 
-### B. Run `dev` from source (Vue 3)
+### B. Run from source
 
 ```sh
 git clone https://github.com/wochenlong/lora-scripts-next.git
 cd lora-scripts-next
-
-git fetch origin
-git checkout dev
-git pull origin dev
 
 # Windows
 ./run_gui.bat
@@ -70,8 +58,8 @@ Direct TOML training wrappers are also available from the repository root:
 `train_anima_fast_by_toml.sh` for the optional Anima Fast runtime.
 
 ```sh
-git branch --show-current   # should be dev
-cat VERSION                 # should be 3.0.0
+git branch --show-current
+cat VERSION                 # formal release branch should be 3.1.0
 ```
 
 Frontend lives in `frontend/` (Vue 3 + Vite):
@@ -83,7 +71,7 @@ npm run dev      # hot reload (backend gui must be running)
 npm run build    # writes frontend/dist for static hosting
 ```
 
-### C. Switch an existing clone from `main` to `dev`
+### C. Work on `dev`
 
 ```sh
 git fetch origin
@@ -91,33 +79,34 @@ git switch dev
 git pull
 ```
 
-Back to stable:
+Return to the stable release:
 
 ```sh
 git switch main
 git pull
 ```
 
-> **Note:** `main` and `dev` use different frontend architectures. Do not mix uncommitted `frontend/dist` hotfixes across branches. Portable users should use the package version as-is.
+> **Note:** `dev` may contain changes that have not reached a stable release. Portable users should stay on formal Releases.
 
 ---
 
-## Vue 3 features (`dev` / 3.0.0)
+## Vue 3 features (3.1.0)
 
-Compared with the legacy multi-page dist UI, **`dev` is a Vue 3 SPA workspace**:
+Next Trainer uses a Vue 3 SPA workspace:
 
 | Area | Capabilities |
 |------|----------------|
 | **Training** | Base model × engine × target; live TOML preview; validate / import-export / start |
 | **Dataset** | WD14 tagging; **image-first tag editor** (toolbar source/load, filter & batch edit in a right panel) |
 | **Tasks** | Task list, status, logs, previews / Loss; primary place to watch runs |
-| **Settings** | UI prefs (incl. light/dark theme), **engine management** (Kohya / Anima Fast / Musubi), **download sources** (pip / PyTorch / HF / GitHub mirrors), About, changelog |
-| **Branding** | Product name **Next Trainer**; formal **`3.0.0`** (prerelease versions still show an **rc** badge) |
+| **Settings** | UI prefs (incl. light/dark theme), **engine management** (Kohya / Anima Fast / Musubi / AI Toolkit), plugin marketplace, **download sources** (pip / PyTorch / HF / GitHub mirrors), About, changelog |
+| **Branding** | Product name **Next Trainer**; current formal version **`3.1.0`** |
 | **Credits** | Settings → About; also [docs/credits.md](docs/credits.md) |
 
 Training backends:
 
 - Anima LoRA / Fast / finetune, SD/SDXL, Flux (Kohya line)
+- **FLUX.2 Klein LoRA** via optional **AI Toolkit** (install from Settings)
 - **Krea 2 LoRA** via optional **Musubi-Tuner** engine (install from Settings)
 - Local tagger, train monitor (`/train-monitor`), TensorBoard
 
@@ -125,7 +114,7 @@ Anima Fast: [docs/anima-fast.md](docs/anima-fast.md) · Krea 2 multi-GPU (Linux)
 
 ### Screenshots
 
-Captured from the `dev` Vue 3 UI (`3.0.0` line, Chinese locale).
+Captured from the Vue 3 workspace (Chinese locale).
 
 #### Training
 

@@ -6,6 +6,16 @@ export interface ReleaseEntry {
 
 export const releases: readonly ReleaseEntry[] = [
   {
+    version: "v3.1.0",
+    date: "2026-09-14",
+    items: [
+      "Anima Fast v1.17.1：Anima 2.9B、T-LoRA 与训练安全门禁",
+      "统一训练引擎注册表，并新增 AI Toolkit / Klein 支持",
+      "插件市场、插件宿主与 Pi Agent 扩展能力",
+      "任务工作台、多 GPU、LyCORIS 与断点恢复稳定性修复",
+    ],
+  },
+  {
     version: "v3.0.0",
     date: "2026-08-16",
     items: [

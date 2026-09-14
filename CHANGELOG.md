@@ -5,7 +5,30 @@
 ---
 ## 未发布（dev）
 
+---
+## v3.1.0 — 2026-09-14
+
+> **正式版候选**：本节随 `dev` 发布基线进入 `main`。合并代码不等于立即发布整合包；正式 tag、便携包构建与上传仍需完成发布验收。
+
+### 引擎与训练
+
+- **Anima Fast 更新**：同步上游 v1.17.1，支持 Anima 2.9B 与 T-LoRA，并补齐 Windows Triton、DGX Spark flash-attn、ComfyUI 布局检查点及安装进度可观测性
+- **Anima Fast 安全与兼容修复**：禁止已知危险的 torch compile / 文本编码器组合，默认优化器改为 `AdamW`，明确训练步数与 epoch 的互斥优先级，并修复数据集增长后的缩放缓存刷新
+- **统一训练引擎注册表**：Kohya、Anima Fast、Musubi 与 AI Toolkit 使用一致的 manifest / route / runner 接口
+- **AI Toolkit / Klein**：新增独立引擎环境、安装、预检、配置转换与训练入口
+
+### 产品与扩展
+
+- **插件市场与插件宿主**：支持签名校验、断点续传、持久缓存、更新复用、运行时监管与权限确认
+- **Pi Agent 插件**：接入数据集、训练指标、产物与知识能力，提供 Windows / Linux 双平台包流程
+- **任务工作台**：补齐任务详情、维护任务、日志与训练状态展示，并修复辅助进程生命周期问题
+
 ### 修复
+
+- 修复 Accelerate 多 GPU 启动参数拆分
+- 修复 LyCORIS / LoKr dtype 与权重合并问题
+- 修复 Automagic 恢复训练时的优化器状态
+- 改进 Windows 路径、安装错误提示与插件运行时恢复
 
 - **Anima Fast 引擎切换串台（#271）**：从 Kohya 切到 Anima Fast 时，不再把 `model_train_type=anima-lora` 与 Kohya 默认 `cache_*=true` 带进 Fast；提交时按页面 schema 强制 `anima-lora-fast`，避免静默启动 `anima_train_network.py`
 - 排队任务、插件安装任务不再误显示正在运行任务的 Loss 曲线 / 预览图；运维任务详情隐藏训练专属面板与 TensorBoard 入口
