@@ -1,11 +1,36 @@
 ﻿# Next Trainer
 
-**Next Trainer** 是 Windows 本地训练 WebUI（GitHub 仓库名：`lora-scripts-next`）。  
-支持 Anima / SD 1.5 / SDXL / Flux / **FLUX.2 Klein** / **Krea 2** 的 LoRA 与全量微调；基于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)，可选 [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) 与 [AI Toolkit](https://github.com/ostris/ai-toolkit)，延续秋叶系训练体验。
+<p align="center">
+  <img src="assets/readme/next-trainer-cover.png" alt="Next Trainer" width="720" />
+</p>
 
-> 产品品牌与发布归档一律为 **Next Trainer** / `Next-Trainer-v*.7z`。整合包内目录名 `SD-Trainer/`（及 `Update-SD-Trainer*.bat`）仍为兼容旧安装的启动契约，暂不改名。
+<p align="center">
+  <strong>面向未来与 Agent 的本地训练器</strong><br />
+  熟悉上手 · 一个训练器覆盖常见模型 · 持续更新<br />
+  <sub>专业玩家与平台可用 · 未来支持 Agent 接入 · 仓库 <code>lora-scripts-next</code></sub>
+</p>
 
-[English](README.md) · [开源引用](docs/credits.md) · [NOTICE](NOTICE.md) · [CHANGELOG](CHANGELOG.md)
+<p align="center">
+  <a href="README.md">English</a>
+  ·
+  <a href="#310-更新了什么">3.1.0 更新</a>
+  ·
+  <a href="docs/credits.md">开源引用</a>
+  ·
+  <a href="CHANGELOG.md">更新日志</a>
+  ·
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases">Releases</a>
+</p>
+
+<p align="center"><sub>产品：<strong>Next Trainer</strong> · 为兼容旧安装，整合包继续保留 <code>SD-Trainer/</code> 目录和更新脚本名称。</sub></p>
+
+## 这是什么
+
+**Next Trainer** 是一款面向未来与 Agent 的本地训练器：界面保持熟悉，同时按专业工作台来组织常见模型与多个训练引擎。
+
+你可以在本机 NVIDIA 显卡上训练 Anima、SD 1.5、SDXL、Flux、FLUX.2 Klein 和 Krea 2 的 LoRA 或全量微调，也可以在同一个工作台里完成数据集打标、caption 编辑、TOML 导入、开训，以及日志、预览图和 Loss 查看。
+
+主路径基于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)，并可选接入 [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) 与 [AI Toolkit](https://github.com/ostris/ai-toolkit)。
 
 ---
 
@@ -16,7 +41,7 @@
 | **`main`** | 稳定发布 | Vue 3 工作台 | **`3.1.0`** |
 | **`dev`** | 下一版本集成与验收 | Vue 3 工作台 | 跟随开发进度 |
 
-反馈 Issue 时请附上侧栏或 `VERSION` 中显示的完整版本号。`legacy/v2.9.1` 保留旧 UI 基线，供回退与对照。
+反馈 Issue 时请附上侧栏或 `VERSION` 中的版本号。旧 UI 基线保留在 `legacy/v2.9.1`。
 
 ---
 
@@ -40,7 +65,7 @@
 
 要求：Windows 10/11，NVIDIA GPU（建议 RTX 20+）。
 
-补充说明：[整合包补充说明](docs/portable-getting-started.md) · [打标模型目录](docs/tagger-models.md) · [构建与发包（协作）](docs/portable-build-guide.md)
+补充说明：[整合包](docs/portable-getting-started.md) · [打标模型](docs/tagger-models.md) · [构建与发包](docs/portable-build-guide.md)
 
 ### B. 从源码运行
 
@@ -53,72 +78,33 @@ cd lora-scripts-next
 # 或：python gui.py --dev
 ```
 
-仓库根目录还提供直接使用 TOML 的训练入口：标准 Anima 后端使用
-`train_anima_by_toml.sh`，可选 Anima Fast 运行时使用
-`train_anima_fast_by_toml.sh`。
-
-查看当前分支与版本：
-
-```powershell
-git branch --show-current
-Get-Content VERSION         # 正式发布分支应为 3.1.0
-```
-
-前端源码在 `frontend/`（Vue 3 + Vite）。日常开发：
-
-```powershell
-cd frontend
-npm install
-npm run dev          # 热更新（需后端 gui 已启动）
-npm run build        # 产物写入 frontend/dist，供 gui 静态托管
-```
-
-### C. 参与 `dev` 开发
-
-```powershell
-git fetch origin
-git switch dev
-# 若本地已有旧分支名，也可：git checkout -B dev origin/dev
-git pull
-```
-
-回到稳定发布线：
-
-```powershell
-git switch main
-git pull
-```
-
-> **注意：** `dev` 可能包含尚未进入稳定发布的改动。整合包用户以正式 Release 为准，不必手动切分支。
+开发者请看：[命令行与 TOML](docs/cli-args.md)、[仓库布局](docs/repo-layout.md) 和 [构建与发包](docs/portable-build-guide.md)。
 
 ---
 
-## Vue3 功能（3.1.0）
+## 3.1.0 更新了什么
 
-Next Trainer 使用 Vue 3 单页工作台：
+3.1.0 的源码发布已经进入 `main`。主要更新：
 
-| 模块 | 能力 |
-|------|------|
-| **训练** | 基础模型 × 训练引擎 × 训练目标；右侧 TOML 预览；校验 / 导入导出 / 开始训练 |
-| **数据集** | 模型打标（内置 WD14）+ **以图为主的标签编辑**（顶栏数据源/加载；筛选与批量编辑在右侧面板） |
-| **任务** | 任务列表、状态、日志、预览 / Loss；日常盯盘以任务页为主 |
-| **设置** | UI 偏好（含浅色/深色主题）、**训练引擎管理**（Kohya / Anima Fast / Musubi / AI Toolkit）、插件市场、**下载源**（pip / PyTorch / HF / GitHub 镜像）、关于、更新日志 |
-| **品牌与版本** | 产品名统一为 **Next Trainer**；当前正式号 **`3.1.0`** |
-| **开源致谢** | 设置 → 关于；仓库另有 [开源引用](docs/credits.md) 子页 |
+- **Anima Fast** 支持 Anima 2.9B 与 T-LoRA，使用独立运行时，补充更清晰的预检、安装进度和更安全的默认值。已在 RTX 4090 上使用 `AdamW` 完成 100 步真机训练验证。
+- **统一引擎**：Kohya、Anima Fast、Musubi、AI Toolkit 现在共享统一的引擎模型。
+- **新增路径**：AI Toolkit / Klein、插件市场和 Pi Agent 基础能力。
+- **运维增强**：任务队列、持久化、清理、重试、配置导出、日志、预览图和 Loss 隔离。
+- **稳定性**：改进参数映射、TOML 步数/epoch 处理、多卡启动和 Windows 安装行为。
 
-训练能力包括：
+详情见：[完整更新日志](CHANGELOG.md) · [Anima Fast](docs/anima-fast.md) · [任务工作台](docs/issues/286-task-workbench.md)。
 
-- Anima LoRA / LoKr / T-LoRA、Anima Fast（插件）、Anima 全量微调  
-- SD 1.5 / SDXL LoRA 与全量微调、Flux LoRA  
-- **FLUX.2 Klein LoRA**（可选 **AI Toolkit** 引擎，设置页安装）
-- **Krea 2 LoRA**（可选 **Musubi-Tuner** 引擎，设置页安装）  
-- 本地打标、训练监控（`/train-monitor`）、TensorBoard  
+---
 
-Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux）：[docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
+portable / AIO 整合包仍需完成最终构建、验收和发布。
 
-### 界面预览
+---
 
-截图来自 Vue 3 工作台（界面语言为中文）。
+## 界面预览
+
+Vue 3 工作台覆盖训练、数据集、任务和训练引擎设置。更详细的使用流程见上面的文档入口。
+
+截图来自中文界面：
 
 #### 训练
 
@@ -144,35 +130,16 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 
 ---
 
-## 支持一览
+## 支持的模型
 
-| 模式 | 说明 |
-|------|------|
-| Anima LoRA | LoRA · LoKr · T-LoRA · 约 12GB 显存起 |
-| Anima Fast | 可选独立运行时 · 建议 16GB+ · 设置页安装 |
-| Anima 全量微调 | 完整 DiT · 建议约 24GB |
-| SD 1.5 / SDXL | LoRA / 全量微调 |
-| Flux | LoRA |
-| Krea 2 | LoRA（Musubi）· 设置页安装引擎 · Linux 可多卡 |
-
-显存与进阶参数见 [docs/anima-training.md](docs/anima-training.md)。
+Anima · SD 1.5 · SDXL · Flux · FLUX.2 Klein · Krea 2。
+训练目标和显存说明：[Anima 训练](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [Krea 2 多卡](docs/krea2-linux-multigpu.md)。
 
 ---
 
-## 文档
+## 延伸阅读
 
-| 主题 | 链接 |
-|------|------|
-| **开源引用（子页）** | [docs/credits.md](docs/credits.md) |
-| 法律向完整 NOTICE | [NOTICE.md](NOTICE.md) |
-| 整合包补充 | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
-| **整合包构建与发包（协作）** | [docs/portable-build-guide.md](docs/portable-build-guide.md) |
-| 打标模型 | [docs/tagger-models.md](docs/tagger-models.md) |
-| Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
-| **Krea 2 多卡（Linux 部署 + WebUI / `dev`）** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
-| 训练监控 | [docs/train-monitor.md](docs/train-monitor.md) |
-| 仓库布局契约 | [docs/repo-layout.md](docs/repo-layout.md) |
-| 命令行入口（`train_anima_by_toml.sh` / `train_anima_fast_by_toml.sh`） | [docs/cli-args.md](docs/cli-args.md) |
+[整合包](docs/portable-getting-started.md) · [Anima Fast](docs/anima-fast.md) · [Krea 2](docs/krea2-linux-multigpu.md) · [TOML / CLI](docs/cli-args.md) · [构建与发包](docs/portable-build-guide.md) · [开源引用](docs/credits.md)
 
 ---
 

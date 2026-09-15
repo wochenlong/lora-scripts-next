@@ -1,11 +1,38 @@
 ﻿# Next Trainer
 
-**Next Trainer** is a local Windows training WebUI (GitHub repo: `lora-scripts-next`).  
-LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / **FLUX.2 Klein** / Krea 2, built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) and [AI Toolkit](https://github.com/ostris/ai-toolkit), following an Akegarasu-style workflow.
+<p align="center">
+  <img src="assets/readme/next-trainer-cover.png" alt="Next Trainer" width="720" />
+</p>
 
-> Product brand and release archives use **Next Trainer** / `Next-Trainer-v*.7z`. The portable layout folder `SD-Trainer/` (and updater bat names) stay as launcher contracts for existing installs.
+<p align="center">
+  <strong>A local trainer for the future — and for agents</strong><br />
+  Familiar UI · One trainer for common models · Kept up to date<br />
+  <sub>For creators and platforms · Agent hooks planned · Repo <code>lora-scripts-next</code></sub>
+</p>
 
-[中文](README-zh.md) · [Credits](docs/credits.md) · [NOTICE](NOTICE.md) · [CHANGELOG](CHANGELOG.md)
+<p align="center">
+  <a href="README-zh.md">中文</a>
+  ·
+  <a href="#whats-new-in-310">What's new</a>
+  ·
+  <a href="docs/credits.md">Credits</a>
+  ·
+  <a href="CHANGELOG.md">Changelog</a>
+  ·
+  <a href="https://github.com/wochenlong/lora-scripts-next/releases">Releases</a>
+</p>
+
+<p align="center"><sub>Product: <strong>Next Trainer</strong> · Portable compatibility keeps the existing <code>SD-Trainer/</code> folder and updater names.</sub></p>
+
+---
+
+## What it is
+
+**Next Trainer** is a local trainer for the future — and for agents: the UI stays familiar, while the product is built as a professional workbench for common models and multiple training engines.
+
+Train Anima, SD 1.5, SDXL, Flux, FLUX.2 Klein, and Krea 2 LoRA or finetunes locally on an NVIDIA GPU. Tag datasets, edit captions, import TOML, start runs, and follow logs, previews, and Loss from one workspace.
+
+The main path uses [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts), with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) and [AI Toolkit](https://github.com/ostris/ai-toolkit) engines.
 
 ---
 
@@ -16,7 +43,7 @@ LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / **FLUX.2 Klein** / Kre
 | **`main`** | Stable release | Vue 3 workspace | **`3.1.0`** |
 | **`dev`** | Next-version integration and acceptance | Vue 3 workspace | Follows development |
 
-Include the full version shown in the sidebar or `VERSION` when filing issues. The old UI baseline remains available on `legacy/v2.9.1` for rollback and comparison.
+Issue reports should include the sidebar version or `VERSION`. The old UI baseline remains on `legacy/v2.9.1`.
 
 ---
 
@@ -40,7 +67,7 @@ Include the full version shown in the sidebar or `VERSION` when filing issues. T
 
 Requirements: Windows 10/11, NVIDIA GPU (RTX 20+ recommended).
 
-More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md) · [Build & release (collaborators)](docs/portable-build-guide.md)
+More: [Portable](docs/portable-getting-started.md) · [Tagger](docs/tagger-models.md) · [Build](docs/portable-build-guide.md)
 
 ### B. Run from source
 
@@ -53,68 +80,31 @@ cd lora-scripts-next
 # or: python gui.py --dev
 ```
 
-Direct TOML training wrappers are also available from the repository root:
-`train_anima_by_toml.sh` for the standard Anima backend and
-`train_anima_fast_by_toml.sh` for the optional Anima Fast runtime.
-
-```sh
-git branch --show-current
-cat VERSION                 # formal release branch should be 3.1.0
-```
-
-Frontend lives in `frontend/` (Vue 3 + Vite):
-
-```sh
-cd frontend
-npm install
-npm run dev      # hot reload (backend gui must be running)
-npm run build    # writes frontend/dist for static hosting
-```
-
-### C. Work on `dev`
-
-```sh
-git fetch origin
-git switch dev
-git pull
-```
-
-Return to the stable release:
-
-```sh
-git switch main
-git pull
-```
-
-> **Note:** `dev` may contain changes that have not reached a stable release. Portable users should stay on formal Releases.
+Developers: see [CLI and TOML](docs/cli-args.md), [repo layout](docs/repo-layout.md), and [build & release](docs/portable-build-guide.md).
 
 ---
 
-## Vue 3 features (3.1.0)
+## What's new in 3.1.0
 
-Next Trainer uses a Vue 3 SPA workspace:
+The 3.1.0 source release is now on `main`. Highlights:
 
-| Area | Capabilities |
-|------|----------------|
-| **Training** | Base model × engine × target; live TOML preview; validate / import-export / start |
-| **Dataset** | WD14 tagging; **image-first tag editor** (toolbar source/load, filter & batch edit in a right panel) |
-| **Tasks** | Task list, status, logs, previews / Loss; primary place to watch runs |
-| **Settings** | UI prefs (incl. light/dark theme), **engine management** (Kohya / Anima Fast / Musubi / AI Toolkit), plugin marketplace, **download sources** (pip / PyTorch / HF / GitHub mirrors), About, changelog |
-| **Branding** | Product name **Next Trainer**; current formal version **`3.1.0`** |
-| **Credits** | Settings → About; also [docs/credits.md](docs/credits.md) |
+- **Anima Fast** now covers Anima 2.9B and T-LoRA with a separate runtime, clearer preflight checks, improved installation progress, and safer defaults. Anima Fast was verified on an RTX 4090 for 100 steps with `AdamW`.
+- **Unified engines**: Kohya, Anima Fast, Musubi, and AI Toolkit now share one engine model.
+- **New paths**: AI Toolkit / Klein, plugin marketplace, and Pi Agent foundations.
+- **Better operations**: task queue, persistence, cleanup, retry, config export, logs, previews, and Loss isolation.
+- **Stability**: safer parameter mapping, TOML step/epoch handling, multi-GPU launch fixes, and improved Windows installation behavior.
 
-Training backends:
+Details: [full changelog](CHANGELOG.md) · [Anima Fast](docs/anima-fast.md) · [task workbench](docs/issues/286-task-workbench.md).
 
-- Anima LoRA / Fast / finetune, SD/SDXL, Flux (Kohya line)
-- **FLUX.2 Klein LoRA** via optional **AI Toolkit** (install from Settings)
-- **Krea 2 LoRA** via optional **Musubi-Tuner** engine (install from Settings)
-- Local tagger, train monitor (`/train-monitor`), TensorBoard
+Portable and AIO archives still require their final build, acceptance, and publication steps.
 
-Anima Fast: [docs/anima-fast.md](docs/anima-fast.md) · Krea 2 multi-GPU (Linux): [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
+---
 
-### Screenshots
+## Screenshots
 
-Captured from the Vue 3 workspace (Chinese locale).
+The Vue 3 workspace covers training, datasets, tasks, and engine settings. More detailed workflows live in the linked docs.
+
+Captured from the Chinese locale:
 
 #### Training
 
@@ -140,35 +130,16 @@ Captured from the Vue 3 workspace (Chinese locale).
 
 ---
 
-## Supported modes
+## Supported models
 
-| Mode | Notes |
-|------|-------|
-| Anima LoRA | LoRA · LoKr · T-LoRA · from ~12 GB VRAM |
-| Anima Fast | Optional runtime · 16 GB+ recommended · install in Settings |
-| Anima finetune | Full DiT · ~24 GB recommended |
-| SD 1.5 / SDXL | LoRA / full finetune |
-| Flux | LoRA |
-| Krea 2 | LoRA via Musubi · install engine in Settings · multi-GPU on Linux |
-
-See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
+Anima · SD 1.5 · SDXL · Flux · FLUX.2 Klein · Krea 2.
+Training targets and VRAM guidance: [Anima training](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [Krea 2 multi-GPU](docs/krea2-linux-multigpu.md).
 
 ---
 
-## Docs
+## Further reading
 
-| Topic | Link |
-|------|------|
-| **Credits (subpage)** | [docs/credits.md](docs/credits.md) |
-| Full legal NOTICE | [NOTICE.md](NOTICE.md) |
-| Portable notes | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
-| **Portable build & release (collaborators)** | [docs/portable-build-guide.md](docs/portable-build-guide.md) |
-| Tagger models | [docs/tagger-models.md](docs/tagger-models.md) |
-| Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
-| **Krea 2 multi-GPU (Linux host + WebUI / `dev`)** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
-| Train monitor | [docs/train-monitor.md](docs/train-monitor.md) |
-| Repo layout | [docs/repo-layout.md](docs/repo-layout.md) |
-| CLI entry points (`train_anima_by_toml.sh` / `train_anima_fast_by_toml.sh`) | [docs/cli-args.md](docs/cli-args.md) |
+[Portable setup](docs/portable-getting-started.md) · [Anima Fast](docs/anima-fast.md) · [Krea 2](docs/krea2-linux-multigpu.md) · [TOML / CLI](docs/cli-args.md) · [Build & release](docs/portable-build-guide.md) · [Credits](docs/credits.md)
 
 ---
 
