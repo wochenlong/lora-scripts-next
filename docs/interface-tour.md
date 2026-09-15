@@ -18,7 +18,7 @@ Choose a model, engine, and training target, then review the generated TOML befo
 
 ### Anima Fast
 
-![Anima Fast training / Fast 训练](../assets/readme/vue3/02-training-fast.png)
+![Anima 2.9B with Anima Fast ready / Anima 2.9B 与 Fast 环境已就绪](../assets/readme/vue3/02-training-anima-fast-29b-ready.png)
 
 [Anima Fast guide / 使用指南](anima-fast.md)
 

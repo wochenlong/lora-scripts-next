@@ -14,9 +14,9 @@
   <a href="README.md">English</a>
 </p>
 
-![Next Trainer 训练工作台：Anima Fast 参数配置与 TOML 预览](assets/readme/vue3/02-training-fast.png)
+![Next Trainer 训练工作台：Anima 2.9B 与 Anima Fast 环境已就绪](assets/readme/vue3/02-training-anima-fast-29b-ready.png)
 
-左侧配置训练，右侧查看 TOML。[查看完整界面导览](docs/interface-tour.md)。
+Anima 2.9B 模型与 Anima Fast 训练环境已经就绪，左侧配置训练，右侧查看 TOML。[查看完整界面导览](docs/interface-tour.md)。
 
 ## 3.1.0 更新了什么
 

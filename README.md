@@ -14,9 +14,9 @@
   <a href="README-zh.md">中文</a>
 </p>
 
-![Next Trainer training workspace showing Anima Fast configuration](assets/readme/vue3/02-training-fast.png)
+![Next Trainer training workspace with Anima 2.9B and Anima Fast ready](assets/readme/vue3/02-training-anima-fast-29b-ready.png)
 
-Training configuration and TOML preview, side by side. [Explore the workspace](docs/interface-tour.md).
+Anima 2.9B and the Anima Fast environment are ready, with training configuration and TOML preview side by side. [Explore the workspace](docs/interface-tour.md).
 
 ## What's new in 3.1.0
 
