@@ -165,46 +165,36 @@ if %FETCH_OK% equ 0 (
 )
 echo.
 
-:: --------------- Stash local changes ---------------
-set "DIRTY="
-for /f "tokens=*" %%i in ('git status --porcelain') do set "DIRTY=1"
-if defined DIRTY (
-    set "STASH_NAME=portable-updater-%date:/=-%-%time::=-%"
-    set "STASH_NAME=!STASH_NAME: =0!"
-    echo Local changes detected; creating git stash backup...
-    echo 检测到本地改动，正在创建 git stash 备份...
-    git stash push -u -m "!STASH_NAME!"
-    if errorlevel 1 (
-        echo.
-        echo [Error] Could not stash local changes / 无法备份本地改动
-        pause
-        exit /b 1
-    )
-    echo Stashed as: !STASH_NAME!
-    echo.
-)
-
 :: --------------- Fast-forward merge ---------------
+set "GIT_HELPER=%PROJECT_DIR%\scripts\portable\portable_git.py"
+set "PYTHON_EXE=%PORTABLE_ROOT%python_embeded\python.exe"
+:: The old bootstrap may have loaded its old manifest before downloading the new one.
+if not exist "%GIT_HELPER%" call :bootstrap_updater_scripts
+if not exist "%GIT_HELPER%" (
+    echo [Error] Safe updater download failed. Check the network and retry.
+    echo [错误] 安全更新组件下载失败，请检查网络后重试。
+    pause
+    exit /b 1
+)
+if not exist "%PYTHON_EXE%" (
+    echo [Error] Embedded Python missing / 缺少整合包 Python。
+    pause
+    exit /b 1
+)
 echo Updating code / 更新代码...
-git merge --ff-only "origin/%UPDATE_BRANCH%" 2>nul
+"%PYTHON_EXE%" -s "%GIT_HELPER%" update --trainer-dir "%PROJECT_DIR%"
 if errorlevel 1 (
-    git merge --ff-only FETCH_HEAD 2>nul
-    if errorlevel 1 (
-        git pull --ff-only --depth=1 origin %UPDATE_BRANCH% 2>nul
-        if errorlevel 1 (
-            echo.
-            echo [Error] fast-forward update failed / 快进更新失败
-            echo.
-            echo This usually means local commits diverged from remote.
-            echo 通常是因为本地提交与远程分支产生了分歧。
-            echo.
-            echo Options / 解决方案:
-            echo   1. git stash pop  ^(restore your changes / 恢复你的改动^)
-            echo   2. Re-download the latest Release package / 重新下载最新整合包
-            pause
-            exit /b 1
-        )
-    )
+    echo.
+    echo [Error] Safe fast-forward update stopped / 安全快进更新已停止。
+    echo No automatic stash or hard reset was performed. Check the Git error above.
+    echo 未执行自动 stash 或强制重置，请查看上方 Git 错误。
+    echo A conflicting user file or local commit could not be updated safely.
+    echo 用户文件或本地提交发生冲突，更新已停止以保留您的文件。
+    echo Keep this entire directory, including .git, before migrating to a fresh package.
+    echo 换用新包前请保留整个旧目录，包括 .git，防止丢失历史 stash。
+    echo Recovery / 恢复说明: https://github.com/wochenlong/lora-scripts-next/issues/356
+    pause
+    exit /b 1
 )
 echo.
 

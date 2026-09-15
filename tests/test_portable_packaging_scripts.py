@@ -1,7 +1,20 @@
 from pathlib import Path
+import re
+import runpy
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def test_bootstrap_download_manifest_matches_git_allowlist():
+    common = (ROOT / "scripts/portable/portable_updater_common.ps1").read_text(
+        encoding="utf-8-sig"
+    )
+    destinations = re.findall(r'Dest = "Next-Trainer/([^"]+)"', common)
+    helper = runpy.run_path(str(ROOT / "scripts/portable/portable_git.py"))
+    assert set(destinations) == set(helper["BOOTSTRAP_FILES"])
+    for path in destinations:
+        assert (ROOT / path).is_file(), path
 
 
 def test_packaged_update_helper_delegates_to_root_updater():
@@ -20,8 +33,9 @@ def test_portable_builder_embeds_git_metadata_for_updates():
     )
 
     assert "Clone-SDTrainerGitMetadata" in script
-    assert "Next-Trainer\\.git" in script
-    assert "--depth=1" in script
+    assert 'portable_git.py") seed --source $ProjectRoot' in script
+    assert 'portable_git.py") verify --trainer-dir $sdtDir' in script
+    assert 'tests/test_portable_git_behavior.py' in script
 
 
 def test_portable_builder_no_longer_requires_dataset_tag_editor():
@@ -96,7 +110,7 @@ def test_portable_archive_temporarily_removes_root_data_junctions():
     assert "ReparsePoint" in script
     assert "$pythonExe -s $linkScript --trainer-dir $sdtDir" in script
     assert "refusing to archive non-empty generated data directory" in script
-    assert 'Where-Object { $_.Name -ne ".gitkeep" }' in script
+    assert 'Where-Object { $_.Name -notin @(".gitkeep", ".keep") }' in script
     assert "-xr!" not in script
 
 
@@ -175,6 +189,9 @@ def test_portable_updater_manifest_paths_exist():
         "build-scripts/templates/Update-Next-Trainer.bat",
         "scripts/portable/bootstrap_portable_updaters.ps1",
         "scripts/portable/UPDATER_VERSION",
+        "scripts/portable/portable_git.py",
+        ".gitignore",
+        ".gitattributes",
     ):
         assert rel in common
     bat = (ROOT / "build-scripts" / "templates" / "Update-Next-Trainer.bat").read_text(
@@ -182,3 +199,13 @@ def test_portable_updater_manifest_paths_exist():
     )
     assert "bootstrap_updater_scripts" in bat
     assert "--no-bootstrap" in bat
+
+
+def test_git_updater_templates_delegate_to_safe_helper():
+    source = (ROOT / "build-scripts/templates/Update-Next-Trainer.bat").read_bytes()
+    assert source == (ROOT / "scripts/portable/templates/Update-Next-Trainer.bat").read_bytes()
+    text = source.decode("utf-8")
+    assert '"%GIT_HELPER%" update --trainer-dir "%PROJECT_DIR%"' in text
+    assert "git stash" not in text
+    assert "git reset" not in text
+    assert not any(line.strip().startswith("git pull ") for line in text.splitlines())

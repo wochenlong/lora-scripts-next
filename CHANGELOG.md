@@ -5,6 +5,10 @@
 ---
 ## 未发布（dev）
 
+### 整合包更新修复
+
+- **修复 Git 更新收走模型和训练集（#356）**：停止自动 stash，自动补齐旧包缺失的程序文件；新包保留完整浅克隆工作树，并在打包前执行数据保留测试。已经受影响的用户请保留整个旧目录（含 `.git`），参见 [恢复说明](https://github.com/wochenlong/lora-scripts-next/issues/356)。
+
 ### 清理
 
 - **移除 legacy Gradio `dataset-tag-editor`**：删除 Git 子模块与 `:28001` 代理；数据集标签编辑仅保留 Vue 自研 `/dataset/editor`。旧 URL `/tageditor.html` 重定向到自研编辑器。
