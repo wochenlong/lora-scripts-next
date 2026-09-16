@@ -280,6 +280,8 @@
   margin: 0 0 12px;
   padding: 10px 12px;
   overflow: auto;
+  direction: ltr;
+  text-align: left;
   white-space: pre-wrap;
   color: var(--text);
   background: var(--surface-inset);
@@ -439,7 +441,7 @@
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 4px 12px;
   padding: 12px;
-  text-align: left;
+  text-align: start;
   color: var(--text);
   background: var(--surface-soft);
   border: 1px solid var(--border);
@@ -490,7 +492,7 @@
 }
 
 .schema-error {
-  border-left: 3px solid #dc2626;
+  border-inline-start: 3px solid #dc2626;
 }
 
 .schema-validate {
@@ -508,7 +510,7 @@
 @media (max-width: 720px) {
   .filepicker-control .el-button:last-child {
     grid-column: 1/-1;
-    margin-left: 0;
+    margin-inline-start: 0;
   }
 }
 

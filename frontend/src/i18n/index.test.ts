@@ -1,24 +1,59 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from "vitest"
-import { DEFAULT_LOCALE, UI_CONFIGS_KEY, getElementPlusLocale, getStoredLocale, i18n, setLocale, setStoredLocale } from "./index"
-import zhCN from "./messages/zh-CN"
-import enUS from "./messages/en-US"
+import {
+  DEFAULT_LOCALE,
+  SUPPORTED_LOCALES,
+  UI_CONFIGS_KEY,
+  getElementPlusLocale,
+  getStoredLocale,
+  i18n,
+  localeMessages,
+  matchLocaleCandidate,
+  normalizeLocaleTag,
+  resolveInitialLocale,
+  setLocale,
+  setStoredLocale,
+} from "./index"
+
+function flattenLeafKeys(obj: Record<string, unknown>, prefix = ""): string[] {
+  return Object.entries(obj).flatMap(([key, value]) =>
+    value && typeof value === "object"
+      ? flattenLeafKeys(value as Record<string, unknown>, `${prefix}${key}.`)
+      : [`${prefix}${key}`],
+  )
+}
+
+function leafValues(obj: Record<string, unknown>, prefix = ""): Record<string, string> {
+  return Object.entries(obj).reduce<Record<string, string>>((acc, [key, value]) => {
+    if (value && typeof value === "object") {
+      Object.assign(acc, leafValues(value as Record<string, unknown>, `${prefix}${key}.`))
+    } else {
+      acc[`${prefix}${key}`] = String(value)
+    }
+    return acc
+  }, {})
+}
+
+function interpolationParams(text: string): string[] {
+  return [...new Set([...text.matchAll(/\{([^{}]+)\}/g)].map((match) => match[1]))].sort()
+}
 
 describe("i18n infrastructure", () => {
   beforeEach(() => {
     localStorage.clear()
     setLocale(DEFAULT_LOCALE)
+    localStorage.clear()
   })
 
-  it("defaults to zh-CN when nothing is stored", () => {
-    expect(getStoredLocale()).toBe("zh-CN")
+  it("has no explicit locale when nothing is stored", () => {
+    expect(getStoredLocale()).toBeUndefined()
   })
 
-  it("falls back to default for unknown stored values", () => {
-    localStorage.setItem(UI_CONFIGS_KEY, JSON.stringify({ language: "fr-FR" }))
-    expect(getStoredLocale()).toBe(DEFAULT_LOCALE)
+  it("ignores unknown or corrupted stored values", () => {
+    localStorage.setItem(UI_CONFIGS_KEY, JSON.stringify({ language: "xx-XX" }))
+    expect(getStoredLocale()).toBeUndefined()
     localStorage.setItem(UI_CONFIGS_KEY, "not-json")
-    expect(getStoredLocale()).toBe(DEFAULT_LOCALE)
+    expect(getStoredLocale()).toBeUndefined()
   })
 
   it("persists locale without dropping other ui-configs keys", () => {
@@ -36,20 +71,198 @@ describe("i18n infrastructure", () => {
     expect(i18n.global.t("nav.training")).toBe("Training")
   })
 
-  it("keeps en-US keys in parity with zh-CN", () => {
-    const flatten = (obj: Record<string, unknown>, prefix = ""): string[] =>
-      Object.entries(obj).flatMap(([key, value]) =>
-        value && typeof value === "object"
-          ? flatten(value as Record<string, unknown>, `${prefix}${key}.`)
-          : [`${prefix}${key}`],
-      )
-    const zhKeys = flatten(zhCN).sort()
-    const enKeys = flatten(enUS).sort()
-    expect(enKeys).toEqual(zhKeys)
+  it("executes locale-specific plural rules", () => {
+    setLocale("en-US")
+    expect(i18n.global.t("tasks.purge.success", { n: 1 })).toBe("Removed 1 finished task")
+    expect(i18n.global.t("tasks.purge.success", { n: 2 })).toBe("Removed 2 finished tasks")
+
+    setLocale("fr-FR")
+    expect(i18n.global.t("tasks.purge.success", { n: 0 })).toBe("0 tâche terminée supprimée")
+    expect(i18n.global.t("tasks.purge.success", { n: 2 })).toBe("2 tâches terminées supprimées")
+
+    setLocale("ru-RU")
+    expect(i18n.global.t("tasks.purge.success", { n: 1 })).toBe("Удалена 1 завершённая задача")
+    expect(i18n.global.t("tasks.purge.success", { n: 2 })).toBe("Удалены 2 завершённые задачи")
+    expect(i18n.global.t("tasks.purge.success", { n: 5 })).toBe("Удалено 5 завершённых задач")
+
+    setLocale("ar")
+    expect(i18n.global.t("tasks.purge.success", { n: 0 })).toBe("لم تُحذف أي مهمة منتهية")
+    expect(i18n.global.t("tasks.purge.success", { n: 2 })).toBe("تم حذف مهمتين منتهيتين")
+    expect(i18n.global.t("tasks.purge.success", { n: 3 })).toBe("تم حذف 3 مهام منتهية")
+    expect(i18n.global.t("tasks.purge.success", { n: 11 })).toBe("تم حذف 11 مهمة منتهية")
   })
 
   it("maps app locales to Element Plus locale packs", () => {
     expect(getElementPlusLocale("zh-CN").el.messagebox.confirm).toBe("确定")
     expect(getElementPlusLocale("en-US").el.messagebox.confirm).toBe("OK")
+  })
+})
+
+describe("locale registry", () => {
+  const registeredLocales = SUPPORTED_LOCALES.map((entry) => entry.value)
+
+  it("declares native label, status and direction for every locale", () => {
+    for (const entry of SUPPORTED_LOCALES) {
+      expect(entry.label.length).toBeGreaterThan(0)
+      expect(["stable", "beta"]).toContain(entry.status)
+      expect(["ltr", "rtl"]).toContain(entry.direction)
+    }
+  })
+
+  it("registers app messages and Element Plus packs for every locale", () => {
+    for (const locale of registeredLocales) {
+      expect(localeMessages[locale], `messages for ${locale}`).toBeDefined()
+      expect(getElementPlusLocale(locale).name, `Element Plus locale for ${locale}`).toBeDefined()
+    }
+  })
+
+  it("keeps leaf keys in parity with zh-CN for every locale", () => {
+    const baseline = flattenLeafKeys(localeMessages[DEFAULT_LOCALE] as Record<string, unknown>).sort()
+    for (const locale of registeredLocales) {
+      const keys = flattenLeafKeys(localeMessages[locale] as Record<string, unknown>).sort()
+      expect(keys, `key parity for ${locale}`).toEqual(baseline)
+    }
+  })
+
+  it("keeps interpolation parameters in parity with zh-CN for every locale", () => {
+    const baseline = leafValues(localeMessages[DEFAULT_LOCALE] as Record<string, unknown>)
+    for (const locale of registeredLocales) {
+      const values = leafValues(localeMessages[locale] as Record<string, unknown>)
+      for (const [key, text] of Object.entries(values)) {
+        expect(interpolationParams(text), `interpolation parity for ${locale}:${key}`)
+          .toEqual(interpolationParams(baseline[key]))
+      }
+    }
+  })
+
+  it("resolves registered locales to themselves except Portuguese auto-detection", () => {
+    for (const locale of registeredLocales.filter((locale) => locale !== "pt-PT")) {
+      expect(matchLocaleCandidate(locale)).toBe(locale)
+    }
+  })
+})
+
+describe("locale normalization", () => {
+  it("canonicalizes separators and casing", () => {
+    expect(normalizeLocaleTag("en_US")).toBe("en-US")
+    expect(normalizeLocaleTag("EN-us")).toBe("en-US")
+    expect(normalizeLocaleTag(" zh_cn ")).toBe("zh-CN")
+  })
+
+  it("rejects invalid tags without throwing", () => {
+    expect(normalizeLocaleTag("")).toBeUndefined()
+    expect(normalizeLocaleTag("!!!")).toBeUndefined()
+    expect(normalizeLocaleTag("not a locale")).toBeUndefined()
+  })
+})
+
+describe("matchLocaleCandidate", () => {
+  it("matches exact supported locales", () => {
+    expect(matchLocaleCandidate("zh-CN")).toBe("zh-CN")
+    expect(matchLocaleCandidate("en-US")).toBe("en-US")
+  })
+
+  it("maps regional variants of supported languages", () => {
+    expect(matchLocaleCandidate("en-GB")).toBe("en-US")
+    expect(matchLocaleCandidate("zh-Hans-CN")).toBe("zh-CN")
+    expect(matchLocaleCandidate("zh-SG")).toBe("zh-CN")
+    expect(matchLocaleCandidate("zh")).toBe("zh-CN")
+  })
+
+  it("maps Traditional Chinese and CJK variants to their locales", () => {
+    expect(matchLocaleCandidate("zh-TW")).toBe("zh-TW")
+    expect(matchLocaleCandidate("zh-Hant-TW")).toBe("zh-TW")
+    expect(matchLocaleCandidate("zh-Hant")).toBe("zh-TW")
+    expect(matchLocaleCandidate("zh-Hant-SG")).toBe("zh-TW")
+    expect(matchLocaleCandidate("zh-HK")).toBe("zh-HK")
+    expect(matchLocaleCandidate("zh-MO")).toBe("zh-HK")
+    expect(matchLocaleCandidate("zh-Hant-MO")).toBe("zh-HK")
+    expect(matchLocaleCandidate("ja")).toBe("ja-JP")
+    expect(matchLocaleCandidate("ko-KP")).toBe("ko-KR")
+  })
+
+  it("maps European language variants to their locales", () => {
+    expect(matchLocaleCandidate("es-MX")).toBe("es-ES")
+    expect(matchLocaleCandidate("fr-CA")).toBe("fr-FR")
+    expect(matchLocaleCandidate("de-AT")).toBe("de-DE")
+    expect(matchLocaleCandidate("ru-BY")).toBe("ru-RU")
+  })
+
+  it("maps all Portuguese browser tags to pt-BR", () => {
+    expect(matchLocaleCandidate("pt")).toBe("pt-BR")
+    expect(matchLocaleCandidate("pt-BR")).toBe("pt-BR")
+    expect(matchLocaleCandidate("pt-PT")).toBe("pt-BR")
+    expect(matchLocaleCandidate("pt-AO")).toBe("pt-BR")
+  })
+
+  it("maps Arabic variants to ar", () => {
+    expect(matchLocaleCandidate("ar")).toBe("ar")
+    expect(matchLocaleCandidate("ar-SA")).toBe("ar")
+    expect(matchLocaleCandidate("ar-EG")).toBe("ar")
+  })
+
+  it("returns undefined for unknown languages", () => {
+    expect(matchLocaleCandidate("xx-XX")).toBeUndefined()
+    expect(matchLocaleCandidate("!!!")).toBeUndefined()
+  })
+})
+
+describe("resolveInitialLocale", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it("prefers the stored explicit choice over browser candidates", () => {
+    setStoredLocale("en-US")
+    expect(resolveInitialLocale(["zh-CN", "en-US"])).toBe("en-US")
+  })
+
+  it("uses the browser preferred language when nothing is stored", () => {
+    expect(resolveInitialLocale(["en-US"])).toBe("en-US")
+  })
+
+  it("keeps matching later candidates when the first is unknown", () => {
+    expect(resolveInitialLocale(["xx-XX", "en-US"])).toBe("en-US")
+  })
+
+  it("skips invalid candidates and falls back to zh-CN", () => {
+    expect(resolveInitialLocale(["!!!", "xx-XX"])).toBe("zh-CN")
+    expect(resolveInitialLocale([])).toBe("zh-CN")
+  })
+
+  it("does not persist the auto-detected locale", () => {
+    expect(resolveInitialLocale(["en-US"])).toBe("en-US")
+    expect(localStorage.getItem(UI_CONFIGS_KEY)).toBeNull()
+  })
+})
+
+describe("document locale sync", () => {
+  beforeEach(() => {
+    localStorage.clear()
+  })
+
+  it("sets document lang and dir on initialization", () => {
+    expect(document.documentElement.lang).toBe(i18n.global.locale.value)
+    expect(document.documentElement.dir).toBe("ltr")
+  })
+
+  it("updates document lang and dir when switching locale", () => {
+    setLocale("en-US")
+    expect(document.documentElement.lang).toBe("en-US")
+    expect(document.documentElement.dir).toBe("ltr")
+    setLocale("zh-CN")
+    expect(document.documentElement.lang).toBe("zh-CN")
+    expect(document.documentElement.dir).toBe("ltr")
+  })
+
+  it("switches to rtl for Arabic and back without residue", () => {
+    setLocale("ar")
+    expect(document.documentElement.lang).toBe("ar")
+    expect(document.documentElement.dir).toBe("rtl")
+    expect(i18n.global.t("nav.training")).not.toBe("")
+    setLocale("en-US")
+    expect(document.documentElement.dir).toBe("ltr")
+    setLocale("zh-CN")
+    expect(document.documentElement.dir).toBe("ltr")
   })
 })

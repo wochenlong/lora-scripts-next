@@ -38,13 +38,14 @@ button {
 
 .sidebar {
   position: fixed;
-  inset: 0 auto 0 0;
+  inset-block: 0;
+  inset-inline-start: 0;
   z-index: 20;
   width: 272px;
   display: flex;
   flex-direction: column;
   background: var(--sidebar);
-  border-right: 1px solid var(--border);
+  border-inline-end: 1px solid var(--border);
 }
 
 .brand {
@@ -213,7 +214,7 @@ button {
 
 .app-content {
   min-height: 100vh;
-  margin-left: 272px;
+  margin-inline-start: 272px;
 }
 
 .mobile-header {
@@ -291,6 +292,10 @@ button {
     transform: translateX(-100%);
     transition: transform 0.22s ease;
   }
+
+  [dir="rtl"] .sidebar {
+    transform: translateX(100%);
+  }
 }
 
 @media (max-width: 900px) {
@@ -314,7 +319,7 @@ button {
 
 @media (max-width: 900px) {
   .app-content {
-    margin-left: 0;
+    margin-inline-start: 0;
   }
 }
 

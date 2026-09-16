@@ -1,5 +1,6 @@
 import Schema from "schemastery"
-import { i18n } from "../i18n"
+import { i18n, type AppLocale } from "../i18n"
+import { schemaDescMessages } from "../i18n/schema-desc"
 import type { SchemaSource } from "../api/schemas"
 
 export type FormValue = string | number | boolean | Array<string | number> | undefined
@@ -95,8 +96,13 @@ export function executeSchemaSources(sources: SchemaSource[], name: string): Ada
 }
 
 function description(meta: Schema["meta"] | undefined) {
-  if (typeof meta?.description === "string") return meta.description
-  return meta?.description?.["zh-CN"] || meta?.description?.[""]
+  if (typeof meta?.description === "string") {
+    const messages = schemaDescMessages[i18n.global.locale.value as AppLocale]
+    return messages?.[meta.description] ?? meta.description
+  }
+  const dict = meta?.description
+  if (!dict) return undefined
+  return dict[i18n.global.locale.value] ?? dict["zh-CN"] ?? dict[""]
 }
 
 function explicitDefault(schema: SchemaRecord) {

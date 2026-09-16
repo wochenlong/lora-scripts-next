@@ -227,12 +227,12 @@ html.dark .brand strong {
 
 html.dark .sidebar {
   background: var(--sidebar);
-  border-right-color: var(--border-muted);
+  border-inline-end-color: var(--border-muted);
 }
 
 html.dark .control-panel {
   background: var(--surface);
-  border-left-color: var(--border-muted);
+  border-inline-start-color: var(--border-muted);
 }
 
 html.dark .training-layout.bare .control-panel {

@@ -95,7 +95,7 @@
 .preview-actions {
   display: inline-flex;
   gap: 6px;
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .preview-actions button {

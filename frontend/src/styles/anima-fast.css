@@ -64,7 +64,7 @@
   padding: 18px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--accent);
+  border-inline-start: 3px solid var(--accent);
   border-radius: 10px;
 }
 
@@ -81,7 +81,7 @@
 }
 
 .fast-state[data-state="broken"] {
-  border-left-color: #dc2626;
+  border-inline-start-color: #dc2626;
 }
 
 .fast-actions {
@@ -123,6 +123,8 @@
   overflow: auto;
   margin: 0;
   padding: 18px;
+  direction: ltr;
+  text-align: left;
   color: #afc7d1;
   background: #0b1117;
   border-radius: 10px;
@@ -204,43 +206,43 @@
   padding: 12px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
-  border-left: 3px solid var(--text-faint);
+  border-inline-start: 3px solid var(--text-faint);
   border-radius: var(--radius);
 }
 .engine-status-bar[data-state="ready"] {
-  border-left-color: #059669;
+  border-inline-start-color: #059669;
   background: rgba(5, 150, 105, 0.06);
 }
 .engine-status-bar[data-state="installing"] {
-  border-left-color: var(--accent);
+  border-inline-start-color: var(--accent);
   background: var(--accent-soft);
 }
 .engine-status-bar[data-state="auditing"] {
-  border-left-color: var(--accent);
+  border-inline-start-color: var(--accent);
   background: var(--accent-soft);
 }
 .engine-status-bar[data-state="broken"] {
-  border-left-color: #dc2626;
+  border-inline-start-color: #dc2626;
   background: rgba(220, 38, 38, 0.06);
 }
 .engine-status-bar[data-state="unknown"] {
-  border-left-color: #d97706;
+  border-inline-start-color: #d97706;
   background: rgba(217, 119, 6, 0.08);
 }
 .engine-status-bar[data-state="not_installed"] {
-  border-left-color: #d97706;
+  border-inline-start-color: #d97706;
   background: rgba(217, 119, 6, 0.08);
 }
 .engine-status-bar[data-state="installed_unverified"] {
-  border-left-color: #d97706;
+  border-inline-start-color: #d97706;
   background: rgba(217, 119, 6, 0.08);
 }
 .engine-status-bar[data-state="disabled"] {
-  border-left-color: #d97706;
+  border-inline-start-color: #d97706;
   background: rgba(217, 119, 6, 0.08);
 }
 .engine-status-bar[data-state="coming_soon"] {
-  border-left-color: #d97706;
+  border-inline-start-color: #d97706;
   background: rgba(217, 119, 6, 0.08);
 }
 .engine-status-copy {
@@ -512,7 +514,7 @@
 .engine-default-lock {
   display: grid;
   gap: 2px;
-  text-align: right;
+  text-align: end;
 }
 .engine-default-lock b {
   color: #047857;
@@ -539,7 +541,7 @@
 .engine-more-menu {
   position: absolute;
   top: calc(100% + 6px);
-  right: 0;
+  inset-inline-end: 0;
   z-index: 20;
   display: grid;
   min-width: 148px;
@@ -551,7 +553,7 @@
 }
 .engine-more-menu button {
   padding: 8px 10px;
-  text-align: left;
+  text-align: start;
   color: var(--text);
   background: transparent;
   border: 0;
@@ -584,6 +586,7 @@
 }
 .engine-path code {
   overflow-wrap: anywhere;
+  direction: ltr;
   color: var(--text);
   font-size: 11px;
 }
@@ -605,6 +608,8 @@
   overflow: auto;
   margin: 0;
   padding: 12px;
+  direction: ltr;
+  text-align: left;
   color: #afc7d1;
   background: #0b1117;
   border-radius: 8px;
@@ -748,6 +753,7 @@
 }
 .ds-channel-body code {
   overflow: hidden;
+  direction: ltr;
   color: var(--text-faint);
   font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-overflow: ellipsis;
