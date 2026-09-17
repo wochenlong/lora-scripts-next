@@ -35,6 +35,7 @@ Schema.intersect([
         max_bucket_reso: Schema.number().min(64).step(64).description("arb 桶最大分辨率；留空时按训练分辨率自动设置，也可以手动填写更大的值"),
         bucket_reso_steps: Schema.number().min(1).step(1).default(64).description("arb 桶分辨率划分单位"),
         bucket_no_upscale: Schema.boolean().default(false).description("不放大较小图片；max bucket 仍需覆盖训练分辨率"),
+        validation_split_num: Schema.number().min(0).step(1).default(0).description("验证集图片数量。0 表示关闭验证集，大于 0 时从训练图片中保留对应数量用于验证，小数据集建议保持 0"),
     }).description("数据集设置"),
 
     SHARED_SCHEMAS.SAVE_SETTINGS,
