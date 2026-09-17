@@ -280,12 +280,15 @@ describe("dynamic schema adapter", () => {
       min: 0,
       step: 1,
       defaultValue: 0,
+      extra: { integer: true },
     })
-    expect(createDefaultModel(fast)).toMatchObject({ validation_split_num: 0 })
+    const defaults = createDefaultModel(fast)
+    expect(defaults).toMatchObject({ validation_split_num: 0 })
+    expect(serializeModel(fast, defaults)).toMatchObject({ validation_split_num: 0 })
 
     const imported = normalizeModelForSchema(
       fast,
-      { ...createDefaultModel(fast), validation_split_num: 8 },
+      { ...defaults, validation_split_num: 8 },
       { explicitKeys: new Set(["validation_split_num"]) },
     )
     expect(serializeModel(fast, imported)).toMatchObject({ validation_split_num: 8 })
