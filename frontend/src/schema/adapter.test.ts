@@ -264,6 +264,33 @@ describe("dynamic schema adapter", () => {
     expect(createDefaultModel(fast)).toMatchObject({ network_train_unet_only: true })
   })
 
+  it("exposes and serializes the Anima Fast validation image count", () => {
+    const schemaDir = resolve(process.cwd(), "../mikazuki/schema")
+    const realSources = readdirSync(schemaDir).filter((name) => name.endsWith(".ts")).map((file) => ({
+      name: file.slice(0, -3),
+      hash: file,
+      schema: readFileSync(resolve(schemaDir, file), "utf8"),
+    }))
+    const fast = executeSchemaSources(realSources, "anima-lora-fast")
+    const dataset = fast.sections.find((section) => section.title === "数据集设置")!
+    const field = dataset.fields.find((item) => item.key === "validation_split_num")
+
+    expect(field).toMatchObject({
+      type: "number",
+      min: 0,
+      step: 1,
+      defaultValue: 0,
+    })
+    expect(createDefaultModel(fast)).toMatchObject({ validation_split_num: 0 })
+
+    const imported = normalizeModelForSchema(
+      fast,
+      { ...createDefaultModel(fast), validation_split_num: 8 },
+      { explicitKeys: new Set(["validation_split_num"]) },
+    )
+    expect(serializeModel(fast, imported)).toMatchObject({ validation_split_num: 8 })
+  })
+
   it("selects and serializes only the active Anima Fast duration field", () => {
     const schemaDir = resolve(process.cwd(), "../mikazuki/schema")
     const realSources = readdirSync(schemaDir).filter((name) => name.endsWith(".ts")).map((file) => ({
