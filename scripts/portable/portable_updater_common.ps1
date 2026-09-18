@@ -21,6 +21,9 @@ function Ensure-PortablePs1Utf8Bom {
 
 function Get-PortableUpdaterManifest {
     @(
+        @{ Src = ".gitignore"; Dest = "Next-Trainer/.gitignore"; OnlyIfMissing = $true },
+        @{ Src = ".gitattributes"; Dest = "Next-Trainer/.gitattributes"; OnlyIfMissing = $true },
+        @{ Src = "scripts/portable/portable_git.py"; Dest = "Next-Trainer/scripts/portable/portable_git.py" },
         @{ Src = "build-scripts/templates/Update-Next-Trainer.bat"; Dest = "Update-Next-Trainer.bat" },
         @{ Src = "build-scripts/templates/Update-Next-Trainer-Release.bat"; Dest = "Update-Next-Trainer-Release.bat" },
         @{ Src = "build-scripts/templates/Fix-Portable-Bats.bat"; Dest = "Fix-Portable-Bats.bat" },

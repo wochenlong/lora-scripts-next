@@ -187,19 +187,43 @@ powershell -NoProfile -ExecutionPolicy Bypass -File `
    - 若整合包是浅克隆，使用 `--deepen=50` 补齐部分历史，避免看不到共同祖先导致 `--ff-only` 失败
    - 每个镜像之间等待 2 秒
    - 全部失败则输出排障建议并退出
-6. 备份本地改动：
-   - git stash push -u -m "portable-updater-<timestamp>"
-   - 若无改动则跳过
-7. 快进更新（三级 fallback）：
-   - git merge --ff-only "origin/<branch>"
-   - git merge --ff-only FETCH_HEAD
-   - git pull --ff-only --depth=1 origin <branch>
+6. 检查旧包裁剪造成的文件缺失：
+   - 遇到现有文件、目录或链接挡路时不覆盖；不在合并前还原旧版文件
+   - bootstrap 下载的文件若与目标提交完全一致，自动衔接；保留用户原有暂存改动
+7. 只对本次成功 fetch 的 FETCH_HEAD 快进：
+   - git merge --ff-only --no-autostash --no-overwrite-ignore <本次抓取的提交>
+   - 不创建 stash，不搬走未跟踪或已忽略的数据；不回退到可能过期的 origin/<branch>
+   - 无冲突的本地修改保留；确有文件冲突或本地提交分叉时停止，不强制覆盖
 8. 刷新根目录启动器：
+   - 合并成功后，从新索引补齐仍然缺失的文件；新版已删除的文件不恢复
    - scripts/portable/sync_portable_root_launchers.bat --nopause
 9. 输出当前版本和成功提示
 ```
 
 不要只执行裸 `git pull`。裸 `git pull` 会依赖当前分支、当前 remote 和用户本地状态，失败时对小白不友好。
+
+**禁止更新器使用 `stash -u` / `stash -a`、`reset --hard` 或 `clean`。**
+旧包漏掉 `.gitignore` 时，模型和训练集会变成未跟踪文件，`stash -u` 会把它们收走。
+普通 `git merge` 默认也允许覆盖挡路的已忽略文件，因此必须加 `--no-overwrite-ignore`。
+本地 Git 配置中的 `merge.autostash=true` 也不能改变上述行为。
+
+### UPDATER_VERSION 6：旧包修复与新包门禁（#356）
+
+保留双通道、小流量 Git 更新、镜像回退和更新器自更新。用户仍然只需双击更新，
+不要求手动运行 Git。旧 bootstrap 第一次使用旧清单时，新入口会自动再同步一次，补齐安全更新组件。
+缺失的 `.gitignore` / `.gitattributes` 会补回；已有规则不由 bootstrap 覆盖。
+当前主线已移除子模块及 `.gitmodules`，不再下载不存在的文件。
+
+新包以完整浅克隆作为 `Next-Trainer/` 基底，保留全部已跟踪文件和 dotfile；
+浅克隆直接来自本地已提交的构建源，不能再只搬 `.git`，也不要求构建前推送远端。
+构建前提交生成的 `frontend/dist`；已有输出目录使用 `-Clean`，正式分发前发布对应提交。
+归档前（包括 `-Skip7z`）强制检查已跟踪工作树与 HEAD 一致、用户目录受忽略规则保护，
+并执行 `tests/test_portable_git_behavior.py` 的真实 Git 更新测试。
+发布验收器也执行这两项，CI 在 Windows/Linux 执行回归测试。
+
+旧版本已经收进 stash 的文件不会被本修复自动弹出，以免旧配置覆盖当前文件。
+请保留完整旧目录，尤其是 `.git`，恢复步骤见 [#356](https://github.com/wochenlong/lora-scripts-next/issues/356)。
+恢复时先检查条目，再用 `git stash apply 'stash@{n}'`，核对文件后才删除对应备份。
 
 ### GitHub 镜像回退策略
 
@@ -223,6 +247,16 @@ fast-forward update failed
 ```
 
 因此浅克隆场景必须使用 `git fetch --deepen=50`，先补齐一段历史，再执行 `git merge --ff-only`。
+
+完整仓库使用普通 `git fetch`，不得加 `--depth=1`，否则新提交也会被截成浅边界，正常后继提交无法通过祖先检查。
+
+### 在线引导的批处理换行
+
+旧引导器直接保存 GitHub raw 文件再调用 `cmd.exe`，不会经过 Git checkout 的换行转换。
+因此下载清单中的 `.bat` 文件必须在 Git blob 内就保持无 BOM 的 CRLF；仅设置 `eol=crlf` 不足以保证在线下载可执行。
+`.gitattributes` 对这些文件单独禁用文本归一化，回归测试同时检查原始 blob 并通过 Windows cmd 执行。
+
+真实旧包还可能保留与实际 LF 文件不一致的 CRLF 索引缓存。更新器只对内容和模式均与索引一致、且没有暂存改动的文件刷新缓存；真实修改和删除不会被覆盖。
 
 ## 首次依赖安装测速
 
@@ -251,7 +285,7 @@ fast-forward update failed
 
 - 失败步骤，例如 `git fetch`、`git pull`、依赖同步。
 - 旧版本仍可继续使用。
-- 如果创建了 stash，告诉用户 stash 名称。
+- 不创建或弹出 stash，保留用户已有的 stash。
 - 如果需要手动处理，提示下载最新 Release 并保留用户数据目录。
 - **全部镜像 fetch 失败时**：打印具体排障建议（检查网络、配置代理、手动下载）。
 
@@ -267,7 +301,8 @@ fast-forward update failed
 - **Release 更新**：下载 + 合并后 `VERSION` 更新，`sd-models/`、`extensions/anima_lora/`（若存在）未丢失
 - **国内无代理网络**：Git 直连失败后自动通过镜像成功拉取；Release 下载镜像回退可用
 - 工作区有用户数据：`sd-models/`、`output/`、`logs/`、`config/` 更新后不丢失
-- 工作区有本地改动：Git 更新脚本能 stash 或给出明确提示
+- 旧包缺少程序文件：自动补齐后更新，模型和训练集留在原处
+- 工作区有本地改动：不冲突的改动保留，真实冲突给出明确提示，不覆盖文件
 - 更新后根目录 `run_gui.bat`、`Update-Next-Trainer-Release.bat` 被刷新
 - 更新后仍能启动 WebUI
 

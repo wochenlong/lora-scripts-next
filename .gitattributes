@@ -1,5 +1,13 @@
 *.ps1 text eol=crlf
 *.bat text eol=crlf
+# Old bootstrap versions copy GitHub raw bytes directly into cmd.exe launchers.
+# Keep these download targets CRLF in Git itself, not just in checkouts.
+build-scripts/templates/Update-Next-Trainer.bat -text whitespace=cr-at-eol
+build-scripts/templates/Update-Next-Trainer-Release.bat -text whitespace=cr-at-eol
+build-scripts/templates/Fix-Portable-Bats.bat -text whitespace=cr-at-eol
+scripts/portable/sync_portable_root_launchers.bat -text whitespace=cr-at-eol
+scripts/portable/templates/Update-Next-Trainer.bat -text whitespace=cr-at-eol
+scripts/portable/templates/Update-Next-Trainer-Release.bat -text whitespace=cr-at-eol
 frontend/dist/**/*.html text eol=lf
 frontend/dist/**/*.js text eol=lf
 frontend/dist/**/*.css text eol=lf
