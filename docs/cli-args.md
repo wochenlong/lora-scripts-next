@@ -8,12 +8,15 @@
 | `--port` | int | `28000` | GUI 端口 |
 | `--listen` | bool | `false` | 监听所有网卡（`0.0.0.0`） |
 | `--skip-prepare-environment` | bool | `false` | 跳过环境准备 |
+| `--skip-prepare-onnxruntime` | bool | `false` | 跳过 onnxruntime 依赖准备 |
 | `--disable-tensorboard` | bool | `false` | 禁用 TensorBoard |
 | `--disable-train-monitor` | bool | `false` | 禁用训练监控页 |
+| `--disable-auto-mirror` | bool | `false` | 禁用自动镜像源切换 |
 | `--tensorboard-host` | str | `127.0.0.1` | TensorBoard 主机 |
 | `--tensorboard-port` | int | `6006` | TensorBoard 端口 |
 | `--train-monitor-port` | int | `6008` | 训练监控页端口 |
 | `--localization` | str | | 界面语言 |
+| `--browser` | str | | 打开 GUI 的浏览器：`chrome` / `edge` / `default` |
 | `--dev` | bool | `false` | 开发者模式 |
 
 ## 示例

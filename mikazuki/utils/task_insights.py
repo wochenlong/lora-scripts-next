@@ -258,6 +258,33 @@ def resolve_preview_image(metadata: dict, filename: str) -> Path | None:
     return None
 
 
+def list_output_files(metadata: dict) -> list[dict]:
+    """Checkpoint artifacts a task produced: ``<output_name>*.safetensors``
+    directly under output_dir, oldest first."""
+    dirs = resolve_task_dirs(metadata)
+    output_dir = dirs.get("output_dir")
+    if output_dir is None or not output_dir.is_dir():
+        return []
+    prefix = dirs.get("output_name") or ""
+
+    files = []
+    for path in output_dir.glob("*.safetensors"):
+        if not path.is_file() or (prefix and not path.name.startswith(prefix)):
+            continue
+        try:
+            stat = path.stat()
+        except OSError:
+            continue
+        files.append({
+            "name": path.name,
+            "size_mb": round(stat.st_size / (1024 * 1024), 2),
+            "mtime": stat.st_mtime,
+            "epoch": parse_epoch(path.name),
+            "step": parse_step(path.name),
+        })
+    return sorted(files, key=lambda item: item["mtime"])
+
+
 def downsample(points: list[dict], limit: int = LOSS_POINT_LIMIT) -> list[dict]:
     if len(points) <= limit:
         return points
