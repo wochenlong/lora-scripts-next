@@ -15,6 +15,9 @@ from urllib.parse import urlsplit
 
 from pydantic import ValidationError
 
+from mikazuki.networking.http import open_url
+from mikazuki.networking.events import emit
+
 from .models import MarketplaceCatalog, MarketplaceEntry
 from .paths import MarketplacePaths
 from .trust import TrustError, TrustStore
@@ -23,7 +26,7 @@ from .trust import TrustError, TrustStore
 logger = logging.getLogger("mikazuki.plugin_marketplace.catalog")
 
 _COPY_CHUNK_BYTES = 8 * 1024 * 1024
-_HTTP_CHUNK_BYTES = 1 * 1024 * 1024
+_HTTP_CHUNK_BYTES = 64 * 1024
 _HTTP_MAX_ATTEMPTS = 6
 _HTTP_BACKOFF_BASE_S = 1.0
 _HTTP_BACKOFF_CAP_S = 16.0
@@ -114,7 +117,7 @@ class HttpCatalogSource:
     def read(self) -> bytes:
         try:
             request = urllib.request.Request(self.url, headers={"Accept": "application/json"})
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with open_url(request, timeout=self.timeout_seconds) as response:
                 payload = response.read(self.max_response_bytes + 1)
         except (urllib.error.URLError, OSError) as exc:
             raise CatalogError(
@@ -323,6 +326,7 @@ class HttpPackageAcquirer:
         temporary = destination.with_suffix(destination.suffix + ".part")
         last_error: CatalogError | None = None
         for attempt in range(1, self._max_attempts + 1):
+            emit(attempt=attempt, max_attempts=self._max_attempts, phase="acquiring", error_type=None, error_code=None)
             if is_cancelled is not None and is_cancelled():
                 raise _cancelled_error()
             if attempt > 1:
@@ -333,6 +337,7 @@ class HttpPackageAcquirer:
                 self._download(url, temporary, package_size, sha256, on_progress, is_cancelled)
                 break
             except CatalogError as exc:
+                emit(error_code=exc.code)
                 # Integrity failures mean the bytes on disk cannot be trusted:
                 # drop the partial file so any later attempt starts clean.
                 # On transient failures the .part is KEPT for Range resume.
@@ -400,7 +405,7 @@ class HttpPackageAcquirer:
             # window raises socket.timeout, which maps to a transient failure
             # below (the .part is kept for resumption). It also bounds the
             # header/connect wait.
-            with urllib.request.urlopen(request, timeout=self._stall_timeout_s) as handle:
+            with open_url(request, timeout=self._stall_timeout_s) as handle:
                 status = getattr(handle, "status", None)
                 if status is None:
                     status = handle.getcode()
@@ -434,13 +439,16 @@ class HttpPackageAcquirer:
                         digest = hashlib.sha256()
                         prefix_active = False
                 with temporary.open(mode) as out:
+                    tick = time.monotonic()
+                    tick_bytes = current
                     if on_progress is not None:
                         on_progress(current, package_size)
                     while True:
                         if is_cancelled is not None and is_cancelled():
                             raise _cancelled_error()
                         try:
-                            chunk = handle.read(_HTTP_CHUNK_BYTES)
+                            reader = getattr(handle, "read1", handle.read)
+                            chunk = reader(_HTTP_CHUNK_BYTES)
                         except socket.timeout:
                             # No bytes for the whole stall window: the
                             # connection is dead or frozen. Transient — the
@@ -455,6 +463,11 @@ class HttpPackageAcquirer:
                         digest.update(chunk)
                         current += len(chunk)
                         out.write(chunk)
+                        elapsed = time.monotonic() - tick
+                        if elapsed >= 0.25:
+                            emit(received_bytes=current, total_bytes=package_size,
+                                 speed_bytes_per_second=round((current - tick_bytes) / elapsed))
+                            tick, tick_bytes = time.monotonic(), current
                         if on_progress is not None:
                             on_progress(current, package_size)
                     out.flush()

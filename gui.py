@@ -219,5 +219,9 @@ def launch():
 
 
 if __name__ == "__main__":
+    # Initialize third-party SDKs/child tools before any download is started.
+    # Runtime tasks use explicit policy snapshots; never hot-edit os.environ.
+    from mikazuki.networking.policy import initialize_sdk_environment
+    initialize_sdk_environment()
     args, _ = parser.parse_known_args()
     launch()

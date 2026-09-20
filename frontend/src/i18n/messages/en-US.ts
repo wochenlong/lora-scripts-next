@@ -1,4 +1,9 @@
 export default {
+  network: {
+    title: "Download network settings", mode: "Connection", auto: "Automatic", system: "System proxy", manual: "Manual proxy", direct: "Direct",
+    description: "Saved on the server and shared by the marketplace and engine installers. Applies to new downloads; retry existing tasks after they finish. Mirrors are configured separately.",
+    bypass: "Proxy bypass addresses", save: "Save network settings", effective: "Current policy", viaProxy: "Via proxy", attempt: "Attempt",
+  },
   app: {
     brand: "Next Trainer",
     prerelease: "rc",

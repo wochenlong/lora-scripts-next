@@ -39,6 +39,8 @@ import zipfile
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from mikazuki.networking.http import open_url
+
 from .catalog import CatalogError
 from .paths import MarketplacePaths
 from .trust import TrustError, TrustStore
@@ -124,7 +126,7 @@ class AssetsUpdater:
     def _fetch(self, url: str, cap: int) -> bytes:
         try:
             request = urllib.request.Request(self._resolve(url), headers={"Accept": "application/json, application/zip"})
-            with urllib.request.urlopen(request, timeout=self.timeout_seconds) as response:
+            with open_url(request, timeout=self.timeout_seconds) as response:
                 payload = response.read(cap + 1)
         except (urllib.error.URLError, OSError) as exc:
             raise AssetsError(

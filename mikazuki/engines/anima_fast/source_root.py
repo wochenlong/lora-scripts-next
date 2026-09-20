@@ -7,6 +7,7 @@ from collections.abc import Callable
 from pathlib import Path
 
 from mikazuki.download_sources import apply_github_prefix
+from mikazuki.networking.git import GitDownloadAdapter
 from mikazuki.engines.vendor_bundle import ensure_vendor_source, snapshot_matches
 
 UPSTREAM_REPO = "https://github.com/sorryhyun/anima_lora.git"
@@ -31,29 +32,9 @@ def ensure_upstream_clone(
     log: Callable[[str], None] | None = None,
     github_url_prefix: str | None = None,
 ) -> Path:
-    target = target.resolve()
-    if _has_train_py(target):
-        if commit:
-            subprocess.run(["git", "-C", str(target), "fetch", "origin", commit, "--depth", "1"], check=False)
-            subprocess.run(["git", "-C", str(target), "checkout", commit], check=True)
-        return target
-
-    if target.exists() and any(target.iterdir()):
-        raise InstallSourceError(f"Upstream cache exists but is not a valid anima_lora checkout: {target}")
-
-    target.parent.mkdir(parents=True, exist_ok=True)
+    target.resolve().relative_to(project_root.resolve())
     repo_url = apply_github_prefix(UPSTREAM_REPO, github_url_prefix)
-    clone_cmd = ["git", "clone", "--depth", "1", repo_url, str(target)]
-    if commit:
-        clone_cmd = ["git", "clone", repo_url, str(target)]
-    if log:
-        log(f"[clone] {' '.join(clone_cmd)}")
-    subprocess.run(clone_cmd, check=True)
-    if commit:
-        subprocess.run(["git", "-C", str(target), "checkout", commit], check=True)
-    if not _has_train_py(target):
-        raise InstallSourceError(f"Cloned upstream missing train.py: {target}")
-    return target
+    return GitDownloadAdapter(log=log).acquire(target, repo_url, commit, _has_train_py)
 
 
 def _commit_available(path: Path, commit: str) -> bool:

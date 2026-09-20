@@ -5,6 +5,13 @@ title Update Next-Trainer
 set "PORTABLE_ROOT=%~dp0"
 for %%I in ("%~dp0.") do set "PORTABLE_ROOT_PS=%%~fI"
 set "PROJECT_DIR=%PORTABLE_ROOT%Next-Trainer"
+if defined NEXT_TRAINER_NETWORK_READY goto :network_policy_ready
+if not exist "%PROJECT_DIR%\scripts\network_run.py" goto :network_policy_ready
+if not exist "%PORTABLE_ROOT%python_embeded\python.exe" goto :network_policy_ready
+"%PORTABLE_ROOT%python_embeded\python.exe" "%PROJECT_DIR%\scripts\network_run.py" --batch "%~f0" %*
+exit /b %errorlevel%
+:network_policy_ready
+
 
 if /I not "%~1"=="--no-bootstrap" (
     if exist "%PROJECT_DIR%\" (

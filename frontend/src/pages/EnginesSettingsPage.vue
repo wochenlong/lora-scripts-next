@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import NetworkSettingsPanel from "../components/NetworkSettingsPanel.vue"
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
@@ -234,6 +235,7 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="engines-settings engines-manager">
+    <NetworkSettingsPanel />
     <header class="engines-page-head">
       <div>
         <h2>{{ t("settings.engines.title") }}</h2>

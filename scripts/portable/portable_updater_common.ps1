@@ -3,9 +3,26 @@ $script:PortableUpdaterRepo = "wochenlong/lora-scripts-next"
 $script:PortableUpdaterBranch = "main"
 
 function Initialize-PortableUpdaterConsole {
+    Initialize-PortableNetworkPolicy
     try { cmd /c "chcp 65001 >nul" 2>$null | Out-Null } catch {}
     if ($Host.Name -eq "ConsoleHost") {
         [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    }
+}
+
+function Initialize-PortableNetworkPolicy {
+    # Use the exact same resolver as Python installers. Do not persist settings
+    # to Windows or global Git configuration.
+    $networkProject = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+    $networkPython = Join-Path (Split-Path $networkProject -Parent) 'python_embeded\python.exe'
+    if (-not (Test-Path -LiteralPath $networkPython)) { $networkPython = 'python' }
+    $networkScript = Join-Path $networkProject 'scripts\network_run.py'
+    if (-not (Test-Path -LiteralPath $networkScript)) { return }
+    $networkJson = & $networkPython $networkScript --env-json
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve download network policy.' }
+    $networkValues = $networkJson | ConvertFrom-Json
+    foreach ($networkProp in $networkValues.PSObject.Properties) {
+        [Environment]::SetEnvironmentVariable($networkProp.Name, [string]$networkProp.Value, 'Process')
     }
 }
 

@@ -1,4 +1,9 @@
 export default {
+  network: {
+    title: "下载网络设置", mode: "连接方式", auto: "自动检测", system: "系统代理", manual: "手动代理", direct: "直连",
+    description: "设置保存在服务端，供插件市场和引擎安装共用。新下载任务生效；已运行的任务需结束后重试。镜像源单独设置。",
+    bypass: "不使用代理的地址", save: "保存网络设置", effective: "当前策略", viaProxy: "通过代理", attempt: "尝试",
+  },
   app: {
     brand: "Next Trainer",
     prerelease: "RC",

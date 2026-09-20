@@ -22,11 +22,12 @@ class DownloadSources:
     github_url_prefix: str | None = None
 
     def as_dict(self) -> dict[str, str | None]:
+        from mikazuki.networking import redact
         return {
-            "pip_index_url": self.pip_index_url,
-            "pytorch_index_url": self.pytorch_index_url,
-            "hf_endpoint": self.hf_endpoint,
-            "github_url_prefix": self.github_url_prefix,
+            "pip_index_url": redact(self.pip_index_url) if self.pip_index_url else None,
+            "pytorch_index_url": redact(self.pytorch_index_url) if self.pytorch_index_url else None,
+            "hf_endpoint": redact(self.hf_endpoint) if self.hf_endpoint else None,
+            "github_url_prefix": redact(self.github_url_prefix) if self.github_url_prefix else None,
         }
 
 
@@ -79,8 +80,15 @@ def pytorch_extra_index_url(base: str | None, cuda_tag: str, default_full: str) 
     return f"{trimmed}/{tag}"
 
 
-def install_process_env(sources: DownloadSources | None) -> dict[str, str] | None:
-    """Env overrides for install subprocesses (currently HF_ENDPOINT only)."""
-    if sources is None or not sources.hf_endpoint:
-        return None
-    return {"HF_ENDPOINT": sources.hf_endpoint}
+def install_process_env(sources: DownloadSources | None) -> dict[str, str]:
+    """Explicit process network policy; no host-environment mutation."""
+    from mikazuki.networking import resolve_policy
+    env = resolve_policy().process_env()
+    # Include empty aliases so legacy callers merging into os.environ cannot
+    # reintroduce a proxy disabled by direct mode.
+    for key in ("HTTP_PROXY", "HTTPS_PROXY", "ALL_PROXY", "NO_PROXY"):
+        env.setdefault(key, "")
+        env.setdefault(key.lower(), env[key])
+    if sources and sources.hf_endpoint:
+        env["HF_ENDPOINT"] = sources.hf_endpoint
+    return env

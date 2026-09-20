@@ -19,6 +19,13 @@ set "PYTHONUTF8=1"
 :: Release-channel marketplace wiring (written by build_portable -MarketplaceCatalogOnly)
 if exist "%PORTABLE_ROOT%marketplace-env.bat" call "%PORTABLE_ROOT%marketplace-env.bat"
 set "PYTHON_EXE=%PORTABLE_ROOT%python_embeded\python.exe"
+if defined NEXT_TRAINER_NETWORK_READY goto :network_policy_ready
+if not exist "%PORTABLE_ROOT%Next-Trainer\scripts\network_run.py" goto :network_policy_ready
+if not exist "%PYTHON_EXE%" goto :network_policy_ready
+"%PYTHON_EXE%" "%PORTABLE_ROOT%Next-Trainer\scripts\network_run.py" --batch "%~f0" %*
+exit /b %errorlevel%
+:network_policy_ready
+
 set "LOG_FILE=%PORTABLE_ROOT%next-trainer-log.txt"
 
 echo ============================================ > "%LOG_FILE%"

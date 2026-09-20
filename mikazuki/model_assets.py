@@ -339,7 +339,8 @@ def start_download_task(train_type: str, items: list[dict], source: str, project
 
         try:
             log(f"[start] asset download via {source} ({train_type})")
-            download_assets(train_type, items, source, project_root, log)
+            from mikazuki.networking.process import download_models
+            download_models(train_type, items, source, project_root, log)
             task.finish_log_only(0, None)
         except (Exception, KeyboardInterrupt) as exc:
             log(f"[error] {exc}")

@@ -17,6 +17,7 @@ from mikazuki.download_sources import (
     install_process_env,
     pytorch_extra_index_url,
 )
+from mikazuki.networking import redact
 from mikazuki.tasks import LANE_MAINTENANCE, tm
 from mikazuki.train_log_hub import hub as train_log_hub
 
@@ -236,7 +237,7 @@ def build_environment_install_plan(
 
 
 def _append(log: LogFn, line: str) -> None:
-    log(line)
+    log(redact(line))
 
 
 def _emit_progress(progress: ProgressFn | None, phase: str, message: str, percent: int | None = None, **extra) -> None:
@@ -256,7 +257,7 @@ def _emit_progress(progress: ProgressFn | None, phase: str, message: str, percen
 
 
 def _run_streaming_once(command: list[str], cwd: Path, log: LogFn, env: dict[str, str] | None = None) -> None:
-    _append(log, "[cmd] " + " ".join(command))
+    _append(log, "[cmd] " + redact(" ".join(command)))
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
@@ -503,7 +504,7 @@ def start_install_task(
 
     def runner() -> None:
         def log(line: str) -> None:
-            train_log_hub.append_line(task_id, line)
+            train_log_hub.append_line(task_id, redact(line))
 
         def progress(event: dict) -> None:
             train_log_hub.append_event(task_id, event)
@@ -515,11 +516,22 @@ def start_install_task(
             task.finish_log_only(0 if result.ok else 1, None if result.ok else "; ".join(result.errors))
         except (Exception, KeyboardInterrupt) as exc:  # install failures must become observable state
             facts = {"plan": plan.as_dict(), "phase": "failed", "task_id": task_id}
-            write_install_state(plan.layout, STATE_BROKEN, facts, str(exc))
+            write_install_state(plan.layout, STATE_BROKEN, facts, redact(exc))
             log(f"[error] {exc}")
-            task.finish_log_only(1, exc)
+            task.finish_log_only(1, RuntimeError(redact(exc)))
 
-    threading.Thread(target=runner, daemon=True).start()
+    def network_runner():
+        from mikazuki.networking.policy import task_policy
+        try:
+            with task_policy():
+                runner()
+        except Exception as exc:
+            message = redact(exc)
+            write_install_state(plan.layout, STATE_BROKEN, {"task_id": task_id}, message)
+            train_log_hub.append_line(task_id, f"[network-error] {message}")
+            task.finish_log_only(1, RuntimeError(message))
+
+    threading.Thread(target=network_runner, daemon=True).start()
     return task_id, {
         "task_id": task_id,
         "plan": plan.as_dict(),

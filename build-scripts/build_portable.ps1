@@ -467,7 +467,7 @@ foreach ($dir in $copyDirs) {
     if (Test-Path $src) {
         $xdArgs = @()
         foreach ($xd in $excludeDirs) { $xdArgs += "/XD"; $xdArgs += $xd }
-        $null = robocopy $src $dst /E /NFL /NDL /NJH /NJS /NC /NS $xdArgs
+        $null = robocopy $src $dst /E /NFL /NDL /NJH /NJS /NC /NS /XF network.local.json $xdArgs
         Write-Host "  Copied $($dir.Src)/"
     } else {
         Write-Host "  [skip] $($dir.Src)/ not found" -ForegroundColor Yellow
