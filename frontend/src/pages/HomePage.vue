@@ -16,7 +16,6 @@ const EVENT_POSTER_URL =
   "https://cdn.jsdelivr.net/gh/wochenlong/lora-scripts-next@main/docs/design/assets/home-event-anima.webp"
 
 const slides = computed(() => [
-  { id: "intro", kind: "intro" as const },
   {
     id: "qwen-image-21",
     kind: "training-poster" as const,
@@ -24,6 +23,7 @@ const slides = computed(() => [
     href: "https://github.com/wochenlong/lora-scripts-next/blob/main/docs/diffsynth.md",
     alt: "Qwen-Image-2.1 训练支持",
   },
+  { id: "intro", kind: "intro" as const },
   {
     id: "modelscope",
     kind: "promo" as const,
