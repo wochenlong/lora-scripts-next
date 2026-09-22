@@ -1,162 +1,309 @@
-# DiffSynth-Studio / Qwen-Image-2.1 LoRA
+# Qwen-Image-2.1 LoRA 训练入门
 
-仅开放 Qwen-Image-2.1 **BF16 文生图 LoRA**，不包含 Edit、量化权重、全量微调或多卡。
-完整 DiffSynth-Studio 固定在 `7686e54d41d25c0e8ed5f1318acc23b6bb832654`，不修改其源码。
-模型、优化器和训练循环使用上游实现；适配层负责输入转换、Kohya 兼容分桶组批、调度器选择、任务管理和 logger 回调。
+这篇教程教你在 Next Trainer 中，从安装引擎开始，训练一个 Qwen-Image-2.1 LoRA。
+LoRA 是训练后得到的小模型文件，需要搭配原来的 Qwen-Image-2.1 大模型使用，不能单独出图。
 
-## 准备与使用
+**适用于 3.1.1 版本的 DiffSynth 引擎。目前支持 BF16 文生图 LoRA，不支持图像编辑训练、量化模型训练或多卡训练。**
+不用修改引擎源码，也不用自己写训练脚本。
 
-1. 在「设置 → 训练引擎」安装 DiffSynth。沿用已有下载源设置，需要 Git、uv、网络及支持 BF16 的 NVIDIA GPU。
-2. 在训练页选择「Qwen-Image-2.1 → DiffSynth-Studio → LoRA」。
-3. 模型输入选择 `components`，分别选择 Comfy-Org 的 BF16 文件：
-   - `diffusion_models/qwen_image_2.1_bf16.safetensors`
-   - `text_encoders/qwen3vl_8b_bf16.safetensors`
-   - `vae/qwen_image_2.1_vae_bf16.safetensors`
-4. 无需填写 Processor 路径。开始训练后自动检查项目根目录的
-   `tokenizer-cache/Qwen_Qwen-Image-2.1/processor/`，缺失或格式损坏的文件自动下载，完整时直接复用。
-   下载进度及失败原因显示在训练日志中；旧配置中的 `processor_path` 不再覆盖固定位置。
-5. 选择数据集格式、保存目录、轮数及 Rank，提交训练。启动时检查本地模型、数据和运行环境。
+## 1. 先确认准备条件
 
-模型也可用 `directory` 模式选择包含 `transformer/`、`text_encoder/`、`vae/` 的 BF16 目录。
-组件路径支持单文件、分片索引，或只有一个模型候选的目录。选择分片时自动查找对应索引，
-缺失分片、索引越界、多候选、错误模型结构和非 BF16 权重会报错。官方目录中的 F32 权重不在本版 BF16 输入范围内。
+- 使用支持 BF16 的 NVIDIA 显卡，并安装可用的显卡驱动。本教程不是 AMD 或 Intel 显卡教程。
+- 安装过程需要联网下载独立的 Python 和训练依赖；模型权重需要另外准备。
+- 安装器需要 Git 和 uv。若日志提示找不到它们，请先按训练器安装说明补齐，再重试。
+- 为模型、转换副本、训练缓存和输出文件留出磁盘空间，不要只预留原模型文件的大小。
+- CPU 卸载会使用系统内存；显存不足不能只靠开关解决，也需要足够的内存与磁盘空间。
 
-Processor 固定下载官方版本 `790c92633540aa0cb11d9abf19eb46d861714758` 的 9 个配置及词表文件，
-下载源优先使用 `HF_ENDPOINT`（未设置时使用 hf-mirror.com），失败时尝试 Hugging Face 官方源。
-下载逐文件原子写入；中断后重试保留已完成文件。随后由上游 AutoProcessor 完成实际加载。
-该目录已加入 `.gitignore`；预检及 dry-run 不下载，准备工作在训练子进程中执行。
+### 显存怎么选？
 
-Windows 训练入口默认设置 `DIFFSYNTH_DISK_MAP_BUFFER_SIZE=1000000000000`，
-避免上游 DiskMap 周期性重开权重映射导致 `torch_cpu.dll` 访问冲突（`0xC0000005`，
-[上游问题 #1563](https://github.com/modelscope/DiffSynth-Studio/issues/1563)）。
-此值是触发刷新的参数数量阈值，不会预分配对应大小的内存；显式设置的环境变量优先。
+**目前有明确实测记录的是 RTX 4090 24GB 的低分辨率短训，不是 1024 分辨率长训保证。**
+实测使用 256×256、Batch 1、Rank 4、AdamW8bit、预编码缓存，完成训练中出图及 LoRA 保存，
+并通过独立 ComfyUI 加载和出图检查。CPU 卸载开启与关闭都分别测过。
 
-训练环境未安装 Triton 时，入口自动使用上游 Qwen-Image-2.1 的分段 PyTorch
-注意力路径，避免 Flex Attention 在首个训练步才报 `No module named 'triton'`。
-
-## ComfyUI 模型及输出
-
-Comfy-Org BF16 文件与 DiffSynth 原生布局并非完全相同：
-
-| 组件 | 转换 |
+| 你的情况 | 建议 |
 | --- | --- |
-| DiT | `img_mlp.gate_up` 按行拆为 `gate_layer`、`proj` |
-| 文本编码器 | 语言模型键名恢复 `model.language_model.*` 前缀 |
-| VAE | Wan 风格层名映射；移除卷积权重中长度为 1 的时间轴 |
+| 24GB 显存，第一次使用 | 先按本文的低分辨率试跑配置确认流程，再逐步提高分辨率和 Rank |
+| 高于 24GB 显存 | 仍建议先试跑；显存更大不代表任意图片尺寸、Batch 和预览配置都能运行 |
+| 低于 24GB 显存 | 尚无本项目的实机验收保证；可尝试缓存、CPU 卸载与低分辨率，但不承诺跑通 |
 
-转换前检查完整键名及尺寸，转换结果必须匹配固定上游的模型签名。
-转换文件只写入 `extensions/diffsynth/cache/models/`，按输入路径、大小、修改时间隔离缓存，
-不覆盖原模型；首次运行需为转换副本预留磁盘空间。
+这些是试跑建议，不是最低硬件门槛或训练质量推荐。实测范围见[验收记录](team/diffsynth-main-acceptance.md)。
 
-输出为 safetensors LoRA，使用 ComfyUI 内置加载器支持的 `lora_A.weight` / `lora_B.weight`，
-并保存各层 `.alpha`。Alpha 留空等于 Rank；继续训练时按照源文件 Alpha 和目标 Alpha
-换算 B 权重，保持初始有效增量一致。MLP 两个子层分别导出，由 ComfyUI 原生映射作用于合并权重的两个区段。
-使用**支持 Qwen-Image-2.1 的新版 ComfyUI**，放入 `models/loras`，接内置 Load LoRA / Load LoRA Model Only 节点；
-本版只训练 DiT，CLIP 不产生 LoRA。
+## 2. 安装 DiffSynth 引擎
 
-已通过未修改 ComfyUI 加载器的 CPU 合成张量映射与合并数值测试。
-**尚未完成真实 Qwen GPU 训练 → 输出权重 → ComfyUI 出图验收**，不能据此承诺任意硬件开箱即训。
+1. 打开训练器，进入 **设置 → 训练引擎**。
+2. 找到 **DiffSynth-Studio**，点击安装。
+3. 等待下载、安装和环境检查完成。过程中可以查看安装日志，不要提前关闭训练器。
+4. 确认引擎显示为**就绪**，再进入训练页面。
 
-## 数据与步数
+已经显示就绪就不用重复安装。DiffSynth 使用自己的环境，不需要往 Kohya 或其他引擎里安装依赖。
+安装引擎**不会替你下载下面的训练模型权重**。
 
-- `image_text`：递归读取图片及同名 TXT。`重复次数_名称` 第一层子目录乘全局 `dataset_repeat`（默认 1）；
-  普通目录和根目录图片也保留。空 TXT 表示空提示词；缺失 TXT 报错。RGBA 不丢失。
-- `metadata`：指定 `dataset_base_path` 与原生 CSV / JSON / JSONL，必需 `image`、`prompt` 字符串。
-  直接交给上游 UnifiedDataset，不按文件夹名重复；CSV 空提示词规范化为空字符串。
-- 支持真实分桶 batch；梯度累积、保存间隔、按步数预览、Loss 和总步数使用**优化器更新次数**。
-  总步数为 `ceil(每轮实际 batch 数 / 梯度累积步数) × 轮数`，包含每轮末尾不足一次累积的更新。
+若显示“环境异常”，先看具体错误。如果之前已经装好，只是在移动目录或修改依赖后出现异常，
+先保留日志并反馈，不要急着卸载。修复操作可能重新安装环境。
 
-## 预览
+## 3. 在训练页选对三个选项
 
-复用作者 `feat/ai-toolkit-klein` 分支的 PreviewSampleField 交互，首版裁剪为文生图字段。
-开启后默认一组，可增删；每组独立设置 prompt、width、height、seed、guidance_scale、sample_steps。
-不暴露采样器切换、参考图或网络倍率等本适配未实现的选项。
+进入训练页面，依次选择：
 
-预览在上游 logger 的优化器更新回调中调用现有 pipeline，不复制训练循环。
-图片保存到本次输出目录的 `sample/`，复用任务页现有图片、缩略图与预览 API。
-界面显示采样阶段，文件名关联 Step 与 Sample；预览失败会让任务明确失败。
-回调恢复随机数状态、训练/评估状态及训练噪声调度器，不修改优化器。
+| 选项 | 选择什么 |
+| --- | --- |
+| 模型 | **Qwen-Image-2.1** |
+| 训练引擎 | **DiffSynth-Studio** |
+| 训练目标 | **LoRA** |
 
-模型 CPU 卸载与训练预览同时启用需要编码缓存。适配层捕获固定上游卸载管理器，
-仅在无梯度预览期间增加临时前向回调，清除每轮推理的重计算标记；正常结束和异常时都移除
-临时回调并恢复原标记，保留原训练钩子及参数对象。此兼容逻辑依赖当前固定上游版本。
+后面的参数会随选择变化。不要在其他模型或其他引擎的页面填写本教程的参数。
 
-## 环境、任务与配置
+## 4. 选择训练模型文件
 
-独立 Python 3.12 位于 `extensions/diffsynth/.python/`，虚拟环境位于 `.venv/`。
-PyTorch 2.8.0/cu128、torchvision 0.23.0 与 DiffSynth 依赖均独立安装，不共用 GUI 或其他训练器的 Python 包。
-不需要 DeepSpeed、FlashAttention 或 Bash。显卡驱动仍由操作系统提供。
+### 方式一：已有 ComfyUI 模型文件
 
-安装由现有 Task 管理一个安装监督进程，停止任务会终止完整子进程树。
-安装、修复、卸载与训练通过同一环境锁协调；中断安装变为 broken，源码或依赖变化使 ready 失效。
-DiffSynth 训练任务继续使用现有队列；重跑重新检查配置并建立新输出目录。
+在“训练用模型”中，把模型输入方式 `model_input_mode` 切换成 **`components`（分组件）**。
+分别选择这三个文件。它们可以放在不同目录，不必手动合并或改名。
 
-每次提交保存 UI TOML 与引擎参数 JSON，实际加载参数还保存在输出目录的 `engine_config.json` / `training_args.json`。
-输出路径为 `output_dir/output_name/本次运行编号/`。配置沿用原有导入、导出、历史和重新编辑接口。
-检查点只含 LoRA，不含优化器状态；已有 LoRA 可作为新训练起点。
+| 页面字段 | 要选择的文件 | 通俗理解 |
+| --- | --- | --- |
+| `dit_path` | `qwen_image_2.1_bf16.safetensors` | 主要负责生成图片的模型 |
+| `text_encoder_path` | `qwen3vl_8b_bf16.safetensors` | 负责理解提示词的模型 |
+| `vae_path` | `qwen_image_2.1_vae_bf16.safetensors` | 负责图片编码和解码的模型 |
 
-## 缓存、优化器与 Alpha
+模型来源：[Comfy-Org / Qwen-Image-2.1](https://huggingface.co/Comfy-Org/Qwen-Image-2.1)。
+在仓库文件列表中查找对应的 `diffusion_models`、`text_encoders` 和 `vae` 目录。
+**本版选择 BF16 文件，不要换成 FP8、GGUF 或其他量化版本。**
+这里填写的是你电脑上已经下载好的文件路径，不是网页地址。
 
-“显存设置”中的 `cache_embeddings` 开启后，先逐条编码训练及预览文本，再编码训练图片。
-两阶段分别只把 TE 或 VAE 搬到 GPU，完成后释放编码器；正式训练仅加载 DiT。
-缓存使用上游 Processor、提示词模板、图片处理和 VAE 编码，不缓存训练噪声或时间步，
-每次训练仍由上游损失函数重新采样。数据集重复次数和梯度检查点设置保持有效。
+例如主模型下载在 `D:\models\qwen_image_2.1_bf16.safetensors`，
+就在 `dit_path` 选择这个文件，不要只选混放很多模型的 `D:\models` 文件夹。
 
-缓存放在 `extensions/diffsynth/cache/encodings/`，以图片路径/大小/修改时间、标注内容、
-编码模型路径/大小/修改时间、Processor 内容、Transformers 版本和尺寸设置识别有效性。
-未完成或不可读的条目重新生成；相同图片和标注可复用。手动更换文件时不要保留原大小和修改时间。
-输出目录的 `encoding_cache.json` 记录本次使用的缓存条目。
+如果模型由多个分片组成，把分片和对应索引保存在一起，选择索引文件或只包含这一套模型的目录即可；
+不用逐个填写分片，也不要只下载其中一个分片。
 
-缓存模式下预览使用已缓存的正负文本特征，不重载 TE；轻量预览 pipeline 共享训练中的
-同一个 DiT 和 LoRA，不额外加载 DiT，也不改变优化器参数引用。常驻 DiT 不被搬到 CPU；
-CPU 卸载模式继续使用原训练卸载器，每次推理前向后释放对应权重。VAE 在解码时临时加载，
-完成后释放；预览仍会产生 VAE、KV cache 和临时张量开销，不承诺显存零增长。
-未开启缓存时，模型 CPU 卸载仍不能与训练预览同时开启。
+### 方式二：已有完整模型目录
 
-预览可设置 `sample_every_n_epochs`：留空使用 `sample_every_n_steps`；填写正整数 N 后，
-每 N 轮完成时出图并覆盖步数出图，不叠加触发。以实际 batch 数识别轮次结束，支持梯度累积、
-不足整批的尾批，以及按步数保存权重；轮次从 1 开始。
+把模型输入方式保持为 **`directory`（完整模型目录）**，
+选择里面包含 `transformer`、`text_encoder`、`vae` 子目录的 BF16 模型根目录。
+不是所有名字相同的模型仓库都满足本版格式要求，F32 或量化权重不能当作 BF16 直接使用。
+不确定自己下载的是哪种格式时，按上面的分组件方式准备文件更直观。
 
-“训练参数”提供 `optimizer_type=AdamW|AdamW8bit`；后者使用独立环境中的 bitsandbytes 0.48.2。
-`lora_alpha` 位于 Rank 后方，必须为有限正数。优化器选择受白名单限制，不接受任意 Python 导入路径。
+**Processor 不需要手动填写。** 它是配套的文本和图片处理配置，开始训练时会自动检查和下载。
+第一次训练需要联网；下载失败时看训练日志中的具体原因。
 
-## 分辨率、分桶和 batch
+## 5. 准备训练图片和说明文字
 
-前端使用 `resolution="1024,1024"`，支持非正方形，宽高为 64 的倍数；旧的 `max_pixels`
-仅在没有 resolution 时由后端兼容读取。开启 `enable_bucket` 后，按仓库内 Kohya 的
-BucketManager/make_bucket_resolutions 规则选桶：最接近宽高比、等比缩放、中心裁剪，
-缩小使用 OpenCV AREA，放大使用 PIL LANCZOS，保留 RGBA。
-可设置 `min_bucket_reso`、`max_bucket_reso`、`bucket_reso_steps`（32 的正整数倍）。
-`bucket_no_upscale` 开启时按原尺寸生成桶，忽略最小/最大桶边长；可能产生更多小桶。
+新手选择 **`image_text`（图片 + TXT）**，不用制作表格。
+每张图片旁边放一个同名 TXT 文件，在 TXT 中写这张图片的描述，建议保存为 UTF-8 编码。
 
-关闭分桶按用户要求回退原 DiffSynth 策略，而非 Kohya 的固定尺寸模式：以 resolution
-宽×高为最大面积，超限等比缩小，宽高向下对齐 32，使用上游 BILINEAR 缩放和中心裁剪，
-小图不放大。依然仅合并相同实际尺寸，不能把不同形状的 latent 直接堆叠。
+```text
+D:\train\my-qwen-lora\
+  001.jpg
+  001.txt
+  002.png
+  002.txt
+```
 
-`train_batch_size` 为真实批大小，大于 1 时需开启预编码缓存。每个桶分别组批，每轮
-重新打乱桶内样本，保留尾批，不跨桶混合、不补样本也不丢图。文本特征补齐到批内最长长度，
-用掩码排除补齐 token；DiT 一次前向处理整个 batch。每轮 batch 数为各桶 ceil(样本数/BS)
-之和；梯度累积、任务总步数与学习率调度均基于该数计算。输出 `buckets.json` 记录分布。
-改变分桶/分辨率设置会生成新的 latent 缓存，文本缓存仍可复用。
+例如 `001.txt` 可以写：
 
-## 学习率调度
+```text
+A woman wearing a yellow kimono, smiling, upper body, plain background.
+```
 
-提供 `lr_scheduler=constant|linear|cosine|cosine_with_restarts`，默认真正恒定。
-上游原代码的 `ConstantLR(optimizer)` 默认前 5 次调度使用 1/3 基础学习率，现不再沿用这个隐含行为。
-`lr_warmup_steps` 对所有策略生效，按优化器更新次数计，0 表示不预热；开启预热时从 0
-线性升到基础学习率。线性/余弦在训练末尾降到 0；余弦重启次数仅对该策略显示和生效，
-重启次数+1 为余弦周期数，重启不重复预热。预热必须短于总更新数，周期数不能超过剩余步数。
+描述应与实际图片相符，不要把同一段示例文字不加区分地用于所有图片。
+确保 TXT 真正叫 `001.txt`，不是 Windows 隐藏扩展名后产生的 `001.txt.txt`。
+缺少 TXT 会报错；空 TXT 可以读取，但表示这张图片没有文字描述。
 
-`lr_schedule.py` 只在隔离的上游函数全局环境中替换调度器和逐轮重排的数据加载器工厂，
-不修改固定上游源码或全局 torch。CSV/TensorBoard 的 `learning_rate` 记录每次实际更新使用的值。
-权重续训仍会开始新的调度，不能恢复优化器/调度器进度。
+在页面“数据集设置”中填写：
 
-## 验证入口
+| 字段 | 第一次怎么填 |
+| --- | --- |
+| `dataset_format` | `image_text` |
+| `train_data_dir` | 选择 `D:\train\my-qwen-lora` 这个目录 |
+| `dataset_repeat` | 先填 `1` |
 
-`POST /api/engines/diffsynth/dry-run` 生成配置，不创建训练任务。
-独立入口 `entry.py --check-only --project-root ... --config ...` 只导入上游及解析参数，不读训练模型张量。
+也兼容 Kohya 常见的重复次数子目录：
 
-前端：Node 22，`npm ci` 后运行 `npm run check`。
-后端：`pytest tests/test_diffsynth_engine.py tests/test_diffsynth_review.py -q`。
-上游回调和入口烟测需要 DiffSynth 依赖及固定源码；`test_diffsynth_comfy.py` 另需原版 ComfyUI 及其依赖。
-具体证据与剩余验收项见 `mikazuki/engines/diffsynth/FIELD_NOTES.md`。
+```text
+D:\train\my-qwen-lora\
+  3_character\
+    001.jpg
+    001.txt
+  1_style\
+    002.jpg
+    002.txt
+```
+
+选择最外层 `my-qwen-lora`。第一层子目录名中的数字表示重复次数：
+上例中第一组每轮重复 3 次，第二组重复 1 次；还会乘页面的全局 `dataset_repeat`。
+普通子目录和根目录的图片也会读取。重复次数会增加训练量，不会生成新的图片文件。
+
+`metadata` 是给已经准备好 CSV / JSON / JSONL 数据的用户使用的，不必为了训练改用它。
+这种方式需要 `image`、`prompt` 字段，不按子目录名字计算重复次数。
+
+## 6. 第一次先用小配置跑通
+
+下面是**检查安装、数据、保存和预览是否正常的试跑配置**，不是正式训练的最佳参数。
+建议先准备少量图片，完成一次试跑后，再决定正式训练的分辨率与训练量。
+其中低分辨率、Rank 4 等值需要手动修改，不是页面默认值。
+
+### 图片尺寸与保存
+
+| 字段 | 试跑填写 | 作用 |
+| --- | --- | --- |
+| `resolution` | `256,256` | 基准分辨率，使用英文逗号；宽高必须是 64 的倍数 |
+| `enable_bucket` | 开启 | 把接近宽高比的图片分组，减少不必要的裁剪 |
+| 其他分桶参数 | 先保持默认 | 不需要为第一次试跑逐项调整 |
+| `output_dir` | 选择一个有剩余空间的目录 | 保存 LoRA 和预览图 |
+| `output_name` | `my-qwen-test` | 给本次训练起名字 |
+| `save_steps` | 留空 | 每轮保存；也可以填正整数，按更新步数保存 |
+
+256 分辨率只是为了试跑省资源，不能据此判断正式训练效果。
+跑通后可以逐级尝试更高分辨率；不要一次同时提高分辨率、Batch 和 Rank，否则难以判断哪里导致显存不足。
+分桶开启时实际图片尺寸不一定全是填写的宽高。
+
+### 训练参数
+
+| 字段 | 试跑填写 | 作用 |
+| --- | --- | --- |
+| `num_epochs` | `1` | 完整学习一次数据集 |
+| `learning_rate` | `1e-4` | 每次更新的学习幅度，先不调整 |
+| `lr_scheduler` | `constant` | 保持学习率恒定 |
+| `lr_warmup_steps` | `0` | 试跑不预热 |
+| `optimizer_type` | `AdamW8bit` | 使用较省显存的优化器状态 |
+| `train_batch_size` | `1` | 一次处理一张图片 |
+| `gradient_accumulation_steps` | `1` | 每个 Batch 更新一次 |
+| `lora_rank` | `4` | 低 Rank 试跑；不是正式训练质量推荐 |
+| `lora_alpha` | 留空 | 自动与 Rank 相同 |
+| `lora_target_modules` | 留空 | 由引擎选择训练层 |
+| `lora_checkpoint` | 留空 | 第一次训练不加载已有 LoRA |
+
+轮数和步数不是同一个东西。例如 10 张图片、重复 1 次、Batch 1、梯度累积 1，
+一轮是 10 次更新；5 轮就是 50 次更新。启用不同子目录重复次数、分桶、较大 Batch 或梯度累积后，
+计算会变化，以任务显示的实际总步数为准。
+
+### 显存设置
+
+| 字段 | 首次试跑建议 | 代价或注意事项 |
+| --- | --- | --- |
+| `cache_embeddings` | **开启** | 先处理并缓存文本、图片，再卸载编码器；首次准备较慢，占用磁盘 |
+| `use_gradient_checkpointing` | 保持开启 | 用额外计算换取显存节省 |
+| `initialize_model_on_cpu` | 保持开启 | 降低加载时的显存峰值，会使用系统内存 |
+| `enable_model_cpu_offload` | 显存紧张时开启 | 在 CPU 与 GPU 间搬运权重，会变慢并使用系统内存 |
+| `use_gradient_checkpointing_offload` | 先保持关闭 | 进一步省显存的选项，必要时单独尝试 |
+
+**CPU 模型卸载和训练预览同时开启时，必须开启 `cache_embeddings`。**
+Batch 大于 1 也必须开启这个缓存。
+缓存不是把模型改为低精度，训练仍是本版支持的 BF16 路线。
+
+## 7. 设置训练中预览图
+
+想在训练过程中看出图效果，在“预览设置”开启 `sample_enabled`。
+默认只有一组样例，需要比较多个提示词时再添加。
+
+短训可以把 `sample_every_n_steps` 改为 `2`，这样在第 2、4……次更新后出图。
+正式训练再按需要增大间隔，频繁出图会明显增加耗时。
+如果总共只跑 5 步却设为每 100 步预览，这次就不会触发步数预览。
+
+`sample_every_n_epochs` 先留空。如果填写它，就改成每 N 轮结束后出图，**不再同时按步数出图**。
+
+每个样例可以单独设置：
+
+| 选项 | 试跑示例 |
+| --- | --- |
+| Prompt / 提示词 | `A woman wearing a yellow kimono, smiling, upper body, plain background.` |
+| 宽度 / 高度 | `256` / `256` |
+| Seed / 随机种子 | `42`，固定种子方便对比变化 |
+| CFG / 引导强度 | `4` |
+| 采样步数 | `20` |
+
+这里的尺寸只影响预览，不会改变训练分辨率。
+**训练能跑不代表更大预览图一定能生成**，预览也需要显存。新手先让两者保持相同的小尺寸。
+本版是文生图训练，不需要上传参考图。
+
+## 8. 开始训练后，看什么？
+
+检查模型路径、数据目录和保存目录后，提交训练，并进入任务页面查看日志。
+第一次启动不一定马上显示训练步数，前面还可能有：
+
+1. 检查和下载 Processor 配置。
+2. 转换 ComfyUI 格式的模型文件，生成适配引擎的缓存副本。
+3. 读取图片和文字，生成预编码缓存。
+4. 加载训练模型，开始更新步数。
+
+这些准备阶段可能较慢。只要日志仍在推进，不要因为还没出现 Loss 就反复提交任务。
+格式转换不会覆盖原模型，但会额外占用磁盘。后续相同输入可以复用有效缓存。
+模型或数据变化后，部分缓存需要重新生成。
+
+训练中会看到步数和 Loss（误差指标）。预览时训练暂时进入采样阶段，出图完成后继续训练。
+短训只用来检查流程，不代表 LoRA 已经学会目标内容，也不要只凭某一次 Loss 判断训练质量。
+
+## 9. 去哪里找 LoRA？怎么放进 ComfyUI？
+
+输出保存在：
+
+```text
+你选择的 output_dir/
+  你填写的 output_name/
+    本次运行编号/
+      ...LoRA 权重文件...
+      sample/
+      engine_config.json
+      training_args.json
+```
+
+在这次运行目录中找到保存的 LoRA `.safetensors` 文件。`sample` 目录是训练预览图，
+不是 LoRA 模型；JSON 是配置记录，也不是模型。
+
+1. 使用已支持 Qwen-Image-2.1 的 ComfyUI，并先确认原模型工作流能够正常出图。
+2. 将训练得到的 LoRA 放入 ComfyUI 的 `models/loras` 目录。
+3. 在对应的 Qwen-Image-2.1 工作流中，用内置 **Load LoRA Model Only** 或 **Load LoRA** 节点加载。
+4. 本版训练的是图像生成模型部分，不会生成 CLIP LoRA。
+
+**本训练器的适配层已经处理输出格式，不需要你再手动转换一次。**
+不要把这里的输出规则直接套用于其他工具直接运行 DiffSynth 得到的文件。
+
+需要基于已有 LoRA 再训练时，在 `lora_checkpoint` 中选择权重即可。
+但这不是精确的断点恢复：优化器和学习率调度会重新开始，不会恢复到上次停止时的全部状态。
+
+## 10. 常见问题
+
+### 提示 CUDA out of memory / 显存不足
+
+先关闭其他占用显卡的程序，再按顺序检查：
+
+1. Batch 是否为 1，预编码缓存和梯度检查点是否开启。
+2. 降低训练分辨率，预览图尺寸也一起降低。
+3. 尝试开启 `enable_model_cpu_offload`，同时确认系统内存足够。
+4. 用低 Rank 试跑，暂时关闭预览，判断是训练还是出图阶段超出显存。
+
+如果只在预览时失败，优先检查预览分辨率，不要只改训练分辨率。
+这些措施不能保证所有显卡都能训练这个 BF16 模型。
+
+### 第一次特别慢，或磁盘空间突然减少
+
+通常涉及模型转换和编码缓存。检查日志正在做哪一步，并确认剩余空间。
+转换缓存位于 `extensions/diffsynth/cache/models/`，
+编码缓存位于 `extensions/diffsynth/cache/encodings/`。不要在任务运行时删除缓存。
+
+### 提示找不到模型、缺少分片或格式不支持
+
+检查是否选中了实际文件、三个组件是否对应本教程列出的 BF16 版本。
+分片模型要下载完整，不能只有索引或其中一个分片。不要把网页地址填进本地路径框。
+
+### 提示缺少 TXT
+
+检查图片旁边是否有同名 TXT，以及扩展名是否正确。
+例如 `photo.png` 对应 `photo.txt`，不是 `photo.png.txt`。
+
+### 训练了，但没有预览图
+
+确认预览开关已打开，预览间隔没有超过实际训练量。
+再检查是否填写了“每 N 轮预览”，覆盖了按步数预览的设置。
+预览报错会让任务失败，请看日志，不要把失败当成只是少了一张图。
+
+### 安装或 Processor 下载失败
+
+先看日志中的网络、下载源、磁盘空间或权限错误。不要把其他引擎的 Python 环境复制过来。
+向维护者反馈时，附上显卡型号、显存容量、训练器版本、相关配置和报错日志；
+不要公开令牌、密码等敏感信息。
+
+---
+
+开发者资料：[适配层技术说明](team/diffsynth-technical-notes.md) · [实机验收记录](team/diffsynth-main-acceptance.md)。
