@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useI18n } from "vue-i18n"
+import qwenPoster from "../assets/qwen-image-21-poster-16-9.png"
 
 const { t } = useI18n()
 
@@ -16,6 +17,13 @@ const EVENT_POSTER_URL =
 
 const slides = computed(() => [
   { id: "intro", kind: "intro" as const },
+  {
+    id: "qwen-image-21",
+    kind: "training-poster" as const,
+    src: qwenPoster,
+    href: "https://github.com/wochenlong/lora-scripts-next/blob/main/docs/diffsynth.md",
+    alt: "Qwen-Image-2.1 训练支持",
+  },
   {
     id: "modelscope",
     kind: "promo" as const,
@@ -112,6 +120,11 @@ onBeforeUnmount(stopAutoplay)
                 <p>{{ slide.text }}</p>
                 <span class="hero-promo-cta">{{ slide.cta }} →</span>
               </div>
+            </a>
+          </template>
+          <template v-else-if="slide.kind === 'training-poster'">
+            <a class="hero-poster" :href="slide.href" target="_blank" rel="noopener noreferrer">
+              <img :src="slide.src" :alt="slide.alt" />
             </a>
           </template>
           <template v-else>
