@@ -5,6 +5,7 @@ from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from mikazuki.app.models import APIResponseSuccess
 from mikazuki.datasets.export import file_download_response, stream_dataset_zip
+from mikazuki.datasets.in_use import in_use_map, in_use_tasks
 from mikazuki.datasets.listing import list_datasets
 from mikazuki.datasets.locks import dataset_operation
 from mikazuki.datasets.root import (
@@ -95,9 +96,10 @@ async def update_root(req: RootUpdateRequest):
 @router.get("/datasets")
 async def list_all():
     root = get_datasets_root()
+    usage = in_use_map(root)
     datasets = []
     for item in list_datasets(root):
-        datasets.append({**item, "overview": cached_overview(root / item["name"])})
+        datasets.append({**item, "overview": cached_overview(root / item["name"]), "in_use": usage.get(item["name"], [])})
     return APIResponseSuccess(
         data={
             "root": normalize_path(root),
@@ -112,7 +114,7 @@ async def overview(name: str):
     dataset_dir = resolve_dataset_dir(get_datasets_root(), name)
     if not dataset_dir.is_dir():
         raise HTTPException(status_code=404, detail="dataset not found")
-    return APIResponseSuccess(data={"name": dataset_dir.name, "overview": get_overview(dataset_dir)})
+    return APIResponseSuccess(data={"name": dataset_dir.name, "overview": get_overview(dataset_dir), "in_use": in_use_tasks(get_datasets_root(), dataset_dir.name)})
 
 
 @router.get("/datasets/{name}/file")
@@ -153,6 +155,15 @@ def existing_dataset_dir(name: str) -> Path:
     return dataset_dir
 
 
+def mutable_dataset_dir(name: str) -> Path:
+    dataset_dir = existing_dataset_dir(name)
+    refs = in_use_tasks(get_datasets_root(), dataset_dir.name)
+    if refs:
+        labels = ", ".join(ref["job_label"] or ref["task_id"] for ref in refs)
+        raise HTTPException(status_code=409, detail=f"dataset is in use by queued or running tasks: {labels}")
+    return dataset_dir
+
+
 @router.get("/datasets/{name}/trash")
 async def trash_list(name: str):
     dataset_dir = existing_dataset_dir(name)
@@ -161,7 +172,7 @@ async def trash_list(name: str):
 
 @router.post("/datasets/{name}/trash/restore")
 async def trash_restore(name: str, req: TrashRestoreRequest):
-    dataset_dir = existing_dataset_dir(name)
+    dataset_dir = mutable_dataset_dir(name)
     with dataset_operation(dataset_dir.name):
         result = restore_batch(get_datasets_root(), dataset_dir, req.id)
     if result["restored"]:
@@ -171,7 +182,7 @@ async def trash_restore(name: str, req: TrashRestoreRequest):
 
 @router.post("/datasets/{name}/trash/empty")
 async def trash_empty(name: str, req: TrashEmptyRequest):
-    dataset_dir = existing_dataset_dir(name)
+    dataset_dir = mutable_dataset_dir(name)
     if not req.confirm:
         raise HTTPException(status_code=400, detail="emptying the trash requires confirm=true")
     with dataset_operation(dataset_dir.name):
@@ -181,7 +192,7 @@ async def trash_empty(name: str, req: TrashEmptyRequest):
 
 @router.delete("/datasets/{name}/files")
 async def delete_files(name: str, req: DeleteFilesRequest):
-    dataset_dir = existing_dataset_dir(name)
+    dataset_dir = mutable_dataset_dir(name)
     if not req.paths:
         raise HTTPException(status_code=400, detail="no paths given")
     with dataset_operation(dataset_dir.name):
@@ -193,7 +204,7 @@ async def delete_files(name: str, req: DeleteFilesRequest):
 
 @router.delete("/datasets/{name}")
 async def delete_dataset(name: str):
-    dataset_dir = existing_dataset_dir(name)
+    dataset_dir = mutable_dataset_dir(name)
     with dataset_operation(dataset_dir.name):
         result = soft_delete_dataset(get_datasets_root(), dataset_dir)
     invalidate_overview(dataset_dir)
@@ -246,9 +257,7 @@ async def upload_check(name: str, req: UploadCheckRequest):
 @router.post("/datasets/{name}/upload")
 async def upload(name: str, request: Request):
     root = get_datasets_root()
-    dataset_dir = resolve_dataset_dir(root, name)
-    if not dataset_dir.is_dir():
-        raise HTTPException(status_code=404, detail="dataset not found")
+    dataset_dir = mutable_dataset_dir(name)
 
     form = await request.form()
     conflict = str(form.get("conflict", "skip"))
