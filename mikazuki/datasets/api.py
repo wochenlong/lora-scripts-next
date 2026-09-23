@@ -9,6 +9,7 @@ from mikazuki.datasets.export import file_download_response, stream_dataset_zip
 from mikazuki.datasets.in_use import in_use_map, in_use_tasks
 from mikazuki.datasets.listing import list_datasets
 from mikazuki.datasets.locks import dataset_operation
+from mikazuki.datasets.rename import rename_dataset
 from mikazuki.datasets.root import (
     DEFAULT_DATASETS_ROOT,
     get_datasets_root,
@@ -53,6 +54,10 @@ class DatasetCreateRequest(BaseModel):
 
 
 class DatasetCopyRequest(BaseModel):
+    new_name: str
+
+
+class DatasetRenameRequest(BaseModel):
     new_name: str
 
 
@@ -118,6 +123,16 @@ async def list_all():
 async def copy(name: str, req: DatasetCopyRequest):
     root = get_datasets_root()
     target = copy_dataset(root, name, req.new_name)
+    invalidate_overview(target)
+    return APIResponseSuccess(data={"name": target.name, "path": normalize_path(target)})
+
+
+@router.post("/datasets/{name}/rename")
+async def rename(name: str, req: DatasetRenameRequest):
+    root = get_datasets_root()
+    mutable_dataset_dir(name)
+    target = rename_dataset(root, name, req.new_name)
+    invalidate_overview(resolve_dataset_dir(root, name))
     invalidate_overview(target)
     return APIResponseSuccess(data={"name": target.name, "path": normalize_path(target)})
 
