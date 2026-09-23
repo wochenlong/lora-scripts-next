@@ -45,6 +45,7 @@ function entry(overview: Partial<DatasetEntry["overview"] & object> = {}): Datas
       error: null,
       ...overview,
     } as DatasetEntry["overview"],
+    in_use: [],
   }
 }
 
@@ -98,6 +99,28 @@ describe("DatasetManagePage type badge", () => {
   it("marks candidate detection as uncertain", async () => {
     const wrapper = await mountPage([entry({ type_confidence: "candidate" })])
     expect(wrapper.find(".dataset-type-badge-uncertain").exists()).toBe(true)
+    wrapper.unmount()
+  })
+})
+
+describe("DatasetManagePage in-use lock", () => {
+  it("shows in-use badge and disables upload and delete", async () => {
+    const busy = { ...entry(), in_use: [{ task_id: "t-1", job_label: "Training" }] }
+    const wrapper = await mountPage([busy])
+    expect(wrapper.find(".dataset-inuse-badge").exists()).toBe(true)
+    const buttons = wrapper.findAll(".dataset-card-actions button, .dataset-card-delete")
+    const disabled = buttons.filter((button) => button.attributes("disabled") !== undefined)
+    expect(disabled.length).toBeGreaterThanOrEqual(2)
+    const download = wrapper.find(".dataset-card-actions a")
+    expect(download.attributes("disabled")).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it("keeps mutations enabled when no task references the dataset", async () => {
+    const wrapper = await mountPage([entry()])
+    expect(wrapper.find(".dataset-inuse-badge").exists()).toBe(false)
+    const deleteButton = wrapper.find(".dataset-card-delete")
+    expect(deleteButton.attributes("disabled")).toBeUndefined()
     wrapper.unmount()
   })
 })

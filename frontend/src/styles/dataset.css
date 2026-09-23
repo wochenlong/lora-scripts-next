@@ -1198,6 +1198,17 @@
   color: var(--warning-text);
 }
 
+.dataset-inuse-badge {
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+}
+
 .dataset-card-path {
   display: block;
   margin-top: 4px;

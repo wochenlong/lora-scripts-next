@@ -205,6 +205,8 @@ export default {
     empty: "根目录下还没有数据集，点击“新建数据集”或把现有文件夹放入根目录即可自动发现。",
     files: "文件数",
     captioned: "已标注",
+    inUse: "使用中",
+    inUseHint: "正被排队或运行中的任务引用：{tasks}；任务结束后才能修改。",
     typeImage: "图片",
     typeImageEdit: "图像编辑",
     typeUncertain: "类型待确认",

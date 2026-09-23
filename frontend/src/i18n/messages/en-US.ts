@@ -205,6 +205,8 @@ export default {
     empty: "No datasets under the root yet. Create one, or drop an existing folder into the root and it will be discovered automatically.",
     files: "Files",
     captioned: "Captioned",
+    inUse: "In use",
+    inUseHint: "Referenced by queued or running tasks: {tasks}. Edits unlock when they finish.",
     typeImage: "Image",
     typeImageEdit: "Image edit",
     typeUncertain: "Type uncertain",

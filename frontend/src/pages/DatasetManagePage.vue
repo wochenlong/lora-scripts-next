@@ -191,6 +191,15 @@ function openTool(tool: "tagger" | "editor", entry: DatasetEntry) {
   void router.push({ path: `/dataset/${tool}`, query: { path: entry.path } })
 }
 
+function inUseRefs(entry: DatasetEntry) {
+  return entry.in_use ?? []
+}
+
+function inUseTitle(entry: DatasetEntry) {
+  const tasks = inUseRefs(entry).map((ref) => ref.job_label || ref.task_id).join(", ")
+  return t("datasetManage.inUseHint", { tasks })
+}
+
 function openUpload(entry: DatasetEntry) {
   uploadTarget.value = entry.name
 }
@@ -254,9 +263,11 @@ onBeforeUnmount(stopPolling)
               :class="`dataset-type-badge-${typeBadge(entry)!.kind}`"
               :title="typeBadge(entry)!.title || undefined"
             >{{ typeBadge(entry)!.label }}</span>
+            <span v-if="inUseRefs(entry).length" class="dataset-inuse-badge" :title="inUseTitle(entry)">{{ t("datasetManage.inUse") }}</span>
             <button
               class="danger-action dataset-card-delete"
-              :title="t('datasetManage.deleteDataset')"
+              :title="inUseRefs(entry).length ? inUseTitle(entry) : t('datasetManage.deleteDataset')"
+              :disabled="!!inUseRefs(entry).length"
               @click="deleteDataset(entry)"
             >{{ t("datasetManage.deleteDataset") }}</button>
           </div>
@@ -272,7 +283,12 @@ onBeforeUnmount(stopPolling)
         <p v-if="pairingWarning(entry)" class="dataset-card-warning">{{ pairingWarning(entry) }}</p>
         <footer class="dataset-card-actions">
           <div class="dataset-card-actions-row">
-            <button class="primary-action" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>
+            <button
+              class="primary-action"
+              :disabled="!!inUseRefs(entry).length"
+              :title="inUseRefs(entry).length ? inUseTitle(entry) : undefined"
+              @click="openUpload(entry)"
+            >{{ t("datasetManage.upload") }}</button>
             <a class="secondary-action" :href="datasetDownloadUrl(entry.name)" download>{{ t("datasetManage.downloadZip") }}</a>
           </div>
           <div class="dataset-card-actions-row">

@@ -17,7 +17,8 @@ export interface DatasetOverview {
   computed_at?: string | null
   error?: string | null
 }
-export interface DatasetEntry { name: string; path: string; overview: DatasetOverview | null }
+export interface DatasetTaskRef { task_id: string; job_label: string }
+export interface DatasetEntry { name: string; path: string; overview: DatasetOverview | null; in_use?: DatasetTaskRef[] }
 export interface DatasetList { root: string; exists: boolean; datasets: DatasetEntry[] }
 export interface DatasetCreated { name: string; path: string }
 export interface UploadFileItem { file: File; path: string }
