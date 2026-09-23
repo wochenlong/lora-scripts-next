@@ -43,7 +43,7 @@ def test_mixed_directory_repeats_and_empty_caption(configured):
     assert sum(row['prompt'] == '' for row in adapted.dataset) == 2
 
 
-def test_comfy_component_mode_and_processor_errors(configured):
+def test_comfy_component_mode_uses_managed_processor(configured):
     rt, config = configured
     model = Path(config['diffsynth_model_dir'])
     config.update(model_input_mode='components', dit_path=str(model / 'transformer'), text_encoder_path=str(model / 'text_encoder'), vae_path=str(model / 'vae'))
@@ -54,8 +54,10 @@ def test_comfy_component_mode_and_processor_errors(configured):
     assert plan['transformer_blocks.0.img_mlp.proj.weight'][1] == 'second_half'
     assert any(op == 'squeeze_time' for _, op in adapted.engine['models'][2]['conversion'].values())
     (model / 'processor/tokenizer.json').unlink()
-    with pytest.raises(ValueError, match='Processor'):
-        adapt_config(config, rt)
+    adapted = adapt_config(config, rt)
+    assert Path(adapted.arguments['processor_path']) == (
+        rt.project_root / 'tokenizer-cache/Qwen_Qwen-Image-2.1/processor'
+    )
 
 
 def test_bad_index_and_ambiguous_models_fail(tmp_path):
