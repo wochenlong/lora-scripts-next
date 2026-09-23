@@ -20,6 +20,7 @@ vi.mock("../api/datasets", async () => {
       updateRoot: vi.fn(),
       create: vi.fn(),
       copy: vi.fn(),
+      rename: vi.fn(),
       deleteDataset: vi.fn(),
     },
   }
@@ -121,7 +122,7 @@ describe("DatasetManagePage in-use lock", () => {
     expect(wrapper.find(".dataset-inuse-badge").exists()).toBe(true)
     const buttons = wrapper.findAll(".dataset-card-actions button, .dataset-card-delete")
     const disabled = buttons.filter((button) => button.attributes("disabled") !== undefined)
-    expect(disabled.length).toBeGreaterThanOrEqual(2)
+    expect(disabled.length).toBeGreaterThanOrEqual(3)
     const download = wrapper.find(".dataset-card-actions a")
     expect(download.attributes("disabled")).toBeUndefined()
     const copyButton = wrapper.findAll("button").find((button) => button.text() === "复制")
@@ -141,6 +142,29 @@ describe("DatasetManagePage in-use lock", () => {
     await dialog.findAll("button").find((button) => button.text() === "复制")!.trigger("click")
     await flushPromises()
     expect(datasetsApi.copy).toHaveBeenCalledWith("ds", "ds-copy")
+    wrapper.unmount()
+  })
+
+  it("renames a dataset through the name dialog", async () => {
+    vi.mocked(datasetsApi.rename).mockResolvedValue({ name: "ds-v2", path: "/data/ds-v2" })
+    const wrapper = await mountPage([entry()])
+    await wrapper.findAll("button").find((button) => button.text() === "重命名")!.trigger("click")
+    await flushPromises()
+    const dialog = wrapper.find(".el-dialog-stub")
+    const input = dialog.find("input")
+    expect((input.element as HTMLInputElement).value).toBe("ds")
+    await input.setValue("ds-v2")
+    await dialog.findAll("button").find((button) => button.text() === "重命名")!.trigger("click")
+    await flushPromises()
+    expect(datasetsApi.rename).toHaveBeenCalledWith("ds", "ds-v2")
+    wrapper.unmount()
+  })
+
+  it("disables rename while in use", async () => {
+    const busy = { ...entry(), in_use: [{ task_id: "t-1", job_label: "Training" }] }
+    const wrapper = await mountPage([busy])
+    const renameButton = wrapper.findAll("button").find((button) => button.text() === "重命名")!
+    expect(renameButton.attributes("disabled")).toBeDefined()
     wrapper.unmount()
   })
 

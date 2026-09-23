@@ -25,9 +25,9 @@ const rootSaving = ref(false)
 const createDialogOpen = ref(false)
 const createName = ref("")
 const creating = ref(false)
-const copySource = ref("")
-const copyName = ref("")
-const copying = ref(false)
+const nameDialog = ref<{ mode: "copy" | "rename"; source: string } | null>(null)
+const nameInput = ref("")
+const nameSaving = ref(false)
 const uploadTarget = ref("")
 const trashOpen = ref(false)
 const autoRefresh = ref(localStorage.getItem(AUTO_REFRESH_KEY) === "1")
@@ -208,23 +208,31 @@ function openUpload(entry: DatasetEntry) {
 }
 
 function openCopy(entry: DatasetEntry) {
-  copySource.value = entry.name
-  copyName.value = `${entry.name}-copy`
+  nameDialog.value = { mode: "copy", source: entry.name }
+  nameInput.value = `${entry.name}-copy`
 }
 
-async function copyDataset() {
-  const newName = copyName.value.trim()
-  if (!newName || copying.value) return
-  copying.value = true
+function openRename(entry: DatasetEntry) {
+  nameDialog.value = { mode: "rename", source: entry.name }
+  nameInput.value = entry.name
+}
+
+async function submitNameDialog() {
+  const dialog = nameDialog.value
+  const newName = nameInput.value.trim()
+  if (!dialog || !newName || nameSaving.value) return
+  nameSaving.value = true
   try {
-    const data = await datasetsApi.copy(copySource.value, newName)
-    ElMessage.success(t("datasetManage.msg.copied", { name: data.name }))
-    copySource.value = ""
+    const data = dialog.mode === "copy"
+      ? await datasetsApi.copy(dialog.source, newName)
+      : await datasetsApi.rename(dialog.source, newName)
+    ElMessage.success(t(dialog.mode === "copy" ? "datasetManage.msg.copied" : "datasetManage.msg.renamed", { name: data.name }))
+    nameDialog.value = null
     await load(true)
   } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : t("datasetManage.msg.copyFail"))
+    ElMessage.error(e instanceof Error ? e.message : t(dialog.mode === "copy" ? "datasetManage.msg.copyFail" : "datasetManage.msg.renameFail"))
   } finally {
-    copying.value = false
+    nameSaving.value = false
   }
 }
 
@@ -319,6 +327,12 @@ onBeforeUnmount(stopPolling)
             <button class="secondary-action" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
             <button class="secondary-action" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
             <button class="secondary-action" @click="openCopy(entry)">{{ t("datasetManage.copyDataset") }}</button>
+            <button
+              class="secondary-action"
+              :disabled="!!inUseRefs(entry).length"
+              :title="inUseRefs(entry).length ? inUseTitle(entry) : undefined"
+              @click="openRename(entry)"
+            >{{ t("datasetManage.renameDataset") }}</button>
           </div>
         </footer>
       </article>
@@ -346,11 +360,18 @@ onBeforeUnmount(stopPolling)
       @changed="onUploaded"
     />
 
-    <ElDialog :model-value="!!copySource" :title="t('datasetManage.copyDialogTitle', { name: copySource })" width="480px" @update:model-value="copySource = ''">
-      <ElInput v-model="copyName" :placeholder="t('datasetManage.copyPlaceholder')" @keyup.enter="copyDataset" />
+    <ElDialog
+      :model-value="!!nameDialog"
+      :title="t(nameDialog?.mode === 'rename' ? 'datasetManage.renameDialogTitle' : 'datasetManage.copyDialogTitle', { name: nameDialog?.source ?? '' })"
+      width="480px"
+      @update:model-value="nameDialog = null"
+    >
+      <ElInput v-model="nameInput" :placeholder="t('datasetManage.namePlaceholder')" @keyup.enter="submitNameDialog" />
       <template #footer>
-        <button class="secondary-action" @click="copySource = ''">{{ t("datasetManage.cancel") }}</button>
-        <button class="primary-action" :disabled="copying || !copyName.trim()" @click="copyDataset">{{ t("datasetManage.copyDataset") }}</button>
+        <button class="secondary-action" @click="nameDialog = null">{{ t("datasetManage.cancel") }}</button>
+        <button class="primary-action" :disabled="nameSaving || !nameInput.trim()" @click="submitNameDialog">
+          {{ t(nameDialog?.mode === "rename" ? "datasetManage.renameDataset" : "datasetManage.copyDataset") }}
+        </button>
       </template>
     </ElDialog>
 
