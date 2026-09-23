@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 from mikazuki.dataset_editor import IMAGE_EXTENSIONS, caption_path_for
+from mikazuki.datasets.detect import detect_dataset_type, image_rel_paths
 from mikazuki.datasets.root import normalize_path
 from mikazuki.log import log
 
@@ -19,6 +20,8 @@ _inflight: set[str] = set()
 
 
 def compute_overview(dataset_dir: Path) -> dict:
+    detection = detect_dataset_type(dataset_dir)
+    targets_dir = dataset_dir / detection["targets"] if detection["targets"] else None
     file_count = 0
     captioned_count = 0
     total_bytes = 0
@@ -29,14 +32,33 @@ def compute_overview(dataset_dir: Path) -> dict:
         stat = path.stat()
         total_bytes += stat.st_size
         latest_mtime = max(latest_mtime, stat.st_mtime)
-        if path.suffix.lower() in IMAGE_EXTENSIONS:
-            file_count += 1
-            if caption_path_for(path).is_file():
-                captioned_count += 1
+        if path.suffix.lower() not in IMAGE_EXTENSIONS:
+            continue
+        if targets_dir is not None and not path.is_relative_to(targets_dir):
+            continue
+        file_count += 1
+        if caption_path_for(path).is_file():
+            captioned_count += 1
+    paired_count = None
+    unpaired_count = None
+    orphan_ref_count = None
+    if detection["type"] == "image_edit" and targets_dir is not None:
+        target_paths = image_rel_paths(targets_dir)
+        ref_sets = [image_rel_paths(dataset_dir / ref) for ref in detection["refs"]]
+        paired_count = sum(1 for rel in target_paths if all(rel in ref_set for ref_set in ref_sets))
+        unpaired_count = len(target_paths) - paired_count
+        orphan_ref_count = sum(len(ref_set - target_paths) for ref_set in ref_sets)
     return {
         "state": "ready",
+        "type": detection["type"],
+        "type_confidence": detection["confidence"],
+        "targets": detection["targets"],
+        "refs": detection["refs"],
         "file_count": file_count,
         "captioned_count": captioned_count,
+        "paired_count": paired_count,
+        "unpaired_count": unpaired_count,
+        "orphan_ref_count": orphan_ref_count,
         "total_bytes": total_bytes,
         "updated_at": datetime.fromtimestamp(latest_mtime, tz=timezone.utc).isoformat() if latest_mtime else None,
         "computed_at": datetime.now(tz=timezone.utc).isoformat(),
@@ -51,8 +73,15 @@ def _compute_and_store(key: str, dataset_dir: Path) -> None:
         log.error(f"Dataset overview failed for {dataset_dir}: {exc}")
         entry = {
             "state": "error",
+            "type": None,
+            "type_confidence": None,
+            "targets": None,
+            "refs": None,
             "file_count": None,
             "captioned_count": None,
+            "paired_count": None,
+            "unpaired_count": None,
+            "orphan_ref_count": None,
             "total_bytes": None,
             "updated_at": None,
             "computed_at": datetime.now(tz=timezone.utc).isoformat(),
