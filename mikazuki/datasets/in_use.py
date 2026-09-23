@@ -1,8 +1,12 @@
 import json
 import threading
 import time
-import tomllib
 from pathlib import Path
+
+try:
+    import tomllib
+except ModuleNotFoundError:  # Python 3.10 runtime
+    import toml as tomllib
 
 from mikazuki.tasks import TaskStatus, tm
 
@@ -38,7 +42,7 @@ def _load_config_paths(config_path: Path, out: set[str], depth: int = 0):
         else:
             with config_path.open("rb") as stream:
                 data = tomllib.load(stream)
-    except (OSError, ValueError, tomllib.TOMLDecodeError):
+    except (OSError, ValueError):
         return
     _collect_strings(data, out)
     if depth < 1 and isinstance(data, dict):
