@@ -223,6 +223,9 @@ export default {
     upload: "Upload",
     downloadZip: "Download ZIP",
     trash: "Trash",
+    copyDataset: "Duplicate",
+    copyDialogTitle: "Duplicate dataset \"{name}\"",
+    copyPlaceholder: "New dataset name",
     deleteDataset: "Delete",
     confirmDelete: "All contents of dataset \"{name}\" will be moved to the trash and can be restored. Continue?",
     rootDialogTitle: "Datasets root",
@@ -241,6 +244,8 @@ export default {
       createFail: "Failed to create dataset",
       deleted: "Moved to trash ({n} files)",
       deleteFail: "Failed to delete dataset",
+      copied: "Duplicated as \"{name}\"",
+      copyFail: "Failed to duplicate dataset",
     },
   },
   datasetUpload: {

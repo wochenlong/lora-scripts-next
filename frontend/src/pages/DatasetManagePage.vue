@@ -25,6 +25,9 @@ const rootSaving = ref(false)
 const createDialogOpen = ref(false)
 const createName = ref("")
 const creating = ref(false)
+const copySource = ref("")
+const copyName = ref("")
+const copying = ref(false)
 const uploadTarget = ref("")
 const trashOpen = ref(false)
 const autoRefresh = ref(localStorage.getItem(AUTO_REFRESH_KEY) === "1")
@@ -204,6 +207,27 @@ function openUpload(entry: DatasetEntry) {
   uploadTarget.value = entry.name
 }
 
+function openCopy(entry: DatasetEntry) {
+  copySource.value = entry.name
+  copyName.value = `${entry.name}-copy`
+}
+
+async function copyDataset() {
+  const newName = copyName.value.trim()
+  if (!newName || copying.value) return
+  copying.value = true
+  try {
+    const data = await datasetsApi.copy(copySource.value, newName)
+    ElMessage.success(t("datasetManage.msg.copied", { name: data.name }))
+    copySource.value = ""
+    await load(true)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : t("datasetManage.msg.copyFail"))
+  } finally {
+    copying.value = false
+  }
+}
+
 async function deleteDataset(entry: DatasetEntry) {
   try {
     await ElMessageBox.confirm(t("datasetManage.confirmDelete", { name: entry.name }), { type: "warning" })
@@ -294,6 +318,7 @@ onBeforeUnmount(stopPolling)
           <div class="dataset-card-actions-row">
             <button class="secondary-action" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
             <button class="secondary-action" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
+            <button class="secondary-action" @click="openCopy(entry)">{{ t("datasetManage.copyDataset") }}</button>
           </div>
         </footer>
       </article>
@@ -320,6 +345,14 @@ onBeforeUnmount(stopPolling)
       @update:model-value="trashOpen = $event"
       @changed="onUploaded"
     />
+
+    <ElDialog :model-value="!!copySource" :title="t('datasetManage.copyDialogTitle', { name: copySource })" width="480px" @update:model-value="copySource = ''">
+      <ElInput v-model="copyName" :placeholder="t('datasetManage.copyPlaceholder')" @keyup.enter="copyDataset" />
+      <template #footer>
+        <button class="secondary-action" @click="copySource = ''">{{ t("datasetManage.cancel") }}</button>
+        <button class="primary-action" :disabled="copying || !copyName.trim()" @click="copyDataset">{{ t("datasetManage.copyDataset") }}</button>
+      </template>
+    </ElDialog>
 
     <ElDialog v-model="createDialogOpen" :title="t('datasetManage.createDialogTitle')" width="480px">
       <ElInput v-model="createName" :placeholder="t('datasetManage.createPlaceholder')" @keyup.enter="createDataset" />

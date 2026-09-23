@@ -223,6 +223,9 @@ export default {
     upload: "上传",
     downloadZip: "下载 ZIP",
     trash: "回收站",
+    copyDataset: "复制",
+    copyDialogTitle: "复制数据集「{name}」",
+    copyPlaceholder: "新数据集名称",
     deleteDataset: "删除",
     confirmDelete: "将把数据集「{name}」的全部内容移入回收站，可从回收站恢复。是否继续？",
     rootDialogTitle: "数据集根目录",
@@ -241,6 +244,8 @@ export default {
       createFail: "创建数据集失败",
       deleted: "已移入回收站（{n} 个文件）",
       deleteFail: "删除数据集失败",
+      copied: "已复制为「{name}」",
+      copyFail: "复制数据集失败",
     },
   },
   datasetUpload: {

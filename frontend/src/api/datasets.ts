@@ -38,6 +38,8 @@ export const datasetsApi = {
   updateRoot: (path: string) => apiData<DatasetsRoot>("/api/datasets/root", { method: "PUT", body: JSON.stringify({ path }) }),
   list: () => apiData<DatasetList>("/api/datasets"),
   create: (name: string) => apiData<DatasetCreated>("/api/datasets", { method: "POST", body: JSON.stringify({ name }) }),
+  copy: (name: string, newName: string) =>
+    apiData<DatasetCreated>(`/api/datasets/${encodeURIComponent(name)}/copy`, { method: "POST", body: JSON.stringify({ new_name: newName }) }),
   overview: (name: string) => apiData<{ name: string; overview: DatasetOverview }>(`/api/datasets/${encodeURIComponent(name)}/overview`),
   checkUpload: (name: string, paths: string[]) =>
     apiData<UploadCheck>(`/api/datasets/${encodeURIComponent(name)}/upload/check`, { method: "POST", body: JSON.stringify({ paths }) }),

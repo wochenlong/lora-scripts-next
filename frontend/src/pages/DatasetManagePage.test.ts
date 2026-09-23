@@ -19,6 +19,7 @@ vi.mock("../api/datasets", async () => {
       overview: vi.fn(),
       updateRoot: vi.fn(),
       create: vi.fn(),
+      copy: vi.fn(),
       deleteDataset: vi.fn(),
     },
   }
@@ -54,12 +55,22 @@ const harness = defineComponent({
   template: "<KeepAlive><Page /></KeepAlive>",
 })
 
+const dialogStub = {
+  props: ["modelValue"],
+  template: '<div v-if="modelValue" class="el-dialog-stub"><slot /><slot name="footer" /></div>',
+}
+const inputStub = {
+  props: ["modelValue"],
+  emits: ["update:modelValue"],
+  template: '<input :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
+}
+
 async function mountPage(datasets: DatasetEntry[]) {
   vi.mocked(datasetsApi.list).mockResolvedValue({ root: "/data", exists: true, datasets })
   const wrapper = mount(harness, {
     global: {
       plugins: [i18n],
-      stubs: { ElDialog: true, ElInput: true, ElSwitch: true, DatasetUploadDialog: true, DatasetTrashDialog: true },
+      stubs: { ElDialog: dialogStub, ElInput: inputStub, ElSwitch: true, DatasetUploadDialog: true, DatasetTrashDialog: true },
     },
   })
   await flushPromises()
@@ -113,6 +124,23 @@ describe("DatasetManagePage in-use lock", () => {
     expect(disabled.length).toBeGreaterThanOrEqual(2)
     const download = wrapper.find(".dataset-card-actions a")
     expect(download.attributes("disabled")).toBeUndefined()
+    const copyButton = wrapper.findAll("button").find((button) => button.text() === "复制")
+    expect(copyButton?.attributes("disabled")).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it("duplicates an in-use dataset as an editable copy", async () => {
+    vi.mocked(datasetsApi.copy).mockResolvedValue({ name: "ds-copy", path: "/data/ds-copy" })
+    const busy = { ...entry(), in_use: [{ task_id: "t-1", job_label: "Training" }] }
+    const wrapper = await mountPage([busy])
+    await wrapper.findAll("button").find((button) => button.text() === "复制")!.trigger("click")
+    await flushPromises()
+    const dialog = wrapper.find(".el-dialog-stub")
+    expect(dialog.exists()).toBe(true)
+    expect((dialog.find("input").element as HTMLInputElement).value).toBe("ds-copy")
+    await dialog.findAll("button").find((button) => button.text() === "复制")!.trigger("click")
+    await flushPromises()
+    expect(datasetsApi.copy).toHaveBeenCalledWith("ds", "ds-copy")
     wrapper.unmount()
   })
 
