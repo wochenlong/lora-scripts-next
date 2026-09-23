@@ -1164,6 +1164,40 @@
   white-space: nowrap;
 }
 
+.dataset-card-title h2 {
+  min-width: 0;
+}
+
+.dataset-type-badge {
+  margin-right: auto;
+  font-size: 11px;
+  line-height: 1;
+  padding: 3px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+}
+
+.dataset-type-badge-image {
+  color: var(--text-soft);
+  background: var(--surface-inset);
+}
+
+.dataset-type-badge-edit {
+  color: var(--accent-dark, var(--accent));
+  background: var(--accent-soft);
+}
+
+.dataset-type-badge-uncertain {
+  color: var(--warning-text);
+  background: var(--warning-bg);
+}
+
+.dataset-card-warning {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--warning-text);
+}
+
 .dataset-card-path {
   display: block;
   margin-top: 4px;

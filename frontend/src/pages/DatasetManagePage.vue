@@ -53,12 +53,38 @@ function overviewOf(entry: DatasetEntry): DatasetOverview | null {
   return entry.overview
 }
 
-function statValue(entry: DatasetEntry, field: "file_count" | "captioned_count" | "total_bytes" | "updated_at") {
+function statValue(entry: DatasetEntry, field: "file_count" | "captioned_count" | "paired_count" | "total_bytes" | "updated_at") {
   const overview = overviewOf(entry)
   if (!overview || overview.state !== "ready") return overview?.state === "error" ? "!" : "…"
   if (field === "total_bytes") return formatBytes(overview.total_bytes)
   if (field === "updated_at") return formatTime(overview.updated_at)
   return overview[field] ?? "-"
+}
+
+function isEditDataset(entry: DatasetEntry) {
+  const overview = overviewOf(entry)
+  return overview?.state === "ready" && overview.type === "image_edit" && !!overview.targets
+}
+
+function typeBadge(entry: DatasetEntry) {
+  const overview = overviewOf(entry)
+  if (!overview || overview.state !== "ready" || !overview.type) return null
+  if (overview.type === "image_edit" && (overview.type_confidence === "detected" || overview.type_confidence === "override"))
+    return { label: t("datasetManage.typeImageEdit"), kind: "edit", title: "" }
+  if (overview.type === "image_edit")
+    return { label: t("datasetManage.typeImageEdit"), kind: "uncertain", title: overview.error || t("datasetManage.typeUncertain") }
+  if (overview.type_confidence === "candidate")
+    return { label: t("datasetManage.typeUncertain"), kind: "uncertain", title: t("datasetManage.typeUncertain") }
+  return { label: t("datasetManage.typeImage"), kind: "image", title: "" }
+}
+
+function pairingWarning(entry: DatasetEntry) {
+  const overview = overviewOf(entry)
+  if (!isEditDataset(entry) || !overview) return ""
+  const parts: string[] = []
+  if ((overview.unpaired_count ?? 0) > 0) parts.push(t("datasetManage.unpaired", { n: overview.unpaired_count }))
+  if ((overview.orphan_ref_count ?? 0) > 0) parts.push(t("datasetManage.orphanRefs", { n: overview.orphan_ref_count }))
+  return parts.join(" / ")
 }
 
 function needsPoll(entry: DatasetEntry) {
@@ -222,6 +248,12 @@ onBeforeUnmount(stopPolling)
         <header class="dataset-card-header">
           <div class="dataset-card-title">
             <h2>{{ entry.name }}</h2>
+            <span
+              v-if="typeBadge(entry)"
+              class="dataset-type-badge"
+              :class="`dataset-type-badge-${typeBadge(entry)!.kind}`"
+              :title="typeBadge(entry)!.title || undefined"
+            >{{ typeBadge(entry)!.label }}</span>
             <button
               class="danger-action dataset-card-delete"
               :title="t('datasetManage.deleteDataset')"
@@ -231,11 +263,13 @@ onBeforeUnmount(stopPolling)
           <span class="dataset-card-path" :title="entry.path">{{ entry.path }}</span>
         </header>
         <dl class="dataset-card-stats">
-          <div><dt>{{ t("datasetManage.files") }}</dt><dd>{{ statValue(entry, "file_count") }}</dd></div>
+          <div><dt>{{ isEditDataset(entry) ? t("datasetManage.targets") : t("datasetManage.files") }}</dt><dd>{{ statValue(entry, "file_count") }}</dd></div>
           <div><dt>{{ t("datasetManage.captioned") }}</dt><dd>{{ statValue(entry, "captioned_count") }}</dd></div>
+          <div v-if="isEditDataset(entry)"><dt>{{ t("datasetManage.paired") }}</dt><dd>{{ statValue(entry, "paired_count") }}</dd></div>
           <div><dt>{{ t("datasetManage.size") }}</dt><dd>{{ statValue(entry, "total_bytes") }}</dd></div>
           <div><dt>{{ t("datasetManage.updatedAt") }}</dt><dd>{{ statValue(entry, "updated_at") }}</dd></div>
         </dl>
+        <p v-if="pairingWarning(entry)" class="dataset-card-warning">{{ pairingWarning(entry) }}</p>
         <footer class="dataset-card-actions">
           <div class="dataset-card-actions-row">
             <button class="primary-action" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>

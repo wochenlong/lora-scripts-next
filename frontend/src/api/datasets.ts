@@ -3,8 +3,15 @@ import { apiData } from "./client"
 export interface DatasetsRoot { root: string; default: string; exists: boolean }
 export interface DatasetOverview {
   state: "computing" | "ready" | "error"
+  type?: "image" | "image_edit" | null
+  type_confidence?: "detected" | "candidate" | "ambiguous" | "override" | null
+  targets?: string | null
+  refs?: string[] | null
   file_count: number | null
   captioned_count: number | null
+  paired_count?: number | null
+  unpaired_count?: number | null
+  orphan_ref_count?: number | null
   total_bytes: number | null
   updated_at: string | null
   computed_at?: string | null
