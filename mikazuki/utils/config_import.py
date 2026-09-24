@@ -555,6 +555,10 @@ def _sanitize_arg_lines(config: dict, key: str) -> None:
 def _finalize_import_config(config: dict) -> dict:
     """Apply cross-page normalizers for imported GUI configs."""
     normalized = copy.deepcopy(config)
+    if normalized.get("model_input_mode") == "directory":
+        normalized["model_input_mode"] = "model_repository"
+    elif normalized.get("model_input_mode") == "components":
+        normalized["model_input_mode"] = "comfyui_files"
     _sanitize_arg_lines(normalized, "network_args")
     _sanitize_arg_lines(normalized, "optimizer_args")
     _hydrate_lycoris_ui_fields_from_network_args(normalized)
