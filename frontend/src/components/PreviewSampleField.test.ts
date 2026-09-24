@@ -72,6 +72,22 @@ describe("PreviewSampleField", () => {
     expect(samples[0].controlImages).toEqual([".runtime/training-preview/dropped.png"])
   })
 
+  it("uses a browser file input when an edit reference card is clicked", async () => {
+    vi.spyOn(schemasApi, "uploadPreviewImage").mockResolvedValue({ path: ".runtime/training-preview/picked.png" })
+    const samples = encodeSamples([{ ...createSample(), controlImages: [""] }])
+    const wrapper = mount(PreviewSampleField, { props: { editing: true, samples }, global })
+    const input = wrapper.get('input[type="file"]')
+    const file = new File(["image"], "picked.png", { type: "image/png" })
+    Object.defineProperty(input.element, "files", { configurable: true, value: [file] })
+
+    await wrapper.get(".control-image-card").trigger("click")
+    await input.trigger("change")
+    await vi.waitFor(() => expect(schemasApi.uploadPreviewImage).toHaveBeenCalledWith(file))
+
+    const emitted = decodeSamples(wrapper.emitted("update:samples")!.at(-1)![0] as string[])
+    expect(emitted[0].controlImages).toEqual([".runtime/training-preview/picked.png"])
+  })
+
   it("renders uploaded server paths through the protected preview endpoint", () => {
     const samples = encodeSamples([{ ...createSample(), controlImages: [".runtime/training-preview/example image.png"] }])
     const wrapper = mount(PreviewSampleField, { props: { editing: true, samples }, global })

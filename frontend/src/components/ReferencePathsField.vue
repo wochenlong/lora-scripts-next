@@ -15,6 +15,8 @@ const catalogOpen = ref(false)
 const catalogLoading = ref(false)
 const uploadLoading = ref(false)
 const catalog = ref<PickerFile[]>([])
+const uploadInput = ref<HTMLInputElement>()
+const uploadIndex = ref<number>()
 const { open, mode: pickerMode, initialPath, nameFilter, pick, onConfirm, onCancel } = useServerPathPick()
 function update(index: number, value: string) {
   const next = [...paths.value]
@@ -39,6 +41,11 @@ function useCatalogPath(path: string) {
   catalogOpen.value = false
 }
 async function browse(index: number) {
+  if (props.compact) {
+    uploadIndex.value = index
+    uploadInput.value?.click()
+    return
+  }
   const value = await pick({ mode: props.mode, initialPath: paths.value[index], nameFilter: props.mode === "file" ? "*.png;*.jpg;*.jpeg;*.webp;*.bmp" : "" })
   if (value) update(index, value)
 }
@@ -71,10 +78,19 @@ async function onAddDrop(event: DragEvent) {
     uploadLoading.value = false
   }
 }
+async function onUploadSelected(event: Event) {
+  const input = event.target as HTMLInputElement
+  const file = input.files?.[0]
+  input.value = ""
+  const index = uploadIndex.value
+  uploadIndex.value = undefined
+  if (file && index !== undefined) await uploadFile(index, file)
+}
 </script>
 
 <template>
   <div v-if="compact" class="control-images">
+    <input ref="uploadInput" class="visually-hidden" type="file" accept=".png,.jpg,.jpeg,.webp,.bmp,image/png,image/jpeg,image/webp,image/bmp" @change="onUploadSelected" />
     <div class="control-images-title">{{ t("sampleInputs.controlImages") }}</div>
     <div class="control-images-grid">
       <button v-for="(path, index) in modelValue" :key="index" type="button" class="control-image-card" :class="{ filled: !!path }" :title="path || `${t('sampleInputs.addControlImage')} ${index + 1}`" :disabled="disabled || uploadLoading" @click="browse(index)" @dragover.prevent @drop="onDrop(index, $event)">
@@ -131,4 +147,5 @@ async function onAddDrop(event: DragEvent) {
 .control-image-card small { color: var(--el-text-color-secondary); font-size: 10px; }
 .control-image-add { border-style: dashed; }
 .control-image-card:disabled { cursor: wait; opacity: .7; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 </style>

@@ -6,8 +6,10 @@ from mikazuki.app.application import app
 from mikazuki.app import api
 
 
-def test_preview_image_serves_a_selected_local_image(tmp_path):
-    image = tmp_path / "selected.png"
+def test_preview_image_serves_an_uploaded_cached_image(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    image = tmp_path / ".runtime" / "training-preview" / "selected.png"
+    image.parent.mkdir(parents=True)
     image.write_bytes(b"\x89PNG\r\n\x1a\n")
 
     response = TestClient(app).get("/api/training/preview-image", params={"path": str(image)})
@@ -16,13 +18,14 @@ def test_preview_image_serves_a_selected_local_image(tmp_path):
     assert response.content == image.read_bytes()
 
 
-def test_preview_image_rejects_non_image_files(tmp_path):
-    text = tmp_path / "secret.txt"
-    text.write_text("secret", encoding="utf-8")
+def test_preview_image_rejects_images_outside_the_upload_cache(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    image = tmp_path / "secret.png"
+    image.write_bytes(b"\x89PNG\r\n\x1a\n")
 
-    response = TestClient(app).get("/api/training/preview-image", params={"path": str(text)})
+    response = TestClient(app).get("/api/training/preview-image", params={"path": str(image)})
 
-    assert response.status_code == 404
+    assert response.status_code == 403
 
 
 def test_preview_upload_rejects_oversized_files(tmp_path, monkeypatch):

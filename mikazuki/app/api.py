@@ -130,9 +130,14 @@ async def upload_training_preview(file: UploadFile = File(...)):
 
 @router.get("/training/preview-image")
 async def training_preview_image(path: str):
-    """Serve a user-selected local image or a browser-uploaded preview."""
+    """Serve browser-uploaded previews without exposing arbitrary local files."""
+    root = _training_preview_dir().resolve()
     candidate = Path(path).expanduser()
     candidate = (candidate if candidate.is_absolute() else Path.cwd() / candidate).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="预览图片路径无效") from exc
     if candidate.suffix.lower() not in TRAINING_PREVIEW_EXTENSIONS or not candidate.is_file():
         raise HTTPException(status_code=404, detail="预览图片不存在")
     return FileResponse(candidate)
