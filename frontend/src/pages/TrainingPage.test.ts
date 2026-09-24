@@ -174,6 +174,33 @@ afterEach(() => {
 })
 
 describe("TrainingPage single-field reset", () => {
+  it("migrates legacy Qwen component-mode autosaves", async () => {
+    const qwenSchema: AdaptedSchema = {
+      ...schema,
+      name: "qwen-image-21-lora",
+      sections: [{
+        ...schema.sections[0],
+        fields: [
+          ...schema.sections[0].fields,
+          { key: "model_input_mode", type: "string", options: ["model_repository", "comfyui_files"], defaultValue: "model_repository", conditions: [] },
+          { key: "dit_path", type: "string", conditions: [{ key: "model_input_mode", value: "comfyui_files" }] },
+        ],
+      }],
+    }
+    vi.mocked(loadTrainingSchema).mockResolvedValue(qwenSchema)
+    localStorage.setItem("configs-qwen-image-21-lora-autosave", JSON.stringify({
+      model_input_mode: "components",
+      dit_path: "D:/models/dit.safetensors",
+    }))
+
+    const wrapper = mountPage("qwen-image-21-lora")
+    await flushPromises()
+
+    expect(wrapper.get(".model").text()).toContain('"model_input_mode":"comfyui_files"')
+    expect(wrapper.get(".preview-panel pre").text()).toContain('dit_path = "D:/models/dit.safetensors"')
+    wrapper.unmount()
+  })
+
   it("restores module override defaults and clears stale field errors without changing other values", async () => {
     const wrapper = mountPage()
     await flushPromises()

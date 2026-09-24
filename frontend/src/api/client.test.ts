@@ -16,6 +16,18 @@ describe("apiRequest", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/example", expect.objectContaining({ headers: { "Content-Type": "application/json" } }))
   })
 
+  it("leaves FormData headers unset so the browser adds the multipart boundary", async () => {
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(response({ status: "success", data: { path: "image.png" } }))
+    const body = new FormData()
+    body.append("file", new Blob(["image"]), "image.png")
+
+    await apiRequest("/api/training/preview-upload", { method: "POST", body })
+
+    const request = fetchMock.mock.calls.at(-1)![1] as RequestInit
+    expect(request.headers).toEqual({})
+    expect(request.body).toBe(body)
+  })
+
   it("allows pending responses only when requested", async () => {
     vi.spyOn(globalThis, "fetch").mockResolvedValue(response({ status: "pending", message: "working" }))
     await expect(apiRequest("/api/task", { allowPending: true })).resolves.toMatchObject({ status: "pending" })

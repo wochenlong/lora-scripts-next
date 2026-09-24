@@ -57,6 +57,35 @@ def test_data_conversion_preserves_alpha_repeats_and_unicode(configured):
     assert json.loads(Path(adapted.arguments["dataset_metadata_path"]).read_text(encoding="utf-8")) == adapted.dataset
 
 
+def test_edit_metadata_serializes_reference_paths_relative_to_dataset_base(configured):
+    rt, config = configured
+    output = Path(config["train_data_dir"]) / "outputs"
+    inputs = Path(config["train_data_dir"]) / "inputs"
+    output.mkdir()
+    inputs.mkdir()
+    Image.new("RGB", (32, 32), "blue").save(output / "target.png")
+    Image.new("RGB", (32, 32), "green").save(inputs / "reference.png")
+    metadata = rt.project_root / "edit.json"
+    metadata.write_text(json.dumps([{
+        "image": "target.png",
+        "prompt": "edit",
+        "edit_image": [str((inputs / "reference.png").resolve())],
+    }]), encoding="utf-8")
+    edit_config = {
+        **config,
+        "training_task": "image-edit",
+        "dataset_format": "metadata",
+        "dataset_base_path": str(output),
+        "dataset_metadata_path": str(metadata),
+    }
+
+    adapted = adapt_config(edit_config, rt)
+    path = dump_config(adapted, rt.project_root / "autosave", "edit")
+    written = json.loads(Path(path.parent / "edit-dataset.json").read_text(encoding="utf-8"))
+
+    assert written[0]["edit_image"] == ["../inputs/reference.png"]
+
+
 def test_official_arguments_and_process_isolation(configured, monkeypatch):
     rt, config = configured
     monkeypatch.setenv("PYTHONPATH", "/gui/packages")
@@ -121,6 +150,16 @@ def test_import_export_roundtrip(configured):
     result = validate_config_import("qwen-image-21-lora", exported)
     assert result["result"] == "ok", result
     assert result["config"]["lora_rank"] == 8
+
+
+def test_import_migrates_legacy_diffsynth_input_mode(configured):
+    from mikazuki.utils.config_import import validate_config_import
+
+    _, config = configured
+    config["model_input_mode"] = "components"
+    result = validate_config_import("qwen-image-21-lora", config)
+    assert result["result"] == "ok", result
+    assert result["config"]["model_input_mode"] == "comfyui_files"
 
 
 def test_api_run_routes_parameters_into_task_without_training(configured, monkeypatch):

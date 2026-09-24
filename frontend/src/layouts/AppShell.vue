@@ -7,6 +7,8 @@ import { storeToRefs } from "pinia"
 import { useAppStore } from "../stores/app"
 import { useTasksStore } from "../stores/tasks"
 import GenericFloatingExtensionHost from "../components/extensions/GenericFloatingExtensionHost.vue"
+import { DEFAULT_SELECTION, normalizeModel, resolveModule, type TrainingEngine, type TrainingTarget } from "../training/modules"
+import { readRecentTrainingSelection, writeRecentTrainingSelection } from "../training/recent"
 
 const route = useRoute()
 const { t } = useI18n()
@@ -15,18 +17,28 @@ const appStore = useAppStore()
 const tasksStore = useTasksStore()
 const { version } = storeToRefs(appStore)
 const { showNavBadge, navBadgeCount, activeCount } = storeToRefs(tasksStore)
+const recentTraining = ref(readRecentTrainingSelection() || DEFAULT_SELECTION)
 const versionLabel = computed(() => {
   if (!version.value) return "beta"
   const pre = /(?:alpha|beta|rc)/i.test(version.value)
   return pre ? `v${version.value} · ${t("app.prerelease")}` : `v${version.value}`
 })
 
-const sections = [
-  { key: "training", to: "/training", icon: Cpu, match: ["/training", "/lora/", "/dreambooth/"] },
+const trainingTo = computed(() => ({
+  path: "/training",
+  query: {
+    model: recentTraining.value.model,
+    engine: recentTraining.value.engine,
+    target: recentTraining.value.target,
+  },
+}))
+
+const sections = computed(() => [
+  { key: "training", to: trainingTo.value, icon: Cpu, match: ["/training", "/lora/", "/dreambooth/"] },
   { key: "dataset", to: "/dataset", icon: FolderOpened, match: ["/dataset", "/tagger.html", "/native-tageditor.html", "/dataset-editor.html", "/tageditor.html"] },
   { key: "tasks", to: "/tasks", icon: DataLine, match: ["/tasks", "/task.html", "/tensorboard.html"] },
   { key: "settings", to: "/settings", icon: Setting, match: ["/settings", "/other/"] },
-] as const
+])
 
 const currentPath = computed(() => route.path)
 function isActive(match: readonly string[]) {
@@ -42,14 +54,29 @@ function clearAttentionIfOnTasks() {
   }
 }
 
+function rememberCurrentTraining() {
+  if (route.path !== "/training") return
+  const model = normalizeModel(route.query.model)
+  const engine = typeof route.query.engine === "string" ? route.query.engine as TrainingEngine : undefined
+  const target = typeof route.query.target === "string" ? route.query.target as TrainingTarget : undefined
+  if (!model || !engine || !target || !resolveModule(model, engine, target)) return
+  const selection = { model, engine, target }
+  recentTraining.value = selection
+  writeRecentTrainingSelection(selection)
+}
+
 onMounted(() => {
   appStore.loadVersion()
   void tasksStore.refresh({ silent: true })
   tasksPoll = window.setInterval(() => tasksStore.refresh({ silent: true }), 4000)
   clearAttentionIfOnTasks()
+  rememberCurrentTraining()
 })
 
-watch(() => route.path, clearAttentionIfOnTasks)
+watch(() => route.fullPath, () => {
+  clearAttentionIfOnTasks()
+  rememberCurrentTraining()
+})
 onBeforeUnmount(() => {
   if (tasksPoll !== undefined) window.clearInterval(tasksPoll)
 })
