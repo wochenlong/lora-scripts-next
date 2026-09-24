@@ -188,6 +188,10 @@
   max-width: 320px;
 }
 
+.picker-switch {
+  max-width: 480px;
+}
+
 .settings-preview {
   padding: 18px 20px;
   border: 1px dashed var(--border);

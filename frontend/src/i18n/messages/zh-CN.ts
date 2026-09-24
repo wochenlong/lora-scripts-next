@@ -446,6 +446,13 @@ export default {
       theme: "主题",
       themeLight: "浅色",
       themeDark: "深色",
+      pathPicker: "路径选择器",
+      pathPickerHint: "Windows 本机建议使用自动或系统原生；Linux、无桌面环境和远程访问建议使用网页。自动模式会在不可用时回退到网页选择器。",
+      pathPickerOptions: {
+        auto: "自动（推荐）",
+        native: "Windows",
+        web: "Linux",
+      },
       tensorboardUrl: "TensorBoard URL",
       tensorboardPlaceholder: "留空则使用默认代理",
       tensorboardHint: "可填写独立 TensorBoard 地址；留空时继续通过后端同源代理访问。",

@@ -446,6 +446,13 @@ export default {
       theme: "Theme",
       themeLight: "Light",
       themeDark: "Dark",
+      pathPicker: "Path picker",
+      pathPickerHint: "Use Auto or System on a local Windows host. Web is recommended for Linux, headless hosts, and remote access. Auto falls back to Web when needed.",
+      pathPickerOptions: {
+        auto: "Auto (recommended)",
+        native: "Windows",
+        web: "Linux",
+      },
       tensorboardUrl: "TensorBoard URL",
       tensorboardPlaceholder: "Leave empty to use the default proxy",
       tensorboardHint: "You can provide a standalone TensorBoard address; when empty, access continues through the same-origin backend proxy.",
