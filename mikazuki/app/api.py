@@ -83,6 +83,24 @@ router.include_router(plugin_host_router)
 router.include_router(agent_workspace_router)
 router.include_router(agent_tools_router)
 
+TRAINING_PREVIEW_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+TRAINING_PREVIEW_MAX_BYTES = 20 * 1024 * 1024
+TRAINING_PREVIEW_MAX_FILES = 100
+
+
+def _training_preview_dir() -> Path:
+    return Path.cwd() / ".runtime" / "training-preview"
+
+
+def _prune_training_previews(target_dir: Path) -> None:
+    files = sorted(
+        (path for path in target_dir.iterdir() if path.is_file()),
+        key=lambda path: path.stat().st_mtime,
+        reverse=True,
+    )
+    for stale in files[TRAINING_PREVIEW_MAX_FILES - 1:]:
+        stale.unlink(missing_ok=True)
+
 
 @router.post("/training/preview-upload")
 async def upload_training_preview(file: UploadFile = File(...)):
@@ -90,27 +108,32 @@ async def upload_training_preview(file: UploadFile = File(...)):
     if not file.content_type or not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="仅支持图片文件")
     suffix = Path(file.filename or "").suffix.lower()
-    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}:
+    if suffix not in TRAINING_PREVIEW_EXTENSIONS:
         raise HTTPException(status_code=400, detail="仅支持 PNG、JPG、WEBP 或 BMP 图片")
-    target_dir = Path.cwd() / ".runtime" / "training-preview"
+    target_dir = _training_preview_dir()
     target_dir.mkdir(parents=True, exist_ok=True)
+    _prune_training_previews(target_dir)
     target = target_dir / f"{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}{suffix}"
-    with target.open("wb") as output:
-        while chunk := await file.read(1024 * 1024):
-            output.write(chunk)
+    written = 0
+    try:
+        with target.open("wb") as output:
+            while chunk := await file.read(1024 * 1024):
+                written += len(chunk)
+                if written > TRAINING_PREVIEW_MAX_BYTES:
+                    raise HTTPException(status_code=413, detail="图片不能超过 20 MiB")
+                output.write(chunk)
+    except Exception:
+        target.unlink(missing_ok=True)
+        raise
     return APIResponseSuccess(data={"path": target.relative_to(Path.cwd()).as_posix()})
 
 
 @router.get("/training/preview-image")
 async def training_preview_image(path: str):
-    """Serve uploaded preview images without exposing arbitrary project files."""
-    root = (Path.cwd() / ".runtime" / "training-preview").resolve()
-    candidate = (Path.cwd() / path).resolve()
-    try:
-        candidate.relative_to(root)
-    except ValueError as exc:
-        raise HTTPException(status_code=403, detail="预览图片路径无效") from exc
-    if not candidate.is_file():
+    """Serve a user-selected local image or a browser-uploaded preview."""
+    candidate = Path(path).expanduser()
+    candidate = (candidate if candidate.is_absolute() else Path.cwd() / candidate).resolve()
+    if candidate.suffix.lower() not in TRAINING_PREVIEW_EXTENSIONS or not candidate.is_file():
         raise HTTPException(status_code=404, detail="预览图片不存在")
     return FileResponse(candidate)
 

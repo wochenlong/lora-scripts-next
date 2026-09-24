@@ -142,6 +142,8 @@ function migrateQwenDraft(model: FormModel) {
   if (props.schemaName !== "qwen-image-21-lora") return
   if (model.output_name === "aki") model.output_name = "qwen-image-21-lora"
   if (model.train_data_dir === "./train/aki") model.train_data_dir = "./train/qwen-image-21"
+  if (model.model_input_mode === "directory") model.model_input_mode = "model_repository"
+  if (model.model_input_mode === "components") model.model_input_mode = "comfyui_files"
 }
 
 async function load() {
