@@ -37,7 +37,6 @@ $buildDir    = Join-Path $ProjectRoot "build"
 $portableDir = Join-Path $buildDir "Next-Trainer-Portable"
 $pythonDir   = Join-Path $portableDir "python_embeded"
 $sdtDir      = Join-Path $portableDir "Next-Trainer"
-$tempGitCloneDir = Join-Path $buildDir "_portable_git_metadata"
 
 $7zExe = "C:\Program Files\7-Zip\7z.exe"
 if (-not (Test-Path $7zExe)) {
@@ -101,29 +100,9 @@ function Invoke-GitChecked {
 
 function Clone-SDTrainerGitMetadata {
     param([string]$Destination)
-    Write-Host "  Embedding shallow .git metadata for Update-Next-Trainer.bat..."
-    if (Test-Path $tempGitCloneDir) {
-        Remove-Item $tempGitCloneDir -Recurse -Force
-    }
-    $branch = (& git -C $ProjectRoot branch --show-current 2>$null | Select-Object -First 1)
-    if (-not $branch) { $branch = "main" }
-    $remote = (& git -C $ProjectRoot remote get-url origin 2>$null | Select-Object -First 1)
-    if (-not $remote) { $remote = "https://github.com/wochenlong/lora-scripts-next.git" }
-
-    & git clone --depth=1 --single-branch --branch $branch $remote $tempGitCloneDir
-    if ($LASTEXITCODE -ne 0) {
-        throw "failed to clone shallow git metadata from $remote"
-    }
-    $dstGit = Join-Path $Destination "Next-Trainer\.git"
-    if (Test-Path $dstGit) {
-        Remove-Item $dstGit -Recurse -Force
-    }
-    Copy-Item (Join-Path $tempGitCloneDir ".git") $dstGit -Recurse -Force
-    Remove-Item $tempGitCloneDir -Recurse -Force
-
-    if (-not (Test-Path (Join-Path $dstGit "HEAD"))) {
-        throw "embedded Next-Trainer\.git is missing HEAD"
-    }
+    Write-Host "  Creating complete shallow checkout for Update-Next-Trainer.bat..."
+    & $pythonExe -s (Join-Path $ProjectRoot "scripts/portable/portable_git.py") seed --source $ProjectRoot --trainer-dir (Join-Path $Destination "Next-Trainer")
+    if ($LASTEXITCODE -ne 0) { throw "Portable checkout creation failed" }
 }
 
 function Write-PortableBuildMetadata {
@@ -432,67 +411,7 @@ if (-not (Test-Path $getPipPath)) {
 Write-Host ""
 Write-Host "[2/6] Copying project files..." -ForegroundColor Cyan
 
-$copyDirs = @(
-    @{ Src = "assets";  Dst = "assets" },
-    @{ Src = "mikazuki"; Dst = "mikazuki" },
-    @{ Src = "frontend"; Dst = "frontend" },
-    @{ Src = "config";   Dst = "config" },
-    @{ Src = "scripts";  Dst = "scripts" },
-    @{ Src = "vendor";   Dst = "vendor" },
-    @{ Src = "train_monitor"; Dst = "train_monitor" }
-)
-
-$copyFiles = @(
-    "gui.py",
-    "run_gui.bat",
-    "requirements.txt",
-    "setup_environment.py",
-    "VERSION",
-    "LICENSE",
-    "NOTICE.md",
-    "CHANGELOG.md",
-    "README.md",
-    "README-zh.md"
-)
-
-$excludeDirs = @(
-    ".git", "__pycache__", ".vscode", ".idea",
-    "node_modules", ".sisyphus", ".playwright-mcp", ".tmp",
-    "anima_lora", "extensions", "drafts"
-)
-
-foreach ($dir in $copyDirs) {
-    $src = Join-Path $ProjectRoot $dir.Src
-    $dst = Join-Path $sdtDir $dir.Dst
-    if (Test-Path $src) {
-        $xdArgs = @()
-        foreach ($xd in $excludeDirs) { $xdArgs += "/XD"; $xdArgs += $xd }
-        $null = robocopy $src $dst /E /NFL /NDL /NJH /NJS /NC /NS $xdArgs
-        Write-Host "  Copied $($dir.Src)/"
-    } else {
-        Write-Host "  [skip] $($dir.Src)/ not found" -ForegroundColor Yellow
-    }
-}
-
-# robocopy /XD can miss nested git metadata or local test directories when
-# names are matched relative to the copied subtree, so run a deterministic
-# cleanup pass before archiving.
-foreach ($exclude in $excludeDirs) {
-    Get-ChildItem -Path $sdtDir -Force -Recurse -ErrorAction SilentlyContinue |
-        Where-Object { $_.Name -eq $exclude } |
-        Sort-Object FullName -Descending |
-        ForEach-Object {
-            Remove-Item $_.FullName -Recurse -Force -ErrorAction SilentlyContinue
-        }
-}
-
-New-Item -ItemType Directory -Path $sdtDir -Force | Out-Null
-foreach ($file in $copyFiles) {
-    $src = Join-Path $ProjectRoot $file
-    if (Test-Path $src) {
-        Copy-Item $src -Destination (Join-Path $sdtDir $file)
-    }
-}
+# Keep the tracked tree with its .git; never reconstruct it from a whitelist.
 Clone-SDTrainerGitMetadata -Destination $portableDir
 
 $packageFlavor = if ($BundleAnimaFast) { "full" } else { "lite" }
@@ -925,6 +844,11 @@ Write-Host "  Done" -ForegroundColor Green
 
 # ==== Step 5: 7z archive ====
 
+& $pythonExe -s (Join-Path $sdtDir "scripts/portable/portable_git.py") verify --trainer-dir $sdtDir
+if ($LASTEXITCODE -ne 0) { throw "Portable Git integrity check failed" }
+& $pythonExe -s (Join-Path $sdtDir "tests/test_portable_git_behavior.py")
+if ($LASTEXITCODE -ne 0) { throw "Portable Git behavior tests failed" }
+
 if (-not $Skip7z) {
     Write-Host ""
     Write-Host "[6/6] Creating 7z archive..." -ForegroundColor Cyan
@@ -945,7 +869,7 @@ if (-not $Skip7z) {
             $canonicalPath = Join-Path $sdtDir $name
             $unexpected = @(
                 Get-ChildItem -LiteralPath $canonicalPath -Force -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -ne ".gitkeep" }
+                    Where-Object { $_.Name -notin @(".gitkeep", ".keep") }
             )
             if ($unexpected.Count -gt 0) {
                 throw "refusing to archive non-empty generated data directory: $canonicalPath (use -Clean)"
