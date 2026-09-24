@@ -1,5 +1,5 @@
 export default {
-  sampleInputs: { reference: "Reference path", remove: "Remove", addReference: "Add reference", addSample: "Add Sample", width: "Width", height: "Height", seed: "Seed", guidance_scale: "CFG", sample_steps: "Sampling steps" },
+  sampleInputs: { reference: "Reference path", remove: "Remove", addReference: "Add reference", addSample: "Add Sample", width: "Width", height: "Height", seed: "Seed", guidance_scale: "CFG", sample_steps: "Sampling steps", controlImages: "Control Images", controlImage: "Control image", addControlImage: "Add Control Image", changeControlImage: "Change image", clickOrDrop: "Click or drop", editPromptPlaceholder: "Example: Convert the image to XX style" },
   app: {
     brand: "Next Trainer",
     prerelease: "rc",

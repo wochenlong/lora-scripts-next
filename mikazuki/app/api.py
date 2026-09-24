@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
 from urllib.parse import quote
 
@@ -82,6 +82,37 @@ router.include_router(plugin_marketplace_router)
 router.include_router(plugin_host_router)
 router.include_router(agent_workspace_router)
 router.include_router(agent_tools_router)
+
+
+@router.post("/training/preview-upload")
+async def upload_training_preview(file: UploadFile = File(...)):
+    """Store a browser-dropped preview image where the training process can read it."""
+    if not file.content_type or not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="仅支持图片文件")
+    suffix = Path(file.filename or "").suffix.lower()
+    if suffix not in {".png", ".jpg", ".jpeg", ".webp", ".bmp"}:
+        raise HTTPException(status_code=400, detail="仅支持 PNG、JPG、WEBP 或 BMP 图片")
+    target_dir = Path.cwd() / ".runtime" / "training-preview"
+    target_dir.mkdir(parents=True, exist_ok=True)
+    target = target_dir / f"{datetime.now().strftime('%Y%m%d-%H%M%S-%f')}{suffix}"
+    with target.open("wb") as output:
+        while chunk := await file.read(1024 * 1024):
+            output.write(chunk)
+    return APIResponseSuccess(data={"path": target.relative_to(Path.cwd()).as_posix()})
+
+
+@router.get("/training/preview-image")
+async def training_preview_image(path: str):
+    """Serve uploaded preview images without exposing arbitrary project files."""
+    root = (Path.cwd() / ".runtime" / "training-preview").resolve()
+    candidate = (Path.cwd() / path).resolve()
+    try:
+        candidate.relative_to(root)
+    except ValueError as exc:
+        raise HTTPException(status_code=403, detail="预览图片路径无效") from exc
+    if not candidate.is_file():
+        raise HTTPException(status_code=404, detail="预览图片不存在")
+    return FileResponse(candidate)
 
 avaliable_scripts = [
     "networks/extract_lora_from_models.py",

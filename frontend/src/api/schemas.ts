@@ -35,4 +35,9 @@ export const schemasApi = {
   },
   pickFile: (pickerType: string) => apiData<{ path: string }>(`/api/pick_file?picker_type=${encodeURIComponent(pickerType)}`),
   files: (pickType: string) => apiData<{ files: PickerFile[] }>(`/api/get_files?pick_type=${encodeURIComponent(pickType)}`),
+  uploadPreviewImage: async (file: File) => {
+    const body = new FormData()
+    body.append("file", file)
+    return apiData<{ path: string }>("/api/training/preview-upload", { method: "POST", body })
+  },
 }

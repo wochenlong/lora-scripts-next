@@ -25,13 +25,14 @@ export interface ApiRequestOptions extends RequestInit {
 
 export async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<ApiResponse<T>> {
   const { allowPending = false, headers, ...requestOptions } = options
+  const isFormData = typeof FormData !== "undefined" && requestOptions.body instanceof FormData
   let response: Response
 
   try {
     response = await fetch(path, {
       ...requestOptions,
       headers: {
-        ...(requestOptions.body ? { "Content-Type": "application/json" } : {}),
+        ...(requestOptions.body && !isFormData ? { "Content-Type": "application/json" } : {}),
         ...headers,
       },
     })

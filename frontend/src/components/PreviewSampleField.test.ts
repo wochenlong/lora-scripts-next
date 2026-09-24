@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { ElInputNumber } from "element-plus"
 import { mount } from "@vue/test-utils"
-import { describe, expect, it } from "vitest"
+import { describe, expect, it, vi } from "vitest"
 import { i18n } from "../i18n"
+import { schemasApi } from "../api/schemas"
 import { createSample, decodeSamples, encodeSamples } from "../training/sampleContract"
 import PreviewSampleField from "./PreviewSampleField.vue"
 import ReferencePathsField from "./ReferencePathsField.vue"
@@ -39,6 +40,46 @@ describe("PreviewSampleField", () => {
     await wrapper.setProps({ editing: true, disabled: true })
     expect(wrapper.findComponent(ReferencePathsField).exists()).toBe(true)
     expect(wrapper.findAll("button").every(button => button.attributes("disabled") !== undefined)).toBe(true)
+  })
+
+  it("shows an editing instruction example only in edit mode", async () => {
+    const wrapper = mount(PreviewSampleField, { global })
+    expect(wrapper.get("textarea").attributes("placeholder")).toBe("")
+    await wrapper.setProps({ editing: true })
+    expect(wrapper.get("textarea").attributes("placeholder")).toBe("例如：将图片转换为 XX 风格")
+  })
+
+  it("renders edit references as AI Toolkit-style control image cards", async () => {
+    const wrapper = mount(PreviewSampleField, { props: { editing: true }, global })
+    expect(wrapper.find(".control-images").exists()).toBe(true)
+    expect(wrapper.find(".control-image-add").exists()).toBe(true)
+    await wrapper.find(".control-image-add").trigger("click")
+    expect(decodeSamples(wrapper.emitted("update:samples")!.at(-1)![0] as string[])[0].controlImages).toEqual([""])
+  })
+
+  it("uploads an image dropped on the add card and stores the server path", async () => {
+    vi.spyOn(schemasApi, "uploadPreviewImage").mockResolvedValue({ path: ".runtime/training-preview/dropped.png" })
+    const wrapper = mount(PreviewSampleField, { props: { editing: true }, global })
+    const file = new File(["image"], "dropped.png", { type: "image/png" })
+
+    await wrapper.find(".control-image-add").trigger("drop", {
+      dataTransfer: { files: [file] },
+    })
+    await vi.waitFor(() => expect(wrapper.emitted("update:samples")).toBeTruthy())
+
+    expect(schemasApi.uploadPreviewImage).toHaveBeenCalledWith(file)
+    const samples = decodeSamples(wrapper.emitted("update:samples")!.at(-1)![0] as string[])
+    expect(samples[0].controlImages).toEqual([".runtime/training-preview/dropped.png"])
+  })
+
+  it("renders uploaded server paths through the protected preview endpoint", () => {
+    const samples = encodeSamples([{ ...createSample(), controlImages: [".runtime/training-preview/example image.png"] }])
+    const wrapper = mount(PreviewSampleField, { props: { editing: true, samples }, global })
+    expect(wrapper.get(".control-image-card img").attributes("src")).toBe(
+      "/api/training/preview-image?path=.runtime%2Ftraining-preview%2Fexample%20image.png",
+    )
+    expect(wrapper.get(".control-image-card").classes()).toContain("filled")
+    expect(wrapper.find(".control-image-card.filled strong").exists()).toBe(false)
   })
 
   it("keeps malformed saved values visible as an error without overwriting them", () => {
