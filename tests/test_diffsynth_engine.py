@@ -96,7 +96,9 @@ def test_quantization_is_rejected(configured):
         adapt_config({**config, "diffsynth_quantization": "bitsandbytes_nf4"}, rt)
 
 
-def test_install_uses_managed_python_complete_pin_and_mirrors(tmp_path):
+def test_install_uses_managed_python_complete_pin_and_mirrors(tmp_path, monkeypatch):
+    monkeypatch.setattr("mikazuki.engines.diffsynth.environment.platform.machine", lambda: "x86_64")
+    monkeypatch.setattr("mikazuki.engines.diffsynth.environment.sys.platform", "linux")
     rt = Runtime(tmp_path)
     sources = DownloadSources(pip_index_url="https://pypi.example/simple", pytorch_index_url="https://torch.example/whl", github_url_prefix="https://git.example/")
     commands = installation_plan(rt, sources)
@@ -111,6 +113,21 @@ def test_install_uses_managed_python_complete_pin_and_mirrors(tmp_path):
     assert "https://torch.example/whl/cu128" in commands[-2]
     assert "https://pypi.example/simple" in commands[-1]
     assert "deepspeed" not in " ".join(commands[-1])
+
+
+def test_install_torch_uses_pypi_on_linux_aarch64(tmp_path, monkeypatch):
+    monkeypatch.setattr("mikazuki.engines.diffsynth.environment.platform.machine", lambda: "aarch64")
+    monkeypatch.setattr("mikazuki.engines.diffsynth.environment.sys.platform", "linux")
+    rt = Runtime(tmp_path)
+    sources = DownloadSources(pip_index_url="https://pypi.example/simple", pytorch_index_url="https://torch.example/whl")
+    commands = installation_plan(rt, sources)
+    torch_cmd = commands[-2]
+    assert "torch.example" not in " ".join(torch_cmd)
+    assert torch_cmd[torch_cmd.index("--index-url") + 1] == "https://pypi.example/simple"
+    assert "torch==2.8.0" in torch_cmd and "torchvision==0.23.0" in torch_cmd
+    plain = installation_plan(rt, DownloadSources())[-2]
+    assert "--index-url" not in plain
+    assert "torch==2.8.0" in plain and "torchvision==0.23.0" in plain
 
 
 def test_import_export_roundtrip(configured):
