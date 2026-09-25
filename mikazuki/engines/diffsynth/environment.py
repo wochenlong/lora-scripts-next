@@ -1,20 +1,40 @@
 """An independent uv-managed interpreter and venv; no GUI torch imports."""
 import json
 import os
+import platform
 import subprocess
+import sys
 
 from .settings import PYTHON_VERSION, TRAIN_SCRIPT
 from mikazuki.download_sources import pytorch_extra_index_url
 
+TORCH_PINS = ["torch==2.8.0", "torchvision==0.23.0"]
+TORCH_PINS_AARCH64 = ["torch==2.13.0", "torchvision==0.28.0"]
+
+
+def _linux_aarch64():
+    return sys.platform.startswith("linux") and platform.machine() in {"aarch64", "arm64"}
+
+
+def _torch_index_args(sources):
+    if _linux_aarch64():
+        return ["--index-url", sources.pip_index_url] if sources.pip_index_url else []
+    torch_index = pytorch_extra_index_url(sources.pytorch_index_url, "cu128", "https://download.pytorch.org/whl/cu128")
+    return ["--index-url", torch_index]
+
+
+def _torch_pins():
+    return TORCH_PINS_AARCH64 if _linux_aarch64() else TORCH_PINS
+
 
 def install_commands(runtime, sources):
     index = ["--index-url", sources.pip_index_url] if sources.pip_index_url else []
-    torch_index = pytorch_extra_index_url(sources.pytorch_index_url, "cu128", "https://download.pytorch.org/whl/cu128")
+    torch_pins = _torch_pins()
     return [
         ["uv", "python", "install", PYTHON_VERSION, "--install-dir", str(runtime.python_install_dir)],
         ["uv", "venv", "--clear", "--managed-python", "--python", PYTHON_VERSION, str(runtime.root / ".venv")],
-        ["uv", "pip", "install", "--python", str(runtime.python), "--index-url", torch_index, "torch==2.8.0", "torchvision==0.23.0"],
-        ["uv", "pip", "install", "--python", str(runtime.python), *index, "-e", str(runtime.source), "transformers>=4.57.1,<5", "tensorboard", "bitsandbytes==0.48.2", "opencv-python-headless==4.11.0.86", "torch==2.8.0", "torchvision==0.23.0"],
+        ["uv", "pip", "install", "--python", str(runtime.python), *_torch_index_args(sources), *torch_pins],
+        ["uv", "pip", "install", "--python", str(runtime.python), *index, "-e", str(runtime.source), "transformers>=4.57.1,<5", "tensorboard", "bitsandbytes==0.48.2", "opencv-python-headless==4.11.0.86", *torch_pins],
     ]
 
 
