@@ -124,10 +124,11 @@ def test_install_torch_uses_pypi_on_linux_aarch64(tmp_path, monkeypatch):
     torch_cmd = commands[-2]
     assert "torch.example" not in " ".join(torch_cmd)
     assert torch_cmd[torch_cmd.index("--index-url") + 1] == "https://pypi.example/simple"
-    assert "torch==2.8.0" in torch_cmd and "torchvision==0.23.0" in torch_cmd
+    assert "torch==2.13.0" in torch_cmd and "torchvision==0.28.0" in torch_cmd
+    assert "torch==2.13.0" in commands[-1] and "torchvision==0.28.0" in commands[-1]
     plain = installation_plan(rt, DownloadSources())[-2]
     assert "--index-url" not in plain
-    assert "torch==2.8.0" in plain and "torchvision==0.23.0" in plain
+    assert "torch==2.13.0" in plain and "torchvision==0.28.0" in plain
 
 
 def test_import_export_roundtrip(configured):
