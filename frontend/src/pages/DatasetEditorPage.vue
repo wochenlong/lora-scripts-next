@@ -2,7 +2,9 @@
 import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
+import { useRoute } from "vue-router"
 import { datasetApi, type ChangedItem, type DatasetHistory, type DatasetItem } from "../api/dataset"
+import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
@@ -10,6 +12,7 @@ import { useServerPathPick } from "../composables/useServerPathPick"
 import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 
 const { t } = useI18n()
+const route = useRoute()
 
 type RightPanelMode = "caption" | "filter" | "batch"
 
@@ -54,6 +57,17 @@ const rightPanelMode = ref<RightPanelMode>("caption")
 const selectMenuOpen = ref(false)
 const sessionHistory = ref<DatasetHistory>({ can_undo: false, can_redo: false, changes: [] })
 const previewOpen = ref(false)
+const managedPaths = ref<Array<{ name: string; path: string }>>([])
+const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
+
+async function refreshManagedPaths() {
+  try {
+    const data = await datasetsApi.list()
+    managedPaths.value = data.datasets.map(({ name, path: datasetPath }) => ({ name, path: datasetPath }))
+  } catch {
+    managedPaths.value = []
+  }
+}
 
 function onPreviewKeydown(event: KeyboardEvent) {
   if (event.key !== "Escape") return
@@ -212,7 +226,7 @@ async function scan() {
     page.value = 1
     rightPanelMode.value = "caption"
     if (data.items[0]) choose(data.items[0])
-    await refreshHistory()
+    await Promise.all([refreshHistory(), refreshManagedPaths()])
     ElMessage.success(t("datasetEditor.scanMsg.loaded", { n: data.total }))
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.scanMsg.fail"))
@@ -277,6 +291,26 @@ async function batch() {
   }
 }
 
+async function deleteTargets() {
+  if (!managedName.value || !targets.value.length) return
+  try {
+    await ElMessageBox.confirm(
+      t("datasetEditor.batch.deleteConfirm", { n: targets.value.length }),
+      { type: "warning" },
+    )
+  } catch {
+    return
+  }
+  try {
+    const data = await datasetsApi.deleteFiles(managedName.value, targets.value.map((item) => item.relative_path))
+    ElMessage.success(t("datasetEditor.batch.deleteDone", { n: data.deleted.length }))
+    if (data.missing.length) ElMessage.warning(t("datasetEditor.batch.deleteMissing", { n: data.missing.length }))
+    await scan()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.batch.deleteFail"))
+  }
+}
+
 async function changeHistory(kind: "undo" | "redo") {
   try {
     const data = await datasetApi[kind](root.value)
@@ -334,6 +368,13 @@ watch(pageCount, (count) => {
   if (page.value > count) page.value = count
 })
 onActivated(() => window.addEventListener("keydown", onPreviewKeydown))
+onActivated(() => {
+  const queryPath = route?.query.path
+  if (typeof queryPath === "string" && queryPath.trim() && queryPath !== path.value) {
+    path.value = queryPath
+    void scan()
+  }
+})
 onDeactivated(() => {
   window.removeEventListener("keydown", onPreviewKeydown)
   previewOpen.value = false
@@ -505,6 +546,14 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
             @click="previewOpen = true"
           >
           <span class="caption-filename" :title="current.relative_path">{{ current.name }}</span>
+          <div v-if="managedName" class="caption-file-actions">
+            <a :href="datasetFileUrl(managedName, current.relative_path)" download>{{ t("datasetEditor.caption.downloadImage") }}</a>
+            <a
+              v-if="current.caption_exists"
+              :href="datasetFileUrl(managedName, current.relative_path.replace(/\.[^.]+$/, '.txt'))"
+              download
+            >{{ t("datasetEditor.caption.downloadCaption") }}</a>
+          </div>
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
               v-for="(tag, index) in captionTags"
@@ -603,6 +652,15 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
         <label><input v-model="stripEscapeChars" type="checkbox">{{ t("datasetEditor.batch.stripEscape") }}</label>
         <label><input v-model="sort" type="checkbox">{{ t("datasetEditor.batch.sort") }}</label>
         <div class="dataset-tool-panel-footer">
+          <button
+            v-if="managedName"
+            type="button"
+            class="danger-action"
+            :disabled="!targets.length"
+            @click="deleteTargets"
+          >
+            {{ t("datasetEditor.batch.deleteFiles", { n: targets.length }) }}
+          </button>
           <button type="button" class="dataset-tool-secondary" @click="closeToolPanel">{{ t("datasetEditor.batch.cancel") }}</button>
           <button type="button" class="primary-action" :disabled="!targets.length" @click="batch">
             {{ t("datasetEditor.batch.applyTo", { n: targets.length }) }}

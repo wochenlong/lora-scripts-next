@@ -3,6 +3,7 @@ import { computed, onActivated, onBeforeUnmount, onDeactivated, reactive, ref } 
 import { ElMessage } from "element-plus"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
+import { useRoute } from "vue-router"
 import { useTaggerStore } from "../stores/tagger"
 import type { TaggerRequest } from "../api/tagger"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
@@ -13,6 +14,7 @@ const form = reactive<TaggerRequest>({ path: "", interrogator_model: models[0], 
 const store = useTaggerStore()
 const { status, error, submitting, busy } = storeToRefs(store)
 const { t } = useI18n()
+const route = useRoute()
 const downloadPercent = computed(() => status.value.download.percent || (status.value.download.total ? Math.round(status.value.download.current / status.value.download.total * 100) : 0))
 const taggingPercent = computed(() => status.value.tagging.total ? Math.round(status.value.tagging.current / status.value.tagging.total * 100) : 0)
 let timer: number | undefined
@@ -44,6 +46,8 @@ function stopPolling() {
   timer = undefined
 }
 onActivated(() => {
+  const queryPath = route?.query.path
+  if (typeof queryPath === "string" && queryPath.trim()) form.path = queryPath
   void store.refresh()
   stopPolling()
   timer = window.setInterval(store.refresh, 1200)

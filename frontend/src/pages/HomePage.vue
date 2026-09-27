@@ -11,10 +11,6 @@ const portals = computed(() => [
   { title: t("home.portals.tasks.title"), text: t("home.portals.tasks.text"), to: "/tasks", tone: "cyan" },
 ] as const)
 
-/** Promo slides for 3.0.0: intro + ModelScope + remote event poster (not bundled). */
-const EVENT_POSTER_URL =
-  "https://cdn.jsdelivr.net/gh/wochenlong/lora-scripts-next@main/docs/design/assets/home-event-anima.webp"
-
 const slides = computed(() => [
   {
     id: "qwen-image-21",
@@ -32,15 +28,6 @@ const slides = computed(() => [
     title: t("home.sponsor.modelscope.title"),
     text: t("home.sponsor.modelscope.text"),
     cta: t("home.sponsor.modelscope.cta"),
-  },
-  {
-    id: "anima-event",
-    kind: "poster" as const,
-    src: EVENT_POSTER_URL,
-    href: "https://kusart.com/zh-CN/events/anima",
-    alt: t("home.sponsor.anima.alt"),
-    badge: t("home.sponsor.anima.badge"),
-    caption: t("home.sponsor.anima.caption"),
   },
 ])
 
@@ -122,18 +109,9 @@ onBeforeUnmount(stopAutoplay)
               </div>
             </a>
           </template>
-          <template v-else-if="slide.kind === 'training-poster'">
-            <a class="hero-poster" :href="slide.href" target="_blank" rel="noopener noreferrer">
-              <img :src="slide.src" :alt="slide.alt" />
-            </a>
-          </template>
           <template v-else>
             <a class="hero-poster" :href="slide.href" target="_blank" rel="noopener noreferrer">
               <img :src="slide.src" :alt="slide.alt" />
-              <div class="poster-meta">
-                <span class="poster-tag">{{ slide.badge }}</span>
-                <span class="poster-tag">{{ slide.caption }}</span>
-              </div>
             </a>
           </template>
         </article>

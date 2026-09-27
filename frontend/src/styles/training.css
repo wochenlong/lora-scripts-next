@@ -587,3 +587,14 @@
 .schema-toc-tab {
   border-radius: var(--radius-sm);
 }
+
+.qwen-training-mode {
+  margin-bottom: 20px;
+  padding: 14px 16px;
+  border: 1px solid var(--el-border-color);
+  border-radius: var(--radius-sm);
+  background: var(--el-fill-color-extra-light);
+}
+.qwen-training-mode > strong { display: block; margin-bottom: 10px; }
+.qwen-training-mode-options { width: 100%; }
+.qwen-training-mode p { margin-top: 10px; line-height: 1.6; }

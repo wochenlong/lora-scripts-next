@@ -43,6 +43,8 @@ uvicorn==0.22.0
 websockets==11.0.3
 wandb==0.16.2
 httpx==0.24.1
+# multipart form parsing for dataset uploads (fastapi request.form)
+python-multipart==0.0.18
 # extra
 open-clip-torch==2.20.0
 lycoris-lora==3.3.0

@@ -16,6 +16,7 @@ ROOT = Path(__file__).resolve().parents[1]
 ROUTES = (
     "training",
     "dataset",
+    "dataset/manage",
     "dataset/editor",
     "dataset/tagger",
     "tasks",

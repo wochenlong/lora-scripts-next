@@ -4,11 +4,12 @@ import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { schemasApi, type PickerFile } from "../api/schemas"
 import type { FormField, FormValue } from "../schema/adapter"
+import ReferencePathsField from "./ReferencePathsField.vue"
 import PreviewSampleField from "./PreviewSampleField.vue"
 import PathPickerDialog from "./PathPickerDialog.vue"
 import { useServerPathPick } from "../composables/useServerPathPick"
 
-const props = defineProps<{ field: FormField; modelValue: FormValue; defaultValue?: FormValue; error?: string }>()
+const props = defineProps<{ field: FormField; modelValue: FormValue; defaultValue?: FormValue; error?: string; editing?: boolean }>()
 const emit = defineEmits<{ "update:modelValue": [value: FormValue]; reset: [] }>()
 const { t } = useI18n()
 const files = ref<PickerFile[]>([])
@@ -87,7 +88,8 @@ async function openCatalog() {
           <el-option v-for="option in field.options" :key="String(option)" :label="String(option) || t('schemaForm.emptyOption')" :value="option ?? ''" />
         </el-select>
         <el-input-number v-else-if="field.type === 'number'" :model-value="modelValue as number | undefined" :disabled="field.disabled" :min="field.min" :max="field.max" :step="field.step || 1" :step-strictly="field.extra?.integer === true" :precision="field.extra?.integer === true ? 0 : undefined" controls-position="right" @update:model-value="emit('update:modelValue', $event ?? undefined)" />
-        <PreviewSampleField v-else-if="field.role === 'preview-samples'" :samples="modelValue as string[] | undefined" :dimension-step="Number(field.extra?.dimensionStep || 1)" :min-guidance="Number(field.extra?.minGuidance || 0)" :disabled="field.disabled" @update:samples="emit('update:modelValue', $event)" />
+        <PreviewSampleField v-else-if="field.role === 'preview-samples'" :samples="modelValue as string[] | undefined" :editing="editing" :dimension-step="Number(field.extra?.dimensionStep || 1)" :min-guidance="Number(field.extra?.minGuidance || 0)" :disabled="field.disabled" @update:samples="emit('update:modelValue', $event)" />
+        <ReferencePathsField v-else-if="field.role === 'reference-paths'" :model-value="(modelValue as string[] | undefined) || []" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
         <el-input v-else-if="field.type === 'array' || field.role === 'table'" v-model="arrayText" type="textarea" :rows="4" :disabled="field.disabled" :placeholder="t('schemaForm.arrayPlaceholder')" />
         <el-input v-else-if="field.role === 'textarea'" :model-value="modelValue as string | undefined" type="textarea" :rows="5" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
         <span v-else-if="field.role === 'filepicker'" class="filepicker-control">

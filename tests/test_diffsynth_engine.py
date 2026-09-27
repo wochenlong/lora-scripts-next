@@ -54,7 +54,7 @@ def test_data_conversion_preserves_alpha_repeats_and_unicode(configured):
     assert adapted.arguments["dataset_repeat"] == 1
     assert adapted.arguments["dataset_num_workers"] == 0
     dump_config(adapted, rt.project_root / "autosave", "test")
-    assert json.loads(Path(adapted.arguments["dataset_metadata_path"]).read_text()) == adapted.dataset
+    assert json.loads(Path(adapted.arguments["dataset_metadata_path"]).read_text(encoding="utf-8")) == adapted.dataset
 
 
 def test_official_arguments_and_process_isolation(configured, monkeypatch):

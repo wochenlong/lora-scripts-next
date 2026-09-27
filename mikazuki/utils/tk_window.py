@@ -35,6 +35,10 @@ def _warn_tkinter_missing_once() -> None:
 last_dir = ""
 
 
+class NativePickerError(RuntimeError):
+    """Raised when tkinter cannot create or operate a native picker."""
+
+
 def tk_window():
     window = tkinter.Tk()
     window.wm_attributes('-topmost', 1)
@@ -65,8 +69,9 @@ def open_file_selector(
         )
         last_dir = os.path.dirname(filename)
         return filename
-    except:
-        return ""
+    except Exception as exc:
+        log.exception("Native file picker failed")
+        raise NativePickerError(str(exc)) from exc
 
 
 def open_directory_selector(initialdir) -> str:
@@ -85,5 +90,6 @@ def open_directory_selector(initialdir) -> str:
         )
         last_dir = directory
         return directory
-    except:
-        return ""
+    except Exception as exc:
+        log.exception("Native directory picker failed")
+        raise NativePickerError(str(exc)) from exc

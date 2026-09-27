@@ -10,6 +10,11 @@ import MarketplaceSettingsPage from "./MarketplaceSettingsPage.vue"
 import UpdateSettingsPage from "./UpdateSettingsPage.vue"
 import { SUPPORTED_LOCALES, UI_CONFIGS_KEY, getStoredLocale, setLocale, type AppLocale } from "../i18n"
 import { getTheme, setTheme, type ThemeName } from "../utils/theme"
+import {
+  readPathPickerPreference,
+  writePathPickerPreference,
+  type PathPickerPreference,
+} from "../utils/pathPickerPreference"
 import { releases } from "../content/releases"
 import { useAppStore } from "../stores/app"
 
@@ -29,7 +34,10 @@ function readUiConfigs(): Record<string, unknown> {
   } catch { return {} }
 }
 
-const form = reactive({ tensorboard_url: String(readUiConfigs().tensorboard_url ?? "") })
+const form = reactive({
+  tensorboard_url: String(readUiConfigs().tensorboard_url ?? ""),
+  path_picker: readPathPickerPreference(),
+})
 
 const tabs = computed(() => [
   { key: "ui", to: "/settings/ui", label: t("settings.nav.ui") },
@@ -54,14 +62,17 @@ function save() {
   const configs = readUiConfigs()
   configs.tensorboard_url = form.tensorboard_url.trim()
   localStorage.setItem(UI_CONFIGS_KEY, JSON.stringify(configs))
+  writePathPickerPreference(form.path_picker)
   ElMessage.success(t("settings.ui.saved"))
 }
 
 function reset() {
   form.tensorboard_url = ""
+  form.path_picker = "auto"
   const configs = readUiConfigs()
   delete configs.tensorboard_url
   localStorage.setItem(UI_CONFIGS_KEY, JSON.stringify(configs))
+  writePathPickerPreference("auto")
   ElMessage.success(t("settings.ui.resetDone"))
 }
 </script>
@@ -92,12 +103,25 @@ function reset() {
                 <button :class="{ active: theme === 'dark' }" @click="changeTheme('dark')">{{ t("settings.ui.themeDark") }}</button>
               </div>
             </div>
+            <div class="settings-field">
+              <span class="settings-field-label">{{ t("settings.ui.pathPicker") }}</span>
+              <div class="segmented picker-switch" role="group" :aria-label="t('settings.ui.pathPicker')">
+                <button
+                  v-for="value in (['auto', 'native', 'web'] as PathPickerPreference[])"
+                  :key="value"
+                  :data-testid="`path-picker-${value}`"
+                  :class="{ active: form.path_picker === value }"
+                  @click="form.path_picker = value"
+                >{{ t(`settings.ui.pathPickerOptions.${value}`) }}</button>
+              </div>
+              <small>{{ t("settings.ui.pathPickerHint") }}</small>
+            </div>
             <label for="tensorboard-url">{{ t("settings.ui.tensorboardUrl") }}</label>
             <input id="tensorboard-url" v-model="form.tensorboard_url" :placeholder="t('settings.ui.tensorboardPlaceholder')">
             <small>{{ t("settings.ui.tensorboardHint") }}</small>
             <div class="form-actions">
-              <button class="primary-action" @click="save">{{ t("settings.ui.save") }}</button>
-              <button class="secondary-action" @click="reset">{{ t("settings.ui.reset") }}</button>
+              <button class="primary-action" data-testid="settings-save" @click="save">{{ t("settings.ui.save") }}</button>
+              <button class="secondary-action" data-testid="settings-reset" @click="reset">{{ t("settings.ui.reset") }}</button>
             </div>
           </section>
           <section class="settings-card">

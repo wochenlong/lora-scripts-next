@@ -53,6 +53,7 @@ from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  APIResponseSuccess, TaggerInterrogateRequest,
                                  TaggerPrefetchRequest)
 from mikazuki.dataset_editor import router as dataset_editor_router
+from mikazuki.datasets.api import router as datasets_router
 from mikazuki.plugin_marketplace.api import host_router as plugin_host_router
 from mikazuki.plugin_marketplace.api import router as plugin_marketplace_router
 from mikazuki.agent_workspace.api import router as agent_workspace_router
@@ -69,12 +70,14 @@ from mikazuki.utils.config_export import normalize_config_for_export
 from mikazuki.utils.config_args import normalize_custom_args
 from mikazuki.utils.devices import printable_devices
 from mikazuki.utils import path_browser as path_browser_utils
-from mikazuki.utils.tk_window import (open_directory_selector,
+from mikazuki.utils.tk_window import (NativePickerError,
+                                      open_directory_selector,
                                       open_file_selector,
                                       tkinter_available)
 
 router = APIRouter()
 router.include_router(dataset_editor_router)
+router.include_router(datasets_router)
 router.include_router(plugin_marketplace_router)
 router.include_router(plugin_host_router)
 router.include_router(agent_workspace_router)
@@ -452,7 +455,13 @@ async def pick_file(picker_type: str):
     else:
         return APIResponseFail(message=f"不支持的 picker_type: {picker_type}")
 
-    result = await coro
+    try:
+        result = await coro
+    except NativePickerError:
+        return APIResponseFail(
+            message="系统文件选择框打开失败，请改用网页路径浏览器。",
+            data={"code": "NATIVE_PICKER_ERROR", "web_picker": True},
+        )
     if result == "":
         return APIResponseFail(message="用户取消选择", data={"code": "CANCELLED", "web_picker": True})
 

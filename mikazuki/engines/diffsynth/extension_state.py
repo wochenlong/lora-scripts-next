@@ -16,7 +16,15 @@ def fingerprint(runtime):
     files = [runtime.python, runtime.source / TRAIN_SCRIPT, runtime.source / "pyproject.toml"]
     files += sorted(runtime.source.glob("diffsynth/**/*.py"))
     files += sorted((runtime.root / ".venv").glob("**/*.dist-info/METADATA"))
-    stats = [(str(p), p.stat().st_size, p.stat().st_mtime_ns) for p in files if p.is_file()]
+    stats = []
+    for path in files:
+        if not path.is_file():
+            continue
+        try:
+            identity = path.relative_to(runtime.root).as_posix()
+        except ValueError:
+            identity = path.name
+        stats.append((identity, path.stat().st_size, path.stat().st_mtime_ns))
     head = subprocess.run(["git", "-C", str(runtime.source), "rev-parse", "HEAD"], capture_output=True, text=True).stdout.strip()
     return hashlib.sha256(json.dumps([head, stats]).encode()).hexdigest()
 
