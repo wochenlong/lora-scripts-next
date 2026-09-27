@@ -202,3 +202,29 @@
 3. 与旧版的已知行为差异。
 4. 自动化及手工验证结果。
 5. 尚未解决的问题和优先级。
+
+
+### DiffSynth review integration
+
+Qwen-Image-2.1 now uses conditional directory/component inputs and image-TXT/native-metadata
+inputs through the shared schema adapter. Existing directory-only drafts remain compatible
+with the directory default. PreviewSampleField was adapted from the author's Klein branch
+for t2i samples; task previews, server path picking and config history reuse existing APIs.
+DiffSynth bypasses Kohya-specific parameter conversion; inactive schema fields are omitted.
+No training-page model download/probe widget is shown. CPU model offload + sampling is
+explicitly unavailable for the pinned upstream runner; see docs/diffsynth.md.
+
+
+### DiffSynth shared frontend contract merge (fork PR #1)
+
+Replaced the t2i-only PreviewSampleField copy with the author's shared component,
+Sample codec, translations and optional reference-path component. The existing SchemaField
+role mounts it with Qwen numeric limits; editing remains disabled. Removed the superseded
+global preview CSS in favor of the shared component styles. Existing sample_enabled
+configs and samples without controlImages remain compatible; the backend accepts an empty
+reference list and rejects actual edit inputs. See docs/team/diffsynth-frontend-contract.md
+for the proposal-to-current-API mapping and outstanding real-training acceptance.
+
+Validation: Node 22 `npm run check` passed (221 tests, typecheck, lint, production build);
+related backend regression: 27 passed, 3 skipped (optional torch/DiffSynth dependencies).
+No browser interaction or GPU training was performed for this merge.

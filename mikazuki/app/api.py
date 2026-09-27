@@ -593,6 +593,16 @@ async def resume_task(task_id: str):
 async def retry_task(task_id: str):
     """Re-queue a finished/failed/terminated training task (stage groups are
     rebuilt as a whole)."""
+    original = tm.tasks.get(task_id)
+    if original and original.metadata.get("backend") == "diffsynth" and original.status.name in {"FINISHED", "FAILED", "TERMINATED"} and original.lane == "compute":
+        config = task_insights.resolve_task_config(original.metadata)
+        result = dispatch_run("qwen-image-21-lora", config, RunContext(
+            timestamp=datetime.now().strftime("%Y%m%d-%H%M%S"),
+            autosave_dir=str(Path.cwd() / "config/autosave"),
+            gpu_ids=config.get("gpu_ids"), model_train_type="qwen-image-21-lora"))
+        if result.status == "success":
+            result.data["task_ids"] = [result.data["task_id"]]
+        return result
     new_tasks = tm.retry_task(task_id)
     if not new_tasks:
         return APIResponseFail(message="Task cannot be retried / 任务无法重跑（仅支持已结束的训练任务）")
@@ -609,7 +619,7 @@ def _task_train_type(task) -> Optional[str]:
     backend = str(task.metadata.get("backend") or "standard")
     if backend == "anima-lora-fast":
         return ANIMA_FAST_TRAIN_TYPE
-    if backend == "ai-toolkit":
+    if backend in {"ai-toolkit", "diffsynth"}:
         train_type = task.metadata.get("train_type")
         return str(train_type) if train_type else None
     if backend == "musubi":
@@ -708,7 +718,8 @@ async def task_previews(task_id: str) -> APIResponse:
         for item in task_insights.list_preview_images(task.metadata)
     ]
     config = task_insights.resolve_task_config(task.metadata)
-    preview_enabled = bool(config.get("sample_prompts")) if config else None
+    preview_key = "sample_enabled" if task.metadata.get("backend") == "diffsynth" else "sample_prompts"
+    preview_enabled = bool(config.get(preview_key)) if config else None
     return APIResponseSuccess(data={"images": images, "preview_enabled": preview_enabled})
 
 

@@ -4,6 +4,7 @@ export default {
     description: "Saved on the server and shared by the marketplace and engine installers. Applies to new downloads; retry existing tasks after they finish. Mirrors are configured separately.",
     bypass: "Proxy bypass addresses", save: "Save network settings", effective: "Current policy", viaProxy: "Via proxy", attempt: "Attempt",
   },
+  sampleInputs: { reference: "Reference path", remove: "Remove", addReference: "Add reference", addSample: "Add Sample", width: "Width", height: "Height", seed: "Seed", guidance_scale: "CFG", sample_steps: "Sampling steps" },
   app: {
     brand: "Next Trainer",
     prerelease: "rc",
@@ -38,12 +39,14 @@ export default {
         lumina: "Lumina 2",
         krea2: "Krea 2",
         klein: "Klein (FLUX.2)",
+        "qwen-image-21": "Qwen-Image-2.1",
       },
       engines: {
         kohya: "Kohya-ss",
         "anima-fast": "Anima Fast",
         musubi: "Musubi-Tuner",
         "ai-toolkit": "AI Toolkit",
+        diffsynth: "DiffSynth-Studio",
       },
       targets: {
         lora: "LoRA",
@@ -184,6 +187,7 @@ export default {
       "flux-lora": { title: "Flux LoRA", area: "Flux · Kohya-ss · LoRA" },
       "lumina2-lora": { title: "Lumina 2 LoRA", area: "Lumina 2 · Kohya-ss · LoRA" },
       "krea2-lora": { title: "Krea 2 LoRA", area: "Krea 2 · Musubi-Tuner · LoRA" },
+      "qwen-image-21-lora": { title: "Qwen-Image-2.1 LoRA", area: "Qwen-Image-2.1 · DiffSynth-Studio · LoRA" },
       "klein-lora": { title: "Klein LoRA", area: "FLUX.2 Klein · AI Toolkit · LoRA" },
     },
   },
@@ -436,6 +440,7 @@ export default {
         anima: "Anima",
         krea2: "Krea 2",
         klein: "Klein",
+        "qwen-image-21": "Qwen-Image-2.1",
         nvidia: "NVIDIA",
       },
       downloadSources: {
@@ -512,6 +517,11 @@ export default {
         resetDone: "Reset to official defaults",
       },
       catalog: {
+        diffsynth: {
+          name: "DiffSynth-Studio",
+          summary: "Qwen-Image-2.1 LoRA with isolated Python / venv and the official training entry",
+          sizeHint: "Several GB for the runtime; model weights are downloaded separately",
+        },
         kohya: {
           name: "Kohya-ss",
           summary: "Built-in engine using the main environment. Ready out of the box.",
@@ -581,6 +591,7 @@ export default {
       confirm: {
         animaFast: "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
         install: {
+          diffsynth: "Download the isolated DiffSynth Python runtime and several GB of dependencies? An NVIDIA GPU is required.",
           "anima-fast": "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
           musubi: "Musubi-Tuner downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
           "ai-toolkit": "AI Toolkit downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
@@ -915,6 +926,10 @@ export default {
     install: "Install Plugin",
     consoleIdle: "Install Log",
     consoleWaiting: "Waiting for install task output…",
+  },
+  diffsynthGate: {
+    intro: "Qwen-Image-2.1 LoRA in an isolated runtime. In-training sampling is not supported.", auditTitle: "Environment audit",
+    installWorking: "Installing…", install: "Install DiffSynth runtime", consoleIdle: "Install log", consoleWaiting: "Waiting for installation…",
   },
   musubiGate: {
     intro: "Krea 2 LoRA training runs on the standalone Musubi-Tuner runtime; finish install and audit to start training.",

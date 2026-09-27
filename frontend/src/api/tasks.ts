@@ -17,6 +17,7 @@ interface TasksData {
 
 export interface TaskPreviewImage {
   name: string
+  sample_id?: number
   epoch?: number | null
   step?: number | null
   mtime: number
@@ -37,6 +38,7 @@ export interface TaskMetricsPoint {
 export type TaskMetrics = Record<string, TaskMetricsPoint[]>
 
 export interface TaskProgress {
+  phase?: string
   percent?: number
   step?: number
   total_steps?: number

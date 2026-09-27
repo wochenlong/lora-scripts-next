@@ -54,6 +54,7 @@ export const trainingApi = {
   saveParams: (pageTrainType: string, config: FormModel) =>
     apiData<{ ok: boolean; page_train_type: string }>("/api/config/saved_params", { method: "PUT", body: JSON.stringify({ page_train_type: pageTrainType, config }) }),
   animaFastPreflight: (config: FormModel) => post<PreflightResult>("/api/engines/anima-fast/preflight", config),
+  diffsynthPreflight: (config: FormModel) => post<PreflightResult>("/api/engines/diffsynth/preflight", config),
   musubiPreflight: (config: FormModel) => post<PreflightResult>("/api/engines/musubi/preflight", config),
   aiToolkitPreflight: (config: FormModel) => post<PreflightResult>("/api/engines/ai-toolkit/preflight", config),
 }

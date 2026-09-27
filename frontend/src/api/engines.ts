@@ -1,3 +1,4 @@
+import { diffsynthApi, type DiffSynthStatus } from "./diffsynth"
 import { animaFastApi, type AnimaFastState, type AnimaFastStatus, type InstallResult } from "./animaFast"
 import { musubiApi, type MusubiInstallResult, type MusubiStatus } from "./musubi"
 import { aiToolkitApi, type AiToolkitInstallResult, type AiToolkitStatus } from "./aiToolkit"
@@ -42,6 +43,12 @@ function mapAnimaState(state: AnimaFastState | string): EngineRuntimeState {
   if (state === "installed_unverified") return "installed_unverified"
   if (state === "not_installed") return "not_installed"
   return "unknown"
+}
+
+function fromDiffSynth(status: DiffSynthStatus): EngineStatus {
+  return { id: "diffsynth", state: mapAnimaState(status.state), featureEnabled: status.feature_enabled,
+    message: status.message || status.reason, facts: status.facts,
+    runtime: { python: status.runtime?.python, environmentPath: status.runtime?.environment_path } }
 }
 
 function fromAnima(status: AnimaFastStatus): EngineStatus {
@@ -130,6 +137,7 @@ function fromAiToolkitInstall(result: AiToolkitInstallResult): EngineActionResul
 
 export const enginesApi = {
   async status(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "diffsynth") return fromDiffSynth(await diffsynthApi.status())
     if (id === "kohya") {
       const data = await apiData<{ state?: string; feature_enabled?: boolean }>("/api/engines/kohya/status")
       return {
@@ -151,12 +159,17 @@ export const enginesApi = {
   },
 
   async list(): Promise<EngineStatus[]> {
-    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit"]
+    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth"]
     return Promise.all(ids.map((id) => this.status(id)))
   },
 
   async install(id: TrainingEngine): Promise<EngineActionResult> {
     const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "diffsynth") {
+      const result = await diffsynthApi.install(downloadSources)
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromDiffSynth(result.status) : undefined }
+    }
     if (id === "anima-fast") return fromInstall(await animaFastApi.install(downloadSources))
     if (id === "musubi") return fromMusubiInstall(await musubiApi.install(downloadSources))
     if (id === "ai-toolkit") return fromAiToolkitInstall(await aiToolkitApi.install(downloadSources))
@@ -165,6 +178,11 @@ export const enginesApi = {
 
   async repair(id: TrainingEngine): Promise<EngineActionResult> {
     const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "diffsynth") {
+      const result = await diffsynthApi.repair(downloadSources)
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromDiffSynth(result.status) : undefined }
+    }
     if (id === "anima-fast") return fromInstall(await animaFastApi.repair(downloadSources))
     if (id === "musubi") return fromMusubiInstall(await musubiApi.repair(downloadSources))
     if (id === "ai-toolkit") return fromAiToolkitInstall(await aiToolkitApi.repair(downloadSources))
@@ -172,6 +190,10 @@ export const enginesApi = {
   },
 
   async uninstall(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "diffsynth") {
+      const result = await diffsynthApi.uninstall()
+      return result.status ? fromDiffSynth(result.status) : { id, state: "not_installed", featureEnabled: true }
+    }
     if (id === "anima-fast") {
       const data = await apiData<{ status?: AnimaFastStatus }>("/api/engines/anima-fast/uninstall", { method: "POST", body: "{}" })
       return data.status ? fromAnima(data.status) : { id: "anima-fast", state: "not_installed", featureEnabled: true }

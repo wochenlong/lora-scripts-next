@@ -90,6 +90,12 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     version: "plugin",
     updatedAt: "2026-08",
   },
+  {
+    id: "diffsynth", kind: "optional", nameKey: "settings.engines.catalog.diffsynth.name",
+    summaryKey: "settings.engines.catalog.diffsynth.summary", sizeHintKey: "settings.engines.catalog.diffsynth.sizeHint",
+    requiresGpu: true, managesRuntime: true, mark: "DS", tags: ["lora", "qwen-image-21", "nvidia"],
+    version: "plugin", updatedAt: "2026-09",
+  },
 ] as const
 
 export function engineDefinition(id: TrainingEngine): EngineDefinition | undefined {

@@ -5,6 +5,7 @@ Buffers training subprocess stdout per task_id for SSE streaming and optional UI
 from __future__ import annotations
 
 import copy
+import json
 import threading
 import re
 from collections import deque
@@ -48,6 +49,16 @@ class TrainLogHub:
                 dq = deque(maxlen=_MAX_LINES)
                 self._lines[task_id] = dq
             dq.append(text)
+        # Subprocess installers cannot access the parent's in-memory hub.
+        # Carry their existing progress events alongside stdout, without a second IPC service.
+        prefix = "[mikazuki-progress] "
+        if text.startswith(prefix):
+            try:
+                event = json.loads(text[len(prefix):])
+            except ValueError:
+                return
+            if isinstance(event, dict):
+                self.append_event(task_id, event)
 
     def append_event(self, task_id: str, event: dict[str, Any]) -> None:
         payload = copy.deepcopy(event)

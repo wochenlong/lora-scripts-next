@@ -4,6 +4,7 @@ import { useRoute, useRouter } from "vue-router"
 import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import AnimaFastPage from "./AnimaFastPage.vue"
+import DiffSynthGatePage from "./DiffSynthGatePage.vue"
 import MusubiGatePage from "./MusubiGatePage.vue"
 import AiToolkitGatePage from "./AiToolkitGatePage.vue"
 import TrainingPage from "./TrainingPage.vue"
@@ -100,6 +101,12 @@ watch([model, engine, target], () => {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </AnimaFastPage>
+    <DiffSynthGatePage v-else-if="resolved.engine === 'diffsynth'" bare>
+      <template #form-top>
+        <WorkbenchHeader />
+        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
+      </template>
+    </DiffSynthGatePage>
     <MusubiGatePage v-else-if="resolved.engine === 'musubi'" bare>
       <template #form-top>
         <WorkbenchHeader />

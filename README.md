@@ -119,9 +119,23 @@ Training backends:
 
 - Anima LoRA / Fast / finetune, SD/SDXL, Flux (Kohya line)
 - **Krea 2 LoRA** via optional **Musubi-Tuner** engine (install from Settings)
+- **Qwen-Image-2.1 BF16 text-to-image LoRA** via optional **DiffSynth** engine (install from Settings; `dev` integration)
 - Local tagger, train monitor (`/train-monitor`), TensorBoard
 
 Anima Fast: [docs/anima-fast.md](docs/anima-fast.md) · Krea 2 multi-GPU (Linux): [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
+
+### DiffSynth / Qwen-Image-2.1 (`dev`)
+
+Install, check, repair or uninstall DiffSynth from **Settings → Training engines**. It uses an isolated Python 3.12 / PyTorch 2.8 CUDA 12.8 environment.
+
+- Select a complete model directory or separate supported BF16 DiT, text encoder and VAE files, including Comfy-Org components. Processor resources are managed automatically.
+- Use images with matching TXT captions (including Kohya-style repeat folders), or CSV / JSON / JSONL metadata.
+- Supports TE/VAE encoding caches, CPU offload, bucketing, batch training and per-Sample previews at step or epoch intervals. CPU offload with previews requires encoding caches; cached previews reuse the training DiT.
+- Initial scope: single-GPU BF16 text-to-image LoRA only. Image editing, quantized training, full finetuning and full optimizer-state resume are not supported.
+
+This is a `dev` integration, not a claim that existing portable packages include it. The contributor reports previews followed by continued training with CPU offload both enabled and disabled. Independent ComfyUI reload/inference of the exported LoRA remains a **pre-`main` acceptance item**.
+
+Configuration and limitations: [DiffSynth guide](docs/diffsynth.md).
 
 ### Screenshots
 
@@ -161,6 +175,7 @@ Captured from the `dev` Vue 3 UI (`3.0.0` line, Chinese locale).
 | SD 1.5 / SDXL | LoRA / full finetune |
 | Flux | LoRA |
 | Krea 2 | LoRA via Musubi · install engine in Settings · multi-GPU on Linux |
+| Qwen-Image-2.1 | DiffSynth · single-GPU BF16 text-to-image LoRA · `dev` integration |
 
 See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 
@@ -176,6 +191,7 @@ See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 | **Portable build & release (collaborators)** | [docs/portable-build-guide.md](docs/portable-build-guide.md) |
 | Tagger models | [docs/tagger-models.md](docs/tagger-models.md) |
 | Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
+| DiffSynth / Qwen-Image-2.1 | [docs/diffsynth.md](docs/diffsynth.md) |
 | **Krea 2 multi-GPU (Linux host + WebUI / `dev`)** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
 | Train monitor | [docs/train-monitor.md](docs/train-monitor.md) |
 | Repo layout | [docs/repo-layout.md](docs/repo-layout.md) |

@@ -124,9 +124,23 @@ git pull
 - Anima LoRA / LoKr / T-LoRA、Anima Fast（插件）、Anima 全量微调  
 - SD 1.5 / SDXL LoRA 与全量微调、Flux LoRA  
 - **Krea 2 LoRA**（可选 **Musubi-Tuner** 引擎，设置页安装）  
+- **Qwen-Image-2.1 BF16 文生图 LoRA**（可选 **DiffSynth** 引擎，设置页安装；`dev` 集成阶段）
 - 本地打标、训练监控（`/train-monitor`）、TensorBoard  
 
 Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux）：[docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
+
+### DiffSynth / Qwen-Image-2.1（`dev`）
+
+在 **设置 → 训练引擎** 中安装、检查、修复或卸载 DiffSynth，使用独立的 Python 3.12 / PyTorch 2.8 CUDA 12.8 环境。
+
+- 模型可选择完整目录，或分别指定受支持的 BF16 DiT、文本编码器和 VAE 文件，支持 Comfy-Org 对应组件；Processor 资源自动管理。
+- 数据集支持图片 + 同名 TXT（含 Kohya 风格子目录重复次数），也可使用 CSV / JSON / JSONL 元数据。
+- 支持 TE/VAE 编码缓存、CPU 卸载、分桶、批量训练，以及按步数或 epoch 生成独立 Sample 预览。CPU 卸载与预览同时使用时需要开启编码缓存；缓存预览复用训练 DiT。
+- 首版仅支持单卡 BF16 文生图 LoRA，暂不支持图像编辑、量化训练、全量微调或恢复完整优化器状态。
+
+目前属于 `dev` 集成，不代表已有整合包已包含此引擎。合作者已反馈 CPU 卸载开启、关闭时都能生成预览并继续训练；导出 LoRA 在独立 ComfyUI 环境回载出图，仍是**进入 `main` 前的验收项**。
+
+参数与限制见 [DiffSynth 使用说明](docs/diffsynth.md)。
 
 ### 界面预览
 
@@ -166,6 +180,7 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 | SD 1.5 / SDXL | LoRA / 全量微调 |
 | Flux | LoRA |
 | Krea 2 | LoRA（Musubi）· 设置页安装引擎 · Linux 可多卡 |
+| Qwen-Image-2.1 | DiffSynth · 单卡 BF16 文生图 LoRA · `dev` 集成阶段 |
 
 显存与进阶参数见 [docs/anima-training.md](docs/anima-training.md)。
 
@@ -181,6 +196,7 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 | **整合包构建与发包（协作）** | [docs/portable-build-guide.md](docs/portable-build-guide.md) |
 | 打标模型 | [docs/tagger-models.md](docs/tagger-models.md) |
 | Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
+| DiffSynth / Qwen-Image-2.1 | [docs/diffsynth.md](docs/diffsynth.md) |
 | **Krea 2 多卡（Linux 部署 + WebUI / `dev`）** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
 | 训练监控 | [docs/train-monitor.md](docs/train-monitor.md) |
 | 仓库布局契约 | [docs/repo-layout.md](docs/repo-layout.md) |

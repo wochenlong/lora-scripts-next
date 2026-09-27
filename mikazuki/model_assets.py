@@ -89,6 +89,12 @@ def _klein_assets(variant: str, repo: str, dit_file: str, te_repo: str, te_dir: 
 
 
 ASSET_REGISTRY: dict[str, tuple[AssetDef, ...]] = {
+    "qwen-image-21-lora": (
+        AssetDef("diffsynth_model_dir", "Qwen-Image-2.1 官方模型目录", "sd-models/qwen-image-21", kind="dir",
+                 hf_repo="Qwen/Qwen-Image-2.1", ms_repo="Qwen/Qwen-Image-2.1",
+                 dir_patterns=("transformer/*", "text_encoder/*", "vae/*", "processor/*"),
+                 dir_required=("processor/tokenizer.json", "processor/tokenizer_config.json", "processor/preprocessor_config.json", "processor/chat_template.jinja", "processor/video_preprocessor_config.json")),
+    ),
     "klein-4b-lora": _klein_assets("base-4B", KLEIN_4B_REPO, "flux-2-klein-base-4b.safetensors", "Qwen/Qwen3-4B", "qwen3-4b", "4B"),
     "klein-9b-lora": _klein_assets("base-9B", KLEIN_9B_REPO, "flux-2-klein-base-9b.safetensors", "Qwen/Qwen3-8B", "qwen3-8b", "8B"),
     "krea2-lora": (
@@ -160,6 +166,13 @@ def dir_complete(path: Path) -> bool:
 
 
 def asset_dir_complete(asset: AssetDef, path: Path) -> bool:
+    if asset.key == "diffsynth_model_dir":
+        from mikazuki.engines.diffsynth.adapter import weight_files
+        try:
+            for folder, pattern in (("transformer", "diffusion_pytorch_model*.safetensors"), ("text_encoder", "model*.safetensors"), ("vae", "diffusion_pytorch_model*.safetensors")):
+                weight_files(path / folder, pattern)
+        except ValueError:
+            return False
     required = asset.dir_required or TOKENIZER_REQUIRED
     if not all((path / name).is_file() for name in required):
         return False

@@ -34,6 +34,7 @@ let metricsSig = ""
 
 function imageLabel(image: TaskPreviewImage): string {
   if (image.epoch != null) return t("tasks.detail.epochLabel", { n: image.epoch })
+  if (image.sample_id != null) return `Step ${image.step} · Sample ${image.sample_id}`
   if (image.step != null) return t("tasks.detail.stepLabel", { n: image.step })
   return ""
 }
@@ -612,6 +613,7 @@ onBeforeUnmount(() => {
             <button v-if="isTerminal(selected)" class="danger-action" :disabled="actionBusyId === selected.id" @click="removeTask(selected)">{{ t("tasks.detail.delete") }}</button>
           </div>
         </header>
+        <p v-if="progress.phase === 'sampling'">正在生成预览图片…</p>
         <div v-if="progress.total_steps" class="task-progress">
           <div class="task-progress-meta"><span>{{ t("tasks.detail.stepProgress", { step: progress.step, total: progress.total_steps }) }}</span><span v-if="progress.total_epochs">{{ t("tasks.detail.epochProgress", { epoch: progress.epoch, total: progress.total_epochs }) }}</span><b>{{ progress.percent }}%</b></div>
           <div class="task-progress-track"><i :style="{ width: `${progress.percent}%` }"></i></div>

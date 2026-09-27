@@ -1,7 +1,7 @@
 import type { FormModel } from "../schema/adapter"
 
-export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2" | "klein"
-export type TrainingEngine = "kohya" | "anima-fast" | "musubi" | "ai-toolkit"
+export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2" | "klein" | "qwen-image-21"
+export type TrainingEngine = "kohya" | "anima-fast" | "musubi" | "ai-toolkit" | "diffsynth"
 export type TrainingTarget = "lora" | "finetune"
 
 export interface TrainingModule {
@@ -17,8 +17,8 @@ export interface TrainingModule {
   legacyStorageKey?: string
 }
 
-export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2", "klein"]
-export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit"]
+export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2", "klein", "qwen-image-21"]
+export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth"]
 export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "finetune"]
 
 export const DEFAULT_SELECTION: { model: TrainingModel; engine: TrainingEngine; target: TrainingTarget } = {
@@ -31,6 +31,7 @@ export const DEFAULT_SELECTION: { model: TrainingModel; engine: TrainingEngine; 
 // resolves shared schemas (lora-master, dreambooth) to the sdxl module,
 // matching the previous single-SD default (schema default was sdxl-lora).
 export const TRAINING_MODULES: readonly TrainingModule[] = [
+  { model: "qwen-image-21", engine: "diffsynth", target: "lora", schemaName: "qwen-image-21-lora" },
   { model: "anima", engine: "kohya", target: "lora", schemaName: "sd3-lora" },
   { model: "anima", engine: "anima-fast", target: "lora", schemaName: "anima-lora-fast" },
   { model: "anima", engine: "kohya", target: "finetune", schemaName: "anima-finetune" },
@@ -45,6 +46,7 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
 ]
 
 export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> = {
+  "qwen-image-21-lora": { titleKey: "training.schemas.qwen-image-21-lora.title", areaKey: "training.schemas.qwen-image-21-lora.area" },
   "sd3-lora": { titleKey: "training.schemas.sd3-lora.title", areaKey: "training.schemas.sd3-lora.area" },
   "anima-lora-fast": { titleKey: "training.schemas.anima-lora-fast.title", areaKey: "training.schemas.anima-lora-fast.area" },
   "anima-finetune": { titleKey: "training.schemas.anima-finetune.title", areaKey: "training.schemas.anima-finetune.area" },

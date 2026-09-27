@@ -28,10 +28,11 @@ let timer: number | undefined
 let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
-const MANAGED_ENGINES = new Set(["anima-fast", "musubi", "ai-toolkit"])
+const MANAGED_ENGINES = new Set(["anima-fast", "musubi", "ai-toolkit", "diffsynth"])
 const INSTALL_STREAM_BASE: Record<string, string> = {
   "anima-fast": "/api/engines/anima-fast/install",
   musubi: "/api/engines/musubi/install",
+  diffsynth: "/api/engines/diffsynth/install",
   "ai-toolkit": "/api/engines/ai-toolkit/install",
 }
 

@@ -128,6 +128,10 @@ TRAIN_TYPE_ALIASES = {
 }
 
 PAGE_SPECS: dict[str, dict[str, Any]] = {
+    "qwen-image-21-lora": {
+        "label": "Qwen-Image-2.1 LoRA", "path": "/training?model=qwen-image-21&engine=diffsynth&target=lora",
+        "accepted": frozenset({"qwen-image-21-lora"}), "default_train_type": "qwen-image-21-lora",
+    },
     "anima-lora": {
         "label": "Anima LoRA 训练",
         "path": "/lora/sd3.html",
@@ -197,6 +201,7 @@ PAGE_SPECS: dict[str, dict[str, Any]] = {
 }
 
 TRAIN_TYPE_TARGETS: dict[str, dict[str, str]] = {
+    "qwen-image-21-lora": {"path": "/training?model=qwen-image-21&engine=diffsynth&target=lora", "label": "Qwen-Image-2.1 LoRA"},
     "anima-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "sd3-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "anima-lora-fast": {"path": "/lora/anima-fast.html", "label": "Anima Fast 训练"},
