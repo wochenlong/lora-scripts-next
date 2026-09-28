@@ -480,3 +480,88 @@ useTagTranslations(tags, options)
 - 运行前端测试和后端测试。
 
 本设计书当前只定义边界和契约，不包含功能实现。进入实现前，应先完成阶段 A 的词库探针和第 13 节的许可/默认策略审计。
+
+## 15. 复用优先的迁移方案
+
+本项目不从零设计翻译引擎。调研后，最适合迁移的参考实现不是 WeiLin 的整套 ComfyUI 代码，而是：
+
+[ComfyUI-Autocomplete-Aaalice](https://github.com/Aaalice233/ComfyUI-Autocomplete-Aaalice)，分析快照 `37cabccf9b4d799b7b53a1e2d74f2cd214fe91d0`。
+
+该项目使用 MIT License，并且已经包含与本需求高度重合的模块：
+
+- `modules/chinese_dictionary_service.py`：ffdkj SQLite 词库下载、manifest、查询和更新；
+- `modules/translation_store.py`：翻译结果持久化和失败状态；
+- `modules/translation_service.py`：批量翻译、重试、拆批、并发限制、响应校验和流式结果；
+- `modules/translation_config.py`：provider 配置、功能开关和 DeepSeek 配置；
+- `modules/api.py`：词库状态、配置、模型测试、翻译 resolve 和 resolve-stream 接口；
+- `web/`：翻译加载、结果展示和状态样式。
+
+### 15.1 允许直接迁移的部分
+
+在确认快照和许可证记录后，可以优先迁移以下实现，再做框架适配：
+
+1. `chinese_dictionary_service.py` 的下载、临时文件、校验、manifest 和 SQLite 查询逻辑；
+2. `translation_service.py` 的批量 provider 调度、失败重试、响应校验和流式返回逻辑；
+3. `translation_config.py` 的配置字段和默认值；
+4. `translation_store.py` 的缓存数据模型，视 Next Trainer 是否接受持久化缓存决定是否完整迁移；
+5. LLM JSON prompt 和“缺失翻译不阻塞 UI”的状态处理。
+
+这些代码不要直接复制 ComfyUI 的路由注册和全局状态，而是保留核心类，接入 Next Trainer 的 FastAPI router。
+
+### 15.2 必须重写的薄适配层
+
+以下部分属于框架耦合，不能直接搬运：
+
+- ComfyUI `PromptServer.instance.routes` 路由；
+- ComfyUI 的用户目录和配置路径；
+- ComfyUI 前端 DOM、输入框监听和 CSS；
+- Aaalice 的 DeepSeek 专用 API 客户端；
+- ComfyUI 的 SSE 生命周期和事件广播；
+- Next Trainer 的 `APIResponseSuccess` 包装和错误码格式。
+
+目标是把重写范围控制在：
+
+```text
+FastAPI 路由适配
+Next Trainer 用户数据路径适配
+Dataset Editor 的 tag chip 展示适配
+provider 配置 UI 适配
+```
+
+### 15.3 WeiLin 代码的处理方式
+
+WeiLin 仓库的 `LICENSE` 是 GPL-2.0-only。其 `local_translate.py`、网络 provider 和 prompt UI 虽然有直接参考价值，但在没有明确许可和完成许可证审计前，不直接复制到 AGPL-3.0 的 Next Trainer 中。
+
+可以继续参考其：
+
+- 本地词库优先；
+- 原文和译文分离；
+- 未命中保留原文；
+- token 级辅助展示。
+
+实际迁移优先采用 MIT 许可的 Aaalice 模块，以减少许可和维护风险。
+
+### 15.4 迁移验收
+
+迁移不以“代码复制完成”为完成标准，必须逐项对比：
+
+- SQLite 文件下载失败和恢复；
+- 词库命中结果；
+- provider 选择和禁用；
+- LLM 返回缺项、重复项、错位项和非 JSON；
+- 失败结果缓存与重试；
+- 原始 caption 是否完全不变；
+- Next Trainer 前端切换图片时是否发生旧请求串入；
+- MIT 版权头和第三方说明是否保留。
+
+### 15.5 实现顺序调整
+
+原来的阶段 A-E 调整为：
+
+- **A：迁移审计**：固定 Aaalice 快照、记录 MIT 文件、列出可迁移文件和必须重写的适配层；
+- **B：后端迁移**：先迁移词库服务、translation service、配置和最小 FastAPI 路由；
+- **C：Next Trainer 前端适配**：只改 Dataset Editor 标签 chip，不迁移 ComfyUI 页面；
+- **D：provider 验收**：先词库，再 MyMemory，最后本地/远程 OpenAI 兼容 LLM；
+- **E：清理与许可检查**：补第三方说明、测试、敏感信息检查和迁移差异审计。
+
+这样预计新增的核心逻辑主要来自接口适配，而不是重新实现下载器、翻译调度器、缓存和 LLM 响应校验。
