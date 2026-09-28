@@ -1,3 +1,4 @@
+import { validateQwenConfig } from "./qwenValidation"
 import { cloneFormModel, type FormModel, type FormValue } from "../schema/adapter"
 import { i18n } from "../i18n"
 import { parse } from "smol-toml"
@@ -99,7 +100,22 @@ export function buildTrainingConfig(source: FormModel, schemaName: string) {
   const config: FormModel = schemaName === "lora-basic" ? { ...BASIC_DEFAULTS, ...cloneFormModel(source) } : cloneFormModel(source)
   const lockedTrainType = SCHEMA_TRAIN_TYPES[schemaName]
   if (lockedTrainType) config.model_train_type = lockedTrainType
-  if (schemaName === "qwen-image-21-lora") return config
+  if (schemaName === "qwen-image-21-lora") {
+    // Keep Edit references in the draft while omitting them from T2I requests.
+    if (config.training_task !== "image-edit" && Array.isArray(config.preview_samples)) {
+      config.preview_samples = config.preview_samples.map(value => {
+        if (typeof value !== "string") return value
+        try {
+          const sample = JSON.parse(value)
+          if (sample && typeof sample === "object" && "controlImages" in sample) {
+            return JSON.stringify({ ...sample, controlImages: [] })
+          }
+        } catch { /* Preserve malformed samples for the existing validation path. */ }
+        return value
+      })
+    }
+    return config
+  }
   let networkArgs: string[] = []
   let optimizerArgs: string[] = []
 
@@ -199,7 +215,7 @@ export function hydrateImportedConfig(source: FormModel) {
 
 export function checkTrainingConfig(config: FormModel): ParamDiagnostics {
   const warnings: string[] = []
-  const errors: string[] = []
+  const errors: string[] = config.model_train_type === "qwen-image-21-lora" ? Object.values(validateQwenConfig(config)) : []
   const optimizer = String(config.optimizer_type || "")
   if (optimizer.startsWith("DAdapt") && config.lr_scheduler !== "constant") warnings.push(i18n.global.t("training.diagnostics.dadaptScheduler"))
   if (optimizer.toLowerCase().startsWith("prodigy") && (config.unet_lr !== 1 || config.text_encoder_lr !== 1)) warnings.push(i18n.global.t("training.diagnostics.prodigyLr"))

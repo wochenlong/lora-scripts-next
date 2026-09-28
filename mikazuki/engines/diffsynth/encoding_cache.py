@@ -60,6 +60,10 @@ class EncodedDataset(torch.utils.data.Dataset):
         return shared, read_tensor(text), {}
 
 
+def preview_key(sample, prompt):
+    return digest([prompt, sample.get('controlImages', []), sample['width'], sample['height']]) if sample.get('controlImages') else prompt
+
+
 def prepare_cache(dataset, paths, args, config, device):
     from diffsynth.core import ModelConfig
     from diffsynth.pipelines.qwen_image_21 import QwenImage21Pipeline, QwenImage21Unit_PromptEmbedder
@@ -72,29 +76,50 @@ def prepare_cache(dataset, paths, args, config, device):
                 'processor': [(p.name, hashlib.sha256(p.read_bytes()).hexdigest())
                               for p in sorted(processor.iterdir()) if p.is_file()],
                 'te': [file_stamp(p) for p in paths[1]], 'vae': [file_stamp(p) for p in paths[2]]}
+    from .edit_images import load_references, resized_references
+    editing = config.get('training_task') == 'image-edit'
     texts, images, items = {}, {}, []
     for i, row in enumerate(dataset.data):
         caption = row['prompt']
-        text = root / (digest([identity, 'text', caption]) + '.pth')
+        refs = [file_stamp(Path(args.dataset_base_path) / p) for p in row.get('edit_image', [])] if editing else []
+        # Vision-conditioned TE output depends on reference pixels AND target area.
+        conditioning = [refs, config.get('bucket_settings'), args.max_pixels, args.height, args.width] if editing else []
+        if editing:
+            conditioning.append(dataset[i]['image'].size)
+        text = root / (digest([identity, 'edit-text-v1', caption, conditioning]) + '.pth') if editing else root / (digest([identity, 'text', caption]) + '.pth')
         image_path = Path(args.dataset_base_path) / row['image']
         crop_identity = [('kohya-center-v1' if config['bucket_settings'].get('enable_bucket', True) else 'diffsynth-original-v1'), config['bucket_settings']] if config.get('bucket_settings') else 'RGBA-center-crop'
-        image = root / (digest([identity, 'image', file_stamp(image_path), args.max_pixels,
-                               args.height, args.width, crop_identity]) + '.pth')
-        texts[text] = caption
+        image_identity = [identity, 'image', file_stamp(image_path), args.max_pixels, args.height, args.width, crop_identity]
+        if editing:
+            image_identity.append(conditioning)
+        image = root / (digest(image_identity) + '.pth')
+        texts[text] = (caption, i if editing else None)
         images[image] = i
         items.append((text, image))
     previews = {}
     if config['samples']['enabled']:
-        for caption in ['', *[s['prompt'] for s in config['samples']['samples']]]:
-            path = root / (digest([identity, 'text', caption]) + '.pth')
-            texts[path] = caption
-            previews[caption] = path
+        for sample in config['samples']['samples']:
+            for caption in ('', sample['prompt']):
+                conditioning = [[file_stamp(p) for p in sample.get('controlImages', [])], sample['width'], sample['height']]
+                path = root / (digest([identity, 'edit-preview-v1', caption, conditioning]) + '.pth') if editing else root / (digest([identity, 'text', caption]) + '.pth')
+                texts[path] = (caption, sample if editing else None)
+                previews[preview_key(sample, caption)] = path
 
     # Only complete, readable tensor payloads are reused after interruption.
     def ready(path, key):
         try:
             value = read_tensor(path)
             tensor = value[key]
+            if editing and key == 'input_latents':
+                refs = value.get('edit_latents')
+                if not isinstance(refs, list) or not refs or any(not isinstance(t, torch.Tensor) or t.ndim != 4 or not t.numel() or not bool(torch.isfinite(t).all()) for t in refs):
+                    return False
+            if key == 'prompt_embeds':
+                mask = value.get('edit_image_pad_mask')
+                if not isinstance(mask, torch.Tensor) or mask.shape != tensor.shape[:2]:
+                    return False
+                if editing and not mask.any():
+                    return False
             return (isinstance(tensor, torch.Tensor) and tensor.numel() > 0
                     and tensor.ndim == (4 if key == 'input_latents' else 3)
                     and bool(torch.isfinite(tensor).all()))
@@ -112,30 +137,38 @@ def prepare_cache(dataset, paths, args, config, device):
             pipe.device = device
             pipe.text_encoder.to(device).eval()
             unit = QwenImage21Unit_PromptEmbedder()
-            norm = pipe.text_encoder.model.model.language_model.norm
+            from .text_encoder_hooks import cleanup_text_encoder_hooks
             for n, path in enumerate(missing_texts, 1):
-                hooks = set(norm._forward_hooks)
-                try:
-                    value = unit.process(pipe, texts[path], None)
+                with cleanup_text_encoder_hooks(pipe.text_encoder):
+                    caption, source = texts[path]
+                    references = None
+                    if isinstance(source, int):
+                        data = dataset[source]
+                        references = resized_references(pipe, data['edit_image'], *data['image'].size)
+                    elif isinstance(source, dict):
+                        references = resized_references(pipe, load_references(source['controlImages']), source['width'], source['height'])
+                    value = unit.process(pipe, caption, references)
                     write_tensor(path, value)
-                finally:
-                    # Upstream registers a new temporary capture hook on every call.
-                    for key in set(norm._forward_hooks) - hooks:
-                        del norm._forward_hooks[key]
                 del value
                 print(f'[cache TE] {n}/{len(missing_texts)}', flush=True)
-            del norm, unit, pipe
+            del unit, pipe
             release()
             print('[cache] TE released from CPU and GPU', flush=True)
         if missing_images:
             pipe = QwenImage21Pipeline.from_pretrained(device='cpu', torch_dtype=torch.bfloat16,
-                model_configs=[ModelConfig(path=paths[2])])
+                model_configs=[ModelConfig(path=paths[2])],
+                processor_config=ModelConfig(str(processor)) if editing else None)
             pipe.device = device
             pipe.vae.to(device).eval()
             for n, path in enumerate(missing_images, 1):
                 data = dataset[images[path]]
                 latent = pipe.vae.encode(pipe.preprocess_image(data['image'].convert('RGBA')))
-                write_tensor(path, {'input_latents': latent})
+                payload = {'input_latents': latent}
+                if editing:
+                    references = resized_references(pipe, data['edit_image'], *data['image'].size)
+                    payload['edit_latents'] = [pipe.vae.encode(pipe.preprocess_image(image)) for image in references]
+                write_tensor(path, payload)
+                del payload
                 del latent, data
                 print(f'[cache VAE] {n}/{len(missing_images)}', flush=True)
             del pipe
@@ -175,13 +208,16 @@ def preview_offload(model):
             unit._in_recompute.update(state)
 
 
-def cached_sample(model, sample, paths, previews):
+def cached_sample(model, sample, paths, previews, processor_path=None):
     """Share the training DiT; only VAE and small inference state are temporary."""
     from diffsynth.core import ModelConfig
     from diffsynth.pipelines.qwen_image_21 import QwenImage21Pipeline, QwenImage21Unit_PromptEmbedder
     from types import MethodType
 
     pipe = QwenImage21Pipeline(device=model.pipe.device, torch_dtype=model.pipe.torch_dtype)
+    if sample.get('controlImages'):
+        from transformers import AutoProcessor
+        pipe.processor = AutoProcessor.from_pretrained(processor_path)
     pipe.dit = model.pipe.dit
     assert pipe.dit is model.pipe.dit
     print('[sampling] reusing training DiT; no second DiT loaded', flush=True)
@@ -199,11 +235,12 @@ def cached_sample(model, sample, paths, previews):
     for unit in pipe.units:
         if isinstance(unit, QwenImage21Unit_PromptEmbedder):
             def encoded(self, pipeline, prompt, edit_image):
-                return model.transfer_data_to_device(read_tensor(previews[prompt]), pipeline.device, pipeline.torch_dtype)
+                return model.transfer_data_to_device(read_tensor(previews[preview_key(sample, prompt)]), pipeline.device, pipeline.torch_dtype)
             unit.process = MethodType(encoded, unit)
     try:
         with preview_offload(model):
-            return pipe(prompt=sample['prompt'], negative_prompt='', width=sample['width'], height=sample['height'],
+            from .edit_images import load_references
+            return pipe(edit_image=load_references(sample.get('controlImages', [])), prompt=sample['prompt'], negative_prompt='', width=sample['width'], height=sample['height'],
                         seed=sample['seed'], cfg_scale=sample['guidance_scale'],
                         num_inference_steps=sample['sample_steps'], tiled=True)
     finally:

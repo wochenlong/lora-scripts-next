@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 from PIL import Image
 
-from mikazuki.engines.diffsynth.adapter import adapt_config, dump_config
+from mikazuki.engines.diffsynth.adapter import AdaptedConfig, adapt_config, dump_config
 from mikazuki.engines.diffsynth.launcher import build_train_spec
 from mikazuki.engines.diffsynth.settings import Runtime, TRAIN_SCRIPT
 from mikazuki.engines.diffsynth.installer import installation_plan
@@ -54,7 +54,56 @@ def test_data_conversion_preserves_alpha_repeats_and_unicode(configured):
     assert adapted.arguments["dataset_repeat"] == 1
     assert adapted.arguments["dataset_num_workers"] == 0
     dump_config(adapted, rt.project_root / "autosave", "test")
-    assert json.loads(Path(adapted.arguments["dataset_metadata_path"]).read_text()) == adapted.dataset
+    assert json.loads(Path(adapted.arguments["dataset_metadata_path"]).read_text(encoding="utf-8")) == adapted.dataset
+
+
+def test_edit_metadata_serializes_reference_paths_relative_to_dataset_base(configured):
+    rt, config = configured
+    output = Path(config["train_data_dir"]) / "outputs"
+    inputs = Path(config["train_data_dir"]) / "inputs"
+    output.mkdir()
+    inputs.mkdir()
+    Image.new("RGB", (32, 32), "blue").save(output / "target.png")
+    Image.new("RGB", (32, 32), "green").save(inputs / "reference.png")
+    metadata = rt.project_root / "edit.json"
+    metadata.write_text(json.dumps([{
+        "image": "target.png",
+        "prompt": "edit",
+        "edit_image": [str((inputs / "reference.png").resolve())],
+    }]), encoding="utf-8")
+    edit_config = {
+        **config,
+        "training_task": "image-edit",
+        "dataset_format": "metadata",
+        "dataset_base_path": str(output),
+        "dataset_metadata_path": str(metadata),
+    }
+
+    adapted = adapt_config(edit_config, rt)
+    path = dump_config(adapted, rt.project_root / "autosave", "edit")
+    written = json.loads(Path(path.parent / "edit-dataset.json").read_text(encoding="utf-8"))
+
+    assert written[0]["edit_image"] == ["../inputs/reference.png"]
+
+
+def test_edit_metadata_keeps_absolute_reference_when_relpath_is_unavailable(tmp_path, monkeypatch):
+    reference = (tmp_path / "reference.png").resolve()
+    adapted = AdaptedConfig(
+        arguments={"dataset_base_path": str((tmp_path / "outputs").resolve())},
+        dataset=[{"image": "target.png", "prompt": "edit", "edit_image": [str(reference)]}],
+        output_path=tmp_path / "output",
+        engine={},
+        metadata_path=None,
+    )
+
+    def cross_drive_relpath(*_args, **_kwargs):
+        raise ValueError("path is on mount 'D:', start on mount 'E:'")
+
+    monkeypatch.setattr("mikazuki.engines.diffsynth.adapter.os.path.relpath", cross_drive_relpath)
+    path = dump_config(adapted, tmp_path / "autosave", "edit")
+    written = json.loads((path.parent / "edit-dataset.json").read_text(encoding="utf-8"))
+
+    assert written[0]["edit_image"] == [reference.as_posix()]
 
 
 def test_official_arguments_and_process_isolation(configured, monkeypatch):
@@ -121,6 +170,16 @@ def test_import_export_roundtrip(configured):
     result = validate_config_import("qwen-image-21-lora", exported)
     assert result["result"] == "ok", result
     assert result["config"]["lora_rank"] == 8
+
+
+def test_import_migrates_legacy_diffsynth_input_mode(configured):
+    from mikazuki.utils.config_import import validate_config_import
+
+    _, config = configured
+    config["model_input_mode"] = "components"
+    result = validate_config_import("qwen-image-21-lora", config)
+    assert result["result"] == "ok", result
+    assert result["config"]["model_input_mode"] == "comfyui_files"
 
 
 def test_api_run_routes_parameters_into_task_without_training(configured, monkeypatch):

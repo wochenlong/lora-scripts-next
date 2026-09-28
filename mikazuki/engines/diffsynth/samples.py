@@ -5,7 +5,7 @@ import math
 DEFAULT_SAMPLE = {'prompt': '', 'width': 1024, 'height': 1024, 'seed': 42, 'guidance_scale': 4, 'sample_steps': 20}
 
 
-def sample_config(config):
+def sample_config(config, root=None):
     enabled = bool(config.get('sample_enabled', False))
     if not enabled:
         return {'enabled': False, 'every_steps': 100, 'samples': []}
@@ -28,7 +28,11 @@ def sample_config(config):
         sample = json.loads(value)
         if not isinstance(sample, dict) or set(sample) - (set(DEFAULT_SAMPLE) | {'controlImages'}):
             raise ValueError(f'预览样例 {i + 1} 包含不支持的参数')
-        if sample.pop('controlImages', []) != []:
+        from .inputs import is_edit, reference_paths
+        from pathlib import Path
+        controls = sample.pop('controlImages', [])
+        editing = is_edit(config)
+        if not editing and controls != []:
             raise ValueError(f'预览样例 {i + 1}: 文生图不支持参考图，controlImages 必须为空数组')
         sample = {**DEFAULT_SAMPLE, **sample}
         if not isinstance(sample['prompt'], str):
@@ -45,5 +49,8 @@ def sample_config(config):
         if not math.isfinite(cfg) or cfg < 1:
             raise ValueError('预览 guidance_scale 必须 >= 1')
         sample['guidance_scale'] = cfg
+        if editing:
+            sample['controlImages'] = reference_paths(controls, Path(root or '.'), f'预览样例 {i + 1}',
+                                                      target_size=(sample['width'], sample['height']))
         result.append(sample)
     return {'enabled': True, 'every_steps': interval, 'every_epochs': every_epochs, 'samples': result}

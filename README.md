@@ -20,7 +20,7 @@ Train Qwen-Image-2.1 LoRA with the DiffSynth engine, with training configuration
 
 ## What's new in 3.1.1
 
-- **DiffSynth / Qwen-Image-2.1:** BF16 text-to-image LoRA training with an isolated engine environment, image + TXT datasets, and previews during training. Image-edit training is not yet supported.
+- **DiffSynth / Qwen-Image-2.1:** single-GPU BF16 text-to-image and Edit LoRA training with an isolated engine environment, target output images plus multiple input references, drag-and-drop upload, and previews during training.
 - **Anima Fast:** continue to train Anima 2.9B and T-LoRA with a dedicated runtime.
 - **Multiple engines, one workspace:** manage Kohya, Anima Fast, Musubi, AI Toolkit, and DiffSynth from the same interface.
 - **Smoother training workflows:** improved task management, configuration imports, and step/epoch handling.
@@ -33,7 +33,7 @@ Train Qwen-Image-2.1 LoRA with the DiffSynth engine, with training configuration
 
 Kohya is built in. Install the optional engines from **Settings → Training engines**, then select the appropriate engine on the training page. Available engines depend on your trainer version; not every model or feature supported upstream is integrated here.
 
-For Qwen-Image-2.1, select **DiffSynth-Studio → LoRA**. Current support is **BF16 text-to-image training**, not image-edit training.
+For Qwen-Image-2.1, select **DiffSynth-Studio → LoRA**, then choose **Text-to-image** or **Edit**. Edit currently requires batch size 1 and can use gradient accumulation for a larger effective batch.
 
 ## Supported models
 

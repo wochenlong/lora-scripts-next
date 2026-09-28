@@ -2,7 +2,7 @@
 
 本文面向维护者。第一次使用请先阅读[训练入门教程](../diffsynth.md)。
 
-仅开放 Qwen-Image-2.1 **BF16 文生图 LoRA**，不包含 Edit、量化权重、全量微调或多卡。
+当前开放 Qwen-Image-2.1 **BF16 文生图与 Edit 图像编辑 LoRA**，不包含量化权重、全量微调或多卡。
 完整 DiffSynth-Studio 固定在 `7686e54d41d25c0e8ed5f1318acc23b6bb832654`，不修改其源码。
 模型、优化器和训练循环使用上游实现；适配层负责输入转换、Kohya 兼容分桶组批、调度器选择、任务管理和 logger 回调。
 
@@ -10,7 +10,7 @@
 
 1. 在「设置 → 训练引擎」安装 DiffSynth。沿用已有下载源设置，需要 Git、uv、网络及支持 BF16 的 NVIDIA GPU。
 2. 在训练页选择「Qwen-Image-2.1 → DiffSynth-Studio → LoRA」。
-3. 模型输入选择 `components`，分别选择 Comfy-Org 的 BF16 文件：
+3. 模型输入选择 `comfyui_files`，分别选择 Comfy-Org 的 BF16 文件：
    - `diffusion_models/qwen_image_2.1_bf16.safetensors`
    - `text_encoders/qwen3vl_8b_bf16.safetensors`
    - `vae/qwen_image_2.1_vae_bf16.safetensors`
@@ -19,7 +19,7 @@
    下载进度及失败原因显示在训练日志中；旧配置中的 `processor_path` 不再覆盖固定位置。
 5. 选择数据集格式、保存目录、轮数及 Rank，提交训练。启动时检查本地模型、数据和运行环境。
 
-模型也可用 `directory` 模式选择包含 `transformer/`、`text_encoder/`、`vae/` 的 BF16 目录。
+模型也可用 `model_repository` 模式选择包含 `transformer/`、`text_encoder/`、`vae/` 的 BF16 目录。
 组件路径支持单文件、分片索引，或只有一个模型候选的目录。选择分片时自动查找对应索引，
 缺失分片、索引越界、多候选、错误模型结构和非 BF16 权重会报错。官方目录中的 F32 权重不在本版 BF16 输入范围内。
 
@@ -58,6 +58,7 @@ Comfy-Org BF16 文件与 DiffSynth 原生布局并非完全相同：
 
 已通过未修改 ComfyUI 加载器的 CPU 合成张量映射与合并数值测试。
 2026-09-22 已完成 RTX 4090 24GB、256×256 的短训、训练中预览和独立 ComfyUI API 回载出图。
+2026-09-28 已完成 RTX 4090 24GB 的 Qwen-Image-2.1 Edit LoRA 实测，训练 48/48 步完成并成功生成预览图。
 这是功能烟测，不是收敛、画质或任意硬件开箱即训保证，具体范围见[验收记录](diffsynth-main-acceptance.md)。
 
 ## 数据与步数
@@ -71,8 +72,8 @@ Comfy-Org BF16 文件与 DiffSynth 原生布局并非完全相同：
 
 ## 预览
 
-复用作者 `feat/ai-toolkit-klein` 分支的 PreviewSampleField 交互，首版裁剪为文生图字段。
-开启后默认一组，可增删；每组独立设置 prompt、width、height、seed、guidance_scale、sample_steps。
+复用作者 `feat/ai-toolkit-klein` 分支的 PreviewSampleField 交互。文生图样例独立设置
+prompt、width、height、seed、guidance_scale、sample_steps；Edit 样例在此基础上增加一个或多个输入参考图。
 不暴露采样器切换、参考图或网络倍率等本适配未实现的选项。
 
 预览在上游 logger 的优化器更新回调中调用现有 pipeline，不复制训练循环。

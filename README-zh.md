@@ -20,7 +20,7 @@
 
 ## 3.1.1 更新了什么
 
-- **DiffSynth / Qwen-Image-2.1**：支持 BF16 文生图 LoRA 训练，提供独立引擎环境、图片 + TXT 数据集和训练中预览；图像编辑训练尚未开放。
+- **DiffSynth / Qwen-Image-2.1**：支持单卡 BF16 文生图与 Edit 图像编辑 LoRA，提供独立引擎环境、目标输出图 + 多输入参考图数据集、拖放上传和训练中预览。
 - **Anima Fast**：继续支持 Anima 2.9B 与 T-LoRA，使用独立训练环境。
 - **多引擎统一管理**：在同一工作台中管理和使用 Kohya、Anima Fast、Musubi、AI Toolkit 与 DiffSynth。
 - **训练流程更顺畅**：改进任务管理、配置导入和训练步数 / epoch 处理。
@@ -33,7 +33,7 @@
 
 Kohya 为内置引擎，其余可在 **设置 → 训练引擎** 中按需下载安装，再到训练页选择对应引擎。可用引擎以所用训练器版本为准；接入引擎不代表已经支持其上游的全部模型和功能。
 
-训练 Qwen-Image-2.1 时，选择 **DiffSynth-Studio → LoRA**。目前支持 **BF16 文生图训练**，图像编辑训练尚未开放。
+训练 Qwen-Image-2.1 时，选择 **DiffSynth-Studio → LoRA**，再切换 **文生图 T2I** 或 **Edit 图像编辑**。Edit 当前要求 Batch 1，可通过梯度累积增加有效批量。
 
 ## 支持的模型
 

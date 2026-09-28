@@ -12,6 +12,7 @@ import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/tra
 import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultModel, hasFormValue, isFieldActive, normalizeModelForSchema, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
+import { QWEN_VALIDATION_FIELDS, validateQwenConfig } from "../training/qwenValidation"
 import { moduleForTrainType } from "../training/modules"
 import { copyText } from "../utils/clipboard"
 import { useTasksStore } from "../stores/tasks"
@@ -56,7 +57,8 @@ const previewCollapsed = ref(readPreviewCollapsed())
 const importInput = ref<HTMLInputElement>()
 const rawConfig = computed(() => schema.value ? serializeModel(schema.value, model.value) : {})
 const output = computed(() => buildTrainingConfig(rawConfig.value, props.schemaName))
-const diagnostics = computed(() => checkTrainingConfig(output.value))
+const diagnostics = computed(() => checkTrainingConfig(props.schemaName === "qwen-image-21-lora"
+  ? { ...output.value, training_task: model.value.training_task } : output.value))
 const outputText = computed(() => stringify(output.value))
 const filteredPresets = computed(() => presets.value.filter((item) => !item.metadata.train_type || item.metadata.train_type === props.schemaName))
 const tocSections = computed(() => {
@@ -136,6 +138,14 @@ function readCarryOver(): FormModel {
   } catch { return {} }
 }
 
+function migrateQwenDraft(model: FormModel) {
+  if (props.schemaName !== "qwen-image-21-lora") return
+  if (model.output_name === "aki") model.output_name = "qwen-image-21-lora"
+  if (model.train_data_dir === "./train/aki") model.train_data_dir = "./train/qwen-image-21"
+  if (model.model_input_mode === "directory") model.model_input_mode = "model_repository"
+  if (model.model_input_mode === "components") model.model_input_mode = "comfyui_files"
+}
+
 async function load() {
   loading.value = true
   error.value = ""
@@ -153,6 +163,7 @@ async function load() {
         ? { ...base, ...sanitizePersistedDraft(saved as FormModel, defaults) }
         : base
       model.value = normalizeModelForSchema(loaded, model.value)
+      migrateQwenDraft(model.value)
     } catch { model.value = normalizeModelForSchema(loaded, base) }
     applyReadonlyDefaults(loaded, model.value, defaults)
     const cards = await schemasApi.graphicCards()
@@ -343,7 +354,14 @@ function scheduleHostSync() {
 }
 
 watch(() => props.schemaName, () => { started.value = undefined; loadHistory(); load() })
-watch(model, (value) => { localStorage.setItem(autosaveKey(), JSON.stringify(value)); scheduleHostSync() }, { deep: true })
+watch(model, (value) => {
+  localStorage.setItem(autosaveKey(), JSON.stringify(value))
+  scheduleHostSync()
+  if (props.schemaName === "qwen-image-21-lora") {
+    for (const key of QWEN_VALIDATION_FIELDS) delete errors.value[key]
+    Object.assign(errors.value, validateQwenConfig(value))
+  }
+}, { deep: true })
 watch(previewCollapsed, (value) => persistPreviewCollapsed(value))
 onMounted(() => { migrateLegacyStorage(); loadHistory(); load(); tasksStore.refresh(); tasksTimer = window.setInterval(() => tasksStore.refresh({ silent: true }), 2000) })
 onBeforeUnmount(() => {
@@ -364,6 +382,14 @@ onBeforeUnmount(() => {
           <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
           <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
           <slot name="form-top" />
+          <div v-if="schemaName === 'qwen-image-21-lora' && schema && !loading" class="qwen-training-mode" data-testid="qwen-training-mode">
+            <strong>训练模式</strong>
+            <div class="qwen-training-mode-options segmented" role="group" aria-label="Qwen-Image 2.1 训练模式">
+              <button :class="{ active: model.training_task !== 'image-edit' }" :aria-pressed="model.training_task !== 'image-edit'" :disabled="submitting" @click="model.training_task = 'text-to-image'">文生图 T2I</button>
+              <button :class="{ active: model.training_task === 'image-edit' }" :aria-pressed="model.training_task === 'image-edit'" :disabled="submitting" @click="model.training_task = 'image-edit'">Edit 图像编辑</button>
+            </div>
+            <p v-if="model.training_task === 'image-edit'">实验性 Edit：目标图是编辑后的结果，TXT 填写编辑指令；另选参考图目录或在元数据填写 edit_image。Edit 当前 batch size 须为 1，支持梯度累积。</p>
+          </div>
           <div v-if="loading" class="schema-state"><strong>{{ t("training.loadingSchema") }}</strong><span>{{ t("training.loadingSchemaHint") }}</span></div>
           <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
           <DynamicSchemaForm v-else-if="schema" :model-value="model" :schema="schema" :errors="errors" :effective-defaults="effectiveDefaults" @update:model-value="updateModel" @reset-field="resetField">
