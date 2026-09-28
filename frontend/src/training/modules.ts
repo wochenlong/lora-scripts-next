@@ -61,6 +61,8 @@ export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> 
 export function normalizeModel(value: unknown): TrainingModel | undefined {
   // Legacy "sd" covered both SD 1.5 and SDXL; map it to sdxl, the old default.
   if (value === "sd") return "sdxl"
+  // Accept the versioned spelling used by older links and saved browser tabs.
+  if (value === "qwen-image-2.1") return "qwen-image-21"
   return TRAINING_MODELS.includes(value as TrainingModel) ? (value as TrainingModel) : undefined
 }
 

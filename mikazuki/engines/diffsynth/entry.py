@@ -75,10 +75,13 @@ def main():
         output.mkdir(parents=True, exist_ok=True)
         (output / 'engine_config.json').write_text(json.dumps({**config, 'arguments': vars(args)}, ensure_ascii=False, indent=2), encoding='utf-8')
         dataset = UnifiedDataset(base_path=args.dataset_base_path, metadata_path=args.dataset_metadata_path,
-                                 repeat=args.dataset_repeat, data_file_keys=['image'],
+                                 repeat=args.dataset_repeat, data_file_keys=args.data_file_keys.split(','),
                                  main_data_operator=UnifiedDataset.default_image_operator(base_path=args.dataset_base_path,
                                      max_pixels=args.max_pixels, height=args.height, width=args.width,
                                      height_division_factor=32, width_division_factor=32, convert_RGB=False, convert_RGBA=True))
+        if config.get('training_task') == 'image-edit':
+            # Keep upstream reference-image preprocessing separate from target buckets.
+            dataset.special_operator_map['edit_image'] = dataset.main_data_operator
         if config.get('bucket_settings'):
             from mikazuki.engines.diffsynth.buckets import BucketImageLoader
             dataset.main_data_operator = BucketImageLoader(args.dataset_base_path, config['bucket_settings'])
@@ -93,11 +96,11 @@ def main():
         if config.get('cache_embeddings', False):
             from mikazuki.engines.diffsynth.encoding_cache import prepare_cache, cached_sample
             dataset, previews = prepare_cache(dataset, paths, args, config, accelerator.device)
-            if config.get('bucket_settings'):
+            if config.get('bucket_settings') and config.get('training_task') != 'image-edit':
                 from mikazuki.engines.diffsynth.buckets import batched_dataset
                 dataset = batched_dataset(dataset, [tuple(s) for s in config['bucket_sizes']], config['train_batch_size'])
             args.model_paths = json.dumps([paths[0]])
-            sample_callback = partial(cached_sample, paths=paths, previews=previews)
+            sample_callback = partial(cached_sample, paths=paths, previews=previews, processor_path=args.processor_path)
         parameters = inspect.signature(upstream.QwenImage21TrainingModule).parameters
         model_args = {key: value for key, value in vars(args).items() if key in parameters}
         model_args['device'] = 'cpu' if args.initialize_model_on_cpu or args.enable_model_cpu_offload else accelerator.device
@@ -106,6 +109,8 @@ def main():
             from mikazuki.engines.diffsynth.formats import prepare_lora_checkpoint
             model_args['lora_checkpoint'] = prepare_lora_checkpoint(load_file(args.lora_checkpoint), args.lora_rank, alpha)
         model = TrainingModule(**model_args)
+        from mikazuki.engines.diffsynth.text_encoder_hooks import install_text_encoder_hook_cleanup
+        install_text_encoder_hook_cleanup(model.pipe.text_encoder)
         if config.get('cache_embeddings', False):
             model.pipe.units = []
             assert model.pipe.text_encoder is None and model.pipe.vae is None

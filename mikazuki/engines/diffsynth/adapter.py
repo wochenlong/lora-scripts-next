@@ -1,9 +1,10 @@
 """UI configuration -> official Qwen-Image-2.1 arguments and dataset metadata."""
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import json
 import math
-from .inputs import absolute, model_inputs, dataset_inputs
+from .inputs import absolute, model_inputs, dataset_inputs, is_edit
 from .samples import sample_config
 
 @dataclass
@@ -24,6 +25,7 @@ def positive_int(config, key, default):
 
 
 def adapt_config(config, runtime):
+    editing = is_edit(config)
     for field in ("output_dir", "output_name"):
         if not str(config.get(field, "")).strip():
             raise ValueError(f"缺少必填参数: {field}")
@@ -47,9 +49,11 @@ def adapt_config(config, runtime):
     from .buckets import bucket_settings, dataset_buckets
     buckets = bucket_settings(config)
     batch_size = positive_int(config, 'train_batch_size', 1)
+    if editing and batch_size != 1:
+        raise ValueError("Edit 训练目前要求 train_batch_size=1；可使用梯度累积提高有效批大小")
     arguments = {
         "dataset_base_path": str(dataset_dir),
-        "data_file_keys": "image",
+        "data_file_keys": "image,edit_image" if editing else "image",
         "dataset_repeat": positive_int(config, "dataset_repeat", 1) if config.get("dataset_format", "image_text") == "image_text" else 1,
         # The upstream collate lambda is not spawn-picklable on Windows.
         "dataset_num_workers": 0,
@@ -70,6 +74,8 @@ def adapt_config(config, runtime):
         "enable_csv_log": True,
         "find_unused_parameters": True,
     }
+    if editing:
+        arguments["extra_inputs"] = "edit_image"
     for key, default in (("use_gradient_checkpointing", True), ("use_gradient_checkpointing_offload", False), ("initialize_model_on_cpu", True), ("enable_model_cpu_offload", False)):
         arguments[key] = bool(config.get(key, default))
     if config.get("save_steps"):
@@ -81,7 +87,7 @@ def adapt_config(config, runtime):
         arguments["lora_checkpoint"] = str(checkpoint)
     if config.get("diffsynth_quantization", "none") != "none":
         raise ValueError("首版仅支持 BF16 模型，不支持量化训练")
-    samples = sample_config(config)
+    samples = sample_config(config, runtime.project_root)
     cache_embeddings = bool(config.get('cache_embeddings', False))
     if batch_size > 1 and not cache_embeddings:
         raise ValueError('真实 batch size 大于 1 时请开启预编码缓存，以便对 latent 和文本特征按桶组批')
@@ -91,7 +97,7 @@ def adapt_config(config, runtime):
     schedule = schedule_config(config, total_steps)
     if samples["enabled"] and arguments["enable_model_cpu_offload"] and not cache_embeddings:
         raise ValueError("模型 CPU 卸载与训练预览同时使用时，请开启预编码缓存；否则请关闭预览或关闭模型 CPU 卸载。")
-    engine = {"models": models, "cache_dir": str(runtime.root / "cache" / "models"), "samples": samples, "output_name": name,
+    engine = {"training_task": "image-edit" if editing else "text-to-image", "models": models, "cache_dir": str(runtime.root / "cache" / "models"), "samples": samples, "output_name": name,
               "cache_embeddings": cache_embeddings, "lora_alpha": alpha, "lr_schedule": schedule,
               "bucket_settings": buckets, "bucket_sizes": sizes, "bucket_summary": bucket_summary,
               "train_batch_size": batch_size, "batches_per_epoch": batches_per_epoch}
@@ -104,7 +110,24 @@ def dump_config(adapted, autosave_dir, run_id):
     metadata = adapted.metadata_path
     if metadata is None:
         metadata = directory / f"{run_id}-dataset.json"
-        metadata.write_text(json.dumps(adapted.dataset, ensure_ascii=False, indent=2), encoding="utf-8")
+        dataset_base = Path(adapted.arguments["dataset_base_path"]).resolve()
+        dataset = []
+        for row in adapted.dataset:
+            serialized = dict(row)
+            references = serialized.get("edit_image")
+            if isinstance(references, list):
+                serialized_references = []
+                for reference in references:
+                    path = Path(reference)
+                    if path.is_absolute():
+                        try:
+                            reference = os.path.relpath(path, dataset_base)
+                        except ValueError:
+                            reference = str(path)
+                    serialized_references.append(reference.replace("\\", "/"))
+                serialized["edit_image"] = serialized_references
+            dataset.append(serialized)
+        metadata.write_text(json.dumps(dataset, ensure_ascii=False, indent=2), encoding="utf-8")
     adapted.arguments["dataset_metadata_path"] = str(metadata.resolve())
     config_path = directory / f"{run_id}-arguments.json"
     config_path.write_text(json.dumps({"arguments": adapted.arguments, **adapted.engine}, ensure_ascii=False, indent=2), encoding="utf-8")

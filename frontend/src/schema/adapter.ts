@@ -1,3 +1,4 @@
+import { validateQwenConfig } from "../training/qwenValidation"
 import Schema from "schemastery"
 import { i18n } from "../i18n"
 import type { SchemaSource } from "../api/schemas"
@@ -121,6 +122,8 @@ function fieldFrom(key: string, schema: SchemaRecord, conditions: FormCondition[
     return {
       key,
       type: "string",
+      role: schema.meta.role,
+      extra: schema.meta.extra,
       description: description(schema.meta),
       defaultValue: explicitDefault(schema),
       required: schema.meta.required,
@@ -260,6 +263,12 @@ export function applyReadonlyDefaults(schema: AdaptedSchema, model: FormModel, d
   for (const field of schema.sections.flatMap((section) => section.fields)) {
     if (seen.has(field.key)) continue
     seen.add(field.key)
+    // A hidden field controlled elsewhere in the UI is user state, not a lock.
+    // Missing values use defaults; invalid explicit values remain for validation.
+    if (field.hidden && field.role === "external-control" && !field.disabled && field.type !== "const") {
+      if (model[field.key] === undefined && defaults[field.key] !== undefined) model[field.key] = cloneFormValue(defaults[field.key])
+      continue
+    }
     if (!(field.disabled || field.hidden || field.type === "const")) continue
     const value = defaults[field.key]
     if (value !== undefined) model[field.key] = cloneFormValue(value)
@@ -297,5 +306,6 @@ export function validateModel(schema: AdaptedSchema, model: FormModel) {
   if (isAnimaFastTorchCompileBlocked(schema, model) && model.torch_compile === true) {
     errors.torch_compile = i18n.global.t("training.diagnostics.animaFastTorchCompile")
   }
+  if (schema.name === "qwen-image-21-lora") Object.assign(errors, validateQwenConfig(model))
   return errors
 }

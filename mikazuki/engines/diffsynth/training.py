@@ -73,7 +73,8 @@ class QwenLogger(ModelLogger):
                     if self.sample_callback is not None:
                         image = self.sample_callback(model, sample)
                     else:
-                        image = pipe(prompt=sample['prompt'], width=sample['width'], height=sample['height'], seed=sample['seed'],
+                        from .edit_images import load_references
+                        image = pipe(edit_image=load_references(sample.get('controlImages', [])), prompt=sample['prompt'], width=sample['width'], height=sample['height'], seed=sample['seed'],
                                      cfg_scale=sample['guidance_scale'], num_inference_steps=sample['sample_steps'], tiled=True)
                     path = directory / f'{self.output_name}-step-{self.num_steps:08d}-sample-{index + 1:02d}.png'
                     temporary = path.with_suffix('.tmp')

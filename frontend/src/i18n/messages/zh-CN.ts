@@ -1,5 +1,5 @@
 export default {
-  sampleInputs: { reference: "参考路径", remove: "移除", addReference: "添加参考路径", addSample: "添加样例", width: "宽度", height: "高度", seed: "随机种子", guidance_scale: "CFG", sample_steps: "采样步数" },
+  sampleInputs: { reference: "参考路径", remove: "移除", addReference: "添加参考路径", addSample: "添加样例", width: "宽度", height: "高度", seed: "随机种子", guidance_scale: "CFG", sample_steps: "采样步数", controlImages: "控制图像", controlImage: "控制图像", addControlImage: "添加控制图像", changeControlImage: "更换图像", clickOrDrop: "点击选择或拖放", editPromptPlaceholder: "例如：将图片转换为 XX 风格" },
   app: {
     brand: "Next Trainer",
     prerelease: "RC",

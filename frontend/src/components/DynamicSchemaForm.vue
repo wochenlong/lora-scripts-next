@@ -51,6 +51,7 @@ function update(key: string, value: FormModel[string]) {
           v-for="field in visibleFields(section.fields)"
           :key="field.key"
           :field="effectiveField(field)"
+          :editing="modelValue.training_task === 'image-edit'"
           :model-value="modelValue[field.key]"
           :default-value="effectiveDefaults[field.key]"
           :error="errors[field.key]"
