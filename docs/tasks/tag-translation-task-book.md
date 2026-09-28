@@ -5,7 +5,7 @@
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: Phase 1: 迁移审计与探针
+- Current active phase: Phase 2: 后端翻译服务迁移
 - Execution readiness: executing
 
 ## 目标
@@ -112,14 +112,15 @@
   - 词库下载、缓存和模型不进入 Git 提交。
 
 ## 进度台账
-- Overall progress: 设计书和独立分支已完成，正在执行迁移审计与探针。
-- Phase 1: in progress
-- Phase 2: pending
+- Overall progress: 设计书、迁移清单和词库探针已完成，开始迁移 Aaalice 后端核心。
+- Phase 1: done
+- Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
 - Phase 5: pending
-- Validation status: 已完成分支/worktree、设计书和参考快照检查；尚未完成本地 SQLite 探针和模块迁移。
-- Residual risks: 外部词库许可/可用性、Aaalice 依赖边界、Qwen 0.8B 质量尚未实测。
+- Validation status: 已完成分支/worktree、设计书、Aaalice 依赖扫描、许可证边界和 ffdkj SQLite 探针；尚未完成后端模块迁移和 FastAPI 接口。
+- Residual risks: 外部词库许可仍需发布前复核；Aaalice 核心模块可迁移但 API/ComfyUI 耦合需隔离；Qwen 0.8B 质量尚未实测。
 
 ## 下一步动作
-完成 Aaalice 迁移模块清单和 ffdkj SQLite 最小探针，留下可复现的查询与依赖证据。
+在 mikazuki/tag_translation/ 中迁移 Aaalice 词库核心和通用配置/服务核心，并先建立后端 provider 单元测试。
+
