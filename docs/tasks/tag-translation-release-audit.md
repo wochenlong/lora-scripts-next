@@ -44,4 +44,3 @@
 ## 回滚
 
 回滚代码使用分支提交的 Git revert；删除用户数据目录中的 `assets/tag_translation/` 可清除词库、配置和缓存，不影响已有 caption 和训练任务。
-
