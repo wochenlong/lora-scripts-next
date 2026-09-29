@@ -58,8 +58,12 @@ def create_inference_session(model_path: os.PathLike | str, *, log: LogFn | None
     _validate_model_file(path)
     _log(f"[tagger] Loading ONNX ({path.stat().st_size // (1024 * 1024)} MB): {path}", log)
 
-    # CUDA EP may need torch-linked DLLs on Windows portable builds.
-    import torch  # noqa: F401
+    # CUDA EP may need torch-linked DLLs on Windows portable builds; torch is
+    # optional now that training stacks live in engine venvs.
+    try:
+        import torch  # noqa: F401
+    except ImportError:
+        pass
 
     options = SessionOptions()
     options.log_severity_level = 3

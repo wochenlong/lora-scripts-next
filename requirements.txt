@@ -1,71 +1,36 @@
-﻿accelerate==0.33.0
-transformers==4.51.3
-diffusers[torch]==0.33.1
-ftfy==6.1.1
-# albumentations==1.3.0
-opencv-python==4.8.1.78
-einops==0.7.0
-pytorch-lightning==1.9.0
-# 下限 0.46.0；CUDA 13 的 torch 需要 >=0.48 才带对应二进制，故不设上限
-bitsandbytes>=0.46.0
-lion-pytorch==0.1.2
-schedulefree==1.4
-pytorch-optimizer==3.7.0
-prodigy-plus-schedule-free==1.9.0
-prodigyopt==1.1.2
-# 2.14+ accepts protobuf>=3.19.6 (needed with protobuf==3.20.3 for Flux/SD3/sentencepiece).
-# Do not pin tensorboard==2.10.1: it requires protobuf<3.20 and modern pip fails the resolve.
-tensorboard==2.14.0
-safetensors==0.4.4
-setuptools<81
-prodigy-plus-schedule-free
-# gradio==3.16.2
-altair==4.2.2
-easygui==0.98.3
+﻿# Main GUI environment only. Training dependencies (torch, accelerate,
+# diffusers, optimizers, ...) live in each engine pack's own managed venv
+# (see mikazuki/engines/<id>/environment.py); install them from the
+# Training Engines page in the UI.
 toml==0.10.2
-voluptuous==0.13.1
 huggingface-hub==0.36.2
-# for Image utils
-imagesize==1.4.1
-# for T5XXL tokenizer (SD3/FLUX)
-sentencepiece==0.2.0
-# sentencepiece / Flux-SD3 path: keep protobuf>=3.20 (avoid pip landing on 3.19.x).
-protobuf==3.20.3
-# for ui
 rich==13.7.0
 pandas
-scipy
 requests
 pillow
 numpy==1.26.4
+# tagger image utils
+opencv-python==4.8.1.78
+# loss/task charts read TB event files (mikazuki/utils/task_insights.py)
+tensorboard==2.14.0
+protobuf==3.20.3
 fastapi==0.95.1
 uvicorn==0.22.0
 websockets==11.0.3
-wandb==0.16.2
 httpx==0.24.1
 # multipart form parsing for dataset uploads (fastapi request.form)
 python-multipart==0.0.18
-# extra
-open-clip-torch==2.20.0
-lycoris-lora==3.3.0
-dadaptation==3.1
-# tagger (WD14 etc.) — required by dataset tagging; NVIDIA portable build uses GPU build
-# Windows guard installs the GPU build. Linux/macOS onnxruntime is handled by
-# setup_onnxruntime() (GPU build when available, CPU build otherwise), because
-# onnxruntime-gpu has no wheels for some platforms (e.g. aarch64) and a forced
-# install here would abort startup.
+# tagger (WD14/CL): NVIDIA portable build uses GPU build. Linux/macOS
+# onnxruntime is handled by setup_onnxruntime() (GPU build when available,
+# CPU build otherwise), because onnxruntime-gpu has no wheels for some
+# platforms (e.g. aarch64) and a forced install here would abort startup.
 onnxruntime-gpu; sys_platform == "win32"
-# domestic Hugging Face downloads (ModelScope hub patch for transformers / sd-scripts)
+# domestic Hugging Face downloads (ModelScope hub patch, mikazuki/model_assets.py)
 modelscope>=1.20.0
-# triton for Windows — source installs only (portable package skips this)
-# Needed by flash-attn on Windows; portable package has prebuilt flash-attn wheel that bundles triton.
-triton-windows<3.4; sys_platform == "win32" # skip_verify
-
-optimum-quanto
+# launch_utils still uses pkg_resources
+setuptools<81
 nvidia-ml-py
-
 # marketplace trust-v2: Ed25519 verification for the plugin catalog and the managed-assets
 # index (mikazuki/plugin_marketplace/trust.py). Security-critical verify path: declared
 # explicitly, never relied on as a transitive dependency.
 cryptography>=41
-
