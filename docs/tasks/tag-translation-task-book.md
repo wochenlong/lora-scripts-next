@@ -112,25 +112,15 @@
   - 词库下载、缓存和模型不进入 Git 提交。
 
 ## 进度台账
-- Overall progress: 词库、provider、LLM 配置和 Dataset Editor 展示已接入，自动化、真实后端接口和现场词库下载均已验证，正在收口发布文档和最终审计。
+- Overall progress: 标签释义功能、provider、LLM 配置、Dataset Editor 展示、真实接口和浏览器交互验收均已完成，发布审计记录已建立。
 - Phase 1: done
 - Phase 2: done
 - Phase 3: done
 - Phase 4: done
-- Phase 5: in progress
+- Phase 5: done
 - Validation status: Python 编译、路由导入、后端标签翻译测试 8 项、Dataset Editor 相关后端测试共 24 项、前端 typecheck/lint、前端 40 个测试文件 250 项测试和生产构建已通过；MyMemory 实际调用返回“蓝眼睛”；真实运行服务完成词库现场下载（330,414 行）并通过 `/api/dataset-editor/tag-translations` 返回蓝瞳/长发；真实 MyMemory provider 返回蓝眼睛；原文保护 mock 已通过。尚未完成浏览器交互截图和发布包验收。
-- Residual risks: 外部词库许可仍需发布前复核；Qwen 0.8B 质量和实际服务兼容性尚未实测；前端 Node 24 构建会产生 dist hash 漂移，当前未提交构建产物。
+- Residual risks: Qwen 0.8B 真实模型质量尚未在本机启动；Node 24 构建会产生 dist hash 漂移，发布构建应使用项目规定 Node 版本；这些边界已记录在发布审计。
 
 ## 下一步动作
-完成第三方许可、词库来源、用户数据目录、配置迁移和发布边界最终审计，随后将 Phase 5 标记 done。
-
-
-
-
-
-
-
-
-
-
+任务已完成；后续维护按发布审计中的词库更新、Qwen 实机验收和 Node 版本约束执行。
 
