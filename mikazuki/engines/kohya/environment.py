@@ -28,6 +28,8 @@ TRAINING_DEPS = [
     "diffusers[torch]==0.33.1",
     "ftfy==6.1.1",
     "opencv-python==4.8.1.78",
+    # flow_use_ot in sd-scripts uses scipy.optimize.linear_sum_assignment.
+    "scipy",
     "einops==0.7.0",
     "pytorch-lightning==1.9.0",
     # CUDA 13 torch needs bitsandbytes>=0.48 binaries; the floor is 0.46.0.
@@ -108,7 +110,7 @@ def install_env(runtime):
 
 def audit_environment(runtime):
     code = (
-        "import json, torch, accelerate, transformers, diffusers; "
+        "import json, torch, accelerate, transformers, diffusers, scipy; "
         "import lycoris, open_clip; "
         "print(json.dumps({'torch':torch.__version__,'cuda':torch.version.cuda,'gpu':torch.cuda.is_available()}))"
     )
