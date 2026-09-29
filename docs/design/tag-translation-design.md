@@ -1,5 +1,9 @@
 # 标签中文释义设计书
 
+> 后续修订：用户实测反馈后的持久化、统一 UI 和免费翻译入口方案见
+> [Tag 中文释义 v2 优化设计书](tag-translation-v2-ux-persistence-design.md)。
+> v2 当前待审核，本文件的早期规划不代表所有路径均已完成实测。
+
 状态：Draft（待审计）
 分支：`feat/tag-translation`
 基线：2026-09-29 的 `origin/dev`（`fb997d4`）
