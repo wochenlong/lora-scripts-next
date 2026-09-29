@@ -5,7 +5,7 @@
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: Phase 4: 端到端验证与质量收口
+- Current active phase: Phase 5: 发布准备与维护交接
 - Execution readiness: executing
 
 ## 目标
@@ -116,13 +116,14 @@
 - Phase 1: done
 - Phase 2: done
 - Phase 3: done
-- Phase 4: in progress
-- Phase 5: pending
+- Phase 4: done
+- Phase 5: in progress
 - Validation status: Python 编译、路由导入、后端标签翻译测试 8 项、Dataset Editor 相关后端测试共 24 项、前端 typecheck/lint、前端 40 个测试文件 250 项测试和生产构建已通过；MyMemory 实际调用返回“蓝眼睛”；真实运行服务完成词库现场下载（330,414 行）并通过 `/api/dataset-editor/tag-translations` 返回蓝瞳/长发；真实 MyMemory provider 返回蓝眼睛；原文保护 mock 已通过。尚未完成浏览器交互截图和发布包验收。
 - Residual risks: 外部词库许可仍需发布前复核；Qwen 0.8B 质量和实际服务兼容性尚未实测；前端 Node 24 构建会产生 dist hash 漂移，当前未提交构建产物。
 
 ## 下一步动作
-完成浏览器页面验收和用户数据目录下载/升级路径检查，随后更新第三方说明和发布边界。当前 API 提供 `/api/dataset-editor/tag-translations` 兼容入口。
+完成第三方许可、词库来源、用户数据目录、配置迁移和发布边界最终审计，随后将 Phase 5 标记 done。
+
 
 
 
