@@ -605,7 +605,8 @@ export default {
         },
         kohya: {
           name: "Kohya-ss",
-          summary: "内置训练引擎，使用主环境，开箱即用。",
+          summary: "sd-scripts 训练引擎（SD1.5/SDXL/FLUX/Anima 等），独立 Python 环境。",
+          sizeHint: "运行环境需数 GB（含 PyTorch）；模型权重需另行下载",
         },
         "anima-fast": {
           name: "Anima Fast",
@@ -672,6 +673,7 @@ export default {
       confirm: {
         animaFast: "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
         install: {
+          kohya: "Kohya (sd-scripts) 会下载独立 Python 和数 GB 依赖（含 PyTorch），并要求 NVIDIA GPU。确认继续？",
           diffsynth: "DiffSynth-Studio 会下载独立 Python 和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           "anima-fast": "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           musubi: "Musubi-Tuner 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
@@ -1014,6 +1016,13 @@ export default {
     install: "安装插件",
     consoleIdle: "安装日志",
     consoleWaiting: "等待安装任务输出…",
+  },
+  kohyaGate: {
+    intro: "Kohya (sd-scripts) 训练运行在独立 Python 环境中；完成安装后即可开始训练。",
+    installWorking: "正在安装…",
+    install: "安装 Kohya 环境",
+    consoleIdle: "安装日志",
+    consoleWaiting: "等待安装…",
   },
   diffsynthGate: {
     intro: "Qwen-Image-2.1 LoRA。独立环境；暂不支持训练中采样预览。", auditTitle: "环境检查结果",

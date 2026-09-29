@@ -1,4 +1,5 @@
 import { diffsynthApi, type DiffSynthStatus } from "./diffsynth"
+import { kohyaApi, type KohyaStatus } from "./kohya"
 import { animaFastApi, type AnimaFastState, type AnimaFastStatus, type InstallResult } from "./animaFast"
 import { musubiApi, type MusubiInstallResult, type MusubiStatus } from "./musubi"
 import { aiToolkitApi, type AiToolkitInstallResult, type AiToolkitStatus } from "./aiToolkit"
@@ -43,6 +44,12 @@ function mapAnimaState(state: AnimaFastState | string): EngineRuntimeState {
   if (state === "installed_unverified") return "installed_unverified"
   if (state === "not_installed") return "not_installed"
   return "unknown"
+}
+
+function fromKohya(status: KohyaStatus): EngineStatus {
+  return { id: "kohya", state: mapAnimaState(status.state), featureEnabled: status.feature_enabled !== false,
+    message: status.message || status.reason, facts: status.facts,
+    runtime: { python: status.runtime?.python, environmentPath: status.runtime?.environment_path } }
 }
 
 function fromDiffSynth(status: DiffSynthStatus): EngineStatus {
@@ -139,12 +146,7 @@ export const enginesApi = {
   async status(id: TrainingEngine): Promise<EngineStatus> {
     if (id === "diffsynth") return fromDiffSynth(await diffsynthApi.status())
     if (id === "kohya") {
-      const data = await apiData<{ state?: string; feature_enabled?: boolean }>("/api/engines/kohya/status")
-      return {
-        id: "kohya",
-        state: mapAnimaState(data.state || "ready"),
-        featureEnabled: data.feature_enabled !== false,
-      }
+      return fromKohya(await kohyaApi.status())
     }
     if (id === "musubi") {
       return fromMusubi(await musubiApi.status())
@@ -165,6 +167,11 @@ export const enginesApi = {
 
   async install(id: TrainingEngine): Promise<EngineActionResult> {
     const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "kohya") {
+      const result = await kohyaApi.install(downloadSources)
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromKohya(result.status) : undefined }
+    }
     if (id === "diffsynth") {
       const result = await diffsynthApi.install(downloadSources)
       return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
@@ -178,6 +185,11 @@ export const enginesApi = {
 
   async repair(id: TrainingEngine): Promise<EngineActionResult> {
     const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "kohya") {
+      const result = await kohyaApi.repair(downloadSources)
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromKohya(result.status) : undefined }
+    }
     if (id === "diffsynth") {
       const result = await diffsynthApi.repair(downloadSources)
       return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
@@ -190,6 +202,10 @@ export const enginesApi = {
   },
 
   async uninstall(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "kohya") {
+      const result = await kohyaApi.uninstall()
+      return result.status ? fromKohya(result.status) : { id, state: "not_installed", featureEnabled: true }
+    }
     if (id === "diffsynth") {
       const result = await diffsynthApi.uninstall()
       return result.status ? fromDiffSynth(result.status) : { id, state: "not_installed", featureEnabled: true }
