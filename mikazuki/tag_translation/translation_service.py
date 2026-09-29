@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import aiohttp
 
-from .translation_config import OnlineServiceConfig, mask_config
+from .translation_config import OnlineServiceConfig, local_llm_endpoint, mask_config
 from .translation_store import is_translation_acceptable
 
 
@@ -114,7 +114,6 @@ class DeepSeekClient:
             "Return every input tag exactly once and do not add unknown tags. "
             "Every translation must use the target language writing system and must not repeat the original tag."
         )
-        reasoning_effort = self.config.get("reasoning_effort", "disabled")
         payload = {
             "model": self.config["model"],
             "messages": [
@@ -130,30 +129,26 @@ class DeepSeekClient:
                     ),
                 },
             ],
-            "response_format": {"type": "json_object"},
-            "thinking": {"type": "disabled" if reasoning_effort == "disabled" else "enabled"},
-            "max_tokens": 4096,
+            "max_tokens": 1024,
+            "temperature": 0.1,
         }
-        if reasoning_effort == "disabled":
-            payload["temperature"] = 0.1
-        else:
-            payload["reasoning_effort"] = reasoning_effort
         headers = {
-            "Authorization": f"Bearer {self.config['api_key']}",
             "Content-Type": "application/json",
             "Accept": "application/json",
             "User-Agent": USER_AGENT,
         }
+        if self.config.get("api_key"):
+            headers["Authorization"] = f"Bearer {self.config['api_key']}"
         async with self.session.post(self.config.get("endpoint") or DEEPSEEK_CHAT_URL, json=payload, headers=headers) as response:
             body = await response.text()
             if response.status == 401:
-                raise TranslationError("DeepSeek rejected the API key", "deepseek_auth_failed")
+                raise TranslationError("LLM rejected the API key", "llm_auth_failed")
             if response.status == 429 or 500 <= response.status < 600:
                 raise RetryableTranslationError(
-                    f"DeepSeek returned retryable HTTP {response.status}", response.headers.get("Retry-After")
+                    f"LLM returned retryable HTTP {response.status}", response.headers.get("Retry-After")
                 )
             if response.status != 200:
-                raise TranslationError(f"DeepSeek returned HTTP {response.status}", "deepseek_request_failed")
+                raise TranslationError(f"LLM returned HTTP {response.status}", "llm_request_failed")
             try:
                 result = json.loads(body)
                 choice = result["choices"][0]
@@ -163,7 +158,7 @@ class DeepSeekClient:
                 }
             except (json.JSONDecodeError, KeyError, IndexError, TypeError) as error:
                 raise TranslationError(
-                    "DeepSeek returned an invalid response envelope", "deepseek_invalid_response"
+                    "LLM returned an invalid response envelope", "llm_invalid_response"
                 ) from error
 
     async def _retry_delay(self, attempt, retry_after=None):
@@ -344,7 +339,7 @@ class TranslationManager:
         if known_failures:
             yield {"translations": {}, "sources": {}, "completed": sorted(known_failures)}
             missing = [item for item in missing if item["name"] not in known_failures]
-        if not config["api_key"] or not missing:
+        if not (config["api_key"] or local_llm_endpoint(config.get("endpoint"))) or not missing:
             return
 
         owned = []

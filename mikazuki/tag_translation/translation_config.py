@@ -7,6 +7,7 @@ import copy
 import json
 import os
 import tempfile
+from urllib.parse import urlparse
 
 
 DEFAULT_SYSTEM_PROMPT = (
@@ -26,7 +27,7 @@ DEFAULT_CONFIG = {
         "model": "deepseek-v4-flash",
         "reasoning_effort": "disabled",
         "system_prompt": DEFAULT_SYSTEM_PROMPT,
-        "concurrency": 300,
+        "concurrency": 4,
         "batch_size": 20,
         "max_retries": 3,
         "timeout_seconds": 180,
@@ -68,8 +69,13 @@ def validate_config(raw_config, current_config=None):
         value = _validate_string(raw_deepseek[key], f"deepseek.{key}", maximum_length).strip()
         if not value:
             raise ValueError(f"deepseek.{key} cannot be empty")
-        if key == "endpoint" and not (value.startswith("https://") or value.startswith("http://127.0.0.1") or value.startswith("http://localhost")):
-            raise ValueError("deepseek.endpoint must use HTTPS or local loopback HTTP")
+        if key == "endpoint":
+            parsed = urlparse(value)
+            local_http = parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
+            if not (parsed.scheme == "https" or local_http) or parsed.username or parsed.password or parsed.query or parsed.fragment:
+                raise ValueError("deepseek.endpoint must use HTTPS or local loopback HTTP")
+            if not parsed.path.endswith("/chat/completions"):
+                raise ValueError("deepseek.endpoint must end with /chat/completions")
         config["deepseek"][key] = value
 
     if "reasoning_effort" in raw_deepseek:
@@ -92,6 +98,11 @@ def validate_config(raw_config, current_config=None):
             raise ValueError(f"deepseek.{key} must be between {minimum} and {maximum}")
         config["deepseek"][key] = value
     return config
+
+
+def local_llm_endpoint(value):
+    parsed = urlparse(str(value or ""))
+    return parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
 
 
 def mask_config(config):
