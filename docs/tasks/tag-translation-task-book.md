@@ -112,17 +112,18 @@
   - 词库下载、缓存和模型不进入 Git 提交。
 
 ## 进度台账
-- Overall progress: 词库、provider、LLM 配置和 Dataset Editor 展示已接入，后端与前端自动化验证通过，正在收口端到端环境与发布文档。
+- Overall progress: 词库、provider、LLM 配置和 Dataset Editor 展示已接入，自动化、真实后端接口和现场词库下载均已验证，正在收口发布文档和最终审计。
 - Phase 1: done
 - Phase 2: done
 - Phase 3: done
 - Phase 4: in progress
 - Phase 5: pending
-- Validation status: Python 编译、路由导入、后端标签翻译测试 8 项、Dataset Editor 相关后端测试共 24 项、前端 typecheck/lint、前端 40 个测试文件 250 项测试和生产构建已通过；MyMemory 实际调用返回“蓝眼睛”；真实 SQLite API 查询返回蓝瞳/长发，原文保护 mock 已通过。尚未完成真实浏览器页面和发布包验收。
+- Validation status: Python 编译、路由导入、后端标签翻译测试 8 项、Dataset Editor 相关后端测试共 24 项、前端 typecheck/lint、前端 40 个测试文件 250 项测试和生产构建已通过；MyMemory 实际调用返回“蓝眼睛”；真实运行服务完成词库现场下载（330,414 行）并通过 `/api/dataset-editor/tag-translations` 返回蓝瞳/长发；真实 MyMemory provider 返回蓝眼睛；原文保护 mock 已通过。尚未完成浏览器交互截图和发布包验收。
 - Residual risks: 外部词库许可仍需发布前复核；Qwen 0.8B 质量和实际服务兼容性尚未实测；前端 Node 24 构建会产生 dist hash 漂移，当前未提交构建产物。
 
 ## 下一步动作
 完成浏览器页面验收和用户数据目录下载/升级路径检查，随后更新第三方说明和发布边界。当前 API 提供 `/api/dataset-editor/tag-translations` 兼容入口。
+
 
 
 
