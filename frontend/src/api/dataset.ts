@@ -20,6 +20,9 @@ export interface BatchEditRequest {
 export interface HistoryItem { image: string; before: string; after: string; before_exists: boolean; after_exists: boolean }
 export interface HistoryChange { label: string; count: number; items: HistoryItem[] }
 export interface DatasetHistory { can_undo: boolean; can_redo: boolean; changes: HistoryChange[] }
+export type TagTranslationProvider = "danbooru" | "mymemory" | "auto" | "llm"
+export interface TagTranslation { tag: string; translation: string | null; source: string | null; status: "hit" | "missing"; category?: number | null; post_count?: number | null }
+export interface TagTranslationResponse { items: TagTranslation[]; provider: TagTranslationProvider; locale: string }
 
 const post = <T>(path: string, body: unknown) => apiData<T>(path, { method: "POST", body: JSON.stringify(body) })
 export const datasetApi = {
@@ -29,4 +32,6 @@ export const datasetApi = {
   undo: (root: string) => post<DatasetMutation>("/api/dataset-editor/undo", { root }),
   redo: (root: string) => post<DatasetMutation>("/api/dataset-editor/redo", { root }),
   history: (root: string) => post<DatasetHistory>("/api/dataset-editor/history", { root }),
+  tagTranslations: (tags: string[], provider: TagTranslationProvider, locale = "zh-CN") =>
+    post<TagTranslationResponse>("/api/tag-translation/resolve", { tags, provider, locale }),
 }

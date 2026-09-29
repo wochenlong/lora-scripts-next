@@ -929,6 +929,10 @@ export default {
       saveFail: "保存失败",
       downloadImage: "下载图片",
       downloadCaption: "下载 caption",
+      translationAction: "显示中文释义",
+      translationLoading: "正在查询释义…",
+      translationProvider: "翻译来源",
+      translationAuto: "自动回退",
       empty: "扫描并选择图片后开始编辑。",
     },
     historyDialog: {

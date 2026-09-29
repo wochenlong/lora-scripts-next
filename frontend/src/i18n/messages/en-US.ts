@@ -929,6 +929,10 @@ export default {
       saveFail: "Failed to save",
       downloadImage: "Download image",
       downloadCaption: "Download caption",
+      translationAction: "Show Chinese meanings",
+      translationLoading: "Looking up meanings…",
+      translationProvider: "Translation provider",
+      translationAuto: "Automatic fallback",
       empty: "Scan and select an image to start editing.",
     },
     historyDialog: {

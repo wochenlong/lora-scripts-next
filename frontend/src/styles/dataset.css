@@ -1423,3 +1423,30 @@
   color: var(--text-soft);
   margin-right: 4px;
 }
+
+.caption-translation-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0;
+  flex-wrap: wrap;
+}
+
+.caption-translation-toolbar select {
+  min-width: 110px;
+}
+
+.caption-translation-error {
+  color: var(--danger, #d14d4d);
+}
+
+.caption-tag-text {
+  display: block;
+}
+
+.caption-tag-translation {
+  display: block;
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.3;
+}

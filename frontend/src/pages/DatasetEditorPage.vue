@@ -10,6 +10,8 @@ import PathPickerDialog from "../components/PathPickerDialog.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
 import { useServerPathPick } from "../composables/useServerPathPick"
 import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
+import { useTagTranslations } from "../composables/useTagTranslations"
+import type { TagTranslationProvider } from "../api/dataset"
 
 const { t } = useI18n()
 const route = useRoute()
@@ -57,6 +59,9 @@ const rightPanelMode = ref<RightPanelMode>("caption")
 const selectMenuOpen = ref(false)
 const sessionHistory = ref<DatasetHistory>({ can_undo: false, can_redo: false, changes: [] })
 const previewOpen = ref(false)
+const showTranslations = ref(false)
+const translationProvider = ref<TagTranslationProvider>("danbooru")
+const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor, clear: clearTranslations } = useTagTranslations()
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
 
@@ -106,6 +111,11 @@ const workingScopeFullySelected = computed(
     filtered.value.length > 0 &&
     filtered.value.every((item) => selectedPaths.value.has(item.relative_path)),
 )
+
+async function loadTranslations() {
+  showTranslations.value = true
+  await resolveTranslations(captionTags.value, translationProvider.value)
+}
 const selectAllLabel = computed(() =>
   workingScopeFullySelected.value
     ? t("datasetEditor.gallery.deselectAll", { n: workingScopeCount.value })
@@ -169,6 +179,8 @@ function onChipDragEnd() {
 function choose(item: DatasetItem, event?: MouseEvent) {
   selected.value = item.relative_path
   caption.value = item.caption
+  showTranslations.value = false
+  clearTranslations()
   rightPanelMode.value = "caption"
   if (!event) return
   const index = filtered.value.findIndex((candidate) => candidate.relative_path === item.relative_path)
@@ -554,6 +566,18 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
               download
             >{{ t("datasetEditor.caption.downloadCaption") }}</a>
           </div>
+          <div class="caption-translation-toolbar">
+            <button type="button" class="dataset-tool-secondary" :disabled="translationsLoading || !captionTags.length" @click="loadTranslations">
+              {{ translationsLoading ? t("datasetEditor.caption.translationLoading") : t("datasetEditor.caption.translationAction") }}
+            </button>
+            <select v-model="translationProvider" :aria-label="t('datasetEditor.caption.translationProvider')">
+              <option value="danbooru">Danbooru</option>
+              <option value="mymemory">MyMemory</option>
+              <option value="llm">LLM</option>
+              <option value="auto">{{ t("datasetEditor.caption.translationAuto") }}</option>
+            </select>
+            <small v-if="translationsError" class="caption-translation-error">{{ translationsError }}</small>
+          </div>
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
               v-for="(tag, index) in captionTags"
@@ -566,7 +590,8 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
               @drop="onChipDrop(index, $event)"
               @dragend="onChipDragEnd"
             >
-              {{ tag }}
+              <span class="caption-tag-text">{{ tag }}</span>
+              <small v-if="showTranslations && translationFor(tag)" class="caption-tag-translation">{{ translationFor(tag) }}</small>
               <button type="button" :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)" @mousedown.stop>×</button>
             </span>
             <span class="chip-add">
