@@ -52,6 +52,7 @@ async def save_tag_translation_config(payload: dict):
 
 
 @router.post("/tag-translation/resolve")
+@router.post("/dataset-editor/tag-translations")
 async def resolve_tag_translations(req: TagTranslationRequest):
     items = _items(req.tags)
     await dictionary_service.ensure(req.locale)
