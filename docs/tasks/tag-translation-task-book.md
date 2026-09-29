@@ -1,11 +1,11 @@
 ## 计划元数据
 - Plan ID: TAG-TRANSLATION-20260929
-- Version: v2-draft
+- Version: v2.1-draft
 - Last updated: 2026-09-29 00:00 Asia/Shanghai
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: v2 优化设计审核
+- Current active phase: 前端缓存生命周期治理设计审核
 - Execution readiness: drafting
 
 ## 目标
@@ -111,15 +111,17 @@
   - 施工只允许在 `feat/tag-translation` worktree。
   - 词库下载、缓存和模型不进入 Git 提交。
 
-## v2 优化审计（当前）
+## v2.1 优化审计（当前）
 
-- 用户要求：先审核设计，再优化切图持久化、统一 UI、明确免费翻译接口。
+- 用户要求：先审核设计，再优化切图持久化、统一 UI、明确免费翻译接口；随后明确指出前端缓存清空是全局生命周期问题，不能只修 tag 翻译。
 - 设计制品：[v2 优化设计书](../design/tag-translation-v2-ux-persistence-design.md)。
+- 横向设计制品：[前端缓存生命周期治理设计书](../design/frontend-cache-lifecycle-design.md)。
 - 核查事实：choose() 关闭显示且清前端缓存；MyMemory 未持久化；只有 MyMemory 免费 provider 已接入。
+- 全局核查事实：生产前端未发现无范围的 `localStorage.clear()` 或 `sessionStorage.clear()`；当前主要问题是页面状态、资源缓存、请求取消和持久数据删除没有统一边界。
 - 新发现：LLM 行对象未经 text 抽取直接进入字符串字段；原测试缺少非空 LLM 响应覆盖。
 - 早期规划中的最长匹配尚未实现；现有词库只做精确查询。需保留原范围缺项，不能由 UI 优化完成声明覆盖。
-- 本轮交付：设计文档；功能代码与正在运行的服务未修改。
-- v2 implementation: pending，等待用户审阅本文设计；不继承下方 v1 完成记录作为 v2 验收证据。
+- 本轮交付：全局缓存生命周期设计文档、tag v2 设计书联动修订；功能代码与正在运行的服务未修改。
+- v2.1 implementation: pending，等待用户审阅横向缓存设计和 tag v2 设计；不继承下方 v1 完成记录作为 v2 验收证据。
 
 ## v1 进度台账（历史记录，受上述审计修正）
 - Overall progress: 标签释义功能、provider、LLM 配置、Dataset Editor 展示、真实接口和浏览器交互验收均已完成，发布审计记录已建立。
@@ -132,4 +134,4 @@
 - Residual risks: Qwen 0.8B 真实模型质量尚未在本机启动；Node 24 构建会产生 dist hash 漂移，发布构建应使用项目规定 Node 版本；这些边界已记录在发布审计。
 
 ## 下一步动作
-审核 v2 设计书第 10 节的四项建议；依据审核结论再修订实施阶段与验收台账。
+审核[前端缓存生命周期治理设计书](../design/frontend-cache-lifecycle-design.md)第 9 节的四项决定，以及[tag v2 设计书](../design/tag-translation-v2-ux-persistence-design.md)第 10 节的四项建议；依据审核结论再建立实现阶段和迁移清单。
