@@ -112,15 +112,16 @@
   - 词库下载、缓存和模型不进入 Git 提交。
 
 ## 进度台账
-- Overall progress: 设计书、迁移清单和词库探针已完成，开始迁移 Aaalice 后端核心。
+- Overall progress: Aaalice 核心模块、Danbooru API、MyMemory/LLM 回退和 Dataset Editor 首版展示已接入，正在补齐配置、接口测试和失败场景。
 - Phase 1: done
 - Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
 - Phase 5: pending
-- Validation status: 已完成分支/worktree、设计书、Aaalice 依赖扫描、许可证边界和 ffdkj SQLite 探针；尚未完成后端模块迁移和 FastAPI 接口。
-- Residual risks: 外部词库许可仍需发布前复核；Aaalice 核心模块可迁移但 API/ComfyUI 耦合需隔离；Qwen 0.8B 质量尚未实测。
+- Validation status: Python 编译、路由导入、词库单元测试 2 项、前端 typecheck/lint、前端 39 个测试文件 248 项测试和生产构建已通过；后端完整接口 provider 测试、真实下载路径和原文保护端到端测试尚未完成。
+- Residual risks: 外部词库许可仍需发布前复核；MyMemory/LLM provider 尚未有端到端 mock 覆盖；Qwen 0.8B 质量和配置 UI 尚未实测。
 
 ## 下一步动作
-在 mikazuki/tag_translation/ 中迁移 Aaalice 词库核心和通用配置/服务核心，并先建立后端 provider 单元测试。
+为 tag-translation API 增加 provider mock、原文保护和配置读取测试，并修正 MyMemory/LLM provider 的回退契约。
+
 
