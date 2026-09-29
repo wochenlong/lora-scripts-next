@@ -223,4 +223,3 @@ class TranslationStore:
     def count(self):
         with self._connect() as connection:
             return connection.execute("SELECT COUNT(*) FROM translations").fetchone()[0]
-

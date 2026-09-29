@@ -1,7 +1,7 @@
 # 标签翻译发布审计
 
-日期：2026-09-29  
-分支：`feat/tag-translation`  
+日期：2026-09-29
+分支：`feat/tag-translation`
 最后代码提交：`260958c`
 
 ## 交付物
