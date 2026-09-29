@@ -1,9 +1,9 @@
 # 标签中文释义设计书
 
-状态：Draft（待审计）  
-分支：`feat/tag-translation`  
-基线：2026-09-29 的 `origin/dev`（`fb997d4`）  
-关联需求：[Issue #365](https://github.com/wochenlong/lora-scripts-next/issues/365)  
+状态：Draft（待审计）
+分支：`feat/tag-translation`
+基线：2026-09-29 的 `origin/dev`（`fb997d4`）
+关联需求：[Issue #365](https://github.com/wochenlong/lora-scripts-next/issues/365)
 相关需求：[Issue #40](https://github.com/wochenlong/lora-scripts-next/issues/40)、[Issue #210](https://github.com/wochenlong/lora-scripts-next/issues/210)
 
 ## 1. 摘要

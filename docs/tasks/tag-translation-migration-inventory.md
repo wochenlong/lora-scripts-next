@@ -1,9 +1,9 @@
 # 标签翻译迁移清单与 Phase 1 探针证据
 
-日期：2026-09-29  
-目标分支：`feat/tag-translation`  
-关联任务书：`docs/tasks/tag-translation-task-book.md`  
-参考项目：`ComfyUI-Autocomplete-Aaalice`  
+日期：2026-09-29
+目标分支：`feat/tag-translation`
+关联任务书：`docs/tasks/tag-translation-task-book.md`
+参考项目：`ComfyUI-Autocomplete-Aaalice`
 参考快照：`37cabccf9b4d799b7b53a1e2d74f2cd214fe91d0`（2026-08-31）
 
 ## 1. 来源和许可证
