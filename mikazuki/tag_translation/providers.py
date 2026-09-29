@@ -38,7 +38,7 @@ async def translate_mymemory(tags: list[str], locale: str = "zh-CN", *, timeout_
         return {}
     timeout = aiohttp.ClientTimeout(total=timeout_seconds)
     semaphore = asyncio.Semaphore(4)
-    async with aiohttp.ClientSession(timeout=timeout) as session:
+    async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
         async def run(tag: str) -> tuple[str, str | None]:
             async with semaphore:
                 try:
@@ -48,4 +48,3 @@ async def translate_mymemory(tags: list[str], locale: str = "zh-CN", *, timeout_
 
         pairs = await asyncio.gather(*(run(tag) for tag in dict.fromkeys(tags)))
     return {tag: value for tag, value in pairs if value}
-
