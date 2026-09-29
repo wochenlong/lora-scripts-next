@@ -3,7 +3,7 @@ import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "v
 import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
-import { datasetApi, type ChangedItem, type DatasetHistory, type DatasetItem } from "../api/dataset"
+import { datasetApi, type ChangedItem, type DatasetItem } from "../api/dataset"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
@@ -11,7 +11,7 @@ import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
 import { useServerPathPick } from "../composables/useServerPathPick"
 import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 import { useTagTranslations } from "../composables/useTagTranslations"
-import type { TagTranslationProvider } from "../api/dataset"
+import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
 
 const { t } = useI18n()
 const route = useRoute()
@@ -20,17 +20,19 @@ type RightPanelMode = "caption" | "filter" | "batch"
 
 const PAGE_SIZE_KEY = "dataset-editor-page-size"
 const DRAWER_WIDTH = "380px"
-const path = ref("")
-const root = ref("")
-const items = ref<DatasetItem[]>([])
-const tags = ref<Array<{ tag: string; count: number }>>([])
-const categories = ref<Array<{ name: string; value: string; count: number }>>([])
-const category = ref("")
-const query = ref("")
-const selected = ref("")
-const selectedPaths = ref(new Set<string>())
+const editorSession = useDatasetEditorSession()
+const path = ref(editorSession.lastPath.value)
+const root = editorSession.lastRoot
+const items = editorSession.items
+const tags = editorSession.tags
+const categories = editorSession.categories
+const category = editorSession.category
+const query = editorSession.query
+const selected = editorSession.selected
+const selectedPaths = editorSession.selectedPaths
 const lastSelectedIndex = ref<number>()
-const caption = ref("")
+const initialItem = items.value.find((item) => item.relative_path === selected.value)
+const caption = ref(initialItem && root.value ? editorSession.getDraft(root.value, initialItem.relative_path) ?? initialItem.caption : "")
 const append = ref("")
 const remove = ref("")
 const replaceFrom = ref("")
@@ -52,16 +54,16 @@ const {
 } = useServerPathPick()
 const appendPosition = ref<"front" | "back">("back")
 const newCaptionTag = ref("")
-const page = ref(1)
+const page = editorSession.page
 const pageSize = ref(Number(localStorage.getItem(PAGE_SIZE_KEY)) || 48)
 const historyOpen = ref(false)
-const rightPanelMode = ref<RightPanelMode>("caption")
+const rightPanelMode = editorSession.rightPanelMode
 const selectMenuOpen = ref(false)
-const sessionHistory = ref<DatasetHistory>({ can_undo: false, can_redo: false, changes: [] })
+const sessionHistory = editorSession.history
 const previewOpen = ref(false)
-const showTranslations = ref(false)
-const translationProvider = ref<TagTranslationProvider>("danbooru")
-const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor, clear: clearTranslations } = useTagTranslations()
+const showTranslations = editorSession.showTranslations
+const translationProvider = editorSession.translationProvider
+const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor } = useTagTranslations()
 const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsSaving = ref(false)
@@ -89,7 +91,7 @@ function onPreviewKeydown(event: KeyboardEvent) {
 }
 
 const { state: tagFilter, filteredItems: tagFilteredItems, visibleTagList, hasActiveFilter, toggleTag, clearTags, reset: resetTagFilter } =
-  useDatasetTagFilter(items, tags)
+  useDatasetTagFilter(items, tags, editorSession.tagFilter)
 
 const filtered = computed(() =>
   tagFilteredItems.value.filter(
@@ -211,11 +213,23 @@ function onChipDragEnd() {
   dragTagIndex.value = null
 }
 
+let restoringCaption = false
+
+function rememberCurrentDraft() {
+  if (!root.value || !selected.value) return
+  const item = items.value.find((candidate) => candidate.relative_path === selected.value)
+  if (!item) return
+  if (caption.value === item.caption) editorSession.clearDraft(root.value, selected.value)
+  else editorSession.setDraft(root.value, selected.value, caption.value)
+}
+
 function choose(item: DatasetItem, event?: MouseEvent) {
+  rememberCurrentDraft()
   selected.value = item.relative_path
-  caption.value = item.caption
-  showTranslations.value = false
-  clearTranslations()
+  editorSession.rememberSelection(item.relative_path)
+  restoringCaption = true
+  caption.value = root.value ? editorSession.getDraft(root.value, item.relative_path) ?? item.caption : item.caption
+  restoringCaption = false
   rightPanelMode.value = "caption"
   if (!event) return
   const index = filtered.value.findIndex((candidate) => candidate.relative_path === item.relative_path)
@@ -238,6 +252,7 @@ function choose(item: DatasetItem, event?: MouseEvent) {
 
 function apply(changes: ChangedItem[]) {
   const map = new Map(changes.map((item) => [item.image, item]))
+  editorSession.clearDrafts(root.value, changes.map((item) => item.image))
   items.value = items.value.map((item) => {
     const change = map.get(item.relative_path)
     return change ? { ...item, caption: change.caption, tags: change.tags, caption_exists: change.caption_exists } : item
@@ -258,21 +273,43 @@ async function refreshHistory() {
 
 async function scan() {
   if (!path.value.trim()) return
+  rememberCurrentDraft()
   loading.value = true
   try {
     const data = await datasetApi.scan(path.value)
+    const restoring = editorSession.lastRoot.value === data.root
+    const restoredPanel = rightPanelMode.value
+    // Keep server data as the baseline. Unsaved captions live in the session
+    // draft map and are loaded only into the active editor field, so a draft
+    // is never mistaken for a saved caption and cleared on the next switch.
+    const restoredItems = data.items
     root.value = data.root
     path.value = data.root
-    items.value = data.items
+    editorSession.rememberDataset(path.value, root.value)
+    items.value = restoredItems
     tags.value = data.tags.sort((a, b) => b.count - a.count)
     categories.value = data.categories
-    selectedPaths.value = new Set()
-    category.value = ""
-    query.value = ""
-    resetTagFilter()
-    page.value = 1
-    rightPanelMode.value = "caption"
-    if (data.items[0]) choose(data.items[0])
+    if (!restoring) {
+      selectedPaths.value = new Set()
+      selected.value = ""
+      sessionHistory.value = { can_undo: false, can_redo: false, changes: [] }
+      category.value = ""
+      query.value = ""
+      resetTagFilter()
+      page.value = 1
+      rightPanelMode.value = "caption"
+    }
+    const restoredItem = restoring && selected.value
+      ? restoredItems.find((item) => item.relative_path === selected.value)
+      : undefined
+    const nextItem = restoredItem || restoredItems[0]
+    if (nextItem) choose(nextItem)
+    else {
+      restoringCaption = true
+      caption.value = ""
+      restoringCaption = false
+    }
+    if (restoring) rightPanelMode.value = restoredPanel
     await Promise.all([refreshHistory(), refreshManagedPaths()])
     ElMessage.success(t("datasetEditor.scanMsg.loaded", { n: data.total }))
   } catch (error) {
@@ -408,8 +445,18 @@ watch([category, query, pageSize], () => {
   page.value = 1
   localStorage.setItem(PAGE_SIZE_KEY, String(pageSize.value))
 })
+watch(caption, () => {
+  if (!restoringCaption) rememberCurrentDraft()
+}, { flush: "sync" })
+watch([showTranslations, translationProvider, category, query, page, rightPanelMode], () => {
+  editorSession.rememberPreferences()
+})
 watch(() => [tagFilter.logic, tagFilter.selectedTags.size, tagFilter.excludeInput], () => {
   page.value = 1
+  editorSession.rememberPreferences()
+})
+watch(() => [tagFilter.search, tagFilter.searchMode, tagFilter.sortBy, tagFilter.order], () => {
+  editorSession.rememberPreferences()
 })
 watch(pageCount, (count) => {
   if (page.value > count) page.value = count
@@ -419,6 +466,8 @@ onActivated(() => {
   const queryPath = route?.query.path
   if (typeof queryPath === "string" && queryPath.trim() && queryPath !== path.value) {
     path.value = queryPath
+    void scan()
+  } else if (!items.value.length && path.value.trim()) {
     void scan()
   }
 })
@@ -636,7 +685,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
               @dragend="onChipDragEnd"
             >
               <span class="caption-tag-text">{{ tag }}</span>
-              <small v-if="showTranslations && translationFor(tag)" class="caption-tag-translation">{{ translationFor(tag) }}</small>
+              <small v-if="showTranslations && translationFor(tag, translationProvider)" class="caption-tag-translation">{{ translationFor(tag, translationProvider) }}</small>
               <button type="button" :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)" @mousedown.stop>×</button>
             </span>
             <span class="chip-add">

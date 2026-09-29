@@ -34,7 +34,7 @@ describe("useTagTranslations", () => {
     const state = useTagTranslations()
     await state.resolve(["unknown"], "danbooru")
     expect(state.translationFor("unknown")).toBe("未知")
-    state.clear()
+    state.clearCache()
     expect(state.translationFor("unknown")).toBe("")
     expect(state.error.value).toBe("")
   })

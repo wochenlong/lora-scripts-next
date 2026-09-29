@@ -10,8 +10,18 @@ import {
   type TagSortBy,
 } from "../dataset/tagFilter"
 
-export function useDatasetTagFilter<T extends { tags: string[] }>(items: Ref<T[]>, globalTags: Ref<TagCount[]>) {
-  const state = reactive({
+export interface DatasetTagFilterState {
+  selectedTags: Set<string>
+  logic: TagFilterLogic
+  search: string
+  searchMode: TagSearchMode
+  sortBy: TagSortBy
+  order: SortOrder
+  excludeInput: string
+}
+
+function createState(): DatasetTagFilterState {
+  return {
     selectedTags: new Set<string>(),
     logic: "and" as TagFilterLogic,
     search: "",
@@ -19,7 +29,15 @@ export function useDatasetTagFilter<T extends { tags: string[] }>(items: Ref<T[]
     sortBy: "frequency" as TagSortBy,
     order: "desc" as SortOrder,
     excludeInput: "",
-  })
+  }
+}
+
+export function useDatasetTagFilter<T extends { tags: string[] }>(
+  items: Ref<T[]>,
+  globalTags: Ref<TagCount[]>,
+  sharedState?: DatasetTagFilterState,
+) {
+  const state = reactive(sharedState || createState())
 
   const excludedTags = computed(() => new Set(state.excludeInput.split(/[,，\n]/).map((tag) => tag.trim()).filter(Boolean)))
   const filteredItems = computed(() => filterItemsByTags(items.value, state.selectedTags, state.logic, excludedTags.value))

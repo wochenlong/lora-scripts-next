@@ -1,18 +1,22 @@
 ## 计划元数据
-- Plan ID: TAG-TRANSLATION-20260929
-- Version: v2.1-draft
+- Plan ID: DATASET-MODULE-20260930
+- Version: v3-dataset-module
 - Last updated: 2026-09-29 00:00 Asia/Shanghai
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: 前端缓存生命周期治理设计审核
+- Current active phase: 数据集模块状态保持与老 BUG 修复
 - Execution readiness: drafting
 
 ## 目标
-在 Next Trainer 的 Dataset Editor 中加入标签中文释义辅助展示。优先迁移成熟的 Aaalice 翻译模块，实现 Danbooru 词库优先、免费网络翻译和 OpenAI 兼容 LLM 可选兜底；原始英文标签、caption、打标结果、训练配置和导出内容保持不变。
+在 Next Trainer 中完成数据集模块状态保持和编辑器恢复。标签中文释义作为 Dataset Editor 的一个资源缓存域继续建设：优先使用 Danbooru 词库，支持免费网络翻译和 OpenAI 兼容 LLM 兜底；同时记忆上次打开的数据集，保留编辑草稿、当前图片、筛选和翻译状态。原始英文标签、caption、打标结果、训练配置和导出内容保持不变。
 
 ## 范围与约束
 - In scope:
+  - 修复从 Dataset Editor 切换到 Tasks/Settings/Training 后返回，数据集和编辑内容被清空的老 BUG。
+  - 建立 Dataset Editor session 状态，记忆上次数据集路径、当前图片、未保存 caption 草稿、选择、筛选和翻译展示状态。
+  - 按数据集根路径隔离草稿和资源，支持浏览器刷新后的路径恢复与重新扫描。
+  - 按全局缓存生命周期设计迁移资源缓存、请求取消和持久化 key 的边界。
   - 迁移并适配 Aaalice 的词库下载、SQLite 查询、翻译调度、缓存和 LLM 响应校验。
   - 接入 Next Trainer FastAPI 和 Dataset Editor Vue 页面。
   - 支持 Danbooru 词库、MyMemory 可选 provider、本地 Qwen OpenAI 兼容服务和远程 LLM API。
@@ -21,6 +25,7 @@
   - 修改打标模型输出或 caption 文件。
   - 把中文释义写入训练数据。
   - 独立翻译数据库管理后台。
+  - 将所有前端页面改造成全局 KeepAlive；页面临时 UI 状态仍按页面语义清理。
   - 直接迁移 ComfyUI 页面和 DOM 监听。
   - 直接复制 WeiLin GPL-2.0-only 实现。
 - Constraints:
@@ -123,6 +128,18 @@
 - 本轮交付：全局缓存生命周期设计文档、tag v2 设计书联动修订；功能代码与正在运行的服务未修改。
 - v2.1 implementation: pending，等待用户审阅横向缓存设计和 tag v2 设计；不继承下方 v1 完成记录作为 v2 验收证据。
 
+## v3 数据集模块施工范围（当前）
+
+- 用户新增要求：任务正式从 tag 翻译上升到数据集模块；查看四张截图后确认，Dataset Editor 从任务模块返回会丢失已打开数据集和编辑状态。
+- 复现证据：[01.png](C:/Users/25454/Desktop/新建文件夹/01.png)、[02.png](C:/Users/25454/Desktop/新建文件夹/02.png)、[03.png](C:/Users/25454/Desktop/新建文件夹/03.png)、[04.png](C:/Users/25454/Desktop/新建文件夹/04.png)。
+- 设计制品：[数据集模块状态保持与编辑器恢复设计](../design/dataset-module-state-retention-design.md)。
+- 施工边界：优先修复 Dataset Editor 的跨路由恢复和草稿隔离，再回收 tag 翻译缓存；不通过全局 KeepAlive 掩盖页面状态问题。
+- 当前实现策略：应用级 session 状态 + 版本化持久化 key；数据集内容刷新后重新 scan，未保存 caption 按数据集根路径和相对路径恢复。
+- 验收重点：任务页往返、数据集页签往返、浏览器刷新、数据集切换隔离、旧请求竞态和原文保护。
+- 已完成实现：`useDatasetEditorSession` 保存数据集路径、根目录、选中项、草稿、翻译偏好、分页和面板状态；`useTagTranslations` 改为应用级 provider/locale/tag 缓存；Dataset Editor scan/choose/save 流程已接入恢复和草稿隔离。
+- 已增加验证：session 单元测试、Dataset Editor 卸载后重新挂载的草稿恢复测试；前端类型检查和相关 8 项测试通过。
+- 待完成验证：完整前端检查、真实浏览器从 Tasks 返回 Dataset 的交互、刷新后重新 scan、数据集切换隔离和后端原文保护回归。
+
 ## v1 进度台账（历史记录，受上述审计修正）
 - Overall progress: 标签释义功能、provider、LLM 配置、Dataset Editor 展示、真实接口和浏览器交互验收均已完成，发布审计记录已建立。
 - Phase 1: done
@@ -134,4 +151,4 @@
 - Residual risks: Qwen 0.8B 真实模型质量尚未在本机启动；Node 24 构建会产生 dist hash 漂移，发布构建应使用项目规定 Node 版本；这些边界已记录在发布审计。
 
 ## 下一步动作
-审核[前端缓存生命周期治理设计书](../design/frontend-cache-lifecycle-design.md)第 9 节的四项决定，以及[tag v2 设计书](../design/tag-translation-v2-ux-persistence-design.md)第 10 节的四项建议；依据审核结论再建立实现阶段和迁移清单。
+执行[数据集模块状态保持与编辑器恢复设计](../design/dataset-module-state-retention-design.md)的实现与验收；完成后再依据[前端缓存生命周期治理设计书](../design/frontend-cache-lifecycle-design.md)迁移其他缓存域，并回收[tag v2 设计书](../design/tag-translation-v2-ux-persistence-design.md)中的剩余翻译体验项。
