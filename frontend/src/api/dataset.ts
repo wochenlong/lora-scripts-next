@@ -23,6 +23,7 @@ export interface DatasetHistory { can_undo: boolean; can_redo: boolean; changes:
 export type TagTranslationProvider = "danbooru" | "mymemory" | "auto" | "llm"
 export interface TagTranslation { tag: string; translation: string | null; source: string | null; status: "hit" | "missing"; category?: number | null; post_count?: number | null }
 export interface TagTranslationResponse { items: TagTranslation[]; provider: TagTranslationProvider; locale: string }
+export interface TagTranslationConfig { deepseek: { endpoint: string; model: string; api_key: string; api_key_configured?: boolean } }
 
 const post = <T>(path: string, body: unknown) => apiData<T>(path, { method: "POST", body: JSON.stringify(body) })
 export const datasetApi = {
@@ -34,4 +35,7 @@ export const datasetApi = {
   history: (root: string) => post<DatasetHistory>("/api/dataset-editor/history", { root }),
   tagTranslations: (tags: string[], provider: TagTranslationProvider, locale = "zh-CN") =>
     post<TagTranslationResponse>("/api/tag-translation/resolve", { tags, provider, locale }),
+  tagTranslationConfig: () => apiData<TagTranslationConfig>("/api/tag-translation/config"),
+  saveTagTranslationConfig: (config: Partial<TagTranslationConfig["deepseek"]>) =>
+    apiData<TagTranslationConfig>("/api/tag-translation/config", { method: "PUT", body: JSON.stringify({ deepseek: config }) }),
 }

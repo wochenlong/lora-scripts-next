@@ -1450,3 +1450,18 @@
   font-size: 11px;
   line-height: 1.3;
 }
+
+.caption-translation-settings {
+  display: grid;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  margin-bottom: 8px;
+}
+
+.caption-translation-settings label {
+  display: grid;
+  gap: 4px;
+  font-size: 12px;
+}

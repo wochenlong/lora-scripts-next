@@ -62,6 +62,13 @@ const previewOpen = ref(false)
 const showTranslations = ref(false)
 const translationProvider = ref<TagTranslationProvider>("danbooru")
 const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor, clear: clearTranslations } = useTagTranslations()
+const translationSettingsOpen = ref(false)
+const translationSettingsLoading = ref(false)
+const translationSettingsSaving = ref(false)
+const translationSettingsError = ref("")
+const translationEndpoint = ref("")
+const translationModel = ref("")
+const translationApiKey = ref("")
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
 
@@ -115,6 +122,34 @@ const workingScopeFullySelected = computed(
 async function loadTranslations() {
   showTranslations.value = true
   await resolveTranslations(captionTags.value, translationProvider.value)
+}
+
+async function loadTranslationSettings() {
+  if (translationSettingsLoading.value || translationEndpoint.value) return
+  translationSettingsLoading.value = true
+  translationSettingsError.value = ""
+  try {
+    const config = await datasetApi.tagTranslationConfig()
+    translationEndpoint.value = config.deepseek.endpoint
+    translationModel.value = config.deepseek.model
+  } catch (caught) {
+    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    translationSettingsLoading.value = false
+  }
+}
+
+async function saveTranslationSettings() {
+  translationSettingsSaving.value = true
+  translationSettingsError.value = ""
+  try {
+    await datasetApi.saveTagTranslationConfig({ endpoint: translationEndpoint.value, model: translationModel.value, ...(translationApiKey.value ? { api_key: translationApiKey.value } : {}) })
+    translationApiKey.value = ""
+  } catch (caught) {
+    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    translationSettingsSaving.value = false
+  }
 }
 const selectAllLabel = computed(() =>
   workingScopeFullySelected.value
@@ -576,7 +611,17 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
               <option value="llm">LLM</option>
               <option value="auto">{{ t("datasetEditor.caption.translationAuto") }}</option>
             </select>
+            <button type="button" class="dataset-tool-secondary" @click="translationSettingsOpen = !translationSettingsOpen; translationSettingsOpen && loadTranslationSettings()">
+              {{ t("datasetEditor.caption.translationSettings") }}
+            </button>
             <small v-if="translationsError" class="caption-translation-error">{{ translationsError }}</small>
+          </div>
+          <div v-if="translationSettingsOpen" class="caption-translation-settings">
+            <label>{{ t("datasetEditor.caption.translationEndpoint") }}<input v-model="translationEndpoint" :placeholder="t('datasetEditor.caption.translationEndpointPlaceholder')"></label>
+            <label>{{ t("datasetEditor.caption.translationModel") }}<input v-model="translationModel" :placeholder="t('datasetEditor.caption.translationModelPlaceholder')"></label>
+            <label>{{ t("datasetEditor.caption.translationKey") }}<input v-model="translationApiKey" type="password" :placeholder="t('datasetEditor.caption.translationKeyPlaceholder')"></label>
+            <button type="button" class="dataset-tool-secondary" :disabled="translationSettingsSaving" @click="saveTranslationSettings">{{ translationSettingsSaving ? t("datasetEditor.caption.translationSaving") : t("datasetEditor.caption.translationSave") }}</button>
+            <small v-if="translationSettingsError" class="caption-translation-error">{{ translationSettingsError }}</small>
           </div>
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
