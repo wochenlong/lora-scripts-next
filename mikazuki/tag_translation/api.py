@@ -41,6 +41,16 @@ async def tag_translation_status():
     return _success({"dictionary": dictionary_service.status(), "llm": translation_manager.status()})
 
 
+@router.get("/tag-translation/config")
+async def tag_translation_config():
+    return _success(translation_manager.get_config())
+
+
+@router.put("/tag-translation/config")
+async def save_tag_translation_config(payload: dict):
+    return _success(translation_manager.save_config(payload))
+
+
 @router.post("/tag-translation/resolve")
 async def resolve_tag_translations(req: TagTranslationRequest):
     items = _items(req.tags)
