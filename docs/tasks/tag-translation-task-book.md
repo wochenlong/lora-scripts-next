@@ -112,7 +112,7 @@
   - 词库下载、缓存和模型不进入 Git 提交。
 
 ## 进度台账
-- Overall progress: Aaalice 核心模块、Danbooru API、MyMemory/LLM 回退、配置界面和 Dataset Editor 首版展示已接入，正在补齐真实词库下载和端到端页面验收。
+- Overall progress: Aaalice 核心模块、Danbooru API、MyMemory/LLM 回退、配置界面和 Dataset Editor 首版展示已接入，正在执行真实词库/接口和页面端到端验收。
 - Phase 1: done
 - Phase 2: in progress
 - Phase 3: pending
@@ -122,7 +122,8 @@
 - Residual risks: 外部词库许可仍需发布前复核；Qwen 0.8B 质量和实际服务兼容性尚未实测；前端构建在 Node 24 下产生 dist hash 漂移，未提交 dist。
 
 ## 下一步动作
-使用真实临时用户数据目录下载 ffdkj SQLite，并通过 FastAPI 测试客户端验收词库、MyMemory 和 LLM provider 状态；随后补请求取消和页面验收。
+使用真实临时用户数据目录下载 ffdkj SQLite，并通过 FastAPI 测试客户端验收词库、MyMemory 和 LLM provider 状态；随后补请求取消和页面验收。当前 API 另提供 `/api/dataset-editor/tag-translations` 兼容入口。
+
 
 
 
