@@ -112,17 +112,18 @@
   - 词库下载、缓存和模型不进入 Git 提交。
 
 ## 进度台账
-- Overall progress: Aaalice 核心模块、Danbooru API、MyMemory/LLM 回退、配置界面和 Dataset Editor 首版展示已接入，正在执行真实词库/接口和页面端到端验收。
+- Overall progress: 词库、provider、LLM 配置和 Dataset Editor 展示已接入，后端与前端自动化验证通过，正在收口端到端环境与发布文档。
 - Phase 1: done
 - Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
 - Phase 5: pending
-- Validation status: Python 编译、路由导入、后端标签翻译测试 8 项、前端 typecheck/lint、前端 39 个测试文件 248 项测试和生产构建已通过；MyMemory 实际调用返回“蓝眼睛”；API provider mock 和原文保护测试已通过；真实词库下载路径和页面端到端测试尚未完成。
-- Residual risks: 外部词库许可仍需发布前复核；Qwen 0.8B 质量和实际服务兼容性尚未实测；前端构建在 Node 24 下产生 dist hash 漂移，未提交 dist。
+- Validation status: Python 编译、路由导入、后端标签翻译测试 8 项、Dataset Editor 相关后端测试共 24 项、前端 typecheck/lint、前端 39 个测试文件 248 项测试和生产构建已通过；MyMemory 实际调用返回“蓝眼睛”；真实 SQLite API 查询返回蓝瞳/长发，原文保护 mock 已通过。尚未完成真实浏览器页面和发布包验收。
+- Residual risks: 外部词库许可仍需发布前复核；Qwen 0.8B 质量和实际服务兼容性尚未实测；前端 Node 24 构建会产生 dist hash 漂移，当前未提交构建产物。
 
 ## 下一步动作
-使用真实临时用户数据目录下载 ffdkj SQLite，并通过 FastAPI 测试客户端验收词库、MyMemory 和 LLM provider 状态；随后补请求取消和页面验收。当前 API 另提供 `/api/dataset-editor/tag-translations` 兼容入口。
+完成浏览器页面验收和用户数据目录下载/升级路径检查，随后更新第三方说明和发布边界。当前 API 提供 `/api/dataset-editor/tag-translations` 兼容入口。
+
 
 
 
