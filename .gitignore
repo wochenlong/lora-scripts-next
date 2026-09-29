@@ -15,6 +15,7 @@ outputs/
 scripts/dev/configs/
 
 assets/config.json
+assets/tag_translation/
 assets/readme/drafts/
 
 py310
