@@ -45,3 +45,21 @@ it("preserves an unknown imported path when confirming its specification", async
   await wrapper.get('[data-spec="2.9b"]').setValue(true)
   expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["D:/models/custom.safetensors"])
 })
+it("does not overwrite remembered custom paths when mounting a default configuration", async () => {
+  localStorage.setItem("anima-model-paths", JSON.stringify({ "2b": "D:/custom/base.safetensors" }))
+  const wrapper = setup()
+  await wrapper.get('[data-spec="2.9b"]').setValue(true)
+  await wrapper.setProps({ modelValue: large })
+  await wrapper.get('[data-spec="2b"]').setValue(true)
+  expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual(["D:/custom/base.safetensors"])
+})
+it("recognizes a confirmed custom model after importing another configuration", async () => {
+  const custom = "D:/models/custom.safetensors"
+  const wrapper = setup(custom)
+  await wrapper.get('[data-spec="2.9b"]').setValue(true)
+  await wrapper.setProps({ modelValue: base })
+  await wrapper.setProps({ modelValue: custom })
+  expect((wrapper.get('[data-spec="2.9b"]').element as HTMLInputElement).checked).toBe(true)
+  await wrapper.get(".reset").trigger("click")
+  expect(wrapper.emitted("update:modelValue")?.at(-1)).toEqual([large])
+})

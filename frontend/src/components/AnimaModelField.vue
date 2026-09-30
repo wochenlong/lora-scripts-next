@@ -28,20 +28,25 @@ function persist() {
 }
 watch(() => props.modelValue, (value) => {
   const path = typeof value === "string" ? value : ""
-  if (path === pendingPath) { pendingPath = undefined; return }
+  const isLocalUpdate = path === pendingPath
+  pendingPath = undefined
+  if (isLocalUpdate) return
   const filename = path.replaceAll("\\", "/").split("/").pop()?.toLowerCase()
   selected.value = path === paths["2.9b"] || filename === "anima-2.9b-preview-v1.safetensors"
     ? "2.9b"
     : path === paths["2b"] || filename === "anima-base-v1.0.safetensors" ? "2b" : undefined
-  if (selected.value && path) { paths[selected.value] = path; persist() }
 }, { immediate: true })
 function update(value: FormValue) {
   const path = typeof value === "string" ? value : ""
   if (selected.value) { paths[selected.value] = path; persist() }
-  pendingPath = path
+  pendingPath = path === props.modelValue ? undefined : path
   emit("update:modelValue", path)
 }
 function select(spec: Spec) {
+  if (selected.value && typeof props.modelValue === "string" && props.modelValue
+    && props.modelValue !== defaults[selected.value]) {
+    paths[selected.value] = props.modelValue
+  }
   // Confirmation of an unknown imported model must not replace that model.
   if (!selected.value && typeof props.modelValue === "string" && props.modelValue) {
     paths[spec] = props.modelValue
