@@ -8,6 +8,8 @@ defineProps<{
   provider: TagTranslationProvider
   loading: boolean
   error: string
+  progressCompleted: number
+  progressTotal: number
 }>()
 
 const emit = defineEmits<{
@@ -32,7 +34,10 @@ const { t } = useI18n()
       <el-option value="llm" :label="t('datasetEditor.caption.translationProviderLlm')" />
       <el-option value="auto" :label="t('datasetEditor.caption.translationAuto')" />
     </el-select>
-    <small v-if="loading">{{ t("datasetEditor.caption.translationLoading") }}</small>
+    <small v-if="loading || progressTotal" class="caption-translation-progress">
+      <span v-if="loading">{{ t("datasetEditor.caption.translationLoading") }}</span>
+      <span v-if="progressTotal">{{ progressCompleted }}/{{ progressTotal }}</span>
+    </small>
     <small v-if="error" class="caption-translation-error">{{ error }}</small>
   </div>
 </template>

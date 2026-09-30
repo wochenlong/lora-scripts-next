@@ -1473,6 +1473,15 @@
   color: var(--danger, #d14d4d);
 }
 
+.caption-translation-progress {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
 .caption-tag-text {
   display: block;
 }

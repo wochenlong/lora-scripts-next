@@ -65,7 +65,7 @@ const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
 const translationProvider = editorSession.translationProvider
-const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor, clearCache: clearTranslationCache, cancelCurrent: cancelTranslations } = useTagTranslations()
+const { loading: translationsLoading, error: translationsError, progress: translationProgress, resolve: resolveTranslations, translationFor, clearCache: clearTranslationCache, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsSaving = ref(false)
@@ -700,6 +700,8 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
             :provider="translationProvider"
             :loading="translationsLoading"
             :error="translationsError"
+            :progress-completed="translationProgress.completed"
+            :progress-total="translationProgress.total"
             @update:enabled="setTranslationsEnabled"
             @update:provider="setTranslationProvider"
             @settings="translationSettingsOpen = true; loadTranslationSettings(); loadTranslationCacheStatus()"

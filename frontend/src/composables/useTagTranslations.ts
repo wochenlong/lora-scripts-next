@@ -18,6 +18,7 @@ const loading = ref(false)
 const error = ref("")
 const activeProvider = ref<TagTranslationProvider>("danbooru")
 const activeLocale = ref("zh-CN")
+const progress = ref({ completed: 0, total: 0 })
 let generation = 0
 
 function cacheKey(tag: string, provider: TagTranslationProvider, locale: string) {
@@ -44,7 +45,11 @@ export function useTagTranslations() {
       const entry = entries.value[cacheKey(tag, provider, locale)]
       return !entry || entry.status !== "hit"
     })
-    if (!missing.length) return
+    progress.value = { completed: unique.length - missing.length, total: unique.length }
+    if (!missing.length) {
+      loading.value = false
+      return
+    }
     const requestGeneration = ++generation
     loading.value = true
     error.value = ""
@@ -59,6 +64,10 @@ export function useTagTranslations() {
         for (const item of response.items) next[cacheKey(item.tag, provider, locale)] = item
         entries.value = next
         persistEntries()
+        progress.value = {
+          completed: unique.length - missing.length + Math.min(start + batch.length, missing.length),
+          total: unique.length,
+        }
       }
     } catch (caught) {
       if (requestGeneration === generation) error.value = caught instanceof Error ? caught.message : String(caught)
@@ -77,13 +86,15 @@ export function useTagTranslations() {
     try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore unavailable storage */ }
     error.value = ""
     loading.value = false
+    progress.value = { completed: 0, total: 0 }
   }
 
   function cancelCurrent() {
     generation += 1
     loading.value = false
     error.value = ""
+    progress.value = { completed: 0, total: 0 }
   }
 
-  return { translations, loading, error, resolve, translationFor, clearCache, cancelCurrent }
+  return { translations, loading, error, progress, resolve, translationFor, clearCache, cancelCurrent }
 }

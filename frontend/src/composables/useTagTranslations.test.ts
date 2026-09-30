@@ -7,7 +7,10 @@ vi.mock("../api/dataset", () => ({
 }))
 
 describe("useTagTranslations", () => {
-  beforeEach(() => vi.mocked(datasetApi.tagTranslations).mockReset())
+  beforeEach(() => {
+    vi.mocked(datasetApi.tagTranslations).mockReset()
+    useTagTranslations().clearCache()
+  })
 
   it("resolves missing tags and reuses the in-memory result", async () => {
     vi.mocked(datasetApi.tagTranslations).mockResolvedValue({
@@ -21,6 +24,7 @@ describe("useTagTranslations", () => {
     await state.resolve(["blue_eyes"], "danbooru")
 
     expect(state.translationFor("blue_eyes")).toBe("蓝瞳")
+    expect(state.progress.value).toEqual({ completed: 1, total: 1 })
     expect(datasetApi.tagTranslations).toHaveBeenCalledTimes(1)
     expect(datasetApi.tagTranslations).toHaveBeenCalledWith(["blue_eyes"], "danbooru", "zh-CN")
   })
