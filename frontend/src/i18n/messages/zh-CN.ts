@@ -930,7 +930,7 @@ export default {
       downloadImage: "下载图片",
       downloadCaption: "下载 caption",
       translationAction: "显示中文释义",
-      translationEnabled: "中文释义",
+      translationEnabled: "中文释义（全数据集）",
       translationLoading: "正在查询释义…",
       translationProvider: "翻译来源",
       translationProviderDanbooru: "仅本地词库",

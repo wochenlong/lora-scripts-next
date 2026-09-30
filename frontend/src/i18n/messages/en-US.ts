@@ -930,7 +930,7 @@ export default {
       downloadImage: "Download image",
       downloadCaption: "Download caption",
       translationAction: "Show Chinese meanings",
-      translationEnabled: "Chinese meanings",
+      translationEnabled: "Chinese meanings (all images)",
       translationLoading: "Looking up meanings…",
       translationProvider: "Translation provider",
       translationProviderDanbooru: "Local dictionary only",
