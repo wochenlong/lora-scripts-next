@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import { ElButton, ElCheckbox, ElInput, ElOption, ElRadio, ElRadioGroup, ElSelect } from "element-plus"
+import { ElButton, ElInput, ElOption, ElRadio, ElRadioGroup, ElSelect } from "element-plus"
 import type { SortOrder, TagCount, TagFilterLogic, TagSearchMode, TagSortBy } from "../../dataset/tagFilter"
+import type { TagTranslationProvider } from "../../api/dataset"
+import { useTagTranslations } from "../../composables/useTagTranslations"
 
 withDefaults(
   defineProps<{
@@ -15,8 +17,10 @@ withDefaults(
     excludeInput: string
     filteredCount: number
     showSelectAll?: boolean
+    translationEnabled?: boolean
+    translationProvider?: TagTranslationProvider
   }>(),
-  { showSelectAll: true },
+  { showSelectAll: true, translationEnabled: false, translationProvider: "danbooru" },
 )
 
 const emit = defineEmits<{
@@ -32,6 +36,7 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { translationFor } = useTagTranslations()
 
 function emitLogic(value: string | number | boolean | undefined) {
   emit("update:logic", String(value) as TagFilterLogic)
@@ -65,10 +70,14 @@ function emitLogic(value: string | number | boolean | undefined) {
       </el-radio>
     </el-radio-group>
     <div class="tag-filter-list">
-      <el-checkbox v-for="entry in tags" :key="entry.tag" :model-value="selectedTags.has(entry.tag)" class="tag-filter-item" @change="emit('toggleTag', entry.tag)">
-        <span>{{ entry.tag }}</span>
+      <label v-for="entry in tags" :key="entry.tag" class="tag-filter-item" :class="{ selected: selectedTags.has(entry.tag) }">
+        <input type="checkbox" :checked="selectedTags.has(entry.tag)" @change="emit('toggleTag', entry.tag)">
+        <span class="tag-filter-copy">
+          <span class="tag-filter-name">{{ entry.tag }}</span>
+          <small v-if="translationEnabled && translationFor(entry.tag, translationProvider)">{{ translationFor(entry.tag, translationProvider) }}</small>
+        </span>
         <small>{{ entry.count }}</small>
-      </el-checkbox>
+      </label>
       <p v-if="!tags.length" class="tag-filter-meta">{{ t("datasetEditor.tagFilter.empty") }}</p>
     </div>
     <small v-if="selectedTags.size" class="tag-filter-meta">{{ t("datasetEditor.tagFilter.selectedCount", { k: selectedTags.size }) }}</small>

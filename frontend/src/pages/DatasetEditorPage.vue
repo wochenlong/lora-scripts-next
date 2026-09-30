@@ -766,6 +766,8 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
           :exclude-input="tagFilter.excludeInput"
           :filtered-count="filtered.length"
           :show-select-all="false"
+          :translation-enabled="showTranslations"
+          :translation-provider="translationProvider"
           @update:logic="tagFilter.logic = $event"
           @update:search="tagFilter.search = $event"
           @update:search-mode="tagFilter.searchMode = $event"

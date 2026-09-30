@@ -990,34 +990,74 @@
 
 .tag-filter-list {
   display: grid;
-  gap: 2px;
-  max-height: 220px;
+  gap: 4px;
+  max-height: 360px;
   overflow: auto;
+  padding: 2px;
 }
 
 .tag-filter-item {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 7px;
-  padding: 3px 5px;
-  border-radius: 6px;
+  gap: 8px;
+  min-height: 38px;
+  padding: 6px 9px;
+  color: var(--text-label);
+  background: color-mix(in srgb, var(--surface-soft) 76%, transparent);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
   cursor: pointer;
 }
 
 .tag-filter-item:hover {
-  background: var(--surface-soft);
+  background: color-mix(in srgb, var(--accent-soft) 48%, var(--surface-soft));
+  border-color: color-mix(in srgb, var(--accent) 28%, var(--border));
 }
 
-.tag-filter-item span {
-  flex: 1;
+.tag-filter-item.selected {
+  background: var(--accent-soft);
+  border-color: color-mix(in srgb, var(--accent) 42%, var(--border));
+}
+
+.tag-filter-item > input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.tag-filter-copy {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+  user-select: text;
+}
+
+.tag-filter-name,
+.tag-filter-copy small {
   overflow: hidden;
-  font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.tag-filter-name {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.tag-filter-copy small {
+  color: var(--text-soft);
+  font-size: 11px;
+  line-height: 1.25;
+  user-select: text;
+}
+
 .tag-filter-item small {
   color: var(--text-faint);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
 }
 
 .tag-filter-meta {
