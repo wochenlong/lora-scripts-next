@@ -30,6 +30,11 @@ MAX_SEARCH_LENGTH = 100
 MAX_SEARCH_RESULTS = 200
 
 
+def normalize_tag_key(value):
+    normalized = unicodedata.normalize("NFKC", str(value or "")).strip().casefold()
+    return " ".join(normalized.replace("_", " ").split())
+
+
 def normalize_search_query(value):
     return " ".join(unicodedata.normalize("NFKC", str(value or "")).strip().split())
 
@@ -165,32 +170,43 @@ class ChineseDictionaryService:
         if not names:
             return {}
         rows = []
+        lookup_keys = {name: normalize_tag_key(name) for name in names}
+        variants = list(dict.fromkeys([key for key in lookup_keys.values() if key]))
         with self._database_lock, closing(self._connect_readonly()) as connection:
-            for start in range(0, len(names), 400):
-                chunk = names[start : start + 400]
+            for start in range(0, len(variants), 400):
+                chunk = variants[start : start + 400]
                 placeholders = ",".join("?" for _ in chunk)
                 rows.extend(
                     connection.execute(
                         f"""
                         SELECT name, category, cn_name, post_count
                           FROM tags
-                         WHERE name IN ({placeholders})
+                         WHERE lower(replace(name, '_', ' ')) IN ({placeholders})
                            AND TRIM(COALESCE(cn_name, '')) != ''
                         """,
                         chunk,
                     ).fetchall()
                 )
-        return {
-            row["name"]: {
-                "tag_name": row["name"],
-                "text": row["cn_name"].strip(),
-                "category": int(row["category"] or 0),
-                "post_count": int(row["post_count"] or 0),
-                "origin": "ffdkj",
-            }
-            for row in rows
-            if row["cn_name"].strip().casefold() != row["name"].casefold()
-        }
+        by_key = {}
+        for row in rows:
+            if row["cn_name"].strip().casefold() == row["name"].casefold():
+                continue
+            key = normalize_tag_key(row["name"])
+            previous = by_key.get(key)
+            if previous is None or len(row["name"]) > len(previous["name"]):
+                by_key[key] = row
+        result = {}
+        for raw_name, key in lookup_keys.items():
+            row = by_key.get(key)
+            if row is not None:
+                result[raw_name] = {
+                    "tag_name": raw_name,
+                    "text": row["cn_name"].strip(),
+                    "category": int(row["category"] or 0),
+                    "post_count": int(row["post_count"] or 0),
+                    "origin": "ffdkj",
+                }
+        return result
 
     def search(self, query, limit=50):
         value = normalize_search_query(query)

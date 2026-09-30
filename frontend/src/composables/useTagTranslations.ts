@@ -1,7 +1,19 @@
 import { computed, ref } from "vue"
 import { datasetApi, type TagTranslation, type TagTranslationProvider } from "../api/dataset"
 
-const entries = ref<Record<string, TagTranslation>>({})
+const STORAGE_KEY = "dataset-tag-translation-cache-v1"
+const MAX_ENTRIES = 2000
+
+function readEntries(): Record<string, TagTranslation> {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "null")
+    return parsed && typeof parsed === "object" ? parsed as Record<string, TagTranslation> : {}
+  } catch {
+    return {}
+  }
+}
+
+const entries = ref<Record<string, TagTranslation>>(readEntries())
 const loading = ref(false)
 const error = ref("")
 const activeProvider = ref<TagTranslationProvider>("danbooru")
@@ -10,6 +22,15 @@ let generation = 0
 
 function cacheKey(tag: string, provider: TagTranslationProvider, locale: string) {
   return `${locale}\u0000${provider}\u0000${tag}`
+}
+
+function persistEntries() {
+  try {
+    const pairs = Object.entries(entries.value)
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(Object.fromEntries(pairs.slice(-MAX_ENTRIES))))
+  } catch {
+    // Browser storage is an optimization; translation display must keep working.
+  }
 }
 
 export function useTagTranslations() {
@@ -33,6 +54,7 @@ export function useTagTranslations() {
       const next = { ...entries.value }
       for (const item of response.items) next[cacheKey(item.tag, provider, locale)] = item
       entries.value = next
+      persistEntries()
     } catch (caught) {
       if (requestGeneration === generation) error.value = caught instanceof Error ? caught.message : String(caught)
     } finally {
@@ -47,6 +69,7 @@ export function useTagTranslations() {
   function clearCache() {
     generation += 1
     entries.value = {}
+    try { localStorage.removeItem(STORAGE_KEY) } catch { /* ignore unavailable storage */ }
     error.value = ""
     loading.value = false
   }

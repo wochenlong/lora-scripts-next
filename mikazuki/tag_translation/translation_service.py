@@ -187,14 +187,25 @@ class TranslationManager:
     def get_api_key(self):
         return self.config_store.load()["deepseek"]["api_key"]
 
+    def profile_revision(self, config=None):
+        section = config or self.config_store.load()["deepseek"]
+        payload = {
+            "endpoint": section.get("endpoint", ""),
+            "model": section.get("model", ""),
+            "system_prompt": section.get("system_prompt", ""),
+            "reasoning_effort": section.get("reasoning_effort", "disabled"),
+        }
+        return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:24]
+
     def save_config(self, raw_config):
         return mask_config(self.config_store.save(raw_config))
 
     def status(self):
+        config = self.config_store.load()["deepseek"]
         return {
-            "cache_count": self.store.count(),
+            "cache_count": self.store.result_count("llm"),
             "deepseek": self._last_status.copy(),
-            "configured": bool(self.config_store.load()["deepseek"]["api_key"]),
+            "configured": bool(config["api_key"] or local_llm_endpoint(config.get("endpoint"))),
         }
 
     def catalog(self, locale):
@@ -274,13 +285,19 @@ class TranslationManager:
             pass
         locale = normalize_locale(locale)
         tag_names = [item["name"] for item in normalize_items(raw_items)]
-        cached = await asyncio.to_thread(self.store.get_many, locale, tag_names)
+        profile_revision = self.profile_revision()
+        cached = await asyncio.to_thread(
+            self.store.get_results, locale, tag_names, "llm", profile_revision
+        )
         primary = await self._get_primary(locale, tag_names)
         return {**cached, **primary}
 
     async def resolve_stream(self, locale, raw_items):
         locale = normalize_locale(locale)
         normalized_items = normalize_items(raw_items)
+        full_config = self.config_store.load()
+        config = full_config["deepseek"]
+        profile_revision = self.profile_revision(config)
         primary = await self._get_primary(locale, [item["name"] for item in normalized_items])
         primary_translations = {
             tag_name: row["text"] for tag_name, row in primary.items() if row.get("text")
@@ -296,7 +313,9 @@ class TranslationManager:
             if item["category"] != 1 and item["name"] not in primary
         ]
         tag_names = [item["name"] for item in items]
-        cached = await asyncio.to_thread(self.store.get_many, locale, tag_names)
+        cached = await asyncio.to_thread(
+            self.store.get_results, locale, tag_names, "llm", profile_revision
+        )
         cached_translations = {
             tag_name: row["text"] for tag_name, row in cached.items() if row.get("text")
         }
@@ -315,10 +334,8 @@ class TranslationManager:
         ):
             return
 
-        full_config = self.config_store.load()
         if not full_config["features"]["translation"]:
             return
-        config = full_config["deepseek"]
         missing = [item for item in items if item["name"] not in cached]
         # Tags without letters (aspect ratios, kaomoji) are untranslatable;
         # asking DeepSeek only burns retries while the client spinner waits.
@@ -351,9 +368,11 @@ class TranslationManager:
             # acquiring this lock. Refresh here so a just-persisted translation
             # is not purchased again after its in-flight entry was removed.
             refreshed = await asyncio.to_thread(
-                self.store.get_many,
+                self.store.get_results,
                 locale,
                 [item["name"] for item in missing],
+                "llm",
+                profile_revision,
             )
             cached.update(refreshed)
             refreshed_translations = {
@@ -457,12 +476,12 @@ class TranslationManager:
                     prompt_hash = hashlib.sha256(config["system_prompt"].encode("utf-8")).hexdigest()
                     if result.translations:
                         await asyncio.to_thread(
-                            self.store.save_many,
+                            self.store.save_results,
                             locale,
+                            "llm",
+                            self.profile_revision(config),
                             batch,
                             result.translations,
-                            config["model"],
-                            prompt_hash,
                         )
                     if result.failures:
                         await asyncio.to_thread(

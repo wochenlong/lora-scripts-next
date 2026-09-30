@@ -1436,6 +1436,19 @@
   min-width: 110px;
 }
 
+.caption-translation-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--text-soft);
+  white-space: nowrap;
+}
+
+.caption-translation-toggle input {
+  accent-color: var(--accent, #5b8cff);
+}
+
 .caption-translation-error {
   color: var(--danger, #d14d4d);
 }
@@ -1463,5 +1476,33 @@
 .caption-translation-settings label {
   display: grid;
   gap: 4px;
+  font-size: 12px;
+}
+
+.caption-translation-dialog {
+  display: grid;
+  gap: 12px;
+}
+
+.caption-translation-dialog label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-soft);
+  font-size: 13px;
+}
+
+.caption-translation-dialog-hint {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.caption-translation-cache-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-soft);
   font-size: 12px;
 }

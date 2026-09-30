@@ -4,11 +4,18 @@
 # Next Trainer changes are tracked in git history.
 
 import sqlite3
+import unicodedata
 from contextlib import contextmanager
 from datetime import datetime, timezone
 
 
 SQLITE_LOOKUP_CHUNK_SIZE = 500
+TRANSLATION_NORMALIZATION_VERSION = "v1"
+
+
+def normalize_tag_key(tag_name):
+    value = unicodedata.normalize("NFKC", str(tag_name or "")).strip().casefold()
+    return " ".join(value.replace("_", " ").split())
 
 
 def is_translation_acceptable(tag_name, text, locale, category=0):
@@ -68,6 +75,24 @@ class TranslationStore:
                     prompt_hash TEXT,
                     updated_at TEXT NOT NULL,
                     PRIMARY KEY(tag_name, locale)
+                )
+                """
+            )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS translation_results_v2 (
+                    tag_key TEXT NOT NULL,
+                    raw_tag TEXT NOT NULL,
+                    locale TEXT NOT NULL,
+                    provider TEXT NOT NULL,
+                    profile_revision TEXT NOT NULL,
+                    normalization_version TEXT NOT NULL,
+                    text TEXT NOT NULL,
+                    category INTEGER NOT NULL DEFAULT 0,
+                    post_count INTEGER NOT NULL DEFAULT 0,
+                    source_model TEXT,
+                    updated_at TEXT NOT NULL,
+                    PRIMARY KEY(tag_key, locale, provider, profile_revision, normalization_version)
                 )
                 """
             )
@@ -223,3 +248,83 @@ class TranslationStore:
     def count(self):
         with self._connect() as connection:
             return connection.execute("SELECT COUNT(*) FROM translations").fetchone()[0]
+
+    def get_results(self, locale, tag_names, provider, profile_revision, normalization_version=TRANSLATION_NORMALIZATION_VERSION):
+        names = list(dict.fromkeys(tag_names))
+        keys = [normalize_tag_key(name) for name in names if normalize_tag_key(name)]
+        if not keys:
+            return {}
+        rows = []
+        with self._connect() as connection:
+            for index in range(0, len(keys), SQLITE_LOOKUP_CHUNK_SIZE):
+                chunk = keys[index : index + SQLITE_LOOKUP_CHUNK_SIZE]
+                placeholders = ",".join("?" for _ in chunk)
+                rows.extend(connection.execute(
+                    f"SELECT * FROM translation_results_v2 WHERE locale = ? AND provider = ? "
+                    f"AND profile_revision = ? AND normalization_version = ? AND tag_key IN ({placeholders})",
+                    (locale, provider, profile_revision, normalization_version, *chunk),
+                ).fetchall())
+        result = {}
+        requested = {normalize_tag_key(name): name for name in names}
+        for row in rows:
+            result[requested.get(row["tag_key"], row["raw_tag"])] = dict(row)
+        return result
+
+    def save_results(
+        self,
+        locale,
+        provider,
+        profile_revision,
+        items,
+        translations,
+        normalization_version=TRANSLATION_NORMALIZATION_VERSION,
+    ):
+        if not translations:
+            return
+        metadata = {str(item["name"]): item for item in items}
+        now = utc_now()
+        rows = []
+        for raw_tag, text in translations.items():
+            value = str(text or "").strip()
+            item = metadata.get(str(raw_tag))
+            if not item or not is_translation_acceptable(raw_tag, value, locale, item.get("category", 0)):
+                continue
+            rows.append((
+                normalize_tag_key(raw_tag), str(raw_tag), locale, provider, profile_revision,
+                normalization_version, value, int(item.get("category", 0)), int(item.get("post_count", 0)),
+                provider, now,
+            ))
+        if not rows:
+            return
+        with self._connect() as connection:
+            connection.executemany(
+                """
+                INSERT INTO translation_results_v2(
+                    tag_key, raw_tag, locale, provider, profile_revision, normalization_version,
+                    text, category, post_count, source_model, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(tag_key, locale, provider, profile_revision, normalization_version) DO UPDATE SET
+                    raw_tag = excluded.raw_tag,
+                    text = excluded.text,
+                    category = excluded.category,
+                    post_count = excluded.post_count,
+                    source_model = excluded.source_model,
+                    updated_at = excluded.updated_at
+                """,
+                rows,
+            )
+
+    def clear_results(self, provider=None):
+        with self._connect() as connection:
+            if provider:
+                connection.execute("DELETE FROM translation_results_v2 WHERE provider = ?", (provider,))
+            else:
+                connection.execute("DELETE FROM translation_results_v2")
+
+    def result_count(self, provider=None):
+        with self._connect() as connection:
+            if provider:
+                return connection.execute(
+                    "SELECT COUNT(*) FROM translation_results_v2 WHERE provider = ?", (provider,)
+                ).fetchone()[0]
+            return connection.execute("SELECT COUNT(*) FROM translation_results_v2").fetchone()[0]

@@ -29,7 +29,10 @@ async def _translate_one(session: aiohttp.ClientSession, tag: str, locale: str) 
         if response.status != 200:
             return None
         payload = await response.json(content_type=None)
-    value = payload.get("responseData", {}).get("translatedText") if isinstance(payload, dict) else None
+    if not isinstance(payload, dict) or payload.get("quotaFinished") is True or payload.get("responseStatus") not in {None, 200}:
+        return None
+    response_data = payload.get("responseData")
+    value = response_data.get("translatedText") if isinstance(response_data, dict) else None
     return str(value).strip() if _acceptable(value, tag, locale) else None
 
 

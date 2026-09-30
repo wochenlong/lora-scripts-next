@@ -6,6 +6,8 @@ import { useRoute } from "vue-router"
 import { datasetApi, type ChangedItem, type DatasetItem } from "../api/dataset"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
+import TagTranslationControls from "../components/dataset/TagTranslationControls.vue"
+import TagTranslationSettingsDialog from "../components/dataset/TagTranslationSettingsDialog.vue"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
 import { useServerPathPick } from "../composables/useServerPathPick"
@@ -63,7 +65,7 @@ const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
 const translationProvider = editorSession.translationProvider
-const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor } = useTagTranslations()
+const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor, clearCache: clearTranslationCache } = useTagTranslations()
 const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsSaving = ref(false)
@@ -71,6 +73,8 @@ const translationSettingsError = ref("")
 const translationEndpoint = ref("")
 const translationModel = ref("")
 const translationApiKey = ref("")
+const translationCacheCount = ref(0)
+const translationCacheClearing = ref(false)
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
 
@@ -151,6 +155,27 @@ async function saveTranslationSettings() {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
     translationSettingsSaving.value = false
+  }
+}
+
+async function loadTranslationCacheStatus() {
+  try {
+    translationCacheCount.value = (await datasetApi.tagTranslationCache()).total
+  } catch {
+    translationCacheCount.value = 0
+  }
+}
+
+async function clearTranslationCacheFromSettings() {
+  translationCacheClearing.value = true
+  try {
+    await datasetApi.clearTagTranslationCache()
+    clearTranslationCache()
+    translationCacheCount.value = 0
+  } catch (caught) {
+    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    translationCacheClearing.value = false
   }
 }
 const selectAllLabel = computed(() =>
@@ -650,28 +675,17 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
               download
             >{{ t("datasetEditor.caption.downloadCaption") }}</a>
           </div>
-          <div class="caption-translation-toolbar">
-            <button type="button" class="dataset-tool-secondary" :disabled="translationsLoading || !captionTags.length" @click="loadTranslations">
-              {{ translationsLoading ? t("datasetEditor.caption.translationLoading") : t("datasetEditor.caption.translationAction") }}
-            </button>
-            <select v-model="translationProvider" :aria-label="t('datasetEditor.caption.translationProvider')">
-              <option value="danbooru">Danbooru</option>
-              <option value="mymemory">MyMemory</option>
-              <option value="llm">LLM</option>
-              <option value="auto">{{ t("datasetEditor.caption.translationAuto") }}</option>
-            </select>
-            <button type="button" class="dataset-tool-secondary" @click="translationSettingsOpen = !translationSettingsOpen; translationSettingsOpen && loadTranslationSettings()">
-              {{ t("datasetEditor.caption.translationSettings") }}
-            </button>
-            <small v-if="translationsError" class="caption-translation-error">{{ translationsError }}</small>
-          </div>
-          <div v-if="translationSettingsOpen" class="caption-translation-settings">
-            <label>{{ t("datasetEditor.caption.translationEndpoint") }}<input v-model="translationEndpoint" :placeholder="t('datasetEditor.caption.translationEndpointPlaceholder')"></label>
-            <label>{{ t("datasetEditor.caption.translationModel") }}<input v-model="translationModel" :placeholder="t('datasetEditor.caption.translationModelPlaceholder')"></label>
-            <label>{{ t("datasetEditor.caption.translationKey") }}<input v-model="translationApiKey" type="password" :placeholder="t('datasetEditor.caption.translationKeyPlaceholder')"></label>
-            <button type="button" class="dataset-tool-secondary" :disabled="translationSettingsSaving" @click="saveTranslationSettings">{{ translationSettingsSaving ? t("datasetEditor.caption.translationSaving") : t("datasetEditor.caption.translationSave") }}</button>
-            <small v-if="translationSettingsError" class="caption-translation-error">{{ translationSettingsError }}</small>
-          </div>
+          <TagTranslationControls
+            :enabled="showTranslations"
+            :provider="translationProvider"
+            :loading="translationsLoading"
+            :error="translationsError"
+            :tag-count="captionTags.length"
+            @update:enabled="showTranslations = $event"
+            @update:provider="translationProvider = $event"
+            @load="loadTranslations"
+            @settings="translationSettingsOpen = true; loadTranslationSettings(); loadTranslationCacheStatus()"
+          />
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
               v-for="(tag, index) in captionTags"
@@ -798,6 +812,23 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
   >
     <img :src="current.image_url" :alt="current.name">
   </div>
+
+  <TagTranslationSettingsDialog
+    v-model="translationSettingsOpen"
+    :loading="translationSettingsLoading"
+    :saving="translationSettingsSaving"
+    :error="translationSettingsError"
+    :endpoint="translationEndpoint"
+    :model="translationModel"
+    :api-key="translationApiKey"
+    :cache-count="translationCacheCount"
+    :clearing-cache="translationCacheClearing"
+    @update:endpoint="translationEndpoint = $event"
+    @update:model="translationModel = $event"
+    @update:api-key="translationApiKey = $event"
+    @save="saveTranslationSettings"
+    @clear-cache="clearTranslationCacheFromSettings"
+  />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">
     <div class="dataset-history">

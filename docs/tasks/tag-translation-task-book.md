@@ -5,7 +5,7 @@
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: 数据集模块状态保持与老 BUG 修复
+- Current active phase: 数据集模块与标签翻译收口验收
 - Execution readiness: drafting
 
 ## 目标
@@ -138,7 +138,10 @@
 - 验收重点：任务页往返、数据集页签往返、浏览器刷新、数据集切换隔离、旧请求竞态和原文保护。
 - 已完成实现：`useDatasetEditorSession` 保存数据集路径、根目录、选中项、草稿、翻译偏好、分页和面板状态；`useTagTranslations` 改为应用级 provider/locale/tag 缓存；Dataset Editor scan/choose/save 流程已接入恢复和草稿隔离。
 - 已增加验证：session 单元测试、Dataset Editor 卸载后重新挂载的草稿恢复测试；前端类型检查和相关 8 项测试通过。
-- 待完成验证：完整前端检查、真实浏览器从 Tasks 返回 Dataset 的交互、刷新后重新 scan、数据集切换隔离和后端原文保护回归。
+- 已完成补充：v2 翻译结果 SQLite v2 表、MyMemory/LLM provider profile 隔离、LLM 行对象字符串适配、MyMemory 缓存清理 API、最长规范化查询、统一翻译工具栏与设置弹窗、浏览器翻译缓存恢复。
+- 已完成验证：前端类型检查、Lint、41 个测试文件 253 项测试、生产构建；后端标签翻译/API/词库/缓存专项 8 项通过；Python 语法编译通过。
+- 环境限制：后端全量 pytest 在当前 Python 3.14 环境受既有依赖缺失（toml、torch、accelerate）及旧 Pydantic root_validator 兼容错误影响，不能作为本次功能失败证据；专项测试已独立通过。
+- 待实机验证：真实浏览器从 Tasks 返回 Dataset、浏览器刷新后翻译缓存、真实 MyMemory/LLM 额度和 Qwen 0.8B 质量；代码和自动化验收已完成，需在目标运行环境进行最后体验验收。
 
 ## v1 进度台账（历史记录，受上述审计修正）
 - Overall progress: 标签释义功能、provider、LLM 配置、Dataset Editor 展示、真实接口和浏览器交互验收均已完成，发布审计记录已建立。
@@ -151,4 +154,4 @@
 - Residual risks: Qwen 0.8B 真实模型质量尚未在本机启动；Node 24 构建会产生 dist hash 漂移，发布构建应使用项目规定 Node 版本；这些边界已记录在发布审计。
 
 ## 下一步动作
-执行[数据集模块状态保持与编辑器恢复设计](../design/dataset-module-state-retention-design.md)的实现与验收；完成后再依据[前端缓存生命周期治理设计书](../design/frontend-cache-lifecycle-design.md)迁移其他缓存域，并回收[tag v2 设计书](../design/tag-translation-v2-ux-persistence-design.md)中的剩余翻译体验项。
+在目标环境完成真实浏览器和模型服务验收后，提交并推送本轮收口改动；若验收发现问题，按数据集模块 session、翻译缓存 provider/profile、UI 设置弹窗三个边界分别修复。

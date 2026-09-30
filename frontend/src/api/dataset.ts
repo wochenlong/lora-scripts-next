@@ -21,9 +21,10 @@ export interface HistoryItem { image: string; before: string; after: string; bef
 export interface HistoryChange { label: string; count: number; items: HistoryItem[] }
 export interface DatasetHistory { can_undo: boolean; can_redo: boolean; changes: HistoryChange[] }
 export type TagTranslationProvider = "danbooru" | "mymemory" | "auto" | "llm"
-export interface TagTranslation { tag: string; translation: string | null; source: string | null; status: "hit" | "missing"; category?: number | null; post_count?: number | null }
+export interface TagTranslation { tag: string; translation: string | null; source: string | null; status: "hit" | "missing"; cached?: boolean; error_code?: string | null; category?: number | null; post_count?: number | null }
 export interface TagTranslationResponse { items: TagTranslation[]; provider: TagTranslationProvider; locale: string }
 export interface TagTranslationConfig { deepseek: { endpoint: string; model: string; api_key: string; api_key_configured?: boolean } }
+export interface TagTranslationCacheStatus { total: number; mymemory: number; llm: number }
 
 const post = <T>(path: string, body: unknown) => apiData<T>(path, { method: "POST", body: JSON.stringify(body) })
 export const datasetApi = {
@@ -33,9 +34,11 @@ export const datasetApi = {
   undo: (root: string) => post<DatasetMutation>("/api/dataset-editor/undo", { root }),
   redo: (root: string) => post<DatasetMutation>("/api/dataset-editor/redo", { root }),
   history: (root: string) => post<DatasetHistory>("/api/dataset-editor/history", { root }),
-  tagTranslations: (tags: string[], provider: TagTranslationProvider, locale = "zh-CN") =>
-    post<TagTranslationResponse>("/api/tag-translation/resolve", { tags, provider, locale }),
+  tagTranslations: (tags: string[], provider: TagTranslationProvider, locale = "zh-CN", options: { localOnly?: boolean; refresh?: boolean } = {}) =>
+    post<TagTranslationResponse>("/api/tag-translation/resolve", { tags, provider, locale, local_only: options.localOnly ?? false, refresh: options.refresh ?? false }),
   tagTranslationConfig: () => apiData<TagTranslationConfig>("/api/tag-translation/config"),
   saveTagTranslationConfig: (config: Partial<TagTranslationConfig["deepseek"]>) =>
     apiData<TagTranslationConfig>("/api/tag-translation/config", { method: "PUT", body: JSON.stringify({ deepseek: config }) }),
+  tagTranslationCache: () => apiData<TagTranslationCacheStatus>("/api/tag-translation/cache"),
+  clearTagTranslationCache: (provider?: "mymemory" | "llm") => apiData<{ provider: string | null; total: number }>(`/api/tag-translation/cache${provider ? `?provider=${provider}` : ""}`, { method: "DELETE" }),
 }
