@@ -78,6 +78,26 @@ class TaskInsightsTests(unittest.TestCase):
         self.metadata["config_path"] = str(self.tmp / "missing.toml")
         self.assertEqual(task_insights.list_preview_images(self.metadata), [])
 
+    def test_list_output_files_filters_by_name_and_sorts_by_mtime(self):
+        first = self.output_dir / "aki_e000001.safetensors"
+        second = self.output_dir / "aki_e000002.safetensors"
+        other = self.output_dir / "other_e000001.safetensors"
+        for path in (second, first, other):
+            path.write_bytes(b"ckpt" * 512 * 1024)
+        earlier = time.time() - 120
+        os.utime(first, (earlier, earlier))
+        (self.output_dir / "sample" / "aki_e000001_20260804_120000.png").write_bytes(b"png")
+
+        files = task_insights.list_output_files(self.metadata)
+
+        self.assertEqual([item["name"] for item in files], [first.name, second.name])
+        self.assertEqual(files[0]["epoch"], 1)
+        self.assertGreater(files[0]["size_mb"], 0)
+
+    def test_list_output_files_without_output_dir_is_empty(self):
+        self.metadata["config_path"] = str(self.tmp / "missing.toml")
+        self.assertEqual(task_insights.list_output_files(self.metadata), [])
+
     def test_resolve_preview_image_only_serves_scanned_names(self):
         sample = self.output_dir / "sample"
         keep = sample / "aki_e000002_x.png"
