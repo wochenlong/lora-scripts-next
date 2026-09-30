@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
+import { ElButton, ElDialog, ElInput } from "element-plus"
 
 defineProps<{
   modelValue: boolean
@@ -34,21 +35,21 @@ const { t } = useI18n()
   >
     <div class="caption-translation-dialog">
       <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationSettingsHint") }}</p>
-      <label>{{ t("datasetEditor.caption.translationEndpoint") }}<input :value="endpoint" :placeholder="t('datasetEditor.caption.translationEndpointPlaceholder')" @input="emit('update:endpoint', ($event.target as HTMLInputElement).value)"></label>
-      <label>{{ t("datasetEditor.caption.translationModel") }}<input :value="model" :placeholder="t('datasetEditor.caption.translationModelPlaceholder')" @input="emit('update:model', ($event.target as HTMLInputElement).value)"></label>
-      <label>{{ t("datasetEditor.caption.translationKey") }}<input :value="apiKey" type="password" :placeholder="t('datasetEditor.caption.translationKeyPlaceholder')" @input="emit('update:apiKey', ($event.target as HTMLInputElement).value)"></label>
+      <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationEndpoint") }}</span><el-input :model-value="endpoint" :placeholder="t('datasetEditor.caption.translationEndpointPlaceholder')" @update:model-value="emit('update:endpoint', $event)" /></label>
+      <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationModel") }}</span><el-input :model-value="model" :placeholder="t('datasetEditor.caption.translationModelPlaceholder')" @update:model-value="emit('update:model', $event)" /></label>
+      <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationKey") }}</span><el-input :model-value="apiKey" type="password" show-password autocomplete="new-password" :placeholder="t('datasetEditor.caption.translationKeyPlaceholder')" @update:model-value="emit('update:apiKey', $event)" /></label>
       <small v-if="loading">{{ t("datasetEditor.caption.translationLoading") }}</small>
       <small v-if="error" class="caption-translation-error">{{ error }}</small>
       <div class="caption-translation-cache-row">
         <span>{{ t("datasetEditor.caption.translationCache", { n: cacheCount }) }}</span>
-        <button type="button" class="dataset-tool-secondary" :disabled="clearingCache" @click="emit('clearCache')">
+        <el-button :loading="clearingCache" @click="emit('clearCache')">
           {{ clearingCache ? t("datasetEditor.caption.translationCacheClearing") : t("datasetEditor.caption.translationCacheClear") }}
-        </button>
+        </el-button>
       </div>
     </div>
     <template #footer>
-      <button type="button" class="dataset-tool-secondary" :disabled="saving" @click="emit('update:modelValue', false)">{{ t("datasetEditor.caption.translationCancel") }}</button>
-      <button type="button" class="primary-action" :disabled="saving || loading" @click="emit('save')">{{ saving ? t("datasetEditor.caption.translationSaving") : t("datasetEditor.caption.translationSave") }}</button>
+      <el-button :disabled="saving" @click="emit('update:modelValue', false)">{{ t("datasetEditor.caption.translationCancel") }}</el-button>
+      <el-button type="primary" :loading="saving" :disabled="loading" @click="emit('save')">{{ t("datasetEditor.caption.translationSave") }}</el-button>
     </template>
   </el-dialog>
 </template>

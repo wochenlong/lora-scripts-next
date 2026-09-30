@@ -36,7 +36,7 @@ function persistEntries() {
 export function useTagTranslations() {
   const translations = computed(() => entries.value)
 
-  async function resolve(tags: string[], provider: TagTranslationProvider, locale = "zh-CN") {
+  async function resolve(tags: string[], provider: TagTranslationProvider, locale = "zh-CN", localOnly = false) {
     activeProvider.value = provider
     activeLocale.value = locale
     const unique = [...new Set(tags.map((tag) => tag.trim()).filter(Boolean))]
@@ -49,8 +49,9 @@ export function useTagTranslations() {
     loading.value = true
     error.value = ""
     try {
-      const response = await datasetApi.tagTranslations(missing, provider, locale)
-      if (requestGeneration !== generation) return
+      const response = localOnly
+        ? await datasetApi.tagTranslations(missing, provider, locale, { localOnly: true })
+        : await datasetApi.tagTranslations(missing, provider, locale)
       const next = { ...entries.value }
       for (const item of response.items) next[cacheKey(item.tag, provider, locale)] = item
       entries.value = next
@@ -74,5 +75,11 @@ export function useTagTranslations() {
     loading.value = false
   }
 
-  return { translations, loading, error, resolve, translationFor, clearCache }
+  function cancelCurrent() {
+    generation += 1
+    loading.value = false
+    error.value = ""
+  }
+
+  return { translations, loading, error, resolve, translationFor, clearCache, cancelCurrent }
 }

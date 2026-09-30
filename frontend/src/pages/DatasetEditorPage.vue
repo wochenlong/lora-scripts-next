@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue"
-import { ElMessage, ElMessageBox } from "element-plus"
+import { ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import { datasetApi, type ChangedItem, type DatasetItem } from "../api/dataset"
@@ -65,7 +65,7 @@ const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
 const translationProvider = editorSession.translationProvider
-const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor, clearCache: clearTranslationCache } = useTagTranslations()
+const { loading: translationsLoading, error: translationsError, resolve: resolveTranslations, translationFor, clearCache: clearTranslationCache, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsSaving = ref(false)
@@ -125,10 +125,21 @@ const workingScopeFullySelected = computed(
     filtered.value.every((item) => selectedPaths.value.has(item.relative_path)),
 )
 
-async function loadTranslations() {
-  showTranslations.value = true
-  await resolveTranslations(captionTags.value, translationProvider.value)
+function setTranslationsEnabled(value: boolean) {
+  showTranslations.value = value
+  if (value) void resolveTranslations(captionTags.value, translationProvider.value)
+  else cancelTranslations()
 }
+
+function setTranslationProvider(value: typeof translationProvider.value) {
+  translationProvider.value = value
+  cancelTranslations()
+  if (showTranslations.value) void resolveTranslations(captionTags.value, value)
+}
+
+watch(captionTags, (tags) => {
+  if (showTranslations.value) void resolveTranslations(tags, translationProvider.value, "zh-CN", true)
+}, { immediate: true })
 
 async function loadTranslationSettings() {
   if (translationSettingsLoading.value || translationEndpoint.value) return
@@ -512,7 +523,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
         <label class="dataset-toolbar-field dataset-toolbar-path">
           <span>{{ t("datasetEditor.pathLabel") }}</span>
           <span class="path-row">
-            <input v-model="path" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="scan">
+            <el-input v-model="path" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="scan" />
             <button
               type="button"
               class="dataset-browse-icon"
@@ -532,16 +543,14 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
         </label>
         <label class="dataset-toolbar-field dataset-toolbar-folder">
           <span>{{ t("datasetEditor.toolbar.folderLabel") }}</span>
-          <select v-model="category" :disabled="!root">
-            <option value="">{{ t("datasetEditor.toolbar.folderAll", { n: totalImageCount || 0 }) }}</option>
-            <option v-for="item in categories" :key="`tb-${item.value || '__root__'}`" :value="item.value">
-              {{ item.name }} ({{ item.count }})
-            </option>
-          </select>
+          <el-select v-model="category" :disabled="!root" :aria-label="t('datasetEditor.toolbar.folderLabel')">
+            <el-option value="" :label="t('datasetEditor.toolbar.folderAll', { n: totalImageCount || 0 })" />
+            <el-option v-for="item in categories" :key="`tb-${item.value || '__root__'}`" :value="item.value" :label="`${item.name} (${item.count})`" />
+          </el-select>
         </label>
         <label class="dataset-toolbar-field dataset-toolbar-search">
           <span>{{ t("datasetEditor.toolbar.searchLabel") }}</span>
-          <input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" :disabled="!root">
+          <el-input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" :disabled="!root" />
         </label>
         <div class="dataset-toolbar-actions">
           <button
@@ -631,9 +640,9 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
           <span>{{ page }} / {{ pageCount }}</span>
           <button type="button" :disabled="page === pageCount" @click="page++">{{ t("datasetEditor.pager.next") }}</button>
           <button type="button" :disabled="page === pageCount" @click="page = pageCount">{{ t("datasetEditor.pager.last") }}</button>
-          <select v-model.number="pageSize">
-            <option v-for="size in [24, 48, 96, 192]" :key="size" :value="size">{{ t("datasetEditor.pager.perPage", { size }) }}</option>
-          </select>
+          <el-select v-model="pageSize" class="dataset-page-size" :aria-label="t('datasetEditor.pager.perPage', { size: pageSize })">
+            <el-option v-for="size in [24, 48, 96, 192]" :key="size" :value="size" :label="t('datasetEditor.pager.perPage', { size })" />
+          </el-select>
         </footer>
       </main>
     </div>
@@ -680,10 +689,8 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
             :provider="translationProvider"
             :loading="translationsLoading"
             :error="translationsError"
-            :tag-count="captionTags.length"
-            @update:enabled="showTranslations = $event"
-            @update:provider="translationProvider = $event"
-            @load="loadTranslations"
+            @update:enabled="setTranslationsEnabled"
+            @update:provider="setTranslationProvider"
             @settings="translationSettingsOpen = true; loadTranslationSettings(); loadTranslationCacheStatus()"
           />
           <div class="caption-chips" @dragover="onChipDragOver">
@@ -703,7 +710,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
               <button type="button" :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)" @mousedown.stop>×</button>
             </span>
             <span class="chip-add">
-              <input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag">
+              <el-input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag" />
               <button type="button" @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button>
             </span>
           </div>
@@ -711,7 +718,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
           <details class="caption-raw">
             <summary>{{ t("datasetEditor.caption.rawToggle") }}</summary>
             <div class="caption-editor">
-              <textarea v-model="caption" rows="8"></textarea>
+              <el-input v-model="caption" type="textarea" :rows="8" :aria-label="t('datasetEditor.caption.rawToggle')" />
               <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
             </div>
           </details>
@@ -723,16 +730,14 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
       <div v-else-if="rightPanelMode === 'filter'" class="dataset-tool-panel-body dataset-filter-body">
         <label>
           {{ t("datasetEditor.queryLabel") }}
-          <input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')">
+          <el-input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" />
         </label>
         <label>
           {{ t("datasetEditor.categoryLabel") }}
-          <select v-model="category">
-            <option value="">{{ t("datasetEditor.allCategories") }} ({{ totalImageCount }})</option>
-            <option v-for="item in categories" :key="item.value || '__root__'" :value="item.value">
-              {{ item.name }} ({{ item.count }})
-            </option>
-          </select>
+          <el-select v-model="category">
+            <el-option value="" :label="`${t('datasetEditor.allCategories')} (${totalImageCount})`" />
+            <el-option v-for="item in categories" :key="item.value || '__root__'" :value="item.value" :label="`${item.name} (${item.count})`" />
+          </el-select>
         </label>
         <TagFilterPanel
           :tags="visibleTagList"
@@ -770,20 +775,20 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
               : t("datasetEditor.batch.filtered", { n: filtered.length })
           }}
         </p>
-        <input v-model="append" :placeholder="t('datasetEditor.batch.appendPlaceholder')">
-        <select v-model="appendPosition" :aria-label="t('datasetEditor.batch.position')">
-          <option value="back">{{ t("datasetEditor.batch.positionBack") }}</option>
-          <option value="front">{{ t("datasetEditor.batch.positionFront") }}</option>
-        </select>
-        <input v-model="remove" :placeholder="t('datasetEditor.batch.removePlaceholder')">
+        <el-input v-model="append" :placeholder="t('datasetEditor.batch.appendPlaceholder')" />
+        <el-select v-model="appendPosition" :aria-label="t('datasetEditor.batch.position')">
+          <el-option value="back" :label="t('datasetEditor.batch.positionBack')" />
+          <el-option value="front" :label="t('datasetEditor.batch.positionFront')" />
+        </el-select>
+        <el-input v-model="remove" :placeholder="t('datasetEditor.batch.removePlaceholder')" />
         <div class="replace-row">
-          <input v-model="replaceFrom" :placeholder="t('datasetEditor.batch.replaceFrom')">
-          <input v-model="replaceTo" :placeholder="t('datasetEditor.batch.replaceTo')">
+          <el-input v-model="replaceFrom" :placeholder="t('datasetEditor.batch.replaceFrom')" />
+          <el-input v-model="replaceTo" :placeholder="t('datasetEditor.batch.replaceTo')" />
         </div>
-        <label><input v-model="clean" type="checkbox">{{ t("datasetEditor.batch.clean") }}</label>
-        <label><input v-model="underscoreToSpace" type="checkbox">{{ t("datasetEditor.batch.underscore") }}</label>
-        <label><input v-model="stripEscapeChars" type="checkbox">{{ t("datasetEditor.batch.stripEscape") }}</label>
-        <label><input v-model="sort" type="checkbox">{{ t("datasetEditor.batch.sort") }}</label>
+        <label>{{ t("datasetEditor.batch.clean") }}<el-switch v-model="clean" :aria-label="t('datasetEditor.batch.clean')" /></label>
+        <label>{{ t("datasetEditor.batch.underscore") }}<el-switch v-model="underscoreToSpace" :aria-label="t('datasetEditor.batch.underscore')" /></label>
+        <label>{{ t("datasetEditor.batch.stripEscape") }}<el-switch v-model="stripEscapeChars" :aria-label="t('datasetEditor.batch.stripEscape')" /></label>
+        <label>{{ t("datasetEditor.batch.sort") }}<el-switch v-model="sort" :aria-label="t('datasetEditor.batch.sort')" /></label>
         <div class="dataset-tool-panel-footer">
           <button
             v-if="managedName"

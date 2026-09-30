@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
+import { ElButton, ElOption, ElSelect, ElSwitch } from "element-plus"
 import type { TagTranslationProvider } from "../../api/dataset"
 
 defineProps<{
@@ -7,13 +8,11 @@ defineProps<{
   provider: TagTranslationProvider
   loading: boolean
   error: string
-  tagCount: number
 }>()
 
 const emit = defineEmits<{
   "update:enabled": [value: boolean]
   "update:provider": [value: TagTranslationProvider]
-  load: []
   settings: []
 }>()
 
@@ -22,27 +21,18 @@ const { t } = useI18n()
 
 <template>
   <div class="caption-translation-toolbar" aria-live="polite">
-    <label class="caption-translation-toggle">
-      <input :checked="enabled" type="checkbox" @change="emit('update:enabled', ($event.target as HTMLInputElement).checked)">
+    <div class="caption-translation-heading">
       <span>{{ t("datasetEditor.caption.translationEnabled") }}</span>
-    </label>
-    <select
-      :value="provider"
-      :aria-label="t('datasetEditor.caption.translationProvider')"
-      @change="emit('update:provider', ($event.target as HTMLSelectElement).value as TagTranslationProvider)"
-    >
-      <option value="danbooru">{{ t("datasetEditor.caption.translationProviderDanbooru") }}</option>
-      <option value="mymemory">{{ t("datasetEditor.caption.translationProviderMymemory") }}</option>
-      <option value="llm">{{ t("datasetEditor.caption.translationProviderLlm") }}</option>
-      <option value="auto">{{ t("datasetEditor.caption.translationAuto") }}</option>
-    </select>
-    <button type="button" class="dataset-tool-secondary" :disabled="loading || !tagCount || !enabled" @click="emit('load')">
-      {{ loading ? t("datasetEditor.caption.translationLoading") : t("datasetEditor.caption.translationAction") }}
-    </button>
-    <button type="button" class="dataset-tool-secondary" @click="emit('settings')">
-      {{ t("datasetEditor.caption.translationSettings") }}
-    </button>
+      <el-switch :model-value="enabled" :aria-label="t('datasetEditor.caption.translationEnabled')" @update:model-value="emit('update:enabled', Boolean($event))" />
+      <el-button @click="emit('settings')">{{ t("datasetEditor.caption.translationSettings") }}</el-button>
+    </div>
+    <el-select :model-value="provider" :aria-label="t('datasetEditor.caption.translationProvider')" @update:model-value="emit('update:provider', $event)">
+      <el-option value="danbooru" :label="t('datasetEditor.caption.translationProviderDanbooru')" />
+      <el-option value="mymemory" :label="t('datasetEditor.caption.translationProviderMymemory')" />
+      <el-option value="llm" :label="t('datasetEditor.caption.translationProviderLlm')" />
+      <el-option value="auto" :label="t('datasetEditor.caption.translationAuto')" />
+    </el-select>
+    <small v-if="loading">{{ t("datasetEditor.caption.translationLoading") }}</small>
     <small v-if="error" class="caption-translation-error">{{ error }}</small>
   </div>
 </template>
-

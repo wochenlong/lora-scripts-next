@@ -1432,8 +1432,28 @@
   flex-wrap: wrap;
 }
 
-.caption-translation-toolbar select {
-  min-width: 110px;
+.caption-translation-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  color: var(--text-soft);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.caption-translation-toolbar .el-select {
+  min-width: 170px;
+  max-width: 100%;
+}
+
+.caption-translation-toolbar .el-button,
+.caption-translation-dialog .el-button {
+  border-radius: var(--radius-sm);
+}
+
+.caption-translation-toolbar .el-button {
+  min-height: 32px;
 }
 
 .caption-translation-toggle {
@@ -1489,6 +1509,10 @@
   gap: 5px;
   color: var(--text-soft);
   font-size: 13px;
+}
+
+.caption-translation-dialog .schema-field {
+  min-width: 0;
 }
 
 .caption-translation-dialog-hint {
