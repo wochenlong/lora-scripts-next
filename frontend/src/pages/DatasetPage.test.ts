@@ -153,12 +153,28 @@ describe("DatasetEditorPage route session", () => {
     })
     await flushPromises()
 
-    const editor = wrapper.find("textarea")
+    expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes")
+    wrapper.unmount()
+
+    // Simulate a browser refresh: the in-memory scan result is gone, but the
+    // persisted dataset root and selected image remain available for restore.
+    session.resetInMemoryDataset()
+    session.selected.value = "sample.png"
+    const refreshed = mount(harness, {
+      global: {
+        plugins: [i18n],
+        stubs: { PathPickerDialog: true, TagFilterPanel: true, "el-dialog": true },
+      },
+    })
+    await flushPromises()
+    expect((refreshed.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes")
+
+    const editor = refreshed.find("textarea")
     expect(editor.exists()).toBe(true)
     await editor.setValue("blue_eyes, long_hair")
     await nextTick()
 
-    wrapper.unmount()
+    refreshed.unmount()
 
     const restored = mount(harness, {
       global: {

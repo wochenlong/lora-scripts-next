@@ -35,6 +35,7 @@ const selectedPaths = editorSession.selectedPaths
 const lastSelectedIndex = ref<number>()
 const initialItem = items.value.find((item) => item.relative_path === selected.value)
 const caption = ref(initialItem && root.value ? editorSession.getDraft(root.value, initialItem.relative_path) ?? initialItem.caption : "")
+let captionHydrated = Boolean(initialItem)
 const append = ref("")
 const remove = ref("")
 const replaceFrom = ref("")
@@ -262,7 +263,7 @@ function onChipDragEnd() {
 let restoringCaption = false
 
 function rememberCurrentDraft() {
-  if (!root.value || !selected.value) return
+  if (!captionHydrated || !root.value || !selected.value) return
   const item = items.value.find((candidate) => candidate.relative_path === selected.value)
   if (!item) return
   if (caption.value === item.caption) editorSession.clearDraft(root.value, selected.value)
@@ -276,6 +277,7 @@ function choose(item: DatasetItem, event?: MouseEvent) {
   restoringCaption = true
   caption.value = root.value ? editorSession.getDraft(root.value, item.relative_path) ?? item.caption : item.caption
   restoringCaption = false
+  captionHydrated = true
   rightPanelMode.value = "caption"
   if (!event) return
   const index = filtered.value.findIndex((candidate) => candidate.relative_path === item.relative_path)
@@ -354,6 +356,7 @@ async function scan() {
       restoringCaption = true
       caption.value = ""
       restoringCaption = false
+      captionHydrated = false
     }
     if (restoring) rightPanelMode.value = restoredPanel
     await Promise.all([refreshHistory(), refreshManagedPaths()])
