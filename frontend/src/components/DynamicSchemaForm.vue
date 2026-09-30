@@ -4,6 +4,7 @@ import { useI18n } from "vue-i18n"
 import type { AdaptedSchema, FormField, FormModel } from "../schema/adapter"
 import { isAnimaFastTorchCompileBlocked, isFieldActive } from "../schema/adapter"
 import SchemaField from "./SchemaField.vue"
+import AnimaModelField from "./AnimaModelField.vue"
 
 const props = defineProps<{ schema: AdaptedSchema; modelValue: FormModel; errors: Record<string, string>; effectiveDefaults: FormModel }>()
 const emit = defineEmits<{ "update:modelValue": [value: FormModel]; "reset-field": [key: string] }>()
@@ -47,7 +48,8 @@ function update(key: string, value: FormModel[string]) {
       <header><h2>{{ section.title }}</h2><span>{{ t("schemaForm.fieldCount", { n: visibleFields(section.fields).length }) }}</span></header>
       <slot :name="`tools-${section.id}`" />
       <div class="schema-fields">
-        <SchemaField
+        <component
+          :is="field.key === 'pretrained_model_name_or_path' && ['sd3-lora', 'anima-lora-fast', 'anima-finetune'].includes(schema.name) ? AnimaModelField : SchemaField"
           v-for="field in visibleFields(section.fields)"
           :key="field.key"
           :field="effectiveField(field)"
