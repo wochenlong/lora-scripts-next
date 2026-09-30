@@ -498,6 +498,10 @@ export default {
       toolbarAria: "引擎全局配置",
       readyChip: "训练环境准备就绪",
       end: "没有更多了",
+      cloud: {
+        banner: "当前为云端单引擎镜像（锁定引擎：{engine}）。引擎的安装 / 重装 / 卸载已禁用；如需其他引擎请使用对应镜像。",
+        lockedGate: "当前为云端单引擎镜像（锁定引擎：{engine}），不支持在线安装此引擎。",
+      },
       defaultEngine: {
         label: "默认引擎",
         locked: "不可调整",

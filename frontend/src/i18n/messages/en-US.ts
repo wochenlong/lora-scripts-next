@@ -498,6 +498,10 @@ export default {
       toolbarAria: "Engine global settings",
       readyChip: "Training environment ready",
       end: "No more",
+      cloud: {
+        banner: "This is a single-engine cloud image (locked engine: {engine}). Engine install / reinstall / uninstall are disabled; use the matching image for other engines.",
+        lockedGate: "This is a single-engine cloud image (locked engine: {engine}); installing this engine online is not supported.",
+      },
       defaultEngine: {
         label: "Default engine",
         locked: "Cannot change",

@@ -37,6 +37,7 @@
 | 路径 | 原因 |
 |------|------|
 | `start_autodl.sh` | 镜像开机命令写死此路径 |
+| `start_cloud.sh` | 云端 slim 装机/直启入口（见 `docs/cloud-deploy.md`）；一旦绑定镜像开机命令同样冻结 |
 
 ## 根目录转发器（可保留文件名，实现已迁走）
 
@@ -64,6 +65,7 @@ Agent 内部操作说明（Token、Release、本机路径等）：`doc/local/AGE
 |------|------|
 | `scripts/portable/` | 整合包启动 |
 | `scripts/autodl/` | 云 GPU 运维 |
+| `scripts/cloud/` | 云端 slim 装机（`start_cloud.sh` 的实现） |
 | `scripts/cli/` | 命令行训练；Anima 标准见 `train_anima_by_toml.sh`，**Anima Fast** 安装与 TOML 训练见 `install_anima_fast.sh` / `train_anima_fast_by_toml.sh` |
 | `legacy/` | 打标 / notebook 等上游工具 |
 | `doc/local/` | 本地交接与 Issue 草稿（不上传 GitHub）；`AGENT_INTERNAL.md` 放此处 |
@@ -75,5 +77,5 @@ Agent 内部操作说明（Token、Release、本机路径等）：`doc/local/AGE
 
 - **Windows 本地 / 整合包**：双击 `run_gui.bat`
 - **Linux 源码**：`bash run_gui.sh` 或 `USE_CN_MIRROR=1 bash run_gui.sh`
-- **云镜像开机**：`start_autodl.sh`（勿动路径）
+- **云镜像开机**：`start_autodl.sh`（勿动路径）；依托镜像已有 torch 的 slim 装机用 `start_cloud.sh` |
 - **Anima 纯命令行**：标准模式用 `bash train_anima_by_toml.sh ...`；Fast 插件模式先 `bash scripts/cli/install_anima_fast.sh`，再 `bash train_anima_fast_by_toml.sh ...`

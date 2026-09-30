@@ -4,6 +4,8 @@
 
 本文用于指导 AutoDL 实例上的 Cursor/Agent 部署 `lora-scripts-next` 训练环境。目标硬件是 RTX 5090 / 50 系显卡，重点是保证 CUDA、PyTorch、Python 与本项目依赖兼容。
 
+> **更省事的路径**：如果镜像已带 torch（如 PyTorch 2.8.0 + CUDA 12.8 官方镜像），可直接用 `bash start_cloud.sh` 一键装机（检测宿主 → 匹配引擎 → slim 安装复用宿主 torch → 直启 6006），见 [cloud-deploy.md](./cloud-deploy.md)。本文的手工流程仍适合需要完全自定义训练环境的场景。
+
 ## 1. AutoDL 镜像选择
 
 在 AutoDL 创建实例时，优先选择：

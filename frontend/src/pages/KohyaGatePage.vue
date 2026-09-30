@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { RouterLink } from "vue-router"
 import { enginesApi, type EngineStatus } from "../api/engines"
+import { useCloudMode } from "../composables/useCloudMode"
 import EngineStatusBar from "../components/EngineStatusBar.vue"
 import TrainingPage from "./TrainingPage.vue"
 import type { FormModel } from "../schema/adapter"
@@ -20,6 +21,8 @@ let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
 const { t } = useI18n()
+const { cloudMode, lockedEngine } = useCloudMode()
+const installBlockedByCloud = computed(() => cloudMode.value && lockedEngine.value !== "kohya")
 const ready = computed(() => status.value.state === "ready")
 const working = computed(() => ["installing", "auditing"].includes(status.value.state))
 const label = computed(() => {
@@ -153,8 +156,8 @@ onBeforeUnmount(() => {
         :title="label"
         :hint="hint"
         :loading="loading"
-        :show-install="!working"
-        :show-reinstall="status.state === 'broken'"
+        :show-install="!working && !installBlockedByCloud"
+        :show-reinstall="status.state === 'broken' && !installBlockedByCloud"
         @install="install(false)"
         @reinstall="install(true)"
       />
@@ -167,12 +170,15 @@ onBeforeUnmount(() => {
           <strong>{{ status.state }}</strong>
         </div>
         <div class="fast-actions">
-          <button class="primary-action" :disabled="loading || working" @click="install(false)">
-            {{ working ? t("kohyaGate.installWorking") : t("kohyaGate.install") }}
-          </button>
-          <button v-if="status.state === 'broken'" class="secondary-action" :disabled="loading" @click="install(true)">
-            {{ t("settings.engines.actions.reinstall") }}
-          </button>
+          <p v-if="installBlockedByCloud" class="cloud-gate-notice">{{ t("settings.engines.cloud.lockedGate", { engine: lockedEngine }) }}</p>
+          <template v-else>
+            <button class="primary-action" :disabled="loading || working" @click="install(false)">
+              {{ working ? t("kohyaGate.installWorking") : t("kohyaGate.install") }}
+            </button>
+            <button v-if="status.state === 'broken'" class="secondary-action" :disabled="loading" @click="install(true)">
+              {{ t("settings.engines.actions.reinstall") }}
+            </button>
+          </template>
           <RouterLink class="secondary-action" to="/settings/engines">{{ t("settings.engines.actions.manage") }}</RouterLink>
         </div>
       </section>

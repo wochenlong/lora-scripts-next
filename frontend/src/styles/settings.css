@@ -652,3 +652,21 @@
 .settings-card {
   border-radius: var(--radius-lg);
 }
+
+.engines-cloud-banner {
+  margin: 0 0 14px;
+  padding: 10px 14px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--el-color-warning-light-5, #e6a23c);
+  background: var(--el-color-warning-light-9, #fdf6ec);
+  color: var(--el-color-warning-dark-2, #b88230);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.cloud-gate-notice {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--muted, #888);
+}

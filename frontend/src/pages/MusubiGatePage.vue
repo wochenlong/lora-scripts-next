@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { RouterLink } from "vue-router"
 import { enginesApi, type EngineStatus } from "../api/engines"
+import { useCloudMode } from "../composables/useCloudMode"
 import EngineStatusBar from "../components/EngineStatusBar.vue"
 import TrainingPage from "./TrainingPage.vue"
 import { SCHEMA_META } from "../training/modules"
@@ -20,6 +21,8 @@ let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
 const { t } = useI18n()
+const { cloudMode, lockedEngine } = useCloudMode()
+const installBlockedByCloud = computed(() => cloudMode.value && lockedEngine.value !== "musubi")
 const meta = SCHEMA_META["krea2-lora"]
 const title = computed(() => t(meta.titleKey))
 const area = computed(() => t(meta.areaKey))
@@ -153,8 +156,8 @@ onBeforeUnmount(() => {
         :title="label"
         :hint="hint"
         :loading="loading"
-        :show-install="status.featureEnabled && !working"
-        :show-reinstall="status.state === 'broken'"
+        :show-install="status.featureEnabled && !working && !installBlockedByCloud"
+        :show-reinstall="status.state === 'broken' && !installBlockedByCloud"
         @install="install(false)"
         @reinstall="install(true)"
       />
@@ -171,12 +174,15 @@ onBeforeUnmount(() => {
           <p v-for="error in status.facts.audit.errors" :key="error">{{ error }}</p>
         </div>
         <div class="fast-actions">
-          <button class="primary-action" :disabled="loading || working || !status.featureEnabled" @click="install(false)">
-            {{ working ? t("musubiGate.installWorking") : t("musubiGate.install") }}
-          </button>
-          <button v-if="status.state === 'broken'" class="secondary-action" :disabled="loading" @click="install(true)">
-            {{ t("settings.engines.actions.reinstall") }}
-          </button>
+          <p v-if="installBlockedByCloud" class="cloud-gate-notice">{{ t("settings.engines.cloud.lockedGate", { engine: lockedEngine }) }}</p>
+          <template v-else>
+            <button class="primary-action" :disabled="loading || working || !status.featureEnabled" @click="install(false)">
+              {{ working ? t("musubiGate.installWorking") : t("musubiGate.install") }}
+            </button>
+            <button v-if="status.state === 'broken'" class="secondary-action" :disabled="loading" @click="install(true)">
+              {{ t("settings.engines.actions.reinstall") }}
+            </button>
+          </template>
           <RouterLink class="secondary-action" to="/settings/engines">{{ t("settings.engines.actions.manage") }}</RouterLink>
         </div>
       </section>

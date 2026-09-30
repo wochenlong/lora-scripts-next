@@ -49,6 +49,9 @@ from mikazuki.app.train_submit import (
     toml,
 )
 from mikazuki.app.config import app_config
+from mikazuki.cloud_mode import current as cloud_mode_current
+from mikazuki.cloud_mode import install_block_reason as cloud_install_block_reason
+from mikazuki.cloud_mode import uninstall_block_reason as cloud_uninstall_block_reason
 from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  APIResponseSuccess, TaggerInterrogateRequest,
                                  TaggerPrefetchRequest)
@@ -309,6 +312,9 @@ async def _engine_install_impl(engine_id: str, request: Request, force_install: 
     pack = registry.get_pack(engine_id)
     if pack is None:
         raise HTTPException(status_code=404, detail=f"Unknown engine: {engine_id}")
+    blocked = cloud_install_block_reason(engine_id)
+    if blocked:
+        return APIResponseFail(message=blocked)
     if pack.manifest.kind == KIND_BUILTIN:
         return APIResponseFail(message=f"{engine_id} 为内置引擎，无需安装。")
     routes = _engine_routes_module(engine_id)
@@ -328,6 +334,9 @@ async def engine_repair(engine_id: str, request: Request):
     pack = registry.get_pack(engine_id)
     if pack is None:
         raise HTTPException(status_code=404, detail=f"Unknown engine: {engine_id}")
+    blocked = cloud_install_block_reason(engine_id)
+    if blocked:
+        return APIResponseFail(message=blocked)
     if pack.manifest.kind == KIND_BUILTIN:
         return APIResponseFail(message=f"{engine_id} 为内置引擎，无需修复。")
     routes = _engine_routes_module(engine_id)
@@ -342,6 +351,9 @@ async def engine_uninstall(engine_id: str):
     pack = registry.get_pack(engine_id)
     if pack is None:
         raise HTTPException(status_code=404, detail=f"Unknown engine: {engine_id}")
+    blocked = cloud_uninstall_block_reason(engine_id)
+    if blocked:
+        return APIResponseFail(message=blocked)
     if pack.manifest.kind == KIND_BUILTIN:
         return APIResponseFail(message=f"{engine_id} 为内置引擎，不可卸载。")
     routes = _engine_routes_module(engine_id)
@@ -990,3 +1002,9 @@ async def check_update(force: bool = False):
 async def get_version():
     from mikazuki.update_check import local_version
     return APIResponseSuccess(data={"version": local_version()})
+
+
+@router.get("/cloud/status")
+async def cloud_status():
+    """云端单引擎镜像模式（start_cloud.sh 注入）；非云端启动恒为 cloud_mode=false。"""
+    return APIResponseSuccess(data=cloud_mode_current())

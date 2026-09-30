@@ -4,6 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { enginesApi, type EngineStatus } from "../api/engines"
+import { useCloudMode } from "../composables/useCloudMode"
 import DownloadSourcesPanel from "../components/DownloadSourcesPanel.vue"
 import {
   ENGINE_CATALOG,
@@ -14,6 +15,7 @@ import { readEnginePrefs, writeEnginePrefs } from "../engines/prefs"
 import type { TrainingEngine } from "../training/modules"
 
 const { t } = useI18n()
+const { cloudMode, lockedEngine } = useCloudMode()
 const loadingId = ref<string | null>(null)
 const statuses = ref<Record<string, EngineStatus>>({})
 const logs = ref<string[]>([])
@@ -245,6 +247,10 @@ onBeforeUnmount(() => {
       </div>
     </header>
 
+    <p v-if="cloudMode" class="engines-cloud-banner" data-testid="engines-cloud-banner">
+      {{ t("settings.engines.cloud.banner", { engine: lockedEngine }) }}
+    </p>
+
     <section class="engines-toolbar" :aria-label="t('settings.engines.toolbarAria')">
       <label class="toolbar-field">
         <span>{{ t("settings.engines.defaultEngine.label") }}</span>
@@ -327,7 +333,7 @@ onBeforeUnmount(() => {
               v-else
               type="button"
               class="primary-action engine-primary"
-              :disabled="loadingId === card.engine.id || ['installing', 'auditing', 'coming_soon'].includes(card.status.state) || !card.status.featureEnabled"
+              :disabled="loadingId === card.engine.id || ['installing', 'auditing', 'coming_soon'].includes(card.status.state) || !card.status.featureEnabled || cloudMode"
               @click="install(card.engine.id, false)"
             >
               {{ ["installing", "auditing"].includes(card.status.state) ? t("settings.engines.actions.installing") : t("settings.engines.actions.install") }}
@@ -341,7 +347,7 @@ onBeforeUnmount(() => {
                 <button
                   type="button"
                   role="menuitem"
-                  :disabled="loadingId === card.engine.id || !['broken', 'installed_unverified', 'ready'].includes(card.status.state)"
+                  :disabled="loadingId === card.engine.id || !['broken', 'installed_unverified', 'ready'].includes(card.status.state) || cloudMode"
                   @click="install(card.engine.id, true)"
                 >
                   {{ t("settings.engines.actions.reinstall") }}
@@ -350,7 +356,7 @@ onBeforeUnmount(() => {
                   type="button"
                   role="menuitem"
                   class="is-danger"
-                  :disabled="loadingId === card.engine.id || ['installing', 'auditing', 'not_installed', 'coming_soon', 'unknown'].includes(card.status.state)"
+                  :disabled="loadingId === card.engine.id || ['installing', 'auditing', 'not_installed', 'coming_soon', 'unknown'].includes(card.status.state) || cloudMode"
                   @click="uninstall(card.engine.id)"
                 >
                   {{ t("settings.engines.actions.uninstall") }}

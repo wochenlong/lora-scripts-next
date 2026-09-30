@@ -5,6 +5,10 @@
 ---
 ## 未发布（dev）
 
+### 新增（云端）
+
+- **`start_cloud.sh` 云端 slim 装机入口**：依托云镜像已有的 torch 直接安装运行（检测宿主 python/torch/CUDA → 按引擎 `REQUIRES` 匹配 → slim 安装复用宿主 torch，不建独立 venv），装完写 `.cloud_install_done` 指纹，之后开机直启；指纹不符明确报错。首个支持 slim 的引擎是 musubi（torch≥2.5.1 / cuda≥12.4）。装机后 WebUI 进入单引擎模式：引擎安装/重装/卸载禁用。用法见 `docs/cloud-deploy.md`
+
 ### 清理
 
 - **移除 legacy Gradio `dataset-tag-editor`**：删除 Git 子模块与 `:28001` 代理；数据集标签编辑仅保留 Vue 自研 `/dataset/editor`。旧 URL `/tageditor.html` 重定向到自研编辑器。

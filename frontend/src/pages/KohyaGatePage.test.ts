@@ -15,6 +15,18 @@ vi.mock("../api/engines", () => ({
   },
 }))
 
+const cloud = vi.hoisted(() => ({ mode: false, engine: null as string | null }))
+vi.mock("../composables/useCloudMode", async () => {
+  const { computed } = await import("vue")
+  return {
+    useCloudMode: () => ({
+      cloudMode: computed(() => cloud.mode),
+      lockedEngine: computed(() => cloud.engine),
+      refreshCloud: async () => {},
+    }),
+  }
+})
+
 const status = vi.mocked(enginesApi.status)
 const ready: EngineStatus = { id: "kohya", state: "ready", featureEnabled: true }
 const installing: EngineStatus = { id: "kohya", state: "installing", featureEnabled: true }
@@ -38,6 +50,8 @@ function mountPage() {
 afterEach(() => {
   vi.restoreAllMocks()
   status.mockReset()
+  cloud.mode = false
+  cloud.engine = null
 })
 
 describe("KohyaGatePage", () => {
@@ -63,6 +77,29 @@ describe("KohyaGatePage", () => {
     const bar = wrapper.get('[data-testid="engine-status-bar"]')
     expect(bar.attributes("data-state")).toBe("not_installed")
     expect(wrapper.text()).toContain("安装 Kohya 环境")
+    wrapper.unmount()
+  })
+
+  it("hides install actions when the cloud image locks another engine", async () => {
+    cloud.mode = true
+    cloud.engine = "musubi"
+    status.mockResolvedValue(notInstalled)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.text()).toContain("云端单引擎镜像")
+    expect(wrapper.find(".fast-actions .primary-action").exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it("keeps install actions when the cloud image locks this engine", async () => {
+    cloud.mode = true
+    cloud.engine = "kohya"
+    status.mockResolvedValue(notInstalled)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find(".fast-actions .primary-action").exists()).toBe(true)
     wrapper.unmount()
   })
 
