@@ -57,6 +57,35 @@ def test_data_conversion_preserves_alpha_repeats_and_unicode(configured):
     assert json.loads(Path(adapted.arguments["dataset_metadata_path"]).read_text(encoding="utf-8")) == adapted.dataset
 
 
+def test_edit_metadata_serializes_reference_paths_relative_to_dataset_base(configured):
+    rt, config = configured
+    output = Path(config["train_data_dir"]) / "outputs"
+    inputs = Path(config["train_data_dir"]) / "inputs"
+    output.mkdir()
+    inputs.mkdir()
+    Image.new("RGB", (32, 32), "blue").save(output / "target.png")
+    Image.new("RGB", (32, 32), "green").save(inputs / "reference.png")
+    metadata = rt.project_root / "edit.json"
+    metadata.write_text(json.dumps([{
+        "image": "target.png",
+        "prompt": "edit",
+        "edit_image": [str((inputs / "reference.png").resolve())],
+    }]), encoding="utf-8")
+    edit_config = {
+        **config,
+        "training_task": "image-edit",
+        "dataset_format": "metadata",
+        "dataset_base_path": str(output),
+        "dataset_metadata_path": str(metadata),
+    }
+
+    adapted = adapt_config(edit_config, rt)
+    path = dump_config(adapted, rt.project_root / "autosave", "edit")
+    written = json.loads(Path(path.parent / "edit-dataset.json").read_text(encoding="utf-8"))
+
+    assert written[0]["edit_image"] == ["../inputs/reference.png"]
+
+
 def test_official_arguments_and_process_isolation(configured, monkeypatch):
     rt, config = configured
     monkeypatch.setenv("PYTHONPATH", "/gui/packages")
@@ -96,7 +125,9 @@ def test_quantization_is_rejected(configured):
         adapt_config({**config, "diffsynth_quantization": "bitsandbytes_nf4"}, rt)
 
 
-def test_install_uses_managed_python_complete_pin_and_mirrors(tmp_path):
+def test_install_uses_managed_python_complete_pin_and_mirrors(tmp_path, monkeypatch):
+    monkeypatch.setattr("mikazuki.engines.diffsynth.environment.platform.machine", lambda: "x86_64")
+    monkeypatch.setattr("mikazuki.engines.diffsynth.environment.sys.platform", "linux")
     rt = Runtime(tmp_path)
     sources = DownloadSources(pip_index_url="https://pypi.example/simple", pytorch_index_url="https://torch.example/whl", github_url_prefix="https://git.example/")
     commands = installation_plan(rt, sources)
@@ -113,6 +144,22 @@ def test_install_uses_managed_python_complete_pin_and_mirrors(tmp_path):
     assert "deepspeed" not in " ".join(commands[-1])
 
 
+def test_install_torch_uses_pypi_on_linux_aarch64(tmp_path, monkeypatch):
+    monkeypatch.setattr("mikazuki.engines.diffsynth.environment.platform.machine", lambda: "aarch64")
+    monkeypatch.setattr("mikazuki.engines.diffsynth.environment.sys.platform", "linux")
+    rt = Runtime(tmp_path)
+    sources = DownloadSources(pip_index_url="https://pypi.example/simple", pytorch_index_url="https://torch.example/whl")
+    commands = installation_plan(rt, sources)
+    torch_cmd = commands[-2]
+    assert "torch.example" not in " ".join(torch_cmd)
+    assert torch_cmd[torch_cmd.index("--index-url") + 1] == "https://pypi.example/simple"
+    assert "torch==2.13.0" in torch_cmd and "torchvision==0.28.0" in torch_cmd
+    assert "torch==2.13.0" in commands[-1] and "torchvision==0.28.0" in commands[-1]
+    plain = installation_plan(rt, DownloadSources())[-2]
+    assert "--index-url" not in plain
+    assert "torch==2.13.0" in plain and "torchvision==0.28.0" in plain
+
+
 def test_import_export_roundtrip(configured):
     from mikazuki.utils.config_import import validate_config_import
     from mikazuki.utils.config_export import normalize_config_for_export
@@ -121,6 +168,16 @@ def test_import_export_roundtrip(configured):
     result = validate_config_import("qwen-image-21-lora", exported)
     assert result["result"] == "ok", result
     assert result["config"]["lora_rank"] == 8
+
+
+def test_import_migrates_legacy_diffsynth_input_mode(configured):
+    from mikazuki.utils.config_import import validate_config_import
+
+    _, config = configured
+    config["model_input_mode"] = "components"
+    result = validate_config_import("qwen-image-21-lora", config)
+    assert result["result"] == "ok", result
+    assert result["config"]["model_input_mode"] == "comfyui_files"
 
 
 def test_api_run_routes_parameters_into_task_without_training(configured, monkeypatch):

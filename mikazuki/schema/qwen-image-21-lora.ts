@@ -2,18 +2,18 @@ Schema.intersect([
     Schema.object({
         training_task: Schema.union(["text-to-image", "image-edit"]).default("text-to-image").role("external-control").hidden(),
         model_train_type: Schema.string().default("qwen-image-21-lora").disabled().description("训练种类"),
-        model_input_mode: Schema.union(["directory", "components"]).default("directory").description("模型输入方式：ComfyUI 分组件 / 完整模型目录；Qwen-Image-2.1 BF16 文生图 / Edit 共用同一套模型"),
+        model_input_mode: Schema.union(["model_repository", "comfyui_files"]).default("model_repository").description("模型输入方式：模型仓库 / ComfyUI 模型文件；Qwen-Image-2.1 BF16 文生图 / Edit 共用同一套模型"),
     }).description("训练用模型"),
     Schema.union([
         Schema.object({
-            model_input_mode: Schema.const("directory"),
-            diffsynth_model_dir: Schema.string().role('filepicker', { type: "folder" }).required().description("模型目录（transformer / text_encoder / vae）"),
+            model_input_mode: Schema.const("model_repository"),
+            diffsynth_model_dir: Schema.string().role('filepicker', { type: "folder" }).default("./sd-models/qwen-image-21").required().description("模型目录（transformer / text_encoder / vae）"),
         }),
         Schema.object({
-            model_input_mode: Schema.const("components"),
-            dit_path: Schema.string().role('filepicker', { type: "model-file", filter: "*.safetensors;*.safetensors.index.json" }).required().description("Comfy-Org Qwen-Image-2.1 BF16 DiT；可填写文件、分片索引或目录"),
-            text_encoder_path: Schema.string().role('filepicker', { type: "model-file", filter: "*.safetensors;*.safetensors.index.json" }).required().description("Qwen3-VL-8B BF16 文本编码器"),
-            vae_path: Schema.string().role('filepicker', { type: "model-file", filter: "*.safetensors;*.safetensors.index.json" }).required().description("Qwen-Image-2.1 BF16 VAE"),
+            model_input_mode: Schema.const("comfyui_files"),
+            dit_path: Schema.string().role('filepicker', { type: "model-file", filter: "*.safetensors;*.safetensors.index.json" }).default("./sd-models/qwen-image-21/transformer").required().description("Comfy-Org Qwen-Image-2.1 BF16 DiT；可填写文件、分片索引或目录"),
+            text_encoder_path: Schema.string().role('filepicker', { type: "model-file", filter: "*.safetensors;*.safetensors.index.json" }).default("./sd-models/qwen-image-21/text_encoder").required().description("Qwen3-VL-8B BF16 文本编码器"),
+            vae_path: Schema.string().role('filepicker', { type: "model-file", filter: "*.safetensors;*.safetensors.index.json" }).default("./sd-models/qwen-image-21/vae").required().description("Qwen-Image-2.1 BF16 VAE"),
         }),
     ]),
     Schema.object({
@@ -26,7 +26,7 @@ Schema.intersect([
                 Schema.object({
                     dataset_format: Schema.const("image_text"),
                     output_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).default("./train/qwen-image-21/edit-output").required().description("输出图目录：包含目标图与同名 TXT 编辑指令"),
-                    input_data_dirs: Schema.array(String).role('reference-paths').default([]).required().description("输入图目录，可添加多组；按输出图的相对目录与同名文件匹配"),
+                    input_data_dirs: Schema.array(String).role('reference-paths', { internal: "train-dir" }).default([]).required().description("输入图目录，可添加多组；按输出图的相对目录与同名文件匹配"),
                 }),
                 Schema.object({
                     dataset_format: Schema.const("metadata"),

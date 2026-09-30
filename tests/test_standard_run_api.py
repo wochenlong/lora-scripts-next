@@ -83,6 +83,14 @@ def make_request(payload: dict) -> Request:
     return Request({"type": "http", "method": "POST", "path": "/api/run", "headers": []}, receive)
 
 
+def kohya_ready():
+    """kohya handle_run now gates on the managed venv being installed."""
+    return mock.patch(
+        "mikazuki.engines.kohya.extension_state.read_status",
+        return_value={"state": "ready", "facts": {}},
+    )
+
+
 class StandardRunApiTests(unittest.TestCase):
     def test_run_rejects_unknown_standard_train_type_without_500(self):
         response = asyncio.run(api.create_toml_file(make_request({"model_train_type": "unknown-lora"})))
@@ -91,21 +99,33 @@ class StandardRunApiTests(unittest.TestCase):
         self.assertIn("不支持的训练类型", response.message)
         self.assertEqual(response.data["model_train_type"], "unknown-lora")
 
-    def test_run_rejects_missing_train_data_dir_without_connect_error(self):
+    def test_run_rejected_when_kohya_env_not_ready(self):
         response = asyncio.run(api.create_toml_file(make_request({
             "model_train_type": "sd-lora",
+            "train_data_dir": "E:/OpenSourceTeamWork/not-used",
             "pretrained_model_name_or_path": "runwayml/stable-diffusion-v1-5",
         })))
+
+        self.assertEqual(response.status, "fail")
+        self.assertIn("未就绪", response.message)
+
+    def test_run_rejects_missing_train_data_dir_without_connect_error(self):
+        with kohya_ready():
+            response = asyncio.run(api.create_toml_file(make_request({
+                "model_train_type": "sd-lora",
+                "pretrained_model_name_or_path": "runwayml/stable-diffusion-v1-5",
+            })))
 
         self.assertEqual(response.status, "fail")
         self.assertEqual(response.data["field"], "train_data_dir")
         self.assertIn("训练数据集路径", response.message)
 
     def test_run_rejects_missing_model_path_without_connect_error(self):
-        response = asyncio.run(api.create_toml_file(make_request({
-            "model_train_type": "sd-lora",
-            "train_data_dir": "E:/OpenSourceTeamWork/not-used",
-        })))
+        with kohya_ready():
+            response = asyncio.run(api.create_toml_file(make_request({
+                "model_train_type": "sd-lora",
+                "train_data_dir": "E:/OpenSourceTeamWork/not-used",
+            })))
 
         self.assertEqual(response.status, "fail")
         self.assertEqual(response.data["field"], "pretrained_model_name_or_path")
@@ -138,6 +158,7 @@ class StandardRunApiTests(unittest.TestCase):
             )
 
             with mock.patch.object(api.os, "getcwd", return_value=str(root)), \
+                    kohya_ready(), \
                     mock.patch.object(api.process, "run_train", return_value=fake_response) as run_train:
                 response = asyncio.run(api.create_toml_file(make_request(payload)))
 
@@ -177,6 +198,7 @@ class StandardRunApiTests(unittest.TestCase):
             )
 
             with mock.patch.object(api.os, "getcwd", return_value=str(root)), \
+                    kohya_ready(), \
                     mock.patch.object(api.process, "run_train", return_value=fake_response) as run_train:
                 response = asyncio.run(api.create_toml_file(make_request(payload)))
 

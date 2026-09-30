@@ -1,12 +1,12 @@
-"""kohya builtin engine pack manifest (contract: mikazuki.engines.manifest).
+"""kohya engine pack manifest (contract: mikazuki.engines.manifest).
 
-kohya ships inside the main Python environment and is always ready: no
-installer, no patches, dispatch goes straight to the existing trainer_mapping
-pipeline.
+kohya (sd-scripts) trains in an independent uv-managed venv under
+``extensions/kohya/``; the training source ships with the repository
+(``vendor/sd-scripts`` + ``scripts/``), so there is no upstream clone step.
 """
 
 ENGINE_ID = "kohya"
-KIND = "builtin"
+KIND = "plugin"
 
 TRAIN_TYPES = {
     "sd-lora": "sd15",

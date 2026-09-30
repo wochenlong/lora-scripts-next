@@ -31,12 +31,12 @@ if errorlevel 1 (
 
 :launch
 :: A venv left behind by a failed install used to reach `python gui.py` and die
-:: at the first torch import with nothing pointing back at the installer. Check
-:: for the package directory rather than importing torch: an import costs
+:: at the first missing dependency with nothing pointing back at the installer.
+:: Check for the package directory rather than importing: an import costs
 :: several seconds on every launch.
-if exist "venv\Scripts\python.exe" if not exist "venv\Lib\site-packages\torch\__init__.py" (
+if exist "venv\Scripts\python.exe" if not exist "venv\Lib\site-packages\fastapi\__init__.py" (
     echo.
-    echo [ERROR] venv 已存在，但里面没有 torch —— 上一次依赖安装没有真正完成。
+    echo [ERROR] venv 已存在，但里面没有 fastapi —— 上一次依赖安装没有真正完成。
     echo   请重新运行安装脚本:
     echo     powershell -NoProfile -ExecutionPolicy Bypass -File "%~dp0install-cn.ps1"
     echo   若仍然失败，删除 venv 文件夹后重试。

@@ -105,8 +105,13 @@ def build_accelerate_train_command(
     toml_path: str,
     cpu_threads: int = 2,
     gpu_ids: Optional[list] = None,
+    python_executable: Optional[str] = None,
 ) -> tuple[list[str], dict[str, str], Optional[str]]:
-    """Build accelerate launch argv and env for sd-scripts training."""
+    """Build accelerate launch argv and env for sd-scripts training.
+
+    ``python_executable`` selects the interpreter; the kohya pack passes its
+    independent venv python, the default keeps the historical GUI-env behavior.
+    """
     launch_opts = [
         "--num_cpu_threads_per_process",
         str(cpu_threads),
@@ -124,7 +129,7 @@ def build_accelerate_train_command(
 
     launch_entry = Path(__file__).resolve().parent / "accelerate_launch.py"
     args = [
-        sys.executable,
+        python_executable or sys.executable,
         str(launch_entry),
         *launch_opts,
         trainer_file,
@@ -210,7 +215,8 @@ def run_train(toml_path: str,
               trainer_file: str = "./scripts/train_network.py",
               gpu_ids: Optional[list] = None,
               cpu_threads: Optional[int] = 2,
-              metadata: Optional[dict] = None):
+              metadata: Optional[dict] = None,
+              python_executable: Optional[str] = None):
     log.info(f"Training started with config file / 训练开始，使用配置文件: {toml_path}")
     cpu_threads = cpu_threads or 2
     args, customize_env, mixed_precision = build_accelerate_train_command(
@@ -218,6 +224,7 @@ def run_train(toml_path: str,
         toml_path=toml_path,
         cpu_threads=cpu_threads,
         gpu_ids=gpu_ids,
+        python_executable=python_executable,
     )
 
     if mixed_precision:

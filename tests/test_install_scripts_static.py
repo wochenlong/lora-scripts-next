@@ -54,9 +54,12 @@ def test_install_cn_upgrades_pip_with_an_explicit_lower_bound():
     assert "Get-PipResumeRetriesArgs" in source
 
 
-def test_installers_verify_torch_is_importable_before_claiming_success():
-    for name in ("install-cn.ps1", "install.ps1"):
-        assert "import torch" in _read(name), name
+def test_installers_no_longer_install_torch_into_gui_env():
+    """Training stacks live in engine-pack venvs; GUI installers stay slim."""
+    for name in ("install-cn.ps1", "install.ps1", "install.bash", "setup_environment.py"):
+        source = _read(name)
+        assert "torch==" not in source, name
+        assert "xformers" not in source, name
 
 
 def test_install_ps1_never_calls_bare_pip():
@@ -73,7 +76,7 @@ def test_install_ps1_never_calls_bare_pip():
     assert "python -m pip install" in source
 
 
-def test_source_launcher_refuses_a_venv_without_torch():
+def test_source_launcher_refuses_a_venv_without_gui_deps():
     source = _read("run_gui_source.bat")
 
-    assert r"venv\Lib\site-packages\torch\__init__.py" in source
+    assert r"venv\Lib\site-packages\fastapi\__init__.py" in source

@@ -1,7 +1,7 @@
 ﻿# Next Trainer
 
 **Next Trainer** 是 Windows 本地训练 WebUI（GitHub 仓库名：`lora-scripts-next`）。  
-支持 Anima / SD 1.5 / SDXL / Flux / **Krea 2** 的 LoRA 与全量微调，并可通过 DiffSynth 训练 Qwen-Image-2.1 LoRA；基于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)，可选 [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) 与独立引擎运行环境，延续秋叶系训练体验。
+支持 Anima / SD 1.5 / SDXL / Flux / **Krea 2** 的 LoRA 与全量微调，并可通过 DiffSynth 训练 Qwen-Image-2.1 文生图与图像编辑 LoRA；基于 [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts)，可选 [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) 与独立引擎运行环境，延续秋叶系训练体验。
 
 > 产品品牌与发布归档一律为 **Next Trainer** / `Next-Trainer-v*.7z`。整合包内目录名 `SD-Trainer/`（及 `Update-SD-Trainer*.bat`）仍为兼容旧安装的启动契约，暂不改名。
 
@@ -124,7 +124,7 @@ git pull
 - Anima LoRA / LoKr / T-LoRA、Anima Fast（插件）、Anima 全量微调  
 - SD 1.5 / SDXL LoRA 与全量微调、Flux LoRA  
 - **Krea 2 LoRA**（可选 **Musubi-Tuner** 引擎，设置页安装）  
-- **Qwen-Image-2.1 BF16 文生图 LoRA**（可选 **DiffSynth** 引擎，设置页安装；`dev` 集成阶段）
+- **Qwen-Image-2.1 BF16 文生图 / 图像编辑 LoRA**（可选 **DiffSynth** 引擎，设置页安装；`dev` 集成阶段）
 - 本地打标、训练监控（`/train-monitor`）、TensorBoard  
 
 Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux）：[docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
@@ -136,6 +136,7 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 - **可恢复删除：** 删除图片时会联动同名 TXT；文件或整个数据集删除后进入全局回收站。恢复时不会静默覆盖新文件，永久清空必须二次确认；数据集操作已串行化，避免上传、删除与恢复互相竞争。
 - **工具互通：** 托管数据集可直接打开模型打标或标签编辑；编辑器内可下载单个托管文件，并把选中图片移入回收站。
 - **Qwen 新手入口：** 首页优先展示 Qwen-Image-2.1 教程海报，并链接到更新后的入门教程。
+- **Qwen 图像编辑训练：** 训练页可在文生图与 Edit 模式间切换；Edit 数据按“目标输出图 + 一个或多个输入参考图”组织，支持拖放上传、训练预览、配置导入导出和任务草稿恢复。
 - **运行时加固：** 引擎安装不再对空虚拟环境误报成功；使用 dataset config 时不再自动整理其训练目录；Anima Fast 增加明确的训练时长模式与验证集拆分设置。
 
 ### 数据集管理器
@@ -158,11 +159,12 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 在 **设置 → 训练引擎** 中安装、检查、修复或卸载 DiffSynth，使用独立的 Python 3.12 / PyTorch 2.8 CUDA 12.8 环境。
 
 - 模型可选择完整目录，或分别指定受支持的 BF16 DiT、文本编码器和 VAE 文件，支持 Comfy-Org 对应组件；Processor 资源自动管理。
-- 数据集支持图片 + 同名 TXT（含 Kohya 风格子目录重复次数），也可使用 CSV / JSON / JSONL 元数据。
-- 支持 TE/VAE 编码缓存、CPU 卸载、分桶、批量训练，以及按步数或 epoch 生成独立 Sample 预览。CPU 卸载与预览同时使用时需要开启编码缓存；缓存预览复用训练 DiT。
-- 首版仅支持单卡 BF16 文生图 LoRA，暂不支持图像编辑、量化训练、全量微调或恢复完整优化器状态。
+- 文生图数据支持图片 + 同名 TXT（含 Kohya 风格子目录重复次数），也可使用 CSV / JSON / JSONL 元数据。
+- 图像编辑数据使用“目标输出图 + 一个或多个输入参考图”；支持目录配对或元数据中的 `edit_image`，并提供带参考图的训练预览。
+- 支持 TE/VAE 编码缓存、CPU 卸载、分桶，以及按步数或 epoch 生成独立 Sample 预览。文生图支持批量训练；Edit 当前要求 Batch 1，可用梯度累积增加有效批量。
+- 当前支持单卡 BF16 文生图与 Edit 图像编辑 LoRA，暂不支持量化训练、全量微调或恢复完整优化器状态。
 
-目前属于 `dev` 集成，不代表已有整合包已包含此引擎。合作者已反馈 CPU 卸载开启、关闭时都能生成预览并继续训练；导出 LoRA 在独立 ComfyUI 环境回载出图，仍是**进入 `main` 前的验收项**。
+目前属于 `dev` 集成，不代表已有整合包已包含此引擎。2026-09-28 已在 RTX 4090 24GB 上完成 Qwen-Image-2.1 Edit LoRA 全流程实测：训练 48/48 步完成并成功生成预览图。该记录是功能验收，不代表任意数据、分辨率和显存配置都能直接运行。
 
 参数与限制见 [DiffSynth 使用说明](docs/diffsynth.md)。
 
@@ -206,7 +208,7 @@ Anima Fast：[docs/anima-fast.md](docs/anima-fast.md) · Krea 2 多卡（Linux�
 | SD 1.5 / SDXL | LoRA / 全量微调 |
 | Flux | LoRA |
 | Krea 2 | LoRA（Musubi）· 设置页安装引擎 · Linux 可多卡 |
-| Qwen-Image-2.1 | DiffSynth · 单卡 BF16 文生图 LoRA · `dev` 集成阶段 |
+| Qwen-Image-2.1 | DiffSynth · 单卡 BF16 文生图 / Edit 图像编辑 LoRA · `dev` 集成阶段 |
 
 显存与进阶参数见 [docs/anima-training.md](docs/anima-training.md)。
 

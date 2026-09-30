@@ -4,7 +4,7 @@ export default {
     description: "设置保存在服务端，供插件市场和引擎安装共用。新下载任务生效；已运行的任务需结束后重试。镜像源单独设置。",
     bypass: "不使用代理的地址", save: "保存网络设置", effective: "当前策略", viaProxy: "通过代理", attempt: "尝试",
   },
-  sampleInputs: { reference: "参考路径", remove: "移除", addReference: "添加参考路径", addSample: "添加样例", width: "宽度", height: "高度", seed: "随机种子", guidance_scale: "CFG", sample_steps: "采样步数" },
+  sampleInputs: { reference: "参考路径", remove: "移除", addReference: "添加参考路径", addSample: "添加样例", width: "宽度", height: "高度", seed: "随机种子", guidance_scale: "CFG", sample_steps: "采样步数", controlImages: "控制图像", controlImage: "控制图像", addControlImage: "添加控制图像", changeControlImage: "更换图像", clickOrDrop: "点击选择或拖放", editPromptPlaceholder: "例如：将图片转换为 XX 风格" },
   app: {
     brand: "Next Trainer",
     prerelease: "RC",
@@ -610,7 +610,8 @@ export default {
         },
         kohya: {
           name: "Kohya-ss",
-          summary: "内置训练引擎，使用主环境，开箱即用。",
+          summary: "sd-scripts 训练引擎（SD1.5/SDXL/FLUX/Anima 等），独立 Python 环境。",
+          sizeHint: "运行环境需数 GB（含 PyTorch）；模型权重需另行下载",
         },
         "anima-fast": {
           name: "Anima Fast",
@@ -677,6 +678,7 @@ export default {
       confirm: {
         animaFast: "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
         install: {
+          kohya: "Kohya (sd-scripts) 会下载独立 Python 和数 GB 依赖（含 PyTorch），并要求 NVIDIA GPU。确认继续？",
           diffsynth: "DiffSynth-Studio 会下载独立 Python 和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           "anima-fast": "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           musubi: "Musubi-Tuner 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
@@ -1019,6 +1021,13 @@ export default {
     install: "安装插件",
     consoleIdle: "安装日志",
     consoleWaiting: "等待安装任务输出…",
+  },
+  kohyaGate: {
+    intro: "Kohya (sd-scripts) 训练运行在独立 Python 环境中；完成安装后即可开始训练。",
+    installWorking: "正在安装…",
+    install: "安装 Kohya 环境",
+    consoleIdle: "安装日志",
+    consoleWaiting: "等待安装…",
   },
   diffsynthGate: {
     intro: "Qwen-Image-2.1 LoRA。独立环境；暂不支持训练中采样预览。", auditTitle: "环境检查结果",

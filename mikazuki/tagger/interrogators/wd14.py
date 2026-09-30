@@ -79,8 +79,12 @@ class WaifuDiffusionInterrogator(Interrogator):
 
         #     run_pip(f'install {package}', 'onnxruntime')
 
-        # Load torch to load cuda libs built in torch for onnxruntime, do not delete this.
-        import torch  # noqa: F401 — onnxruntime may use torch CUDA libs in portable builds
+        # Load torch to load cuda libs built in torch for onnxruntime; torch is
+        # optional now that training stacks live in engine venvs.
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            pass
 
         self.model = create_inference_session(model_path)
 

@@ -3,6 +3,11 @@ chcp 65001 >nul 2>&1
 title Install Flash Attention 2
 cd /d "%~dp0"
 
+echo  NOTE: training stacks moved to per-engine managed venvs
+echo  (Settings -^> Training Engines). Installing flash-attn into the
+echo  GUI environment no longer affects training.
+echo.
+
 echo.
 echo  ============================================
 echo   Flash Attention 2 Installer

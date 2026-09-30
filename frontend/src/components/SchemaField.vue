@@ -89,7 +89,7 @@ async function openCatalog() {
         </el-select>
         <el-input-number v-else-if="field.type === 'number'" :model-value="modelValue as number | undefined" :disabled="field.disabled" :min="field.min" :max="field.max" :step="field.step || 1" :step-strictly="field.extra?.integer === true" :precision="field.extra?.integer === true ? 0 : undefined" controls-position="right" @update:model-value="emit('update:modelValue', $event ?? undefined)" />
         <PreviewSampleField v-else-if="field.role === 'preview-samples'" :samples="modelValue as string[] | undefined" :editing="editing" :dimension-step="Number(field.extra?.dimensionStep || 1)" :min-guidance="Number(field.extra?.minGuidance || 0)" :disabled="field.disabled" @update:samples="emit('update:modelValue', $event)" />
-        <ReferencePathsField v-else-if="field.role === 'reference-paths'" :model-value="(modelValue as string[] | undefined) || []" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
+        <ReferencePathsField v-else-if="field.role === 'reference-paths'" :model-value="(modelValue as string[] | undefined) || []" :disabled="field.disabled" :internal-picker="String(field.extra?.internal || '')" @update:model-value="emit('update:modelValue', $event)" />
         <el-input v-else-if="field.type === 'array' || field.role === 'table'" v-model="arrayText" type="textarea" :rows="4" :disabled="field.disabled" :placeholder="t('schemaForm.arrayPlaceholder')" />
         <el-input v-else-if="field.role === 'textarea'" :model-value="modelValue as string | undefined" type="textarea" :rows="5" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
         <span v-else-if="field.role === 'filepicker'" class="filepicker-control">

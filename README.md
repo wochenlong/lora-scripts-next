@@ -1,7 +1,7 @@
 ﻿# Next Trainer
 
 **Next Trainer** is a local Windows training WebUI (GitHub repo: `lora-scripts-next`).  
-LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / Krea 2, plus Qwen-Image-2.1 LoRA through DiffSynth. It is built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) and isolated engine runtimes, using an Akegarasu-style workflow.
+LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / Krea 2, plus Qwen-Image-2.1 text-to-image and image-editing LoRA through DiffSynth. It is built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) and isolated engine runtimes, using an Akegarasu-style workflow.
 
 > Product brand and release archives use **Next Trainer** / `Next-Trainer-v*.7z`. The portable layout folder `SD-Trainer/` (and updater bat names) stay as launcher contracts for existing installs.
 
@@ -119,7 +119,7 @@ Training backends:
 
 - Anima LoRA / Fast / finetune, SD/SDXL, Flux (Kohya line)
 - **Krea 2 LoRA** via optional **Musubi-Tuner** engine (install from Settings)
-- **Qwen-Image-2.1 BF16 text-to-image LoRA** via optional **DiffSynth** engine (install from Settings; `dev` integration)
+- **Qwen-Image-2.1 BF16 text-to-image / image-editing LoRA** via optional **DiffSynth** engine (install from Settings; `dev` integration)
 - Local tagger, train monitor (`/train-monitor`), TensorBoard
 
 Anima Fast: [docs/anima-fast.md](docs/anima-fast.md) · Krea 2 multi-GPU (Linux): [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
@@ -131,6 +131,7 @@ Anima Fast: [docs/anima-fast.md](docs/anima-fast.md) · Krea 2 multi-GPU (Linux)
 - **Recoverable deletion:** deleting selected images also includes matching TXT captions; deleting files or a whole dataset moves them to a global trash area. Restore never silently overwrites newer files, while permanent deletion requires confirmation. Dataset operations are serialized to avoid upload/delete/restore races.
 - **Tool handoff:** managed datasets can be opened directly in the tagger or tag editor. The editor can download individual managed files and move selected images to trash.
 - **Qwen onboarding:** the home page links to the updated Qwen-Image-2.1 beginner guide and shows the Qwen tutorial poster first.
+- **Qwen image-editing training:** switch between text-to-image and Edit modes in the training page. Edit datasets use a target output image plus one or more input reference images, with drag-and-drop upload, training previews, config import/export and task draft restoration.
 - **Runtime hardening:** engine installation no longer reports success for an empty virtual environment; dataset-config-owned training paths are left untouched; Anima Fast exposes explicit duration and validation-split controls.
 
 ### Dataset manager
@@ -153,11 +154,12 @@ Not included in this first dataset-workspace slice: ZIP import/extraction, renam
 Install, check, repair or uninstall DiffSynth from **Settings → Training engines**. It uses an isolated Python 3.12 / PyTorch 2.8 CUDA 12.8 environment.
 
 - Select a complete model directory or separate supported BF16 DiT, text encoder and VAE files, including Comfy-Org components. Processor resources are managed automatically.
-- Use images with matching TXT captions (including Kohya-style repeat folders), or CSV / JSON / JSONL metadata.
-- Supports TE/VAE encoding caches, CPU offload, bucketing, batch training and per-Sample previews at step or epoch intervals. CPU offload with previews requires encoding caches; cached previews reuse the training DiT.
-- Initial scope: single-GPU BF16 text-to-image LoRA only. Image editing, quantized training, full finetuning and full optimizer-state resume are not supported.
+- Text-to-image datasets support images with matching TXT captions (including Kohya-style repeat folders), or CSV / JSON / JSONL metadata.
+- Image-editing datasets use a target output image plus one or more input references, either paired by directory or declared through `edit_image` metadata, with reference-aware training previews.
+- Supports TE/VAE encoding caches, CPU offload, bucketing and per-Sample previews at step or epoch intervals. Text-to-image supports batched training; Edit currently requires batch size 1 and can use gradient accumulation.
+- Current scope: single-GPU BF16 text-to-image and Edit LoRA. Quantized training, full finetuning and full optimizer-state resume are not supported.
 
-This is a `dev` integration, not a claim that existing portable packages include it. The contributor reports previews followed by continued training with CPU offload both enabled and disabled. Independent ComfyUI reload/inference of the exported LoRA remains a **pre-`main` acceptance item**.
+This is a `dev` integration, not a claim that existing portable packages include it. On September 28, 2026, a Qwen-Image-2.1 Edit LoRA run was validated end to end on an RTX 4090 24 GB: all 48 training steps completed and a training preview was generated. This is a functional validation, not a guarantee for arbitrary datasets, resolutions or VRAM configurations.
 
 Configuration and limitations: [DiffSynth guide](docs/diffsynth.md).
 
@@ -201,7 +203,7 @@ The screenshots below predate the new dataset-manager landing view; the tagger a
 | SD 1.5 / SDXL | LoRA / full finetune |
 | Flux | LoRA |
 | Krea 2 | LoRA via Musubi · install engine in Settings · multi-GPU on Linux |
-| Qwen-Image-2.1 | DiffSynth · single-GPU BF16 text-to-image LoRA · `dev` integration |
+| Qwen-Image-2.1 | DiffSynth · single-GPU BF16 text-to-image / Edit LoRA · `dev` integration |
 
 See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
 

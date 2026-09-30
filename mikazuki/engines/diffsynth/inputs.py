@@ -123,11 +123,15 @@ def tensor_headers(files, field):
 
 
 def model_inputs(config, root):
-    mode = config.get('model_input_mode', 'directory')
-    if mode == 'directory':
+    # Accept the pre-#381 values so existing TOML files remain importable.
+    mode = {
+        'directory': 'model_repository',
+        'components': 'comfyui_files',
+    }.get(config.get('model_input_mode'), config.get('model_input_mode', 'model_repository'))
+    if mode == 'model_repository':
         directory = required_path(config, 'diffsynth_model_dir', root)
         selected = [('dit_path', directory / 'transformer'), ('text_encoder_path', directory / 'text_encoder'), ('vae_path', directory / 'vae')]
-    elif mode == 'components':
+    elif mode == 'comfyui_files':
         selected = [(key, required_path(config, key, root)) for key in ('dit_path', 'text_encoder_path', 'vae_path')]
     else:
         raise InputError('model_input_mode', '未知模型输入模式')

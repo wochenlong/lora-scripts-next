@@ -1,5 +1,8 @@
 #!/bin/bash
 # Flash Attention 2 installer for source/venv users (Linux / WSL / AutoDL)
+# DEPRECATED: training stacks moved to per-engine managed venvs
+# (Settings -> Training Engines). Installing flash-attn into the GUI
+# environment no longer affects training.
 
 set -e
 

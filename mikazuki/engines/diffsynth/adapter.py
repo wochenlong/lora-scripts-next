@@ -1,5 +1,6 @@
 """UI configuration -> official Qwen-Image-2.1 arguments and dataset metadata."""
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import json
 import math
@@ -109,7 +110,20 @@ def dump_config(adapted, autosave_dir, run_id):
     metadata = adapted.metadata_path
     if metadata is None:
         metadata = directory / f"{run_id}-dataset.json"
-        metadata.write_text(json.dumps(adapted.dataset, ensure_ascii=False, indent=2), encoding="utf-8")
+        dataset_base = Path(adapted.arguments["dataset_base_path"]).resolve()
+        dataset = []
+        for row in adapted.dataset:
+            serialized = dict(row)
+            references = serialized.get("edit_image")
+            if isinstance(references, list):
+                serialized["edit_image"] = [
+                    os.path.relpath(Path(reference), dataset_base).replace("\\", "/")
+                    if Path(reference).is_absolute()
+                    else reference
+                    for reference in references
+                ]
+            dataset.append(serialized)
+        metadata.write_text(json.dumps(dataset, ensure_ascii=False, indent=2), encoding="utf-8")
     adapted.arguments["dataset_metadata_path"] = str(metadata.resolve())
     config_path = directory / f"{run_id}-arguments.json"
     config_path.write_text(json.dumps({"arguments": adapted.arguments, **adapted.engine}, ensure_ascii=False, indent=2), encoding="utf-8")

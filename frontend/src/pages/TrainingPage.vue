@@ -138,6 +138,14 @@ function readCarryOver(): FormModel {
   } catch { return {} }
 }
 
+function migrateQwenDraft(model: FormModel) {
+  if (props.schemaName !== "qwen-image-21-lora") return
+  if (model.output_name === "aki") model.output_name = "qwen-image-21-lora"
+  if (model.train_data_dir === "./train/aki") model.train_data_dir = "./train/qwen-image-21"
+  if (model.model_input_mode === "directory") model.model_input_mode = "model_repository"
+  if (model.model_input_mode === "components") model.model_input_mode = "comfyui_files"
+}
+
 async function load() {
   loading.value = true
   error.value = ""
@@ -155,9 +163,7 @@ async function load() {
         ? { ...base, ...sanitizePersistedDraft(saved as FormModel, defaults) }
         : base
       model.value = normalizeModelForSchema(loaded, model.value)
-      if (props.schemaName === "qwen-image-21-lora" && model.value.train_data_dir === "./train/aki") {
-        model.value.train_data_dir = "./train/qwen-image-21"
-      }
+      migrateQwenDraft(model.value)
     } catch { model.value = normalizeModelForSchema(loaded, base) }
     applyReadonlyDefaults(loaded, model.value, defaults)
     const cards = await schemasApi.graphicCards()

@@ -4,15 +4,14 @@ import sys
 import types
 
 from mikazuki.engines import registry
-from mikazuki.engines.manifest import KIND_BUILTIN, KIND_PLUGIN
+from mikazuki.engines.manifest import KIND_PLUGIN
 from mikazuki.engines.runner import RunContext, dispatch_run
 
 
 def test_discovers_migrated_packs():
     packs = registry.discover_packs()
     assert set(packs) == {"musubi", "anima-fast", "kohya", "ai-toolkit", "diffsynth"}
-    assert packs["kohya"].manifest.kind == KIND_BUILTIN
-    for engine_id in ("musubi", "anima-fast", "ai-toolkit", "diffsynth"):
+    for engine_id in ("musubi", "anima-fast", "kohya", "ai-toolkit", "diffsynth"):
         pack = packs[engine_id]
         assert pack.manifest.kind == KIND_PLUGIN
         assert pack.manifest.upstream["repo"]

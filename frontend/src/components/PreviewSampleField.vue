@@ -27,14 +27,14 @@ function update(index: number, patch: Partial<PreviewSample>) {
         <strong>Sample {{ index + 1 }}</strong>
         <el-button :icon="Delete" :disabled="disabled || decoded.samples.length === 1" :title="t('sampleInputs.remove')" :aria-label="t('sampleInputs.remove')" @click="emit('update:samples', encodeSamples(decoded.samples.filter((_, i) => i !== index)))" />
       </header>
-      <el-input :model-value="sample.prompt" type="textarea" :rows="2" :disabled="disabled" aria-label="Prompt" @update:model-value="update(index, { prompt: $event })" />
+      <el-input :model-value="sample.prompt" type="textarea" :rows="2" :placeholder="editing ? t('sampleInputs.editPromptPlaceholder') : ''" :disabled="disabled" aria-label="Prompt" @update:model-value="update(index, { prompt: $event })" />
       <div class="sample-settings">
         <label v-for="key in settings" :key="key">
           <span>{{ t(`sampleInputs.${key}`) }}</span>
           <el-input-number :model-value="sample[key]" :min="key === 'seed' ? 0 : key === 'guidance_scale' ? minGuidance : key === 'width' || key === 'height' ? dimensionStep : 1" :step="key === 'guidance_scale' ? 0.1 : key === 'width' || key === 'height' ? dimensionStep : 1" :disabled="disabled" @update:model-value="update(index, { [key]: $event ?? sample[key] })" />
         </label>
       </div>
-      <ReferencePathsField v-if="editing" :model-value="sample.controlImages" mode="file" :disabled="disabled" @update:model-value="update(index, { controlImages: $event })" />
+      <ReferencePathsField v-if="editing" :model-value="sample.controlImages" mode="file" compact :disabled="disabled" @update:model-value="update(index, { controlImages: $event })" />
     </div>
     <el-button class="preview-sample-add" :icon="Plus" :disabled="disabled || !!decoded.error" :title="t('sampleInputs.addSample')" :aria-label="t('sampleInputs.addSample')" @click="emit('update:samples', encodeSamples([...decoded.samples, createSample()]))" />
   </div>

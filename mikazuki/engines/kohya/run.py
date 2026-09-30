@@ -40,6 +40,14 @@ TRAINER_MAPPING = {
 
 
 def handle_run(config: dict, ctx: RunContext):
+    from .settings import runtime
+    from .extension_state import read_status
+
+    rt = runtime()
+    status = read_status(rt)
+    if status["state"] != "ready":
+        return APIResponseFail(message="kohya (sd-scripts) 训练环境未就绪，请到训练引擎管理中安装或修复。")
+
     model_train_type = ctx.model_train_type
     toml_file = os.path.join(ctx.autosave_dir, f"{ctx.timestamp}.toml")
 
@@ -118,6 +126,7 @@ def handle_run(config: dict, ctx: RunContext):
         f.write(toml.dumps(config))
 
     result = process.run_train(toml_file, trainer_file, ctx.gpu_ids, suggest_cpu_threads,
-                               metadata={"train_type": model_train_type})
+                               metadata={"train_type": model_train_type},
+                               python_executable=str(rt.python))
 
     return result
