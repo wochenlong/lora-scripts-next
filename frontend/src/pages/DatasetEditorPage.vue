@@ -114,6 +114,15 @@ const targets = computed(() =>
   selectedPaths.value.size ? items.value.filter((item) => selectedPaths.value.has(item.relative_path)) : filtered.value,
 )
 const captionTags = computed(() => splitCaptionTags(caption.value))
+const allDatasetTags = computed(() => {
+  const unique = new Set<string>(tags.value.map((item) => item.tag))
+  items.value.forEach((item) => {
+    item.tags.forEach((tag) => unique.add(tag))
+    const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
+    splitCaptionTags(draft ?? item.caption).forEach((tag) => unique.add(tag))
+  })
+  return [...unique]
+})
 const hasWorkingFilter = computed(
   () => Boolean(category.value) || Boolean(query.value.trim()) || hasActiveFilter.value,
 )
@@ -125,21 +134,22 @@ const workingScopeFullySelected = computed(
     filtered.value.every((item) => selectedPaths.value.has(item.relative_path)),
 )
 
+async function translateWholeDataset(localOnly = false) {
+  if (!allDatasetTags.value.length) return
+  await resolveTranslations(allDatasetTags.value, translationProvider.value, "zh-CN", localOnly)
+}
+
 function setTranslationsEnabled(value: boolean) {
   showTranslations.value = value
-  if (value) void resolveTranslations(captionTags.value, translationProvider.value)
+  if (value) void translateWholeDataset()
   else cancelTranslations()
 }
 
 function setTranslationProvider(value: typeof translationProvider.value) {
   translationProvider.value = value
   cancelTranslations()
-  if (showTranslations.value) void resolveTranslations(captionTags.value, value)
+  if (showTranslations.value) void translateWholeDataset()
 }
-
-watch(captionTags, (tags) => {
-  if (showTranslations.value) void resolveTranslations(tags, translationProvider.value, "zh-CN", true)
-}, { immediate: true })
 
 async function loadTranslationSettings() {
   if (translationSettingsLoading.value || translationEndpoint.value) return
@@ -347,6 +357,7 @@ async function scan() {
     }
     if (restoring) rightPanelMode.value = restoredPanel
     await Promise.all([refreshHistory(), refreshManagedPaths()])
+    if (showTranslations.value) void translateWholeDataset()
     ElMessage.success(t("datasetEditor.scanMsg.loaded", { n: data.total }))
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.scanMsg.fail"))

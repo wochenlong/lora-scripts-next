@@ -49,13 +49,17 @@ export function useTagTranslations() {
     loading.value = true
     error.value = ""
     try {
-      const response = localOnly
-        ? await datasetApi.tagTranslations(missing, provider, locale, { localOnly: true })
-        : await datasetApi.tagTranslations(missing, provider, locale)
       const next = { ...entries.value }
-      for (const item of response.items) next[cacheKey(item.tag, provider, locale)] = item
-      entries.value = next
-      persistEntries()
+      for (let start = 0; start < missing.length; start += 500) {
+        const batch = missing.slice(start, start + 500)
+        const response = localOnly
+          ? await datasetApi.tagTranslations(batch, provider, locale, { localOnly: true })
+          : await datasetApi.tagTranslations(batch, provider, locale)
+        if (requestGeneration !== generation) return
+        for (const item of response.items) next[cacheKey(item.tag, provider, locale)] = item
+        entries.value = next
+        persistEntries()
+      }
     } catch (caught) {
       if (requestGeneration === generation) error.value = caught instanceof Error ? caught.message : String(caught)
     } finally {
