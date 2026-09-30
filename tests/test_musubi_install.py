@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -387,6 +388,119 @@ class PreflightTests(unittest.TestCase):
             result = run_preflight(values, runtime, dataset, probe=probe)
         self.assertFalse(result.ok)
         self.assertTrue(any("transformers" in e for e in result.errors))
+
+
+class SlimInstallTests(unittest.TestCase):
+    def test_manifest_opts_into_slim(self):
+        from mikazuki.engines.musubi import manifest as musubi_manifest
+
+        self.assertTrue(musubi_manifest.SLIM_SUPPORTED)
+        self.assertEqual(
+            set(musubi_manifest.REQUIRES),
+            {"python", "torch", "cuda"},
+        )
+
+    @unittest.skipIf(sys.platform == "win32", "slim symlink shim is Linux-only")
+    def test_slim_link_created_and_idempotent(self):
+        from mikazuki.engines.musubi.environment import _ensure_slim_python_link
+
+        with tempfile.TemporaryDirectory() as td:
+            layout = default_layout(Path(td))
+            host = Path(sys.executable).resolve()
+            link = _ensure_slim_python_link(layout, host)
+            self.assertTrue(link.is_symlink())
+            self.assertEqual(link.resolve(), host)
+            self.assertEqual(_ensure_slim_python_link(layout, host), link)
+
+    def test_slim_link_refuses_existing_venv(self):
+        from mikazuki.engines.musubi.environment import _ensure_slim_python_link
+
+        with tempfile.TemporaryDirectory() as td:
+            layout = default_layout(Path(td))
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.write_text("", encoding="utf-8")
+            with self.assertRaises(FileExistsError):
+                _ensure_slim_python_link(layout, Path(sys.executable))
+
+    @unittest.skipIf(sys.platform == "win32", "slim symlink shim is Linux-only")
+    def test_isolated_install_refuses_slim_link(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = default_layout(root)
+            source = root / "upstream"
+            (source / "src" / "musubi_tuner").mkdir(parents=True)
+            base_python = root / "base-python" / "python3"
+            base_python.parent.mkdir(parents=True)
+            base_python.write_text("", encoding="utf-8")
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.symlink_to(Path(sys.executable).resolve())
+            plan = build_environment_install_plan(root, layout, source)
+            with mock.patch("mikazuki.engines.musubi.environment.ensure_install_source_ready", return_value=source), \
+                    mock.patch("mikazuki.engines.musubi.environment.copy_source_snapshot"), \
+                    mock.patch("mikazuki.engines.musubi.environment._uv_command", return_value="uv"), \
+                    mock.patch("mikazuki.engines.musubi.environment._find_base_python", return_value=base_python):
+                with self.assertRaises(RuntimeError):
+                    install_environment(plan, lambda _line: None)
+
+    @unittest.skipIf(sys.platform == "win32", "slim symlink shim is Linux-only")
+    def test_slim_deps_command_excludes_torch_extra(self):
+        from mikazuki.engines.musubi.environment import install_slim_dependencies
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = default_layout(root)
+            source = root / "upstream"
+            (source / "src" / "musubi_tuner").mkdir(parents=True)
+            commands: list[list[str]] = []
+            with mock.patch("mikazuki.engines.musubi.environment.ensure_install_source_ready", return_value=source), \
+                    mock.patch("mikazuki.engines.musubi.environment.copy_source_snapshot"), \
+                    mock.patch("mikazuki.engines.musubi.environment._run_streaming", side_effect=lambda cmd, *_a, **_k: commands.append(cmd)):
+                install_slim_dependencies(root, layout, Path(sys.executable), source, log=lambda _line: None)
+            self.assertEqual(len(commands), 1)
+            cmd = commands[0]
+            self.assertEqual(cmd[1:4], ["-m", "pip", "install"])
+            self.assertIn(str(layout.source), cmd)
+            self.assertIn("tensorboard", cmd)
+            self.assertFalse(any("cu1" in arg or "torch" in arg for arg in cmd), cmd)
+            self.assertTrue(layout.venv_python.is_symlink())
+
+    @unittest.skipIf(sys.platform == "win32", "slim symlink shim is Linux-only")
+    def test_slim_status_ready_via_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = default_layout(root)
+            (layout.source / "src" / "musubi_tuner").mkdir(parents=True)
+            (layout.source / "pyproject.toml").write_text("", encoding="utf-8")
+            (layout.source / "krea2_train_network.py").write_text("", encoding="utf-8")
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.symlink_to(Path(sys.executable).resolve())
+            write_install_state(layout, STATE_READY, {"slim": True, "audit": {"ok": True}})
+            status = read_extension_status(layout)
+            self.assertEqual(status.state, STATE_READY)
+            runtime = discover_runtime(config={}, lora_next_root=root)
+            self.assertEqual(runtime.python.resolve(), Path(sys.executable).resolve())
+
+    def test_audit_slim_install_writes_ready_state(self):
+        from mikazuki.engines.musubi.environment import audit_slim_install
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = default_layout(root)
+            (layout.source / "src" / "musubi_tuner").mkdir(parents=True)
+            (layout.source / "pyproject.toml").write_text("", encoding="utf-8")
+            (layout.source / "krea2_train_network.py").write_text("", encoding="utf-8")
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.write_text("", encoding="utf-8")
+            write_install_state(layout, "installing", {"slim": True, "slim_python": sys.executable})
+            with mock.patch(
+                "mikazuki.engines.musubi.environment.audit_environment",
+                return_value=AuditResult(ok=True, facts={"torch_version": "2.8.0+cu128"}),
+            ):
+                result = audit_slim_install(root, layout, log=lambda _line: None)
+            self.assertTrue(result.ok)
+            status = read_extension_status(layout)
+            self.assertEqual(status.state, STATE_READY)
+            self.assertTrue(status.facts["slim"])
 
 
 if __name__ == "__main__":

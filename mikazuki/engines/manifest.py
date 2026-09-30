@@ -25,8 +25,21 @@ Every ``mikazuki/engines/<id>/manifest.py`` data module must define:
 - ``CAPABILITIES``: free-form capability matrix (model families x tasks x variants).
 - ``PATCHES``: list of patch entries applied to the upstream snapshot at install
   time (empty for builtin packs).
-- ``REQUIRES`` / ``SLIM_SUPPORTED``: reserved placeholders for the cloud slim
-  install mode; only ``isolated`` installs are implemented for now.
+- ``REQUIRES`` / ``SLIM_SUPPORTED``: cloud slim install mode (``start_cloud.sh``).
+  ``SLIM_SUPPORTED=True`` opts a pack into host-env (no venv) installs.
+  ``REQUIRES`` declares host facts the pack can reuse, as comma-separated
+  specifier strings (subset of PEP 440: ``==``, ``>=``, ``<=``, ``>``, ``<``,
+  ``!=``; local segments like ``+cu128`` are ignored when comparing)::
+
+      REQUIRES = {
+          "python": ">=3.10,<3.13",   # host interpreter version
+          "torch": ">=2.5.1",         # host torch version (absent torch = no match)
+          "cuda": ">=12.4",           # torch.version.cuda of the host torch
+      }
+
+  Fill ranges only for host versions verified by a real training smoke run;
+  an honest narrow range beats an optimistic wide one. Packs with
+  ``SLIM_SUPPORTED=False`` keep ``REQUIRES = {}`` and never match.
 
 ``load_manifest(package)`` validates a pack's manifest module and returns an
 ``EngineManifest``. Unknown extra keys in ``UPSTREAM``/``CAPABILITIES`` are

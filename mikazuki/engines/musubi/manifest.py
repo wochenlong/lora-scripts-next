@@ -27,5 +27,13 @@ CAPABILITIES = {
 
 PATCHES = []
 
-REQUIRES = {}
-SLIM_SUPPORTED = False
+# Cloud slim install (start_cloud.sh): musubi-tuner keeps torch out of its
+# base dependencies (torch only enters via the cu12x extras), so installing
+# the package without extras never touches the host torch. Ranges mirror the
+# upstream extras floor (cu124 -> torch>=2.5.1) and requires-python.
+REQUIRES = {
+    "python": ">=3.10,<3.13",
+    "torch": ">=2.5.1",
+    "cuda": ">=12.4",
+}
+SLIM_SUPPORTED = True

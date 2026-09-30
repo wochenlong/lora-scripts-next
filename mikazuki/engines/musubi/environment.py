@@ -30,7 +30,7 @@ from .extension_state import (
     write_install_state,
 )
 from .installer import build_install_plan, copy_source_snapshot
-from .settings import RuntimeConfig, ensure_install_source_ready, load_backend_config
+from .settings import RuntimeConfig, discover_runtime, ensure_install_source_ready, load_backend_config
 
 
 IMPORT_PROBE = (
@@ -414,6 +414,11 @@ def install_environment(
     facts["phase"] = "venv"
     _emit_progress(progress, "venv", "Creating musubi-tuner extension virtual environment")
     write_install_state(plan.layout, STATE_INSTALLING, facts, "creating musubi-tuner extension venv")
+    if plan.venv_python.is_symlink():
+        raise RuntimeError(
+            "检测到云端 slim 安装（venv python 是指向宿主解释器的符号链接），"
+            "隔离安装会改写宿主环境，已拒绝。请先卸载引擎，或继续使用云端镜像。"
+        )
     if not plan.venv_python.is_file():
         plan.venv_python.parent.parent.mkdir(parents=True, exist_ok=True)
         _run_streaming(
@@ -466,6 +471,105 @@ def install_environment(
         write_install_state(plan.layout, STATE_BROKEN, final_facts, "; ".join(result.errors))
         _emit_progress(progress, "broken", "musubi-tuner environment audit failed", state="broken")
         _append(log, "[broken] musubi-tuner environment audit failed")
+    return result
+
+
+def _ensure_slim_python_link(layout: ExtensionLayout, host_python: Path) -> Path:
+    """Point the pack's expected venv python at the host interpreter.
+
+    Slim mode installs into the cloud image's host environment instead of a
+    managed venv. The symlink keeps every consumer (status, audit, preflight,
+    launcher) working unchanged: they all resolve ``layout.venv_python``.
+    """
+    if sys.platform == "win32":
+        raise RuntimeError("slim 安装仅用于 Linux 云端镜像，不支持 Windows")
+    host_python = host_python.resolve()
+    if not host_python.is_file():
+        raise FileNotFoundError(f"宿主 python 不存在：{host_python}")
+    link = layout.venv_python
+    if link.is_symlink():
+        if link.resolve() == host_python:
+            return link
+        link.unlink()
+    elif link.exists():
+        raise FileExistsError(
+            f"已存在隔离 venv：{link.parent.parent}，slim 与 isolated 不混装；请先卸载引擎"
+        )
+    link.parent.mkdir(parents=True, exist_ok=True)
+    link.symlink_to(host_python)
+    return link
+
+
+def install_slim_dependencies(
+    project_root: Path,
+    layout: ExtensionLayout,
+    host_python: Path,
+    source_root: Path,
+    source_commit: str | None = None,
+    log: LogFn = print,
+) -> None:
+    """Slim install: source snapshot + host-env deps, reusing the image's torch.
+
+    The musubi-tuner package keeps torch/torchvision out of its base
+    dependencies (they only enter via the cu12x extras), so installing without
+    an extra never downgrades or replaces the host torch.
+    """
+    facts: dict = {"slim": True, "slim_python": str(host_python), "phase": "source"}
+    write_install_state(layout, STATE_INSTALLING, facts, "copying musubi-tuner source snapshot (slim)")
+    _append(log, "[phase] copy source snapshot")
+    resolved_source = ensure_install_source_ready(
+        project_root,
+        source_root,
+        source_commit,
+        log=lambda line: _append(log, line),
+    )
+    copy_source_snapshot(
+        build_install_plan(resolved_source, layout, dry_run=False, source_commit=source_commit)
+    )
+    _ensure_slim_python_link(layout, host_python)
+
+    facts["phase"] = "dependencies"
+    write_install_state(layout, STATE_INSTALLING, facts, "installing musubi-tuner deps into host env (slim)")
+    _append(log, "[phase] pip install musubi-tuner deps into host env (no cuda extra; host torch reused)")
+    _run_streaming(
+        [str(host_python), "-m", "pip", "install", str(layout.source), *MUSUBI_EXTRA_PIP_TARGETS],
+        project_root,
+        log,
+        retries=int(os.environ.get("MUSUBI_INSTALL_RETRIES", "3")),
+    )
+
+
+def slim_runtime(project_root: Path, layout: ExtensionLayout) -> RuntimeConfig:
+    """Runtime view of a slim install; resolves through the symlink shim."""
+    return discover_runtime(lora_next_root=project_root)
+
+
+def audit_slim_install(
+    project_root: Path,
+    layout: ExtensionLayout,
+    log: LogFn = print,
+) -> AuditResult:
+    """Audit a slim install and fold the result back into install_state."""
+    facts: dict = {"slim": True, "phase": "audit"}
+    state_payload = {}
+    if layout.install_state.is_file():
+        try:
+            state_payload = json.loads(layout.install_state.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            state_payload = {}
+    facts.update(state_payload.get("facts") or {})
+    facts["slim"] = True
+    facts["phase"] = "audit"
+    write_install_state(layout, STATE_AUDITING, facts, "auditing slim install")
+    result = audit_environment(slim_runtime(project_root, layout), layout=layout)
+    facts["audit"] = result.as_dict()
+    facts["phase"] = "ready" if result.ok else "audit_failed"
+    if result.ok:
+        write_install_state(layout, STATE_READY, facts, "slim audit passed")
+        _append(log, "[ready] musubi-tuner slim environment verified")
+    else:
+        write_install_state(layout, STATE_BROKEN, facts, "; ".join(result.errors))
+        _append(log, "[broken] musubi-tuner slim audit failed: " + "; ".join(result.errors))
     return result
 
 
