@@ -13,7 +13,9 @@ import asyncio
 import json
 import logging
 import os
+import platform
 import tempfile
+import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
@@ -28,7 +30,10 @@ MODEL_URL = (
     "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/main/"
     f"{MODEL_FILENAME}"
 )
+RUNTIME_RELEASE_TAG = "v0.5.0"
+RUNTIME_API_URL = f"https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/{RUNTIME_RELEASE_TAG}"
 ALLOWED_HOSTS = {"huggingface.co", "hf.co", "cdn-lfs.huggingface.co"}
+RUNTIME_HOSTS = {"api.github.com", "github.com", "objects.githubusercontent.com"}
 
 
 def utc_now():
@@ -41,6 +46,8 @@ class LocalModelService:
         self.root.mkdir(parents=True, exist_ok=True)
         self.metadata_path = self.root / "local-model.json"
         self.model_path = self.root / MODEL_FILENAME
+        self.runtime_root = self.root / "llama-runtime"
+        self.runtime_executable = self.runtime_root / ("llama-server.exe" if os.name == "nt" else "llama-server")
         self.config_store = config_store
         self.session_factory = aiohttp.ClientSession
         self._task: asyncio.Task | None = None
@@ -51,16 +58,27 @@ class LocalModelService:
             "total_bytes": 0,
             "error": None,
         }
+        self._runtime_install = {
+            "state": "ready" if self.runtime_executable.exists() else "missing",
+            "downloaded_bytes": 0,
+            "total_bytes": 0,
+            "error": None,
+        }
 
     def status(self):
         config = self.config_store.load().get("local", {})
         state = self._runtime["state"]
+        if self._task and not self._task.done() and self._runtime_install["state"] == "installing":
+            state = "installing"
+        if self._runtime_install["state"] == "error" and not self._process:
+            state = "error"
         if self._process and self._process.returncode is None:
             state = "running"
         elif state not in {"downloading", "checking", "error", "cancelled"}:
             state = "ready" if self.model_path.exists() else "missing"
         return {
             "model_id": MODEL_ID,
+            "runtime_version": RUNTIME_RELEASE_TAG,
             "model_filename": MODEL_FILENAME,
             "model_url": MODEL_URL,
             "model_path": str(self.model_path),
@@ -70,10 +88,18 @@ class LocalModelService:
             "downloaded_bytes": self._runtime["downloaded_bytes"],
             "total_bytes": self._runtime["total_bytes"],
             "runtime_path": config.get("runtime_path", ""),
+            "runtime_installed": self.runtime_executable.exists(),
+            "runtime_state": self._runtime_install["state"],
+            "runtime_downloaded_bytes": self._runtime_install["downloaded_bytes"],
+            "runtime_total_bytes": self._runtime_install["total_bytes"],
             "endpoint": config.get("endpoint", "http://127.0.0.1:8081/v1/chat/completions"),
             "port": int(config.get("port", 8081)),
-            "error": self._runtime["error"],
+            "error": self._runtime["error"] or self._runtime_install["error"],
         }
+
+    def upstream_endpoint(self):
+        config = self.config_store.load().get("local", {})
+        return f"http://127.0.0.1:{int(config.get('port', 18081))}/v1/chat/completions"
 
     def start_download(self, force=False):
         if self._task and not self._task.done():
@@ -83,12 +109,49 @@ class LocalModelService:
         self._task = asyncio.create_task(self._download(force=force))
         return self.status()
 
+    def start_setup(self, force=False):
+        if self._task and not self._task.done():
+            return self.status()
+        self._runtime.update(state="installing", downloaded_bytes=0, total_bytes=0, error=None)
+        self._runtime_install.update(state="installing", downloaded_bytes=0, total_bytes=0, error=None)
+        self._task = asyncio.create_task(self._setup(force=force))
+        LOGGER.info("local tag translation runtime setup queued")
+        return self.status()
+
     def cancel_download(self):
         if self._task and not self._task.done():
             self._task.cancel()
             self._runtime.update(state="cancelled", error="Model download cancelled")
+            self._runtime_install.update(state="cancelled", error="Local runtime setup cancelled")
             LOGGER.info("local tag translation model download cancelled")
         return self.status()
+
+    async def _setup(self, force=False):
+        try:
+            if not self.model_path.exists() or force:
+                await self._download(force=force)
+            if self._runtime["state"] == "error":
+                return
+            if not self.runtime_executable.exists() or force:
+                await self._download_runtime(force=force)
+            if self._runtime_install["state"] == "ready":
+                config = self.config_store.load()
+                if not config.get("local", {}).get("runtime_path"):
+                    self.config_store.save({"local": {"runtime_path": str(self.runtime_executable)}})
+                self._runtime["state"] = "ready"
+                try:
+                    await self.start_runtime()
+                except Exception as error:
+                    self._runtime["error"] = str(error)[:1000]
+                    LOGGER.warning("local runtime installed but could not start automatically: %s", error)
+        except asyncio.CancelledError:
+            self._runtime.update(state="cancelled", error="Local runtime setup cancelled")
+            self._runtime_install.update(state="cancelled", error="Local runtime setup cancelled")
+            raise
+        except Exception as error:
+            self._runtime.update(state="error", error=str(error)[:1000])
+            self._runtime_install.update(state="error", error=str(error)[:1000])
+            LOGGER.error("local tag translation runtime setup failed: %s", error)
 
     async def wait(self):
         if self._task:
@@ -139,13 +202,76 @@ class LocalModelService:
                 except OSError:
                     pass
 
+    async def _download_runtime(self, force=False):
+        temporary = None
+        try:
+            if platform.system() != "Windows":
+                raise RuntimeError("Automatic llama.cpp setup currently supports Windows")
+            timeout = aiohttp.ClientTimeout(total=1800)
+            headers = {"Accept": "application/vnd.github+json", "User-Agent": "Next-Trainer-Tag-Translation"}
+            async with self.session_factory(timeout=timeout, trust_env=True) as session:
+                async with session.get(RUNTIME_API_URL, headers=headers) as response:
+                    if response.status != 200:
+                        raise RuntimeError(f"llama.cpp release lookup returned HTTP {response.status}")
+                    release = await response.json(content_type=None)
+            assets = release.get("assets", []) if isinstance(release, dict) else []
+            candidates = [
+                asset for asset in assets
+                if isinstance(asset, dict)
+                and str(asset.get("name", "")).lower().endswith(".zip")
+                and "win" in str(asset.get("name", "")).lower()
+                and ("avx2" in str(asset.get("name", "")).lower() or "x64" in str(asset.get("name", "")).lower())
+            ]
+            if not candidates:
+                raise RuntimeError("No Windows llama.cpp release asset was found")
+            asset = sorted(candidates, key=lambda item: ("avx2" not in item["name"].lower(), item["name"]))[0]
+            url = str(asset.get("browser_download_url") or "")
+            if urlparse(url).hostname not in RUNTIME_HOSTS:
+                raise RuntimeError("llama.cpp release URL is not trusted")
+            fd, temporary = tempfile.mkstemp(prefix="llama-", suffix=".zip.download", dir=self.root)
+            os.close(fd)
+            async with self.session_factory(timeout=timeout, trust_env=True) as session:
+                async with session.get(url, headers={"Accept": "application/octet-stream"}) as response:
+                    if response.status != 200:
+                        raise RuntimeError(f"llama.cpp download returned HTTP {response.status}")
+                    self._runtime_install["total_bytes"] = int(response.headers.get("Content-Length") or 0)
+                    with open(temporary, "wb") as target:
+                        async for chunk in response.content.iter_chunked(1024 * 1024):
+                            target.write(chunk)
+                            self._runtime_install["downloaded_bytes"] += len(chunk)
+            self.runtime_root.mkdir(parents=True, exist_ok=True)
+            with zipfile.ZipFile(temporary) as archive:
+                members = [item for item in archive.infolist() if Path(item.filename).name.lower() == self.runtime_executable.name.lower()]
+                if not members:
+                    raise RuntimeError("llama.cpp archive does not contain llama-server")
+                member = members[0]
+                target = self.runtime_root / self.runtime_executable.name
+                with archive.open(member) as source, open(target, "wb") as destination:
+                    destination.write(source.read())
+            if not self.runtime_executable.exists() or self.runtime_executable.stat().st_size < 1024:
+                raise RuntimeError("llama-server installation is incomplete")
+            if os.name != "nt":
+                self.runtime_executable.chmod(0o755)
+            self._runtime_install.update(state="ready", error=None)
+            LOGGER.info("llama.cpp runtime ready: %s", self.runtime_executable)
+        except asyncio.CancelledError:
+            self._runtime_install.update(state="cancelled", error="Runtime download cancelled")
+            raise
+        except Exception as error:
+            self._runtime_install.update(state="error", error=str(error)[:1000])
+            LOGGER.error("llama.cpp runtime download failed: %s", error)
+        finally:
+            if temporary and os.path.exists(temporary):
+                try:
+                    os.remove(temporary)
+                except OSError:
+                    pass
+
     async def start_runtime(self):
         if self._process and self._process.returncode is None:
             return self.status()
         config = self.config_store.load().get("local", {})
-        executable = str(config.get("runtime_path") or "").strip()
-        if not executable:
-            raise RuntimeError("Configure the llama-server executable path first")
+        executable = str(config.get("runtime_path") or self.runtime_executable).strip()
         if not self.model_path.exists():
             raise RuntimeError("Install the Qwen GGUF model first")
         if not os.path.isfile(executable):
@@ -163,6 +289,21 @@ class LocalModelService:
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.DEVNULL,
         )
+        ready = False
+        timeout = aiohttp.ClientTimeout(total=1)
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
+            for _ in range(50):
+                try:
+                    async with session.get(f"http://127.0.0.1:{port}/health") as response:
+                        if response.status == 200:
+                            ready = True
+                            break
+                except (aiohttp.ClientError, asyncio.TimeoutError):
+                    pass
+                await asyncio.sleep(0.2)
+        if not ready:
+            await self.stop_runtime()
+            raise RuntimeError("llama-server did not become healthy on the managed loopback port")
         LOGGER.info("local tag translation runtime started: pid=%s port=%s", self._process.pid, port)
         return self.status()
 

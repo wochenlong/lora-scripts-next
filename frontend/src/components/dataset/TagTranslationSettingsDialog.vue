@@ -1,57 +1,72 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
 import { ElButton, ElDialog, ElInput } from "element-plus"
-import type { LocalModelStatus, TagDictionaryStatus } from "../../api/dataset"
+import type { LocalModelStatus, LlmProfile, TagDictionaryStatus } from "../../api/dataset"
 
-defineProps<{
+const props = defineProps<{
   modelValue: boolean
   loading: boolean
   saving: boolean
   error: string
-  endpoint: string
-  model: string
-  apiKey: string
+  profiles: LlmProfile[]
+  activeRemoteId: string
+  llmMode: "remote" | "local"
   cacheCount: number
   clearingCache: boolean
   dictionary: TagDictionaryStatus
   dictionaryBusy: boolean
   localModel: LocalModelStatus
   localModelBusy: boolean
-  localEnabled: boolean
-  localEndpoint: string
-  localRuntimePath: string
 }>()
 
 const emit = defineEmits<{
   "update:modelValue": [value: boolean]
-  "update:endpoint": [value: string]
-  "update:model": [value: string]
-  "update:apiKey": [value: string]
+  "update:profiles": [value: LlmProfile[]]
+  "update:active-remote-id": [value: string]
+  "update:llm-mode": [value: "remote" | "local"]
   save: []
   clearCache: []
   checkDictionary: []
   updateDictionary: []
   retryDictionary: []
   cancelDictionary: []
-  installLocalModel: []
+  setupLocalModel: []
   cancelLocalModel: []
   startLocalModel: []
   stopLocalModel: []
-  "update:local-enabled": [value: boolean]
-  "update:local-endpoint": [value: string]
-  "update:local-runtime-path": [value: string]
 }>()
 
 const { t } = useI18n()
+
+function updateProfile(id: string, patch: Partial<LlmProfile>) {
+  emit("update:profiles", props.profiles.map((profile) => profile.id === id ? { ...profile, ...patch } : profile))
+}
+
+function addProfile() {
+  const id = "remote-" + Date.now()
+  const profile: LlmProfile = {
+    id,
+    name: t("datasetEditor.caption.translationProfileNew"),
+    endpoint: "https://api.example.com/v1/chat/completions",
+    model: "",
+    api_key: "",
+    reasoning_effort: "disabled",
+  }
+  emit("update:profiles", [...props.profiles, profile])
+  emit("update:active-remote-id", id)
+  emit("update:llm-mode", "remote")
+}
+
+function removeProfile(id: string) {
+  if (props.profiles.length <= 1) return
+  const next = props.profiles.filter((profile) => profile.id !== id)
+  emit("update:profiles", next)
+  if (props.activeRemoteId === id) emit("update:active-remote-id", next[0].id)
+}
 </script>
 
 <template>
-  <el-dialog
-    :model-value="modelValue"
-    :title="t('datasetEditor.caption.translationSettingsTitle')"
-    width="min(640px, 94vw)"
-    @update:model-value="emit('update:modelValue', $event)"
-  >
+  <el-dialog :model-value="modelValue" :title="t('datasetEditor.caption.translationSettingsTitle')" width="min(720px, 94vw)" @update:model-value="emit('update:modelValue', $event)">
     <div class="caption-translation-dialog">
       <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationSettingsHint") }}</p>
       <section class="translation-settings-section">
@@ -69,32 +84,52 @@ const { t } = useI18n()
         </div>
       </section>
       <section class="translation-settings-section">
-        <div class="translation-settings-section-heading"><strong>{{ t("datasetEditor.caption.translationLocalModelTitle") }}</strong><span>{{ localModel.model_id }}</span></div>
-        <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationLocalModelHint") }}</p>
-        <label class="translation-settings-switch"><span>{{ t("datasetEditor.caption.translationLocalEnabled") }}</span><el-switch :model-value="localEnabled" @update:model-value="emit('update:local-enabled', $event)" /></label>
-        <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationLocalEndpoint") }}</span><el-input :model-value="localEndpoint" @update:model-value="emit('update:local-endpoint', $event)" /></label>
-        <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationRuntimePath") }}</span><el-input :model-value="localRuntimePath" :placeholder="t('datasetEditor.caption.translationRuntimePathPlaceholder')" @update:model-value="emit('update:local-runtime-path', $event)" /></label>
-        <small v-if="localModel.error" class="caption-translation-error">{{ localModel.error }}</small>
-        <div class="caption-translation-cache-row">
-          <span>{{ localModel.state }}<template v-if="localModel.downloaded_bytes"> · {{ localModel.downloaded_bytes }}/{{ localModel.total_bytes || "?" }}</template></span>
-          <span class="translation-settings-actions">
-            <el-button v-if="localModel.state === 'downloading'" :loading="localModelBusy" @click="emit('cancelLocalModel')">{{ t("datasetEditor.caption.translationLocalCancel") }}</el-button>
-            <el-button v-else-if="!localModel.installed" :loading="localModelBusy" @click="emit('installLocalModel')">{{ t("datasetEditor.caption.translationLocalInstall") }}</el-button>
-            <el-button v-else-if="localModel.state === 'running'" :loading="localModelBusy" @click="emit('stopLocalModel')">{{ t("datasetEditor.caption.translationLocalStop") }}</el-button>
-            <el-button v-else :loading="localModelBusy" @click="emit('startLocalModel')">{{ t("datasetEditor.caption.translationLocalStart") }}</el-button>
-          </span>
+        <div class="translation-settings-section-heading"><strong>{{ t("datasetEditor.caption.translationLlmTitle") }}</strong><span>{{ llmMode === "local" ? t("datasetEditor.caption.translationLocalMode") : t("datasetEditor.caption.translationRemoteMode") }}</span></div>
+        <div class="translation-mode-tabs" role="tablist">
+          <button type="button" :class="{ active: llmMode === 'remote' }" :disabled="saving" @click="emit('update:llm-mode', 'remote')">{{ t("datasetEditor.caption.translationRemoteMode") }}</button>
+          <button type="button" :class="{ active: llmMode === 'local' }" :disabled="saving || localModel.state !== 'running'" @click="emit('update:llm-mode', 'local')">{{ t("datasetEditor.caption.translationLocalMode") }}</button>
+        </div>
+        <div v-if="llmMode === 'remote'" class="translation-profile-list">
+          <article v-for="profile in profiles" :key="profile.id" class="translation-llm-card" :class="{ active: profile.id === activeRemoteId }">
+            <header class="translation-llm-card-header">
+              <label class="translation-profile-name"><span>{{ t("datasetEditor.caption.translationProfileName") }}</span><el-input :model-value="profile.name" @update:model-value="updateProfile(profile.id, { name: $event })" /></label>
+              <div class="translation-profile-actions">
+                <el-button v-if="profile.id !== activeRemoteId" size="small" @click="emit('update:active-remote-id', profile.id)">{{ t("datasetEditor.caption.translationProfileEnable") }}</el-button>
+                <span v-else class="translation-profile-active">{{ t("datasetEditor.caption.translationProfileActive") }}</span>
+                <el-button v-if="profiles.length > 1" size="small" text type="danger" @click="removeProfile(profile.id)">{{ t("datasetEditor.caption.translationProfileRemove") }}</el-button>
+              </div>
+            </header>
+            <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationEndpoint") }}</span><el-input :model-value="profile.endpoint" :placeholder="t('datasetEditor.caption.translationEndpointPlaceholder')" @update:model-value="updateProfile(profile.id, { endpoint: $event })" /></label>
+            <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationModel") }}</span><el-input :model-value="profile.model" :placeholder="t('datasetEditor.caption.translationModelPlaceholder')" @update:model-value="updateProfile(profile.id, { model: $event })" /></label>
+            <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationKey") }}</span><el-input :model-value="profile.api_key" type="password" show-password autocomplete="new-password" :placeholder="t('datasetEditor.caption.translationKeyPlaceholder')" @update:model-value="updateProfile(profile.id, { api_key: $event })" /></label>
+          </article>
+          <el-button class="translation-profile-add" @click="addProfile">{{ t("datasetEditor.caption.translationProfileAdd") }}</el-button>
+        </div>
+        <div v-else class="translation-profile-list">
+          <article class="translation-llm-card active">
+            <header class="translation-llm-card-header"><strong>{{ t("datasetEditor.caption.translationLocalModelTitle") }}</strong><span class="translation-profile-active">{{ localModel.model_id }}</span></header>
+            <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationLocalModelHint") }}</p>
+            <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationLocalEndpoint") }}</span><el-input :model-value="localModel.endpoint" readonly /></label>
+            <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationRuntimePath") }}</span><el-input :model-value="localModel.runtime_path || t('datasetEditor.caption.translationManagedRuntime')" readonly /></label>
+            <small v-if="localModel.error" class="caption-translation-error">{{ localModel.error }}</small>
+            <div class="caption-translation-cache-row">
+              <span>{{ localModel.state }}<template v-if="localModel.downloaded_bytes"> · {{ localModel.downloaded_bytes }}/{{ localModel.total_bytes || "?" }}</template></span>
+              <span class="translation-settings-actions">
+                <el-button v-if="localModel.state === 'installing' || localModel.state === 'downloading'" :loading="localModelBusy" @click="emit('cancelLocalModel')">{{ t("datasetEditor.caption.translationLocalCancel") }}</el-button>
+                <el-button v-else-if="!localModel.installed || localModel.runtime_state !== 'ready'" :loading="localModelBusy" @click="emit('setupLocalModel')">{{ t("datasetEditor.caption.translationLocalSetup") }}</el-button>
+                <el-button v-else-if="localModel.state === 'running'" :loading="localModelBusy" @click="emit('stopLocalModel')">{{ t("datasetEditor.caption.translationLocalStop") }}</el-button>
+                <el-button v-else :loading="localModelBusy" @click="emit('startLocalModel')">{{ t("datasetEditor.caption.translationLocalStart") }}</el-button>
+              </span>
+            </div>
+            <small class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationLocalMutuallyExclusive") }}</small>
+          </article>
         </div>
       </section>
-      <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationEndpoint") }}</span><el-input :model-value="endpoint" :placeholder="t('datasetEditor.caption.translationEndpointPlaceholder')" @update:model-value="emit('update:endpoint', $event)" /></label>
-      <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationModel") }}</span><el-input :model-value="model" :placeholder="t('datasetEditor.caption.translationModelPlaceholder')" @update:model-value="emit('update:model', $event)" /></label>
-      <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationKey") }}</span><el-input :model-value="apiKey" type="password" show-password autocomplete="new-password" :placeholder="t('datasetEditor.caption.translationKeyPlaceholder')" @update:model-value="emit('update:apiKey', $event)" /></label>
       <small v-if="loading">{{ t("datasetEditor.caption.translationLoading") }}</small>
       <small v-if="error" class="caption-translation-error">{{ error }}</small>
       <div class="caption-translation-cache-row">
         <span>{{ t("datasetEditor.caption.translationCache", { n: cacheCount }) }}</span>
-        <el-button :loading="clearingCache" @click="emit('clearCache')">
-          {{ clearingCache ? t("datasetEditor.caption.translationCacheClearing") : t("datasetEditor.caption.translationCacheClear") }}
-        </el-button>
+        <el-button :loading="clearingCache" @click="emit('clearCache')">{{ clearingCache ? t("datasetEditor.caption.translationCacheClearing") : t("datasetEditor.caption.translationCacheClear") }}</el-button>
       </div>
     </div>
     <template #footer>

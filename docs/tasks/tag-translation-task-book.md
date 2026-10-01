@@ -165,11 +165,12 @@
 | --- | --- | --- | --- |
 | V4-A 契约与缓存修复 | 统一 locale/revision/合并、失败冷却和回退顺序 | 模型切换、重启、缓存优先不联网、迁移幂等测试 | done；v2 SQLite 结果表、profile/in-flight 隔离、locale 规范化、refresh 重试已实现 |
 | V4-B 词库与下载管理 | 后台下载任务、终端日志、设置页签、查询解耦 | 首次/失败/取消/重试/旧库保护真实探针 | done；状态/检查/更新/取消/重试 API、设置页轮询、原子安装和 SHA/SQLite 校验 |
-| V4-C 本地小模型 | 固定清单、受管运行时/模型安装、启停/健康检查 | Windows CPU真实Qwen标签翻译、进程退出、端口冲突 | done（管理面）；Qwen3.5-0.8B GGUF 安装管理、llama-server 路径/启停/loopback 校验、状态 API/UI 已完成；真实推理需用户按需下载 563 MB 模型并提供 llama-server |
+| V4-C 本地小模型 | 固定清单、受管运行时/模型安装、启停/健康检查 | Windows CPU真实Qwen标签翻译、进程退出、端口冲突 | done（管理面）；Qwen3.5-0.8B GGUF 与 llama.cpp 自动安装、loopback 启停/健康检查、状态 API/UI 已完成；真实推理需用户在设置页主动安装约 563 MB 模型 |
 | V4-D 翻译任务与设置UI | 全量任务、增量N/N、错误汇总、统一设置 | 1586标签混合来源、取消/重试/切图、窄屏 | done；全数据集 500 分批、N/N 进度、缓存持久化、设置中词库/本地模型/LLM 管理 |
 | V4-E 统一验收与文档 | 维护说明、发布边界、验收清单 | 原文保护、草稿恢复、相关Python/前端检查、真实服务 | done（代码交付）；验证记录见 docs/tasks/tag-translation-validation.md；Qwen 实机质量验证作为用户安装模型后的可选验收步骤 |
 
 - 本轮改动：补齐下载/取消/重试管理、本地 Qwen GGUF 与 llama-server 管理、配置契约、自动回退错误码和设置页 UI；未把词库或模型二进制提交到 Git。
+- 后续缺陷修复：词库下载改用 GitHub API 原始内容入口并保留 raw 备用路径，规避 raw.githubusercontent.com 网络不可达；本地模型改为 Qwen GGUF + llama.cpp 一键安装，运行时自动保存在用户数据目录；LLM 设置改为远程多配置卡片与本地模型统一卡片，远程/本地只能启用一个；本地请求统一代理到主应用的数据集翻译 API，不再让用户填写接口或可执行文件路径。
 
 ## v1 进度台账（历史记录，受上述审计修正）
 - Overall progress: 标签释义功能、provider、LLM 配置、Dataset Editor 展示、真实接口和浏览器交互验收均已完成，发布审计记录已建立。

@@ -23,7 +23,8 @@ GITHUB_CONTENTS_URL = (
     "https://api.github.com/repos/ffdkj/"
     "ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/contents/tag.sqlite?ref=main"
 )
-ALLOWED_DOWNLOAD_HOSTS = {"raw.githubusercontent.com", "github.com", "objects.githubusercontent.com"}
+ALLOWED_DOWNLOAD_HOSTS = {"api.github.com", "raw.githubusercontent.com", "github.com", "objects.githubusercontent.com"}
+PREFERRED_DICTIONARY_HOSTS = ("github.com", "raw.githubusercontent.com")
 USER_AGENT = "Autocomplete-Plus/1.12"
 MAX_LOOKUP_ITEMS = 500
 MAX_TAG_LENGTH = 200
@@ -282,8 +283,20 @@ class ChineseDictionaryService:
     async def _download_and_install(self, force=False):
         temp_path = None
         try:
-            remote = await self._fetch_remote_metadata()
             metadata = self._load_metadata()
+            try:
+                remote = await self._fetch_remote_metadata()
+            except Exception:
+                # A GitHub contents request can succeed while the raw host is
+                # unavailable in restricted networks. Reuse the last verified
+                # SHA and try the alternate GitHub download hosts below.
+                if not metadata.get("remote_sha") or not metadata.get("download_url"):
+                    raise
+                remote = {
+                    "sha": metadata["remote_sha"],
+                    "download_url": metadata["download_url"],
+                    "size": metadata.get("remote_size", 0),
+                }
             if (
                 not force
                 and os.path.exists(self.database_path)
@@ -355,15 +368,48 @@ class ChineseDictionaryService:
     async def _download_file(self, url, path):
         timeout = aiohttp.ClientTimeout(total=600)
         headers = {"Accept": "application/octet-stream", "User-Agent": USER_AGENT}
-        async with self.session_factory(timeout=timeout) as session:
-            async with session.get(url, headers=headers) as response:
-                if response.status != 200:
-                    raise RuntimeError(f"Dictionary download returned HTTP {response.status}")
-                self._runtime["total_bytes"] = int(response.headers.get("Content-Length") or 0)
-                with open(path, "wb") as target:
-                    async for chunk in response.content.iter_chunked(256 * 1024):
-                        target.write(chunk)
-                        self._runtime["downloaded_bytes"] += len(chunk)
+        errors = []
+        for candidate in self._candidate_download_urls(url):
+            try:
+                candidate_headers = dict(headers)
+                if urlparse(candidate).hostname == "api.github.com":
+                    candidate_headers["Accept"] = "application/vnd.github.raw"
+                async with self.session_factory(timeout=timeout) as session:
+                    async with session.get(candidate, headers=candidate_headers) as response:
+                        if response.status != 200:
+                            raise RuntimeError(f"HTTP {response.status}")
+                        self._runtime["total_bytes"] = int(response.headers.get("Content-Length") or 0)
+                        with open(path, "wb") as target:
+                            async for chunk in response.content.iter_chunked(256 * 1024):
+                                target.write(chunk)
+                                self._runtime["downloaded_bytes"] += len(chunk)
+                        LOGGER.info("tag translation dictionary downloaded from %s", urlparse(candidate).hostname)
+                        return
+            except (aiohttp.ClientError, asyncio.TimeoutError, OSError, RuntimeError) as error:
+                errors.append(f"{urlparse(candidate).hostname}: {error}")
+                try:
+                    os.remove(path)
+                except OSError:
+                    pass
+                self._runtime["downloaded_bytes"] = 0
+        raise RuntimeError("Dictionary download failed; " + " | ".join(errors))
+
+    @staticmethod
+    def _candidate_download_urls(url):
+        parsed = urlparse(url)
+        path = parsed.path
+        candidates = [url]
+        if "raw.githubusercontent.com" in (parsed.hostname or ""):
+            parts = path.strip("/").split("/")
+            if len(parts) >= 4:
+                owner, repo, ref = parts[:3]
+                file_path = "/".join(parts[3:])
+                candidates.insert(0, f"https://github.com/{owner}/{repo}/raw/refs/heads/{ref}/{file_path}")
+                candidates.insert(
+                    0,
+                    f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}?ref={ref}",
+                )
+        return list(dict.fromkeys(candidates))
 
     @staticmethod
     def _validate_database(path):

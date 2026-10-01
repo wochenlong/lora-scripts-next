@@ -1608,3 +1608,71 @@
   justify-content: space-between;
   gap: 12px;
 }
+
+.translation-mode-tabs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.translation-mode-tabs button,
+.translation-profile-add {
+  min-height: 34px;
+  color: var(--text-soft);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+
+.translation-mode-tabs button.active {
+  color: var(--accent-dark);
+  background: var(--accent-soft);
+  border-color: var(--accent);
+}
+
+.translation-profile-list {
+  display: grid;
+  gap: 10px;
+}
+
+.translation-llm-card {
+  display: grid;
+  gap: 9px;
+  padding: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.translation-llm-card.active {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+.translation-llm-card-header,
+.translation-profile-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.translation-profile-name {
+  flex: 1;
+}
+
+.translation-profile-name > span {
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.translation-profile-active {
+  color: var(--accent-dark);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.translation-profile-add {
+  width: 100%;
+}

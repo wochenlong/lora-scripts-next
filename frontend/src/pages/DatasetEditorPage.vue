@@ -3,7 +3,7 @@ import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "v
 import { ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
-import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type TagDictionaryStatus } from "../api/dataset"
+import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type LlmProfile, type TagDictionaryStatus } from "../api/dataset"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import TagTranslationControls from "../components/dataset/TagTranslationControls.vue"
@@ -71,18 +71,15 @@ const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsSaving = ref(false)
 const translationSettingsError = ref("")
-const translationEndpoint = ref("")
-const translationModel = ref("")
-const translationApiKey = ref("")
+const llmProfiles = ref<LlmProfile[]>([])
+const activeRemoteId = ref("default")
+const llmMode = ref<"remote" | "local">("remote")
 const translationCacheCount = ref(0)
 const translationCacheClearing = ref(false)
 const dictionaryStatus = ref<TagDictionaryStatus>({ state: "missing", installed: false, row_count: 0, size_bytes: 0, error: null })
 const dictionaryBusy = ref(false)
-const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "http://127.0.0.1:8081/v1/chat/completions", port: 8081, error: null })
+const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "http://127.0.0.1:28000/api/dataset/translate/v1/chat/completions", port: 18081, error: null })
 const localModelBusy = ref(false)
-const localEnabled = ref(false)
-const localEndpoint = ref("http://127.0.0.1:8081/v1/chat/completions")
-const localRuntimePath = ref("")
 let translationSettingsPoll: ReturnType<typeof setTimeout> | undefined
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
@@ -161,16 +158,16 @@ function setTranslationProvider(value: typeof translationProvider.value) {
 }
 
 async function loadTranslationSettings() {
-  if (translationSettingsLoading.value || translationEndpoint.value) return
+  if (translationSettingsLoading.value || llmProfiles.value.length) return
   translationSettingsLoading.value = true
   translationSettingsError.value = ""
   try {
     const config = await datasetApi.tagTranslationConfig()
-    translationEndpoint.value = config.deepseek.endpoint
-    translationModel.value = config.deepseek.model
-    localEnabled.value = config.local?.enabled ?? false
-    localEndpoint.value = config.local?.endpoint ?? localEndpoint.value
-    localRuntimePath.value = config.local?.runtime_path ?? ""
+    llmProfiles.value = config.remote_profiles?.length
+      ? config.remote_profiles
+      : [{ ...config.deepseek, id: "default", name: t("datasetEditor.caption.translationProfileNew") }]
+    activeRemoteId.value = config.active_remote_id || llmProfiles.value[0]?.id || "default"
+    llmMode.value = config.llm_mode || (config.local?.enabled ? "local" : "remote")
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
@@ -183,11 +180,11 @@ async function saveTranslationSettings() {
   translationSettingsError.value = ""
   try {
     await datasetApi.saveTagTranslationConfig({
-      endpoint: translationEndpoint.value,
-      model: translationModel.value,
-      ...(translationApiKey.value ? { api_key: translationApiKey.value } : {}),
-    }, { enabled: localEnabled.value, endpoint: localEndpoint.value, runtime_path: localRuntimePath.value })
-    translationApiKey.value = ""
+      llm_mode: llmMode.value,
+      active_remote_id: activeRemoteId.value,
+      remote_profiles: llmProfiles.value,
+      local: { enabled: llmMode.value === "local" },
+    })
     clearTranslationCache()
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
@@ -219,7 +216,7 @@ async function loadLocalModelStatus() {
 
 function scheduleTranslationSettingsPoll() {
   if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
-  if (dictionaryStatus.value.state !== "downloading" && localModelStatus.value.state !== "downloading") return
+  if (dictionaryStatus.value.state !== "downloading" && localModelStatus.value.state !== "downloading" && localModelStatus.value.state !== "installing" && localModelStatus.value.runtime_state !== "installing") return
   translationSettingsPoll = setTimeout(async () => {
     await Promise.all([loadDictionaryStatus(), loadLocalModelStatus()])
     scheduleTranslationSettingsPoll()
@@ -254,9 +251,9 @@ async function cancelDictionary() {
   finally { dictionaryBusy.value = false }
 }
 
-async function installLocalModel() {
+async function setupLocalModel() {
   localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.installLocalModel(); scheduleTranslationSettingsPoll() }
+  try { localModelStatus.value = await datasetApi.setupLocalModel(); scheduleTranslationSettingsPoll() }
   catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
   finally { localModelBusy.value = false }
 }
@@ -938,34 +935,28 @@ onUnmounted(() => {
     :loading="translationSettingsLoading"
     :saving="translationSettingsSaving"
     :error="translationSettingsError"
-    :endpoint="translationEndpoint"
-    :model="translationModel"
-    :api-key="translationApiKey"
+    :profiles="llmProfiles"
+    :active-remote-id="activeRemoteId"
+    :llm-mode="llmMode"
     :cache-count="translationCacheCount"
     :clearing-cache="translationCacheClearing"
     :dictionary="dictionaryStatus"
     :dictionary-busy="dictionaryBusy"
     :local-model="localModelStatus"
     :local-model-busy="localModelBusy"
-    :local-enabled="localEnabled"
-    :local-endpoint="localEndpoint"
-    :local-runtime-path="localRuntimePath"
-    @update:endpoint="translationEndpoint = $event"
-    @update:model="translationModel = $event"
-    @update:api-key="translationApiKey = $event"
+    @update:profiles="llmProfiles = $event"
+    @update:active-remote-id="activeRemoteId = $event"
+    @update:llm-mode="llmMode = $event"
     @save="saveTranslationSettings"
     @clear-cache="clearTranslationCacheFromSettings"
     @check-dictionary="checkDictionary"
     @update-dictionary="updateDictionary"
     @retry-dictionary="retryDictionary"
     @cancel-dictionary="cancelDictionary"
-    @install-local-model="installLocalModel"
+    @setup-local-model="setupLocalModel"
     @cancel-local-model="cancelLocalModel"
     @start-local-model="startLocalModel"
     @stop-local-model="stopLocalModel"
-    @update:local-enabled="localEnabled = $event"
-    @update:local-endpoint="localEndpoint = $event"
-    @update:local-runtime-path="localRuntimePath = $event"
   />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">

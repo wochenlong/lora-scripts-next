@@ -64,3 +64,11 @@ def test_dictionary_lookup_normalizes_spaces_and_prefers_longest_match(tmp_path)
 
     assert rows["blue eyes"]["text"] == "蓝瞳"
     assert rows["blue_eyes_extra"]["text"] == "蓝眼睛扩展"
+
+
+def test_dictionary_download_candidates_prefer_github_api_over_raw_host():
+    candidates = ChineseDictionaryService._candidate_download_urls(
+        "https://raw.githubusercontent.com/ffdkj/repo/main/tag.sqlite"
+    )
+    assert candidates[0] == "https://api.github.com/repos/ffdkj/repo/contents/tag.sqlite?ref=main"
+    assert "raw.githubusercontent.com" in candidates[-1]

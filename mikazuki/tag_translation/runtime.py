@@ -23,7 +23,8 @@ LOCAL_MODEL_ROOT = TRANSLATION_ROOT / "models"
 
 def _session_factory(**kwargs):
     """Use the host's HTTP proxy and environment policy for all providers."""
-    return aiohttp.ClientSession(trust_env=True, **kwargs)
+    kwargs.setdefault("trust_env", True)
+    return aiohttp.ClientSession(**kwargs)
 
 
 dictionary_service = ChineseDictionaryService(str(DICTIONARY_ROOT), session_factory=_session_factory)

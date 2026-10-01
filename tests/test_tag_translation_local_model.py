@@ -27,5 +27,5 @@ def test_local_model_status_is_safe_before_install(tmp_path):
 
 def test_local_runtime_requires_explicit_executable(tmp_path):
     service = LocalModelService(tmp_path, Config())
-    with pytest.raises(RuntimeError, match="llama-server"):
+    with pytest.raises(RuntimeError, match="Qwen GGUF"):
         asyncio.run(service.start_runtime())

@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+import json
 from typing import Literal
 
-from fastapi import APIRouter
+import aiohttp
+from fastapi import APIRouter, HTTPException, Request, Response
 from pydantic import BaseModel, Field
 
 from .runtime import dictionary_service, local_model_service, translation_manager, translation_store
@@ -79,6 +82,11 @@ async def install_tag_translation_local_model(force: bool = False):
     return _success(local_model_service.start_download(force=force))
 
 
+@router.post("/tag-translation/local-model/setup")
+async def setup_tag_translation_local_model(force: bool = False):
+    return _success(local_model_service.start_setup(force=force))
+
+
 @router.post("/tag-translation/local-model/cancel")
 async def cancel_tag_translation_local_model():
     return _success(local_model_service.cancel_download())
@@ -100,6 +108,36 @@ async def stop_tag_translation_local_model():
         return _success(local_model_service.set_error(error))
 
 
+@router.post("/dataset/translate/v1/chat/completions")
+async def proxy_local_tag_translation(request: Request):
+    """Expose llama.cpp only through the main application API namespace."""
+    status = local_model_service.status()
+    if status["state"] != "running":
+        return Response(
+            content='{"error":{"message":"Local translation runtime is not running"}}',
+            status_code=503,
+            media_type="application/json",
+        )
+    body = await request.body()
+    timeout = aiohttp.ClientTimeout(total=300)
+    try:
+        async with aiohttp.ClientSession(timeout=timeout, trust_env=True) as session:
+            async with session.post(
+                local_model_service.upstream_endpoint(),
+                data=body,
+                headers={"Content-Type": request.headers.get("content-type", "application/json")},
+            ) as upstream:
+                response_body = await upstream.read()
+                content_type = upstream.headers.get("content-type", "application/json")
+                return Response(content=response_body, status_code=upstream.status, media_type=content_type.split(";")[0])
+    except (aiohttp.ClientError, asyncio.TimeoutError) as error:
+        return Response(
+            content=json.dumps({"error": {"message": str(error)}}),
+            status_code=502,
+            media_type="application/json",
+        )
+
+
 @router.get("/tag-translation/config")
 async def tag_translation_config():
     return _success(translation_manager.get_config())
@@ -107,6 +145,10 @@ async def tag_translation_config():
 
 @router.put("/tag-translation/config")
 async def save_tag_translation_config(payload: dict):
+    if payload.get("llm_mode") == "local":
+        local_status = local_model_service.status()
+        if not local_status.get("installed") or local_status.get("state") != "running":
+            raise HTTPException(status_code=409, detail="Install and start the managed local runtime before enabling local LLM")
     return _success(translation_manager.save_config(payload))
 
 
