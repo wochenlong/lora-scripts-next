@@ -1,12 +1,13 @@
 ## 计划元数据
 - Plan ID: DATASET-MODULE-20260930
-- Version: v4-translation-management-draft
+- Version: v4-translation-management-approved
 - Last updated: 2026-10-01 Asia/Shanghai
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: v4 翻译设置与运行管理设计审核
-- Execution readiness: drafting
+- Current active phase: V4-A 缓存契约与回退修复
+- Execution readiness: executing
+- Active Goal: `01a0c916-e274-7412-9950-a0d41c633bdf`
 
 ## 目标
 在 Next Trainer 中完成数据集模块状态保持和编辑器恢复。标签中文释义作为 Dataset Editor 的一个资源缓存域继续建设：优先使用 Danbooru 词库，支持免费网络翻译和 OpenAI 兼容 LLM 兜底；同时记忆上次打开的数据集，保留编辑草稿、当前图片、筛选和翻译状态。原始英文标签、caption、打标结果、训练配置和导出内容保持不变。
@@ -146,7 +147,7 @@
 - 环境限制：后端全量 pytest 在当前 Python 3.14 环境受既有依赖缺失（toml、torch、accelerate）及旧 Pydantic root_validator 兼容错误影响，不能作为本次功能失败证据；专项测试已独立通过。
 - 待实机验证：真实浏览器从 Tasks 返回 Dataset、浏览器刷新后翻译缓存、真实 MyMemory/LLM 额度和 Qwen 0.8B 质量；代码和自动化验收已完成，需在目标运行环境进行最后体验验收。
 
-## v4 翻译设置与运行管理（当前）
+## v4 翻译设置与运行管理（执行中）
 
 - 用户已验收 v3 数据集恢复、全量翻译、UI、进度和筛选译文；已推送 `029d30ab4fe63a8f8aaa7630d1d73f7c498399c3`，未创建 PR。
 - 最新要求：编写新设计书补齐词库下载管理、本地小模型安装、自动回退和失败处理；全部相关 UI 位于“翻译设置”。
@@ -155,13 +156,14 @@
 - Active assumptions：受管 llama.cpp+Qwen3.5-0.8B GGUF 作为轻量路线；具体平台发布包、量化文件、版本、资源占用与翻译质量需技术探针锁定。
 - Locked decisions：沿用既有分支和台账；UI统一在翻译设置；全数据集翻译；英文原文不改；逻辑词库→MyMemory→LLM，允许缓存先于外部调用；本轮仅设计。
 - Open questions：没有要求用户额外选择的实施项；模型/运行时版本和量化适配由探针确定。设计仍待用户审核。
-- 整体状态：设计已编写；实现 pending；不继承 v3 UI验收作为新功能完成证据。
+- 用户已确认采用全部设计建议；Goal `01a0c916-e274-7412-9950-a0d41c633bdf` 已建立并进入全面执行。
+- 整体状态：V4-A 至 V4-E 执行中；v3 UI 验收保留为历史证据，新阶段必须补充下载、模型、错误和任务级证据。
 
 ### 当前执行阶段（替代新增工作的旧实施阶段，保留历史阶段记录）
 
 | 阶段 | 目的与产物 | 完成条件与验证 | 状态/证据 |
 | --- | --- | --- | --- |
-| V4-A 契约与缓存修复 | 统一locale/revision/合并、失败冷却和回退顺序 | 模型切换、重启、缓存优先不联网、迁移幂等测试 | pending；待实施测试 |
+| V4-A 契约与缓存修复 | 统一locale/revision/合并、失败冷却和回退顺序 | 模型切换、重启、缓存优先不联网、迁移幂等测试 | in progress；Goal 已启动 |
 | V4-B 词库与下载管理 | 后台下载任务、终端日志、设置页签、查询解耦 | 首次/失败/取消/重试/旧库保护真实探针 | pending；待下载证据 |
 | V4-C 本地小模型 | 固定清单、受管运行时/模型安装、启停/健康检查 | Windows CPU真实Qwen标签翻译、进程退出、端口冲突 | pending；待锁定版本与实机证据 |
 | V4-D 翻译任务与设置UI | 全量任务、增量N/N、错误汇总、五页签 | 1586标签混合来源、取消/重试/切图、浅深色窄屏 | pending；待任务/浏览器证据 |
@@ -180,4 +182,4 @@
 - Residual risks: Qwen 0.8B 真实模型质量尚未在本机启动；Node 24 构建会产生 dist hash 漂移，发布构建应使用项目规定 Node 版本；这些边界已记录在发布审计。
 
 ## 下一步动作
-审核[新设计书](../design/tag-translation-v3-settings-and-runtime-design.md)；确认后执行 V4-A 至 V4-E，并在阶段完成时记录测试、探针和实际结果。未经后续明确指示不创建 PR。
+执行 V4-A 至 V4-E；阶段完成时记录测试、探针和实际结果。未经后续明确指示不创建 PR，最终统一推送并交付验收。
