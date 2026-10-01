@@ -97,3 +97,50 @@ def test_llm_rows_are_adapted_to_public_strings(monkeypatch):
 
     assert result["data"]["items"][0]["translation"] == "模型译文"
     assert isinstance(result["data"]["items"][0]["translation"], str)
+
+
+def test_local_only_never_uses_external_cache(monkeypatch):
+    async def ready(_locale):
+        return {}
+
+    async def wait():
+        return {}
+
+    monkeypatch.setattr(api.dictionary_service, "ensure", ready)
+    monkeypatch.setattr(api.dictionary_service, "wait_for_update", wait)
+    monkeypatch.setattr(api.dictionary_service, "lookup", lambda tags: {})
+    monkeypatch.setattr(api.translation_store, "get_results", lambda *args: {"unknown": {"text": "网络缓存"}})
+
+    result = asyncio.run(api.resolve_tag_translations(api.TagTranslationRequest(
+        tags=["unknown"], provider="auto", local_only=True,
+    )))
+
+    item = result["data"]["items"][0]
+    assert item["translation"] is None
+    assert item["status"] == "missing"
+    assert item["error_code"] is None
+
+
+def test_external_failure_is_returned_as_structured_error(monkeypatch):
+    async def ready(_locale):
+        return {}
+
+    async def wait():
+        return {}
+
+    async def unavailable(*_args):
+        raise RuntimeError("network offline")
+
+    monkeypatch.setattr(api.dictionary_service, "ensure", ready)
+    monkeypatch.setattr(api.dictionary_service, "wait_for_update", wait)
+    monkeypatch.setattr(api.dictionary_service, "lookup", lambda tags: {})
+    monkeypatch.setattr(api.translation_store, "get_results", lambda *args: {})
+    monkeypatch.setattr(api, "translate_mymemory", unavailable)
+
+    result = asyncio.run(api.resolve_tag_translations(api.TagTranslationRequest(
+        tags=["unknown"], provider="mymemory",
+    )))
+
+    item = result["data"]["items"][0]
+    assert item["status"] == "error"
+    assert item["error_code"] == "network_unavailable"

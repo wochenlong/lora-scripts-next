@@ -7,8 +7,9 @@ from typing import Literal
 from fastapi import APIRouter
 from pydantic import BaseModel, Field
 
-from .runtime import dictionary_service, translation_manager, translation_store
+from .runtime import dictionary_service, local_model_service, translation_manager, translation_store
 from .providers import translate_mymemory
+from .translation_service import normalize_locale
 
 
 router = APIRouter()
@@ -40,7 +41,63 @@ def _items(tags: list[str]) -> list[dict[str, object]]:
 
 @router.get("/tag-translation/status")
 async def tag_translation_status():
-    return _success({"dictionary": dictionary_service.status(), "llm": translation_manager.status()})
+    return _success({"dictionary": dictionary_service.status(), "llm": translation_manager.status(), "local_model": local_model_service.status()})
+
+
+@router.get("/tag-translation/dictionary/status")
+async def tag_translation_dictionary_status():
+    return _success(dictionary_service.status())
+
+
+@router.post("/tag-translation/dictionary/check")
+async def check_tag_translation_dictionary():
+    return _success(await dictionary_service.check_update())
+
+
+@router.post("/tag-translation/dictionary/update")
+async def update_tag_translation_dictionary(force: bool = False):
+    return _success(dictionary_service.start_update(force=force))
+
+
+@router.post("/tag-translation/dictionary/retry")
+async def retry_tag_translation_dictionary():
+    return _success(dictionary_service.retry_update())
+
+
+@router.post("/tag-translation/dictionary/cancel")
+async def cancel_tag_translation_dictionary():
+    return _success(dictionary_service.cancel_update())
+
+
+@router.get("/tag-translation/local-model/status")
+async def tag_translation_local_model_status():
+    return _success(local_model_service.status())
+
+
+@router.post("/tag-translation/local-model/install")
+async def install_tag_translation_local_model(force: bool = False):
+    return _success(local_model_service.start_download(force=force))
+
+
+@router.post("/tag-translation/local-model/cancel")
+async def cancel_tag_translation_local_model():
+    return _success(local_model_service.cancel_download())
+
+
+@router.post("/tag-translation/local-model/start")
+async def start_tag_translation_local_model():
+    try:
+        return _success(await local_model_service.start_runtime())
+    except Exception as error:
+        return _success(local_model_service.set_error(error))
+
+
+@router.post("/tag-translation/local-model/stop")
+async def stop_tag_translation_local_model():
+    try:
+        return _success(await local_model_service.stop_runtime())
+    except Exception as error:
+        return _success(local_model_service.set_error(error))
 
 
 @router.get("/tag-translation/config")
@@ -72,6 +129,7 @@ async def clear_tag_translation_cache(provider: Literal["mymemory", "llm"] | Non
 @router.post("/dataset-editor/tag-translations")
 async def resolve_tag_translations(req: TagTranslationRequest):
     items = _items(req.tags)
+    storage_locale = normalize_locale(req.locale)
     if not req.local_only:
         await dictionary_service.ensure(req.locale)
         await dictionary_service.wait_for_update()
@@ -81,46 +139,69 @@ async def resolve_tag_translations(req: TagTranslationRequest):
     llm: dict[str, str] = {}
     network_cached: set[str] = set()
     llm_cached: set[str] = set()
+    network_error: str | None = None
+    llm_error: str | None = None
     mymemory_revision = "mymemory-v1"
     llm_revision = translation_manager.profile_revision()
     if not req.refresh:
-        if req.provider in {"mymemory", "auto"}:
-            cached = translation_store.get_results(req.locale, unresolved, "mymemory", mymemory_revision)
+        if not req.local_only and req.provider in {"mymemory", "auto"}:
+            cached = translation_store.get_results(storage_locale, unresolved, "mymemory", mymemory_revision)
             network = {tag: str(row["text"]) for tag, row in cached.items() if row.get("text")}
             network_cached = set(network)
-        if req.provider in {"llm", "auto"}:
-            cached = translation_store.get_results(req.locale, unresolved, "llm", llm_revision)
+        if not req.local_only and req.provider in {"llm", "auto"}:
+            cached = translation_store.get_results(storage_locale, unresolved, "llm", llm_revision)
             llm = {tag: str(row["text"]) for tag, row in cached.items() if row.get("text")}
             llm_cached = set(llm)
     if not req.local_only and req.provider in {"mymemory", "auto"}:
         missing = [tag for tag in unresolved if tag not in network]
         if missing:
-            fetched = await translate_mymemory(missing, req.locale)
-            network.update(fetched)
-            translation_store.save_results(req.locale, "mymemory", mymemory_revision, items, fetched)
+            try:
+                fetched = await translate_mymemory(missing, storage_locale)
+                network.update(fetched)
+                translation_store.save_results(storage_locale, "mymemory", mymemory_revision, items, fetched)
+                if not fetched:
+                    network_error = "network_no_result"
+            except Exception as error:
+                network_error = getattr(error, "code", "network_unavailable")
     if not req.local_only and req.provider in {"llm", "auto"}:
         missing = [item for item in items if str(item["name"]) in unresolved and str(item["name"]) not in network and str(item["name"]) not in llm]
-        llm_rows = await translation_manager.resolve(req.locale, missing) if missing else {}
+        try:
+            if missing:
+                llm_rows = (
+                    await translation_manager.resolve(storage_locale, missing, refresh=True)
+                    if req.refresh
+                    else await translation_manager.resolve(storage_locale, missing)
+                )
+            else:
+                llm_rows = {}
+        except Exception as error:
+            llm_error = getattr(error, "code", "llm_request_failed")
+            llm_rows = {}
         # TranslationManager returns metadata rows. The public API contract is
         # always tag -> string, even when the cache returns a full row object.
-        llm = {
+        llm.update({
             tag: str(row.get("text")) if isinstance(row, dict) else str(row)
             for tag, row in llm_rows.items()
             if (row.get("text") if isinstance(row, dict) else row)
-        }
+        })
     result = []
     for item in items:
         tag = str(item["name"])
         row = rows.get(tag)
         text = row.get("text") if row else network.get(tag) or llm.get(tag)
         source = "danbooru" if row else ("mymemory" if tag in network else ("llm" if tag in llm else None))
+        error_code = None
+        if not text and not req.local_only and req.provider in {"mymemory", "auto", "llm"}:
+            error_code = llm_error if tag in unresolved and llm_error else (
+                network_error if tag in unresolved and network_error else "translation_missing"
+            )
         result.append({
             "tag": tag,
             "translation": text,
             "source": source,
-            "status": "hit" if text else "missing",
+            "status": "hit" if text else ("error" if error_code and error_code != "translation_missing" else "missing"),
             "cached": tag in network_cached or tag in llm_cached,
-            "error_code": None,
+            "error_code": error_code,
             "category": row.get("category") if row else None,
             "post_count": row.get("post_count") if row else None,
         })

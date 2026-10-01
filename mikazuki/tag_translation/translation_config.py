@@ -32,6 +32,13 @@ DEFAULT_CONFIG = {
         "max_retries": 3,
         "timeout_seconds": 180,
     },
+    "local": {
+        "enabled": False,
+        "endpoint": "http://127.0.0.1:8081/v1/chat/completions",
+        "runtime_path": "",
+        "port": 8081,
+        "context_length": 2048,
+    },
 }
 
 SECRET_MASK = "********"
@@ -47,6 +54,7 @@ def validate_config(raw_config, current_config=None):
     config = copy.deepcopy(current_config or DEFAULT_CONFIG)
     config.setdefault("features", copy.deepcopy(DEFAULT_CONFIG["features"]))
     config.setdefault("deepseek", copy.deepcopy(DEFAULT_CONFIG["deepseek"]))
+    config.setdefault("local", copy.deepcopy(DEFAULT_CONFIG["local"]))
     config["version"] = DEFAULT_CONFIG["version"]
     raw_features = raw_config.get("features", {})
     if not isinstance(raw_features, dict):
@@ -97,6 +105,32 @@ def validate_config(raw_config, current_config=None):
         if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
             raise ValueError(f"deepseek.{key} must be between {minimum} and {maximum}")
         config["deepseek"][key] = value
+
+    raw_local = raw_config.get("local", {})
+    if not isinstance(raw_local, dict):
+        raise ValueError("local must be an object")
+    if "enabled" in raw_local:
+        if not isinstance(raw_local["enabled"], bool):
+            raise ValueError("local.enabled must be a boolean")
+        config["local"]["enabled"] = raw_local["enabled"]
+    for key, maximum_length in (("endpoint", 500), ("runtime_path", 2000)):
+        if key not in raw_local:
+            continue
+        value = _validate_string(raw_local[key], f"local.{key}", maximum_length).strip()
+        if key == "endpoint":
+            parsed = urlparse(value)
+            if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
+                raise ValueError("local.endpoint must use loopback HTTP")
+            if not parsed.path.endswith("/chat/completions"):
+                raise ValueError("local.endpoint must end with /chat/completions")
+        config["local"][key] = value
+    for key, (minimum, maximum) in (("port", (1, 65535)), ("context_length", (256, 32768))):
+        if key not in raw_local:
+            continue
+        value = raw_local[key]
+        if isinstance(value, bool) or not isinstance(value, int) or not minimum <= value <= maximum:
+            raise ValueError(f"local.{key} must be between {minimum} and {maximum}")
+        config["local"][key] = value
     return config
 
 

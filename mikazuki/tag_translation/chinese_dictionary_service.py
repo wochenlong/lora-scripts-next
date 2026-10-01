@@ -6,6 +6,7 @@
 import asyncio
 import hashlib
 import json
+import logging
 import os
 import sqlite3
 import tempfile
@@ -28,6 +29,7 @@ MAX_LOOKUP_ITEMS = 500
 MAX_TAG_LENGTH = 200
 MAX_SEARCH_LENGTH = 100
 MAX_SEARCH_RESULTS = 200
+LOGGER = logging.getLogger(__name__)
 
 
 def normalize_tag_key(value):
@@ -81,7 +83,7 @@ class ChineseDictionaryService:
         metadata = self._load_metadata()
         installed = os.path.exists(self.database_path)
         state = self._runtime["state"]
-        if state not in {"downloading", "checking", "error"}:
+        if state not in {"downloading", "checking", "error", "cancelled"}:
             state = "ready" if installed else "missing"
         return {
             "state": state,
@@ -120,12 +122,28 @@ class ChineseDictionaryService:
             total_bytes=0,
             error=None,
         )
+        LOGGER.info("tag translation dictionary update queued: force=%s", force)
         self._task = asyncio.create_task(self._download_and_install(force=force))
         return self.status()
 
+    def cancel_update(self):
+        if not self._task or self._task.done():
+            return self.status()
+        self._task.cancel()
+        self._runtime.update(state="cancelled", error="Dictionary update cancelled")
+        LOGGER.info("tag translation dictionary update cancelled")
+        return self.status()
+
+    def retry_update(self):
+        self._auto_attempted = False
+        return self.start_update(force=True)
+
     async def wait_for_update(self):
         if self._task:
-            await self._task
+            try:
+                await self._task
+            except asyncio.CancelledError:
+                pass
         return self.status()
 
     async def check_update(self):
@@ -144,6 +162,7 @@ class ChineseDictionaryService:
             self._save_metadata(metadata)
             self._runtime["state"] = "ready" if os.path.exists(self.database_path) else "missing"
         except Exception as error:
+            LOGGER.error("tag translation dictionary update failed: %s", error)
             self._runtime.update(state="error", error=str(error)[:1000])
         return self.status()
 
@@ -303,6 +322,10 @@ class ChineseDictionaryService:
             )
             self._save_metadata(metadata)
             self._runtime.update(state="ready", error=None)
+            LOGGER.info("tag translation dictionary ready: rows=%s sha=%s", row_count, remote["sha"])
+        except asyncio.CancelledError:
+            self._runtime.update(state="cancelled", error="Dictionary update cancelled")
+            raise
         except Exception as error:
             self._runtime.update(state="error", error=str(error)[:1000])
         finally:

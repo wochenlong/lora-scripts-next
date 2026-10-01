@@ -1579,3 +1579,32 @@
   color: var(--text-soft);
   font-size: 12px;
 }
+
+.translation-settings-section {
+  display: grid;
+  gap: 8px;
+  padding: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.translation-settings-section-heading,
+.translation-settings-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.translation-settings-section-heading span {
+  color: var(--text-faint);
+  font-size: 12px;
+}
+
+.translation-settings-switch {
+  display: flex !important;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}

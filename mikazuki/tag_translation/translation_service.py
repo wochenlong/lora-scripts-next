@@ -188,7 +188,13 @@ class TranslationManager:
         return self.config_store.load()["deepseek"]["api_key"]
 
     def profile_revision(self, config=None):
-        section = config or self.config_store.load()["deepseek"]
+        if config is None:
+            full_config = self.config_store.load()
+            section = full_config["deepseek"].copy()
+            if full_config.get("local", {}).get("enabled"):
+                section["endpoint"] = full_config["local"].get("endpoint") or section.get("endpoint")
+        else:
+            section = config
         payload = {
             "endpoint": section.get("endpoint", ""),
             "model": section.get("model", ""),
@@ -201,11 +207,19 @@ class TranslationManager:
         return mask_config(self.config_store.save(raw_config))
 
     def status(self):
-        config = self.config_store.load()["deepseek"]
+        full_config = self.config_store.load()
+        config = full_config["deepseek"]
+        local_config = full_config.get("local", {})
         return {
             "cache_count": self.store.result_count("llm"),
             "deepseek": self._last_status.copy(),
-            "configured": bool(config["api_key"] or local_llm_endpoint(config.get("endpoint"))),
+            "configured": bool(
+                config["api_key"]
+                or local_llm_endpoint(config.get("endpoint"))
+                or local_config.get("enabled")
+            ),
+            "local_enabled": bool(local_config.get("enabled")),
+            "local_endpoint": local_config.get("endpoint", ""),
         }
 
     def catalog(self, locale):
@@ -280,23 +294,32 @@ class TranslationManager:
             self._set_status("error", str(error)[:500])
             raise
 
-    async def resolve(self, locale, raw_items):
-        async for _translations in self.resolve_stream(locale, raw_items):
+    async def resolve(self, locale, raw_items, refresh=False):
+        async for _translations in self.resolve_stream(locale, raw_items, refresh=refresh):
             pass
         locale = normalize_locale(locale)
         tag_names = [item["name"] for item in normalize_items(raw_items)]
-        profile_revision = self.profile_revision()
+        full_config = self.config_store.load()
+        active_config = full_config["deepseek"].copy()
+        if full_config.get("local", {}).get("enabled"):
+            active_config["endpoint"] = full_config["local"].get("endpoint") or active_config.get("endpoint")
+        profile_revision = self.profile_revision(active_config)
         cached = await asyncio.to_thread(
             self.store.get_results, locale, tag_names, "llm", profile_revision
         )
         primary = await self._get_primary(locale, tag_names)
         return {**cached, **primary}
 
-    async def resolve_stream(self, locale, raw_items):
+    async def resolve_stream(self, locale, raw_items, refresh=False):
         locale = normalize_locale(locale)
         normalized_items = normalize_items(raw_items)
         full_config = self.config_store.load()
         config = full_config["deepseek"]
+        local_config = full_config.get("local", {})
+        if local_config.get("enabled"):
+            config = config.copy()
+            config["endpoint"] = local_config.get("endpoint") or config.get("endpoint")
+            config["model"] = config.get("model") or "qwen3.5-0.8b-q4_0"
         profile_revision = self.profile_revision(config)
         primary = await self._get_primary(locale, [item["name"] for item in normalized_items])
         primary_translations = {
@@ -313,7 +336,7 @@ class TranslationManager:
             if item["category"] != 1 and item["name"] not in primary
         ]
         tag_names = [item["name"] for item in items]
-        cached = await asyncio.to_thread(
+        cached = {} if refresh else await asyncio.to_thread(
             self.store.get_results, locale, tag_names, "llm", profile_revision
         )
         cached_translations = {
@@ -346,7 +369,7 @@ class TranslationManager:
         # Tags that already exhausted retries with this model and prompt are
         # treated as resolved-without-translation instead of being re-asked.
         prompt_hash = hashlib.sha256(config["system_prompt"].encode("utf-8")).hexdigest()
-        known_failures = await asyncio.to_thread(
+        known_failures = set() if refresh else await asyncio.to_thread(
             self.store.get_failures,
             locale,
             [item["name"] for item in missing],
@@ -367,7 +390,7 @@ class TranslationManager:
             # Another request can finish between the first SQLite lookup and
             # acquiring this lock. Refresh here so a just-persisted translation
             # is not purchased again after its in-flight entry was removed.
-            refreshed = await asyncio.to_thread(
+            refreshed = {} if refresh else await asyncio.to_thread(
                 self.store.get_results,
                 locale,
                 [item["name"] for item in missing],
@@ -383,7 +406,7 @@ class TranslationManager:
             for item in missing:
                 if item["name"] in cached:
                     continue
-                key = (locale, item["name"])
+                key = (locale, profile_revision, item["name"])
                 future = self._inflight.get(key)
                 if future is None:
                     future = loop.create_future()
@@ -399,7 +422,7 @@ class TranslationManager:
             }
 
         if owned:
-            worker = asyncio.create_task(self._translate_owned(locale, owned, config))
+            worker = asyncio.create_task(self._translate_owned(locale, profile_revision, owned, config))
             self._workers.add(worker)
             worker.add_done_callback(self._workers.discard)
 
@@ -443,7 +466,7 @@ class TranslationManager:
         lookup = getattr(self.primary_store, "lookup_all", self.primary_store.lookup)
         return lookup(tag_names)
 
-    async def _translate_owned(self, locale, items, config):
+    async def _translate_owned(self, locale, profile_revision, items, config):
         translations = {}
         errors = []
         try:
@@ -470,7 +493,7 @@ class TranslationManager:
                     batch, result, error = await completed
                     if error is not None:
                         errors.append(error)
-                        await self._finish_inflight_batch(locale, batch, {})
+                        await self._finish_inflight_batch(locale, profile_revision, batch, {})
                         continue
                     translations.update(result.translations)
                     prompt_hash = hashlib.sha256(config["system_prompt"].encode("utf-8")).hexdigest()
@@ -492,7 +515,7 @@ class TranslationManager:
                             config["model"],
                             prompt_hash,
                         )
-                    await self._finish_inflight_batch(locale, batch, result.translations)
+                    await self._finish_inflight_batch(locale, profile_revision, batch, result.translations)
             if errors:
                 self._set_status("error", str(errors[0])[:500])
             else:
@@ -500,12 +523,12 @@ class TranslationManager:
         except Exception as caught:
             self._set_status("error", str(caught)[:500])
         finally:
-            await self._finish_inflight_batch(locale, items, translations)
+            await self._finish_inflight_batch(locale, profile_revision, items, translations)
 
-    async def _finish_inflight_batch(self, locale, items, translations):
+    async def _finish_inflight_batch(self, locale, profile_revision, items, translations):
         async with self._inflight_lock:
             for item in items:
-                key = (locale, item["name"])
+                key = (locale, profile_revision, item["name"])
                 future = self._inflight.pop(key, None)
                 if future is not None and not future.done():
                     future.set_result(translations.get(item["name"]))

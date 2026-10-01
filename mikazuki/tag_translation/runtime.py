@@ -10,6 +10,7 @@ from .chinese_dictionary_service import ChineseDictionaryService
 from .translation_config import OnlineServiceConfig
 from .translation_service import TranslationManager
 from .translation_store import TranslationStore
+from .local_model_service import LocalModelService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -17,6 +18,7 @@ TRANSLATION_ROOT = PROJECT_ROOT / "assets" / "tag_translation"
 DICTIONARY_ROOT = TRANSLATION_ROOT / "danbooru"
 TRANSLATION_CONFIG_PATH = TRANSLATION_ROOT / "translation.json"
 TRANSLATION_CACHE_PATH = TRANSLATION_ROOT / "translations.sqlite3"
+LOCAL_MODEL_ROOT = TRANSLATION_ROOT / "models"
 
 
 def _session_factory(**kwargs):
@@ -32,3 +34,4 @@ translation_manager = TranslationManager(
     session_factory=_session_factory,
     primary_store=dictionary_service,
 )
+local_model_service = LocalModelService(str(LOCAL_MODEL_ROOT), translation_manager.config_store)

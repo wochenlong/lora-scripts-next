@@ -3,7 +3,7 @@ import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "v
 import { ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
-import { datasetApi, type ChangedItem, type DatasetItem } from "../api/dataset"
+import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type TagDictionaryStatus } from "../api/dataset"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import TagTranslationControls from "../components/dataset/TagTranslationControls.vue"
@@ -76,6 +76,14 @@ const translationModel = ref("")
 const translationApiKey = ref("")
 const translationCacheCount = ref(0)
 const translationCacheClearing = ref(false)
+const dictionaryStatus = ref<TagDictionaryStatus>({ state: "missing", installed: false, row_count: 0, size_bytes: 0, error: null })
+const dictionaryBusy = ref(false)
+const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "http://127.0.0.1:8081/v1/chat/completions", port: 8081, error: null })
+const localModelBusy = ref(false)
+const localEnabled = ref(false)
+const localEndpoint = ref("http://127.0.0.1:8081/v1/chat/completions")
+const localRuntimePath = ref("")
+let translationSettingsPoll: ReturnType<typeof setTimeout> | undefined
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
 
@@ -160,6 +168,9 @@ async function loadTranslationSettings() {
     const config = await datasetApi.tagTranslationConfig()
     translationEndpoint.value = config.deepseek.endpoint
     translationModel.value = config.deepseek.model
+    localEnabled.value = config.local?.enabled ?? false
+    localEndpoint.value = config.local?.endpoint ?? localEndpoint.value
+    localRuntimePath.value = config.local?.runtime_path ?? ""
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
@@ -171,8 +182,13 @@ async function saveTranslationSettings() {
   translationSettingsSaving.value = true
   translationSettingsError.value = ""
   try {
-    await datasetApi.saveTagTranslationConfig({ endpoint: translationEndpoint.value, model: translationModel.value, ...(translationApiKey.value ? { api_key: translationApiKey.value } : {}) })
+    await datasetApi.saveTagTranslationConfig({
+      endpoint: translationEndpoint.value,
+      model: translationModel.value,
+      ...(translationApiKey.value ? { api_key: translationApiKey.value } : {}),
+    }, { enabled: localEnabled.value, endpoint: localEndpoint.value, runtime_path: localRuntimePath.value })
     translationApiKey.value = ""
+    clearTranslationCache()
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
@@ -186,6 +202,84 @@ async function loadTranslationCacheStatus() {
   } catch {
     translationCacheCount.value = 0
   }
+}
+
+async function loadDictionaryStatus() {
+  try {
+    dictionaryStatus.value = await datasetApi.tagDictionaryStatus()
+  } catch (caught) {
+    dictionaryStatus.value = { ...dictionaryStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) }
+  }
+}
+
+async function loadLocalModelStatus() {
+  try { localModelStatus.value = await datasetApi.localModelStatus() }
+  catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
+}
+
+function scheduleTranslationSettingsPoll() {
+  if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
+  if (dictionaryStatus.value.state !== "downloading" && localModelStatus.value.state !== "downloading") return
+  translationSettingsPoll = setTimeout(async () => {
+    await Promise.all([loadDictionaryStatus(), loadLocalModelStatus()])
+    scheduleTranslationSettingsPoll()
+  }, 1000)
+}
+
+async function checkDictionary() {
+  dictionaryBusy.value = true
+  try { dictionaryStatus.value = await datasetApi.checkTagDictionary() }
+  catch (caught) { dictionaryStatus.value = { ...dictionaryStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
+  finally { dictionaryBusy.value = false }
+}
+
+async function updateDictionary() {
+  dictionaryBusy.value = true
+  try { dictionaryStatus.value = await datasetApi.updateTagDictionary(true); scheduleTranslationSettingsPoll() }
+  catch (caught) { dictionaryStatus.value = { ...dictionaryStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
+  finally { dictionaryBusy.value = false }
+}
+
+async function retryDictionary() {
+  dictionaryBusy.value = true
+  try { dictionaryStatus.value = await datasetApi.retryTagDictionary(); scheduleTranslationSettingsPoll() }
+  catch (caught) { dictionaryStatus.value = { ...dictionaryStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
+  finally { dictionaryBusy.value = false }
+}
+
+async function cancelDictionary() {
+  dictionaryBusy.value = true
+  try { dictionaryStatus.value = await datasetApi.cancelTagDictionary() }
+  catch (caught) { dictionaryStatus.value = { ...dictionaryStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
+  finally { dictionaryBusy.value = false }
+}
+
+async function installLocalModel() {
+  localModelBusy.value = true
+  try { localModelStatus.value = await datasetApi.installLocalModel(); scheduleTranslationSettingsPoll() }
+  catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
+  finally { localModelBusy.value = false }
+}
+
+async function cancelLocalModel() {
+  localModelBusy.value = true
+  try { localModelStatus.value = await datasetApi.cancelLocalModel() }
+  catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
+  finally { localModelBusy.value = false }
+}
+
+async function startLocalModel() {
+  localModelBusy.value = true
+  try { localModelStatus.value = await datasetApi.startLocalModel() }
+  catch (caught) { translationSettingsError.value = caught instanceof Error ? caught.message : String(caught) }
+  finally { localModelBusy.value = false }
+}
+
+async function stopLocalModel() {
+  localModelBusy.value = true
+  try { localModelStatus.value = await datasetApi.stopLocalModel() }
+  catch (caught) { translationSettingsError.value = caught instanceof Error ? caught.message : String(caught) }
+  finally { localModelBusy.value = false }
 }
 
 async function clearTranslationCacheFromSettings() {
@@ -527,7 +621,10 @@ onDeactivated(() => {
   selectMenuOpen.value = false
   historyOpen.value = false
 })
-onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
+onUnmounted(() => {
+  window.removeEventListener("keydown", onPreviewKeydown)
+  if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
+})
 </script>
 
 <template>
@@ -707,7 +804,7 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
             :progress-total="translationProgress.total"
             @update:enabled="setTranslationsEnabled"
             @update:provider="setTranslationProvider"
-            @settings="translationSettingsOpen = true; loadTranslationSettings(); loadTranslationCacheStatus()"
+            @settings="translationSettingsOpen = true; loadTranslationSettings(); loadTranslationCacheStatus(); loadDictionaryStatus(); loadLocalModelStatus()"
           />
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
@@ -846,11 +943,29 @@ onUnmounted(() => window.removeEventListener("keydown", onPreviewKeydown))
     :api-key="translationApiKey"
     :cache-count="translationCacheCount"
     :clearing-cache="translationCacheClearing"
+    :dictionary="dictionaryStatus"
+    :dictionary-busy="dictionaryBusy"
+    :local-model="localModelStatus"
+    :local-model-busy="localModelBusy"
+    :local-enabled="localEnabled"
+    :local-endpoint="localEndpoint"
+    :local-runtime-path="localRuntimePath"
     @update:endpoint="translationEndpoint = $event"
     @update:model="translationModel = $event"
     @update:api-key="translationApiKey = $event"
     @save="saveTranslationSettings"
     @clear-cache="clearTranslationCacheFromSettings"
+    @check-dictionary="checkDictionary"
+    @update-dictionary="updateDictionary"
+    @retry-dictionary="retryDictionary"
+    @cancel-dictionary="cancelDictionary"
+    @install-local-model="installLocalModel"
+    @cancel-local-model="cancelLocalModel"
+    @start-local-model="startLocalModel"
+    @stop-local-model="stopLocalModel"
+    @update:local-enabled="localEnabled = $event"
+    @update:local-endpoint="localEndpoint = $event"
+    @update:local-runtime-path="localRuntimePath = $event"
   />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">
