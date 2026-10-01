@@ -374,7 +374,7 @@ class ChineseDictionaryService:
         return {"sha": sha, "download_url": download_url, "size": int(payload.get("size") or 0)}
 
     async def _download_file(self, url, path):
-        timeout = aiohttp.ClientTimeout(total=600)
+        timeout = aiohttp.ClientTimeout(total=600, connect=15, sock_connect=15, sock_read=45)
         headers = {"Accept": "application/octet-stream", "User-Agent": USER_AGENT}
         errors = []
         for candidate in self._candidate_download_urls(url):

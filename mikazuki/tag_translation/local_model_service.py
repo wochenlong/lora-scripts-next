@@ -192,7 +192,7 @@ class LocalModelService:
                 return
             fd, temporary = tempfile.mkstemp(prefix="qwen-", suffix=".gguf.download", dir=self.root)
             os.close(fd)
-            timeout = aiohttp.ClientTimeout(total=3600)
+            timeout = aiohttp.ClientTimeout(total=3600, connect=20, sock_connect=20, sock_read=60)
             errors = []
             downloaded = False
             for url in (MODEL_MIRROR_URL, MODEL_URL):
@@ -254,7 +254,7 @@ class LocalModelService:
             ]
             errors = []
             downloaded = False
-            timeout = aiohttp.ClientTimeout(total=1800)
+            timeout = aiohttp.ClientTimeout(total=1800, connect=20, sock_connect=20, sock_read=60)
             for url in (*mirror_urls, RUNTIME_SOURCE_URL):
                 if urlparse(url).hostname not in RUNTIME_HOSTS:
                     continue
