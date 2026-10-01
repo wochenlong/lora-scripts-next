@@ -72,6 +72,8 @@ function removeProfile(id: string) {
       <section class="translation-settings-section">
         <div class="translation-settings-section-heading"><strong>{{ t("datasetEditor.caption.translationDictionaryTitle") }}</strong><span>{{ dictionary.row_count || 0 }} {{ t("datasetEditor.caption.translationDictionaryRows") }}</span></div>
         <p class="caption-translation-dialog-hint">{{ dictionary.installed ? t("datasetEditor.caption.translationDictionaryReady") : t("datasetEditor.caption.translationDictionaryMissing") }}</p>
+        <small v-if="dictionary.state === 'ready' && dictionary.update_available" class="caption-translation-update">{{ t("datasetEditor.caption.translationDictionaryUpdateAvailable") }}</small>
+        <small v-else-if="dictionary.state === 'ready' && dictionary.last_checked_at" class="caption-translation-ok">{{ t("datasetEditor.caption.translationDictionaryUpToDate") }}</small>
         <small v-if="dictionary.error" class="caption-translation-error">{{ dictionary.error }}</small>
         <div class="caption-translation-cache-row">
           <span>{{ dictionary.state }}<template v-if="dictionary.downloaded_bytes"> · {{ dictionary.downloaded_bytes }}/{{ dictionary.total_bytes || "?" }}</template></span>
@@ -87,7 +89,7 @@ function removeProfile(id: string) {
         <div class="translation-settings-section-heading"><strong>{{ t("datasetEditor.caption.translationLlmTitle") }}</strong><span>{{ llmMode === "local" ? t("datasetEditor.caption.translationLocalMode") : t("datasetEditor.caption.translationRemoteMode") }}</span></div>
         <div class="translation-mode-tabs" role="tablist">
           <button type="button" :class="{ active: llmMode === 'remote' }" :disabled="saving" @click="emit('update:llm-mode', 'remote')">{{ t("datasetEditor.caption.translationRemoteMode") }}</button>
-          <button type="button" :class="{ active: llmMode === 'local' }" :disabled="saving || localModel.state !== 'running'" @click="emit('update:llm-mode', 'local')">{{ t("datasetEditor.caption.translationLocalMode") }}</button>
+          <button type="button" :class="{ active: llmMode === 'local' }" :disabled="saving" @click="emit('update:llm-mode', 'local')">{{ t("datasetEditor.caption.translationLocalMode") }}</button>
         </div>
         <div v-if="llmMode === 'remote'" class="translation-profile-list">
           <article v-for="profile in profiles" :key="profile.id" class="translation-llm-card" :class="{ active: profile.id === activeRemoteId }">
@@ -134,7 +136,7 @@ function removeProfile(id: string) {
     </div>
     <template #footer>
       <el-button :disabled="saving" @click="emit('update:modelValue', false)">{{ t("datasetEditor.caption.translationCancel") }}</el-button>
-      <el-button type="primary" :loading="saving" :disabled="loading" @click="emit('save')">{{ t("datasetEditor.caption.translationSave") }}</el-button>
+      <el-button type="primary" :loading="saving" :disabled="loading || (llmMode === 'local' && localModel.state !== 'running')" @click="emit('save')">{{ t("datasetEditor.caption.translationSave") }}</el-button>
     </template>
   </el-dialog>
 </template>

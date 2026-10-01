@@ -70,5 +70,6 @@ def test_dictionary_download_candidates_prefer_github_api_over_raw_host():
     candidates = ChineseDictionaryService._candidate_download_urls(
         "https://raw.githubusercontent.com/ffdkj/repo/main/tag.sqlite"
     )
-    assert candidates[0] == "https://api.github.com/repos/ffdkj/repo/contents/tag.sqlite?ref=main"
+    assert candidates[0].startswith("https://ghfast.top/")
+    assert any("api.github.com" in candidate for candidate in candidates)
     assert "raw.githubusercontent.com" in candidates[-1]

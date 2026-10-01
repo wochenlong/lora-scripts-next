@@ -149,6 +149,8 @@ async def save_tag_translation_config(payload: dict):
         local_status = local_model_service.status()
         if not local_status.get("installed") or local_status.get("state") != "running":
             raise HTTPException(status_code=409, detail="Install and start the managed local runtime before enabling local LLM")
+    elif payload.get("llm_mode") == "remote":
+        await local_model_service.stop_runtime()
     return _success(translation_manager.save_config(payload))
 
 

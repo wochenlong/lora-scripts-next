@@ -952,6 +952,8 @@ export default {
       translationDictionaryUpdate: "Update dictionary",
       translationDictionaryRetry: "Download / retry",
       translationDictionaryCancel: "Cancel download",
+      translationDictionaryUpdateAvailable: "A newer dictionary is available. Click Update dictionary.",
+      translationDictionaryUpToDate: "Checked: the installed dictionary is up to date.",
       translationLocalModelTitle: "Local Qwen model",
       translationLocalModelHint: "The app installs Qwen3.5-0.8B GGUF and a managed llama.cpp runtime. Requests stay behind the main dataset translation route.",
       translationLocalEnabled: "Use local LLM",

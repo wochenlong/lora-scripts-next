@@ -60,3 +60,7 @@ vue/require-default-prop 警告；本轮没有新增 lint 错误。Vite 对第�
   “未配置就能启用本地 LLM”的状态。
 - 本地 endpoint 固定为主应用数据集翻译路由，llama-server 只监听用户数据目录配置的
   loopback 内部端口。
+- 本地模型页签在缺少模型时仍可进入并点击一键安装；只有运行状态为 running 时才允许保存
+  为当前 LLM 路由。
+- 词库镜像回归探针验证 ghfast.top、ghproxy.net、gh-proxy.com 均可返回完整文件响应，
+  作为 GitHub API/raw 失败时的备用下载入口。

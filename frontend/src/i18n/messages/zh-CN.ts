@@ -952,6 +952,8 @@ export default {
       translationDictionaryUpdate: "更新词库",
       translationDictionaryRetry: "下载/重试",
       translationDictionaryCancel: "取消下载",
+      translationDictionaryUpdateAvailable: "检测到新词库，可以点击“更新词库”。",
+      translationDictionaryUpToDate: "已检查：当前词库已是最新版本。",
       translationLocalModelTitle: "本地 Qwen 小模型",
       translationLocalModelHint: "系统会自动安装 Qwen3.5-0.8B GGUF 和受管 llama.cpp 运行环境，接口只通过主项目的内部数据集翻译路由提供。",
       translationLocalEnabled: "启用本地 LLM",

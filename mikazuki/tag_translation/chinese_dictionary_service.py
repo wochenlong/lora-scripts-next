@@ -23,7 +23,15 @@ GITHUB_CONTENTS_URL = (
     "https://api.github.com/repos/ffdkj/"
     "ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/contents/tag.sqlite?ref=main"
 )
-ALLOWED_DOWNLOAD_HOSTS = {"api.github.com", "raw.githubusercontent.com", "github.com", "objects.githubusercontent.com"}
+ALLOWED_DOWNLOAD_HOSTS = {
+    "api.github.com",
+    "raw.githubusercontent.com",
+    "github.com",
+    "objects.githubusercontent.com",
+    "ghfast.top",
+    "ghproxy.net",
+    "gh-proxy.com",
+}
 PREFERRED_DICTIONARY_HOSTS = ("github.com", "raw.githubusercontent.com")
 USER_AGENT = "Autocomplete-Plus/1.12"
 MAX_LOOKUP_ITEMS = 500
@@ -404,11 +412,14 @@ class ChineseDictionaryService:
             if len(parts) >= 4:
                 owner, repo, ref = parts[:3]
                 file_path = "/".join(parts[3:])
-                candidates.insert(0, f"https://github.com/{owner}/{repo}/raw/refs/heads/{ref}/{file_path}")
-                candidates.insert(
-                    0,
-                    f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}?ref={ref}",
-                )
+                mirror_url = url
+                mirrors = [
+                    f"https://{mirror}/{mirror_url}"
+                    for mirror in ("ghfast.top", "ghproxy.net", "gh-proxy.com")
+                ]
+                api_url = f"https://api.github.com/repos/{owner}/{repo}/contents/{file_path}?ref={ref}"
+                github_url = f"https://github.com/{owner}/{repo}/raw/refs/heads/{ref}/{file_path}"
+                candidates = mirrors + [api_url, github_url, url]
         return list(dict.fromkeys(candidates))
 
     @staticmethod

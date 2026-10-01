@@ -32,7 +32,7 @@ export interface TagTranslationConfig {
   local: { enabled: boolean; endpoint: string; runtime_path: string; port: number; context_length: number }
 }
 export interface TagTranslationCacheStatus { total: number; mymemory: number; llm: number }
-export interface TagDictionaryStatus { state: string; installed: boolean; row_count: number; size_bytes: number; installed_sha?: string | null; remote_sha?: string | null; update_available?: boolean; downloaded_bytes?: number; total_bytes?: number; error?: string | null }
+export interface TagDictionaryStatus { state: string; installed: boolean; row_count: number; size_bytes: number; installed_sha?: string | null; remote_sha?: string | null; update_available?: boolean; downloaded_bytes?: number; total_bytes?: number; last_checked_at?: string | null; error?: string | null }
 export interface LocalModelStatus { state: string; model_id: string; model_filename: string; model_url: string; model_path: string; installed: boolean; size_bytes: number; downloaded_bytes: number; total_bytes: number; runtime_path: string; endpoint: string; port: number; runtime_version?: string; runtime_installed?: boolean; runtime_state?: string; runtime_downloaded_bytes?: number; runtime_total_bytes?: number; error?: string | null }
 
 const post = <T>(path: string, body: unknown) => apiData<T>(path, { method: "POST", body: JSON.stringify(body) })
