@@ -132,6 +132,8 @@ class DeepSeekClient:
             "max_tokens": 1024,
             "temperature": 0.1,
         }
+        if local_llm_endpoint(self.config.get("endpoint")):
+            payload["thinking"] = {"type": "disabled"}
         headers = {
             "Content-Type": "application/json",
             "Accept": "application/json",
