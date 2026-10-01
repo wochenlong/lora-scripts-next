@@ -1,6 +1,6 @@
 # Portable updater channel and execution safety
 
-Status: design draft; implementation and acceptance pending.
+Status: implemented; package-level combined acceptance pending.
 Target: dev. Follow-up to PR #362. No main changes or release publication.
 
 ## Evidence
@@ -21,9 +21,11 @@ then updated toward c48bbbc5 through the root BAT.
 
 ## Decision
 
-Use a short, stable BAT launcher and a separate updater worker. Resolve the
-selected repository branch before downloading helpers. Fetch once and pin
-bootstrap and application content to the same verified commit.
+Use a fully parsed BAT handoff block and a separate stdlib updater worker.
+Git owns tracked updater scripts: Git checkouts skip online bootstrap entirely.
+Load the local safe Git helper before updating, fetch the current local branch,
+and pass the captured commit SHA to the helper. Refresh generated root launchers
+only after successful fast-forward. No updater is downloaded from main.
 
 Keeping unconditional main bootstrap is rejected because dev and main differ.
 Merely switching raw download URLs to a moving dev branch is insufficient:
@@ -36,11 +38,10 @@ downloads and the subsequent merge could still refer to different commits.
   and user edits. No automatic stash, hard reset or clean.
 - Detached or ambiguous channel selection must stop with a clear error, not
   silently fall back to main.
-- Download/stage allowlisted updater files away from live tracked scripts.
-  Validate completeness before activation. Preserve the old launcher on failure.
-- The running BAT must not be overwritten. The worker starts only after the
-  launcher has handed off safely; launcher refresh happens at the end.
-- Reuse the same selected commit across mirror fallback and helper downloads.
+- Git changes tracked scripts only through the guarded fast-forward.
+- Parse the entire BAT handoff before starting the worker, so refreshing its
+  file cannot change commands still awaiting execution.
+- Use the captured fetched commit even if the remote branch subsequently advances.
 - Do not execute staged repository Python with a sys.path rooted only in staging.
   Explicitly retain the application root and use the package interpreter.
 - Report worker failure to the user and to the caller; never print success
@@ -52,7 +53,7 @@ downloads and the subsequent merge could still refer to different commits.
 
 - Real root BAT bootstrap: pre-362 dev to merged dev, then repeat at current HEAD.
 - Equivalent main-channel scenario without changing main remotely.
-- Branch advances between fetch and download: original pinned commit is used.
+- Branch advances after fetch: original pinned commit is used.
 - Partial download, unavailable network, detached HEAD and conflicting local
   files stop safely and preserve original scripts/data.
 - Child worker preserves process-only proxy policy.
@@ -70,3 +71,6 @@ No subagents are used in this side conversation.
 
 This draft is not merge-ready. Implementation, regression tests and a real
 package update rerun must precede conversion to a ready PR.
+
+Legacy packages missing the local worker need a complete-package upgrade.
+Fail closed instead of silently installing another branch's updater.

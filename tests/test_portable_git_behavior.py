@@ -50,6 +50,8 @@ class PortableGitBehavior(unittest.TestCase):
         self.write(self.source, "docs/guide.md", b"old guide\n")
         self.write(self.source, "tests/example.py", b"test file\n")
         self.write(self.source, "scripts/portable/portable_git.py", HELPER.read_bytes())
+        self.write(self.source, "scripts/portable/update_portable.py",
+                   (ROOT / "scripts/portable/update_portable.py").read_bytes())
         self.commit("initial")
         self.helper("seed", source=True)
 
