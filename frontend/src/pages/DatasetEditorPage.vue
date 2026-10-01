@@ -232,7 +232,7 @@ async function checkDictionary() {
 
 async function updateDictionary() {
   dictionaryBusy.value = true
-  try { dictionaryStatus.value = await datasetApi.updateTagDictionary(true); scheduleTranslationSettingsPoll() }
+  try { dictionaryStatus.value = await datasetApi.updateTagDictionary(false); scheduleTranslationSettingsPoll() }
   catch (caught) { dictionaryStatus.value = { ...dictionaryStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
   finally { dictionaryBusy.value = false }
 }

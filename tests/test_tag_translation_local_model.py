@@ -1,8 +1,15 @@
 import asyncio
+import io
+import zipfile
 
 import pytest
 
-from mikazuki.tag_translation.local_model_service import LocalModelService
+from mikazuki.tag_translation.local_model_service import (
+    MODEL_MIRROR_URL,
+    RUNTIME_ASSET_NAME,
+    RUNTIME_RELEASE_TAG,
+    LocalModelService,
+)
 
 
 class Config:
@@ -16,6 +23,55 @@ class Config:
                 "context_length": 2048,
             }
         }
+
+
+class FakeResponse:
+    def __init__(self, payload, content_type="application/octet-stream"):
+        self.status = 200
+        self.headers = {"Content-Length": str(len(payload))}
+        self.content = self
+        self._payload = payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+    def __aiter__(self):
+        return self
+
+    async def iter_chunked(self, _size):
+        yield self._payload
+        self._payload = b""
+
+    async def __anext__(self):
+        if not self._payload:
+            raise StopAsyncIteration
+        payload, self._payload = self._payload, b""
+        return payload
+
+
+class FakeSession:
+    def __init__(self, payload):
+        self.payload = payload
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *_args):
+        return None
+
+    def get(self, *_args, **_kwargs):
+        return FakeResponse(self.payload)
+
+
+class FakeSessionFactory:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __call__(self, **_kwargs):
+        return FakeSession(self.payload)
 
 
 def test_local_model_status_is_safe_before_install(tmp_path):
@@ -33,7 +89,32 @@ def test_runtime_port_is_allocated_by_the_os():
     assert second > 0
 
 
+def test_managed_assets_have_reachable_mirror_and_windows_cpu_runtime():
+    assert "hf-mirror.com" in MODEL_MIRROR_URL
+    assert RUNTIME_RELEASE_TAG == "b11327"
+    assert RUNTIME_ASSET_NAME.endswith("win-cpu-x64.zip")
+
+
 def test_local_runtime_requires_explicit_executable(tmp_path):
     service = LocalModelService(tmp_path, Config())
     with pytest.raises(RuntimeError, match="Qwen GGUF"):
         asyncio.run(service.start_runtime())
+
+
+def test_model_download_accepts_a_valid_gguf_payload(tmp_path):
+    service = LocalModelService(tmp_path, Config())
+    service.session_factory = FakeSessionFactory(b"GGUF" + b"x" * 32)
+    asyncio.run(service._download())
+    assert service.model_path.read_bytes().startswith(b"GGUF")
+    assert service.status()["state"] == "ready"
+
+
+def test_runtime_download_extracts_llama_server_from_windows_zip(tmp_path):
+    archive = io.BytesIO()
+    with zipfile.ZipFile(archive, "w") as output:
+        output.writestr("llama-b11327/bin/llama-server.exe", b"x" * 2048)
+    service = LocalModelService(tmp_path, Config())
+    service.session_factory = FakeSessionFactory(archive.getvalue())
+    asyncio.run(service._download_runtime())
+    assert service.runtime_executable.exists()
+    assert service.status()["runtime_state"] == "ready"

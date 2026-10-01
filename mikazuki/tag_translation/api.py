@@ -59,6 +59,10 @@ async def check_tag_translation_dictionary():
 
 @router.post("/tag-translation/dictionary/update")
 async def update_tag_translation_dictionary(force: bool = False):
+    if not force:
+        current = dictionary_service.status()
+        if current.get("installed") and current.get("update_available") is not True:
+            return _success(current)
     return _success(dictionary_service.start_update(force=force))
 
 

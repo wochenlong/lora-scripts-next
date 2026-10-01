@@ -11,7 +11,7 @@ assets/tag_translation/ 用户数据目录，不进入 Git。
 | 检查 | 结果 |
 | --- | --- |
 | python -m compileall -q mikazuki/tag_translation | 通过 |
-| python -m pytest -q tests/test_tag_translation_config.py tests/test_tag_translation_api.py tests/test_tag_translation_dictionary.py tests/test_tag_translation_local_model.py | 19 项通过（含本轮错误码、local-only、下载入口、本地运行时和多配置回归） |
+| python -m pytest -q tests/test_tag_translation_config.py tests/test_tag_translation_api.py tests/test_tag_translation_dictionary.py tests/test_tag_translation_local_model.py | 23 项通过（含本轮错误码、local-only、镜像入口、本地运行时、资产提取和多配置回归） |
 | cd frontend; npm run check | 通过；41 个测试文件、253 项测试通过；构建通过 |
 | git diff --check | 通过 |
 

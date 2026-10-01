@@ -1,11 +1,11 @@
 ## 计划元数据
 - Plan ID: DATASET-MODULE-20260930
-- Version: v4-translation-management-approved
-- Last updated: 2026-10-01 Asia/Shanghai
+- Version: v4-installation-acceptance-executing
+- Last updated: 2026-10-02 Asia/Shanghai
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: V4-E 统一验收与文档
+- Current active phase: T1 测试计划与契约修复
 - Execution readiness: executing
 - Active Goal: `01a0c916-e274-7412-9950-a0d41c633bdf`
 
@@ -173,6 +173,31 @@
 - 后续缺陷修复：词库下载改用 GitHub API 原始内容入口并保留 raw 备用路径，规避 raw.githubusercontent.com 网络不可达；本地模型改为 Qwen GGUF + llama.cpp 一键安装，运行时自动保存在用户数据目录；LLM 设置改为远程多配置卡片与本地模型统一卡片，远程/本地只能启用一个；本地请求统一代理到主应用的数据集翻译 API，不再让用户填写接口或可执行文件路径。
 - 最新回归修复：检查词库后在设置页显示“已是最新/有新版本”；更新下载增加 ghfast/ghproxy 镜像并优先使用，避免多个 GitHub 域名同时不可达；本地模型页签允许进入安装，但未运行前禁止保存启用。
 - 端口治理修复：本地模型设置不再显示接口地址或 llama-server 路径；主应用代理地址运行时读取实际 GUI 端口，llama-server 每次启动从操作系统申请空闲 loopback 端口，配置文件不再持久化 28000 或固定内部端口。
+
+## V4 安装与下载专项验收（当前执行）
+
+- 测试计划：[标签翻译下载与安装系统全面测试验收计划](tag-translation-installation-acceptance-plan.md)。
+- 当前已知缺陷：
+  - 词库已是最新时更新按钮仍可点击，且 API 仍接受无必要的更新任务。
+  - Qwen 模型只尝试 Hugging Face 主站，受限网络下会超时。
+  - llama.cpp v0.5.0 只有 nightly-tag 标记资产，没有 Windows llama-server 压缩包，导致一键安装必然失败；已改为 b11327 Windows CPU x64 资产。
+- 已锁定修复方向：
+  - 已是最新时 UI 禁用更新按钮，后端也拒绝无更新任务。
+  - Qwen 下载使用 hf-mirror.com 优先、huggingface.co 备用。
+  - llama.cpp 改用 b11327 Windows CPU x64 资产，并使用 ghfast/ghproxy/GitHub 备用入口。
+  - 安装完成后自动启动、健康检查、动态端口分配和失败重试。
+- 新阶段状态：
+
+| 阶段 | 目的 | 状态 |
+| --- | --- | --- |
+| T1 测试计划与契约修复 | 建立测试矩阵、修复已知状态和资产契约 | in progress |
+| T2 下载器模拟与故障注入 | 覆盖超时、镜像、校验、取消、重试、旧库保护 | pending |
+| T3 一键安装运行时 | 实际模型/runtime 安装、自动启动、健康检查、动态端口 | pending |
+| T4 UI 全组件验收 | 翻译设置全部按钮、互斥模式、缓存、回退、进度 | pending |
+| T5 隔离目录重装验收 | 全新 clone、全新 data、启动和真实翻译链路 | pending |
+| T6 交付收口 | 证据、任务书、测试报告、提交推送 | pending |
+
+- 下一步动作：先完成 T1/T2 自动化修复和测试，再建立隔离安装目录执行 T3～T5。
 
 ## v1 进度台账（历史记录，受上述审计修正）
 - Overall progress: 标签释义功能、provider、LLM 配置、Dataset Editor 展示、真实接口和浏览器交互验收均已完成，发布审计记录已建立。

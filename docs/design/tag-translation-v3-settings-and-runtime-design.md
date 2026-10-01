@@ -111,7 +111,7 @@ Danbooru 词库         失败：连接超时               [重试]
 
 来源证据（2026-10-01）：[Qwen 模型卡](https://huggingface.co/Qwen/Qwen3.5-0.8B)、[ggml-org GGUF 仓库](https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF)、[llama.cpp 项目](https://github.com/ggml-org/llama.cpp)。模型存在与兼容服务方式可核实；中文标签质量、具体量化版本和本机资源占用尚未实测。
 
-实现固定 llama.cpp release、模型仓库文件、量化文件、大小与哈希；先通过 Windows CPU 的加载、JSON 翻译和停服探针，再登记到可安装清单。当前实现固定使用已验证的 llama.cpp v0.5.0，并只选择 Windows x64/AVX2 资产，不静默换成其他版本。
+实现固定 llama.cpp release、模型仓库文件、量化文件、大小与哈希；先通过 Windows CPU 的加载、JSON 翻译和停服探针，再登记到可安装清单。当前实现固定使用已验证的 llama.cpp b11327 Windows CPU x64 资产，并不静默换成其他版本。
 
 ### 5.2 三种 LLM 来源
 

@@ -31,10 +31,24 @@ MODEL_URL = (
     "https://huggingface.co/ggml-org/Qwen3.5-0.8B-GGUF/resolve/main/"
     f"{MODEL_FILENAME}"
 )
-RUNTIME_RELEASE_TAG = "v0.5.0"
-RUNTIME_API_URL = f"https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/{RUNTIME_RELEASE_TAG}"
-ALLOWED_HOSTS = {"huggingface.co", "hf.co", "cdn-lfs.huggingface.co"}
-RUNTIME_HOSTS = {"api.github.com", "github.com", "objects.githubusercontent.com"}
+MODEL_MIRROR_URL = (
+    "https://hf-mirror.com/ggml-org/Qwen3.5-0.8B-GGUF/resolve/main/"
+    f"{MODEL_FILENAME}"
+)
+RUNTIME_RELEASE_TAG = "b11327"
+RUNTIME_ASSET_NAME = f"llama-{RUNTIME_RELEASE_TAG}-bin-win-cpu-x64.zip"
+RUNTIME_SOURCE_URL = (
+    "https://github.com/ggml-org/llama.cpp/releases/download/"
+    f"{RUNTIME_RELEASE_TAG}/{RUNTIME_ASSET_NAME}"
+)
+ALLOWED_HOSTS = {"huggingface.co", "hf-mirror.com", "hf.co", "cdn-lfs.huggingface.co"}
+RUNTIME_HOSTS = {
+    "github.com",
+    "objects.githubusercontent.com",
+    "ghfast.top",
+    "ghproxy.net",
+    "gh-proxy.com",
+}
 
 
 def utc_now():
@@ -176,20 +190,36 @@ class LocalModelService:
             if self.model_path.exists() and not force:
                 self._runtime["state"] = "ready"
                 return
-            if urlparse(MODEL_URL).hostname not in ALLOWED_HOSTS:
-                raise RuntimeError("Model download URL is not trusted")
             fd, temporary = tempfile.mkstemp(prefix="qwen-", suffix=".gguf.download", dir=self.root)
             os.close(fd)
             timeout = aiohttp.ClientTimeout(total=3600)
-            async with self.session_factory(timeout=timeout, trust_env=True) as session:
-                async with session.get(MODEL_URL, headers={"Accept": "application/octet-stream"}) as response:
-                    if response.status != 200:
-                        raise RuntimeError(f"Model download returned HTTP {response.status}")
-                    self._runtime["total_bytes"] = int(response.headers.get("Content-Length") or 0)
-                    with open(temporary, "wb") as target:
-                        async for chunk in response.content.iter_chunked(1024 * 1024):
-                            target.write(chunk)
-                            self._runtime["downloaded_bytes"] += len(chunk)
+            errors = []
+            downloaded = False
+            for url in (MODEL_MIRROR_URL, MODEL_URL):
+                if urlparse(url).hostname not in ALLOWED_HOSTS:
+                    continue
+                try:
+                    async with self.session_factory(timeout=timeout, trust_env=True) as session:
+                        async with session.get(url, headers={"Accept": "application/octet-stream"}) as response:
+                            if response.status != 200:
+                                raise RuntimeError(f"HTTP {response.status}")
+                            self._runtime["total_bytes"] = int(response.headers.get("Content-Length") or 0)
+                            with open(temporary, "wb") as target:
+                                async for chunk in response.content.iter_chunked(1024 * 1024):
+                                    target.write(chunk)
+                                    self._runtime["downloaded_bytes"] += len(chunk)
+                    LOGGER.info("local tag translation model downloaded from %s", urlparse(url).hostname)
+                    downloaded = True
+                    break
+                except (aiohttp.ClientError, asyncio.TimeoutError, OSError, RuntimeError) as error:
+                    errors.append(f"{urlparse(url).hostname}: {error}")
+                    self._runtime["downloaded_bytes"] = 0
+                    try:
+                        os.remove(temporary)
+                    except OSError:
+                        pass
+            if not downloaded:
+                raise RuntimeError("Model download failed; " + " | ".join(errors))
             with open(temporary, "rb") as source:
                 if source.read(4) != b"GGUF":
                     raise RuntimeError("Downloaded model is not a GGUF file")
@@ -216,38 +246,40 @@ class LocalModelService:
         try:
             if platform.system() != "Windows":
                 raise RuntimeError("Automatic llama.cpp setup currently supports Windows")
-            timeout = aiohttp.ClientTimeout(total=1800)
-            headers = {"Accept": "application/vnd.github+json", "User-Agent": "Next-Trainer-Tag-Translation"}
-            async with self.session_factory(timeout=timeout, trust_env=True) as session:
-                async with session.get(RUNTIME_API_URL, headers=headers) as response:
-                    if response.status != 200:
-                        raise RuntimeError(f"llama.cpp release lookup returned HTTP {response.status}")
-                    release = await response.json(content_type=None)
-            assets = release.get("assets", []) if isinstance(release, dict) else []
-            candidates = [
-                asset for asset in assets
-                if isinstance(asset, dict)
-                and str(asset.get("name", "")).lower().endswith(".zip")
-                and "win" in str(asset.get("name", "")).lower()
-                and ("avx2" in str(asset.get("name", "")).lower() or "x64" in str(asset.get("name", "")).lower())
-            ]
-            if not candidates:
-                raise RuntimeError("No Windows llama.cpp release asset was found")
-            asset = sorted(candidates, key=lambda item: ("avx2" not in item["name"].lower(), item["name"]))[0]
-            url = str(asset.get("browser_download_url") or "")
-            if urlparse(url).hostname not in RUNTIME_HOSTS:
-                raise RuntimeError("llama.cpp release URL is not trusted")
             fd, temporary = tempfile.mkstemp(prefix="llama-", suffix=".zip.download", dir=self.root)
             os.close(fd)
-            async with self.session_factory(timeout=timeout, trust_env=True) as session:
-                async with session.get(url, headers={"Accept": "application/octet-stream"}) as response:
-                    if response.status != 200:
-                        raise RuntimeError(f"llama.cpp download returned HTTP {response.status}")
-                    self._runtime_install["total_bytes"] = int(response.headers.get("Content-Length") or 0)
-                    with open(temporary, "wb") as target:
-                        async for chunk in response.content.iter_chunked(1024 * 1024):
-                            target.write(chunk)
-                            self._runtime_install["downloaded_bytes"] += len(chunk)
+            mirror_urls = [
+                f"https://{mirror}/{RUNTIME_SOURCE_URL}"
+                for mirror in ("ghfast.top", "ghproxy.net", "gh-proxy.com")
+            ]
+            errors = []
+            downloaded = False
+            timeout = aiohttp.ClientTimeout(total=1800)
+            for url in (*mirror_urls, RUNTIME_SOURCE_URL):
+                if urlparse(url).hostname not in RUNTIME_HOSTS:
+                    continue
+                try:
+                    async with self.session_factory(timeout=timeout, trust_env=True) as session:
+                        async with session.get(url, headers={"Accept": "application/octet-stream"}) as response:
+                            if response.status != 200:
+                                raise RuntimeError(f"HTTP {response.status}")
+                            self._runtime_install["total_bytes"] = int(response.headers.get("Content-Length") or 0)
+                            with open(temporary, "wb") as target:
+                                async for chunk in response.content.iter_chunked(1024 * 1024):
+                                    target.write(chunk)
+                                    self._runtime_install["downloaded_bytes"] += len(chunk)
+                    LOGGER.info("llama.cpp runtime downloaded from %s", urlparse(url).hostname)
+                    downloaded = True
+                    break
+                except (aiohttp.ClientError, asyncio.TimeoutError, OSError, RuntimeError) as error:
+                    errors.append(f"{urlparse(url).hostname}: {error}")
+                    self._runtime_install["downloaded_bytes"] = 0
+                    try:
+                        os.remove(temporary)
+                    except OSError:
+                        pass
+            if not downloaded:
+                raise RuntimeError("llama.cpp runtime download failed; " + " | ".join(errors))
             self.runtime_root.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(temporary) as archive:
                 members = [item for item in archive.infolist() if Path(item.filename).name.lower() == self.runtime_executable.name.lower()]
