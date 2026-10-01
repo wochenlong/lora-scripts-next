@@ -282,13 +282,24 @@ class LocalModelService:
                 raise RuntimeError("llama.cpp runtime download failed; " + " | ".join(errors))
             self.runtime_root.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(temporary) as archive:
-                members = [item for item in archive.infolist() if Path(item.filename).name.lower() == self.runtime_executable.name.lower()]
-                if not members:
+                members = archive.infolist()
+                server_members = [
+                    item for item in members
+                    if Path(item.filename).name.lower() == self.runtime_executable.name.lower()
+                ]
+                if not server_members:
                     raise RuntimeError("llama.cpp archive does not contain llama-server")
-                member = members[0]
-                target = self.runtime_root / self.runtime_executable.name
-                with archive.open(member) as source, open(target, "wb") as destination:
-                    destination.write(source.read())
+                root = self.runtime_root.resolve()
+                for member in members:
+                    target = (self.runtime_root / member.filename).resolve()
+                    if target != root and root not in target.parents:
+                        raise RuntimeError("llama.cpp archive contains an unsafe path")
+                archive.extractall(self.runtime_root)
+                extracted = next(
+                    (self.runtime_root / member.filename).resolve()
+                    for member in server_members
+                )
+                self.runtime_executable = extracted
             if not self.runtime_executable.exists() or self.runtime_executable.stat().st_size < 1024:
                 raise RuntimeError("llama-server installation is incomplete")
             if os.name != "nt":
