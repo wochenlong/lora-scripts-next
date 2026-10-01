@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 
 import aiohttp
@@ -14,7 +15,9 @@ from .local_model_service import LocalModelService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-TRANSLATION_ROOT = PROJECT_ROOT / "assets" / "tag_translation"
+TRANSLATION_ROOT = Path(
+    os.environ.get("MIKAZUKI_TAG_TRANSLATION_ROOT", str(PROJECT_ROOT / "assets" / "tag_translation"))
+)
 DICTIONARY_ROOT = TRANSLATION_ROOT / "danbooru"
 TRANSLATION_CONFIG_PATH = TRANSLATION_ROOT / "translation.json"
 TRANSLATION_CACHE_PATH = TRANSLATION_ROOT / "translations.sqlite3"
