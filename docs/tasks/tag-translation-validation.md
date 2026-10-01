@@ -62,5 +62,7 @@ vue/require-default-prop 警告；本轮没有新增 lint 错误。Vite 对第�
   loopback 内部端口。
 - 本地模型页签在缺少模型时仍可进入并点击一键安装；只有运行状态为 running 时才允许保存
   为当前 LLM 路由。
+- 本地模型配置不再展示 endpoint 或可执行文件路径；主应用端口从 GUI 启动环境读取，
+  llama-server 内部端口由操作系统动态分配，端口冲突会在健康检查阶段失败并可重试。
 - 词库镜像回归探针验证 ghfast.top、ghproxy.net、gh-proxy.com 均可返回完整文件响应，
   作为 GitHub API/raw 失败时的备用下载入口。

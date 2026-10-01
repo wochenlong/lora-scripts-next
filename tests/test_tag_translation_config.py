@@ -56,6 +56,8 @@ def test_remote_profiles_keep_one_active_route_and_mask_keys():
 def test_local_mode_is_mutually_exclusive():
     config = validate_config({"llm_mode": "local"})
     assert config["local"]["enabled"] is True
+    assert config["local"]["port"] == 0
+    assert config["local"]["endpoint"] == "internal://dataset-translation"
 
 
 def test_masked_profile_key_is_preserved_on_save():

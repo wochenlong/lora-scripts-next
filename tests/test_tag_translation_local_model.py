@@ -23,6 +23,14 @@ def test_local_model_status_is_safe_before_install(tmp_path):
     assert status["state"] == "missing"
     assert status["installed"] is False
     assert status["model_id"] == "qwen3.5-0.8b-q4_0"
+    assert status["port"] == 0
+
+
+def test_runtime_port_is_allocated_by_the_os():
+    first = LocalModelService._allocate_loopback_port()
+    second = LocalModelService._allocate_loopback_port()
+    assert first > 0
+    assert second > 0
 
 
 def test_local_runtime_requires_explicit_executable(tmp_path):

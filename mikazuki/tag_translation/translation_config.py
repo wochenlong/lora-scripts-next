@@ -47,9 +47,9 @@ DEFAULT_CONFIG = {
     ],
     "local": {
         "enabled": False,
-        "endpoint": "http://127.0.0.1:28000/api/dataset/translate/v1/chat/completions",
+        "endpoint": "internal://dataset-translation",
         "runtime_path": "",
-        "port": 18081,
+        "port": 0,
         "context_length": 2048,
     },
 }
@@ -58,7 +58,7 @@ SECRET_MASK = "********"
 
 
 def local_proxy_endpoint():
-    port = os.environ.get("MIKAZUKI_PORT", "28000")
+    port = os.environ.get("MIKAZUKI_PORT", "0")
     return f"http://127.0.0.1:{port}/api/dataset/translate/v1/chat/completions"
 
 
@@ -175,15 +175,9 @@ def validate_config(raw_config, current_config=None):
             continue
         value = _validate_string(raw_local[key], f"local.{key}", maximum_length).strip()
         if key == "endpoint":
-            if value.endswith("/v1/chat/completions"):
-                value = local_proxy_endpoint()
-            parsed = urlparse(value)
-            if parsed.scheme != "http" or parsed.hostname not in {"127.0.0.1", "localhost", "::1"}:
-                raise ValueError("local.endpoint must use loopback HTTP")
-            if not parsed.path.endswith("/api/dataset/translate/v1/chat/completions"):
-                raise ValueError("local.endpoint must use the internal dataset translation route")
+            value = "internal://dataset-translation"
         config["local"][key] = value
-    for key, (minimum, maximum) in (("port", (1, 65535)), ("context_length", (256, 32768))):
+    for key, (minimum, maximum) in (("port", (0, 65535)), ("context_length", (256, 32768))):
         if key not in raw_local:
             continue
         value = raw_local[key]
@@ -193,7 +187,8 @@ def validate_config(raw_config, current_config=None):
     # The selected route is a single global switch. A local model and a remote
     # profile can both be stored, but only one is ever active.
     config["local"]["enabled"] = config["llm_mode"] == "local"
-    config["local"]["endpoint"] = local_proxy_endpoint()
+    config["local"]["endpoint"] = "internal://dataset-translation"
+    config["local"]["port"] = 0
     return config
 
 

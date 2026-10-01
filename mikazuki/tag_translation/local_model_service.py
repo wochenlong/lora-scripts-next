@@ -14,6 +14,7 @@ import json
 import logging
 import os
 import platform
+import socket
 import tempfile
 import zipfile
 from datetime import datetime, timezone
@@ -52,6 +53,7 @@ class LocalModelService:
         self.session_factory = aiohttp.ClientSession
         self._task: asyncio.Task | None = None
         self._process: asyncio.subprocess.Process | None = None
+        self._runtime_port: int | None = None
         self._runtime = {
             "state": "ready" if self.model_path.exists() else "missing",
             "downloaded_bytes": 0,
@@ -92,14 +94,21 @@ class LocalModelService:
             "runtime_state": self._runtime_install["state"],
             "runtime_downloaded_bytes": self._runtime_install["downloaded_bytes"],
             "runtime_total_bytes": self._runtime_install["total_bytes"],
-            "endpoint": config.get("endpoint", "http://127.0.0.1:8081/v1/chat/completions"),
-            "port": int(config.get("port", 8081)),
+            "endpoint": config.get("endpoint", "internal://dataset-translation"),
+            "port": self._runtime_port or 0,
             "error": self._runtime["error"] or self._runtime_install["error"],
         }
 
     def upstream_endpoint(self):
-        config = self.config_store.load().get("local", {})
-        return f"http://127.0.0.1:{int(config.get('port', 18081))}/v1/chat/completions"
+        if not self._runtime_port:
+            return ""
+        return f"http://127.0.0.1:{self._runtime_port}/v1/chat/completions"
+
+    @staticmethod
+    def _allocate_loopback_port():
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+            probe.bind(("127.0.0.1", 0))
+            return int(probe.getsockname()[1])
 
     def start_download(self, force=False):
         if self._task and not self._task.done():
@@ -276,7 +285,8 @@ class LocalModelService:
             raise RuntimeError("Install the Qwen GGUF model first")
         if not os.path.isfile(executable):
             raise RuntimeError("The configured llama-server executable does not exist")
-        port = int(config.get("port", 8081))
+        port = self._allocate_loopback_port()
+        self._runtime_port = port
         command = [
             executable,
             "-m", str(self.model_path),
@@ -322,6 +332,7 @@ class LocalModelService:
                 await self._process.wait()
             LOGGER.info("local tag translation runtime stopped")
         self._process = None
+        self._runtime_port = None
         return self.status()
 
     def _save_metadata(self, payload):

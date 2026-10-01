@@ -1681,6 +1681,16 @@
   font-weight: 600;
 }
 
+.translation-runtime-managed {
+  margin: 0;
+  padding: 9px 10px;
+  color: var(--text-soft);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+}
+
 .translation-profile-add {
   width: 100%;
 }

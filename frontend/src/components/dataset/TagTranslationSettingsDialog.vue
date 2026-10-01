@@ -111,8 +111,7 @@ function removeProfile(id: string) {
           <article class="translation-llm-card active">
             <header class="translation-llm-card-header"><strong>{{ t("datasetEditor.caption.translationLocalModelTitle") }}</strong><span class="translation-profile-active">{{ localModel.model_id }}</span></header>
             <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationLocalModelHint") }}</p>
-            <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationLocalEndpoint") }}</span><el-input :model-value="localModel.endpoint" readonly /></label>
-            <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationRuntimePath") }}</span><el-input :model-value="localModel.runtime_path || t('datasetEditor.caption.translationManagedRuntime')" readonly /></label>
+            <p class="translation-runtime-managed">{{ t("datasetEditor.caption.translationManagedRuntime") }}</p>
             <small v-if="localModel.error" class="caption-translation-error">{{ localModel.error }}</small>
             <div class="caption-translation-cache-row">
               <span>{{ localModel.state }}<template v-if="localModel.downloaded_bytes"> · {{ localModel.downloaded_bytes }}/{{ localModel.total_bytes || "?" }}</template></span>

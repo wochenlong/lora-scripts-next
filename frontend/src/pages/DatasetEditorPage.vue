@@ -78,7 +78,7 @@ const translationCacheCount = ref(0)
 const translationCacheClearing = ref(false)
 const dictionaryStatus = ref<TagDictionaryStatus>({ state: "missing", installed: false, row_count: 0, size_bytes: 0, error: null })
 const dictionaryBusy = ref(false)
-const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "http://127.0.0.1:28000/api/dataset/translate/v1/chat/completions", port: 18081, error: null })
+const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "internal://dataset-translation", port: 0, error: null })
 const localModelBusy = ref(false)
 let translationSettingsPoll: ReturnType<typeof setTimeout> | undefined
 const managedPaths = ref<Array<{ name: string; path: string }>>([])

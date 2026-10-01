@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import aiohttp
 
-from .translation_config import OnlineServiceConfig, local_llm_endpoint, mask_config
+from .translation_config import OnlineServiceConfig, local_llm_endpoint, local_proxy_endpoint, mask_config
 from .translation_store import is_translation_acceptable
 
 
@@ -302,7 +302,7 @@ class TranslationManager:
         full_config = self.config_store.load()
         active_config = full_config["deepseek"].copy()
         if full_config.get("local", {}).get("enabled"):
-            active_config["endpoint"] = full_config["local"].get("endpoint") or active_config.get("endpoint")
+            active_config["endpoint"] = local_proxy_endpoint()
         profile_revision = self.profile_revision(active_config)
         cached = await asyncio.to_thread(
             self.store.get_results, locale, tag_names, "llm", profile_revision
@@ -318,7 +318,7 @@ class TranslationManager:
         local_config = full_config.get("local", {})
         if local_config.get("enabled"):
             config = config.copy()
-            config["endpoint"] = local_config.get("endpoint") or config.get("endpoint")
+            config["endpoint"] = local_proxy_endpoint()
             config["model"] = config.get("model") or "qwen3.5-0.8b-q4_0"
         profile_revision = self.profile_revision(config)
         primary = await self._get_primary(locale, [item["name"] for item in normalized_items])
