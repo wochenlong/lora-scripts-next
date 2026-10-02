@@ -1,10 +1,7 @@
-"""Optional, user-managed local Qwen/llama.cpp runtime.
+"""Managed local Qwen/llama.cpp runtime for tag translation.
 
-The translation feature never imports torch or starts a process implicitly.  This
-small manager only owns the downloadable GGUF asset and, when the user supplies
-an installed llama-server executable, its lifecycle.  The actual translation
-client continues to use the OpenAI-compatible endpoint configured in
-``translation.json``.
+The service owns the downloadable GGUF asset, the pinned llama.cpp runtime,
+and the lifecycle of the internal OpenAI-compatible loopback endpoint.
 """
 
 from __future__ import annotations
@@ -157,6 +154,12 @@ class LocalModelService:
                 return
             if not self.runtime_executable.exists() or force:
                 await self._download_runtime(force=force)
+            elif self._runtime_install["state"] != "ready":
+                # A setup request may arrive after a process restart while the
+                # runtime files are already present.  Reconcile the persisted
+                # filesystem state before deciding whether setup is complete;
+                # otherwise the UI remains stuck at "installing" forever.
+                self._runtime_install.update(state="ready", error=None)
             if self._runtime_install["state"] == "ready":
                 config = self.config_store.load()
                 if not config.get("local", {}).get("runtime_path"):
