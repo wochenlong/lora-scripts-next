@@ -339,6 +339,13 @@ class LocalModelService:
             "--host", "127.0.0.1",
             "--port", str(port),
             "-c", str(int(config.get("context_length", 2048))),
+            # Qwen3.5 defaults to a reasoning trace.  Tag translation needs a
+            # short structured answer, so force non-thinking mode at the
+            # managed server level instead of relying on provider-specific
+            # request fields.
+            "--reasoning", "off",
+            "--reasoning-budget", "0",
+            "--chat-template-kwargs", '{"enable_thinking":false}',
         ]
         self._process = await asyncio.create_subprocess_exec(
             *command,
