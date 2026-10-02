@@ -74,6 +74,9 @@ const translationSettingsError = ref("")
 const llmProfiles = ref<LlmProfile[]>([])
 const activeRemoteId = ref("default")
 const llmMode = ref<"remote" | "local">("remote")
+const committedLlmProfiles = ref<LlmProfile[]>([])
+const committedActiveRemoteId = ref("default")
+const committedLlmMode = ref<"remote" | "local">("remote")
 const translationCacheCount = ref(0)
 const translationCacheClearing = ref(false)
 const dictionaryStatus = ref<TagDictionaryStatus>({ state: "missing", installed: false, row_count: 0, size_bytes: 0, error: null })
@@ -99,9 +102,6 @@ function onPreviewKeydown(event: KeyboardEvent) {
   selectMenuOpen.value = false
   if (rightPanelMode.value !== "caption") rightPanelMode.value = "caption"
 }
-
-const { state: tagFilter, filteredItems: tagFilteredItems, visibleTagList, hasActiveFilter, toggleTag, clearTags, reset: resetTagFilter } =
-  useDatasetTagFilter(items, tags, editorSession.tagFilter)
 
 const filtered = computed(() =>
   tagFilteredItems.value.filter(
@@ -129,6 +129,22 @@ const allDatasetTags = computed(() => {
   })
   return [...unique]
 })
+const allDatasetTagSignature = computed(() => [...allDatasetTags.value].sort().join("\u0000"))
+const filterTagCounts = computed(() => {
+  const counts = new Map<string, number>()
+  items.value.forEach((item) => {
+    const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
+    const sourceTags = draft === undefined ? item.tags : splitCaptionTags(draft)
+    sourceTags.forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1))
+  })
+  return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
+})
+const filterItems = computed(() => items.value.map((item) => {
+  const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
+  return draft === undefined ? item : { ...item, tags: splitCaptionTags(draft) }
+}))
+const { state: tagFilter, filteredItems: tagFilteredItems, visibleTagList, hasActiveFilter, toggleTag, clearTags, reset: resetTagFilter } =
+  useDatasetTagFilter(filterItems, filterTagCounts, editorSession.tagFilter)
 const hasWorkingFilter = computed(
   () => Boolean(category.value) || Boolean(query.value.trim()) || hasActiveFilter.value,
 )
@@ -145,20 +161,62 @@ async function translateWholeDataset(localOnly = false) {
   await resolveTranslations(allDatasetTags.value, translationProvider.value, "zh-CN", localOnly)
 }
 
+let translationRefreshTimer: ReturnType<typeof setTimeout> | undefined
+
+function scheduleTranslationRefresh() {
+  if (!showTranslations.value) return
+  if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
+  translationRefreshTimer = setTimeout(() => {
+    translationRefreshTimer = undefined
+    void translateWholeDataset()
+  }, 350)
+}
+
 function setTranslationsEnabled(value: boolean) {
   showTranslations.value = value
-  if (value) void translateWholeDataset()
-  else cancelTranslations()
+  if (!value) {
+    cancelTranslations()
+    return
+  }
+  if (translationProvider.value === "llm") {
+    void ensureLlmReady().then((ready) => {
+      if (ready && showTranslations.value && translationProvider.value === "llm") void translateWholeDataset()
+    })
+    return
+  }
+  void translateWholeDataset()
 }
 
 function setTranslationProvider(value: typeof translationProvider.value) {
   translationProvider.value = value
   cancelTranslations()
+  if (value === "llm") {
+    void ensureLlmReady().then((ready) => {
+      if (ready && showTranslations.value && translationProvider.value === "llm") void translateWholeDataset()
+    })
+    return
+  }
   if (showTranslations.value) void translateWholeDataset()
 }
 
-async function loadTranslationSettings() {
-  if (translationSettingsLoading.value || llmProfiles.value.length) return
+function cloneProfiles(profiles: LlmProfile[]) {
+  return profiles.map((profile) => ({ ...profile }))
+}
+
+function snapshotTranslationSettings() {
+  committedLlmProfiles.value = cloneProfiles(llmProfiles.value)
+  committedActiveRemoteId.value = activeRemoteId.value
+  committedLlmMode.value = llmMode.value
+}
+
+function restoreTranslationSettings() {
+  llmProfiles.value = cloneProfiles(committedLlmProfiles.value)
+  activeRemoteId.value = committedActiveRemoteId.value
+  llmMode.value = committedLlmMode.value
+}
+
+async function loadTranslationSettings(force = false) {
+  if (translationSettingsLoading.value || (!force && llmProfiles.value.length)) return
   translationSettingsLoading.value = true
   translationSettingsError.value = ""
   try {
@@ -168,6 +226,7 @@ async function loadTranslationSettings() {
       : [{ ...config.deepseek, id: "default", name: t("datasetEditor.caption.translationProfileNew") }]
     activeRemoteId.value = config.active_remote_id || llmProfiles.value[0]?.id || "default"
     llmMode.value = config.llm_mode || (config.local?.enabled ? "local" : "remote")
+    snapshotTranslationSettings()
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
@@ -185,12 +244,51 @@ async function saveTranslationSettings() {
       remote_profiles: llmProfiles.value,
       local: { enabled: llmMode.value === "local" },
     })
+    snapshotTranslationSettings()
     clearTranslationCache()
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
+    restoreTranslationSettings()
   } finally {
     translationSettingsSaving.value = false
   }
+}
+
+const activeRemoteProfile = computed(() => llmProfiles.value.find((profile) => profile.id === activeRemoteId.value))
+const remoteProfileConfigured = computed(() => {
+  const profile = activeRemoteProfile.value
+  if (!profile) return false
+  const endpoint = profile.endpoint.trim().toLowerCase()
+  return Boolean(profile.api_key_configured || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//.test(endpoint))
+})
+
+async function ensureLlmReady() {
+  await Promise.all([loadTranslationSettings(true), loadLocalModelStatus()])
+  const ready = llmMode.value === "local" ? localModelStatus.value.state === "running" : remoteProfileConfigured.value
+  if (!ready) {
+    const message = llmMode.value === "local"
+      ? t("datasetEditor.caption.translationLocalUnavailable")
+      : t("datasetEditor.caption.translationRemoteNotConfigured")
+    translationSettingsOpen.value = true
+    await Promise.all([loadTranslationCacheStatus(), loadDictionaryStatus()])
+    ElMessage.warning(message)
+  }
+  return ready
+}
+
+async function openTranslationSettings() {
+  translationSettingsOpen.value = true
+  await Promise.all([
+    loadTranslationSettings(true),
+    loadTranslationCacheStatus(),
+    loadDictionaryStatus(),
+    loadLocalModelStatus(),
+  ])
+}
+
+function onTranslationSettingsModelChange(value: boolean) {
+  translationSettingsOpen.value = value
+  if (!value) restoreTranslationSettings()
 }
 
 async function loadTranslationCacheStatus() {
@@ -589,6 +687,9 @@ watch([category, query, pageSize], () => {
 watch(caption, () => {
   if (!restoringCaption) rememberCurrentDraft()
 }, { flush: "sync" })
+watch(allDatasetTagSignature, () => {
+  scheduleTranslationRefresh()
+})
 watch([showTranslations, translationProvider, category, query, page, rightPanelMode], () => {
   editorSession.rememberPreferences()
 })
@@ -621,6 +722,7 @@ onDeactivated(() => {
 onUnmounted(() => {
   window.removeEventListener("keydown", onPreviewKeydown)
   if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
+  if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
 })
 </script>
 
@@ -801,7 +903,7 @@ onUnmounted(() => {
             :progress-total="translationProgress.total"
             @update:enabled="setTranslationsEnabled"
             @update:provider="setTranslationProvider"
-            @settings="translationSettingsOpen = true; loadTranslationSettings(); loadTranslationCacheStatus(); loadDictionaryStatus(); loadLocalModelStatus()"
+            @settings="openTranslationSettings"
           />
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
@@ -931,7 +1033,7 @@ onUnmounted(() => {
   </div>
 
   <TagTranslationSettingsDialog
-    v-model="translationSettingsOpen"
+    :model-value="translationSettingsOpen"
     :loading="translationSettingsLoading"
     :saving="translationSettingsSaving"
     :error="translationSettingsError"
@@ -944,6 +1046,8 @@ onUnmounted(() => {
     :dictionary-busy="dictionaryBusy"
     :local-model="localModelStatus"
     :local-model-busy="localModelBusy"
+    :remote-configured="remoteProfileConfigured"
+    @update:model-value="onTranslationSettingsModelChange"
     @update:profiles="llmProfiles = $event"
     @update:active-remote-id="activeRemoteId = $event"
     @update:llm-mode="llmMode = $event"
@@ -957,6 +1061,7 @@ onUnmounted(() => {
     @cancel-local-model="cancelLocalModel"
     @start-local-model="startLocalModel"
     @stop-local-model="stopLocalModel"
+    @use-remote-mode="llmMode = 'remote'"
   />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">

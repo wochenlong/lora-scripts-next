@@ -1,14 +1,15 @@
 ## 计划元数据
 - Plan ID: DATASET-MODULE-20260930
-- Version: v4-installation-acceptance-complete-pending-user-review
+- Version: v5-review-hardening-executing
 - Last updated: 2026-10-02 Asia/Shanghai
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
 - Latest acceptance report: `docs/tasks/tag-translation-installation-acceptance-report.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: T6 交付收口
-- Execution readiness: complete pending user review
-- Active Goal: `01a0c916-e274-7412-9950-a0d41c633bdf`
+- Current active phase: R1 review 与任务拆解
+- Execution readiness: executing
+- Active Goal: pending creation after review sign-off
+- V5 review/design: `docs/design/tag-translation-v5-review-and-hardening.md`
 
 ## 目标
 在 Next Trainer 中完成数据集模块状态保持和编辑器恢复。标签中文释义作为 Dataset Editor 的一个资源缓存域继续建设：优先使用 Danbooru 词库，支持免费网络翻译和 OpenAI 兼容 LLM 兜底；同时记忆上次打开的数据集，保留编辑草稿、当前图片、筛选和翻译状态。原始英文标签、caption、打标结果、训练配置和导出内容保持不变。
@@ -202,6 +203,37 @@
 | T6 交付收口 | 证据、任务书、测试报告、提交推送 | done pending user review；验证记录和证据路径已补齐 |
 
 - 下一步动作：等待用户验收；如确认通过，再按发布流程创建 PR。当前不创建 PR。
+
+## V5 Review 与用户体验/稳定性加固（当前 Goal）
+
+- 用户已确认 V4 验收通过，要求再次 review 并自主完成前端体验和多模式稳定性加固。
+- Review 结论与复现记录见：[V5 Review 与加固设计书](../design/tag-translation-v5-review-and-hardening.md)。
+- 已确认的真实问题：
+  - 新增未保存 tag 不会进入筛选标签列表；
+  - 中文释义开关开启时新增 tag 不会自动补译；
+  - 远程 profile 全部展开，多接口时操作成本高；
+  - 停止本地服务后没有引导切换远程或重新启动；
+  - 远程未配置时选择 LLM provider 没有前置提示；
+  - 设置弹窗取消后可能残留未保存的模式/profile 草稿；
+  - 多模式切换缺少统一的旧请求清理、状态提示和回归覆盖。
+
+### V5 阶段与门禁
+
+| 阶段 | 产物 | 完成条件 | 状态 |
+| --- | --- | --- | --- |
+| R1 Review 与任务拆解 | review 设计书、任务矩阵、Goal | 已复现已知问题并锁定验收标准 | done |
+| R2 草稿标签索引 | 会话草稿 tag 合并索引 | 新增/删除/原文编辑后筛选即时同步，保存前不污染服务器 | pending |
+| R3 新增 tag 自动补译 | 增量翻译调度与 debounce | 开关打开时新增未命中 tag 自动请求，显示正确 N/N，不重复请求 | pending |
+| R4 设置 UX | 折叠 profile、单选、取消恢复、状态引导 | 远程多卡片易操作，本地停止/远程缺配置均可操作恢复 | pending |
+| R5 模式切换稳定性 | 配置快照、请求边界、错误提示 | Danbooru/MyMemory/LLM/本地/自动回退切换无旧响应串线 | pending |
+| R6 自动化与隔离验收 | 测试、报告、全新启动环境 | 相关测试通过；全新隔离目录只启动不额外安装，完成所有按钮和组件验收 | pending |
+
+### V5 执行约束
+
+- 不改变训练 caption 原文保存规则；中文释义只进入 UI 和翻译缓存。
+- 不把用户模型、词库、缓存或隔离数据提交到 Git。
+- 远程 profile 的 API Key 保持掩码和原有持久化语义。
+- 任务完成后新建全新隔离目录，从零启动项目；最终环境不执行依赖安装，只使用项目已有依赖，并把手动验收地址交给用户。
 
 ## v1 进度台账（历史记录，受上述审计修正）
 - Overall progress: 标签释义功能、provider、LLM 配置、Dataset Editor 展示、真实接口和浏览器交互验收均已完成，发布审计记录已建立。

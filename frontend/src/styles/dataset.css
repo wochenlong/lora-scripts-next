@@ -1666,6 +1666,32 @@
   gap: 8px;
 }
 
+.translation-profile-summary {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 2px;
+  padding: 0;
+  color: var(--text);
+  text-align: left;
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+.translation-profile-summary small {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.translation-profile-fields {
+  display: grid;
+  gap: 9px;
+}
+
 .translation-profile-name {
   flex: 1;
 }
@@ -1689,6 +1715,21 @@
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   font-size: 12px;
+}
+
+.translation-runtime-warning {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0;
+  padding: 9px 10px;
+  color: var(--warning, #c88719);
+  background: color-mix(in srgb, var(--warning, #c88719) 10%, var(--surface));
+  border: 1px solid color-mix(in srgb, var(--warning, #c88719) 35%, var(--border));
+  border-radius: var(--radius-sm);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .translation-profile-add {

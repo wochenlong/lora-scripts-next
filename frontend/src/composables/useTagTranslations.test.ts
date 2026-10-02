@@ -42,4 +42,25 @@ describe("useTagTranslations", () => {
     expect(state.translationFor("unknown")).toBe("")
     expect(state.error.value).toBe("")
   })
+
+  it("only requests a newly added tag when the dataset grows", async () => {
+    vi.mocked(datasetApi.tagTranslations)
+      .mockResolvedValueOnce({
+        items: [{ tag: "blue_eyes", translation: "蓝瞳", source: "danbooru", status: "hit" }],
+        provider: "danbooru",
+        locale: "zh-CN",
+      })
+      .mockResolvedValueOnce({
+        items: [{ tag: "new_review_tag", translation: "新的审查标签", source: "llm", status: "hit" }],
+        provider: "danbooru",
+        locale: "zh-CN",
+      })
+    const state = useTagTranslations()
+
+    await state.resolve(["blue_eyes"], "danbooru")
+    await state.resolve(["blue_eyes", "new_review_tag"], "danbooru")
+
+    expect(datasetApi.tagTranslations).toHaveBeenNthCalledWith(2, ["new_review_tag"], "danbooru", "zh-CN")
+    expect(state.translationFor("new_review_tag", "danbooru")).toBe("新的审查标签")
+  })
 })
