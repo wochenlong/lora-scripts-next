@@ -24,6 +24,9 @@ class Config:
             }
         }
 
+    def save(self, _payload):
+        return None
+
 
 class FakeResponse:
     def __init__(self, payload, content_type="application/octet-stream"):
@@ -118,3 +121,23 @@ def test_runtime_download_extracts_llama_server_from_windows_zip(tmp_path):
     asyncio.run(service._download_runtime())
     assert service.runtime_executable.exists()
     assert service.status()["runtime_state"] == "ready"
+
+
+def test_setup_reconciles_existing_runtime_after_process_restart(tmp_path):
+    service = LocalModelService(tmp_path, Config())
+    service.model_path.write_bytes(b"GGUF" + b"x" * 32)
+    service.runtime_root.mkdir(parents=True)
+    service.runtime_executable.write_bytes(b"x" * 2048)
+    started = False
+
+    async def fake_start_runtime():
+        nonlocal started
+        started = True
+        return service.status()
+
+    service.start_runtime = fake_start_runtime
+    service._runtime_install.update(state="installing")
+    asyncio.run(service._setup())
+
+    assert service.status()["runtime_state"] == "ready"
+    assert started is True

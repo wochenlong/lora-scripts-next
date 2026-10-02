@@ -1,12 +1,13 @@
 ## 计划元数据
 - Plan ID: DATASET-MODULE-20260930
-- Version: v4-installation-acceptance-executing
+- Version: v4-installation-acceptance-complete-pending-user-review
 - Last updated: 2026-10-02 Asia/Shanghai
 - Canonical progress file: `docs/tasks/tag-translation-task-book.md`
+- Latest acceptance report: `docs/tasks/tag-translation-installation-acceptance-report.md`
 - Related handoff file: none
 - Current branch: `feat/tag-translation`
-- Current active phase: T1 测试计划与契约修复
-- Execution readiness: executing
+- Current active phase: T6 交付收口
+- Execution readiness: complete pending user review
 - Active Goal: `01a0c916-e274-7412-9950-a0d41c633bdf`
 
 ## 目标
@@ -177,10 +178,13 @@
 ## V4 安装与下载专项验收（当前执行）
 
 - 测试计划：[标签翻译下载与安装系统全面测试验收计划](tag-translation-installation-acceptance-plan.md)。
-- 当前已知缺陷：
-  - 词库已是最新时更新按钮仍可点击，且 API 仍接受无必要的更新任务。
-  - Qwen 模型只尝试 Hugging Face 主站，受限网络下会超时。
-  - llama.cpp v0.5.0 只有 nightly-tag 标记资产，没有 Windows llama-server 压缩包，导致一键安装必然失败；已改为 b11327 Windows CPU x64 资产。
+- 初始已知缺陷及结果：
+  - 词库已是最新时更新按钮仍可点击，且 API 仍接受无必要的更新任务：已修复并在隔离
+    浏览器中确认按钮禁用，API no-op。
+  - Qwen 模型只尝试 Hugging Face 主站：已改为 hf-mirror.com 优先、主站备用。
+  - llama.cpp v0.5.0 无可用 Windows server 资产：已改为 b11327 Windows CPU x64，
+    并完整解压 DLL 依赖。
+  - 进程重启后再次安装会长期停留 installing：已修复并加入回归测试。
 - 已锁定修复方向：
   - 已是最新时 UI 禁用更新按钮，后端也拒绝无更新任务。
   - Qwen 下载使用 hf-mirror.com 优先、huggingface.co 备用。
@@ -190,14 +194,14 @@
 
 | 阶段 | 目的 | 状态 |
 | --- | --- | --- |
-| T1 测试计划与契约修复 | 建立测试矩阵、修复已知状态和资产契约 | in progress |
-| T2 下载器模拟与故障注入 | 覆盖超时、镜像、校验、取消、重试、旧库保护 | pending |
-| T3 一键安装运行时 | 实际模型/runtime 安装、自动启动、健康检查、动态端口 | pending |
-| T4 UI 全组件验收 | 翻译设置全部按钮、互斥模式、缓存、回退、进度 | pending |
-| T5 隔离目录重装验收 | 全新 clone、全新 data、启动和真实翻译链路 | pending |
-| T6 交付收口 | 证据、任务书、测试报告、提交推送 | pending |
+| T1 测试计划与契约修复 | 建立测试矩阵、修复已知状态和资产契约 | done；计划与状态契约已落实 |
+| T2 下载器模拟与故障注入 | 覆盖超时、镜像、校验、取消、重试、旧库保护 | done；专项测试 24 项通过，取消/重试/旧库保护有隔离证据 |
+| T3 一键安装运行时 | 实际模型/runtime 安装、自动启动、健康检查、动态端口 | done；Qwen GGUF、b11327 runtime、健康检查和动态端口已实测 |
+| T4 UI 全组件验收 | 翻译设置全部按钮、互斥模式、缓存、回退、进度 | done；Playwright 隔离浏览器逐项验收通过 |
+| T5 隔离目录重装验收 | 全新 clone、全新 data、启动和真实翻译链路 | done；隔离 source/data 和 Dataset Editor 真实链路通过 |
+| T6 交付收口 | 证据、任务书、测试报告、提交推送 | done pending user review；验证记录和证据路径已补齐 |
 
-- 下一步动作：先完成 T1/T2 自动化修复和测试，再建立隔离安装目录执行 T3～T5。
+- 下一步动作：等待用户验收；如确认通过，再按发布流程创建 PR。当前不创建 PR。
 
 ## v1 进度台账（历史记录，受上述审计修正）
 - Overall progress: 标签释义功能、provider、LLM 配置、Dataset Editor 展示、真实接口和浏览器交互验收均已完成，发布审计记录已建立。

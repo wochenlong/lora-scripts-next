@@ -2,6 +2,8 @@
 
 更新时间：2026-10-02（Asia/Shanghai）
 
+当前状态：T1～T6 已完成，等待用户验收；当前分支不创建 PR。
+
 本计划用于 Goal 01a0c916-e274-7412-9950-a0d41c633bdf 的下载、安装、运行和 UI 验收。测试必须与当前用户
 已经存在的 assets/tag_translation 数据隔离，不能把已有词库、缓存或模型文件当作全新安装证据。
 
@@ -105,3 +107,9 @@
 - port-allocation.json
 - translation-path-matrix.json
 - UI 手动验收清单和失败重试记录
+
+本次隔离实测结果保存在：
+`project/.runtime/tag-translation-isolated-acceptance-20261002/`，其中
+`ui-manual-acceptance.json` 是按钮/组件验收矩阵，`local-dynamic-port-final.json`
+记录动态端口，`failed-install-evidence.json` 保留了首轮运行时缺 DLL 的真实失败，
+用于证明修复前后差异。
