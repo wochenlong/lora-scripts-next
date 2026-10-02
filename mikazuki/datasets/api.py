@@ -25,6 +25,7 @@ from mikazuki.datasets.trash import (
     soft_delete,
     soft_delete_dataset,
 )
+from mikazuki.datasets.validate import validate_dataset_path
 from mikazuki.datasets.upload import (
     MAX_BATCH_BYTES,
     cleanup_staging,
@@ -48,6 +49,11 @@ class RootUpdateRequest(BaseModel):
 
 class DatasetCreateRequest(BaseModel):
     name: str
+
+
+class ValidateRequest(BaseModel):
+    path: str
+    engine: str | None = None
 
 
 class UploadCheckRequest(BaseModel):
@@ -105,6 +111,11 @@ async def list_all():
             "datasets": datasets,
         }
     )
+
+
+@router.post("/datasets/validate")
+async def validate(req: ValidateRequest):
+    return APIResponseSuccess(data=validate_dataset_path(req.path, req.engine))
 
 
 @router.get("/datasets/{name}/overview")
