@@ -165,6 +165,11 @@ function openTool(tool: "tagger" | "editor", entry: DatasetEntry) {
   void router.push({ path: `/dataset/${tool}`, query: { path: entry.path } })
 }
 
+function openTraining(entry: DatasetEntry) {
+  sessionStorage.setItem("mikazuki-dataset-prefill", JSON.stringify({ train_data_dir: entry.path }))
+  void router.push({ path: "/training" })
+}
+
 function openUpload(entry: DatasetEntry) {
   uploadTarget.value = entry.name
 }
@@ -244,6 +249,7 @@ onBeforeUnmount(stopPolling)
           <div class="dataset-card-actions-row">
             <button class="secondary-action" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
             <button class="secondary-action" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
+            <button class="secondary-action" @click="openTraining(entry)">{{ t("datasetManage.openTrain") }}</button>
           </div>
         </footer>
       </article>

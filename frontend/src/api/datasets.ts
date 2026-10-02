@@ -20,6 +20,16 @@ export interface UploadCheck { conflicts: string[]; invalid: UploadFailure[]; ok
 export interface TrashBatch { id: string; dataset: string; deleted_at: string | null; count: number; paths: string[] }
 export interface DeleteResult { batch: string | null; deleted: string[]; missing: string[] }
 export interface RestoreResult { restored: string[]; conflicts: string[]; missing: string[] }
+export interface ValidateFinding { level: "error" | "warning" | "info"; code: string; params: Record<string, unknown> }
+export interface DatasetValidationStats {
+  image_count: number
+  captioned_count: number
+  missing_caption: number
+  subdir_count: number
+  total_bytes: number
+  sampled: number
+}
+export interface DatasetValidation { path: string; engine: string | null; exists: boolean; stats: DatasetValidationStats | null; findings: ValidateFinding[] }
 
 export const datasetFileUrl = (name: string, path: string) =>
   `/api/datasets/${encodeURIComponent(name)}/file?path=${encodeURIComponent(path)}`
@@ -31,6 +41,8 @@ export const datasetsApi = {
   list: () => apiData<DatasetList>("/api/datasets"),
   create: (name: string) => apiData<DatasetCreated>("/api/datasets", { method: "POST", body: JSON.stringify({ name }) }),
   overview: (name: string) => apiData<{ name: string; overview: DatasetOverview }>(`/api/datasets/${encodeURIComponent(name)}/overview`),
+  validatePath: (path: string, engine?: string) =>
+    apiData<DatasetValidation>("/api/datasets/validate", { method: "POST", body: JSON.stringify({ path, engine: engine ?? null }) }),
   checkUpload: (name: string, paths: string[]) =>
     apiData<UploadCheck>(`/api/datasets/${encodeURIComponent(name)}/upload/check`, { method: "POST", body: JSON.stringify({ paths }) }),
   deleteFiles: (name: string, paths: string[]) =>

@@ -565,6 +565,42 @@
   color: var(--danger);
 }
 
+.dataset-check-list {
+  display: grid;
+  gap: 14px;
+}
+
+.dataset-check-item {
+  display: grid;
+  gap: 6px;
+}
+
+.dataset-check-path {
+  font-size: 12px;
+  word-break: break-all;
+}
+
+.dataset-check-stats {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-soft);
+}
+
+.dataset-check-finding {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-soft);
+}
+
+.dataset-check-finding.error {
+  color: var(--danger);
+}
+
+.dataset-check-finding.warning {
+  color: var(--warning-text);
+}
+
 .started-task {
   display: grid;
   gap: 6px;
