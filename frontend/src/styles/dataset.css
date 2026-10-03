@@ -1530,6 +1530,13 @@
   white-space: nowrap;
 }
 
+.caption-translation-warning {
+  flex-basis: 100%;
+  color: var(--warning, #c88719);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
 .caption-tag-text {
   display: block;
 }

@@ -99,7 +99,14 @@ async def cancel_tag_translation_local_model():
 @router.post("/tag-translation/local-model/start")
 async def start_tag_translation_local_model():
     try:
+        local_status = local_model_service.status()
+        if local_status.get("runtime_state") == "installing" or local_status.get("state") in {"downloading", "installing"}:
+            raise HTTPException(status_code=409, detail="Local runtime setup is still in progress; wait for it to finish before starting the service")
+        if not local_status.get("installed") or not local_status.get("runtime_installed"):
+            raise HTTPException(status_code=409, detail="Install the managed local runtime before starting the service")
         return _success(await local_model_service.start_runtime())
+    except HTTPException:
+        raise
     except Exception as error:
         return _success(local_model_service.set_error(error))
 

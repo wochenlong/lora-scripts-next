@@ -64,6 +64,8 @@ class LocalModelService:
         self.session_factory = aiohttp.ClientSession
         self._task: asyncio.Task | None = None
         self._process: asyncio.subprocess.Process | None = None
+        self._stderr_task: asyncio.Task | None = None
+        self._stderr_tail = ""
         self._runtime_port: int | None = None
         self._runtime = {
             "state": "ready" if self.model_path.exists() else "missing",
@@ -168,6 +170,7 @@ class LocalModelService:
                 try:
                     await self.start_runtime()
                 except Exception as error:
+                    self._runtime["state"] = "error"
                     self._runtime["error"] = str(error)[:1000]
                     LOGGER.warning("local runtime installed but could not start automatically: %s", error)
         except asyncio.CancelledError:
@@ -350,12 +353,22 @@ class LocalModelService:
         self._process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.DEVNULL,
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=asyncio.subprocess.PIPE,
         )
+        self._stderr_tail = ""
+        self._stderr_task = asyncio.create_task(self._drain_stderr(self._process.stderr))
         ready = False
         timeout = aiohttp.ClientTimeout(total=1)
         async with aiohttp.ClientSession(timeout=timeout, trust_env=False) as session:
-            for _ in range(50):
+            # Loading a GGUF model can take tens of seconds on a CPU-only
+            # machine.  Keep the process alive long enough for a first-run
+            # install instead of killing a healthy server during model load.
+            for _ in range(300):
+                if self._process.returncode is not None:
+                    detail = self._stderr_tail.strip()
+                    await self.stop_runtime()
+                    suffix = f": {detail[-800:]}" if detail else ""
+                    raise RuntimeError(f"llama-server exited before becoming healthy{suffix}")
                 try:
                     async with session.get(f"http://127.0.0.1:{port}/health") as response:
                         if response.status == 200:
@@ -365,10 +378,27 @@ class LocalModelService:
                     pass
                 await asyncio.sleep(0.2)
         if not ready:
+            detail = self._stderr_tail.strip()
             await self.stop_runtime()
-            raise RuntimeError("llama-server did not become healthy on the managed loopback port")
+            suffix = f": {detail[-800:]}" if detail else ""
+            raise RuntimeError(f"llama-server did not become healthy on the managed loopback port{suffix}")
+        self._runtime.update(state="ready", error=None)
         LOGGER.info("local tag translation runtime started: pid=%s port=%s", self._process.pid, port)
         return self.status()
+
+    async def _drain_stderr(self, stream):
+        if stream is None:
+            return
+        try:
+            while True:
+                chunk = await stream.readline()
+                if not chunk:
+                    break
+                text = chunk.decode("utf-8", errors="replace").strip()
+                if text:
+                    self._stderr_tail = (self._stderr_tail + "\n" + text)[-4000:]
+        except (asyncio.CancelledError, OSError):
+            return
 
     def set_error(self, error):
         self._runtime.update(state="error", error=str(error)[:1000])
@@ -384,8 +414,17 @@ class LocalModelService:
                 self._process.kill()
                 await self._process.wait()
             LOGGER.info("local tag translation runtime stopped")
+        if self._stderr_task and not self._stderr_task.done():
+            self._stderr_task.cancel()
+            try:
+                await self._stderr_task
+            except asyncio.CancelledError:
+                pass
+        self._stderr_task = None
         self._process = None
         self._runtime_port = None
+        if self.model_path.exists() and self._runtime["state"] == "error":
+            self._runtime.update(state="ready", error=None)
         return self.status()
 
     def _save_metadata(self, payload):

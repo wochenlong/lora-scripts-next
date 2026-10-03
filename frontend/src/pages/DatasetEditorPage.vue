@@ -71,6 +71,7 @@ const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsSaving = ref(false)
 const translationSettingsError = ref("")
+const translationReadinessLoaded = ref(false)
 const llmProfiles = ref<LlmProfile[]>([])
 const activeRemoteId = ref("default")
 const llmMode = ref<"remote" | "local">("remote")
@@ -157,6 +158,13 @@ const workingScopeFullySelected = computed(
 )
 
 async function translateWholeDataset(localOnly = false) {
+  if (!translationReadinessLoaded.value) await loadTranslationReadiness()
+  if (!translationAvailable.value) {
+    showTranslations.value = false
+    cancelTranslations()
+    ElMessage.warning(translationUnavailableHint.value)
+    return
+  }
   if (!allDatasetTags.value.length) return
   await resolveTranslations(allDatasetTags.value, translationProvider.value, "zh-CN", localOnly)
 }
@@ -173,6 +181,11 @@ function scheduleTranslationRefresh() {
 }
 
 function setTranslationsEnabled(value: boolean) {
+  if (value && !translationAvailable.value) {
+    translationSettingsOpen.value = true
+    ElMessage.warning(translationUnavailableHint.value)
+    return
+  }
   showTranslations.value = value
   if (!value) {
     cancelTranslations()
@@ -234,6 +247,15 @@ async function loadTranslationSettings(force = false) {
   }
 }
 
+async function loadTranslationReadiness() {
+  await Promise.all([loadTranslationSettings(), loadDictionaryStatus(), loadLocalModelStatus()])
+  translationReadinessLoaded.value = true
+  if (!translationAvailable.value && showTranslations.value) {
+    showTranslations.value = false
+    cancelTranslations()
+  }
+}
+
 async function saveTranslationSettings() {
   translationSettingsSaving.value = true
   translationSettingsError.value = ""
@@ -271,6 +293,9 @@ const remoteProfileConfigured = computed(() => {
   const endpoint = profile.endpoint.trim().toLowerCase()
   return Boolean(profile.api_key_configured || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//.test(endpoint))
 })
+const localTranslationReady = computed(() => localModelStatus.value.state === "running")
+const translationAvailable = computed(() => Boolean(dictionaryStatus.value.installed || remoteProfileConfigured.value || localTranslationReady.value))
+const translationUnavailableHint = computed(() => t("datasetEditor.caption.translationUnavailable"))
 
 async function ensureLlmReady() {
   await Promise.all([loadTranslationSettings(true), loadLocalModelStatus()])
@@ -294,6 +319,7 @@ async function openTranslationSettings() {
     loadDictionaryStatus(),
     loadLocalModelStatus(),
   ])
+  translationReadinessLoaded.value = true
 }
 
 function onTranslationSettingsModelChange(value: boolean) {
@@ -716,6 +742,7 @@ watch(pageCount, (count) => {
 })
 onActivated(() => window.addEventListener("keydown", onPreviewKeydown))
 onActivated(() => {
+  void loadTranslationReadiness()
   const queryPath = route?.query.path
   if (typeof queryPath === "string" && queryPath.trim() && queryPath !== path.value) {
     path.value = queryPath
@@ -907,6 +934,8 @@ onUnmounted(() => {
           </div>
           <TagTranslationControls
             :enabled="showTranslations"
+            :available="translationAvailable"
+            :unavailable-hint="translationUnavailableHint"
             :provider="translationProvider"
             :loading="translationsLoading"
             :error="translationsError"

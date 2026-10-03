@@ -152,14 +152,25 @@ function activateProfile(id: string) {
             <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationLocalModelHint") }}</p>
             <p class="translation-runtime-managed">{{ t("datasetEditor.caption.translationManagedRuntime") }}</p>
             <small v-if="localModel.error" class="caption-translation-error">{{ localModel.error }}</small>
-            <p v-if="localModel.state !== 'running'" class="translation-runtime-warning">
+            <p v-if="localModel.runtime_state === 'installing'" class="translation-runtime-warning">
+              {{ t("datasetEditor.caption.translationLocalRuntimeInstalling") }}
+            </p>
+            <p v-else-if="localModel.state !== 'running'" class="translation-runtime-warning">
               {{ t("datasetEditor.caption.translationLocalUnavailable") }}
               <el-button size="small" @click="emit('useRemoteMode')">{{ t("datasetEditor.caption.translationRemoteMode") }}</el-button>
             </p>
             <div class="caption-translation-cache-row">
-              <span>{{ localModel.state }}<template v-if="localModel.downloaded_bytes"> · {{ localModel.downloaded_bytes }}/{{ localModel.total_bytes || "?" }}</template></span>
+              <span>
+                <template v-if="localModel.runtime_state === 'installing'">
+                  {{ t("datasetEditor.caption.translationLocalRuntimeInstalling") }}
+                  <template v-if="localModel.runtime_downloaded_bytes"> · {{ localModel.runtime_downloaded_bytes }}/{{ localModel.runtime_total_bytes || "?" }}</template>
+                </template>
+                <template v-else>
+                  {{ localModel.state }}<template v-if="localModel.downloaded_bytes"> · {{ localModel.downloaded_bytes }}/{{ localModel.total_bytes || "?" }}</template>
+                </template>
+              </span>
               <span class="translation-settings-actions">
-                <el-button v-if="localModel.state === 'installing' || localModel.state === 'downloading'" :loading="localModelBusy" @click="emit('cancelLocalModel')">{{ t("datasetEditor.caption.translationLocalCancel") }}</el-button>
+                <el-button v-if="localModel.state === 'installing' || localModel.state === 'downloading' || localModel.runtime_state === 'installing'" :loading="localModelBusy" @click="emit('cancelLocalModel')">{{ t("datasetEditor.caption.translationLocalCancel") }}</el-button>
                 <el-button v-else-if="!localModel.installed || localModel.runtime_state !== 'ready'" :loading="localModelBusy" @click="emit('setupLocalModel')">{{ t("datasetEditor.caption.translationLocalSetup") }}</el-button>
                 <el-button v-else-if="localModel.state === 'running'" :loading="localModelBusy" @click="emit('stopLocalModel')">{{ t("datasetEditor.caption.translationLocalStop") }}</el-button>
                 <el-button v-else :loading="localModelBusy" @click="emit('startLocalModel')">{{ t("datasetEditor.caption.translationLocalStart") }}</el-button>

@@ -141,3 +141,20 @@ def test_setup_reconciles_existing_runtime_after_process_restart(tmp_path):
 
     assert service.status()["runtime_state"] == "ready"
     assert started is True
+
+
+def test_setup_surfaces_runtime_start_failure(tmp_path):
+    service = LocalModelService(tmp_path, Config())
+    service.model_path.write_bytes(b"GGUF" + b"x" * 32)
+    service.runtime_root.mkdir(parents=True)
+    service.runtime_executable.write_bytes(b"x" * 2048)
+
+    async def failed_start_runtime():
+        raise RuntimeError("llama-server did not become healthy")
+
+    service.start_runtime = failed_start_runtime
+    asyncio.run(service._setup())
+
+    status = service.status()
+    assert status["state"] == "error"
+    assert "did not become healthy" in (status["error"] or "")
