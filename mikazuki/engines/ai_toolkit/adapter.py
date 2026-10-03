@@ -290,6 +290,7 @@ def write_job(adapted, yaml_path):
     for filename, items in adapted.dataset_manifests.items():
         path = Path(filename)
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding='utf-8')
+        # Upstream reads manifests with the Windows locale encoding.
+        path.write_text(json.dumps(items, ensure_ascii=True, indent=2), encoding='utf-8')
     Path(yaml_path).parent.mkdir(parents=True, exist_ok=True)
     Path(yaml_path).write_text(dump_yaml(adapted.config), encoding='utf-8')

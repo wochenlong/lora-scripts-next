@@ -27,6 +27,19 @@ def local_component_loader(model_class, path, config_dir):
     model_class.load_model = classmethod(load)
 
 
+def preserve_qwen_reference_size(encoder_class):
+    original = encoder_class.load_processor.__func__
+
+    def load(cls, *args, **kwargs):
+        processor = original(cls, *args, **kwargs)
+        # Qwen already grid-resizes references for both TE and VAE. The
+        # processor's minimum-area resize would change only the TE slot count.
+        processor.image_processor.do_resize = False
+        return processor
+
+    encoder_class.load_processor = classmethod(load)
+
+
 def apply_local_inputs(model):
     options = model.get('model_kwargs', {})
     if model.get('arch') == 'sdxl' and options.get('next_trainer_sdxl_config'):
@@ -38,12 +51,14 @@ def apply_local_inputs(model):
 
         StableDiffusionXLPipeline.from_single_file = classmethod(load)
     components = options.get('next_trainer_components')
-    if model.get('arch') == 'qwen_image_2' and components:
+    if model.get('arch') == 'qwen_image_2':
         from extensions_built_in.diffusion_models.qwen_image_2.qwen_image_2 import (
             QwenImage21Transformer2DModel, QwenImage21TextEncoder, AutoencoderKLQwenImage21,
         )
-        for key, cls in [('transformer', QwenImage21Transformer2DModel), ('text_encoder', QwenImage21TextEncoder), ('vae', AutoencoderKLQwenImage21)]:
-            local_component_loader(cls, components[key], model['extras_name_or_path'])
+        preserve_qwen_reference_size(QwenImage21TextEncoder)
+        if components:
+            for key, cls in [('transformer', QwenImage21Transformer2DModel), ('text_encoder', QwenImage21TextEncoder), ('vae', AutoencoderKLQwenImage21)]:
+                local_component_loader(cls, components[key], model['extras_name_or_path'])
 
 
 def main() -> None:

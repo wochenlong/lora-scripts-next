@@ -138,6 +138,9 @@ export function buildTrainingConfig(source: FormModel, schemaName: string) {
     if (typeof config.learning_rate === "string" && Number.isFinite(Number(config.learning_rate))) {
       config.learning_rate = Number(config.learning_rate)
     }
+    if (Array.isArray(config.gpu_ids)) {
+      config.gpu_ids = config.gpu_ids.map((value) => String(value).match(/GPU (\d+):/)?.[1] || String(value)).filter(Boolean)
+    }
     return config
   }
   let networkArgs: string[] = []

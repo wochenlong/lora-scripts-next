@@ -79,6 +79,8 @@ it("combines search and filters and clears an empty result", async () => {
   await wrapper.get('[data-filter="installed"]').trigger("click")
   expect(order(wrapper)).toEqual(["anima-fast", "ai-toolkit"])
   await wrapper.get('input[type="search"]').setValue("qwen")
+  expect(order(wrapper)).toEqual(["ai-toolkit"])
+  await wrapper.get('input[type="search"]').setValue("nonexistent-engine")
   expect(order(wrapper)).toEqual([])
   await wrapper.get(".engine-clear-filters").trigger("click")
   expect(order(wrapper)).toHaveLength(5)

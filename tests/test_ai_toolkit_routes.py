@@ -2,13 +2,31 @@
 
 import asyncio
 import json
+import struct
 
 from pathlib import Path
 
+from PIL import Image
 from starlette.requests import Request
 
 from mikazuki.app import api
 from mikazuki.engines.ai_toolkit import routes
+
+
+def _local_model(tmp_path: Path, variant="4b") -> dict:
+    model = tmp_path / "models"
+    te = model / "text_encoder"
+    te.mkdir(parents=True, exist_ok=True)
+    hidden_size = 2560 if variant == "4b" else 4096
+    (te / "config.json").write_text(json.dumps({"hidden_size": hidden_size}), encoding="utf-8")
+    for name in ("tokenizer.json", "tokenizer_config.json"):
+        (te / name).write_text("{}", encoding="utf-8")
+    header = json.dumps({"weight": {"dtype": "F32", "shape": [1], "data_offsets": [0, 4]}}).encode()
+    header += b" " * (-len(header) % 8)
+    for path in (model / f"flux-2-klein-base-{variant}.safetensors",
+                 model / "ae.safetensors", te / "model.safetensors"):
+        path.write_bytes(struct.pack("<Q", len(header)) + header + struct.pack("<f", 0))
+    return {"model_input_mode": "model_directory", "model_path": str(model), "text_encoder_path": str(te)}
 
 
 def make_request(payload: dict) -> Request:
@@ -26,7 +44,11 @@ def test_status_reports_not_installed(tmp_path, monkeypatch):
     assert response.status == "success"
     assert response.data["state"] == "not_installed"
     assert response.data["feature_enabled"] is True
-    assert set(response.data["train_types"]) == {"klein-4b-lora", "klein-9b-lora"}
+    assert set(response.data["train_types"]) == {
+        "klein-4b-lora", "klein-9b-lora", "ai-toolkit-flux-lora",
+        "ai-toolkit-sdxl-lora", "ai-toolkit-qwen-image-21-lora",
+        "ai-toolkit-krea2-lora", "ai-toolkit-anima-lora",
+    }
 
 
 def test_status_unknown_engine_404():
@@ -51,18 +73,15 @@ def test_dry_run_emits_yaml(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
     data_dir = tmp_path / "train" / "klein"
     data_dir.mkdir(parents=True)
-    (data_dir / "img1.png").write_bytes(b"")
-    te_dir = tmp_path / "models" / "qwen3-8b"
-    te_dir.mkdir(parents=True)
+    Image.new("RGB", (8, 8)).save(data_dir / "img1.png")
     payload = {
         "model_train_type": "klein-9b-lora",
-        "pretrained_model_name_or_path": "black-forest-labs/FLUX.2-klein-base-9B",
-        "text_encoder": str(te_dir),
+        **_local_model(tmp_path, "9b"),
         "train_data_dir": str(data_dir),
         "max_train_steps": 100,
     }
     response = asyncio.run(api.engine_dry_run("ai-toolkit", make_request(payload)))
-    assert response.status == "success"
+    assert response.status == "success", response.message
     assert response.data["variant"] == "klein-9b"
     yaml_path = Path(response.data["yaml_path"])
     assert yaml_path.is_file()
@@ -83,11 +102,11 @@ def test_install_dry_run_plan(tmp_path, monkeypatch):
     (source / "toolkit").mkdir(parents=True)
     (source / "run.py").write_text("")
     # DIY vendor dirs must carry the pinned-commit marker to satisfy the pin
-    (source / ".source_commit").write_text("5497a001cb8752c665f93907a0393fc612116fd5\n", encoding="utf-8")
+    (source / ".source_commit").write_text(routes.UPSTREAM["commit"] + "\n", encoding="utf-8")
     response = asyncio.run(api.engine_install("ai-toolkit", make_request({"dry_run": True})))
-    assert response.status == "success"
+    assert response.status == "success", response.message
     assert response.data["plan"]["dry_run"] is True
-    assert response.data["plan"]["source_commit"] == "5497a001cb8752c665f93907a0393fc612116fd5"
+    assert response.data["plan"]["source_commit"] == routes.UPSTREAM["commit"]
 
 
 def test_run_dispatch_reaches_pack_gate(tmp_path, monkeypatch):
@@ -153,17 +172,11 @@ def test_handle_run_autosaves_ui_toml_for_reimport(tmp_path, monkeypatch):
 
     data_dir = tmp_path / "train"
     data_dir.mkdir()
-    (data_dir / "img.png").write_bytes(b"")
-    te_dir = tmp_path / "te"
-    te_dir.mkdir()
-    for name in ("config.json", "tokenizer.json", "tokenizer_config.json"):
-        (te_dir / name).write_text("{}", encoding="utf-8")
-    (te_dir / "model.safetensors").write_bytes(b"")
+    Image.new("RGB", (8, 8)).save(data_dir / "img.png")
 
     config = {
         "train_data_dir": str(data_dir),
-        "pretrained_model_name_or_path": "black-forest-labs/FLUX.2-klein-base-4B",
-        "text_encoder": str(te_dir),
+        **_local_model(tmp_path),
         "max_train_steps": 100,
         "network_dim": 32,
     }
@@ -175,7 +188,7 @@ def test_handle_run_autosaves_ui_toml_for_reimport(tmp_path, monkeypatch):
     )
     (tmp_path / "autosave").mkdir()
     result = aitk_run.handle_run(config, ctx)
-    assert result.status == "success"
+    assert result.status == "success", result.message
 
     metadata = captured["metadata"]
     ui_toml = Path(metadata["config_path"])
@@ -183,6 +196,8 @@ def test_handle_run_autosaves_ui_toml_for_reimport(tmp_path, monkeypatch):
     reloaded = toml.loads(ui_toml.read_text(encoding="utf-8"))
     assert reloaded["network_dim"] == 32
     assert reloaded["max_train_steps"] == 100
+    assert reloaded["model_input_mode"] == "model_directory"
+    assert reloaded["model_path"] == config["model_path"]
     engine_yaml = Path(metadata["engine_config_path"])
     assert engine_yaml.suffix == ".yaml" and engine_yaml.is_file()
     assert str(engine_yaml) == captured["config_yaml"]
@@ -228,17 +243,11 @@ def test_handle_run_preserves_preview_settings(tmp_path, monkeypatch):
 
     data_dir = tmp_path / "train"
     data_dir.mkdir()
-    (data_dir / "img.png").write_bytes(b"")
-    te_dir = tmp_path / "te"
-    te_dir.mkdir()
-    for name in ("config.json", "tokenizer.json", "tokenizer_config.json"):
-        (te_dir / name).write_text("{}", encoding="utf-8")
-    (te_dir / "model.safetensors").write_bytes(b"")
+    Image.new("RGB", (8, 8)).save(data_dir / "img.png")
 
     config = {
         "train_data_dir": str(data_dir),
-        "pretrained_model_name_or_path": "black-forest-labs/FLUX.2-klein-base-4B",
-        "text_encoder": str(te_dir),
+        **_local_model(tmp_path),
         "max_train_steps": 100,
         "enable_preview": True,
         "positive_prompts": "a cat",
@@ -257,7 +266,7 @@ def test_handle_run_preserves_preview_settings(tmp_path, monkeypatch):
     )
     (tmp_path / "autosave").mkdir()
     result = aitk_run.handle_run(config, ctx)
-    assert result.status == "success"
+    assert result.status == "success", result.message
 
     process = yaml.safe_load(Path(captured["config_yaml"]).read_text(encoding="utf-8"))["config"]["process"][0]
     sample = process["sample"]
@@ -268,3 +277,7 @@ def test_handle_run_preserves_preview_settings(tmp_path, monkeypatch):
     assert sample["sample_steps"] == 33
     assert sample["neg"] == "blurry"
     assert sample["prompts"] == ["a cat"]
+    assert sample["samples"] == [{
+        "prompt": "a cat", "width": 768, "height": 1152, "guidance_scale": 6.5,
+        "seed": 1234, "sample_steps": 33,
+    }]
