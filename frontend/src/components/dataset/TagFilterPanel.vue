@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
+import { ElButton, ElInput, ElOption, ElRadio, ElRadioGroup, ElSelect } from "element-plus"
 import type { SortOrder, TagCount, TagFilterLogic, TagSearchMode, TagSortBy } from "../../dataset/tagFilter"
+import type { TagTranslationProvider } from "../../api/dataset"
+import { useTagTranslations } from "../../composables/useTagTranslations"
 
 withDefaults(
   defineProps<{
@@ -14,8 +17,10 @@ withDefaults(
     excludeInput: string
     filteredCount: number
     showSelectAll?: boolean
+    translationEnabled?: boolean
+    translationProvider?: TagTranslationProvider
   }>(),
-  { showSelectAll: true },
+  { showSelectAll: true, translationEnabled: false, translationProvider: "danbooru" },
 )
 
 const emit = defineEmits<{
@@ -31,59 +36,59 @@ const emit = defineEmits<{
 }>()
 
 const { t } = useI18n()
+const { translationFor } = useTagTranslations()
 
-function selectValue(event: Event): string {
-  return (event.target as HTMLSelectElement).value
+function emitLogic(value: string | number | boolean | undefined) {
+  emit("update:logic", String(value) as TagFilterLogic)
 }
 </script>
 
 <template>
   <div class="tag-filter-box">
     <strong>{{ t("datasetEditor.tagFilter.title") }}</strong>
-    <input :value="search" :placeholder="t('datasetEditor.tagFilter.searchPlaceholder')" @input="emit('update:search', ($event.target as HTMLInputElement).value)">
+    <el-input :model-value="search" :placeholder="t('datasetEditor.tagFilter.searchPlaceholder')" @update:model-value="emit('update:search', $event)" />
     <div class="tag-filter-controls">
-      <select :value="sortBy" :aria-label="t('datasetEditor.tagFilter.sortLabel')" @change="emit('update:sortBy', selectValue($event) as TagSortBy)">
-        <option value="frequency">{{ t("datasetEditor.tagFilter.sortFrequency") }}</option>
-        <option value="alphabetical">{{ t("datasetEditor.tagFilter.sortAlphabetical") }}</option>
-        <option value="length">{{ t("datasetEditor.tagFilter.sortLength") }}</option>
-        <option value="tokenLength" :title="t('datasetEditor.tagFilter.tokenLengthTip')">{{ t("datasetEditor.tagFilter.sortTokenLength") }}</option>
-      </select>
-      <select :value="order" :aria-label="t('datasetEditor.tagFilter.orderLabel')" @change="emit('update:order', selectValue($event) as SortOrder)">
-        <option value="desc">{{ t("datasetEditor.tagFilter.orderDesc") }}</option>
-        <option value="asc">{{ t("datasetEditor.tagFilter.orderAsc") }}</option>
-      </select>
-      <select :value="searchMode" :aria-label="t('datasetEditor.tagFilter.searchModeLabel')" @change="emit('update:searchMode', selectValue($event) as TagSearchMode)">
-        <option value="substring">{{ t("datasetEditor.tagFilter.searchModeSubstring") }}</option>
-        <option value="prefix">{{ t("datasetEditor.tagFilter.searchModePrefix") }}</option>
-        <option value="suffix">{{ t("datasetEditor.tagFilter.searchModeSuffix") }}</option>
-      </select>
+      <el-select :model-value="sortBy" :aria-label="t('datasetEditor.tagFilter.sortLabel')" @update:model-value="emit('update:sortBy', $event)">
+        <el-option value="frequency" :label="t('datasetEditor.tagFilter.sortFrequency')" />
+        <el-option value="alphabetical" :label="t('datasetEditor.tagFilter.sortAlphabetical')" />
+        <el-option value="length" :label="t('datasetEditor.tagFilter.sortLength')" />
+        <el-option value="tokenLength" :label="t('datasetEditor.tagFilter.sortTokenLength')" />
+      </el-select>
+      <el-select :model-value="order" :aria-label="t('datasetEditor.tagFilter.orderLabel')" @update:model-value="emit('update:order', $event)">
+        <el-option value="desc" :label="t('datasetEditor.tagFilter.orderDesc')" />
+        <el-option value="asc" :label="t('datasetEditor.tagFilter.orderAsc')" />
+      </el-select>
+      <el-select :model-value="searchMode" :aria-label="t('datasetEditor.tagFilter.searchModeLabel')" @update:model-value="emit('update:searchMode', $event)">
+        <el-option value="substring" :label="t('datasetEditor.tagFilter.searchModeSubstring')" />
+        <el-option value="prefix" :label="t('datasetEditor.tagFilter.searchModePrefix')" />
+        <el-option value="suffix" :label="t('datasetEditor.tagFilter.searchModeSuffix')" />
+      </el-select>
     </div>
-    <div class="tag-filter-logic">
-      <label v-for="mode in (['and', 'or', 'none'] as TagFilterLogic[])" :key="mode">
-        <input type="radio" name="tag-filter-logic" :value="mode" :checked="logic === mode" @change="emit('update:logic', mode)">
+    <el-radio-group :model-value="logic" class="tag-filter-logic" @update:model-value="emitLogic">
+      <el-radio v-for="mode in (['and', 'or', 'none'] as TagFilterLogic[])" :key="mode" :value="mode">
         {{ t(`datasetEditor.tagFilter.logic.${mode}`) }}
-      </label>
-    </div>
+      </el-radio>
+    </el-radio-group>
     <div class="tag-filter-list">
-      <label v-for="entry in tags" :key="entry.tag" class="tag-filter-item">
+      <label v-for="entry in tags" :key="entry.tag" class="tag-filter-item" :class="{ selected: selectedTags.has(entry.tag) }">
         <input type="checkbox" :checked="selectedTags.has(entry.tag)" @change="emit('toggleTag', entry.tag)">
-        <span>{{ entry.tag }}</span>
+        <span class="tag-filter-copy">
+          <span class="tag-filter-name">{{ entry.tag }}</span>
+          <small v-if="translationEnabled && translationFor(entry.tag, translationProvider)">{{ translationFor(entry.tag, translationProvider) }}</small>
+        </span>
         <small>{{ entry.count }}</small>
       </label>
       <p v-if="!tags.length" class="tag-filter-meta">{{ t("datasetEditor.tagFilter.empty") }}</p>
     </div>
     <small v-if="selectedTags.size" class="tag-filter-meta">{{ t("datasetEditor.tagFilter.selectedCount", { k: selectedTags.size }) }}</small>
-    <input :value="excludeInput" :placeholder="t('datasetEditor.tagFilter.excludePlaceholder')" :title="t('datasetEditor.tagFilter.excludeTip')" @input="emit('update:excludeInput', ($event.target as HTMLInputElement).value)">
+    <el-input :model-value="excludeInput" :placeholder="t('datasetEditor.tagFilter.excludePlaceholder')" :title="t('datasetEditor.tagFilter.excludeTip')" @update:model-value="emit('update:excludeInput', $event)" />
     <div class="tag-filter-actions">
-      <button :disabled="!selectedTags.size" @click="emit('clear')">{{ t("datasetEditor.tagFilter.clear") }}</button>
-      <button
-        v-if="showSelectAll"
-        :disabled="!filteredCount"
-        :title="t('datasetEditor.tagFilter.selectAllTip')"
-        @click="emit('selectAll')"
-      >
+      <el-button :disabled="!selectedTags.size" @click="emit('clear')">{{ t("datasetEditor.tagFilter.clear") }}</el-button>
+      <el-button v-if="showSelectAll" :disabled="!filteredCount" :title="t('datasetEditor.tagFilter.selectAllTip')" @click="emit('selectAll')">
         {{ t("datasetEditor.tagFilter.selectAll", { n: filteredCount }) }}
-      </button>
+      </el-button>
     </div>
   </div>
 </template>
+
+\n
