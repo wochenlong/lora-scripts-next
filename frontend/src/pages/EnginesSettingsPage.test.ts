@@ -26,6 +26,14 @@ async function setup() {
   return wrapper
 }
 const order = (wrapper: ReturnType<typeof mount>) => wrapper.findAll(".engine-row").map((row) => row.attributes("data-engine"))
+it("allows changing the default engine and retains it across mounts", async () => {
+  const wrapper = await setup()
+  const select = wrapper.get(".toolbar-default select")
+  expect(select.attributes("disabled")).toBeUndefined()
+  await select.setValue("ai-toolkit")
+  expect(JSON.parse(localStorage.getItem("nt.training.enginePrefs")!).defaultEngine).toBe("ai-toolkit")
+  expect(((await setup()).get(".toolbar-default select").element as HTMLSelectElement).value).toBe("ai-toolkit")
+})
 beforeEach(() => {
   localStorage.clear()
   vi.mocked(enginesApi.list).mockResolvedValue(statuses)
