@@ -42,6 +42,8 @@ Install AI Toolkit from **Settings → Training Engines**, then select the model
 
 Anima's default paths are guidance, **not downloaded model weights**. Prepare models, datasets, GPU resources and dependencies for your chosen engine.
 
+AI Toolkit acceptance: Qwen-Image-2.1 text-to-image and image editing passed three-step GPU smoke tests with saved LoRAs and preview generation. This is not full-model or long-run validation. See the [acceptance report](docs/team/pr399-acceptance-2026-10-03.md).
+
 Guides: [Anima](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [Krea 2](docs/krea2-linux-multigpu.md) · [DiffSynth / Qwen](docs/diffsynth.md)
 
 ## Get Started

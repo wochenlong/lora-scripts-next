@@ -4,7 +4,17 @@
 
 Reviewed PR head `927c7374f1cbc0fec988c279b81b4109b9054741`, integrated
 `origin/dev` at `275c8884`, and tested the fixes on an isolated branch.
-This report does not authorize merging or claim coverage of every model.
+This report does not claim coverage of every model.
+
+## Dev Integration
+
+Following maintainer approval, the integration branch was synchronized with
+dev `11a9cc0b` (including tag translation) without conflicts. Before merging,
+the combined frontend passed `npm run check` with 297 tests and a successful
+build; the AI Toolkit backend suite passed all 68 tests. The original GPU
+evidence below predates this synchronization and was not rerun.
+The integration includes PR #399's original commits, the acceptance fixes,
+and English/Chinese README and development-progress updates. Main is unchanged.
 
 ## Fixes
 
@@ -67,4 +77,5 @@ caveat, not a claimed code fix.
   20 sampling steps and visual inspection.
 - No full browser/HTTP end-to-end acceptance in this run.
 - Other model families and alternative quantizers were not GPU-tested.
-- No merge into dev or main was performed as part of this acceptance.
+- The initial acceptance did not merge branches; subsequent dev integration
+  is recorded separately above. No main merge or release is included.

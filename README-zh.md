@@ -40,6 +40,8 @@ Next Trainer 把数据集管理、打标、标签编辑、训练配置与任务�
 
 AI Toolkit 可在「设置 → 训练引擎」按需安装，训练时选择对应模型与引擎。按所选模型填写本地模型目录、单文件或组件路径，并准备所需的文本编码器、VAE、配置与 tokenizer；启动前检查模型组件和数据集。图像编辑使用目标图与参考图目录，预览可分别设置提示词、尺寸、种子与参考图。
 
+AI Toolkit 验收：Qwen-Image-2.1 文生图与图像编辑均通过 3 步真机训练、LoRA 保存及预览生成检查；不代表所有模型或长时间训练均已验收。详见[验收报告](docs/team/pr399-acceptance-2026-10-03.md)。
+
 Anima 默认路径仅用于引导，**不代表已下载权重**。模型、数据集、GPU 显存及依赖仍需按所选引擎准备。
 
 使用细节：[Anima](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [Krea 2](docs/krea2-linux-multigpu.md) · [DiffSynth / Qwen](docs/diffsynth.md)
