@@ -1148,20 +1148,20 @@
   min-width: 0;
 }
 
+.dataset-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.dataset-card-heading {
+  min-width: 0;
+}
+
 .dataset-card-header h2 {
   margin: 0;
   font-size: 16px;
-}
-
-.dataset-card-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.dataset-card-delete {
-  white-space: nowrap;
 }
 
 .dataset-card-path {
@@ -1195,21 +1195,31 @@
 }
 
 .dataset-card-actions {
-  display: grid;
-  gap: 8px;
-}
-
-.dataset-card-actions-row {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+  max-width: 60%;
 }
 
-.dataset-card-actions-row .primary-action,
-.dataset-card-actions-row .secondary-action {
-  flex: 1;
+.dataset-card-actions .primary-action,
+.dataset-card-actions .secondary-action,
+.dataset-card-actions .danger-action {
   white-space: nowrap;
   text-align: center;
   justify-content: center;
+}
+
+@media (max-width: 720px) {
+  .dataset-card-header {
+    flex-direction: column;
+  }
+
+  .dataset-card-actions {
+    justify-content: flex-start;
+    max-width: none;
+  }
 }
 
 .dataset-manage-dialog-hint {
