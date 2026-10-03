@@ -42,8 +42,16 @@ export const datasetsApi = {
   create: (name: string) => apiData<DatasetCreated>("/api/datasets", { method: "POST", body: JSON.stringify({ name }) }),
   overview: (name: string, refresh = false) =>
     apiData<{ name: string; overview: DatasetOverview }>(`/api/datasets/${encodeURIComponent(name)}/overview${refresh ? "?refresh=1" : ""}`),
-  validatePath: (path: string, engine?: string) =>
-    apiData<DatasetValidation>("/api/datasets/validate", { method: "POST", body: JSON.stringify({ path, engine: engine ?? null }) }),
+  validatePath: (path: string, engine?: string, caption?: { extension?: string; preferJson?: boolean }) =>
+    apiData<DatasetValidation>("/api/datasets/validate", {
+      method: "POST",
+      body: JSON.stringify({
+        path,
+        engine: engine ?? null,
+        caption_extension: caption?.extension ?? ".txt",
+        prefer_json_caption: caption?.preferJson ?? false,
+      }),
+    }),
   checkUpload: (name: string, paths: string[]) =>
     apiData<UploadCheck>(`/api/datasets/${encodeURIComponent(name)}/upload/check`, { method: "POST", body: JSON.stringify({ paths }) }),
   deleteFiles: (name: string, paths: string[]) =>

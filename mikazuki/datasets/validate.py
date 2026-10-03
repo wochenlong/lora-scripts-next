@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import os
 import re
 from pathlib import Path
 
 from PIL import Image, UnidentifiedImageError
 
-from mikazuki.dataset_editor import IMAGE_EXTENSIONS, caption_path_for
+from mikazuki.dataset_editor import IMAGE_EXTENSIONS
 from mikazuki.datasets.root import normalize_path, resolve_root
 
 READABILITY_SAMPLE_LIMIT = 20
@@ -20,12 +21,23 @@ def _finding(level: str, code: str, **params) -> dict:
 
 
 def _iter_files(root: Path):
-    for path in root.rglob("*"):
-        if not path.is_file():
-            continue
-        if any(part.startswith(".") for part in path.relative_to(root).parts):
-            continue
-        yield path
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [name for name in dirnames if not name.startswith(".")]
+        for name in filenames:
+            yield Path(dirpath) / name
+
+
+def _sanitize_caption_extension(raw: str) -> str:
+    ext = (raw or "").strip()
+    if not ext.startswith(".") or "/" in ext or "\\" in ext or ext == ".":
+        return ".txt"
+    return ext
+
+
+def _caption_exists(image: Path, extension: str, prefer_json: bool) -> bool:
+    if prefer_json and image.with_suffix(".json").is_file():
+        return True
+    return image.with_suffix(extension).is_file()
 
 
 def _spot_check(images: list[Path]) -> list[str]:
@@ -44,7 +56,12 @@ def _spot_check(images: list[Path]) -> list[str]:
     return unreadable
 
 
-def validate_dataset_path(raw_path: str, engine: str | None = None) -> dict:
+def validate_dataset_path(
+    raw_path: str,
+    engine: str | None = None,
+    caption_extension: str = ".txt",
+    prefer_json_caption: bool = False,
+) -> dict:
     findings: list[dict] = []
     if not raw_path or not raw_path.strip():
         findings.append(_finding("error", "path-empty"))
@@ -67,7 +84,8 @@ def validate_dataset_path(raw_path: str, engine: str | None = None) -> dict:
             images.append(path)
     images.sort()
 
-    captioned = sum(1 for image in images if caption_path_for(image).is_file())
+    extension = _sanitize_caption_extension(caption_extension)
+    captioned = sum(1 for image in images if _caption_exists(image, extension, prefer_json_caption))
     missing = len(images) - captioned
     subdirs = {image.parent for image in images if image.parent != target}
 

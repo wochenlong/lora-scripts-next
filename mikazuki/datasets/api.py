@@ -54,6 +54,8 @@ class DatasetCreateRequest(BaseModel):
 class ValidateRequest(BaseModel):
     path: str
     engine: str | None = None
+    caption_extension: str = ".txt"
+    prefer_json_caption: bool = False
 
 
 class UploadCheckRequest(BaseModel):
@@ -114,8 +116,10 @@ async def list_all():
 
 
 @router.post("/datasets/validate")
-async def validate(req: ValidateRequest):
-    return APIResponseSuccess(data=validate_dataset_path(req.path, req.engine))
+def validate(req: ValidateRequest):
+    return APIResponseSuccess(
+        data=validate_dataset_path(req.path, req.engine, req.caption_extension, req.prefer_json_caption)
+    )
 
 
 @router.get("/datasets/{name}/overview")

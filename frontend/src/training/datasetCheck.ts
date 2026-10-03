@@ -1,6 +1,6 @@
 import type { FormModel } from "../schema/adapter"
 
-const SCALAR_DIR_KEYS = ["train_data_dir", "reg_data_dir", "output_data_dir"] as const
+const SCALAR_DIR_KEYS = ["train_data_dir", "reg_data_dir", "output_data_dir", "dataset_base_path"] as const
 const ARRAY_DIR_KEYS = ["input_data_dirs"] as const
 
 /** Collect non-empty dataset directory values from a training form model. */

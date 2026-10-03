@@ -215,15 +215,20 @@ function findingText(finding: ValidateFinding) {
 }
 
 async function checkDatasets() {
-  const targets = collectDatasetCheckTargets(model.value)
+  const config = output.value
+  const targets = collectDatasetCheckTargets(config)
   if (!targets.length) { ElMessage.info(t("datasetValidate.noTargets")); return }
   const engine = moduleForSchema(props.schemaName)?.engine
+  const caption = {
+    extension: typeof config.caption_extension === "string" ? config.caption_extension : undefined,
+    preferJson: config.prefer_json_caption === true,
+  }
   datasetCheckOpen.value = true
   datasetChecking.value = true
   try {
     datasetCheckResults.value = await Promise.all(targets.map(async (path) => {
       try {
-        return { path, result: await datasetsApi.validatePath(path, engine) }
+        return { path, result: await datasetsApi.validatePath(path, engine, caption) }
       } catch (reason) {
         return { path, error: reason instanceof Error ? reason.message : String(reason) }
       }

@@ -15,6 +15,10 @@ describe("collectDatasetCheckTargets", () => {
     expect(targets).toEqual(["/data/out", "/data/in-a", "/data/in-b"])
   })
 
+  it("collects metadata-mode dataset_base_path", () => {
+    expect(collectDatasetCheckTargets({ dataset_base_path: "./datasets/qwen-meta" })).toEqual(["./datasets/qwen-meta"])
+  })
+
   it("returns empty when nothing is set", () => {
     expect(collectDatasetCheckTargets({})).toEqual([])
   })

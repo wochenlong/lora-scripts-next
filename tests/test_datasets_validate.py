@@ -77,6 +77,36 @@ def test_nested_subdirs_reported_and_hidden_dirs_skipped(tmp_path):
     assert "nested-images" in codes(data)
 
 
+def test_caption_extension_and_prefer_json_are_honored(tmp_path):
+    make_image(tmp_path / "a.png")
+    make_image(tmp_path / "b.png")
+    (tmp_path / "a.caption").write_text("tag", encoding="utf-8")
+    (tmp_path / "b.json").write_text("{}", encoding="utf-8")
+
+    client = TestClient(app)
+
+    default = client.post("/api/datasets/validate", json={"path": str(tmp_path)}).json()["data"]
+    assert default["stats"]["captioned_count"] == 0
+
+    custom = client.post(
+        "/api/datasets/validate",
+        json={"path": str(tmp_path), "caption_extension": ".caption"},
+    ).json()["data"]
+    assert custom["stats"]["captioned_count"] == 1
+
+    json_preferred = client.post(
+        "/api/datasets/validate",
+        json={"path": str(tmp_path), "prefer_json_caption": True},
+    ).json()["data"]
+    assert json_preferred["stats"]["captioned_count"] == 1
+
+    unsafe = client.post(
+        "/api/datasets/validate",
+        json={"path": str(tmp_path), "caption_extension": "../etc"},
+    ).json()["data"]
+    assert unsafe["stats"]["captioned_count"] == 0
+
+
 def test_unreadable_image_is_warning(tmp_path):
     (tmp_path / "broken.png").write_bytes(b"not an image")
 
