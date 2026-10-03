@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from mikazuki.app.models import APIResponseSuccess
-from mikazuki.datasets.copy import copy_dataset
+from mikazuki.datasets.copy import LAYOUTS, copy_dataset
 from mikazuki.datasets.export import file_download_response, stream_dataset_zip
 from mikazuki.datasets.inuse import datasets_in_use, ensure_dataset_not_in_use
 from mikazuki.datasets.listing import list_datasets
@@ -56,6 +56,8 @@ class DatasetCreateRequest(BaseModel):
 class DatasetCopyRequest(BaseModel):
     name: str
     flatten_transparent: bool = False
+    layout: str = "preserve"
+    repeats: int = 10
 
 
 class ValidateRequest(BaseModel):
@@ -180,6 +182,10 @@ def existing_dataset_dir(name: str) -> Path:
 
 @router.post("/datasets/{name}/copy")
 def copy(name: str, req: DatasetCopyRequest):
+    if req.layout not in LAYOUTS:
+        raise HTTPException(status_code=400, detail=f"layout must be one of {sorted(LAYOUTS)}")
+    if not 1 <= req.repeats <= 999:
+        raise HTTPException(status_code=400, detail="repeats must be between 1 and 999")
     root = get_datasets_root()
     source = existing_dataset_dir(name)
     target = resolve_dataset_dir(root, req.name)
@@ -188,7 +194,7 @@ def copy(name: str, req: DatasetCopyRequest):
         with dataset_operation(lock_order[1]):
             if target.exists():
                 raise HTTPException(status_code=409, detail="target dataset already exists")
-            result = copy_dataset(source, target, req.flatten_transparent)
+            result = copy_dataset(source, target, req.flatten_transparent, req.layout, req.repeats)
     invalidate_overview(target)
     return APIResponseSuccess(data={"name": target.name, "path": normalize_path(target), **result})
 

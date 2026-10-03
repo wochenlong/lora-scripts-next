@@ -80,6 +80,61 @@ def test_copy_missing_source_is_404(datasets_root):
     assert client.post("/api/datasets/nope/copy", json={"name": "dst"}).status_code == 404
 
 
+def test_copy_flatten_layout_drops_hierarchy(datasets_root):
+    make_dataset(datasets_root, "src")
+    client = TestClient(app)
+    response = client.post("/api/datasets/src/copy", json={"name": "flat-layout", "layout": "flatten"})
+
+    assert response.status_code == 200
+    target = datasets_root / "flat-layout"
+    assert (target / "a.png").is_file()
+    assert (target / "b.png").is_file()
+    assert not (target / "sub").exists()
+
+
+def test_copy_flatten_dedupes_name_collisions(datasets_root):
+    dataset_dir = datasets_root / "src"
+    make_image(dataset_dir / "x" / "same.png", mode="RGB", color=(1, 2, 3))
+    make_image(dataset_dir / "y" / "same.png", mode="RGB", color=(4, 5, 6))
+    (dataset_dir / "x" / "same.txt").write_text("caption-x", encoding="utf-8")
+    (dataset_dir / "y" / "same.txt").write_text("caption-y", encoding="utf-8")
+
+    client = TestClient(app)
+    response = client.post("/api/datasets/src/copy", json={"name": "dedup", "layout": "flatten"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["deduped"] >= 2
+    target = datasets_root / "dedup"
+    captions = sorted(p.read_text(encoding="utf-8") for p in target.glob("*.txt"))
+    assert captions == ["caption-x", "caption-y"]
+    # 每个 caption 仍与同 stem 的图片配对
+    for caption in target.glob("*.txt"):
+        assert caption.with_suffix(".png").is_file()
+
+
+def test_copy_kohya_layout_wraps_subsets(datasets_root):
+    make_dataset(datasets_root, "src")
+    make_image(datasets_root / "src" / "5_kept" / "c.png", mode="RGB", color=(9, 9, 9))
+
+    client = TestClient(app)
+    response = client.post("/api/datasets/src/copy", json={"name": "kohya-ds", "layout": "kohya", "repeats": 7})
+
+    assert response.status_code == 200
+    target = datasets_root / "kohya-ds"
+    assert (target / "7_kohya-ds" / "a.png").is_file()
+    assert (target / "7_kohya-ds" / "a.txt").is_file()
+    assert (target / "7_sub" / "b.png").is_file()
+    # 已符合 N_ 约定的子目录原样保留
+    assert (target / "5_kept" / "c.png").is_file()
+
+
+def test_copy_rejects_bad_layout_and_repeats(datasets_root):
+    make_dataset(datasets_root, "src")
+    client = TestClient(app)
+    assert client.post("/api/datasets/src/copy", json={"name": "x", "layout": "weird"}).status_code == 400
+    assert client.post("/api/datasets/src/copy", json={"name": "x", "repeats": 0}).status_code == 400
+
+
 @pytest.fixture
 def training_task(datasets_root, tmp_path):
     config = tmp_path / "task.toml"
