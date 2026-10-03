@@ -943,6 +943,7 @@ export default {
       translationCancel: "Cancel",
       translationCache: "Cached translations: {n}",
       translationCacheClear: "Clear network/LLM cache",
+      translationUnresolved: "{n} unresolved",
       translationCacheClearing: "Clearing…",
       translationDictionaryTitle: "Danbooru Chinese dictionary",
       translationDictionaryRows: "rows",

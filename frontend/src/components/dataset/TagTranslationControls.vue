@@ -10,6 +10,7 @@ defineProps<{
   error: string
   progressCompleted: number
   progressTotal: number
+  progressUnresolved: number
 }>()
 
 const emit = defineEmits<{
@@ -36,7 +37,7 @@ const { t } = useI18n()
     </el-select>
     <small v-if="loading || progressTotal" class="caption-translation-progress">
       <span v-if="loading">{{ t("datasetEditor.caption.translationLoading") }}</span>
-      <span v-if="progressTotal">{{ progressCompleted }}/{{ progressTotal }}</span>
+      <span v-if="progressTotal">{{ progressCompleted }}/{{ progressTotal }}<template v-if="progressUnresolved">（{{ t("datasetEditor.caption.translationUnresolved", { n: progressUnresolved }) }}）</template></span>
     </small>
     <small v-if="error" class="caption-translation-error">{{ error }}</small>
   </div>

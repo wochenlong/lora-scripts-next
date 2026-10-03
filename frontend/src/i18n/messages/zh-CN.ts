@@ -943,6 +943,7 @@ export default {
       translationCancel: "取消",
       translationCache: "已缓存译文：{n} 条",
       translationCacheClear: "清理网络/LLM缓存",
+      translationUnresolved: "未命中 {n} 条",
       translationCacheClearing: "清理中…",
       translationDictionaryTitle: "Danbooru 中文词库",
       translationDictionaryRows: "条",

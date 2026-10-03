@@ -63,4 +63,26 @@ describe("useTagTranslations", () => {
     expect(datasetApi.tagTranslations).toHaveBeenNthCalledWith(2, ["new_review_tag"], "danbooru", "zh-CN")
     expect(state.translationFor("new_review_tag", "danbooru")).toBe("新的审查标签")
   })
+
+  it("clears external results without dropping dictionary meanings", async () => {
+    vi.mocked(datasetApi.tagTranslations)
+      .mockResolvedValueOnce({
+        items: [{ tag: "blue_eyes", translation: "蓝瞳", source: "danbooru", status: "hit" }],
+        provider: "danbooru",
+        locale: "zh-CN",
+      })
+      .mockResolvedValueOnce({
+        items: [{ tag: "custom_tag", translation: "自定义标签", source: "llm", status: "hit" }],
+        provider: "llm",
+        locale: "zh-CN",
+      })
+    const state = useTagTranslations()
+
+    await state.resolve(["blue_eyes"], "danbooru")
+    await state.resolve(["custom_tag"], "llm")
+    state.clearExternalCache()
+
+    expect(state.translationFor("blue_eyes", "danbooru")).toBe("蓝瞳")
+    expect(state.translationFor("custom_tag", "llm")).toBe("")
+  })
 })

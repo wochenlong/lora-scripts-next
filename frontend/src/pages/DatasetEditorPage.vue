@@ -66,7 +66,7 @@ const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
 const translationProvider = editorSession.translationProvider
-const { loading: translationsLoading, error: translationsError, progress: translationProgress, resolve: resolveTranslations, translationFor, clearCache: clearTranslationCache, cancelCurrent: cancelTranslations } = useTagTranslations()
+const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, clearExternalCache, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsSaving = ref(false)
@@ -245,13 +245,23 @@ async function saveTranslationSettings() {
       local: { enabled: llmMode.value === "local" },
     })
     snapshotTranslationSettings()
-    clearTranslationCache()
+    clearExternalCache()
+    if (showTranslations.value) void refreshTranslationsAfterSettingsChange()
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
     restoreTranslationSettings()
   } finally {
     translationSettingsSaving.value = false
   }
+}
+
+async function refreshTranslationsAfterSettingsChange() {
+  if (!showTranslations.value) return
+  if (translationProvider.value === "llm") {
+    const ready = await ensureLlmReady()
+    if (!ready || !showTranslations.value || translationProvider.value !== "llm") return
+  }
+  await translateWholeDataset()
 }
 
 const activeRemoteProfile = computed(() => llmProfiles.value.find((profile) => profile.id === activeRemoteId.value))
@@ -381,8 +391,9 @@ async function clearTranslationCacheFromSettings() {
   translationCacheClearing.value = true
   try {
     await datasetApi.clearTagTranslationCache()
-    clearTranslationCache()
+    clearExternalCache()
     translationCacheCount.value = 0
+    if (showTranslations.value) void refreshTranslationsAfterSettingsChange()
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
@@ -901,6 +912,7 @@ onUnmounted(() => {
             :error="translationsError"
             :progress-completed="translationProgress.completed"
             :progress-total="translationProgress.total"
+            :progress-unresolved="translationUnresolved"
             @update:enabled="setTranslationsEnabled"
             @update:provider="setTranslationProvider"
             @settings="openTranslationSettings"

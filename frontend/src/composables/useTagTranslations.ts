@@ -19,6 +19,7 @@ const error = ref("")
 const activeProvider = ref<TagTranslationProvider>("danbooru")
 const activeLocale = ref("zh-CN")
 const progress = ref({ completed: 0, total: 0 })
+const unresolved = ref(0)
 let generation = 0
 
 function cacheKey(tag: string, provider: TagTranslationProvider, locale: string) {
@@ -46,6 +47,7 @@ export function useTagTranslations() {
       return !entry || entry.status !== "hit"
     })
     progress.value = { completed: unique.length - missing.length, total: unique.length }
+    unresolved.value = 0
     if (!missing.length) {
       loading.value = false
       return
@@ -62,6 +64,7 @@ export function useTagTranslations() {
           : await datasetApi.tagTranslations(batch, provider, locale)
         if (requestGeneration !== generation) return
         for (const item of response.items) next[cacheKey(item.tag, provider, locale)] = item
+        unresolved.value += response.items.filter((item) => item.status !== "hit").length
         entries.value = next
         persistEntries()
         progress.value = {
@@ -87,6 +90,20 @@ export function useTagTranslations() {
     error.value = ""
     loading.value = false
     progress.value = { completed: 0, total: 0 }
+    unresolved.value = 0
+  }
+
+  function clearExternalCache() {
+    generation += 1
+    const preserved = Object.fromEntries(
+      Object.entries(entries.value).filter(([key]) => key.includes("\u0000danbooru\u0000")),
+    )
+    entries.value = preserved
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(preserved)) } catch { /* ignore unavailable storage */ }
+    error.value = ""
+    loading.value = false
+    progress.value = { completed: 0, total: 0 }
+    unresolved.value = 0
   }
 
   function cancelCurrent() {
@@ -94,7 +111,8 @@ export function useTagTranslations() {
     loading.value = false
     error.value = ""
     progress.value = { completed: 0, total: 0 }
+    unresolved.value = 0
   }
 
-  return { translations, loading, error, progress, resolve, translationFor, clearCache, cancelCurrent }
+  return { translations, loading, error, progress, unresolved, resolve, translationFor, clearCache, clearExternalCache, cancelCurrent }
 }
