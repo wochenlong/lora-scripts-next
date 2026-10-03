@@ -3,6 +3,7 @@ import { computed, ref } from "vue"
 import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { schemasApi, type PickerFile } from "../api/schemas"
+import { datasetsApi, type DatasetEntry } from "../api/datasets"
 import type { FormField, FormValue } from "../schema/adapter"
 import ReferencePathsField from "./ReferencePathsField.vue"
 import PreviewSampleField from "./PreviewSampleField.vue"
@@ -14,6 +15,8 @@ const emit = defineEmits<{ "update:modelValue": [value: FormValue]; reset: [] }>
 const { t } = useI18n()
 const files = ref<PickerFile[]>([])
 const catalogOpen = ref(false)
+const datasetOpen = ref(false)
+const datasetEntries = ref<DatasetEntry[]>([])
 const picking = ref(false)
 const pickerType = computed(() => String(props.field.extra?.type || "folder"))
 const internalPicker = computed(() => props.field.extra?.internal ? String(props.field.extra.internal) : "")
@@ -73,6 +76,23 @@ async function openCatalog() {
     ElMessage.error(error instanceof Error ? error.message : t("schemaForm.catalogFail"))
   }
 }
+
+const isTrainDirPicker = computed(() => internalPicker.value === "train-dir")
+
+async function openDatasets() {
+  try {
+    datasetEntries.value = (await datasetsApi.list()).datasets
+    datasetOpen.value = true
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("schemaForm.datasetFail"))
+  }
+}
+
+function datasetStat(entry: DatasetEntry) {
+  const overview = entry.overview
+  if (!overview || overview.state !== "ready" || overview.file_count == null) return ""
+  return t("schemaForm.datasetStat", { total: overview.file_count, captioned: overview.captioned_count ?? 0 })
+}
 </script>
 
 <template>
@@ -97,6 +117,7 @@ async function openCatalog() {
           <el-input :model-value="modelValue as string | undefined" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
           <el-button :loading="picking" :disabled="field.disabled" @click.prevent="pick">{{ t("schemaForm.browse") }}</el-button>
           <el-button v-if="internalPicker" :disabled="field.disabled" @click.prevent="openCatalog">{{ t("schemaForm.commonPaths") }}</el-button>
+          <el-button v-if="isTrainDirPicker" :disabled="field.disabled" @click.prevent="openDatasets">{{ t("schemaForm.pickDataset") }}</el-button>
         </span>
         <el-input v-else :model-value="modelValue as string | undefined" :disabled="field.disabled || field.type === 'const'" @update:model-value="emit('update:modelValue', $event)" />
       </span>
@@ -112,6 +133,15 @@ async function openCatalog() {
       <button v-for="file in files" :key="file.path" @click="emit('update:modelValue', file.path); catalogOpen = false">
         <strong>{{ file.name }}</strong><span>{{ file.path }}</span><small v-if="file.size">{{ file.size }}</small>
       </button>
+    </div>
+  </el-dialog>
+
+  <el-dialog v-model="datasetOpen" :title="t('schemaForm.datasetTitle')" width="min(680px, 92vw)">
+    <div class="picker-list">
+      <button v-for="entry in datasetEntries" :key="entry.path" @click="emit('update:modelValue', entry.path); datasetOpen = false">
+        <strong>{{ entry.name }}</strong><span>{{ entry.path }}</span><small v-if="datasetStat(entry)">{{ datasetStat(entry) }}</small>
+      </button>
+      <p v-if="!datasetEntries.length">{{ t("schemaForm.datasetEmpty") }}</p>
     </div>
   </el-dialog>
 

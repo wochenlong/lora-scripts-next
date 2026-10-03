@@ -25,6 +25,7 @@ from mikazuki.datasets.trash import (
     soft_delete,
     soft_delete_dataset,
 )
+from mikazuki.datasets.validate import validate_dataset_path
 from mikazuki.datasets.upload import (
     MAX_BATCH_BYTES,
     cleanup_staging,
@@ -48,6 +49,13 @@ class RootUpdateRequest(BaseModel):
 
 class DatasetCreateRequest(BaseModel):
     name: str
+
+
+class ValidateRequest(BaseModel):
+    path: str
+    engine: str | None = None
+    caption_extension: str = ".txt"
+    prefer_json_caption: bool = False
 
 
 class UploadCheckRequest(BaseModel):
@@ -107,11 +115,20 @@ async def list_all():
     )
 
 
+@router.post("/datasets/validate")
+def validate(req: ValidateRequest):
+    return APIResponseSuccess(
+        data=validate_dataset_path(req.path, req.engine, req.caption_extension, req.prefer_json_caption)
+    )
+
+
 @router.get("/datasets/{name}/overview")
-async def overview(name: str):
+async def overview(name: str, refresh: bool = False):
     dataset_dir = resolve_dataset_dir(get_datasets_root(), name)
     if not dataset_dir.is_dir():
         raise HTTPException(status_code=404, detail="dataset not found")
+    if refresh:
+        invalidate_overview(dataset_dir)
     return APIResponseSuccess(data={"name": dataset_dir.name, "overview": get_overview(dataset_dir)})
 
 
