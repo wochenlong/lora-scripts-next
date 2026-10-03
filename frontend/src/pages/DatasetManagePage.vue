@@ -30,6 +30,8 @@ const trashOpen = ref(false)
 const copySource = ref("")
 const copyName = ref("")
 const copyFlatten = ref(false)
+const copyLayout = ref<"preserve" | "flatten" | "kohya">("preserve")
+const copyRepeats = ref(10)
 const copying = ref(false)
 const autoRefresh = ref(localStorage.getItem(AUTO_REFRESH_KEY) === "1")
 let timer: number | undefined
@@ -193,6 +195,8 @@ function openCopy(entry: DatasetEntry) {
   copySource.value = entry.name
   copyName.value = `${entry.name}-copy`
   copyFlatten.value = false
+  copyLayout.value = "preserve"
+  copyRepeats.value = 10
 }
 
 async function copyDataset() {
@@ -200,7 +204,7 @@ async function copyDataset() {
   if (!name || copying.value) return
   copying.value = true
   try {
-    const data = await datasetsApi.copy(copySource.value, name, copyFlatten.value)
+    const data = await datasetsApi.copy(copySource.value, name, { flattenTransparent: copyFlatten.value, layout: copyLayout.value, repeats: copyRepeats.value })
     copySource.value = ""
     ElMessage.success(t("datasetManage.msg.copied", { n: data.copied, m: data.flattened }))
     await load(true)
@@ -290,6 +294,19 @@ onBeforeUnmount(stopPolling)
 
     <ElDialog :model-value="!!copySource" :title="t('datasetManage.copyDialogTitle', { name: copySource })" width="480px" @update:model-value="copySource = ''">
       <ElInput v-model="copyName" :placeholder="t('datasetManage.createPlaceholder')" @keyup.enter="copyDataset" />
+      <div class="dataset-copy-option">
+        <span class="dataset-copy-label">{{ t("datasetManage.layoutLabel") }}</span>
+        <ElSelect v-model="copyLayout">
+          <ElOption value="preserve" :label="t('datasetManage.layoutPreserve')" />
+          <ElOption value="flatten" :label="t('datasetManage.layoutFlatten')" />
+          <ElOption value="kohya" :label="t('datasetManage.layoutKohya')" />
+        </ElSelect>
+      </div>
+      <div v-if="copyLayout === 'kohya'" class="dataset-copy-option">
+        <span class="dataset-copy-label">{{ t("datasetManage.repeatsLabel") }}</span>
+        <ElInputNumber v-model="copyRepeats" :min="1" :max="999" controls-position="right" />
+      </div>
+      <p v-if="copyLayout === 'kohya'" class="dataset-manage-dialog-hint">{{ t("datasetManage.layoutKohyaHint") }}</p>
       <label class="dataset-copy-option">
         <ElCheckbox v-model="copyFlatten" />
         <span>{{ t("datasetManage.flattenOption") }}</span>
