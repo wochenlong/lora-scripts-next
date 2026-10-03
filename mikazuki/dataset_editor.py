@@ -13,6 +13,7 @@ from PIL import Image
 from pydantic import BaseModel, Field
 
 from mikazuki.app.models import APIResponseSuccess
+from mikazuki.datasets.inuse import ensure_path_not_in_use
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
@@ -302,6 +303,7 @@ async def image(root: str, image: str, thumb: bool = False, size: int = DEFAULT_
 @router.post("/dataset-editor/caption")
 async def save_caption(req: CaptionWriteRequest):
     root = dataset_root(req.root)
+    ensure_path_not_in_use(str(root))
     image_path = resolve_image(root, req.image)
     if not image_path.is_file():
         raise HTTPException(status_code=404, detail="image not found")
@@ -322,6 +324,7 @@ async def save_caption(req: CaptionWriteRequest):
 @router.post("/dataset-editor/batch")
 async def batch_edit(req: BatchEditRequest):
     root = dataset_root(req.root)
+    ensure_path_not_in_use(str(root))
     append_tags = parse_tags(",".join(req.append))
     remove_tags = set(parse_tags(",".join(req.remove)))
     replacements = {item.source.strip(): item.target.strip() for item in req.replace if item.source.strip()}
@@ -385,6 +388,7 @@ async def batch_edit(req: BatchEditRequest):
 @router.post("/dataset-editor/undo")
 async def undo(req: UndoRequest):
     root = dataset_root(req.root)
+    ensure_path_not_in_use(str(root))
     stack = _UNDO_STACKS.get(normalize_path(str(root)), [])
     if not stack:
         return APIResponseSuccess(data={"changed": 0, "items": []}, message="nothing to undo")
@@ -398,6 +402,7 @@ async def undo(req: UndoRequest):
 @router.post("/dataset-editor/redo")
 async def redo(req: UndoRequest):
     root = dataset_root(req.root)
+    ensure_path_not_in_use(str(root))
     key = normalize_path(str(root))
     stack = _REDO_STACKS.get(key, [])
     if not stack:

@@ -71,3 +71,16 @@ def datasets_in_use(root: Path | None = None) -> set[str]:
 def ensure_dataset_not_in_use(name: str) -> None:
     if name in datasets_in_use():
         raise HTTPException(status_code=409, detail=f"dataset '{name}' is in use by a running training task")
+
+
+def ensure_path_not_in_use(raw_path: str) -> None:
+    try:
+        path = resolve_root(raw_path)
+    except (OSError, ValueError):
+        return
+    try:
+        rel = path.relative_to(get_datasets_root())
+    except ValueError:
+        return
+    if rel.parts and not rel.parts[0].startswith("."):
+        ensure_dataset_not_in_use(rel.parts[0])
