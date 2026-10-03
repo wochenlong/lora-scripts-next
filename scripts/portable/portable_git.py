@@ -20,6 +20,7 @@ BOOTSTRAP_FILES = (
     ".gitignore",
     ".gitattributes",
     "scripts/portable/portable_git.py",
+    "scripts/portable/update_portable.py",
     "scripts/portable/update_from_release.ps1",
     "scripts/portable/bootstrap_portable_updaters.ps1",
     "scripts/portable/show_portable_update_status.ps1",
@@ -105,11 +106,11 @@ def seed(source, destination):
     verify(destination)
 
 
-def update(root):
+def update(root, target_ref="FETCH_HEAD"):
     root = root.resolve()
     # FETCH_HEAD is the result of the successful fetch, including mirror fetches.
     # Never stash/reset/clean: Git must refuse collisions, including ignored files.
-    target = git(root, "rev-parse", "--verify", "FETCH_HEAD^{commit}").decode().strip()
+    target = git(root, "rev-parse", "--verify", f"{target_ref}^{{commit}}").decode().strip()
     git(root, "merge-base", "--is-ancestor", "HEAD", target)
     # Extracted releases can have LF bytes with a CRLF checkout stat cache.
     # Re-add only content/mode-identical, unstaged files to refresh that cache;
