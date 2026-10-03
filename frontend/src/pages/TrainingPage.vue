@@ -13,7 +13,9 @@ import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultMod
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
 import { QWEN_VALIDATION_FIELDS, validateQwenConfig } from "../training/qwenValidation"
-import { isAiToolkitSchema, moduleForTrainType } from "../training/modules"
+import { isAiToolkitSchema, moduleForSchema, moduleForTrainType } from "../training/modules"
+import { collectDatasetCheckTargets } from "../training/datasetCheck"
+import { datasetsApi, type DatasetValidation, type ValidateFinding } from "../api/datasets"
 import { copyText } from "../utils/clipboard"
 import { useTasksStore } from "../stores/tasks"
 
@@ -228,6 +230,38 @@ function validate() {
   if (diagnostics.value.warnings.length) ElMessage.warning(diagnostics.value.warnings[0])
   else ElMessage.success(t("training.validatePassed"))
   return true
+}
+
+const datasetCheckOpen = ref(false)
+const datasetChecking = ref(false)
+const datasetCheckResults = ref<{ path: string; result?: DatasetValidation; error?: string }[]>([])
+
+function findingText(finding: ValidateFinding) {
+  const params: Record<string, unknown> = { ...finding.params }
+  if (Array.isArray(params.samples)) params.samples = params.samples.join(", ")
+  return t(`datasetValidate.findings.${finding.code}`, params)
+}
+
+async function checkDatasets() {
+  const config = output.value
+  const targets = collectDatasetCheckTargets(config)
+  if (!targets.length) { ElMessage.info(t("datasetValidate.noTargets")); return }
+  const engine = moduleForSchema(props.schemaName)?.engine
+  const caption = {
+    extension: typeof config.caption_extension === "string" ? config.caption_extension : undefined,
+    preferJson: config.prefer_json_caption === true,
+  }
+  datasetCheckOpen.value = true
+  datasetChecking.value = true
+  try {
+    datasetCheckResults.value = await Promise.all(targets.map(async (path) => {
+      try {
+        return { path, result: await datasetsApi.validatePath(path, engine, caption) }
+      } catch (reason) {
+        return { path, error: reason instanceof Error ? reason.message : String(reason) }
+      }
+    }))
+  } finally { datasetChecking.value = false }
 }
 
 function saveHistory() {
@@ -461,11 +495,25 @@ onBeforeUnmount(() => {
         <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>{{ t("training.preview.panelTitle") }}</span><b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b><span class="preview-actions"><button class="preview-collapse" :title="previewCollapsed ? t('training.preview.expand') : t('training.preview.collapse')" :aria-label="previewCollapsed ? t('training.preview.expand') : t('training.preview.collapse')" @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? "←" : "→" }}</button><button @click="copyToml">{{ t("training.preview.copy") }}</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
         <div class="panel-actions"><button @click="openPresets">{{ t("training.toolbar.presets") }}</button><button @click="saveHistory">{{ t("training.toolbar.save") }}</button><button @click="openImport">{{ t("training.toolbar.import") }}</button><button @click="historyOpen = true">{{ t("training.toolbar.history") }}</button><button @click="exportConfig">{{ t("training.toolbar.export") }}</button><button @click="resetConfig">{{ t("training.toolbar.reset") }}</button></div>
         <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">{{ t("training.validate") }}</button>
+        <button class="secondary-action schema-validate" :disabled="!schema || datasetChecking" @click="checkDatasets">{{ datasetChecking ? t("datasetValidate.checking") : t("datasetValidate.button") }}</button>
         <div class="submit-row"><button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button><button class="danger-action stop-training" :disabled="!currentRunning || Boolean(tasksStore.terminatingId)" @click="stopTraining">{{ tasksStore.terminatingId ? t("tasks.detail.stopping") : t("training.stop") }}</button></div>
       </div>
     </aside>
   </div>
 
+  <el-dialog v-model="datasetCheckOpen" :title="t('datasetValidate.title')" width="min(680px, 92vw)">
+    <div v-loading="datasetChecking" class="dataset-check-list">
+      <article v-for="item in datasetCheckResults" :key="item.path" class="dataset-check-item">
+        <code class="dataset-check-path">{{ item.path }}</code>
+        <p v-if="item.error" class="dataset-check-finding error">{{ item.error }}</p>
+        <template v-else-if="item.result">
+          <p v-if="item.result.stats" class="dataset-check-stats">{{ t("datasetValidate.stats", item.result.stats) }}</p>
+          <p v-for="(finding, index) in item.result.findings" :key="index" class="dataset-check-finding" :class="finding.level">{{ findingText(finding) }}</p>
+          <p v-if="item.result.exists && !item.result.findings.length" class="dataset-check-finding info">{{ t("datasetValidate.ok") }}</p>
+        </template>
+      </article>
+    </div>
+  </el-dialog>
   <el-dialog v-model="historyOpen" :title="t('training.historyDialog.title')" width="min(760px, 92vw)"><div class="config-list"><article v-for="(row, index) in history" :key="`${row.time}-${index}`"><div><strong>{{ row.name || t('training.historyDialog.unnamed') }}</strong><span>{{ row.time }}</span></div><button @click="applyHistory(row.value)">{{ t("training.historyDialog.use") }}</button><button class="danger" @click="deleteHistory(index)">{{ t("training.historyDialog.delete") }}</button></article><p v-if="!history.length">{{ t("training.historyDialog.empty") }}</p></div></el-dialog>
   <el-dialog v-model="presetsOpen" :title="t('training.presetsDialog.title')" width="min(760px, 92vw)"><div v-loading="presetsLoading" class="config-list"><article v-for="preset in filteredPresets" :key="preset.metadata.name"><div><strong>{{ preset.metadata.name }}</strong><span>{{ preset.metadata.description || `${preset.metadata.author || ''} ${preset.metadata.version || ''}` }}</span></div><button @click="applyPreset(preset)">{{ t("training.presetsDialog.apply") }}</button></article><p v-if="!presetsLoading && !filteredPresets.length">{{ t("training.presetsDialog.empty") }}</p></div></el-dialog>
 </template>
