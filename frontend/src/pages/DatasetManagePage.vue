@@ -72,13 +72,13 @@ function hasUnsettled() {
   return datasets.value.some((entry) => !entry.overview || entry.overview.state === "computing")
 }
 
-async function pollOverviews() {
-  const pending = datasets.value.filter(needsPoll)
+async function pollOverviews(force = false) {
+  const pending = force ? datasets.value : datasets.value.filter(needsPoll)
   if (!pending.length) return
   await Promise.all(
     pending.map(async (entry) => {
       try {
-        const data = await datasetsApi.overview(entry.name)
+        const data = await datasetsApi.overview(entry.name, force)
         entry.overview = data.overview
       } catch {
         entry.overview = { state: "error", file_count: null, captioned_count: null, total_bytes: null, updated_at: null, error: "request failed" }
@@ -112,7 +112,7 @@ async function load(silent = false) {
     rootPath.value = data.root
     rootExists.value = data.exists
     datasets.value = data.datasets
-    void pollOverviews()
+    void pollOverviews(true)
     if (autoRefresh.value || hasUnsettled()) ensurePolling()
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : t("datasetManage.msg.loadFail"))

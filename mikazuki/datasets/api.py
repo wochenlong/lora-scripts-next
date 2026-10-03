@@ -119,10 +119,12 @@ async def validate(req: ValidateRequest):
 
 
 @router.get("/datasets/{name}/overview")
-async def overview(name: str):
+async def overview(name: str, refresh: bool = False):
     dataset_dir = resolve_dataset_dir(get_datasets_root(), name)
     if not dataset_dir.is_dir():
         raise HTTPException(status_code=404, detail="dataset not found")
+    if refresh:
+        invalidate_overview(dataset_dir)
     return APIResponseSuccess(data={"name": dataset_dir.name, "overview": get_overview(dataset_dir)})
 
 
