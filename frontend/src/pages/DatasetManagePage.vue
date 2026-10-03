@@ -220,21 +220,15 @@ onBeforeUnmount(stopPolling)
     <section v-else class="dataset-manage-grid">
       <article v-for="entry in datasets" :key="entry.name" class="dataset-card">
         <header class="dataset-card-header">
-          <div class="dataset-card-heading">
+          <div class="dataset-card-title">
             <h2>{{ entry.name }}</h2>
-            <span class="dataset-card-path" :title="entry.path">{{ entry.path }}</span>
-          </div>
-          <div class="dataset-card-actions">
-            <button class="primary-action" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>
-            <button class="secondary-action" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
-            <button class="secondary-action" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
-            <a class="secondary-action" :href="datasetDownloadUrl(entry.name)" download>{{ t("datasetManage.downloadZip") }}</a>
             <button
-              class="danger-action"
+              class="danger-action dataset-card-delete"
               :title="t('datasetManage.deleteDataset')"
               @click="deleteDataset(entry)"
             >{{ t("datasetManage.deleteDataset") }}</button>
           </div>
+          <span class="dataset-card-path" :title="entry.path">{{ entry.path }}</span>
         </header>
         <dl class="dataset-card-stats">
           <div><dt>{{ t("datasetManage.files") }}</dt><dd>{{ statValue(entry, "file_count") }}</dd></div>
@@ -242,6 +236,16 @@ onBeforeUnmount(stopPolling)
           <div><dt>{{ t("datasetManage.size") }}</dt><dd>{{ statValue(entry, "total_bytes") }}</dd></div>
           <div><dt>{{ t("datasetManage.updatedAt") }}</dt><dd>{{ statValue(entry, "updated_at") }}</dd></div>
         </dl>
+        <footer class="dataset-card-actions">
+          <div class="dataset-card-actions-row">
+            <button class="primary-action" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>
+            <a class="secondary-action" :href="datasetDownloadUrl(entry.name)" download>{{ t("datasetManage.downloadZip") }}</a>
+          </div>
+          <div class="dataset-card-actions-row">
+            <button class="secondary-action" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
+            <button class="secondary-action" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
+          </div>
+        </footer>
       </article>
     </section>
 
