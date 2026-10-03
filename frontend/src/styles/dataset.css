@@ -1164,6 +1164,34 @@
   white-space: nowrap;
 }
 
+.dataset-card.in-use {
+  border-color: var(--warning-border);
+  box-shadow: 0 0 0 1px var(--warning-border), 0 4px 18px -12px var(--warning-text);
+}
+
+.dataset-card-in-use {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  color: var(--warning-text);
+  background: var(--warning-bg);
+  border: 1px solid var(--warning-border);
+}
+
+.dataset-copy-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 12px;
+  font-size: 13px;
+}
+
+.dataset-copy-label {
+  flex-shrink: 0;
+  color: var(--text-soft);
+}
+
 .dataset-card-path {
   display: block;
   margin-top: 4px;

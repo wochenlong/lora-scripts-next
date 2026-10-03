@@ -10,7 +10,7 @@ export interface DatasetOverview {
   computed_at?: string | null
   error?: string | null
 }
-export interface DatasetEntry { name: string; path: string; overview: DatasetOverview | null }
+export interface DatasetEntry { name: string; path: string; in_use?: boolean; overview: DatasetOverview | null }
 export interface DatasetList { root: string; exists: boolean; datasets: DatasetEntry[] }
 export interface DatasetCreated { name: string; path: string }
 export interface UploadFileItem { file: File; path: string }
@@ -40,6 +40,19 @@ export const datasetsApi = {
   updateRoot: (path: string) => apiData<DatasetsRoot>("/api/datasets/root", { method: "PUT", body: JSON.stringify({ path }) }),
   list: () => apiData<DatasetList>("/api/datasets"),
   create: (name: string) => apiData<DatasetCreated>("/api/datasets", { method: "POST", body: JSON.stringify({ name }) }),
+  copy: (name: string, target: string, options: { flattenTransparent: boolean; layout: "preserve" | "flatten" | "kohya"; repeats: number }) =>
+    apiData<{ name: string; path: string; copied: number; flattened: number; deduped: number }>(
+      `/api/datasets/${encodeURIComponent(name)}/copy`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          name: target,
+          flatten_transparent: options.flattenTransparent,
+          layout: options.layout,
+          repeats: options.repeats,
+        }),
+      },
+    ),
   overview: (name: string, refresh = false) =>
     apiData<{ name: string; overview: DatasetOverview }>(`/api/datasets/${encodeURIComponent(name)}/overview${refresh ? "?refresh=1" : ""}`),
   validatePath: (path: string, engine?: string, caption?: { extension?: string; preferJson?: boolean }) =>

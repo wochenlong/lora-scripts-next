@@ -27,6 +27,12 @@ const createName = ref("")
 const creating = ref(false)
 const uploadTarget = ref("")
 const trashOpen = ref(false)
+const copySource = ref("")
+const copyName = ref("")
+const copyFlatten = ref(false)
+const copyLayout = ref<"preserve" | "flatten" | "kohya">("preserve")
+const copyRepeats = ref(10)
+const copying = ref(false)
 const autoRefresh = ref(localStorage.getItem(AUTO_REFRESH_KEY) === "1")
 let timer: number | undefined
 
@@ -72,11 +78,19 @@ function hasUnsettled() {
   return datasets.value.some((entry) => !entry.overview || entry.overview.state === "computing")
 }
 
+async function refreshInUseFlags() {
+  try {
+    const data = await datasetsApi.list()
+    const flags = new Map(data.datasets.map((item) => [item.name, item.in_use === true]))
+    for (const entry of datasets.value) entry.in_use = flags.get(entry.name) ?? false
+  } catch {}
+}
+
 async function pollOverviews(force = false) {
   const pending = force ? datasets.value : datasets.value.filter(needsPoll)
-  if (!pending.length) return
-  await Promise.all(
-    pending.map(async (entry) => {
+  await Promise.all([
+    refreshInUseFlags(),
+    ...pending.map(async (entry) => {
       try {
         const data = await datasetsApi.overview(entry.name, force)
         entry.overview = data.overview
@@ -84,7 +98,7 @@ async function pollOverviews(force = false) {
         entry.overview = { state: "error", file_count: null, captioned_count: null, total_bytes: null, updated_at: null, error: "request failed" }
       }
     }),
-  )
+  ])
   if (!autoRefresh.value && !hasUnsettled()) stopPolling()
 }
 
@@ -185,6 +199,30 @@ async function deleteDataset(entry: DatasetEntry) {
   }
 }
 
+function openCopy(entry: DatasetEntry) {
+  copySource.value = entry.name
+  copyName.value = `${entry.name}-copy`
+  copyFlatten.value = false
+  copyLayout.value = "preserve"
+  copyRepeats.value = 10
+}
+
+async function copyDataset() {
+  const name = copyName.value.trim()
+  if (!name || copying.value) return
+  copying.value = true
+  try {
+    const data = await datasetsApi.copy(copySource.value, name, { flattenTransparent: copyFlatten.value, layout: copyLayout.value, repeats: copyRepeats.value })
+    copySource.value = ""
+    ElMessage.success(t("datasetManage.msg.copied", { n: data.copied, m: data.flattened }))
+    await load(true)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : t("datasetManage.msg.copyFail"))
+  } finally {
+    copying.value = false
+  }
+}
+
 function onUploaded() {
   void load(true)
 }
@@ -219,13 +257,15 @@ onBeforeUnmount(stopPolling)
     <p v-if="!loading && !datasets.length" class="dataset-manage-empty">{{ t("datasetManage.empty") }}</p>
 
     <section v-else class="dataset-manage-grid">
-      <article v-for="entry in datasets" :key="entry.name" class="dataset-card">
+      <article v-for="entry in datasets" :key="entry.name" class="dataset-card" :class="{ 'in-use': entry.in_use }">
         <header class="dataset-card-header">
           <div class="dataset-card-title">
             <h2>{{ entry.name }}</h2>
+            <span v-if="entry.in_use" class="dataset-card-in-use">{{ t("datasetManage.inUse") }}</span>
             <button
               class="danger-action dataset-card-delete"
-              :title="t('datasetManage.deleteDataset')"
+              :title="entry.in_use ? t('datasetManage.inUseHint') : t('datasetManage.deleteDataset')"
+              :disabled="entry.in_use"
               @click="deleteDataset(entry)"
             >{{ t("datasetManage.deleteDataset") }}</button>
           </div>
@@ -239,12 +279,13 @@ onBeforeUnmount(stopPolling)
         </dl>
         <footer class="dataset-card-actions">
           <div class="dataset-card-actions-row">
-            <button class="primary-action" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>
+            <button class="primary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>
+            <button class="secondary-action" @click="openCopy(entry)">{{ t("datasetManage.copy") }}</button>
             <a class="secondary-action" :href="datasetDownloadUrl(entry.name)" download>{{ t("datasetManage.downloadZip") }}</a>
           </div>
           <div class="dataset-card-actions-row">
-            <button class="secondary-action" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
-            <button class="secondary-action" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
+            <button class="secondary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
+            <button class="secondary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
           </div>
         </footer>
       </article>
@@ -256,6 +297,32 @@ onBeforeUnmount(stopPolling)
       <template #footer>
         <button class="secondary-action" @click="rootDialogOpen = false">{{ t("datasetManage.cancel") }}</button>
         <button class="primary-action" :disabled="rootSaving || !rootInput.trim()" @click="saveRoot">{{ t("datasetManage.save") }}</button>
+      </template>
+    </ElDialog>
+
+    <ElDialog :model-value="!!copySource" :title="t('datasetManage.copyDialogTitle', { name: copySource })" width="480px" @update:model-value="copySource = ''">
+      <ElInput v-model="copyName" :placeholder="t('datasetManage.createPlaceholder')" @keyup.enter="copyDataset" />
+      <div class="dataset-copy-option">
+        <span class="dataset-copy-label">{{ t("datasetManage.layoutLabel") }}</span>
+        <ElSelect v-model="copyLayout">
+          <ElOption value="preserve" :label="t('datasetManage.layoutPreserve')" />
+          <ElOption value="flatten" :label="t('datasetManage.layoutFlatten')" />
+          <ElOption value="kohya" :label="t('datasetManage.layoutKohya')" />
+        </ElSelect>
+      </div>
+      <div v-if="copyLayout === 'kohya'" class="dataset-copy-option">
+        <span class="dataset-copy-label">{{ t("datasetManage.repeatsLabel") }}</span>
+        <ElInputNumber v-model="copyRepeats" :min="1" :max="999" controls-position="right" />
+      </div>
+      <p v-if="copyLayout === 'kohya'" class="dataset-manage-dialog-hint">{{ t("datasetManage.layoutKohyaHint") }}</p>
+      <label class="dataset-copy-option">
+        <ElCheckbox v-model="copyFlatten" />
+        <span>{{ t("datasetManage.flattenOption") }}</span>
+      </label>
+      <p class="dataset-manage-dialog-hint">{{ t("datasetManage.flattenHint") }}</p>
+      <template #footer>
+        <button class="secondary-action" @click="copySource = ''">{{ t("datasetManage.cancel") }}</button>
+        <button class="primary-action" :disabled="copying || !copyName.trim()" @click="copyDataset">{{ t("datasetManage.copyConfirm") }}</button>
       </template>
     </ElDialog>
 
