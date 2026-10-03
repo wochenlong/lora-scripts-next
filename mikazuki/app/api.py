@@ -586,6 +586,8 @@ async def get_files(pick_type) -> APIResponse:
     def list_path_or_files(preset_info):
         path = Path(preset_info["path"])
         file_type = preset_info["type"]
+        if not path.is_dir():
+            return []
         regex_filter = preset_info["filter"]
         result_list = []
 
