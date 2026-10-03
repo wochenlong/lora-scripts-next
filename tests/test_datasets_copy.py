@@ -135,6 +135,55 @@ def test_copy_rejects_bad_layout_and_repeats(datasets_root):
     assert client.post("/api/datasets/src/copy", json={"name": "x", "repeats": 0}).status_code == 400
 
 
+def test_copy_to_same_name_is_409_not_500(datasets_root):
+    make_dataset(datasets_root, "src")
+    client = TestClient(app)
+    assert client.post("/api/datasets/src/copy", json={"name": "src"}).status_code == 409
+
+
+def test_copy_empty_source_creates_target(datasets_root):
+    (datasets_root / "empty-src").mkdir(parents=True)
+    client = TestClient(app)
+    response = client.post("/api/datasets/empty-src/copy", json={"name": "empty-dst"})
+
+    assert response.status_code == 200
+    assert response.json()["data"]["copied"] == 0
+    assert (datasets_root / "empty-dst").is_dir()
+
+
+def test_copy_kohya_promotes_nested_prefixed_dirs(datasets_root):
+    make_image(datasets_root / "src" / "outer" / "5_kept" / "c.png", mode="RGB", color=(9, 9, 9))
+
+    client = TestClient(app)
+    response = client.post("/api/datasets/src/copy", json={"name": "nested-kohya", "layout": "kohya"})
+
+    assert response.status_code == 200
+    target = datasets_root / "nested-kohya"
+    # sd-scripts 只扫一级子集，嵌套的合规目录应提升到顶层
+    assert (target / "5_kept" / "c.png").is_file()
+    assert not (target / "outer").exists()
+
+
+def test_copy_flatten_pairs_caption_across_image_extensions(datasets_root):
+    dataset_dir = datasets_root / "src"
+    make_image(dataset_dir / "x" / "same.jpg", mode="RGB", color=(1, 2, 3))
+    make_image(dataset_dir / "y" / "same.png", mode="RGB", color=(4, 5, 6))
+    (dataset_dir / "x" / "same.txt").write_text("caption-jpg", encoding="utf-8")
+    (dataset_dir / "y" / "same.txt").write_text("caption-png", encoding="utf-8")
+
+    client = TestClient(app)
+    response = client.post("/api/datasets/src/copy", json={"name": "pairing", "layout": "flatten"})
+
+    assert response.status_code == 200
+    target = datasets_root / "pairing"
+    pairs = {}
+    for image in list(target.glob("*.jpg")) + list(target.glob("*.png")):
+        caption = image.with_suffix(".txt")
+        assert caption.is_file(), f"{image.name} lost its caption"
+        pairs[image.suffix] = caption.read_text(encoding="utf-8")
+    assert pairs == {".jpg": "caption-jpg", ".png": "caption-png"}
+
+
 @pytest.fixture
 def training_task(datasets_root, tmp_path):
     config = tmp_path / "task.toml"
@@ -177,3 +226,43 @@ def test_finished_task_releases_dataset(datasets_root, training_task):
 
     client = TestClient(app)
     assert client.delete("/api/datasets/src").status_code == 200
+
+
+@pytest.fixture
+def task_with_config(datasets_root, tmp_path):
+    tasks = []
+
+    def spawn(config: dict):
+        config_path = tmp_path / f"task-{len(tasks)}.toml"
+        config_path.write_text(toml.dumps(config), encoding="utf-8")
+        task = tm.create_task(["true"], None, metadata={"config_path": str(config_path)})
+        task.status = TaskStatus.RUNNING
+        tasks.append(task)
+        return task
+
+    yield spawn
+    with tm._cond:
+        for task in tasks:
+            tm.tasks.pop(task.task_id, None)
+
+
+def test_in_use_covers_source_image_dir_and_control_dirs(datasets_root, task_with_config):
+    make_dataset(datasets_root, "src")
+    task_with_config({
+        "source_image_dir": str(datasets_root / "src"),
+        "control_data_dirs": f"{datasets_root / 'ctrl-a'}\n{datasets_root / 'ctrl-b'}",
+    })
+    assert datasets_in_use() == {"src", "ctrl-a", "ctrl-b"}
+
+
+def test_in_use_resolves_referenced_dataset_config(datasets_root, task_with_config, tmp_path):
+    make_dataset(datasets_root, "src")
+    referenced = tmp_path / "dataset.toml"
+    referenced.write_text(toml.dumps({
+        "datasets": [
+            {"image_directory": str(datasets_root / "via-dir")},
+            {"subsets": [{"image_dir": str(datasets_root / "src")}]},
+        ]
+    }), encoding="utf-8")
+    task_with_config({"dataset_config": str(referenced)})
+    assert datasets_in_use() == {"src", "via-dir"}

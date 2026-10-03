@@ -189,6 +189,8 @@ def copy(name: str, req: DatasetCopyRequest):
     root = get_datasets_root()
     source = existing_dataset_dir(name)
     target = resolve_dataset_dir(root, req.name)
+    if target == source or target.exists():
+        raise HTTPException(status_code=409, detail="target dataset already exists")
     lock_order = sorted({source.name, target.name})
     with dataset_operation(lock_order[0]):
         with dataset_operation(lock_order[1]):
@@ -365,6 +367,7 @@ async def upload(name: str, request: Request):
         with dataset_operation(dataset_dir.name):
             if not dataset_dir.is_dir():
                 raise HTTPException(status_code=409, detail="dataset was removed during upload")
+            ensure_dataset_not_in_use(dataset_dir.name)
             ensure_capacity(dataset_dir, moves)
             overwrite = conflict == "overwrite"
             for staged, target in moves:

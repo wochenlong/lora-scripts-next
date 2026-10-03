@@ -78,11 +78,19 @@ function hasUnsettled() {
   return datasets.value.some((entry) => !entry.overview || entry.overview.state === "computing")
 }
 
+async function refreshInUseFlags() {
+  try {
+    const data = await datasetsApi.list()
+    const flags = new Map(data.datasets.map((item) => [item.name, item.in_use === true]))
+    for (const entry of datasets.value) entry.in_use = flags.get(entry.name) ?? false
+  } catch {}
+}
+
 async function pollOverviews(force = false) {
   const pending = force ? datasets.value : datasets.value.filter(needsPoll)
-  if (!pending.length) return
-  await Promise.all(
-    pending.map(async (entry) => {
+  await Promise.all([
+    refreshInUseFlags(),
+    ...pending.map(async (entry) => {
       try {
         const data = await datasetsApi.overview(entry.name, force)
         entry.overview = data.overview
@@ -90,7 +98,7 @@ async function pollOverviews(force = false) {
         entry.overview = { state: "error", file_count: null, captioned_count: null, total_bytes: null, updated_at: null, error: "request failed" }
       }
     }),
-  )
+  ])
   if (!autoRefresh.value && !hasUnsettled()) stopPolling()
 }
 

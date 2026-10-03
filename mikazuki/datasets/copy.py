@@ -39,12 +39,13 @@ def _base_target_rel(rel: Path, target_name: str, layout: str, repeats: int) -> 
         return rel
     if layout == "flatten":
         return Path(rel.name)
+    parts = rel.parts
+    for index, part in enumerate(parts[:-1]):
+        if REPEATS_PREFIX.match(part):
+            return Path(*parts[index:])
     parent = rel.parent
-    if str(parent) != "." and REPEATS_PREFIX.match(parent.name):
-        return rel
     base = target_name if str(parent) == "." else "_".join(parent.parts)
-    subset = base if REPEATS_PREFIX.match(base) else f"{repeats}_{_sanitize_subset_name(base)}"
-    return Path(subset) / rel.name
+    return Path(f"{repeats}_{_sanitize_subset_name(base)}") / rel.name
 
 
 def _dedupe(rel: Path, used: set[Path]) -> Path:
@@ -54,6 +55,16 @@ def _dedupe(rel: Path, used: set[Path]) -> Path:
         candidate = rel.with_name(f"{rel.stem}-{index}{rel.suffix}")
         index += 1
     used.add(candidate)
+    return candidate
+
+
+def _dedupe_image_stem(rel: Path, used_stems: set[tuple[str, str]]) -> Path:
+    candidate = rel
+    index = 2
+    while (str(candidate.parent), candidate.stem) in used_stems:
+        candidate = rel.with_name(f"{rel.stem}-{index}{rel.suffix}")
+        index += 1
+    used_stems.add((str(candidate.parent), candidate.stem))
     return candidate
 
 
@@ -79,6 +90,7 @@ def copy_dataset(
     files.sort(key=lambda item: str(item[1]))
 
     used: set[Path] = set()
+    used_image_stems: set[tuple[str, str]] = set()
     image_dests: dict[tuple[str, str], Path] = {}
     pending_captions: list[tuple[Path, Path]] = []
     moves: list[tuple[Path, Path]] = []
@@ -87,7 +99,8 @@ def copy_dataset(
     for src, rel in files:
         is_image = src.suffix.lower() in IMAGE_EXTENSIONS
         if is_image:
-            dst_rel = _dedupe(_base_target_rel(rel, target.name, layout, repeats), used)
+            dst_rel = _dedupe_image_stem(_base_target_rel(rel, target.name, layout, repeats), used_image_stems)
+            used.add(dst_rel)
             image_dests[(str(rel.parent), rel.stem)] = dst_rel
             moves.append((src, dst_rel))
             if dst_rel.name != rel.name:
@@ -110,6 +123,7 @@ def copy_dataset(
 
     copied = 0
     flattened = 0
+    target.mkdir(parents=True, exist_ok=True)
     for src, dst_rel in moves:
         dst = target / dst_rel
         dst.parent.mkdir(parents=True, exist_ok=True)
