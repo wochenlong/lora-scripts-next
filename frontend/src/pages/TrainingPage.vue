@@ -168,7 +168,6 @@ async function load() {
       migrateQwenDraft(model.value)
     } catch { model.value = normalizeModelForSchema(loaded, base) }
     applyReadonlyDefaults(loaded, model.value, defaults)
-    applyDatasetPrefill()
     const cards = await schemasApi.graphicCards()
     if (cards.length > 1) {
       const options = cards.map((card, index) => typeof card === "object" ? (card.value ?? card.label ?? index) : card)
@@ -183,18 +182,6 @@ async function load() {
     }
   } catch (reason) { error.value = reason instanceof Error ? reason.message : t("training.schemaLoadFail") }
   finally { loading.value = false }
-}
-
-function applyDatasetPrefill() {
-  const raw = sessionStorage.getItem("mikazuki-dataset-prefill")
-  if (!raw) return
-  sessionStorage.removeItem("mikazuki-dataset-prefill")
-  try {
-    const parsed = JSON.parse(raw) as { train_data_dir?: unknown }
-    if (typeof parsed?.train_data_dir === "string" && parsed.train_data_dir.trim() && "train_data_dir" in model.value) {
-      model.value.train_data_dir = parsed.train_data_dir.trim()
-    }
-  } catch {}
 }
 
 function resolveEffectiveDefaults(loaded: AdaptedSchema) {

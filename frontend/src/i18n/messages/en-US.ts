@@ -217,7 +217,6 @@ export default {
     statsError: "Stats failed",
     openTagger: "Tagging",
     openEditor: "Tag editor",
-    openTrain: "Train",
     upload: "Upload",
     downloadZip: "Download ZIP",
     trash: "Trash",

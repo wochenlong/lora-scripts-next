@@ -217,7 +217,6 @@ export default {
     statsError: "统计失败",
     openTagger: "模型打标",
     openEditor: "标签编辑",
-    openTrain: "去训练",
     upload: "上传",
     downloadZip: "下载 ZIP",
     trash: "回收站",
