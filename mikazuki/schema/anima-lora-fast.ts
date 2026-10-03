@@ -21,7 +21,7 @@ Schema.intersect([
     }).description("Anima Fast 参数"),
 
     Schema.object({
-        train_data_dir: Schema.string().role('filepicker', { type: "folder" }).description("原始训练图片目录（含子文件夹与 .txt caption；与 Kohya 相同结构）"),
+        train_data_dir: Schema.string().role('filepicker', { type: "folder", internal: "train-dir" }).description("原始训练图片目录（含子文件夹与 .txt caption；与 Kohya 相同结构）"),
         source_image_dir: Schema.string().role('filepicker', { type: "folder" }).description("Anima 原图目录；不填时使用「训练图片目录」"),
         resized_image_dir: Schema.string().role('filepicker', { type: "folder" }).description("训练实际读取的 resized 目录。留空则自动使用 .cache/anima_fast/<数据集路径>/resized 并可复用"),
         lora_cache_dir: Schema.string().role('filepicker', { type: "folder" }).description("Anima LoRA cache 目录；不填时自动使用 .cache/anima_fast"),
