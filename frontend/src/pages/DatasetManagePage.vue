@@ -112,8 +112,9 @@ async function load(silent = false) {
     rootPath.value = data.root
     rootExists.value = data.exists
     datasets.value = data.datasets
-    void pollOverviews(true)
-    if (autoRefresh.value || hasUnsettled()) ensurePolling()
+    void pollOverviews(true).then(() => {
+      if (autoRefresh.value || hasUnsettled()) ensurePolling()
+    })
   } catch (e) {
     ElMessage.error(e instanceof Error ? e.message : t("datasetManage.msg.loadFail"))
   } finally {
