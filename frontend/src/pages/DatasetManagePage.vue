@@ -276,8 +276,8 @@ onBeforeUnmount(stopPolling)
             <a class="secondary-action" :href="datasetDownloadUrl(entry.name)" download>{{ t("datasetManage.downloadZip") }}</a>
           </div>
           <div class="dataset-card-actions-row">
-            <button class="secondary-action" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
-            <button class="secondary-action" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
+            <button class="secondary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
+            <button class="secondary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
           </div>
         </footer>
       </article>
