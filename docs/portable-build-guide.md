@@ -112,9 +112,15 @@ git log -1 --oneline
 推荐：单独 worktree 构建，避免踩开发目录。
 
 ```powershell
-git worktree add D:\build\lora-scripts-next-portable origin/dev
+git worktree add -b build_portable_candidate D:\build\lora-scripts-next-portable origin/dev
 cd D:\build\lora-scripts-next-portable
 ```
+
+Git 整合包从本地已提交的 HEAD 创建完整浅克隆，不要求构建前推送，也不访问远端来复制代码。
+包内仍保留原 `origin` 地址，优先使用当前分支跟踪的 `origin` 分支作为更新分支。
+`00-build-frontend.ps1` 重建后若 `frontend/dist` 有变化，应先提交再打包，确保工作树与 `.git` 一致。
+已有输出目录须用 `-Clean` 重建，避免覆盖旧产物或混入其他包型的运行文件。
+正式分发前仍应发布对应提交，确保用户后续能从远端更新。
 
 ---
 

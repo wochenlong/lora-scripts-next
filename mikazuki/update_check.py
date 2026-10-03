@@ -15,6 +15,7 @@ import urllib.request
 from pathlib import Path
 from typing import Optional
 
+from mikazuki.networking.http import open_url
 from mikazuki.log import log
 
 GITHUB_REPO = "wochenlong/lora-scripts-next"
@@ -181,7 +182,7 @@ def check_update(*, force: bool = False) -> dict:
                 "User-Agent": "Next-Trainer",
             },
         )
-        with urllib.request.urlopen(req, timeout=12) as resp:
+        with open_url(req, timeout=12) as resp:
             data = json.loads(resp.read().decode("utf-8"))
 
         if not isinstance(data, list):

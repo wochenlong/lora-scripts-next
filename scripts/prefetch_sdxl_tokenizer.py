@@ -14,6 +14,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
+from mikazuki.networking.http import open_url
 from mikazuki.china_hub import HF_TO_MODELSCOPE_REPOS  # noqa: E402
 from mikazuki.tokenizer_cache import (  # noqa: E402
     BUNDLED_TOKENIZER_DIRS,
@@ -51,7 +52,7 @@ def _download_via_http(repo_id: str, filename: str, dest: Path, *, endpoint: str
             raise RuntimeError(f"too many redirects for {current_url}")
         req = urllib.request.Request(current_url, headers={"User-Agent": "sd-trainer-prefetch"})
         try:
-            with urllib.request.urlopen(req, timeout=60) as response:
+            with open_url(req, timeout=60) as response:
                 return response.read()
         except urllib.error.HTTPError as exc:
             if exc.code in {301, 302, 303, 307, 308} and exc.headers.get("Location"):

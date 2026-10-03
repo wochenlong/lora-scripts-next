@@ -14,6 +14,7 @@ except ModuleNotFoundError:  # Python 3.10 runtime
     import toml as tomllib
 
 from mikazuki.download_sources import apply_github_prefix
+from mikazuki.networking.git import GitDownloadAdapter
 from mikazuki.engines.vendor_bundle import ensure_vendor_source, snapshot_matches
 
 
@@ -89,27 +90,9 @@ def ensure_upstream_clone(
     log: Callable[[str], None] | None = None,
     github_url_prefix: str | None = None,
 ) -> Path:
-    target = target.resolve()
-    if _has_package_tree(target):
-        if commit:
-            subprocess.run(["git", "-C", str(target), "fetch", "origin", commit, "--depth", "1"], check=False)
-            subprocess.run(["git", "-C", str(target), "checkout", commit], check=True)
-        return target
-    if target.exists() and any(target.iterdir()):
-        raise ValueError(f"musubi-tuner 上游缓存已存在但不是有效源码目录: {target}")
-    target.parent.mkdir(parents=True, exist_ok=True)
+    target.resolve().relative_to(project_root.resolve())
     repo_url = apply_github_prefix(UPSTREAM_REPO, github_url_prefix)
-    clone_cmd = ["git", "clone", "--depth", "1", repo_url, str(target)]
-    if commit:
-        clone_cmd = ["git", "clone", repo_url, str(target)]
-    if log:
-        log(f"[clone] {' '.join(clone_cmd)}")
-    subprocess.run(clone_cmd, check=True)
-    if commit:
-        subprocess.run(["git", "-C", str(target), "checkout", commit], check=True)
-    if not _has_package_tree(target):
-        raise ValueError(f"克隆的 musubi-tuner 缺少 src/musubi_tuner: {target}")
-    return target
+    return GitDownloadAdapter(log=log).acquire(target, repo_url, commit, _has_package_tree)
 
 
 def _commit_available(path: Path, commit: str) -> bool:

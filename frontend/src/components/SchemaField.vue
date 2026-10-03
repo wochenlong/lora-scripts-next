@@ -76,11 +76,12 @@ async function openCatalog() {
 </script>
 
 <template>
-  <label class="schema-field" :class="{ 'has-error': error, 'schema-field--compact': compact }">
+  <component :is="$slots['before-control'] ? 'div' : 'label'" class="schema-field" :class="{ 'has-error': error, 'schema-field--compact': compact }">
     <span class="field-text">
       <span class="field-label"><code>{{ field.key }}</code><b v-if="field.required">{{ t("schemaForm.required") }}</b></span>
       <span v-if="field.description" class="field-description">{{ field.description }}</span>
     </span>
+    <slot name="before-control" />
     <span class="field-control-wrap">
       <span class="field-control">
         <el-switch v-if="field.type === 'boolean'" :model-value="Boolean(modelValue)" :disabled="field.disabled" @update:model-value="emit('update:modelValue', $event)" />
@@ -104,7 +105,7 @@ async function openCatalog() {
       </el-tooltip>
     </span>
     <span v-if="error" class="field-error">{{ error }}</span>
-  </label>
+  </component>
 
   <el-dialog v-model="catalogOpen" :title="t('schemaForm.catalogTitle')" width="min(680px, 92vw)">
     <div class="picker-list">

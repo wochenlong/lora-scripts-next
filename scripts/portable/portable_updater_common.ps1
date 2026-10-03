@@ -3,9 +3,26 @@ $script:PortableUpdaterRepo = "wochenlong/lora-scripts-next"
 $script:PortableUpdaterBranch = "main"
 
 function Initialize-PortableUpdaterConsole {
+    Initialize-PortableNetworkPolicy
     try { cmd /c "chcp 65001 >nul" 2>$null | Out-Null } catch {}
     if ($Host.Name -eq "ConsoleHost") {
         [Console]::OutputEncoding = New-Object System.Text.UTF8Encoding $false
+    }
+}
+
+function Initialize-PortableNetworkPolicy {
+    # Use the exact same resolver as Python installers. Do not persist settings
+    # to Windows or global Git configuration.
+    $networkProject = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot '..\..'))
+    $networkPython = Join-Path (Split-Path $networkProject -Parent) 'python_embeded\python.exe'
+    if (-not (Test-Path -LiteralPath $networkPython)) { $networkPython = 'python' }
+    $networkScript = Join-Path $networkProject 'scripts\network_run.py'
+    if (-not (Test-Path -LiteralPath $networkScript)) { return }
+    $networkJson = & $networkPython $networkScript --env-json
+    if ($LASTEXITCODE -ne 0) { throw 'Cannot resolve download network policy.' }
+    $networkValues = $networkJson | ConvertFrom-Json
+    foreach ($networkProp in $networkValues.PSObject.Properties) {
+        [Environment]::SetEnvironmentVariable($networkProp.Name, [string]$networkProp.Value, 'Process')
     }
 }
 
@@ -21,6 +38,9 @@ function Ensure-PortablePs1Utf8Bom {
 
 function Get-PortableUpdaterManifest {
     @(
+        @{ Src = ".gitignore"; Dest = "Next-Trainer/.gitignore"; OnlyIfMissing = $true },
+        @{ Src = ".gitattributes"; Dest = "Next-Trainer/.gitattributes"; OnlyIfMissing = $true },
+        @{ Src = "scripts/portable/portable_git.py"; Dest = "Next-Trainer/scripts/portable/portable_git.py" },
         @{ Src = "build-scripts/templates/Update-Next-Trainer.bat"; Dest = "Update-Next-Trainer.bat" },
         @{ Src = "build-scripts/templates/Update-Next-Trainer-Release.bat"; Dest = "Update-Next-Trainer-Release.bat" },
         @{ Src = "build-scripts/templates/Fix-Portable-Bats.bat"; Dest = "Fix-Portable-Bats.bat" },

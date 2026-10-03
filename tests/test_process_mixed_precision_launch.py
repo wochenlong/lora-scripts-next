@@ -194,9 +194,18 @@ class BuildAccelerateTrainCommandTests(unittest.TestCase):
         self.assertIn("--multi_gpu", launch_opts)
         num_proc_idx = launch_opts.index("--num_processes")
         self.assertEqual(launch_opts[num_proc_idx + 1], "2")
-        self.assertNotIn("--rdzv_backend", launch_opts)
+        # Windows requires the c10d rendezvous backend for multi-process
+        # launch; other platforms use accelerate's default.
+        if process.sys.platform == "win32":
+            rdzv_idx = launch_opts.index("--rdzv_backend")
+            self.assertEqual(launch_opts[rdzv_idx + 1], "c10d")
+        else:
+            self.assertNotIn("--rdzv_backend", launch_opts)
         self.assertEqual(env["CUDA_VISIBLE_DEVICES"], "0,1")
-        self.assertNotIn("USE_LIBUV", env)
+        if process.sys.platform == "win32":
+            self.assertEqual(env["USE_LIBUV"], "0")
+        else:
+            self.assertNotIn("USE_LIBUV", env)
 
     def test_multi_gpu_windows_variant(self):
         trainer = "./scripts/stable/train_network.py"

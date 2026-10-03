@@ -213,6 +213,8 @@ async def add_cache_control_header(request, call_next):
     return response
 
 app.include_router(api_router, prefix="/api")
+from mikazuki.networking.api import router as network_router
+app.include_router(network_router, prefix="/api")
 # app.include_router(ipc_router, prefix="/ipc")
 
 _TRAIN_LOG_HTML = Path(__file__).resolve().parent.parent / "static" / "train_log.html"

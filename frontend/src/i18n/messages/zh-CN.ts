@@ -1,4 +1,10 @@
 export default {
+  animaModel: { spec: "模型规格", confirm: "请确认模型规格（保留当前路径）" },
+  network: {
+    title: "下载网络设置", mode: "连接方式", auto: "自动检测", system: "系统代理", manual: "手动代理", direct: "直连",
+    description: "设置保存在服务端，供插件市场和引擎安装共用。新下载任务生效；已运行的任务需结束后重试。镜像源单独设置。",
+    bypass: "不使用代理的地址", save: "保存网络设置", effective: "当前策略", viaProxy: "通过代理", attempt: "尝试",
+  },
   sampleInputs: { reference: "参考路径", remove: "移除", addReference: "添加参考路径", addSample: "添加样例", width: "宽度", height: "高度", seed: "随机种子", guidance_scale: "CFG", sample_steps: "采样步数", controlImages: "控制图像", controlImage: "控制图像", addControlImage: "添加控制图像", changeControlImage: "更换图像", clickOrDrop: "点击选择或拖放", editPromptPlaceholder: "例如：将图片转换为 XX 风格" },
   app: {
     brand: "Next Trainer",
@@ -507,6 +513,27 @@ export default {
         hintShort: "按基础模型记住上次引擎，冷启动仍默认 Kohya",
       },
       listTitle: "引擎列表",
+      list: {
+        search: "搜索引擎或模型",
+        pagination: "引擎列表分页",
+        perPage: "每页 {count} 个",
+        previous: "上一页",
+        next: "下一页",
+        filter: "安装状态",
+        all: "全部",
+        installed: "已安装",
+        not_installed: "未安装",
+        options: "列表选项",
+        restore: "恢复默认顺序",
+        reorder: "调整 {name} 的顺序",
+        top: "移到顶部",
+        up: "上移",
+        down: "下移",
+        details: "查看详情",
+        empty: "没有匹配的引擎",
+        clear: "清除筛选",
+        saveFailed: "无法保存排序，当前顺序仅在本次访问中生效。",
+      },
       badges: {
         installed: "已安装",
         notInstalled: "未安装",
@@ -605,7 +632,8 @@ export default {
         },
         kohya: {
           name: "Kohya-ss",
-          summary: "内置训练引擎，使用主环境，开箱即用。",
+          summary: "sd-scripts 训练引擎（SD1.5/SDXL/FLUX/Anima 等），独立 Python 环境。",
+          sizeHint: "运行环境需数 GB（含 PyTorch）；模型权重需另行下载",
         },
         "anima-fast": {
           name: "Anima Fast",
@@ -672,6 +700,7 @@ export default {
       confirm: {
         animaFast: "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
         install: {
+          kohya: "Kohya (sd-scripts) 会下载独立 Python 和数 GB 依赖（含 PyTorch），并要求 NVIDIA GPU。确认继续？",
           diffsynth: "DiffSynth-Studio 会下载独立 Python 和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           "anima-fast": "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           musubi: "Musubi-Tuner 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
@@ -1071,6 +1100,13 @@ export default {
     install: "安装插件",
     consoleIdle: "安装日志",
     consoleWaiting: "等待安装任务输出…",
+  },
+  kohyaGate: {
+    intro: "Kohya (sd-scripts) 训练运行在独立 Python 环境中；完成安装后即可开始训练。",
+    installWorking: "正在安装…",
+    install: "安装 Kohya 环境",
+    consoleIdle: "安装日志",
+    consoleWaiting: "等待安装…",
   },
   diffsynthGate: {
     intro: "Qwen-Image-2.1 LoRA。独立环境；暂不支持训练中采样预览。", auditTitle: "环境检查结果",

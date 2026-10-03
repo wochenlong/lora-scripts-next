@@ -46,6 +46,8 @@ if (-not $SkipDownload) {
     New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
     try {
         foreach ($item in (Get-PortableUpdaterManifest)) {
+            $dest = Join-Path $PortableRoot ($item.Dest -replace '/', '\')
+            if ($item.OnlyIfMissing -and (Test-Path -LiteralPath $dest)) { continue }
             $tempFile = Join-Path $tempRoot (($item.Src -replace '[/\\]', '_'))
             try {
                 Invoke-PortableRawDownload -RelativePath $item.Src -Destination $tempFile | Out-Null

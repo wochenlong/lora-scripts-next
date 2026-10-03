@@ -61,6 +61,12 @@ def _requirement_names(path: Path) -> set[str]:
 
 
 class PluginPackageBoundaryTests(unittest.TestCase):
+    def test_core_gui_declares_process_management_without_training_dependencies(self):
+        requirements = _requirement_names(ROOT / "requirements.txt")
+        self.assertIn("psutil", requirements)
+        training = {"torch", "accelerate", "diffusers", "transformers"}
+        self.assertTrue(training.isdisjoint(requirements), sorted(training & requirements))
+
     def test_core_portable_policy_excludes_plugin_source_and_runtime(self):
         policy = _read_copy_policy()
 

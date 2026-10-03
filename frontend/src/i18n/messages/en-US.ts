@@ -1,4 +1,10 @@
 export default {
+  animaModel: { spec: "Model size", confirm: "Confirm model size (current path is preserved)" },
+  network: {
+    title: "Download network settings", mode: "Connection", auto: "Automatic", system: "System proxy", manual: "Manual proxy", direct: "Direct",
+    description: "Saved on the server and shared by the marketplace and engine installers. Applies to new downloads; retry existing tasks after they finish. Mirrors are configured separately.",
+    bypass: "Proxy bypass addresses", save: "Save network settings", effective: "Current policy", viaProxy: "Via proxy", attempt: "Attempt",
+  },
   sampleInputs: { reference: "Reference path", remove: "Remove", addReference: "Add reference", addSample: "Add Sample", width: "Width", height: "Height", seed: "Seed", guidance_scale: "CFG", sample_steps: "Sampling steps", controlImages: "Control Images", controlImage: "Control image", addControlImage: "Add Control Image", changeControlImage: "Change image", clickOrDrop: "Click or drop", editPromptPlaceholder: "Example: Convert the image to XX style" },
   app: {
     brand: "Next Trainer",
@@ -507,6 +513,27 @@ export default {
         hintShort: "Remember last engine per model; cold start still uses Kohya",
       },
       listTitle: "Engines",
+      list: {
+        search: "Search engines or models",
+        pagination: "Engine list pagination",
+        perPage: "{count} per page",
+        previous: "Previous page",
+        next: "Next page",
+        filter: "Installation status",
+        all: "All",
+        installed: "Installed",
+        not_installed: "Not installed",
+        options: "List options",
+        restore: "Restore default order",
+        reorder: "Reorder {name}",
+        top: "Move to top",
+        up: "Move up",
+        down: "Move down",
+        details: "View details",
+        empty: "No matching engines",
+        clear: "Clear filters",
+        saveFailed: "Could not save the order. It will only apply during this visit.",
+      },
       badges: {
         installed: "Installed",
         notInstalled: "Not installed",
@@ -605,7 +632,8 @@ export default {
         },
         kohya: {
           name: "Kohya-ss",
-          summary: "Built-in engine using the main environment. Ready out of the box.",
+          summary: "sd-scripts engine (SD1.5/SDXL/FLUX/Anima) in an isolated Python runtime.",
+          sizeHint: "Runtime needs several GB (includes PyTorch); model weights download separately",
         },
         "anima-fast": {
           name: "Anima Fast",
@@ -672,6 +700,7 @@ export default {
       confirm: {
         animaFast: "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
         install: {
+          kohya: "Kohya (sd-scripts) downloads a standalone Python environment and several GB of dependencies (including PyTorch), and requires an NVIDIA GPU. Continue?",
           diffsynth: "Download the isolated DiffSynth Python runtime and several GB of dependencies? An NVIDIA GPU is required.",
           "anima-fast": "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
           musubi: "Musubi-Tuner downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
@@ -1071,6 +1100,13 @@ export default {
     install: "Install Plugin",
     consoleIdle: "Install Log",
     consoleWaiting: "Waiting for install task output…",
+  },
+  kohyaGate: {
+    intro: "Kohya (sd-scripts) training runs in an isolated Python runtime; finish the install to start training.",
+    installWorking: "Installing…",
+    install: "Install Kohya runtime",
+    consoleIdle: "Install log",
+    consoleWaiting: "Waiting for installation…",
   },
   diffsynthGate: {
     intro: "Qwen-Image-2.1 LoRA in an isolated runtime. In-training sampling is not supported.", auditTitle: "Environment audit",

@@ -88,8 +88,11 @@ prompt、width、height、seed、guidance_scale、sample_steps；Edit 样例在�
 ## 环境、任务与配置
 
 独立 Python 3.12 位于 `extensions/diffsynth/.python/`，虚拟环境位于 `.venv/`。
-PyTorch 2.8.0/cu128、torchvision 0.23.0 与 DiffSynth 依赖均独立安装，不共用 GUI 或其他训练器的 Python 包。
-不需要 DeepSpeed、FlashAttention 或 Bash。显卡驱动仍由操作系统提供。
+x86_64（Windows/Linux）安装 PyTorch 2.8.0/cu128 与 torchvision 0.23.0，来自 PyTorch cu128 index；
+Linux aarch64 因 cu128 index 无 aarch64 轮子，改从 pip index（PyPI 或镜像）安装 PyTorch 2.13.0 与 torchvision 0.28.0，
+CUDA 支持由 PyPI aarch64 轮子自带，显卡驱动仍由操作系统提供。
+DiffSynth 依赖均独立安装，不共用 GUI 或其他训练器的 Python 包。
+不需要 DeepSpeed、FlashAttention 或 Bash。
 
 安装由现有 Task 管理一个安装监督进程，停止任务会终止完整子进程树。
 安装、修复、卸载与训练通过同一环境锁协调；中断安装变为 broken，源码或依赖变化使 ready 失效。

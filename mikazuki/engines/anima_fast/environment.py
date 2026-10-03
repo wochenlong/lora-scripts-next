@@ -21,6 +21,7 @@ from mikazuki.download_sources import (
     install_process_env,
     pytorch_extra_index_url,
 )
+from mikazuki.networking import redact
 from mikazuki.tasks import LANE_MAINTENANCE, tm
 from mikazuki.train_log_hub import hub as train_log_hub
 
@@ -252,7 +253,7 @@ def build_environment_install_plan(
 
 
 def _append(log: LogFn, line: str) -> None:
-    log(line)
+    log(redact(line))
 
 
 def _emit_progress(progress: ProgressFn | None, phase: str, message: str, percent: int | None = None, **extra) -> None:
@@ -347,7 +348,7 @@ def _run_streaming_once(
     env: dict[str, str] | None = None,
     heartbeat_seconds: float = 30.0,
 ) -> None:
-    _append(log, "[cmd] " + " ".join(command))
+    _append(log, "[cmd] " + redact(" ".join(command)))
     merged_env = os.environ.copy()
     if env:
         merged_env.update(env)
@@ -410,7 +411,7 @@ def _run_streaming_once(
                 reader_error = line
                 continue
             silent_since = time.monotonic()
-            clean_line = line.rstrip("\r\n")
+            clean_line = redact(line.rstrip("\r\n"))
             if "unknownissuer" in clean_line.lower():
                 unknown_certificate_issuer = True
             _append(log, clean_line)
@@ -555,7 +556,11 @@ def install_environment(
     facts["phase"] = "venv"
     _emit_progress(progress, "venv", "Creating Anima extension virtual environment")
     write_install_state(plan.layout, STATE_INSTALLING, facts, "creating Anima extension venv")
-    if not plan.venv_python.is_file():
+    portable = sys.platform == "win32" and (plan.layout.root / "portable-runtime.json").is_file()
+    if portable:
+        from .portable_runtime import rebuild_base
+        base_python = rebuild_base(plan.layout.root, base_python)
+    if portable or not plan.venv_python.is_file():
         plan.venv_python.parent.parent.mkdir(parents=True, exist_ok=True)
         _run_streaming(
             [str(base_python), "-m", "venv", str(plan.venv_python.parent.parent)],
@@ -772,7 +777,7 @@ def _main_facts_in_process() -> dict:
         except importlib.metadata.PackageNotFoundError:
             packages[name] = None
     imports = {}
-    for name in ("cv2", "torch"):
+    for name in ("cv2",):
         try:
             __import__(name)
             imports[name] = True
@@ -786,13 +791,6 @@ def _main_facts_in_process() -> dict:
         "packages": packages,
         "imports": imports,
     }
-    try:
-        import torch
-
-        facts["torch_cuda_available"] = bool(torch.cuda.is_available())
-        facts["torch_cuda"] = getattr(torch.version, "cuda", "")
-    except Exception as exc:
-        facts["torch_error"] = repr(exc)
     return facts
 
 
@@ -806,6 +804,15 @@ def audit_environment(
     root = project_root.resolve()
     errors: list[str] = []
     warnings: list[str] = []
+    if sys.platform == "win32":
+        from .portable_runtime import repair
+        try:
+            repair(layout.root)
+        except (OSError, ValueError, RuntimeError) as exc:
+            return AuditResult(
+                ok=False, errors=[f"Portable Fast runtime needs repair: {exc}"],
+                warnings=[], facts={"python": str(layout.venv_python)},
+            )
     if not layout.train_py.is_file():
         errors.append(f"anima: extension source train.py missing: {layout.train_py}")
     if not layout.venv_python.is_file():
@@ -815,7 +822,7 @@ def audit_environment(
     main_facts = _main_facts_in_process() if main_python.resolve() == Path(sys.executable).resolve() else _collect_python_facts(
         main_python,
         sorted(set(MAIN_EXPECTED["exact"]) | {name for names in MAIN_EXPECTED.get("alternatives", {}).values() for name in names}),
-        ["cv2", "torch"],
+        ["cv2"],
         root,
     )
     anima_expected = _anima_expected_for_platform()
@@ -883,7 +890,7 @@ def start_install_task(
         nonlocal plan
 
         def log(line: str) -> None:
-            train_log_hub.append_line(task_id, line)
+            train_log_hub.append_line(task_id, redact(line))
 
         def progress(event: dict) -> None:
             train_log_hub.append_event(task_id, event)
@@ -907,11 +914,22 @@ def start_install_task(
             task.finish_log_only(0 if result.ok else 1, None if result.ok else "; ".join(result.errors))
         except (Exception, KeyboardInterrupt) as exc:  # install failures must become observable state
             facts = {"plan": plan.as_dict(), "phase": "failed", "task_id": task_id}
-            write_install_state(plan.layout, STATE_BROKEN, facts, str(exc))
+            write_install_state(plan.layout, STATE_BROKEN, facts, redact(exc))
             log(f"[error] {exc}")
-            task.finish_log_only(1, exc)
+            task.finish_log_only(1, RuntimeError(redact(exc)))
 
-    threading.Thread(target=runner, daemon=True).start()
+    def network_runner():
+        from mikazuki.networking.policy import task_policy
+        try:
+            with task_policy():
+                runner()
+        except Exception as exc:
+            message = redact(exc)
+            write_install_state(plan.layout, STATE_BROKEN, {"task_id": task_id}, message)
+            train_log_hub.append_line(task_id, f"[network-error] {message}")
+            task.finish_log_only(1, RuntimeError(message))
+
+    threading.Thread(target=network_runner, daemon=True).start()
     return task_id, {
         "task_id": task_id,
         "plan": plan.as_dict(),

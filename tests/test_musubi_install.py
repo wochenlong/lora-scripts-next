@@ -159,16 +159,13 @@ class InstallerTests(unittest.TestCase):
             root = Path(td)
             cache = default_upstream_cache(root)
 
-            def fake_run(cmd, **kwargs):
-                if cmd[:2] == ["git", "clone"]:
-                    (cache / "src" / "musubi_tuner").mkdir(parents=True)
-                return subprocess.CompletedProcess(cmd, 0)
-
-            with mock.patch("mikazuki.engines.musubi.settings.subprocess.run", side_effect=fake_run) as run:
+            with mock.patch("mikazuki.engines.musubi.settings.GitDownloadAdapter") as adapter:
+                adapter.return_value.acquire.return_value = cache
                 found = resolve_install_source_root(root, allow_clone=True)
             self.assertEqual(found, cache)
-            clone_cmd = run.call_args_list[0].args[0]
-            self.assertIn("https://github.com/kohya-ss/musubi-tuner.git", clone_cmd)
+            args = adapter.return_value.acquire.call_args.args
+            self.assertEqual(args[0], cache)
+            self.assertEqual(args[1], "https://github.com/kohya-ss/musubi-tuner.git")
 
     def test_ensure_install_source_ready_keeps_usable_preferred(self):
         with tempfile.TemporaryDirectory() as td:

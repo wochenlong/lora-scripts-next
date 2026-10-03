@@ -175,6 +175,13 @@ def enable_china_hub(*, force: bool = False) -> bool:
     if not force and hub_backend() != "modelscope":
         return False
 
+    # ModelScope patches transformers.utils.hub unconditionally. GUI-only
+    # environments must skip before it partially mutates huggingface_hub.
+    try:
+        from transformers.utils import hub as _transformers_hub  # noqa: F401
+    except ImportError:
+        return False
+
     try:
         from modelscope.utils.hf_util import patch_hub
     except ImportError:

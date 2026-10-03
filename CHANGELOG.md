@@ -2,8 +2,14 @@
 
 本文件记录 **wochenlong/lora-scripts-next**（产品名 **Next Trainer**）面向镜像与 AutoDL 的发行说明；上游 kohya-ss/sd-scripts 的变更请见其仓库。
 
+> 当前开发版的功能进展与限制见 [开发进展](docs/dev-progress.md)，未来目标见 [路线图](docs/roadmap.md)。下方历史版本中的分支、下载和发布时间说明属于当时记录，不代表当前状态。
+
 ---
 ## 未发布（dev）
+
+### 整合包更新修复
+
+- **修复 Git 更新收走模型和训练集（#356）**：停止自动 stash，自动补齐旧包缺失的程序文件；新包保留完整浅克隆工作树，并在打包前执行数据保留测试。已经受影响的用户请保留整个旧目录（含 `.git`），参见 [恢复说明](https://github.com/wochenlong/lora-scripts-next/issues/356)。
 
 ### 清理
 

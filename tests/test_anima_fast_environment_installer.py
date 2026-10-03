@@ -47,6 +47,42 @@ def _fake_discovered_python(plan) -> Path:
 
 
 class AnimaFastEnvironmentInstallerTests(unittest.TestCase):
+    @unittest.skipUnless(sys.platform == "win32", "Windows portable runtime")
+    def test_portable_repair_recreates_venv_even_when_launcher_exists(self):
+        with tempfile.TemporaryDirectory() as td:
+            project = Path(td)
+            source = self._make_source(project)
+            self._make_constraints(project)
+            layout = ExtensionLayout(project / "extensions/anima_lora")
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.write_text("broken launcher")
+            (layout.root / "portable-runtime.json").write_text("{")
+            packages = layout.root / ".venv/Lib/site-packages"
+            packages.mkdir(parents=True)
+            (packages / "keep.py").write_text("keep")
+            plan = build_environment_install_plan(project, layout, source, dry_run=False)
+            base = _fake_discovered_python(plan)
+            base.parent.mkdir(parents=True)
+            base.write_text("new base")
+            calls = []
+
+            def fake_run(command, cwd, log, **kwargs):
+                calls.append(command)
+                if command[1:3] == ["-m", "venv"]:
+                    (layout.root / ".venv/pyvenv.cfg").write_text(
+                        f"home = {Path(command[0]).parent}\ninclude-system-site-packages = false\n")
+
+            with mock.patch("mikazuki.engines.anima_fast.environment._uv_command", return_value="uv"), \
+                mock.patch("mikazuki.engines.anima_fast.environment._run_streaming", side_effect=fake_run), \
+                mock.patch("mikazuki.engines.anima_fast.environment.audit_environment",
+                           return_value=AuditResult(ok=True)):
+                result = install_environment(plan, lambda line: None)
+            self.assertTrue(result.ok)
+            self.assertTrue(any(command[1:3] == ["-m", "venv"] for command in calls))
+            self.assertEqual((packages / "keep.py").read_text(), "keep")
+            self.assertEqual(read_extension_status(layout).state, STATE_READY)
+            self.assertEqual((layout.root / ".python/python.exe").read_text(), "new base")
+
     def _make_runtime_source(self, layout: ExtensionLayout) -> None:
         layout.source.mkdir(parents=True, exist_ok=True)
         layout.train_py.write_text("print('train')\n", encoding="utf-8")

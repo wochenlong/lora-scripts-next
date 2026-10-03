@@ -287,8 +287,7 @@
   grid-template-columns: minmax(180px, 1.1fr) minmax(220px, 1.3fr) minmax(220px, 1.2fr);
   gap: 16px 20px;
   align-items: end;
-  min-height: 120px;
-  max-height: 140px;
+  min-height: 88px;
   padding: 16px 18px;
   background: var(--surface);
   border: 1px solid var(--border);
@@ -360,11 +359,128 @@
   cursor: pointer;
 }
 .engines-list-head h3 {
-  margin: 8px 2px 0;
+  margin: 0;
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 650;
-  letter-spacing: 0.04em;
+  letter-spacing: 0;
+}
+.engines-list-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+.engines-list-head h3 span {
+  margin-left: 8px;
+  color: var(--text-faint);
+  font-weight: 400;
+}
+.engine-list-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.engine-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 240px;
+  max-width: 100%;
+  padding: 0 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+.engine-search input {
+  min-width: 0;
+  width: 100%;
+  min-height: 36px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+}
+.engine-search svg,
+.engine-more-btn svg,
+.engine-more-menu svg,
+.engine-drag-handle svg {
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.engine-search svg { color: var(--text-faint); }
+.engine-filter {
+  display: flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+.engine-filter button {
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 12px;
+}
+.engine-filter button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--accent);
+  box-shadow: 0 1px 3px #0000000d;
+}
+.engine-drag-handle {
+  touch-action: none;
+  user-select: none;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  color: var(--text-faint);
+  background: transparent;
+  cursor: grab;
+}
+.engine-drag-handle:hover {
+  color: var(--accent);
+  background: var(--surface-soft);
+}
+.engine-row.is-dragging { opacity: 0.5; }
+.engine-row.is-drop-target { border-top: 2px solid var(--accent); }
+.engine-list-empty {
+  padding: 32px 16px;
+  text-align: center;
+  color: var(--text-soft);
+}
+.engine-pagination {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+.engine-pagination .engine-more-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.engine-more-menu hr {
+  width: 100%;
+  border: 0;
+  border-top: 1px solid var(--border);
+}
+@media (max-width: 640px) {
+  .engine-list-tools { width: 100%; }
+  .engine-search { width: 100%; }
 }
 .engine-rows {
   display: grid;
@@ -372,12 +488,11 @@
 }
 .engine-row {
   display: grid;
-  grid-template-columns: minmax(0, 1.6fr) 160px 168px;
+  grid-template-columns: 28px minmax(0, 1fr) auto;
   gap: 12px;
   align-items: center;
-  min-height: 124px;
-  max-height: 140px;
-  padding: 14px 16px;
+  min-height: 88px;
+  padding: 12px 14px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 14px;
@@ -391,15 +506,15 @@
 .engine-logo {
   display: grid;
   flex-shrink: 0;
-  width: 52px;
-  height: 52px;
+  width: 42px;
+  height: 42px;
   place-items: center;
   color: var(--accent-dark);
   background: var(--accent-soft);
   border-radius: 12px;
   font-size: 15px;
   font-weight: 780;
-  letter-spacing: -0.02em;
+  letter-spacing: 0;
 }
 .engine-logo[data-engine="kohya"] {
   color: #0f766e;
@@ -483,6 +598,9 @@
   background: rgba(220, 38, 38, 0.08);
   border-color: rgba(220, 38, 38, 0.22);
 }
+html.dark .engine-badge.is-default { color: #93b4ff; }
+html.dark .engine-badge.is-ready { color: #6ee7b7; }
+html.dark .engine-badge.is-broken { color: #fca5a5; }
 .engine-meta-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -526,6 +644,9 @@
   position: relative;
 }
 .engine-more-btn {
+  display: grid;
+  place-items: center;
+  padding: 0;
   width: 34px;
   height: 34px;
   color: var(--text-soft);
@@ -779,17 +900,18 @@
   margin-top: 3px;
 }
 @media (max-width: 1100px) {
-  .engines-toolbar,
-  .engine-row {
+  .engines-toolbar {
     grid-template-columns: 1fr;
     max-height: none;
-  }
-  .engine-row-actions {
-    justify-content: flex-start;
   }
   .ds-channel-top {
     grid-template-columns: 1fr;
   }
+}
+@media (max-width: 640px) {
+  .engine-row { grid-template-columns: 28px minmax(0, 1fr); gap: 8px; }
+  .engine-row-actions { grid-column: 2; justify-content: flex-end; }
+  .engine-title-line h4 { overflow-wrap: anywhere; }
 }
 @media (max-width: 900px) {
   .engine-status-bar {

@@ -1,240 +1,85 @@
-﻿# Next Trainer
+# Next Trainer
 
-**Next Trainer** is a local Windows training WebUI (GitHub repo: `lora-scripts-next`).  
-LoRA and full finetune for Anima / SD 1.5 / SDXL / Flux / Krea 2, plus Qwen-Image-2.1 text-to-image and image-editing LoRA through DiffSynth. It is built on [kohya-ss/sd-scripts](https://github.com/kohya-ss/sd-scripts) with optional [musubi-tuner](https://github.com/kohya-ss/musubi-tuner) and isolated engine runtimes, using an Akegarasu-style workflow.
+**A multi-engine workspace for training AI models.**
 
-> Product brand and release archives use **Next Trainer** / `Next-Trainer-v*.7z`. The portable layout folder `SD-Trainer/` (and updater bat names) stay as launcher contracts for existing installs.
+[中文](README-zh.md) · [Download](https://github.com/wochenlong/lora-scripts-next/releases) · [Get started](#get-started) · [Development updates](docs/dev-progress.md) · [Roadmap](docs/roadmap.md)
 
-[中文](README-zh.md) · [Credits](docs/credits.md) · [NOTICE](NOTICE.md) · [CHANGELOG](CHANGELOG.md)
+## What Is Next Trainer?
 
----
+Next Trainer brings dataset management, tagging, caption editing, training configuration and task monitoring into one Web UI, for local use or browser access to a remote training server.
 
-## Branches and versions
+Building on the Akegarasu training workflow, it integrates engines such as Kohya, Anima Fast and Musubi. The goal is a professional, extensible workspace rather than a separate application for every model.
 
-| Branch | Role | UI | Version |
-|--------|------|----|---------|
-| **`main`** | Stable (legacy UI until cutover) | Legacy prebuilt frontend | **v2.9.1** (moving to `legacy`) |
-| **`dev`** | **Vue 3 development line** (this README) | Vue 3 workspace | **`3.0.0`** |
+> This is the **`dev` development branch**. Features here may not be included in published portable packages. For everyday use, prefer a [Release](https://github.com/wochenlong/lora-scripts-next/releases); development progress is not a release announcement.
 
-**Versioning:** pre-releases used **`2.9.x`** (`beta` → `rc`); **formal Vue 3 release is `3.0.0`**. After default-branch cutover and portable GA, trust the sidebar version and Release archive names. Include the full version when filing issues.
+![Qwen-Image training workspace](assets/readme/screenshot-qwen-ui.png)
 
----
+*Example interface; available options depend on the version and engine.*
 
-## Portable packages (Next Trainer)
+## What Can It Do?
 
-| Package | Contents | Download |
-|---------|----------|----------|
-| **3.0.0 GA** | Preparing (lite / Kohya / Musubi flavors) | Coming to GitHub Release `v3.0.0` and ModelScope |
-| **RC (still usable)** | lite ~0.39 GB; kohya-musubi ~4.2 GB | [GitHub v2.9.2-rc.1-0813](https://github.com/wochenlong/lora-scripts-next/releases/tag/v2.9.2-rc.1-0813) · [ModelScope windsing/next-trainer-portable](https://modelscope.cn/datasets/windsing/next-trainer-portable) |
+| Workflow | Current capabilities |
+| --- | --- |
+| Datasets | Create and discover datasets; upload images, TXT files and nested folders; check conflicts, retry failures, export ZIPs and recover deleted data |
+| Tagging and editing | Local WD-family tagging, image-centered caption editing, shared dataset paths across tools |
+| Training | Model / engine / target selection, TOML preview and import/export, LoRA and full finetuning where supported |
+| Monitoring | Training queues, task status, logs, Loss and previews; TensorBoard remains an option |
+| Engine management | Manage training environments, search and filter engines, drag to reorder, five items per page; order saved in the current browser |
 
-RC ModelScope example path:
+### Models and Engines
 
-```text
-releases/v2.9.2-rc.1-0813/Next-Trainer-v2.9.2-rc.1-0813-kohya-musubi.7z
-```
+**An engine integration does not imply support for every upstream model or training mode.**
 
-Legacy UI packages: [Releases](https://github.com/wochenlong/lora-scripts-next/releases) → **v2.9.1**.
+| Engine | Main training entry points | Notes |
+| --- | --- | --- |
+| Kohya | SD 1.5, SDXL, Flux, Anima | Capabilities vary by model; standalone environment management is integrated |
+| Anima Fast | Anima 2B / 2.9B LoRA | Isolated runtime with explicit base-model path selection |
+| Musubi | Krea 2 LoRA | Optional installation; see the Linux multi-GPU guide |
+| DiffSynth | Qwen-Image-2.1 text-to-image / image-editing LoRA | Single-GPU BF16; Edit currently uses batch size 1 |
 
----
+Anima's default paths are guidance, **not downloaded model weights**. Prepare models, datasets, GPU resources and dependencies for your chosen engine.
 
-## How to use
+Guides: [Anima](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [Krea 2](docs/krea2-linux-multigpu.md) · [DiffSynth / Qwen](docs/diffsynth.md)
 
-### A. Portable
+## Get Started
 
-1. **Until 3.0.0 packs ship:** keep using the RC packages above for Vue 3 (sidebar may still say rc; source `dev` is already `3.0.0`)
-2. Extract to a path **without spaces or non-ASCII**; **lite** → `run_gui.bat`; full/split packs → follow in-archive launcher
-3. Open **http://127.0.0.1:28000**
-4. GA builds should show **`v3.0.0`** in the sidebar
+**Portable package:** choose a package from [Releases](https://github.com/wochenlong/lora-scripts-next/releases), follow its startup instructions and open `http://127.0.0.1:28000`. Preinstalled runtimes vary by package; base-model weights generally need to be supplied separately.
 
-Requirements: Windows 10/11, NVIDIA GPU (RTX 20+ recommended).
+**Development source:** follow the environment instructions and switch to `dev`. On Windows, use `run_gui.bat`; with a prepared Python environment, run `python gui.py`. Frontend development and builds are documented in [frontend/README.md](frontend/README.md).
 
-More: [Portable getting started](docs/portable-getting-started.md) · [Tagger models](docs/tagger-models.md) · [Build & release (collaborators)](docs/portable-build-guide.md)
+| Need help with | Documentation |
+| --- | --- |
+| Installation and portable packages | [Getting started](docs/portable-getting-started.md) |
+| Dataset paths, upload and deletion rules | [Development feature notes](docs/dev-progress.md#dataset-workspace) |
+| Tagger models and storage | [Tagger models](docs/tagger-models.md) |
+| Monitoring and command-line use | [Train monitor](docs/train-monitor.md) · [CLI](docs/cli-args.md) |
+| Development and packaging | [Repository layout](docs/repo-layout.md) · [Build guide](docs/portable-build-guide.md) |
 
-### B. Run `dev` from source (Vue 3)
+## What We Have Built
 
-```sh
-git clone https://github.com/wochenlong/lora-scripts-next.git
-cd lora-scripts-next
+Recent work integrated into `dev`:
 
-git fetch origin
-git checkout dev
-git pull origin dev
+- **Dataset workspace:** managed roots, nested uploads, batch conflict decisions, export and recoverable deletion.
+- **Image-editing training:** target/reference-image workflows for DiffSynth / Qwen-Image-2.1.
+- **Anima path guidance:** separate defaults and remembered paths for Anima 2B / 2.9B, preserving imported paths.
+- **Engine environments and UI:** standalone Kohya management, compact searchable lists, persistent drag ordering and five-item pagination.
+- **Reliability:** stronger environment installation checks, configuration boundaries and portable update handling.
 
-# Windows
-./run_gui.bat
-# or: python gui.py --dev
-```
+See [development progress and limitations](docs/dev-progress.md). Historical version notes are in [CHANGELOG](CHANGELOG.md) and [Releases](https://github.com/wochenlong/lora-scripts-next/releases).
 
-Direct TOML training wrappers are also available from the repository root:
-`train_anima_by_toml.sh` for the standard Anima backend and
-`train_anima_fast_by_toml.sh` for the optional Anima Fast runtime.
+### What Comes Next?
 
-```sh
-git branch --show-current   # should be dev
-cat VERSION                 # should be 3.0.0
-```
+| Milestone | Direction |
+| --- | --- |
+| **3.2.0** | Dataset preparation, tagging and caption editing; continued model integrations |
+| **3.3.0** | Complete and validate the AI Toolkit product integration |
+| **Later 3.x** | Update reliability, an EXE client, API captioning and model publishing; individual versions not assigned |
+| **4.0.0** | Official Agent support across data preparation, training and testing |
 
-Frontend lives in `frontend/` (Vue 3 + Vite):
+These are goals, not completion claims or release-date commitments. See the [roadmap](docs/roadmap.md) for implemented portions and remaining work.
 
-```sh
-cd frontend
-npm install
-npm run dev      # hot reload (backend gui must be running)
-npm run build    # writes frontend/dist for static hosting
-```
+## Contribute
 
-### C. Switch an existing clone from `main` to `dev`
+When opening an [issue](https://github.com/wochenlong/lora-scripts-next/issues), include the version or commit, model and engine, reproduction steps and relevant logs. Remove tokens and private data before sharing.
 
-```sh
-git fetch origin
-git switch dev
-git pull
-```
-
-Back to stable:
-
-```sh
-git switch main
-git pull
-```
-
-> **Note:** `main` and `dev` use different frontend architectures. Do not mix uncommitted `frontend/dist` hotfixes across branches. Portable users should use the package version as-is.
-
----
-
-## Vue 3 features (`dev` / 3.0.0)
-
-Compared with the legacy multi-page dist UI, **`dev` is a Vue 3 SPA workspace**:
-
-| Area | Capabilities |
-|------|----------------|
-| **Training** | Base model × engine × target; live TOML preview; validate / import-export / start |
-| **Dataset** | Managed dataset root; create/discover datasets; reliable image + TXT upload; overview stats; ZIP export; recoverable deletion; WD14 tagging; **image-first tag editor** |
-| **Tasks** | Task list, status, logs, previews / Loss; primary place to watch runs |
-| **Settings** | UI prefs (incl. light/dark theme), **engine management** (Kohya / Anima Fast / Musubi / DiffSynth), **plugin marketplace**, **download sources** (pip / PyTorch / HF / GitHub mirrors), About, changelog |
-| **Branding** | Product name **Next Trainer**; formal **`3.0.0`** (prerelease versions still show an **rc** badge) |
-| **Credits** | Settings → About; also [docs/credits.md](docs/credits.md) |
-
-Training backends:
-
-- Anima LoRA / Fast / finetune, SD/SDXL, Flux (Kohya line)
-- **Krea 2 LoRA** via optional **Musubi-Tuner** engine (install from Settings)
-- **Qwen-Image-2.1 BF16 text-to-image / image-editing LoRA** via optional **DiffSynth** engine (install from Settings; `dev` integration)
-- Local tagger, train monitor (`/train-monitor`), TensorBoard
-
-Anima Fast: [docs/anima-fast.md](docs/anima-fast.md) · Krea 2 multi-GPU (Linux): [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md)
-
-### Recent `dev` updates
-
-- **Dataset manager:** `/dataset` now opens a managed workspace with a configurable root directory. First-level folders are discovered automatically, and each dataset shows image count, caption coverage, size and last update time.
-- **Reliable import and export:** upload files or nested folders while preserving relative paths; conflicts are checked before upload with explicit skip-all or overwrite-all choices. Uploads enforce per-file and batch limits, validate images/TXT files, report progress and support retrying failures. A complete dataset can be streamed as a ZIP.
-- **Recoverable deletion:** deleting selected images also includes matching TXT captions; deleting files or a whole dataset moves them to a global trash area. Restore never silently overwrites newer files, while permanent deletion requires confirmation. Dataset operations are serialized to avoid upload/delete/restore races.
-- **Tool handoff:** managed datasets can be opened directly in the tagger or tag editor. The editor can download individual managed files and move selected images to trash.
-- **Qwen onboarding:** the home page links to the updated Qwen-Image-2.1 beginner guide and shows the Qwen tutorial poster first.
-- **Qwen image-editing training:** switch between text-to-image and Edit modes in the training page. Edit datasets use a target output image plus one or more input reference images, with drag-and-drop upload, training previews, config import/export and task draft restoration.
-- **Runtime hardening:** engine installation no longer reports success for an empty virtual environment; dataset-config-owned training paths are left untouched; Anima Fast exposes explicit duration and validation-split controls.
-
-### Dataset manager
-
-Open **Dataset → Dataset manager**. The default managed root is `./datasets`, resolved from the application directory rather than the process working directory. Changing the root does not move existing data.
-
-Supported now:
-
-- Create and auto-discover first-level dataset folders.
-- Upload PNG, JPG/JPEG, WebP, BMP and UTF-8 TXT files, including nested folder drops.
-- Preview conflicts, monitor upload progress, retry failed files, and view asynchronous dataset statistics.
-- Download one file from the editor or stream a complete dataset ZIP while excluding trash and temporary files.
-- Soft-delete and restore files or whole datasets through the global trash view.
-- Open the same dataset path in WD14 tagging or the tag editor.
-
-Not included in this first dataset-workspace slice: ZIP import/extraction, rename, video/audio management, natural-language captioning, training-form dataset picker/validation, or write locking against an active training run.
-
-### DiffSynth / Qwen-Image-2.1 (`dev`)
-
-Install, check, repair or uninstall DiffSynth from **Settings → Training engines**. It uses an isolated Python 3.12 / PyTorch 2.8 CUDA 12.8 environment.
-
-- Select a complete model directory or separate supported BF16 DiT, text encoder and VAE files, including Comfy-Org components. Processor resources are managed automatically.
-- Text-to-image datasets support images with matching TXT captions (including Kohya-style repeat folders), or CSV / JSON / JSONL metadata.
-- Image-editing datasets use a target output image plus one or more input references, either paired by directory or declared through `edit_image` metadata, with reference-aware training previews.
-- Supports TE/VAE encoding caches, CPU offload, bucketing and per-Sample previews at step or epoch intervals. Text-to-image supports batched training; Edit currently requires batch size 1 and can use gradient accumulation.
-- Current scope: single-GPU BF16 text-to-image and Edit LoRA. Quantized training, full finetuning and full optimizer-state resume are not supported.
-
-This is a `dev` integration, not a claim that existing portable packages include it. On September 28, 2026, a Qwen-Image-2.1 Edit LoRA run was validated end to end on an RTX 4090 24 GB: all 48 training steps completed and a training preview was generated. This is a functional validation, not a guarantee for arbitrary datasets, resolutions or VRAM configurations.
-
-Configuration and limitations: [DiffSynth guide](docs/diffsynth.md).
-
-### Screenshots
-
-Captured from the `dev` Vue 3 UI (`3.0.0` line, Chinese locale).
-
-#### Training
-
-| Standard (Kohya / Anima LoRA) | Anima Fast | Krea 2 (Musubi) |
-|---|---|---|
-| ![Training · standard](assets/readme/vue3/01-training-standard.png) | ![Training · Fast](assets/readme/vue3/02-training-fast.png) | ![Training · Krea 2](assets/readme/vue3/08-training-krea2.png) |
-
-#### Dataset
-
-The screenshots below predate the new dataset-manager landing view; the tagger and editor remain available as tabs in the same workspace.
-
-| Tagger | Tag editor |
-|---|---|
-| ![Dataset · tagger](assets/readme/vue3/03-dataset-tagger.png) | ![Dataset · editor](assets/readme/vue3/04-dataset-editor.png) |
-
-#### Tasks
-
-![Tasks](assets/readme/vue3/05-tasks.png)
-
-#### Settings
-
-| UI prefs | Engines |
-|---|---|
-| ![Settings · UI](assets/readme/vue3/07-settings-ui.png) | ![Settings · engines](assets/readme/vue3/06-settings-engines.png) |
-
----
-
-## Supported modes
-
-| Mode | Notes |
-|------|-------|
-| Anima LoRA | LoRA · LoKr · T-LoRA · from ~12 GB VRAM |
-| Anima Fast | Optional runtime · 16 GB+ recommended · install in Settings |
-| Anima finetune | Full DiT · ~24 GB recommended |
-| SD 1.5 / SDXL | LoRA / full finetune |
-| Flux | LoRA |
-| Krea 2 | LoRA via Musubi · install engine in Settings · multi-GPU on Linux |
-| Qwen-Image-2.1 | DiffSynth · single-GPU BF16 text-to-image / Edit LoRA · `dev` integration |
-
-See [docs/anima-training.md](docs/anima-training.md) for VRAM tips.
-
----
-
-## Docs
-
-| Topic | Link |
-|------|------|
-| **Credits (subpage)** | [docs/credits.md](docs/credits.md) |
-| Full legal NOTICE | [NOTICE.md](NOTICE.md) |
-| Portable notes | [docs/portable-getting-started.md](docs/portable-getting-started.md) |
-| **Portable build & release (collaborators)** | [docs/portable-build-guide.md](docs/portable-build-guide.md) |
-| Tagger models | [docs/tagger-models.md](docs/tagger-models.md) |
-| Anima Fast | [docs/anima-fast.md](docs/anima-fast.md) |
-| DiffSynth / Qwen-Image-2.1 | [docs/diffsynth.md](docs/diffsynth.md) |
-| **Krea 2 multi-GPU (Linux host + WebUI / `dev`)** | [docs/krea2-linux-multigpu.md](docs/krea2-linux-multigpu.md) |
-| Train monitor | [docs/train-monitor.md](docs/train-monitor.md) |
-| Repo layout | [docs/repo-layout.md](docs/repo-layout.md) |
-| CLI entry points (`train_anima_by_toml.sh` / `train_anima_fast_by_toml.sh`) | [docs/cli-args.md](docs/cli-args.md) |
-
----
-
-## FAQ (short)
-
-**What to include in a bug report?**  
-Full version from the sidebar, train type (model/engine/target), steps to reproduce, logs. → [Issues](https://github.com/wochenlong/lora-scripts-next/issues)
-
-**lite vs kohya-musubi?**  
-Quick / weak network → lite (install deps on first run). Want Kohya + Musubi (Krea 2) ready → **kohya-musubi** (ModelScope). Anima Fast is install-from-Settings on both.
-
----
-
-<p align="center"><sub>Maintainer: <a href="https://github.com/wochenlong">@wochenlong</a> · <a href="docs/credits.md">Credits</a> · <a href="CONTRIBUTORS.md">Contributors</a></sub></p>
+Thanks to the original project, engine authors and contributors. [Credits](docs/credits.md) · [NOTICE](NOTICE.md) · [Contributors](CONTRIBUTORS.md)

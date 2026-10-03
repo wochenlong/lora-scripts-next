@@ -1,4 +1,10 @@
 /* schema-form — split from layout.css / features.css (issue #235) */
+.anima-model-field { grid-column: 1 / -1; min-width: 0; }
+.anima-model-spec { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-bottom: 8px; font-size: 13px; color: var(--text-soft); }
+.anima-model-options { display: flex; flex-wrap: wrap; gap: 6px 18px; }
+.anima-model-options label { display: inline-flex; align-items: center; gap: 6px; min-height: 28px; font-weight: 400; cursor: pointer; }
+.anima-model-options input { margin: 0; width: 14px; height: 14px; accent-color: var(--accent); }
+.anima-model-unconfirmed { font-size: 12px; color: var(--text-soft); }
 .argument-heading strong {
   font-size: 12px;
   font-weight: 750;

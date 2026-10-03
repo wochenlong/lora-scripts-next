@@ -33,6 +33,18 @@ Test-FileExists "Next-Trainer\scripts\portable\UPDATER_VERSION" "UPDATER_VERSION
 Test-FileExists "Next-Trainer\scripts\portable\bootstrap_portable_updaters.ps1" "bootstrap_portable_updaters.ps1" | Out-Null
 Test-FileExists "Next-Trainer\scripts\portable\portable_updater_common.ps1" "portable_updater_common.ps1" | Out-Null
 Test-FileExists "Next-Trainer\scripts\portable\show_portable_update_status.ps1" "show_portable_update_status.ps1" | Out-Null
+Test-FileExists "Next-Trainer\scripts\portable\portable_git.py" "portable_git.py" | Out-Null
+
+$pythonExe = Join-Path $PortableRoot "python_embeded/python.exe"
+$trainerDir = Join-Path $PortableRoot "Next-Trainer"
+if (Test-Path $pythonExe) {
+    & $pythonExe -s (Join-Path $trainerDir "scripts/portable/portable_git.py") verify --trainer-dir $trainerDir
+    if ($LASTEXITCODE -ne 0) { $failures += "[FAIL] Packaged Git tree or user-data ignore rules are invalid" }
+    & $pythonExe -s (Join-Path $trainerDir "tests/test_portable_git_behavior.py")
+    if ($LASTEXITCODE -ne 0) { $failures += "[FAIL] Portable Git behavior tests failed" }
+} else {
+    $failures += "[FAIL] Embedded Python missing; cannot verify Git update behavior"
+}
 
 $gitHead = Join-Path $PortableRoot "Next-Trainer\.git\HEAD"
 if (Test-Path $gitHead) {

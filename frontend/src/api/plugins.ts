@@ -130,6 +130,7 @@ export interface MarketplaceInstallOperation {
   errorCode: string | null
   errorMessage: string | null
   status: MarketplacePluginStatus | null
+  network?: { network_mode?: string; source?: string; proxy_enabled?: boolean; attempt?: number; max_attempts?: number; speed_bytes_per_second?: number }
   startedAt: string
   finishedAt: string | null
 }
@@ -629,4 +630,19 @@ export const pluginsApi = {
   rollbackMarketplacePlugin: (pluginId: string, version?: string) =>
     marketplaceMutation(pluginId, "rollback", { version: version ?? null }),
   uninstallMarketplacePlugin: (pluginId: string) => marketplaceMutation(pluginId, "uninstall", {}),
+}
+
+export interface NetworkSettings {
+  mode: "auto" | "system" | "manual" | "direct"
+  http_proxy: string
+  https_proxy: string
+  no_proxy: string
+}
+export interface NetworkState {
+  settings: NetworkSettings
+  effective: { network_mode: string; source: string; http_proxy: string; https_proxy: string; warning: string; proxy_enabled: boolean }
+}
+export const networkApi = {
+  get: async () => hostData<NetworkState>(await authorizedFetch("/api/network/settings", { method: "GET" })),
+  save: async (settings: NetworkSettings) => hostData<NetworkState>(await authorizedFetch("/api/network/settings", { method: "PUT", body: JSON.stringify(settings) })),
 }

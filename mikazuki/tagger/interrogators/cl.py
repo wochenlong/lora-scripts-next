@@ -157,7 +157,10 @@ class CLTaggerInterrogator(Interrogator):
     def load(self) -> None:
         model_path, tag_mapping_path = self.download()
 
-        import torch  # noqa: F401
+        try:
+            import torch  # noqa: F401
+        except ImportError:
+            pass
 
         self.model = create_inference_session(model_path)
 

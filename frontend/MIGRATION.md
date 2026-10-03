@@ -187,6 +187,14 @@
 
 ## 变更记录规范
 
+### 2026-09-20 Issue #368：下载网络设置
+
+- 训练引擎与插件市场复用 `NetworkSettingsPanel`，读取/保存受宿主运行令牌保护的 `/api/network/settings`。
+- 网络配置持久化在服务端 `config/network.local.json`，不新增浏览器代理凭据存储；原下载镜像 localStorage 契约不变。
+- 自动、系统、手动和直连分别可选；安装进度附带线路、尝试次数与速率。新任务采用新配置，既有任务保持策略快照。
+- 前端类型、Lint、210 项测试和构建通过；Edge 桌面/390px 移动端预览验证了读取/保存与布局。后端 API 验证记录见 `docs/issues/368-network-policy-verification.md`。
+- 当前未构建新整合包，也未运行外部 Agent ZIP 工件测试；不将前端通过等同于发布验收完成。
+
 后续每个迁移 PR/提交在本文件追加：
 
 1. 迁移的页面或工作流。

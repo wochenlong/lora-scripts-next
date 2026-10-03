@@ -144,6 +144,28 @@ def _missing_runtime_files(layout: ExtensionLayout) -> list[str]:
 
 
 def read_extension_status(layout: ExtensionLayout) -> ExtensionStatus:
+    # A repair may temporarily lack its interpreter/config. Keep its live task
+    # visible instead of offering another repair while files are being rebuilt.
+    if layout.install_state.is_file():
+        try:
+            payload = json.loads(layout.install_state.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            payload = {}
+        if isinstance(payload, dict) and payload.get("state") in {STATE_INSTALLING, STATE_AUDITING}:
+            state, facts, reason = _reconcile_stale_install_state(
+                layout, payload["state"], payload.get("facts") or {}, payload.get("reason", ""),
+            )
+            if state in {STATE_INSTALLING, STATE_AUDITING}:
+                return ExtensionStatus(state, str(layout.source), str(layout.venv_python), reason, facts)
+    if sys.platform == "win32":
+        from .portable_runtime import repair
+        try:
+            repair(layout.root)
+        except (OSError, ValueError, RuntimeError) as exc:
+            return ExtensionStatus(
+                STATE_BROKEN, str(layout.source), str(layout.venv_python),
+                f"Portable Fast runtime needs repair: {exc}",
+            )
     if not layout.root.exists():
         return ExtensionStatus(STATE_NOT_INSTALLED, str(layout.source), str(layout.venv_python), "extension root missing")
     if not layout.source.exists():

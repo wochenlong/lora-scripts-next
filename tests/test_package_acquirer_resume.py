@@ -265,8 +265,7 @@ def test_416_on_resume_drops_prefix_and_recovers(server: _Server, tmp_path: Path
 
 
 def test_stall_watchdog_triggers_resume_retry(server: _Server, tmp_path: Path) -> None:
-    # Three full 1 MB chunks reach the .part before the connection stalls,
-    # so the resume offset is a real non-zero position.
+    # read1 persists short reads too; all received bytes survive the stall.
     stall_at = 3_000_000
     server.behavior = [{"stall": stall_at, "sleep": 20}, {"range"}]
     dest = tmp_path / "p" / "0.3.10.zip"
@@ -276,14 +275,7 @@ def test_stall_watchdog_triggers_resume_retry(server: _Server, tmp_path: Path) -
     elapsed = time.monotonic() - started
     assert dest.read_bytes() == BODY
     assert len(server.requests) == 2
-    # The .part only ever holds fully-written 1 MB chunks: at the stall,
-    # two chunks (2097152 B) were flushed and the in-flight third was
-    # discarded — so the resume offset is the chunk-aligned position, not
-    # stall_at itself. Nothing is lost: the tail is re-sent by the server.
-    chunk = 1024 * 1024
-    assert stall_at % chunk  # precondition: the stall lands mid-chunk
-    expected_offset = (stall_at // chunk) * chunk
-    assert server.requests[1]["range"] == f"bytes={expected_offset}-"
+    assert server.requests[1]["range"] == f"bytes={stall_at}-"
     # The 0.4s stall window (socket timeout) fired — not the 20s server sleep.
     assert elapsed < 10
 

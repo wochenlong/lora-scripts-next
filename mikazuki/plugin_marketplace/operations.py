@@ -82,6 +82,11 @@ class InstallOperation:
         self.status: dict[str, Any] | None = None
         self.started_at = _now_iso()
         self.finished_at: str | None = None
+        self.network: dict[str, Any] = {}
+
+    def report_network(self, event: dict) -> None:
+        with self._lock:
+            self.network.update(event)
 
     @property
     def cancel_requested(self) -> bool:
@@ -194,6 +199,7 @@ class InstallOperation:
                 "status": self.status,
                 "startedAt": self.started_at,
                 "finishedAt": self.finished_at,
+                "network": dict(self.network),
             }
 
 

@@ -429,7 +429,10 @@ def _install_pipeline(op: InstallOperation, entry: MarketplaceEntry, approved_pe
     # is deliberately NOT unlinked here. Cancelling (or failing) after the
     # download keeps the verified zip on disk, so the next install of the same
     # pinned package skips the download entirely.
-    package = _catalog.acquire(entry, _platform_name(), on_progress=on_progress, is_cancelled=is_cancelled)
+    from mikazuki.networking.events import observe
+    from mikazuki.networking.policy import task_policy
+    with task_policy(), observe(op.report_network):
+        package = _catalog.acquire(entry, _platform_name(), on_progress=on_progress, is_cancelled=is_cancelled)
     # Cancellation is honored while acquiring. manager.install() runs under the
     # plugin lock and deliberately swallows every on_phase exception ("progress
     # must never break the install"), so once install() returns the plugin IS
