@@ -55,6 +55,7 @@ from mikazuki.app.models import (APIResponse, APIResponseFail,
 from mikazuki.dataset_editor import router as dataset_editor_router
 from mikazuki.tag_translation.api import router as tag_translation_router
 from mikazuki.datasets.api import router as datasets_router
+from mikazuki.datasets.inuse import ensure_path_not_in_use
 from mikazuki.plugin_marketplace.api import host_router as plugin_host_router
 from mikazuki.plugin_marketplace.api import router as plugin_marketplace_router
 from mikazuki.agent_workspace.api import router as agent_workspace_router
@@ -495,6 +496,10 @@ async def run_interrogate(req: TaggerInterrogateRequest, background_tasks: Backg
         return APIResponseFail(message=f"未知模型: {req.interrogator_model}")
     if tagger_progress.is_busy():
         return APIResponseFail(message="已有打标或下载任务进行中")
+    try:
+        ensure_path_not_in_use(req.path)
+    except HTTPException:
+        return APIResponseFail(message="训练任务正在使用该数据集，打标已锁定")
     background_tasks.add_task(run_interrogate_job, req)
     return APIResponseSuccess(message="打标任务已提交")
 
