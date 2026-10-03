@@ -27,6 +27,10 @@ const createName = ref("")
 const creating = ref(false)
 const uploadTarget = ref("")
 const trashOpen = ref(false)
+const copySource = ref("")
+const copyName = ref("")
+const copyFlatten = ref(false)
+const copying = ref(false)
 const autoRefresh = ref(localStorage.getItem(AUTO_REFRESH_KEY) === "1")
 let timer: number | undefined
 
@@ -185,6 +189,28 @@ async function deleteDataset(entry: DatasetEntry) {
   }
 }
 
+function openCopy(entry: DatasetEntry) {
+  copySource.value = entry.name
+  copyName.value = `${entry.name}-copy`
+  copyFlatten.value = false
+}
+
+async function copyDataset() {
+  const name = copyName.value.trim()
+  if (!name || copying.value) return
+  copying.value = true
+  try {
+    const data = await datasetsApi.copy(copySource.value, name, copyFlatten.value)
+    copySource.value = ""
+    ElMessage.success(t("datasetManage.msg.copied", { n: data.copied, m: data.flattened }))
+    await load(true)
+  } catch (e) {
+    ElMessage.error(e instanceof Error ? e.message : t("datasetManage.msg.copyFail"))
+  } finally {
+    copying.value = false
+  }
+}
+
 function onUploaded() {
   void load(true)
 }
@@ -219,13 +245,15 @@ onBeforeUnmount(stopPolling)
     <p v-if="!loading && !datasets.length" class="dataset-manage-empty">{{ t("datasetManage.empty") }}</p>
 
     <section v-else class="dataset-manage-grid">
-      <article v-for="entry in datasets" :key="entry.name" class="dataset-card">
+      <article v-for="entry in datasets" :key="entry.name" class="dataset-card" :class="{ 'in-use': entry.in_use }">
         <header class="dataset-card-header">
           <div class="dataset-card-title">
             <h2>{{ entry.name }}</h2>
+            <span v-if="entry.in_use" class="dataset-card-in-use">{{ t("datasetManage.inUse") }}</span>
             <button
               class="danger-action dataset-card-delete"
-              :title="t('datasetManage.deleteDataset')"
+              :title="entry.in_use ? t('datasetManage.inUseHint') : t('datasetManage.deleteDataset')"
+              :disabled="entry.in_use"
               @click="deleteDataset(entry)"
             >{{ t("datasetManage.deleteDataset") }}</button>
           </div>
@@ -239,7 +267,8 @@ onBeforeUnmount(stopPolling)
         </dl>
         <footer class="dataset-card-actions">
           <div class="dataset-card-actions-row">
-            <button class="primary-action" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>
+            <button class="primary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>
+            <button class="secondary-action" @click="openCopy(entry)">{{ t("datasetManage.copy") }}</button>
             <a class="secondary-action" :href="datasetDownloadUrl(entry.name)" download>{{ t("datasetManage.downloadZip") }}</a>
           </div>
           <div class="dataset-card-actions-row">
@@ -256,6 +285,19 @@ onBeforeUnmount(stopPolling)
       <template #footer>
         <button class="secondary-action" @click="rootDialogOpen = false">{{ t("datasetManage.cancel") }}</button>
         <button class="primary-action" :disabled="rootSaving || !rootInput.trim()" @click="saveRoot">{{ t("datasetManage.save") }}</button>
+      </template>
+    </ElDialog>
+
+    <ElDialog :model-value="!!copySource" :title="t('datasetManage.copyDialogTitle', { name: copySource })" width="480px" @update:model-value="copySource = ''">
+      <ElInput v-model="copyName" :placeholder="t('datasetManage.createPlaceholder')" @keyup.enter="copyDataset" />
+      <label class="dataset-copy-option">
+        <ElCheckbox v-model="copyFlatten" />
+        <span>{{ t("datasetManage.flattenOption") }}</span>
+      </label>
+      <p class="dataset-manage-dialog-hint">{{ t("datasetManage.flattenHint") }}</p>
+      <template #footer>
+        <button class="secondary-action" @click="copySource = ''">{{ t("datasetManage.cancel") }}</button>
+        <button class="primary-action" :disabled="copying || !copyName.trim()" @click="copyDataset">{{ t("datasetManage.copyConfirm") }}</button>
       </template>
     </ElDialog>
 
