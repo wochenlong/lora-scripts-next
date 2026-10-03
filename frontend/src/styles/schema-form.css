@@ -173,9 +173,18 @@
 }
 
 .filepicker-control {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto auto;
+  display: flex;
   gap: 6px;
+}
+
+.filepicker-control .el-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.filepicker-control .el-button {
+  flex-shrink: 0;
+  margin-left: 0;
 }
 
 .model-assets-tools {
@@ -507,14 +516,11 @@
 
 @media (max-width: 720px) {
   .filepicker-control {
-    grid-template-columns: minmax(0, 1fr) auto;
+    flex-wrap: wrap;
   }
-}
 
-@media (max-width: 720px) {
-  .filepicker-control .el-button:last-child {
-    grid-column: 1/-1;
-    margin-left: 0;
+  .filepicker-control .el-input {
+    flex-basis: 100%;
   }
 }
 
