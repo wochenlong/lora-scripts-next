@@ -9,6 +9,7 @@ import { useTasksStore } from "../stores/tasks"
 import GenericFloatingExtensionHost from "../components/extensions/GenericFloatingExtensionHost.vue"
 import { DEFAULT_SELECTION, normalizeModel, resolveModule, type TrainingEngine, type TrainingTarget } from "../training/modules"
 import { readRecentTrainingSelection, writeRecentTrainingSelection } from "../training/recent"
+import { ENGINE_PREFS_CHANGED, readEnginePrefs } from "../engines/prefs"
 
 const route = useRoute()
 const { t } = useI18n()
@@ -18,20 +19,27 @@ const tasksStore = useTasksStore()
 const { version } = storeToRefs(appStore)
 const { showNavBadge, navBadgeCount, activeCount } = storeToRefs(tasksStore)
 const recentTraining = ref(readRecentTrainingSelection() || DEFAULT_SELECTION)
+const prefsRevision = ref(0)
+function refreshEnginePrefs() {
+  prefsRevision.value++
+}
 const versionLabel = computed(() => {
   if (!version.value) return "beta"
   const pre = /(?:alpha|beta|rc)/i.test(version.value)
   return pre ? `v${version.value} · ${t("app.prerelease")}` : `v${version.value}`
 })
 
-const trainingTo = computed(() => ({
-  path: "/training",
-  query: {
+const trainingTo = computed(() => {
+  // Re-read browser preferences after returning from settings.
+  void route.fullPath
+  void prefsRevision.value
+  if (!readEnginePrefs().rememberLast || !readRecentTrainingSelection()) return { path: "/training" }
+  return { path: "/training", query: {
     model: recentTraining.value.model,
     engine: recentTraining.value.engine,
     target: recentTraining.value.target,
-  },
-}))
+  } }
+})
 
 const sections = computed(() => [
   { key: "training", to: trainingTo.value, icon: Cpu, match: ["/training", "/lora/", "/dreambooth/"] },
@@ -66,6 +74,8 @@ function rememberCurrentTraining() {
 }
 
 onMounted(() => {
+  window.addEventListener(ENGINE_PREFS_CHANGED, refreshEnginePrefs)
+  window.addEventListener("storage", refreshEnginePrefs)
   appStore.loadVersion()
   void tasksStore.refresh({ silent: true })
   tasksPoll = window.setInterval(() => tasksStore.refresh({ silent: true }), 4000)
@@ -78,6 +88,8 @@ watch(() => route.fullPath, () => {
   rememberCurrentTraining()
 })
 onBeforeUnmount(() => {
+  window.removeEventListener(ENGINE_PREFS_CHANGED, refreshEnginePrefs)
+  window.removeEventListener("storage", refreshEnginePrefs)
   if (tasksPoll !== undefined) window.clearInterval(tasksPoll)
 })
 </script>

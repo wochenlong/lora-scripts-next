@@ -8,7 +8,6 @@ import { enginesApi, type EngineStatus } from "../api/engines"
 import DownloadSourcesPanel from "../components/DownloadSourcesPanel.vue"
 import {
   ENGINE_CATALOG,
-  PRODUCT_DEFAULT_ENGINE,
   type EngineDefinition,
 } from "../engines/catalog"
 import { readEnginePrefs, writeEnginePrefs } from "../engines/prefs"
@@ -25,6 +24,7 @@ const activeConsoleId = ref<string | null>(null)
 const manageId = ref<string | null>(null)
 const menuId = ref<string | null>(null)
 const rememberLast = ref(readEnginePrefs().rememberLast)
+const defaultEngine = ref(readEnginePrefs().defaultEngine ?? "kohya")
 const downloadPanel = ref<{ openAdvanced: () => void } | null>(null)
 const catalogIds = ENGINE_CATALOG.map((engine) => engine.id)
 const order = ref(readEngineOrder(catalogIds))
@@ -54,7 +54,7 @@ function isManaged(id: string) {
 }
 
 function isProductDefault(id: string) {
-  return id === PRODUCT_DEFAULT_ENGINE
+  return id === defaultEngine.value
 }
 
 function workingStatus(id: string): EngineStatus | undefined {
@@ -276,6 +276,7 @@ async function uninstall(engineId: TrainingEngine) {
 function saveRemember() {
   const prefs = readEnginePrefs()
   prefs.rememberLast = rememberLast.value
+  prefs.defaultEngine = defaultEngine.value
   writeEnginePrefs(prefs)
   ElMessage.success(t("settings.engines.msg.prefsSaved"))
 }
@@ -348,8 +349,8 @@ onBeforeUnmount(() => {
       <label class="toolbar-field">
         <span>{{ t("settings.engines.defaultEngine.label") }}</span>
         <div class="toolbar-default">
-          <select disabled :value="PRODUCT_DEFAULT_ENGINE" :aria-label="t('settings.engines.defaultEngine.label')">
-            <option :value="PRODUCT_DEFAULT_ENGINE">{{ t("settings.engines.catalog.kohya.name") }}</option>
+          <select v-model="defaultEngine" :aria-label="t('settings.engines.defaultEngine.label')" @change="saveRemember">
+            <option v-for="item in ENGINE_CATALOG" :key="item.id" :value="item.id">{{ t(item.nameKey) }}</option>
           </select>
           <i class="engine-badge is-default">{{ t("settings.engines.badges.currentDefault") }}</i>
         </div>

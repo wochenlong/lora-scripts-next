@@ -531,7 +531,7 @@ export default {
       rememberLast: {
         label: "Remember last training engine",
         hint: "Remembers engine and target per base model. Cold start for new users still defaults to Kohya.",
-        hintShort: "Remember last engine per model; cold start still uses Kohya",
+        hintShort: "Remember the last engine per model; otherwise use the default",
       },
       listTitle: "Engines",
       list: {
