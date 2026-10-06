@@ -85,8 +85,19 @@ def extract_chat_content(response: Mapping[str, Any]) -> str:
 
 
 def parse_json_content(content: str) -> dict[str, Any]:
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise LLMContractError("LLM JSON response contains a duplicate key")
+            result[key] = value
+        return result
+
+    def invalid_constant(_value):
+        raise LLMContractError("LLM JSON response contains a non-finite number")
+
     try:
-        parsed = json.loads(content)
+        parsed = json.loads(content, object_pairs_hook=unique_object, parse_constant=invalid_constant)
     except json.JSONDecodeError as exc:
         raise LLMContractError("LLM response is not valid JSON") from exc
     if not isinstance(parsed, dict):

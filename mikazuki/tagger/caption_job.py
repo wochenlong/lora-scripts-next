@@ -275,7 +275,7 @@ class CaptionJobManager:
             )
             tagger_progress.release()
 
-    async def _process_one(self, image_path: Path, request: dict) -> bool:
+    async def _process_one(self, image_path: Path, request: dict) -> dict | bool:
         from mikazuki.tagger.caption import compose_caption, parse_caption_response, render_prompt
         from mikazuki.llm.runtime import llm_service as runtime_llm_service
         from mikazuki.llm.config import config_revision
@@ -287,6 +287,7 @@ class CaptionJobManager:
         prompt_revision_for_report = None
         cache_hit = False
         self._guard_path(image_path)
+        image_hash = caption_sha256(image_path)
         target = caption_path_for(image_path)
         if target.is_symlink():
             raise CaptionWriteConflict("caption symlink cannot be overwritten")
@@ -308,7 +309,7 @@ class CaptionJobManager:
             prompt_template = str(request.get("prompt") or '请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。')
             prompt, _snapshot = render_prompt(prompt_template, language=language, mode=mode, image_name=image_path.name)
             prompt_revision = hashlib.sha256((prompt_template + chr(10) + _snapshot).encode("utf-8")).hexdigest()[:24]
-            preprocess_revision = "jpeg-rgb-max1024-q85-v1"
+            preprocess_revision = "jpeg-white-matte-rgb-max1024-q85-v2"
             cache = self.cache
             if cache is None and self.service is None:
                 from mikazuki.llm.runtime import caption_cache
@@ -321,7 +322,7 @@ class CaptionJobManager:
             if cache is not None:
                 selected_profile = service.resolve("vision", language=language, profile_id=profile_id, allow_local_fallback=bool(request.get("allow_local_fallback", False)))
                 cached = cache.get(
-                    caption_sha256(image_path) or "",
+                    image_hash or "",
                     config_revision(selected_profile),
                     prompt_revision,
                     language,
@@ -359,9 +360,11 @@ class CaptionJobManager:
                 generated = result.caption
                 profile_id_for_report = _profile.id
                 profile_revision_for_report = config_revision(_profile)
+                if caption_sha256(image_path) != image_hash:
+                    raise CaptionWriteConflict("source image changed during caption generation")
                 if cache is not None:
                     cache.put(
-                        caption_sha256(image_path) or "",
+                        image_hash or "",
                         config_revision(_profile),
                         prompt_revision,
                         language,
@@ -375,6 +378,8 @@ class CaptionJobManager:
         if self._cancel.is_set():
             raise CaptionJobCancelled()
         self._guard_path(image_path)
+        if caption_sha256(image_path) != image_hash:
+            raise CaptionWriteConflict("source image changed before caption write")
         merged, should_write = merge_caption(existing, generated, "copy" if action == "ignore" else action)
         if not should_write:
             return False

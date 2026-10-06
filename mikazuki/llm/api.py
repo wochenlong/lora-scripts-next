@@ -25,9 +25,16 @@ def _success(data: dict) -> dict:
     return {"status": "success", "message": None, "data": data}
 
 
+def _configuration():
+    try:
+        return llm_service.config(masked=True)
+    except LLMContractError:
+        raise HTTPException(status_code=409, detail={"code": "llm_config_invalid", "message": "共享 LLM 配置无法读取，请检查或恢复配置"}) from None
+
+
 @router.get("/llm/profiles")
 async def list_llm_profiles():
-    config = llm_service.config(masked=True)
+    config = _configuration()
     profiles = config["profiles"]
     profiles.sort(key=lambda item: (0 if item.get("source") == "remote" else 1, str(item.get("name") or item.get("id"))))
     return _success(config)
@@ -35,7 +42,7 @@ async def list_llm_profiles():
 
 @router.get("/llm/config")
 async def get_llm_config():
-    return _success(llm_service.config(masked=True))
+    return _success(_configuration())
 
 
 @router.get("/llm/local-vision/manifest")

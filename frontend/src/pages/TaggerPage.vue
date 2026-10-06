@@ -30,14 +30,53 @@ const profileSaving = ref(false)
 const localVision = ref<LocalVisionStatus>({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 })
 const localVisionBusy = ref(false)
 const previewBusy = ref(false)
+const presetId = ref("")
+const presetName = ref("")
+const presetSaving = ref(false)
+const committedPrompt = ref({ prompt: captionForm.prompt, language: captionForm.language })
 const profileDraft = reactive({ id: "vision-profile", name: "视觉 Profile", endpoint: "", model: "", source: "remote" as "remote" | "local-endpoint", api_key: "", languages: "zh-CN,en" })
 let timer: number | undefined
 
-const visionProfiles = computed(() => llmConfig.value.profiles.filter(profile => profile.enabled && profile.ready && profile.capabilities.includes("vision")).sort((first, second) => Number(second.source === "remote") - Number(first.source === "remote")))
+const visionProfiles = computed(() => llmConfig.value.profiles.filter(profile => profile.enabled && profile.ready && profile.capabilities.includes("vision") && (profile.languages.includes(captionForm.language) || profile.languages.includes("*"))).sort((first, second) => Number(second.source === "remote") - Number(first.source === "remote")))
 const captionBusy = computed(() => ["pending", "captioning", "cancelling"].includes(captionStatus.value.phase))
 const captionPercent = computed(() => captionStatus.value.total ? Math.round(captionStatus.value.current / captionStatus.value.total * 100) : 0)
 const downloadPercent = computed(() => status.value.download.percent || (status.value.download.total ? Math.round(status.value.download.current / status.value.download.total * 100) : 0))
 const taggingPercent = computed(() => status.value.tagging.total ? Math.round(status.value.tagging.current / status.value.tagging.total * 100) : 0)
+
+watch(visionProfiles, profiles => {
+  if (!profiles.some(profile => profile.id === captionForm.profile_id)) captionForm.profile_id = profiles[0]?.id
+})
+
+function selectPreset() {
+  const preset = llmConfig.value.prompt_presets.find(item => item.id === presetId.value)
+  if (!preset?.template || !preset.language) return
+  captionForm.prompt = preset.template
+  captionForm.language = preset.language
+  presetName.value = preset.name || ""
+  committedPrompt.value = { prompt: preset.template, language: preset.language }
+}
+
+function restorePrompt() {
+  Object.assign(captionForm, committedPrompt.value)
+}
+
+async function savePreset(remove = false) {
+  if (!remove && (!presetName.value.trim() || !captionForm.prompt.trim())) return ElMessage.error(t("tagger.caption.presetRequired"))
+  presetSaving.value = true
+  try {
+    const identifier = presetId.value || `caption-${Date.now()}`
+    const presets = llmConfig.value.prompt_presets.filter(item => item.id !== identifier)
+    if (!remove) presets.push({ id: identifier, name: presetName.value.trim(), template: captionForm.prompt, language: captionForm.language })
+    llmConfig.value = await llmApi.saveConfig({ prompt_presets: presets })
+    presetId.value = remove ? "" : identifier
+    if (!remove) committedPrompt.value = { prompt: captionForm.prompt, language: captionForm.language }
+    ElMessage.success(t("tagger.caption.presetSaved"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : String(caught))
+  } finally {
+    presetSaving.value = false
+  }
+}
 
 async function loadLlmProfiles() {
   if (llmLoading.value) return
@@ -141,6 +180,7 @@ async function startCaption() {
 }
 
 async function previewCaption() {
+  if (previewBusy.value) return
   syncCaptionPath()
   if (!previewImagePath.value.trim()) return ElMessage.error(t("tagger.caption.previewPathRequired"))
   if (!captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
@@ -254,7 +294,10 @@ onBeforeUnmount(stopPolling)
         <template v-if="mode !== 'tag'">
           <label>{{ t("tagger.caption.profile") }}<select v-model="captionForm.profile_id" :disabled="llmLoading"><option v-for="profile in visionProfiles" :key="profile.id" :value="profile.id">{{ profile.name }} · {{ profile.source === 'remote' ? t("tagger.caption.remote") : t("tagger.caption.local") }}</option></select><button type="button" class="inline-config-button" @click="profileEditorOpen = !profileEditorOpen">{{ t("tagger.caption.manageProfiles") }}</button></label>
           <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
-          <label class="wide-field">{{ t("tagger.caption.prompt") }}<textarea v-model="captionForm.prompt" rows="4" /></label>
+          <label>{{ t("tagger.caption.preset") }}<select v-model="presetId" class="caption-preset-select" :disabled="presetSaving" @change="selectPreset"><option value="">{{ t("tagger.caption.customPrompt") }}</option><option v-for="preset in llmConfig.prompt_presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option></select></label>
+          <label>{{ t("tagger.caption.presetName") }}<input v-model="presetName" class="caption-preset-name" :disabled="presetSaving" /></label>
+          <label class="wide-field">{{ t("tagger.caption.prompt") }}<textarea v-model="captionForm.prompt" rows="4" :disabled="presetSaving" /></label>
+          <div class="caption-preset-actions wide-field"><button type="button" :disabled="presetSaving" @click="savePreset()">{{ t("tagger.caption.savePreset") }}</button><button type="button" :disabled="presetSaving" @click="restorePrompt">{{ t("tagger.caption.restorePrompt") }}</button><button type="button" :disabled="presetSaving || !presetId" @click="savePreset(true)">{{ t("tagger.caption.removePreset") }}</button></div>
           <label>{{ t("tagger.caption.layout") }}<select v-model="captionForm.layout"><option value="tags_then_caption">{{ t("tagger.caption.layoutTagsFirst") }}</option><option value="caption_then_tags">{{ t("tagger.caption.layoutCaptionFirst") }}</option><option value="caption_only">{{ t("tagger.caption.layoutCaptionOnly") }}</option></select></label>
           <label>{{ t("tagger.caption.conflict") }}<select v-model="captionForm.conflict_action"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
           <label class="wide-field">{{ t("tagger.caption.previewPath") }}<input v-model="previewImagePath" placeholder="/data/datasets/images/example.png" /></label>
@@ -306,7 +349,7 @@ onBeforeUnmount(stopPolling)
         <p class="caption-route-hint">{{ t("tagger.caption.remoteFirst") }}</p>
         <div class="meter"><header><span>{{ t("tagger.caption.progress") }}</span><b>{{ captionPercent }}%</b></header><div><i :style="{ width: captionPercent + '%' }" /></div><small>{{ captionStatus.current }} / {{ captionStatus.total }} {{ captionStatus.filename }}</small></div>
         <div v-if="captionStatus.failed" class="caption-failures">{{ t("tagger.caption.failed", { n: captionStatus.failed }) }}</div>
-        <div class="tagger-actions"><button v-if="captionBusy" class="danger-action" :disabled="captionSubmitting" @click="captionAction('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="captionSubmitting || !visionProfiles.length" @click="startCaption">{{ t("tagger.start") }}</button><button v-if="captionStatus.failed" class="secondary-action" :disabled="captionBusy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button></div>
+        <div class="tagger-actions"><button v-if="captionBusy" class="danger-action" :disabled="captionSubmitting" @click="captionAction('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="captionSubmitting || previewBusy || !visionProfiles.length" @click="startCaption">{{ t("tagger.start") }}</button><button v-if="captionStatus.failed" class="secondary-action" :disabled="captionBusy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || previewBusy || captionBusy || !visionProfiles.length || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button></div>
       </template>
     </aside>
     <PathPickerDialog v-model="pathPickerOpen" :mode="pathPickerMode" :initial-path="pathPickerInitial" :name-filter="pathPickerFilter" @confirm="onPathConfirm" @cancel="onPathCancel" />

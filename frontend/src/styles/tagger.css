@@ -231,3 +231,6 @@
   border-radius: 8px;
   cursor: pointer;
 }
+.caption-preset-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.caption-preset-actions button { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; cursor: pointer; }
+.caption-preset-actions button:disabled { opacity: .5; cursor: default; }

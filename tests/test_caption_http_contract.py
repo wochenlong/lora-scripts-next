@@ -87,3 +87,30 @@ def test_legacy_tagger_reservation_blocks_new_caption_job(api_client):
     assert response.status_code == 409
     assert not manager.is_busy()
     assert not service.calls
+
+
+def test_preview_rejects_truncated_response_even_if_json_is_parseable(api_client, monkeypatch):
+    client, image, _manager, service = api_client
+
+    async def truncated(*args, **kwargs):
+        return service.profile, {"choices": [{"finish_reason": "length"}]}, '{"caption":"一只猫。","language":"zh-CN"}', {}
+
+    monkeypatch.setattr(service, "complete_vision", truncated)
+    response = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image)})
+    assert response.status_code == 502
+    assert response.json()["detail"]["code"] == "llm_invalid_response"
+    assert not image.with_suffix(".txt").exists()
+
+
+def test_preview_error_never_echoes_private_paths_or_provider_text(api_client, monkeypatch):
+    client, image, _manager, service = api_client
+
+    async def failed(*args, **kwargs):
+        raise RuntimeError("private provider response " + str(image))
+
+    monkeypatch.setattr(service, "complete_vision", failed)
+    response = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image)})
+    assert response.status_code == 502
+    assert str(image) not in response.text
+    assert "private provider response" not in response.text
+    assert not image.with_suffix(".txt").exists()

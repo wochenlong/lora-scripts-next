@@ -4,7 +4,7 @@ import copy
 import hashlib
 import json
 import os
-import tempfile
+import re
 import threading
 from pathlib import Path
 from urllib.parse import urlparse
@@ -36,7 +36,13 @@ def _string(value, name: str, limit: int) -> str:
 
 
 def _validate_endpoint(value: str) -> str:
-    parsed = urlparse(value)
+    try:
+        parsed = urlparse(value)
+        valid_host = bool(parsed.hostname) and (parsed.port is None or 1 <= parsed.port <= 65535)
+    except ValueError:
+        valid_host = False
+    if not valid_host:
+        raise LLMContractError("endpoint requires a valid host and port")
     loopback = parsed.scheme == "http" and parsed.hostname in {"127.0.0.1", "localhost", "::1"}
     if not (parsed.scheme == "https" or loopback):
         raise LLMContractError("endpoint must use HTTPS or loopback HTTP")
@@ -69,7 +75,7 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
     if not isinstance(raw_languages, (list, tuple)) or any(not isinstance(item, str) for item in raw_languages):
         raise LLMContractError("profile.languages must be an array of strings")
     languages = tuple(dict.fromkeys(raw_languages))
-    if not languages or any(not isinstance(item, str) or not item.strip() for item in languages):
+    if not languages or len(languages) > 32 or any(item != "*" and not re.fullmatch(r"[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*", item) for item in languages):
         raise LLMContractError("profile.languages is invalid")
     api_key = _string(raw.get("api_key", previous.get("api_key", "") if previous else ""), "profile.api_key", 1000)
     if api_key == SECRET_MASK and previous:
@@ -85,7 +91,14 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
     for flag in ("enabled", "ready"):
         if flag in raw and not isinstance(raw[flag], bool):
             raise LLMContractError(f"profile.{flag} must be a boolean")
-    secret_revision = int((previous or raw).get("secret_revision", 0))
+    secret_revision = (previous or raw).get("secret_revision", 0)
+    if isinstance(secret_revision, bool) or not isinstance(secret_revision, int) or secret_revision < 0:
+        raise LLMContractError("profile.secret_revision must be a non-negative integer")
+    metadata = raw.get("metadata", {})
+    if metadata is None:
+        metadata = {}
+    if not isinstance(metadata, dict):
+        raise LLMContractError("profile.metadata must be an object")
     if previous and api_key != previous.get("api_key", ""):
         secret_revision += 1
     return {
@@ -101,7 +114,7 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
         "revision": revision,
         "enabled": bool(raw.get("enabled", True)),
         "ready": bool(raw.get("ready", True)),
-        "metadata": copy.deepcopy(raw.get("metadata") or {}),
+        "metadata": copy.deepcopy(metadata),
         "secret_revision": secret_revision,
     }
 
@@ -191,6 +204,33 @@ def mask_profiles(config: dict) -> dict:
     return masked
 
 
+def validate_options(config: dict) -> None:
+    routes = config.get("routes", {})
+    if not isinstance(routes, dict) or any(key not in {"translation", "caption"} or not isinstance(value, str) for key, value in routes.items()):
+        raise LLMContractError("routes must map translation or caption to a profile id")
+    cache = config.get("cache")
+    if not isinstance(cache, dict) or any(key not in {"caption", "translation"} or not isinstance(value, bool) for key, value in cache.items()):
+        raise LLMContractError("cache must contain boolean caption and translation flags")
+    presets = config.get("prompt_presets")
+    if not isinstance(presets, list) or len(presets) > 24:
+        raise LLMContractError("prompt_presets must be an array of at most 24 presets")
+    seen = set()
+    for preset in presets:
+        if not isinstance(preset, dict) or set(preset) - {"id", "name", "template", "language"}:
+            raise LLMContractError("prompt preset has invalid fields")
+        identifier = _string(preset.get("id", ""), "prompt.id", 80)
+        name = _string(preset.get("name", ""), "prompt.name", 120)
+        template = _string(preset.get("template", ""), "prompt.template", 8000)
+        if not identifier or identifier in seen or not name or not template:
+            raise LLMContractError("prompt preset requires a unique id, name and template")
+        if preset.get("language") not in {"zh-CN", "zh-TW", "en", "ja"}:
+            raise LLMContractError("prompt preset language is unsupported")
+        variables = re.findall(r"\{\{([^{}]*)\}\}", template)
+        if any(variable not in {"language", "mode", "image_name", "existing_caption", "existing_tags"} for variable in variables):
+            raise LLMContractError("prompt preset contains an unknown variable")
+        seen.add(identifier)
+
+
 def config_revision(profile: dict | LLMProfile, prompt_revision: str | None = None) -> str:
     if isinstance(profile, LLMProfile):
         data = {
@@ -234,19 +274,25 @@ class UnifiedConfigStore:
         document = self._read_document()
         raw = document.get("llm")
         if isinstance(raw, dict):
+            if not isinstance(raw.get("profiles"), list) or len(raw["profiles"]) > 24 or any(not isinstance(item, dict) for item in raw["profiles"]):
+                raise LLMContractError("stored profiles must be an array of at most 24 objects")
             profiles = [
                 validate_profile(item, None)
                 for item in raw.get("profiles", [])
                 if isinstance(item, dict)
             ]
+            if len({profile["id"] for profile in profiles}) != len(profiles):
+                raise LLMContractError("stored profile ids must be unique")
             if isinstance(raw.get("profiles"), list):
-                return {
+                config = {
                     "version": CURRENT_CONFIG_VERSION,
                     "profiles": profiles,
-                    "routes": dict(raw.get("routes") or {}),
-                    "prompt_presets": copy.deepcopy(raw.get("prompt_presets") or []),
-                    "cache": copy.deepcopy(raw.get("cache") or {"translation": True, "caption": True}),
+                    "routes": copy.deepcopy(raw.get("routes", {})),
+                    "prompt_presets": copy.deepcopy(raw.get("prompt_presets", [])),
+                    "cache": copy.deepcopy(raw.get("cache", {"translation": True, "caption": True})),
                 }
+                validate_options(config)
+                return config
         if not document:
             return {
                 "version": CURRENT_CONFIG_VERSION,
@@ -278,8 +324,11 @@ class UnifiedConfigStore:
         ids = {profile["id"] for profile in profiles}
         if len(ids) != len(profiles):
             raise LLMContractError("profile ids must be unique")
+        raw_routes = payload.get("routes", {})
+        if not isinstance(raw_routes, dict) or any(key not in {"translation", "caption"} or not isinstance(value, str) for key, value in raw_routes.items()):
+            raise LLMContractError("routes must map translation or caption to a profile id")
         routes = dict(current.get("routes") or {})
-        routes.update(dict(payload.get("routes") or {}))
+        routes.update(raw_routes)
         remote_ids = [profile["id"] for profile in profiles if profile["source"] == "remote"]
         for route_name in ("translation", "caption"):
             if not profiles:
@@ -295,6 +344,7 @@ class UnifiedConfigStore:
             "prompt_presets": copy.deepcopy(payload.get("prompt_presets", current.get("prompt_presets", []))),
             "cache": copy.deepcopy(payload.get("cache", current.get("cache", {"translation": True, "caption": True}))),
         }
+        validate_options(config)
         document = self._read_document()
         document["llm"] = config
         self._sync_legacy_translation_fields(document, profiles, routes)

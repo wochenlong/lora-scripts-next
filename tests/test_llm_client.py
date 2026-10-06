@@ -67,3 +67,13 @@ def test_response_adapters_validate_shape():
         extract_chat_content({"choices": []})
     with pytest.raises(LLMContractError):
         parse_json_content("[]")
+
+
+@pytest.mark.parametrize("content", [
+    '{"caption":"first","caption":"second"}',
+    '{"nested":{"ok":true,"ok":false}}',
+    '{"value":NaN}', '{"value":Infinity}', '{"value":-Infinity}',
+])
+def test_strict_json_rejects_duplicate_keys_and_non_finite_numbers(content):
+    with pytest.raises(LLMContractError):
+        parse_json_content(content)

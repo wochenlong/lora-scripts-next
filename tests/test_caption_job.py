@@ -179,3 +179,21 @@ def test_cancel_aborts_inflight_inference_and_prevents_write(tmp_path):
     assert manager.status()["phase"] == "cancelled"
     assert manager.status()["cancelled"] == 1
     assert not (tmp_path / "a.txt").exists()
+
+
+def test_changed_source_image_during_inference_cannot_write_stale_caption(tmp_path):
+    image = tmp_path / "a.png"
+    image.write_bytes(b"original image")
+
+    class ModifyingVision(FakeVisionService):
+        async def complete_vision(self, image_path, prompt, **kwargs):
+            image_path.write_bytes(b"new user image")
+            return await super().complete_vision(image_path, prompt, **kwargs)
+
+    manager = CaptionJobManager(ModifyingVision())
+    manager.start({"path": str(tmp_path), "mode": "natural", "conflict_action": "copy"})
+    manager._thread.join(timeout=5)
+    assert not manager._thread.is_alive()
+    assert manager.status()["failed"] == 1
+    assert manager.status()["errors"][0]["code"] == "caption_conflict"
+    assert not image.with_suffix(".txt").exists()

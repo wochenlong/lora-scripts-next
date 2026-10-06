@@ -124,9 +124,12 @@ async def preview_caption(req: CaptionPreviewRequest):
             allow_local_fallback=req.allow_local_fallback,
             response_schema={"type": "object", "properties": {"caption": {"type": "string", "minLength": 1, "maxLength": 2000}, "language": {"type": "string", "enum": [req.language]}}, "required": ["caption", "language"], "additionalProperties": False},
         )
+        if envelope.get("choices", [{}])[0].get("finish_reason") == "length":
+            from mikazuki.llm.contracts import LLMContractError
+            raise LLMContractError("caption preview response was truncated")
         result = parse_caption_response(content, language=req.language)
     except Exception as exc:
-        raise HTTPException(status_code=502, detail={"code": getattr(exc, "code", "caption_preview_failed"), "message": str(exc)}) from exc
+        raise HTTPException(status_code=502, detail={"code": getattr(exc, "code", "caption_preview_failed"), "message": "预览失败，请检查图片、模型能力、语言和服务状态"}) from exc
     return _success({
         "caption": result.caption,
         "language": result.language,

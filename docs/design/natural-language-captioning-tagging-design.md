@@ -8,7 +8,7 @@
 - Canonical progress file: `docs/tasks/natural-language-captioning-task-book.md`
 - Related task book: `docs/tasks/tag-translation-task-book.md`
 - Current branch: `feat/NL-Captioning`
-- Current active phase: Phase 0 完成门复审；后端和 UI 已进入实现
+- Current active phase: Phase 1 后端视觉任务；Phase 0 完成门通过
 - Execution readiness: `executing`（已收到完整交付 goal）
 - Scope: Dataset Tagger、Dataset Editor、统一 LLM 配置/运行时、提示词与结果写回
 
@@ -543,12 +543,12 @@ TaggerPage 交互顺序：
 - 前端实现: in progress（三模式、预览、进度、重试和 mixed safety 已接入；设置复用、提示词预设及人工验收仍待完成）
 - 真实模型/远程评测: pending implementation（SiliconFlow 三样本通过；Qwen3-VL-2B 本地中文探针通过）
 - 隔离重建真实验收: pending implementation
-- Execution readiness: `executing`（2026-10-07 增量回归后端 136 passed；前端 Node 22 check 304 passed；宽范围后端仍有 11 failed）
+- Execution readiness: `executing`（Phase 0 done；2026-10-07 增量回归后端 168 passed；前端 Node 22 check 307 passed；宽范围后端仍有 11 failed）
 - Residual risks: Qwen3-VL-2B CPU-only 峰值约 3.1 GB 且单图约 4.5–7.3 秒；更低资源本地模型只验证英文；自然语言/Tag 混合 caption 的训练语义需要在 P4/P5 验证。
 
 ## 19. 下一步动作
 
-逐项核销 Phase 0 统一 LLM 完成门；具体执行状态见 canonical task book 与续接记录。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
+实现并验证 Phase 1 的持久任务快照/报告以及重启恢复边界；具体执行状态见 canonical task book 与续接记录。当前 flat request API 和预设 UI 已接入，但本文目标中的 prompt_id 与持久 report 尚未全部实现。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
 
 ## 参考资料
 

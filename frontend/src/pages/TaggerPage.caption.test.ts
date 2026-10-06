@@ -85,4 +85,46 @@ describe("natural-language TaggerPage", () => {
     expect(taggerApi.captionStart).not.toHaveBeenCalled()
     expect(page.get(".caption-preview").text()).toContain("一只猫。")
   })
+
+  it("saves a named prompt preset and discards later edits", async () => {
+    const page = await naturalPage()
+    const config = await llmApi.profiles()
+    vi.mocked(llmApi.saveConfig).mockImplementationOnce(async update => ({ ...config, ...update }))
+    await page.get(".caption-preset-name").setValue("主体描述")
+    await page.get("textarea").setValue("只描述主体 {{language}}")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    expect(llmApi.saveConfig).toHaveBeenCalledWith({ prompt_presets: [expect.objectContaining({ name: "主体描述", template: "只描述主体 {{language}}", language: "zh-CN" })] })
+    await page.get("textarea").setValue("未保存的修改")
+    await page.findAll(".caption-preset-actions button")[1].trigger("click")
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("只描述主体 {{language}}")
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+  })
+
+  it("rejects profiles that do not support the selected output language", async () => {
+    const page = await naturalPage()
+    const language = page.findAll("select").find(select => select.find('option[value="ja"]').exists())!
+    await language.setValue("en")
+    expect((page.get(".tagger-actions .primary-action").element as HTMLButtonElement).disabled).toBe(true)
+    expect(page.findAll('option[value="remote"]')).toHaveLength(0)
+  })
+
+  it("disables repeat previews while an inference request is pending", async () => {
+    let finish!: () => void
+    const pending = new Promise<void>(resolve => { finish = resolve })
+    vi.mocked(taggerApi.captionPreview).mockImplementationOnce(async () => {
+      await pending
+      return { caption: "一只猫。", language: "zh-CN", profile_id: "remote", profile_revision: "rev" }
+    })
+    const page = await naturalPage()
+    await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue("D:/sample/a.png")
+    const button = page.findAll(".tagger-actions button").find(item => item.text().includes("测试当前图片"))!
+    await button.trigger("click")
+    expect((button.element as HTMLButtonElement).disabled).toBe(true)
+    await button.trigger("click")
+    expect(taggerApi.captionPreview).toHaveBeenCalledOnce()
+    finish()
+    await flushPromises()
+    expect((button.element as HTMLButtonElement).disabled).toBe(false)
+  })
 })

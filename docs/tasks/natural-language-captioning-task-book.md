@@ -9,7 +9,7 @@
 - Construction plan: docs/tasks/natural-language-captioning-plan/
 - Design source: docs/design/natural-language-captioning-tagging-design.md
 - Current branch: feat/NL-Captioning
-- Current active phase: Phase 0 — 统一 LLM 完成门复审；Phase 1/2 已有实现但尚未通过阶段完成门
+- Current active phase: Phase 1 — 后端视觉任务；Phase 0 完成门已通过，Phase 1/2 既有实现仍需完整补验
 - Execution readiness: executing（已收到完整交付 goal；禁止以局部检查通过替代最终验收）
 - Scale: Full
 
@@ -124,16 +124,16 @@
 
 ## 进度台账
 
-- Overall progress: Phase 0–2 首轮实现及修复在 feat/NL-Captioning；共享配置/路由、受管视觉资产、缓存、任务取消/冲突保护和 mixed safety 已有代码及测试。当前回到 Phase 0 审查完成门，不以已接入 UI 视为阶段解锁。
-- Phase 0: in progress
+- Overall progress: Phase 0 完成门复审通过，相关契约/旧 API/灰度有实际证据；Phase 1/2 已有代码和相关测试，正式进入 Phase 1 补全持久报告和恢复链路。不以既有 UI 或相关测试视为全部阶段完成。
+- Phase 0: done（证据：phase-0-llm/2026-10-07-phase-0-gate-review.md）
 - Phase 1: in progress
 - Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
-- Validation status: 2026-10-07 Python 3.11 相关后端回归 136 passed；Node 22 check 48 files / 304 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
-- Residual risks: 共享前端设置尚未完全复用；提示词预设/回滚、任务报告持久化、组合预览、完整灰度、EDD 人工评分和浏览器验收缺口仍待闭环。受管 Qwen 三样本启动/取消/停止开发验证已通过；完整 API/真实写回与 Phase 4 均未完成。翻译灰度增补后相关回归 58 passed。
+- Validation status: 2026-10-07 Python 3.11 相关后端回归 168 passed；Node 22 check 48 files / 307 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
+- Residual risks: 共享前端设置尚未完全复用；提示词预设 UI 和撤销已接入，但 prompt_id/持久快照报告尚待完成；任务报告持久化、组合预览、完整灰度、EDD 人工评分和浏览器验收仍待闭环。受管 Qwen 三样本启动/取消/停止开发验证已通过；完整 API/真实写回与 Phase 4 均未完成。翻译灰度已纳入最新相关 suite。
 - Continuity source: docs/tasks/natural-language-captioning-continuity.md；记录环境、Git 和单一步骤，证据以阶段报告为准。
 
 ## 下一步动作
 
-完成 Phase 0 的配置/错误契约和迁移边界复审，逐项核销该阶段完成门；凭据、连接测试、显式兜底和 facade 灰度补验已通过，随后解锁 Phase 1 的完整 API/真实视觉任务验收。
+实现并验证 Phase 1 的持久任务快照/报告以及服务重启后的恢复边界。
