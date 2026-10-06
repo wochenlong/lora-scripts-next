@@ -223,7 +223,7 @@ class CaptionJobManager:
         else:
             language = str(request.get("language") or "zh-CN")
             profile_id = request.get("profile_id") or None
-            prompt_template = str(request.get("prompt") or "请用{{language}}简洁描述图片内容，只返回 JSON。")
+            prompt_template = str(request.get("prompt") or '请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。')
             prompt, _snapshot = render_prompt(prompt_template, language=language, mode=mode, image_name=image_path.name)
             _profile, _envelope, content, _image_info = await service.complete_vision(
                 image_path,
@@ -232,7 +232,7 @@ class CaptionJobManager:
                 profile_id=profile_id,
                 response_schema={
                     "type": "object",
-                    "properties": {"caption": {"type": "string"}, "language": {"type": "string"}},
+                    "properties": {"caption": {"type": "string", "minLength": 1, "maxLength": 2000}, "language": {"type": "string", "enum": [language]}},
                     "required": ["caption", "language"],
                     "additionalProperties": False,
                 },

@@ -11,7 +11,7 @@ CAPTION_SCHEMA = {
     "type": "object",
     "properties": {
         "caption": {"type": "string", "minLength": 1, "maxLength": 2000},
-        "language": {"type": "string"},
+        "language": {"type": "string", "enum": ["zh-CN", "zh-TW", "en", "ja"]},
     },
     "required": ["caption", "language"],
     "additionalProperties": False,

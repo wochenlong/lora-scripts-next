@@ -24,7 +24,7 @@ class CaptionJobRequest(BaseModel):
     mode: Literal["natural", "combined", "tag"] = "natural"
     recursive: bool = False
     profile_id: str | None = None
-    prompt: str = Field(default="请用{{language}}简洁描述图片内容，只返回 JSON。", max_length=8000)
+    prompt: str = Field(default='请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。', max_length=8000)
     language: str = "zh-CN"
     layout: Literal["tags_then_caption", "caption_then_tags", "tags_only", "caption_only"] = "tags_then_caption"
     conflict_action: Literal["ignore", "copy", "prepend", "append"] = "copy"
@@ -118,7 +118,7 @@ async def preview_caption(req: CaptionPreviewRequest):
             prompt,
             language=req.language,
             profile_id=profile.id,
-            response_schema={"type": "object", "properties": {"caption": {"type": "string"}, "language": {"type": "string"}}, "required": ["caption", "language"], "additionalProperties": False},
+            response_schema={"type": "object", "properties": {"caption": {"type": "string", "minLength": 1, "maxLength": 2000}, "language": {"type": "string", "enum": [req.language]}}, "required": ["caption", "language"], "additionalProperties": False},
         )
         result = parse_caption_response(content, language=req.language)
     except Exception as exc:
