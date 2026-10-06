@@ -23,3 +23,20 @@ def test_scan_dataset_does_not_expose_natural_text_as_tags(tmp_path: Path):
     assert result["items"][0]["caption_format"] == "natural"
     assert result["items"][0]["tags"] == []
     assert result["items"][0]["natural_text"].startswith("一只猫")
+
+
+def test_caption_first_mixed_projection_preserves_original_text():
+    raw = "  女孩站在窗边。\n\n1girl, solo\n"
+    kind, tags, natural = caption_projection(raw)
+    assert kind == "mixed"
+    assert tags == ["1girl", "solo"]
+    assert natural == "女孩站在窗边。"
+
+
+def test_raw_natural_caption_keeps_whitespace_on_save_and_reload(tmp_path):
+    from mikazuki.dataset_editor import read_caption, write_caption
+    image = tmp_path / "example.png"
+    image.write_bytes(b"fake")
+    raw = "  一个女孩站在窗边。\n\n这是第二段。\n"
+    assert write_caption(image, raw) == raw
+    assert read_caption(image) == raw

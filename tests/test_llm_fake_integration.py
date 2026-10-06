@@ -110,7 +110,7 @@ def test_fake_openai_vision_server_data_url_and_remote_first_fallback(tmp_path: 
             ],
         })
         fallback, _envelope, content, _image = asyncio.run(
-            service.complete_vision(image_path, "describe {{language}}", language="zh-CN")
+            service.complete_vision(image_path, "describe {{language}}", language="zh-CN", allow_local_fallback=True)
         )
         assert fallback.id == "local"
         assert "一只猫" in content

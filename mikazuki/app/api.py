@@ -478,6 +478,9 @@ async def tagger_cancel():
 
 @router.post("/tagger/reset")
 async def tagger_reset():
+    from mikazuki.tagger.caption_job import caption_job_manager
+    if caption_job_manager.is_busy():
+        return APIResponseFail(message="自然语言打标仍在进行，请先取消并等待完成")
     if tagger_progress.is_busy():
         tagger_progress.request_cancel()
     tagger_progress.reset_idle("配置参数后点击启动")

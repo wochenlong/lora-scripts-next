@@ -1,7 +1,16 @@
 import { describe, expect, it } from "vitest"
-import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "./caption"
+import { addTagToCaption, detectCaptionFormat, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "./caption"
 
 describe("caption tag helpers", () => {
+  it("preserves mixed and natural text through every tag mutation", () => {
+    for (const caption of ["solo, 1girl\n\n她站在窗边。", "她站在窗边。\n\nsolo, 1girl", "A cat is sitting next to the window"]) {
+      expect(addTagToCaption(caption, "smile")).toBe(caption)
+      expect(removeTagFromCaption(caption, "solo")).toBe(caption)
+      expect(moveCaptionTag(caption, 0, 1)).toBe(caption)
+    }
+    expect(detectCaptionFormat("她站在窗边。\n\nsolo, 1girl")).toBe("mixed")
+    expect(splitCaptionTags("她站在窗边。\n\nsolo, 1girl")).toEqual(["solo", "1girl"])
+  })
   it("splits captions into trimmed tags", () => {
     expect(splitCaptionTags("solo, 1girl ,,cat ears")).toEqual(["solo", "1girl", "cat ears"])
     expect(splitCaptionTags("")).toEqual([])

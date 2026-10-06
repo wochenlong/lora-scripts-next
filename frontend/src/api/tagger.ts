@@ -1,6 +1,6 @@
 import { apiData, apiRequest } from "./client"
 
-export type TaggerPhase = "idle" | "downloading" | "tagging" | "done" | "error" | "pending" | "cancelling"
+export type TaggerPhase = "idle" | "downloading" | "tagging" | "captioning" | "done" | "error" | "pending" | "cancelling"
 export type CaptionMode = "natural" | "combined" | "tag"
 export type CaptionJobPhase = "idle" | "pending" | "captioning" | "cancelling" | "cancelled" | "done" | "error"
 export type CaptionConflictAction = "ignore" | "copy" | "prepend" | "append"
@@ -17,6 +17,7 @@ export interface CaptionJobRequest {
   path: string
   mode: CaptionMode
   recursive: boolean
+  allow_local_fallback?: boolean
   profile_id?: string
   prompt: string
   language: string

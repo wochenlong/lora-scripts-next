@@ -1,9 +1,9 @@
 # Plan Manifest
 
 - Plan ID: DATASET-NL-TAGGING-20261006
-- Version: v2.0-preflight-audit
+- Version: v2.1-executing
 - Scale mode: Full
-- Readiness: drafting（等待用户最终 goal 提示词）
+- Readiness: executing（已收到完整交付 goal；Phase 0 完成门复审中）
 - Canonical progress: ../natural-language-captioning-task-book.md
 - Design source: ../../design/natural-language-captioning-tagging-design.md
 - Evidence root: ../../evidence/natural-language-captioning/
@@ -39,3 +39,11 @@
 ## Change control
 
 任何配置 schema、远程优先策略、vision capability、caption 文件格式、API contract、并发模型、测试阈值、隔离重建步骤或最终完成门变化，都必须更新 manifest、canonical task book、设计书和受影响的 gate。
+
+## 2026-10-07 执行同步
+
+- 相关后端回归 136 passed；Node 22 前端完整 check：304 tests / 48 files passed，typecheck/lint/build 通过。
+- 宽范围回归仍有 11 failed、21 skipped；不得推进完整验证门。见 evidence 的 failure report。
+- 凭据落实 goal 原有边界：后端进程内保存真实 Key，配置文件和响应只有掩码；后端重启需要重新注入。
+- 连接测试直接测试所选 profile 并校验严格 JSON，不应用生产路由的 fallback。
+- Phase 0–2 in progress；Phase 3/4 pending。唯一下一步：Phase 0 完成门逐项核销。

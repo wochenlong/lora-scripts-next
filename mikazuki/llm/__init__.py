@@ -11,6 +11,7 @@ from .config import (
 )
 from .routing import choose_profile
 from .service import UnifiedLLMService
+from .cache import CaptionCache
 
 __all__ = [
     "CURRENT_CONFIG_VERSION",
@@ -24,4 +25,5 @@ __all__ = [
     "migrate_legacy_translation_config",
     "validate_profile",
     "UnifiedLLMService",
+    "CaptionCache",
 ]

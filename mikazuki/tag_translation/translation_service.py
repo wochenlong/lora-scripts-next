@@ -15,6 +15,8 @@ import aiohttp
 
 from .translation_config import OnlineServiceConfig, local_llm_endpoint, local_proxy_endpoint, mask_config
 from .translation_store import is_translation_acceptable
+from mikazuki.llm.http import LLMRequestError, post_chat
+from mikazuki.llm.contracts import LLMContractError
 
 
 DEEPSEEK_CHAT_URL = "https://api.deepseek.com/chat/completions"
@@ -134,34 +136,33 @@ class DeepSeekClient:
         }
         if local_llm_endpoint(self.config.get("endpoint")):
             payload["thinking"] = {"type": "disabled"}
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": USER_AGENT,
-        }
-        if self.config.get("api_key"):
-            headers["Authorization"] = f"Bearer {self.config['api_key']}"
-        async with self.session.post(self.config.get("endpoint") or DEEPSEEK_CHAT_URL, json=payload, headers=headers) as response:
-            body = await response.text()
-            if response.status == 401:
-                raise TranslationError("LLM rejected the API key", "llm_auth_failed")
-            if response.status == 429 or 500 <= response.status < 600:
-                raise RetryableTranslationError(
-                    f"LLM returned retryable HTTP {response.status}", response.headers.get("Retry-After")
-                )
-            if response.status != 200:
-                raise TranslationError(f"LLM returned HTTP {response.status}", "llm_request_failed")
+        try:
             try:
-                result = json.loads(body)
-                choice = result["choices"][0]
-                return {
-                    "content": choice["message"]["content"],
-                    "finish_reason": choice.get("finish_reason"),
-                }
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as error:
-                raise TranslationError(
-                    "LLM returned an invalid response envelope", "llm_invalid_response"
-                ) from error
+                envelope, content = await post_chat(
+                    self.session,
+                    self.config.get("endpoint") or DEEPSEEK_CHAT_URL,
+                    payload,
+                    self.config.get("api_key", ""),
+                    extra_headers={"User-Agent": USER_AGENT},
+                )
+            except (LLMRequestError, aiohttp.ClientError, asyncio.TimeoutError):
+                fallbacks = self.config.get("_fallbacks") or []
+                if not fallbacks:
+                    raise
+                fallback = fallbacks[0]
+                envelope, content = await post_chat(
+                    self.session, fallback["endpoint"],
+                    {**payload, "model": fallback["model"]},
+                    fallback.get("api_key", ""),
+                    extra_headers={"User-Agent": USER_AGENT},
+                )
+            return {"content": content, "finish_reason": envelope["choices"][0].get("finish_reason")}
+        except LLMRequestError as error:
+            if error.retryable:
+                raise RetryableTranslationError(str(error)) from error
+            raise TranslationError(str(error), error.code) from error
+        except LLMContractError as error:
+            raise TranslationError("LLM returned an invalid response envelope", "llm_invalid_response") from error
 
     async def _retry_delay(self, attempt, retry_after=None):
         try:
@@ -189,12 +190,39 @@ class TranslationManager:
     def get_api_key(self):
         return self.config_store.load()["deepseek"]["api_key"]
 
+    def _active_llm_config(self, full_config):
+        section = full_config["deepseek"].copy()
+        shared = full_config.get("llm")
+        if isinstance(shared, dict) and shared.get("profiles"):
+            from mikazuki.llm.routing import choose_profile
+            profile = choose_profile(
+                shared["profiles"], "text",
+                preferred_id=shared.get("routes", {}).get("translation"),
+                allow_local_fallback=bool(full_config.get("local", {}).get("enabled")),
+            )
+            legacy = next((item for item in full_config.get("remote_profiles", []) if item["id"] == profile.id), {})
+            section.update({key: value for key, value in legacy.items() if key in {"system_prompt", "reasoning_effort"}})
+            section.update(endpoint=profile.endpoint, model=profile.model, api_key=profile.api_key)
+            section["secret_revision"] = profile.metadata.get("secret_revision", 0)
+            section["_fallbacks"] = [
+                candidate for candidate in shared["profiles"]
+                if full_config.get("local", {}).get("enabled")
+                and profile.is_remote and candidate.get("source") != "remote"
+                and candidate.get("enabled") and candidate.get("ready")
+                and "text" in candidate.get("capabilities", [])
+            ]
+        if full_config.get("local", {}).get("enabled") and section.get("api_key"):
+            section.setdefault("_fallbacks", []).append({
+                "endpoint": local_proxy_endpoint(), "model": "qwen3.5-0.8b-q4_0", "api_key": "",
+            })
+        elif full_config.get("local", {}).get("enabled") and not section.get("api_key") and not shared:
+            section["endpoint"] = local_proxy_endpoint()
+        return section
+
     def profile_revision(self, config=None):
         if config is None:
             full_config = self.config_store.load()
-            section = full_config["deepseek"].copy()
-            if full_config.get("local", {}).get("enabled"):
-                section["endpoint"] = full_config["local"].get("endpoint") or section.get("endpoint")
+            section = self._active_llm_config(full_config)
         else:
             section = config
         payload = {
@@ -202,6 +230,11 @@ class TranslationManager:
             "model": section.get("model", ""),
             "system_prompt": section.get("system_prompt", ""),
             "reasoning_effort": section.get("reasoning_effort", "disabled"),
+            "secret_revision": section.get("secret_revision", 0),
+            "fallback_revisions": [
+                {key: profile.get(key) for key in ("endpoint", "model", "revision", "secret_revision")}
+                for profile in section.get("_fallbacks", [])
+            ],
         }
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:24]
 
@@ -302,9 +335,7 @@ class TranslationManager:
         locale = normalize_locale(locale)
         tag_names = [item["name"] for item in normalize_items(raw_items)]
         full_config = self.config_store.load()
-        active_config = full_config["deepseek"].copy()
-        if full_config.get("local", {}).get("enabled"):
-            active_config["endpoint"] = local_proxy_endpoint()
+        active_config = self._active_llm_config(full_config)
         profile_revision = self.profile_revision(active_config)
         cached = await asyncio.to_thread(
             self.store.get_results, locale, tag_names, "llm", profile_revision
@@ -316,12 +347,8 @@ class TranslationManager:
         locale = normalize_locale(locale)
         normalized_items = normalize_items(raw_items)
         full_config = self.config_store.load()
-        config = full_config["deepseek"]
+        config = self._active_llm_config(full_config)
         local_config = full_config.get("local", {})
-        if local_config.get("enabled"):
-            config = config.copy()
-            config["endpoint"] = local_proxy_endpoint()
-            config["model"] = config.get("model") or "qwen3.5-0.8b-q4_0"
         profile_revision = self.profile_revision(config)
         primary = await self._get_primary(locale, [item["name"] for item in normalized_items])
         primary_translations = {

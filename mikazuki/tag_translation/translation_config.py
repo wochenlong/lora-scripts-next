@@ -251,6 +251,12 @@ def mask_config(config):
         configured = bool(profile.get("api_key"))
         profile["api_key"] = SECRET_MASK if configured else ""
         profile["api_key_configured"] = configured
+    shared = masked.get("llm")
+    if isinstance(shared, dict):
+        for profile in shared.get("profiles", []):
+            configured = bool(profile.get("api_key"))
+            profile["api_key"] = SECRET_MASK if configured else ""
+            profile["api_key_configured"] = configured
     return masked
 
 
@@ -262,31 +268,50 @@ class OnlineServiceConfig:
         if not os.path.exists(self.path):
             return copy.deepcopy(DEFAULT_CONFIG)
         try:
-            with open(self.path, encoding="utf-8") as config_file:
-                # Version 1 live-tag settings are intentionally reduced to their
-                # compatible DeepSeek section on first load/save.
-                return validate_config(json.load(config_file))
+            from mikazuki.llm.secrets import read_configuration
+            raw = read_configuration(self.path)
+            config = validate_config(raw)
+            if isinstance(raw, dict) and isinstance(raw.get("llm"), dict):
+                config["llm"] = copy.deepcopy(raw["llm"])
+            return config
         except (OSError, json.JSONDecodeError, ValueError) as error:
             raise RuntimeError(f"Unable to load translation configuration: {error}") from error
 
     def save(self, raw_config):
-        config = validate_config(raw_config, self.load())
-        os.makedirs(os.path.dirname(self.path), exist_ok=True)
-        file_descriptor, temp_path = tempfile.mkstemp(
-            prefix="translation-config-",
-            suffix=".json.tmp",
-            dir=os.path.dirname(self.path),
-        )
-        try:
-            with os.fdopen(file_descriptor, "w", encoding="utf-8", newline="\n") as config_file:
-                json.dump(config, config_file, ensure_ascii=False, indent=2)
-                config_file.write("\n")
-            os.replace(temp_path, self.path)
-            os.chmod(self.path, 0o600)
-        except Exception:
-            if os.path.exists(temp_path):
-                os.remove(temp_path)
-            raise
+        from mikazuki.llm.config import configuration_lock
+        with configuration_lock(self.path):
+            return self._save(raw_config)
+
+    def _save(self, raw_config):
+        current = self.load()
+        config = validate_config(raw_config, current)
+        if isinstance(current.get("llm"), dict):
+            config["llm"] = copy.deepcopy(current["llm"])
+            from mikazuki.llm.config import validate_profile
+            old_profiles = {profile["id"]: profile for profile in config["llm"].get("profiles", [])}
+            shared_remote = []
+            for remote in config["remote_profiles"]:
+                previous = old_profiles.get(remote["id"])
+                shared_remote.append(validate_profile({
+                    **(previous or {}),
+                    "id": remote["id"],
+                    "name": remote["name"],
+                    "endpoint": remote["endpoint"],
+                    "model": remote["model"],
+                    "source": "remote",
+                    "api_key": remote["api_key"],
+                    "capabilities": (previous or {}).get("capabilities", ["text"]),
+                    "languages": (previous or {}).get("languages", ["en", "zh", "zh-CN", "zh-TW", "ja"]),
+                }, previous))
+            config["llm"]["profiles"] = shared_remote + [
+                profile for profile in old_profiles.values() if profile.get("source") != "remote"
+            ]
+            config["llm"].setdefault("routes", {})["translation"] = config["active_remote_id"]
+            profile_ids = {profile["id"] for profile in config["llm"]["profiles"]}
+            if config["llm"]["routes"].get("caption") not in profile_ids:
+                config["llm"]["routes"].pop("caption", None)
+        from mikazuki.llm.secrets import write_configuration
+        write_configuration(self.path, config)
         return config
 
 

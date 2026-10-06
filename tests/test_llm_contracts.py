@@ -138,6 +138,7 @@ def test_caption_requires_vision_and_can_fallback_to_local():
         ],
         "vision",
         language="zh-CN",
+        allow_local_fallback=True,
     )
     assert profile.id == "local-vision"
 

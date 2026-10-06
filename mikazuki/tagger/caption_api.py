@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 
 from mikazuki.llm.runtime import llm_service
+from mikazuki.llm.config import config_revision
 from mikazuki.tagger.caption import parse_caption_response, render_prompt
 from mikazuki.tagger.caption_job import caption_job_manager
 
@@ -23,9 +24,11 @@ class CaptionJobRequest(BaseModel):
     path: str
     mode: Literal["natural", "combined", "tag"] = "natural"
     recursive: bool = False
+    allow_local_fallback: bool = False
+    use_cache: bool = True
     profile_id: str | None = None
     prompt: str = Field(default='请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。', max_length=8000)
-    language: str = "zh-CN"
+    language: Literal["zh-CN", "zh-TW", "en", "ja"] = "zh-CN"
     layout: Literal["tags_then_caption", "caption_then_tags", "tags_only", "caption_only"] = "tags_then_caption"
     conflict_action: Literal["ignore", "copy", "prepend", "append"] = "copy"
     interrogator_model: str = "wd14-convnextv2-v2"
@@ -58,7 +61,7 @@ async def caption_job_status():
 async def start_caption_job(req: CaptionJobRequest):
     if req.mode != "tag":
         try:
-            llm_service.resolve("vision", language=req.language, profile_id=req.profile_id)
+            llm_service.resolve("vision", language=req.language, profile_id=req.profile_id, allow_local_fallback=req.allow_local_fallback)
         except Exception as exc:
             raise HTTPException(status_code=400, detail={"code": getattr(exc, "code", "llm_capability_vision_required"), "message": str(exc)}) from exc
     try:
@@ -111,13 +114,14 @@ async def preview_caption(req: CaptionPreviewRequest):
     if req.mode == "tag":
         raise HTTPException(status_code=400, detail="Tag 模式预览请使用既有 Tagger")
     try:
-        profile = llm_service.resolve("vision", language=req.language, profile_id=req.profile_id)
+        profile = llm_service.resolve("vision", language=req.language, profile_id=req.profile_id, allow_local_fallback=req.allow_local_fallback)
         prompt, snapshot = render_prompt(req.prompt, language=req.language, mode=req.mode, image_name=image_path.name)
         _profile, envelope, content, image_info = await llm_service.complete_vision(
             image_path,
             prompt,
             language=req.language,
             profile_id=profile.id,
+            allow_local_fallback=req.allow_local_fallback,
             response_schema={"type": "object", "properties": {"caption": {"type": "string", "minLength": 1, "maxLength": 2000}, "language": {"type": "string", "enum": [req.language]}}, "required": ["caption", "language"], "additionalProperties": False},
         )
         result = parse_caption_response(content, language=req.language)
@@ -126,8 +130,8 @@ async def preview_caption(req: CaptionPreviewRequest):
     return _success({
         "caption": result.caption,
         "language": result.language,
-        "profile_id": profile.id,
-        "profile_revision": llm_service.revision(profile.id, prompt_revision=snapshot),
+        "profile_id": _profile.id,
+        "profile_revision": config_revision(_profile, prompt_revision=snapshot),
         "image": image_info,
         "finish_reason": envelope.get("choices", [{}])[0].get("finish_reason"),
     })

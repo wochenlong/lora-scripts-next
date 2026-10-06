@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import asyncio
 import pytest
 import time
+from pathlib import Path
 
 from mikazuki.tagger.caption_job import (
     CaptionJobManager,
@@ -68,3 +70,112 @@ def test_caption_job_manager_writes_caption_and_reports_status(tmp_path):
         time.sleep(0.02)
     assert manager.status()["phase"] == "done"
     assert image.with_suffix(".txt").read_text(encoding="utf-8") == "一只猫。" + chr(10)
+
+
+class MutatingVisionService(FakeVisionService):
+    async def complete_vision(self, image_path, prompt, **kwargs):
+        Path(image_path).with_suffix(".txt").write_text("user edit", encoding="utf-8")
+        return await super().complete_vision(image_path, prompt, **kwargs)
+
+
+def test_caption_job_detects_external_caption_change_before_atomic_write(tmp_path):
+    image = tmp_path / "cat.png"
+    image.write_bytes(b"fake")
+    image.with_suffix(".txt").write_text("old", encoding="utf-8")
+    manager = CaptionJobManager(MutatingVisionService())
+    manager.start({
+        "path": str(tmp_path),
+        "mode": "natural",
+        "language": "zh-CN",
+        "prompt": "describe {{language}}",
+        "conflict_action": "copy",
+    })
+    deadline = time.time() + 5
+    while manager.status()["phase"] in {"pending", "captioning"} and time.time() < deadline:
+        time.sleep(0.02)
+    assert manager.status()["failed"] == 1
+    assert manager.status()["errors"][0]["code"] == "caption_conflict"
+    assert image.with_suffix(".txt").read_text(encoding="utf-8") == "user edit"
+
+
+class SlowVisionService(FakeVisionService):
+    async def complete_vision(self, image_path, prompt, **kwargs):
+        await asyncio.sleep(0.25)
+        return await super().complete_vision(image_path, prompt, **kwargs)
+
+
+def test_caption_job_cancel_preserves_completed_items(tmp_path):
+    first = tmp_path / "a.png"
+    second = tmp_path / "b.png"
+    first.write_bytes(b"fake")
+    second.write_bytes(b"fake")
+    manager = CaptionJobManager(SlowVisionService())
+    manager.start({
+        "path": str(tmp_path),
+        "mode": "natural",
+        "language": "zh-CN",
+        "prompt": "describe {{language}}",
+        "conflict_action": "copy",
+    })
+    deadline = time.time() + 5
+    while manager.status()["current"] < 1 and time.time() < deadline:
+        time.sleep(0.02)
+    manager.cancel()
+    while manager.status()["phase"] in {"pending", "captioning", "cancelling"} and time.time() < deadline:
+        time.sleep(0.02)
+    assert manager.status()["phase"] == "cancelled"
+    assert first.with_suffix(".txt").is_file()
+    assert not second.with_suffix(".txt").is_file()
+
+
+def test_atomic_writer_rejects_new_external_file(tmp_path):
+    target = tmp_path / "caption.txt"
+    target.write_text("user created", encoding="utf-8")
+    with pytest.raises(CaptionWriteConflict):
+        write_caption_atomic(target, "model output", expected_sha256=None)
+    assert target.read_text(encoding="utf-8") == "user created"
+
+
+def test_ignore_creates_missing_caption_without_touching_existing(tmp_path):
+    first = tmp_path / "a.png"
+    second = tmp_path / "b.png"
+    first.write_bytes(b"fake")
+    second.write_bytes(b"fake")
+    first.with_suffix(".txt").write_text("user caption", encoding="utf-8")
+    manager = CaptionJobManager(FakeVisionService())
+    manager.start({"path": str(tmp_path), "mode": "natural", "conflict_action": "ignore"})
+    manager._thread.join(timeout=5)
+    assert not manager._thread.is_alive()
+    assert manager.status()["succeeded"] == 1
+    assert manager.status()["skipped"] == 1
+    assert first.with_suffix(".txt").read_text(encoding="utf-8") == "user caption"
+    assert second.with_suffix(".txt").read_text(encoding="utf-8").strip() == "一只猫。"
+
+
+def test_cancel_aborts_inflight_inference_and_prevents_write(tmp_path):
+    import threading
+
+    entered = threading.Event()
+    aborted = threading.Event()
+
+    class WaitingService:
+        async def complete_vision(self, *args, **kwargs):
+            entered.set()
+            try:
+                await asyncio.sleep(60)
+            finally:
+                aborted.set()
+
+    (tmp_path / "a.png").write_bytes(b"fake")
+    manager = CaptionJobManager(WaitingService())
+    manager.start({"path": str(tmp_path), "mode": "natural"})
+    assert entered.wait(timeout=5)
+    started = time.monotonic()
+    manager.cancel()
+    manager._thread.join(timeout=2)
+    assert not manager._thread.is_alive()
+    assert aborted.is_set()
+    assert time.monotonic() - started < 2
+    assert manager.status()["phase"] == "cancelled"
+    assert manager.status()["cancelled"] == 1
+    assert not (tmp_path / "a.txt").exists()

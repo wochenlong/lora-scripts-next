@@ -5,7 +5,7 @@ import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import { useTaggerStore } from "../stores/tagger"
-import { llmApi, type LlmConfig } from "../api/llm"
+import { llmApi, type LlmConfig, type LocalVisionStatus } from "../api/llm"
 import { taggerApi, type CaptionJobRequest, type CaptionJobStatus, type CaptionMode, type TaggerRequest } from "../api/tagger"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import { useServerPathPick } from "../composables/useServerPathPick"
@@ -27,10 +27,13 @@ const llmLoading = ref(false)
 const captionSubmitting = ref(false)
 const profileEditorOpen = ref(false)
 const profileSaving = ref(false)
+const localVision = ref<LocalVisionStatus>({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 })
+const localVisionBusy = ref(false)
+const previewBusy = ref(false)
 const profileDraft = reactive({ id: "vision-profile", name: "视觉 Profile", endpoint: "", model: "", source: "remote" as "remote" | "local-endpoint", api_key: "", languages: "zh-CN,en" })
 let timer: number | undefined
 
-const visionProfiles = computed(() => llmConfig.value.profiles.filter(profile => profile.enabled && profile.ready && profile.capabilities.includes("vision")))
+const visionProfiles = computed(() => llmConfig.value.profiles.filter(profile => profile.enabled && profile.ready && profile.capabilities.includes("vision")).sort((first, second) => Number(second.source === "remote") - Number(first.source === "remote")))
 const captionBusy = computed(() => ["pending", "captioning", "cancelling"].includes(captionStatus.value.phase))
 const captionPercent = computed(() => captionStatus.value.total ? Math.round(captionStatus.value.current / captionStatus.value.total * 100) : 0)
 const downloadPercent = computed(() => status.value.download.percent || (status.value.download.total ? Math.round(status.value.download.current / status.value.download.total * 100) : 0))
@@ -41,11 +44,24 @@ async function loadLlmProfiles() {
   llmLoading.value = true
   try {
     llmConfig.value = await llmApi.profiles()
+    localVision.value = await llmApi.localVisionStatus()
     if (!captionForm.profile_id && visionProfiles.value.length) captionForm.profile_id = visionProfiles.value[0].id
   } catch (caught) {
     captionError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
     llmLoading.value = false
+  }
+}
+
+async function manageLocalVision(action: "setup" | "start" | "stop" | "cancel") {
+  localVisionBusy.value = true
+  try {
+    localVision.value = await llmApi.localVisionAction(action)
+    await loadLlmProfiles()
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : String(caught))
+  } finally {
+    localVisionBusy.value = false
   }
 }
 
@@ -92,6 +108,8 @@ function syncCaptionPath() {
   captionForm.replace_underscore = form.replace_underscore
   captionForm.replace_underscore_excludes = form.replace_underscore_excludes
   captionForm.escape_tag = form.escape_tag
+  captionForm.add_rating_tag = form.add_rating_tag
+  captionForm.add_model_tag = form.add_model_tag
 }
 
 async function start() {
@@ -126,12 +144,15 @@ async function previewCaption() {
   syncCaptionPath()
   if (!previewImagePath.value.trim()) return ElMessage.error(t("tagger.caption.previewPathRequired"))
   if (!captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
+  previewBusy.value = true
   try {
     const result = await taggerApi.captionPreview({ ...captionForm, image_path: previewImagePath.value })
     previewResult.value = result.caption
   } catch (caught) {
     captionError.value = caught instanceof Error ? caught.message : String(caught)
     ElMessage.error(captionError.value)
+  } finally {
+    previewBusy.value = false
   }
 }
 
@@ -179,10 +200,11 @@ function stopPolling() {
 }
 
 async function refresh() {
-  if (mode.value === "tag") await store.refresh()
-  else {
+  await store.refresh()
+  if (mode.value !== "tag") {
     try {
       captionStatus.value = await taggerApi.captionStatus()
+      localVision.value = await llmApi.localVisionStatus()
       captionError.value = ""
     } catch (caught) {
       captionError.value = caught instanceof Error ? caught.message : t("tagger.msg.statusFail")
@@ -220,16 +242,16 @@ onBeforeUnmount(stopPolling)
       </div>
       <div class="tagger-grid">
         <label>{{ t("tagger.pathLabel") }}<span class="path-row"><input v-model="form.path" placeholder="/data/datasets/images" /><button :disabled="picking" @click.prevent="browsePath">{{ t("schemaForm.browse") }}</button></span></label>
-        <label>{{ t("tagger.modelLabel") }}<select v-model="form.interrogator_model"><option v-for="model in models" :key="model">{{ model }}</option></select></label>
-        <template v-if="mode === 'tag'">
+        <label v-if="mode !== 'natural'">{{ t("tagger.modelLabel") }}<select v-model="form.interrogator_model"><option v-for="model in models" :key="model">{{ model }}</option></select></label>
+        <template v-if="mode !== 'natural'">
           <label>{{ t("tagger.thresholdLabel") }}<input v-model.number="form.threshold" type="number" min="0" max="1" step="0.05" /></label>
           <label>{{ t("tagger.characterThresholdLabel") }}<input v-model.number="form.character_threshold" type="number" min="0" max="1" step="0.05" /></label>
           <label>{{ t("tagger.additionalTagsLabel") }}<input v-model="form.additional_tags" /></label>
           <label>{{ t("tagger.excludeTagsLabel") }}<input v-model="form.exclude_tags" /></label>
           <label>{{ t("tagger.endpointLabel") }}<input v-model="form.download_endpoint" :placeholder="t('tagger.endpointPlaceholder')" /></label>
-          <label>{{ t("tagger.conflictLabel") }}<select v-model="form.batch_output_action_on_conflict"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
+          <label v-if="mode === 'tag'">{{ t("tagger.conflictLabel") }}<select v-model="form.batch_output_action_on_conflict"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
         </template>
-        <template v-else>
+        <template v-if="mode !== 'tag'">
           <label>{{ t("tagger.caption.profile") }}<select v-model="captionForm.profile_id" :disabled="llmLoading"><option v-for="profile in visionProfiles" :key="profile.id" :value="profile.id">{{ profile.name }} · {{ profile.source === 'remote' ? t("tagger.caption.remote") : t("tagger.caption.local") }}</option></select><button type="button" class="inline-config-button" @click="profileEditorOpen = !profileEditorOpen">{{ t("tagger.caption.manageProfiles") }}</button></label>
           <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
           <label class="wide-field">{{ t("tagger.caption.prompt") }}<textarea v-model="captionForm.prompt" rows="4" /></label>
@@ -237,6 +259,16 @@ onBeforeUnmount(stopPolling)
           <label>{{ t("tagger.caption.conflict") }}<select v-model="captionForm.conflict_action"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
           <label class="wide-field">{{ t("tagger.caption.previewPath") }}<input v-model="previewImagePath" placeholder="/data/datasets/images/example.png" /></label>
           <div class="caption-privacy wide-field">{{ t("tagger.caption.privacy") }}</div>
+          <section class="caption-local-runtime wide-field">
+            <strong>{{ t("tagger.caption.localRuntimeTitle") }}</strong>
+            <p>{{ t("tagger.caption.localRuntimeHint") }}</p>
+            <p>{{ localVision.state }} · {{ localVision.downloaded_bytes }} / {{ localVision.total_bytes }}</p>
+            <p v-if="localVision.error">{{ localVision.error }}</p>
+            <button v-if="['installing', 'downloading'].includes(localVision.state)" type="button" :disabled="localVisionBusy" @click="manageLocalVision('cancel')">{{ t("tagger.caption.cancelInstall") }}</button>
+            <button v-else-if="!localVision.installed || !localVision.runtime_installed" type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('setup')">{{ t("tagger.caption.setupLocal") }}</button>
+            <button v-else-if="localVision.state !== 'running'" type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('start')">{{ t("tagger.caption.startLocal") }}</button>
+            <button v-else type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('stop')">{{ t("tagger.caption.stopLocal") }}</button>
+          </section>
           <div v-if="profileEditorOpen" class="caption-profile-editor wide-field">
             <label>{{ t("tagger.caption.profileId") }}<input v-model="profileDraft.id" /></label>
             <label>{{ t("tagger.caption.profileName") }}<input v-model="profileDraft.name" /></label>
@@ -253,6 +285,7 @@ onBeforeUnmount(stopPolling)
       <div class="check-row">
         <label v-if="mode === 'tag'"><input v-model="form.batch_input_recursive" type="checkbox" />{{ t("tagger.recursive") }}</label>
         <label v-else><input v-model="captionForm.recursive" type="checkbox" />{{ t("tagger.recursive") }}</label>
+        <label v-if="mode !== 'tag'"><input v-model="captionForm.allow_local_fallback" type="checkbox" />{{ t("tagger.caption.enableLocalFallback") }}</label>
         <label><input v-model="form.replace_underscore" type="checkbox" />{{ t("tagger.replaceUnderscore") }}</label>
         <label><input v-model="form.escape_tag" type="checkbox" />{{ t("tagger.escapeTag") }}</label>
         <label><input v-model="form.add_rating_tag" type="checkbox" />{{ t("tagger.addRatingTag") }}</label>

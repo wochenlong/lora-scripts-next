@@ -213,3 +213,21 @@
 .caption-profile-editor button {
   width: max-content;
 }
+
+.caption-local-runtime {
+  padding: 14px;
+  color: var(--text-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.caption-local-runtime button {
+  padding: 8px 12px;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+}

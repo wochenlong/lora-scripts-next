@@ -25,10 +25,24 @@ export interface LlmConfig {
   cache: { translation?: boolean; caption?: boolean }
 }
 
+export interface LocalVisionStatus {
+  state: string
+  installed: boolean
+  runtime_installed?: boolean
+  downloaded_bytes: number
+  total_bytes: number
+  error?: string | null
+  estimated_peak_rss_bytes?: number
+}
+
 export const llmApi = {
   profiles: () => apiData<LlmConfig>("/api/llm/profiles"),
   config: () => apiData<LlmConfig>("/api/llm/config"),
   saveConfig: (body: Partial<LlmConfig>) => apiData<LlmConfig>("/api/llm/config", { method: "PUT", body: JSON.stringify(body) }),
   connectionTest: (body: { capability: "text" | "vision"; profile_id?: string; image_path?: string; prompt?: string; language?: string }) =>
     apiData<Record<string, unknown>>("/api/llm/connection-test", { method: "POST", body: JSON.stringify(body) }),
+  localVisionManifest: () => apiData<Record<string, unknown>>("/api/llm/local-vision/manifest"),
+  localVisionStatus: () => apiData<LocalVisionStatus>("/api/llm/local-vision/status"),
+  localVisionAction: (action: "setup" | "start" | "stop" | "cancel") =>
+    apiData<LocalVisionStatus>("/api/llm/local-vision/" + action, { method: "POST" }),
 }

@@ -21,7 +21,7 @@ def _as_profile(item: LLMProfile | Mapping[str, object]) -> LLMProfile:
         revision=item.get("revision"),
         enabled=bool(item.get("enabled", True)),
         ready=bool(item.get("ready", True)),
-        metadata=item.get("metadata") or {},
+        metadata={**(item.get("metadata") or {}), "secret_revision": item.get("secret_revision", 0)},
     )
 
 
@@ -31,7 +31,7 @@ def choose_profile(
     *,
     language: str | None = None,
     preferred_id: str | None = None,
-    allow_local_fallback: bool = True,
+    allow_local_fallback: bool = False,
 ) -> LLMProfile:
     """Choose remote first, then an explicitly allowed local fallback."""
     candidates = [_as_profile(item) for item in profiles]

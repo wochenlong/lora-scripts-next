@@ -8,8 +8,8 @@
 - Canonical progress file: `docs/tasks/natural-language-captioning-task-book.md`
 - Related task book: `docs/tasks/tag-translation-task-book.md`
 - Current branch: `feat/NL-Captioning`
-- Current active phase: 开工前审计，等待用户最终 goal 提示词
-- Execution readiness: `drafting`（等待用户最终 goal 提示词）
+- Current active phase: Phase 0 完成门复审；后端和 UI 已进入实现
+- Execution readiness: `executing`（已收到完整交付 goal）
 - Scope: Dataset Tagger、Dataset Editor、统一 LLM 配置/运行时、提示词与结果写回
 
 ## 1. 目标与完成口径
@@ -124,7 +124,7 @@ TagUI 是本地 RPA 工具：用户写 `.tag` 流程文本，解析器将流程�
 }
 ```
 
-Key 只在后端保存和掩码返回；`revision` 由 endpoint、model、capabilities、asset revision、推理参数和凭据变更序列共同计算，不包含明文 Key。改变 profile、模型或提示词后，旧 caption 缓存不得复用。
+Key 仅在后端进程内注入和使用；配置文件只保存掩码，后端重启后需要重新注入，旧明文配置在读取时原子迁移为掩码。翻译 facade 和统一服务共用同一个进程内凭据存储；响应不返回原始 Key。`revision` 由 endpoint、model、capabilities、asset revision、推理参数和凭据变更序列共同计算，不包含明文 Key。改变 profile、模型或提示词后，旧 caption 缓存不得复用。连接测试直接请求用户指定的 profile，不做 fallback，并且只接受完整的严格 JSON 成功对象，不返回提供方原始响应。
 
 ### 4.2 统一调用接口
 
@@ -539,16 +539,16 @@ TaggerPage 交互顺序：
 - 现状与边界复盘: done
 - 统一 LLM 架构: done（待维护者评审）
 - 视觉模型可行性探针: done with boundary（见 `docs/tasks/natural-language-captioning-feasibility-probe.md`；Qwen3-VL-2B 已通过中文本地探针）
-- 后端实现: pending
-- 前端实现: pending
+- 后端实现: in progress（共享配置、视觉任务、原子写回、取消、缓存及受管 Qwen 已实现；报告持久化、完整灰度和真实受管路径仍缺验收）
+- 前端实现: in progress（三模式、预览、进度、重试和 mixed safety 已接入；设置复用、提示词预设及人工验收仍待完成）
 - 真实模型/远程评测: pending implementation（SiliconFlow 三样本通过；Qwen3-VL-2B 本地中文探针通过）
 - 隔离重建真实验收: pending implementation
-- Execution readiness: `drafting`（等待用户最终 goal 提示词）
+- Execution readiness: `executing`（2026-10-07 增量回归后端 136 passed；前端 Node 22 check 304 passed；宽范围后端仍有 11 failed）
 - Residual risks: Qwen3-VL-2B CPU-only 峰值约 3.1 GB 且单图约 4.5–7.3 秒；更低资源本地模型只验证英文；自然语言/Tag 混合 caption 的训练语义需要在 P4/P5 验证。
 
 ## 19. 下一步动作
 
-等待用户发送最终 goal 提示词；收到后从 Phase 0 开始，按任务书逐阶段完成后端、前端、完整测试、人工验收和最终隔离重建真实验收。未通过 P6 隔离重建门禁，不得将计划标记为完成。
+逐项核销 Phase 0 统一 LLM 完成门；具体执行状态见 canonical task book 与续接记录。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
 
 ## 参考资料
 

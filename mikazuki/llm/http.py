@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from collections.abc import Callable, Mapping
 from typing import Any
 
@@ -15,6 +16,28 @@ class LLMRequestError(RuntimeError):
         super().__init__(message)
         self.code = code
         self.retryable = retryable
+
+
+async def post_chat(session, endpoint: str, payload: Mapping[str, Any], api_key: str = "", *, extra_headers=None):
+    """One sanitized OpenAI-compatible transport for translation and vision."""
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    headers.update(extra_headers or {})
+    if api_key:
+        headers["Authorization"] = f"Bearer {api_key}"
+    async with session.post(endpoint, json=dict(payload), headers=headers) as response:
+        if response.status in {401, 403}:
+            raise LLMRequestError("LLM rejected the configured credentials", "llm_auth_failed")
+        if response.status == 429 or response.status >= 500:
+            raise LLMRequestError(f"LLM returned retryable HTTP {response.status}", "llm_request_failed", retryable=True)
+        if response.status != 200:
+            raise LLMRequestError(f"LLM returned HTTP {response.status}", "llm_request_failed")
+        try:
+            envelope = json.loads(await response.text())
+        except (ValueError, aiohttp.ContentTypeError) as exc:
+            raise LLMContractError("LLM response is not valid JSON") from exc
+        if not isinstance(envelope, dict):
+            raise LLMContractError("LLM response envelope must be an object")
+        return envelope, extract_chat_content(envelope)
 
 
 async def chat_completion(
@@ -35,28 +58,7 @@ async def chat_completion(
     for attempt in range(max(0, retries) + 1):
         try:
             async with session_factory(timeout=timeout, trust_env=True) as session:
-                async with session.post(profile.endpoint, json=dict(payload), headers=headers) as response:
-                    text = await response.text()
-                    if response.status == 401 or response.status == 403:
-                        raise LLMRequestError("LLM rejected the configured credentials", "llm_auth_failed")
-                    if response.status == 429 or response.status >= 500:
-                        raise LLMRequestError(
-                            f"LLM returned retryable HTTP {response.status}",
-                            "llm_request_failed",
-                            retryable=True,
-                        )
-                    if response.status != 200:
-                        raise LLMRequestError(
-                            f"LLM returned HTTP {response.status}",
-                            "llm_request_failed",
-                        )
-                    try:
-                        envelope = await response.json(content_type=None)
-                    except (ValueError, aiohttp.ContentTypeError) as exc:
-                        raise LLMContractError("LLM response is not valid JSON") from exc
-                    if not isinstance(envelope, dict):
-                        raise LLMContractError("LLM response envelope must be an object")
-                    return envelope, extract_chat_content(envelope)
+                return await post_chat(session, profile.endpoint, payload, profile.api_key)
         except LLMRequestError as exc:
             last_error = exc
             if not exc.retryable or attempt >= retries:

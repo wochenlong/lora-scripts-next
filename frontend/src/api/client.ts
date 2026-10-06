@@ -6,6 +6,7 @@ export interface ApiResponse<T> {
   status: ApiStatus
   message?: string | null
   data?: T | null
+  detail?: string | { message?: string; code?: string }
 }
 
 export class ApiError extends Error {
@@ -48,7 +49,8 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   }
 
   if (!response.ok) {
-    throw new ApiError(payload.message || i18n.global.t("api.httpFail", { status: response.status }), "http", payload)
+    const detail = typeof payload.detail === "string" ? payload.detail : payload.detail?.message
+    throw new ApiError(payload.message || detail || i18n.global.t("api.httpFail", { status: response.status }), "http", payload)
   }
   if (payload.status !== "success" && !(allowPending && payload.status === "pending")) {
     throw new ApiError(payload.message || i18n.global.t("api.fail"), payload.status, payload)

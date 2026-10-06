@@ -9,6 +9,14 @@ function response(body: unknown, init: ResponseInit = {}) {
 }
 
 describe("apiRequest", () => {
+  it("shows actionable FastAPI errors for caption and profile requests", async () => {
+    vi.spyOn(globalThis, "fetch").mockResolvedValue(response({
+      detail: { code: "llm_capability_vision_required", message: "请选择视觉模型" },
+    }, { status: 400 }))
+    await expect(apiRequest("/api/tagger/jobs")).rejects.toMatchObject({
+      status: "http", message: "请选择视觉模型",
+    })
+  })
   it("adds JSON headers and returns successful payloads", async () => {
     const fetchMock = vi.spyOn(globalThis, "fetch").mockResolvedValue(response({ status: "success", data: { id: 7 } }))
 

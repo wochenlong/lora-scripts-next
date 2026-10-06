@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import dataclass
 
 from mikazuki.llm.client import parse_json_content
@@ -19,7 +20,7 @@ CAPTION_SCHEMA = {
 
 
 class CaptionContractError(LLMContractError):
-    pass
+    code = "llm_invalid_response"
 
 
 @dataclass(frozen=True)
@@ -34,6 +35,8 @@ def render_prompt(template: str, *, language: str, mode: str, image_name: str = 
         raise CaptionContractError("prompt template cannot be empty")
     if len(template) > 8000:
         raise CaptionContractError("prompt template is too long")
+    if language not in {"zh-CN", "zh-TW", "en", "ja"}:
+        raise CaptionContractError("unsupported caption language")
     values = {
         "language": language,
         "mode": mode,
@@ -44,6 +47,8 @@ def render_prompt(template: str, *, language: str, mode: str, image_name: str = 
     rendered = template
     for key, value in values.items():
         rendered = rendered.replace("{{" + key + "}}", value)
+    if re.search(r"\{\{[^{}]*\}\}", rendered):
+        raise CaptionContractError("prompt contains an unknown variable")
     return rendered.strip(), json.dumps(values, ensure_ascii=False, sort_keys=True)
 
 
@@ -58,6 +63,12 @@ def parse_caption_response(content: str, *, language: str) -> CaptionResult:
         raise CaptionContractError("caption contains invalid content")
     if payload["language"] != language:
         raise CaptionContractError("caption language does not match request")
+    if language.startswith("zh") and not any("\u3400" <= char <= "\u9fff" for char in caption):
+        raise CaptionContractError("caption does not contain Chinese text")
+    if language == "ja" and not any("\u3040" <= char <= "\u30ff" or "\u3400" <= char <= "\u9fff" for char in caption):
+        raise CaptionContractError("caption does not contain Japanese text")
+    if re.search(r"(?:[A-Za-z]:[\\/]|file://|/(?:home|Users|mnt|data)/)", caption):
+        raise CaptionContractError("caption contains a local path")
     return CaptionResult(caption=caption.strip(), language=language)
 
 

@@ -122,7 +122,7 @@ const targets = computed(() =>
 )
 const captionTags = computed(() => splitCaptionTags(caption.value))
 const captionFormat = computed(() => detectCaptionFormat(caption.value))
-const tagEditingAllowed = computed(() => captionFormat.value === "tag" || captionFormat.value === "mixed")
+const tagEditingAllowed = computed(() => !caption.value.trim() || captionFormat.value === "tag")
 const allDatasetTags = computed(() => {
   const unique = new Set<string>(tags.value.map((item) => item.tag))
   items.value.forEach((item) => {

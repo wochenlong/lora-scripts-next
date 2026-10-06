@@ -13,15 +13,25 @@ from .contracts import LLMContractError, LLMProfile
 
 def encode_image_data_url(path, *, max_side: int = 1024, quality: int = 85) -> tuple[str, dict[str, Any]]:
     """Encode a local image without exposing its path to a provider."""
+    if not 32 <= max_side <= 2048 or not 1 <= quality <= 95:
+        raise LLMContractError("invalid image preprocessing limits")
     try:
         with Image.open(path) as source:
-            image = ImageOps.exif_transpose(source).convert("RGB")
+            oriented = ImageOps.exif_transpose(source)
+            if oriented.mode in {"RGBA", "LA", "P"}:
+                rgba = oriented.convert("RGBA")
+                background = Image.new("RGBA", rgba.size, (255, 255, 255, 255))
+                image = Image.alpha_composite(background, rgba).convert("RGB")
+            else:
+                image = oriented.convert("RGB")
             image.thumbnail((max_side, max_side))
             output = io.BytesIO()
             image.save(output, format="JPEG", quality=quality)
     except Exception as exc:
         raise LLMContractError(f"image could not be encoded: {type(exc).__name__}") from exc
     raw = output.getvalue()
+    if len(raw) > 2 * 1024 * 1024:
+        raise LLMContractError("encoded image exceeds upload limit")
     return (
         "data:image/jpeg;base64," + base64.b64encode(raw).decode("ascii"),
         {"width": image.width, "height": image.height, "bytes": len(raw)},

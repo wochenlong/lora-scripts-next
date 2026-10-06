@@ -5,15 +5,25 @@ import hashlib
 import json
 import os
 import tempfile
+import threading
 from pathlib import Path
 from urllib.parse import urlparse
 
 from .contracts import LLMCapability, LLMContractError, LLMProfile, LLMSource
+from .secrets import read_configuration, write_configuration
 
 CURRENT_CONFIG_VERSION = 5
 SECRET_MASK = "********"
 _ALLOWED_SOURCES = {"remote", "local-endpoint", "managed-local"}
 _ALLOWED_CAPABILITIES = {"text", "vision"}
+_CONFIG_LOCKS: dict[str, threading.RLock] = {}
+_LOCKS_GUARD = threading.Lock()
+
+
+def configuration_lock(path):
+    key = os.path.normcase(str(Path(path).resolve()))
+    with _LOCKS_GUARD:
+        return _CONFIG_LOCKS.setdefault(key, threading.RLock())
 
 
 def _string(value, name: str, limit: int) -> str:
@@ -44,24 +54,40 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
     name = _string(raw.get("name", profile_id), "profile.name", 120)
     endpoint = _validate_endpoint(_string(raw.get("endpoint", ""), "profile.endpoint", 500))
     model = _string(raw.get("model", ""), "profile.model", 200)
+    if not profile_id or not name or not model:
+        raise LLMContractError("profile id, name and model are required")
     source = raw.get("source", "remote")
     if source not in _ALLOWED_SOURCES:
         raise LLMContractError("profile.source is invalid")
-    capabilities = tuple(dict.fromkeys(raw.get("capabilities", ["text"])))
+    raw_capabilities = raw.get("capabilities", ["text"])
+    if not isinstance(raw_capabilities, (list, tuple)) or any(not isinstance(item, str) for item in raw_capabilities):
+        raise LLMContractError("profile.capabilities must be an array of strings")
+    capabilities = tuple(dict.fromkeys(raw_capabilities))
     if not capabilities or any(item not in _ALLOWED_CAPABILITIES for item in capabilities):
         raise LLMContractError("profile.capabilities is invalid")
-    languages = tuple(dict.fromkeys(raw.get("languages", ["en"])))
+    raw_languages = raw.get("languages", ["en"])
+    if not isinstance(raw_languages, (list, tuple)) or any(not isinstance(item, str) for item in raw_languages):
+        raise LLMContractError("profile.languages must be an array of strings")
+    languages = tuple(dict.fromkeys(raw_languages))
     if not languages or any(not isinstance(item, str) or not item.strip() for item in languages):
         raise LLMContractError("profile.languages is invalid")
-    api_key = _string(raw.get("api_key", ""), "profile.api_key", 1000)
+    api_key = _string(raw.get("api_key", previous.get("api_key", "") if previous else ""), "profile.api_key", 1000)
     if api_key == SECRET_MASK and previous:
         api_key = str(previous.get("api_key", ""))
+    elif api_key == SECRET_MASK:
+        raise LLMContractError("a masked API key requires an existing profile")
     asset_id = raw.get("asset_id")
     if asset_id is not None:
         asset_id = _string(asset_id, "profile.asset_id", 200)
     revision = raw.get("revision")
     if revision is not None:
         revision = _string(revision, "profile.revision", 200)
+    for flag in ("enabled", "ready"):
+        if flag in raw and not isinstance(raw[flag], bool):
+            raise LLMContractError(f"profile.{flag} must be a boolean")
+    secret_revision = int((previous or raw).get("secret_revision", 0))
+    if previous and api_key != previous.get("api_key", ""):
+        secret_revision += 1
     return {
         "id": profile_id,
         "name": name,
@@ -76,6 +102,7 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
         "enabled": bool(raw.get("enabled", True)),
         "ready": bool(raw.get("ready", True)),
         "metadata": copy.deepcopy(raw.get("metadata") or {}),
+        "secret_revision": secret_revision,
     }
 
 
@@ -175,11 +202,12 @@ def config_revision(profile: dict | LLMProfile, prompt_revision: str | None = No
             "languages": profile.languages,
             "asset_id": profile.asset_id,
             "revision": profile.revision,
+            "secret_revision": profile.metadata.get("secret_revision", 0),
         }
     else:
         data = {
             key: profile.get(key)
-            for key in ("id", "endpoint", "model", "source", "capabilities", "languages", "asset_id", "revision")
+            for key in ("id", "endpoint", "model", "source", "capabilities", "languages", "asset_id", "revision", "secret_revision")
         }
     data["prompt_revision"] = prompt_revision
     return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:24]
@@ -195,7 +223,7 @@ class UnifiedConfigStore:
         if not self.path.is_file():
             return {}
         try:
-            payload = json.loads(self.path.read_text(encoding="utf-8"))
+            payload = read_configuration(self.path)
         except (OSError, json.JSONDecodeError) as exc:
             raise LLMContractError("shared LLM configuration is unreadable") from exc
         if not isinstance(payload, dict):
@@ -211,7 +239,7 @@ class UnifiedConfigStore:
                 for item in raw.get("profiles", [])
                 if isinstance(item, dict)
             ]
-            if profiles:
+            if isinstance(raw.get("profiles"), list):
                 return {
                     "version": CURRENT_CONFIG_VERSION,
                     "profiles": profiles,
@@ -233,19 +261,30 @@ class UnifiedConfigStore:
         return mask_profiles(self.load())
 
     def save(self, payload: dict) -> dict:
+        with configuration_lock(self.path):
+            return self._save(payload)
+
+    def _save(self, payload: dict) -> dict:
         if not isinstance(payload, dict):
             raise LLMContractError("shared LLM configuration must be an object")
         current = self.load()
         previous = {item["id"]: item for item in current.get("profiles", [])}
         raw_profiles = payload.get("profiles", current.get("profiles", []))
-        if not isinstance(raw_profiles, list) or not raw_profiles:
-            raise LLMContractError("profiles must contain at least one profile")
+        if not isinstance(raw_profiles, list) or len(raw_profiles) > 24:
+            raise LLMContractError("profiles must contain at most 24 profiles")
+        if any(not isinstance(item, dict) for item in raw_profiles):
+            raise LLMContractError("each profile must be an object")
         profiles = [validate_profile(item, previous.get(str(item.get("id")))) for item in raw_profiles]
         ids = {profile["id"] for profile in profiles}
+        if len(ids) != len(profiles):
+            raise LLMContractError("profile ids must be unique")
         routes = dict(current.get("routes") or {})
         routes.update(dict(payload.get("routes") or {}))
         remote_ids = [profile["id"] for profile in profiles if profile["source"] == "remote"]
         for route_name in ("translation", "caption"):
+            if not profiles:
+                routes.pop(route_name, None)
+                continue
             selected = routes.get(route_name)
             if selected not in ids:
                 routes[route_name] = remote_ids[0] if remote_ids else profiles[0]["id"]
@@ -259,25 +298,13 @@ class UnifiedConfigStore:
         document = self._read_document()
         document["llm"] = config
         self._sync_legacy_translation_fields(document, profiles, routes)
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        fd, temporary = tempfile.mkstemp(prefix="llm-config-", suffix=".tmp", dir=self.path.parent)
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8", newline="\n") as target:
-                json.dump(document, target, ensure_ascii=False, indent=2)
-                target.write("\n")
-                target.flush()
-                os.fsync(target.fileno())
-            os.replace(temporary, self.path)
-        except Exception:
-            try:
-                os.unlink(temporary)
-            except OSError:
-                pass
-            raise
+        write_configuration(self.path, document)
         return config
 
     @staticmethod
     def _sync_legacy_translation_fields(document: dict, profiles: list[dict], routes: dict) -> None:
+        from mikazuki.tag_translation.translation_config import DEFAULT_CONFIG
+        previous = {profile["id"]: profile for profile in document.get("remote_profiles", [])}
         remotes = [profile for profile in profiles if profile["source"] == "remote"]
         selected_id = routes.get("translation")
         selected = next((profile for profile in remotes if profile["id"] == selected_id), None)
@@ -285,6 +312,10 @@ class UnifiedConfigStore:
             selected = remotes[0]
             routes["translation"] = selected["id"]
         if selected is None:
+            if not remotes:
+                document["remote_profiles"] = copy.deepcopy(DEFAULT_CONFIG["remote_profiles"])
+                document["active_remote_id"] = DEFAULT_CONFIG["active_remote_id"]
+                document["deepseek"] = copy.deepcopy(DEFAULT_CONFIG["deepseek"])
             return
         document["version"] = 4
         document["active_remote_id"] = selected["id"]
@@ -296,18 +327,16 @@ class UnifiedConfigStore:
                 "api_key": profile.get("api_key", ""),
                 "model": profile["model"],
                 "reasoning_effort": "disabled",
-                "system_prompt": "You are a tag translation assistant.",
+                "system_prompt": previous.get(profile["id"], {}).get("system_prompt", DEFAULT_CONFIG["deepseek"]["system_prompt"]),
             }
             for profile in remotes
         ]
         document["deepseek"] = {
+            **copy.deepcopy(DEFAULT_CONFIG["deepseek"]),
+            **document.get("deepseek", {}),
             "endpoint": selected["endpoint"],
             "api_key": selected.get("api_key", ""),
             "model": selected["model"],
             "reasoning_effort": "disabled",
-            "system_prompt": "You are a tag translation assistant.",
-            "concurrency": 4,
-            "batch_size": 20,
-            "max_retries": 3,
-            "timeout_seconds": 180,
+            "system_prompt": previous.get(selected["id"], {}).get("system_prompt", document.get("deepseek", {}).get("system_prompt", DEFAULT_CONFIG["deepseek"]["system_prompt"])),
         }

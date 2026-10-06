@@ -9,6 +9,7 @@ LLMSource = Literal["remote", "local-endpoint", "managed-local"]
 
 class LLMContractError(ValueError):
     """Invalid shared LLM configuration or request contract."""
+    code = "llm_invalid_response"
 
 
 class LLMRouteError(RuntimeError):

@@ -104,12 +104,19 @@ def parse_tags(caption: str) -> list[str]:
 
 def _looks_like_tag_block(value: str) -> bool:
     text = value.strip()
-    if not text or len(text) > 400 or chr(10) in text:
+    if not text or len(text) > 400:
         return False
-    parts = [part.strip() for part in text.split(",") if part.strip()]
+    normalized = text.replace("，", ",").replace("；", ",").replace(";", ",").replace(chr(10), ",")
+    parts = [part.strip() for part in normalized.split(",") if part.strip()]
     if not parts:
         return False
-    return all(len(part) <= 120 and not any(mark in part for mark in ("。", "！", "？", ".", "!", "?")) for part in parts)
+    return all(
+        len(part) <= 120
+        and len(part.split()) <= 4
+        and not any(mark in part for mark in ("。", "！", "？", ".", "!", "?"))
+        and sum("\u3400" <= char <= "\u9fff" for char in part) <= 12
+        for part in parts
+    )
 
 
 def detect_caption_format(caption: str) -> CaptionFormat:
@@ -117,7 +124,7 @@ def detect_caption_format(caption: str) -> CaptionFormat:
     if not text:
         return "unknown"
     blocks = [block.strip() for block in text.split(chr(10) + chr(10)) if block.strip()]
-    if len(blocks) >= 2 and _looks_like_tag_block(blocks[0]):
+    if len(blocks) >= 2 and any(_looks_like_tag_block(block) for block in blocks):
         return "mixed"
     if _looks_like_tag_block(text):
         return "tag"
@@ -130,8 +137,9 @@ def caption_projection(caption: str) -> tuple[CaptionFormat, list[str], str]:
         return format_name, parse_tags(caption), ""
     if format_name == "mixed":
         blocks = [block.strip() for block in caption.split(chr(10) + chr(10)) if block.strip()]
-        tags = parse_tags(blocks[0]) if blocks else []
-        natural = (chr(10) + chr(10)).join(blocks[1:])
+        tag_index = next(index for index, block in enumerate(blocks) if _looks_like_tag_block(block))
+        tags = parse_tags(blocks[tag_index])
+        natural = (chr(10) + chr(10)).join(block for index, block in enumerate(blocks) if index != tag_index)
         return format_name, tags, natural
     return format_name, [], caption.strip()
 
@@ -189,7 +197,8 @@ def read_caption(image_path: Path) -> str:
     caption_path = caption_path_for(image_path)
     if not caption_path.is_file():
         return ""
-    return caption_path.read_text(encoding="utf-8").strip()
+    text = caption_path.read_text(encoding="utf-8")
+    return text.strip() if detect_caption_format(text) == "tag" else text
 
 
 def thumbnail_bytes(image_path: Path, size: int) -> bytes:
@@ -285,7 +294,7 @@ def category_for(root: Path, image_path: Path) -> str:
 
 
 def write_caption(image_path: Path, caption: str) -> str:
-    normalized = caption.strip()
+    normalized = caption.strip() if detect_caption_format(caption) == "tag" else caption
     caption_path_for(image_path).write_text(normalized, encoding="utf-8")
     return normalized
 
@@ -383,13 +392,26 @@ async def batch_edit(req: BatchEditRequest):
     before_snapshots = []
     after_snapshots = []
 
+    # Validate the entire batch before the first mutation; otherwise encountering
+    # a natural caption after a tag caption leaves an untracked partial edit.
+    for rel in req.images:
+        candidate = resolve_image(root, rel)
+        if not candidate.is_file():
+            continue
+        text = read_caption(candidate)
+        if text and detect_caption_format(text) != "tag":
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "caption_format_unsafe", "message": "自然语言或 mixed caption 不能使用 Tag 批量操作"},
+            )
+
     for rel in req.images:
         image_path = resolve_image(root, rel)
         if not image_path.is_file():
             continue
         current_caption = read_caption(image_path)
         caption_format, _, _ = caption_projection(current_caption)
-        if caption_format in {"natural", "mixed", "unknown"}:
+        if current_caption and caption_format in {"natural", "mixed", "unknown"}:
             raise HTTPException(
                 status_code=409,
                 detail={"code": "caption_format_unsafe", "message": "自然语言或 mixed caption 不能使用 Tag 批量清理、排序或去重"},

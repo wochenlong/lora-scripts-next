@@ -3,14 +3,14 @@
 ## 计划元数据
 
 - Plan ID: DATASET-NL-TAGGING-20261006
-- Version: v2.0-preflight-audit
-- Last updated: 2026-10-06 Asia/Shanghai
+- Version: v2.1-executing
+- Last updated: 2026-10-07 Asia/Shanghai
 - Canonical progress file: 本文
 - Construction plan: docs/tasks/natural-language-captioning-plan/
 - Design source: docs/design/natural-language-captioning-tagging-design.md
 - Current branch: feat/NL-Captioning
-- Current active phase: Phase 0 — 预检与统一 LLM（等待 goal 解锁）
-- Execution readiness: drafting（等待用户最终 goal 提示词）
+- Current active phase: Phase 0 — 统一 LLM 完成门复审；Phase 1/2 已有实现但尚未通过阶段完成门
+- Execution readiness: executing（已收到完整交付 goal；禁止以局部检查通过替代最终验收）
 - Scale: Full
 
 ## 目标
@@ -34,7 +34,7 @@
   - 多任务并发调度。
 - Constraints:
   - Node 22、npm、Python 项目现有依赖。
-  - API Key 只能存后端并以掩码返回。
+  - API Key 仅在后端进程内注入；配置文件只保存掩码，重启后重新注入。翻译与打标共用凭据，前端响应以掩码返回。
   - 远程图片使用受限 JPEG data URL，不发送本地路径。
   - 修改公开代码必须关联 GitHub Issue；实现应在 feature 分支。
   - 最终完成必须在全新目录/全新运行环境中从零安装、构建、启动并验收；真实远程请求只使用允许外发的脱敏样本，本地模型资产和凭据不进入 Git。
@@ -120,19 +120,20 @@
 - Probe worktree: E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-p1-20261006
 - Required frontend command: npm --prefix frontend run check
 - Required backend command: pytest tests/test_tag_translation_*.py tests/test_tagger_*.py
-- Runtime baseline: Node 22，Python 3.14 host probe，Windows 16-thread CPU，32 GiB RAM
+- Runtime baseline: Node 22.17.1，Python 3.11.15 隔离测试环境，Windows 16-thread CPU，32 GiB RAM；宿主 Python 3.14 不作为依赖兼容验收依据
 
 ## 进度台账
 
-- Overall progress: Phase 0 统一 LLM 和 Phase 1/2 的首轮实现已进入工作树；后端共享配置、视觉任务 API、TaggerPage 三模式和 Dataset Editor 格式安全已有可执行代码与 focused evidence。
+- Overall progress: Phase 0–2 首轮实现及修复在 feat/NL-Captioning；共享配置/路由、受管视觉资产、缓存、任务取消/冲突保护和 mixed safety 已有代码及测试。当前回到 Phase 0 审查完成门，不以已接入 UI 视为阶段解锁。
 - Phase 0: in progress
 - Phase 1: in progress
 - Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
-- Validation status: P1 pass-with-boundary；后端 focused 57 tests 和前端 check 已通过，真实资源、完整灰度/人工验收和隔离重建尚未完成。
-- Residual risks: 远程优先路由和旧配置迁移需要先建立 contract；本地 Qwen3-VL-2B 资源成本需在 UI 中可见。
+- Validation status: 2026-10-07 Python 3.11 相关后端回归 136 passed；Node 22 check 48 files / 304 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
+- Residual risks: 共享前端设置尚未完全复用；提示词预设/回滚、任务报告持久化、组合预览、完整灰度、EDD 人工评分和浏览器验收缺口仍待闭环。受管 Qwen 三样本启动/取消/停止开发验证已通过；完整 API/真实写回与 Phase 4 均未完成。翻译灰度增补后相关回归 58 passed。
+- Continuity source: docs/tasks/natural-language-captioning-continuity.md；记录环境、Git 和单一步骤，证据以阶段报告为准。
 
 ## 下一步动作
 
-继续完成 Phase 0–2 的缺口和完整后端/前端验收，然后进入 Phase 3 评测与 Phase 4 隔离重建；任何阶段未通过完成门都不得标记 complete。
+完成 Phase 0 的配置/错误契约和迁移边界复审，逐项核销该阶段完成门；凭据、连接测试、显式兜底和 facade 灰度补验已通过，随后解锁 Phase 1 的完整 API/真实视觉任务验收。
