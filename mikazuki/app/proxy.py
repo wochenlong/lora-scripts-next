@@ -16,7 +16,9 @@ def reverse_proxy_maker(url_type: str, full_path: bool = False):
     else:
         raise ValueError(f"unsupported proxy type: {url_type}")
 
-    client = httpx.AsyncClient(base_url=f"http://{host}:{port}/", proxies={}, trust_env=False, timeout=360)
+    # httpx 0.28 removed the legacy ``proxies`` keyword. ``trust_env=False``
+    # keeps this local reverse proxy independent from shell proxy variables.
+    client = httpx.AsyncClient(base_url=f"http://{host}:{port}/", trust_env=False, timeout=360)
 
     async def _reverse_proxy(request: Request):
         if full_path:

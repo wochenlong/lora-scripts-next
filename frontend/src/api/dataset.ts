@@ -1,8 +1,9 @@
 import { apiData } from "./client"
 
-export interface DatasetItem { name: string; relative_path: string; category: string; caption: string; caption_exists: boolean; tags: string[]; image_url: string; thumb_url: string }
+export type CaptionFormat = "tag" | "natural" | "mixed" | "unknown"
+export interface DatasetItem { name: string; relative_path: string; category: string; caption: string; caption_exists: boolean; tags: string[]; caption_format?: CaptionFormat; tag_blocks?: string[]; natural_text?: string; image_url: string; thumb_url: string }
 export interface DatasetScan { root: string; total: number; items: DatasetItem[]; tags: Array<{ tag: string; count: number }>; categories: Array<{ name: string; value: string; count: number }> }
-export interface ChangedItem { image: string; caption: string; caption_exists: boolean; tags: string[] }
+export interface ChangedItem { image: string; caption: string; caption_exists: boolean; tags: string[]; caption_format?: CaptionFormat }
 export interface TagReplacement { from: string; to: string }
 export interface DatasetMutation { changed: number; items: ChangedItem[] }
 export interface BatchEditRequest {

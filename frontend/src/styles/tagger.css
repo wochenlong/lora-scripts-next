@@ -121,3 +121,95 @@
 .tagger-grid {
   border-radius: var(--radius-lg);
 }
+
+.tagger-mode-tabs {
+  display: flex;
+  gap: 8px;
+  margin-top: 24px;
+}
+
+.tagger-mode-tabs button {
+  padding: 9px 14px;
+  color: var(--text-soft);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  cursor: pointer;
+}
+
+.tagger-mode-tabs button.active {
+  color: var(--text);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.wide-field {
+  grid-column: 1 / -1;
+}
+
+.tagger-grid textarea {
+  min-height: 92px;
+  padding: 10px 11px;
+  color: var(--text);
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  resize: vertical;
+}
+
+.caption-privacy,
+.caption-route-hint,
+.caption-preview,
+.caption-failures {
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.caption-preview {
+  padding: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.inline-config-button {
+  width: max-content;
+  padding: 5px 8px;
+  color: var(--text-soft);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.caption-profile-editor {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+
+.caption-profile-editor label {
+  display: grid;
+  gap: 5px;
+  color: var(--text-soft);
+  font-size: 12px;
+}
+
+.caption-profile-editor input,
+.caption-profile-editor select {
+  min-height: 34px;
+  padding: 0 8px;
+  color: var(--text);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.caption-profile-editor button {
+  width: max-content;
+}

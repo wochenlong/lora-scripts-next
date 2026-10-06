@@ -1,5 +1,18 @@
-export function splitCaptionTags(caption: string): string[] {
-  return caption.split(",").map((tag) => tag.trim()).filter(Boolean)
+import type { CaptionFormat } from "../api/dataset"
+
+export function detectCaptionFormat(caption: string): CaptionFormat {
+  const text = caption.trim()
+  if (!text) return "unknown"
+  const blocks = text.split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean)
+  const looksLikeTags = (value: string) => value.split(",").map((tag) => tag.trim()).filter(Boolean).every((tag) => tag.length <= 120 && !/[。！？.!?]/.test(tag))
+  if (blocks.length > 1 && looksLikeTags(blocks[0])) return "mixed"
+  return looksLikeTags(text) ? "tag" : "natural"
+}
+
+export function splitCaptionTags(caption: string, format: CaptionFormat = detectCaptionFormat(caption)): string[] {
+  if (format === "natural" || format === "unknown") return []
+  const source = format === "mixed" ? caption.split(/\n\s*\n/)[0] : caption
+  return source.split(",").map((tag) => tag.trim()).filter(Boolean)
 }
 
 export function addTagToCaption(caption: string, tag: string): string {

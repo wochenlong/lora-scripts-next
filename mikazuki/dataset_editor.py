@@ -12,18 +12,28 @@ from fastapi.responses import FileResponse, Response
 from PIL import Image
 from pydantic import BaseModel, Field
 
-from mikazuki.app.models import APIResponseSuccess
-from mikazuki.datasets.inuse import ensure_path_not_in_use
 
 
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".webp", ".bmp"}
+CaptionFormat = Literal["tag", "natural", "mixed", "unknown"]
 DEFAULT_THUMB_SIZE = 256
 _THUMBNAIL_CACHE_LIMIT = 2000
 
 router = APIRouter()
+
+
+class APIResponseSuccess(BaseModel):
+    status: str = "success"
+    message: str | None = None
+    data: dict | None = None
 _UNDO_STACKS: dict[str, list["EditTransaction"]] = {}
 _REDO_STACKS: dict[str, list["EditTransaction"]] = {}
 _THUMBNAIL_CACHE: dict[tuple[str, float, int], bytes] = {}
+
+
+def _ensure_path_not_in_use(path: str) -> None:
+    from mikazuki.datasets.inuse import ensure_path_not_in_use
+    ensure_path_not_in_use(path)
 
 
 @dataclass
@@ -90,6 +100,40 @@ def parse_tags(caption: str) -> list[str]:
         seen.add(tag)
         tags.append(tag)
     return tags
+
+
+def _looks_like_tag_block(value: str) -> bool:
+    text = value.strip()
+    if not text or len(text) > 400 or chr(10) in text:
+        return False
+    parts = [part.strip() for part in text.split(",") if part.strip()]
+    if not parts:
+        return False
+    return all(len(part) <= 120 and not any(mark in part for mark in ("。", "！", "？", ".", "!", "?")) for part in parts)
+
+
+def detect_caption_format(caption: str) -> CaptionFormat:
+    text = str(caption or "").strip()
+    if not text:
+        return "unknown"
+    blocks = [block.strip() for block in text.split(chr(10) + chr(10)) if block.strip()]
+    if len(blocks) >= 2 and _looks_like_tag_block(blocks[0]):
+        return "mixed"
+    if _looks_like_tag_block(text):
+        return "tag"
+    return "natural"
+
+
+def caption_projection(caption: str) -> tuple[CaptionFormat, list[str], str]:
+    format_name = detect_caption_format(caption)
+    if format_name == "tag":
+        return format_name, parse_tags(caption), ""
+    if format_name == "mixed":
+        blocks = [block.strip() for block in caption.split(chr(10) + chr(10)) if block.strip()]
+        tags = parse_tags(blocks[0]) if blocks else []
+        natural = (chr(10) + chr(10)).join(blocks[1:])
+        return format_name, tags, natural
+    return format_name, [], caption.strip()
 
 
 def normalize_caption_for_cleanup(caption: str, underscore_to_space: bool = False, strip_escape_chars: bool = False) -> list[str]:
@@ -201,7 +245,8 @@ def restore_caption(root: Path, snapshot: CaptionSnapshot) -> dict:
         "image": snapshot.image,
         "caption": caption,
         "caption_exists": caption_path.is_file(),
-        "tags": parse_tags(caption),
+        "tags": caption_projection(caption)[1],
+        "caption_format": caption_projection(caption)[0],
     }
 
 
@@ -210,7 +255,8 @@ def snapshot_to_item(snapshot: CaptionSnapshot) -> dict:
         "image": snapshot.image,
         "caption": snapshot.caption,
         "caption_exists": snapshot.caption_exists,
-        "tags": parse_tags(snapshot.caption),
+        "tags": caption_projection(snapshot.caption)[1],
+        "caption_format": caption_projection(snapshot.caption)[0],
     }
 
 
@@ -254,7 +300,7 @@ def scan_dataset(root: Path) -> dict:
         rel = normalize_relative_path(image_path.relative_to(root))
         category = category_for(root, image_path)
         caption = read_caption(image_path)
-        tags = parse_tags(caption)
+        caption_format, tags, natural_text = caption_projection(caption)
         tag_counts.update(tags)
         category_counts.update([category])
         caption_path = caption_path_for(image_path)
@@ -267,6 +313,9 @@ def scan_dataset(root: Path) -> dict:
                 "caption": caption,
                 "caption_exists": caption_path.is_file(),
                 "tags": tags,
+                "caption_format": caption_format,
+                "tag_blocks": tags if caption_format == "mixed" else [],
+                "natural_text": natural_text,
                 "image_url": f"/api/dataset-editor/image?{image_query}",
                 "thumb_url": f"/api/dataset-editor/image?{image_query}&thumb=1",
             }
@@ -303,7 +352,7 @@ async def image(root: str, image: str, thumb: bool = False, size: int = DEFAULT_
 @router.post("/dataset-editor/caption")
 async def save_caption(req: CaptionWriteRequest):
     root = dataset_root(req.root)
-    ensure_path_not_in_use(str(root))
+    _ensure_path_not_in_use(str(root))
     image_path = resolve_image(root, req.image)
     if not image_path.is_file():
         raise HTTPException(status_code=404, detail="image not found")
@@ -316,7 +365,8 @@ async def save_caption(req: CaptionWriteRequest):
             "image": normalize_relative_path(image_path.relative_to(root)),
             "caption": caption,
             "caption_exists": caption_path_for(image_path).is_file(),
-            "tags": parse_tags(caption),
+            "tags": caption_projection(caption)[1],
+            "caption_format": caption_projection(caption)[0],
         }
     )
 
@@ -324,7 +374,7 @@ async def save_caption(req: CaptionWriteRequest):
 @router.post("/dataset-editor/batch")
 async def batch_edit(req: BatchEditRequest):
     root = dataset_root(req.root)
-    ensure_path_not_in_use(str(root))
+    _ensure_path_not_in_use(str(root))
     append_tags = parse_tags(",".join(req.append))
     remove_tags = set(parse_tags(",".join(req.remove)))
     replacements = {item.source.strip(): item.target.strip() for item in req.replace if item.source.strip()}
@@ -337,9 +387,16 @@ async def batch_edit(req: BatchEditRequest):
         image_path = resolve_image(root, rel)
         if not image_path.is_file():
             continue
+        current_caption = read_caption(image_path)
+        caption_format, _, _ = caption_projection(current_caption)
+        if caption_format in {"natural", "mixed", "unknown"}:
+            raise HTTPException(
+                status_code=409,
+                detail={"code": "caption_format_unsafe", "message": "自然语言或 mixed caption 不能使用 Tag 批量清理、排序或去重"},
+            )
         tags = (
             normalize_caption_for_cleanup(
-                read_caption(image_path),
+                current_caption,
                 underscore_to_space=req.underscore_to_space,
                 strip_escape_chars=req.strip_escape_chars,
             )
@@ -367,7 +424,7 @@ async def batch_edit(req: BatchEditRequest):
         if req.sort:
             next_tags = sorted(next_tags)
         next_caption = format_tags(next_tags)
-        if next_caption != read_caption(image_path):
+        if next_caption != current_caption:
             before_snapshots.append(capture_caption(root, image_path))
             write_caption(image_path, next_caption)
             after_snapshots.append(capture_caption(root, image_path))
@@ -378,6 +435,7 @@ async def batch_edit(req: BatchEditRequest):
                 "caption": next_caption,
                 "caption_exists": caption_path_for(image_path).is_file(),
                 "tags": next_tags,
+                "caption_format": "tag",
             }
         )
 
@@ -388,7 +446,7 @@ async def batch_edit(req: BatchEditRequest):
 @router.post("/dataset-editor/undo")
 async def undo(req: UndoRequest):
     root = dataset_root(req.root)
-    ensure_path_not_in_use(str(root))
+    _ensure_path_not_in_use(str(root))
     stack = _UNDO_STACKS.get(normalize_path(str(root)), [])
     if not stack:
         return APIResponseSuccess(data={"changed": 0, "items": []}, message="nothing to undo")
@@ -402,7 +460,7 @@ async def undo(req: UndoRequest):
 @router.post("/dataset-editor/redo")
 async def redo(req: UndoRequest):
     root = dataset_root(req.root)
-    ensure_path_not_in_use(str(root))
+    _ensure_path_not_in_use(str(root))
     key = normalize_path(str(root))
     stack = _REDO_STACKS.get(key, [])
     if not stack:

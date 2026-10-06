@@ -11,7 +11,7 @@ import TagTranslationSettingsDialog from "../components/dataset/TagTranslationSe
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
 import { useServerPathPick } from "../composables/useServerPathPick"
-import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
+import { addTagToCaption, detectCaptionFormat, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 import { useTagTranslations } from "../composables/useTagTranslations"
 import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
 
@@ -121,6 +121,8 @@ const targets = computed(() =>
   selectedPaths.value.size ? items.value.filter((item) => selectedPaths.value.has(item.relative_path)) : filtered.value,
 )
 const captionTags = computed(() => splitCaptionTags(caption.value))
+const captionFormat = computed(() => detectCaptionFormat(caption.value))
+const tagEditingAllowed = computed(() => captionFormat.value === "tag" || captionFormat.value === "mixed")
 const allDatasetTags = computed(() => {
   const unique = new Set<string>(tags.value.map((item) => item.tag))
   items.value.forEach((item) => {
@@ -452,12 +454,20 @@ function closeToolPanel() {
 }
 
 function addCaptionTag() {
+  if (!tagEditingAllowed.value) {
+    ElMessage.warning(t("datasetEditor.caption.naturalTagEditBlocked"))
+    return
+  }
   const next = addTagToCaption(caption.value, newCaptionTag.value)
   if (next !== caption.value) caption.value = next
   newCaptionTag.value = ""
 }
 
 function removeCaptionTag(tag: string) {
+  if (!tagEditingAllowed.value) {
+    ElMessage.warning(t("datasetEditor.caption.naturalTagEditBlocked"))
+    return
+  }
   caption.value = removeTagFromCaption(caption.value, tag)
 }
 
@@ -476,6 +486,7 @@ function onChipDragOver(event: DragEvent) {
 
 function onChipDrop(toIndex: number, event: DragEvent) {
   event.preventDefault()
+  if (!tagEditingAllowed.value) return
   const from = dragTagIndex.value
   dragTagIndex.value = null
   if (from == null || from === toIndex) return
@@ -529,7 +540,7 @@ function apply(changes: ChangedItem[]) {
   editorSession.clearDrafts(root.value, changes.map((item) => item.image))
   items.value = items.value.map((item) => {
     const change = map.get(item.relative_path)
-    return change ? { ...item, caption: change.caption, tags: change.tags, caption_exists: change.caption_exists } : item
+    return change ? { ...item, caption: change.caption, tags: change.tags, caption_exists: change.caption_exists, caption_format: change.caption_format ?? item.caption_format } : item
   })
   if (current.value) caption.value = current.value.caption
   rebuildTags()
@@ -624,6 +635,10 @@ async function browsePath() {
 
 async function batch() {
   if (!targets.value.length) return
+  if (targets.value.some((item) => item.caption_format !== "tag")) {
+    ElMessage.warning(t("datasetEditor.caption.naturalBatchBlocked"))
+    return
+  }
   try {
     await ElMessageBox.confirm(
       t("datasetEditor.batch.confirm", { n: targets.value.length }),
@@ -946,7 +961,8 @@ onUnmounted(() => {
             @update:provider="setTranslationProvider"
             @settings="openTranslationSettings"
           />
-          <div class="caption-chips" @dragover="onChipDragOver">
+          <p v-if="!tagEditingAllowed" class="caption-format-warning">{{ t("datasetEditor.caption.naturalCaptionReadOnly", { format: captionFormat }) }}</p>
+          <div v-else class="caption-chips" @dragover="onChipDragOver">
             <span
               v-for="(tag, index) in captionTags"
               :key="`${index}:${tag}`"
@@ -967,7 +983,7 @@ onUnmounted(() => {
               <button type="button" @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button>
             </span>
           </div>
-          <small class="caption-drag-hint">{{ t("datasetEditor.caption.dragHint") }}</small>
+          <small v-if="tagEditingAllowed" class="caption-drag-hint">{{ t("datasetEditor.caption.dragHint") }}</small>
           <details class="caption-raw">
             <summary>{{ t("datasetEditor.caption.rawToggle") }}</summary>
             <div class="caption-editor">

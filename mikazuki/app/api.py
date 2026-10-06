@@ -54,6 +54,8 @@ from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  TaggerPrefetchRequest)
 from mikazuki.dataset_editor import router as dataset_editor_router
 from mikazuki.tag_translation.api import router as tag_translation_router
+from mikazuki.llm.api import router as llm_router
+from mikazuki.tagger.caption_api import router as caption_router
 from mikazuki.datasets.api import router as datasets_router
 from mikazuki.datasets.inuse import ensure_path_not_in_use
 from mikazuki.plugin_marketplace.api import host_router as plugin_host_router
@@ -80,6 +82,8 @@ from mikazuki.utils.tk_window import (NativePickerError,
 router = APIRouter()
 router.include_router(dataset_editor_router)
 router.include_router(tag_translation_router)
+router.include_router(llm_router)
+router.include_router(caption_router)
 router.include_router(datasets_router)
 router.include_router(plugin_marketplace_router)
 router.include_router(plugin_host_router)

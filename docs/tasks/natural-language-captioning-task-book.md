@@ -124,15 +124,15 @@
 
 ## 进度台账
 
-- Overall progress: 参考分析、设计书、远程验证和 Qwen3-VL-2B 本地中文探针完成；第二轮设计/任务书审计已完成；等待用户最终 goal 提示词后开工。
-- Phase 0: pending
-- Phase 1: pending
-- Phase 2: pending
+- Overall progress: Phase 0 统一 LLM 和 Phase 1/2 的首轮实现已进入工作树；后端共享配置、视觉任务 API、TaggerPage 三模式和 Dataset Editor 格式安全已有可执行代码与 focused evidence。
+- Phase 0: in progress
+- Phase 1: in progress
+- Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
-- Validation status: P1 pass-with-boundary；实现验证和最终隔离重建尚未开始。
+- Validation status: P1 pass-with-boundary；后端 focused 57 tests 和前端 check 已通过，真实资源、完整灰度/人工验收和隔离重建尚未完成。
 - Residual risks: 远程优先路由和旧配置迁移需要先建立 contract；本地 Qwen3-VL-2B 资源成本需在 UI 中可见。
 
 ## 下一步动作
 
-等待用户发送最终 goal 提示词；收到后在 feat/NL-Captioning 从 Phase 0 开工，最终必须完成 Phase 0–4，并以隔离重建真实验收作为唯一最终完成门。
+继续完成 Phase 0–2 的缺口和完整后端/前端验收，然后进入 Phase 3 评测与 Phase 4 隔离重建；任何阶段未通过完成门都不得标记 complete。
