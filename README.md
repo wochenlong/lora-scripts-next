@@ -24,7 +24,7 @@ Building on the Akegarasu training workflow, it integrates engines such as Kohya
 | Tagging and editing | Local WD-family tagging, image-centered caption editing, shared dataset paths across tools |
 | Training | Model / engine / target selection, TOML preview and import/export, LoRA and full finetuning where supported |
 | Monitoring | Training queues, task status, logs, Loss and previews; TensorBoard remains an option |
-| Engine management | Manage training environments, search and filter engines, drag to reorder, five items per page; order saved in the current browser |
+| Engine management | Manage training environments, search and filter engines, drag to reorder, five items per page; engine preferences and order saved on the server |
 
 ### Models and Engines
 
@@ -59,6 +59,16 @@ Guides: [Anima](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [
 | Tagger models and storage | [Tagger models](docs/tagger-models.md) |
 | Monitoring and command-line use | [Train monitor](docs/train-monitor.md) · [CLI](docs/cli-args.md) |
 | Development and packaging | [Repository layout](docs/repo-layout.md) · [Build guide](docs/portable-build-guide.md) |
+
+### User Data
+
+Engine preferences and ordering are stored in project-root `user_data/`, so they
+survive browser and port changes. This branch also adds user preset CRUD and
+configuration archives for new training tasks. GUI, monitor and TensorBoard
+startup settings share a configuration file with GUI port priority.
+
+See [user data and migration boundaries](docs/user-data.md). Existing history is
+not migrated; this is not a complete migration of every browser preference.
 
 ## What We Have Built
 

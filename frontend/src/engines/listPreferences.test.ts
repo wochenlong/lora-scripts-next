@@ -21,19 +21,19 @@ it("inserts before or after a target without disturbing other entries", () => {
 it("keeps hidden engines in relative order during a filtered move", () => {
   expect(moveEngine(ids, "ai-toolkit", "kohya")).toEqual(["ai-toolkit", "kohya", "anima-fast", "musubi"])
 })
-it("persists order without changing training preferences", () => {
+it("never reads order from legacy browser storage", () => {
   localStorage.setItem("nt.training.enginePrefs", '{"rememberLast":false}')
-  expect(saveEngineOrder([...ids].reverse())).toBe(true)
-  expect(readEngineOrder(ids)).toEqual([...ids].reverse())
+  localStorage.setItem("nt.settings.engineOrder", JSON.stringify([...ids].reverse()))
+  expect(readEngineOrder(ids)).toEqual(ids)
   expect(localStorage.getItem("nt.training.enginePrefs")).toBe('{"rememberLast":false}')
 })
-it("recovers from malformed or inaccessible storage", () => {
+it("recovers from malformed or inaccessible legacy storage but rejects unhydrated saves", async () => {
   localStorage.setItem("nt.settings.engineOrder", "{")
   expect(readEngineOrder(ids)).toEqual(ids)
   vi.spyOn(Storage.prototype, "getItem").mockImplementation(() => { throw new Error("blocked") })
   expect(readEngineOrder(ids)).toEqual(ids)
   vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota") })
-  expect(saveEngineOrder(ids)).toBe(false)
+  await expect(saveEngineOrder(ids)).rejects.toThrow()
 })
 it("combines localized search and precise status filters", () => {
   expect(matchesEngineFilter("Anima Fast 图像", "ready", " ANIMA ", "installed")).toBe(true)

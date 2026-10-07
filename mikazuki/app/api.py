@@ -49,6 +49,7 @@ from mikazuki.app.train_submit import (
     toml,
 )
 from mikazuki.app.config import app_config
+from mikazuki.app.user_data_api import router as user_data_router
 from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  APIResponseSuccess, TaggerInterrogateRequest,
                                  TaggerPrefetchRequest)
@@ -78,6 +79,7 @@ from mikazuki.utils.tk_window import (NativePickerError,
                                       tkinter_available)
 
 router = APIRouter()
+router.include_router(user_data_router)
 router.include_router(dataset_editor_router)
 router.include_router(tag_translation_router)
 router.include_router(datasets_router)

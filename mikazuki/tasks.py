@@ -414,6 +414,12 @@ class TaskManager:
         lane is busy; call submit()/submit_group() to schedule execution."""
         with self._cond:
             task_id = task_id or str(uuid.uuid4())
+            metadata = dict(metadata or {})
+            if lane == LANE_COMPUTE and metadata.get("config_path"):
+                from mikazuki.user_data import UserDataStore
+                archive = UserDataStore().archive_task(
+                    task_id, metadata, metadata.get("config_path"))
+                metadata["task_archive"] = archive
             task = Task(task_id=task_id, command=command, environ=environ,
                         metadata=metadata, cwd=cwd, lane=lane, group=group)
             if lane == LANE_COMPUTE and self._compute_busy_locked():
@@ -655,6 +661,7 @@ class TaskManager:
         new_tasks: List[Task] = []
         for member in members:
             metadata = dict(member.metadata)
+            metadata.pop("task_archive", None)
             for key in self._RETRY_STRIP_METADATA:
                 metadata.pop(key, None)
             metadata["retry_of"] = member.task_id

@@ -145,3 +145,6 @@ extensions/diffsynth/
 
 # Generated frontend assets (existing tracked release assets remain tracked)
 /frontend/dist/
+
+# User-owned settings, credentials, presets and task archives.
+/user_data/

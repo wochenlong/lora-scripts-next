@@ -92,7 +92,9 @@ watch([model, engine, target], () => {
     adjusted = true
   }
   if (adjusted) ElMessage.info(t("training.selector.autoAdjusted"))
-  rememberSelection(model.value, engine.value, target.value)
+  void rememberSelection(model.value, engine.value, target.value).catch((error: unknown) => {
+    ElMessage.error(error instanceof Error ? error.message : t("engineSettings.saveFailed"))
+  })
   router.replace({ query: { model: model.value, engine: engine.value, target: target.value } })
 })
 </script>
