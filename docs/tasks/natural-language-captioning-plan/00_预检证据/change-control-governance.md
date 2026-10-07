@@ -7,7 +7,8 @@
 - remote-first 改为 local-first；
 - translation/caption profile schema 改变；
 - vision capability 判定改变；
-- caption 写回格式或 mixed 解析改变；
+- caption 写回格式或历史 mixed 兼容解析改变；首版不得新增 mixed 输出；
 - 增加模型下载或外发 provider；
 - 放宽 API Key/路径/图片日志策略；
 - 跳过计划测试或降低 EDD 阈值。
+

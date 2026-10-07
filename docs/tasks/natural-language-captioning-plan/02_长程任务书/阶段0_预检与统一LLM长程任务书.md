@@ -1,33 +1,21 @@
-# 阶段 0：预检与统一 LLM
+# 阶段 0：契约收敛与统一 LLM 长程任务书
 
-## Purpose
+## 目标
 
-集中配置、能力、资产和路由复杂度，为翻译与视觉打标提供稳定公共 seam。
+将现有实现和计划从旧 mode-first/combined 设计收敛到 Issue #409 的 model-first、capability-driven 契约。
 
-## 执行步骤
+## 任务
 
-1. 在 feat/NL-Captioning 工作树记录初始 git 状态、源 commit 和本阶段 evidence 目录。
-2. 新增统一 LLM contracts、profile v5、mask 和 revision。
-3. 迁移现有 translation config/store/service 到 facade，保留旧 facade。
-4. 实现 capability routing：translation=text；caption/combined=vision。
-5. 实现 remote-first：远程可用优先，失败后按策略启用本地 fallback。
-6. 注册 SiliconFlow remote profile contract 和 Qwen3-VL-2B local asset manifest，不把 Key 写入文件。
-7. 建立 fake text/vision endpoint 和 migration fixtures。
-8. 跑翻译、tagger、config、store 相关回归测试。
+1. 记录 Issue #409、当前 commit、工作区和现有实现差异。
+2. 从首版 UI/API/验收中移除 combined/mixed 创建和 Agent/plugin 范围。
+3. 冻结 runtime、model、capability、output、user_data caption preset schema。
+4. 审计统一 LLM、旧翻译 API、旧 `/api/interrogate` 和 API 动态入口。
+5. 形成保留/迁移/删除/历史兼容表。
 
-## 完成标准
+## 完成门
 
-- 旧 API 兼容；
-- capability 和 route unit/contract pass；
-- migration 幂等；
-- remote-first/local-fallback 行为可模拟；
-- 无 secret/path 日志；
-- Phase 1 开工清单通过。
+canonical design/task/goal/manifest/targets/checklists 一致；没有首版 combined/mixed 入口或 Agent 依赖；preset 与训练预设隔离方案可执行；差异表和 failure report 已归档。
 
-## Failure handling
+## 验证与证据
 
-迁移失败保留 v4 文件，停止进入 Phase 1；旧翻译 regression 失败时回到 facade adapter；远程优先策略不明确时阻止 UI 接线。
-
-## Evidence
-
-tests output、migration fixture、fake server transcript、git diff --check、task book update。
+文档一致性搜索、schema review、git diff review；证据写入 `phase-0-contract-alignment/`。

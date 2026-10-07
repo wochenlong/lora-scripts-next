@@ -5,8 +5,9 @@ P1 已完成并记录在 docs/tasks/natural-language-captioning-feasibility-prob
 硬性边界：
 
 - 远程优先，本地兜底；
-- translation 不需要 vision，caption/combined 必须 vision；
+- translation 不需要 vision，caption 必须 vision；首版不创建 combined/mixed；
 - API Key 不落盘；
 - 真实远程调用只用脱敏样本；
 - 证据不进入 Git；
 - 取消和失败必须保留失败样本。
+

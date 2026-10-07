@@ -14,7 +14,7 @@
 
 ## Phase 1 探针
 
-- 3 image fake caption job，验证 natural/combined、cache、atomic writer。
+- 3 image fake caption job，验证 natural、cache、atomic writer。
 - cancel after first completed image，验证已完成项保留。
 - external file mutation，验证 caption_conflict。
 
@@ -24,3 +24,4 @@
 - 单次真实任务最长 15 分钟；
 - 远程样本只使用公开或脱敏图；
 - 输出放 evidence 目录，测试结束清理图片、model cache 和 raw response。
+

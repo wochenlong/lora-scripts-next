@@ -1,3 +1,12 @@
+# 2026-10-07 Issue #409 重规划增量
+
+- 当前契约已切换为 Issue #409；设计书、canonical task book、manifest、目标计划和 goal 已重写为 v3.0。
+- 首版范围是 model-first 的本地模型/API 服务、Tag/自然语言 Caption、模型专属参数、user_data Caption prompt preset、任务安全和 Dataset Editor safety。
+- 首版不创建、不展示、不验收 combined/mixed；历史 combined/mixed 证据保留为旧契约记录，不得当作本版完成门。
+- Agent、sidecar、provider、plugin marketplace 不属于本任务；越界未提交计划和工具已清理。
+- 当前 readiness 为 drafting；下一步是 Phase 0 差异审计，之后才重新开工。
+
+以下内容是重规划前的历史执行记录，仅用于保留已验证事实，不能覆盖以上新契约。
 # 自然语言打标续接摘要
 
 2026-10-07；canonical progress：natural-language-captioning-task-book.md。每次继续先读goal-objective，完整目标必须包括全部前后端、完整测试/真实/人工验收和Phase4从零重建。
@@ -83,3 +92,4 @@ DiffSynth Windows fixture改为稀疏标志+末字节seek/write，保留逻辑�
 ModelScope tokenizer联网测试已限定实际JSON/TXT下载，7 passed/7.39s，原卡住单项关闭；主矩阵分区再次复验handle29013已结束（1474通过/4权限失败/25跳过/1单独验证），日志sandbox/nl-caption-eval-20261007/logs/main-tests-partition-r2-20261007.txt。不要重复启动观察同一run；结束后记录实际总数，再在修复后的源码上完整组合复验。HEAD2d56b45已提交18文件，后续ModelScope修复读最新git log。已有4个Windows权限与25个skip仍未核销，root vendor矩阵仍待处理。冻结manifest保持原样，评分approval为后来用户事件。清理被review拒绝的临时模型目录未删除，未复用。
 
 最新HEAD读git log；本轮所有自己启动的模型/UI/测试进程均已结束，浏览器about:blank。当前Windows权限问题尚需用户处理；没有批准任何失败或skip豁免。下一轮先完成矩阵缺口审计，不重做P1探针或人工评分。用户评分只对应最初A/B精确文本。
+

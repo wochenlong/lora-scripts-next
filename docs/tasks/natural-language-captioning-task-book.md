@@ -1,161 +1,263 @@
-# 数据集自然语言打标长程任务书
+# 数据集模型打标与自然语言 Caption 长程任务书（Issue #409 对齐版）
 
 ## 计划元数据
 
-- Plan ID: DATASET-NL-TAGGING-20261006
-- Version: v2.2-executing
-- Last updated: 2026-10-07 Asia/Shanghai
-- Canonical progress file: 本文
-- Construction plan: docs/tasks/natural-language-captioning-plan/
-- Design source: docs/design/natural-language-captioning-tagging-design.md
-- Current branch: feat/NL-Captioning
-- Current active phase: Phase 3 — 评测、发布与维护；Phase 0/1/2 完成门通过
-- Execution readiness: executing（已收到完整交付 goal；禁止以局部检查通过替代最终验收）
-- Scale: Full
+- Plan ID：`DATASET-NL-TAGGING-20261006`
+- Version：`v3.0-issue-409-aligned`
+- Last updated：2026-10-07 Asia/Shanghai
+- Canonical progress file：本文
+- Design source：`docs/design/natural-language-captioning-tagging-design.md`
+- Construction plan：`docs/tasks/natural-language-captioning-plan/`
+- Contract：[#409 模型打标界面与自然语言标注](https://github.com/wochenlong/lora-scripts-next/issues/409)
+- Related issues：#365 数据集工作区、#405 user_data/任务契约
+- Current branch：`feat/NL-Captioning`
+- Current active phase：重新规划后的 Phase 0 — 契约收敛与差异修复
+- Execution readiness：`drafting`（设计、任务书和 goal 已重写；等待重新审计后再开工）
+- Scale：Full
 
-## 目标
+## 总目标
 
-在 Dataset Tagger 页面提供 Tag、自然语言 caption、组合打标三种模式。打标与标签翻译共用统一 LLM 管理、profile、Key、模型资产、运行时、缓存和连接测试。翻译 profile 不要求视觉能力；caption/组合 profile 强制声明 vision capability。远程 LLM 总是优先，本地 LLM 只作为用户主动启用的可选兜底。
+在既有 Dataset Tagger 页面内完成 Issue #409 约定的模型打标体验：用户按“数据集 → 运行方式 → 具体模型 → 模型专属参数/提示词 → 单图试标 → 批量打标”执行 Tag 或自然语言 Caption。WD/CL Tag 行为继续兼容；视觉模型按 capability 生成自然语言；翻译与 Caption 共用统一 LLM 管理；远程 Profile 可用时始终优先，本地视觉模型只在用户明确启用且远程失败后兜底。
+
+首版不实现、不展示组合打标或混合输出。已有 mixed provenance 代码只用于读取历史/外部文件的安全兼容，不得成为新任务的输出模式或验收门。
 
 ## 范围与约束
 
-- In scope:
-  - 统一 LLM 配置、profile、asset、runtime、cache、revision。
-  - 远程 OpenAI-compatible vision 与本地 Qwen3-VL-2B fallback。
-  - Tagger job、提示词预设、预览、缓存、取消、重试、报告和安全写回。
-  - TaggerPage UI、共享 LLM 设置、自然语言/组合模式。
-  - Dataset Editor 的 tag/natural/mixed 格式安全。
-  - 单元、契约、集成、灰度、真实资源、Zero-Short 和 LLM 评测。
-  - 前后端完整验收、人工验收、发布前回归和隔离重建从零真实验收。
-- Out of scope:
-  - 让 LLM 直接替代 WD/CL 生成训练 Tag。
-  - 自动上传用户数据集到远程服务。
-  - 发布模型二进制到 Git。
-  - 多任务并发调度。
-- Constraints:
-  - Node 22、npm、Python 项目现有依赖。
-  - API Key 仅在后端进程内注入；配置文件只保存掩码，重启后重新注入。翻译与打标共用凭据，前端响应以掩码返回。
-  - 远程图片使用受限 JPEG data URL，不发送本地路径。
-  - 修改公开代码必须关联 GitHub Issue；实现应在 feature 分支。
-  - 最终完成必须在全新目录/全新运行环境中从零安装、构建、启动并验收；真实远程请求只使用允许外发的脱敏样本，本地模型资产和凭据不进入 Git。
-  - 隔离重建不得复用旧 worktree 的未提交文件、旧配置、旧模型缓存或旧测试产物。
+### In scope
+
+- TaggerPage 的模型/运行方式优先信息架构。
+- WD/CL Tag 旧 API、旧配置、阈值和输出兼容。
+- 本地视觉 Caption 模型和已配置远程视觉 Profile。
+- 模型系列折叠、搜索、具体型号、下载/就绪状态和 capability 驱动参数。
+- Caption 默认提示词、编辑、保存、另存为、恢复默认、未保存修改保护。
+- `user_data/presets/` 中 `kind=caption_prompt` 的预设 CRUD，与训练预设隔离。
+- 单图预览、持久批量任务、底部进度、取消、失败项重试、跳过/明确覆盖。
+- 共享 LLM Profile、asset、runtime、cache、revision、密钥掩码和连接测试。
+- strict JSON/语言/长度/不臆测校验，受限 JPEG data URL，原子写回和 before hash 冲突保护。
+- Dataset Editor 的 tag/natural/unknown 安全；历史 mixed 只读兼容。
+- Unit、Contract、Integration、Gray、Frontend、Real、EDD、Zero-Short 和 Phase4 隔离重建。
+
+### Out of scope
+
+- `combined`、`mixed`、`tags_then_caption`、`caption_then_tags` 的新建、UI 入口和首版验收。
+- WD + Caption 双模型串联、本地 + API 联合流水线。
+- 不可用 API 的空入口或虚假“即将可用”模型。
+- Agent、sidecar、provider、plugin marketplace 及其旧真实接口测试。
+- 让 LLM 替代 WD/CL 生成训练 Tag。
+- 独立进程/独立端口、多任务并发调度、自动上传数据集。
+- API Key、用户图片、原始响应、模型二进制进入 Git 或证据公开目录。
+
+### 不可违反的边界
+
+- API Key 只在后端运行时注入；配置、响应、预设、任务档案、日志和报告只允许掩码或布尔状态。
+- 翻译 Profile 只需 `text`；Caption Profile 必须声明 `vision` 和 `caption`；后端能力校验是最终依据。
+- API 运行方式只有在存在真实可用 Profile 时才显示；没有 API 配置不构成空入口。
+- 远程视觉请求只发送受限 JPEG data URL，不发送本地路径、文件名、数据集名或 EXIF。
+- Natural caption 不经 Tag 拆分、排序、去重、下划线转换；旧 Tag 继续按原逻辑处理。
+- 已有标注默认跳过；覆盖必须明确；停止不写空文件；外部 hash 变化触发 conflict。
+- 隔离重建必须重新建立目录、venv、node_modules、配置、数据库、缓存、样本和模型资产，禁止复用旧产物。
+- 所有失败、跳过和不适用项必须记录实际原因、替代证据和批准人，不能口头核销。
 
 ## 执行阶段
 
-### Phase 0: 预检与统一 LLM
+### Phase 0：契约收敛与差异修复
 
-- Purpose: 冻结兼容边界，建立统一 profile、revision、capability 和远程优先路由。
-- Outputs: mikazuki/llm facade、配置迁移、fake client、profile contract。
-- Completion criteria: 旧翻译测试通过；v4 配置可迁移；translation 不需要 vision；caption 选择 text-only profile 会被拒绝；remote-first 路由有测试。
-- Validation: Python unit/contract/gray tests、旧 API regression。
-- Evidence: 阶段任务书、测试日志、迁移样例、decision log。
+**目的**：把现有实现和文档从旧的 mode-first/combined 设计收敛到 Issue #409。
 
-### Phase 1: 后端视觉任务
+**任务**：
 
-- Purpose: 接入视觉请求、提示词、任务进度、缓存、写回和报告。
-- Outputs: vision adapter、caption job、writer、错误码、retry/cancel。
-- Completion criteria: Tag/natural/combined 三模式可由 fake endpoint 完成；写回原子化；训练占用和文件冲突受保护。
-- Validation: unit/contract/integration、fake OpenAI-compatible server、低限额真实 Qwen3-VL。
-- Evidence: job report、failure samples、before/after hash。
+1. 更新设计书、任务书、goal、manifest、总控索引和目标计划，统一声明 #409。
+2. 从首版 UI 和 API contract 移除 combined/mixed 创建入口、布局参数和双模型流水线。
+3. 设计 runtime-first/model-first 页面信息架构和 capability schema。
+4. 盘点现有 `prompt_presets` 配置，设计迁移到 `user_data/presets/` 的兼容方案。
+5. 明确 API 动态入口：已配置可用才显示；无配置不显示空入口。
+6. 清除 Agent/plugin 计划、验收和非本任务依赖。
 
-### Phase 2: 前端与编辑器安全
+**输出**：对齐后的设计书、任务书、goal、manifest、差异清单、迁移说明。
 
-- Purpose: TaggerPage 具备远程优先、提示词、预览、进度和重试；Dataset Editor 能安全处理 mixed caption。
-- Outputs: Vue API/types/composables/components、i18n、caption_format。
-- Completion criteria: UI 不允许不具备 vision 的 profile 执行 caption；旧 Tag 表单回归；自然语言文本不被 Tag 清理破坏。
-- Validation: typecheck/lint/Vitest/build、组件手测、窄屏和键盘验收。
-- Evidence: frontend test report、manual acceptance record。
+**完成标准**：所有 canonical 计划文档无首版 combined 硬门、无 Agent 范围；关键代码差异已逐项登记；无未授权 P0/P1。
 
-### Phase 3: 评测、发布与维护
+**验证**：文档一致性搜索、API/UI contract review、git diff review。
 
-- Purpose: 用冻结评测集确认模型/提示词质量，补齐 Zero-Short、隐私、回滚和交付说明。
-- Outputs: eval dataset、baseline report、release audit、user documentation。
-- Completion criteria: P0/P1 无未授权问题；远程中文路径和 Qwen3-VL-2B fallback 都有证据；计划产物与代码状态一致。
-- Validation: real resource test、EDD rubric、Zero-Short、review。
-- Evidence: docs/tasks/natural-language-captioning-feasibility-probe.md、eval report、final review。
+**证据**：`docs/evidence/natural-language-captioning/phase-0-contract-alignment/`。
 
-### Phase 4: 隔离重建与从零真实验收
+### Phase 1：统一 LLM 与模型能力契约
 
-- Purpose: 证明交付物不依赖开发机残留状态，用户可以从干净来源真实复现完整功能。
-- Outputs: isolated rebuild log、依赖与配置清单、前后端启动记录、真实远程优先/本地兜底结果、写回前后 hash、清理报告和最终验收签字记录。
-- Completion criteria:
-  - 从全新 worktree 或干净源码包开始，不带旧 .venv、node_modules、模型缓存、配置、SQLite、测试输出和未提交文件；
-  - 按文档重新安装依赖、构建前端、启动后端和前端，并通过健康检查；
-  - 在受控脱敏样本上完成 Tag、natural、combined 三种路径，验证远程优先、远程失败后本地兜底、取消、失败重试、冲突保护和安全写回；
-  - 运行完整测试矩阵并保存命令、commit、环境、样本 hash、profile/prompt revision 和输出摘要；
-  - 清理临时模型、图片、Key、原始响应和缓存，确认无秘密或用户数据进入 Git。
-- Validation: Zero-Short、isolated rebuild、backend/frontend build、real remote/local smoke、manual acceptance、privacy scan。
-- Evidence: evidence/natural-language-captioning/phase-4-isolated-rebuild/ 下的可审计日志、hash 清单、测试报告和清理报告。
+**目的**：确保翻译和打标共用管理层，模型 capability、运行方式、专属参数和远程优先行为可验证。
+
+**任务**：
+
+1. 保持 v5 Profile/旧翻译配置迁移和密钥掩码兼容。
+2. 为模型注册表补齐 `supports_tag`、`supports_caption`、`supports_vision`、transport、下载状态和参数 schema。
+3. 将 Caption prompt preset 接入 `user_data/presets/`，与训练 preset 按 kind 隔离；保留旧配置读取迁移。
+4. 让翻译 Profile 可以 text-only，Caption 请求拒绝无 vision Profile 和不适用参数。
+5. 保持 remote-first；local fallback 必须显式启用；API 未配置时不产生空入口。
+6. 保持连接测试、cache revision、资产/运行时状态和日志脱敏。
+
+**输出**：统一 Profile/model/preset contract、迁移器、API schema、缓存 revision 规则。
+
+**完成标准**：旧翻译和旧 Tag contract 通过；preset 跨进程可读；不适用参数前后端均拒绝；密钥永不落盘明文。
+
+**验证**：Unit、Contract、Gray、fake text/vision endpoint、配置迁移回归。
+
+**证据**：`docs/evidence/natural-language-captioning/phase-1-llm-contract/`。
+
+### Phase 2：模型打标后端任务链路
+
+**目的**：实现 Tag 和自然语言 Caption 两条独立、可恢复、安全写回的任务链路。
+
+**任务**：
+
+1. 保持旧 `/api/interrogate` 映射 Tag；新增或调整 job contract 为 `runtime + model + capability + output`。
+2. 实现受限图片预处理、data URL、严格 JSON、语言/长度/不臆测检查。
+3. 实现 Caption prompt snapshot、cache、任务持久化、报告、取消、失败项重试和恢复。
+4. 保持 Tag formatter 与 natural formatter 分离；首版拒绝 `output=combined`，不新建 mixed。
+5. 实现已有 caption 默认跳过、明确覆盖、in-use 锁、before hash、原子写回、rollback/clear。
+6. 保持单文件失败隔离和只重试失败项。
+
+**输出**：后端 API、job store、vision adapter、writer、report、错误码和回归测试。
+
+**完成标准**：fake endpoint 可覆盖成功、非法 JSON、超时、429、取消、部分失败、冲突、恢复和重试；natural 文本逐字节安全写回；旧 Tag 逐文件兼容。
+
+**验证**：Unit、Contract、Integration、Gray、低限额真实本地视觉模型；已配置远程时执行 remote-first。
+
+**证据**：`docs/evidence/natural-language-captioning/phase-2-caption-job/`。
+
+### Phase 3：前端、编辑器与用户数据联动
+
+**目的**：按 Issue #409 重做页面结构和预设交互，确保旧用户流程清晰、窄屏可用、自然语言安全。
+
+**任务**：
+
+1. 将页面顺序改为数据集、运行方式、模型、专属参数/提示词、输出、底部任务进度。
+2. 实现系列折叠、搜索、具体型号显示、下载状态和能力过滤。
+3. 只为 Caption 模型显示 prompt editor；实现保存、另存为、恢复默认、未保存修改保护。
+4. 预设使用 user_data CRUD；训练预设列表不得读取 Caption 预设。
+5. 实现单图试标、批量、取消、失败重试、历史和隐私提示；移除 combined/mixed UI。
+6. Dataset Editor 继续保护 natural/unknown 和历史 mixed，Tag 操作不得破坏自然语言。
+
+**输出**：Vue 页面/API/composable/components/i18n/CSS、Dataset Editor 安全和手工验收记录。
+
+**完成标准**：旧 Tag 表单回归；模型切换不携带错误参数；无 API/无视觉模型时页面有可操作提示；桌面、390px、Tab/Escape、错误和空配置通过；底部无常驻右侧进度栏。
+
+**验证**：Node 22 check、typecheck、lint、Vitest、build、浏览器手测和 Dataset Editor 端到端。
+
+**证据**：`docs/evidence/natural-language-captioning/phase-3-frontend-editor/`。
+
+### Phase 4：真实资源、EDD 与发布前审计
+
+**目的**：在首版范围内完成真实本地 Caption、可选远程优先、Tag 灰度、质量评测、隐私和维护验收。
+
+**任务**：
+
+1. 冻结公开/脱敏样本、来源 URL、SHA、许可证、模型和 prompt revision。
+2. 完成 Qwen3-VL-2B 本地视觉模型真实三样本 Caption；如已配置远程 Profile，再完成远程优先与显式 fallback。
+3. 完成 ONNX/WD Tag 真实灰度，确认旧输出兼容；不执行 combined 作为本版验收。
+4. 完成 EDD 规则和人工评分；评分必须绑定准确的模型、prompt、revision 和输出文本。
+5. 完成 Zero-Short、rollback/clear、缓存隔离、隐私扫描和用户文档。
+
+**输出**：真实资源报告、EDD 评测、Zero-Short、隐私/清理报告、发布前审计。
+
+**完成标准**：本地 Caption 真实路径通过；远程若可用则 remote-first 通过；质量、资源、取消、写回、Editor safety 证据齐全；无秘密进入 Git。
+
+**验证**：Real、EDD、Zero-Short、manual acceptance、privacy scan。
+
+**证据**：`docs/evidence/natural-language-captioning/phase-4-real-evaluation/`。
+
+### Phase 5：隔离重建与从零真实验收
+
+**目的**：证明首版交付不依赖旧工作树、旧配置、旧缓存或旧模型资产。
+
+**任务**：
+
+1. 从最新提交创建全新 worktree/干净源码 checkout。
+2. 创建全新 Python 3.11 venv、Node 22 依赖和 frontend dist。
+3. 重新下载公开样本、Qwen3-VL 资产/runtime 和 ONNX Tag 资产，逐项记录 URL/SHA/revision。
+4. 创建全新配置、SQLite、cache、queue、output；不复制旧 sandbox、旧数据库、旧模型或旧输出。
+5. 完成正式 lifespan 启动、空配置 Zero-Short、本地 Tag、本地 natural Caption、取消/重试/冲突/编辑器安全。
+6. 若有远程 Profile，完成 remote-first 和显式 fallback；无远程凭据则记录为可选路径未配置，不伪造通过。
+7. 运行前后端测试矩阵、构建检查、隐私扫描和清理，并保留隔离日志。
+
+**输出**：`phase-5-isolated-rebuild/` 全套日志、hash、环境清单、测试报告、清理报告和最终签字。
+
+**完成标准**：隔离环境关键链路通过；失败后必须修复并重新建立全新环境；没有任何旧产物复用证明；最终 GATE 全部通过。
+
+**验证**：Zero-Short、真实本地、可选远程、完整测试、人工验收、privacy/cleanup。
+
+**证据**：`docs/evidence/natural-language-captioning/phase-5-isolated-rebuild/`。
 
 ## 决策记录
 
 ### Verified facts
 
-- TagUI 是 RPA 流程工具，不提供本项目所需视觉 caption 实现。
-- SiliconFlow Qwen3.6-27B 三张样本均返回中文严格 JSON。
-- Qwen3-VL-2B Q4_K_M + Q8 mmproj 本地 CPU-only 三张样本均返回中文严格 JSON。
-- 当前翻译已有远程/本地 LLM 配置和受管 runtime。
+- Issue #409 是当前模型打标界面、参数、预设和首版范围的维护者契约。
+- TagUI 是 RPA 流程工具，不能作为视觉 Caption 实现直接移植。
+- 统一 LLM、自然语言任务、Dataset Editor 来源保护和部分真实模型证据已经存在，但之前的计划把 combined 误列为首版能力。
+- 当前分支没有 Agent/plugin 源码改动；越界 Agent 计划和工具已清理。
 
 ### Locked decisions
 
-- 翻译与打标共享 LLM 管理、profile、资产、runtime、cache 和测试。
-- translation profile 不要求 vision；natural/combined profile 必须 vision。
-- 远程 LLM 永远优先；本地 LLM 只作为显式启用的兜底。
-- V1 Tag 继续使用 WD/CL；LLM 只生成自然语言 caption。
-- Qwen3-VL-2B 是本地中文兜底候选；SmolVLM-256M 是英文低资源候选。
-- 完整交付必须包含后端实现、前端实现、Dataset Editor 安全、完整测试与人工验收，以及最后一次隔离重建从零真实验收。
+- 页面一级分类按本地模型/API 服务；Tag/Caption 按模型能力显示。
+- 首版不实现、不展示、不验收 combined/mixed 新建流程。
+- Caption prompt preset 使用 `user_data/presets/` 的 `kind=caption_prompt`，与训练预设隔离。
+- 翻译和 Caption 共用 LLM 管理；翻译不要求 vision，Caption 必须 vision。
+- 已配置远程 Profile 时始终 remote-first；本地 fallback 必须显式启用。
+- API 未配置时不展示空入口；远程真实验收是可选配置路径，不能伪造为已通过。
+- Agent、plugin、sidecar、marketplace 不属于本任务。
+- 完成必须包含前后端、完整测试、人工验收和隔离重建；不能用历史 combined 证据替代本版门禁。
+
+### Active assumptions
+
+- 现有 LLM 配置可通过一次兼容迁移映射到 user_data prompt preset，而不破坏翻译配置。
+- 当前 Qwen3-VL-2B Q4_K_M + Q8 mmproj 仍是个人电脑可用的本地视觉候选；Phase 4/5 需重新核对资源。
+- #405 的 user_data CRUD/任务目录契约可以被自然语言预设和任务记录复用。
 
 ### Open questions
 
-- Qwen3-VL-2B 在真实动漫数据集上的描述质量和显存/CPU体验。
-- mixed caption 是否需要训练侧额外解析。
-- 是否把 caption job 历史接入现有任务历史数据库。
-- 真实验收使用的脱敏样本和本地模型资产下载源，需要在执行前由 goal 运行者记录；不得把凭据写入计划或证据。
+- user_data preset 的最终字段和 CRUD 路由需以当前 #405 实际实现为准。
+- 本地视觉模型可展示的温度、长度等参数必须按模型注册表实际支持范围冻结。
+- Windows 符号链接测试所需权限环境仍需在最终完整矩阵中解决或记录明确环境阻塞。
 
-## 关键制品与环境
+## 关键制品和环境
 
-- Design: docs/design/natural-language-captioning-tagging-design.md
-- Feasibility: docs/tasks/natural-language-captioning-feasibility-probe.md
-- Construction plan: docs/tasks/natural-language-captioning-plan/
-- Probe worktree: E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-p1-20261006
-- Required frontend command: npm --prefix frontend run check
-- Required backend command: pytest tests/test_tag_translation_*.py tests/test_tagger_*.py
-- Runtime baseline: Node 22.17.1，Python 3.11.15 隔离测试环境，Windows 16-thread CPU，32 GiB RAM；宿主 Python 3.14 不作为依赖兼容验收依据
+- Design：`docs/design/natural-language-captioning-tagging-design.md`
+- Canonical task book：本文
+- Construction manifest：`docs/tasks/natural-language-captioning-plan/plan-manifest.md`
+- Goal：`docs/tasks/natural-language-captioning-plan/03_goal提示词/自然语言打标全程执行_goal提示词.md`
+- Issue #409：`https://github.com/wochenlong/lora-scripts-next/issues/409`
+- Branch：`feat/NL-Captioning`
+- Frontend：Node 22，`npm --prefix frontend run check`
+- Backend：Python 3.11 隔离环境，相关 `pytest` 和完整矩阵按阶段记录
+- Evidence root：`docs/evidence/natural-language-captioning/`
+- 禁止复用：旧 `.venv`、`node_modules`、模型缓存、配置、SQLite、output、P1 sandbox 作为 Phase 5 资产
 
 ## 进度台账
 
-- Overall progress: Phase 0/1 完成门通过；后端持久任务、冻结预设、恢复、报告、组合预览、错误矩阵、Tag 灰度和低限额本地真实写回已有证据。Phase 2 已核销共享设置、历史报告 UI 和编辑器来源保护；不以相关测试代替最终完整验收。
-- Phase 0: done（证据：phase-0-llm/2026-10-07-phase-0-gate-review.md）
-- Phase 1: done（证据：phase-1-vision-job/2026-10-07-phase-1-gate-review.md）
-- Phase 2: done（证据：phase-2-frontend-editor/2026-10-07-phase-2-gate-review.md）
-- Phase 3: in progress
-- Phase 4: pending
-- Validation status: 2026-10-07 Python 3.11 相关后端回归 241 passed；Node 22 check 51 files / 329 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
-- Residual risks: 共享设置组件和编辑器来源保护已接入并回归；历史报告/恢复 UI、轮询治理、批量/undo/redo 冲突已验证；本地资源管理已共享，规定Phase2浏览器矩阵已验证，正式启动/真实模型仍待验；安全回滚/清理、真实远程/本地生产链路及 EDD 人工评分已验证；真实 ONNX 三模式、正式启动和最终验收仍待闭环。本地三样本开发验收复用 P1 模型，Phase 4 不得复用。
-- Continuity source: docs/tasks/natural-language-captioning-continuity.md；记录环境、Git 和单一步骤，证据以阶段报告为准。
+| 阶段 | 状态 | 说明 |
+|---|---|---|
+| Phase 0 契约收敛 | in progress | 文档重写和 Agent 范围清理进行中；代码差异审计待执行 |
+| Phase 1 LLM/模型能力契约 | pending | 需先完成 Phase 0 完成门 |
+| Phase 2 后端 Caption/Tag 任务 | pending | 既有实现需按新 contract 复核 |
+| Phase 3 前端/Editor/user_data | pending | 既有 UI 需移除 combined 并改为 model-first |
+| Phase 4 真实资源/EDD | pending | 历史证据保留但按新门重新归类 |
+| Phase 5 隔离重建 | pending | 最终完成门 |
 
-## 下一步动作
+### 当前验证状态
 
-完成主测试矩阵复验并核销剩余失败、跳过和联网测试。
+历史证据显示：Node 22 前端和相关后端已有大量通过项，远程/本地 Caption、Tag 灰度、缓存、取消、冲突、Zero-Short 和人工评分曾有验证；这些证据需要按新契约重新审计。完整矩阵曾有 Windows symlink 权限失败和未核销 skip，不能直接宣告完成。历史 combined 证据不再作为本版验收依据。
 
-## 阶段完成证据
+### 下一步动作
 
-Phase2逐项追踪：API/types/composable/components、三模式/vision/language/remote排序、prompt/preview/progress/cancel/retry/report、共享设置/翻译兼容、Dataset Editor格式投影/原文/冲突、旧Tag灰度以及桌面/窄屏/键盘/错误/空配置/隐私/重启恢复均对应实际证据。详见Phase2 gate-review。lifespan=off和fake模型仅支持本阶段业务验收，未替代Phase3/4。
+完成 Phase 0 契约差异清单：逐项审计前端 `TaggerPage`、后端 `caption_api.py/caption_job.py`、LLM prompt preset 存储和 user_data 现有 CRUD，形成“保留/迁移/删除/兼容读取”表；随后再开始代码修改。
 
-Phase3开工：三公开样本与SHA/URL/rubric已冻结，资源/预算/清理/Phase4输入已登记；初始冻结时评分为空；后续用户人工评分六条均 20/20，见独立 approval 记录。整体完整矩阵11失败/21跳过未核销，GATE09/10未通过。
+## 失败与变更处理
 
-Phase3回滚/清理已实现并测试，actual浏览器恢复2/冲突1、取消无变化、清理保留文件/来源通过。相关241后端/329前端。原11失败已恢复逐case：17项依赖/README/process复验通过，关闭其中7个；4个symlink仍因WinError1314等待用户权限环境，未豁免；完整矩阵/真实/EDD/正式启动/Phase4仍未完成。
+- 发现任何 combined/mixed 新入口、Agent 依赖、空 API 入口、能力绕过、明文凭据或自然语言被 Tag 清理，立即生成 failure report，禁止进入下一阶段。
+- 发现数据写回风险先停止任务，保留 before hash 和备份，修复后重新运行受影响矩阵。
+- 远程资源不可用时可以执行本地路径并明确标记远程未配置/未运行；不得把未运行写成通过。
+- 隔离重建任一步失败时回到对应阶段修复，然后建立新的全新隔离根目录重跑；不能在失败环境上补丁式宣告完成。
+- 任何重大范围变化必须同步设计书、任务书、goal、manifest、阶段计划和 change-control 记录。
 
-## 2026-10-07 真实生产路径及人工评分同步
+## 阶段完成证据索引
 
-远程、本地和同时可用的 remote-first/显式 fallback 均通过当前生产路径验证；三样本严格 JSON、缓存零重复请求、预览不写盘通过。用户对最初 A/B 六条描述五维各给 4 分，每条 20/20，两组均满足冻结 rubric。精确文本哈希与评分范围见 phase-3-evaluation/human-evaluation-approval.json；路由后续不同文本不沿用评分。详见 2026-10-07-production-real-and-human-review.md。Phase3仍 in progress，Phase4 pending，完整矩阵及最终交付门未通过。
-
-## 2026-10-07 Tag/combined、Zero-Short和矩阵增量
-
-真实默认WD ONNX三图旧/新Tag逐字节相同（13/11/8 Tags、8.366s）；实际WD+Qwen combined三图3/3、24.208s，mixed来源和actualTags正确，缓存3命中零LLM请求、preview零写盘、模型已停止。正式FastAPI lifespan=on和新Node22 dist已通过空配置/无Key/无词库/无视觉模型启动；API健康与桌面/390px页面可用，安装/配置入口、默认禁用fallback/生成均核对。证据见phase-3-evaluation/2026-10-07-real-tag-combined-zero-short.md，不属于Phase4。
-
-主tests收集1503项；分区运行1467 passed/11 failed/25 skipped/1 deselected/77 subtests/308.42s。排除的唯一联网ModelScope tokenizer测试实际下载整个模型仓库，已停止并保留pending，未豁免。11失败中的7项已修复：任务维护测试不再向sys.modules泄漏Tagger替身，LyCORIS fake工厂允许可选导入缺失；相关55 passed/7.50s。另4项Windows symlink权限未解决。修复后的分区复验实际1474 passed/4 failed/25 skipped/1 deselected/77 subtests，306.54秒；仅4个Windows symlink失败。被排除的ModelScope项在独立7项真实组中通过，完整组合运行仍待复验；25项skip逐案审计/授权尚未核销。
-
-DiffSynth Windows fixture改为稀疏标志+末字节seek/write，保留逻辑长度与模型header，13 passed/2.80s。初次truncate产生的测试文件清理被自动审批拒绝（仅blocked by policy），保留未复用，最终清理待核销。自建正式UI和模型进程停止，浏览器about:blank。
-
-使用/维护说明已补充docs/natural-language-captioning-usage.md。Phase3仍in progress，Phase4 pending，goal未完成。当前唯一下一步：完成主测试矩阵复验并核销剩余失败、跳过和联网测试。
+旧阶段证据仍保留在 `docs/evidence/natural-language-captioning/`，但需要在 Phase 0/4 重新标记适用性。新增证据必须绑定：Issue #409、commit、模型/资产 revision、prompt/preset revision、样本 SHA、实际命令、结果、资源占用和清理状态。
