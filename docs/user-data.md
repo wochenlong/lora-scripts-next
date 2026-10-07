@@ -115,8 +115,13 @@ deleted. Applying that default automatically in training is not yet connected.
 
 New configuration snapshots are stored in
 `user_data/tasks/<engine>/<YYYY-MM-DD>/<HHMMSS>_<task-id>/`, using UTC timestamps.
-Each contains `task.json` and a native configuration copy. Task details offer
-archive selection and parameter import into the matching training page.
+Each contains `task.json` and a sanitized configuration snapshot. When supplied,
+`engine_config_path` is also captured as `engine-config.yaml` or JSON alongside
+the UI configuration. Credential fields are removed recursively before writing
+snapshots; original training files are not modified. A missing or invalid source
+blocks task registration. Snapshots are reserialized, so comments are not retained.
+The task-page header offers archive browsing even after queue history is cleared;
+task details additionally offer filtered selection and parameter import into the matching training page.
 GET `/api/user-data/task-archives` returns `data.archives`; preset lists return
 `data.presets`. Archive detail is available at `/api/user-data/task-archives/{id}`.
 

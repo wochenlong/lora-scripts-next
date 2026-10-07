@@ -356,7 +356,9 @@ class TaskMaintenanceApiTests(unittest.TestCase):
         self.assertEqual(response.data["config"]["network_dim"], 32)
 
     def test_task_config_missing_file(self):
-        self._api_task("api-cfg-missing", metadata={
+        task = self._api_task("api-cfg-missing")
+        # Legacy history may outlive its original configuration file.
+        task.metadata.update({
             "config_path": "/nonexistent/path/task.toml",
             "backend": "standard",
         })
@@ -365,7 +367,8 @@ class TaskMaintenanceApiTests(unittest.TestCase):
         self.assertIn("不存在", response.message)
 
     def test_task_config_prefers_anima_fast_source_config(self):
-        self._api_task("api-cfg-anima-source", metadata={
+        task = self._api_task("api-cfg-anima-source")
+        task.metadata.update({
             "config_path": "/nonexistent/adapted.toml",
             "backend": "anima-lora-fast",
             "source_config": {

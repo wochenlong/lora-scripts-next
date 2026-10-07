@@ -81,6 +81,25 @@ def test_archive_list_detail_contract(app, tmp_path):
     assert request(app, "GET", endpoint + "?train_type=sdxl").json()["data"] == {"archives": []}
 
 
+@pytest.mark.parametrize("method,path", [
+    ("POST", "/api/user-data/presets"),
+    ("PATCH", "/api/user-data/presets/test"),
+    ("DELETE", "/api/user-data/presets/test"),
+])
+def test_preset_cross_site_write_rejected(app, method, path):
+    assert request(app, method, path, headers={"sec-fetch-site": "cross-site"},
+                   json={"name": "Test", "config": {}}).status_code == 403
+
+
+@pytest.mark.parametrize("method,path", [
+    ("POST", "/api/user-data/presets"), ("PATCH", "/api/user-data/presets/test"),
+])
+def test_preset_bounded_json(app, method, path):
+    assert request(app, method, path, content="{}", headers={"content-type": "text/plain"}).status_code == 415
+    assert request(app, method, path, content=b"x" * (1024 * 1024 + 1),
+                   headers={"content-type": "application/json"}).status_code == 413
+
+
 def test_settings_reject_secret_and_unknown_fields(app):
     result = request(app, "PATCH", "/api/user-data/settings",
                      json={"revision": 0, "patch": {"api_key": "sensitive-value"}})

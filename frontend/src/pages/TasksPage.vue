@@ -570,12 +570,12 @@ async function deletePreset(preset: UserPreset) {
   }
 }
 
-async function openArchiveDialog(task: TrainingTask) {
+async function openArchiveDialog(task?: TrainingTask) {
   archiveDialogOpen.value = true
   archiveBusy.value = true
   archiveId.value = ""
   try {
-    archives.value = await taskArchivesApi.list(metaString(task, "train_type") || undefined)
+    archives.value = await taskArchivesApi.list(task ? metaString(task, "train_type") || undefined : undefined)
   } catch (caught) {
     archives.value = []
     ElMessage.error(caught instanceof Error ? caught.message : t("tasks.archives.loadFail"))
@@ -670,6 +670,7 @@ onBeforeUnmount(() => {
   <div class="tasks-board">
     <header class="tasks-board-header">
       <h1>{{ t("tasks.title") }}</h1>
+      <button class="ghost-button" @click="openArchiveDialog()">{{ t("tasks.archives.loadButton") }}</button>
       <button class="ghost-button" :disabled="loading" @click="store.refresh()"><el-icon><Refresh /></el-icon>{{ t("tasks.refresh") }}</button>
     </header>
 

@@ -25,6 +25,43 @@ class RevisionConflict(UserDataError):
     pass
 
 
+def without_credentials(value):
+    """Remove credential fields recursively, without matching tokenizer parameters."""
+    if isinstance(value, dict):
+        def sensitive(key):
+            key = re.sub(r"(?<!^)(?=[A-Z])", "_", str(key)).lower().replace("-", "_")
+            return key in {"auth", "authorization", "credentials", "api_key", "apikey", "token", "secret", "password"} or key.endswith(
+                ("_api_key", "_token", "_secret", "_password"))
+        return {key: without_credentials(item) for key, item in value.items() if not sensitive(key)}
+    if isinstance(value, list):
+        return [without_credentials(item) for item in value]
+    return value
+
+
+def _configuration_snapshot(path):
+    source = Path(path)
+    try:
+        text = source.read_text(encoding="utf-8-sig")
+        suffix = source.suffix.lower()
+        if suffix == ".toml":
+            import toml
+            value = without_credentials(toml.loads(text))
+            serialized = toml.dumps(value)
+        elif suffix in {".yaml", ".yml"}:
+            import yaml
+            value = without_credentials(yaml.safe_load(text))
+            serialized = yaml.safe_dump(value, allow_unicode=True)
+        elif suffix == ".json":
+            value = without_credentials(json.loads(text))
+            serialized = json.dumps(value, ensure_ascii=False, allow_nan=False)
+        else:
+            raise UserDataError("Unsupported configuration format")
+        _object(value, "configuration")
+        return suffix, value, serialized
+    except Exception as exc:
+        raise UserDataError("Task configuration snapshot is missing or invalid") from exc
+
+
 def _object(value, label):
     if not isinstance(value, dict):
         raise UserDataError(f"{label} must be an object")
@@ -361,9 +398,8 @@ class UserDataStore:
         _keys(value, {"id", "name", "description", "train_type", "config", "created_at", "updated_at"}, "preset")
         _string(value.get("name"), "preset name")
         _object(value.get("config"), "preset config")
-        for secret_key in ("api_key", "token", "secret", "password"):
-            if secret_key in json.dumps(value["config"]).lower():
-                raise UserDataError("Preset cannot contain credentials")
+        if without_credentials(value["config"]) != value["config"]:
+            raise UserDataError("Preset cannot contain credentials")
         now = datetime.datetime.now(datetime.timezone.utc).isoformat()
         value = copy.deepcopy(value)
         value["id"] = preset_id
@@ -402,6 +438,12 @@ class UserDataStore:
     def archive_task(self, task_id, metadata, config_path=None):
         self._safe_id(task_id, "task id")
         engine = self._safe_id(str(metadata.get("backend") or "standard"), "engine")
+        source_path = config_path or metadata.get("config_path")
+        if not source_path:
+            raise UserDataError("Task configuration snapshot is missing")
+        snapshots = {"config": _configuration_snapshot(source_path)}
+        if metadata.get("engine_config_path"):
+            snapshots["engine_config"] = _configuration_snapshot(metadata["engine_config_path"])
         stamp = datetime.datetime.now(datetime.timezone.utc)
         folder = self.root / "tasks" / engine / stamp.strftime("%Y-%m-%d") / f"{stamp.strftime('%H%M%S')}_{task_id}"
         folder.mkdir(parents=True, exist_ok=False)
@@ -409,23 +451,15 @@ class UserDataStore:
             "task_id": task_id,
             "engine": engine,
             "created_at": stamp.isoformat(),
-            "metadata": copy.deepcopy(metadata),
+            "metadata": without_credentials(copy.deepcopy(metadata)),
             "config_path": str(config_path or metadata.get("config_path") or ""),
         }
         try:
-            if config_path and Path(config_path).is_file():
-                source = Path(config_path)
-                native = folder / f"config{source.suffix or '.json'}"
-                native.write_bytes(source.read_bytes())
-                record["config_file"] = native.name
-                try:
-                    if source.suffix.lower() == ".toml":
-                        import toml
-                        record["config"] = toml.loads(source.read_text(encoding="utf-8-sig"))
-                    else:
-                        record["config"] = json.loads(source.read_text(encoding="utf-8-sig"))
-                except Exception as exc:
-                    raise UserDataError("Task configuration snapshot is invalid") from exc
+            for key, (suffix, config, text) in snapshots.items():
+                native = folder / f"{key.replace('_', '-')}{suffix}"
+                native.write_text(text, encoding="utf-8")
+                record[key + "_file"] = native.name
+                record[key] = config
             self._write_path(folder / "task.json", record)
         except BaseException:
             import shutil
@@ -440,7 +474,7 @@ class UserDataStore:
             return records
         for path in root.glob("*/*/*/task.json"):
             try:
-                item = json.loads(path.read_text(encoding="utf-8"))
+                item = without_credentials(json.loads(path.read_text(encoding="utf-8")))
                 if train_type and item.get("metadata", {}).get("train_type") != train_type:
                     continue
                 item["id"] = item["task_id"]

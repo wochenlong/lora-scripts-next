@@ -13,6 +13,26 @@ afterEach(() => {
   sessionStorage.clear()
 })
 
+it("offers archive browsing with no queue history", async () => {
+  vi.spyOn(globalThis, "fetch").mockImplementation(async (input) => new Response(JSON.stringify({
+    status: "success", data: String(input).includes("task-archives") ? { archives: [] } : { tasks: [] },
+  })))
+  const wrapper = mount(TasksPage, {
+    global: { plugins: [createPinia(), i18n], stubs: {
+      "el-dialog": { props: ["modelValue"], template: '<div v-if="modelValue"><slot /></div>' },
+      "el-icon": true, "el-input-number": true, "el-select": true, "el-option": true, RouterLink: true,
+    } },
+  })
+  try {
+    await flushPromises()
+    const action = wrapper.findAll("button").find(button => button.text() === i18n.global.t("tasks.archives.loadButton"))
+    expect(action).toBeDefined()
+    await action!.trigger("click")
+    await flushPromises()
+    expect(wrapper.text()).toContain(i18n.global.t("tasks.archives.empty"))
+  } finally { wrapper.unmount() }
+})
+
 it("loads a server archive into the matching training module", async () => {
   const archive = {
     id: "archive-1", name: "Saved run", train_type: "anima-lora-fast",

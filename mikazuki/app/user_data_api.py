@@ -32,7 +32,7 @@ async def _call(operation, *args, data_key=None):
         return _response(message="User data storage is unavailable; nothing was saved", status=503)
 
 
-async def _body(request, allowed):
+async def _body(request, allowed, partial=False):
     if request.headers.get("sec-fetch-site") == "cross-site":
         return _response(message="Cross-site configuration writes are not allowed", status=403)
     if request.headers.get("content-type", "").split(";")[0].strip() != "application/json":
@@ -44,11 +44,12 @@ async def _body(request, allowed):
             return _response(message="Request is too large", status=413)
     try:
         data = json.loads(raw)
+        json.dumps(data, ensure_ascii=False, allow_nan=False).encode("utf-8")
     except (ValueError, UnicodeError, RecursionError):
         return _response(message="Invalid JSON", status=422)
-    if not isinstance(data, dict) or set(data) != set(allowed):
+    if not isinstance(data, dict) or (set(data) - set(allowed) if partial else set(data) != set(allowed)):
         return _response(message="Invalid request fields", status=422)
-    if type(data.get("revision")) is not int or data["revision"] < 0:
+    if not partial and (type(data.get("revision")) is not int or data["revision"] < 0):
         return _response(message="Invalid revision", status=422)
     return data
 
@@ -100,14 +101,9 @@ async def read_preset(preset_id: str):
 
 @router.post("/presets")
 async def create_preset(request: Request):
-    try:
-        data = json.loads(await request.body() or b"{}")
-        if not isinstance(data, dict) or set(data) - {"id", "name", "description", "train_type", "config"}:
-            raise UserDataError("Invalid preset fields")
-        if len(json.dumps(data).encode("utf-8")) > MAX_BYTES:
-            raise UserDataError("Request is too large")
-    except (ValueError, UnicodeError) as exc:
-        return _response(message="Invalid JSON", status=422)
+    data = await _body(request, {"id", "name", "description", "train_type", "config"}, partial=True)
+    if isinstance(data, JSONResponse):
+        return data
     try:
         preset_id, payload = _preset_payload(data)
         return _response(await run_in_threadpool(store.save_preset, preset_id, payload, False))
@@ -115,26 +111,29 @@ async def create_preset(request: Request):
         return _response(message=str(exc), status=409)
     except UserDataError as exc:
         return _response(message=str(exc), status=422)
+    except OSError:
+        return _response(message="User data storage is unavailable; nothing was saved", status=503)
 
 
 @router.patch("/presets/{preset_id}")
 async def update_preset(preset_id: str, request: Request):
-    try:
-        data = json.loads(await request.body() or b"{}")
-        if not isinstance(data, dict) or not data or set(data) - {"name", "description", "train_type", "config"}:
-            raise UserDataError("Invalid preset fields")
-    except (ValueError, UnicodeError):
-        return _response(message="Invalid JSON", status=422)
+    data = await _body(request, {"name", "description", "train_type", "config"}, partial=True)
+    if isinstance(data, JSONResponse):
+        return data
     try:
         current = await run_in_threadpool(store.get_preset, preset_id)
         current.update(data)
         return _response(await run_in_threadpool(store.save_preset, preset_id, current, True))
     except UserDataError as exc:
         return _response(message=str(exc), status=422)
+    except OSError:
+        return _response(message="User data storage is unavailable; nothing was saved", status=503)
 
 
 @router.delete("/presets/{preset_id}")
-async def remove_preset(preset_id: str):
+async def remove_preset(preset_id: str, request: Request):
+    if request.headers.get("sec-fetch-site") == "cross-site":
+        return _response(message="Cross-site configuration writes are not allowed", status=403)
     try:
         await run_in_threadpool(store.delete_preset, preset_id)
         return _response({"removed": True})
