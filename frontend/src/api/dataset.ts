@@ -1,9 +1,10 @@
 import { apiData } from "./client"
+import type { LlmConfig } from "./llm"
 
 export type CaptionFormat = "tag" | "natural" | "mixed" | "unknown"
-export interface DatasetItem { name: string; relative_path: string; category: string; caption: string; caption_exists: boolean; tags: string[]; caption_format?: CaptionFormat; tag_blocks?: string[]; natural_text?: string; image_url: string; thumb_url: string }
+export interface DatasetItem { name: string; relative_path: string; category: string; caption: string; caption_exists: boolean; caption_sha256?: string | null; tags: string[]; caption_format?: CaptionFormat; tag_blocks?: string[]; natural_text?: string; image_url: string; thumb_url: string }
 export interface DatasetScan { root: string; total: number; items: DatasetItem[]; tags: Array<{ tag: string; count: number }>; categories: Array<{ name: string; value: string; count: number }> }
-export interface ChangedItem { image: string; caption: string; caption_exists: boolean; tags: string[]; caption_format?: CaptionFormat }
+export interface ChangedItem { image: string; caption: string; caption_exists: boolean; caption_sha256?: string | null; tags: string[]; caption_format?: CaptionFormat }
 export interface TagReplacement { from: string; to: string }
 export interface DatasetMutation { changed: number; items: ChangedItem[] }
 export interface BatchEditRequest {
@@ -26,6 +27,7 @@ export interface TagTranslation { tag: string; translation: string | null; sourc
 export interface TagTranslationResponse { items: TagTranslation[]; provider: TagTranslationProvider; locale: string }
 export interface LlmProfile { id: string; name: string; endpoint: string; model: string; api_key: string; api_key_configured?: boolean; reasoning_effort?: "disabled" | "high" | "max"; system_prompt?: string }
 export interface TagTranslationConfig {
+  llm?: LlmConfig
   deepseek: LlmProfile
   llm_mode: "remote" | "local"
   active_remote_id: string
@@ -39,7 +41,7 @@ export interface LocalModelStatus { state: string; model_id: string; model_filen
 const post = <T>(path: string, body: unknown) => apiData<T>(path, { method: "POST", body: JSON.stringify(body) })
 export const datasetApi = {
   scan: (path: string) => post<DatasetScan>("/api/dataset-editor/scan", { path }),
-  save: (root: string, image: string, caption: string) => post<ChangedItem>("/api/dataset-editor/caption", { root, image, caption }),
+  save: (root: string, image: string, caption: string, expected_sha256?: string | null) => post<ChangedItem>("/api/dataset-editor/caption", { root, image, caption, ...(expected_sha256 !== undefined ? { expected_sha256 } : {}) }),
   batch: (body: BatchEditRequest) => post<DatasetMutation>("/api/dataset-editor/batch", body),
   undo: (root: string) => post<DatasetMutation>("/api/dataset-editor/undo", { root }),
   redo: (root: string) => post<DatasetMutation>("/api/dataset-editor/redo", { root }),

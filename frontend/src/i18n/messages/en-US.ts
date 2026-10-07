@@ -1,4 +1,14 @@
 export default {
+  llm: {
+    localFallback: "Allow a running local text model to handle remote failures",
+    title: "Shared LLM settings", sharedHint: "Translation and captioning share these profiles. Remote is preferred; local fallback requires explicit enablement. Captioning requires vision; translation requires text.",
+    keyHint: "Keys stay in backend memory; only masks are saved. Reinject keys after restarting the backend. Cancel discards unsaved edits.",
+    loading: "Loading settings…", newProfile: "New endpoint", fieldsRequired: "Enter a name, endpoint, model, capabilities and languages",
+    translationRoute: "Default translation profile", captionRoute: "Default vision profile", auto: "Automatic remote-first selection",
+    testImage: "Vision connection test image path", saveBeforeTest: "Save changes before testing the saved endpoint", testPassed: "{name}: connection and strict JSON test passed",
+    remote: "Remote", local: "Local endpoint", managed: "Managed local model", name: "Name", source: "Type", endpoint: "Endpoint", model: "Model", key: "API key", languages: "Languages (comma separated)",
+    text: "Text", vision: "Vision", enabled: "Enabled", test: "Test saved endpoint", remove: "Delete", add: "Add endpoint", cancel: "Cancel and discard", save: "Save shared settings",
+  },
   animaModel: { spec: "Model size", confirm: "Confirm model size (current path is preserved)" },
   network: {
     title: "Download network settings", mode: "Connection", auto: "Automatic", system: "System proxy", manual: "Manual proxy", direct: "Direct",

@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
-import { ElButton, ElDialog, ElInput } from "element-plus"
+import { ElButton, ElDialog } from "element-plus"
+import LlmSettingsDialog from "../LlmSettingsDialog.vue"
 import type { LocalModelStatus, LlmProfile, TagDictionaryStatus } from "../../api/dataset"
 
 const props = defineProps<{
@@ -19,6 +20,7 @@ const props = defineProps<{
   localModel: LocalModelStatus
   localModelBusy: boolean
   remoteConfigured: boolean
+  sharedLocalReady: boolean
 }>()
 
 const emit = defineEmits<{
@@ -37,63 +39,12 @@ const emit = defineEmits<{
   startLocalModel: []
   stopLocalModel: []
   useRemoteMode: []
+  sharedSaved: []
 }>()
 
 const { t } = useI18n()
-const expandedProfiles = ref(new Set<string>())
-
-watch(() => [props.activeRemoteId, ...props.profiles.map((profile) => profile.id)], () => {
-  const next = new Set(expandedProfiles.value)
-  if (props.activeRemoteId) next.add(props.activeRemoteId)
-  expandedProfiles.value = next
-}, { immediate: true })
-
-function updateProfile(id: string, patch: Partial<LlmProfile>) {
-  emit("update:profiles", props.profiles.map((profile) => {
-    if (profile.id !== id) return profile
-    const next = { ...profile, ...patch }
-    if ("api_key" in patch && patch.api_key !== "********") next.api_key_configured = Boolean(patch.api_key)
-    return next
-  }))
-}
-
-function addProfile() {
-  const id = "remote-" + Date.now()
-  const profile: LlmProfile = {
-    id,
-    name: t("datasetEditor.caption.translationProfileNew"),
-    endpoint: "https://api.example.com/v1/chat/completions",
-    model: "",
-    api_key: "",
-    reasoning_effort: "disabled",
-  }
-  emit("update:profiles", [...props.profiles, profile])
-  emit("update:active-remote-id", id)
-  emit("update:llm-mode", "remote")
-  expandedProfiles.value = new Set([...expandedProfiles.value, id])
-}
-
-function removeProfile(id: string) {
-  if (props.profiles.length <= 1) return
-  const next = props.profiles.filter((profile) => profile.id !== id)
-  emit("update:profiles", next)
-  if (props.activeRemoteId === id) emit("update:active-remote-id", next[0].id)
-  const expanded = new Set(expandedProfiles.value)
-  expanded.delete(id)
-  expandedProfiles.value = expanded
-}
-
-function toggleProfile(id: string) {
-  const next = new Set(expandedProfiles.value)
-  if (next.has(id)) next.delete(id)
-  else next.add(id)
-  expandedProfiles.value = next
-}
-
-function activateProfile(id: string) {
-  emit("update:active-remote-id", id)
-  expandedProfiles.value = new Set([...expandedProfiles.value, id])
-}
+const sharedOpen = ref(false)
+watch(() => props.modelValue, open => { if (!open) sharedOpen.value = false })
 </script>
 
 <template>
@@ -118,35 +69,10 @@ function activateProfile(id: string) {
       </section>
       <section class="translation-settings-section">
         <div class="translation-settings-section-heading"><strong>{{ t("datasetEditor.caption.translationLlmTitle") }}</strong><span>{{ llmMode === "local" ? t("datasetEditor.caption.translationLocalMode") : t("datasetEditor.caption.translationRemoteMode") }}</span></div>
-        <div class="translation-mode-tabs" role="tablist">
-          <button type="button" :class="{ active: llmMode === 'remote' }" :disabled="saving" @click="emit('update:llm-mode', 'remote')">{{ t("datasetEditor.caption.translationRemoteMode") }}</button>
-          <button type="button" :class="{ active: llmMode === 'local' }" :disabled="saving" @click="emit('update:llm-mode', 'local')">{{ t("datasetEditor.caption.translationLocalMode") }}</button>
-        </div>
-        <div v-if="llmMode === 'remote'" class="translation-profile-list">
-          <p v-if="!remoteConfigured" class="translation-runtime-warning">{{ t("datasetEditor.caption.translationRemoteNotConfigured") }}</p>
-          <article v-for="profile in profiles" :key="profile.id" class="translation-llm-card" :class="{ active: profile.id === activeRemoteId, collapsed: !expandedProfiles.has(profile.id) }">
-            <header class="translation-llm-card-header">
-              <button type="button" class="translation-profile-summary" @click="toggleProfile(profile.id)">
-                <strong>{{ profile.name }}</strong>
-                <small>{{ profile.model || t("datasetEditor.caption.translationModelPlaceholder") }}</small>
-              </button>
-              <div class="translation-profile-actions">
-                <el-button v-if="profile.id !== activeRemoteId" size="small" @click="activateProfile(profile.id)">{{ t("datasetEditor.caption.translationProfileEnable") }}</el-button>
-                <span v-else class="translation-profile-active">{{ t("datasetEditor.caption.translationProfileActive") }}</span>
-                <el-button v-if="profiles.length > 1" size="small" text type="danger" @click="removeProfile(profile.id)">{{ t("datasetEditor.caption.translationProfileRemove") }}</el-button>
-                <el-button size="small" text @click="toggleProfile(profile.id)">{{ expandedProfiles.has(profile.id) ? t("datasetEditor.caption.translationProfileCollapse") : t("datasetEditor.caption.translationProfileExpand") }}</el-button>
-              </div>
-            </header>
-            <div v-if="expandedProfiles.has(profile.id)" class="translation-profile-fields">
-              <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationProfileName") }}</span><el-input :model-value="profile.name" @update:model-value="updateProfile(profile.id, { name: $event })" /></label>
-              <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationEndpoint") }}</span><el-input :model-value="profile.endpoint" :placeholder="t('datasetEditor.caption.translationEndpointPlaceholder')" @update:model-value="updateProfile(profile.id, { endpoint: $event })" /></label>
-              <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationModel") }}</span><el-input :model-value="profile.model" :placeholder="t('datasetEditor.caption.translationModelPlaceholder')" @update:model-value="updateProfile(profile.id, { model: $event })" /></label>
-              <label class="schema-field"><span class="field-label">{{ t("datasetEditor.caption.translationKey") }}</span><el-input :model-value="profile.api_key" type="password" show-password autocomplete="new-password" :placeholder="t('datasetEditor.caption.translationKeyPlaceholder')" @update:model-value="updateProfile(profile.id, { api_key: $event })" /></label>
-            </div>
-          </article>
-          <el-button class="translation-profile-add" @click="addProfile">{{ t("datasetEditor.caption.translationProfileAdd") }}</el-button>
-        </div>
-        <div v-else class="translation-profile-list">
+        <p>{{ t("llm.sharedHint") }}</p>
+        <label class="translation-fallback"><input type="checkbox" :checked="llmMode === 'local'" :disabled="saving" @change="emit('update:llm-mode', ($event.target as HTMLInputElement).checked ? 'local' : 'remote')" />{{ t("llm.localFallback") }}</label>
+        <button type="button" class="translation-profile-add" :disabled="saving" @click="sharedOpen = true">{{ t("llm.title") }}</button>
+        <div v-if="llmMode === 'local'" class="translation-profile-list">
           <article class="translation-llm-card active">
             <header class="translation-llm-card-header"><strong>{{ t("datasetEditor.caption.translationLocalModelTitle") }}</strong><span class="translation-profile-active">{{ localModel.model_id }}</span></header>
             <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationLocalModelHint") }}</p>
@@ -189,7 +115,8 @@ function activateProfile(id: string) {
     </div>
     <template #footer>
       <el-button :disabled="saving" @click="emit('update:modelValue', false)">{{ t("datasetEditor.caption.translationCancel") }}</el-button>
-      <el-button type="primary" :loading="saving" :disabled="loading || (llmMode === 'local' && localModel.state !== 'running')" @click="emit('save')">{{ t("datasetEditor.caption.translationSave") }}</el-button>
+      <el-button type="primary" :loading="saving" :disabled="loading || (llmMode === 'local' && localModel.state !== 'running' && !sharedLocalReady && !remoteConfigured)" @click="emit('save')">{{ t("datasetEditor.caption.translationSave") }}</el-button>
     </template>
   </el-dialog>
+  <LlmSettingsDialog v-model="sharedOpen" capability="text" @saved="emit('sharedSaved')" />
 </template>

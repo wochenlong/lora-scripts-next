@@ -68,6 +68,7 @@ const showTranslations = editorSession.showTranslations
 const translationProvider = editorSession.translationProvider
 const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, clearExternalCache, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
+const sharedLocalTextReady = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsSaving = ref(false)
 const translationSettingsError = ref("")
@@ -236,6 +237,7 @@ async function loadTranslationSettings(force = false) {
   translationSettingsError.value = ""
   try {
     const config = await datasetApi.tagTranslationConfig()
+    sharedLocalTextReady.value = Boolean(config.llm?.profiles.some(profile => profile.source !== "remote" && profile.enabled && profile.ready && profile.capabilities.includes("text")))
     llmProfiles.value = config.remote_profiles?.length
       ? config.remote_profiles
       : [{ ...config.deepseek, id: "default", name: t("datasetEditor.caption.translationProfileNew") }]
@@ -295,13 +297,13 @@ const remoteProfileConfigured = computed(() => {
   const endpoint = profile.endpoint.trim().toLowerCase()
   return Boolean(profile.api_key_configured || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//.test(endpoint))
 })
-const localTranslationReady = computed(() => localModelStatus.value.state === "running")
+const localTranslationReady = computed(() => localModelStatus.value.state === "running" || sharedLocalTextReady.value)
 const translationAvailable = computed(() => Boolean(dictionaryStatus.value.installed || remoteProfileConfigured.value || localTranslationReady.value))
 const translationUnavailableHint = computed(() => t("datasetEditor.caption.translationUnavailable"))
 
 async function ensureLlmReady() {
   await Promise.all([loadTranslationSettings(true), loadLocalModelStatus()])
-  const ready = llmMode.value === "local" ? localModelStatus.value.state === "running" : remoteProfileConfigured.value
+  const ready = remoteProfileConfigured.value || (llmMode.value === "local" && localTranslationReady.value)
   if (!ready) {
     const message = llmMode.value === "local"
       ? t("datasetEditor.caption.translationLocalUnavailable")
@@ -540,7 +542,7 @@ function apply(changes: ChangedItem[]) {
   editorSession.clearDrafts(root.value, changes.map((item) => item.image))
   items.value = items.value.map((item) => {
     const change = map.get(item.relative_path)
-    return change ? { ...item, caption: change.caption, tags: change.tags, caption_exists: change.caption_exists, caption_format: change.caption_format ?? item.caption_format } : item
+    return change ? { ...item, caption: change.caption, tags: change.tags, caption_exists: change.caption_exists, caption_format: change.caption_format ?? item.caption_format, caption_sha256: change.caption_sha256 } : item
   })
   if (current.value) caption.value = current.value.caption
   rebuildTags()
@@ -609,7 +611,7 @@ async function scan() {
 async function save() {
   if (!current.value) return
   try {
-    apply([await datasetApi.save(root.value, current.value.relative_path, caption.value)])
+    apply([await datasetApi.save(root.value, current.value.relative_path, caption.value, current.value.caption_sha256)])
     await refreshHistory()
     ElMessage.success(t("datasetEditor.caption.saved"))
   } catch (error) {
@@ -1104,11 +1106,13 @@ onUnmounted(() => {
     :local-model="localModelStatus"
     :local-model-busy="localModelBusy"
     :remote-configured="remoteProfileConfigured"
+    :shared-local-ready="sharedLocalTextReady"
     @update:model-value="onTranslationSettingsModelChange"
     @update:profiles="llmProfiles = $event"
     @update:active-remote-id="activeRemoteId = $event"
     @update:llm-mode="llmMode = $event"
     @save="saveTranslationSettings"
+    @shared-saved="loadTranslationSettings(true)"
     @clear-cache="clearTranslationCacheFromSettings"
     @check-dictionary="checkDictionary"
     @update-dictionary="updateDictionary"

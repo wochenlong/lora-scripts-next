@@ -42,8 +42,8 @@
 
 ## 2026-10-07 执行同步
 
-- 最新相关后端回归 203 passed；Node 22 前端完整 check：309 tests / 48 files passed，typecheck/lint/build 通过。Phase 0/1 核销分别见其 gate-review 报告；本地真实批量在 durable-jobs-and-real-batch 报告中记录，明确复用 P1 资产。
+- 最新相关后端回归 207 passed；Node 22 前端完整 check：313 tests / 49 files passed，typecheck/lint/build 通过。共享设置/编辑器来源保护见 Phase 2 shared-settings-and-provenance 报告。Phase 0/1 核销分别见其 gate-review；本地真实批量明确复用 P1 资产。
 - 宽范围回归仍有 11 failed、21 skipped；不得推进完整验证门。见 evidence 的 failure report。
 - 凭据落实 goal 原有边界：后端进程内保存真实 Key，配置文件和响应只有掩码；后端重启需要重新注入。
 - 连接测试直接测试所选 profile 并校验严格 JSON，不应用生产路由的 fallback。
-- Phase 0/1 done；Phase 2 in progress；Phase 3/4 pending。唯一下一步：Dataset Editor 生成来源格式的读写/投影/批量保护。
+- Phase 0/1 done；Phase 2 in progress；Phase 3/4 pending。唯一下一步：TaggerPage 历史报告/恢复 UI 与轮询代次治理。

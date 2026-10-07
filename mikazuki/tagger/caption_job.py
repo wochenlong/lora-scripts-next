@@ -162,7 +162,7 @@ class CaptionJobManager:
                 self._status["succeeded"] += 1
                 self._status["report"]["items"].append({**self._intent["result"], "recovered_write": True})
                 if self._intent["result"].get("caption_format"):
-                    self.job_store.remember_format(caption_path_for(path), self._intent["after_hash"], self._intent["result"]["caption_format"])
+                    self.job_store.remember_format(caption_path_for(path), self._intent["after_hash"], self._intent["result"]["caption_format"], self._intent["result"].get("tags", []))
         known = {item["path"] for item in self._failed}
         for index, path in enumerate(self._paths):
             if index not in self._completed and path not in known:
@@ -392,6 +392,7 @@ class CaptionJobManager:
         profile_revision_for_report = None
         prompt_revision_for_report = None
         cache_hit = False
+        training_tags = []
         self._guard_path(image_path)
         image_hash = caption_sha256(image_path)
         target = caption_path_for(image_path)
@@ -411,7 +412,8 @@ class CaptionJobManager:
         if before_hash != expected:
             raise CaptionWriteConflict("caption changed since the job snapshot")
         if mode == "tag":
-            generated = ", ".join(self._generate_tags(image_path, request))
+            training_tags = self._generate_tags(image_path, request)
+            generated = ", ".join(training_tags)
         else:
             language = str(request.get("language") or "zh-CN")
             profile_id = request.get("profile_id") or None
@@ -485,6 +487,7 @@ class CaptionJobManager:
             prompt_revision_for_report = prompt_revision
         if mode == "combined":
             tags = self._generate_tags(image_path, request)
+            training_tags = tags
             generated = compose_caption(tags, generated, str(request.get("layout") or "tags_then_caption"))
         if self._cancel.is_set():
             raise CaptionJobCancelled()
@@ -511,6 +514,7 @@ class CaptionJobManager:
             "index": self._item_index,
             "image_sha256": image_hash,
             "caption_format": output_format,
+            "tags": training_tags,
             "status": "written",
             "written": True,
             "before_hash": before_hash,
@@ -529,7 +533,7 @@ class CaptionJobManager:
                 self._persist_locked()
         write_caption_atomic(target, merged, expected_sha256=expected, trailing_newline=mode != "tag")
         if self.job_store:
-            self.job_store.remember_format(target, result["after_hash"], result["caption_format"])
+            self.job_store.remember_format(target, result["after_hash"], result["caption_format"], training_tags)
         return result
 
     async def _cancellable(self, operation):

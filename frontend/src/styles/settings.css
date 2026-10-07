@@ -652,3 +652,17 @@
 .settings-card {
   border-radius: var(--radius-lg);
 }
+.llm-settings fieldset { border: 0; padding: 0; display: grid; gap: 14px; min-width: 0; }
+.llm-settings label { display: grid; gap: 5px; }
+.llm-settings input:not([type="checkbox"]), .llm-settings select { min-width: 0; width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }
+.llm-profile-card { padding: 14px; border: 1px solid var(--border); border-radius: 8px; }
+.llm-profile-card header, .llm-capabilities, .llm-profile-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+.llm-profile-card header { justify-content: space-between; margin-bottom: 12px; }
+.llm-profile-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+.llm-capabilities, .llm-profile-actions { margin-top: 12px; }
+.llm-capabilities label { display: flex; align-items: center; gap: 5px; }
+.llm-settings button, .llm-cancel { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; }
+.llm-settings button:disabled, .llm-cancel:disabled { opacity: .5; cursor: default; }
+.llm-error { color: var(--danger); }
+.llm-cancel { margin-right: 10px; }
+@media (max-width: 600px) { .llm-profile-fields { grid-template-columns: minmax(0, 1fr); } }

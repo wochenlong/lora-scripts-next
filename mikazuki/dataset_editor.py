@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import hashlib
 from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +42,9 @@ class CaptionSnapshot:
     image: str
     caption: str
     caption_exists: bool
+    caption_format: CaptionFormat | None = None
+    caption_sha256: str | None = None
+    source_tags: list[str] | None = None
 
 
 @dataclass
@@ -58,6 +62,7 @@ class CaptionWriteRequest(BaseModel):
     root: str
     image: str
     caption: str = ""
+    expected_sha256: str | None = None
 
 
 class TagReplacement(BaseModel):
@@ -131,13 +136,15 @@ def detect_caption_format(caption: str) -> CaptionFormat:
     return "natural"
 
 
-def caption_projection(caption: str) -> tuple[CaptionFormat, list[str], str]:
-    format_name = detect_caption_format(caption)
+def caption_projection(caption: str, format_hint=None, source_tags=None) -> tuple[CaptionFormat, list[str], str]:
+    format_name = format_hint or detect_caption_format(caption)
     if format_name == "tag":
         return format_name, parse_tags(caption), ""
     if format_name == "mixed":
         blocks = [block.strip() for block in caption.split(chr(10) + chr(10)) if block.strip()]
-        tag_index = next(index for index, block in enumerate(blocks) if _looks_like_tag_block(block))
+        tag_index = next((index for index, block in enumerate(blocks) if parse_tags(block) == source_tags), None) if source_tags is not None else next((index for index, block in enumerate(blocks) if _looks_like_tag_block(block)), None)
+        if tag_index is None:
+            return format_name, [], caption
         tags = parse_tags(blocks[tag_index])
         natural = (chr(10) + chr(10)).join(block for index, block in enumerate(blocks) if index != tag_index)
         return format_name, tags, natural
@@ -193,12 +200,23 @@ def caption_path_for(image_path: Path) -> Path:
     return image_path.with_suffix(".txt")
 
 
+def caption_provenance(image_path):
+    from mikazuki.llm.runtime import caption_job_store
+    from mikazuki.tagger.caption_job import caption_sha256
+    return caption_job_store.find_format_detail(caption_path_for(image_path), caption_sha256(caption_path_for(image_path)))
+
+
+def image_caption_projection(image_path, caption):
+    source = caption_provenance(image_path)
+    return caption_projection(caption, source["format"] if source else None, source["tags"] if source else None)
+
+
 def read_caption(image_path: Path) -> str:
     caption_path = caption_path_for(image_path)
     if not caption_path.is_file():
         return ""
-    text = caption_path.read_text(encoding="utf-8")
-    return text.strip() if detect_caption_format(text) == "tag" else text
+    text = caption_path.read_bytes().decode("utf-8")
+    return text.strip() if image_caption_projection(image_path, text)[0] == "tag" else text
 
 
 def thumbnail_bytes(image_path: Path, size: int) -> bytes:
@@ -227,10 +245,15 @@ def thumbnail_bytes(image_path: Path, size: int) -> bytes:
 
 def capture_caption(root: Path, image_path: Path) -> CaptionSnapshot:
     caption_path = caption_path_for(image_path)
+    caption = read_caption(image_path)
+    provenance = caption_provenance(image_path)
     return CaptionSnapshot(
         image=normalize_relative_path(image_path.relative_to(root)),
-        caption=read_caption(image_path),
+        caption=caption,
         caption_exists=caption_path.is_file(),
+        caption_format=image_caption_projection(image_path, caption)[0],
+        caption_sha256=hashlib.sha256(caption_path.read_bytes()).hexdigest() if caption_path.is_file() else None,
+        source_tags=provenance["tags"] if provenance else None,
     )
 
 
@@ -246,7 +269,7 @@ def restore_caption(root: Path, snapshot: CaptionSnapshot) -> dict:
     image_path = resolve_image(root, snapshot.image)
     caption_path = caption_path_for(image_path)
     if snapshot.caption_exists:
-        write_caption(image_path, snapshot.caption)
+        write_caption(image_path, snapshot.caption, format_hint=snapshot.caption_format, source_tags=snapshot.source_tags)
     elif caption_path.exists():
         caption_path.unlink()
     caption = read_caption(image_path)
@@ -254,8 +277,9 @@ def restore_caption(root: Path, snapshot: CaptionSnapshot) -> dict:
         "image": snapshot.image,
         "caption": caption,
         "caption_exists": caption_path.is_file(),
-        "tags": caption_projection(caption)[1],
-        "caption_format": caption_projection(caption)[0],
+        "tags": image_caption_projection(image_path, caption)[1],
+        "caption_format": image_caption_projection(image_path, caption)[0],
+        "caption_sha256": capture_caption(root, image_path).caption_sha256,
     }
 
 
@@ -264,8 +288,9 @@ def snapshot_to_item(snapshot: CaptionSnapshot) -> dict:
         "image": snapshot.image,
         "caption": snapshot.caption,
         "caption_exists": snapshot.caption_exists,
-        "tags": caption_projection(snapshot.caption)[1],
-        "caption_format": caption_projection(snapshot.caption)[0],
+        "tags": caption_projection(snapshot.caption, snapshot.caption_format, snapshot.source_tags)[1],
+        "caption_format": snapshot.caption_format or caption_projection(snapshot.caption)[0],
+        "caption_sha256": snapshot.caption_sha256,
     }
 
 
@@ -293,9 +318,23 @@ def category_for(root: Path, image_path: Path) -> str:
     return rel.parts[0]
 
 
-def write_caption(image_path: Path, caption: str) -> str:
-    normalized = caption.strip() if detect_caption_format(caption) == "tag" else caption
-    caption_path_for(image_path).write_text(normalized, encoding="utf-8")
+def write_caption(image_path: Path, caption: str, *, expected_sha256=..., format_hint=None, source_tags=None) -> str:
+    from mikazuki.llm.runtime import caption_job_store
+    from mikazuki.tagger.caption_job import CaptionWriteConflict, caption_sha256, write_caption_atomic
+    target = caption_path_for(image_path)
+    if target.is_symlink():
+        raise HTTPException(status_code=409, detail={"code": "caption_conflict", "message": "不能写入符号链接 caption"})
+    previous = caption_provenance(image_path)
+    caption_format = format_hint or (previous["format"] if previous and previous["format"] != "tag" else detect_caption_format(caption))
+    normalized = caption.strip() if caption_format == "tag" else caption
+    before_hash = caption_sha256(target) if expected_sha256 is ... else expected_sha256
+    try:
+        after_hash = write_caption_atomic(target, normalized, expected_sha256=before_hash, trailing_newline=False)
+    except CaptionWriteConflict:
+        raise HTTPException(status_code=409, detail={"code": "caption_conflict", "message": "caption 已被外部修改，请刷新后重试"}) from None
+    if source_tags is None:
+        source_tags = previous["tags"] if previous and previous["format"] == "mixed" else []
+    caption_job_store.remember_format(target, after_hash, caption_format, source_tags)
     return normalized
 
 
@@ -309,7 +348,7 @@ def scan_dataset(root: Path) -> dict:
         rel = normalize_relative_path(image_path.relative_to(root))
         category = category_for(root, image_path)
         caption = read_caption(image_path)
-        caption_format, tags, natural_text = caption_projection(caption)
+        caption_format, tags, natural_text = image_caption_projection(image_path, caption)
         tag_counts.update(tags)
         category_counts.update([category])
         caption_path = caption_path_for(image_path)
@@ -323,6 +362,7 @@ def scan_dataset(root: Path) -> dict:
                 "caption_exists": caption_path.is_file(),
                 "tags": tags,
                 "caption_format": caption_format,
+                "caption_sha256": capture_caption(root, image_path).caption_sha256,
                 "tag_blocks": tags if caption_format == "mixed" else [],
                 "natural_text": natural_text,
                 "image_url": f"/api/dataset-editor/image?{image_query}",
@@ -366,7 +406,8 @@ async def save_caption(req: CaptionWriteRequest):
     if not image_path.is_file():
         raise HTTPException(status_code=404, detail="image not found")
     before = capture_caption(root, image_path)
-    caption = write_caption(image_path, req.caption)
+    expected = req.expected_sha256 if "expected_sha256" in req.__fields_set__ else before.caption_sha256
+    caption = write_caption(image_path, req.caption, expected_sha256=expected)
     if before.caption != caption or not before.caption_exists:
         remember_edit(root, "保存当前 caption", [before], [capture_caption(root, image_path)])
     return APIResponseSuccess(
@@ -374,8 +415,9 @@ async def save_caption(req: CaptionWriteRequest):
             "image": normalize_relative_path(image_path.relative_to(root)),
             "caption": caption,
             "caption_exists": caption_path_for(image_path).is_file(),
-            "tags": caption_projection(caption)[1],
-            "caption_format": caption_projection(caption)[0],
+            "tags": image_caption_projection(image_path, caption)[1],
+            "caption_format": image_caption_projection(image_path, caption)[0],
+            "caption_sha256": capture_caption(root, image_path).caption_sha256,
         }
     )
 
@@ -399,7 +441,7 @@ async def batch_edit(req: BatchEditRequest):
         if not candidate.is_file():
             continue
         text = read_caption(candidate)
-        if text and detect_caption_format(text) != "tag":
+        if text and image_caption_projection(candidate, text)[0] != "tag":
             raise HTTPException(
                 status_code=409,
                 detail={"code": "caption_format_unsafe", "message": "自然语言或 mixed caption 不能使用 Tag 批量操作"},
@@ -410,7 +452,7 @@ async def batch_edit(req: BatchEditRequest):
         if not image_path.is_file():
             continue
         current_caption = read_caption(image_path)
-        caption_format, _, _ = caption_projection(current_caption)
+        caption_format, _, _ = image_caption_projection(image_path, current_caption)
         if current_caption and caption_format in {"natural", "mixed", "unknown"}:
             raise HTTPException(
                 status_code=409,
@@ -458,6 +500,7 @@ async def batch_edit(req: BatchEditRequest):
                 "caption_exists": caption_path_for(image_path).is_file(),
                 "tags": next_tags,
                 "caption_format": "tag",
+                "caption_sha256": capture_caption(root, image_path).caption_sha256,
             }
         )
 

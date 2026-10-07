@@ -35,7 +35,10 @@ class CaptionJobStore:
                 job_id TEXT NOT NULL, item_index INTEGER NOT NULL, content BLOB,
                 before_hash TEXT, PRIMARY KEY(job_id, item_index))""")
             connection.execute("""CREATE TABLE IF NOT EXISTS caption_formats (
-                path TEXT PRIMARY KEY, after_hash TEXT NOT NULL, format TEXT NOT NULL)""")
+                path TEXT PRIMARY KEY, after_hash TEXT NOT NULL, format TEXT NOT NULL,
+                tags TEXT NOT NULL DEFAULT '[]')""")
+            if "tags" not in {row["name"] for row in connection.execute("PRAGMA table_info(caption_formats)")}:
+                connection.execute("ALTER TABLE caption_formats ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'")
 
     @contextmanager
     def _connect(self):
@@ -79,17 +82,21 @@ class CaptionJobStore:
             rows = connection.execute("SELECT state FROM caption_jobs ORDER BY updated_at DESC, rowid DESC LIMIT ?", (max(1, min(limit, 100)),)).fetchall()
         return [json.loads(row["state"]) for row in rows]
 
-    def remember_format(self, path, after_hash, caption_format):
+    def remember_format(self, path, after_hash, caption_format, tags=None):
         import os
         key = os.path.normcase(str(Path(path).resolve()))
         with self._connect() as connection:
-            connection.execute("""INSERT INTO caption_formats(path, after_hash, format) VALUES (?, ?, ?)
-                ON CONFLICT(path) DO UPDATE SET after_hash=excluded.after_hash, format=excluded.format""",
-                (key, after_hash, caption_format))
+            connection.execute("""INSERT INTO caption_formats(path, after_hash, format, tags) VALUES (?, ?, ?, ?)
+                ON CONFLICT(path) DO UPDATE SET after_hash=excluded.after_hash, format=excluded.format, tags=excluded.tags""",
+                (key, after_hash, caption_format, json.dumps(tags or [], ensure_ascii=False)))
 
     def find_format(self, path, current_hash):
+        detail = self.find_format_detail(path, current_hash)
+        return detail["format"] if detail else None
+
+    def find_format_detail(self, path, current_hash):
         import os
         key = os.path.normcase(str(Path(path).resolve()))
         with self._connect() as connection:
-            row = connection.execute("SELECT format FROM caption_formats WHERE path=? AND after_hash=?", (key, current_hash)).fetchone()
-        return row["format"] if row else None
+            row = connection.execute("SELECT format, tags FROM caption_formats WHERE path=? AND after_hash=?", (key, current_hash)).fetchone()
+        return {"format": row["format"], "tags": json.loads(row["tags"])} if row else None

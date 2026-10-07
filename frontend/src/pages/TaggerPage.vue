@@ -8,6 +8,7 @@ import { useTaggerStore } from "../stores/tagger"
 import { llmApi, type LlmConfig, type LocalVisionStatus } from "../api/llm"
 import { taggerApi, type CaptionJobRequest, type CaptionJobStatus, type CaptionMode, type TaggerRequest } from "../api/tagger"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
+import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
 import { useServerPathPick } from "../composables/useServerPathPick"
 
 const models = ["wd14-convnextv2-v2", "wd-convnext-v3", "wd-swinv2-v3", "wd-vit-v3", "wd14-swinv2-v2", "wd14-vit-v2", "wd14-moat-v2", "wd-eva02-large-tagger-v3", "wd-vit-large-tagger-v3", "cl_tagger_1_01"]
@@ -26,7 +27,6 @@ const previewResult = ref("")
 const llmLoading = ref(false)
 const captionSubmitting = ref(false)
 const profileEditorOpen = ref(false)
-const profileSaving = ref(false)
 const localVision = ref<LocalVisionStatus>({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 })
 const localVisionBusy = ref(false)
 const previewBusy = ref(false)
@@ -35,7 +35,6 @@ const presetName = ref("")
 const presetSaving = ref(false)
 captionForm.max_caption_length = 2000
 const committedPrompt = ref({ prompt: captionForm.prompt, language: captionForm.language, max_caption_length: captionForm.max_caption_length })
-const profileDraft = reactive({ id: "vision-profile", name: "视觉 Profile", endpoint: "", model: "", source: "remote" as "remote" | "local-endpoint", api_key: "", languages: "zh-CN,en" })
 let timer: number | undefined
 
 const visionProfiles = computed(() => llmConfig.value.profiles.filter(profile => profile.enabled && profile.ready && profile.capabilities.includes("vision") && (profile.languages.includes(captionForm.language) || profile.languages.includes("*"))).sort((first, second) => Number(second.source === "remote") - Number(first.source === "remote")))
@@ -104,38 +103,6 @@ async function manageLocalVision(action: "setup" | "start" | "stop" | "cancel") 
     ElMessage.error(caught instanceof Error ? caught.message : String(caught))
   } finally {
     localVisionBusy.value = false
-  }
-}
-
-async function saveVisionProfile() {
-  if (!profileDraft.endpoint.trim() || !profileDraft.model.trim()) {
-    ElMessage.error(t("tagger.caption.profileFieldsRequired"))
-    return
-  }
-  profileSaving.value = true
-  try {
-    const profile = {
-      id: profileDraft.id.trim() || "vision-profile",
-      name: profileDraft.name.trim() || profileDraft.id.trim() || "Vision profile",
-      endpoint: profileDraft.endpoint.trim(),
-      model: profileDraft.model.trim(),
-      source: profileDraft.source,
-      capabilities: ["text", "vision"],
-      languages: profileDraft.languages.split(",").map(item => item.trim()).filter(Boolean),
-      api_key: profileDraft.api_key,
-      enabled: true,
-      ready: true,
-    }
-    const profiles = llmConfig.value.profiles.filter(item => item.id !== profile.id).map(item => ({ ...item, api_key: item.api_key || "********" }))
-    llmConfig.value = await llmApi.saveConfig({ profiles: [...profiles, profile], routes: { ...llmConfig.value.routes, caption: profile.id } })
-    captionForm.profile_id = profile.id
-    profileEditorOpen.value = false
-    profileDraft.api_key = ""
-    ElMessage.success(t("tagger.caption.profileSaved"))
-  } catch (caught) {
-    ElMessage.error(caught instanceof Error ? caught.message : String(caught))
-  } finally {
-    profileSaving.value = false
   }
 }
 
@@ -324,16 +291,7 @@ onBeforeUnmount(stopPolling)
             <button v-else-if="localVision.state !== 'running'" type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('start')">{{ t("tagger.caption.startLocal") }}</button>
             <button v-else type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('stop')">{{ t("tagger.caption.stopLocal") }}</button>
           </section>
-          <div v-if="profileEditorOpen" class="caption-profile-editor wide-field">
-            <label>{{ t("tagger.caption.profileId") }}<input v-model="profileDraft.id" /></label>
-            <label>{{ t("tagger.caption.profileName") }}<input v-model="profileDraft.name" /></label>
-            <label>{{ t("tagger.caption.profileSource") }}<select v-model="profileDraft.source"><option value="remote">{{ t("tagger.caption.remote") }}</option><option value="local-endpoint">{{ t("tagger.caption.local") }}</option></select></label>
-            <label>{{ t("tagger.caption.endpoint") }}<input v-model="profileDraft.endpoint" placeholder="https://.../chat/completions" /></label>
-            <label>{{ t("tagger.caption.model") }}<input v-model="profileDraft.model" /></label>
-            <label>{{ t("tagger.caption.apiKey") }}<input v-model="profileDraft.api_key" type="password" autocomplete="new-password" /></label>
-            <label>{{ t("tagger.caption.languages") }}<input v-model="profileDraft.languages" placeholder="zh-CN,en" /></label>
-            <button type="button" class="primary-action" :disabled="profileSaving" @click="saveVisionProfile">{{ t("tagger.caption.saveProfile") }}</button>
-          </div>
+
           <div v-if="previewResult" class="caption-preview wide-field"><strong>{{ t("tagger.caption.previewResult") }}</strong><p>{{ previewResult }}</p></div>
         </template>
       </div>
@@ -364,6 +322,7 @@ onBeforeUnmount(stopPolling)
         <div class="tagger-actions"><button v-if="captionBusy" class="danger-action" :disabled="captionSubmitting" @click="captionAction('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="captionSubmitting || previewBusy || !visionProfiles.length" @click="startCaption">{{ t("tagger.start") }}</button><button v-if="captionStatus.failed" class="secondary-action" :disabled="captionBusy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || previewBusy || captionBusy || !visionProfiles.length || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button></div>
       </template>
     </aside>
+    <LlmSettingsDialog v-model="profileEditorOpen" capability="vision" :image-path="previewImagePath" @saved="loadLlmProfiles" />
     <PathPickerDialog v-model="pathPickerOpen" :mode="pathPickerMode" :initial-path="pathPickerInitial" :name-filter="pathPickerFilter" @confirm="onPathConfirm" @cancel="onPathCancel" />
   </div>
 </template>

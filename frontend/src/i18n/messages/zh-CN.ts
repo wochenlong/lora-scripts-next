@@ -1,4 +1,14 @@
 export default {
+  llm: {
+    localFallback: "远程失败时允许已启动的本地文本模型兜底",
+    title: "共用 LLM 配置", sharedHint: "翻译与打标共用这些配置。远程始终优先；本地须显式启用兜底。打标要求视觉能力，翻译只要求文本能力。",
+    keyHint: "Key 仅保留在后端进程，配置只保存掩码；服务重启后须重新注入。取消会丢弃未保存的编辑。",
+    loading: "正在读取配置…", newProfile: "新接口", fieldsRequired: "请填写名称、地址、模型、能力和语言",
+    translationRoute: "翻译默认接口", captionRoute: "打标默认视觉接口", auto: "自动选择远程优先接口",
+    testImage: "视觉连接测试图片路径", saveBeforeTest: "请先保存修改，再测试已保存的接口", testPassed: "{name} 连接与严格 JSON 测试通过",
+    remote: "远程", local: "本地接口", managed: "受管本地模型", name: "名称", source: "类型", endpoint: "接口地址", model: "模型", key: "API Key", languages: "支持语言（逗号分隔）",
+    text: "文本能力", vision: "视觉能力", enabled: "启用", test: "测试已保存接口", remove: "删除", add: "新增接口", cancel: "取消并丢弃修改", save: "保存共用配置",
+  },
   animaModel: { spec: "模型规格", confirm: "请确认模型规格（保留当前路径）" },
   network: {
     title: "下载网络设置", mode: "连接方式", auto: "自动检测", system: "系统代理", manual: "手动代理", direct: "直连",

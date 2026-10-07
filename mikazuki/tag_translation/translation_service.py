@@ -185,7 +185,12 @@ class TranslationManager:
         self._last_status = {"state": "idle", "message": "", "updated_at": None}
 
     def get_config(self):
-        return mask_config(self.config_store.load())
+        config = self.config_store.load()
+        if isinstance(config.get("llm"), dict):
+            from mikazuki.llm.config import UnifiedConfigStore
+            from mikazuki.llm.service import UnifiedLLMService
+            config["llm"] = UnifiedLLMService(UnifiedConfigStore(self.config_store.path)).config(masked=True)
+        return mask_config(config)
 
     def get_api_key(self):
         return self.config_store.load()["deepseek"]["api_key"]
