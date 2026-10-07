@@ -41,7 +41,7 @@ export interface CaptionPromptPreset {
 export interface CaptionPromptPresetDocument {
   revision: string
   presets: CaptionPromptPreset[]
-  settings: { default_caption_preset_id?: string | null }
+  settings: { default_caption_preset_id?: string | null; legacy_imported?: boolean }
 }
 
 export interface LocalVisionStatus {
@@ -60,6 +60,7 @@ export const llmApi = {
   saveConfig: (body: Partial<LlmConfig>) => apiData<LlmConfig>("/api/llm/config", { method: "PUT", body: JSON.stringify(body) }),
   promptPresets: (signal?: AbortSignal) => apiData<CaptionPromptPresetDocument>("/api/llm/prompt-presets", { signal }),
   savePromptPresets: (body: CaptionPromptPresetDocument) => apiData<CaptionPromptPresetDocument>("/api/llm/prompt-presets", { method: "PUT", body: JSON.stringify(body) }),
+  importLegacyPromptPresets: (revision: string) => apiData<CaptionPromptPresetDocument>("/api/llm/prompt-presets/import-legacy", { method: "POST", body: JSON.stringify({ confirmed: true, revision }) }),
   connectionTest: (body: { capability: "text" | "vision"; profile_id?: string; image_path?: string; prompt?: string; language?: string }) =>
     apiData<Record<string, unknown>>("/api/llm/connection-test", { method: "POST", body: JSON.stringify(body) }),
   localVisionManifest: () => apiData<Record<string, unknown>>("/api/llm/local-vision/manifest"),

@@ -248,7 +248,7 @@
 
 ### 下一步动作
 
-补齐user_data预设的多文件失败恢复和跨进程修订保护，然后接入显式旧预设导入UI。模型目录/页面/参数隔离已实现，见本轮证据。
+接入既有TaskManager与user_data任务档案，落实任务页停止、重启状态与档案写入失败保护。
 
 ## 失败与变更处理
 
@@ -273,3 +273,9 @@
 GET /api/tagger/models和本地/API一级选择已实现；系列折叠/原名搜索/下载状态/具体型号/每模型草稿、API空入口保护、前后端参数隔离；Caption生成参数进入cache/任务快照；manager/retry拒绝combined、worker不生成mixed；默认跳过和retry外部hash冲突保护。相关后端216通过，前端336/52及type/lint/build通过。实际新fake fixture完成preview不写盘、batch3写回/重复skip3零额外provider、390px无溢出/底部任务、Qwen缺失安装入口和禁用生成，修复KeepAlive初始目录请求丢弃。报告phase-0-contract-alignment/2026-10-08-model-catalog-browser.md。
 
 不属于真实模型或Phase5。预设事务/跨进程、任务档案联动、Tag单图试标及最终验证未完成。唯一下一步：补预设多文件失败恢复/跨进程revision保护和显式legacy导入UI。全部自建browser fixture已停止，tracked dist恢复，不修改既有tests/test_diffsynth_review.py。
+
+## 2026-10-08 预设存储与导入完成增量
+
+本轮预设事务/journal恢复、OS跨进程锁、完整settings revision、上一版本备份、路径约束、明确确认的一次性导入、系统提示词编辑/全草稿撤销、保留草稿刷新已实现。专项真实进程并发和硬退出16通过；相关223通过，随后APIfocused37；前端340/52/check/build通过。实际fake browser取消导入0写入/确认导入保留旧源和草稿，另存默认模板跨独立BrowserContext及后端重启保留正文/系统提示词；非真实模型或Phase5。
+
+证据2026-10-08-preset-transactions-import.md。单一下一步：既有TaskManager+user_data/tasks/dataset-tagger档案，任务页停止真正取消、重启状态和档案写入失败不开始。不要将Task.start_log_only简单注册后当完成：Task.terminate目前只杀process，Caption没有独立process，必须打通取消回调。既有tests/test_diffsynth_review.py保留未提交；全部自建进程停止、dist恢复。

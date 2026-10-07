@@ -25,6 +25,7 @@ vi.mock("../api/llm", () => ({
     saveConfig: vi.fn(),
     promptPresets: vi.fn().mockResolvedValue({ presets: [], settings: { default_caption_preset_id: null }, revision: "r1" }),
     savePromptPresets: vi.fn(),
+    importLegacyPromptPresets: vi.fn(),
   },
 }))
 vi.mock("../api/tagger", () => ({
@@ -69,6 +70,69 @@ async function naturalPage() {
 }
 
 describe("natural-language TaggerPage", () => {
+  it("imports legacy presets only after confirmation and preserves the current draft", async () => {
+    const config = await llmApi.profiles()
+    vi.mocked(llmApi.profiles).mockResolvedValueOnce({ ...config, prompt_presets: [{ id: "legacy", name: "旧预设", template: "旧提示词", language: "zh-CN" }] })
+    // Element Plus resolves confirmation actions as strings, while its type
+    // declares the input-dialog data/action intersection for all shortcuts.
+    vi.spyOn(ElMessageBox, "confirm").mockRejectedValueOnce("cancel").mockResolvedValueOnce("confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    vi.mocked(llmApi.importLegacyPromptPresets).mockResolvedValueOnce({ revision: "r2", presets: [{ id: "legacy", kind: "caption_prompt", name: "旧预设", template: "旧提示词", language: "zh-CN", max_length: 2000, output_format: "plain_text", model_capabilities: ["vision", "caption"], revision: "p1" }], settings: { default_caption_preset_id: null, legacy_imported: true } })
+    const page = await naturalPage()
+    await page.get("textarea").setValue("保留当前草稿")
+    await page.get(".caption-legacy-import button").trigger("click")
+    await flushPromises()
+    expect(llmApi.importLegacyPromptPresets).not.toHaveBeenCalled()
+    await page.get(".caption-legacy-import button").trigger("click")
+    await flushPromises()
+    expect(llmApi.importLegacyPromptPresets).toHaveBeenCalledWith("r1")
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("保留当前草稿")
+    expect(page.find('.caption-preset-select option[value="legacy"]').exists()).toBe(true)
+    expect(page.find(".caption-legacy-import").exists()).toBe(false)
+    expect(llmApi.saveConfig).not.toHaveBeenCalled()
+  })
+
+  it("retains the draft and import entry after an import conflict", async () => {
+    const config = await llmApi.profiles()
+    vi.mocked(llmApi.profiles).mockResolvedValueOnce({ ...config, prompt_presets: [{ id: "legacy", name: "旧预设", template: "旧提示词", language: "zh-CN" }] })
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue("confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    vi.mocked(llmApi.importLegacyPromptPresets).mockRejectedValueOnce(new Error("revision conflict"))
+    const page = await naturalPage()
+    await page.get("textarea").setValue("未保存草稿")
+    await page.get(".caption-legacy-import button").trigger("click")
+    await flushPromises()
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("未保存草稿")
+    expect(page.find(".caption-legacy-import").exists()).toBe(true)
+    expect(page.find('.caption-preset-select option[value="legacy"]').exists()).toBe(false)
+  })
+
+  it("discards unsaved system prompt and name changes together", async () => {
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => update)
+    const page = await naturalPage()
+    await page.get(".caption-preset-name").setValue("保存版本")
+    await page.get(".caption-system-prompt").setValue("只描述可见内容")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    await page.get(".caption-system-prompt").setValue("未保存系统提示词")
+    await page.get(".caption-preset-name").setValue("未保存名称")
+    await page.findAll(".caption-preset-actions button")[1].trigger("click")
+    expect((page.get(".caption-system-prompt").element as HTMLTextAreaElement).value).toBe("只描述可见内容")
+    expect((page.get(".caption-preset-name").element as HTMLInputElement).value).toBe("保存版本")
+  })
+
+  it("refreshes a conflicting revision without discarding unsaved edits", async () => {
+    const page = await naturalPage()
+    await page.get("textarea").setValue("并发时保留的草稿")
+    await page.get(".caption-preset-name").setValue("我的名称")
+    vi.mocked(llmApi.promptPresets).mockResolvedValueOnce({ presets: [], settings: {}, revision: "r2" })
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => update)
+    await page.get(".caption-refresh-presets").trigger("click")
+    await flushPromises()
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("并发时保留的草稿")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    expect(llmApi.savePromptPresets).toHaveBeenCalledWith(expect.objectContaining({ revision: "r2", presets: [expect.objectContaining({ name: "我的名称", template: "并发时保留的草稿" })] }))
+  })
+
   it("loads the initial catalog when mounted inside KeepAlive", async () => {
     const host = defineComponent({ components: { TaggerPage }, template: "<KeepAlive><TaggerPage /></KeepAlive>" })
     wrapper = mount(host, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })

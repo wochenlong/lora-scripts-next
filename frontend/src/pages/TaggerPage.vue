@@ -30,7 +30,8 @@ const availableModels = computed(() => catalog.value.filter(model => model.runti
 const apiAvailable = computed(() => catalog.value.some(model => model.runtime === "api" && model.ready))
 const modelReady = computed(() => selectedModel.value?.ready && (mode.value === "tag" || selectedModel.value.languages.includes(captionForm.language) || selectedModel.value.languages.includes("*")))
 const catalogLoading = ref(false)
-const modelDrafts = new Map<string, { tag: TaggerRequest; caption: CaptionJobRequest; presetId: string; presetName: string; systemPrompt: string }>()
+type PromptState = Pick<CaptionJobRequest, "prompt" | "language" | "max_caption_length"> & { system_prompt: string; name: string }
+const modelDrafts = new Map<string, { tag: TaggerRequest; caption: CaptionJobRequest; presetId: string; presetName: string; systemPrompt: string; committed: PromptState }>()
 const store = useTaggerStore()
 const { status, error, submitting, busy } = storeToRefs(store)
 const { t } = useI18n()
@@ -79,11 +80,14 @@ const presetName = ref("")
 const presetSaving = ref(false)
 const captionPresets = ref<CaptionPromptPreset[]>([])
 const presetRevision = ref("")
+const defaultPresetId = ref<string | null>(null)
+const legacyImported = ref(false)
+const legacyPresetCount = computed(() => legacyImported.value ? 0 : llmProfiles.config.value.prompt_presets.length)
 const defaultPrompt = captionForm.prompt
 const builtinPresets: CaptionPromptPreset[] = [{ id: "builtin-caption-zh", kind: "caption_prompt", name: "客观描述 / Visible facts", template: defaultPrompt, system_prompt: "只描述可见主体、动作、环境和构图，不臆测身份或不可见事实。", output_format: "plain_text", language: "zh-CN", max_length: 2000, model_capabilities: ["vision", "caption"], revision: "builtin-v1" }]
-const selectedSystemPrompt = ref("")
+const selectedSystemPrompt = ref(builtinPresets[0].system_prompt || "")
 captionForm.max_caption_length = 2000
-const committedPrompt = ref({ prompt: captionForm.prompt, language: captionForm.language, max_caption_length: captionForm.max_caption_length })
+const committedPrompt = ref<PromptState>({ prompt: captionForm.prompt, language: captionForm.language, max_caption_length: captionForm.max_caption_length, system_prompt: selectedSystemPrompt.value, name: "" })
 let timer: number | undefined
 
 const downloadPercent = computed(() => status.value.download.percent || (status.value.download.total ? Math.round(status.value.download.current / status.value.download.total * 100) : 0))
@@ -92,7 +96,7 @@ const taggingPercent = computed(() => status.value.tagging.total ? Math.round(st
 function selectModel(identifier: string) {
   const next = catalog.value.find(model => model.id === identifier)
   if (!next) return
-  modelDrafts.set(selectedModelId.value, { tag: { ...form }, caption: { ...captionForm }, presetId: presetId.value, presetName: presetName.value, systemPrompt: selectedSystemPrompt.value })
+  modelDrafts.set(selectedModelId.value, { tag: { ...form }, caption: { ...captionForm }, presetId: presetId.value, presetName: presetName.value, systemPrompt: selectedSystemPrompt.value, committed: { ...committedPrompt.value } })
   const path = form.path
   const draft = modelDrafts.get(identifier)
   if (draft) {
@@ -102,6 +106,7 @@ function selectModel(identifier: string) {
       presetId.value = draft.presetId
       presetName.value = draft.presetName
       selectedSystemPrompt.value = draft.systemPrompt
+      committedPrompt.value = { ...draft.committed }
     }
   }
   selectedModelId.value = identifier
@@ -120,7 +125,7 @@ function selectRuntime(next: "local" | "api") {
 }
 
 async function selectPreset(identifier: string) {
-  if (captionForm.prompt !== committedPrompt.value.prompt || captionForm.language !== committedPrompt.value.language || captionForm.max_caption_length !== committedPrompt.value.max_caption_length) {
+  if (captionForm.prompt !== committedPrompt.value.prompt || captionForm.language !== committedPrompt.value.language || captionForm.max_caption_length !== committedPrompt.value.max_caption_length || selectedSystemPrompt.value !== committedPrompt.value.system_prompt || presetName.value !== committedPrompt.value.name) {
     try {
       await ElMessageBox.confirm(t("tagger.caption.unsavedPrompt"), { confirmButtonText: t("tagger.caption.discardChanges"), cancelButtonText: t("tagger.caption.keepEditing"), type: "warning" })
     } catch { return }
@@ -133,11 +138,45 @@ async function selectPreset(identifier: string) {
   captionForm.max_caption_length = preset.max_length || 2000
   presetName.value = preset.name || ""
   selectedSystemPrompt.value = preset.system_prompt || ""
-  committedPrompt.value = { prompt: preset.template, language: preset.language, max_caption_length: captionForm.max_caption_length }
+  committedPrompt.value = { prompt: preset.template, language: preset.language, max_caption_length: captionForm.max_caption_length, system_prompt: selectedSystemPrompt.value, name: presetName.value }
 }
 
 function restorePrompt() {
-  Object.assign(captionForm, committedPrompt.value)
+  const saved = committedPrompt.value
+  Object.assign(captionForm, { prompt: saved.prompt, language: saved.language, max_caption_length: saved.max_caption_length })
+  selectedSystemPrompt.value = saved.system_prompt
+  presetName.value = saved.name
+}
+
+async function refreshPromptPresets() {
+  if (presetSaving.value) return
+  presetSaving.value = true
+  try {
+    const saved = await llmApi.promptPresets()
+    captionPresets.value = saved.presets
+    presetRevision.value = saved.revision
+    defaultPresetId.value = saved.settings.default_caption_preset_id || null
+    legacyImported.value = saved.settings.legacy_imported === true
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : String(caught))
+  } finally { presetSaving.value = false }
+}
+
+async function importLegacyPresets() {
+  if (presetSaving.value) return
+  try { await ElMessageBox.confirm(t('tagger.caption.importLegacyConfirm'), { type: "warning" }) }
+  catch { return }
+  presetSaving.value = true
+  try {
+    const saved = await llmApi.importLegacyPromptPresets(presetRevision.value)
+    captionPresets.value = saved.presets
+    presetRevision.value = saved.revision
+    defaultPresetId.value = saved.settings.default_caption_preset_id || null
+    legacyImported.value = saved.settings.legacy_imported === true
+    ElMessage.success(t('tagger.caption.legacyImported'))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : String(caught))
+  } finally { presetSaving.value = false }
 }
 
 async function savePreset(remove = false, saveAs = false) {
@@ -148,11 +187,13 @@ async function savePreset(remove = false, saveAs = false) {
     const identifier = (!saveAs && captionPresets.value.some(item => item.id === presetId.value) ? presetId.value : "") || `caption-${Date.now()}`
     const presets = captionPresets.value.filter(item => item.id !== identifier)
     if (!remove) presets.push({ id: identifier, kind: "caption_prompt", name: presetName.value.trim(), template: captionForm.prompt, system_prompt: selectedSystemPrompt.value, output_format: "plain_text", language: captionForm.language, max_length: captionForm.max_caption_length || 2000, model_capabilities: ["vision", "caption"], revision: "" })
-    const saved = await llmApi.savePromptPresets({ presets, settings: { default_caption_preset_id: remove ? null : identifier }, revision: presetRevision.value })
+    const saved = await llmApi.savePromptPresets({ presets, settings: { default_caption_preset_id: remove ? (defaultPresetId.value === identifier ? null : defaultPresetId.value) : identifier }, revision: presetRevision.value })
     captionPresets.value = saved.presets
     presetRevision.value = saved.revision
+    defaultPresetId.value = saved.settings.default_caption_preset_id || null
     presetId.value = remove ? "" : identifier
-    if (!remove) committedPrompt.value = { prompt: captionForm.prompt, language: captionForm.language, max_caption_length: captionForm.max_caption_length || 2000 }
+    const savedPreset = saved.presets.find(item => item.id === identifier)
+    if (savedPreset) committedPrompt.value = { prompt: savedPreset.template, language: savedPreset.language, max_caption_length: savedPreset.max_length, system_prompt: savedPreset.system_prompt || "", name: savedPreset.name }
     ElMessage.success(t("tagger.caption.presetSaved"))
   } catch (caught) {
     ElMessage.error(caught instanceof Error ? caught.message : String(caught))
@@ -170,6 +211,8 @@ async function loadLlmProfiles() {
     if (revision === refreshGeneration) {
       captionPresets.value = promptDocument.presets
       presetRevision.value = promptDocument.revision
+      defaultPresetId.value = promptDocument.settings.default_caption_preset_id || null
+      legacyImported.value = promptDocument.settings.legacy_imported === true
       const defaultId = promptDocument.settings.default_caption_preset_id
       if (!presetId.value && defaultId && captionForm.prompt === defaultPrompt) await selectPreset(defaultId)
     }
@@ -364,13 +407,13 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
       <div class="tagger-grid">
         <label class="wide-field">{{ t("tagger.pathLabel") }}<span class="path-row"><input v-model="form.path" placeholder="/data/datasets/images" /><button :disabled="picking" @click.prevent="browsePath">{{ t("schemaForm.browse") }}</button></span></label>
         <div class="tagger-mode-tabs wide-field" role="group" :aria-label="t('tagger.models.runtime')">
-          <button type="button" :class="{ active: runtime === 'local' }" :disabled="catalogLoading || busy || captionBusy" @click="selectRuntime('local')">{{ t('tagger.models.local') }}</button>
-          <button v-if="apiAvailable" type="button" :class="{ active: runtime === 'api' }" :disabled="catalogLoading || busy || captionBusy" @click="selectRuntime('api')">{{ t('tagger.models.api') }}</button>
+          <button type="button" :class="{ active: runtime === 'local' }" :disabled="catalogLoading || busy || captionBusy || presetSaving" @click="selectRuntime('local')">{{ t('tagger.models.local') }}</button>
+          <button v-if="apiAvailable" type="button" :class="{ active: runtime === 'api' }" :disabled="catalogLoading || busy || captionBusy || presetSaving" @click="selectRuntime('api')">{{ t('tagger.models.api') }}</button>
           <button type="button" class="inline-config-button" @click="profileEditorOpen = true">{{ t('tagger.caption.manageProfiles') }}</button>
         </div>
         <p v-if="catalogLoading" class="wide-field" role="status">{{ t('tagger.models.loading') }}</p>
         <p v-if="mode === 'tag' && captionError" class="wide-field" role="alert">{{ captionError }}</p>
-        <TaggerModelSelector :models="availableModels" :selected="selectedModelId" :disabled="catalogLoading || busy || captionBusy || previewBusy" @select="selectModel" />
+        <TaggerModelSelector :models="availableModels" :selected="selectedModelId" :disabled="catalogLoading || busy || captionBusy || previewBusy || presetSaving" @select="selectModel" />
         <p v-if="selectedModel" class="wide-field">{{ t('tagger.models.output') }}: {{ mode === 'tag' ? t('tagger.modeTag') : t('tagger.modeNatural') }} · {{ selectedModel.ready ? t('tagger.models.ready') : t('tagger.models.notReady') }}</p>
         <template v-if="mode !== 'natural'">
           <label>{{ t("tagger.thresholdLabel") }}<input v-model.number="form.threshold" type="number" min="0" max="1" step="0.05" /></label>
@@ -381,10 +424,10 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
           <label v-if="mode === 'tag'">{{ t("tagger.conflictLabel") }}<select v-model="form.batch_output_action_on_conflict"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
         </template>
         <template v-if="mode !== 'tag'">
-          <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
+          <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language" :disabled="presetSaving"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
           <label>{{ t('tagger.models.maxTokens') }}<input v-model.number="captionForm.max_tokens" type="number" min="1" max="8192" /></label>
           <label>{{ t('tagger.models.temperature') }}<input v-model.number="captionForm.temperature" type="number" min="0" max="2" step="0.1" /></label>
-          <CaptionPromptEditor v-model:preset-id="presetId" v-model:name="presetName" v-model:prompt="captionForm.prompt" v-model:maximum="captionForm.max_caption_length" :presets="captionPresets" :builtins="builtinPresets" :saving="presetSaving" @select="selectPreset" @save="savePreset()" @save-as="savePreset(false, true)" @restore-default="selectPreset('builtin-caption-zh')" @restore="restorePrompt" @remove="savePreset(true)" />
+          <CaptionPromptEditor v-model:preset-id="presetId" v-model:name="presetName" v-model:prompt="captionForm.prompt" v-model:system-prompt="selectedSystemPrompt" v-model:maximum="captionForm.max_caption_length" :presets="captionPresets" :builtins="builtinPresets" :saving="presetSaving" :legacy-count="legacyPresetCount" @select="selectPreset" @save="savePreset()" @save-as="savePreset(false, true)" @restore-default="selectPreset('builtin-caption-zh')" @restore="restorePrompt" @remove="savePreset(true)" @import-legacy="importLegacyPresets" @refresh="refreshPromptPresets" />
           <label>{{ t("tagger.caption.conflict") }}<select v-model="captionForm.conflict_action"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option></select></label>
           <label class="wide-field">{{ t("tagger.caption.previewPath") }}<input v-model="previewImagePath" placeholder="/data/datasets/images/example.png" /></label>
           <div class="caption-privacy wide-field">{{ t("tagger.caption.privacy") }}</div>

@@ -231,8 +231,8 @@
   cursor: pointer;
 }
 .caption-preset-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.caption-preset-actions button { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; cursor: pointer; }
-.caption-preset-actions button:disabled { opacity: .5; cursor: default; }
+.caption-preset-actions button, .caption-refresh-presets, .caption-legacy-import button { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; cursor: pointer; }
+.caption-preset-actions button:disabled, .caption-refresh-presets:disabled, .caption-legacy-import button:disabled { opacity: .5; cursor: default; }
 .caption-history { margin-top: 24px; display: grid; gap: 10px; }
 .caption-history label { display: grid; gap: 6px; }
 .caption-history select { max-width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }

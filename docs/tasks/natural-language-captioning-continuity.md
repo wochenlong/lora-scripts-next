@@ -1,3 +1,14 @@
+# 2026-10-08 预设事务与导入续接（当前）
+
+HEAD读取git log。本轮完成preset OS跨进程锁、prepared/committed journal、异常/硬退出恢复、完整settings revision、备份与路径约束；系统提示词编辑、全草稿撤销、保留草稿刷新；一次性明确导入，旧源与用户版本保留。16专项真实进程/故障/junction测试；相关后端223，API最后37；前端340/52/check/build通过。Browser：新的fake root nl-caption-presets-browser-20261008，取消0/确认1旧源1、另存模板跨独立BrowserContext和后端重启正文/system/default一致，console0error。不是Real或Phase5。报告2026-10-08-preset-transactions-import.md。
+
+所有本轮自建server和子进程停止，browser aboutblank，tracked dist恢复；tests/test_diffsynth_review.py保留不提交，Agent源码不动。Goal active。
+
+单一下一步：Caption注册既有TaskManager并归档user_data/tasks/dataset-tagger/<date>/<time>_<job-id>/task.json+config.json；任务页停止必须真正manager.cancel，重启只恢复状态不自动推理，参数档案失败不启动，删除不得删图片/模型。当前Task.start_log_only可注册但Task.terminate只杀process，Caption线程没有process，不能直接复用后当取消通过；需明确callback或Task专门适配。TasksPage维护kind标签需要新增dataset_caption。禁止新增独立scheduler、Agent接口或复用Phase5旧资产。
+
+后续Tag单图试标、全矩阵、真实模型、正式空配置lifespan及Phase5 fresh rebuild仍未完成。历史P1/评分不重复，历史combined只保留防误清理。锁仅协调caption存储，未来#405共享基础合入须适配；此次证明进程崩溃恢复，未测试断电。
+
+以下为历史记录，以本段和canonical最新为准。
 # 2026-10-08 模型目录执行续接（当前）
 
 HEAD读git log。模型目录/catalog、model-first本地/API、系列搜索/折叠/具体型号、参数隔离已实施；manager/retry拒绝combined且worker串联代码删除，natural默认skip，beforehash冲突先于skip；max_tokens/temperature进入生成/cache/任务snapshot。后端216、前端336/52/check/build通过。实际fake browser preview0写盘、batch3写回、重复skip3/零provider、390px无溢出与底部进度通过；KeepAlive初始化request丢弃已修复并加回归。证据2026-10-08-model-catalog-browser.md。
