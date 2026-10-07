@@ -197,3 +197,28 @@ def test_mixed_undo_redo_preserves_raw_text_and_actual_tags(dataset):
     assert response.status_code == 200
     assert response.json()["data"]["items"][0]["caption_format"] == "mixed"
     assert response.json()["data"]["items"][0]["tags"] == ["cat", "window"]
+
+
+@pytest.mark.parametrize("previous_format", ["natural", "mixed"])
+def test_external_short_edit_keeps_generated_caption_unsafe_for_tag_cleanup(dataset, previous_format):
+    root, store, client = dataset
+    seed(root, store, "原始描述。".encode(), previous_format, ["cat"] if previous_format == "mixed" else [])
+    updated = "  猫\r\n".encode()
+    (root / "a.txt").write_bytes(updated)
+    item = client.post("/api/dataset-editor/scan", json={"path": str(root)}).json()["data"]["items"][0]
+    assert item["caption_format"] == "unknown"
+    assert item["caption"] == updated.decode()
+    assert item["tags"] == []
+    result = client.post("/api/dataset-editor/batch", json={"root": str(root), "images": ["a.png"], "clean": True, "expected_hashes": {"a.png": item["caption_sha256"]}})
+    assert result.status_code == 409
+    assert result.json()["detail"]["code"] == "caption_format_unsafe"
+    assert (root / "a.txt").read_bytes() == updated
+
+
+def test_batch_tag_creation_on_missing_caption_records_explicit_tag_format(dataset):
+    root, _, client = dataset
+    result = client.post("/api/dataset-editor/batch", json={"root": str(root), "images": ["a.png"], "append": ["cat"], "expected_hashes": {"a.png": None}})
+    assert result.status_code == 200
+    item = client.post("/api/dataset-editor/scan", json={"path": str(root)}).json()["data"]["items"][0]
+    assert item["caption_format"] == "tag"
+    assert item["tags"] == ["cat"]

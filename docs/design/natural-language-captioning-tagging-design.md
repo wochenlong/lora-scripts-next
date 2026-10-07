@@ -545,7 +545,7 @@ TaggerPage 交互顺序：
 - 前端实现: in progress（三模式、预览、进度、重试和 mixed safety 已接入；设置复用、提示词预设及人工验收仍待完成）
 - 真实模型/远程评测: pending implementation（SiliconFlow 三样本通过；Qwen3-VL-2B 本地中文探针通过）
 - 隔离重建真实验收: pending implementation
-- Execution readiness: `executing`（Phase 0/1 done；2026-10-07 增量回归后端 226 passed；前端 Node 22 check 325 passed；宽范围后端仍有 11 failed）
+- Execution readiness: `executing`（Phase 0/1 done；2026-10-07 增量回归后端 229 passed；前端 Node 22 check 328 passed；宽范围后端仍有 11 failed）
 - Residual risks: Qwen3-VL-2B CPU-only 峰值约 3.1 GB 且单图约 4.5–7.3 秒；更低资源本地模型只验证英文；自然语言/Tag 混合 caption 的训练语义需要在 P4/P5 验证。
 
 ## 19. 下一步动作
@@ -567,3 +567,5 @@ Phase 2 共享设置和编辑器生成来源已接入，历史报告/恢复 UI�
 2026-10-07 共享资产/cache和浏览器业务增量：相关后端221+最后本地管理定向16通过，Node22 check324；真实Vue+API/fake模型完成预览不写、自然/组合批量、429部分失败重试、取消、报告、mixed原文save/undo/redo和外部冲突。translation共享text连接/窄屏/Tab/Escape部分通过。初始fixture继承auto偏好触发词库下载后已取消，r2将词库/MyMemory也替换，实际HTTP验证无下载。不是实际模型或Phase4，完整gate仍pending。见phase-2-frontend-editor/2026-10-07-shared-assets-cache-browser-flow.md。
 
 翻译选项兼容增量已验证：迁移/共享及旧API双向保存、revision、managed restart保留metadata，浏览器profile新增/删除/取消/能力/语言过滤和翻译选项保存均通过；相关后端226、Node22 check325。首次typecheck失败已修复并复验，见Phase2 translation-options failure/resolved报告。实际模型/正式启动/Phase4仍不由fake fixture替代。
+
+实际重启恢复/历史选择已验：不自动推理/写盘，显式重试3/3成功；恢复报告原因隐藏和前端忽略来源的短natural安全问题均已修复并浏览器复验。最后229后端/328前端通过，详见phase-2-frontend-editor/2026-10-07-browser-restart-recovery-and-source-safety.md及resolved failure。Phase2整体门待审计，Phase3/4和完整矩阵仍未通过。

@@ -83,6 +83,8 @@ def test_restart_marks_pending_items_retryable_without_automatic_calls(tmp_path)
     assert not restarted.is_busy()
     assert restarted.status()["recovered"] is True
     assert restarted.status()["failed"] == 1
+    assert restarted.status()["report"]["items"][0]["code"] == "caption_interrupted"
+    assert store.get("interrupted")["state"]["report"]["items"][0]["code"] == "caption_interrupted"
     restarted.retry_failed()
     wait(restarted)
     assert service.calls == ["a.png"]

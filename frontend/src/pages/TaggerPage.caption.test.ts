@@ -176,4 +176,15 @@ describe("natural-language TaggerPage", () => {
     expect(page.get(".caption-report").text()).toContain("profile-rev")
     expect(page.get(".caption-report").text()).toContain("before-sha → after-sha")
   })
+
+  it("shows errors from older recovered reports even when they lack an error code", async () => {
+    vi.mocked(taggerApi.captionReport).mockResolvedValueOnce({ job_id: "old-interrupted", phase: "error", snapshot: {}, report: { items: [{ filename: "a.png", status: "interrupted", error: "服务重启前未完成此图片，可重试" }] } })
+    const page = await naturalPage()
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "old-interrupted", phase: "error", mode: "natural", message: "", current: 0, total: 1, filename: "", succeeded: 0, failed: 1, cancelled: 0, errors: [], updated_at: 1 }] })
+    await page.get(".caption-history button").trigger("click")
+    await flushPromises()
+    await page.get(".caption-history select").setValue("old-interrupted")
+    await flushPromises()
+    expect(page.get(".caption-report").text()).toContain("服务重启前未完成此图片，可重试")
+  })
 })

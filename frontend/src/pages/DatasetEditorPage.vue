@@ -11,7 +11,7 @@ import TagTranslationSettingsDialog from "../components/dataset/TagTranslationSe
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
 import { useServerPathPick } from "../composables/useServerPathPick"
-import { addTagToCaption, detectCaptionFormat, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
+import { addTagToCaption, captionEditingFormat, captionEditingTags, moveCaptionTag, removeTagFromCaption } from "../dataset/caption"
 import { useTagTranslations } from "../composables/useTagTranslations"
 import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
 
@@ -121,15 +121,15 @@ const current = computed(() => items.value.find((item) => item.relative_path ===
 const targets = computed(() =>
   selectedPaths.value.size ? items.value.filter((item) => selectedPaths.value.has(item.relative_path)) : filtered.value,
 )
-const captionTags = computed(() => splitCaptionTags(caption.value))
-const captionFormat = computed(() => detectCaptionFormat(caption.value))
-const tagEditingAllowed = computed(() => !caption.value.trim() || captionFormat.value === "tag")
+const captionFormat = computed(() => captionEditingFormat(caption.value, current.value))
+const captionTags = computed(() => current.value ? captionEditingTags(caption.value, current.value) : [])
+const tagEditingAllowed = computed(() => captionFormat.value === "tag" || (!current.value?.caption_exists && !caption.value.trim()))
 const allDatasetTags = computed(() => {
   const unique = new Set<string>(tags.value.map((item) => item.tag))
   items.value.forEach((item) => {
     item.tags.forEach((tag) => unique.add(tag))
     const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
-    splitCaptionTags(draft ?? item.caption).forEach((tag) => unique.add(tag))
+    if (draft !== undefined) captionEditingTags(draft, item).forEach((tag) => unique.add(tag))
   })
   return [...unique]
 })
@@ -138,14 +138,14 @@ const filterTagCounts = computed(() => {
   const counts = new Map<string, number>()
   items.value.forEach((item) => {
     const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
-    const sourceTags = draft === undefined ? item.tags : splitCaptionTags(draft)
+    const sourceTags = draft === undefined ? item.tags : captionEditingTags(draft, item)
     sourceTags.forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1))
   })
   return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
 })
 const filterItems = computed(() => items.value.map((item) => {
   const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
-  return draft === undefined ? item : { ...item, tags: splitCaptionTags(draft) }
+  return draft === undefined ? item : { ...item, tags: captionEditingTags(draft, item) }
 }))
 const { state: tagFilter, filteredItems: tagFilteredItems, visibleTagList, hasActiveFilter, toggleTag, clearTags, reset: resetTagFilter } =
   useDatasetTagFilter(filterItems, filterTagCounts, editorSession.tagFilter)
@@ -637,7 +637,7 @@ async function browsePath() {
 
 async function batch() {
   if (!targets.value.length) return
-  if (targets.value.some((item) => item.caption_format !== "tag")) {
+  if (targets.value.some((item) => item.caption_exists && item.caption_format !== "tag")) {
     ElMessage.warning(t("datasetEditor.caption.naturalBatchBlocked"))
     return
   }

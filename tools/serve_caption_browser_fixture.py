@@ -81,21 +81,30 @@ def main():
     parser.add_argument("--port", type=int, default=28762)
     parser.add_argument("--frontend-port", type=int, default=5177)
     parser.add_argument("--provider-port", type=int, default=18762)
+    parser.add_argument("--resume", action="store_true", help="Resume only a directory marked as this fake fixture")
     args = parser.parse_args()
     root = args.root.resolve()
-    if root.exists():
+    marker = root / "fixture.json"
+    identity = {"fixture": "caption-browser-fake", "version": 1}
+    if args.resume:
+        if not marker.is_file() or json.loads(marker.read_text(encoding="utf-8")) != identity:
+            raise SystemExit("Resume requires this script's fake fixture marker")
+    elif root.exists():
         raise SystemExit("Fixture root must be a new directory")
-    root.mkdir(parents=True)
+    else:
+        root.mkdir(parents=True)
+        marker.write_text(json.dumps(identity), encoding="utf-8")
     os.environ["MIKAZUKI_DEV"] = "1"
     os.environ["MIKAZUKI_TAG_TRANSLATION_ROOT"] = str(root / "state")
     os.environ["TASK_QUEUE_FILE"] = str(root / "queue.json")
     from PIL import Image, ImageDraw
     samples = root / "images"
-    samples.mkdir()
-    for index, color in enumerate(("red", "blue", "green")):
-        image = Image.new("RGB", (120, 96), "white")
-        ImageDraw.Draw(image).rectangle((16 + index * 4, 20, 72, 80), fill=color)
-        image.save(samples / f"sample-{index + 1}.png")
+    if not args.resume:
+        samples.mkdir()
+        for index, color in enumerate(("red", "blue", "green")):
+            image = Image.new("RGB", (120, 96), "white")
+            ImageDraw.Draw(image).rectangle((16 + index * 4, 20, 72, 80), fill=color)
+            image.save(samples / f"sample-{index + 1}.png")
 
     provider = ThreadingHTTPServer(("127.0.0.1", args.provider_port), Provider)
     provider.daemon_threads = True
@@ -122,12 +131,16 @@ def main():
         translation_api.dictionary_service.status = lambda: {"state": "ready", "installed": False, "row_count": 0, "size_bytes": 0}
         translation_api.translate_mymemory = network_translations
         endpoint = f"http://127.0.0.1:{args.provider_port}/v1/chat/completions"
-        llm_config_store.save({"profiles": [
-            {"id": "fixture-vision", "name": "浏览器测试视觉接口", "source": "remote", "endpoint": endpoint,
-             "model": "fixture-vision", "api_key": "", "capabilities": ["text", "vision"], "languages": ["zh-CN"], "ready": True},
-            {"id": "fixture-text", "name": "浏览器测试纯文本接口", "source": "remote", "endpoint": endpoint,
-             "model": "fixture-text", "api_key": "", "capabilities": ["text"], "languages": ["zh-CN"], "ready": True},
-        ]})
+        if args.resume:
+            if any(profile["endpoint"] != endpoint or profile.get("api_key") for profile in llm_config_store.load()["profiles"]):
+                raise SystemExit("Fake fixture resume rejects real endpoints or credentials")
+        else:
+            llm_config_store.save({"profiles": [
+                {"id": "fixture-vision", "name": "浏览器测试视觉接口", "source": "remote", "endpoint": endpoint,
+                 "model": "fixture-vision", "api_key": "", "capabilities": ["text", "vision"], "languages": ["zh-CN"], "ready": True},
+                {"id": "fixture-text", "name": "浏览器测试纯文本接口", "source": "remote", "endpoint": endpoint,
+                 "model": "fixture-text", "api_key": "", "capabilities": ["text"], "languages": ["zh-CN"], "ready": True},
+            ]})
         caption_job_manager._prepare_tag_model = lambda _request: None
         caption_job_manager._generate_tags = lambda _image, _request: ["rectangle", "white background"]
         hosts = [f"127.0.0.1:{args.port}", f"127.0.0.1:{args.frontend_port}"]

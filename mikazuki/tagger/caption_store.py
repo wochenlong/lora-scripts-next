@@ -98,5 +98,11 @@ class CaptionJobStore:
         import os
         key = os.path.normcase(str(Path(path).resolve()))
         with self._connect() as connection:
-            row = connection.execute("SELECT format, tags FROM caption_formats WHERE path=? AND after_hash=?", (key, current_hash)).fetchone()
-        return {"format": row["format"], "tags": json.loads(row["tags"])} if row else None
+            row = connection.execute("SELECT after_hash, format, tags FROM caption_formats WHERE path=?", (key,)).fetchone()
+        if row and row["after_hash"] == current_hash:
+            return {"format": row["format"], "tags": json.loads(row["tags"])}
+        # An external edit invalidates actual Tag projections, but does not
+        # make a previously natural/mixed caption safe for Tag cleanup.
+        if row and current_hash is not None and row["format"] in {"natural", "mixed", "unknown"}:
+            return {"format": "unknown", "tags": []}
+        return None

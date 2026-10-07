@@ -512,7 +512,7 @@ async def batch_edit(req: BatchEditRequest):
                 next_tags = sorted(next_tags)
             next_caption = format_tags(next_tags)
             if next_caption != current_caption:
-                write_caption(image_path, next_caption, expected_sha256=before.caption_sha256)
+                write_caption(image_path, next_caption, expected_sha256=before.caption_sha256, format_hint="tag")
                 before_snapshots.append(before)
                 after_snapshots.append(capture_caption(root, image_path))
                 changed += 1

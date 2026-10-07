@@ -335,7 +335,7 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
           <div v-if="captionJob.report.value" class="caption-report" aria-live="polite">
             <strong>{{ captionJob.report.value.job_id }}</strong>
             <p>{{ t("tagger.caption.reportPrivacy") }}</p>
-            <dl v-for="(item, index) in captionJob.report.value.report.items" :key="index"><dt>{{ item.filename }} · {{ item.status }}</dt><dd v-if="item.code">{{ item.code }} · {{ item.error }}</dd><dd v-if="item.profile_id">{{ t("tagger.caption.reportProfile") }}: {{ item.profile_id }} · {{ item.profile_revision }}</dd><dd v-if="item.prompt_revision">{{ t("tagger.caption.reportPrompt") }}: {{ item.prompt_revision }}</dd><dd v-if="item.before_hash || item.after_hash">{{ t("tagger.caption.reportHashes") }}: {{ item.before_hash || '∅' }} → {{ item.after_hash || '∅' }}</dd><dd v-if="item.cached">{{ t("tagger.caption.reportCached") }}</dd></dl>
+            <dl v-for="(item, index) in captionJob.report.value.report.items" :key="index"><dt>{{ item.filename }} · {{ item.status }}</dt><dd v-if="item.code || item.error">{{ [item.code, item.error].filter(Boolean).join(' · ') }}</dd><dd v-if="item.profile_id">{{ t("tagger.caption.reportProfile") }}: {{ item.profile_id }} · {{ item.profile_revision }}</dd><dd v-if="item.prompt_revision">{{ t("tagger.caption.reportPrompt") }}: {{ item.prompt_revision }}</dd><dd v-if="item.before_hash || item.after_hash">{{ t("tagger.caption.reportHashes") }}: {{ item.before_hash || '∅' }} → {{ item.after_hash || '∅' }}</dd><dd v-if="item.cached">{{ t("tagger.caption.reportCached") }}</dd></dl>
           </div>
         </section>
       </template>

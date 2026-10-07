@@ -169,7 +169,7 @@ class CaptionJobManager:
                 item = {"path": path, "filename": Path(path).name, "code": "caption_interrupted", "error": "服务重启前未完成此图片，可重试"}
                 self._failed.append(item)
                 self._status["errors"].append({"filename": item["filename"], "code": item["code"], "message": item["error"]})
-                self._status["report"]["items"].append({"filename": item["filename"], "index": index, "status": "interrupted", "error": item["error"]})
+                self._status["report"]["items"].append({"filename": item["filename"], "index": index, "status": "interrupted", "code": item["code"], "error": item["error"]})
         self._intent = None
         self._status.update(phase="error" if self._failed else "done",
                             message="上次任务被服务重启中断；已保留完成项，可重试未完成项" if self._failed else "服务重启后已核验全部完成项", filename="",

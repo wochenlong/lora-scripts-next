@@ -1,4 +1,15 @@
-import type { CaptionFormat } from "../api/dataset"
+import type { CaptionFormat, DatasetItem } from "../api/dataset"
+
+export function captionEditingFormat(caption: string, source?: Pick<DatasetItem, "caption_exists" | "caption_format">): CaptionFormat {
+  if (source?.caption_exists && source.caption_format && source.caption_format !== "tag") return source.caption_format
+  return detectCaptionFormat(caption)
+}
+
+export function captionEditingTags(caption: string, source: Pick<DatasetItem, "caption_exists" | "caption_format" | "tags">): string[] {
+  const format = captionEditingFormat(caption, source)
+  if (format === "tag") return splitCaptionTags(caption, "tag")
+  return format === "mixed" ? [...source.tags] : []
+}
 
 export function detectCaptionFormat(caption: string): CaptionFormat {
   const text = caption.trim()
