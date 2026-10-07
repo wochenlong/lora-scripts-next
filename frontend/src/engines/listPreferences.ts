@@ -1,6 +1,6 @@
 import type { EngineRuntimeState } from "./catalog"
+import { engineSettingsState, patchEngineSettings } from "./settings"
 
-const ORDER_KEY = "nt.settings.engineOrder"
 export type EngineFilter = "all" | "installed" | "not_installed"
 
 export function normalizeOrder(saved: unknown, catalog: readonly string[]): string[] {
@@ -11,20 +11,12 @@ export function normalizeOrder(saved: unknown, catalog: readonly string[]): stri
 }
 
 export function readEngineOrder(catalog: readonly string[]): string[] {
-  try {
-    return normalizeOrder(JSON.parse(localStorage.getItem(ORDER_KEY) || "[]"), catalog)
-  } catch {
-    return [...catalog]
-  }
+  return normalizeOrder(engineSettingsState.settings?.engine_order, catalog)
 }
 
-export function saveEngineOrder(order: readonly string[]): boolean {
-  try {
-    localStorage.setItem(ORDER_KEY, JSON.stringify(order))
-    return true
-  } catch {
-    return false
-  }
+export function saveEngineOrder(order: readonly string[]) {
+  const next = [...order]
+  return patchEngineSettings(() => ({ engine_order: next }))
 }
 
 export function moveEngine(order: readonly string[], id: string, target: string, after = false): string[] {

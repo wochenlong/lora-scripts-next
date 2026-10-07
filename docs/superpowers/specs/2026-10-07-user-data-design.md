@@ -1,6 +1,6 @@
 # Unified User Data
 
-Status: written specification for user review, before implementation.
+Status: approved; implementation in progress under issue #405.
 Target: dev only. Desired delivery date: 2026-10-07, subject to verification.
 
 ## Approved Product Direction
