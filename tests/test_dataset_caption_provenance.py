@@ -74,3 +74,126 @@ def test_old_format_table_is_migrated_without_losing_format(tmp_path):
     store = CaptionJobStore(path)
     store.remember_format(tmp_path / "a.txt", "sha", "natural")
     assert store.find_format(tmp_path / "a.txt", "sha") == "natural"
+
+
+@pytest.mark.parametrize("kind", ["undo", "redo"])
+@pytest.mark.parametrize("external", [b"external edit", None])
+def test_history_conflict_preserves_external_change_and_stack(dataset, kind, external):
+    root, store, client = dataset
+    before = seed(root, store, b"cat", "tag")
+    assert client.post("/api/dataset-editor/caption", json={"root": str(root), "image": "a.png", "caption": "dog", "expected_sha256": before}).status_code == 200
+    if kind == "redo":
+        assert client.post("/api/dataset-editor/undo", json={"root": str(root)}).status_code == 200
+    if external is None:
+        (root / "a.txt").unlink()
+    else:
+        (root / "a.txt").write_bytes(external)
+    previous = client.post("/api/dataset-editor/history", json={"root": str(root)}).json()["data"]
+    response = client.post(f"/api/dataset-editor/{kind}", json={"root": str(root)})
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "caption_conflict"
+    assert ((root / "a.txt").read_bytes() if (root / "a.txt").exists() else None) == external
+    assert client.post("/api/dataset-editor/history", json={"root": str(root)}).json()["data"] == previous
+
+
+def test_batch_stale_hash_rejects_all_before_mutation(dataset):
+    root, store, client = dataset
+    first = seed(root, store, b"cat", "tag")
+    Image.new("RGB", (16, 16)).save(root / "b.png")
+    (root / "b.txt").write_bytes(b"dog")
+    second = hashlib.sha256(b"dog").hexdigest()
+    (root / "b.txt").write_bytes(b"external edit")
+    response = client.post("/api/dataset-editor/batch", json={"root": str(root), "images": ["a.png", "b.png"], "append": ["solo"], "expected_hashes": {"a.png": first, "b.png": second}})
+    assert response.status_code == 409
+    assert (root / "a.txt").read_bytes() == b"cat"
+    assert (root / "b.txt").read_bytes() == b"external edit"
+
+
+def test_partial_batch_race_keeps_successful_files_undoable(dataset, monkeypatch):
+    import mikazuki.dataset_editor as editor
+    root, store, client = dataset
+    seed(root, store, b"cat", "tag")
+    Image.new("RGB", (16, 16)).save(root / "b.png")
+    (root / "b.txt").write_bytes(b"dog")
+    original = editor.write_caption
+    def race(image, caption, **kwargs):
+        if image.name == "b.png":
+            (root / "b.txt").write_bytes(b"external edit")
+        return original(image, caption, **kwargs)
+    monkeypatch.setattr(editor, "write_caption", race)
+    response = client.post("/api/dataset-editor/batch", json={"root": str(root), "images": ["a.png", "b.png"], "append": ["solo"]})
+    assert response.status_code == 409
+    assert (root / "a.txt").read_bytes() == b"cat, solo"
+    assert (root / "b.txt").read_bytes() == b"external edit"
+    assert client.post("/api/dataset-editor/undo", json={"root": str(root)}).status_code == 200
+    assert (root / "a.txt").read_bytes() == b"cat"
+    assert (root / "b.txt").read_bytes() == b"external edit"
+
+
+def test_tag_undo_restores_exact_whitespace_bytes_and_redo(dataset):
+    root, store, client = dataset
+    original = b"  cat, window\r\n"
+    seed(root, store, original, "tag")
+    assert client.post("/api/dataset-editor/caption", json={"root": str(root), "image": "a.png", "caption": "dog"}).status_code == 200
+    assert client.post("/api/dataset-editor/undo", json={"root": str(root)}).status_code == 200
+    assert (root / "a.txt").read_bytes() == original
+    assert client.post("/api/dataset-editor/redo", json={"root": str(root)}).status_code == 200
+    assert (root / "a.txt").read_bytes() == b"dog"
+
+
+def test_multi_file_undo_preflight_does_not_partially_restore(dataset):
+    root, store, client = dataset
+    seed(root, store, b"cat", "tag")
+    Image.new("RGB", (16, 16)).save(root / "b.png")
+    (root / "b.txt").write_bytes(b"dog")
+    assert client.post("/api/dataset-editor/batch", json={"root": str(root), "images": ["a.png", "b.png"], "append": ["solo"]}).status_code == 200
+    (root / "b.txt").write_bytes(b"external edit")
+    assert client.post("/api/dataset-editor/undo", json={"root": str(root)}).status_code == 409
+    assert (root / "a.txt").read_bytes() == b"cat, solo"
+    assert (root / "b.txt").read_bytes() == b"external edit"
+    assert client.post("/api/dataset-editor/history", json={"root": str(root)}).json()["data"]["can_redo"] is False
+
+
+def test_partial_undo_race_retains_both_history_portions(dataset, monkeypatch):
+    import mikazuki.dataset_editor as editor
+    root, store, client = dataset
+    seed(root, store, b"cat", "tag")
+    Image.new("RGB", (16, 16)).save(root / "b.png")
+    (root / "b.txt").write_bytes(b"dog")
+    assert client.post("/api/dataset-editor/batch", json={"root": str(root), "images": ["a.png", "b.png"], "append": ["solo"]}).status_code == 200
+    original = editor.restore_caption
+    def race(root_path, snapshot, expected):
+        if snapshot.image == "b.png":
+            (root / "b.txt").write_bytes(b"external edit")
+        return original(root_path, snapshot, expected)
+    monkeypatch.setattr(editor, "restore_caption", race)
+    assert client.post("/api/dataset-editor/undo", json={"root": str(root)}).status_code == 409
+    assert (root / "a.txt").read_bytes() == b"cat"
+    assert (root / "b.txt").read_bytes() == b"external edit"
+    history = client.post("/api/dataset-editor/history", json={"root": str(root)}).json()["data"]
+    assert history["can_undo"] and history["can_redo"]
+    assert history["changes"][0]["count"] == 1
+    assert client.post("/api/dataset-editor/redo", json={"root": str(root)}).status_code == 200
+    assert (root / "a.txt").read_bytes() == b"cat, solo"
+    assert (root / "b.txt").read_bytes() == b"external edit"
+
+
+def test_undo_caption_creation_rejects_external_replacement(dataset):
+    root, _, client = dataset
+    assert client.post("/api/dataset-editor/caption", json={"root": str(root), "image": "a.png", "caption": "cat"}).status_code == 200
+    (root / "a.txt").write_bytes(b"external edit")
+    assert client.post("/api/dataset-editor/undo", json={"root": str(root)}).status_code == 409
+    assert (root / "a.txt").read_bytes() == b"external edit"
+
+
+def test_mixed_undo_redo_preserves_raw_text_and_actual_tags(dataset):
+    root, store, client = dataset
+    original = "  猫\r\n\r\ncat, window\r\n".encode()
+    before = seed(root, store, original, "mixed", ["cat", "window"])
+    assert client.post("/api/dataset-editor/caption", json={"root": str(root), "image": "a.png", "caption": "狗\n\ncat, window", "expected_sha256": before}).status_code == 200
+    assert client.post("/api/dataset-editor/undo", json={"root": str(root)}).status_code == 200
+    assert (root / "a.txt").read_bytes() == original
+    response = client.post("/api/dataset-editor/redo", json={"root": str(root)})
+    assert response.status_code == 200
+    assert response.json()["data"]["items"][0]["caption_format"] == "mixed"
+    assert response.json()["data"]["items"][0]["tags"] == ["cat", "window"]

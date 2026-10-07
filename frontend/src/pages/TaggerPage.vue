@@ -5,10 +5,14 @@ import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import { useTaggerStore } from "../stores/tagger"
-import { llmApi, type LlmConfig, type LocalVisionStatus } from "../api/llm"
-import { taggerApi, type CaptionJobRequest, type CaptionJobStatus, type CaptionMode, type TaggerRequest } from "../api/tagger"
+import { llmApi, type LocalVisionStatus } from "../api/llm"
+import { taggerApi, type CaptionJobRequest, type CaptionMode, type TaggerRequest } from "../api/tagger"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
+import CaptionJobProgress from "../components/CaptionJobProgress.vue"
+import CaptionPromptEditor from "../components/CaptionPromptEditor.vue"
+import { useLlmProfiles } from "../composables/useLlmProfiles"
+import { useTaggerJob } from "../composables/useTaggerJob"
 import { useServerPathPick } from "../composables/useServerPathPick"
 
 const models = ["wd14-convnextv2-v2", "wd-convnext-v3", "wd-swinv2-v3", "wd-vit-v3", "wd14-swinv2-v2", "wd14-vit-v2", "wd14-moat-v2", "wd-eva02-large-tagger-v3", "wd-vit-large-tagger-v3", "cl_tagger_1_01"]
@@ -19,13 +23,17 @@ const store = useTaggerStore()
 const { status, error, submitting, busy } = storeToRefs(store)
 const { t } = useI18n()
 const route = useRoute()
-const llmConfig = ref<LlmConfig>({ version: 5, profiles: [], routes: {}, prompt_presets: [], cache: { translation: true, caption: true } })
-const captionStatus = ref<CaptionJobStatus>({ job_id: null, phase: "idle", mode: null, message: "", current: 0, total: 0, filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 0 })
-const captionError = ref("")
+const llmProfiles = useLlmProfiles("vision", computed(() => captionForm.language))
+const llmConfig = llmProfiles.config
+const llmLoading = llmProfiles.loading
+const captionJob = useTaggerJob()
+const captionStatus = captionJob.status
+const captionError = captionJob.error
+const captionSubmitting = captionJob.submitting
+const captionBusy = captionJob.busy
+const historyJobId = ref("")
 const previewImagePath = ref("")
 const previewResult = ref("")
-const llmLoading = ref(false)
-const captionSubmitting = ref(false)
 const profileEditorOpen = ref(false)
 const localVision = ref<LocalVisionStatus>({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 })
 const localVisionBusy = ref(false)
@@ -37,9 +45,7 @@ captionForm.max_caption_length = 2000
 const committedPrompt = ref({ prompt: captionForm.prompt, language: captionForm.language, max_caption_length: captionForm.max_caption_length })
 let timer: number | undefined
 
-const visionProfiles = computed(() => llmConfig.value.profiles.filter(profile => profile.enabled && profile.ready && profile.capabilities.includes("vision") && (profile.languages.includes(captionForm.language) || profile.languages.includes("*"))).sort((first, second) => Number(second.source === "remote") - Number(first.source === "remote")))
-const captionBusy = computed(() => ["pending", "captioning", "cancelling"].includes(captionStatus.value.phase))
-const captionPercent = computed(() => captionStatus.value.total ? Math.round(captionStatus.value.current / captionStatus.value.total * 100) : 0)
+const visionProfiles = llmProfiles.profiles
 const downloadPercent = computed(() => status.value.download.percent || (status.value.download.total ? Math.round(status.value.download.current / status.value.download.total * 100) : 0))
 const taggingPercent = computed(() => status.value.tagging.total ? Math.round(status.value.tagging.current / status.value.tagging.total * 100) : 0)
 
@@ -81,17 +87,14 @@ async function savePreset(remove = false) {
 }
 
 async function loadLlmProfiles() {
-  if (llmLoading.value) return
-  llmLoading.value = true
+  const revision = refreshGeneration
+  await llmProfiles.load()
+  if (llmProfiles.error.value) { captionError.value = llmProfiles.error.value; return }
   try {
-    llmConfig.value = await llmApi.profiles()
-    localVision.value = await llmApi.localVisionStatus()
+    const local = await llmApi.localVisionStatus()
+    if (revision === refreshGeneration) localVision.value = local
     if (!captionForm.profile_id && visionProfiles.value.length) captionForm.profile_id = visionProfiles.value[0].id
-  } catch (caught) {
-    captionError.value = caught instanceof Error ? caught.message : String(caught)
-  } finally {
-    llmLoading.value = false
-  }
+  } catch (caught) { captionError.value = caught instanceof Error ? caught.message : String(caught) }
 }
 
 async function manageLocalVision(action: "setup" | "start" | "stop" | "cancel") {
@@ -143,10 +146,9 @@ async function startCaption() {
   if (!captionForm.path.trim()) return ElMessage.error(t("tagger.msg.pathRequired"))
   if (!captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
   if (!captionForm.prompt.trim()) return ElMessage.error(t("tagger.caption.promptRequired"))
-  captionSubmitting.value = true
   captionError.value = ""
   try {
-    captionStatus.value = await taggerApi.captionStart({ ...captionForm, path: captionForm.path.replaceAll("\\", "/") })
+    await captionJob.start({ ...captionForm, path: captionForm.path.replaceAll("\\", "/") })
     ElMessage.success(t("tagger.caption.submitted"))
   } catch (caught) {
     captionError.value = caught instanceof Error ? caught.message : String(caught)
@@ -176,7 +178,9 @@ async function previewCaption() {
 
 async function captionAction(kind: "cancel" | "retry") {
   try {
-    captionStatus.value = kind === "cancel" ? await taggerApi.captionCancel() : await taggerApi.captionRetryFailed()
+    if (kind === "cancel") await captionJob.cancel()
+    else await captionJob.retry()
+    await captionJob.loadHistory()
   } catch (caught) {
     captionError.value = caught instanceof Error ? caught.message : String(caught)
     ElMessage.error(captionError.value)
@@ -195,7 +199,12 @@ async function invoke(kind: "prefetch" | "cancel" | "reset") {
 
 watch(mode, value => {
   captionForm.mode = value === "tag" ? "natural" : value
-  if (value !== "tag") void loadLlmProfiles()
+  if (value !== "tag") {
+    captionJob.activate()
+    void loadLlmProfiles()
+    void captionJob.refresh()
+    void captionJob.loadHistory()
+  } else captionJob.deactivate()
 })
 
 const picking = ref(false)
@@ -215,19 +224,26 @@ async function browsePath() {
 function stopPolling() {
   window.clearInterval(timer)
   timer = undefined
+  captionJob.deactivate()
+  llmProfiles.invalidate()
 }
 
+let refreshing = false
+let refreshGeneration = 0
 async function refresh() {
-  await store.refresh()
-  if (mode.value !== "tag") {
-    try {
-      captionStatus.value = await taggerApi.captionStatus()
-      localVision.value = await llmApi.localVisionStatus()
-      captionError.value = ""
-    } catch (caught) {
-      captionError.value = caught instanceof Error ? caught.message : t("tagger.msg.statusFail")
+  if (refreshing) return
+  refreshing = true
+  const revision = refreshGeneration
+  try {
+    await store.refresh()
+    if (mode.value !== "tag") {
+      await captionJob.refresh()
+      const local = await llmApi.localVisionStatus()
+      if (revision === refreshGeneration) localVision.value = local
     }
-  }
+  } catch (caught) {
+    if (revision === refreshGeneration) captionError.value = caught instanceof Error ? caught.message : t("tagger.msg.statusFail")
+  } finally { refreshing = false }
 }
 
 onActivated(() => {
@@ -236,13 +252,15 @@ onActivated(() => {
     form.path = queryPath
     captionForm.path = queryPath
   }
-  void refresh()
-  if (mode.value !== "tag") void loadLlmProfiles()
   stopPolling()
+  refreshGeneration += 1
+  captionJob.activate()
+  void refresh()
+  if (mode.value !== "tag") { void loadLlmProfiles(); void captionJob.loadHistory() }
   timer = window.setInterval(refresh, 1200)
 })
-onDeactivated(stopPolling)
-onBeforeUnmount(stopPolling)
+onDeactivated(() => { refreshGeneration += 1; stopPolling() })
+onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
 </script>
 
 <template>
@@ -272,19 +290,15 @@ onBeforeUnmount(stopPolling)
         <template v-if="mode !== 'tag'">
           <label>{{ t("tagger.caption.profile") }}<select v-model="captionForm.profile_id" :disabled="llmLoading"><option v-for="profile in visionProfiles" :key="profile.id" :value="profile.id">{{ profile.name }} · {{ profile.source === 'remote' ? t("tagger.caption.remote") : t("tagger.caption.local") }}</option></select><button type="button" class="inline-config-button" @click="profileEditorOpen = !profileEditorOpen">{{ t("tagger.caption.manageProfiles") }}</button></label>
           <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
-          <label>{{ t("tagger.caption.preset") }}<select v-model="presetId" class="caption-preset-select" :disabled="presetSaving" @change="selectPreset"><option value="">{{ t("tagger.caption.customPrompt") }}</option><option v-for="preset in llmConfig.prompt_presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option></select></label>
-          <label>{{ t("tagger.caption.presetName") }}<input v-model="presetName" class="caption-preset-name" :disabled="presetSaving" /></label>
-          <label>{{ t("tagger.caption.maxLength") }}<input v-model.number="captionForm.max_caption_length" class="caption-max-length" type="number" min="1" max="2000" step="1" :disabled="presetSaving" /></label>
-          <label class="wide-field">{{ t("tagger.caption.prompt") }}<textarea v-model="captionForm.prompt" rows="4" :disabled="presetSaving" /></label>
-          <div class="caption-preset-actions wide-field"><button type="button" :disabled="presetSaving" @click="savePreset()">{{ t("tagger.caption.savePreset") }}</button><button type="button" :disabled="presetSaving" @click="restorePrompt">{{ t("tagger.caption.restorePrompt") }}</button><button type="button" :disabled="presetSaving || !presetId" @click="savePreset(true)">{{ t("tagger.caption.removePreset") }}</button></div>
-          <label>{{ t("tagger.caption.layout") }}<select v-model="captionForm.layout"><option value="tags_then_caption">{{ t("tagger.caption.layoutTagsFirst") }}</option><option value="caption_then_tags">{{ t("tagger.caption.layoutCaptionFirst") }}</option><option value="caption_only">{{ t("tagger.caption.layoutCaptionOnly") }}</option></select></label>
+          <CaptionPromptEditor v-model:preset-id="presetId" v-model:name="presetName" v-model:prompt="captionForm.prompt" v-model:maximum="captionForm.max_caption_length" :presets="llmConfig.prompt_presets" :saving="presetSaving" @select="selectPreset" @save="savePreset()" @restore="restorePrompt" @remove="savePreset(true)" />
+          <label v-if="mode === 'combined'">{{ t("tagger.caption.layout") }}<select v-model="captionForm.layout"><option value="tags_then_caption">{{ t("tagger.caption.layoutTagsFirst") }}</option><option value="caption_then_tags">{{ t("tagger.caption.layoutCaptionFirst") }}</option><option value="caption_only">{{ t("tagger.caption.layoutCaptionOnly") }}</option></select></label>
           <label>{{ t("tagger.caption.conflict") }}<select v-model="captionForm.conflict_action"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
           <label class="wide-field">{{ t("tagger.caption.previewPath") }}<input v-model="previewImagePath" placeholder="/data/datasets/images/example.png" /></label>
           <div class="caption-privacy wide-field">{{ t("tagger.caption.privacy") }}</div>
           <section class="caption-local-runtime wide-field">
             <strong>{{ t("tagger.caption.localRuntimeTitle") }}</strong>
             <p>{{ t("tagger.caption.localRuntimeHint") }}</p>
-            <p>{{ localVision.state }} · {{ localVision.downloaded_bytes }} / {{ localVision.total_bytes }}</p>
+            <p>{{ t('tagger.caption.localStates.' + localVision.state) }} · {{ (localVision.downloaded_bytes / 1048576).toFixed(1) }} / {{ (localVision.total_bytes / 1048576).toFixed(1) }} MiB</p>
             <p v-if="localVision.error">{{ localVision.error }}</p>
             <button v-if="['installing', 'downloading'].includes(localVision.state)" type="button" :disabled="localVisionBusy" @click="manageLocalVision('cancel')">{{ t("tagger.caption.cancelInstall") }}</button>
             <button v-else-if="!localVision.installed || !localVision.runtime_installed" type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('setup')">{{ t("tagger.caption.setupLocal") }}</button>
@@ -299,13 +313,13 @@ onBeforeUnmount(stopPolling)
         <label v-if="mode === 'tag'"><input v-model="form.batch_input_recursive" type="checkbox" />{{ t("tagger.recursive") }}</label>
         <label v-else><input v-model="captionForm.recursive" type="checkbox" />{{ t("tagger.recursive") }}</label>
         <label v-if="mode !== 'tag'"><input v-model="captionForm.allow_local_fallback" type="checkbox" />{{ t("tagger.caption.enableLocalFallback") }}</label>
-        <label><input v-model="form.replace_underscore" type="checkbox" />{{ t("tagger.replaceUnderscore") }}</label>
-        <label><input v-model="form.escape_tag" type="checkbox" />{{ t("tagger.escapeTag") }}</label>
-        <label><input v-model="form.add_rating_tag" type="checkbox" />{{ t("tagger.addRatingTag") }}</label>
-        <label><input v-model="form.add_model_tag" type="checkbox" />{{ t("tagger.addModelTag") }}</label>
+        <label v-if="mode !== 'natural'"><input v-model="form.replace_underscore" type="checkbox" />{{ t("tagger.replaceUnderscore") }}</label>
+        <label v-if="mode !== 'natural'"><input v-model="form.escape_tag" type="checkbox" />{{ t("tagger.escapeTag") }}</label>
+        <label v-if="mode !== 'natural'"><input v-model="form.add_rating_tag" type="checkbox" />{{ t("tagger.addRatingTag") }}</label>
+        <label v-if="mode !== 'natural'"><input v-model="form.add_model_tag" type="checkbox" />{{ t("tagger.addModelTag") }}</label>
       </div>
     </section>
-    <aside class="tagger-status">
+    <aside class="tagger-status" :class="{ 'caption-status-panel': mode !== 'tag' }">
       <template v-if="mode === 'tag'">
         <span class="task-status">{{ status.phase }}</span><h2>{{ status.message || t("tagger.idle") }}</h2><p v-if="error">{{ error }}</p>
         <div class="meter"><header><span>{{ t("tagger.downloadMeter") }}</span><b>{{ downloadPercent }}%</b></header><div><i :style="{ width: downloadPercent + '%' }" /></div><small>{{ status.download.filename || t("tagger.downloadIdle") }}</small></div>
@@ -313,13 +327,25 @@ onBeforeUnmount(stopPolling)
         <div class="tagger-actions"><button v-if="busy" class="danger-action" :disabled="submitting" @click="invoke('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="submitting" @click="start">{{ t("tagger.start") }}</button><button class="secondary-action" :disabled="submitting || status.phase === 'tagging'" @click="invoke('prefetch')">{{ t("tagger.prefetch") }}</button><button class="secondary-action" :disabled="submitting" @click="invoke('reset')">{{ t("tagger.reset") }}</button></div>
       </template>
       <template v-else>
-        <span class="task-status">{{ captionStatus.phase }}</span>
+        <span class="task-status">{{ t('tagger.caption.phases.' + captionStatus.phase) }}</span>
         <h2>{{ captionStatus.message || t("tagger.caption.idle") }}</h2>
         <p v-if="captionError">{{ captionError }}</p>
         <p class="caption-route-hint">{{ t("tagger.caption.remoteFirst") }}</p>
-        <div class="meter"><header><span>{{ t("tagger.caption.progress") }}</span><b>{{ captionPercent }}%</b></header><div><i :style="{ width: captionPercent + '%' }" /></div><small>{{ captionStatus.current }} / {{ captionStatus.total }} {{ captionStatus.filename }}</small></div>
+        <CaptionJobProgress :status="captionStatus" />
         <div v-if="captionStatus.failed" class="caption-failures">{{ t("tagger.caption.failed", { n: captionStatus.failed }) }}</div>
         <div class="tagger-actions"><button v-if="captionBusy" class="danger-action" :disabled="captionSubmitting" @click="captionAction('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="captionSubmitting || previewBusy || !visionProfiles.length" @click="startCaption">{{ t("tagger.start") }}</button><button v-if="captionStatus.failed" class="secondary-action" :disabled="captionBusy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || previewBusy || captionBusy || !visionProfiles.length || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button></div>
+        <section class="caption-history">
+          <h3>{{ t("tagger.caption.history") }}</h3>
+          <button type="button" :disabled="captionJob.historyBusy.value" @click="captionJob.loadHistory">{{ t("tagger.caption.refreshHistory") }}</button>
+          <label>{{ t("tagger.caption.selectReport") }}<select v-model="historyJobId" @change="captionJob.loadReport(historyJobId)"><option value="">{{ t("tagger.caption.selectReport") }}</option><option v-for="job in captionJob.jobs.value" :key="job.job_id || ''" :value="job.job_id || ''">{{ job.mode }} · {{ job.phase }} · {{ job.succeeded }}/{{ job.total }} · {{ job.job_id?.slice(0, 8) }}</option></select></label>
+          <button v-if="captionStatus.job_id" type="button" :disabled="captionJob.reportBusy.value" @click="captionJob.loadReport(captionStatus.job_id!)">{{ t("tagger.caption.currentReport") }}</button>
+          <p v-if="captionJob.reportBusy.value" role="status">{{ t("tagger.caption.loadingReport") }}</p>
+          <div v-if="captionJob.report.value" class="caption-report" aria-live="polite">
+            <strong>{{ captionJob.report.value.job_id }}</strong>
+            <p>{{ t("tagger.caption.reportPrivacy") }}</p>
+            <dl v-for="(item, index) in captionJob.report.value.report.items" :key="index"><dt>{{ item.filename }} · {{ item.status }}</dt><dd v-if="item.code">{{ item.code }} · {{ item.error }}</dd><dd v-if="item.profile_id">{{ t("tagger.caption.reportProfile") }}: {{ item.profile_id }} · {{ item.profile_revision }}</dd><dd v-if="item.prompt_revision">{{ t("tagger.caption.reportPrompt") }}: {{ item.prompt_revision }}</dd><dd v-if="item.before_hash || item.after_hash">{{ t("tagger.caption.reportHashes") }}: {{ item.before_hash || '∅' }} → {{ item.after_hash || '∅' }}</dd><dd v-if="item.cached">{{ t("tagger.caption.reportCached") }}</dd></dl>
+          </div>
+        </section>
       </template>
     </aside>
     <LlmSettingsDialog v-model="profileEditorOpen" capability="vision" :image-path="previewImagePath" @saved="loadLlmProfiles" />

@@ -36,7 +36,7 @@ export interface LocalVisionStatus {
 }
 
 export const llmApi = {
-  profiles: () => apiData<LlmConfig>("/api/llm/profiles"),
+  profiles: (signal?: AbortSignal) => apiData<LlmConfig>("/api/llm/profiles", { signal }),
   config: () => apiData<LlmConfig>("/api/llm/config"),
   saveConfig: (body: Partial<LlmConfig>) => apiData<LlmConfig>("/api/llm/config", { method: "PUT", body: JSON.stringify(body) }),
   connectionTest: (body: { capability: "text" | "vision"; profile_id?: string; image_path?: string; prompt?: string; language?: string }) =>

@@ -26,7 +26,9 @@ vi.mock("../api/llm", () => ({
 vi.mock("../api/tagger", () => ({
   taggerApi: {
     status: vi.fn(),
-    captionStatus: vi.fn(),
+    captionStatus: vi.fn().mockResolvedValue({ job_id: null, phase: "idle", mode: null, message: "", current: 0, total: 0, filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 0 }),
+    captionHistory: vi.fn().mockResolvedValue({ jobs: [] }),
+    captionReport: vi.fn(),
     captionStart: vi.fn().mockResolvedValue({
       job_id: "job", phase: "pending", mode: "natural", message: "", current: 0, total: 1,
       filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 0,
@@ -150,5 +152,28 @@ describe("natural-language TaggerPage", () => {
     finish()
     await flushPromises()
     expect((button.element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it("shows recovered failures and exposes retry without rewriting completed files", async () => {
+    vi.mocked(taggerApi.captionStatus).mockResolvedValueOnce({ job_id: "recovered", phase: "error", mode: "natural", message: "recovered", current: 1, total: 2, filename: "", succeeded: 1, failed: 1, cancelled: 0, errors: [{ filename: "b.png", code: "caption_interrupted", message: "未完成" }], updated_at: 1, recovered: true })
+    vi.mocked(taggerApi.captionRetryFailed).mockResolvedValueOnce({ job_id: "retry", phase: "pending", mode: "natural", message: "retry", current: 0, total: 1, filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 2 })
+    const page = await naturalPage()
+    expect(page.text()).toContain("已恢复上次任务")
+    const retry = page.findAll(".tagger-actions button").find(button => button.text().includes("重试失败项"))!
+    await retry.trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionRetryFailed).toHaveBeenCalledOnce()
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+  })
+
+  it("loads a historical report with actual profile revisions and write hashes", async () => {
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "old-job", phase: "done", mode: "natural", message: "", current: 1, total: 1, filename: "", succeeded: 1, failed: 0, cancelled: 0, errors: [], updated_at: 1 }] })
+    vi.mocked(taggerApi.captionReport).mockResolvedValueOnce({ job_id: "old-job", phase: "done", snapshot: {}, report: { items: [{ filename: "a.png", status: "written", profile_id: "remote", profile_revision: "profile-rev", before_hash: "before-sha", after_hash: "after-sha" }] } })
+    const page = await naturalPage()
+    await page.get(".caption-history select").setValue("old-job")
+    await flushPromises()
+    expect(taggerApi.captionReport).toHaveBeenCalledWith("old-job")
+    expect(page.get(".caption-report").text()).toContain("profile-rev")
+    expect(page.get(".caption-report").text()).toContain("before-sha → after-sha")
   })
 })

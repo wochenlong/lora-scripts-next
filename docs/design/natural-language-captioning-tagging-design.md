@@ -545,12 +545,12 @@ TaggerPage 交互顺序：
 - 前端实现: in progress（三模式、预览、进度、重试和 mixed safety 已接入；设置复用、提示词预设及人工验收仍待完成）
 - 真实模型/远程评测: pending implementation（SiliconFlow 三样本通过；Qwen3-VL-2B 本地中文探针通过）
 - 隔离重建真实验收: pending implementation
-- Execution readiness: `executing`（Phase 0/1 done；2026-10-07 增量回归后端 207 passed；前端 Node 22 check 313 passed；宽范围后端仍有 11 failed）
+- Execution readiness: `executing`（Phase 0/1 done；2026-10-07 增量回归后端 218 passed；前端 Node 22 check 321 passed；宽范围后端仍有 11 failed）
 - Residual risks: Qwen3-VL-2B CPU-only 峰值约 3.1 GB 且单图约 4.5–7.3 秒；更低资源本地模型只验证英文；自然语言/Tag 混合 caption 的训练语义需要在 P4/P5 验证。
 
 ## 19. 下一步动作
 
-Phase 2 共享设置和编辑器生成来源已接入，下一步完成历史报告/恢复 UI 与轮询代次治理，再补资源管理和浏览器验收。具体状态见 canonical task book 与续接记录。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
+Phase 2 共享设置和编辑器生成来源已接入，历史报告/恢复 UI、轮询代次治理及编辑器批量/undo/redo 冲突已实现并验证，下一步共享本地视觉资产管理与翻译 cache 开关，完整浏览器验收仍待完成。具体状态见 canonical task book 与续接记录。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
 
 ## 参考资料
 

@@ -650,6 +650,7 @@ async function batch() {
     const data = await datasetApi.batch({
       root: root.value,
       images: targets.value.map((item) => item.relative_path),
+      expected_hashes: Object.fromEntries(targets.value.map((item) => [item.relative_path, item.caption_sha256 ?? null])),
       append: splitTags(append.value),
       append_position: appendPosition.value,
       remove: splitTags(remove.value),

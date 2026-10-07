@@ -10,6 +10,7 @@ export interface DatasetMutation { changed: number; items: ChangedItem[] }
 export interface BatchEditRequest {
   root: string
   images: string[]
+  expected_hashes?: Record<string, string | null>
   append?: string[]
   append_position?: "front" | "back"
   remove?: string[]

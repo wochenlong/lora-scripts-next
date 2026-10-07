@@ -130,10 +130,10 @@
 - Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
-- Validation status: 2026-10-07 Python 3.11 相关后端回归 207 passed；Node 22 check 49 files / 313 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
-- Residual risks: 共享设置组件和编辑器来源保护已接入并回归；历史报告/恢复 UI、轮询治理、资源管理完整复用和完整编辑冲突矩阵尚待完成；安全回滚/清理、真实远程与 ONNX 三模式、EDD 人工评分和浏览器验收仍待闭环。本地三样本开发验收复用 P1 模型，Phase 4 不得复用。
+- Validation status: 2026-10-07 Python 3.11 相关后端回归 218 passed；Node 22 check 51 files / 321 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
+- Residual risks: 共享设置组件和编辑器来源保护已接入并回归；历史报告/恢复 UI、轮询治理、批量/undo/redo 冲突已验证；资源管理完整复用尚待完成；安全回滚/清理、真实远程与 ONNX 三模式、EDD 人工评分和浏览器验收仍待闭环。本地三样本开发验收复用 P1 模型，Phase 4 不得复用。
 - Continuity source: docs/tasks/natural-language-captioning-continuity.md；记录环境、Git 和单一步骤，证据以阶段报告为准。
 
 ## 下一步动作
 
-实现 TaggerPage 的历史报告/恢复界面与轮询代次治理。
+将本地视觉资产管理接入共享 LLM 设置，并兑现翻译 cache 开关。

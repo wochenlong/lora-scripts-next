@@ -1,58 +1,49 @@
-# 自然语言打标执行检查点
+# 自然语言打标续接记录
 
-更新：2026-10-07。此文件用于续接，canonical progress 始终是 `docs/tasks/natural-language-captioning-task-book.md`。完整目标是后端、前端、共享 LLM、编辑器安全、完整测试、真实/人工验收和最后从零隔离重建；不能降级为局部实现。
+更新 2026-10-07。canonical progress 为 natural-language-captioning-task-book.md；完整目标包括全部前后端、测试/真实/人工和 Phase 4 从零重建，不能缩水。
 
 ## 当前状态
 
-- 工作树：`E:\OpenSourceTeamWork\workspace\branches\feat-NL-Captioning`；分支 `feat/NL-Captioning`；本批修复前 HEAD：397581cb82dd0f714a4e15997847db8e9c27c409。本文件随代码一起提交，提交号读取 `git log`。
-- Phase 0/1 done（各阶段 gate-review 逐项核销）；当前正式 Phase 2；Phase 3/4 pending。完整 GATE-09/10 未通过。
-- 当前用户完整 goal 位于 `C:\Users\25454\.codex\attachments\33329a36-8e01-4211-b79c-a080571cde4b\goal-objective.md`，每次自动续接先读。
-- 实际验证：最新相关后端 207 passed / 4 warnings / 29.40s；Node 22 check 313 tests / 49 files passed，typecheck/lint/build 通过，lint 2 个已有 warning。当前增量见 Phase 2 shared-settings-and-provenance；真实批量仍见 Phase 1 报告。
-- 宽范围测试仍有 11 failed / 21 skipped，根目录 pytest 另有 31 项 collection errors；缺失逐用例失败输出，详见 failure report，不能称完整验收通过。
+- 工作树 E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning；分支 feat/NL-Captioning。本批基线 eb93de4，提交号读 git log。
+- 每次续接先读 C:/Users/25454/.codex/attachments/33329a36-8e01-4211-b79c-a080571cde4b/goal-objective.md。
+- Phase 0/1 done（有 gate-review），Phase 2 in progress，Phase 3/4 pending。goal 保持 active。
+- 最新相关后端 218 passed / 4 warnings / 19.05s；编辑器 35 passed / 3.05s；Node22 check 321 tests / 51 files、type/lint/build pass，2 个已有 lint warning。
+- 宽范围仍 1139 passed / 11 failed / 21 skipped，另有31训练 collection errors，缺逐用例失败日志；不能当作完整矩阵通过，须恢复/复现并修复。
 
-## 环境和重要路径
+## 环境
 
-- Python：`E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-runtime-20261006\.venv\Scripts\python.exe`（3.11.15，requirements 和 pytest 已安装）。宿主 Python 3.14 不适合当前依赖 TestClient，曾恢复宿主 httpx 0.28.1，不应再次降级宿主。
-- 前端：Node 22.17.1 可由 `npm exec --yes --package=node@22.17.1 -- node ...` 调用；npm CLI 位于 `I:\NdoeJS\node_modules\npm\bin\npm-cli.js`。当前 npm ci 已完成。不要使用宿主 Node 24 验收。
-- P1 公共样本和二文件 GGUF 已在 `workspace\sandboxes\nl-caption-p1-20261006\.sandbox-data\`；可用于中间开发验证，Phase 4 禁止复用。
-- 固定视觉模型：Qwen3-VL-2B Q4_K_M + Q8 mmproj，revision/SHA/size 在 `mikazuki/llm/local_vision.py`；runtime b11327，旧 probe 和本次受管进程均已停止。`tools/verify_managed_caption_runtime.py` 三样本开发验证已通过（复用资产，不是 Phase 4），开发目录 `E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-managed-20261007`。
-- 旧 worktree 不删除；不要把旧工作树未提交状态当作隔离验收来源。禁止凭据、模型、图片、SQLite、环境或 node_modules 入 Git。
-- 本地真实批量目录：`E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-batch-20261007-r2`，三张公开样本写回 14.803s，RSS 3094904832 bytes；实际冲突保护、job cancel 0.026s、取消后连接和停止均通过。首个不带 r2 的目录因脚本选错 text-only 诊断 profile 退出 1，修复后新 root 重跑退出 0；失败已记入证据。均复用 P1 资产，不是 Phase 4；两个服务进程均已停止。
+- Python 3.11.15：workspace/sandboxes/nl-caption-runtime-20261006/.venv/Scripts/python.exe；不要用宿主3.14。requirements/pytest已安装。
+- Node22.17.1：npm exec --yes --package=node@22.17.1 -- node 'I:/NdoeJS/node_modules/npm/bin/npm-cli.js' --prefix frontend run check。npm ci完成；不要用宿主24。
+- GitHub git统一127.0.0.1:11809代理；没要求push，旧worktree保留。
+- P1资产位于workspace/sandboxes/nl-caption-p1-20261006/.sandbox-data；仅中间开发可复用，Phase4禁止复用venv/node_modules/模型/缓存/配置/output。
+- Qwen3-VL-2B Q4_K_M+Q8 mmproj，revision/SHA固定在local_vision.py；runtime b11327，共用translation models/runtime。
+- 真实批量目录workspace/sandboxes/nl-caption-batch-20261007-r2：三公共样本14.803s，峰值3094904832B，实际冲突/取消0.026s/再次连接/停止通过。前次脚本误选text-only profile失败已记录，修正后freshroot通过。不是Phase4。模型进程已停止。
+- 本轮浏览器dev服务端口5176/28761和两个自建进程已停止；无待等测试handle。空配置根nl-caption-browser-20261007，截图outsideGit；lifespan=off仅页面验证。
 
-## 关键实现及决策
+## 不可变决策和实现
 
-- `mikazuki/llm/config.py` 与旧 translation config 共用配置锁和文件；`secrets.py` 只在进程内持有 Key，磁盘只有掩码，旧明文首次读原子迁移；重启须重新注入。测试覆盖排序/删除/清除/重启及写失败。
-- `service.py` 生产默认关闭 local fallback；显式启用仍 remote-first；连接测试只访问指定 profile，校验成功 JSON，不返回原始响应。该诊断特例不改变生产路由。
-- `local_vision.py` 复用翻译模型目录的 llama.cpp runtime，校验模型和 mmproj 二文件 SHA；有安装/取消/启停 API 和 UI。受管开发验证启动 4.835s、3 张严格 JSON 中文、RSS 峰值 3107680256 bytes，取消 0.195s 后再次请求通过，停止进程通过；HTTP API/下载/浏览器/真实写回仍待验证。
-- caption job 有快照、revision SQLite 缓存、可取消 in-flight request、Tagger 单任务占用、冲突哈希和原子写回；Dataset Editor 和前端禁止 natural/mixed 经过 Tag 清理，保留原文空白。
-- Tag 继续由 WD/CL 生成，LLM 只写 natural；caption 强制 vision，translation 只需 text。远程仅发送受限 JPEG data URL。
-- 受跟踪 dist 曾被旧提交误删，本批以 Git restore 恢复 1cfa947 的生成基线；最终必须重新从源码 build，禁止手工编辑 dist。
-- 426396f 已提交第一批共享 LLM/受管视觉修复和证据；第二批新增配置 HTTP 契约（包括损坏读取不覆盖）、严格 JSON 重复键/非有限值拒绝、预览截断/错误脱敏、原图变更冲突、预处理 v2 与提示词预设 UI。最新相关 suite 168 和 Node 22 check 307 覆盖本批。旧翻译 remote 选择只关闭兜底，保留其他模块共享的 runtime；旧 local 选择可复用已 ready 的共享 text 模型，不强迫安装独立翻译模型。
-- a308a8b 为本批修改前基线。当前批新增 `caption_store.py`：共用 translations.sqlite3，保存私有恢复计划/备份/intent 和公开状态；历史 detail/report API 不返回私有路径。重启不自动推理，已写回凭 after hash 恢复，失败重试只处理失败路径。
-- prompt_id 展开后冻结模板/语言/字符上限，删除预设不影响失败重试；每次重试为关联新 job，使用当前 profiles/凭据。上限与服务端 revision/响应校验/cache key 同步；UI 可编辑并撤销上限。
-- 新旧 Tag 原子写回，四冲突策略逐文件逐字节灰度通过；自然/mixed 禁止 Tag 合并；Tag mode 保留原有无末尾换行约定，自然/组合保留换行。旧日志中的输入/输出路径和提供方错误正文已移除。
-- `caption_formats` 用路径+after hash 存生成来源；当前已接入 Dataset Editor，保护已生成的短自然语言。未带来源的历史 caption 仍依赖启发式，需要在完整验收中说明边界；不能宣告整体交付。
-- 本批基线 9f23e8c：caption_formats 增加 tags 并迁移旧表；Dataset Editor 已接入来源、真实 Tag 投影、CRLF/原文保留及保存 hash/atomic guard。frontend/api/dataset.ts 与页面传递/更新 caption_sha256。新增 tests/test_dataset_caption_provenance.py 四场景通过。
-- 共用 `frontend/src/components/LlmSettingsDialog.vue` 已接入 TaggerPage 和 TagTranslationSettingsDialog；移除两处独立 profile 表单，CRUD/capability/routes/test/save/cancel 共用同一 API。4 个组件场景通过；TaggerPage 原有测试仍通过。翻译原互斥 tabs 改为 explicit fallback checkbox，旧 native 安装区仍保留，完整资源管理复用待完成。
-- 当前所有运行的测试/构建 handle 均已完成，无等待中的验证；新批提交号读 git log。普通修复无需重新询问授权，目标仍 active。
+- Tag由WD/CL，LLM仅natural；caption须vision，translation只需text；remote-first，只有显式启用才能local fallback，默认false。
+- process-only真实Key、磁盘/响应掩码，重启需重新注入。真实Key不放源码/CLI/envfiles/log/report/截图。远程bounded JPEG dataURL，无文件名/绝对路径/EXIF。
+- 配置v5+迁移/锁+secret epoch；精准profile连接测试；caption严格JSON拒绝重复键/NaN/截断，上限1–2000参与prompt revision/schema/cache。
+- shared translations.sqlite3缓存+CaptionJobStore私有请求/冻结计划/backup/intent。重启不autoinference、afterhash恢复；retry创建parentjob，冻结提示词，读当前profiles/keys。
+- 旧Tag及caption writer atomic/hash；image source也校验；自然/mixed不Tag合并清理；prompt预设增删改撤销已实现。
+- 共享LlmSettingsDialog用于Tagger和translation，profiles/routes草稿cancel清空、精确测试；旧translation互斥tabs已改显式fallback，但旧文案和本地asset管理仍待统一。
+- caption_formats path+hash+actualTags来源，短natural和caption-first mixed安全；编辑器scan/save带hash；原文CRLF保留。无来源历史短句仍启发式边界。
+- 本批useTaggerJob/useLlmProfiles单飞+AbortController+generation，离页取消，旧poll不盖cancel，新report优先；CaptionPromptEditor/CaptionJobProgress抽取；历史恢复/报告接入。
+- 编辑器批量snapshot/rawhash冻结，前端发扫描expected_hashes，先整批验证；undo/redo检查另一侧hash，外部修改/删除拒绝、预检不改stack；中途失败部分历史分拆。快照单次字节读、Tag/natural/mixed恢复精确保留字节。
+- 浏览器桌面1440/narrow390无横向overflow、空profiles禁preview/batch、不自动下载、共享草稿Escape关闭不persist；窄屏actions与history已修正重叠。全业务浏览器/正式启动未验收。
 
-## 待办与风险
+## 待办/风险
 
-1. Phase 0 已核销：迁移/掩码/修订/路由/精确连接测试/旧 API/实际 fake HTTP 灰度等证据见 gate-review；不需要反复重新运行已通过的同一 suite，除非有新改动或失败。
-2. Phase 1 已核销：持久任务/快照/恢复、组合预览、HTTP fake 错误矩阵、Tag 灰度、低限额本地真实自然写回/冲突/取消。真实远程与 ONNX 三模式/EDD/完整隔离验收继续留在 Phase 3/4。
-3. Phase 2：翻译和打标实际复用同一设置组件，profile CRUD/连接测试、设置编辑取消回滚、防重叠轮询；语言过滤、提示词预设保存/选择/删除/撤销、preview busy 已实现及组件验证，但浏览器桌面/窄屏/键盘/空配置/错误/隐私验收仍待完成。
-4. Phase 3：冻结 3–5 个公共样本及 hash/rubric、远程中文和本地中文真实路径、人工评分（不得伪造评分）、Zero-Short、隐私/回滚和文档。
-5. Phase 4：所有必要修复已提交后，全新 worktree/new venv/new Node22 ci/new config/cache/models/output，重新安装构建启动并真实复验整个关键链路；不复用旧缓存/未提交文件。
-6. 恢复宽范围失败逐用例证据，补训练依赖或合法不适用审查及 dev 对照；Windows symlink 必须有实际适用验收，不能无授权跳过。
+1. 完成本地视觉资产管理共享UI、native text模型profile/readiness复用；兑现translation cache flag；任务安全rollback/clear。
+2. 完整浏览器CRUD/preview/batch/cancel/retry/report/conflict/mixed、键盘/error/privacy、三模式ONNX真实路径。
+3. Phase3 frozen public样本+rubric、真实远程中文（需进程注入原用户Key，不能写文件）、Qwen本地中文/远程优先显式fallback、EDD人工评分/失败baseline、正式Zero-Short/发布/扫描。
+4. 完整回归失败闭环：缺torch/transformers/training依赖、README、symlink权限、trainingstub；未获豁免，不能跳过。
+5. Phase4全部提交后freshcheckout/newPython/newNodeci/newmodeldownloads/newconfig/cache/output，从零复验全链路；失败回修后再建freshroot。
+6. frontend/dist构建后恢复tracked基线，禁止手改/误提交删除；最终从源码build。图片/DB/GGUF不入Git。
 
-## 单一下一步动作
+## 单一 Next action
 
-实现 TaggerPage 历史报告/恢复 UI 与轮询代次治理。随后补资源管理、prompt/progress 组件、编辑器 batch/undo/redo 外部冲突矩阵及完整浏览器验收。
+将本地视觉资产管理接入共享 LLM 设置，并兑现翻译 cache 开关。
 
-## 续接提示词
-
-```text
-继续 DATASET-NL-TAGGING-20261006 的完整交付。先读 goal、canonical task book、manifest、此续接记录和 Phase 2 清单/任务书，核对最新 commit/status。Phase 0/1 已核销，当前 Phase 2。共享 LlmSettingsDialog 和编辑器来源保护已接入；最新后端 207、前端 Node22 check 313 通过。先完成 TaggerPage 历史报告/恢复 UI 与轮询治理，再补资源管理/编辑冲突/浏览器、完整矩阵、EDD 和隔离重建。不要重复 TagUI/P1，也不能以相关 suite 代替完整验收。Phase 4 新依赖/模型/配置/cache/output，不能复用开发目录。守住 remote-first、explicit local fallback、vision、runtime-only credentials/masked persistence 与 natural/mixed 安全。普通修复自主继续，所有完成门通过前 goal 保持 active。
-```
-
-Confidence：medium。当前源码、环境和相关测试已核对；宽范围失败详情和完整灰度/真实/人工/隔离验收仍不完整。Continuity degradation risk：宽范围运行缺逐用例日志，后续须恢复或定向复现。
+证据：docs/evidence/natural-language-captioning/phase-2-frontend-editor/2026-10-07-history-polling-editor-conflicts.md。Confidence medium：增量已验，完整矩阵/实际浏览器/EDD/隔离重建仍未闭环。

@@ -51,7 +51,29 @@ export interface CaptionJobStatus {
   cancelled: number
   errors: Array<{ filename?: string; code?: string; message?: string }>
   updated_at: number
+  skipped?: number
+  recovered?: boolean
+  parent_job_id?: string | null
+  snapshot?: Record<string, unknown>
+  report?: { items: CaptionReportItem[] }
 }
+
+export interface CaptionReportItem {
+  filename: string
+  status: string
+  index?: number
+  code?: string
+  error?: string
+  before_hash?: string | null
+  after_hash?: string | null
+  image_sha256?: string | null
+  profile_id?: string | null
+  profile_revision?: string | null
+  prompt_revision?: string | null
+  cached?: boolean
+  recovered_write?: boolean
+}
+export interface CaptionJobReport { job_id: string; phase: CaptionJobPhase; snapshot: Record<string, unknown>; report: { items: CaptionReportItem[] } }
 
 export const taggerApi = {
   status: () => apiData<TaggerStatus>("/api/tagger/status"),
@@ -59,7 +81,9 @@ export const taggerApi = {
   prefetch: (interrogator_model: string, download_endpoint: string) => apiRequest("/api/tagger/prefetch", { method: "POST", body: JSON.stringify({ interrogator_model, download_endpoint }) }),
   cancel: () => apiRequest("/api/tagger/cancel", { method: "POST" }),
   reset: () => apiRequest("/api/tagger/reset", { method: "POST" }),
-  captionStatus: () => apiData<CaptionJobStatus>("/api/tagger/jobs"),
+  captionStatus: (signal?: AbortSignal) => apiData<CaptionJobStatus>("/api/tagger/jobs", { signal }),
+  captionHistory: () => apiData<{ jobs: CaptionJobStatus[] }>("/api/tagger/jobs/history"),
+  captionReport: (jobId: string) => apiData<CaptionJobReport>(`/api/tagger/jobs/${encodeURIComponent(jobId)}/report`),
   captionStart: (body: CaptionJobRequest) => apiData<CaptionJobStatus>("/api/tagger/jobs", { method: "POST", body: JSON.stringify(body) }),
   captionCancel: () => apiData<CaptionJobStatus>("/api/tagger/jobs/cancel", { method: "POST" }),
   captionRetryFailed: () => apiData<CaptionJobStatus>("/api/tagger/jobs/retry-failed", { method: "POST" }),

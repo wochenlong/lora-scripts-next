@@ -73,6 +73,7 @@ class TagReplacement(BaseModel):
 class BatchEditRequest(BaseModel):
     root: str
     images: list[str]
+    expected_hashes: dict[str, str | None] | None = None
     append: list[str] = []
     append_position: Literal["front", "back"] = "back"
     remove: list[str] = []
@@ -244,15 +245,21 @@ def thumbnail_bytes(image_path: Path, size: int) -> bytes:
 
 
 def capture_caption(root: Path, image_path: Path) -> CaptionSnapshot:
+    from mikazuki.llm.runtime import caption_job_store
     caption_path = caption_path_for(image_path)
-    caption = read_caption(image_path)
-    provenance = caption_provenance(image_path)
+    try:
+        raw = caption_path.read_bytes()
+    except FileNotFoundError:
+        raw = None
+    caption = raw.decode("utf-8") if raw is not None else ""
+    caption_hash = hashlib.sha256(raw).hexdigest() if raw is not None else None
+    provenance = caption_job_store.find_format_detail(caption_path, caption_hash)
     return CaptionSnapshot(
         image=normalize_relative_path(image_path.relative_to(root)),
         caption=caption,
-        caption_exists=caption_path.is_file(),
-        caption_format=image_caption_projection(image_path, caption)[0],
-        caption_sha256=hashlib.sha256(caption_path.read_bytes()).hexdigest() if caption_path.is_file() else None,
+        caption_exists=raw is not None,
+        caption_format=caption_projection(caption, provenance["format"] if provenance else None, provenance["tags"] if provenance else None)[0],
+        caption_sha256=caption_hash,
         source_tags=provenance["tags"] if provenance else None,
     )
 
@@ -265,11 +272,19 @@ def remember_edit(root: Path, label: str, before: list[CaptionSnapshot], after: 
     _REDO_STACKS[key] = []
 
 
-def restore_caption(root: Path, snapshot: CaptionSnapshot) -> dict:
+def ensure_caption_hash(image_path: Path, expected_sha256: str | None) -> None:
+    from mikazuki.tagger.caption_job import caption_sha256
+    target = caption_path_for(image_path)
+    if target.is_symlink() or caption_sha256(target) != expected_sha256:
+        raise HTTPException(status_code=409, detail={"code": "caption_conflict", "message": "caption 已被外部修改，请刷新后重试"})
+
+
+def restore_caption(root: Path, snapshot: CaptionSnapshot, expected_sha256: str | None) -> dict:
     image_path = resolve_image(root, snapshot.image)
     caption_path = caption_path_for(image_path)
+    ensure_caption_hash(image_path, expected_sha256)
     if snapshot.caption_exists:
-        write_caption(image_path, snapshot.caption, format_hint=snapshot.caption_format, source_tags=snapshot.source_tags)
+        write_caption(image_path, snapshot.caption, expected_sha256=expected_sha256, format_hint=snapshot.caption_format, source_tags=snapshot.source_tags, preserve_raw=True)
     elif caption_path.exists():
         caption_path.unlink()
     caption = read_caption(image_path)
@@ -318,7 +333,7 @@ def category_for(root: Path, image_path: Path) -> str:
     return rel.parts[0]
 
 
-def write_caption(image_path: Path, caption: str, *, expected_sha256=..., format_hint=None, source_tags=None) -> str:
+def write_caption(image_path: Path, caption: str, *, expected_sha256=..., format_hint=None, source_tags=None, preserve_raw=False) -> str:
     from mikazuki.llm.runtime import caption_job_store
     from mikazuki.tagger.caption_job import CaptionWriteConflict, caption_sha256, write_caption_atomic
     target = caption_path_for(image_path)
@@ -326,7 +341,7 @@ def write_caption(image_path: Path, caption: str, *, expected_sha256=..., format
         raise HTTPException(status_code=409, detail={"code": "caption_conflict", "message": "不能写入符号链接 caption"})
     previous = caption_provenance(image_path)
     caption_format = format_hint or (previous["format"] if previous and previous["format"] != "tag" else detect_caption_format(caption))
-    normalized = caption.strip() if caption_format == "tag" else caption
+    normalized = caption.strip() if caption_format == "tag" and not preserve_raw else caption
     before_hash = caption_sha256(target) if expected_sha256 is ... else expected_sha256
     try:
         after_hash = write_caption_atomic(target, normalized, expected_sha256=before_hash, trailing_newline=False)
@@ -434,107 +449,136 @@ async def batch_edit(req: BatchEditRequest):
     before_snapshots = []
     after_snapshots = []
 
+    planned = []
     # Validate the entire batch before the first mutation; otherwise encountering
     # a natural caption after a tag caption leaves an untracked partial edit.
-    for rel in req.images:
+    for rel in dict.fromkeys(req.images):
         candidate = resolve_image(root, rel)
         if not candidate.is_file():
             continue
-        text = read_caption(candidate)
+        snapshot = capture_caption(root, candidate)
+        if req.expected_hashes is not None:
+            if rel not in req.expected_hashes:
+                raise HTTPException(status_code=400, detail={"code": "caption_hash_required", "message": "批量 caption 哈希不完整"})
+            ensure_caption_hash(candidate, req.expected_hashes[rel])
+            if snapshot.caption_sha256 != req.expected_hashes[rel]:
+                raise HTTPException(status_code=409, detail={"code": "caption_conflict", "message": "caption 已被外部修改，请刷新后重试"})
+        planned.append((candidate, snapshot))
+        text = snapshot.caption
         if text and image_caption_projection(candidate, text)[0] != "tag":
             raise HTTPException(
                 status_code=409,
                 detail={"code": "caption_format_unsafe", "message": "自然语言或 mixed caption 不能使用 Tag 批量操作"},
             )
 
-    for rel in req.images:
-        image_path = resolve_image(root, rel)
-        if not image_path.is_file():
-            continue
-        current_caption = read_caption(image_path)
-        caption_format, _, _ = image_caption_projection(image_path, current_caption)
-        if current_caption and caption_format in {"natural", "mixed", "unknown"}:
-            raise HTTPException(
-                status_code=409,
-                detail={"code": "caption_format_unsafe", "message": "自然语言或 mixed caption 不能使用 Tag 批量清理、排序或去重"},
+    try:
+        for image_path, before in planned:
+            ensure_caption_hash(image_path, before.caption_sha256)
+            current_caption = before.caption
+            caption_format, _, _ = image_caption_projection(image_path, current_caption)
+            if current_caption and caption_format in {"natural", "mixed", "unknown"}:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"code": "caption_format_unsafe", "message": "自然语言或 mixed caption 不能使用 Tag 批量清理、排序或去重"},
+                )
+            tags = (
+                normalize_caption_for_cleanup(
+                    current_caption,
+                    underscore_to_space=req.underscore_to_space,
+                    strip_escape_chars=req.strip_escape_chars,
+                )
+                if req.clean
+                else parse_tags(current_caption)
             )
-        tags = (
-            normalize_caption_for_cleanup(
-                current_caption,
-                underscore_to_space=req.underscore_to_space,
-                strip_escape_chars=req.strip_escape_chars,
-            )
-            if req.clean
-            else parse_tags(read_caption(image_path))
-        )
-        next_tags = []
-        for tag in tags:
-            if tag in remove_tags:
-                continue
-            tag = replacements.get(tag, tag)
-            if tag and tag not in next_tags:
-                next_tags.append(tag)
-        if req.append_position == "front":
-            # "front" means the requested tags form the ordered prefix, even
-            # when one of them already exists later in the caption. Remove
-            # those existing occurrences before prepending so de-duplication
-            # does not accidentally leave a requested prefix tag at the end.
-            prefix = list(dict.fromkeys(append_tags))
-            next_tags = [*prefix, *(tag for tag in next_tags if tag not in prefix)]
-        else:
-            for tag in append_tags:
-                if tag not in next_tags:
+            next_tags = []
+            for tag in tags:
+                if tag in remove_tags:
+                    continue
+                tag = replacements.get(tag, tag)
+                if tag and tag not in next_tags:
                     next_tags.append(tag)
-        if req.sort:
-            next_tags = sorted(next_tags)
-        next_caption = format_tags(next_tags)
-        if next_caption != current_caption:
-            before_snapshots.append(capture_caption(root, image_path))
-            write_caption(image_path, next_caption)
-            after_snapshots.append(capture_caption(root, image_path))
-            changed += 1
-        results.append(
-            {
-                "image": normalize_relative_path(image_path.relative_to(root)),
-                "caption": next_caption,
-                "caption_exists": caption_path_for(image_path).is_file(),
-                "tags": next_tags,
-                "caption_format": "tag",
-                "caption_sha256": capture_caption(root, image_path).caption_sha256,
-            }
-        )
-
-    remember_edit(root, "批量编辑 caption", before_snapshots, after_snapshots)
+            if req.append_position == "front":
+                # "front" means the requested tags form the ordered prefix, even
+                # when one of them already exists later in the caption. Remove
+                # those existing occurrences before prepending so de-duplication
+                # does not accidentally leave a requested prefix tag at the end.
+                prefix = list(dict.fromkeys(append_tags))
+                next_tags = [*prefix, *(tag for tag in next_tags if tag not in prefix)]
+            else:
+                for tag in append_tags:
+                    if tag not in next_tags:
+                        next_tags.append(tag)
+            if req.sort:
+                next_tags = sorted(next_tags)
+            next_caption = format_tags(next_tags)
+            if next_caption != current_caption:
+                write_caption(image_path, next_caption, expected_sha256=before.caption_sha256)
+                before_snapshots.append(before)
+                after_snapshots.append(capture_caption(root, image_path))
+                changed += 1
+            results.append(
+                {
+                    "image": normalize_relative_path(image_path.relative_to(root)),
+                    "caption": next_caption,
+                    "caption_exists": caption_path_for(image_path).is_file(),
+                    "tags": next_tags,
+                    "caption_format": "tag",
+                    "caption_sha256": capture_caption(root, image_path).caption_sha256,
+                }
+            )
+    finally:
+        remember_edit(root, "批量编辑 caption", before_snapshots, after_snapshots)
     return APIResponseSuccess(data={"changed": changed, "items": results})
+
+
+def apply_history(root: Path, kind: Literal["undo", "redo"]) -> APIResponseSuccess:
+    key = normalize_path(str(root))
+    source = _UNDO_STACKS if kind == "undo" else _REDO_STACKS
+    destination = _REDO_STACKS if kind == "undo" else _UNDO_STACKS
+    stack = source.get(key, [])
+    if not stack:
+        return APIResponseSuccess(data={"changed": 0, "items": []}, message=f"nothing to {kind}")
+    tx = stack[-1]
+    targets = tx.before if kind == "undo" else tx.after
+    expected = {item.image: item for item in (tx.after if kind == "undo" else tx.before)}
+    # Reject a stale multi-file transaction before changing any file or stack.
+    for snapshot in targets:
+        ensure_caption_hash(resolve_image(root, snapshot.image), expected[snapshot.image].caption_sha256)
+    items = []
+    applied = set()
+    try:
+        for snapshot in targets:
+            items.append(restore_caption(root, snapshot, expected[snapshot.image].caption_sha256))
+            applied.add(snapshot.image)
+    finally:
+        # A race or disk failure after the preflight can leave a partial operation.
+        # Keep both portions explicitly undoable instead of losing the transaction.
+        if applied:
+            stack.pop()
+            remaining_before = [item for item in tx.before if item.image not in applied]
+            remaining_after = [item for item in tx.after if item.image not in applied]
+            if remaining_before:
+                stack.append(EditTransaction(tx.label, remaining_before, remaining_after))
+            destination.setdefault(key, []).append(EditTransaction(
+                tx.label,
+                [item for item in tx.before if item.image in applied],
+                [item for item in tx.after if item.image in applied],
+            ))
+    return APIResponseSuccess(data={"changed": len(items), "items": items})
 
 
 @router.post("/dataset-editor/undo")
 async def undo(req: UndoRequest):
     root = dataset_root(req.root)
     _ensure_path_not_in_use(str(root))
-    stack = _UNDO_STACKS.get(normalize_path(str(root)), [])
-    if not stack:
-        return APIResponseSuccess(data={"changed": 0, "items": []}, message="nothing to undo")
-
-    tx = stack.pop()
-    _REDO_STACKS.setdefault(normalize_path(str(root)), []).append(tx)
-    items = [restore_caption(root, snapshot) for snapshot in tx.before]
-    return APIResponseSuccess(data={"changed": len(items), "items": items})
+    return apply_history(root, "undo")
 
 
 @router.post("/dataset-editor/redo")
 async def redo(req: UndoRequest):
     root = dataset_root(req.root)
     _ensure_path_not_in_use(str(root))
-    key = normalize_path(str(root))
-    stack = _REDO_STACKS.get(key, [])
-    if not stack:
-        return APIResponseSuccess(data={"changed": 0, "items": []}, message="nothing to redo")
-
-    tx = stack.pop()
-    _UNDO_STACKS.setdefault(key, []).append(tx)
-    items = [restore_caption(root, snapshot) for snapshot in tx.after]
-    return APIResponseSuccess(data={"changed": len(items), "items": items})
+    return apply_history(root, "redo")
 
 
 @router.post("/dataset-editor/history")

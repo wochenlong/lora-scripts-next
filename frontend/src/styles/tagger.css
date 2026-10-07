@@ -234,3 +234,22 @@
 .caption-preset-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .caption-preset-actions button { padding: 7px 10px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: inherit; cursor: pointer; }
 .caption-preset-actions button:disabled { opacity: .5; cursor: default; }
+.caption-history { margin-top: 24px; display: grid; gap: 10px; }
+.caption-history label { display: grid; gap: 6px; }
+.caption-history select { max-width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); }
+.caption-history button { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; }
+.caption-report { overflow-wrap: anywhere; font-size: 13px; line-height: 1.6; }
+.caption-report dl { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.caption-report dd { margin-left: 0; }
+.caption-error-list { padding-left: 20px; overflow-wrap: anywhere; }
+.caption-recovered { padding: 10px; border: 1px solid var(--border); border-radius: 6px; }
+.caption-prompt-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
+@media (max-width: 600px) { .caption-prompt-editor { grid-template-columns: minmax(0, 1fr); } }
+.caption-status-panel { height: auto; min-height: 100vh; }
+.caption-status-panel .tagger-actions { position: static; margin-top: 18px; }
+.caption-report { max-height: 420px; overflow-y: auto; }
+.tagger-actions button:disabled { opacity: .5; cursor: default; }
+.tagger-status > p.caption-route-hint { color: var(--text); font-size: 13px; }
+.tagger-form .path-row input { min-width: 0; }
+.tagger-form .path-row button { flex-shrink: 0; min-width: 48px; white-space: nowrap; }
+@media (max-width: 900px) { .caption-status-panel { min-height: 0; } }
