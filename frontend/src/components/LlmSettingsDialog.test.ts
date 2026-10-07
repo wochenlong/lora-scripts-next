@@ -6,7 +6,7 @@ import LlmSettingsDialog from "./LlmSettingsDialog.vue"
 import { i18n } from "../i18n"
 import { llmApi, type LlmConfig } from "../api/llm"
 
-vi.mock("../api/llm", () => ({ llmApi: { config: vi.fn(), saveConfig: vi.fn(), connectionTest: vi.fn() } }))
+vi.mock("../api/llm", () => ({ llmApi: { config: vi.fn(), saveConfig: vi.fn(), connectionTest: vi.fn(), localVisionStatus: vi.fn(), localVisionAction: vi.fn() } }))
 const Dialog = defineComponent({ props: { modelValue: { type: Boolean, required: true } }, template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' })
 let page: VueWrapper | undefined
 const config = (): LlmConfig => ({ version: 5, routes: { translation: "text", caption: "vision" }, prompt_presets: [], cache: {},
@@ -17,12 +17,13 @@ const config = (): LlmConfig => ({ version: 5, routes: { translation: "text", ca
 
 async function open(capability: "text" | "vision" = "vision") {
   vi.mocked(llmApi.config).mockResolvedValue(config())
+  vi.mocked(llmApi.localVisionStatus).mockResolvedValue({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 })
   page = mount(LlmSettingsDialog, { props: { modelValue: true, capability, imagePath: "D:/public/a.png" }, global: { plugins: [i18n], stubs: { ElDialog: Dialog } } })
   await flushPromises()
   return page
 }
 
-afterEach(() => { page?.unmount(); vi.resetAllMocks() })
+afterEach(() => { page?.unmount(); vi.resetAllMocks(); vi.useRealTimers() })
 
 describe("shared LLM settings", () => {
   it("allows text-only translation while the caption route contains only vision", async () => {
@@ -71,5 +72,44 @@ describe("shared LLM settings", () => {
     await wrapper.get('[data-profile-id="vision"] .llm-profile-name').setValue("Draft")
     expect((button.element as HTMLButtonElement).disabled).toBe(true)
     expect(wrapper.text()).toContain("请先保存修改")
+  })
+
+  it("shares the vision asset controls with translation without an automatic download", async () => {
+    vi.useFakeTimers()
+    const wrapper = await open("text")
+    expect(wrapper.get(".managed-vision-model").text()).toContain("Qwen3-VL-2B")
+    expect(llmApi.localVisionAction).not.toHaveBeenCalled()
+    vi.mocked(llmApi.localVisionStatus).mockImplementation(() => new Promise(() => {}))
+    vi.advanceTimersByTime(1200)
+    const signal = vi.mocked(llmApi.localVisionStatus).mock.calls.at(-1)?.[0]
+    await wrapper.get(".llm-cancel").trigger("click")
+    expect(signal?.aborted).toBe(true)
+  })
+
+  it("keeps unsaved profile inputs when a runtime action refreshes the managed profile", async () => {
+    const wrapper = await open("text")
+    await wrapper.get('[data-profile-id="text"] .llm-profile-name').setValue("Unsaved name")
+    const updated = config()
+    updated.profiles.push({ ...updated.profiles[1], id: "qwen3-vl-2b-local", source: "managed-local", asset_id: "qwen3-vl-2b-local" })
+    vi.mocked(llmApi.config).mockResolvedValue(updated)
+    vi.mocked(llmApi.localVisionAction).mockResolvedValue({ state: "running", installed: true, runtime_installed: true, downloaded_bytes: 0, total_bytes: 0 })
+    await wrapper.get(".managed-vision-model button").trigger("click")
+    await flushPromises()
+    expect(llmApi.localVisionAction).toHaveBeenCalledWith("setup")
+    expect((wrapper.get('[data-profile-id="text"] .llm-profile-name').element as HTMLInputElement).value).toBe("Unsaved name")
+    expect(wrapper.find('[data-profile-id="qwen3-vl-2b-local"]').exists()).toBe(true)
+    expect(llmApi.saveConfig).not.toHaveBeenCalled()
+  })
+
+  it("blocks saving an empty draft when the shared configuration failed to load", async () => {
+    const wrapper = await open()
+    await wrapper.setProps({ modelValue: false })
+    vi.mocked(llmApi.config).mockRejectedValue(new Error("Configuration unreadable"))
+    await wrapper.setProps({ modelValue: true })
+    await flushPromises()
+    expect(wrapper.get('[role="alert"]').text()).toContain("Configuration unreadable")
+    expect((wrapper.get(".llm-save").element as HTMLButtonElement).disabled).toBe(true)
+    await wrapper.get(".llm-save").trigger("click")
+    expect(llmApi.saveConfig).not.toHaveBeenCalled()
   })
 })

@@ -1593,6 +1593,8 @@
 
 .caption-translation-dialog {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 12px;
 }
 
@@ -1616,6 +1618,9 @@
 
 .caption-translation-cache-row {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1625,6 +1630,8 @@
 
 .translation-settings-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 8px;
   padding: 12px;
   background: var(--surface-soft);
@@ -1635,10 +1642,14 @@
 .translation-settings-section-heading,
 .translation-settings-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
+
+.translation-settings-actions .el-button + .el-button { margin-left: 0; }
+.caption-translation-dialog label.translation-fallback { display: flex; align-items: flex-start; gap: 8px; }
 
 .translation-settings-section-heading span {
   color: var(--text-faint);

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue"
+import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { ElDialog } from "element-plus"
 import { useI18n } from "vue-i18n"
-import { llmApi, type LlmConfig, type LlmProfile } from "../api/llm"
+import { llmApi, type LlmConfig, type LlmProfile, type LocalVisionStatus } from "../api/llm"
+import ManagedVisionModel from "./ManagedVisionModel.vue"
 
 const props = defineProps<{ modelValue: boolean; capability: "text" | "vision"; imagePath?: string }>()
 const emit = defineEmits<{ "update:modelValue": [value: boolean]; saved: [config: LlmConfig] }>()
@@ -10,12 +11,62 @@ const { t } = useI18n()
 const draft = ref<LlmConfig>({ version: 5, profiles: [], routes: {}, prompt_presets: [], cache: {} })
 const committed = ref("")
 const loading = ref(false)
+const loaded = ref(false)
 const saving = ref(false)
 const testing = ref("")
 const error = ref("")
 const result = ref("")
 const testImage = ref("")
 let generation = 0
+const local = ref<LocalVisionStatus>({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 })
+const localBusy = ref(false)
+let localTimer: ReturnType<typeof setInterval> | undefined
+let localRequest: AbortController | undefined
+
+function stopMonitoring() {
+  if (localTimer !== undefined) clearInterval(localTimer)
+  localTimer = undefined
+  localRequest?.abort()
+  localRequest = undefined
+}
+
+async function loadLocal(revision: number) {
+  if (localRequest || revision !== generation) return
+  const request = new AbortController()
+  localRequest = request
+  try {
+    const value = await llmApi.localVisionStatus(request.signal)
+    if (revision === generation) local.value = value
+  } catch (caught) {
+    if (!request.signal.aborted && revision === generation) error.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    if (localRequest === request) localRequest = undefined
+  }
+}
+
+async function manageLocal(action: "setup" | "start" | "stop" | "cancel") {
+  if (localBusy.value) return
+  localBusy.value = true
+  error.value = ""
+  const revision = generation
+  try {
+    const status = await llmApi.localVisionAction(action)
+    if (revision !== generation) return
+    local.value = status
+    const config = await llmApi.config()
+    if (revision !== generation) return
+    // Runtime actions own managed assets only; preserve all unsaved user inputs.
+    const managed = config.profiles.filter(profile => profile.asset_id === "qwen3-vl-2b-local")
+    draft.value.profiles = [...draft.value.profiles.filter(profile => profile.asset_id !== "qwen3-vl-2b-local"), ...managed]
+    emit("saved", config)
+  } catch (caught) {
+    if (revision === generation) error.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    localBusy.value = false
+  }
+}
+
+onBeforeUnmount(() => { generation += 1; stopMonitoring() })
 
 const profiles = computed(() => [...draft.value.profiles].sort((a, b) => Number(b.source === "remote") - Number(a.source === "remote")))
 const dirty = computed(() => JSON.stringify(draft.value) !== committed.value)
@@ -24,6 +75,8 @@ const visionProfiles = computed(() => profiles.value.filter(profile => profile.e
 
 watch(() => props.modelValue, async open => {
   const revision = ++generation
+  stopMonitoring()
+  loaded.value = false
   error.value = ""
   result.value = ""
   if (!open) {
@@ -31,12 +84,16 @@ watch(() => props.modelValue, async open => {
     return
   }
   loading.value = true
+  void loadLocal(revision)
+  localTimer = setInterval(() => { void loadLocal(revision) }, 1200)
   testImage.value = props.imagePath || ""
   try {
     const config = await llmApi.config()
     if (revision !== generation) return
     draft.value = JSON.parse(JSON.stringify(config))
+    draft.value.cache = { translation: true, caption: true, ...config.cache }
     committed.value = JSON.stringify(draft.value)
+    loaded.value = true
   } catch (caught) {
     if (revision === generation) error.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
@@ -45,8 +102,9 @@ watch(() => props.modelValue, async open => {
 }, { immediate: true })
 
 function close() {
-  if (saving.value || testing.value) return
+  if (saving.value || testing.value || localBusy.value) return
   generation += 1
+  stopMonitoring()
   draft.value = { version: 5, profiles: [], routes: {}, prompt_presets: [], cache: {} }
   emit("update:modelValue", false)
 }
@@ -66,6 +124,7 @@ function languages(profile: LlmProfile, event: Event) {
 }
 
 async function save() {
+  if (!loaded.value) return
   if (draft.value.profiles.some(profile => !profile.name.trim() || !profile.endpoint.trim() || !profile.model.trim() || !profile.capabilities.length || !profile.languages.length)) {
     error.value = t("llm.fieldsRequired")
     return
@@ -74,8 +133,9 @@ async function save() {
   error.value = ""
   try {
     // Save only fields this editor owns. Concurrent preset edits stay intact.
-    const config = await llmApi.saveConfig({ profiles: draft.value.profiles, routes: draft.value.routes })
+    const config = await llmApi.saveConfig({ profiles: draft.value.profiles, routes: draft.value.routes, cache: draft.value.cache })
     draft.value = JSON.parse(JSON.stringify(config))
+    draft.value.cache = { translation: true, caption: true, ...config.cache }
     committed.value = JSON.stringify(draft.value)
     emit("saved", config)
     saving.value = false
@@ -111,7 +171,10 @@ async function test(profile: LlmProfile) {
       <p v-if="loading" role="status">{{ t("llm.loading") }}</p>
       <p v-if="error" role="alert" class="llm-error">{{ error }}</p>
       <p v-if="result" role="status">{{ result }}</p>
-      <fieldset :disabled="loading || saving || Boolean(testing)">
+      <ManagedVisionModel :status="local" :busy="localBusy" :locked="!loaded || loading || saving || Boolean(testing)" @action="manageLocal" />
+      <fieldset :disabled="!loaded || loading || saving || Boolean(testing) || localBusy">
+        <label><input v-model="draft.cache.translation" type="checkbox" />{{ t("llm.translationCache") }}</label>
+        <label><input v-model="draft.cache.caption" type="checkbox" />{{ t("llm.captionCache") }}</label>
         <label>{{ t("llm.translationRoute") }}<select v-model="draft.routes.translation"><option value="">{{ t("llm.auto") }}</option><option v-for="profile in textProfiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option></select></label>
         <label>{{ t("llm.captionRoute") }}<select v-model="draft.routes.caption"><option value="">{{ t("llm.auto") }}</option><option v-for="profile in visionProfiles" :key="profile.id" :value="profile.id">{{ profile.name }}</option></select></label>
         <label v-if="capability === 'vision'">{{ t("llm.testImage") }}<input v-model="testImage" class="llm-test-image" /></label>
@@ -139,6 +202,6 @@ async function test(profile: LlmProfile) {
         <button type="button" class="llm-add-profile" @click="add">{{ t("llm.add") }}</button>
       </fieldset>
     </div>
-    <template #footer><button type="button" class="llm-cancel" :disabled="saving || Boolean(testing)" @click="close">{{ t("llm.cancel") }}</button><button type="button" class="primary-action llm-save" :disabled="loading || saving || Boolean(testing)" @click="save">{{ t("llm.save") }}</button></template>
+    <template #footer><button type="button" class="llm-cancel" :disabled="saving || Boolean(testing) || localBusy" @click="close">{{ t("llm.cancel") }}</button><button type="button" class="primary-action llm-save" :disabled="!loaded || loading || saving || Boolean(testing) || localBusy" @click="save">{{ t("llm.save") }}</button></template>
   </ElDialog>
 </template>

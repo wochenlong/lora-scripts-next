@@ -144,3 +144,21 @@ def test_external_failure_is_returned_as_structured_error(monkeypatch):
     item = result["data"]["items"][0]
     assert item["status"] == "error"
     assert item["error_code"] == "network_unavailable"
+
+
+def test_public_llm_endpoint_honors_disabled_shared_cache(monkeypatch):
+    async def ready(*_args):
+        return {}
+
+    async def live(_locale, _items):
+        return {"cat": {"text": "猫"}}
+
+    monkeypatch.setattr(api.dictionary_service, "ensure", ready)
+    monkeypatch.setattr(api.dictionary_service, "wait_for_update", ready)
+    monkeypatch.setattr(api.dictionary_service, "lookup", lambda tags: {})
+    monkeypatch.setattr(api.translation_manager, "cache_enabled", lambda: False)
+    monkeypatch.setattr(api.translation_store, "get_results", lambda *_args: (_ for _ in ()).throw(AssertionError("disabled cache must not be read")))
+    monkeypatch.setattr(api.translation_manager, "resolve", live)
+    result = asyncio.run(api.resolve_tag_translations(api.TagTranslationRequest(tags=["cat"], provider="llm")))
+    assert result["data"]["items"][0]["translation"] == "猫"
+    assert result["data"]["items"][0]["cached"] is False

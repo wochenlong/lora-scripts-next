@@ -68,7 +68,7 @@ async def local_vision_manifest():
 async def save_llm_config(payload: dict):
     try:
         llm_service.save_config(payload)
-        return _success(llm_service.config_store.load_masked())
+        return _success(llm_service.config(masked=True))
     except LLMContractError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 

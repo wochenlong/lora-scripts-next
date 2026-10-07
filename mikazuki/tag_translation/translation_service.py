@@ -195,9 +195,17 @@ class TranslationManager:
     def get_api_key(self):
         return self.config_store.load()["deepseek"]["api_key"]
 
+    def cache_enabled(self):
+        return self.config_store.load().get("llm", {}).get("cache", {}).get("translation", True)
+
     def _active_llm_config(self, full_config):
         section = full_config["deepseek"].copy()
         shared = full_config.get("llm")
+        if isinstance(shared, dict):
+            from mikazuki.llm.config import UnifiedConfigStore
+            from mikazuki.llm.service import UnifiedLLMService
+            shared = UnifiedLLMService(UnifiedConfigStore(self.config_store.path)).config(masked=False)
+        section["_cache_enabled"] = not isinstance(shared, dict) or shared.get("cache", {}).get("translation", True)
         if isinstance(shared, dict) and shared.get("profiles"):
             from mikazuki.llm.routing import choose_profile
             profile = choose_profile(
@@ -216,7 +224,13 @@ class TranslationManager:
                 and candidate.get("enabled") and candidate.get("ready")
                 and "text" in candidate.get("capabilities", [])
             ]
-        if full_config.get("local", {}).get("enabled") and section.get("api_key"):
+        native_ready = False
+        if full_config.get("local", {}).get("enabled"):
+            from mikazuki.llm.runtime import llm_config_store
+            if self.config_store.path == llm_config_store.path:
+                from mikazuki.tag_translation.runtime import local_model_service
+                native_ready = local_model_service.status()["state"] == "running"
+        if native_ready and section.get("api_key") and not any(profile.get("asset_id") == "qwen3.5-0.8b-local" for profile in section.get("_fallbacks", [])):
             section.setdefault("_fallbacks", []).append({
                 "endpoint": local_proxy_endpoint(), "model": "qwen3.5-0.8b-q4_0", "api_key": "",
             })
@@ -335,12 +349,16 @@ class TranslationManager:
             raise
 
     async def resolve(self, locale, raw_items, refresh=False):
-        async for _translations in self.resolve_stream(locale, raw_items, refresh=refresh):
-            pass
+        live = {}
+        async for chunk in self.resolve_stream(locale, raw_items, refresh=refresh):
+            for tag, text in chunk["translations"].items():
+                live[tag] = {"text": text, "origin": chunk["sources"].get(tag, "deepseek")}
         locale = normalize_locale(locale)
         tag_names = [item["name"] for item in normalize_items(raw_items)]
         full_config = self.config_store.load()
         active_config = self._active_llm_config(full_config)
+        if not active_config["_cache_enabled"]:
+            return live
         profile_revision = self.profile_revision(active_config)
         cached = await asyncio.to_thread(
             self.store.get_results, locale, tag_names, "llm", profile_revision
@@ -353,8 +371,11 @@ class TranslationManager:
         normalized_items = normalize_items(raw_items)
         full_config = self.config_store.load()
         config = self._active_llm_config(full_config)
+        cache_enabled = config["_cache_enabled"]
         local_config = full_config.get("local", {})
         profile_revision = self.profile_revision(config)
+        if not cache_enabled:
+            profile_revision += ":no-cache"
         primary = await self._get_primary(locale, [item["name"] for item in normalized_items])
         primary_translations = {
             tag_name: row["text"] for tag_name, row in primary.items() if row.get("text")
@@ -370,7 +391,7 @@ class TranslationManager:
             if item["category"] != 1 and item["name"] not in primary
         ]
         tag_names = [item["name"] for item in items]
-        cached = {} if refresh else await asyncio.to_thread(
+        cached = {} if refresh or not cache_enabled else await asyncio.to_thread(
             self.store.get_results, locale, tag_names, "llm", profile_revision
         )
         cached_translations = {
@@ -403,7 +424,7 @@ class TranslationManager:
         # Tags that already exhausted retries with this model and prompt are
         # treated as resolved-without-translation instead of being re-asked.
         prompt_hash = hashlib.sha256(config["system_prompt"].encode("utf-8")).hexdigest()
-        known_failures = set() if refresh else await asyncio.to_thread(
+        known_failures = set() if refresh or not cache_enabled else await asyncio.to_thread(
             self.store.get_failures,
             locale,
             [item["name"] for item in missing],
@@ -424,7 +445,7 @@ class TranslationManager:
             # Another request can finish between the first SQLite lookup and
             # acquiring this lock. Refresh here so a just-persisted translation
             # is not purchased again after its in-flight entry was removed.
-            refreshed = {} if refresh else await asyncio.to_thread(
+            refreshed = {} if refresh or not cache_enabled else await asyncio.to_thread(
                 self.store.get_results,
                 locale,
                 [item["name"] for item in missing],
@@ -531,7 +552,7 @@ class TranslationManager:
                         continue
                     translations.update(result.translations)
                     prompt_hash = hashlib.sha256(config["system_prompt"].encode("utf-8")).hexdigest()
-                    if result.translations:
+                    if result.translations and config.get("_cache_enabled", True):
                         await asyncio.to_thread(
                             self.store.save_results,
                             locale,
@@ -540,7 +561,7 @@ class TranslationManager:
                             batch,
                             result.translations,
                         )
-                    if result.failures:
+                    if result.failures and config.get("_cache_enabled", True):
                         await asyncio.to_thread(
                             self.store.save_failures,
                             locale,

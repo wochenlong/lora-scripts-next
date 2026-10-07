@@ -1,5 +1,6 @@
 export default {
   llm: {
+    translationCache: "使用翻译结果缓存", captionCache: "使用自然语言打标缓存",
     localFallback: "远程失败时允许已启动的本地文本模型兜底",
     title: "共用 LLM 配置", sharedHint: "翻译与打标共用这些配置。远程始终优先；本地须显式启用兜底。打标要求视觉能力，翻译只要求文本能力。",
     keyHint: "Key 仅保留在后端进程，配置只保存掩码；服务重启后须重新注入。取消会丢弃未保存的编辑。",
@@ -1042,7 +1043,7 @@ export default {
       translationRemoteNotConfigured: "当前远程接口还没有配置 API Key。请展开接口卡片完成配置后再使用 LLM 翻译。",
       translationLocalSetup: "一键安装运行环境",
       translationManagedRuntime: "接口、端口和 llama.cpp 运行时均由系统自动分配和管理。",
-      translationLocalMutuallyExclusive: "本地模型和远程接口互斥，只会启用当前选中的一种。",
+      translationLocalMutuallyExclusive: "远程接口始终优先；只有显式启用且远程不可用时才使用本地模型。",
       translationEndpoint: "LLM 接口",
       translationEndpointPlaceholder: "https://.../chat/completions 或本地回环地址",
       translationModel: "模型",

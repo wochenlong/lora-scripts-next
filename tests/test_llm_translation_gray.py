@@ -14,6 +14,7 @@ from mikazuki.tag_translation.translation_service import DeepSeekClient, Transla
 
 class TextProvider(BaseHTTPRequestHandler):
     def do_POST(self):
+        self.server.requests = getattr(self.server, "requests", 0) + 1
         body = json.loads(self.rfile.read(int(self.headers["content-length"])))
         assert body["model"] == "text-model"
         content = json.dumps({"translations": [{"tag": "cat", "translation": "猫"}]}, ensure_ascii=False)
@@ -81,3 +82,35 @@ def test_translation_fallback_requires_explicit_local_enable(tmp_path, local_ena
     section = manager._active_llm_config(legacy.load())
     assert section["endpoint"].startswith("https://")  # Remote always wins, including legacy local mode.
     assert bool(section["_fallbacks"]) is local_enabled
+
+
+def test_translation_cache_disable_skips_existing_results_failures_and_writes(tmp_path):
+    from mikazuki.tag_translation.translation_store import TranslationStore
+    server = ThreadingHTTPServer(("127.0.0.1", 0), TextProvider)
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        path = tmp_path / "translation.json"
+        legacy = OnlineServiceConfig(path)
+        legacy.save({"deepseek": {"endpoint": f"http://127.0.0.1:{server.server_port}/v1/chat/completions", "model": "text-model", "api_key": "fixture-runtime-key"}})
+        shared = UnifiedConfigStore(path)
+        shared.save({"cache": {"translation": False, "caption": True}})
+        store = TranslationStore(str(tmp_path / "translations.sqlite3"))
+        manager = TranslationManager(path, store)
+        config = manager._active_llm_config(legacy.load())
+        item = {"name": "cat", "category": 0, "post_count": 0, "origin": "fixture"}
+        store.save_results("zh", "llm", manager.profile_revision(config), [item], {"cat": "旧缓存译文"})
+        import hashlib
+        prompt_hash = hashlib.sha256(config["system_prompt"].encode()).hexdigest()
+        store.save_failures("zh", [item], ["cat"], config["model"], prompt_hash)
+        async def verify():
+            for _ in range(2):
+                result = await manager.resolve("zh-CN", [item])
+                assert result["cat"]["text"] == "猫"
+        asyncio.run(verify())
+        assert server.requests == 2
+        assert store.get_results("zh", ["cat"], "llm", manager.profile_revision(config))["cat"]["text"] == "旧缓存译文"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=2)

@@ -11,6 +11,7 @@ import PathPickerDialog from "../components/PathPickerDialog.vue"
 import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
 import CaptionJobProgress from "../components/CaptionJobProgress.vue"
 import CaptionPromptEditor from "../components/CaptionPromptEditor.vue"
+import ManagedVisionModel from "../components/ManagedVisionModel.vue"
 import { useLlmProfiles } from "../composables/useLlmProfiles"
 import { useTaggerJob } from "../composables/useTaggerJob"
 import { useServerPathPick } from "../composables/useServerPathPick"
@@ -295,16 +296,7 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
           <label>{{ t("tagger.caption.conflict") }}<select v-model="captionForm.conflict_action"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
           <label class="wide-field">{{ t("tagger.caption.previewPath") }}<input v-model="previewImagePath" placeholder="/data/datasets/images/example.png" /></label>
           <div class="caption-privacy wide-field">{{ t("tagger.caption.privacy") }}</div>
-          <section class="caption-local-runtime wide-field">
-            <strong>{{ t("tagger.caption.localRuntimeTitle") }}</strong>
-            <p>{{ t("tagger.caption.localRuntimeHint") }}</p>
-            <p>{{ t('tagger.caption.localStates.' + localVision.state) }} · {{ (localVision.downloaded_bytes / 1048576).toFixed(1) }} / {{ (localVision.total_bytes / 1048576).toFixed(1) }} MiB</p>
-            <p v-if="localVision.error">{{ localVision.error }}</p>
-            <button v-if="['installing', 'downloading'].includes(localVision.state)" type="button" :disabled="localVisionBusy" @click="manageLocalVision('cancel')">{{ t("tagger.caption.cancelInstall") }}</button>
-            <button v-else-if="!localVision.installed || !localVision.runtime_installed" type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('setup')">{{ t("tagger.caption.setupLocal") }}</button>
-            <button v-else-if="localVision.state !== 'running'" type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('start')">{{ t("tagger.caption.startLocal") }}</button>
-            <button v-else type="button" :disabled="localVisionBusy || captionBusy" @click="manageLocalVision('stop')">{{ t("tagger.caption.stopLocal") }}</button>
-          </section>
+          <ManagedVisionModel :status="localVision" :busy="localVisionBusy" :locked="captionBusy || previewBusy" @action="manageLocalVision" />
 
           <div v-if="previewResult" class="caption-preview wide-field"><strong>{{ t("tagger.caption.previewResult") }}</strong><p>{{ previewResult }}</p></div>
         </template>

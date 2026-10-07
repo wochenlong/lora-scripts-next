@@ -11,7 +11,8 @@ from .chinese_dictionary_service import ChineseDictionaryService
 from .translation_config import OnlineServiceConfig
 from .translation_service import TranslationManager
 from .translation_store import TranslationStore
-from .local_model_service import LocalModelService
+from mikazuki.llm.config import UnifiedConfigStore
+from mikazuki.llm.local_text import LocalTextModelService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -38,4 +39,4 @@ translation_manager = TranslationManager(
     session_factory=_session_factory,
     primary_store=dictionary_service,
 )
-local_model_service = LocalModelService(str(LOCAL_MODEL_ROOT), translation_manager.config_store)
+local_model_service = LocalTextModelService(str(LOCAL_MODEL_ROOT), translation_manager.config_store, UnifiedConfigStore(TRANSLATION_CONFIG_PATH))

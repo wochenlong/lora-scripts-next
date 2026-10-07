@@ -47,6 +47,11 @@ class UnifiedLLMService:
                 from .runtime import get_local_vision_service, llm_config_store
                 if self.config_store.path == llm_config_store.path:
                     profile["ready"] = get_local_vision_service().status()["state"] == "running"
+            if profile.get("asset_id") == "qwen3.5-0.8b-local":
+                from .runtime import llm_config_store
+                if self.config_store.path == llm_config_store.path:
+                    from mikazuki.tag_translation.runtime import local_model_service
+                    profile["ready"] = local_model_service.status()["state"] == "running"
         return config
 
     def profiles(self, *, masked: bool = True) -> list[dict[str, Any]]:

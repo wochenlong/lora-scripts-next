@@ -7,7 +7,7 @@
 - 工作树 E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning；分支 feat/NL-Captioning。本批基线 eb93de4，提交号读 git log。
 - 每次续接先读 C:/Users/25454/.codex/attachments/33329a36-8e01-4211-b79c-a080571cde4b/goal-objective.md。
 - Phase 0/1 done（有 gate-review），Phase 2 in progress，Phase 3/4 pending。goal 保持 active。
-- 最新相关后端 218 passed / 4 warnings / 19.05s；编辑器 35 passed / 3.05s；Node22 check 321 tests / 51 files、type/lint/build pass，2 个已有 lint warning。
+- 最新相关后端 221 passed / 4 warnings / 19.58s；编辑器 35 passed / 3.05s；Node22 check 324 tests / 51 files、type/lint/build pass，2 个已有 lint warning。
 - 宽范围仍 1139 passed / 11 failed / 21 skipped，另有31训练 collection errors，缺逐用例失败日志；不能当作完整矩阵通过，须恢复/复现并修复。
 
 ## 环境
@@ -18,7 +18,7 @@
 - P1资产位于workspace/sandboxes/nl-caption-p1-20261006/.sandbox-data；仅中间开发可复用，Phase4禁止复用venv/node_modules/模型/缓存/配置/output。
 - Qwen3-VL-2B Q4_K_M+Q8 mmproj，revision/SHA固定在local_vision.py；runtime b11327，共用translation models/runtime。
 - 真实批量目录workspace/sandboxes/nl-caption-batch-20261007-r2：三公共样本14.803s，峰值3094904832B，实际冲突/取消0.026s/再次连接/停止通过。前次脚本误选text-only profile失败已记录，修正后freshroot通过。不是Phase4。模型进程已停止。
-- 本轮浏览器dev服务端口5176/28761和两个自建进程已停止；无待等测试handle。空配置根nl-caption-browser-20261007，截图outsideGit；lifespan=off仅页面验证。
+- 本轮5176/28761、5177/28762/18762各自建服务已停止；无等待测试handle。空配置根nl-caption-browser-20261007，截图outsideGit；lifespan=off仅页面验证。
 
 ## 不可变决策和实现
 
@@ -35,7 +35,7 @@
 
 ## 待办/风险
 
-1. 完成本地视觉资产管理共享UI、native text模型profile/readiness复用；兑现translation cache flag；任务安全rollback/clear。
+1. 共享本地视觉管理、native text profile/readiness、translation cache已完成；还需旧翻译system_prompt/reasoning_effort设置兼容、编辑器部分失败刷新、任务安全rollback/clear。
 2. 完整浏览器CRUD/preview/batch/cancel/retry/report/conflict/mixed、键盘/error/privacy、三模式ONNX真实路径。
 3. Phase3 frozen public样本+rubric、真实远程中文（需进程注入原用户Key，不能写文件）、Qwen本地中文/远程优先显式fallback、EDD人工评分/失败baseline、正式Zero-Short/发布/扫描。
 4. 完整回归失败闭环：缺torch/transformers/training依赖、README、symlink权限、trainingstub；未获豁免，不能跳过。
@@ -44,6 +44,8 @@
 
 ## 单一 Next action
 
-将本地视觉资产管理接入共享 LLM 设置，并兑现翻译 cache 开关。
+补全共享设置对旧翻译提示词/推理选项的兼容，并验证保存与 revision。
 
 证据：docs/evidence/natural-language-captioning/phase-2-frontend-editor/2026-10-07-history-polling-editor-conflicts.md。Confidence medium：增量已验，完整矩阵/实际浏览器/EDD/隔离重建仍未闭环。
+
+2026-10-07 共享资产/cache和浏览器业务增量：相关后端221+最后本地管理定向16通过，Node22 check324；真实Vue+API/fake模型完成预览不写、自然/组合批量、429部分失败重试、取消、报告、mixed原文save/undo/redo和外部冲突。translation共享text连接/窄屏/Tab/Escape部分通过。初始fixture继承auto偏好触发词库下载后已取消，r2将词库/MyMemory也替换，实际HTTP验证无下载。不是实际模型或Phase4，完整gate仍pending。见phase-2-frontend-editor/2026-10-07-shared-assets-cache-browser-flow.md。

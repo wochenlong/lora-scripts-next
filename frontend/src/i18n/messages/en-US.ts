@@ -1,5 +1,6 @@
 export default {
   llm: {
+    translationCache: "Use translation result cache", captionCache: "Use caption result cache",
     localFallback: "Allow a running local text model to handle remote failures",
     title: "Shared LLM settings", sharedHint: "Translation and captioning share these profiles. Remote is preferred; local fallback requires explicit enablement. Captioning requires vision; translation requires text.",
     keyHint: "Keys stay in backend memory; only masks are saved. Reinject keys after restarting the backend. Cancel discards unsaved edits.",
@@ -1042,7 +1043,7 @@ export default {
       translationRemoteNotConfigured: "The active remote interface has no API key. Expand the card and configure it before using LLM translation.",
       translationLocalSetup: "Install runtime automatically",
       translationManagedRuntime: "The app assigns and manages the endpoint, port, and llama.cpp runtime automatically.",
-      translationLocalMutuallyExclusive: "The local model and remote APIs are mutually exclusive; only the selected route is enabled.",
+      translationLocalMutuallyExclusive: "Remote APIs always take priority; local models are used only when explicitly enabled and remote APIs are unavailable.",
       translationEndpoint: "LLM endpoint",
       translationEndpointPlaceholder: "https://.../chat/completions or local loopback",
       translationModel: "Model",

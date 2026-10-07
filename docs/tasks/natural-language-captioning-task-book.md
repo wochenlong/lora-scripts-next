@@ -130,10 +130,12 @@
 - Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
-- Validation status: 2026-10-07 Python 3.11 相关后端回归 218 passed；Node 22 check 51 files / 321 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
-- Residual risks: 共享设置组件和编辑器来源保护已接入并回归；历史报告/恢复 UI、轮询治理、批量/undo/redo 冲突已验证；资源管理完整复用尚待完成；安全回滚/清理、真实远程与 ONNX 三模式、EDD 人工评分和浏览器验收仍待闭环。本地三样本开发验收复用 P1 模型，Phase 4 不得复用。
+- Validation status: 2026-10-07 Python 3.11 相关后端回归 221 passed；Node 22 check 51 files / 324 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
+- Residual risks: 共享设置组件和编辑器来源保护已接入并回归；历史报告/恢复 UI、轮询治理、批量/undo/redo 冲突已验证；本地资源管理已共享，完整浏览器矩阵尚待完成；安全回滚/清理、真实远程与 ONNX 三模式、EDD 人工评分和浏览器验收仍待闭环。本地三样本开发验收复用 P1 模型，Phase 4 不得复用。
 - Continuity source: docs/tasks/natural-language-captioning-continuity.md；记录环境、Git 和单一步骤，证据以阶段报告为准。
 
 ## 下一步动作
 
-将本地视觉资产管理接入共享 LLM 设置，并兑现翻译 cache 开关。
+补全共享设置对旧翻译提示词/推理选项的兼容，并验证保存与 revision。
+
+2026-10-07 共享资产/cache和浏览器业务增量：相关后端221+最后本地管理定向16通过，Node22 check324；真实Vue+API/fake模型完成预览不写、自然/组合批量、429部分失败重试、取消、报告、mixed原文save/undo/redo和外部冲突。translation共享text连接/窄屏/Tab/Escape部分通过。初始fixture继承auto偏好触发词库下载后已取消，r2将词库/MyMemory也替换，实际HTTP验证无下载。不是实际模型或Phase4，完整gate仍pending。见phase-2-frontend-editor/2026-10-07-shared-assets-cache-browser-flow.md。

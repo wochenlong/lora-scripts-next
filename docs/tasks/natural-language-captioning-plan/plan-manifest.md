@@ -42,8 +42,10 @@
 
 ## 2026-10-07 执行同步
 
-- 最新相关后端回归 218 passed；Node 22 前端完整 check：321 tests / 51 files passed，typecheck/lint/build 通过。共享设置/编辑器来源保护见 Phase 2 shared-settings-and-provenance 报告。Phase 0/1 核销分别见其 gate-review；本地真实批量明确复用 P1 资产。
+- 最新相关后端回归 221 passed；Node 22 前端完整 check：324 tests / 51 files passed，typecheck/lint/build 通过。共享设置/编辑器来源保护见 Phase 2 shared-settings-and-provenance 报告。Phase 0/1 核销分别见其 gate-review；本地真实批量明确复用 P1 资产。
 - 宽范围回归仍有 11 failed、21 skipped；不得推进完整验证门。见 evidence 的 failure report。
 - 凭据落实 goal 原有边界：后端进程内保存真实 Key，配置文件和响应只有掩码；后端重启需要重新注入。
 - 连接测试直接测试所选 profile 并校验严格 JSON，不应用生产路由的 fallback。
-- Phase 0/1 done；Phase 2 in progress；Phase 3/4 pending。唯一下一步：共享本地视觉资产管理与翻译 cache 开关。
+- Phase 0/1 done；Phase 2 in progress；Phase 3/4 pending。唯一下一步：共享设置的旧翻译提示词/推理选项兼容及保存/revision 验证。
+
+2026-10-07 共享资产/cache和浏览器业务增量：相关后端221+最后本地管理定向16通过，Node22 check324；真实Vue+API/fake模型完成预览不写、自然/组合批量、429部分失败重试、取消、报告、mixed原文save/undo/redo和外部冲突。translation共享text连接/窄屏/Tab/Escape部分通过。初始fixture继承auto偏好触发词库下载后已取消，r2将词库/MyMemory也替换，实际HTTP验证无下载。不是实际模型或Phase4，完整gate仍pending。见phase-2-frontend-editor/2026-10-07-shared-assets-cache-browser-flow.md。

@@ -140,6 +140,7 @@ class LocalVisionService(LocalModelService):
     async def start_runtime(self):
         data = await super().start_runtime()
         config = self.unified_config_store.load()
+        previous = next((item for item in config["profiles"] if item["id"] == ASSET_ID), {})
         profiles = [item for item in config["profiles"] if item["id"] != ASSET_ID]
         profiles.append({
             "id": ASSET_ID,
@@ -151,10 +152,10 @@ class LocalVisionService(LocalModelService):
             "revision": REVISION,
             "capabilities": ["text", "vision"],
             "languages": ["zh-CN", "en"],
-            "enabled": True,
+            "enabled": previous.get("enabled", True),
             "ready": True,
         })
-        self.unified_config_store.save({**config, "profiles": profiles})
+        self.unified_config_store.save({"profiles": profiles})
         return data
 
     async def stop_runtime(self):
@@ -166,5 +167,5 @@ class LocalVisionService(LocalModelService):
                 item["ready"] = False
                 changed = True
         if changed:
-            self.unified_config_store.save(config)
+            self.unified_config_store.save({"profiles": config["profiles"]})
         return data

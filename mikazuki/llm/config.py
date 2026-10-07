@@ -85,6 +85,8 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
     asset_id = raw.get("asset_id")
     if asset_id is not None:
         asset_id = _string(asset_id, "profile.asset_id", 200)
+    if asset_id == "qwen3.5-0.8b-local" and (source != "managed-local" or capabilities != ("text",)):
+        raise LLMContractError("managed text-only model cannot declare vision capability")
     revision = raw.get("revision")
     if revision is not None:
         revision = _string(revision, "profile.revision", 200)

@@ -210,7 +210,7 @@ async def resolve_tag_translations(req: TagTranslationRequest):
             cached = translation_store.get_results(storage_locale, unresolved, "mymemory", mymemory_revision)
             network = {tag: str(row["text"]) for tag, row in cached.items() if row.get("text")}
             network_cached = set(network)
-        if not req.local_only and req.provider in {"llm", "auto"}:
+        if not req.local_only and req.provider in {"llm", "auto"} and translation_manager.cache_enabled():
             cached = translation_store.get_results(storage_locale, unresolved, "llm", llm_revision)
             llm = {tag: str(row["text"]) for tag, row in cached.items() if row.get("text")}
             llm_cached = set(llm)

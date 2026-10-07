@@ -42,7 +42,7 @@ export const llmApi = {
   connectionTest: (body: { capability: "text" | "vision"; profile_id?: string; image_path?: string; prompt?: string; language?: string }) =>
     apiData<Record<string, unknown>>("/api/llm/connection-test", { method: "POST", body: JSON.stringify(body) }),
   localVisionManifest: () => apiData<Record<string, unknown>>("/api/llm/local-vision/manifest"),
-  localVisionStatus: () => apiData<LocalVisionStatus>("/api/llm/local-vision/status"),
+  localVisionStatus: (signal?: AbortSignal) => apiData<LocalVisionStatus>("/api/llm/local-vision/status", { signal }),
   localVisionAction: (action: "setup" | "start" | "stop" | "cancel") =>
     apiData<LocalVisionStatus>("/api/llm/local-vision/" + action, { method: "POST" }),
 }
