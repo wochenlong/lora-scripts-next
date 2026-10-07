@@ -1,3 +1,12 @@
+# 2026-10-08 模型目录执行续接（当前）
+
+HEAD读git log。模型目录/catalog、model-first本地/API、系列搜索/折叠/具体型号、参数隔离已实施；manager/retry拒绝combined且worker串联代码删除，natural默认skip，beforehash冲突先于skip；max_tokens/temperature进入生成/cache/任务snapshot。后端216、前端336/52/check/build通过。实际fake browser preview0写盘、batch3写回、重复skip3/零provider、390px无溢出与底部进度通过；KeepAlive初始化request丢弃已修复并加回归。证据2026-10-08-model-catalog-browser.md。
+
+server已停止，browser aboutblank，tracked dist恢复。tests/test_diffsynth_review.py保留未提交，未改Agent源码。Goal active，不宣告全验收。
+
+单一下一步：预设存储多文件失败恢复/跨进程revision保护，然后显式legacy导入UI；后续user_data任务档案/既有任务页联动、Tag试标、真实模型/正式lifespan/全矩阵/Phase5 fresh rebuild。不要重复P1或旧评分，不把当前fake/browser当Real/Phase5。
+
+以下历史只保留线索，以本段和canonical task最新为准。
 # 2026-10-08 执行续接
 
 Goal active；用户已明确全面施工。HEAD需读git log；本轮预设存储/API、明确导入、类型/settings保护、revision409、内置/用户模板及未保存保护、system prompt单图/批量与缓存已实现。combined UI及start/preview入口拒绝；manager内部/retry旧任务仍待审计。底部进度布局已实现未浏览器验收。

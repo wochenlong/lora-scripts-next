@@ -14,6 +14,8 @@ export interface TaggerRequest {
 }
 
 export interface CaptionJobRequest {
+  model_id?: string
+  runtime?: "local" | "api"
   prompt_id?: string
   max_caption_length?: number
   path: string
@@ -24,19 +26,25 @@ export interface CaptionJobRequest {
   prompt: string
   system_prompt?: string
   language: string
-  layout?: "caption_only"
-  conflict_action: "ignore" | "copy" | "prepend" | "append"
-  interrogator_model: string
-  download_endpoint: string
-  threshold: number
-  character_threshold: number
-  add_rating_tag: boolean
-  add_model_tag: boolean
-  additional_tags: string
-  exclude_tags: string
-  escape_tag: boolean
-  replace_underscore: boolean
-  replace_underscore_excludes: string
+  conflict_action: "ignore" | "copy"
+  max_tokens?: number
+  temperature?: number
+}
+
+export interface TaggerModel {
+  id: string
+  name: string
+  model: string
+  family: string
+  author: string
+  runtime: "local" | "api"
+  output: "tag" | "natural"
+  capabilities: string[]
+  languages: string[]
+  downloaded: boolean
+  ready: boolean
+  profile_id: string | null
+  parameters: string[]
 }
 
 export interface CaptionJobStatus {
@@ -79,6 +87,7 @@ export interface CaptionRollbackResult { job_id: string; restored: number; confl
 export interface CaptionJobReport { job_id: string; phase: CaptionJobPhase; snapshot: Record<string, unknown>; report: { items: CaptionReportItem[] } }
 
 export const taggerApi = {
+  models: (signal?: AbortSignal) => apiData<{ models: TaggerModel[] }>("/api/tagger/models", { signal }),
   captionRollback: (jobId: string) => apiData<CaptionRollbackResult>(`/api/tagger/jobs/${encodeURIComponent(jobId)}/rollback`, { method: "POST" }),
   captionDeleteHistory: (jobId: string) => apiData<{ deleted: boolean; job_id: string }>(`/api/tagger/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }),
   status: () => apiData<TaggerStatus>("/api/tagger/status"),

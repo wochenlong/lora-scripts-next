@@ -248,7 +248,7 @@
 
 ### 下一步动作
 
-实现后端模型能力目录、TaggerPage 一级运行方式与模型系列选择器，再补前后端参数隔离；Phase0差异表已归档。
+补齐user_data预设的多文件失败恢复和跨进程修订保护，然后接入显式旧预设导入UI。模型目录/页面/参数隔离已实现，见本轮证据。
 
 ## 失败与变更处理
 
@@ -267,3 +267,9 @@
 用户明确全面施工，Goal active。本轮完成user_data Caption预设存储/API、版本/备份/修订冲突、类型隔离/其他设置保留、显式旧预设导入；Vue内置/用户预设、另存为/恢复默认/未保存保护；单图与批量读取预设及system prompt、缓存revision；combined UI移除/API拒绝；底部进度和1100px布局。后端44 passed，前端331/51、type/lint/build通过。详情及未完成项见phase-0-contract-alignment/2026-10-08-presets-and-delta.md。
 
 当前唯一下一步：实现后端模型能力目录及运行方式/模型系列选择器，然后补前后端参数隔离。尚无新契约最终验收，Phase0/1 in progress，其余pending；历史combined记录不用于本版完成门。全局user_data基础尚未合入本checkout，多文件事务/跨进程并发需继续验证；不实施#405的端口仲裁或Agent迁移。
+
+## 2026-10-08 模型能力与浏览器增量
+
+GET /api/tagger/models和本地/API一级选择已实现；系列折叠/原名搜索/下载状态/具体型号/每模型草稿、API空入口保护、前后端参数隔离；Caption生成参数进入cache/任务快照；manager/retry拒绝combined、worker不生成mixed；默认跳过和retry外部hash冲突保护。相关后端216通过，前端336/52及type/lint/build通过。实际新fake fixture完成preview不写盘、batch3写回/重复skip3零额外provider、390px无溢出/底部任务、Qwen缺失安装入口和禁用生成，修复KeepAlive初始目录请求丢弃。报告phase-0-contract-alignment/2026-10-08-model-catalog-browser.md。
+
+不属于真实模型或Phase5。预设事务/跨进程、任务档案联动、Tag单图试标及最终验证未完成。唯一下一步：补预设多文件失败恢复/跨进程revision保护和显式legacy导入UI。全部自建browser fixture已停止，tracked dist恢复，不修改既有tests/test_diffsynth_review.py。

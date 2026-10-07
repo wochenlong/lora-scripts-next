@@ -96,6 +96,7 @@ def main():
         marker.write_text(json.dumps(identity), encoding="utf-8")
     os.environ["MIKAZUKI_DEV"] = "1"
     os.environ["MIKAZUKI_TAG_TRANSLATION_ROOT"] = str(root / "state")
+    os.environ["MIKAZUKI_USER_DATA_ROOT"] = str(root / "user_data")
     os.environ["TASK_QUEUE_FILE"] = str(root / "queue.json")
     from PIL import Image, ImageDraw
     samples = root / "images"

@@ -8,6 +8,9 @@ class TaggerPrefetchRequest(BaseModel):
 
 
 class TaggerInterrogateRequest(BaseModel):
+    class Config:
+        extra = "forbid"
+
     path: str
     interrogator_model: str = Field(
         default="wd14-convnextv2-v2"

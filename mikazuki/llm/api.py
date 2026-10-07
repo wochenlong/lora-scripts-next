@@ -40,6 +40,12 @@ async def list_llm_profiles():
     return _success(config)
 
 
+@router.get("/tagger/models")
+async def tagger_models():
+    from mikazuki.tagger.catalog import model_catalog
+    return _success({"models": model_catalog(_configuration(), get_local_vision_service().status())})
+
+
 @router.get("/llm/config")
 async def get_llm_config():
     return _success(_configuration())

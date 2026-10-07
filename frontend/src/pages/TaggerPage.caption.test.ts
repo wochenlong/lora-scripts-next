@@ -7,6 +7,7 @@ import { i18n } from "../i18n"
 import { llmApi } from "../api/llm"
 import { taggerApi } from "../api/tagger"
 import { ElMessageBox } from "element-plus"
+import { defineComponent } from "vue"
 
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }))
 vi.mock("../api/llm", () => ({
@@ -28,7 +29,12 @@ vi.mock("../api/llm", () => ({
 }))
 vi.mock("../api/tagger", () => ({
   taggerApi: {
-    status: vi.fn(),
+    models: vi.fn().mockResolvedValue({ models: [
+      { id: "wd14-convnextv2-v2", name: "WD", model: "wd14-convnextv2-v2", family: "WD", author: "SmilingWolf", runtime: "local", output: "tag", ready: true, downloaded: false, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
+      { id: "llm:local", name: "Local", model: "local-vision", family: "Vision LLM", author: "", runtime: "local", output: "natural", ready: true, downloaded: false, languages: ["zh-CN"], capabilities: ["vision", "caption"], parameters: [], profile_id: "local" },
+      { id: "llm:remote", name: "Remote", model: "remote-vision", family: "Vision LLM", author: "", runtime: "api", output: "natural", ready: true, downloaded: false, languages: ["zh-CN"], capabilities: ["vision", "caption"], parameters: [], profile_id: "remote" },
+    ] }),
+    status: vi.fn().mockResolvedValue({ phase: "idle", message: "", model: "", download: { current: 0, total: 0, percent: 0, filename: "", bytes_current: 0, bytes_total: 0 }, tagging: { current: 0, total: 0, percent: 0, filename: "", bytes_current: 0, bytes_total: 0 }, updated_at: 0 }),
     captionStatus: vi.fn().mockResolvedValue({ job_id: null, phase: "idle", mode: null, message: "", current: 0, total: 0, filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 0 }),
     captionHistory: vi.fn().mockResolvedValue({ jobs: [] }),
     captionReport: vi.fn(),
@@ -56,12 +62,20 @@ async function naturalPage() {
   wrapper = mount(TaggerPage, {
     global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } },
   })
+  await flushPromises()
   await wrapper.findAll(".tagger-mode-tabs button")[1].trigger("click")
   await flushPromises()
   return wrapper
 }
 
 describe("natural-language TaggerPage", () => {
+  it("loads the initial catalog when mounted inside KeepAlive", async () => {
+    const host = defineComponent({ components: { TaggerPage }, template: "<KeepAlive><TaggerPage /></KeepAlive>" })
+    wrapper = mount(host, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
+    await flushPromises()
+    expect(wrapper.find(".tagger-model-selector summary").text()).toContain("wd14-convnextv2-v2")
+    expect(wrapper.findAll(".tagger-mode-tabs button").some(button => button.text() === "API 服务")).toBe(true)
+  })
   it("protects unsaved prompt edits when a template switch is cancelled", async () => {
     vi.spyOn(ElMessageBox, "confirm").mockRejectedValue("cancel")
     const page = await naturalPage()
@@ -88,12 +102,12 @@ describe("natural-language TaggerPage", () => {
     expect(saved.revision).toBe("r1")
   })
 
-  it("filters text-only profiles and lists remote vision first", async () => {
+  it("selects API vision by model capability and excludes text-only models", async () => {
     const page = await naturalPage()
-    const options = page.findAll('select option').filter(option => ["remote", "local", "text"].includes(String(option.attributes("value"))))
-    expect(options.map(option => option.attributes("value"))).toEqual(["remote", "local"])
-    expect(page.text()).toContain("1.55 GB")
-    expect(page.text()).toContain("3.1 GB")
+    expect(page.findAll('[data-model-id="llm:remote"]')).toHaveLength(1)
+    expect(page.findAll('[data-model-id="llm:local"]')).toHaveLength(0)
+    expect(page.text()).not.toContain("Text only")
+    expect(page.find(".tagger-model-selector summary").text()).toContain("remote-vision")
     expect(llmApi.localVisionStatus).toHaveBeenCalledOnce()
   })
 
@@ -108,6 +122,10 @@ describe("natural-language TaggerPage", () => {
     }))
     const submitted = vi.mocked(taggerApi.captionStart).mock.calls[0][0]
     expect(submitted.allow_local_fallback).toBeFalsy()
+    expect(submitted.runtime).toBe("api")
+    expect(submitted.model_id).toBe("llm:remote")
+    expect(submitted).not.toHaveProperty("threshold")
+    expect(submitted).not.toHaveProperty("interrogator_model")
   })
 
   it("previews a single image through the preview endpoint without starting a batch", async () => {
@@ -162,7 +180,29 @@ describe("natural-language TaggerPage", () => {
     const language = page.findAll("select").find(select => select.find('option[value="ja"]').exists())!
     await language.setValue("en")
     expect((page.get(".tagger-actions .primary-action").element as HTMLButtonElement).disabled).toBe(true)
-    expect(page.findAll('option[value="remote"]')).toHaveLength(0)
+    expect(page.text()).toContain("remote-vision")
+  })
+
+  it("does not show an API tab when the model catalog has no ready API models", async () => {
+    const baseline = await taggerApi.models()
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: baseline.models.filter(model => model.runtime === "local") })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
+    await flushPromises()
+    expect(wrapper.findAll(".tagger-mode-tabs button").some(button => button.text() === "API 服务")).toBe(false)
+    expect(wrapper.findAll(".tagger-mode-tabs button").some(button => button.text() === "本地模型")).toBe(true)
+  })
+
+  it("preserves each Caption model's settings across runtime switches", async () => {
+    const page = await naturalPage()
+    await page.get("textarea").setValue("远程提示词")
+    await page.findAll(".tagger-mode-tabs button")[0].trigger("click")
+    await page.get('[data-model-id="llm:local"]').trigger("click")
+    await page.get("textarea").setValue("本地提示词")
+    await page.findAll(".tagger-mode-tabs button")[1].trigger("click")
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("远程提示词")
+    await page.findAll(".tagger-mode-tabs button")[0].trigger("click")
+    await page.get('[data-model-id="llm:local"]').trigger("click")
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("本地提示词")
   })
 
   it("disables repeat previews while an inference request is pending", async () => {

@@ -91,7 +91,7 @@ def test_restart_marks_pending_items_retryable_without_automatic_calls(tmp_path)
     assert restarted.status()["succeeded"] == 1
 
 
-def test_crash_after_atomic_write_recovers_completion_without_duplicate_append(tmp_path):
+def test_crash_after_atomic_overwrite_recovers_completion_without_reinference(tmp_path):
     images = tmp_path / "images"
     images.mkdir()
     image = images / "a.png"
@@ -113,7 +113,7 @@ def interrupted_write(*args, **kwargs):
     os._exit(91)
 caption_job.write_caption_atomic = interrupted_write
 manager = caption_job.CaptionJobManager(Vision(), job_store=CaptionJobStore(sys.argv[2]))
-manager.start({"path":sys.argv[1], "mode":"natural", "conflict_action":"append"})
+manager.start({"path":sys.argv[1], "mode":"natural", "conflict_action":"copy"})
 manager._thread.join()
 '''
     result = subprocess.run([sys.executable, "-c", script, str(images), str(database)],
@@ -121,7 +121,7 @@ manager._thread.join()
                             env={**os.environ, "MIKAZUKI_TAG_TRANSLATION_ROOT": str(tmp_path / "runtime")})
     assert result.returncode == 91
     written = image.with_suffix(".txt").read_bytes()
-    assert written.startswith(b"original\r\ncaption\n\n")
+    assert written.decode("utf-8").strip() == "一只猫。"
     service = Vision()
     restarted = CaptionJobManager(service, job_store=CaptionJobStore(database))
     assert restarted.status()["succeeded"] == 1

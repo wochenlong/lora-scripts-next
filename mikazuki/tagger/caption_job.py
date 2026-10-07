@@ -221,10 +221,16 @@ class CaptionJobManager:
             return self._status["phase"] in {"pending", "captioning", "cancelling"}
 
     def start(self, request: dict, *, retry_failed: bool = False) -> dict:
+        if request.get("mode", "natural") not in {"tag", "natural"}:
+            raise RuntimeError("当前版本不支持组合打标；历史任务仅可查看或回滚")
+        if request.get("mode", "natural") == "natural" and request.get("conflict_action", "ignore") not in {"ignore", "copy"}:
+            raise RuntimeError("自然语言打标仅支持跳过或明确覆盖")
         with self._lock:
             if self.is_busy():
                 raise RuntimeError("已有自然语言打标任务进行中")
             request = copy.deepcopy(request)
+            if request.get("mode", "natural") == "natural":
+                request.setdefault("conflict_action", "ignore")
             paths = [Path(item) for item in request.get("paths", [])] or discover_images(request.get("path", ""), bool(request.get("recursive", False)))
             if "expected_hashes" not in request:
                 request["expected_hashes"] = {str(path): caption_sha256(caption_path_for(path)) for path in paths}
@@ -267,8 +273,13 @@ class CaptionJobManager:
                 "parent_job_id": parent_job_id,
                 "snapshot": {
                     "mode": request.get("mode") or "natural", "language": request.get("language") or "zh-CN",
+                    "model_id": request.get("model_id") or request.get("interrogator_model"),
+                    "runtime": request.get("runtime"), "profile_id": request.get("profile_id"),
+                    "max_tokens": request.get("max_tokens", 512), "temperature": request.get("temperature", 0.0),
+                    "conflict_action": request.get("conflict_action"), "recursive": bool(request.get("recursive", False)),
                     "prompt_id": request.get("prompt_id"),
                     "max_caption_length": request.get("max_caption_length", 2000),
+                    "preset_revision": request.get("preset_revision"),
                     "template_revision": hashlib.sha256(str(request.get("prompt") or "").encode("utf-8")).hexdigest()[:24],
                     "allow_local_fallback": bool(request.get("allow_local_fallback", False)),
                 },
@@ -321,7 +332,7 @@ class CaptionJobManager:
             if not paths:
                 self._set(phase="done", message="没有找到图片")
                 return
-            if str(request.get("mode") or "natural") in {"tag", "combined"}:
+            if str(request.get("mode") or "natural") == "tag":
                 self._prepare_tag_model(request)
             for index, path in enumerate(paths, start=1):
                 self._item_index = index - 1
@@ -384,7 +395,7 @@ class CaptionJobManager:
             tagger_progress.release()
 
     async def _process_one(self, image_path: Path, request: dict) -> dict | bool:
-        from mikazuki.tagger.caption import compose_caption, merge_tag_caption, parse_caption_response, render_prompt
+        from mikazuki.tagger.caption import merge_tag_caption, parse_caption_response, render_prompt
         from mikazuki.llm.runtime import llm_service as runtime_llm_service
         from mikazuki.llm.config import config_revision
         service = self._job_service or runtime_llm_service
@@ -409,10 +420,10 @@ class CaptionJobManager:
             else caption_sha256(target)
         )
         action = str(request.get("conflict_action") or "copy")
-        if action == "ignore" and target.exists():
-            return {"filename": image_path.name, "status": "skipped", "written": False, "before_hash": before_hash, "after_hash": before_hash}
         if before_hash != expected:
             raise CaptionWriteConflict("caption changed since the job snapshot")
+        if action == "ignore" and target.exists():
+            return {"filename": image_path.name, "status": "skipped", "written": False, "before_hash": before_hash, "after_hash": before_hash}
         if mode == "tag":
             training_tags = self._generate_tags(image_path, request)
             generated = ", ".join(training_tags)
@@ -423,7 +434,8 @@ class CaptionJobManager:
             maximum = int(request.get("max_caption_length", 2000))
             prompt, _snapshot = render_prompt(prompt_template, language=language, mode=mode, image_name="image")
             system_prompt = str(request.get("system_prompt") or "")
-            prompt_revision = hashlib.sha256((prompt_template + chr(10) + system_prompt + chr(10) + _snapshot + chr(10) + str(maximum)).encode("utf-8")).hexdigest()[:24]
+            parameters_revision = json.dumps({"max_caption_length": maximum, "max_tokens": request.get("max_tokens", 512), "temperature": request.get("temperature", 0.0)}, sort_keys=True)
+            prompt_revision = hashlib.sha256((prompt_template + chr(10) + system_prompt + chr(10) + _snapshot + chr(10) + parameters_revision).encode("utf-8")).hexdigest()[:24]
             preprocess_revision = "jpeg-white-matte-rgb-max1024-q85-v2"
             cache = self.cache
             if cache is None and self.service is None:
@@ -457,6 +469,8 @@ class CaptionJobManager:
                             image_path,
                             prompt,
                             system_prompt=system_prompt,
+                            max_tokens=request.get("max_tokens", 512),
+                            temperature=request.get("temperature", 0.0),
                             language=language,
                             profile_id=profile_id,
                             allow_local_fallback=bool(request.get("allow_local_fallback", False)),
@@ -489,10 +503,6 @@ class CaptionJobManager:
                         generated,
                     )
             prompt_revision_for_report = prompt_revision
-        if mode == "combined":
-            tags = self._generate_tags(image_path, request)
-            training_tags = tags
-            generated = compose_caption(tags, generated, str(request.get("layout") or "tags_then_caption"))
         if self._cancel.is_set():
             raise CaptionJobCancelled()
         self._guard_path(image_path)
@@ -505,14 +515,7 @@ class CaptionJobManager:
             merged, should_write = merge_caption(existing, generated, "copy" if action == "ignore" else action)
         if not should_write:
             return False
-        from mikazuki.dataset_editor import detect_caption_format
-        generated_format = "tag" if mode == "tag" else "natural" if mode == "natural" else "tag" if request.get("layout") == "tags_only" else "natural" if request.get("layout") == "caption_only" or not tags else "mixed"
-        output_format = generated_format
-        if mode != "tag" and action in {"prepend", "append"} and existing.strip():
-            existing_format = self.job_store.find_format(target, before_hash) if self.job_store else None
-            existing_format = existing_format or detect_caption_format(existing)
-            if existing_format != generated_format or existing_format == "mixed":
-                output_format = "mixed"
+        output_format = "tag" if mode == "tag" else "natural"
         result = {
             "filename": image_path.name,
             "index": self._item_index,

@@ -1248,6 +1248,11 @@ translationPrompt: "Translation system prompt (tag translation only)", reasoning
       append: "Append",
     },
     modeTag: "Tags",
+    models: {
+      runtime: "Run with", local: "Local models", api: "API services", loading: "Loading model capabilities…",
+      search: "Search model names", downloaded: "Downloaded", notReady: "Configure, install or start", ready: "Ready",
+      output: "Output capability", noMatch: "No matching models", advanced: "Advanced settings", maxTokens: "Maximum generated tokens", temperature: "Sampling temperature",
+    },
     modeNatural: "Natural language",
     modeCombined: "Combined",
     caption: {

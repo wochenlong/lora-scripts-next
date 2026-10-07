@@ -145,16 +145,17 @@ Caption 预设使用 `kind=caption_prompt`，训练预设使用既有类型/元�
 
 ```json
 {
-  "dataset_root": "<server-side path>",
+  "path": "<server-side path>",
   "runtime": "local",
-  "model_id": "qwen3-vl-2b",
-  "output": "caption",
+  "model_id": "llm:qwen3-vl-2b-local",
+  "mode": "natural",
   "language": "zh-CN",
-  "prompt_preset_id": "caption-default-zh",
+  "prompt_id": "caption-default-zh",
   "prompt": "实际渲染后的快照",
-  "parameters": {"max_length": 512},
-  "overwrite": false,
-  "preview": false,
+  "max_caption_length": 512,
+  "max_tokens": 512,
+  "temperature": 0.0,
+  "conflict_action": "ignore",
   "allow_local_fallback": false
 }
 ```
@@ -214,3 +215,7 @@ Node 22 check/typecheck/lint/Vitest/build 通过；桌面、390px、键盘、空
 证据根目录：`docs/evidence/natural-language-captioning/`。历史 combined 证据保留但标记为“旧契约历史，不是本版完成门”。新证据必须记录 Issue #409 版本、commit、模型/资产 revision、样本 hash、命令、结果、资源和清理。
 
 完成时交付：后端/API、前端页面、Dataset Editor 安全、预设迁移说明、用户文档、测试矩阵、真实资源报告、Zero-Short、隔离重建报告、隐私扫描和剩余风险清单。没有通过 GATE-01 至 GATE-07 不得宣告完成。
+
+## 2026-10-08 当前实现契约增量
+
+模型目录为GET /api/tagger/models；具体模型id绑定旧Tag id或llm:<profile_id>。新请求保留mode=tag/natural表示输出能力，runtime/model_id/profile_id需一致；生成字段为flat max_tokens/temperature/max_caption_length，与旧接口同源兼容，不额外引入parameters/output别名。实现与证据见phase-0-contract-alignment/2026-10-08-model-catalog-browser.md。Goal active，最终完成门未通过。

@@ -169,6 +169,42 @@ def test_unknown_preset_rejected_before_job_or_request(api_client, monkeypatch):
     assert not service.calls
 
 
+@pytest.mark.parametrize("fields", [{"threshold": 0.9}, {"replace_underscore": True}, {"interrogator_model": "wd-vit-v3"}, {"conflict_action": "append"}, {"layout": "tags_only"}])
+def test_natural_requests_reject_tag_or_mixed_parameters_before_execution(api_client, fields):
+    client, image, manager, service = api_client
+    for url, extra in [("/api/tagger/jobs", {}), ("/api/tagger/jobs/preview", {"image_path": str(image)})]:
+        response = client.post(url, json={"path": str(image.parent), "mode": "natural", **extra, **fields})
+        assert response.status_code == 400
+        assert response.json()["detail"]["code"] == "tagger_parameter_unsupported"
+    assert not manager.is_busy()
+    assert not service.calls
+
+
+def test_natural_default_skips_existing_caption(api_client):
+    client, image, manager, service = api_client
+    image.with_suffix(".txt").write_bytes(b"keep original")
+    assert client.post("/api/tagger/jobs", json={"path": str(image.parent)}).status_code == 200
+    manager._thread.join(timeout=5)
+    assert manager.status()["skipped"] == 1
+    assert not service.calls
+    assert image.with_suffix(".txt").read_bytes() == b"keep original"
+
+
+def test_forged_model_runtime_rejected_and_valid_parameters_frozen(api_client, monkeypatch):
+    client, image, manager, service = api_client
+    monkeypatch.setattr(service, "config", lambda **kwargs: {"profiles": [{"id": "remote", "source": "remote", "capabilities": ["vision"], "enabled": True}]}, raising=False)
+    payload = {"path": str(image.parent), "model_id": "llm:remote", "profile_id": "remote", "runtime": "local", "max_tokens": 256, "temperature": 0.2}
+    assert client.post("/api/tagger/jobs", json=payload).status_code == 400
+    assert not service.calls
+    response = client.post("/api/tagger/jobs", json={**payload, "runtime": "api"})
+    assert response.status_code == 200
+    manager._thread.join(timeout=5)
+    assert service.calls[-1][1]["max_tokens"] == 256
+    assert service.calls[-1][1]["temperature"] == 0.2
+    assert manager.status()["snapshot"]["max_tokens"] == 256
+    assert manager.status()["snapshot"]["model_id"] == "llm:remote"
+
+
 def test_user_data_preset_freezes_system_prompt_for_preview_and_batch(api_client, monkeypatch):
     from mikazuki.llm.prompt_presets import save_presets
     client, image, manager, service = api_client

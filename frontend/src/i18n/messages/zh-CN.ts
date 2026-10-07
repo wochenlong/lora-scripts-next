@@ -1248,6 +1248,11 @@ translationPrompt: "翻译系统提示词（仅用于标签翻译）", reasoning
       append: "追加",
     },
     modeTag: "Tag 标签",
+    models: {
+      runtime: "运行方式", local: "本地模型", api: "API 服务", loading: "正在读取模型能力…",
+      search: "搜索具体模型", downloaded: "已下载", notReady: "需要配置、安装或启动", ready: "可用",
+      output: "输出能力", noMatch: "没有匹配模型", advanced: "高级设置", maxTokens: "最大生成 token 数", temperature: "采样温度",
+    },
     modeNatural: "自然语言",
     modeCombined: "组合打标",
     caption: {

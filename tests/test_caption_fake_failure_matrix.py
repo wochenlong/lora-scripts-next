@@ -122,23 +122,18 @@ def test_partial_http_failure_and_restart_retry_preserve_completed_file(tmp_path
     assert len(state["requests"]) == 4
 
 
-@pytest.mark.parametrize("layout,expected", [
-    ("tags_then_caption", "cat, red hair\n\n一个彩色方块。\n"),
-    ("caption_then_tags", "一个彩色方块。\n\ncat, red hair\n"),
-    ("caption_only", "一个彩色方块。\n"),
-    ("tags_only", "cat, red hair\n"),
-])
-def test_combined_job_uses_separate_tag_output_and_real_http_caption(tmp_path, provider, monkeypatch, layout, expected):
+@pytest.mark.parametrize("layout", ["tags_then_caption", "caption_then_tags", "caption_only", "tags_only"])
+def test_combined_job_is_rejected_before_any_provider_or_write(tmp_path, provider, monkeypatch, layout):
     endpoint, state = provider
     Image.new("RGB", (32, 32), "red").save(tmp_path / "a.png")
     manager = manager_for(tmp_path, endpoint, "combined")
     monkeypatch.setattr(manager, "_prepare_tag_model", lambda request: None)
     monkeypatch.setattr(manager, "_generate_tags", lambda path, request: ["cat", "red hair"])
-    manager.start({"path": str(tmp_path), "mode": "combined", "layout": layout})
-    manager._thread.join(timeout=5)
-    assert manager.status()["succeeded"] == 1
-    assert (tmp_path / "a.txt").read_text(encoding="utf-8") == expected
-    assert len(state["requests"]) == 1
+    with pytest.raises(RuntimeError):
+        manager.start({"path": str(tmp_path), "mode": "combined", "layout": layout})
+    assert not manager.is_busy()
+    assert not (tmp_path / "a.txt").exists()
+    assert len(state["requests"]) == 0
 
 
 def test_remote_failure_explicit_fallback_records_actual_local_profile(tmp_path, provider):

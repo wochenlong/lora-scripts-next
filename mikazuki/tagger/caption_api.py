@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 
 from mikazuki.llm.runtime import llm_service
 from mikazuki.llm.config import config_revision
-from mikazuki.tagger.caption import DEFAULT_CAPTION_PROMPT, compose_caption, parse_caption_response, render_prompt, snapshot_prompt
+from mikazuki.tagger.caption import DEFAULT_CAPTION_PROMPT, parse_caption_response, render_prompt, snapshot_prompt
 from mikazuki.tagger.caption_job import CaptionJobCancelled, caption_job_manager
 from mikazuki.tagger.progress import TaggerCancelled, tagger_progress
 
@@ -24,7 +24,12 @@ def _ensure_path_not_in_use(path: str) -> None:
 
 
 class CaptionJobRequest(BaseModel):
+    class Config:
+        extra = "forbid"
+
     path: str
+    model_id: str | None = Field(default=None, max_length=200)
+    runtime: Literal["local", "api"] | None = None
     mode: Literal["natural", "combined", "tag"] = "natural"
     recursive: bool = False
     allow_local_fallback: bool = False
@@ -34,9 +39,11 @@ class CaptionJobRequest(BaseModel):
     prompt: str = Field(default=DEFAULT_CAPTION_PROMPT, max_length=8000)
     system_prompt: str = Field(default="", max_length=8000)
     max_caption_length: int = Field(default=2000, ge=1, le=2000)
+    max_tokens: int = Field(default=512, ge=1, le=8192)
+    temperature: float = Field(default=0.0, ge=0, le=2)
     language: Literal["zh-CN", "zh-TW", "en", "ja"] = "zh-CN"
     layout: Literal["tags_then_caption", "caption_then_tags", "tags_only", "caption_only"] = "tags_then_caption"
-    conflict_action: Literal["ignore", "copy", "prepend", "append"] = "copy"
+    conflict_action: Literal["ignore", "copy", "prepend", "append"] = "ignore"
     interrogator_model: str = "wd14-convnextv2-v2"
     download_endpoint: str = ""
     threshold: float = Field(default=0.35, ge=0, le=1)
@@ -59,7 +66,20 @@ def _success(data=None, message=None):
 
 
 def _snapshot_request(req):
+    from .catalog import TAG_PARAMETERS, CAPTION_PARAMETERS, validate_model_selection
+    if req.mode == "combined":
+        raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标"})
+    invalid = req.__fields_set__ & set(TAG_PARAMETERS if req.mode == "natural" else CAPTION_PARAMETERS)
+    if invalid or (req.mode == "natural" and (req.conflict_action not in {"ignore", "copy"} or ("layout" in req.__fields_set__ and req.layout != "caption_only"))):
+        raise HTTPException(status_code=400, detail={"code": "tagger_parameter_unsupported", "message": "所选模型不支持这些参数或输出操作"})
     payload = req.dict()
+    for field in (TAG_PARAMETERS if req.mode == "natural" else CAPTION_PARAMETERS):
+        payload.pop(field, None)
+    payload.pop("layout", None)
+    try:
+        validate_model_selection(payload, llm_service.config(masked=False) if req.model_id and req.mode != "tag" else {})
+    except ValueError:
+        raise HTTPException(status_code=400, detail={"code": "tagger_model_capability_mismatch", "message": "模型、运行方式或输出能力不匹配"}) from None
     if req.prompt_id:
         for field in ("prompt", "language", "max_caption_length", "system_prompt"):
             if field not in req.__fields_set__:
@@ -188,10 +208,13 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
         raise HTTPException(status_code=400, detail="Tag 模式预览请使用既有 Tagger")
     if req.mode == "combined":
         raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标"})
+    try:
+        payload = _snapshot_request(req)
+    except ValueError:
+        raise HTTPException(status_code=400, detail={"code": "caption_prompt_invalid", "message": "提示词预设或模板无效"}) from None
     if not tagger_progress.try_begin("captioning", req.interrogator_model, "正在预览当前图片"):
         raise HTTPException(status_code=409, detail={"code": "tagger_busy", "message": "已有打标或下载任务进行中"})
     try:
-        payload = _snapshot_request(req)
         language = payload["language"]
         profile = llm_service.resolve("vision", language=language, profile_id=req.profile_id, allow_local_fallback=req.allow_local_fallback)
         prompt, snapshot = render_prompt(payload["prompt"], language=language, mode=req.mode, image_name="image")
@@ -199,6 +222,8 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
             image_path,
             prompt,
             system_prompt=payload.get("system_prompt", ""),
+            max_tokens=payload["max_tokens"],
+            temperature=payload["temperature"],
             language=language,
             profile_id=profile.id,
             allow_local_fallback=req.allow_local_fallback,
@@ -209,12 +234,8 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
             raise LLMContractError("caption preview response was truncated")
         result = parse_caption_response(content, language=language, max_length=payload["max_caption_length"])
         tagger_progress.check_cancelled()
-        tags = []
-        if req.mode == "combined":
-            await _preview_operation(asyncio.to_thread(caption_job_manager._prepare_tag_model, payload), request, blocking=True)
-            tags = await _preview_operation(asyncio.to_thread(caption_job_manager._generate_tags, image_path, payload), request, blocking=True)
         tagger_progress.check_cancelled()
-        caption = compose_caption(tags, result.caption, req.layout) if req.mode == "combined" else result.caption
+        caption = result.caption
     except (CaptionJobCancelled, TaggerCancelled):
         raise HTTPException(status_code=409, detail={"code": "caption_cancelled", "message": "预览已取消"}) from None
     except Exception as exc:
@@ -225,7 +246,7 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
     return _success({
         "caption": caption,
         "natural_caption": result.caption,
-        "tags": tags,
+        "tags": [],
         "language": result.language,
         "profile_id": _profile.id,
         "profile_revision": config_revision(_profile, prompt_revision=snapshot),

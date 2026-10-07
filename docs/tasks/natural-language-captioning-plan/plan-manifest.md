@@ -43,7 +43,7 @@
 | GATE-05 | pending | 最小可行性风险验证计划 |
 | GATE-06 | pending | goal 与所有 canonical 文档一致 |
 | GATE-07 | pending | Issue #409 对齐最终复盘 |
-| GATE-08 | blocked-by-draft | 不能在文档重写完成前重新开工 |
+| GATE-08 | in progress | 用户已全面授权；实施和验证进行中 |
 | GATE-09 | pending | 完整实现和验证 |
 | GATE-10 | pending | 全新隔离重建和最终验收 |
 
@@ -67,3 +67,7 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 ## 2026-10-08 实施增量
 
 差异审计与首批预设实施见../../evidence/natural-language-captioning/phase-0-contract-alignment/2026-10-08-presets-and-delta.md。后端44/前端331通过，不是阶段/最终完成。当前Next action以canonical任务书末尾为准：模型能力目录和运行方式/模型系列选择器。
+
+## 2026-10-08 模型目录增量
+
+模型目录/页面/参数隔离与manager组合禁用完成；后端216、前端336及fake browser业务通过。详情见2026-10-08-model-catalog-browser.md。Next action由canonical task最新定义：预设事务/跨进程与legacy导入UI。GATE09/10未通过，旧in progress描述已由用户全面施工授权覆盖，当前executing。

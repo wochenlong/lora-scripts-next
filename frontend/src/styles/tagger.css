@@ -38,6 +38,7 @@
 }
 
 .tagger-grid input {
+  min-width: 0;
   min-height: 39px;
   padding: 0 11px;
   color: var(--text);
@@ -47,6 +48,7 @@
 }
 
 .tagger-grid select {
+  min-width: 0;
   min-height: 39px;
   padding: 0 11px;
   color: var(--text);
@@ -144,6 +146,7 @@
 }
 
 .tagger-grid textarea {
+  min-width: 0;
   min-height: 92px;
   padding: 10px 11px;
   color: var(--text);
@@ -251,3 +254,13 @@
 @media (max-width: 900px) { .caption-status-panel { min-height: 0; } }
 
 .caption-maintenance { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.tagger-model-selector { padding: 14px; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 10px; }
+.tagger-model-selector summary { cursor: pointer; overflow-wrap: anywhere; font-size: 14px; }
+.tagger-model-selector label { margin-top: 14px; }
+.tagger-model-family { margin-top: 14px; }
+.tagger-model-family button { display: grid; gap: 5px; width: 100%; margin-top: 8px; padding: 10px; text-align: left; color: var(--text); background: var(--surface); border: 1px solid var(--border); border-radius: 8px; cursor: pointer; overflow-wrap: anywhere; }
+.tagger-model-family button.active { border-color: var(--accent); }
+.tagger-model-family button small { color: var(--text-soft); font-size: 12px; }
+.tagger-model-family button:disabled { opacity: .5; cursor: default; }
+.tagger-advanced label { margin-top: 10px; }
