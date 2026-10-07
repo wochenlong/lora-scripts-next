@@ -545,12 +545,12 @@ TaggerPage 交互顺序：
 - 前端实现: in progress（三模式、预览、进度、重试和 mixed safety 已接入；设置复用、提示词预设及人工验收仍待完成）
 - 真实模型/远程评测: pending implementation（SiliconFlow 三样本通过；Qwen3-VL-2B 本地中文探针通过）
 - 隔离重建真实验收: pending implementation
-- Execution readiness: `executing`（Phase 0/1 done；2026-10-07 增量回归后端 229 passed；前端 Node 22 check 328 passed；宽范围后端仍有 11 failed）
+- Execution readiness: `executing`（Phase 0/1/2 done；2026-10-07 增量回归后端 241 passed；前端 Node 22 check 329 passed；宽范围后端仍有 11 failed）
 - Residual risks: Qwen3-VL-2B CPU-only 峰值约 3.1 GB 且单图约 4.5–7.3 秒；更低资源本地模型只验证英文；自然语言/Tag 混合 caption 的训练语义需要在 P4/P5 验证。
 
 ## 19. 下一步动作
 
-Phase 2 共享设置和编辑器生成来源已接入，历史报告/恢复 UI、轮询代次治理及编辑器批量/undo/redo 冲突已实现并验证，下一步共享本地视觉资产管理与翻译 cache 开关，完整浏览器验收仍待完成。具体状态见 canonical task book 与续接记录。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
+Phase 2 已核销共享设置、编辑器生成来源和实际浏览器业务，历史报告/恢复 UI、轮询代次治理及编辑器批量/undo/redo 冲突已实现并验证，下一步共享本地视觉资产管理与翻译 cache 开关，完整浏览器验收仍待完成。具体状态见 canonical task book 与续接记录。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
 
 ## 参考资料
 
@@ -569,3 +569,9 @@ Phase 2 共享设置和编辑器生成来源已接入，历史报告/恢复 UI�
 翻译选项兼容增量已验证：迁移/共享及旧API双向保存、revision、managed restart保留metadata，浏览器profile新增/删除/取消/能力/语言过滤和翻译选项保存均通过；相关后端226、Node22 check325。首次typecheck失败已修复并复验，见Phase2 translation-options failure/resolved报告。实际模型/正式启动/Phase4仍不由fake fixture替代。
 
 实际重启恢复/历史选择已验：不自动推理/写盘，显式重试3/3成功；恢复报告原因隐藏和前端忽略来源的短natural安全问题均已修复并浏览器复验。最后229后端/328前端通过，详见phase-2-frontend-editor/2026-10-07-browser-restart-recovery-and-source-safety.md及resolved failure。Phase2整体门待审计，Phase3/4和完整矩阵仍未通过。
+
+## 2026-10-07 Phase3开工同步
+
+Phase2所有规定项已有gate-review，阶段done；fake模型及lifespan=off不替代Stage3/4。公开评测集3图、SHA/URL、rubric已冻结且人工评分pending。下一步任务回滚采用before-format备份、last-writer标识和哈希校验，历史清理不能删除格式来源。具体API/schema变更记录在Phase3设计增量与canonical task book，GATE09/10仍未通过。
+
+Phase3回滚/清理已实现并测试，actual浏览器恢复2/冲突1、取消无变化、清理保留文件/来源通过。相关241后端/329前端。原11失败已恢复逐case：17项依赖/README/process复验通过，关闭其中7个；4个symlink仍因WinError1314等待用户权限环境，未豁免；完整矩阵/真实/EDD/正式启动/Phase4仍未完成。

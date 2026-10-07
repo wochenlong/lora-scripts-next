@@ -1,0 +1,88 @@
+{
+  "id": "NL-CAPTION-EVAL-20261007-v1",
+  "version": 1,
+  "frozen": true,
+  "language": "zh-CN",
+  "sample_count": 3,
+  "annotation_author": "execution-agent visual inspection; not human scoring",
+  "human_scores": null,
+  "samples": [
+    {
+      "id": "chelsea",
+      "filename": "chelsea.png",
+      "source_url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/chelsea.png",
+      "source_revision": "v0.19.3",
+      "sha256": "596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb",
+      "size_bytes": 240512,
+      "dimensions": [
+        451,
+        300
+      ],
+      "source_bytes_verified": true,
+      "license": "CC0",
+      "reference_visible_facts": [
+        "猫脸近景",
+        "棕色虎斑纹理",
+        "绿色或黄绿色眼睛",
+        "可见鼻子和胡须",
+        "背景模糊"
+      ],
+      "unsupported_claim_examples": [
+        "人物身份",
+        "猫在奔跑或跳跃",
+        "未可见的房间故事"
+      ]
+    },
+    {
+      "id": "coffee",
+      "filename": "coffee.png",
+      "source_url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/coffee.png",
+      "source_revision": "v0.19.3",
+      "sha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "size_bytes": 466706,
+      "dimensions": [
+        600,
+        400
+      ],
+      "source_bytes_verified": true,
+      "license": "CC0",
+      "reference_visible_facts": [
+        "咖啡杯和杯碟",
+        "杯中咖啡",
+        "金属勺子",
+        "木质桌面",
+        "杯内壁浅色、外部偏棕红"
+      ],
+      "unsupported_claim_examples": [
+        "心形拉花",
+        "人物身份",
+        "具体店址或价格"
+      ]
+    },
+    {
+      "id": "rocket",
+      "filename": "rocket.jpg",
+      "source_url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/rocket.jpg",
+      "source_revision": "v0.19.3",
+      "sha256": "c2dd0de7c538df8d111e479619b129464d0269d0ae5fd18ca91d33a7fdfea95c",
+      "size_bytes": 112525,
+      "dimensions": [
+        640,
+        427
+      ],
+      "source_bytes_verified": true,
+      "license": "Public domain (scikit-image attribution to SpaceX)",
+      "reference_visible_facts": [
+        "火箭位于发射设施中",
+        "周围金属塔架",
+        "蓝色昏暗天空",
+        "地面黄色灯光"
+      ],
+      "unsupported_claim_examples": [
+        "正在升空或爆炸",
+        "明显喷射火焰",
+        "航天员或人物故事"
+      ]
+    }
+  ]
+}

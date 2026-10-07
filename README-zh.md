@@ -60,6 +60,8 @@ Anima 默认路径仅用于引导，**不代表已下载权重**。模型、数�
 | 监控与命令行使用 | [训练监控](docs/train-monitor.md) · [CLI](docs/cli-args.md) |
 | 开发与整合包构建 | [仓库布局](docs/repo-layout.md) · [构建指南](docs/portable-build-guide.md) |
 
+Bash/WSL 命令行训练可使用 `train_anima_by_toml.sh`（标准 Anima）或 `train_anima_fast_by_toml.sh`（Anima Fast），分别使用对应的引擎运行环境。配置和安装说明见 [Anima 训练](docs/anima-training.md) 与 [命令行参数](docs/cli-args.md)。
+
 ## 我们做了什么
 
 近期已合入 `dev` 的重点：

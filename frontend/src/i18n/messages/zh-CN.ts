@@ -1251,6 +1251,7 @@ translationPrompt: "翻译系统提示词（仅用于标签翻译）", reasoning
     modeNatural: "自然语言",
     modeCombined: "组合打标",
     caption: {
+      rollback: "回滚本次写回", deleteHistory: "清理此任务历史", rollbackConfirm: "恢复本任务的原始 caption。已被其他任务或外部修改的文件将保留并报告冲突。继续？", deleteHistoryConfirm: "仅删除此任务记录与备份，不删除 caption 或格式来源。删除后无法通过此记录回滚。继续？", rollbackResult: "已恢复 {restored} · 冲突保留 {conflicts} · 跳过 {skipped}", maintenanceFailed: "任务维护失败，请检查状态后重试",
       profile: "视觉 LLM Profile",
       remote: "远程优先",
       local: "本地兜底",

@@ -60,6 +60,8 @@ Guides: [Anima](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [
 | Monitoring and command-line use | [Train monitor](docs/train-monitor.md) · [CLI](docs/cli-args.md) |
 | Development and packaging | [Repository layout](docs/repo-layout.md) · [Build guide](docs/portable-build-guide.md) |
 
+For Bash/WSL command-line training, use `train_anima_by_toml.sh` for standard Anima or `train_anima_fast_by_toml.sh` for Anima Fast. These entrypoints use their respective engine runtimes. See [Anima training](docs/anima-training.md) and [CLI arguments](docs/cli-args.md) for configuration and setup.
+
 ## What We Have Built
 
 Recent work integrated into `dev`:

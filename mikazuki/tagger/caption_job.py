@@ -162,7 +162,7 @@ class CaptionJobManager:
                 self._status["succeeded"] += 1
                 self._status["report"]["items"].append({**self._intent["result"], "recovered_write": True})
                 if self._intent["result"].get("caption_format"):
-                    self.job_store.remember_format(caption_path_for(path), self._intent["after_hash"], self._intent["result"]["caption_format"], self._intent["result"].get("tags", []))
+                    self.job_store.remember_format(caption_path_for(path), self._intent["after_hash"], self._intent["result"]["caption_format"], self._intent["result"].get("tags", []), self._status["job_id"])
         known = {item["path"] for item in self._failed}
         for index, path in enumerate(self._paths):
             if index not in self._completed and path not in known:
@@ -250,9 +250,11 @@ class CaptionJobManager:
             self._failed = []
             parent_job_id = self._status.get("job_id") if retry_failed else None
             self._request = request
+            self._request["path"] = str(Path(request.get("path", "")).expanduser().absolute())
+            self._request["expected_hashes"] = {str(path.absolute()): request["expected_hashes"].get(str(path)) for path in paths}
             self._request["retry_failed"] = retry_failed
             self._job_service = job_service
-            self._paths = [str(path) for path in paths]
+            self._paths = [str(path.absolute()) for path in paths]
             self._completed = []
             self._intent = None
             self._status = {
@@ -527,13 +529,16 @@ class CaptionJobManager:
         if self.job_store:
             if existing_bytes is not None and hashlib.sha256(existing_bytes).hexdigest() != before_hash:
                 raise CaptionWriteConflict("caption changed before backup")
-            self.job_store.backup(self._status["job_id"], self._item_index, existing_bytes, before_hash)
+            from mikazuki.dataset_editor import detect_caption_format
+            before_detail = self.job_store.find_format_detail(target, before_hash) or {"format": detect_caption_format(existing), "tags": []}
+            before_detail["writer_job_id"] = self.job_store.format_owner(target, before_hash)
+            self.job_store.backup(self._status["job_id"], self._item_index, existing_bytes, before_hash, before_detail)
             with self._lock:
                 self._intent = {"index": self._item_index, "after_hash": result["after_hash"], "result": result}
                 self._persist_locked()
         write_caption_atomic(target, merged, expected_sha256=expected, trailing_newline=mode != "tag")
         if self.job_store:
-            self.job_store.remember_format(target, result["after_hash"], result["caption_format"], training_tags)
+            self.job_store.remember_format(target, result["after_hash"], result["caption_format"], training_tags, self._status["job_id"])
         return result
 
     async def _cancellable(self, operation):

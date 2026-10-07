@@ -72,10 +72,14 @@ export interface CaptionReportItem {
   prompt_revision?: string | null
   cached?: boolean
   recovered_write?: boolean
+  rollback_status?: string | null
 }
+export interface CaptionRollbackResult { job_id: string; restored: number; conflicts: number; skipped: number; items: Array<{ filename: string; status: string; code?: string; after_hash?: string | null }> }
 export interface CaptionJobReport { job_id: string; phase: CaptionJobPhase; snapshot: Record<string, unknown>; report: { items: CaptionReportItem[] } }
 
 export const taggerApi = {
+  captionRollback: (jobId: string) => apiData<CaptionRollbackResult>(`/api/tagger/jobs/${encodeURIComponent(jobId)}/rollback`, { method: "POST" }),
+  captionDeleteHistory: (jobId: string) => apiData<{ deleted: boolean; job_id: string }>(`/api/tagger/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }),
   status: () => apiData<TaggerStatus>("/api/tagger/status"),
   start: (body: TaggerRequest) => apiRequest("/api/interrogate", { method: "POST", body: JSON.stringify(body) }),
   prefetch: (interrogator_model: string, download_endpoint: string) => apiRequest("/api/tagger/prefetch", { method: "POST", body: JSON.stringify({ interrogator_model, download_endpoint }) }),

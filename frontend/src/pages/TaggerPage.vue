@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { computed, onActivated, onBeforeUnmount, onDeactivated, reactive, ref, watch } from "vue"
-import { ElMessage } from "element-plus"
+import { ElMessage, ElMessageBox } from "element-plus"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import { useTaggerStore } from "../stores/tagger"
 import { llmApi, type LocalVisionStatus } from "../api/llm"
-import { taggerApi, type CaptionJobRequest, type CaptionMode, type TaggerRequest } from "../api/tagger"
+import { taggerApi, type CaptionJobRequest, type CaptionMode, type TaggerRequest, type CaptionRollbackResult } from "../api/tagger"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
 import CaptionJobProgress from "../components/CaptionJobProgress.vue"
@@ -33,6 +33,32 @@ const captionError = captionJob.error
 const captionSubmitting = captionJob.submitting
 const captionBusy = captionJob.busy
 const historyJobId = ref("")
+const maintenanceBusy = ref(false)
+const maintenanceResult = ref<CaptionRollbackResult | null>(null)
+
+async function maintainHistory(action: "rollback" | "delete") {
+  const jobId = captionJob.report.value?.job_id
+  if (!jobId || maintenanceBusy.value || captionBusy.value) return
+  try {
+    await ElMessageBox.confirm(t(action === "rollback" ? "tagger.caption.rollbackConfirm" : "tagger.caption.deleteHistoryConfirm"), { type: "warning" })
+  } catch { return }
+  maintenanceBusy.value = true
+  maintenanceResult.value = null
+  try {
+    if (action === "rollback") {
+      maintenanceResult.value = await taggerApi.captionRollback(jobId)
+      await captionJob.loadReport(jobId)
+    } else {
+      await taggerApi.captionDeleteHistory(jobId)
+      captionJob.report.value = null
+      historyJobId.value = ""
+    }
+    await captionJob.loadHistory()
+    await captionJob.refresh()
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tagger.caption.maintenanceFailed"))
+  } finally { maintenanceBusy.value = false }
+}
 const previewImagePath = ref("")
 const previewResult = ref("")
 const profileEditorOpen = ref(false)
@@ -328,13 +354,19 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
         <div class="tagger-actions"><button v-if="captionBusy" class="danger-action" :disabled="captionSubmitting" @click="captionAction('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="captionSubmitting || previewBusy || !visionProfiles.length" @click="startCaption">{{ t("tagger.start") }}</button><button v-if="captionStatus.failed" class="secondary-action" :disabled="captionBusy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || previewBusy || captionBusy || !visionProfiles.length || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button></div>
         <section class="caption-history">
           <h3>{{ t("tagger.caption.history") }}</h3>
-          <button type="button" :disabled="captionJob.historyBusy.value" @click="captionJob.loadHistory">{{ t("tagger.caption.refreshHistory") }}</button>
-          <label>{{ t("tagger.caption.selectReport") }}<select v-model="historyJobId" @change="captionJob.loadReport(historyJobId)"><option value="">{{ t("tagger.caption.selectReport") }}</option><option v-for="job in captionJob.jobs.value" :key="job.job_id || ''" :value="job.job_id || ''">{{ job.mode }} · {{ job.phase }} · {{ job.succeeded }}/{{ job.total }} · {{ job.job_id?.slice(0, 8) }}</option></select></label>
-          <button v-if="captionStatus.job_id" type="button" :disabled="captionJob.reportBusy.value" @click="captionJob.loadReport(captionStatus.job_id!)">{{ t("tagger.caption.currentReport") }}</button>
+          <button type="button" :disabled="maintenanceBusy || captionJob.historyBusy.value" @click="captionJob.loadHistory">{{ t("tagger.caption.refreshHistory") }}</button>
+          <label>{{ t("tagger.caption.selectReport") }}<select v-model="historyJobId" :disabled="maintenanceBusy" @change="captionJob.loadReport(historyJobId)"><option value="">{{ t("tagger.caption.selectReport") }}</option><option v-for="job in captionJob.jobs.value" :key="job.job_id || ''" :value="job.job_id || ''">{{ job.mode }} · {{ job.phase }} · {{ job.succeeded }}/{{ job.total }} · {{ job.job_id?.slice(0, 8) }}</option></select></label>
+          <button v-if="captionStatus.job_id" type="button" :disabled="maintenanceBusy || captionJob.reportBusy.value" @click="captionJob.loadReport(captionStatus.job_id!)">{{ t("tagger.caption.currentReport") }}</button>
           <p v-if="captionJob.reportBusy.value" role="status">{{ t("tagger.caption.loadingReport") }}</p>
           <div v-if="captionJob.report.value" class="caption-report" aria-live="polite">
             <strong>{{ captionJob.report.value.job_id }}</strong>
             <p>{{ t("tagger.caption.reportPrivacy") }}</p>
+            <div class="caption-maintenance">
+              <button type="button" :disabled="maintenanceBusy || captionBusy || captionJob.reportBusy.value" @click="maintainHistory('rollback')">{{ t("tagger.caption.rollback") }}</button>
+              <button type="button" :disabled="maintenanceBusy || captionBusy || captionJob.reportBusy.value" @click="maintainHistory('delete')">{{ t("tagger.caption.deleteHistory") }}</button>
+            </div>
+            <p v-if="maintenanceResult?.job_id === captionJob.report.value.job_id" role="status">{{ t("tagger.caption.rollbackResult", { restored: maintenanceResult.restored, conflicts: maintenanceResult.conflicts, skipped: maintenanceResult.skipped }) }}</p>
+            <ul v-if="maintenanceResult?.job_id === captionJob.report.value.job_id"><li v-for="item in maintenanceResult.items" :key="item.filename">{{ item.filename }} · {{ item.status }}<template v-if="item.code"> · {{ item.code }}</template></li></ul>
             <dl v-for="(item, index) in captionJob.report.value.report.items" :key="index"><dt>{{ item.filename }} · {{ item.status }}</dt><dd v-if="item.code || item.error">{{ [item.code, item.error].filter(Boolean).join(' · ') }}</dd><dd v-if="item.profile_id">{{ t("tagger.caption.reportProfile") }}: {{ item.profile_id }} · {{ item.profile_revision }}</dd><dd v-if="item.prompt_revision">{{ t("tagger.caption.reportPrompt") }}: {{ item.prompt_revision }}</dd><dd v-if="item.before_hash || item.after_hash">{{ t("tagger.caption.reportHashes") }}: {{ item.before_hash || '∅' }} → {{ item.after_hash || '∅' }}</dd><dd v-if="item.cached">{{ t("tagger.caption.reportCached") }}</dd></dl>
           </div>
         </section>

@@ -3,7 +3,7 @@
 - Plan ID: DATASET-NL-TAGGING-20261006
 - Version: v2.2-executing
 - Scale mode: Full
-- Readiness: executing（Phase 0/1 完成门通过；当前 Phase 2）
+- Readiness: executing（Phase 0/1/2 完成门通过；当前 Phase 3）
 - Canonical progress: ../natural-language-captioning-task-book.md
 - Design source: ../../design/natural-language-captioning-tagging-design.md
 - Evidence root: ../../evidence/natural-language-captioning/
@@ -42,14 +42,12 @@
 
 ## 2026-10-07 执行同步
 
-- 最新相关后端回归 229 passed；Node 22 前端完整 check：328 tests / 51 files passed，typecheck/lint/build 通过。共享设置/编辑器来源保护见 Phase 2 shared-settings-and-provenance 报告。Phase 0/1 核销分别见其 gate-review；本地真实批量明确复用 P1 资产。
+- 最新相关后端回归 241 passed；Node 22 前端完整 check：329 tests / 51 files passed，typecheck/lint/build 通过。共享设置/编辑器来源保护见 Phase 2 shared-settings-and-provenance 报告。Phase 0/1 核销分别见其 gate-review；本地真实批量明确复用 P1 资产。
 - 宽范围回归仍有 11 failed、21 skipped；不得推进完整验证门。见 evidence 的 failure report。
 - 凭据落实 goal 原有边界：后端进程内保存真实 Key，配置文件和响应只有掩码；后端重启需要重新注入。
 - 连接测试直接测试所选 profile 并校验严格 JSON，不应用生产路由的 fallback。
-- Phase 0/1 done；Phase 2 in progress；Phase 3/4 pending。唯一下一步：审计并核销 Phase 2 完成门。
+- Phase 0/1/2 done；Phase 3 in progress；Phase 4 pending。唯一下一步：验证当前生产 adapter 的真实远程中文与本地显式兜底路径。
 
-2026-10-07 共享资产/cache和浏览器业务增量：相关后端221+最后本地管理定向16通过，Node22 check324；真实Vue+API/fake模型完成预览不写、自然/组合批量、429部分失败重试、取消、报告、mixed原文save/undo/redo和外部冲突。translation共享text连接/窄屏/Tab/Escape部分通过。初始fixture继承auto偏好触发词库下载后已取消，r2将词库/MyMemory也替换，实际HTTP验证无下载。不是实际模型或Phase4，完整gate仍pending。见phase-2-frontend-editor/2026-10-07-shared-assets-cache-browser-flow.md。
+Phase2 gate-review已逐项核销；Phase3 frozen-eval-manifest/rubric/preflight/Phase4输入齐全，人工评分pending。全局GATE09/10仍未通过，无失败豁免。
 
-翻译选项兼容增量已验证：迁移/共享及旧API双向保存、revision、managed restart保留metadata，浏览器profile新增/删除/取消/能力/语言过滤和翻译选项保存均通过；相关后端226、Node22 check325。首次typecheck失败已修复并复验，见Phase2 translation-options failure/resolved报告。实际模型/正式启动/Phase4仍不由fake fixture替代。
-
-实际重启恢复/历史选择已验：不自动推理/写盘，显式重试3/3成功；恢复报告原因隐藏和前端忽略来源的短natural安全问题均已修复并浏览器复验。最后229后端/328前端通过，详见phase-2-frontend-editor/2026-10-07-browser-restart-recovery-and-source-safety.md及resolved failure。Phase2整体门待审计，Phase3/4和完整矩阵仍未通过。
+Phase3回滚/清理已实现并测试，actual浏览器恢复2/冲突1、取消无变化、清理保留文件/来源通过。相关241后端/329前端。原11失败已恢复逐case：17项依赖/README/process复验通过，关闭其中7个；4个symlink仍因WinError1314等待用户权限环境，未豁免；完整矩阵/真实/EDD/正式启动/Phase4仍未完成。

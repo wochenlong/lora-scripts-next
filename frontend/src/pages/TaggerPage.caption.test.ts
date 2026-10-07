@@ -6,6 +6,7 @@ import TaggerPage from "./TaggerPage.vue"
 import { i18n } from "../i18n"
 import { llmApi } from "../api/llm"
 import { taggerApi } from "../api/tagger"
+import { ElMessageBox } from "element-plus"
 
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }))
 vi.mock("../api/llm", () => ({
@@ -36,6 +37,8 @@ vi.mock("../api/tagger", () => ({
     captionPreview: vi.fn().mockResolvedValue({ caption: "一只猫。", language: "zh-CN", profile_id: "remote", profile_revision: "rev" }),
     captionCancel: vi.fn(),
     captionRetryFailed: vi.fn(),
+    captionRollback: vi.fn(),
+    captionDeleteHistory: vi.fn(),
   },
 }))
 
@@ -44,6 +47,7 @@ afterEach(() => {
   wrapper?.unmount()
   wrapper = undefined
   vi.clearAllMocks()
+  vi.restoreAllMocks()
 })
 
 async function naturalPage() {
@@ -186,5 +190,21 @@ describe("natural-language TaggerPage", () => {
     await page.get(".caption-history select").setValue("old-interrupted")
     await flushPromises()
     expect(page.get(".caption-report").text()).toContain("服务重启前未完成此图片，可重试")
+  })
+
+  it("requires confirmation before rollback and exposes partial conflicts", async () => {
+    vi.spyOn(ElMessageBox, "confirm").mockImplementation(vi.fn().mockResolvedValue("confirm"))
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "done", phase: "done", mode: "natural", message: "", current: 1, total: 1, filename: "", succeeded: 1, failed: 0, cancelled: 0, errors: [], updated_at: 1 }] })
+    vi.mocked(taggerApi.captionReport).mockResolvedValue({ job_id: "done", phase: "done", snapshot: {}, report: { items: [{ filename: "a.png", status: "written" }] } })
+    vi.mocked(taggerApi.captionRollback).mockResolvedValue({ job_id: "done", restored: 0, conflicts: 1, skipped: 0, items: [{ filename: "a.png", status: "conflict", code: "caption_conflict" }] })
+    const page = await naturalPage()
+    await page.get(".caption-history select").setValue("done")
+    await flushPromises()
+    expect(taggerApi.captionRollback).not.toHaveBeenCalled()
+    await page.get(".caption-maintenance button").trigger("click")
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalled()
+    expect(taggerApi.captionRollback).toHaveBeenCalledWith("done")
+    expect(page.get(".caption-report").text()).toContain("冲突保留 1")
   })
 })

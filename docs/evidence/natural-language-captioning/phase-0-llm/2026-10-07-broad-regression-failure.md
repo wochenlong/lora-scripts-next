@@ -27,3 +27,7 @@
 ## 隐私与风险
 
 本报告不包含凭据、原始请求/响应、用户图片或机器绝对路径。未将环境差异默认为测试豁免，尚无批准人。
+
+## 2026-10-07 Phase3恢复与修复
+
+已实际重现所有11项并保存脱敏逐用例日志；具体case和命令见phase-3-evaluation/2026-10-07-maintenance-and-matrix-progress.md。CPU torch2.7.0/torchvision0.22.0、transformers4.51.3、accelerate0.33.0、safetensors0.8.0补到独立测试venv，README补CLI说明。17项复验全部通过，原7个依赖/README/process失败关闭。原4个WinError1314未关闭，已异步请求用户提供DeveloperMode或可创建symlink的Windows环境。根31个training collection与21 skipped尚待完整重验/适用审计；仍不能称完整矩阵通过。

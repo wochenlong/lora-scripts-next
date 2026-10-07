@@ -5,11 +5,11 @@
 ## 当前目标和状态
 
 - goal文件：C:/Users/25454/.codex/attachments/33329a36-8e01-4211-b79c-a080571cde4b/goal-objective.md。
-- worktree：E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning；分支feat/NL-Captioning；HEAD e673d9a，git status clean。未push。
+- worktree：E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning；分支feat/NL-Captioning；本批基线2cdb77f，最新HEAD读git log，git status clean。未push。
 - 本次为progress：c0c94ed报告/轮询/编辑器冲突；25e954b共享资产/cache；3b369e8翻译prompt/reasoning兼容；e673d9a恢复/来源安全。
-- Phase0/1 done（有gate-review），Phase2 in progress、已完成增量待逐项核销完成门；Phase3/4 pending。整体goal保持active，尚未交付完成。
-- 最后相关后端229 passed/4 warnings/22.53s；Node22 check328 tests/51 files/13.11s，type/lint/build pass，2个已有Lint warning，build5.34s。不得等同完整矩阵。
-- 宽范围1139 passed/11 failed/21 skipped，另31训练collection errors；无豁免，缺逐用例日志须恢复/复现。后续必须修复或获得明确适用批准。
+- Phase0/1/2 done（有gate-review）；Phase3 in progress，Phase4 pending。整体goal保持active，尚未交付完成。
+- 最后相关后端241 passed/4 warnings/20.75s；Node22 check329 tests/51 files/13.92s，type/lint/build pass，2个已有Lint warning，build5.58s。不得等同完整矩阵。
+- 原宽范围11失败已全部重现/留脱敏逐case日志；7个依赖/README/process修复后17项/215.59s复验通过，4个WinError1314未解决。21 skipped/31根训练collection仍未核销。
 
 ## 关键决策
 
@@ -41,14 +41,23 @@ Key仅进程、磁盘/响应掩码，重启重新注入。不能写真实Key到�
 
 ## 待办/风险
 
-1. 审计Phase2完成门，各项用实际证据对应；不要仅据check绿色标done。
-2. Phase3安全job回滚/清理、冻结公开3–5样本/hash/rubric、真实远程中文和Qwen本地/remote-first显式fallback、ONNX三模式、cache隔离、EDD真实评分、正式Zero-Short、发布/隐私扫描。
+1. Phase2完成门已逐项核销，见phase-2-gate-review。当前Phase3。
+2. Phase3安全rollback/clear与冻结三样本/rubric已完成；真实remote/local/ONNX、cache隔离/EDD human score/正式Zero-Short/发布/隐私扫描仍待执行。
 3. 修复完整矩阵：torch/transformers/accelerate/safetensors依赖、README、Windows symlink权限、trainingstub等；无豁免不能skip。
-4. API JSON schema vs SiliconFlow兼容尚需官方文档和生产路径验证，不能以P1原始探针代替当前adapter验收。真实Key由原用户提供，仅后端瞬时注入。
+4. 最新官方SiliconFlow文档支持vision json_schema/json_object，已查证；仍需当前生产路径实际验收，不用P1替代。原用户真实Key只允许后端瞬时注入，不写任何文件/日志/前端。
 5. Phase4全部源码提交后fresh checkout/newvenv/newNodeci/new模型下载/newconfig/SQLite/output，从零完整复验；失败回修后再建freshroot。最终release dist从源码构建。
 
 ## 单一 Next action
 
-审计并核销 Phase2 完成门。
+验证当前生产adapter真实远程中文与本地显式兜底路径。
 
 Confidence medium：本批源码和证据已核对；整体完整测试、真实/人工评分、正式启动与隔离重建仍未闭环。普通修复自主，不暂停/不缩goal/不假完工。
+
+## 本轮增量（Phase3）
+
+- 新caption_maintenance.py + API rollback/DELETE +UI确认；caption_formats.writer_job_id、backups.format_detail和rollback prepared/done。保护same bytes later writer、raw original bytes/source、busy/in-use、backup SHA；prepared恢复和幂等；历史删后不删来源。当前12个维护测试，241相关完整后端；Node22 check329。
+- 实际维护browser root nl-caption-maintenance-browser-20261007（fake/lifespanoff）：cancel不写，rollback恢复2/冲突1保持外部编辑，history clear→idle/history0/backups0且caption/format1仍保留。两server停止，无活跃handle，aboutblank，dist恢复基线。
+- Stage3 frozen-eval-manifest/evaluation-rubric/preflight-and-phase4-inputs已落在docs/evidence/.../phase-3-evaluation；样本copy在sandbox/nl-caption-eval-20261007/samples，仅中间使用，Phase4从URL新下载。版权/public URL与SHA实际对上；评分null，不能伪造human。
+- 失败日志sandbox/nl-caption-eval-20261007/logs/reproduced-11-failures.txt已脱敏。具体原case见Stage3 maintenance-and-matrix-progress。
+- 测试venv新增torch2.7.0+cpu、torchvision0.22.0+cpu、transformers4.51.3、accelerate0.33.0、safetensors0.8.0（uv pip --python指定venv，venv无pip），未改GUI requirements/宿主。Original11失败中7个已关闭，17 tests通过。4个symlink权限等待用户；已request_user_input_async，不要重复问/擅自skip。已读取官方Windows资料；Admin=False，DeveloperMode未检出。所有进程终止后再具权限验Windows4case。
+- 更新两README现有Bash/WSL CLI说明以修复已有测试。没有发布/push。

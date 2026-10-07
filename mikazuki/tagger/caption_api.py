@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Literal
 import asyncio
+import sqlite3
 
 from fastapi import APIRouter, HTTPException, Query, Request
 from pydantic import BaseModel, Field
@@ -128,7 +129,38 @@ async def caption_job_report(job_id: str):
     status = caption_job_manager.detail(job_id)
     if status is None:
         raise HTTPException(status_code=404, detail="自然语言打标任务不存在")
-    return _success({"job_id": job_id, "phase": status["phase"], "snapshot": status.get("snapshot", {}), "report": status["report"]})
+    report = status["report"]
+    if caption_job_manager.job_store:
+        for item in report["items"]:
+            if isinstance(item.get("index"), int):
+                item["rollback_status"] = caption_job_manager.job_store.rollback_status(job_id, item["index"])
+    return _success({"job_id": job_id, "phase": status["phase"], "snapshot": status.get("snapshot", {}), "report": report})
+
+
+@router.post("/tagger/jobs/{job_id}/rollback")
+async def rollback_caption_job(job_id: str):
+    from .caption_maintenance import rollback_job
+    try:
+        return _success(await asyncio.to_thread(rollback_job, caption_job_manager, job_id))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="自然语言打标任务不存在") from None
+    except RuntimeError:
+        raise HTTPException(status_code=409, detail="回滚不可用，请先结束任务并检查数据集占用状态") from None
+    except sqlite3.Error:
+        raise HTTPException(status_code=503, detail="无法保存回滚记录，请检查数据库并重试") from None
+
+
+@router.delete("/tagger/jobs/{job_id}")
+async def delete_caption_history(job_id: str):
+    from .caption_maintenance import delete_history
+    try:
+        return _success(await asyncio.to_thread(delete_history, caption_job_manager, job_id))
+    except KeyError:
+        raise HTTPException(status_code=404, detail="自然语言打标任务不存在") from None
+    except RuntimeError:
+        raise HTTPException(status_code=409, detail="请先结束任务再清理历史记录") from None
+    except sqlite3.Error:
+        raise HTTPException(status_code=503, detail="无法清理历史记录，请检查数据库并重试") from None
 
 
 @router.post("/tagger/jobs/{job_id}/cancel")

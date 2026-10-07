@@ -1251,6 +1251,7 @@ translationPrompt: "Translation system prompt (tag translation only)", reasoning
     modeNatural: "Natural language",
     modeCombined: "Combined",
     caption: {
+      rollback: "Roll back caption writes", deleteHistory: "Clear this job history", rollbackConfirm: "Restore original captions for this job. Files changed externally or by a later job will remain unchanged and report conflicts. Continue?", deleteHistoryConfirm: "Delete only this job record and backups; keep captions and format provenance. This record can no longer be used for rollback. Continue?", rollbackResult: "Restored {restored} · Conflicts preserved {conflicts} · Skipped {skipped}", maintenanceFailed: "Job maintenance failed; check status and retry",
       profile: "Vision LLM profile",
       remote: "Remote first",
       local: "Local fallback",

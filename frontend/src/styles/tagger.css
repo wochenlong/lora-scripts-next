@@ -253,3 +253,5 @@
 .tagger-form .path-row input { min-width: 0; }
 .tagger-form .path-row button { flex-shrink: 0; min-width: 48px; white-space: nowrap; }
 @media (max-width: 900px) { .caption-status-panel { min-height: 0; } }
+
+.caption-maintenance { display: flex; flex-wrap: wrap; gap: 8px; }
