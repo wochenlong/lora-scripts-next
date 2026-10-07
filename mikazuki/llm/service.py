@@ -132,6 +132,7 @@ class UnifiedLLMService:
         image_path: str | Path,
         prompt: str,
         *,
+        system_prompt: str = "",
         language: str | None = None,
         profile_id: str | None = None,
         response_schema: dict[str, Any] | None = None,
@@ -149,6 +150,7 @@ class UnifiedLLMService:
         payload = build_chat_payload(
             profile,
             prompt=prompt,
+            system_prompt=system_prompt,
             image_data_url=image_data_url,
             response_schema=response_schema,
             max_tokens=max_tokens,
@@ -167,6 +169,7 @@ class UnifiedLLMService:
             payload = build_chat_payload(
                 fallback,
                 prompt=prompt,
+                system_prompt=system_prompt,
                 image_data_url=image_data_url,
                 response_schema=response_schema,
                 max_tokens=max_tokens,

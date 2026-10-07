@@ -1,3 +1,12 @@
+# 2026-10-08 执行续接
+
+Goal active；用户已明确全面施工。HEAD需读git log；本轮预设存储/API、明确导入、类型/settings保护、revision409、内置/用户模板及未保存保护、system prompt单图/批量与缓存已实现。combined UI及start/preview入口拒绝；manager内部/retry旧任务仍待审计。底部进度布局已实现未浏览器验收。
+
+最后后端44项通过、前端331项/51文件与type/lint/build通过。未运行新契约真实资源和Phase5。源码/证据详情见phase-0-contract-alignment/2026-10-08-presets-and-delta.md。tests/test_diffsynth_review.py为既有未提交修改，不加入本批提交。tracked dist恢复基线。
+
+单一下一步：后端模型能力目录、TaggerPage一级本地/API与模型系列选择器、前后端参数隔离。存储仍需多文件失败恢复/跨进程并发补验；UI仍需显式legacy导入按钮及实际跨浏览器验收。不重复Agent插件工作，不重新做P1探针/既有评分。
+
+以下为历史记录，以本段和canonical任务书最新状态为准。
 # 2026-10-07 Issue #409 重规划增量
 
 - 当前契约已切换为 Issue #409；设计书、canonical task book、manifest、目标计划和 goal 已重写为 v3.0。
@@ -92,4 +101,3 @@ DiffSynth Windows fixture改为稀疏标志+末字节seek/write，保留逻辑�
 ModelScope tokenizer联网测试已限定实际JSON/TXT下载，7 passed/7.39s，原卡住单项关闭；主矩阵分区再次复验handle29013已结束（1474通过/4权限失败/25跳过/1单独验证），日志sandbox/nl-caption-eval-20261007/logs/main-tests-partition-r2-20261007.txt。不要重复启动观察同一run；结束后记录实际总数，再在修复后的源码上完整组合复验。HEAD2d56b45已提交18文件，后续ModelScope修复读最新git log。已有4个Windows权限与25个skip仍未核销，root vendor矩阵仍待处理。冻结manifest保持原样，评分approval为后来用户事件。清理被review拒绝的临时模型目录未删除，未复用。
 
 最新HEAD读git log；本轮所有自己启动的模型/UI/测试进程均已结束，浏览器about:blank。当前Windows权限问题尚需用户处理；没有批准任何失败或skip豁免。下一轮先完成矩阵缺口审计，不重做P1探针或人工评分。用户评分只对应最初A/B精确文本。
-

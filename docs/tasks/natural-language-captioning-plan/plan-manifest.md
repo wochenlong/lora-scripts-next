@@ -4,7 +4,7 @@
 - Version: `v3.0-issue-409-aligned`
 - Scale mode: Full
 - Contract: [Issue #409](https://github.com/wochenlong/lora-scripts-next/issues/409)
-- Readiness: `drafting`（契约重写完成，等待差异审计和重新开工）
+- Readiness: `executing`（用户明确全面施工；差异表已归档，当前契约修复中）
 - Canonical progress: `../natural-language-captioning-task-book.md`
 - Design source: `../../design/natural-language-captioning-tagging-design.md`
 - Goal: `03_goal提示词/自然语言打标全程执行_goal提示词.md`
@@ -63,3 +63,7 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 ## Next action
 
 完成 Phase 0 差异审计：核对 `TaggerPage.vue`、`caption_api.py`、`caption_job.py`、模型注册表、LLM prompt preset 存储和 #405 user_data CRUD，形成保留/迁移/删除/历史兼容表；审计通过后再修改代码。
+
+## 2026-10-08 实施增量
+
+差异审计与首批预设实施见../../evidence/natural-language-captioning/phase-0-contract-alignment/2026-10-08-presets-and-delta.md。后端44/前端331通过，不是阶段/最终完成。当前Next action以canonical任务书末尾为准：模型能力目录和运行方式/模型系列选择器。

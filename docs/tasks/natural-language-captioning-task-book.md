@@ -12,7 +12,7 @@
 - Related issues：#365 数据集工作区、#405 user_data/任务契约
 - Current branch：`feat/NL-Captioning`
 - Current active phase：重新规划后的 Phase 0 — 契约收敛与差异修复
-- Execution readiness：`drafting`（设计、任务书和 goal 已重写；等待重新审计后再开工）
+- Execution readiness：`executing`（用户已于2026-10-07明确建立goal并全面执行）
 - Scale：Full
 
 ## 总目标
@@ -235,7 +235,7 @@
 
 | 阶段 | 状态 | 说明 |
 |---|---|---|
-| Phase 0 契约收敛 | in progress | 文档重写和 Agent 范围清理进行中；代码差异审计待执行 |
+| Phase 0 契约收敛 | in progress | 差异表已归档；预设及组合入口首批修复，模型能力目录待实现 |
 | Phase 1 LLM/模型能力契约 | pending | 需先完成 Phase 0 完成门 |
 | Phase 2 后端 Caption/Tag 任务 | pending | 既有实现需按新 contract 复核 |
 | Phase 3 前端/Editor/user_data | pending | 既有 UI 需移除 combined 并改为 model-first |
@@ -248,7 +248,7 @@
 
 ### 下一步动作
 
-完成 Phase 0 契约差异清单：逐项审计前端 `TaggerPage`、后端 `caption_api.py/caption_job.py`、LLM prompt preset 存储和 user_data 现有 CRUD，形成“保留/迁移/删除/兼容读取”表；随后再开始代码修改。
+实现后端模型能力目录、TaggerPage 一级运行方式与模型系列选择器，再补前后端参数隔离；Phase0差异表已归档。
 
 ## 失败与变更处理
 
@@ -261,3 +261,9 @@
 ## 阶段完成证据索引
 
 旧阶段证据仍保留在 `docs/evidence/natural-language-captioning/`，但需要在 Phase 0/4 重新标记适用性。新增证据必须绑定：Issue #409、commit、模型/资产 revision、prompt/preset revision、样本 SHA、实际命令、结果、资源占用和清理状态。
+
+## 2026-10-08 执行增量
+
+用户明确全面施工，Goal active。本轮完成user_data Caption预设存储/API、版本/备份/修订冲突、类型隔离/其他设置保留、显式旧预设导入；Vue内置/用户预设、另存为/恢复默认/未保存保护；单图与批量读取预设及system prompt、缓存revision；combined UI移除/API拒绝；底部进度和1100px布局。后端44 passed，前端331/51、type/lint/build通过。详情及未完成项见phase-0-contract-alignment/2026-10-08-presets-and-delta.md。
+
+当前唯一下一步：实现后端模型能力目录及运行方式/模型系列选择器，然后补前后端参数隔离。尚无新契约最终验收，Phase0/1 in progress，其余pending；历史combined记录不用于本版完成门。全局user_data基础尚未合入本checkout，多文件事务/跨进程并发需继续验证；不实施#405的端口仲裁或Agent迁移。

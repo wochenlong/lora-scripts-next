@@ -41,10 +41,15 @@ def snapshot_prompt(request: dict, config: dict | None = None) -> dict:
         result.setdefault("prompt", preset["template"])
         result.setdefault("language", preset["language"])
         result.setdefault("max_caption_length", preset.get("max_length", 2000))
+        result.setdefault("system_prompt", preset.get("system_prompt", ""))
+        result["preset_revision"] = preset.get("revision")
     result.setdefault("prompt", DEFAULT_CAPTION_PROMPT)
     result.setdefault("language", "zh-CN")
     result.setdefault("mode", "natural")
     result.setdefault("max_caption_length", 2000)
+    result.setdefault("system_prompt", "")
+    if not isinstance(result["system_prompt"], str) or len(result["system_prompt"]) > 8000:
+        raise CaptionContractError("system prompt must be bounded text")
     maximum = result["max_caption_length"]
     if isinstance(maximum, bool) or not isinstance(maximum, int) or not 1 <= maximum <= 2000:
         raise CaptionContractError("caption length limit must be an integer between 1 and 2000")

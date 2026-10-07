@@ -43,6 +43,7 @@ def build_chat_payload(
     profile: LLMProfile | Mapping[str, Any],
     *,
     prompt: str,
+    system_prompt: str = "",
     image_data_url: str | None = None,
     response_schema: dict[str, Any] | None = None,
     max_tokens: int = 512,
@@ -63,6 +64,8 @@ def build_chat_payload(
         "temperature": max(0.0, min(float(temperature), 2.0)),
         "stream": bool(stream),
     }
+    if system_prompt:
+        payload["messages"].insert(0, {"role": "system", "content": system_prompt})
     if response_schema is not None:
         payload["response_format"] = {
             "type": "json_schema",

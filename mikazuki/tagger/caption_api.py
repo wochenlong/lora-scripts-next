@@ -32,6 +32,7 @@ class CaptionJobRequest(BaseModel):
     profile_id: str | None = None
     prompt_id: str | None = Field(default=None, max_length=80)
     prompt: str = Field(default=DEFAULT_CAPTION_PROMPT, max_length=8000)
+    system_prompt: str = Field(default="", max_length=8000)
     max_caption_length: int = Field(default=2000, ge=1, le=2000)
     language: Literal["zh-CN", "zh-TW", "en", "ja"] = "zh-CN"
     layout: Literal["tags_then_caption", "caption_then_tags", "tags_only", "caption_only"] = "tags_then_caption"
@@ -60,10 +61,15 @@ def _success(data=None, message=None):
 def _snapshot_request(req):
     payload = req.dict()
     if req.prompt_id:
-        for field in ("prompt", "language", "max_caption_length"):
+        for field in ("prompt", "language", "max_caption_length", "system_prompt"):
             if field not in req.__fields_set__:
                 payload.pop(field)
     config = llm_service.config(masked=False) if req.prompt_id else {}
+    if req.prompt_id:
+        from mikazuki.llm.prompt_presets import list_presets
+        config = {**config, "prompt_presets": [*config.get("prompt_presets", []), *list_presets()]}
+        # Prefer the user_data version if a legacy preset has the same id.
+        config["prompt_presets"] = list({item["id"]: item for item in config["prompt_presets"]}.values())
     return snapshot_prompt(payload, config) if req.mode != "tag" else payload
 
 
@@ -74,6 +80,8 @@ async def caption_job_status():
 
 @router.post("/tagger/jobs")
 async def start_caption_job(req: CaptionJobRequest):
+    if req.mode == "combined":
+        raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标，请选择 Tag 或自然语言 Caption"})
     try:
         payload = _snapshot_request(req)
     except ValueError as exc:
@@ -178,6 +186,8 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
         raise HTTPException(status_code=400, detail="预览图片不存在")
     if req.mode == "tag":
         raise HTTPException(status_code=400, detail="Tag 模式预览请使用既有 Tagger")
+    if req.mode == "combined":
+        raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标"})
     if not tagger_progress.try_begin("captioning", req.interrogator_model, "正在预览当前图片"):
         raise HTTPException(status_code=409, detail={"code": "tagger_busy", "message": "已有打标或下载任务进行中"})
     try:
@@ -188,6 +198,7 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
         _profile, envelope, content, image_info = await _preview_operation(llm_service.complete_vision(
             image_path,
             prompt,
+            system_prompt=payload.get("system_prompt", ""),
             language=language,
             profile_id=profile.id,
             allow_local_fallback=req.allow_local_fallback,

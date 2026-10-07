@@ -422,7 +422,8 @@ class CaptionJobManager:
             prompt_template = str(request.get("prompt") or '请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。')
             maximum = int(request.get("max_caption_length", 2000))
             prompt, _snapshot = render_prompt(prompt_template, language=language, mode=mode, image_name="image")
-            prompt_revision = hashlib.sha256((prompt_template + chr(10) + _snapshot + chr(10) + str(maximum)).encode("utf-8")).hexdigest()[:24]
+            system_prompt = str(request.get("system_prompt") or "")
+            prompt_revision = hashlib.sha256((prompt_template + chr(10) + system_prompt + chr(10) + _snapshot + chr(10) + str(maximum)).encode("utf-8")).hexdigest()[:24]
             preprocess_revision = "jpeg-white-matte-rgb-max1024-q85-v2"
             cache = self.cache
             if cache is None and self.service is None:
@@ -455,6 +456,7 @@ class CaptionJobManager:
                         _profile, _envelope, content, _image_info = await self._cancellable(service.complete_vision(
                             image_path,
                             prompt,
+                            system_prompt=system_prompt,
                             language=language,
                             profile_id=profile_id,
                             allow_local_fallback=bool(request.get("allow_local_fallback", False)),

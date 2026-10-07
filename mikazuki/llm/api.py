@@ -73,6 +73,40 @@ async def save_llm_config(payload: dict):
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
 
+@router.get("/llm/prompt-presets")
+async def list_prompt_presets():
+    from .prompt_presets import document
+    try:
+        return _success(document())
+    except LLMContractError as exc:
+        raise HTTPException(status_code=409, detail={"code": "caption_preset_store_invalid", "message": str(exc)}) from exc
+    except OSError:
+        raise HTTPException(status_code=503, detail={"code": "caption_preset_storage_failed", "message": "无法读取提示词预设，请检查存储权限"}) from None
+
+
+@router.put("/llm/prompt-presets")
+async def save_prompt_presets(payload: dict):
+    from .prompt_presets import save_document
+    try:
+        return _success(save_document(payload))
+    except LLMContractError as exc:
+        conflict = "revision conflict" in str(exc)
+        raise HTTPException(status_code=409 if conflict else 400, detail={"code": "caption_preset_conflict" if conflict else "caption_preset_invalid", "message": str(exc)}) from exc
+    except OSError:
+        raise HTTPException(status_code=503, detail={"code": "caption_preset_storage_failed", "message": "无法保存提示词预设，请检查存储权限"}) from None
+
+
+@router.post("/llm/prompt-presets/import-legacy")
+async def import_legacy_prompt_presets(payload: dict):
+    from .prompt_presets import import_legacy
+    if payload.get("confirmed") is not True:
+        raise HTTPException(status_code=400, detail={"code": "caption_preset_confirmation_required", "message": "请先确认导入旧提示词预设"})
+    try:
+        return _success(import_legacy(llm_service.config(masked=True).get("prompt_presets", []), expected_revision=payload.get("revision")))
+    except LLMContractError as exc:
+        raise HTTPException(status_code=409, detail={"code": "caption_preset_import_failed", "message": str(exc)}) from exc
+
+
 @router.get("/llm/local-vision/status")
 async def local_vision_status():
     return _success(get_local_vision_service().status())

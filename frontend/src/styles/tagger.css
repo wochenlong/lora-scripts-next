@@ -1,12 +1,13 @@
 /* tagger — split from layout.css / features.css (issue #235) */
 .tagger-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 360px;
-  min-height: 100vh;
+  grid-template-columns: minmax(0, 1fr);
+  max-width: 1100px;
+  margin: 0 auto;
 }
 
 .tagger-form {
-  padding: 50px clamp(24px, 5vw, 70px);
+  padding: 32px 24px;
 }
 
 .tagger-form header h1 {
@@ -55,12 +56,10 @@
 }
 
 .tagger-status {
-  position: sticky;
-  top: 0;
-  height: 100vh;
-  padding: 46px 28px;
+  position: relative;
+  padding: 24px;
   background: var(--surface);
-  border-left: 1px solid var(--border);
+  border-top: 1px solid var(--border);
 }
 
 .tagger-status h2 {
@@ -76,10 +75,8 @@
 }
 
 .tagger-actions {
-  position: absolute;
-  right: 28px;
-  bottom: 32px;
-  left: 28px;
+  position: static;
+  margin-top: 18px;
   display: grid;
   gap: 9px;
 }
@@ -99,7 +96,6 @@
   .tagger-status {
     position: relative;
     height: auto;
-    min-height: 480px;
     border-top: 1px solid var(--border);
     border-left: 0;
   }
@@ -245,7 +241,7 @@
 .caption-recovered { padding: 10px; border: 1px solid var(--border); border-radius: 6px; }
 .caption-prompt-editor { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }
 @media (max-width: 600px) { .caption-prompt-editor { grid-template-columns: minmax(0, 1fr); } }
-.caption-status-panel { height: auto; min-height: 100vh; }
+.caption-status-panel { height: auto; }
 .caption-status-panel .tagger-actions { position: static; margin-top: 18px; }
 .caption-report { max-height: 420px; overflow-y: auto; }
 .tagger-actions button:disabled { opacity: .5; cursor: default; }

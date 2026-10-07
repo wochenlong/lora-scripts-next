@@ -32,6 +32,7 @@ class Service:
 
 @pytest.fixture
 def api_client(tmp_path, monkeypatch):
+    monkeypatch.setenv("MIKAZUKI_USER_DATA_ROOT", str(tmp_path / "user_data"))
     service = Service()
     manager = CaptionJobManager(service)
     monkeypatch.setattr(caption_api, "llm_service", service)
@@ -168,14 +169,27 @@ def test_unknown_preset_rejected_before_job_or_request(api_client, monkeypatch):
     assert not service.calls
 
 
-def test_combined_preview_composes_tag_and_natural_text_without_writing(api_client, monkeypatch):
-    client, image, manager, _service = api_client
-    monkeypatch.setattr(manager, "_prepare_tag_model", lambda req: None)
-    monkeypatch.setattr(manager, "_generate_tags", lambda path, req: ["cat", "window"])
-    response = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image), "mode": "combined", "layout": "caption_then_tags"})
+def test_user_data_preset_freezes_system_prompt_for_preview_and_batch(api_client, monkeypatch):
+    from mikazuki.llm.prompt_presets import save_presets
+    client, image, manager, service = api_client
+    monkeypatch.setattr(service, "config", lambda **kwargs: {"prompt_presets": []}, raising=False)
+    save_presets([{"id": "user", "kind": "caption_prompt", "name": "用户", "template": "Use {{language}}", "system_prompt": "Only visible facts", "language": "zh-CN"}])
+    preview = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image), "prompt_id": "user"})
+    assert preview.status_code == 200
+    assert service.calls[-1][1]["system_prompt"] == "Only visible facts"
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "prompt_id": "user"})
     assert response.status_code == 200
-    assert response.json()["data"]["caption"] == "一只猫坐在窗边。\n\ncat, window"
-    assert response.json()["data"]["tags"] == ["cat", "window"]
+    manager._thread.join(timeout=5)
+    assert service.calls[-1][1]["system_prompt"] == "Only visible facts"
+    assert manager._request["system_prompt"] == "Only visible facts"
+    assert manager._request["preset_revision"]
+
+
+def test_combined_preview_is_rejected_by_issue_409_contract(api_client):
+    client, image, _manager, _service = api_client
+    response = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image), "mode": "combined", "layout": "caption_then_tags"})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "caption_combined_unsupported"
     assert not image.with_suffix(".txt").exists()
     assert not tagger_progress.is_busy()
 

@@ -1,7 +1,7 @@
 import { apiData, apiRequest } from "./client"
 
 export type TaggerPhase = "idle" | "downloading" | "tagging" | "captioning" | "done" | "error" | "pending" | "cancelling"
-export type CaptionMode = "natural" | "combined" | "tag"
+export type CaptionMode = "natural" | "tag"
 export type CaptionJobPhase = "idle" | "pending" | "captioning" | "cancelling" | "cancelled" | "done" | "error"
 export type CaptionConflictAction = "ignore" | "copy" | "prepend" | "append"
 export interface TaggerStep { current: number; total: number; filename: string; bytes_current: number; bytes_total: number; percent: number }
@@ -22,8 +22,9 @@ export interface CaptionJobRequest {
   allow_local_fallback?: boolean
   profile_id?: string
   prompt: string
+  system_prompt?: string
   language: string
-  layout: "tags_then_caption" | "caption_then_tags" | "tags_only" | "caption_only"
+  layout?: "caption_only"
   conflict_action: "ignore" | "copy" | "prepend" | "append"
   interrogator_model: string
   download_endpoint: string

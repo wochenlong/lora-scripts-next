@@ -22,6 +22,8 @@ vi.mock("../api/llm", () => ({
     localVisionStatus: vi.fn().mockResolvedValue({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 }),
     localVisionAction: vi.fn(),
     saveConfig: vi.fn(),
+    promptPresets: vi.fn().mockResolvedValue({ presets: [], settings: { default_caption_preset_id: null }, revision: "r1" }),
+    savePromptPresets: vi.fn(),
   },
 }))
 vi.mock("../api/tagger", () => ({
@@ -60,6 +62,32 @@ async function naturalPage() {
 }
 
 describe("natural-language TaggerPage", () => {
+  it("protects unsaved prompt edits when a template switch is cancelled", async () => {
+    vi.spyOn(ElMessageBox, "confirm").mockRejectedValue("cancel")
+    const page = await naturalPage()
+    await page.get("textarea").setValue("保留我的修改")
+    await page.get(".caption-preset-select").setValue("builtin-caption-zh")
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("保留我的修改")
+    expect(llmApi.savePromptPresets).not.toHaveBeenCalled()
+    expect(page.text()).not.toContain("组合打标")
+  })
+
+  it("saves edited built-in templates as user copies", async () => {
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => update)
+    const page = await naturalPage()
+    await page.get(".caption-preset-select").setValue("builtin-caption-zh")
+    await flushPromises()
+    await page.get("textarea").setValue("我的模板 {{language}}")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    const saved = vi.mocked(llmApi.savePromptPresets).mock.calls[0][0]
+    expect(saved.presets[0].id).not.toBe("builtin-caption-zh")
+    expect(saved.presets[0].template).toBe("我的模板 {{language}}")
+    expect(saved.revision).toBe("r1")
+  })
+
   it("filters text-only profiles and lists remote vision first", async () => {
     const page = await naturalPage()
     const options = page.findAll('select option').filter(option => ["remote", "local", "text"].includes(String(option.attributes("value"))))
@@ -94,13 +122,12 @@ describe("natural-language TaggerPage", () => {
 
   it("saves a named prompt preset and discards later edits", async () => {
     const page = await naturalPage()
-    const config = await llmApi.profiles()
-    vi.mocked(llmApi.saveConfig).mockImplementationOnce(async update => ({ ...config, ...update }))
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => ({ ...update, presets: update.presets, settings: update.settings }))
     await page.get(".caption-preset-name").setValue("主体描述")
     await page.get("textarea").setValue("只描述主体 {{language}}")
     await page.findAll(".caption-preset-actions button")[0].trigger("click")
     await flushPromises()
-    expect(llmApi.saveConfig).toHaveBeenCalledWith({ prompt_presets: [expect.objectContaining({ name: "主体描述", template: "只描述主体 {{language}}", language: "zh-CN" })] })
+    expect(llmApi.savePromptPresets).toHaveBeenCalledWith(expect.objectContaining({ presets: [expect.objectContaining({ kind: "caption_prompt", name: "主体描述", template: "只描述主体 {{language}}", language: "zh-CN" })] }))
     await page.get("textarea").setValue("未保存的修改")
     await page.findAll(".caption-preset-actions button")[1].trigger("click")
     expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("只描述主体 {{language}}")
@@ -109,8 +136,7 @@ describe("natural-language TaggerPage", () => {
 
   it("keeps the saved length limit when discarding prompt changes", async () => {
     const page = await naturalPage()
-    const config = await llmApi.profiles()
-    vi.mocked(llmApi.saveConfig).mockImplementationOnce(async update => ({ ...config, ...update }))
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => ({ ...update, presets: update.presets, settings: update.settings }))
     await page.get(".caption-preset-name").setValue("简洁")
     await page.get(".caption-max-length").setValue("40")
     await page.findAll(".caption-preset-actions button")[0].trigger("click")
@@ -128,7 +154,7 @@ describe("natural-language TaggerPage", () => {
     await page.findAll(".caption-preset-actions button")[0].trigger("click")
     await flushPromises()
     expect(taggerApi.captionStart).not.toHaveBeenCalled()
-    expect(llmApi.saveConfig).not.toHaveBeenCalled()
+    expect(llmApi.savePromptPresets).not.toHaveBeenCalled()
   })
 
   it("rejects profiles that do not support the selected output language", async () => {
