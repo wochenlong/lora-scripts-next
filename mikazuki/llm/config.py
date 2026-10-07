@@ -216,7 +216,7 @@ def validate_options(config: dict) -> None:
         raise LLMContractError("prompt_presets must be an array of at most 24 presets")
     seen = set()
     for preset in presets:
-        if not isinstance(preset, dict) or set(preset) - {"id", "name", "template", "language"}:
+        if not isinstance(preset, dict) or set(preset) - {"id", "name", "template", "language", "max_length", "revision"}:
             raise LLMContractError("prompt preset has invalid fields")
         identifier = _string(preset.get("id", ""), "prompt.id", 80)
         name = _string(preset.get("name", ""), "prompt.name", 120)
@@ -225,6 +225,11 @@ def validate_options(config: dict) -> None:
             raise LLMContractError("prompt preset requires a unique id, name and template")
         if preset.get("language") not in {"zh-CN", "zh-TW", "en", "ja"}:
             raise LLMContractError("prompt preset language is unsupported")
+        maximum = preset.get("max_length", 2000)
+        if isinstance(maximum, bool) or not isinstance(maximum, int) or not 1 <= maximum <= 2000:
+            raise LLMContractError("prompt max_length must be an integer between 1 and 2000")
+        preset["max_length"] = maximum
+        preset["revision"] = hashlib.sha256(json.dumps({"template": template, "language": preset["language"], "max_length": maximum}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:24]
         variables = re.findall(r"\{\{([^{}]*)\}\}", template)
         if any(variable not in {"language", "mode", "image_name", "existing_caption", "existing_tags"} for variable in variables):
             raise LLMContractError("prompt preset contains an unknown variable")

@@ -25,6 +25,7 @@ def encode_image_data_url(path, *, max_side: int = 1024, quality: int = 85) -> t
             else:
                 image = oriented.convert("RGB")
             image.thumbnail((max_side, max_side))
+            image.info.clear()
             output = io.BytesIO()
             image.save(output, format="JPEG", quality=quality)
     except Exception as exc:

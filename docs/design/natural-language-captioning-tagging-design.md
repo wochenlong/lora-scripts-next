@@ -8,7 +8,7 @@
 - Canonical progress file: `docs/tasks/natural-language-captioning-task-book.md`
 - Related task book: `docs/tasks/tag-translation-task-book.md`
 - Current branch: `feat/NL-Captioning`
-- Current active phase: Phase 1 后端视觉任务；Phase 0 完成门通过
+- Current active phase: Phase 2 前端与编辑器；Phase 0/1 完成门通过
 - Execution readiness: `executing`（已收到完整交付 goal）
 - Scope: Dataset Tagger、Dataset Editor、统一 LLM 配置/运行时、提示词与结果写回
 
@@ -173,6 +173,8 @@ flowchart LR
   jobs/<job-id>/report.json
 ```
 
+2026-10-07 实现采用共享 `translations.sqlite3` 作为任务记录的权威存储：caption_jobs、caption_backups、caption_formats，与 caption cache 共用后端数据根；`GET /api/tagger/jobs/{job_id}/report` 导出公开报告。report.json 是可选导出形式，不建立第二份需要同步的权威日志。私有恢复数据保留路径和原 caption 字节，公开报告只含状态/修订/hash。重启后不会自动重新推理；写回 intent 的 after hash 用于辨认已完成项，未完成项等待显式重试。
+
 ## 5. 用户流程与打标语义
 
 ### 5.1 Tag 模式
@@ -219,7 +221,7 @@ A young woman with long blue hair stands beside a window.
 | `{{language}}` | 目标语言 | 来自白名单 |
 | `{{existing_caption}}` | 当前 caption | 默认不发送，用户显式启用才发送 |
 | `{{existing_tags}}` | 当前 Tag 列表 | 仅组合模式可选 |
-| `{{image_name}}` | 文件名，不含本地目录 | 可选 |
+| `{{image_name}}` | 固定逻辑名 image，避免泄露原文件名 | 可选 |
 | `{{mode}}` | `natural` 或 `combined` | 后端固定 |
 
 默认系统约束由后端追加，用户模板不能覆盖输出 schema 和安全限制：只描述图片、不输出 Markdown、不过度臆测、不生成 API 指令、不返回本地路径。
@@ -543,12 +545,12 @@ TaggerPage 交互顺序：
 - 前端实现: in progress（三模式、预览、进度、重试和 mixed safety 已接入；设置复用、提示词预设及人工验收仍待完成）
 - 真实模型/远程评测: pending implementation（SiliconFlow 三样本通过；Qwen3-VL-2B 本地中文探针通过）
 - 隔离重建真实验收: pending implementation
-- Execution readiness: `executing`（Phase 0 done；2026-10-07 增量回归后端 168 passed；前端 Node 22 check 307 passed；宽范围后端仍有 11 failed）
+- Execution readiness: `executing`（Phase 0/1 done；2026-10-07 增量回归后端 203 passed；前端 Node 22 check 309 passed；宽范围后端仍有 11 failed）
 - Residual risks: Qwen3-VL-2B CPU-only 峰值约 3.1 GB 且单图约 4.5–7.3 秒；更低资源本地模型只验证英文；自然语言/Tag 混合 caption 的训练语义需要在 P4/P5 验证。
 
 ## 19. 下一步动作
 
-实现并验证 Phase 1 的持久任务快照/报告以及重启恢复边界；具体执行状态见 canonical task book 与续接记录。当前 flat request API 和预设 UI 已接入，但本文目标中的 prompt_id 与持久 report 尚未全部实现。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
+Phase 1 的持久任务、冻结 prompt_id、恢复与低限额真实本地批量已有证据；后续接入 Phase 2 的共享设置、历史报告 UI 和 Dataset Editor 生成来源保护。具体执行状态见 canonical task book 与续接记录。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
 
 ## 参考资料
 

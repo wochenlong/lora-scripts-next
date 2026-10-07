@@ -56,7 +56,7 @@ def describe_interrogator_asset_status(
     local_paths = local_model_asset_paths(model_key, interrogator)
     if local_paths:
         return True, (
-            f"[tagger] 模型 {model_key} 已在本地: {local_paths[0].parent}"
+            f"[tagger] 模型 {model_key} 已在本地"
         )
 
     kwargs = _hf_kwargs(interrogator)
@@ -71,7 +71,7 @@ def describe_interrogator_asset_status(
     file_hint = ", ".join(missing or files)
     return False, (
         f"[tagger] 模型 {model_key} 未在本地\n"
-        f"  可手动放置目录: {local_dir}\n"
+        "  请检查配置的 tagger-models 模型目录\n"
         f"  缺少文件: {file_hint}\n"
         f"  将尝试从 Hugging Face 下载: {repo_id}"
     )
@@ -82,6 +82,9 @@ def format_tagger_download_error(model_key: str, exc: BaseException) -> str:
     message = str(exc).strip()
     lowered = message.lower()
     exc_name = type(exc).__name__
+    # Classify the original error locally, but never echo provider bodies,
+    # credentials or absolute cache paths to the console or WebUI.
+    message = exc_name
 
     if exc_name in {"LocalEntryNotFoundError", "OfflineModeIsEnabled"}:
         return (
@@ -105,7 +108,7 @@ def format_tagger_download_error(model_key: str, exc: BaseException) -> str:
             f"（{message}）"
         )
 
-    if exc_name == "HTTPError" or "404" in message:
+    if exc_name == "HTTPError" or "404" in lowered:
         if "modelscope" in lowered:
             return (
                 f"魔搭 ModelScope 上不存在打标模型 {model_key}（SmilingWolf 系列仅托管在 Hugging Face）。"
@@ -261,7 +264,7 @@ def download_interrogator_assets(
         try:
             with _hub_download_progress(index, len(files), filename):
                 path = hf_hub_download(**kwargs, filename=filename)
-            print(f"[tagger] 已完成 {filename} -> {path}", flush=True)
+            print(f"[tagger] 已完成 {filename}", flush=True)
         except TaggerCancelled:
             raise
         except Exception as exc:

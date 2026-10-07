@@ -8,6 +8,7 @@ import aiohttp
 from .config import UnifiedConfigStore
 from .cache import CaptionCache
 from .service import UnifiedLLMService
+from mikazuki.tagger.caption_store import CaptionJobStore
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -26,6 +27,7 @@ def _session_factory(**kwargs):
 llm_config_store = UnifiedConfigStore(SHARED_CONFIG_PATH)
 llm_service = UnifiedLLMService(llm_config_store, session_factory=_session_factory)
 caption_cache = CaptionCache(SHARED_CACHE_PATH)
+caption_job_store = CaptionJobStore(SHARED_CACHE_PATH)
 
 _local_vision_service = None
 

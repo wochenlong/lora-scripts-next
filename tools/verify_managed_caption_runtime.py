@@ -13,6 +13,7 @@ import json
 import os
 import sys
 import time
+import shutil
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
@@ -20,10 +21,68 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import psutil
 
 from mikazuki.llm.config import UnifiedConfigStore
-from mikazuki.llm.local_vision import FILES, LocalVisionService
+from mikazuki.llm.local_vision import ASSET_ID, FILES, LocalVisionService
 from mikazuki.llm.service import UnifiedLLMService
 from mikazuki.tag_translation.translation_config import OnlineServiceConfig
 from mikazuki.tagger.caption import CAPTION_SCHEMA, parse_caption_response
+from mikazuki.tagger.caption_job import CaptionJobManager, caption_sha256
+from mikazuki.tagger.caption_store import CaptionJobStore
+from mikazuki.llm.cache import CaptionCache
+
+
+async def verify_batch(root, service, samples):
+    images = root / "images"
+    images.mkdir()
+    for sample in samples:
+        shutil.copy2(sample, images / Path(sample).name)
+    cache = CaptionCache(root / "translations.sqlite3")
+    journal = CaptionJobStore(cache.path)
+    job = CaptionJobManager(service, cache=cache, job_store=journal)
+    started = time.perf_counter()
+    job.start({"path": str(images), "mode": "natural", "allow_local_fallback": True, "use_cache": False})
+    await asyncio.to_thread(job._thread.join, 90)
+    if job._thread.is_alive() or job.status()["succeeded"] != 3:
+        job.cancel()
+        await asyncio.to_thread(job._thread.join, 10)
+        raise RuntimeError("real natural batch failed")
+    report = {"batch_seconds": round(time.perf_counter() - started, 3), "batch_written": job.status()["succeeded"], "samples": []}
+    for index, item in enumerate(job.status()["report"]["items"]):
+        target = images / Path(item["filename"]).with_suffix(".txt")
+        text = target.read_text(encoding="utf-8").strip()
+        parse_caption_response(json.dumps({"caption": text, "language": "zh-CN"}), language="zh-CN")
+        assert item["after_hash"] == caption_sha256(target)
+        assert journal.find_format(target, item["after_hash"]) == "natural"
+        report["samples"].append({"index": index, "schema_valid": True, "caption_length": len(text), "language": "zh-CN",
+                                  "image_sha256": item["image_sha256"], "after_hash": item["after_hash"]})
+    first = sorted(images.glob("*.png"))[0]
+    target = first.with_suffix(".txt")
+
+    class EditingService:
+        async def complete_vision(self, *args, **kwargs):
+            target.write_text("user edit preserved", encoding="utf-8")
+            return await service.complete_vision(*args, **kwargs)
+
+    conflict = CaptionJobManager(EditingService(), job_store=journal)
+    conflict.start({"path": str(images), "paths": [str(first)], "mode": "natural", "allow_local_fallback": True, "use_cache": False})
+    await asyncio.to_thread(conflict._thread.join, 45)
+    assert not conflict._thread.is_alive()
+    assert conflict.status()["errors"][0]["code"] == "caption_conflict"
+    assert target.read_text() == "user edit preserved"
+    report["real_conflict_preserved"] = True
+    cancelled = CaptionJobManager(service, cache=cache, job_store=journal)
+    before = target.read_bytes()
+    cancelled.start({"path": str(images), "paths": [str(first)], "mode": "natural", "allow_local_fallback": True, "use_cache": False})
+    await asyncio.sleep(.25)
+    started = time.perf_counter()
+    cancelled.cancel()
+    await asyncio.to_thread(cancelled._thread.join, 5)
+    assert not cancelled._thread.is_alive()
+    assert cancelled.status()["phase"] == "cancelled"
+    assert target.read_bytes() == before
+    report["request_cancelled"] = True
+    report["cancel_seconds"] = round(time.perf_counter() - started, 3)
+    report["job_history_count"] = len(journal.history())
+    return report
 
 
 async def verify(args):
@@ -55,7 +114,9 @@ async def verify(args):
         report["startup_seconds"] = round(time.perf_counter() - started, 3)
         report["running"] = manager.status()["state"] == "running"
         sampler = asyncio.create_task(sample_memory())
-        for index, image in enumerate(args.samples):
+        if args.batch:
+            report.update(await verify_batch(root, service, args.samples))
+        for index, image in enumerate([] if args.batch else args.samples):
             started = time.perf_counter()
             profile, envelope, content, image_info = await service.complete_vision(
                 image, '请用简体中文描述图片主要可见内容，只返回严格 JSON：{"caption":"中文描述","language":"zh-CN"}。',
@@ -67,21 +128,22 @@ async def verify(args):
                                       "seconds": round(time.perf_counter() - started, 3),
                                       "source": profile.source, "image": image_info,
                                       "finish_reason": envelope["choices"][0].get("finish_reason")})
-        started = time.perf_counter()
-        pending = asyncio.create_task(service.complete_vision(
+        if not args.batch:
+            started = time.perf_counter()
+            pending = asyncio.create_task(service.complete_vision(
             args.samples[0], "请用简体中文尽可能长地描述每个可见细节，输出不少于一千字的描述。",
             language="zh-CN", max_tokens=8192, allow_local_fallback=True,
-        ))
-        await asyncio.sleep(0.2)
-        if pending.done():
-            raise RuntimeError("cancellation request finished before cancellation")
-        pending.cancel()
-        try:
-            await pending
-        except asyncio.CancelledError:
-            report["request_cancelled"] = True
-        report["cancel_seconds"] = round(time.perf_counter() - started, 3)
-        diagnostic = await service.connection_test(capability="vision", profile_id=profile.id, image_path=args.samples[0])
+            ))
+            await asyncio.sleep(0.2)
+            if pending.done():
+                raise RuntimeError("cancellation request finished before cancellation")
+            pending.cancel()
+            try:
+                await pending
+            except asyncio.CancelledError:
+                report["request_cancelled"] = True
+            report["cancel_seconds"] = round(time.perf_counter() - started, 3)
+        diagnostic = await service.connection_test(capability="vision", profile_id=ASSET_ID, image_path=args.samples[0])
         report["healthy_after_cancel"] = diagnostic["ok"]
     finally:
         if sampler:
@@ -100,4 +162,5 @@ if __name__ == "__main__":
     parser.add_argument("--assets", required=True)
     parser.add_argument("--runtime", required=True)
     parser.add_argument("--samples", nargs=3, required=True)
+    parser.add_argument("--batch", action="store_true", help="verify real natural writes, conflict and job cancellation")
     asyncio.run(verify(parser.parse_args()))

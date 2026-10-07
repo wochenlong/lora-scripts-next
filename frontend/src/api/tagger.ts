@@ -14,6 +14,8 @@ export interface TaggerRequest {
 }
 
 export interface CaptionJobRequest {
+  prompt_id?: string
+  max_caption_length?: number
   path: string
   mode: CaptionMode
   recursive: boolean

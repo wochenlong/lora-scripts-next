@@ -1263,6 +1263,8 @@ export default {
       promptRequired: "The prompt cannot be empty",
       preset: "Prompt preset",
       presetName: "Preset name",
+      maxLength: "Maximum caption characters (1–2000)",
+      maxLengthRequired: "Enter an integer from 1 to 2000 for the caption limit",
       customPrompt: "Custom prompt",
       savePreset: "Save prompt preset",
       restorePrompt: "Discard prompt changes",

@@ -101,6 +101,30 @@ describe("natural-language TaggerPage", () => {
     expect(taggerApi.captionStart).not.toHaveBeenCalled()
   })
 
+  it("keeps the saved length limit when discarding prompt changes", async () => {
+    const page = await naturalPage()
+    const config = await llmApi.profiles()
+    vi.mocked(llmApi.saveConfig).mockImplementationOnce(async update => ({ ...config, ...update }))
+    await page.get(".caption-preset-name").setValue("简洁")
+    await page.get(".caption-max-length").setValue("40")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    await page.get(".caption-max-length").setValue("120")
+    await page.findAll(".caption-preset-actions button")[1].trigger("click")
+    expect((page.get(".caption-max-length").element as HTMLInputElement).value).toBe("40")
+  })
+
+  it("does not submit or save an invalid caption length limit", async () => {
+    const page = await naturalPage()
+    await page.get('input[placeholder="/data/datasets/images"]').setValue("D:/sample")
+    await page.get(".caption-max-length").setValue("0")
+    await page.get(".tagger-actions .primary-action").trigger("click")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+    expect(llmApi.saveConfig).not.toHaveBeenCalled()
+  })
+
   it("rejects profiles that do not support the selected output language", async () => {
     const page = await naturalPage()
     const language = page.findAll("select").find(select => select.find('option[value="ja"]').exists())!

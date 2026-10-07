@@ -102,7 +102,8 @@ async def start_local_vision():
 @router.post("/llm/local-vision/stop")
 async def stop_local_vision():
     from mikazuki.tagger.caption_job import caption_job_manager
-    if caption_job_manager.is_busy():
+    from mikazuki.tagger.progress import tagger_progress
+    if caption_job_manager.is_busy() or (tagger_progress.is_busy() and tagger_progress.get()["phase"] in {"captioning", "cancelling"}):
         raise HTTPException(status_code=409, detail="请先取消打标任务再停止视觉服务")
     return _success(await get_local_vision_service().stop_runtime())
 

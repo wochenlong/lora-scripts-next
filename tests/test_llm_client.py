@@ -77,3 +77,21 @@ def test_response_adapters_validate_shape():
 def test_strict_json_rejects_duplicate_keys_and_non_finite_numbers(content):
     with pytest.raises(LLMContractError):
         parse_json_content(content)
+
+
+def test_image_encoder_honors_orientation_and_strips_private_exif(tmp_path):
+    import base64
+    import io
+    source = Image.new("RGB", (120, 60), "red")
+    metadata = Image.Exif()
+    metadata[274] = 6
+    metadata[270] = "synthetic private dataset metadata"
+    path = tmp_path / "source.jpg"
+    source.save(path, exif=metadata)
+    url, info = encode_image_data_url(path)
+    encoded = base64.b64decode(url.split(",", 1)[1])
+    with Image.open(io.BytesIO(encoded)) as decoded:
+        assert decoded.size == (60, 120)
+        assert dict(decoded.getexif()) == {}
+    assert "synthetic private dataset metadata".encode() not in encoded
+    assert info["width"] == 60

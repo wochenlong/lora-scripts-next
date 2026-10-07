@@ -114,3 +114,110 @@ def test_preview_error_never_echoes_private_paths_or_provider_text(api_client, m
     assert str(image) not in response.text
     assert "private provider response" not in response.text
     assert not image.with_suffix(".txt").exists()
+
+
+def test_persisted_history_and_report_routes_exclude_private_recovery_data(api_client):
+    from mikazuki.tagger.caption_store import CaptionJobStore
+    client, image, manager, _service = api_client
+    manager.job_store = CaptionJobStore(image.parent / "reports.sqlite3")
+    first_id = client.post("/api/tagger/jobs", json={"path": str(image.parent)}).json()["data"]["job_id"]
+    manager._thread.join(timeout=5)
+    client.post("/api/tagger/jobs", json={"path": str(image.parent)})
+    manager._thread.join(timeout=5)
+    history = client.get("/api/tagger/jobs/history")
+    assert history.status_code == 200
+    assert len(history.json()["data"]["jobs"]) == 2
+    report = client.get(f"/api/tagger/jobs/{first_id}/report")
+    assert report.status_code == 200
+    assert report.json()["data"]["report"]["items"][0]["before_hash"] is None
+    assert report.json()["data"]["report"]["items"][0]["image_sha256"]
+    assert str(image.parent) not in report.text
+    assert "expected_hashes" not in report.text
+    assert "_prompt_frozen" not in report.text
+    assert client.get(f"/api/tagger/jobs/{first_id}").status_code == 200
+
+
+def test_prompt_id_resolves_preset_and_does_not_transmit_filename(api_client, monkeypatch):
+    client, image, manager, service = api_client
+    monkeypatch.setattr(service, "config", lambda **kwargs: {"prompt_presets": [
+        {"id": "short", "name": "简洁", "template": "Use {{language}} for {{image_name}}", "language": "zh-CN"}
+    ]}, raising=False)
+    original = service.complete_vision
+
+    async def check_prompt(image_path, prompt, **kwargs):
+        assert prompt == "Use zh-CN for image"
+        assert image.name not in prompt
+        return await original(image_path, prompt, **kwargs)
+
+    monkeypatch.setattr(service, "complete_vision", check_prompt)
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "prompt_id": "short"})
+    assert response.status_code == 200
+    manager._thread.join(timeout=5)
+    assert manager.status()["succeeded"] == 1
+    assert manager.status()["snapshot"]["prompt_id"] == "short"
+    assert client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image), "prompt_id": "short"}).status_code == 200
+
+
+def test_unknown_preset_rejected_before_job_or_request(api_client, monkeypatch):
+    client, image, manager, service = api_client
+    monkeypatch.setattr(service, "config", lambda **kwargs: {"prompt_presets": []}, raising=False)
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "prompt_id": "missing"})
+    assert response.status_code == 400
+    assert response.json()["detail"]["code"] == "caption_prompt_invalid"
+    assert not manager.is_busy()
+    assert not service.calls
+
+
+def test_combined_preview_composes_tag_and_natural_text_without_writing(api_client, monkeypatch):
+    client, image, manager, _service = api_client
+    monkeypatch.setattr(manager, "_prepare_tag_model", lambda req: None)
+    monkeypatch.setattr(manager, "_generate_tags", lambda path, req: ["cat", "window"])
+    response = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image), "mode": "combined", "layout": "caption_then_tags"})
+    assert response.status_code == 200
+    assert response.json()["data"]["caption"] == "一只猫坐在窗边。\n\ncat, window"
+    assert response.json()["data"]["tags"] == ["cat", "window"]
+    assert not image.with_suffix(".txt").exists()
+    assert not tagger_progress.is_busy()
+
+
+def test_preview_obeys_shared_tagger_busy_guard(api_client):
+    client, image, _manager, service = api_client
+    assert tagger_progress.try_begin("tagging", "wd14", "busy")
+    response = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image)})
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "tagger_busy"
+    assert not service.calls
+
+
+def test_preview_cancel_aborts_provider_and_releases_reservation(api_client, monkeypatch):
+    client, image, _manager, service = api_client
+    aborted = []
+
+    async def waiting(*args, **kwargs):
+        tagger_progress.request_cancel()
+        try:
+            await asyncio.sleep(60)
+        finally:
+            aborted.append(True)
+
+    monkeypatch.setattr(service, "complete_vision", waiting)
+    response = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image)})
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "caption_cancelled"
+    assert aborted == [True]
+    assert not tagger_progress.is_busy()
+    assert not image.with_suffix(".txt").exists()
+
+
+def test_preset_length_limit_is_frozen_and_excess_output_is_rejected(api_client, monkeypatch):
+    client, image, manager, service = api_client
+    monkeypatch.setattr(service, "config", lambda **kwargs: {"prompt_presets": [
+        {"id": "tiny", "name": "Tiny", "template": "Describe {{language}}", "language": "zh-CN", "max_length": 2}
+    ]}, raising=False)
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "prompt_id": "tiny"})
+    assert response.status_code == 200
+    manager._thread.join(timeout=5)
+    assert manager.status()["snapshot"]["max_caption_length"] == 2
+    assert manager.status()["failed"] == 1
+    assert not image.with_suffix(".txt").exists()
+    assert service.calls[0][1]["response_schema"]["properties"]["caption"]["maxLength"] == 2

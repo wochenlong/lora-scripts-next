@@ -8,6 +8,7 @@ from mikazuki.llm.client import parse_json_content
 from mikazuki.llm.contracts import LLMContractError, LLMProfile
 
 CAPTION_LAYOUTS = {"tags_then_caption", "caption_then_tags", "tags_only", "caption_only"}
+DEFAULT_CAPTION_PROMPT = '请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。'
 CAPTION_SCHEMA = {
     "type": "object",
     "properties": {
@@ -27,6 +28,29 @@ class CaptionContractError(LLMContractError):
 class CaptionResult:
     caption: str
     language: str
+
+
+def snapshot_prompt(request: dict, config: dict | None = None) -> dict:
+    import copy
+    result = copy.deepcopy(request)
+    preset_id = result.get("prompt_id")
+    if preset_id and not result.get("_prompt_frozen"):
+        preset = next((item for item in (config or {}).get("prompt_presets", []) if item.get("id") == preset_id), None)
+        if preset is None:
+            raise CaptionContractError("prompt preset does not exist")
+        result.setdefault("prompt", preset["template"])
+        result.setdefault("language", preset["language"])
+        result.setdefault("max_caption_length", preset.get("max_length", 2000))
+    result.setdefault("prompt", DEFAULT_CAPTION_PROMPT)
+    result.setdefault("language", "zh-CN")
+    result.setdefault("mode", "natural")
+    result.setdefault("max_caption_length", 2000)
+    maximum = result["max_caption_length"]
+    if isinstance(maximum, bool) or not isinstance(maximum, int) or not 1 <= maximum <= 2000:
+        raise CaptionContractError("caption length limit must be an integer between 1 and 2000")
+    render_prompt(result["prompt"], language=result["language"], mode=result["mode"], image_name="image")
+    result["_prompt_frozen"] = True
+    return result
 
 
 def render_prompt(template: str, *, language: str, mode: str, image_name: str = "",
@@ -52,14 +76,14 @@ def render_prompt(template: str, *, language: str, mode: str, image_name: str = 
     return rendered.strip(), json.dumps(values, ensure_ascii=False, sort_keys=True)
 
 
-def parse_caption_response(content: str, *, language: str) -> CaptionResult:
+def parse_caption_response(content: str, *, language: str, max_length: int = 2000) -> CaptionResult:
     payload = parse_json_content(content)
     if set(payload) != {"caption", "language"}:
         raise CaptionContractError("caption response must contain exactly caption and language")
     caption = payload["caption"]
     if not isinstance(caption, str) or not caption.strip():
         raise CaptionContractError("caption must be non-empty text")
-    if len(caption) > 2000 or chr(0) in caption or chr(96) * 3 in caption:
+    if len(caption) > max_length or chr(0) in caption or chr(96) * 3 in caption:
         raise CaptionContractError("caption contains invalid content")
     if payload["language"] != language:
         raise CaptionContractError("caption language does not match request")
@@ -87,6 +111,21 @@ def compose_caption(tags: list[str], caption: str, layout: str = "tags_then_capt
     if layout == "tags_then_caption":
         return tag_line + "\n\n" + clean_caption
     return clean_caption + "\n\n" + tag_line
+
+
+def merge_tag_caption(existing: str, generated: str, action: str, *, existed: bool, format_hint=None) -> str:
+    """Keep legacy Tag ordering/dedup without modifying natural sentences."""
+    from mikazuki.dataset_editor import detect_caption_format
+    if action in {"prepend", "append"} and existing.strip() and (format_hint or detect_caption_format(existing)) != "tag":
+        raise CaptionContractError("Tag merge cannot modify natural or mixed caption")
+    output = [existing.strip()] if existed else []
+    if action == "copy" or (action == "ignore" and not existed):
+        output = [generated]
+    elif action == "prepend":
+        output.insert(0, generated)
+    else:
+        output.append(generated)
+    return ", ".join(dict.fromkeys(item.strip() for item in ",".join(output).split(",")))
 
 
 def require_vision_profile(profile: LLMProfile | dict) -> None:

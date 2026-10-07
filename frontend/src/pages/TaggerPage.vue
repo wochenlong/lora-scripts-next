@@ -33,7 +33,8 @@ const previewBusy = ref(false)
 const presetId = ref("")
 const presetName = ref("")
 const presetSaving = ref(false)
-const committedPrompt = ref({ prompt: captionForm.prompt, language: captionForm.language })
+captionForm.max_caption_length = 2000
+const committedPrompt = ref({ prompt: captionForm.prompt, language: captionForm.language, max_caption_length: captionForm.max_caption_length })
 const profileDraft = reactive({ id: "vision-profile", name: "视觉 Profile", endpoint: "", model: "", source: "remote" as "remote" | "local-endpoint", api_key: "", languages: "zh-CN,en" })
 let timer: number | undefined
 
@@ -52,8 +53,9 @@ function selectPreset() {
   if (!preset?.template || !preset.language) return
   captionForm.prompt = preset.template
   captionForm.language = preset.language
+  captionForm.max_caption_length = preset.max_length || 2000
   presetName.value = preset.name || ""
-  committedPrompt.value = { prompt: preset.template, language: preset.language }
+  committedPrompt.value = { prompt: preset.template, language: preset.language, max_caption_length: captionForm.max_caption_length }
 }
 
 function restorePrompt() {
@@ -61,15 +63,16 @@ function restorePrompt() {
 }
 
 async function savePreset(remove = false) {
+  if (!remove && !validCaptionLimit()) return ElMessage.error(t("tagger.caption.maxLengthRequired"))
   if (!remove && (!presetName.value.trim() || !captionForm.prompt.trim())) return ElMessage.error(t("tagger.caption.presetRequired"))
   presetSaving.value = true
   try {
     const identifier = presetId.value || `caption-${Date.now()}`
     const presets = llmConfig.value.prompt_presets.filter(item => item.id !== identifier)
-    if (!remove) presets.push({ id: identifier, name: presetName.value.trim(), template: captionForm.prompt, language: captionForm.language })
+    if (!remove) presets.push({ id: identifier, name: presetName.value.trim(), template: captionForm.prompt, language: captionForm.language, max_length: captionForm.max_caption_length || 2000 })
     llmConfig.value = await llmApi.saveConfig({ prompt_presets: presets })
     presetId.value = remove ? "" : identifier
-    if (!remove) committedPrompt.value = { prompt: captionForm.prompt, language: captionForm.language }
+    if (!remove) committedPrompt.value = { prompt: captionForm.prompt, language: captionForm.language, max_caption_length: captionForm.max_caption_length || 2000 }
     ElMessage.success(t("tagger.caption.presetSaved"))
   } catch (caught) {
     ElMessage.error(caught instanceof Error ? caught.message : String(caught))
@@ -137,6 +140,7 @@ async function saveVisionProfile() {
 }
 
 function syncCaptionPath() {
+  captionForm.prompt_id = presetId.value || undefined
   captionForm.path = form.path
   captionForm.interrogator_model = form.interrogator_model
   captionForm.download_endpoint = form.download_endpoint
@@ -151,6 +155,11 @@ function syncCaptionPath() {
   captionForm.add_model_tag = form.add_model_tag
 }
 
+function validCaptionLimit() {
+  const maximum = captionForm.max_caption_length ?? 2000
+  return Number.isInteger(maximum) && maximum >= 1 && maximum <= 2000
+}
+
 async function start() {
   if (!form.path.trim()) return ElMessage.error(t("tagger.msg.pathRequired"))
   try {
@@ -163,6 +172,7 @@ async function start() {
 
 async function startCaption() {
   syncCaptionPath()
+  if (!validCaptionLimit()) return ElMessage.error(t("tagger.caption.maxLengthRequired"))
   if (!captionForm.path.trim()) return ElMessage.error(t("tagger.msg.pathRequired"))
   if (!captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
   if (!captionForm.prompt.trim()) return ElMessage.error(t("tagger.caption.promptRequired"))
@@ -182,6 +192,7 @@ async function startCaption() {
 async function previewCaption() {
   if (previewBusy.value) return
   syncCaptionPath()
+  if (!validCaptionLimit()) return ElMessage.error(t("tagger.caption.maxLengthRequired"))
   if (!previewImagePath.value.trim()) return ElMessage.error(t("tagger.caption.previewPathRequired"))
   if (!captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
   previewBusy.value = true
@@ -296,6 +307,7 @@ onBeforeUnmount(stopPolling)
           <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
           <label>{{ t("tagger.caption.preset") }}<select v-model="presetId" class="caption-preset-select" :disabled="presetSaving" @change="selectPreset"><option value="">{{ t("tagger.caption.customPrompt") }}</option><option v-for="preset in llmConfig.prompt_presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option></select></label>
           <label>{{ t("tagger.caption.presetName") }}<input v-model="presetName" class="caption-preset-name" :disabled="presetSaving" /></label>
+          <label>{{ t("tagger.caption.maxLength") }}<input v-model.number="captionForm.max_caption_length" class="caption-max-length" type="number" min="1" max="2000" step="1" :disabled="presetSaving" /></label>
           <label class="wide-field">{{ t("tagger.caption.prompt") }}<textarea v-model="captionForm.prompt" rows="4" :disabled="presetSaving" /></label>
           <div class="caption-preset-actions wide-field"><button type="button" :disabled="presetSaving" @click="savePreset()">{{ t("tagger.caption.savePreset") }}</button><button type="button" :disabled="presetSaving" @click="restorePrompt">{{ t("tagger.caption.restorePrompt") }}</button><button type="button" :disabled="presetSaving || !presetId" @click="savePreset(true)">{{ t("tagger.caption.removePreset") }}</button></div>
           <label>{{ t("tagger.caption.layout") }}<select v-model="captionForm.layout"><option value="tags_then_caption">{{ t("tagger.caption.layoutTagsFirst") }}</option><option value="caption_then_tags">{{ t("tagger.caption.layoutCaptionFirst") }}</option><option value="caption_only">{{ t("tagger.caption.layoutCaptionOnly") }}</option></select></label>

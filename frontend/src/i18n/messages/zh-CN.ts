@@ -1263,6 +1263,8 @@ export default {
       promptRequired: "提示词不能为空",
       preset: "提示词预设",
       presetName: "预设名称",
+      maxLength: "最大描述字符数（1–2000）",
+      maxLengthRequired: "最大描述字符数必须是 1–2000 的整数",
       customPrompt: "自定义提示词",
       savePreset: "保存提示词预设",
       restorePrompt: "撤销提示词修改",

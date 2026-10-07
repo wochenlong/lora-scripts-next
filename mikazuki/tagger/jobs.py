@@ -62,7 +62,7 @@ def run_interrogate_job(req) -> None:
         return
 
     ready, status_msg = describe_interrogator_asset_status(model_key, interrogator)
-    print(f"[tagger] 打标任务: model={model_key}, path={req.path}", flush=True)
+    print(f"[tagger] 打标任务: model={model_key}", flush=True)
     print(status_msg, flush=True)
 
     try:

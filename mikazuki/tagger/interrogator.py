@@ -172,7 +172,7 @@ def on_interrogate(
                     image = Image.open(path)
                 except UnidentifiedImageError:
                     # just in case, user has mysterious file...
-                    print(f'${path} is not supported image type')
+                    print('unsupported image type / 图片格式不受支持')
                     continue
 
                 # guess the output path
@@ -201,13 +201,24 @@ def on_interrogate(
                 )
 
                 output = []
+                from mikazuki.tagger.caption_job import CaptionJobManager, CaptionWriteConflict, caption_sha256, write_caption_atomic
+                from mikazuki.dataset_editor import detect_caption_format
+                from mikazuki.llm.runtime import caption_job_store
+                before_hash = caption_sha256(output_path)
+                if output_path.is_symlink():
+                    raise CaptionWriteConflict("caption symlink cannot be overwritten")
 
                 if output_path.is_file():
                     output.append(output_path.read_text(errors='ignore').strip())
 
                     if batch_output_action_on_conflict == 'ignore':
-                        print(f'skipping {path}')
+                        print('skipping existing caption / 跳过已有 caption')
                         continue
+                    known_format = caption_job_store.find_format(output_path, before_hash) or detect_caption_format(output[0])
+                    if batch_output_action_on_conflict in {'prepend', 'append'} and output[0] and known_format != 'tag':
+                        if unload_model_after_running:
+                            interrogator.unload()
+                        return 'Tag merge cannot modify natural or mixed caption'
 
                 tags = interrogator.interrogate(image)
                 processed_tags = Interrogator.postprocess_tags(
@@ -217,7 +228,7 @@ def on_interrogate(
 
                 # TODO: switch for less print
                 print(
-                    f'found {len(processed_tags)} tags out of {len(tags)} from {path}'
+                    f'found {len(processed_tags)} tags out of {len(tags)}'
                 )
 
                 plain_tags = ', '.join(processed_tags)
@@ -230,18 +241,20 @@ def on_interrogate(
                     output.append(plain_tags)
 
                 if batch_remove_duplicated_tag:
-                    output_path.write_text(
+                    CaptionJobManager._guard_path(path)
+                    write_caption_atomic(output_path,
                         ', '.join(
                             OrderedDict.fromkeys(
                                 map(str.strip, ','.join(output).split(','))
                             )
                         ),
-                        encoding='utf-8'
+                        expected_sha256=before_hash, trailing_newline=False,
                     )
                 else:
-                    output_path.write_text(
+                    CaptionJobManager._guard_path(path)
+                    write_caption_atomic(output_path,
                         ', '.join(output),
-                        encoding='utf-8'
+                        expected_sha256=before_hash, trailing_newline=False,
                     )
 
                 if batch_output_save_json:
@@ -255,6 +268,10 @@ def on_interrogate(
             if unload_model_after_running:
                 interrogator.unload()
             return 'Cancelled'
+        except Exception:
+            if unload_model_after_running:
+                interrogator.unload()
+            raise
 
     if unload_model_after_running:
         interrogator.unload()

@@ -3,13 +3,13 @@
 ## 计划元数据
 
 - Plan ID: DATASET-NL-TAGGING-20261006
-- Version: v2.1-executing
+- Version: v2.2-executing
 - Last updated: 2026-10-07 Asia/Shanghai
 - Canonical progress file: 本文
 - Construction plan: docs/tasks/natural-language-captioning-plan/
 - Design source: docs/design/natural-language-captioning-tagging-design.md
 - Current branch: feat/NL-Captioning
-- Current active phase: Phase 1 — 后端视觉任务；Phase 0 完成门已通过，Phase 1/2 既有实现仍需完整补验
+- Current active phase: Phase 2 — 前端与编辑器完整闭环；Phase 0/1 阶段完成门通过
 - Execution readiness: executing（已收到完整交付 goal；禁止以局部检查通过替代最终验收）
 - Scale: Full
 
@@ -124,16 +124,16 @@
 
 ## 进度台账
 
-- Overall progress: Phase 0 完成门复审通过，相关契约/旧 API/灰度有实际证据；Phase 1/2 已有代码和相关测试，正式进入 Phase 1 补全持久报告和恢复链路。不以既有 UI 或相关测试视为全部阶段完成。
+- Overall progress: Phase 0/1 完成门通过；后端持久任务、冻结预设、恢复、报告、组合预览、错误矩阵、Tag 灰度和低限额本地真实写回已有证据。Phase 2 继续完整共享设置、历史报告 UI 和编辑器来源保护；不以相关测试代替最终完整验收。
 - Phase 0: done（证据：phase-0-llm/2026-10-07-phase-0-gate-review.md）
-- Phase 1: in progress
+- Phase 1: done（证据：phase-1-vision-job/2026-10-07-phase-1-gate-review.md）
 - Phase 2: in progress
 - Phase 3: pending
 - Phase 4: pending
-- Validation status: 2026-10-07 Python 3.11 相关后端回归 168 passed；Node 22 check 48 files / 307 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
-- Residual risks: 共享前端设置尚未完全复用；提示词预设 UI 和撤销已接入，但 prompt_id/持久快照报告尚待完成；任务报告持久化、组合预览、完整灰度、EDD 人工评分和浏览器验收仍待闭环。受管 Qwen 三样本启动/取消/停止开发验证已通过；完整 API/真实写回与 Phase 4 均未完成。翻译灰度已纳入最新相关 suite。
+- Validation status: 2026-10-07 Python 3.11 相关后端回归 203 passed；Node 22 check 48 files / 309 tests passed，typecheck/lint/build 通过（lint 2 项已有 warning）。宽范围 GUI 回归 1139 passed / 11 failed / 21 skipped，另有训练子项目收集失败；失败未获得豁免，不能视为完整测试通过。详见 evidence 下本次增量报告和 failure report。
+- Residual risks: 共享前端设置、历史报告 UI 和 Dataset Editor 短自然语言来源保护尚待完成；安全回滚/清理、真实远程与真实 ONNX 三模式、EDD 人工评分和浏览器验收仍待闭环。本地三样本真实自然语言写回/冲突/取消开发验收通过，但复用了 P1 模型；Phase 4 不得复用。
 - Continuity source: docs/tasks/natural-language-captioning-continuity.md；记录环境、Git 和单一步骤，证据以阶段报告为准。
 
 ## 下一步动作
 
-实现并验证 Phase 1 的持久任务快照/报告以及服务重启后的恢复边界。
+将生成来源格式接入 Dataset Editor 的读写、Tag 投影及批量保护，防止短自然语言误判。

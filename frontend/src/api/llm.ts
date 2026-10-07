@@ -21,7 +21,7 @@ export interface LlmConfig {
   version: number
   profiles: LlmProfile[]
   routes: Record<string, string>
-  prompt_presets: Array<{ id?: string; name?: string; template?: string; language?: string }>
+  prompt_presets: Array<{ id?: string; name?: string; template?: string; language?: string; max_length?: number; revision?: string }>
   cache: { translation?: boolean; caption?: boolean }
 }
 
