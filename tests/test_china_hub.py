@@ -110,6 +110,9 @@ def test_enable_china_hub_patches_transformers_download(tmp_path, monkeypatch: p
         "openai/clip-vit-large-patch14",
         cache_dir=str(cache),
         force_download=True,
+        # ModelScope resolves from_pretrained through a repo snapshot. This
+        # tokenizer contract requires no multi-GB neural-network weights.
+        allow_file_pattern=["*.json", "*.txt"],
     )
     # The ModelScope patch stores snapshots in its own cache (ignoring HF
     # cache_dir), so only assert the download actually produced a working

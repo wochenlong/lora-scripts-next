@@ -40,3 +40,11 @@ Node22.17.1 从当前源码构建新 dist（1868 模块，5.98 秒），输出 `
 Windows 修复：按 [Microsoft FSCTL_SET_SPARSE 说明](https://learn.microsoft.com/windows/win32/api/winioctl/ni-winioctl-fsctl_set_sparse) 设置稀疏标志，再 seek 至最后一个字节并写零；Windows CRT truncate 会填充间隙，单独 sparse 标志不足。原有 shape/header/offset/逻辑长度与断言均保留，无假通过或跳过。修复后该组 13 passed / 4 warnings / 2.80 秒。完整矩阵重新运行中，Windows symlink 等失败未豁免。
 
 自动审批审查拒绝删除首次生成的临时模型目录，理由只有 blocked by policy。该目录保留，未复用；此清理未完成，最终需核销。
+
+## 矩阵后续复验
+
+完整分区运行：1467 passed / 11 failed / 25 skipped / 1 deselected / 77 subtests，308.42 秒。唯一 deselected 是实际尝试后卡在整仓模型下载的 ModelScope tokenizer 测试；此时不计为通过。11 failed 中6个来自 test_task_maintenance_api.py 在收集阶段向 sys.modules 泄漏 Tagger 替身，1个来自 GUI-only 环境没有可选 LyCORIS 工厂属性，另4个仍为 WinError1314。
+
+移除测试全局替身泄漏，并仅向 LyCORIS 单元测试注入 fake 工厂（create=True），保留原有逐权重/倍率/merge 断言。灰度测试补充终态和总图片数断言，避免任务级失败计数为零导致误读。相关五文件55 passed / 4 warnings / 7.50秒；全分区再次复验中。
+
+ModelScope 测试根据已安装 patcher 的 allow_file_pattern 参数，仅真实下载 tokenizer 的 JSON/TXT 文件，继续调用实际 patched CLIPTokenizer.from_pretrained 并验证 vocab_size=49408。代理下 `python -m pytest tests/test_china_hub.py -q -ra -o faulthandler_timeout=90` 实际7 passed / 7.39秒，关闭该单项资源问题；并未把真实测试改成假 tokenizer 或跳过。完整组合运行尚待最终复验。
