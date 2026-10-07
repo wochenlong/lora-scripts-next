@@ -302,6 +302,11 @@ class OnlineServiceConfig:
                     "api_key": remote["api_key"],
                     "capabilities": (previous or {}).get("capabilities", ["text"]),
                     "languages": (previous or {}).get("languages", ["en", "zh", "zh-CN", "zh-TW", "ja"]),
+                    "metadata": {
+                        **(previous or {}).get("metadata", {}),
+                        "translation_system_prompt": remote["system_prompt"],
+                        "reasoning_effort": remote["reasoning_effort"],
+                    },
                 }, previous))
             config["llm"]["profiles"] = shared_remote + [
                 profile for profile in old_profiles.values() if profile.get("source") != "remote"

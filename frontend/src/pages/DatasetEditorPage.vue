@@ -665,7 +665,10 @@ async function batch() {
     ElMessage.success(t("datasetEditor.batch.done", { n: data.changed }))
     rightPanelMode.value = "caption"
   } catch (error) {
-    if (error !== "cancel" && error !== "close") ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.batch.fail"))
+    if (error !== "cancel" && error !== "close") {
+      await refreshHistory().catch(() => undefined)
+      ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.batch.fail"))
+    }
   }
 }
 
@@ -702,6 +705,7 @@ async function changeHistory(kind: "undo" | "redo") {
         : t("datasetEditor.historyMsg.none"),
     )
   } catch (error) {
+    await refreshHistory().catch(() => undefined)
     ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.historyMsg.fail"))
   }
 }

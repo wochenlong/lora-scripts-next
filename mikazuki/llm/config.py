@@ -101,6 +101,10 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
         metadata = {}
     if not isinstance(metadata, dict):
         raise LLMContractError("profile.metadata must be an object")
+    if "translation_system_prompt" in metadata:
+        _string(metadata["translation_system_prompt"], "profile.metadata.translation_system_prompt", 20_000)
+    if "reasoning_effort" in metadata and (not isinstance(metadata["reasoning_effort"], str) or metadata["reasoning_effort"] not in {"disabled", "high", "max"}):
+        raise LLMContractError("profile.metadata.reasoning_effort must be disabled, high, or max")
     if previous and api_key != previous.get("api_key", ""):
         secret_revision += 1
     return {
@@ -133,7 +137,11 @@ def _profile_from_legacy(section: dict, profile_id: str, source: LLMSource = "re
         "api_key": section.get("api_key", ""),
         "enabled": True,
         "ready": True,
-        "metadata": {"migrated_from": "tag_translation.v4"},
+        "metadata": {
+            "migrated_from": "tag_translation.v4",
+            **({"translation_system_prompt": section["system_prompt"]} if "system_prompt" in section else {}),
+            **({"reasoning_effort": section["reasoning_effort"]} if "reasoning_effort" in section else {}),
+        },
     }
 
 
@@ -383,8 +391,8 @@ class UnifiedConfigStore:
                 "endpoint": profile["endpoint"],
                 "api_key": profile.get("api_key", ""),
                 "model": profile["model"],
-                "reasoning_effort": "disabled",
-                "system_prompt": previous.get(profile["id"], {}).get("system_prompt", DEFAULT_CONFIG["deepseek"]["system_prompt"]),
+                "reasoning_effort": profile.get("metadata", {}).get("reasoning_effort", previous.get(profile["id"], {}).get("reasoning_effort", "disabled")),
+                "system_prompt": profile.get("metadata", {}).get("translation_system_prompt", previous.get(profile["id"], {}).get("system_prompt", DEFAULT_CONFIG["deepseek"]["system_prompt"])),
             }
             for profile in remotes
         ]
@@ -394,6 +402,6 @@ class UnifiedConfigStore:
             "endpoint": selected["endpoint"],
             "api_key": selected.get("api_key", ""),
             "model": selected["model"],
-            "reasoning_effort": "disabled",
-            "system_prompt": previous.get(selected["id"], {}).get("system_prompt", document.get("deepseek", {}).get("system_prompt", DEFAULT_CONFIG["deepseek"]["system_prompt"])),
+            "reasoning_effort": selected.get("metadata", {}).get("reasoning_effort", previous.get(selected["id"], {}).get("reasoning_effort", "disabled")),
+            "system_prompt": selected.get("metadata", {}).get("translation_system_prompt", previous.get(selected["id"], {}).get("system_prompt", document.get("deepseek", {}).get("system_prompt", DEFAULT_CONFIG["deepseek"]["system_prompt"]))),
         }

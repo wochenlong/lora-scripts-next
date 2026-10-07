@@ -7,7 +7,7 @@
 - 工作树 E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning；分支 feat/NL-Captioning。本批基线 eb93de4，提交号读 git log。
 - 每次续接先读 C:/Users/25454/.codex/attachments/33329a36-8e01-4211-b79c-a080571cde4b/goal-objective.md。
 - Phase 0/1 done（有 gate-review），Phase 2 in progress，Phase 3/4 pending。goal 保持 active。
-- 最新相关后端 221 passed / 4 warnings / 19.58s；编辑器 35 passed / 3.05s；Node22 check 324 tests / 51 files、type/lint/build pass，2 个已有 lint warning。
+- 最新相关后端 226 passed / 4 warnings / 20.26s；编辑器 35 passed / 3.05s；Node22 check 325 tests / 51 files、type/lint/build pass，2 个已有 lint warning。
 - 宽范围仍 1139 passed / 11 failed / 21 skipped，另有31训练 collection errors，缺逐用例失败日志；不能当作完整矩阵通过，须恢复/复现并修复。
 
 ## 环境
@@ -44,8 +44,10 @@
 
 ## 单一 Next action
 
-补全共享设置对旧翻译提示词/推理选项的兼容，并验证保存与 revision。
+完成实际浏览器重启恢复与历史选择验收。
 
 证据：docs/evidence/natural-language-captioning/phase-2-frontend-editor/2026-10-07-history-polling-editor-conflicts.md。Confidence medium：增量已验，完整矩阵/实际浏览器/EDD/隔离重建仍未闭环。
 
 2026-10-07 共享资产/cache和浏览器业务增量：相关后端221+最后本地管理定向16通过，Node22 check324；真实Vue+API/fake模型完成预览不写、自然/组合批量、429部分失败重试、取消、报告、mixed原文save/undo/redo和外部冲突。translation共享text连接/窄屏/Tab/Escape部分通过。初始fixture继承auto偏好触发词库下载后已取消，r2将词库/MyMemory也替换，实际HTTP验证无下载。不是实际模型或Phase4，完整gate仍pending。见phase-2-frontend-editor/2026-10-07-shared-assets-cache-browser-flow.md。
+
+翻译选项兼容增量已验证：迁移/共享及旧API双向保存、revision、managed restart保留metadata，浏览器profile新增/删除/取消/能力/语言过滤和翻译选项保存均通过；相关后端226、Node22 check325。首次typecheck失败已修复并复验，见Phase2 translation-options failure/resolved报告。实际模型/正式启动/Phase4仍不由fake fixture替代。

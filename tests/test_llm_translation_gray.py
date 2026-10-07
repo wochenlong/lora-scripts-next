@@ -114,3 +114,42 @@ def test_translation_cache_disable_skips_existing_results_failures_and_writes(tm
         server.shutdown()
         server.server_close()
         thread.join(timeout=2)
+
+
+def test_translation_options_roundtrip_through_shared_and_legacy_settings(tmp_path):
+    path = tmp_path / "translation.json"
+    legacy = OnlineServiceConfig(path)
+    legacy.save({"deepseek": {"system_prompt": "Translate visible training tags only.", "reasoning_effort": "high"}})
+    manager = TranslationManager(path, store=None)
+    before = manager._active_llm_config(legacy.load())
+    shared = UnifiedConfigStore(path)
+    shared.save(shared.load())
+    after = manager._active_llm_config(legacy.load())
+    assert before["system_prompt"] == after["system_prompt"]
+    assert before["reasoning_effort"] == after["reasoning_effort"] == "high"
+    revision = manager.profile_revision(after)
+    config = shared.load()
+    config["profiles"][0]["metadata"].update(translation_system_prompt="Return concise Chinese translations.", reasoning_effort="max")
+    shared.save({"profiles": config["profiles"]})
+    shared_result = manager._active_llm_config(legacy.load())
+    assert shared_result["system_prompt"] == "Return concise Chinese translations."
+    assert shared_result["reasoning_effort"] == "max"
+    assert manager.profile_revision(shared_result) != revision
+    legacy.save({"deepseek": {"system_prompt": "Updated through the legacy API.", "reasoning_effort": "disabled"}})
+    current = manager._active_llm_config(legacy.load())
+    assert current["system_prompt"] == "Updated through the legacy API."
+    assert current["reasoning_effort"] == "disabled"
+    assert shared.load()["profiles"][0]["metadata"]["translation_system_prompt"] == current["system_prompt"]
+
+
+@pytest.mark.parametrize("key,value", [("reasoning_effort", {}), ("reasoning_effort", ["high"]), ("translation_system_prompt", [])])
+def test_translation_metadata_rejects_invalid_types_with_contract_error(tmp_path, key, value):
+    from mikazuki.llm.config import LLMContractError
+    path = tmp_path / "translation.json"
+    legacy = OnlineServiceConfig(path)
+    legacy.save({})
+    shared = UnifiedConfigStore(path)
+    config = shared.load()
+    config["profiles"][0]["metadata"][key] = value
+    with pytest.raises(LLMContractError):
+        shared.save({"profiles": config["profiles"]})

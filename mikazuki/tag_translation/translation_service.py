@@ -215,6 +215,12 @@ class TranslationManager:
             )
             legacy = next((item for item in full_config.get("remote_profiles", []) if item["id"] == profile.id), {})
             section.update({key: value for key, value in legacy.items() if key in {"system_prompt", "reasoning_effort"}})
+            if "translation_system_prompt" in profile.metadata:
+                section["system_prompt"] = profile.metadata["translation_system_prompt"]
+            if "reasoning_effort" in profile.metadata:
+                section["reasoning_effort"] = profile.metadata["reasoning_effort"]
+            if profile.source == "managed-local":
+                section["reasoning_effort"] = "disabled"
             section.update(endpoint=profile.endpoint, model=profile.model, api_key=profile.api_key)
             section["secret_revision"] = profile.metadata.get("secret_revision", 0)
             section["_fallbacks"] = [

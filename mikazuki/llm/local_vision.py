@@ -144,7 +144,7 @@ class LocalVisionService(LocalModelService):
         profiles = [item for item in config["profiles"] if item["id"] != ASSET_ID]
         profiles.append({
             "id": ASSET_ID,
-            "name": "Qwen3-VL-2B 本地视觉兜底",
+            "name": previous.get("name", "Qwen3-VL-2B 本地视觉兜底"),
             "source": "managed-local",
             "endpoint": self.upstream_endpoint(),
             "model": FILES[0][0],
@@ -154,6 +154,7 @@ class LocalVisionService(LocalModelService):
             "languages": ["zh-CN", "en"],
             "enabled": previous.get("enabled", True),
             "ready": True,
+            "metadata": previous.get("metadata", {}),
         })
         self.unified_config_store.save({"profiles": profiles})
         return data

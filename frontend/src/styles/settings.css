@@ -654,7 +654,7 @@
 }
 .llm-settings fieldset { border: 0; padding: 0; display: grid; gap: 14px; min-width: 0; }
 .llm-settings label { display: grid; gap: 5px; }
-.llm-settings input:not([type="checkbox"]), .llm-settings select { min-width: 0; width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }
+.llm-settings input:not([type="checkbox"]), .llm-settings select, .llm-settings textarea { min-width: 0; width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }
 .llm-profile-card { padding: 14px; border: 1px solid var(--border); border-radius: 8px; }
 .llm-profile-card header, .llm-capabilities, .llm-profile-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .llm-profile-card header { justify-content: space-between; margin-bottom: 12px; }

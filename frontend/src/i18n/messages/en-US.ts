@@ -1,5 +1,6 @@
 export default {
   llm: {
+translationPrompt: "Translation system prompt (tag translation only)", reasoning: "Translation reasoning effort", reasoningDisabled: "Disabled", reasoningHigh: "High", reasoningMax: "Maximum",
     translationCache: "Use translation result cache", captionCache: "Use caption result cache",
     localFallback: "Allow a running local text model to handle remote failures",
     title: "Shared LLM settings", sharedHint: "Translation and captioning share these profiles. Remote is preferred; local fallback requires explicit enablement. Captioning requires vision; translation requires text.",

@@ -1,5 +1,6 @@
 export default {
   llm: {
+translationPrompt: "翻译系统提示词（仅用于标签翻译）", reasoning: "翻译推理强度", reasoningDisabled: "关闭", reasoningHigh: "高", reasoningMax: "最高",
     translationCache: "使用翻译结果缓存", captionCache: "使用自然语言打标缓存",
     localFallback: "远程失败时允许已启动的本地文本模型兜底",
     title: "共用 LLM 配置", sharedHint: "翻译与打标共用这些配置。远程始终优先；本地须显式启用兜底。打标要求视觉能力，翻译只要求文本能力。",

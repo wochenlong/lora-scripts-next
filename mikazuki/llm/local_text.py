@@ -16,11 +16,12 @@ class LocalTextModelService(LocalModelService):
         profiles = [profile for profile in current["profiles"] if profile.get("asset_id") != ASSET_ID]
         previous = next((profile for profile in current["profiles"] if profile.get("asset_id") == ASSET_ID), {})
         profiles.append({
-            "id": ASSET_ID, "name": "Qwen3.5-0.8B（纯文本）", "source": "managed-local",
+            "id": ASSET_ID, "name": previous.get("name", "Qwen3.5-0.8B（纯文本）"), "source": "managed-local",
             "endpoint": self.upstream_endpoint(), "model": MODEL_ID,
             "capabilities": ["text"], "languages": ["zh-CN", "zh-TW", "en", "ja"],
             "api_key": "", "asset_id": ASSET_ID, "revision": status.get("runtime_version"),
             "enabled": previous.get("enabled", True), "ready": status["state"] == "running",
+            "metadata": previous.get("metadata", {}),
         })
         self.unified_config_store.save({"profiles": profiles})
         return status

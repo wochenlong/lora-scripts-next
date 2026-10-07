@@ -112,4 +112,16 @@ describe("shared LLM settings", () => {
     await wrapper.get(".llm-save").trigger("click")
     expect(llmApi.saveConfig).not.toHaveBeenCalled()
   })
+
+  it("edits translation prompt and reasoning in the shared profile without changing caption presets", async () => {
+    const wrapper = await open("text")
+    vi.mocked(llmApi.saveConfig).mockResolvedValue(config())
+    await wrapper.get('[data-profile-id="text"] .llm-translation-prompt').setValue("Translate tags concisely.")
+    await wrapper.get('[data-profile-id="text"] .llm-reasoning').setValue("high")
+    await wrapper.get(".llm-save").trigger("click")
+    await flushPromises()
+    const payload = vi.mocked(llmApi.saveConfig).mock.calls[0][0]
+    expect(payload.profiles?.find(profile => profile.id === "text")?.metadata).toEqual({ translation_system_prompt: "Translate tags concisely.", reasoning_effort: "high" })
+    expect(payload).not.toHaveProperty("prompt_presets")
+  })
 })

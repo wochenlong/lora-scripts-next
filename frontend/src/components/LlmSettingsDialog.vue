@@ -123,6 +123,10 @@ function languages(profile: LlmProfile, event: Event) {
   profile.languages = (event.target as HTMLInputElement).value.split(",").map(item => item.trim()).filter(Boolean)
 }
 
+function setTranslationOption(profile: LlmProfile, key: "translation_system_prompt" | "reasoning_effort", event: Event) {
+  profile.metadata = { ...profile.metadata, [key]: (event.target as HTMLInputElement).value }
+}
+
 async function save() {
   if (!loaded.value) return
   if (draft.value.profiles.some(profile => !profile.name.trim() || !profile.endpoint.trim() || !profile.model.trim() || !profile.capabilities.length || !profile.languages.length)) {
@@ -188,7 +192,9 @@ async function test(profile: LlmProfile) {
             <label>{{ t("llm.model") }}<input v-model="profile.model" :disabled="profile.source === 'managed-local'" /></label>
             <label>{{ t("llm.key") }}<input v-model="profile.api_key" type="password" autocomplete="new-password" :disabled="profile.source === 'managed-local'" /></label>
             <label>{{ t("llm.languages") }}<input :value="profile.languages.join(',')" @input="languages(profile, $event)" /></label>
+            <label v-if="profile.capabilities.includes('text')">{{ t("llm.reasoning") }}<select class="llm-reasoning" :value="String(profile.metadata?.reasoning_effort ?? 'disabled')" :disabled="profile.source === 'managed-local'" @change="setTranslationOption(profile, 'reasoning_effort', $event)"><option value="disabled">{{ t("llm.reasoningDisabled") }}</option><option value="high">{{ t("llm.reasoningHigh") }}</option><option value="max">{{ t("llm.reasoningMax") }}</option></select></label>
           </div>
+          <label v-if="profile.capabilities.includes('text')">{{ t("llm.translationPrompt") }}<textarea class="llm-translation-prompt" rows="4" maxlength="20000" :value="String(profile.metadata?.translation_system_prompt ?? '')" @input="setTranslationOption(profile, 'translation_system_prompt', $event)" /></label>
           <div class="llm-capabilities">
             <label><input type="checkbox" :checked="profile.capabilities.includes('text')" :disabled="profile.source === 'managed-local'" @change="setCapability(profile, 'text', ($event.target as HTMLInputElement).checked)" />{{ t("llm.text") }}</label>
             <label><input type="checkbox" :checked="profile.capabilities.includes('vision')" :disabled="profile.source === 'managed-local'" @change="setCapability(profile, 'vision', ($event.target as HTMLInputElement).checked)" />{{ t("llm.vision") }}</label>
