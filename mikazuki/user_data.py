@@ -436,6 +436,7 @@ class UserDataStore:
                 Path(temporary).unlink(missing_ok=True)
 
     def archive_task(self, task_id, metadata, config_path=None):
+        metadata = {key: value for key, value in metadata.items() if key != "task_archive"}
         self._safe_id(task_id, "task id")
         engine = self._safe_id(str(metadata.get("backend") or "standard"), "engine")
         source_path = config_path or metadata.get("config_path")

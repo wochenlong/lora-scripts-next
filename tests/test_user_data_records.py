@@ -87,3 +87,14 @@ def test_missing_snapshot_prevents_task_registration(tmp_path, monkeypatch):
                             metadata={"config_path": str(tmp_path / "missing.toml")})
     assert "missing-snapshot" not in manager.tasks
     assert "missing-snapshot" not in manager._compute_queue
+
+
+def test_repeated_archives_do_not_embed_previous_snapshots(tmp_path):
+    store = UserDataStore(tmp_path / "data")
+    config = tmp_path / "config.toml"
+    config.write_text('output_name = "' + "x" * 65536 + '"\n')
+    metadata = {"backend": "anima-fast"}
+    for index in range(20):
+        record = store.archive_task(f"retry-{index}", metadata, config)
+        assert "task_archive" not in record["metadata"]
+        metadata["task_archive"] = record

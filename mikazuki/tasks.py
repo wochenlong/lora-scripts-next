@@ -661,6 +661,7 @@ class TaskManager:
         new_tasks: List[Task] = []
         for member in members:
             metadata = dict(member.metadata)
+            metadata.pop("task_archive", None)
             for key in self._RETRY_STRIP_METADATA:
                 metadata.pop(key, None)
             metadata["retry_of"] = member.task_id
