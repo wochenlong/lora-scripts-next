@@ -1,0 +1,85 @@
+{
+  "status": "pass",
+  "reviewer": "当前用户",
+  "approval_text": [
+    "全部部合格。",
+    "4分 all"
+  ],
+  "scope": "最初发送的A/B六条描述，仅这些精确文本；不扩展至后续routing输出",
+  "recorded_at": "2026-10-07T12:24:20.556983+00:00",
+  "rubric": "evaluation-rubric.md v1",
+  "scores": [
+    {
+      "group": "A",
+      "sample_id": "chelsea",
+      "caption_sha256": "9cc6fb0ad3d3ad90a1cf1cb68ff62acdea061009e30b184b33193e19bb205b55",
+      "subject": 4,
+      "facts": 4,
+      "chinese": 4,
+      "training_usefulness": 4,
+      "conciseness": 4,
+      "total": 20,
+      "reason": "用户确认全部合格并要求所有维度4分；未提供逐项额外说明"
+    },
+    {
+      "group": "A",
+      "sample_id": "coffee",
+      "caption_sha256": "1a3c5f6a736b433af925d09fe72cb4bdc7fe83d81407f00ab4940bd710917e68",
+      "subject": 4,
+      "facts": 4,
+      "chinese": 4,
+      "training_usefulness": 4,
+      "conciseness": 4,
+      "total": 20,
+      "reason": "用户确认全部合格并要求所有维度4分；未提供逐项额外说明"
+    },
+    {
+      "group": "A",
+      "sample_id": "rocket",
+      "caption_sha256": "99eaede225cbb522171007dbed8464e133622f8842af55d5ee09ebda60b11878",
+      "subject": 4,
+      "facts": 4,
+      "chinese": 4,
+      "training_usefulness": 4,
+      "conciseness": 4,
+      "total": 20,
+      "reason": "用户确认全部合格并要求所有维度4分；未提供逐项额外说明"
+    },
+    {
+      "group": "B",
+      "sample_id": "chelsea",
+      "caption_sha256": "8aea8bddb74ef798e5761bb362e25d9d3b19222a3c8bd2827dead6cd6c01cf1c",
+      "subject": 4,
+      "facts": 4,
+      "chinese": 4,
+      "training_usefulness": 4,
+      "conciseness": 4,
+      "total": 20,
+      "reason": "用户确认全部合格并要求所有维度4分；未提供逐项额外说明"
+    },
+    {
+      "group": "B",
+      "sample_id": "coffee",
+      "caption_sha256": "e69d511397aebf1aaedaa493127e17ac97e7e930d30048724e0d1855ee5866a9",
+      "subject": 4,
+      "facts": 4,
+      "chinese": 4,
+      "training_usefulness": 4,
+      "conciseness": 4,
+      "total": 20,
+      "reason": "用户确认全部合格并要求所有维度4分；未提供逐项额外说明"
+    },
+    {
+      "group": "B",
+      "sample_id": "rocket",
+      "caption_sha256": "20ff84d8abb6428fddd34312416fb07f3933e35b4a32d083811f6780bf122f67",
+      "subject": 4,
+      "facts": 4,
+      "chinese": 4,
+      "training_usefulness": 4,
+      "conciseness": 4,
+      "total": 20,
+      "reason": "用户确认全部合格并要求所有维度4分；未提供逐项额外说明"
+    }
+  ]
+}

@@ -550,7 +550,7 @@ TaggerPage 交互顺序：
 
 ## 19. 下一步动作
 
-Phase 2 已核销共享设置、编辑器生成来源和实际浏览器业务，历史报告/恢复 UI、轮询代次治理及编辑器批量/undo/redo 冲突已实现并验证，下一步共享本地视觉资产管理与翻译 cache 开关，完整浏览器验收仍待完成。具体状态见 canonical task book 与续接记录。未通过 Phase 4 隔离重建门禁，不得将计划标记为完成。
+完成主测试矩阵复验并核销剩余失败、跳过和联网测试。 状态以 canonical task book 为准；Phase 4 隔离重建尚未执行，整体未完成。
 
 ## 参考资料
 
@@ -575,3 +575,17 @@ Phase 2 已核销共享设置、编辑器生成来源和实际浏览器业务，
 Phase2所有规定项已有gate-review，阶段done；fake模型及lifespan=off不替代Stage3/4。公开评测集3图、SHA/URL、rubric已冻结且人工评分pending。下一步任务回滚采用before-format备份、last-writer标识和哈希校验，历史清理不能删除格式来源。具体API/schema变更记录在Phase3设计增量与canonical task book，GATE09/10仍未通过。
 
 Phase3回滚/清理已实现并测试，actual浏览器恢复2/冲突1、取消无变化、清理保留文件/来源通过。相关241后端/329前端。原11失败已恢复逐case：17项依赖/README/process复验通过，关闭其中7个；4个symlink仍因WinError1314等待用户权限环境，未豁免；完整矩阵/真实/EDD/正式启动/Phase4仍未完成。
+
+## 当前执行状态更正（2026-10-07）
+
+前述带日期的条目保留为历史。当前 Phase0/1/2 done；Phase3 in progress，Phase4 pending。共享 LLM 设置、前端和编辑器业务已验收，真实远程/本地生产链路及六条人工评分通过；仍需真实 ONNX Tag/combined、正式空配置启动、完整矩阵和从零隔离重建。人工评分仅对应 approval JSON 中的精确文本，不扩大至后续随机生成结果。
+
+## 2026-10-07 Tag/combined、Zero-Short和矩阵增量
+
+真实默认WD ONNX三图旧/新Tag逐字节相同（13/11/8 Tags、8.366s）；实际WD+Qwen combined三图3/3、24.208s，mixed来源和actualTags正确，缓存3命中零LLM请求、preview零写盘、模型已停止。正式FastAPI lifespan=on和新Node22 dist已通过空配置/无Key/无词库/无视觉模型启动；API健康与桌面/390px页面可用，安装/配置入口、默认禁用fallback/生成均核对。证据见phase-3-evaluation/2026-10-07-real-tag-combined-zero-short.md，不属于Phase4。
+
+主tests收集1503项；分区运行1467 passed/11 failed/25 skipped/1 deselected/77 subtests/308.42s。排除的唯一联网ModelScope tokenizer测试实际下载整个模型仓库，已停止并保留pending，未豁免。11失败中的7项已修复：任务维护测试不再向sys.modules泄漏Tagger替身，LyCORIS fake工厂允许可选导入缺失；相关55 passed/7.50s。另4项Windows symlink权限未解决。完整分区复验正在运行，不能提前计通过；25项skip逐案审计/授权尚未核销。
+
+DiffSynth Windows fixture改为稀疏标志+末字节seek/write，保留逻辑长度与模型header，13 passed/2.80s。初次truncate产生的测试文件清理被自动审批拒绝（仅blocked by policy），保留未复用，最终清理待核销。自建正式UI和模型进程停止，浏览器about:blank。
+
+使用/维护说明已补充docs/natural-language-captioning-usage.md。Phase3仍in progress，Phase4 pending，goal未完成。当前唯一下一步：完成主测试矩阵复验并核销剩余失败、跳过和联网测试。

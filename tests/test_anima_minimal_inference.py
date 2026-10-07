@@ -61,7 +61,9 @@ class AnimaMinimalInferenceTests(TestCase):
 
         with (
             mock.patch.object(inference, "load_file", side_effect=fake_load_file),
-            mock.patch.object(inference, "create_network_from_weights", side_effect=fake_create_network),
+            # This optional LyCORIS import is absent in a GUI-only test env.
+            # Inject the fake factory while retaining all merge assertions.
+            mock.patch.object(inference, "create_network_from_weights", side_effect=fake_create_network, create=True),
             mock.patch.object(inference.anima_utils, "load_anima_model", return_value=model),
             mock.patch.object(inference, "clean_memory_on_device"),
         ):

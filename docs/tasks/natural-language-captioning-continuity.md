@@ -49,7 +49,7 @@ Key仅进程、磁盘/响应掩码，重启重新注入。不能写真实Key到�
 
 ## 单一 Next action
 
-验证当前生产adapter真实远程中文与本地显式兜底路径。
+完成主测试矩阵复验并核销剩余失败、跳过和联网测试。
 
 Confidence medium：本批源码和证据已核对；整体完整测试、真实/人工评分、正式启动与隔离重建仍未闭环。普通修复自主，不暂停/不缩goal/不假完工。
 
@@ -61,3 +61,21 @@ Confidence medium：本批源码和证据已核对；整体完整测试、真实
 - 失败日志sandbox/nl-caption-eval-20261007/logs/reproduced-11-failures.txt已脱敏。具体原case见Stage3 maintenance-and-matrix-progress。
 - 测试venv新增torch2.7.0+cpu、torchvision0.22.0+cpu、transformers4.51.3、accelerate0.33.0、safetensors0.8.0（uv pip --python指定venv，venv无pip），未改GUI requirements/宿主。Original11失败中7个已关闭，17 tests通过。4个symlink权限等待用户；已request_user_input_async，不要重复问/擅自skip。已读取官方Windows资料；Admin=False，DeveloperMode未检出。所有进程终止后再具权限验Windows4case。
 - 更新两README现有Bash/WSL CLI说明以修复已有测试。没有发布/push。
+
+## 本轮增量：真实模型与用户评分
+
+- 生产模块基线776c082，新增tools/verify_caption_production.py。remote 3/3、41.7s；local-r3 3/3、13.894s、启动2.952s、峰值3070423040B；routing三图全部remote，故障后disabled拒绝/explicit真实local成功。缓存3命中零请求、preview零写盘、模型停止；本地资产复用P1，仅Phase3。
+- 用户原话“全部部合格。”“4分 all”，最初A/B六条五维各4，总20。SHA实核通过；approval独立于冻结manifest，后续routing不同文本不沿用分数。
+- EOF输入/导入后mkdir r2失败已记录并修复；fresh local-r3/routing通过。证据见phase-3-evaluation/2026-10-07-production-real-and-human-review.md。
+- diffusers0.32.2/einops0.8.1已装进指定测试venv。完整主tests收集正在复验；Windows symlink问题仍未豁免。
+- 唯一下一步：完成主测试矩阵复验并核销剩余失败、跳过和联网测试。
+
+## 2026-10-07 Tag/combined、Zero-Short和矩阵增量
+
+真实默认WD ONNX三图旧/新Tag逐字节相同（13/11/8 Tags、8.366s）；实际WD+Qwen combined三图3/3、24.208s，mixed来源和actualTags正确，缓存3命中零LLM请求、preview零写盘、模型已停止。正式FastAPI lifespan=on和新Node22 dist已通过空配置/无Key/无词库/无视觉模型启动；API健康与桌面/390px页面可用，安装/配置入口、默认禁用fallback/生成均核对。证据见phase-3-evaluation/2026-10-07-real-tag-combined-zero-short.md，不属于Phase4。
+
+主tests收集1503项；分区运行1467 passed/11 failed/25 skipped/1 deselected/77 subtests/308.42s。排除的唯一联网ModelScope tokenizer测试实际下载整个模型仓库，已停止并保留pending，未豁免。11失败中的7项已修复：任务维护测试不再向sys.modules泄漏Tagger替身，LyCORIS fake工厂允许可选导入缺失；相关55 passed/7.50s。另4项Windows symlink权限未解决。完整分区复验正在运行，不能提前计通过；25项skip逐案审计/授权尚未核销。
+
+DiffSynth Windows fixture改为稀疏标志+末字节seek/write，保留逻辑长度与模型header，13 passed/2.80s。初次truncate产生的测试文件清理被自动审批拒绝（仅blocked by policy），保留未复用，最终清理待核销。自建正式UI和模型进程停止，浏览器about:blank。
+
+使用/维护说明已补充docs/natural-language-captioning-usage.md。Phase3仍in progress，Phase4 pending，goal未完成。当前唯一下一步：完成主测试矩阵复验并核销剩余失败、跳过和联网测试。

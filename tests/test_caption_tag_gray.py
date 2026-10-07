@@ -47,6 +47,8 @@ def test_new_tag_mode_matches_legacy_files_byte_for_byte(tmp_path, monkeypatch, 
     manager.start({**request.dict(), "path": str(new), "mode": "tag", "conflict_action": action})
     manager._thread.join(timeout=5)
     assert not manager._thread.is_alive()
+    assert manager.status()["phase"] == "done", manager.status()
+    assert manager.status()["total"] == 3, manager.status()
     assert manager.status()["failed"] == 0
     for name in ["a", "b", "c"]:
         assert (old / (name + ".txt")).read_bytes() == (new / (name + ".txt")).read_bytes()

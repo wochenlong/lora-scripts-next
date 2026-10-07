@@ -1,6 +1,7 @@
 """DiffSynth contract tests: no model weights or GPU training are used."""
 import importlib.util
 import json
+import os
 import struct
 from pathlib import Path
 
@@ -13,6 +14,26 @@ from mikazuki.engines.diffsynth.settings import Runtime, TRAIN_SCRIPT
 from mikazuki.engines.diffsynth.installer import installation_plan
 from mikazuki.engines.diffsynth.manifest import UPSTREAM
 from mikazuki.download_sources import DownloadSources
+
+
+def _mark_sparse(file):
+    """NTFS needs an explicit sparse flag before extending model fixtures."""
+    if os.name != "nt":
+        return
+    import ctypes
+    import msvcrt
+    from ctypes import wintypes
+
+    ioctl = ctypes.WinDLL("kernel32", use_last_error=True).DeviceIoControl
+    ioctl.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPVOID,
+                     wintypes.DWORD, wintypes.LPVOID, wintypes.DWORD,
+                     ctypes.POINTER(wintypes.DWORD), wintypes.LPVOID]
+    ioctl.restype = wintypes.BOOL
+    returned = wintypes.DWORD()
+    # FSCTL_SET_SPARSE; no input buffer means enable sparse-file handling.
+    if not ioctl(msvcrt.get_osfhandle(file.fileno()), 0x900C4,
+                 None, 0, None, 0, ctypes.byref(returned), None):
+        raise ctypes.WinError(ctypes.get_last_error())
 
 
 @pytest.fixture
@@ -30,8 +51,12 @@ def configured(tmp_path):
             offset = end
         raw = json.dumps(headers).encode()
         with (model / folder / name).open("wb") as file:
+            _mark_sparse(file)
             file.write(struct.pack("<Q", len(raw)) + raw)
-            file.truncate(8 + len(raw) + offset)  # sparse fixture: headers only, no real model tensors
+            # The Windows CRT truncate implementation fills the gap even on
+            # sparse files. Seeking and writing one byte preserves the hole.
+            file.seek(8 + len(raw) + offset - 1)
+            file.write(b"\0")  # headers and logical length, no model tensors
 
     (model / "processor").mkdir()
     for name in ("tokenizer.json", "tokenizer_config.json", "preprocessor_config.json", "chat_template.jinja", "video_preprocessor_config.json"):
