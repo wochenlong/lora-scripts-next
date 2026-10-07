@@ -74,10 +74,12 @@ Confidence medium：本批源码和证据已核对；整体完整测试、真实
 
 真实默认WD ONNX三图旧/新Tag逐字节相同（13/11/8 Tags、8.366s）；实际WD+Qwen combined三图3/3、24.208s，mixed来源和actualTags正确，缓存3命中零LLM请求、preview零写盘、模型已停止。正式FastAPI lifespan=on和新Node22 dist已通过空配置/无Key/无词库/无视觉模型启动；API健康与桌面/390px页面可用，安装/配置入口、默认禁用fallback/生成均核对。证据见phase-3-evaluation/2026-10-07-real-tag-combined-zero-short.md，不属于Phase4。
 
-主tests收集1503项；分区运行1467 passed/11 failed/25 skipped/1 deselected/77 subtests/308.42s。排除的唯一联网ModelScope tokenizer测试实际下载整个模型仓库，已停止并保留pending，未豁免。11失败中的7项已修复：任务维护测试不再向sys.modules泄漏Tagger替身，LyCORIS fake工厂允许可选导入缺失；相关55 passed/7.50s。另4项Windows symlink权限未解决。完整分区复验正在运行，不能提前计通过；25项skip逐案审计/授权尚未核销。
+主tests收集1503项；分区运行1467 passed/11 failed/25 skipped/1 deselected/77 subtests/308.42s。排除的唯一联网ModelScope tokenizer测试实际下载整个模型仓库，已停止并保留pending，未豁免。11失败中的7项已修复：任务维护测试不再向sys.modules泄漏Tagger替身，LyCORIS fake工厂允许可选导入缺失；相关55 passed/7.50s。另4项Windows symlink权限未解决。修复后的分区复验实际1474 passed/4 failed/25 skipped/1 deselected/77 subtests，306.54秒；仅4个Windows symlink失败。被排除的ModelScope项在独立7项真实组中通过，完整组合运行仍待复验；25项skip逐案审计/授权尚未核销。
 
 DiffSynth Windows fixture改为稀疏标志+末字节seek/write，保留逻辑长度与模型header，13 passed/2.80s。初次truncate产生的测试文件清理被自动审批拒绝（仅blocked by policy），保留未复用，最终清理待核销。自建正式UI和模型进程停止，浏览器about:blank。
 
 使用/维护说明已补充docs/natural-language-captioning-usage.md。Phase3仍in progress，Phase4 pending，goal未完成。当前唯一下一步：完成主测试矩阵复验并核销剩余失败、跳过和联网测试。
 
-ModelScope tokenizer联网测试已限定实际JSON/TXT下载，7 passed/7.39s，原卡住单项关闭；主矩阵分区再次复验handle29013仍在运行，日志sandbox/nl-caption-eval-20261007/logs/main-tests-partition-r2-20261007.txt。不要重复启动观察同一run；结束后记录实际总数，再在修复后的源码上完整组合复验。HEAD2d56b45已提交18文件，后续ModelScope修复读最新git log。已有4个Windows权限与25个skip仍未核销，root vendor矩阵仍待处理。冻结manifest保持原样，评分approval为后来用户事件。清理被review拒绝的临时模型目录未删除，未复用。
+ModelScope tokenizer联网测试已限定实际JSON/TXT下载，7 passed/7.39s，原卡住单项关闭；主矩阵分区再次复验handle29013已结束（1474通过/4权限失败/25跳过/1单独验证），日志sandbox/nl-caption-eval-20261007/logs/main-tests-partition-r2-20261007.txt。不要重复启动观察同一run；结束后记录实际总数，再在修复后的源码上完整组合复验。HEAD2d56b45已提交18文件，后续ModelScope修复读最新git log。已有4个Windows权限与25个skip仍未核销，root vendor矩阵仍待处理。冻结manifest保持原样，评分approval为后来用户事件。清理被review拒绝的临时模型目录未删除，未复用。
+
+最新HEAD读git log；本轮所有自己启动的模型/UI/测试进程均已结束，浏览器about:blank。当前Windows权限问题尚需用户处理；没有批准任何失败或skip豁免。下一轮先完成矩阵缺口审计，不重做P1探针或人工评分。用户评分只对应最初A/B精确文本。

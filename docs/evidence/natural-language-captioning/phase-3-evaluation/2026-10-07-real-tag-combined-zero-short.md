@@ -48,3 +48,5 @@ Windows 修复：按 [Microsoft FSCTL_SET_SPARSE 说明](https://learn.microsoft
 移除测试全局替身泄漏，并仅向 LyCORIS 单元测试注入 fake 工厂（create=True），保留原有逐权重/倍率/merge 断言。灰度测试补充终态和总图片数断言，避免任务级失败计数为零导致误读。相关五文件55 passed / 4 warnings / 7.50秒；全分区再次复验中。
 
 ModelScope 测试根据已安装 patcher 的 allow_file_pattern 参数，仅真实下载 tokenizer 的 JSON/TXT 文件，继续调用实际 patched CLIPTokenizer.from_pretrained 并验证 vocab_size=49408。代理下 `python -m pytest tests/test_china_hub.py -q -ra -o faulthandler_timeout=90` 实际7 passed / 7.39秒，关闭该单项资源问题；并未把真实测试改成假 tokenizer 或跳过。完整组合运行尚待最终复验。
+
+最新分区复验命令：`python -m pytest tests -q -ra -o faulthandler_timeout=90 -k "not test_enable_china_hub_patches_transformers_download"`，实际1474 passed / 4 failed / 25 skipped / 1 deselected / 4 warnings / 77 subtests / 306.54秒。4个失败均为原Windows符号链接权限场景，未豁免；排除项已在独立真实7项组中通过，但仍需完整组合复验。所有自建进程已结束，整体验收未完成。
