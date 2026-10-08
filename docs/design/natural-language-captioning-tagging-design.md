@@ -86,6 +86,8 @@ supports_text
 transport: local | api
 ```
 
+以上是逻辑能力名称，线上模型目录用capabilities字符串数组（tag/caption/vision/text）、runtime（local/api）、downloaded/ready及parameters表示，不新增重复布尔字段。共享LLM Profile保持既有text/vision schema；Caption能力由视觉模型目录与生成adapter表达，后端对Profile的vision、目录output/capability和实际响应分别校验。
+
 WD/CL 模型显示适用的 Tag 参数，如一般/角色标签阈值、标签处理选项。视觉 Caption 模型显示其支持的生成参数、语言、长度、温度/采样等实际能力和提示词编辑器。翻译模型只显示文本参数。
 
 切换模型时保留各自草稿设置，但提交请求前根据模型 capability 过滤字段；后端再次校验，收到不适用参数必须返回稳定错误码，不得静默忽略或把参数传给模型。
@@ -130,7 +132,7 @@ Caption 预设使用 `kind=caption_prompt`，训练预设使用既有类型/元�
 
 ## 5. 统一 LLM 管理
 
-翻译和自然语言打标共享 `mikazuki/llm/` 的 Profile、能力声明、密钥注入、资产/运行时、缓存、revision 和连接测试。翻译 profile 只需要 `text`；Caption profile 必须声明 `vision` 和 `caption`。API Key 仅在后端运行时使用，磁盘配置和响应只保留掩码，重启后重新注入。
+翻译和自然语言打标共享 `mikazuki/llm/` 的 Profile、能力声明、密钥注入、资产/运行时、缓存、revision 和连接测试。翻译Profile只需要text；Caption模型目录必须有vision/caption，所引用的共享Profile必须声明vision并支持图片请求。API Key仅在后端运行时使用，磁盘配置和响应只保留掩码，重启后重新注入。
 
 缓存 revision 至少绑定 endpoint、model、capabilities、asset revision、推理参数、prompt revision、输入图片 hash 和密钥变更序列，不包含明文 Key。改变模型、能力、参数或提示词后旧 Caption 结果不得复用。
 

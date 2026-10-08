@@ -97,7 +97,7 @@ def main():
     os.environ["MIKAZUKI_DEV"] = "1"
     os.environ["MIKAZUKI_TAG_TRANSLATION_ROOT"] = str(root / "state")
     os.environ["MIKAZUKI_USER_DATA_ROOT"] = str(root / "user_data")
-    os.environ["TASK_QUEUE_FILE"] = str(root / "queue.json")
+    os.environ["MIKAZUKI_TASK_QUEUE_FILE"] = str(root / "queue.json")
     from PIL import Image, ImageDraw
     samples = root / "images"
     if not args.resume:

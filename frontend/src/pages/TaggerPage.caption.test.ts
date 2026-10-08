@@ -71,6 +71,15 @@ async function naturalPage() {
 }
 
 describe("natural-language TaggerPage", () => {
+  it("shows active Tag downloads beside the selected model", async () => {
+    const idle = await taggerApi.status()
+    vi.mocked(taggerApi.status).mockResolvedValueOnce({ ...idle, phase: "downloading", model: "wd14-convnextv2-v2", download: { ...idle.download, percent: 52, filename: "model.onnx" } })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
+    await flushPromises()
+    expect(wrapper.get(".tagger-model-download").text()).toContain("52%")
+    expect(wrapper.get(".tagger-model-download").text()).toContain("model.onnx")
+    expect(wrapper.find(".tagger-model-selector").exists()).toBe(true)
+  })
   it("submits Tag previews and batches through the same durable API with only Tag parameters", async () => {
     wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
     await flushPromises()
@@ -170,6 +179,7 @@ describe("natural-language TaggerPage", () => {
     await flushPromises()
     expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
     expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("保留我的修改")
+    expect((page.get(".caption-preset-select").element as HTMLSelectElement).value).toBe("")
     expect(llmApi.savePromptPresets).not.toHaveBeenCalled()
     expect(page.text()).not.toContain("组合打标")
   })
@@ -262,11 +272,11 @@ describe("natural-language TaggerPage", () => {
     expect(llmApi.savePromptPresets).not.toHaveBeenCalled()
   })
 
-  it("rejects profiles that do not support the selected output language", async () => {
+  it("offers only model-supported output languages", async () => {
     const page = await naturalPage()
-    const language = page.findAll("select").find(select => select.find('option[value="ja"]').exists())!
-    await language.setValue("en")
-    expect((page.get(".tagger-actions .primary-action").element as HTMLButtonElement).disabled).toBe(true)
+    const language = page.get(".caption-output-language")
+    expect(language.findAll("option").map(option => option.attributes("value"))).toEqual(["zh-CN"])
+    expect((page.get(".tagger-actions .primary-action").element as HTMLButtonElement).disabled).toBe(false)
     expect(page.text()).toContain("remote-vision")
   })
 

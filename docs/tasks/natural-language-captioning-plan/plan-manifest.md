@@ -21,30 +21,30 @@
 
 | Artifact | Status | Purpose |
 |---|---|---|
-| `00_总控目标索引.md` | needs-alignment | 总目标、范围、阶段门，需同步 Issue #409 |
+| `00_总控目标索引.md` | aligned | 总目标和边界已按Issue #409重写 |
 | `00_预检证据/` | in use | 测试、授权、失败和变更治理 |
-| `01_目标计划书/` | needs-alignment | 按模型能力、预设、后端、前端和隔离重建拆分目标 |
-| `02_长程任务书/` | needs-alignment | Phase 0–5 执行任务和完成门 |
+| `01_目标计划书/` | aligned | 按模型能力、预设、后端、前端和隔离重建拆分目标 |
+| `02_长程任务书/` | aligned | Phase0–5执行任务和完成门，旧编号文件按正文阶段读取 |
 | `03_goal提示词/` | rewritten | 可直接复制执行的 Issue #409 对齐 goal |
-| `04_阶段开工清单/` | needs-alignment | 每阶段硬门槛和失败处理 |
-| `05_最小可行性验证/` | needs-alignment | 本地模型、user_data preset 和 capability 风险验证 |
-| `06_开工前最终复盘报告.md` | pending | 重新审计后生成 |
-| `07_设计与任务书审计及开工准备报告.md` | historical | 保存旧版审计历史，需追加本次 Issue #409 重规划记录 |
+| `04_阶段开工清单/` | aligned | 每阶段硬门槛和失败处理，执行状态以canonical任务书为准 |
+| `05_最小可行性验证/` | in use | 本地模型、user_data preset和capability风险；当前证据已补进索引 |
+| `06_开工前最终复盘报告.md` | current-note-added | 保留v2历史，顶部新增#409当前事实 |
+| `07_设计与任务书审计及开工准备报告.md` | current-note-added | #409重规划及最新实施/验证状态 |
 
 ## Gate status
 
 | Gate | Status | Definition |
 |---|---|---|
 | GATE-00 | pass-with-boundary | 已有资料和 Issue #409 已读取；旧设计存在冲突 |
-| GATE-01 | in progress | 契约、范围和 out-of-scope 正在收敛 |
+| GATE-01 | pass | #409契约、范围和out-of-scope已收敛 |
 | GATE-02 | pending | 证据治理与失败/清理策略同步 |
-| GATE-03 | pending | 模型能力、user_data preset、API dynamic entry 目标计划 |
-| GATE-04 | pending | Phase 0–5 长程任务书和开工清单 |
-| GATE-05 | pending | 最小可行性风险验证计划 |
-| GATE-06 | pending | goal 与所有 canonical 文档一致 |
+| GATE-03 | pass | 模型能力、user_data preset、API dynamic entry目标计划已对齐 |
+| GATE-04 | pass | Phase0–5长程任务书和开工清单已对齐 |
+| GATE-05 | pass-with-boundary | P1和当前本地真实/预设事务风险验证；最终fresh资产未验 |
+| GATE-06 | pass | goal与canonical文档对齐，capability线上表示已说明 |
 | GATE-07 | pending | Issue #409 对齐最终复盘 |
 | GATE-08 | in progress | 用户已全面授权；实施和验证进行中 |
-| GATE-09 | pending | 完整实现和验证 |
+| GATE-09 | in progress | 功能/前端/真实本地通过，4项Windows权限失败及最终审计未核销 |
 | GATE-10 | pending | 全新隔离重建和最终验收 |
 
 ## Change control
@@ -62,7 +62,7 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 
 ## Next action
 
-完成 Phase 0 差异审计：核对 `TaggerPage.vue`、`caption_api.py`、`caption_job.py`、模型注册表、LLM prompt preset 存储和 #405 user_data CRUD，形成保留/迁移/删除/历史兼容表；审计通过后再修改代码。
+完成当前矩阵与Phase2/3完成门审计；具体单一步骤以canonical任务书末尾为准。Phase5仍pending，不得提前宣告全验收。
 
 ## 2026-10-08 实施增量
 
@@ -79,3 +79,7 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 ## 2026-10-08 任务档案与Tag试标增量
 
 既有TaskManager与user_data/tasks/dataset-tagger联动（35e5189），Tag/natural前端共用持久化链路；Tag单图HTTP预览、适用参数快照、状态恢复/真正取消/仅失败重试/安全删除和报告链接已实现。相关后端299、专项44、前端341/52/check/build与fake browser通过。证据2026-10-08-task-archives-bridge.md和2026-10-08-tag-preview-durable-ui.md。下一步真实ONNX与Qwen当前源码验收，随后正式lifespan/最终矩阵/Phase5。GATE09/10未通过。
+
+## 2026-10-08 真实链路与验收修复增量
+
+真实Tag/本地Qwen/正式Zero-Short及真实UI生成/取消/Editor通过；完整功能矩阵506通过/4Windows权限失败，补充Linux四原始case通过。Windows验收环境口径和新UI火箭人工评分正在等待用户答复。Tag下载取消和档案损坏类型隔离、支持语言/停止弹窗/取消模板选择等修复后专项50、前端342通过。最新证据phase-4-real-evaluation三份报告；下一步提交后完整功能矩阵复跑，Phase5未解锁，GATE09/10未通过。

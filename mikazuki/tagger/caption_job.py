@@ -12,7 +12,7 @@ import copy
 import sqlite3
 from pathlib import Path
 from typing import Literal
-from mikazuki.tagger.progress import tagger_progress
+from mikazuki.tagger.progress import TaggerCancelled, tagger_progress
 
 CaptionConflict = Literal["ignore", "copy", "prepend", "append"]
 _UNSET_HASH = object()
@@ -337,6 +337,7 @@ class CaptionJobManager:
             if not self.is_busy():
                 return self.status()
             self._cancel.set()
+            tagger_progress.request_cancel()
             self._status["phase"] = "cancelling"
             self._status["message"] = "正在取消…"
             self._touch_locked()
@@ -405,7 +406,7 @@ class CaptionJobManager:
                         counter = "succeeded" if result["written"] else "skipped"
                         self._set(report={"items": [*self._status["report"]["items"], result]},
                                   current=index, **{counter: self._status[counter] + 1})
-                except CaptionJobCancelled:
+                except (CaptionJobCancelled, TaggerCancelled):
                     remaining = max(len(paths) - index + 1, 0)
                     self._set(
                         phase="cancelled",
@@ -433,6 +434,15 @@ class CaptionJobManager:
             else:
                 self._set(phase="done", message="模型打标完成")
             self._set(current=len(paths), filename="")
+        except (CaptionJobCancelled, TaggerCancelled):
+            with self._lock:
+                self._status.update(phase="cancelled", message="任务已取消", cancelled=max(self._status["total"] - self._status["current"], 0))
+                self._status.setdefault("finished_at", time.time())
+                self._touch_locked()
+                try:
+                    self._persist_locked()
+                except CaptionPersistenceError:
+                    pass
         except Exception as exc:
             message = safe_error_message(exc)
             with self._lock:

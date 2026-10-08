@@ -7,9 +7,9 @@
 | G-02 | 目标和阶段可验收 | pass |
 | G-03 | 证据、失败、清理、授权规则存在 | pass |
 | G-04 | P1 本地/远程 probe 有结果 | pass-with-boundary |
-| G-05 | feat/NL-Captioning feature branch 和环境准备完成 | pass-with-boundary（等待 goal 后开工） |
-| G-06 | Phase 0 tests + migration evidence pass | pending |
-| G-07 | Vision job contract and writer tests pass | pending |
+| G-05 | feat/NL-Captioning feature branch和环境准备完成 | pass；用户已明确全面施工 |
+| G-06 | Phase0 tests + migration evidence pass | pass；能力/迁移/预设事务/参数拒绝证据齐全 |
+| G-07 | Vision job contract and writer tests pass | pass；相关子集299通过，最终矩阵仍有环境失败 |
 | G-08 | Frontend check and manual acceptance pass | pending |
 | G-09 | Real/EDD/Zero-Short evidence pass | pending |
 | G-10 | Review no unauthorized P0/P1 | pending |

@@ -8,11 +8,11 @@ docs/tasks/natural-language-captioning-task-book.md
 
 ## 当前状态
 
-- Execution readiness: drafting（等待用户最终 goal 提示词）
+- Execution readiness: executing（用户已明确建立goal并全面执行）
 - Current branch: feat/NL-Captioning
-- Current phase: 开工前审计完成，等待 goal
+- Current phase: Phase2/3完成门复核；Phase4真实资源与矩阵证据采集
 - Remote priority: locked
 - Caption vision requirement: locked
 - Local fallback: Qwen3-VL-2B candidate, locked after P1 probe
-- Final delivery gate: Phase 4 — 隔离重建与从零真实验收
-- Next action: 等待用户发送最终 goal 提示词；收到后从 Phase 0 开始，直至 Phase 4 通过
+- Final delivery gate: Phase5 — 隔离重建与从零真实验收
+- Next action: 核对canonical任务书最新单一步骤，补齐矩阵与真实资源缺口，最后进入Phase5

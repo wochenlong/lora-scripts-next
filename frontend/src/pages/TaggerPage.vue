@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref } from "vue"
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
@@ -29,6 +29,10 @@ const mode = computed(() => selectedModel.value?.output || "tag")
 const availableModels = computed(() => catalog.value.filter(model => model.runtime === runtime.value))
 const apiAvailable = computed(() => catalog.value.some(model => model.runtime === "api" && model.ready))
 const modelReady = computed(() => selectedModel.value?.ready && (mode.value === "tag" || selectedModel.value.languages.includes(captionForm.language) || selectedModel.value.languages.includes("*")))
+const outputLanguages = computed(() => [
+  { value: "zh-CN", label: "简体中文" }, { value: "zh-TW", label: "繁體中文" },
+  { value: "en", label: "English" }, { value: "ja", label: "日本語" },
+].filter(item => selectedModel.value?.languages.includes(item.value) || selectedModel.value?.languages.includes("*")))
 const catalogLoading = ref(false)
 type PromptState = Pick<CaptionJobRequest, "prompt" | "language" | "max_caption_length"> & { system_prompt: string; name: string }
 const modelDrafts = new Map<string, { tag: TaggerRequest; caption: CaptionJobRequest; presetId: string; presetName: string; systemPrompt: string; committed: PromptState }>()
@@ -91,6 +95,16 @@ const committedPrompt = ref<PromptState>({ prompt: captionForm.prompt, language:
 let timer: number | undefined
 
 const downloadPercent = computed(() => status.value.download.percent || (status.value.download.total ? Math.round(status.value.download.current / status.value.download.total * 100) : 0))
+
+watch([() => status.value.phase, () => captionStatus.value.phase], async (next, previous) => {
+  const active = ["downloading", "tagging", "captioning", "pending", "cancelling"]
+  if (!previous.some(phase => active.includes(phase)) || next.some(phase => active.includes(phase))) return
+  const generation = refreshGeneration
+  try {
+    const document = await taggerApi.models()
+    if (generation === refreshGeneration) catalog.value = document.models
+  } catch { /* Status remains usable when catalog refresh is unavailable. */ }
+})
 
 function selectModel(identifier: string) {
   const next = catalog.value.find(model => model.id === identifier)
@@ -426,7 +440,9 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
         <p v-if="catalogLoading" class="wide-field" role="status">{{ t('tagger.models.loading') }}</p>
         <p v-if="mode === 'tag' && captionError" class="wide-field" role="alert">{{ captionError }}</p>
         <TaggerModelSelector :models="availableModels" :selected="selectedModelId" :disabled="catalogLoading || busy || captionBusy || previewBusy || presetSaving" @select="selectModel" />
+        <p v-if="mode === 'tag' && status.phase === 'downloading' && status.model === selectedModelId" class="tagger-model-download wide-field" role="status">{{ t('tagger.downloadMeter') }} · {{ downloadPercent }}% · {{ status.download.filename }}</p>
         <p v-if="selectedModel" class="wide-field">{{ t('tagger.models.output') }}: {{ mode === 'tag' ? t('tagger.modeTag') : t('tagger.modeNatural') }} · {{ selectedModel.ready ? t('tagger.models.ready') : t('tagger.models.notReady') }}</p>
+        <ManagedVisionModel v-if="selectedModel?.profile_id === 'qwen3-vl-2b-local'" :status="localVision" :busy="localVisionBusy" :locked="captionBusy || previewBusy" @action="manageLocalVision" />
         <template v-if="mode !== 'natural'">
           <label>{{ t("tagger.thresholdLabel") }}<input v-model.number="form.threshold" type="number" min="0" max="1" step="0.05" /></label>
           <label>{{ t("tagger.characterThresholdLabel") }}<input v-model.number="form.character_threshold" type="number" min="0" max="1" step="0.05" /></label>
@@ -436,13 +452,12 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
           <label v-if="mode === 'tag'">{{ t("tagger.conflictLabel") }}<select v-model="form.batch_output_action_on_conflict"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
         </template>
         <template v-if="mode !== 'tag'">
-          <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language" :disabled="presetSaving"><option value="zh-CN">简体中文</option><option value="zh-TW">繁體中文</option><option value="en">English</option><option value="ja">日本語</option></select></label>
+          <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language" class="caption-output-language" :disabled="presetSaving"><option v-if="!outputLanguages.some(item => item.value === captionForm.language)" :value="captionForm.language" disabled>{{ t('tagger.caption.unsupportedLanguage') }}</option><option v-for="item in outputLanguages" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
           <label>{{ t('tagger.models.maxTokens') }}<input v-model.number="captionForm.max_tokens" type="number" min="1" max="8192" /></label>
           <label>{{ t('tagger.models.temperature') }}<input v-model.number="captionForm.temperature" type="number" min="0" max="2" step="0.1" /></label>
           <CaptionPromptEditor v-model:preset-id="presetId" v-model:name="presetName" v-model:prompt="captionForm.prompt" v-model:system-prompt="selectedSystemPrompt" v-model:maximum="captionForm.max_caption_length" :presets="captionPresets" :builtins="builtinPresets" :saving="presetSaving" :legacy-count="legacyPresetCount" @select="selectPreset" @save="savePreset()" @save-as="savePreset(false, true)" @restore-default="selectPreset('builtin-caption-zh')" @restore="restorePrompt" @remove="savePreset(true)" @import-legacy="importLegacyPresets" @refresh="refreshPromptPresets" />
           <label>{{ t("tagger.caption.conflict") }}<select v-model="captionForm.conflict_action"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option></select></label>
           <div class="caption-privacy wide-field">{{ t("tagger.caption.privacy") }}</div>
-          <ManagedVisionModel v-if="selectedModel?.profile_id === 'qwen3-vl-2b-local'" :status="localVision" :busy="localVisionBusy" :locked="captionBusy || previewBusy" @action="manageLocalVision" />
 
         </template>
         <label class="wide-field">{{ t("tagger.caption.previewPath") }}<input v-model="previewImagePath" placeholder="/data/datasets/images/example.png" /></label>

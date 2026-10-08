@@ -35,7 +35,7 @@
 ## 统一 LLM 和安全边界
 
 - 翻译和自然语言打标共用 Profile、asset、runtime、cache、revision、connection test 和密钥掩码。
-- 翻译 Profile 只需 `text`；Caption Profile 必须 `vision` + `caption`。
+- 翻译Profile只需text；Caption模型目录必须有vision/caption，所引用共享Profile必须有vision，保持既有text/vision Profile schema。逻辑supports_*能力在线上目录使用capabilities数组与runtime表达；后端目录/模型选择、Profile与实际响应均需校验。
 - 已配置远程视觉 Profile 时生产路由始终 remote-first；本地模型只在用户明确启用 fallback 且远程失败时使用。
 - API Key 只能在后端运行时注入；不得写入配置明文、前端、预设、任务档案、日志、报告、截图、Git 或环境文件。
 - 远程请求只传受限 JPEG data URL，不传本地路径、文件名、数据集名称、EXIF 或原始响应。

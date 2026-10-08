@@ -1,4 +1,17 @@
-# 2026-10-08 Tag统一任务与试标续接（当前）
+# 2026-10-08 真实验收与修复续接（当前）
+
+Goal active且无budget；用户授权全部实现/验证，Agent/plugin接口不修改。业务父提交6829ec8，当前HEAD读git log。真实ONNX旧新Tag/HTTPpreview3图逐字节相同13/11/8、skip3、archive通过；本地Qwen3/3、cache3零新增请求/skip3零请求、preview零写盘、峰值3,068,416,000B、已停止。正式lifespan空配置/无Key/词库/模型/预设/任务及390px通过。真实UI（内置system）3/3、Task页实际cancel0txt、Editor单字natural/undo/redo/外部409/unknown保护通过。公开样本副本原始hash已恢复，所有自建模型/server停止，browser blank，tracked dist恢复。证据phase-4-real-evaluation三份最新报告。
+
+首轮功能完整范围51文件：506passed/4Windows symlink权限失败/0skip/17subtests/42.46s。原四case在独立WSL/Python3.11.15/newvenv/干净6829源码真实POSIX symlink四项通过；最初libGL缺失collection失败，专用venv替换同版本opencv-python-headless后通过。不是Phase5，也不把Windows失败改写pass。新tools/run_caption_scope_tests.py固定选择完整Caption/LLM/Tagger/translation/datasets/editor/Task/log/config/SPA，排除用户已收敛的Agent和训练引擎内部族；保存scope SHA/junit/report，任何skip也非pass。
+
+两项用户问题仍待答，不得按默认选项推定批准：1) 新UI火箭文本SHA1df733846810cc99cf4eda6293dc739c2a35a21caa081ee7e77ab51932d466ef五维评分；猫/咖啡与旧B组精确相同，可引用旧对应评分。2) 启用Windows开发者模式原四case复验，或批准仅这四case跨平台组合验收。新UI火箭prompt_revision543e625a7759e434bf355f7e；原CLI三图全部与B精确同文本prompt_revisionf27bd880bde909f515423f53，不扩大评分。
+
+本批修复：停止弹窗Caption文案、支持语言过滤、取消模板选择DOM值与草稿一致、模型旁安装/下载进度及终态目录刷新、Tag任务取消传播共享下载事件且TaggerCancelled归cancelled、坏档案phase/count/timestamp隔离及不可用archive根保护。专项50通过；前端342/52/type/lint/build，2既有warning。最近之后又补了archive时间戳/必须计数字段检查，提交后完整矩阵需复跑。所有句柄已结束。tests/test_diffsynth_review.py既有未提交修改保留，不加入提交。
+
+唯一下一步：提交本批源代码/文档（staged privacy scan），执行当前提交完整功能矩阵的新root；核对Phase2/3完成门，同时等两项用户答案，之后才解锁Phase5全新重建。Phase5必须新源码/venv/node_modules/dist/config/DB/cache/output与URL重新下载样本/Qwen/runtime/ONNX，禁止复用中间资产。当前没有Phase5目录。新runtime/user_data隔离已修正到harness，fake fixture queue环境变量也已修正。中间真实UI根nl-caption-real-ui-409-20261008、CLI本地nl-caption-real-local-409-20261008，私有结果仅sandbox，不进Git；无本轮远程Key或远程Profile，不能称当前远程实测通过。无需重做旧TagUI/P1或原六条人工评分。
+
+以下仅为历史增量。
+# 2026-10-08 Tag统一任务与试标续接
 
 Goal active；HEAD读git log。Tag前端已走统一/tagger/jobs持久化并共享进度/停止/重试/历史，旧interrogate保留兼容；TagJobRequest去掉LLM及旧字段、Tag公开snapshot仅适用参数。Tag单图预览复用_prepare_tag_model/_generate_tags且无写盘，native取消等待调用结束再release。报告deep-link支持Tag。独立mount加载状态修复并全回归通过。后端299/4warning/39.69秒，专项44；前端341/52/check/type/lint/build，2既有warning。新fake browser nl-caption-tag-browser-20261008：preview与batch3txt一致/provider0，任务页报告WD正确/390px无横溢出。证据2026-10-08-tag-preview-durable-ui.md。真实工具已去combined入口、隔离user_data并注入bridge、TagHTTPpreview及copy/cache+ignore/skip分离，尚未实际运行。用户文档同步。
 

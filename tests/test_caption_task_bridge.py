@@ -235,3 +235,63 @@ def test_sqlite_failure_after_archive_registration_prevents_inference(setup, mon
     assert not image.with_suffix(".txt").exists()
     assert next(iter(tasks.tasks.values())).status == TaskStatus.FAILED
     assert not tagger_progress.is_busy()
+
+
+def test_task_stop_cancels_tag_asset_download_before_inference(setup, monkeypatch):
+    image, tasks, _bridge, _store, create = setup
+    service = Vision()
+    manager = create(service)
+    downloading = threading.Event()
+    tick = threading.Event()
+    generated = []
+
+    def prepare(request):
+        downloading.set()
+        while not tagger_progress.is_cancel_requested():
+            tick.wait(.01)
+        tagger_progress.check_cancelled()
+
+    monkeypatch.setattr(manager, "_prepare_tag_model", prepare)
+    monkeypatch.setattr(manager, "_generate_tags", lambda *args: generated.append(True))
+    job_id = manager.start({"path": str(image.parent), "mode": "tag"})["job_id"]
+    assert downloading.wait(timeout=3)
+    tasks.terminate_task(job_id)
+    manager._thread.join(timeout=5)
+    assert not manager._thread.is_alive()
+    assert manager.status()["phase"] == "cancelled"
+    assert manager.status()["cancelled"] == 1
+    assert manager.status()["failed"] == 0
+    assert tasks.tasks[job_id].status == TaskStatus.TERMINATED
+    assert not generated and not service.calls
+    assert not image.with_suffix(".txt").exists()
+    assert not tagger_progress.is_busy()
+
+
+def test_malformed_archive_state_does_not_prevent_other_tasks_from_restoring(setup):
+    image, _tasks, bridge, store, create = setup
+    manager = create(Vision())
+    job_id = manager.start({"path": str(image.parent), "mode": "natural"})["job_id"]
+    manager._thread.join(timeout=5)
+    valid = bridge.locations[job_id]
+    malformed_id = str(uuid.uuid4())
+    malformed = valid.with_name(valid.name.replace(job_id, malformed_id))
+    malformed.mkdir()
+    (malformed / "config.json").write_text("{}", encoding="utf-8")
+    record = json.loads((valid / "task.json").read_text(encoding="utf-8"))
+    record["job_id"] = malformed_id
+    record["state"].update(job_id=malformed_id, phase=["done"])
+    (malformed / "task.json").write_text(json.dumps(record), encoding="utf-8")
+    restored = TaskManager()
+    CaptionTaskBridge(bridge.root, restored).restore(store)
+    assert list(restored.tasks) == [job_id]
+
+
+def test_unavailable_archive_root_does_not_crash_state_restoration(setup, monkeypatch):
+    _image, _tasks, bridge, store, _create = setup
+
+    def unavailable(path):
+        raise OSError("archive root unavailable")
+
+    monkeypatch.setattr(bridge, "_contained", unavailable)
+    bridge.restore(store)
+    assert bridge.locations == {}

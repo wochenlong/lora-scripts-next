@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import copy
 import json
+import math
 import os
 import re
 import stat
@@ -191,7 +192,11 @@ class CaptionTaskBridge:
         self._write(path, record, backup=not recovered)
 
     def restore(self, job_store):
-        base = self._contained(self.root / "tasks" / "dataset-tagger")
+        try:
+            base = self._contained(self.root / "tasks" / "dataset-tagger")
+        except OSError:
+            log.warning("Caption archive root unavailable / 打标档案目录不可用，请检查user_data")
+            return
         if not base.is_dir():
             return
         for path in sorted(base.glob("*/*/task.json")):
@@ -205,6 +210,19 @@ class CaptionTaskBridge:
                     continue
                 saved = job_store.get(job_id) if job_store else None
                 state = copy.deepcopy(saved["state"] if saved else record["state"])
+                phase = state.get("phase") if isinstance(state, dict) else None
+                if not isinstance(phase, str) or phase not in {"pending", "captioning", "cancelling", "cancelled", "done", "error"} or state.get("job_id") != job_id:
+                    raise ValueError("caption archive state is invalid")
+                for key in ("current", "total", "succeeded", "failed", "skipped"):
+                    count = state.get(key, 0 if key == "skipped" else None)
+                    if type(count) is not int or count < 0:
+                        raise ValueError("caption archive counts are invalid")
+                created = record.get("created_at")
+                if type(created) not in {int, float} or not math.isfinite(created) or created < 0:
+                    raise ValueError("caption archive timestamp is invalid")
+                for key in ("updated_at", "finished_at"):
+                    if key in state and (type(state[key]) not in {int, float} or not math.isfinite(state[key]) or state[key] < 0):
+                        raise ValueError("caption archive timestamp is invalid")
                 if state["phase"] not in _TERMINAL:
                     state.update(phase="error", message="服务重启前未完成，可从打标页重试", recovered=True)
                 self.locations[job_id] = directory
@@ -212,5 +230,5 @@ class CaptionTaskBridge:
                     record["state"] = state
                     self._write(path, record, backup=not recovered)
                 self._register(state, record["created_at"], restoring=True)
-            except (OSError, ValueError, KeyError):
+            except (OSError, ValueError, KeyError, TypeError):
                 log.warning("Caption archive unavailable; other task records remain usable / 打标档案不可读，请检查user_data，其他记录继续可用")

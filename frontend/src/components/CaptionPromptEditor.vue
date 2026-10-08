@@ -9,11 +9,19 @@ const systemPrompt = defineModel<string>("systemPrompt", { required: true })
 const maximum = defineModel<number | undefined>("maximum", { required: true })
 const emit = defineEmits<{ select: [identifier: string]; save: []; saveAs: []; restore: []; restoreDefault: []; remove: []; importLegacy: []; refresh: [] }>()
 const { t } = useI18n()
+
+function requestPreset(event: Event) {
+  const select = event.target as HTMLSelectElement
+  const identifier = select.value
+  // The parent commits selection only after handling unsaved changes.
+  select.value = presetId.value
+  emit("select", identifier)
+}
 </script>
 
 <template>
   <div class="caption-prompt-editor wide-field">
-    <label>{{ t("tagger.caption.preset") }}<select :value="presetId" class="caption-preset-select" :disabled="saving" @change="emit('select', ($event.target as HTMLSelectElement).value)"><option value="">{{ t("tagger.caption.customPrompt") }}</option><optgroup :label="t('tagger.caption.builtins')"><option v-for="preset in builtins" :key="preset.id" :value="preset.id">{{ preset.name }}</option></optgroup><optgroup :label="t('tagger.caption.userPresets')"><option v-for="preset in presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option></optgroup></select></label>
+    <label>{{ t("tagger.caption.preset") }}<select :value="presetId" class="caption-preset-select" :disabled="saving" @change="requestPreset"><option value="">{{ t("tagger.caption.customPrompt") }}</option><optgroup :label="t('tagger.caption.builtins')"><option v-for="preset in builtins" :key="preset.id" :value="preset.id">{{ preset.name }}</option></optgroup><optgroup :label="t('tagger.caption.userPresets')"><option v-for="preset in presets" :key="preset.id" :value="preset.id">{{ preset.name }}</option></optgroup></select></label>
     <label>{{ t("tagger.caption.presetName") }}<input v-model="name" class="caption-preset-name" :disabled="saving" /></label>
     <label>{{ t("tagger.caption.maxLength") }}<input v-model.number="maximum" class="caption-max-length" type="number" min="1" max="2000" step="1" :disabled="saving" /></label>
     <label class="wide-field">{{ t("tagger.caption.prompt") }}<textarea v-model="prompt" rows="4" :disabled="saving" /></label>

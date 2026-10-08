@@ -370,14 +370,15 @@ watch(() => selected.value?.status, (status, previous) => {
 })
 
 async function terminate(task: TrainingTask) {
+  const caption = task.metadata.kind === "dataset_caption"
   try {
-    await ElMessageBox.confirm(t("tasks.terminate.confirm", { id: task.id }), t("tasks.terminate.title"), {
-      confirmButtonText: t("tasks.terminate.confirmButton"),
+    await ElMessageBox.confirm(t(caption ? "tasks.detail.captionCancelConfirm" : "tasks.terminate.confirm", { id: task.id }), t(caption ? "tasks.detail.captionCancelTitle" : "tasks.terminate.title"), {
+      confirmButtonText: t(caption ? "tasks.detail.captionCancelTitle" : "tasks.terminate.confirmButton"),
       cancelButtonText: t("tasks.terminate.cancel"),
       type: "warning",
     })
     await store.terminate(task.id)
-    ElMessage.success(t("tasks.terminate.success"))
+    ElMessage.success(t(caption ? "tagger.msg.cancelRequested" : "tasks.terminate.success"))
   } catch (caught) {
     if (caught !== "cancel" && caught !== "close") {
       ElMessage.error(caught instanceof Error ? caught.message : t("tasks.terminate.fail"))

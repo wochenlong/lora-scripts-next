@@ -4,14 +4,14 @@
 
 - Plan ID：`DATASET-NL-TAGGING-20261006`
 - Version：`v3.0-issue-409-aligned`
-- Last updated：2026-10-07 Asia/Shanghai
+- Last updated：2026-10-08 Asia/Shanghai
 - Canonical progress file：本文
 - Design source：`docs/design/natural-language-captioning-tagging-design.md`
 - Construction plan：`docs/tasks/natural-language-captioning-plan/`
 - Contract：[#409 模型打标界面与自然语言标注](https://github.com/wochenlong/lora-scripts-next/issues/409)
 - Related issues：#365 数据集工作区、#405 user_data/任务契约
 - Current branch：`feat/NL-Captioning`
-- Current active phase：重新规划后的 Phase 0 — 契约收敛与差异修复
+- Current active phase：Phase 2/3 完成门审计；Phase 4 真实资源与矩阵证据采集
 - Execution readiness：`executing`（用户已于2026-10-07明确建立goal并全面执行）
 - Scale：Full
 
@@ -50,7 +50,7 @@
 ### 不可违反的边界
 
 - API Key 只在后端运行时注入；配置、响应、预设、任务档案、日志和报告只允许掩码或布尔状态。
-- 翻译 Profile 只需 `text`；Caption Profile 必须声明 `vision` 和 `caption`；后端能力校验是最终依据。
+- 翻译Profile只需text；Caption模型目录必须有vision/caption，共享Profile必须声明vision；后端目录、Profile和实际响应校验是最终依据。
 - API 运行方式只有在存在真实可用 Profile 时才显示；没有 API 配置不构成空入口。
 - 远程视觉请求只发送受限 JPEG data URL，不发送本地路径、文件名、数据集名或 EXIF。
 - Natural caption 不经 Tag 拆分、排序、去重、下划线转换；旧 Tag 继续按原逻辑处理。
@@ -235,11 +235,11 @@
 
 | 阶段 | 状态 | 说明 |
 |---|---|---|
-| Phase 0 契约收敛 | in progress | 差异表已归档；预设及组合入口首批修复，模型能力目录待实现 |
-| Phase 1 LLM/模型能力契约 | pending | 需先完成 Phase 0 完成门 |
-| Phase 2 后端 Caption/Tag 任务 | pending | 既有实现需按新 contract 复核 |
-| Phase 3 前端/Editor/user_data | pending | 既有 UI 需移除 combined 并改为 model-first |
-| Phase 4 真实资源/EDD | pending | 历史证据保留但按新门重新归类 |
+| Phase 0 契约收敛 | done | #409差异表、范围收敛、模型目录与user_data规则已实施；文档复盘已同步 |
+| Phase 1 LLM/模型能力契约 | done | 共享配置/掩码/迁移、能力参数拒绝、预设进程事务和fake/gray回归通过 |
+| Phase 2 后端 Caption/Tag 任务 | in progress | 持久化/预览/取消/恢复/灰度通过；最终完成门仍需复核 |
+| Phase 3 前端/Editor/user_data | in progress | model-first/预设/任务联动/390px及前端341项通过；最终UI/Editor完成门复核中 |
+| Phase 4 真实资源/EDD | in progress | 当前ONNX/Qwen/正式Zero-Short通过；完整功能矩阵506通过/4环境失败，0skip |
 | Phase 5 隔离重建 | pending | 最终完成门 |
 
 ### 当前验证状态
@@ -291,3 +291,13 @@ GET /api/tagger/models和本地/API一级选择已实现；系列折叠/原名�
 Tag页面接入统一/tagger/jobs持久化、取消/仅失败重试、底部进度/历史；旧/interrogate保留兼容。单图Tag试标复用批量参数与后处理且零写盘，原生推理结束前不释放占用。快照按能力隔离、报告deep-link支持Tag，独立mount/KeepAlive初始化均验证。相关后端299、专项44、前端341/52/check/build通过；实际fake browser三图Tag/单图结果一致、provider0、任务报告和390px无溢出。证据2026-10-08-tag-preview-durable-ui.md。使用文档与真实验证工具同步本版边界。
 
 唯一下一步：在当前提交源码上执行真实ONNX Tag/HTTP试标/旧输出灰度及本地Qwen自然语言/缓存/归档验证；随后正式lifespan、最终矩阵与Phase5全新重建。尚不宣告阶段/goal完成，不复用旧combined证据或把fake当Real。
+
+## 2026-10-08 真实链路与完成门修复
+
+当前真实ONNX新旧/HTTP预览三图相同，Tag13/11/8，默认跳过和档案通过；本地Qwen3/3、缓存3命中/零新请求、默认跳过零请求、预览不写盘，峰值3,068,416,000字节，运行时停止；正式lifespan空配置Zero-Short和390px通过。真实UI内置系统提示词三图3/3、任务页停止0写盘；编辑器单字natural/撤回/重做/409外部冲突/unknown保护通过。准确输出绑定旧B组相同文本；新UI火箭文本已请求单独人工评分，仍待用户回复。
+
+完整功能矩阵506通过/4Windows symlink权限失败/0skip；独立新Linux/Python3.11环境四原始symlink case实际通过，不改测试。用户选择Windows开发者模式复验或批准跨平台组合覆盖仍待回复，不能擅自核销Windows失败。
+
+验收修复：停止弹窗类型、支持语言过滤、取消模板切换的select显示、Tag下载事件取消与取消终态、模型旁下载/安装状态及目录刷新、损坏档案类型和时间戳隔离。专项50、前端342/52完整check通过。证据phase-4-real-evaluation最新三份报告。Phase5尚未开始。
+
+唯一下一步：本批提交后完整功能矩阵复跑并核对Phase2/3完成门；同时保持两项用户问题待答，再解锁Phase5全新隔离重建。Agent/plugin不纳入施工，既有tests/test_diffsynth_review.py保留未提交。
