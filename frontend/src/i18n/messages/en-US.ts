@@ -439,6 +439,18 @@ export default {
       success: "Removed {n} finished task(s)",
       fail: "Cleanup failed",
     },
+    autoRetry: {
+      off: "Retry: off",
+      armed: "Retry: {n}x",
+      title: "Auto Re-queue on Failure",
+      countLabel: "Auto re-queue up to",
+      countSuffix: "time(s)",
+      hint: "Only applies when the training process fails after launching (bad parameters fail at preflight without consuming attempts); re-queued tasks go to the back of the queue. Resuming from a checkpoint requires save_state during training. Use 0 to disable.",
+      confirm: "Save",
+      cancel: "Cancel",
+      saved: "Auto re-queue setting saved",
+      fail: "Failed to save auto re-queue setting",
+    },
     importTrain: {
       fail: "Failed to import into the training page",
     },

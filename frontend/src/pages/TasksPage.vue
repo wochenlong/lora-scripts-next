@@ -439,6 +439,40 @@ const purgeOpen = ref(false)
 const purgeKeepLast = ref(10)
 const purgeBusy = ref(false)
 
+const autoRetryOpen = ref(false)
+const autoRetryCount = ref(0)
+const autoRetryBusy = ref(false)
+
+function autoRetryMax(task: TrainingTask): number {
+  const raw = Number(task.metadata?.auto_retry_max ?? 0)
+  return Number.isFinite(raw) && raw > 0 ? Math.min(9, Math.floor(raw)) : 0
+}
+
+function canArmAutoRetry(task: TrainingTask): boolean {
+  return !isMaintenanceTask(task) && (task.status === "CREATED" || task.status === "QUEUED" || task.status === "RUNNING")
+}
+
+function openAutoRetry() {
+  if (!selected.value) return
+  autoRetryCount.value = autoRetryMax(selected.value)
+  autoRetryOpen.value = true
+}
+
+async function saveAutoRetry() {
+  if (!selected.value) return
+  autoRetryBusy.value = true
+  try {
+    await tasksApi.setAutoRetry(selected.value.id, autoRetryCount.value)
+    await store.refresh({ silent: true })
+    autoRetryOpen.value = false
+    ElMessage.success(t("tasks.autoRetry.saved"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.autoRetry.fail"))
+  } finally {
+    autoRetryBusy.value = false
+  }
+}
+
 async function purgeTasks() {
   purgeBusy.value = true
   try {
@@ -717,6 +751,7 @@ onBeforeUnmount(() => {
             <button v-else-if="isHeld(selected)" class="primary-action" :disabled="actionBusyId === selected.id" @click="resume(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.starting") : t("tasks.detail.resume") }}</button>
             <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
             <button v-if="selected.status === 'QUEUED'" class="secondary-action" :disabled="actionBusyId === selected.id" @click="moveToFront(selected)">{{ t("tasks.detail.moveToFront") }}</button>
+            <button v-if="canArmAutoRetry(selected)" class="secondary-action" @click="openAutoRetry">{{ autoRetryMax(selected) > 0 ? t("tasks.autoRetry.armed", { n: autoRetryMax(selected) }) : t("tasks.autoRetry.off") }}</button>
             <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
             <button v-if="isTerminal(selected)" class="danger-action" :disabled="actionBusyId === selected.id" @click="removeTask(selected)">{{ t("tasks.detail.delete") }}</button>
           </div>
@@ -793,6 +828,21 @@ onBeforeUnmount(() => {
       <template #footer>
         <button class="ghost-button" @click="purgeOpen = false">{{ t("tasks.purge.cancel") }}</button>
         <button class="danger-action" :disabled="purgeBusy" @click="purgeTasks">{{ t("tasks.purge.confirmButton") }}</button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="autoRetryOpen" :title="t('tasks.autoRetry.title')" width="min(440px, 92vw)" align-center>
+      <div class="purge-form">
+        <label class="purge-keep">
+          <span>{{ t("tasks.autoRetry.countLabel") }}</span>
+          <el-input-number v-model="autoRetryCount" :min="0" :max="9" size="small" />
+          <span>{{ t("tasks.autoRetry.countSuffix") }}</span>
+        </label>
+        <p class="purge-hint">{{ t("tasks.autoRetry.hint") }}</p>
+      </div>
+      <template #footer>
+        <button class="ghost-button" @click="autoRetryOpen = false">{{ t("tasks.autoRetry.cancel") }}</button>
+        <button class="primary-action" :disabled="autoRetryBusy" @click="saveAutoRetry">{{ t("tasks.autoRetry.confirm") }}</button>
       </template>
     </el-dialog>
 

@@ -375,3 +375,58 @@ class RetryTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class AutoRequeueTests(unittest.TestCase):
+    def test_failed_task_auto_requeues_until_budget_exhausted(self):
+        tm = TaskManager()
+        fail = [sys.executable, "-c", "import sys; sys.exit(3)"]
+        a = tm.create_task(fail, dict(os.environ), task_id="a", metadata={"auto_retry_max": 1})
+        tm.submit(a)
+        self.assertTrue(_wait_status(a, {TaskStatus.FAILED}))
+        retried = next((t for t in tm.tasks.values() if t.metadata.get("retry_of") == "a"), None)
+        self.assertIsNotNone(retried)
+        self.assertEqual(retried.metadata["auto_retry_max"], 1)
+        self.assertEqual(retried.metadata["auto_retry_used"], 1)
+        self.assertTrue(_wait_status(retried, {TaskStatus.FAILED}))
+        time.sleep(0.5)
+        self.assertFalse(any(t.metadata.get("retry_of") == retried.task_id for t in tm.tasks.values()))
+
+    def test_successful_task_is_not_requeued(self):
+        tm = TaskManager()
+        a = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="a", metadata={"auto_retry_max": 2})
+        tm.submit(a)
+        self.assertTrue(_wait_status(a, {TaskStatus.FINISHED}))
+        time.sleep(0.5)
+        self.assertEqual(len(tm.tasks), 1)
+
+    def test_spawn_failure_is_not_requeued(self):
+        tm = TaskManager()
+        a = tm.create_task(["/nonexistent/python-xyz-357"], dict(os.environ), task_id="a", metadata={"auto_retry_max": 2})
+        tm.submit(a)
+        self.assertTrue(_wait_status(a, {TaskStatus.FAILED}))
+        time.sleep(0.5)
+        self.assertEqual(len(tm.tasks), 1)
+
+    def test_terminated_task_is_not_requeued(self):
+        tm = TaskManager()
+        a = tm.create_task(_sleeper(5), dict(os.environ), task_id="a", metadata={"auto_retry_max": 2})
+        tm.submit(a)
+        self.assertTrue(_wait_status(a, {TaskStatus.RUNNING}))
+        tm.terminate_task("a")
+        self.assertTrue(_wait_status(a, {TaskStatus.TERMINATED}))
+        time.sleep(0.5)
+        self.assertEqual(len(tm.tasks), 1)
+
+    def test_set_auto_retry_arms_active_task_only(self):
+        tm = TaskManager()
+        a = tm.create_task(_sleeper(0.8), dict(os.environ), task_id="a")
+        tm.submit(a)
+        b = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="b")
+        tm.submit(b)
+        armed = tm.set_auto_retry("b", 3)
+        self.assertIsNotNone(armed)
+        self.assertEqual(armed.metadata["auto_retry_max"], 3)
+        self.assertTrue(_wait_status(b, {TaskStatus.FINISHED}))
+        self.assertIsNone(tm.set_auto_retry("b", 1))
+        self.assertIsNone(tm.set_auto_retry("missing", 1))

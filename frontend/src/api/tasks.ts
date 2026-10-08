@@ -91,6 +91,7 @@ export const tasksApi = {
   remove: (taskId: string) => apiRequest(`/api/tasks/${encodeURIComponent(taskId)}`, { method: "DELETE" }),
   purge: (keepLast: number) => apiData<TaskPurgeResult>("/api/tasks/purge", { method: "POST", body: JSON.stringify({ keep_last: keepLast }) }),
   moveToFront: (taskId: string) => apiData<TaskMoveResult>(`/api/tasks/${encodeURIComponent(taskId)}/move-to-front`, { method: "POST" }),
+  setAutoRetry: (taskId: string, count: number) => apiData<{ task_id: string; auto_retry_max: number }>(`/api/tasks/auto_retry/${encodeURIComponent(taskId)}`, { method: "POST", body: JSON.stringify({ count }) }),
   config: (taskId: string) => apiData<TaskConfigData>(`/api/tasks/${encodeURIComponent(taskId)}/config`),
   previews: (taskId: string, signal?: AbortSignal) => apiData<TaskPreviewsData>(`/api/tasks/${encodeURIComponent(taskId)}/previews`, { signal }),
   metrics: (taskId: string, signal?: AbortSignal) => apiData<TaskMetricsData>(`/api/tasks/${encodeURIComponent(taskId)}/metrics`, { signal }),

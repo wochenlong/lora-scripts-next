@@ -439,6 +439,18 @@ export default {
       success: "已清理 {n} 个历史任务",
       fail: "清理失败",
     },
+    autoRetry: {
+      off: "重试：不重试",
+      armed: "重试：{n} 次",
+      title: "失败自动重新排队",
+      countLabel: "失败后自动重排",
+      countSuffix: "次",
+      hint: "仅在训练进程启动后失败时生效（参数错误会在预检查阶段直接失败，不占次数）；重排追加到队尾，从断点恢复需训练时开启 save_state。填 0 表示不重试。",
+      confirm: "保存",
+      cancel: "取消",
+      saved: "自动重排设置已保存",
+      fail: "保存自动重排设置失败",
+    },
     importTrain: {
       fail: "导入训练页失败",
     },

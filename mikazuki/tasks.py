@@ -494,6 +494,48 @@ class TaskManager:
             log.error(f"{label} fatal error / 任务出现致命错误: {e}")
         if rc != 0 and task.group:
             self._skip_group_remainder(task, rc)
+        self._maybe_auto_requeue(task, rc)
+
+    def _maybe_auto_requeue(self, task: Task, rc: int) -> None:
+        """Re-queue a failed task when the user armed auto-retry (#357).
+
+        Only failures after the training process actually launched qualify:
+        adapter/preflight failures never create a task, and a process that
+        could not even spawn would fail identically on every retry. Manual
+        termination and skipped group remainders are excluded.
+        """
+        if rc == 0 or task.status != TaskStatus.FAILED or task.process is None:
+            return
+        if task.lane != LANE_COMPUTE or not task.command:
+            return
+        try:
+            max_retries = int(task.metadata.get("auto_retry_max") or 0)
+            used = int(task.metadata.get("auto_retry_used") or 0)
+        except (TypeError, ValueError):
+            return
+        if max_retries <= 0 or used >= max_retries:
+            return
+        # Set before retry_task() so the rebuilt task(s) inherit the counters.
+        task.metadata["auto_retry_used"] = used + 1
+        task.metadata["auto_requeued"] = True
+        self._persist()
+        log.info(
+            f"Task {task.task_id} failed; auto re-queue {used + 1}/{max_retries} "
+            f"/ 任务失败，自动重新排队（第 {used + 1}/{max_retries} 次）"
+        )
+        self.retry_task(task.task_id)
+
+    def set_auto_retry(self, task_id: str, count: int) -> Optional["Task"]:
+        """Arm/disarm auto re-queue for an active compute task (#357)."""
+        with self._cond:
+            task = self.tasks.get(task_id)
+            if task is None or task.lane != LANE_COMPUTE:
+                return None
+            if task.status not in (TaskStatus.CREATED, TaskStatus.QUEUED, TaskStatus.RUNNING):
+                return None
+            task.metadata["auto_retry_max"] = max(0, min(9, int(count)))
+            self._persist()
+            return task
 
     def _skip_group_remainder(self, failed_task: Task, rc: int):
         label = failed_task.metadata.get("stage_label") \
