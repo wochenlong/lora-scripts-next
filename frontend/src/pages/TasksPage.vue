@@ -752,7 +752,6 @@ onBeforeUnmount(() => {
           <button :class="{ active: activeTab === 'running' }" @click="activeTab = 'running'">{{ t("tasks.tabs.running") }}<b>{{ runningList.length }}</b></button>
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
-        <button class="ghost-button tasks-purge-button" @click="openBatchEnqueue">{{ t("tasks.batchEnqueue.button") }}</button>
         <button v-if="activeTab === 'recent' && recentList.length" class="ghost-button tasks-purge-button" @click="purgeOpen = true">{{ t("tasks.purge.button") }}</button>
         <div class="tasks-filters">
           <el-select v-model="filterStatus" size="small" class="tasks-filter-status">
@@ -775,6 +774,7 @@ onBeforeUnmount(() => {
             <span v-for="stage in group.stages" :key="stage.id" class="task-stage" :data-status="stage.status.toLowerCase()">{{ stageLabelKey(stage.name) ? t(stageLabelKey(stage.name)) : stage.name }}</span>
           </div>
         </article>
+        <button class="ghost-button tasks-purge-button" @click="openBatchEnqueue">{{ t("tasks.batchEnqueue.button") }}</button>
       </aside>
 
       <section v-if="selected" class="task-detail" :data-status="selected.status.toLowerCase()">
