@@ -2,7 +2,7 @@
 
 用户2026-10-09反馈并直接授权：远程生成成功但Editor原文有时为空；本地英文选择仍返回中文；英文提示词实测可改善输出；自然语言需要中文译文，但继续禁用Tag操作，中文无需调用模型。
 
-这是原goal完成后的修复与新增功能，原完成历史保留。当前状态：功能与补验通过，待候选完整矩阵及手测项目同步。分支feat/NL-Captioning，既有tests/test_diffsynth_review.py修改保留。
+这是原goal完成后的修复与新增功能，原完成历史保留。当前状态：complete-with-existing-platform-boundary；已提交并同步手测项目。分支feat/NL-Captioning，既有tests/test_diffsynth_review.py修改保留。
 
 | 验收项 | 实施/验证 |
 |---|---|
@@ -20,3 +20,16 @@
 
 
 真实补验首轮：迁移产生的无Key text远程占位配置被当成候选，实际fallback模型cache无法按远程revision命中；新译文路由在请求快照中排除此类外部接口，持久配置不变。新增合同验证后r2重启补验全部通过，保留首轮fail报告。不重用原goal人工4分评价新英文输出，r2只记录自动语言/功能检查。浏览器早期协议对隐藏的ElSwitch input和缺少llm:前缀型号定位错误，修正为实际可见控件/型号后完成；窄屏实测client375/body380的5px溢出真实修复，最终client/body均375。
+
+
+## 最终结果与交付
+
+候选81e85d7f88e230829fba94d4def2dec80d59d6b7。前端53文件347项、typecheck/lint/build通过，两个既有EngineStatusBar warning。候选后端53文件533项：529通过、四个原Windows WinError1314失败、0skip、17subtests；同四个case/安全路径组件均未修改，沿用此前用户批准的平台组合边界，未在本轮新跑Linux，不声称Windows原生通过。
+
+真实Qwen3-VL-2B三图默认en均生成英文正文（3/3），真实中文整句翻译成功；缓存回放命中，原始TXT逐SHA不变，模型停止后中文短路仍成功。浏览器16项通过：原文显示/默认展开、Tag chips与批量Tag禁用、译文不改原文、中文0翻译请求、草稿恢复、外部生成后重新加载、English默认/英中模板及System prompt切换、最终390px client/body均375，无pageerror。
+
+新模型输出只做自动语言/功能检验，没有冒用旧中文描述人工分数。本轮新增远程译文没有真实Key注入或付费请求，远程优先/fallback由合同与已有共享LLM回归覆盖，用户需重新输入Key继续远程手测。不宣称重新进行完整Phase5 fresh重建。
+
+原手测源码已切到81e85d7并从源码重新构建，28766应用重启就绪。用户4个数据集、21个文件在升级前后逐SHA相同；预设/任务状态继续使用原state，不重新初始化。中文短路及新OpenAPI英文默认接口已在实际交付服务验证；独立BrowserContext读用户实际remote-english目录，原文、译文入口与禁用Tag批量均确认，未写用户文件。早期交付检查使用旧目录名caption-samples失败；按用户已改名的实际目录检查后通过，不改用户目录名。28767补验服务及视觉模型已停止，私有日志/截图留在手测根。原tests/test_diffsynth_review.py未提交或恢复；Agent/plugin生产零变更，没有push。
+
+机器摘要：[测试、真实模型与交付](2026-10-09-natural-translation-results.json)、[浏览器](2026-10-09-natural-translation-browser.json)。用户下一步：Ctrl+F5刷新页面、重新输入后端运行时API Key，在自然语言原文面板开启中文译文；旧空草稿可通过恢复磁盘原文按钮明确丢弃。

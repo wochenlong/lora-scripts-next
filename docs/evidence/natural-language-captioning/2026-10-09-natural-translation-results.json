@@ -1,0 +1,104 @@
+{
+  "source_commit": "81e85d7f88e230829fba94d4def2dec80d59d6b7",
+  "frontend": {
+    "files": 53,
+    "passed": 347,
+    "typecheck": true,
+    "lint": true,
+    "build": true,
+    "existing_lint_warnings": 2
+  },
+  "backend_raw": {
+    "source_commit": "81e85d7f88e230829fba94d4def2dec80d59d6b7",
+    "selected_files": 53,
+    "testcases": 533,
+    "exit_code": 1,
+    "failures": [
+      {
+        "classname": "tests.test_datasets_api",
+        "name": "test_list_datasets_excludes_symlinked_directories",
+        "time": "0.006"
+      },
+      {
+        "classname": "tests.test_datasets_api",
+        "name": "test_resolve_dataset_dir_rejects_symlink_escape",
+        "time": "0.006"
+      },
+      {
+        "classname": "tests.test_datasets_export",
+        "name": "test_zip_export_skips_symlinked_files",
+        "time": "0.009"
+      },
+      {
+        "classname": "tests.test_datasets_export",
+        "name": "test_zip_export_skips_symlinked_directories",
+        "time": "0.011"
+      }
+    ],
+    "skipped": [],
+    "passed": false
+  },
+  "backend_boundary": {
+    "windows_passed": 529,
+    "windows_symlink_permission_failures": 4,
+    "skipped": 0,
+    "prior_user_approved_original_linux_cases": 4,
+    "unchanged_path_security_components": true,
+    "new_linux_run_this_followup": false,
+    "windows_native_symlink_unverified": true
+  },
+  "real_local_r2": {
+    "kind": "followup-real-english-and-translation",
+    "checks": {
+      "default_english_three_written": true,
+      "actual_three_english_bodies": true,
+      "real_text_translation": true,
+      "translation_cache_replay": true,
+      "translation_never_writes_captions": true,
+      "chinese_bypass_without_running_model": true
+    },
+    "passed": true,
+    "remote": "not injected into this supplemental server",
+    "caption_sha256": {
+      "chelsea.txt": "46faf67e9ec202634cbe71e2ef260b735865450f8c5d0b0428af6c46835f222a",
+      "coffee.txt": "9147900c297d11270f105b208970d9bd1d36082c5aa745a859fd6527d291aa78",
+      "rocket.txt": "847c13da7cf1049fc5439fe52142b9904a247664292cb61633d44f74ef2ab0e8"
+    },
+    "translation_sha256": "be86eb1617a5b6ad9df68194cf9d25bd03dd14fa82dec0d60978eab113568397"
+  },
+  "real_local_r1_failed": {
+    "kind": "followup-real-english-and-translation",
+    "checks": {
+      "default_english_three_written": true,
+      "actual_three_english_bodies": true,
+      "real_text_translation": true
+    },
+    "passed": false,
+    "remote": "not injected into this supplemental server",
+    "caption_sha256": {
+      "chelsea.txt": "46faf67e9ec202634cbe71e2ef260b735865450f8c5d0b0428af6c46835f222a",
+      "coffee.txt": "9147900c297d11270f105b208970d9bd1d36082c5aa745a859fd6527d291aa78",
+      "rocket.txt": "847c13da7cf1049fc5439fe52142b9904a247664292cb61633d44f74ef2ab0e8"
+    }
+  },
+  "browser_report": "2026-10-09-natural-translation-browser.json",
+  "deployment": {
+    "source_commit": "81e85d7f88e230829fba94d4def2dec80d59d6b7",
+    "fresh_source_build": true,
+    "user_dataset_hashes_preserved": true,
+    "dataset_directories": 4,
+    "user_files_preserved": 21,
+    "api_english_default": true,
+    "new_translation_endpoint": true,
+    "chinese_bypass": true,
+    "application_running": true,
+    "runtime_keys_require_reinjection": true,
+    "original_goal_reopened": false,
+    "supplemental_server_stopped": true
+  },
+  "remote_real_new_translation": "not run; key not injected into supplemental server, reinject after main restart",
+  "fresh_phase5_rebuild_claimed": false,
+  "increment_status": "complete-with-existing-platform-boundary",
+  "new_english_human_scores": "not supplied; no scores inherited from Chinese results",
+  "sensitive_artifacts_in_git": false
+}

@@ -1,3 +1,13 @@
+# 当前最小续接：手测反馈增量已交付（2026-10-09）
+
+原goal完成历史不变。本轮用户授权的新功能/修复已提交81e85d7：English优先/builtin语言与System prompt切换/严格正文语言及坏旧cache再生成；Editor scan不误写空draft、激活重扫/原文展开/恢复；自然语言只读中文译文共享LLM text路由和SQLite独立表，中文无需模型，无Key外部Profile排除，取消与旧响应隔离，Tag操作禁用、390px宽度修复。
+
+最终前端53文件347pass/type/lint/build（2既有warning）；候选后端533项529pass/4既有WinError1314/0skip/17subtests。四原case/路径安全组件完全未变，保留此前用户批准的组合边界；本轮无新Linux验证或新远程Key/付费译文测试，无新英文人工评分，不冒用旧结果。真实Qwen English3/3、中文翻译/cache/不写原文/中文短路与16浏览器检查通过。
+
+现有手测源码已升级81e85d7/源构建/28766重启。用户将样本拆分为local-chinese、local-engish、remote-english和tag-samples；四目录21文件在升级前后SHA一致。原state/presets/tasks保留。API Key按既定仅在运行时，重启后用户重新输入；需CtrlF5新页面，旧空draft若有则点恢复磁盘原文确认。原tests/test_diffsynth_review.py仍保留不提交。补验28767和视觉服务已停止，所有安装/构建/测试句柄结束，无live句柄要poll。用户实际remote-english目录在交付新服务经独立BrowserContext只读确认原文可见/译文入口/批量Tag禁用。
+
+证据2026-10-09-manual-feedback-change.md及natural-translation-results/browser JSON。无施工项剩余，用户继续手测；实际新问题作为新反馈处理，不重启原goal。下面为历史。
+
 # 当前：用户手动反馈修复与自然语言译文（2026-10-09）
 
 原goal已complete，不重新建goal。本轮用户直接授权修复Editor空文本/本地en实际中文、英文优先，并新增整段自然语言中文译文（中文零模型调用），继续禁用Tag操作。Canonical任务书与变更证据2026-10-09-manual-feedback-change.md维护新增任务，不覆盖原闭门。

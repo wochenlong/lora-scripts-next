@@ -97,3 +97,6 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 ## 最新完成门：2026-10-08
 
 候选8986b9e功能/真实/从零已通过，最终证据索引2026-10-08-final-acceptance-audit.md。仅Windows剩余五个沙盒清理尚未核销；自动审批两次拒绝，已询问用户手动删除或明确保留例外。goal active，GATE10不能提前complete。
+
+
+2026-10-09增量完成：候选81e85d7；前端347/53/type/lint/build，后端529通过/四项既有平台失败/0skip，真实本地English3/3与译文/cache/中文短路、浏览器16项通过。已更新现有手测项目并源构建/重启，4目录21文件SHA不变。新远程译文实测及新英文人工评分未运行，不伪称通过。详情2026-10-09-manual-feedback-change.md。

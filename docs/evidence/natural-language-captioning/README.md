@@ -28,3 +28,5 @@ Phase4已按用户批准的环境口径通过；候选8986b9e已在新r5根完�
 - [用户手动清理与最终闭门](phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json)
 
 - [goal完成后全新手测项目交付](phase-5-isolated-rebuild/2026-10-09-manual-test-delivery.md)
+
+- [手测反馈：英文优先与自然语言译文增量](2026-10-09-manual-feedback-change.md)

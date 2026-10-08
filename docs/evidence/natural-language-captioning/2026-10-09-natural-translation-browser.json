@@ -1,0 +1,35 @@
+{
+  "source_commit": "81e85d7f88e230829fba94d4def2dec80d59d6b7",
+  "checks": {
+    "naturalTextVisible": true,
+    "rawExpanded": true,
+    "noTagChips": true,
+    "realChineseTranslation": true,
+    "translationLeavesOriginal": true,
+    "chineseZeroRequests": true,
+    "restoreOriginal": true,
+    "emptyDatasetLoaded": true,
+    "defaultEnglish": true,
+    "englishPrompt": true,
+    "chinesePrompt": true,
+    "switchBackEnglish": true,
+    "externalGenerationReloadVisible": true,
+    "editor390NoOverflow": true,
+    "batchTagDisabledForNatural": true,
+    "finalStyledTranslation": true
+  },
+  "pageErrors": [],
+  "passed": true,
+  "initial_narrow_equality_check_failed": true,
+  "narrow_dimensions": {
+    "viewport": 390,
+    "client": 375,
+    "body": 375
+  },
+  "manual_delivery_browser": {
+    "userCaptionVisible": true,
+    "naturalTranslationControls": true,
+    "batchTagDisabled": true,
+    "userDatasetReadOnlyInspection": true
+  }
+}
