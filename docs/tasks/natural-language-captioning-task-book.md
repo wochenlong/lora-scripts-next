@@ -11,7 +11,7 @@
 - Contract：[#409 模型打标界面与自然语言标注](https://github.com/wochenlong/lora-scripts-next/issues/409)
 - Related issues：#365 数据集工作区、#405 user_data/任务契约
 - Current branch：`feat/NL-Captioning`
-- Current active phase：Phase 2/3 完成门审计；Phase 4 真实资源与矩阵证据采集
+- Current active phase：Phase4真实资源与完成门审计；Phase5等待前置门
 - Execution readiness：`executing`（用户已于2026-10-07明确建立goal并全面执行）
 - Scale：Full
 
@@ -237,9 +237,9 @@
 |---|---|---|
 | Phase 0 契约收敛 | done | #409差异表、范围收敛、模型目录与user_data规则已实施；文档复盘已同步 |
 | Phase 1 LLM/模型能力契约 | done | 共享配置/掩码/迁移、能力参数拒绝、预设进程事务和fake/gray回归通过 |
-| Phase 2 后端 Caption/Tag 任务 | in progress | 持久化/预览/取消/恢复/灰度通过；最终完成门仍需复核 |
-| Phase 3 前端/Editor/user_data | in progress | model-first/预设/任务联动/390px及前端341项通过；最终UI/Editor完成门复核中 |
-| Phase 4 真实资源/EDD | in progress | 当前ONNX/Qwen/正式Zero-Short通过；完整功能矩阵506通过/4环境失败，0skip |
+| Phase 2 后端 Caption/Tag 任务 | done | 假模型失败矩阵/持久化/预览/取消/恢复/写回/真实灰度通过，完成门复核完成 |
+| Phase 3 前端/Editor/user_data | done | model-first/预设/任务联动/390px/键盘及前端342项通过；真实Editor安全复核完成 |
+| Phase 4 真实资源/EDD | in progress | 当前ONNX/Qwen/正式Zero-Short通过；最新功能矩阵509通过/4Windows环境失败，0skip；用户评分/验收环境待答 |
 | Phase 5 隔离重建 | pending | 最终完成门 |
 
 ### 当前验证状态
@@ -301,3 +301,5 @@ Tag页面接入统一/tagger/jobs持久化、取消/仅失败重试、底部进�
 验收修复：停止弹窗类型、支持语言过滤、取消模板切换的select显示、Tag下载事件取消与取消终态、模型旁下载/安装状态及目录刷新、损坏档案类型和时间戳隔离。专项50、前端342/52完整check通过。证据phase-4-real-evaluation最新三份报告。Phase5尚未开始。
 
 唯一下一步：本批提交后完整功能矩阵复跑并核对Phase2/3完成门；同时保持两项用户问题待答，再解锁Phase5全新隔离重建。Agent/plugin不纳入施工，既有tests/test_diffsynth_review.py保留未提交。
+
+f53582e提交后的完整复验：51文件/513 case，509 passed/4同样Windows权限失败/0skip，其他失败无新增。Phase2/3对应focused/真实路径/前端与Editor完成门已复核；整项目仍不complete。下一步：完成Phase4用户评分与Windows/跨平台环境口径核销、发布前审计；之后开始Phase5新源码/新依赖/新资产重建。

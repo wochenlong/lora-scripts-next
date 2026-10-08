@@ -1,5 +1,7 @@
 # 2026-10-08 真实验收与修复续接（当前）
 
+最新：HEAD f53582e业务修复已提交，后续文档提交读git log。f53582e完整功能矩阵r2结束，51文件/513case，509通过/4同样Win symlink权限失败/0skip，无新增失败。Phase2/3完成门已复核为done，Phase4in progress，Phase5pending。两个用户问题仍待答；不是停止goal，goal active。下一步Phase4评分/环境口径与发布前审计，之后才新建Phase5。没有活动exec句柄，所有自建模型/server已停止。
+
 Goal active且无budget；用户授权全部实现/验证，Agent/plugin接口不修改。业务父提交6829ec8，当前HEAD读git log。真实ONNX旧新Tag/HTTPpreview3图逐字节相同13/11/8、skip3、archive通过；本地Qwen3/3、cache3零新增请求/skip3零请求、preview零写盘、峰值3,068,416,000B、已停止。正式lifespan空配置/无Key/词库/模型/预设/任务及390px通过。真实UI（内置system）3/3、Task页实际cancel0txt、Editor单字natural/undo/redo/外部409/unknown保护通过。公开样本副本原始hash已恢复，所有自建模型/server停止，browser blank，tracked dist恢复。证据phase-4-real-evaluation三份最新报告。
 
 首轮功能完整范围51文件：506passed/4Windows symlink权限失败/0skip/17subtests/42.46s。原四case在独立WSL/Python3.11.15/newvenv/干净6829源码真实POSIX symlink四项通过；最初libGL缺失collection失败，专用venv替换同版本opencv-python-headless后通过。不是Phase5，也不把Windows失败改写pass。新tools/run_caption_scope_tests.py固定选择完整Caption/LLM/Tagger/translation/datasets/editor/Task/log/config/SPA，排除用户已收敛的Agent和训练引擎内部族；保存scope SHA/junit/report，任何skip也非pass。

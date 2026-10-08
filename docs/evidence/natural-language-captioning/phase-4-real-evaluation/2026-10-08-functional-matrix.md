@@ -15,4 +15,6 @@
 
 补充实际结果：独立Linux/Python3.11.15、干净6829ec8源码及新venv中，四个原始case使用真实POSIX symlink全部通过，未改测试。最初因libGL.so.1缺失无法collection，改用相同4.8.1.78版本的原生opencv-python-headless（仅此venv）后4 passed，退出码0。Python安装包SHA 171dffd8c0f66e8a0725364a7428015b22fc18dd298b24f541392e17dd0e561f；headless wheel从PyPI下载并验证其发布SHA。Windows原运行仍4失败，已向用户请求“启用开发者模式复验”或“批准这四项跨平台组合覆盖”的验收选择，尚未收到决定。
 
+f53582e修复提交后重新运行同一完整选择集合：51文件/513 case（新增三个取消/归档恢复case），509 passed/4相同Windows权限失败/0skip；无新增失败。source_commit与每个测试文件SHA均由runner记录，未用此前子集结果代替。最终环境口径仍待用户决定。
+
 相关后端子集299通过、前端341/52完整check通过、真实ONNX/本地Qwen和正式lifespan Zero-Short通过，见2026-10-08-current-tag-local-zero.md。整体goal仍active，最终测试和全新隔离重建未闭环。
