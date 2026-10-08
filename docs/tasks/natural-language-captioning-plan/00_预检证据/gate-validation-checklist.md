@@ -1,5 +1,9 @@
 # Gate Validation Checklist
 
+2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。
+
+以下2026-10-08及更早条目保留为历史，当前状态以上述闭门结论和canonical任务书为准。
+
 | Gate | 通过条件 | 当前 |
 | --- | --- | --- |
 | G-00 | 用户目标、仓库、参考项目、P1 证据明确 | pass |
@@ -13,4 +17,4 @@
 | G-08 | Frontend check and manual acceptance pass | pass；342/52、实际浏览器与用户评分 |
 | G-09 | Real/EDD/Zero-Short evidence pass | pass-with-boundary；远程本轮未配置 |
 | G-10 | Review no unauthorized P0/P1 | pass；OpenAPI遗漏已修复并全新重建 |
-| G-11 | 隔离环境从零重建、完整真实验收和清理通过 | cleanup pending；Windows删除策略拒绝 |
+| G-11 | 隔离环境从零重建、完整真实验收和清理通过 | pass-with-boundary；用户手动清空后实测清理完成 |

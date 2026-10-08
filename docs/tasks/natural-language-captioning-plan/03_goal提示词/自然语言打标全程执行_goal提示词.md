@@ -1,5 +1,9 @@
 # 自然语言打标全程执行 Goal（Issue #409 对齐版）
 
+2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。
+
+以下2026-10-08及更早条目保留为历史，当前状态以上述闭门结论和canonical任务书为准。
+
 你现在执行 `DATASET-NL-TAGGING-20261006` 的完整交付。最终目标是在现有 Dataset Tagger 页面中完成 Issue #409 约定的模型打标体验，并通过完整测试、真实资源验收、人工验收和一次全新隔离重建。工作范围必须收敛到数据集 Tag/自然语言 Caption、统一 LLM、user_data 预设、Dataset Editor 安全和相关验收。
 
 ## 立即读取的资料

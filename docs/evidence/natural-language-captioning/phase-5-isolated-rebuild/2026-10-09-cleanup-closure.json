@@ -1,0 +1,30 @@
+{
+  "kind": "user-manual-cleanup-and-final-gate-closure",
+  "date": "2026-10-09",
+  "user_statement": "我直接把sandboxes里的内容全删除了，继续推进任务；完成goal之后在sandboxes里再重建一个全新项目我做最后手动测试",
+  "approved_action": "user performed deletion; no retention exception required",
+  "sandboxes_empty_before_new_manual_delivery": true,
+  "previous_five_windows_roots_exist": {
+    "nl-caption-phase5-409-20261008-r1": false,
+    "nl-caption-phase5-409-20261008-r2": false,
+    "nl-caption-phase5-409-20261008-r3": false,
+    "nl-caption-phase5-409-20261008-r4": false,
+    "nl-caption-phase5-409-20261008-r5": false
+  },
+  "owned_model_and_server_processes_running": false,
+  "stale_worktree_registrations_pruned": true,
+  "accepted_source_commit": "8986b9e16ca90268480139eda5e086cbd197dea1",
+  "functional_git_content_matches_accepted_source": true,
+  "checkout_eol_only_differences": 65,
+  "all_functional_evidence_passed": true,
+  "raw_windows_symlink_failures_preserved": 4,
+  "linux_original_cases_passed": 4,
+  "platform_combination_user_approved": true,
+  "remote_this_rebuild": "not-configured; not marked passing",
+  "unauthorized_p0_p1": 0,
+  "GATE-10": "pass-with-boundary",
+  "G-11": "pass-with-boundary",
+  "cleanup_completed": true,
+  "new_manual_project": "separate user-requested retained delivery; created only after goal completion",
+  "historical_rejections_preserved": true
+}
