@@ -182,6 +182,7 @@ export default {
       confirm: "开始训练",
       cancel: "取消",
       started: "训练任务已启动：{id}",
+      queued: "已有训练在运行，任务已加入队列：{id}",
       fail: "训练提交失败",
       preflightFail: "Anima Fast 预检查未通过",
     },

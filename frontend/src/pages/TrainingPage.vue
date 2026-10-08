@@ -349,7 +349,7 @@ async function submit() {
     tasksStore.markAttention()
     tasksStore.refresh({ silent: true })
     saveHistory()
-    ElMessage.success(t("training.submitConfirm.started", { id: started.value.task_id }))
+    ElMessage.success(t(started.value.queued ? "training.submitConfirm.queued" : "training.submitConfirm.started", { id: started.value.task_id }))
   } catch (reason) {
     if (reason !== "cancel" && reason !== "close") ElMessage.error(reason instanceof Error ? reason.message : t("training.submitConfirm.fail"))
   } finally { submitting.value = false }

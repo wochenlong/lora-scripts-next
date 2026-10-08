@@ -29,6 +29,7 @@ export interface NormalizedExport {
 
 export interface TrainingStart {
   task_id: string
+  queued?: boolean
   train_log_url?: string
   train_log_path?: string
   train_log_query?: string
