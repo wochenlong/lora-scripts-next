@@ -393,7 +393,7 @@
 
 ### 升级说明
 
-- **v2.5.2 整合包用户请整包升级到 v2.5.3**（不要覆盖 `sd-models/`、`output/`、`config/` 等用户目录）。详见 [`docs/portable-upgrade-2.5.2-to-2.5.3.md`](docs/portable-upgrade-2.5.2-to-2.5.3.md)。
+- **v2.5.2 整合包用户请整包升级到 v2.5.3**（不要覆盖 `sd-models/`、`output/`、`config/` 等用户目录）。详见 [`docs/outdated/portable-upgrade-2.5.2-to-2.5.3.md`](docs/outdated/portable-upgrade-2.5.2-to-2.5.3.md)。
 
 ---
 

@@ -87,6 +87,6 @@ Anima Fast 在整合包内也可通过侧栏 **Anima LoRA → Fast 模式** 页�
 
 用户数据（`sd-models/`、`output/`、`logs/`、`config/autosave/`）不会被覆盖。
 
-若你仍在 **v2.5.2**，可先参考 [`portable-upgrade-2.5.2-to-2.5.3.md`](portable-upgrade-2.5.2-to-2.5.3.md)，再整包更新到 v2.8.2。
+若你仍在 **v2.5.2**，可先参考 [`portable-upgrade-2.5.2-to-2.5.3.md`](outdated/portable-upgrade-2.5.2-to-2.5.3.md)，再整包更新到 v2.8.2。
 
 更多打包与更新契约见 [`portable-packaging-git-update.md`](portable-packaging-git-update.md)。

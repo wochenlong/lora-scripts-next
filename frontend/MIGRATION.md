@@ -7,7 +7,7 @@
 ### 2026-07-28：工程基线
 
 - 创建分支 `refactor/vue3-frontend`。
-- 完成 API、页面模块、执行时序和用户工作流调研，见 `docs/vue3-frontend-rewrite-research-and-plan.md`。
+- 完成 API、页面模块、执行时序和用户工作流调研，见 `docs/outdated/vue3-frontend-rewrite-research-and-plan.md`。
 - 重写期间曾将旧 `frontend/` 移至 `frontendbak/` 作为迁移参考；重写完成后该临时备份已删除。
 - 在原路径创建 Vue 3 + TypeScript + Vite 工程。
 - 引入 Vue Router、Pinia、Element Plus；所有开发 API 使用同源路径并由 Vite 代理。
