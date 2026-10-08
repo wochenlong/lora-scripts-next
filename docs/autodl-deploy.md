@@ -27,7 +27,7 @@ nvidia-smi
 
 ## 3. 创建 Python 3.10 环境
 
-本项目 README 要求 Python 3.10，且依赖里包含较旧的训练栈组件，例如 `gradio==3.44.2`、`pytorch-lightning==1.9.0`。因此不要使用镜像自带的 Python 3.12。
+GUI 主环境沿用 Python 3.10（与整合包内嵌解释器一致）；`requirements.txt` 现仅含 GUI 依赖，训练栈由各训练引擎的独立 venv 承载，不在本环境安装。因此不要使用镜像自带的 Python 3.12。
 
 ```bash
 source /root/miniconda3/etc/profile.d/conda.sh
