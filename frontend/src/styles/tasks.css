@@ -254,6 +254,31 @@
   line-height: 1.5;
 }
 
+.batch-enqueue-results {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 6px;
+  max-height: 40vh;
+  overflow: auto;
+}
+
+.batch-enqueue-results li {
+  display: grid;
+  gap: 2px;
+  font-size: 12px;
+}
+
+.batch-enqueue-results li[data-ok="false"] strong {
+  color: var(--danger, #c45656);
+}
+
+.batch-enqueue-error {
+  color: var(--danger, #c45656);
+  word-break: break-all;
+}
+
 .purge-dialog .el-dialog__footer,
 .purge-dialog footer {
   display: flex;

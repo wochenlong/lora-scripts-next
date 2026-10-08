@@ -3,11 +3,12 @@ import hashlib
 import json
 import os
 import re
+import toml
 
 from glob import glob
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
@@ -273,6 +274,85 @@ async def create_toml_file(request: Request):
         data["output_name_renamed"] = {"from": renamed_from, "to": config["output_name"]}
         result.data = data
     return result
+
+
+@router.post("/tasks/batch-enqueue")
+async def batch_enqueue_training(files: List[UploadFile] = File(...)):
+    """Enqueue several exported training configs (TOML/JSON) at once (#357).
+
+    Each file must carry model_train_type and goes through the same
+    preparation + dispatch pipeline as /api/run; files that fail validation
+    are reported without blocking the rest. Uploaded files are kept under
+    config/batch-queue/ as a record of what was submitted.
+    """
+    queue_dir = Path(os.getcwd()) / "config" / "batch-queue"
+    queue_dir.mkdir(parents=True, exist_ok=True)
+    autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
+    os.makedirs(autosave_dir, exist_ok=True)
+    base_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+
+    results: list[dict] = []
+    for index, upload in enumerate(files):
+        name = Path(upload.filename or f"config-{index}.toml").name
+        entry: dict = {"file": name, "ok": False}
+        results.append(entry)
+        try:
+            raw = (await upload.read()).decode("utf-8-sig")
+        except UnicodeDecodeError:
+            entry["error"] = "文件编码不是有效的 UTF-8"
+            continue
+        try:
+            config = json.loads(raw) if name.lower().endswith(".json") else toml.loads(raw)
+        except Exception as exc:
+            entry["error"] = f"配置解析失败: {exc}"
+            continue
+        if not isinstance(config, dict):
+            entry["error"] = "配置内容不是键值表"
+            continue
+        (queue_dir / f"{base_timestamp}-{index:02d}-{name}").write_text(raw, encoding="utf-8")
+
+        model_train_type = str(config.get("model_train_type") or "").strip()
+        if not model_train_type or registry.resolve_train_type(model_train_type) is None:
+            entry["error"] = f"无法识别训练类型: {model_train_type or '(缺失 model_train_type)'}"
+            continue
+        try:
+            train_utils.fix_config_types(config)
+            normalize_custom_args(config)
+            train_utils.ensure_enable_preview_flag(config)
+            gpu_ids = config.pop("gpu_ids", None)
+            config.pop("model_train_type", None)
+            renamed_from = ensure_unique_output_name(config, tm)
+            result = dispatch_run(
+                model_train_type,
+                config,
+                RunContext(
+                    timestamp=f"{base_timestamp}-{index:02d}",
+                    autosave_dir=autosave_dir,
+                    gpu_ids=gpu_ids,
+                    model_train_type=model_train_type,
+                ),
+            )
+        except Exception as exc:
+            entry["error"] = str(exc)
+            continue
+        if result is None or result.status != "success":
+            entry["error"] = (result.message if result is not None else None) or f"不支持的训练类型: {model_train_type}"
+            continue
+        entry["ok"] = True
+        data = result.data or {}
+        if data.get("task_id"):
+            entry["task_id"] = data["task_id"]
+        entry["queued"] = bool(data.get("queued"))
+        if renamed_from:
+            entry["output_name_renamed"] = {"from": renamed_from, "to": config["output_name"]}
+
+    ok_count = sum(1 for item in results if item["ok"])
+    return APIResponseSuccess(data={
+        "results": results,
+        "ok_count": ok_count,
+        "fail_count": len(results) - ok_count,
+        "queue_dir": str(queue_dir),
+    })
 
 
 def _engine_routes_module(engine_id: str):

@@ -83,6 +83,22 @@ export interface TaskMoveResult {
   queue_position?: number | null
 }
 
+export interface BatchEnqueueItem {
+  file: string
+  ok: boolean
+  task_id?: string
+  queued?: boolean
+  error?: string
+  output_name_renamed?: { from: string; to: string }
+}
+
+export interface BatchEnqueueData {
+  results: BatchEnqueueItem[]
+  ok_count: number
+  fail_count: number
+  queue_dir: string
+}
+
 export const tasksApi = {
   list: async () => (await apiData<TasksData>("/api/tasks")).tasks,
   terminate: (taskId: string) => apiRequest(`/api/tasks/terminate/${encodeURIComponent(taskId)}`),
@@ -92,6 +108,11 @@ export const tasksApi = {
   purge: (keepLast: number) => apiData<TaskPurgeResult>("/api/tasks/purge", { method: "POST", body: JSON.stringify({ keep_last: keepLast }) }),
   moveToFront: (taskId: string) => apiData<TaskMoveResult>(`/api/tasks/${encodeURIComponent(taskId)}/move-to-front`, { method: "POST" }),
   setAutoRetry: (taskId: string, count: number) => apiData<{ task_id: string; auto_retry_max: number }>(`/api/tasks/auto_retry/${encodeURIComponent(taskId)}`, { method: "POST", body: JSON.stringify({ count }) }),
+  batchEnqueue: (files: File[]) => {
+    const form = new FormData()
+    files.forEach((file) => form.append("files", file))
+    return apiData<BatchEnqueueData>("/api/tasks/batch-enqueue", { method: "POST", body: form })
+  },
   config: (taskId: string) => apiData<TaskConfigData>(`/api/tasks/${encodeURIComponent(taskId)}/config`),
   previews: (taskId: string, signal?: AbortSignal) => apiData<TaskPreviewsData>(`/api/tasks/${encodeURIComponent(taskId)}/previews`, { signal }),
   metrics: (taskId: string, signal?: AbortSignal) => apiData<TaskMetricsData>(`/api/tasks/${encodeURIComponent(taskId)}/metrics`, { signal }),

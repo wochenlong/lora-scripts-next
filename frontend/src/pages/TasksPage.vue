@@ -7,7 +7,7 @@ import { stringify } from "smol-toml"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useTasksStore } from "../stores/tasks"
-import { tasksApi, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
+import { tasksApi, type BatchEnqueueItem, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
 import { moduleForTrainType } from "../training/modules"
 import { copyText } from "../utils/clipboard"
 import LossChart from "../components/LossChart.vue"
@@ -443,6 +443,39 @@ const autoRetryOpen = ref(false)
 const autoRetryCount = ref(0)
 const autoRetryBusy = ref(false)
 
+const batchOpen = ref(false)
+const batchFiles = ref<File[]>([])
+const batchBusy = ref(false)
+const batchResults = ref<BatchEnqueueItem[] | null>(null)
+
+function openBatchEnqueue() {
+  batchFiles.value = []
+  batchResults.value = null
+  batchOpen.value = true
+}
+
+function onBatchFilesChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  batchFiles.value = Array.from(input.files ?? [])
+  batchResults.value = null
+}
+
+async function submitBatchEnqueue() {
+  if (!batchFiles.value.length || batchBusy.value) return
+  batchBusy.value = true
+  try {
+    const data = await tasksApi.batchEnqueue(batchFiles.value)
+    batchResults.value = data.results
+    await store.refresh({ silent: true })
+    if (data.fail_count === 0) ElMessage.success(t("tasks.batchEnqueue.allOk", { n: data.ok_count }))
+    else ElMessage.warning(t("tasks.batchEnqueue.partial", { ok: data.ok_count, fail: data.fail_count }))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.batchEnqueue.fail"))
+  } finally {
+    batchBusy.value = false
+  }
+}
+
 function autoRetryMax(task: TrainingTask): number {
   const raw = Number(task.metadata?.auto_retry_max ?? 0)
   return Number.isFinite(raw) && raw > 0 ? Math.min(9, Math.floor(raw)) : 0
@@ -719,6 +752,7 @@ onBeforeUnmount(() => {
           <button :class="{ active: activeTab === 'running' }" @click="activeTab = 'running'">{{ t("tasks.tabs.running") }}<b>{{ runningList.length }}</b></button>
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
+        <button class="ghost-button tasks-purge-button" @click="openBatchEnqueue">{{ t("tasks.batchEnqueue.button") }}</button>
         <button v-if="activeTab === 'recent' && recentList.length" class="ghost-button tasks-purge-button" @click="purgeOpen = true">{{ t("tasks.purge.button") }}</button>
         <div class="tasks-filters">
           <el-select v-model="filterStatus" size="small" class="tasks-filter-status">
@@ -843,6 +877,26 @@ onBeforeUnmount(() => {
       <template #footer>
         <button class="ghost-button" @click="autoRetryOpen = false">{{ t("tasks.autoRetry.cancel") }}</button>
         <button class="primary-action" :disabled="autoRetryBusy" @click="saveAutoRetry">{{ t("tasks.autoRetry.confirm") }}</button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="batchOpen" :title="t('tasks.batchEnqueue.title')" width="min(560px, 94vw)" align-center>
+      <div class="purge-form">
+        <input type="file" multiple accept=".toml,.json" @change="onBatchFilesChange">
+        <p class="purge-hint">{{ t("tasks.batchEnqueue.hint") }}</p>
+        <p v-if="batchFiles.length" class="purge-hint">{{ t("tasks.batchEnqueue.selected", { n: batchFiles.length }) }}</p>
+        <ul v-if="batchResults" class="batch-enqueue-results">
+          <li v-for="item in batchResults" :key="item.file" :data-ok="item.ok">
+            <strong>{{ item.file }}</strong>
+            <span v-if="item.ok">{{ item.queued ? t("tasks.batchEnqueue.queued") : t("tasks.batchEnqueue.started") }}</span>
+            <span v-if="item.ok && item.output_name_renamed">{{ t("tasks.batchEnqueue.renamed", { from: item.output_name_renamed.from, to: item.output_name_renamed.to }) }}</span>
+            <span v-if="!item.ok" class="batch-enqueue-error">{{ item.error }}</span>
+          </li>
+        </ul>
+      </div>
+      <template #footer>
+        <button class="ghost-button" @click="batchOpen = false">{{ t("tasks.batchEnqueue.close") }}</button>
+        <button class="primary-action" :disabled="!batchFiles.length || batchBusy" @click="submitBatchEnqueue">{{ batchBusy ? t("tasks.batchEnqueue.submitting") : t("tasks.batchEnqueue.confirm") }}</button>
       </template>
     </el-dialog>
 
