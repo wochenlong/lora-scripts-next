@@ -1,5 +1,8 @@
 # 数据集模型打标与自然语言 Caption 设计书（Issue #409 对齐版）
 
+2026-10-08当前验收：候选8986b9e功能/前后端/真实模型/人工评分/正式Zero-Short及第五次全新重建已通过。前端342/52，后端Windows512+Linux四原case覆盖516项/0skip，四项平台口径获用户批准；本轮远程未配置并如实记录。唯一剩余为Windows五个临时根清理，自动审批以blocked by policy拒绝递归删除，正在等待用户手动清理或明确保留例外。源码worktree、Linux根与自建进程已清理。整体goal未complete，GATE10/G-11 cleanup pending。详见phase-5-isolated-rebuild/2026-10-08-final-acceptance-audit.md。
+
+
 2026-10-08实施补充：Tag与自然语言前端共用既有/tagger/jobs持久化任务、TaskManager maintenance lane及user_data/tasks/dataset-tagger日期/UUID档案；SQLite是执行/恢复权威，TaskManager与task.json是状态投影，不增加调度器。冻结config/task/SQLite成功后才启动推理。任务页停止通过协作回调实际取消，历史失败项重试读取原配置，重启仅恢复状态。Tag单图试标复用批量模型与后处理，原生调用结束并卸载前保持共享占用；预览不写盘。新API请求和公开快照按Tag/Caption能力隔离。删除任务页记录隐藏投影且重启不复活，保留数据集/模型/档案；打标页历史清理另删除SQLite备份并保留图片/当前标注。实现与当前验证见2026-10-08-task-archives-bridge.md和2026-10-08-tag-preview-durable-ui.md；真实模型与浏览器已通过当前实现验证；最终完成门以隔离重建证据为准。
 
 ## 1. 文档状态与契约来源

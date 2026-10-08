@@ -1,0 +1,89 @@
+{
+  "schema_version": 1,
+  "kind": "fresh-caption-rebuild-inputs",
+  "manifest_sha256": "0bf2ade2c20141fdff27f21b52a1f484c92e3965582584e86b5336cb6d97dcaa",
+  "receipts": [
+    {
+      "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/chelsea.png",
+      "filename": "chelsea.png",
+      "sha256": "596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb",
+      "size_bytes": 240512,
+      "downloaded_at": "2026-10-08T11:47:31.688595+00:00",
+      "fresh_download": true,
+      "download_attempts": 1,
+      "relative_path": "samples/chelsea.png"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/coffee.png",
+      "filename": "coffee.png",
+      "sha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "size_bytes": 466706,
+      "downloaded_at": "2026-10-08T11:47:34.918428+00:00",
+      "fresh_download": true,
+      "download_attempts": 1,
+      "relative_path": "samples/coffee.png"
+    },
+    {
+      "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/rocket.jpg",
+      "filename": "rocket.jpg",
+      "sha256": "c2dd0de7c538df8d111e479619b129464d0269d0ae5fd18ca91d33a7fdfea95c",
+      "size_bytes": 112525,
+      "downloaded_at": "2026-10-08T11:47:36.734502+00:00",
+      "fresh_download": true,
+      "download_attempts": 1,
+      "relative_path": "samples/rocket.jpg"
+    },
+    {
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+      "filename": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+      "sha256": "089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae",
+      "size_bytes": 1107409952,
+      "downloaded_at": "2026-10-08T11:52:25.993292+00:00",
+      "fresh_download": true,
+      "download_attempts": 1,
+      "relative_path": "vision/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
+    },
+    {
+      "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+      "filename": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+      "sha256": "f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82",
+      "size_bytes": 445053216,
+      "downloaded_at": "2026-10-08T11:54:20.788416+00:00",
+      "fresh_download": true,
+      "download_attempts": 1,
+      "relative_path": "vision/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+    },
+    {
+      "url": "https://huggingface.co/SmilingWolf/wd-v1-4-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/model.onnx",
+      "filename": "model.onnx",
+      "sha256": "e91daa19cd9e8725125b7d70702d1560855fb687f8d8c4218eddaa821f41834a",
+      "size_bytes": 388479878,
+      "downloaded_at": "2026-10-08T11:57:03.225270+00:00",
+      "fresh_download": true,
+      "download_attempts": 1,
+      "relative_path": "tag-models/wd14/wd14-convnextv2-v2/model.onnx"
+    },
+    {
+      "url": "https://huggingface.co/SmilingWolf/wd-v1-4-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/selected_tags.csv",
+      "filename": "selected_tags.csv",
+      "sha256": "8c8750600db36233a1b274ac88bd46289e588b338218c2e4c62bbc9f2b516368",
+      "size_bytes": 253906,
+      "downloaded_at": "2026-10-08T11:57:08.265886+00:00",
+      "fresh_download": true,
+      "download_attempts": 1,
+      "relative_path": "tag-models/wd14/wd14-convnextv2-v2/selected_tags.csv"
+    },
+    {
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11327/llama-b11327-bin-win-cpu-x64.zip",
+      "filename": "llama-b11327-bin-win-cpu-x64.zip",
+      "sha256": "4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f",
+      "size_bytes": 19275534,
+      "downloaded_at": "2026-10-08T11:57:25.901139+00:00",
+      "fresh_download": true,
+      "download_attempts": 1,
+      "relative_path": "runtime-download/llama-b11327-bin-win-cpu-x64.zip"
+    }
+  ],
+  "passed": true,
+  "runtime_executable": "runtime/llama-server.exe"
+}

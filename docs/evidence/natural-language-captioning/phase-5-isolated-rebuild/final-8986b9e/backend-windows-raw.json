@@ -1,0 +1,30 @@
+{
+  "source_commit": "8986b9e16ca90268480139eda5e086cbd197dea1",
+  "selected_files": 52,
+  "testcases": 516,
+  "exit_code": 1,
+  "failures": [
+    {
+      "classname": "tests.test_datasets_api",
+      "name": "test_list_datasets_excludes_symlinked_directories",
+      "time": "0.004"
+    },
+    {
+      "classname": "tests.test_datasets_api",
+      "name": "test_resolve_dataset_dir_rejects_symlink_escape",
+      "time": "0.003"
+    },
+    {
+      "classname": "tests.test_datasets_export",
+      "name": "test_zip_export_skips_symlinked_files",
+      "time": "0.006"
+    },
+    {
+      "classname": "tests.test_datasets_export",
+      "name": "test_zip_export_skips_symlinked_directories",
+      "time": "0.005"
+    }
+  ],
+  "skipped": [],
+  "passed": false
+}

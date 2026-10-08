@@ -1,0 +1,44 @@
+[
+  {
+    "sample": "chelsea",
+    "text_sha256": "8aea8bddb74ef798e5761bb362e25d9d3b19222a3c8bd2827dead6cd6c01cf1c",
+    "exact_match_human_scored_B": true,
+    "scores": [
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "total": 20,
+    "approval_source": "phase-3-evaluation/human-evaluation-approval.json"
+  },
+  {
+    "sample": "coffee",
+    "text_sha256": "e69d511397aebf1aaedaa493127e17ac97e7e930d30048724e0d1855ee5866a9",
+    "exact_match_human_scored_B": true,
+    "scores": [
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "total": 20,
+    "approval_source": "phase-3-evaluation/human-evaluation-approval.json"
+  },
+  {
+    "sample": "rocket",
+    "text_sha256": "20ff84d8abb6428fddd34312416fb07f3933e35b4a32d083811f6780bf122f67",
+    "exact_match_human_scored_B": true,
+    "scores": [
+      4,
+      4,
+      4,
+      4,
+      4
+    ],
+    "total": 20,
+    "approval_source": "phase-3-evaluation/human-evaluation-approval.json"
+  }
+]

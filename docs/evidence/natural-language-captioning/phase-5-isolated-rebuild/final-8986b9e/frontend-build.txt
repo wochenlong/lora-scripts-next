@@ -1,0 +1,52 @@
+
+> next-trainer-frontend@0.1.0 build
+> vue-tsc -b && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+node_modules/@vueuse/core/dist/index.js (3362:0): A comment
+
+"/* #__PURE__ */"
+
+in "node_modules/@vueuse/core/dist/index.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/@vueuse/core/dist/index.js (5780:22): A comment
+
+"/* #__PURE__ */"
+
+in "node_modules/@vueuse/core/dist/index.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 1870 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                         0.81 kB │ gzip:   0.48 kB
+dist/assets/svg-256-CcWyxtGm.png                      262.58 kB
+dist/assets/qwen-image-21-poster-16-9-Cdng6kcc.png  1,680.49 kB
+dist/assets/useServerPathPick-Dx1NB19y.css              2.22 kB │ gzip:   0.67 kB
+dist/assets/SettingsContainerPage-DWq1XXqS.css          2.36 kB │ gzip:   0.76 kB
+dist/assets/TrainingWorkbenchPage-ChED8RU8.css          2.37 kB │ gzip:   0.76 kB
+dist/assets/index-CYwdr1t4.css                        209.19 kB │ gzip:  33.23 kB
+dist/assets/home-logo-Bq2pf2HD.js                       0.05 kB │ gzip:   0.07 kB
+dist/assets/pathPickerPreference-D5YQmlx2.js            0.46 kB │ gzip:   0.31 kB
+dist/assets/NotFoundPage-B5UOD0Wr.js                    0.50 kB │ gzip:   0.34 kB
+dist/assets/IntegrationPage-CecPy2dz.js                 1.05 kB │ gzip:   0.64 kB
+dist/assets/ParamsPage-CQZOOdO7.js                      1.42 kB │ gzip:   0.51 kB
+dist/assets/GenericPluginSettingsPage-NMzjc5_E.js       1.92 kB │ gzip:   0.94 kB
+dist/assets/GenericArtifactDetailPage-CjaGsZX7.js       1.95 kB │ gzip:   0.84 kB
+dist/assets/ToolsPage-DiB-xAoQ.js                       2.33 kB │ gzip:   1.17 kB
+dist/assets/GuidePage-rVEkqWY8.js                       2.40 kB │ gzip:   0.80 kB
+dist/assets/clipboard-ZS14DWZB.js                       2.60 kB │ gzip:   1.22 kB
+dist/assets/HomePage-C5Pjw152.js                        4.87 kB │ gzip:   2.03 kB
+dist/assets/index-BdDYr5K5.js                           7.45 kB │ gzip:   3.24 kB
+dist/assets/useServerPathPick-Byhkj6bo.js               7.68 kB │ gzip:   3.02 kB
+dist/assets/engines-BHTWupRm.js                         8.97 kB │ gzip:   1.98 kB
+dist/assets/index-B-iMEaMC.js                          11.32 kB │ gzip:   4.22 kB
+dist/assets/TasksPage-6_gutPP2.js                      28.94 kB │ gzip:   8.98 kB
+dist/assets/SettingsContainerPage-CLLhTuND.js          53.96 kB │ gzip:  15.72 kB
+dist/assets/TrainingWorkbenchPage-DnT8JL9t.js         121.86 kB │ gzip:  35.07 kB
+dist/assets/DatasetPage-DeeNoJ1x.js                   131.37 kB │ gzip:  35.77 kB
+dist/assets/index-2ck_QDRq.js                         562.87 kB │ gzip: 197.61 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 10.20s

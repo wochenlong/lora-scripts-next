@@ -10,7 +10,7 @@
 | G-05 | feat/NL-Captioning feature branch和环境准备完成 | pass；用户已明确全面施工 |
 | G-06 | Phase0 tests + migration evidence pass | pass；能力/迁移/预设事务/参数拒绝证据齐全 |
 | G-07 | Vision job contract and writer tests pass | pass；相关子集299通过，最终矩阵仍有环境失败 |
-| G-08 | Frontend check and manual acceptance pass | pending |
-| G-09 | Real/EDD/Zero-Short evidence pass | pending |
-| G-10 | Review no unauthorized P0/P1 | pending |
-| G-11 | 隔离环境从零重建、完整真实验收和清理通过 | pending |
+| G-08 | Frontend check and manual acceptance pass | pass；342/52、实际浏览器与用户评分 |
+| G-09 | Real/EDD/Zero-Short evidence pass | pass-with-boundary；远程本轮未配置 |
+| G-10 | Review no unauthorized P0/P1 | pass；OpenAPI遗漏已修复并全新重建 |
+| G-11 | 隔离环境从零重建、完整真实验收和清理通过 | cleanup pending；Windows删除策略拒绝 |

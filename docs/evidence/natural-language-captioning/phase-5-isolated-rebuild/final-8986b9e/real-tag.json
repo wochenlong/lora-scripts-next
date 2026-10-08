@@ -1,0 +1,35 @@
+{
+  "source_commit": "8986b9e",
+  "phase_4": false,
+  "provider": "real-ONNX-CPU",
+  "model": "wd14-convnextv2-v2",
+  "samples": [
+    {
+      "id": "chelsea",
+      "bytes_equal": true,
+      "preview_equal": true,
+      "tag_count": 13,
+      "after_hash": "6d051feae2d9d61c6bd21b079103ad6aef6eab1af89b3ceaf842a8e78ab22e57"
+    },
+    {
+      "id": "coffee",
+      "bytes_equal": true,
+      "preview_equal": true,
+      "tag_count": 11,
+      "after_hash": "f3f27dfcc407e7bbc363e07ca108dfb13cedbbf1b52ba4ffb055e609729dbb4d"
+    },
+    {
+      "id": "rocket",
+      "bytes_equal": true,
+      "preview_equal": true,
+      "tag_count": 8,
+      "after_hash": "275535818ae759366cc84305a799ada13b6c4de1080c451b6dc26e0b3d44dc29"
+    }
+  ],
+  "fresh_rebuild_inputs": true,
+  "task_archive_present": true,
+  "preview_no_write": true,
+  "default_skip": true,
+  "passed": true,
+  "seconds": 39.524
+}

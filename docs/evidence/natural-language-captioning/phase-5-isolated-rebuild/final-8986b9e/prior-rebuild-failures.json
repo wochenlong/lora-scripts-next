@@ -1,0 +1,46 @@
+[
+  {
+    "root_id": "nl-caption-phase5-409-20261008-r1",
+    "accepted": false,
+    "failure": {
+      "kind": "phase5-fresh-root-failure",
+      "source_commit": "25ef85b363bddfe39458b92a7659397d2d0c0669",
+      "root_accepted": false,
+      "failure": "frontend DatasetPage remount test exceeded unchanged 5000ms timeout under default parallel workers; 341 passed/1 failed",
+      "diagnosis": "original file unchanged, focused --maxWorkers=2: 4 passed; next run must retest entire matrix in new root with bounded concurrency",
+      "next_root_required": true,
+      "reuse_from_failed_root": false
+    }
+  },
+  {
+    "root_id": "nl-caption-phase5-409-20261008-r2",
+    "accepted": false,
+    "failure": {
+      "kind": "fresh-root-rejected",
+      "accepted": false,
+      "reason": "HTTP acceptance harness omitted explicit local runtime startup; expected capability rejection made harness assertion fail",
+      "business_failure": false,
+      "diagnostic_corrected_harness": "http-diagnostic-report.json",
+      "next_fresh_root_required": true
+    }
+  },
+  {
+    "root_id": "nl-caption-phase5-409-20261008-r3",
+    "accepted": false,
+    "failure": {
+      "accepted": false,
+      "reason": "first public sample download truncated; received 48210 instead of 240512 bytes and PNG IEND absent; fixed SHA rejection",
+      "new_root_required": true
+    }
+  },
+  {
+    "root_id": "nl-caption-phase5-409-20261008-r4",
+    "accepted": false,
+    "failure": {
+      "accepted": false,
+      "reason": "completion audit: public OpenAPI advertised unsupported combined output and combined layout choices",
+      "all_functional_real_checks_passed": true,
+      "new_root_after_contract_fix_required": true
+    }
+  }
+]

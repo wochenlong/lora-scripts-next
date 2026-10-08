@@ -1,0 +1,29 @@
+{
+  "source_commit": "8986b9e16ca90268480139eda5e086cbd197dea1",
+  "frontend": {
+    "files": 52,
+    "passed": 342,
+    "typecheck": true,
+    "lint": true,
+    "build": true,
+    "existing_lint_warnings": 2
+  },
+  "backend": {
+    "files": 52,
+    "testcases": 516,
+    "windows_passed": 512,
+    "windows_environment_failures": 4,
+    "skipped": 0,
+    "linux_original_cases_passed": 4,
+    "accepted_combination": true,
+    "approval": "../phase-4-real-evaluation/2026-10-08-user-gate-approval.json",
+    "windows_native_symlink_unverified": true
+  },
+  "remote_real": "not configured this rebuild; not marked passing",
+  "source_runtime_and_dependencies_fresh": true,
+  "all_public_inputs_redownloaded": true,
+  "all_real_and_browser_checks_passed": true,
+  "cleanup_completed": false,
+  "cleanup_status": "../../phase-5-isolated-rebuild/2026-10-08-cleanup-status.json",
+  "goal_complete": false
+}

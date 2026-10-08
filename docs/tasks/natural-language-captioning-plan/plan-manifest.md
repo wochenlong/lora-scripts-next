@@ -37,15 +37,15 @@
 |---|---|---|
 | GATE-00 | pass-with-boundary | 已有资料和 Issue #409 已读取；旧设计存在冲突 |
 | GATE-01 | pass | #409契约、范围和out-of-scope已收敛 |
-| GATE-02 | pending | 证据治理与失败/清理策略同步 |
+| GATE-02 | pass | 失败/重跑/隐私与清理记录已同步 |
 | GATE-03 | pass | 模型能力、user_data preset、API dynamic entry目标计划已对齐 |
 | GATE-04 | pass | Phase0–5长程任务书和开工清单已对齐 |
-| GATE-05 | pass-with-boundary | P1和当前本地真实/预设事务风险验证；最终fresh资产未验 |
+| GATE-05 | pass | Qwen/mmproj/runtime/ONNX全新公开下载与真实验收通过 |
 | GATE-06 | pass | goal与canonical文档对齐，capability线上表示已说明 |
-| GATE-07 | pending | Issue #409 对齐最终复盘 |
-| GATE-08 | in progress | 用户已全面授权；实施和验证进行中 |
-| GATE-09 | in progress | 功能/前端/真实本地通过，4项Windows权限失败及最终审计未核销 |
-| GATE-10 | pending | 全新隔离重建和最终验收 |
+| GATE-07 | pass-with-boundary | 逐项审计完成，保留批准的平台边界与未配置远程 |
+| GATE-08 | pass | 功能实施完成，OpenAPI首版范围声明已修正 |
+| GATE-09 | pass-with-boundary | 前端342、后端512+Linux四原case及真实链路通过；环境口径获用户批准 |
+| GATE-10 | cleanup pending | 第五根从零验收通过，Windows删除策略拒绝待用户处理 |
 
 ## Change control
 
@@ -87,3 +87,7 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 ## 2026-10-08 用户完成门批准
 
 新UI火箭五维各4分，四项symlink跨平台组合验收获用户批准，保留Windows权限失败。Phase4 pass-with-boundary，Phase5 in progress；独立授权事件2026-10-08-user-gate-approval.json。下一步全新源码/依赖/URL资产重建，GATE10仍未通过，整体goal active。
+
+## 最新完成门：2026-10-08
+
+候选8986b9e功能/真实/从零已通过，最终证据索引2026-10-08-final-acceptance-audit.md。仅Windows剩余五个沙盒清理尚未核销；自动审批两次拒绝，已询问用户手动删除或明确保留例外。goal active，GATE10不能提前complete。

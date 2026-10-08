@@ -1,0 +1,52 @@
+{
+  "kind": "fresh-real-browser",
+  "job_id": "c620cbc2-10ab-47cc-9212-177d615a6c84",
+  "succeeded": 3,
+  "failed": 0,
+  "preview_no_write_inferred_from_ignore_and_all_before_hash_null": true,
+  "samples": [
+    {
+      "sample": "chelsea",
+      "text_sha256": "8aea8bddb74ef798e5761bb362e25d9d3b19222a3c8bd2827dead6cd6c01cf1c",
+      "scores": [
+        4,
+        4,
+        4,
+        4,
+        4
+      ]
+    },
+    {
+      "sample": "coffee",
+      "text_sha256": "e69d511397aebf1aaedaa493127e17ac97e7e930d30048724e0d1855ee5866a9",
+      "scores": [
+        4,
+        4,
+        4,
+        4,
+        4
+      ]
+    },
+    {
+      "sample": "rocket",
+      "text_sha256": "1df733846810cc99cf4eda6293dc739c2a35a21caa081ee7e77ab51932d466ef",
+      "scores": [
+        4,
+        4,
+        4,
+        4,
+        4
+      ]
+    }
+  ],
+  "harness_observation": "initial report count checked while report AJAX pending; verify after explicit report-loaded wait",
+  "passed": true,
+  "fresh_browser_context": true,
+  "report_loaded_three_written": true,
+  "desktop_and_390px_verified": true,
+  "save_as_cross_browser": true,
+  "model_search_parameter_isolation_and_draft_preservation": true,
+  "escape_preserves_draft": true,
+  "tab_to_name": true,
+  "task_snapshot_unchanged_after_template_edits": true
+}

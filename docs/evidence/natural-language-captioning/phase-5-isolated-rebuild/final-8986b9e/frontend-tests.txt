@@ -1,0 +1,12 @@
+
+> next-trainer-frontend@0.1.0 test
+> vitest run --maxWorkers=2
+
+
+ RUN  v4.1.10 <fresh_root>/source/frontend
+
+
+ Test Files  52 passed (52)
+      Tests  342 passed (342)
+   Start at  19:48:50
+   Duration  115.13s (transform 6.95s, setup 0ms, import 69.45s, tests 7.41s, environment 140.03s)

@@ -1,0 +1,109 @@
+{
+  "/api/llm/config": {
+    "status": "success",
+    "message": null,
+    "data": {
+      "version": 5,
+      "profiles": [],
+      "routes": {},
+      "prompt_presets": [],
+      "cache": {
+        "translation": true,
+        "caption": true
+      }
+    }
+  },
+  "/api/llm/local-vision/status": {
+    "status": "success",
+    "message": null,
+    "data": {
+      "model_id": "qwen3-vl-2b-local",
+      "runtime_version": "b11327",
+      "model_filename": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+      "model_url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+      "model_path": "<fresh_root>\\zero-state\\translation\\models\\qwen3-vl-2b-local\\52d6c8ffea26cc873ac5ad116f8631268d7eb503\\Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+      "state": "missing",
+      "installed": false,
+      "size_bytes": 0,
+      "downloaded_bytes": 0,
+      "total_bytes": 0,
+      "runtime_path": "",
+      "runtime_installed": false,
+      "runtime_state": "missing",
+      "runtime_downloaded_bytes": 0,
+      "runtime_total_bytes": 0,
+      "endpoint": "internal://dataset-translation",
+      "port": 0,
+      "error": null,
+      "capabilities": [
+        "text",
+        "vision"
+      ],
+      "languages": [
+        "zh-CN",
+        "en"
+      ],
+      "estimated_peak_rss_bytes": 3097571328
+    }
+  },
+  "/api/tag-translation/dictionary/status": {
+    "status": "success",
+    "message": null,
+    "data": {
+      "state": "missing",
+      "installed": false,
+      "installed_sha": null,
+      "remote_sha": null,
+      "row_count": 0,
+      "size_bytes": 0,
+      "last_checked_at": null,
+      "last_updated_at": null,
+      "downloaded_bytes": 0,
+      "total_bytes": 0,
+      "update_available": false,
+      "error": null
+    }
+  },
+  "/api/tagger/status": {
+    "status": "success",
+    "message": null,
+    "data": {
+      "phase": "idle",
+      "message": "",
+      "model": "",
+      "download": {
+        "current": 0,
+        "total": 0,
+        "filename": "",
+        "bytes_current": 0,
+        "bytes_total": 0,
+        "percent": 0
+      },
+      "tagging": {
+        "current": 0,
+        "total": 0,
+        "filename": "",
+        "bytes_current": 0,
+        "bytes_total": 0,
+        "percent": 0
+      },
+      "error": null,
+      "updated_at": 1791461089.0429475
+    }
+  },
+  "/api/llm/prompt-presets": {
+    "status": "success",
+    "message": null,
+    "data": {
+      "presets": [],
+      "settings": {
+        "default_caption_preset_id": null,
+        "legacy_imported": false
+      },
+      "revision": "0d3bbe34381beb9d7461e6bd"
+    }
+  },
+  "formal_lifespan": true,
+  "openapi_no_combined": true,
+  "passed": true
+}

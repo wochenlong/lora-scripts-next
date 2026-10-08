@@ -11,7 +11,7 @@
 - Contract：[#409 模型打标界面与自然语言标注](https://github.com/wochenlong/lora-scripts-next/issues/409)
 - Related issues：#365 数据集工作区、#405 user_data/任务契约
 - Current branch：`feat/NL-Captioning`
-- Current active phase：Phase5全新隔离重建
+- Current active phase：Phase5验收已通过；Windows清理完成门待处理
 - Execution readiness：`executing`（用户已于2026-10-07明确建立goal并全面执行）
 - Scale：Full
 
@@ -240,7 +240,7 @@
 | Phase 2 后端 Caption/Tag 任务 | done | 假模型失败矩阵/持久化/预览/取消/恢复/写回/真实灰度通过，完成门复核完成 |
 | Phase 3 前端/Editor/user_data | done | model-first/预设/任务联动/390px/键盘及前端342项通过；真实Editor安全复核完成 |
 | Phase 4 真实资源/EDD | pass-with-boundary | 当前真实模型/UI/Zero-Short通过；511通过与四项Linux原case组合验收获用户批准，新火箭五维各4分；Windows原生symlink未验 |
-| Phase 5 隔离重建 | in progress | 用户前置验收已批准；必须新源码/依赖/资产/状态完整重跑 |
+| Phase 5 隔离重建 | pass / cleanup pending | 候选8986b9e从零重建与功能验收通过；仅剩自动审批拒绝的Windows临时目录清理 |
 
 ### 当前验证状态
 
@@ -339,3 +339,9 @@ r3首样本网络截断被SHA/size拒绝，根不接受；r2修正HTTP诊断22�
 ## 2026-10-08 首版OpenAPI完成门修复
 
 r4全部功能矩阵/真实HTTP22checks/浏览器/新Linux四原case通过，但审计发现OpenAPI仍把combined和组合layout列为可选；运行时拒绝不等于声明正确。已收敛schema，保留400拒绝，专项41通过。r4不作为最终通过，唯一下一步：提交修复建立r5最新源码、全新依赖和公开URL资产，再完整重跑与清理。源修复仅Caption API，Agent/plugin不触碰；goal active。
+
+## 2026-10-08 最新从零验收结果与唯一剩余门
+
+候选8986b9e完整新r5验收：前端342/52/type/lint/build；后端52文件516项Windows512通过/四权限失败/0skip，独立新Linux同commit四原case真实symlink4通过且用户已批准组合口径。所有公共资产/依赖重新下载；真实Qwen3图/JSON/data URL/cache/资源、ONNX旧输出灰度、HTTP22项、formal Zero-Short、浏览器真实preview和batch3/3、预设跨Context/Esc/Tab/模型参数隔离、精确SHA人工评分绑定均通过。OpenAPI只有natural/tag和单模式layout。最终逐项证据2026-10-08-final-acceptance-audit.md及final-8986b9e包。
+
+清理：所有自建模型/应用停止，五个临时Git源码树与三个Linux根已移除。Windows五个剩余根的组合/单目录递归删除均被自动审批拒绝blocked by policy；不改用其他工具绕过。已向用户请求手动删除或明确保留例外；此前评分与symlink批准不扩大到此次拒绝。唯一下一步：接收该处理结果，核销cleanup并更新最终GATE后才complete。其余工作完成，不继续重复已通过测试。

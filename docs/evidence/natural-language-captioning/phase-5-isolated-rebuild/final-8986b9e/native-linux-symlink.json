@@ -1,0 +1,15 @@
+{
+  "source_commit": "8986b9e",
+  "kind": "fresh-native-posix-symlink-tests",
+  "python": "3.11.15",
+  "exit_code": 0,
+  "cases": [
+    "tests/test_datasets_api.py::test_list_datasets_excludes_symlinked_directories",
+    "tests/test_datasets_api.py::test_resolve_dataset_dir_rejects_symlink_escape",
+    "tests/test_datasets_export.py::test_zip_export_skips_symlinked_files",
+    "tests/test_datasets_export.py::test_zip_export_skips_symlinked_directories"
+  ],
+  "phase5": true,
+  "original_cases_unchanged": true,
+  "source_archive_sha256": "f89eac373c39dd31e7483e189b50c5067f2761097a411abd19ab59a968cdd953"
+}

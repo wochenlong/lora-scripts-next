@@ -1,0 +1,34 @@
+{
+  "kind": "fresh-rebuild-real-http",
+  "checks": {
+    "explicit_local_runtime_started": true,
+    "natural_preview_no_write": true,
+    "natural_three_written": true,
+    "task_archives": true,
+    "default_skip_three": true,
+    "editor_natural_not_tags": true,
+    "single_word_remains_natural": true,
+    "undo_preserves_bytes": true,
+    "redo_preserves_single_word": true,
+    "editor_stale_hash_never_overwrites": true,
+    "real_cancel_zero_writes": true,
+    "partial_real_failure": true,
+    "retry_only_failed": true,
+    "retry_parent": true,
+    "inference_write_conflict": true,
+    "rollback_input_generated": true,
+    "rollback_creation_only": true,
+    "clear_history_keeps_images": true,
+    "user_data_presets": true,
+    "stale_preset_revision_rejected": true,
+    "model_stopped": true,
+    "atomic_no_orphan_parts": true
+  },
+  "passed": true,
+  "remote": "not configured",
+  "caption_sha256": {
+    "chelsea.txt": "727322f490e9e179cdc0e6f86e0b9d2ec890c852ad1337a57daa8b3f1ddb65f3",
+    "coffee.txt": "73c84c1b82b3bd2c7a0365d769626b9b6e8f365c04d97a86875223d8175d2db1",
+    "rocket.txt": "683967f420a3bbf1bd75a192ac57d3ab2eb20ed657785352fa4244a24a8b49e6"
+  }
+}

@@ -1,0 +1,262 @@
+[
+  {
+    "path": "frontend/src/api/client.test.ts",
+    "sha256": "cb514d0c9bf9219731e51974e84f7a4431dd1a3f401f29553e5bef6e22610393"
+  },
+  {
+    "path": "frontend/src/api/client.ts",
+    "sha256": "dbfa6e4b0bf8e7122e8c3ebbbc762c5fcaf27482ce9ca6abea38cd9d74a41488"
+  },
+  {
+    "path": "frontend/src/api/dataset.ts",
+    "sha256": "2f93d8218ca973f8bd85d59906dd2298474fd97ff38187c3904019b441eddd66"
+  },
+  {
+    "path": "frontend/src/api/llm.ts",
+    "sha256": "43add11c9fcc66fd5d61f1318fb1ec1de9fab52dbfac623f9aa3252f8cd94269"
+  },
+  {
+    "path": "frontend/src/api/tagger.ts",
+    "sha256": "4b3d2a3155d5ac112e4a2fc0e880fb7e8f43341e99419e81e84b389d6141fa64"
+  },
+  {
+    "path": "frontend/src/components/CaptionJobProgress.vue",
+    "sha256": "cb78941f64d874bb28c54bfa2fe45103c508f90da2318be497a0cb027ff914a2"
+  },
+  {
+    "path": "frontend/src/components/CaptionPromptEditor.vue",
+    "sha256": "5a875641d2bdc7a87fcca8a1c7a2a3b0a858833d851445b7c00727e434adfcb3"
+  },
+  {
+    "path": "frontend/src/components/LlmSettingsDialog.test.ts",
+    "sha256": "3d1e16d2da7c60a3b75d9f9c8c8dc1a68929a3a0c3f8fd85684b5600c741a7dc"
+  },
+  {
+    "path": "frontend/src/components/LlmSettingsDialog.vue",
+    "sha256": "f40eeb72763d272320e7ecd52dbd7cfe78ec645d3115ae6d44b2a1702d27c1e9"
+  },
+  {
+    "path": "frontend/src/components/ManagedVisionModel.vue",
+    "sha256": "58fbea49f327b701e0a8881766f6d4128f104a242a559eb27120f10c998994b1"
+  },
+  {
+    "path": "frontend/src/components/TaggerModelSelector.test.ts",
+    "sha256": "701c99450369faed06491c64888b27fda3b02b513fcd66e77027a85d85e946db"
+  },
+  {
+    "path": "frontend/src/components/TaggerModelSelector.vue",
+    "sha256": "dd7f4c1bbc33f412409ddb570311fcbae44561a33478bd8630e98f4ca818ab83"
+  },
+  {
+    "path": "frontend/src/components/dataset/TagTranslationSettingsDialog.vue",
+    "sha256": "a225fe9ee29e0747952a11a731ec772fe8090340c422fc0e0953162103a42c69"
+  },
+  {
+    "path": "frontend/src/composables/useLlmProfiles.test.ts",
+    "sha256": "5668edf16131a9a262dfde2bea6974de7d87f459a693e0be0faa178245fc9874"
+  },
+  {
+    "path": "frontend/src/composables/useLlmProfiles.ts",
+    "sha256": "9947511c4fdf81735a075cced35f93dfb7d8160306cacc23ea0841e05e89eac5"
+  },
+  {
+    "path": "frontend/src/composables/useTaggerJob.test.ts",
+    "sha256": "61b8227b2ffa0d5f522c523ab0197464f1f70f05c87f3955be63526f1fc98022"
+  },
+  {
+    "path": "frontend/src/composables/useTaggerJob.ts",
+    "sha256": "d0466ce9222a4a8ab5b67bdf7332885605409900f2c9468453889922092c02e1"
+  },
+  {
+    "path": "frontend/src/dataset/caption.test.ts",
+    "sha256": "f6d18814861f355c0615b1bb651dc275e12ec32810baf3bd8f756818cee6e641"
+  },
+  {
+    "path": "frontend/src/dataset/caption.ts",
+    "sha256": "f08263112ad86e23942573e29e5f0cefa67408a1070d5e3aaf84d8045193c6ce"
+  },
+  {
+    "path": "frontend/src/i18n/messages/en-US.ts",
+    "sha256": "5e491f0fb49c325662b0ce9937eba48aa8a024ec22191e3ef9798e9938e2f3ad"
+  },
+  {
+    "path": "frontend/src/i18n/messages/zh-CN.ts",
+    "sha256": "72b9d48bfdfd8b4040771c881c7c67a33ac29a3f7aab6bafc6af42b8dd8d92be"
+  },
+  {
+    "path": "frontend/src/pages/DatasetEditorPage.vue",
+    "sha256": "cc11456d4df96f718d27f3907849df9d2f1a172324ee2c034adbf6f98d82fadd"
+  },
+  {
+    "path": "frontend/src/pages/TaggerPage.caption.test.ts",
+    "sha256": "42e11c3dfb085f289f286bb9ef75359f5680b856536516dce564ba8b07bd4e3b"
+  },
+  {
+    "path": "frontend/src/pages/TaggerPage.vue",
+    "sha256": "ac3541b0f6c436bd49a32e47998a6ac269ec38b7179eaba8c0f21a23fd6f0135"
+  },
+  {
+    "path": "frontend/src/pages/TasksPage.vue",
+    "sha256": "c1124441fdfc29ba0cefcc2095927db2d4a85ae85435060b9c7ccb788096d08c"
+  },
+  {
+    "path": "frontend/src/stores/tagger.ts",
+    "sha256": "d503d06d14dee6b3b1daabb0823179df945f9554af19f03c8647f8bd75d94051"
+  },
+  {
+    "path": "frontend/src/styles/dataset.css",
+    "sha256": "98165f39add01fe52799410ae465ccd65d3121793308b17136392624abc42e2b"
+  },
+  {
+    "path": "frontend/src/styles/settings.css",
+    "sha256": "aae930394f7596510609ba5b1e7cf0c4115b338a25a5b5be9231f9db86d10911"
+  },
+  {
+    "path": "frontend/src/styles/tagger.css",
+    "sha256": "3dba0167d286b66320031a7c2cd40d26b68180d6f5b825092a96d410e785a8bf"
+  },
+  {
+    "path": "mikazuki/app/__init__.py",
+    "sha256": "68af148794636a8a40f89955bf6958a9e63e81375fa67e7b220dfd433b9d326a"
+  },
+  {
+    "path": "mikazuki/app/api.py",
+    "sha256": "751c47af9f2bc9e2c3cb510b4e08eb77799f77c72d3ecf8ba0d85ee5b32b5f03"
+  },
+  {
+    "path": "mikazuki/app/models.py",
+    "sha256": "5802cadb85cd36ca1eeeec473b2c5e96e3cb1f87dffd755302e9276c3a16014c"
+  },
+  {
+    "path": "mikazuki/app/proxy.py",
+    "sha256": "b8d9a0340995b1da19ae0c177a730e11971e9ff93ebead0843e198e7db765afa"
+  },
+  {
+    "path": "mikazuki/dataset_editor.py",
+    "sha256": "f1f378bd9a86c68704d4f41ebcf42bd77463367456a5338d38d412f0359fad3b"
+  },
+  {
+    "path": "mikazuki/llm/__init__.py",
+    "sha256": "f203a27972639728b406f105efec8ad71004f94a751cc4262b614557d4cffe52"
+  },
+  {
+    "path": "mikazuki/llm/api.py",
+    "sha256": "c1c68d804f93b40a49d372c7ba9463640e585c9f835c209d9cd9c69c688402f7"
+  },
+  {
+    "path": "mikazuki/llm/cache.py",
+    "sha256": "eaed9560bbd8f1af84bb549ec33a55bf3c1ed4cbe824a5a51f3faf8f8649f08a"
+  },
+  {
+    "path": "mikazuki/llm/client.py",
+    "sha256": "f1089c6135ef9cf73ba099dc6fa3a1f9b711ee108b16538cf1bea96b3d6d85d8"
+  },
+  {
+    "path": "mikazuki/llm/config.py",
+    "sha256": "81a40a5bbede0dd94f0afb6edc1edb11aaa7ae32c8dcf1d918baf197218718e2"
+  },
+  {
+    "path": "mikazuki/llm/contracts.py",
+    "sha256": "2cdaadcc44b2f282917d6be82575b045bf475a93288d1590eb863fe2e22b552f"
+  },
+  {
+    "path": "mikazuki/llm/http.py",
+    "sha256": "78c177b44eaf5b989627a1732e8a86976021262580eeda6504708c5b942d058e"
+  },
+  {
+    "path": "mikazuki/llm/local_text.py",
+    "sha256": "e90cdba20f3d5337a690464c1d87cad7b23143dd0c0a8a197206afa064176e25"
+  },
+  {
+    "path": "mikazuki/llm/local_vision.py",
+    "sha256": "930e4fd0fd4fb62545e5ca3e0389755268545dc5c51c41b6eed2e69d4cf4c735"
+  },
+  {
+    "path": "mikazuki/llm/prompt_presets.py",
+    "sha256": "8aa416cd13212db9427e7ddf5af2a003c4b7d98200d9587d01a015cbbfbf9821"
+  },
+  {
+    "path": "mikazuki/llm/routing.py",
+    "sha256": "92db1ef7485427417a7061732238115e88848a0987e88ccf7d9621dedfedac45"
+  },
+  {
+    "path": "mikazuki/llm/runtime.py",
+    "sha256": "6540c0ba4f3f32ab38da60d160be44689cf97203602ffa666ea9ef81b211a417"
+  },
+  {
+    "path": "mikazuki/llm/secrets.py",
+    "sha256": "13222d5903b42737a53f8677e5e797159949d4f0177b80628986c994957a9a35"
+  },
+  {
+    "path": "mikazuki/llm/service.py",
+    "sha256": "c835a2bb8b31d48f5a01588940b6f4895dfda4030cb370069ff0ed3a371281fe"
+  },
+  {
+    "path": "mikazuki/tag_translation/api.py",
+    "sha256": "b99cbeee4eb902f90cc484d5f201e348928b6e73537ae012b80b939d8764e15f"
+  },
+  {
+    "path": "mikazuki/tag_translation/local_model_service.py",
+    "sha256": "effa2675858d7d32868bc58b1f058563943fed05cc508aed47cf9686688f8c55"
+  },
+  {
+    "path": "mikazuki/tag_translation/runtime.py",
+    "sha256": "8deae5b68c1e178fb42868a951cfa5fed7a1b5351aecd04fdd9156eb7da3b8d0"
+  },
+  {
+    "path": "mikazuki/tag_translation/translation_config.py",
+    "sha256": "7b379add9c5b2d84b0a0a528e59e26e291aa477f179555450ba2bf663a9fb300"
+  },
+  {
+    "path": "mikazuki/tag_translation/translation_service.py",
+    "sha256": "88fa824e1a2d3d0af7193a16f313471ee4378878599b33c610cea29eee0351fb"
+  },
+  {
+    "path": "mikazuki/tagger/caption.py",
+    "sha256": "6c660088e207ea89a7f3407b9f45b9dfdf59aeba6d534f08f60c31472df69b59"
+  },
+  {
+    "path": "mikazuki/tagger/caption_api.py",
+    "sha256": "13a3bd863c70bbb030f5d400e8a909ec7ad2c8cf00c685944d48e6e45fc42456"
+  },
+  {
+    "path": "mikazuki/tagger/caption_job.py",
+    "sha256": "a497d234a5ad7c9d9ab11714f7b4479041d7ee1dfddbfae4e8d24f520e24080d"
+  },
+  {
+    "path": "mikazuki/tagger/caption_maintenance.py",
+    "sha256": "23d3a7702ad4151a0bbd15d1fb24aa961be1440afba814865270cab7b627314c"
+  },
+  {
+    "path": "mikazuki/tagger/caption_store.py",
+    "sha256": "514d24800f6ebcbdb2c91e02b38e69a382b2cb91418fdb1c81ea7337cae6cd7d"
+  },
+  {
+    "path": "mikazuki/tagger/catalog.py",
+    "sha256": "8fa4dc646e105df28d1bbcd4ab3dee88b2a0e6197a6f9c309a64e848137d3688"
+  },
+  {
+    "path": "mikazuki/tagger/interrogator.py",
+    "sha256": "7f03a7d01b9546f3648c8b5fdaf86ca31dfcc350257c448f38d96cc0e288e922"
+  },
+  {
+    "path": "mikazuki/tagger/jobs.py",
+    "sha256": "59b4be9e7efe70ae48ead950eeea9a8f3f7c39506630f833c79050dda11d29b2"
+  },
+  {
+    "path": "mikazuki/tagger/model_fetch.py",
+    "sha256": "2fd814675fd2416c22b25087e216f101fec5914373d816786c83ed3ee51193db"
+  },
+  {
+    "path": "mikazuki/tagger/task_bridge.py",
+    "sha256": "746b2d1589b6fb3546cbe6ae19aa5880d57b5ee159122a9614c1dcb4f9d1c194"
+  },
+  {
+    "path": "mikazuki/tagger/vision_service.py",
+    "sha256": "5da4eadedcdeeb8d9fe8fea084868cce6d9c6cfc43db897106621b661157d7db"
+  },
+  {
+    "path": "mikazuki/tasks.py",
+    "sha256": "bdcfee0b640596c3516b970d9e93bc87b776bb254eb2596cb6d069678a1bb20c"
+  }
+]

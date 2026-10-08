@@ -1,0 +1,10 @@
+
+> next-trainer-frontend@0.1.0 lint
+> eslint src vite.config.ts
+
+
+<fresh_root>\source\frontend\src\components\EngineStatusBar.vue
+   9:3  warning  Prop 'title' requires default value to be set  vue/require-default-prop
+  10:3  warning  Prop 'hint' requires default value to be set   vue/require-default-prop
+
+✖ 2 problems (0 errors, 2 warnings)

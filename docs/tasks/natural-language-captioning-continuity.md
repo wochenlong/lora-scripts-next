@@ -1,3 +1,37 @@
+# 当前最小续接：功能及fresh验收通过，仅清理门待用户（2026-10-08）
+
+候选8986b9e16ca90268480139eda5e086cbd197dea1；feat/NL-Captioning。功能、前后端、当前Qwen/ONNX/HTTP22/正式Zero-Short/浏览器及r5全新重建已通过。前端342/52/type/lint/build；后端516项，Windows512pass/四symlink权限fail/0skip；独立新Linux同commit四原case实际pass且用户批准跨平台组合。人工评分精确SHA绑定旧B与新批准UI火箭，均20/20。remote本轮未配置，准确记录不声称pass。OpenAPI旧combined/组合layout声明修复；所有新根重新下载资产/依赖，无旧产物复用。
+
+最终证据docs/evidence/natural-language-captioning/phase-5-isolated-rebuild/2026-10-08-final-acceptance-audit.md和final-8986b9e包，privacy staged scan通过。所有模型/服务器/安装/测试句柄已终止，无live handle要poll。五个自己的临时source worktree已由Git移除；本轮WSL r2/r4/r5已删除。不要删除更早用户已有sandbox或模型。
+
+唯一剩余：Windows根nl-caption-phase5-409-20261008-r1至r5剩模型/venv/公开样本/缓存/输出尚保留。自动审批拒绝组合和单目录PowerShell递归删除，理由仅blocked by policy。未改用Python/Node/dotNET绕过Windows拒绝。已用request_user_input_async问用户手动删除这五根，或明确批准保留为cleanup例外。**没有回复，默认选项不是批准。** 原“4分all全部通过”仅绑定评分及四symlink平台口径，不扩展到此后清理拒绝。goal active，尚不能complete；只等此必要输入，不再重复测试或询问此前评分。
+
+还有必要自主收尾：将已通过所有条件的候选审计/cleanup pending状态同步design/goal/最终复盘/阶段清单和证据README，提交当前证据与文档（不包含tests/test_diffsynth_review.py既有修改）。收到用户清理/例外后更新cleanup JSON与GATE10/G-11/canonical状态、final review并update_goal complete。绝不可在例外未批准时写清理通过。新增public.txt日志是已脱敏命令输出，原.log被gitignore，需添加.txt。
+
+Windows r5/source已删但r5/.venv仍在，可运行private scan脚本E:/OpenSourceTeamWork/workspace/sandboxes/nl-caption-eval-20261007/scan-staged-caption.py。源码和证据commit不需网络；未push。所有原句柄包括56150、33498、85684、37108、12833、78247、41575、32059、94532均已结束，不再poll。
+
+以下历史不覆盖本条。
+
+# 最小续接：Phase5 r5执行中（2026-10-08）
+
+当前候选8986b9e，开发树feat/NL-Captioning；既有tests/test_diffsynth_review.py保留不提交。r5 root workspace/sandboxes/nl-caption-phase5-409-20261008-r5/source detached8986b9e。新业务修改仅Caption API：OpenAPI mode仅natural/tag，layout仅tags_only/caption_only；pre-validator对旧combined/组合layout明确400；41专项通过，新增schema合同测试。最新完整矩阵预期52文件516 case（Windows512pass/4批准环境失败，Linux四原case补验，不得有skip）。
+
+r4全部前后端/真实HTTP22项/CLI模型/浏览器/新Linux四case通过，但完成门发现OpenAPI仍宣称combined，所以不核销r4最终根；r4 model/server全部已停止，所有live handle已结束。r1前端超时、r2脚本漏runtime start、r3样本网络截断、r4schema遗漏四根均有failure记录。不得复用其Python/venv/node_modules/models/samples/config/DB/output。
+
+当前r5已新建Python3.11.15/venv，前端新npm ci/typecheck/lint/342测试/52文件/build全部完成exit0（handle33498已结束勿再poll）。确认live handle56150=公开URL重新下载全部样本/Qwen/mmproj/ONNX/runtime后，再无缓存安装requirements+torch2.7.0+cpu+pytest9.1.1；日志input-download.log/python-install.log。handle85684=新Linux Python/headless OpenCV/numpy重新下载+SHA已通过，再WSL新venv安装四原始symlink tests；native根/home/displace/.local/share/nl-caption-phase5-409-20261008-r5，结果r5/linux-inputs/result.json。先wait同handle。三图/Qwen/mmprojfresh已下载，其他资产/依赖仍进行中。
+
+之后只用r5新venv Python、r5/source cwd：tools/run_caption_scope_tests.py --root r5/backend-tests；tools/verify_caption_real_tag.py --root r5/real-tag --samples r5/inputs/samples --manifest docs/evidence/natural-language-captioning/phase-4-real-evaluation/phase5-frozen-inputs.json --tag-models r5/inputs/tag-models --commit8986b9e --rebuild-inputs r5/inputs；tools/verify_caption_production.py --root r5/real-natural --samples... --manifest... --commit8986b9e --local --assets r5/inputs/vision --runtime r5/inputs/runtime/llama-server.exe --rebuild-inputs r5/inputs。保存日志。路径需自行展开绝对r5根，不打印任何Key。
+
+Formal Zero：tools/serve_caption_acceptance.py --root r5/zero-state --frontend-dist frontend/dist --port28765，等待明确ready后五API200、空profile、vision/dict missing、idle；new BrowserContext390px安装入口/禁用生成/API空入口不存在。Real HTTP：同launcher --root r5/http-state --port28766 --rebuild-inputs r5/inputs，ready后tools/verify_caption_rebuild_http.py --root r5 --port28766。22checks自行先启动runtime并最后stop，全部是真实model HTTP。
+
+UI最终自动化协议已保存r5/browser-acceptance.js，MCP browser_run_code_unsafe filename绝对文件即可执行。先创建r5/browser-images，并从r5/inputs/samples复制3样本（只在本轮fresh根内）；等待HTTP22checks通过且model已stop。脚本独立fresh BrowserContext，真实runtime UI启动/preview/batch3、deep-link刷新/report、390px截图等待侧栏动画关闭、Esc/Tab草稿、另存为跨BrowserContext、原名搜索和参数草稿。返回JSON需要保存browser-report，并检查preview0txt及实际3caption SHA精确匹配旧B猫/咖啡和新批准UI火箭1df733...；CLI3输出绑定旧B SHA（8aea猫/e69咖啡/20ff火箭）。r4同协议已全部通过。默认preset fresh-caption是HTTP工具写入，脚本restore内置后生成，随后save-as不会改变旧任务snapshot。
+
+最终必须做全部goal/Issue409/计划完成门审计、保存不含私有路径/二进制的报告/命令/环境/测试与模型hash、secret扫描；停止所有model/server；删除仅本会话创建的r1–r5隔离根和WSL r2/r4/r5（先验证绝对路径和无活进程，gitworktree remove自身source），保留失败摘要/hash。不要删除更早用户已有sandbox/模型；cleanup界定明确。同步design/task book/goal/manifest/总控/目标/阶段清单与最终复盘和证据索引；随后才update_goal complete。发布/推送未要求，不操作。
+
+用户“4分all全部通过”已记录批准新UI火箭五维4分/20分及仅四项Windows权限失败的跨平台组合口径，不再提问。Windows原生symlink未验边界保留。远程本轮无Profile/Key，按goal可选路径未配置明确记录，不虚称fresh remote通过。Agent/plugin不改/不纳验收。goal active/Phase5 in progress。唯一下一步：轮询r5当前安装句柄，执行上述完整验收。
+
+以下为历史，不覆盖本条。
+
 # 最小续接：Phase5 r4执行中（2026-10-08）
 
 候选 b0a9eb2，分支feat/NL-Captioning。仅tools/evidence/governance新增，业务源码最后f53582e不变。开发树只剩既有tests/test_diffsynth_review.py未提交，请保留。当前fresh root workspace/sandboxes/nl-caption-phase5-409-20261008-r4；source detached b0a9eb2。
