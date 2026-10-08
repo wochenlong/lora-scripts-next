@@ -183,6 +183,7 @@ export default {
       cancel: "Cancel",
       started: "Training task started: {id}",
       queued: "Another training is running; task queued: {id}",
+      renamed: "Output name {from} conflicts with an active task or existing output; renamed to {to}",
       fail: "Failed to submit training",
       preflightFail: "Anima Fast preflight checks failed",
     },

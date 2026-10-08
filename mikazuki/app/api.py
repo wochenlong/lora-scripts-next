@@ -21,6 +21,7 @@ from mikazuki.engines.kohya.run import TRAINER_MAPPING as trainer_mapping
 from mikazuki.engines.manifest import KIND_BUILTIN
 from mikazuki.engines.musubi import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
 from mikazuki.engines.runner import RunContext, dispatch_run
+from mikazuki.utils.output_naming import ensure_unique_output_name
 from mikazuki.model_assets import (
     check_assets as check_model_assets,
     resolve_train_type as resolve_model_asset_train_type,
@@ -251,6 +252,7 @@ async def create_toml_file(request: Request):
     gpu_ids = config.pop("gpu_ids", None)
     model_train_type = config.pop("model_train_type", "sd-lora")
 
+    renamed_from = ensure_unique_output_name(config, tm)
     result = dispatch_run(
         model_train_type,
         config,
@@ -266,6 +268,10 @@ async def create_toml_file(request: Request):
             message=f"不支持的训练类型: {model_train_type}",
             data={"model_train_type": model_train_type},
         )
+    if renamed_from and result.status == "success":
+        data = dict(result.data or {})
+        data["output_name_renamed"] = {"from": renamed_from, "to": config["output_name"]}
+        result.data = data
     return result
 
 
