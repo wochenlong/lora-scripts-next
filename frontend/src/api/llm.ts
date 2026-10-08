@@ -55,6 +55,7 @@ export interface LocalVisionStatus {
 }
 
 export const llmApi = {
+  translateCaption: (text: string, allowLocalFallback = false, signal?: AbortSignal) => apiData<{ translation: string; skipped: boolean; cached: boolean }>("/api/llm/caption-translation", { method: "POST", body: JSON.stringify({ text, allow_local_fallback: allowLocalFallback }), signal }),
   profiles: (signal?: AbortSignal) => apiData<LlmConfig>("/api/llm/profiles", { signal }),
   config: () => apiData<LlmConfig>("/api/llm/config"),
   saveConfig: (body: Partial<LlmConfig>) => apiData<LlmConfig>("/api/llm/config", { method: "PUT", body: JSON.stringify(body) }),

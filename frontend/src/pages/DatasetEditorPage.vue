@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue"
-import { ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
+import { ElButton, ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type LlmProfile, type TagDictionaryStatus } from "../api/dataset"
@@ -14,6 +14,7 @@ import { useServerPathPick } from "../composables/useServerPathPick"
 import { addTagToCaption, captionEditingFormat, captionEditingTags, moveCaptionTag, removeTagFromCaption } from "../dataset/caption"
 import { useTagTranslations } from "../composables/useTagTranslations"
 import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
+import { useCaptionTranslation } from "../composables/useCaptionTranslation"
 
 const { t } = useI18n()
 const route = useRoute()
@@ -65,6 +66,9 @@ const selectMenuOpen = ref(false)
 const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
+const captionTranslation = useCaptionTranslation()
+const allowCaptionTranslationFallback = ref(false)
+let captionTranslationTimer: ReturnType<typeof setTimeout> | undefined
 const translationProvider = editorSession.translationProvider
 const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, clearExternalCache, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
@@ -124,6 +128,10 @@ const targets = computed(() =>
 const captionFormat = computed(() => captionEditingFormat(caption.value, current.value))
 const captionTags = computed(() => current.value ? captionEditingTags(caption.value, current.value) : [])
 const tagEditingAllowed = computed(() => captionFormat.value === "tag" || (!current.value?.caption_exists && !caption.value.trim()))
+const batchTagEditingAllowed = computed(() => targets.value.every(item => {
+  const text = editorSession.getDraft(root.value, item.relative_path) ?? item.caption
+  return captionEditingFormat(text, item) === "tag" || (!item.caption_exists && !text.trim())
+}))
 const allDatasetTags = computed(() => {
   const unique = new Set<string>(tags.value.map((item) => item.tag))
   items.value.forEach((item) => {
@@ -161,6 +169,7 @@ const workingScopeFullySelected = computed(
 )
 
 async function translateWholeDataset(localOnly = false) {
+  if (!tagEditingAllowed.value) return
   if (!translationReadinessLoaded.value) await loadTranslationReadiness()
   if (!translationAvailable.value) {
     showTranslations.value = false
@@ -254,7 +263,7 @@ async function loadTranslationSettings(force = false) {
 async function loadTranslationReadiness() {
   await Promise.all([loadTranslationSettings(), loadDictionaryStatus(), loadLocalModelStatus()])
   translationReadinessLoaded.value = true
-  if (!translationAvailable.value && showTranslations.value) {
+  if (tagEditingAllowed.value && !translationAvailable.value && showTranslations.value) {
     showTranslations.value = false
     cancelTranslations()
   }
@@ -283,6 +292,10 @@ async function saveTranslationSettings() {
 
 async function refreshTranslationsAfterSettingsChange() {
   if (!showTranslations.value) return
+  if (!tagEditingAllowed.value) {
+    await captionTranslation.translate(caption.value, allowCaptionTranslationFallback.value)
+    return
+  }
   if (translationProvider.value === "llm") {
     const ready = await ensureLlmReady()
     if (!ready || !showTranslations.value || translationProvider.value !== "llm") return
@@ -509,8 +522,33 @@ function rememberCurrentDraft() {
   else editorSession.setDraft(root.value, selected.value, caption.value)
 }
 
-function choose(item: DatasetItem, event?: MouseEvent) {
-  rememberCurrentDraft()
+async function restoreDiskCaption() {
+  if (!current.value) return
+  try { await ElMessageBox.confirm(t('datasetEditor.caption.restoreDiskConfirm'), { type: "warning" }) }
+  catch { return }
+  editorSession.clearDraft(root.value, current.value.relative_path)
+  restoringCaption = true
+  caption.value = current.value.caption
+  restoringCaption = false
+}
+
+function cancelCaptionTranslation() {
+  if (captionTranslationTimer) clearTimeout(captionTranslationTimer)
+  captionTranslationTimer = undefined
+  captionTranslation.cancel()
+}
+
+watch([caption, selected, root, showTranslations, tagEditingAllowed, allowCaptionTranslationFallback], () => {
+  cancelCaptionTranslation()
+  if (!showTranslations.value || tagEditingAllowed.value || !caption.value.trim()) return
+  captionTranslationTimer = setTimeout(() => {
+    captionTranslationTimer = undefined
+    void captionTranslation.translate(caption.value, allowCaptionTranslationFallback.value)
+  }, 350)
+})
+
+function choose(item: DatasetItem, event?: MouseEvent, remember = true) {
+  if (remember) rememberCurrentDraft()
   selected.value = item.relative_path
   editorSession.rememberSelection(item.relative_path)
   restoringCaption = true
@@ -590,7 +628,7 @@ async function scan() {
       ? restoredItems.find((item) => item.relative_path === selected.value)
       : undefined
     const nextItem = restoredItem || restoredItems[0]
-    if (nextItem) choose(nextItem)
+    if (nextItem) choose(nextItem, undefined, false)
     else {
       restoringCaption = true
       caption.value = ""
@@ -769,17 +807,20 @@ onActivated(() => {
   if (typeof queryPath === "string" && queryPath.trim() && queryPath !== path.value) {
     path.value = queryPath
     void scan()
-  } else if (!items.value.length && path.value.trim()) {
+  } else if (path.value.trim()) {
     void scan()
   }
 })
 onDeactivated(() => {
+  rememberCurrentDraft()
+  cancelCaptionTranslation()
   window.removeEventListener("keydown", onPreviewKeydown)
   previewOpen.value = false
   selectMenuOpen.value = false
   historyOpen.value = false
 })
 onUnmounted(() => {
+  cancelCaptionTranslation()
   window.removeEventListener("keydown", onPreviewKeydown)
   if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
   if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
@@ -837,7 +878,7 @@ onUnmounted(() => {
             type="button"
             class="dataset-tool-entry dataset-batch-entry"
             :class="{ active: rightPanelMode === 'batch' || selectedPaths.size > 0 }"
-            :disabled="!root"
+            :disabled="!root || !batchTagEditingAllowed"
             @click="openRightPanel('batch')"
           >
             {{ t("datasetEditor.batch.toolbar", { n: selectedPaths.size }) }}
@@ -955,6 +996,7 @@ onUnmounted(() => {
             >{{ t("datasetEditor.caption.downloadCaption") }}</a>
           </div>
           <TagTranslationControls
+            v-if="tagEditingAllowed"
             :enabled="showTranslations"
             :available="translationAvailable"
             :unavailable-hint="translationUnavailableHint"
@@ -968,6 +1010,20 @@ onUnmounted(() => {
             @update:provider="setTranslationProvider"
             @settings="openTranslationSettings"
           />
+          <section v-else class="natural-caption-translation">
+            <div class="natural-translation-controls">
+              <label>{{ t('datasetEditor.caption.naturalTranslation') }} <el-switch v-model="showTranslations" :aria-label="t('datasetEditor.caption.naturalTranslation')" /></label>
+              <el-button @click="openTranslationSettings">{{ t('datasetEditor.caption.translationSettings') }}</el-button>
+              <el-button v-if="showTranslations" :disabled="captionTranslation.loading.value" @click="captionTranslation.translate(caption, allowCaptionTranslationFallback)">{{ t('datasetEditor.caption.retryNaturalTranslation') }}</el-button>
+            </div>
+            <label v-if="showTranslations"><input v-model="allowCaptionTranslationFallback" type="checkbox"> {{ t('datasetEditor.caption.naturalTranslationFallback') }}</label>
+            <p v-if="showTranslations && captionTranslation.loading.value" role="status">{{ t('datasetEditor.caption.naturalTranslating') }}</p>
+            <p v-if="showTranslations && captionTranslation.error.value" role="alert">{{ captionTranslation.error.value }}</p>
+            <div v-if="showTranslations && captionTranslation.text.value" class="natural-caption-translated" aria-live="polite">
+              <small v-if="captionTranslation.alreadyChinese.value">{{ t('datasetEditor.caption.alreadyChinese') }}</small>
+              <p>{{ captionTranslation.text.value }}</p>
+            </div>
+          </section>
           <p v-if="!tagEditingAllowed" class="caption-format-warning">{{ t("datasetEditor.caption.naturalCaptionReadOnly", { format: captionFormat }) }}</p>
           <div v-else class="caption-chips" @dragover="onChipDragOver">
             <span
@@ -991,13 +1047,14 @@ onUnmounted(() => {
             </span>
           </div>
           <small v-if="tagEditingAllowed" class="caption-drag-hint">{{ t("datasetEditor.caption.dragHint") }}</small>
-          <details class="caption-raw">
+          <details class="caption-raw" :open="!tagEditingAllowed">
             <summary>{{ t("datasetEditor.caption.rawToggle") }}</summary>
             <div class="caption-editor">
               <el-input v-model="caption" type="textarea" :rows="8" :aria-label="t('datasetEditor.caption.rawToggle')" />
               <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
             </div>
           </details>
+          <el-button v-if="caption !== current.caption" class="caption-restore-disk" @click="restoreDiskCaption">{{ t('datasetEditor.caption.restoreDisk') }}</el-button>
           <button type="button" class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button>
         </div>
         <p v-else>{{ t("datasetEditor.caption.empty") }}</p>

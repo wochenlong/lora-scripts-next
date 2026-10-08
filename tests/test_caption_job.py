@@ -143,7 +143,7 @@ def test_ignore_creates_missing_caption_without_touching_existing(tmp_path):
     second.write_bytes(b"fake")
     first.with_suffix(".txt").write_text("user caption", encoding="utf-8")
     manager = CaptionJobManager(FakeVisionService())
-    manager.start({"path": str(tmp_path), "mode": "natural", "conflict_action": "ignore"})
+    manager.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN", "conflict_action": "ignore"})
     manager._thread.join(timeout=5)
     assert not manager._thread.is_alive()
     assert manager.status()["succeeded"] == 1
@@ -191,7 +191,7 @@ def test_changed_source_image_during_inference_cannot_write_stale_caption(tmp_pa
             return await super().complete_vision(image_path, prompt, **kwargs)
 
     manager = CaptionJobManager(ModifyingVision())
-    manager.start({"path": str(tmp_path), "mode": "natural", "conflict_action": "copy"})
+    manager.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN", "conflict_action": "copy"})
     manager._thread.join(timeout=5)
     assert not manager._thread.is_alive()
     assert manager.status()["failed"] == 1

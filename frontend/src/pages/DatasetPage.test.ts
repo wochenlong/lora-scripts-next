@@ -117,6 +117,33 @@ describe("DatasetPage tab keep-alive", () => {
 })
 
 describe("DatasetEditorPage route session", () => {
+  it("loads externally generated captions without turning the previous empty field into a draft", async () => {
+    const session = useDatasetEditorSession()
+    session.resetInMemoryDataset()
+    session.lastPath.value = "D:/caption-test"
+    session.lastRoot.value = ""
+    session.drafts.value = {}
+    session.showTranslations.value = false
+    const item = { name: "cat.png", relative_path: "cat.png", category: "", caption: "", caption_exists: false, tags: [], image_url: "/image", thumb_url: "/thumb", caption_format: "unknown" as const }
+    const scan = { root: "D:/caption-test", total: 1, items: [item], tags: [], categories: [] }
+    vi.mocked(datasetApi.scan).mockResolvedValueOnce(scan).mockResolvedValueOnce({ ...scan, items: [{ ...item, caption: "A cat by a window.", caption_exists: true, caption_format: "natural" }] })
+    const harness = defineComponent({ components: { Page: DatasetEditorPage }, template: "<KeepAlive><Page /></KeepAlive>" })
+    const wrapper = mount(harness, { global: { plugins: [i18n], stubs: { PathPickerDialog: true, TagFilterPanel: true, "el-dialog": true } } })
+    await flushPromises()
+    await wrapper.findAll("button").find(button => button.text() === "加载")!.trigger("click")
+    await flushPromises()
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("A cat by a window.")
+    expect(session.getDraft("D:/caption-test", "cat.png")).toBeUndefined()
+    expect(wrapper.get(".caption-raw").attributes()).toHaveProperty("open")
+    expect(wrapper.find(".caption-chips").exists()).toBe(false)
+    expect((wrapper.findAll("button").find(button => button.text().startsWith("批量编辑"))!.element as HTMLButtonElement).disabled).toBe(true)
+    await wrapper.get("textarea").setValue("My real unsaved description.")
+    vi.mocked(datasetApi.scan).mockResolvedValueOnce({ ...scan, items: [{ ...item, caption: "External newer caption.", caption_exists: true, caption_format: "natural" }] })
+    await wrapper.findAll("button").find(button => button.text() === "加载")!.trigger("click")
+    await flushPromises()
+    expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("My real unsaved description.")
+    wrapper.unmount()
+  })
   it("restores the selected dataset and an unsaved caption after remount", async () => {
     const session = useDatasetEditorSession()
     session.lastPath.value = "D:/datasets/sample"

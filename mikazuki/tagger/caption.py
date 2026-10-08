@@ -8,7 +8,7 @@ from mikazuki.llm.client import parse_json_content
 from mikazuki.llm.contracts import LLMContractError, LLMProfile
 
 CAPTION_LAYOUTS = {"tags_then_caption", "caption_then_tags", "tags_only", "caption_only"}
-DEFAULT_CAPTION_PROMPT = '请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。'
+DEFAULT_CAPTION_PROMPT = 'Describe the main visible content of the image in {{language}} (en means English). Return only a JSON object with exactly caption and language; language must be "{{language}}". Do not output Markdown.'
 CAPTION_SCHEMA = {
     "type": "object",
     "properties": {
@@ -44,7 +44,7 @@ def snapshot_prompt(request: dict, config: dict | None = None) -> dict:
         result.setdefault("system_prompt", preset.get("system_prompt", ""))
         result["preset_revision"] = preset.get("revision")
     result.setdefault("prompt", DEFAULT_CAPTION_PROMPT)
-    result.setdefault("language", "zh-CN")
+    result.setdefault("language", "en")
     result.setdefault("mode", "natural")
     result.setdefault("max_caption_length", 2000)
     result.setdefault("system_prompt", "")
@@ -94,6 +94,8 @@ def parse_caption_response(content: str, *, language: str, max_length: int = 200
         raise CaptionContractError("caption language does not match request")
     if language.startswith("zh") and not any("\u3400" <= char <= "\u9fff" for char in caption):
         raise CaptionContractError("caption does not contain Chinese text")
+    if language == "en" and (not re.search(r"[A-Za-z]", caption) or re.search(r"[\u3400-\u9fff\u3040-\u30ff]", caption)):
+        raise CaptionContractError("caption does not contain English-only text")
     if language == "ja" and not any("\u3040" <= char <= "\u30ff" or "\u3400" <= char <= "\u9fff" for char in caption):
         raise CaptionContractError("caption does not contain Japanese text")
     if re.search(r"(?:[A-Za-z]:[\\/]|file://|/(?:home|Users|mnt|data)/)", caption):

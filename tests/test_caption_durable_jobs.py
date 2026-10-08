@@ -36,7 +36,7 @@ def test_partial_failure_survives_restart_and_retries_only_failed_image(tmp_path
         (images / (name + ".png")).write_bytes(b"fake")
     store = CaptionJobStore(tmp_path / "translations.sqlite3")
     first = CaptionJobManager(Vision(fail="b.png"), job_store=store)
-    first.start({"path": str(images), "mode": "natural"})
+    first.start({"path": str(images), "mode": "natural", "language": "zh-CN"})
     wait(first)
     first_id = first.status()["job_id"]
     before = (images / "a.txt").read_bytes()
@@ -59,7 +59,7 @@ def test_retry_after_restart_preserves_external_caption_edit(tmp_path):
     image.write_bytes(b"fake")
     store = CaptionJobStore(tmp_path / "translations.sqlite3")
     first = CaptionJobManager(Vision(fail="b.png"), job_store=store)
-    first.start({"path": str(tmp_path), "mode": "natural"})
+    first.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN"})
     wait(first)
     image.with_suffix(".txt").write_text("user updated caption", encoding="utf-8")
     service = Vision()
@@ -76,7 +76,7 @@ def test_restart_marks_pending_items_retryable_without_automatic_calls(tmp_path)
     image.write_bytes(b"fake")
     store = CaptionJobStore(tmp_path / "translations.sqlite3")
     state = {**CaptionJobManager._idle(), "job_id": "interrupted", "phase": "captioning", "total": 1}
-    store.save(state, {"path": str(tmp_path), "mode": "natural", "expected_hashes": {str(image): None}}, [str(image)], [], [])
+    store.save(state, {"path": str(tmp_path), "mode": "natural", "language": "zh-CN", "expected_hashes": {str(image): None}}, [str(image)], [], [])
     service = Vision()
     restarted = CaptionJobManager(service, job_store=store)
     assert service.calls == []
@@ -113,7 +113,7 @@ def interrupted_write(*args, **kwargs):
     os._exit(91)
 caption_job.write_caption_atomic = interrupted_write
 manager = caption_job.CaptionJobManager(Vision(), job_store=CaptionJobStore(sys.argv[2]))
-manager.start({"path":sys.argv[1], "mode":"natural", "conflict_action":"copy"})
+manager.start({"path":sys.argv[1], "mode":"natural", "language":"zh-CN", "conflict_action":"copy"})
 manager._thread.join()
 '''
     result = subprocess.run([sys.executable, "-c", script, str(images), str(database)],
@@ -135,7 +135,7 @@ manager._thread.join()
 def test_store_never_persists_request_credentials_or_provider_envelope(tmp_path):
     store = CaptionJobStore(tmp_path / "translations.sqlite3")
     state = {**CaptionJobManager._idle(), "job_id": "safe"}
-    store.save(state, {"mode": "natural", "api_key": "fixture-private-key", "config_snapshot": {"api_key": "fixture-private-key"}}, [], [], [])
+    store.save(state, {"mode": "natural", "language": "zh-CN", "api_key": "fixture-private-key", "config_snapshot": {"api_key": "fixture-private-key"}}, [], [], [])
     assert "fixture-private-key" not in store.path.read_bytes().decode("latin1")
     assert "api_key" not in json.dumps(store.get())
 
@@ -158,7 +158,7 @@ def test_persistence_failure_prevents_inference_and_releases_shared_reservation(
     monkeypatch.setattr(store, "save", fail_after_submission)
     service = Vision()
     manager = CaptionJobManager(service, job_store=store)
-    manager.start({"path": str(tmp_path), "mode": "natural"})
+    manager.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN"})
     wait(manager)
     assert manager.status()["phase"] == "error"
     assert "private disk path" not in json.dumps(manager.status())
@@ -184,7 +184,7 @@ def test_retry_uses_frozen_prompt_after_preset_is_deleted(tmp_path):
 
     service = PresetVision(fail="a.png")
     first = CaptionJobManager(service, job_store=store)
-    first.start({"path": str(tmp_path), "mode": "natural", "prompt_id": "frozen"})
+    first.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN", "prompt_id": "frozen"})
     wait(first)
     assert first.status()["snapshot"]["prompt_id"] == "frozen"
     service.presets = []
@@ -200,7 +200,7 @@ def test_restart_can_retry_task_level_error_before_first_image(tmp_path):
     image.write_bytes(b"fake")
     store = CaptionJobStore(tmp_path / "translations.sqlite3")
     state = {**CaptionJobManager._idle(), "job_id": "failed-before-image", "phase": "error", "total": 1}
-    store.save(state, {"path": str(tmp_path), "mode": "natural", "expected_hashes": {str(image): None}}, [str(image)], [], [])
+    store.save(state, {"path": str(tmp_path), "mode": "natural", "language": "zh-CN", "expected_hashes": {str(image): None}}, [str(image)], [], [])
     service = Vision()
     restarted = CaptionJobManager(service, job_store=store)
     assert restarted.status()["failed"] == 1
@@ -221,7 +221,7 @@ def test_short_natural_caption_provenance_blocks_tag_cleanup(tmp_path, monkeypat
             return profile, envelope, '{"caption":"一只猫","language":"zh-CN"}', info
 
     natural = CaptionJobManager(ShortVision(), job_store=store)
-    natural.start({"path": str(tmp_path), "mode": "natural"})
+    natural.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN"})
     wait(natural)
     target = image.with_suffix(".txt")
     before = target.read_bytes()

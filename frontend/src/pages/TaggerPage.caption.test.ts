@@ -71,6 +71,21 @@ async function naturalPage() {
 }
 
 describe("natural-language TaggerPage", () => {
+  it("starts English-first and switches both built-in prompt fields with output language", async () => {
+    const document = await taggerApi.models()
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: document.models.map(model => model.output === "natural" ? { ...model, languages: ["en", "zh-CN"] } : model) })
+    const page = await naturalPage()
+    expect((page.get('.caption-output-language').element as HTMLSelectElement).value).toBe('en')
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('en means English')
+    expect((page.get('.caption-system-prompt').element as HTMLTextAreaElement).value).not.toMatch(/[\u3400-\u9fff]/)
+    await page.get('.caption-output-language').setValue('zh-CN')
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('请用')
+    await page.get('.caption-output-language').setValue('en')
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).not.toMatch(/[\u3400-\u9fff]/)
+    await page.get('textarea').setValue('我自己的草稿')
+    await page.get('.caption-output-language').setValue('zh-CN')
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toBe('我自己的草稿')
+  })
   it("shows active Tag downloads beside the selected model", async () => {
     const idle = await taggerApi.status()
     vi.mocked(taggerApi.status).mockResolvedValueOnce({ ...idle, phase: "downloading", model: "wd14-convnextv2-v2", download: { ...idle.download, percent: 52, filename: "model.onnx" } })
@@ -179,7 +194,7 @@ describe("natural-language TaggerPage", () => {
     await flushPromises()
     expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
     expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("保留我的修改")
-    expect((page.get(".caption-preset-select").element as HTMLSelectElement).value).toBe("")
+    expect((page.get(".caption-preset-select").element as HTMLSelectElement).value).toBe("builtin-caption-zh")
     expect(llmApi.savePromptPresets).not.toHaveBeenCalled()
     expect(page.text()).not.toContain("组合打标")
   })

@@ -1,3 +1,17 @@
+# 当前：用户手动反馈修复与自然语言译文（2026-10-09）
+
+原goal已complete，不重新建goal。本轮用户直接授权修复Editor空文本/本地en实际中文、英文优先，并新增整段自然语言中文译文（中文零模型调用），继续禁用Tag操作。Canonical任务书与变更证据2026-10-09-manual-feedback-change.md维护新增任务，不覆盖原闭门。
+
+工作树feat-NL-Captioning；既有tests/test_diffsynth_review.py保留不提交。新增LLM caption_translation.py/API/cache table，共用LLM text路由/运行时/密钥，remote-first/local显式；中文CJK+词数保守识别短路；配置空Key远程不发请求。Editor scan choose不再误写旧空draft，onActivated重扫、natural展开原文、恢复磁盘原文按钮、只读译文/防旧响应；Tagger默认en和英文builtin，按语言自动切换未修改builtin与system，自定义保留且提示恢复默认；parse_en拒中文含body，坏旧cache作miss。
+
+验证：前端完整53文件347pass/type/lint/build，2既有EngineStatusBar警告；后端相关53文件530case，第二轮526pass/4既有Windows WinError1314/0skip。新增空远程保护尚需追加回归。原32fail中28是中文固定fixture未指定lang，已显式zh-CN；其余4保留既有平台边界。新测试新增中文skip/缓存/revision/合同等。
+
+私有手测根nl-caption-manual-20261009保留用户数据。补验服务器dev源码tools/serve_caption_acceptance.py port28767、followup-state（live exec45135），使用同手测新下载inputs，不冒充Phase5 fresh；原手测server28766暂未改。新真实三图default en均成功、正文真实English；翻译真实中文成功，但首轮cache回放fail：helper迁移生成未配置的text remote占优，导致fallback实际profile cache每次不命中。已在新translator快照中排除无Key外部remote（loopback匿名保留），新增测试，不改全局路由或持久配置。followup-real.py/report首轮保留失败，重验需新followup-images-r2与report-r2并重启28767载新后端。
+
+安装/前端/后端句柄65882/36993/19638/65572/46860/24993已结束；只有补验服务器45135仍在。不要读/打印用户APIKey；原server28766运行时可能有用户注入Key，升级后重启需提醒重新输入，图片/TXT/预设/history必须保留。下一步：新后端回归+重启补验server，真实English/翻译/cache/中文skip与新BrowserContext Editor翻译/空原文修复；随后候选提交，同步手测源码/源构建/重启，并最终提交文档。禁止把user人工4分扩大到新英文文本，补验仅自动语言/功能检查。
+
+以下为历史。
+
 # 当前最小续接：goal已完成，全新手动测试项目已交付（2026-10-09）
 
 原goal已调用update_goal complete。清理实际闭门证据2026-10-09-cleanup-closure.json；之后才新建nl-caption-manual-20261009，干净源码c3b4a7f、新Python/venv/Node依赖/源构建及公开URL资产，新state与数据集。12项真实就绪检查、新BrowserContext桌面/390px和实际停止重启均通过，服务127.0.0.1:28766运行，视觉模型已安装但停止。两个手测集各3图且零TXT；没有Key预填。项目与启动/停止脚本、中文README保留供用户最后手测，不自动删除。详情2026-10-09-manual-test-delivery.md。

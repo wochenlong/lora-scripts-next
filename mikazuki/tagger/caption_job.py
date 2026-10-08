@@ -294,7 +294,7 @@ class CaptionJobManager:
                 "total": len(paths),
                 "parent_job_id": parent_job_id,
                 "snapshot": {
-                    "mode": request.get("mode") or "natural", "language": request.get("language") or "zh-CN",
+                    "mode": request.get("mode") or "natural", "language": request.get("language") or "en",
                     "model_id": request.get("model_id") or request.get("interrogator_model"),
                     "runtime": request.get("runtime"), "profile_id": request.get("profile_id"),
                     "model_snapshot": request.get("model_snapshot"),
@@ -463,7 +463,7 @@ class CaptionJobManager:
             tagger_progress.release()
 
     async def _process_one(self, image_path: Path, request: dict) -> dict | bool:
-        from mikazuki.tagger.caption import merge_tag_caption, parse_caption_response, render_prompt
+        from mikazuki.tagger.caption import DEFAULT_CAPTION_PROMPT, merge_tag_caption, parse_caption_response, render_prompt
         from mikazuki.llm.runtime import llm_service as runtime_llm_service
         from mikazuki.llm.config import config_revision
         service = self._job_service or runtime_llm_service
@@ -498,9 +498,9 @@ class CaptionJobManager:
             training_tags = self._generate_tags(image_path, request)
             generated = ", ".join(training_tags)
         else:
-            language = str(request.get("language") or "zh-CN")
+            language = str(request.get("language") or "en")
             profile_id = request.get("profile_id") or None
-            prompt_template = str(request.get("prompt") or '请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。')
+            prompt_template = str(request.get("prompt") or DEFAULT_CAPTION_PROMPT)
             maximum = int(request.get("max_caption_length", 2000))
             prompt, _snapshot = render_prompt(prompt_template, language=language, mode=mode, image_name="image")
             system_prompt = str(request.get("system_prompt") or "")
@@ -526,7 +526,12 @@ class CaptionJobManager:
                     preprocess_revision,
                 )
             if cached:
-                parse_caption_response(json.dumps({"caption": cached, "language": language}), language=language, max_length=maximum)
+                from mikazuki.tagger.caption import CaptionContractError
+                try:
+                    parse_caption_response(json.dumps({"caption": cached, "language": language}), language=language, max_length=maximum)
+                except CaptionContractError:
+                    cached = None
+            if cached:
                 generated = cached
                 profile_id_for_report = selected_profile.id
                 model_for_report = selected_profile.model

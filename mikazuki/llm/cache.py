@@ -26,6 +26,10 @@ class CaptionCache:
 
     def _initialize(self) -> None:
         with self._connect() as connection:
+            connection.execute("""CREATE TABLE IF NOT EXISTS caption_translations (
+                source_sha256 TEXT NOT NULL, profile_revision TEXT NOT NULL,
+                target_language TEXT NOT NULL, translation TEXT NOT NULL,
+                PRIMARY KEY(source_sha256, profile_revision, target_language))""")
             connection.execute(
                 """
                 CREATE TABLE IF NOT EXISTS caption_results (
@@ -76,3 +80,20 @@ class CaptionCache:
     def clear(self) -> None:
         with self._connect() as connection:
             connection.execute("DELETE FROM caption_results")
+
+    def get_translation(self, source_hash, revision, language):
+        with self._connect() as connection:
+            row = connection.execute("SELECT translation FROM caption_translations WHERE source_sha256=? AND profile_revision=? AND target_language=?", (source_hash, revision, language)).fetchone()
+        return row[0] if row else None
+
+    def put_translation(self, source_hash, revision, language, translation):
+        with self._connect() as connection:
+            connection.execute("INSERT OR REPLACE INTO caption_translations VALUES (?, ?, ?, ?)", (source_hash, revision, language, translation))
+
+    def clear_translations(self):
+        with self._connect() as connection:
+            connection.execute("DELETE FROM caption_translations")
+
+    def translation_count(self):
+        with self._connect() as connection:
+            return connection.execute("SELECT COUNT(*) FROM caption_translations").fetchone()[0]

@@ -41,7 +41,7 @@ class CaptionJobRequest(BaseModel):
     max_caption_length: int = Field(default=2000, ge=1, le=2000)
     max_tokens: int = Field(default=512, ge=1, le=8192)
     temperature: float = Field(default=0.0, ge=0, le=2)
-    language: Literal["zh-CN", "zh-TW", "en", "ja"] = "zh-CN"
+    language: Literal["zh-CN", "zh-TW", "en", "ja"] = "en"
     layout: Literal["tags_only", "caption_only"] = "caption_only"
     conflict_action: Literal["ignore", "copy", "prepend", "append"] = "ignore"
     interrogator_model: str = "wd14-convnextv2-v2"

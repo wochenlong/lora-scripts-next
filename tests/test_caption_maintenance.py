@@ -28,7 +28,7 @@ def completed(tmp_path):
 
 
 def run(manager, root):
-    manager.start({"path": str(root), "mode": "natural", "conflict_action": "copy"})
+    manager.start({"path": str(root), "mode": "natural", "language": "zh-CN", "conflict_action": "copy"})
     manager._thread.join(5)
     assert manager.status()["succeeded"] == 1
     return manager.status()["job_id"]

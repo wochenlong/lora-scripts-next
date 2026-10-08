@@ -17,7 +17,7 @@ class Service:
         self.calls = []
         self.profile = LLMProfile(
             id="remote", name="Remote", endpoint="https://example.test/v1/chat/completions",
-            model="vision", source="remote", capabilities=("text", "vision"), languages=("zh-CN",),
+            model="vision", source="remote", capabilities=("text", "vision"), languages=("zh-CN", "en"),
         )
 
     def resolve(self, capability, **kwargs):
@@ -27,6 +27,8 @@ class Service:
 
     async def complete_vision(self, image_path, prompt, **kwargs):
         self.calls.append((Path(image_path).name, kwargs))
+        if kwargs.get("language") == "en":
+            return self.profile, {"choices": [{"finish_reason": "stop"}]}, '{"caption":"A cat by a window.","language":"en"}', {"bytes": 64}
         return self.profile, {"choices": [{"finish_reason": "stop"}]}, '{"caption":"一只猫坐在窗边。","language":"zh-CN"}', {"bytes": 64}
 
 
@@ -108,7 +110,7 @@ def test_tag_requests_reject_caption_parameters_in_preview_and_batch(api_client,
 
 def test_job_real_api_writes_and_exposes_report(api_client):
     client, image, manager, _service = api_client
-    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "mode": "natural", "profile_id": "remote"})
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "mode": "natural", "language": "zh-CN", "profile_id": "remote"})
     assert response.status_code == 200
     job_id = response.json()["data"]["job_id"]
     manager._thread.join(timeout=5)

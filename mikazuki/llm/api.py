@@ -2,15 +2,49 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Literal
+import asyncio
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .config import LLMContractError
-from .runtime import llm_service, get_local_vision_service
+from .runtime import llm_service, get_local_vision_service, caption_cache
 
 
 router = APIRouter()
+
+
+class CaptionTranslationRequest(BaseModel):
+    text: str = Field(min_length=1, max_length=2000)
+    profile_id: str | None = None
+    allow_local_fallback: bool = False
+    use_cache: bool = True
+
+    class Config:
+        extra = "forbid"
+
+
+@router.post("/llm/caption-translation")
+async def translate_caption_text(req: CaptionTranslationRequest, request: Request):
+    from .caption_translation import CaptionTextTranslator
+    from .contracts import LLMRouteError
+    operation = asyncio.create_task(CaptionTextTranslator(llm_service, caption_cache).translate(**req.dict()))
+    try:
+        while not operation.done():
+            if await request.is_disconnected():
+                raise HTTPException(status_code=499, detail="译文请求已取消")
+            await asyncio.wait({operation}, timeout=0.1)
+        return _success(await operation)
+    except HTTPException:
+        raise
+    except LLMRouteError as error:
+        raise HTTPException(status_code=409, detail={"code": error.code, "message": "请在共享 LLM 配置中设置可用的中文文本翻译接口，或显式启用已启动的本地模型兜底"}) from None
+    except Exception as error:
+        raise HTTPException(status_code=502, detail={"code": getattr(error, "code", "llm_request_failed"), "message": "自然语言译文生成失败，请检查模型返回、接口配置或稍后重试"}) from None
+    finally:
+        if not operation.done():
+            operation.cancel()
+        await asyncio.gather(operation, return_exceptions=True)
 
 
 class LLMConnectionTestRequest(BaseModel):

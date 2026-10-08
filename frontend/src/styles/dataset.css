@@ -1781,3 +1781,30 @@
 .translation-profile-add {
   width: 100%;
 }
+
+.natural-caption-translation {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.natural-translation-controls,
+.natural-caption-translation label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.natural-translation-controls .el-button + .el-button { margin-left: 0; }
+.natural-caption-translated { white-space: pre-wrap; overflow-wrap: anywhere; }
+.caption-restore-disk { margin-bottom: 12px; }
+
+@media (max-width: 700px) {
+  .dataset-tool-panel { max-width: 100%; }
+}

@@ -84,7 +84,7 @@ def test_real_http_fake_error_matrix(tmp_path, provider, model, success, code, c
     image = tmp_path / "private-image-name.png"
     Image.new("RGB", (32, 32), "red").save(image)
     manager = manager_for(tmp_path, endpoint, model)
-    manager.start({"path": str(tmp_path), "mode": "natural", "prompt": "Describe {{image_name}} in {{language}}"})
+    manager.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN", "prompt": "Describe {{image_name}} in {{language}}"})
     manager._thread.join(timeout=10)
     assert not manager._thread.is_alive()
     status = manager.status()
@@ -107,7 +107,7 @@ def test_partial_http_failure_and_restart_retry_preserve_completed_file(tmp_path
     Image.new("RGB", (32, 32), "red").save(tmp_path / "a.png")
     Image.new("RGB", (32, 32), "green").save(tmp_path / "b.png")
     manager = manager_for(tmp_path, endpoint, "partial")
-    manager.start({"path": str(tmp_path), "mode": "natural"})
+    manager.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN"})
     manager._thread.join(timeout=10)
     assert manager.status()["succeeded"] == manager.status()["failed"] == 1
     completed = (tmp_path / "a.txt").read_bytes()
@@ -145,7 +145,7 @@ def test_remote_failure_explicit_fallback_records_actual_local_profile(tmp_path,
     config["profiles"].append({"id": "local", "name": "local", "model": "fallback-local", "endpoint": endpoint,
                                "source": "managed-local", "capabilities": ["text", "vision"], "languages": ["zh-CN"], "ready": True})
     store.save(config)
-    manager.start({"path": str(tmp_path), "mode": "natural", "allow_local_fallback": True, "profile_id": "remote"})
+    manager.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN", "allow_local_fallback": True, "profile_id": "remote"})
     manager._thread.join(timeout=5)
     assert manager.status()["succeeded"] == 1
     assert [request["model"] for request in state["requests"]] == ["auth-failed", "fallback-local"]

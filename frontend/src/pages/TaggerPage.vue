@@ -16,10 +16,11 @@ import TaggerModelSelector from "../components/TaggerModelSelector.vue"
 import { useLlmProfiles } from "../composables/useLlmProfiles"
 import { useTaggerJob } from "../composables/useTaggerJob"
 import { useServerPathPick } from "../composables/useServerPathPick"
+import { captionBuiltins, englishCaptionPrompt } from "../dataset/captionPrompts"
 
 const models = ["wd14-convnextv2-v2", "wd-convnext-v3", "wd-swinv2-v3", "wd-vit-v3", "wd14-swinv2-v2", "wd14-vit-v2", "wd14-moat-v2", "wd-eva02-large-tagger-v3", "wd-vit-large-tagger-v3", "cl_tagger_1_01"]
 const form = reactive<TaggerRequest>({ path: "", interrogator_model: models[0], threshold: .35, character_threshold: .6, add_rating_tag: false, add_model_tag: false, additional_tags: "", exclude_tags: "", escape_tag: true, batch_input_recursive: false, batch_output_action_on_conflict: "copy", replace_underscore: true, download_endpoint: "", replace_underscore_excludes: "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||" })
-const captionForm = reactive<CaptionJobRequest>({ path: "", mode: "natural", recursive: false, profile_id: undefined, prompt: '请用{{language}}（zh-CN 使用简体中文）描述图片中的主要可见内容，只返回 JSON 对象，字段必须为 caption 和 language；language 必须是 "{{language}}"，不要输出 Markdown。', language: "zh-CN", conflict_action: "ignore", max_tokens: 512, temperature: 0, allow_local_fallback: false })
+const captionForm = reactive<CaptionJobRequest>({ path: "", mode: "natural", recursive: false, profile_id: undefined, prompt: englishCaptionPrompt, language: "en", conflict_action: "ignore", max_tokens: 512, temperature: 0, allow_local_fallback: false })
 form.batch_output_action_on_conflict = "ignore"
 const runtime = ref<"local" | "api">("local")
 const catalog = ref<TaggerModel[]>([])
@@ -30,8 +31,8 @@ const availableModels = computed(() => catalog.value.filter(model => model.runti
 const apiAvailable = computed(() => catalog.value.some(model => model.runtime === "api" && model.ready))
 const modelReady = computed(() => selectedModel.value?.ready && (mode.value === "tag" || selectedModel.value.languages.includes(captionForm.language) || selectedModel.value.languages.includes("*")))
 const outputLanguages = computed(() => [
-  { value: "zh-CN", label: "简体中文" }, { value: "zh-TW", label: "繁體中文" },
-  { value: "en", label: "English" }, { value: "ja", label: "日本語" },
+  { value: "en", label: "English" }, { value: "zh-CN", label: "简体中文" },
+  { value: "zh-TW", label: "繁體中文" }, { value: "ja", label: "日本語" },
 ].filter(item => selectedModel.value?.languages.includes(item.value) || selectedModel.value?.languages.includes("*")))
 const catalogLoading = ref(false)
 type PromptState = Pick<CaptionJobRequest, "prompt" | "language" | "max_caption_length"> & { system_prompt: string; name: string }
@@ -88,7 +89,7 @@ const defaultPresetId = ref<string | null>(null)
 const legacyImported = ref(false)
 const legacyPresetCount = computed(() => legacyImported.value ? 0 : llmProfiles.config.value.prompt_presets.length)
 const defaultPrompt = captionForm.prompt
-const builtinPresets: CaptionPromptPreset[] = [{ id: "builtin-caption-zh", kind: "caption_prompt", name: "客观描述 / Visible facts", template: defaultPrompt, system_prompt: "只描述可见主体、动作、环境和构图，不臆测身份或不可见事实。", output_format: "plain_text", language: "zh-CN", max_length: 2000, model_capabilities: ["vision", "caption"], revision: "builtin-v1" }]
+const builtinPresets = captionBuiltins
 const selectedSystemPrompt = ref(builtinPresets[0].system_prompt || "")
 captionForm.max_caption_length = 2000
 const committedPrompt = ref<PromptState>({ prompt: captionForm.prompt, language: captionForm.language, max_caption_length: captionForm.max_caption_length, system_prompt: selectedSystemPrompt.value, name: "" })
@@ -121,6 +122,10 @@ function selectModel(identifier: string) {
       selectedSystemPrompt.value = draft.systemPrompt
       committedPrompt.value = { ...draft.committed }
     }
+  }
+  if (next.output === "natural" && !next.languages.includes(captionForm.language) && !next.languages.includes("*")) {
+    captionForm.language = next.languages.find(language => ["en", "zh-CN", "zh-TW", "ja"].includes(language)) || "en"
+    changeOutputLanguage()
   }
   selectedModelId.value = identifier
   runtime.value = next.runtime
@@ -159,6 +164,17 @@ function restorePrompt() {
   Object.assign(captionForm, { prompt: saved.prompt, language: saved.language, max_caption_length: saved.max_caption_length })
   selectedSystemPrompt.value = saved.system_prompt
   presetName.value = saved.name
+}
+
+function changeOutputLanguage() {
+  const previous = builtinPresets.find(preset => preset.id === presetId.value) || (!presetId.value ? builtinPresets[0] : undefined)
+  if (!previous || captionForm.prompt !== previous.template || selectedSystemPrompt.value !== previous.system_prompt || (presetName.value && presetName.value !== previous.name)) return
+  const next = builtinPresets[captionForm.language.startsWith("zh") ? 1 : 0]
+  captionForm.prompt = next.template
+  selectedSystemPrompt.value = next.system_prompt || ""
+  presetId.value = next.id
+  presetName.value = next.name
+  committedPrompt.value = { ...committedPrompt.value, prompt: next.template, language: captionForm.language, system_prompt: selectedSystemPrompt.value, name: next.name }
 }
 
 async function refreshPromptPresets() {
@@ -227,7 +243,7 @@ async function loadLlmProfiles() {
       defaultPresetId.value = promptDocument.settings.default_caption_preset_id || null
       legacyImported.value = promptDocument.settings.legacy_imported === true
       const defaultId = promptDocument.settings.default_caption_preset_id
-      if (!presetId.value && defaultId && captionForm.prompt === defaultPrompt) await selectPreset(defaultId)
+      if ((!presetId.value || presetId.value.startsWith("builtin-caption-")) && defaultId && captionForm.prompt === defaultPrompt) await selectPreset(defaultId)
     }
     const local = await llmApi.localVisionStatus()
     if (revision === refreshGeneration) localVision.value = local
@@ -452,10 +468,11 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
           <label v-if="mode === 'tag'">{{ t("tagger.conflictLabel") }}<select v-model="form.batch_output_action_on_conflict"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select></label>
         </template>
         <template v-if="mode !== 'tag'">
-          <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language" class="caption-output-language" :disabled="presetSaving"><option v-if="!outputLanguages.some(item => item.value === captionForm.language)" :value="captionForm.language" disabled>{{ t('tagger.caption.unsupportedLanguage') }}</option><option v-for="item in outputLanguages" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
+          <label>{{ t("tagger.caption.language") }}<select v-model="captionForm.language" class="caption-output-language" :disabled="presetSaving" @change="changeOutputLanguage"><option v-if="!outputLanguages.some(item => item.value === captionForm.language)" :value="captionForm.language" disabled>{{ t('tagger.caption.unsupportedLanguage') }}</option><option v-for="item in outputLanguages" :key="item.value" :value="item.value">{{ item.label }}</option></select></label>
           <label>{{ t('tagger.models.maxTokens') }}<input v-model.number="captionForm.max_tokens" type="number" min="1" max="8192" /></label>
           <label>{{ t('tagger.models.temperature') }}<input v-model.number="captionForm.temperature" type="number" min="0" max="2" step="0.1" /></label>
-          <CaptionPromptEditor v-model:preset-id="presetId" v-model:name="presetName" v-model:prompt="captionForm.prompt" v-model:system-prompt="selectedSystemPrompt" v-model:maximum="captionForm.max_caption_length" :presets="captionPresets" :builtins="builtinPresets" :saving="presetSaving" :legacy-count="legacyPresetCount" @select="selectPreset" @save="savePreset()" @save-as="savePreset(false, true)" @restore-default="selectPreset('builtin-caption-zh')" @restore="restorePrompt" @remove="savePreset(true)" @import-legacy="importLegacyPresets" @refresh="refreshPromptPresets" />
+          <p v-if="captionForm.language === 'en' && /[\u3400-\u9fff]/.test(captionForm.prompt + selectedSystemPrompt)" class="wide-field" role="status">{{ t('tagger.caption.englishPromptHint') }}</p>
+          <CaptionPromptEditor v-model:preset-id="presetId" v-model:name="presetName" v-model:prompt="captionForm.prompt" v-model:system-prompt="selectedSystemPrompt" v-model:maximum="captionForm.max_caption_length" :presets="captionPresets" :builtins="builtinPresets" :saving="presetSaving" :legacy-count="legacyPresetCount" @select="selectPreset" @save="savePreset()" @save-as="savePreset(false, true)" @restore-default="selectPreset(captionForm.language.startsWith('zh') ? 'builtin-caption-zh' : 'builtin-caption-en')" @restore="restorePrompt" @remove="savePreset(true)" @import-legacy="importLegacyPresets" @refresh="refreshPromptPresets" />
           <label>{{ t("tagger.caption.conflict") }}<select v-model="captionForm.conflict_action"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option></select></label>
           <div class="caption-privacy wide-field">{{ t("tagger.caption.privacy") }}</div>
 

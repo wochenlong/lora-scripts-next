@@ -174,8 +174,9 @@ async def save_tag_translation_config(payload: dict):
 
 @router.get("/tag-translation/cache")
 async def tag_translation_cache_status():
+    from mikazuki.llm.runtime import caption_cache
     return _success({
-        "total": translation_store.result_count(),
+        "total": translation_store.result_count() + caption_cache.translation_count(),
         "mymemory": translation_store.result_count("mymemory"),
         "llm": translation_store.result_count("llm"),
     })
@@ -184,6 +185,9 @@ async def tag_translation_cache_status():
 @router.delete("/tag-translation/cache")
 async def clear_tag_translation_cache(provider: Literal["mymemory", "llm"] | None = None):
     translation_store.clear_results(provider)
+    if provider in {None, "llm"}:
+        from mikazuki.llm.runtime import caption_cache
+        caption_cache.clear_translations()
     return _success({"provider": provider, "total": translation_store.result_count()})
 
 

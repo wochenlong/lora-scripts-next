@@ -62,7 +62,7 @@ def test_new_job_archives_frozen_configuration_and_appears_in_task_manager(setup
     image, tasks, bridge, _store, create = setup
     service = Vision()
     manager = create(service)
-    result = manager.start({"path": str(image.parent), "mode": "natural", "system_prompt": "可见事实", "max_tokens": 123, "temperature": .2, "model_id": "llm:fake", "runtime": "local", "api_key": "should-not-persist"})
+    result = manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN", "system_prompt": "可见事实", "max_tokens": 123, "temperature": .2, "model_id": "llm:fake", "runtime": "local", "api_key": "should-not-persist"})
     manager._thread.join(timeout=5)
     assert manager.status()["succeeded"] == 1, manager.status()
     job_id = result["job_id"]
@@ -83,7 +83,7 @@ def test_task_page_stop_cancels_the_actual_caption_inference_without_writing(set
     image, tasks, _bridge, _store, create = setup
     service = Vision(wait=True)
     manager = create(service)
-    job_id = manager.start({"path": str(image.parent), "mode": "natural"})["job_id"]
+    job_id = manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN"})["job_id"]
     assert service.started.wait(timeout=3)
     tasks.terminate_task(job_id)
     manager._thread.join(timeout=5)
@@ -104,7 +104,7 @@ def test_archive_failure_prevents_worker_and_provider_start(setup, monkeypatch):
 
     monkeypatch.setattr(bridge, "_write", fail)
     with pytest.raises(CaptionPersistenceError):
-        manager.start({"path": str(image.parent), "mode": "natural"})
+        manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN"})
     assert not service.calls
     assert not tasks.dump()
     assert not manager._thread.is_alive()
@@ -114,7 +114,7 @@ def test_archive_failure_prevents_worker_and_provider_start(setup, monkeypatch):
 def test_task_page_delete_preserves_dataset_and_does_not_resurrect_history(setup):
     image, tasks, bridge, store, create = setup
     manager = create(Vision())
-    job_id = manager.start({"path": str(image.parent), "mode": "natural"})["job_id"]
+    job_id = manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN"})["job_id"]
     manager._thread.join(timeout=5)
     written = image.with_suffix(".txt").read_bytes()
     assert tasks.delete_task(job_id)
@@ -129,7 +129,7 @@ def test_task_page_delete_preserves_dataset_and_does_not_resurrect_history(setup
 def test_sqlite_recovery_preserves_all_new_generation_parameters(setup):
     image, _tasks, bridge, store, create = setup
     manager = create(Vision())
-    job_id = manager.start({"path": str(image.parent), "mode": "natural", "system_prompt": "系统提示词", "max_tokens": 333, "temperature": .4, "model_id": "llm:fake", "runtime": "local", "preset_revision": "r1"})["job_id"]
+    job_id = manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN", "system_prompt": "系统提示词", "max_tokens": 333, "temperature": .4, "model_id": "llm:fake", "runtime": "local", "preset_revision": "r1"})["job_id"]
     manager._thread.join(timeout=5)
     service = Vision()
     restored_tasks = TaskManager()
@@ -145,8 +145,8 @@ def test_sqlite_recovery_preserves_all_new_generation_parameters(setup):
 def test_interrupted_archive_restores_failed_task_without_auto_inference_and_can_retry(setup):
     image, _tasks, bridge, store, _create = setup
     job_id = str(uuid.uuid4())
-    state = {**CaptionJobManager._idle(), "job_id": job_id, "phase": "captioning", "mode": "natural", "total": 1}
-    request = {"path": str(image.parent), "mode": "natural", "system_prompt": "冻结系统提示词", "max_tokens": 234, "temperature": .3, "expected_hashes": {str(image): None}}
+    state = {**CaptionJobManager._idle(), "job_id": job_id, "phase": "captioning", "mode": "natural", "language": "zh-CN", "total": 1}
+    request = {"path": str(image.parent), "mode": "natural", "language": "zh-CN", "system_prompt": "冻结系统提示词", "max_tokens": 234, "temperature": .3, "expected_hashes": {str(image): None}}
     request["_task_archive"] = bridge.prepare(state, request, [str(image)], lambda: None)
     store.save(state, request, [str(image)], [], [])
     restored_tasks = TaskManager()
@@ -172,13 +172,13 @@ def test_historical_retry_does_not_use_a_newer_tasks_configuration(setup):
             raise RuntimeError("failed")
 
     manager = create(Flaky())
-    old = manager.start({"path": str(image.parent), "mode": "natural", "system_prompt": "旧系统提示词", "max_tokens": 222})["job_id"]
+    old = manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN", "system_prompt": "旧系统提示词", "max_tokens": 222})["job_id"]
     manager._thread.join(timeout=5)
     newer_image = image.parent / "b.png"
     newer_image.write_bytes(b"second")
     service = Vision()
     manager.service = service
-    manager.start({"path": str(image.parent), "paths": [str(newer_image)], "mode": "natural", "system_prompt": "新系统提示词", "max_tokens": 555})
+    manager.start({"path": str(image.parent), "paths": [str(newer_image)], "mode": "natural", "language": "zh-CN", "system_prompt": "新系统提示词", "max_tokens": 555})
     manager._thread.join(timeout=5)
     retried = manager.retry_failed(old)
     manager._thread.join(timeout=5)
@@ -191,7 +191,7 @@ def test_historical_retry_does_not_use_a_newer_tasks_configuration(setup):
 def test_corrupt_task_record_recovers_valid_backup_and_sqlite_state(setup):
     image, _tasks, bridge, store, create = setup
     manager = create(Vision())
-    job_id = manager.start({"path": str(image.parent), "mode": "natural"})["job_id"]
+    job_id = manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN"})["job_id"]
     manager._thread.join(timeout=5)
     path = bridge.locations[job_id] / "task.json"
     path.write_bytes(b"invalid json")
@@ -204,13 +204,13 @@ def test_corrupt_task_record_recovers_valid_backup_and_sqlite_state(setup):
 def test_old_task_cancel_does_not_cancel_newer_active_job(setup):
     image, tasks, _bridge, _store, create = setup
     manager = create(Vision())
-    old_id = manager.start({"path": str(image.parent), "mode": "natural"})["job_id"]
+    old_id = manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN"})["job_id"]
     manager._thread.join(timeout=5)
     second = image.parent / "b.png"
     second.write_bytes(b"second-image")
     waiting = Vision(wait=True)
     manager.service = waiting
-    new_id = manager.start({"path": str(image.parent), "paths": [str(second)], "mode": "natural"})["job_id"]
+    new_id = manager.start({"path": str(image.parent), "paths": [str(second)], "mode": "natural", "language": "zh-CN"})["job_id"]
     assert waiting.started.wait(timeout=3)
     tasks.tasks[old_id]._on_cancel()
     assert manager.status()["job_id"] == new_id
@@ -230,7 +230,7 @@ def test_sqlite_failure_after_archive_registration_prevents_inference(setup, mon
 
     monkeypatch.setattr(store, "save", fail)
     with pytest.raises(CaptionPersistenceError):
-        manager.start({"path": str(image.parent), "mode": "natural"})
+        manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN"})
     assert not service.calls
     assert not image.with_suffix(".txt").exists()
     assert next(iter(tasks.tasks.values())).status == TaskStatus.FAILED
@@ -270,7 +270,7 @@ def test_task_stop_cancels_tag_asset_download_before_inference(setup, monkeypatc
 def test_malformed_archive_state_does_not_prevent_other_tasks_from_restoring(setup):
     image, _tasks, bridge, store, create = setup
     manager = create(Vision())
-    job_id = manager.start({"path": str(image.parent), "mode": "natural"})["job_id"]
+    job_id = manager.start({"path": str(image.parent), "mode": "natural", "language": "zh-CN"})["job_id"]
     manager._thread.join(timeout=5)
     valid = bridge.locations[job_id]
     malformed_id = str(uuid.uuid4())
