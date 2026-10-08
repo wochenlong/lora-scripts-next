@@ -1,10 +1,14 @@
 # Plan Manifest
 
+2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。
+
+以下2026-10-08及更早条目保留为历史，当前状态以上述闭门结论和canonical任务书为准。
+
 - Plan ID: `DATASET-NL-TAGGING-20261006`
 - Version: `v3.0-issue-409-aligned`
 - Scale mode: Full
 - Contract: [Issue #409](https://github.com/wochenlong/lora-scripts-next/issues/409)
-- Readiness: `executing`（用户明确全面施工；差异表已归档，当前契约修复中）
+- Readiness: `complete-with-boundary`（全部硬门已关闭，批准的平台边界保留）
 - Canonical progress: `../natural-language-captioning-task-book.md`
 - Design source: `../../design/natural-language-captioning-tagging-design.md`
 - Goal: `03_goal提示词/自然语言打标全程执行_goal提示词.md`
@@ -45,7 +49,7 @@
 | GATE-07 | pass-with-boundary | 逐项审计完成，保留批准的平台边界与未配置远程 |
 | GATE-08 | pass | 功能实施完成，OpenAPI首版范围声明已修正 |
 | GATE-09 | pass-with-boundary | 前端342、后端512+Linux四原case及真实链路通过；环境口径获用户批准 |
-| GATE-10 | cleanup pending | 第五根从零验收通过，Windows删除策略拒绝待用户处理 |
+| GATE-10 | pass-with-boundary | 第五根从零验收通过；用户删除剩余沙盒，2026-10-09实测清理完成 |
 
 ## Change control
 
@@ -62,7 +66,7 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 
 ## Next action
 
-完成当前矩阵与Phase2/3完成门审计；具体单一步骤以canonical任务书末尾为准。Phase5仍pending，不得提前宣告全验收。
+原goal闭门提交并标记完成后，新建全新项目交由用户手动测试；此前历史Next action不再适用。
 
 ## 2026-10-08 实施增量
 

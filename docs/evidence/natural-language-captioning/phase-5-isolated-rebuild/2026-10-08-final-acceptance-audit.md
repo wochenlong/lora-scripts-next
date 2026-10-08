@@ -1,8 +1,12 @@
 # Issue #409 最终功能验收审计
 
+2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。
+
+以下2026-10-08及更早条目保留为历史，当前状态以上述闭门结论和canonical任务书为准。
+
 日期：2026-10-08。候选源码：`8986b9e16ca90268480139eda5e086cbd197dea1`。分支：`feat/NL-Captioning`。
 
-**功能、前后端、真实资源、人工评分和第五次全新隔离重建已通过相应验收；整体完成门仍等待Windows临时目录清理或用户明确批准保留例外。** 不把清理策略拒绝记为完成，不把Windows原生symlink环境失败记为通过。
+**功能、前后端、真实资源、人工评分和第五次全新隔离重建已通过相应验收；2026-10-09用户删除后已实测核销清理，整体完成门全部关闭。** 不把清理策略拒绝记为完成，不把Windows原生symlink环境失败记为通过。
 
 ## 当前证据
 
@@ -58,8 +62,15 @@ python tools/verify_caption_rebuild_http.py --root <fresh_root> --port 28766
 
 Python安装目录、npm cache、HF cache、user_data/translation/queue/输出均设为本轮新根。所有功能命令均使用新venv，前端使用Node22.17.1。四个Linux原case用独立新Python3.11.15/venv/候选源码；仅OpenCV以同4.8.1.78的headless包装满足Linux无libGL环境，不改原测试或替换symlink为junction。
 
-## 剩余门
+## 历史剩余门（2026-10-09已关闭）
 
 自动审批两次拒绝Windows递归清理，原始理由均为`blocked by policy`，未提供更具体原因。已经改用允许的Git逐个移除本轮临时源码树，未改用其他语言/工具绕过Windows删除拒绝。剩余五个沙盒仅含本轮公开样本、模型、依赖、缓存、配置和本地测试输出，没有真实远程Key。
 
 需要用户手动删除五个剩余Windows根，或明确批准保留为清理例外。此前“4分all，全部通过”绑定人工评分与四项测试环境，不自动扩大为尚未发生的清理拒绝批准。其余完成条件不需要再次确认。整体goal保持active；收到处理结果后更新清理报告及最终门，才可以complete。
+
+
+## 最终闭门结论（2026-10-09）
+
+2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。
+
+未授权P0/P1为零，首版范围和全部必需验收项已完成；发布/push未请求，未执行。四项Windows原生symlink环境失败、fresh远程未配置均按已批准/可选边界保留，不隐藏原始结果。

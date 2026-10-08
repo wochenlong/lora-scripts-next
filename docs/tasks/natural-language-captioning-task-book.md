@@ -4,15 +4,15 @@
 
 - Plan ID：`DATASET-NL-TAGGING-20261006`
 - Version：`v3.0-issue-409-aligned`
-- Last updated：2026-10-08 Asia/Shanghai
+- Last updated：2026-10-09 Asia/Shanghai
 - Canonical progress file：本文
 - Design source：`docs/design/natural-language-captioning-tagging-design.md`
 - Construction plan：`docs/tasks/natural-language-captioning-plan/`
 - Contract：[#409 模型打标界面与自然语言标注](https://github.com/wochenlong/lora-scripts-next/issues/409)
 - Related issues：#365 数据集工作区、#405 user_data/任务契约
 - Current branch：`feat/NL-Captioning`
-- Current active phase：Phase5验收已通过；Windows清理完成门待处理
-- Execution readiness：`executing`（用户已于2026-10-07明确建立goal并全面执行）
+- Current active phase：Phase0–5全部完成；清理门已核销
+- Execution readiness：`complete-with-boundary`（所有硬门完成，批准的平台边界保留）
 - Scale：Full
 
 ## 总目标
@@ -240,15 +240,15 @@
 | Phase 2 后端 Caption/Tag 任务 | done | 假模型失败矩阵/持久化/预览/取消/恢复/写回/真实灰度通过，完成门复核完成 |
 | Phase 3 前端/Editor/user_data | done | model-first/预设/任务联动/390px/键盘及前端342项通过；真实Editor安全复核完成 |
 | Phase 4 真实资源/EDD | pass-with-boundary | 当前真实模型/UI/Zero-Short通过；511通过与四项Linux原case组合验收获用户批准，新火箭五维各4分；Windows原生symlink未验 |
-| Phase 5 隔离重建 | pass / cleanup pending | 候选8986b9e从零重建与功能验收通过；仅剩自动审批拒绝的Windows临时目录清理 |
+| Phase 5 隔离重建 | pass-with-boundary | 候选8986b9e从零与全部功能验收通过；2026-10-09用户手动删除并实测核销清理 |
 
 ### 当前验证状态
 
-历史证据显示：Node 22 前端和相关后端已有大量通过项，远程/本地 Caption、Tag 灰度、缓存、取消、冲突、Zero-Short 和人工评分曾有验证；这些证据需要按新契约重新审计。完整矩阵曾有 Windows symlink 权限失败和未核销 skip，不能直接宣告完成。历史 combined 证据不再作为本版验收依据。
+最终候选8986b9e：前端342/52、typecheck/lint/build通过；后端516项，Windows512通过/四项权限失败/0skip，独立Linux同候选四个原case通过且用户批准组合验收。真实Qwen/ONNX/HTTP22项、浏览器、人工评分、正式Zero-Short及第五次fresh重建通过；清理已实测完成。远程本轮未配置，不标记通过；历史combined不纳入。
 
 ### 下一步动作
 
-接入既有TaskManager与user_data任务档案，落实任务页停止、重启状态与档案写入失败保护。
+原goal无剩余施工项。闭门提交并更新goal complete后，按用户新要求建立全新手动测试项目（源码、依赖、模型/样本和数据目录均新建）。
 
 ## 失败与变更处理
 
@@ -353,3 +353,8 @@ r4全部功能矩阵/真实HTTP22checks/浏览器/新Linux四原case通过，但
 ## 2026-10-08 清理门连续第三轮阻塞审计
 
 本轮确认五个Windows剩余根仍在，源码与自建进程均已清理，无live句柄待等。自动审批拒绝后的清理选择连续三轮没有答复；当前所有可独立完成的功能/验收/文档/隐私扫描已经完成，无可再推进的必要工作。不得重复失败删除或改工具绕过，不把此前评分/环境批准扩大到cleanup。依据goal三轮规则，本轮将goal设为blocked，整体目标和已通过证据完整保留。证据2026-10-08-cleanup-blocked-audit.json。唯一解除条件：用户手动删除剩余五根，或明确批准其保留例外；之后核销清理和最终GATE，才complete。
+
+
+## 2026-10-09 用户手动清理与最终闭门
+
+2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。

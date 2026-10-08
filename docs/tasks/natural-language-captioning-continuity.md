@@ -1,3 +1,13 @@
+# 当前最小续接：原goal完成门全部关闭（2026-10-09）
+
+2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。
+
+最终候选8986b9e，前端342/52，后端516项=Windows512+获批准的Linux四原case，0skip。真实HTTP22/Qwen/ONNX/浏览器/人工/Zero-Short及r5全新重建全部已核验。原始Windows四失败不改写；fresh远程未配置不宣称通过。既有tests/test_diffsynth_review.py保留不提交。原沙盒已全删，无可轮询的旧句柄或旧venv可调用。
+
+单一下一步：闭门证据与canonical提交并update_goal complete，然后从该干净提交新建用户手动测试项目；新项目必须留存，不能视作旧清理剩余。
+
+以下为历史（不覆盖当前状态）。
+
 # 最新：清理门三轮审计，goal设blocked（2026-10-08）
 
 同一清理阻塞已连续三轮：五个Windows剩余根仍在，自动审批拒绝递归删除，用户尚未手动删除或批准保留。无live句柄，功能/完整测试/真实/人工/从零验收/文档和隐私扫描完成，无独立必要工作；本轮按goal规则set blocked，不能complete。已提交审计2026-10-08-cleanup-blocked-audit.json。不要重复提问/删除/测试，不绕过拒绝；已有审批问题待答。收到用户结果后重新核查五根，更新cleanup、GATE10/G-11、canonical和final review；如批准保留需独立记录批准人/原话/准确五根范围，完成最终门后update_goal complete。既有tests/test_diffsynth_review.py仍保留不提交。

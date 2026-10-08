@@ -14,13 +14,7 @@
     "r4",
     "r5"
   ],
-  "windows_remaining_roots": [
-    "nl-caption-phase5-409-20261008-r1",
-    "nl-caption-phase5-409-20261008-r2",
-    "nl-caption-phase5-409-20261008-r3",
-    "nl-caption-phase5-409-20261008-r4",
-    "nl-caption-phase5-409-20261008-r5"
-  ],
+  "windows_remaining_roots": [],
   "deletion_rejections": [
     {
       "action": "combined workspace-checked five-root recursive PowerShell cleanup",
@@ -35,8 +29,17 @@
   "no_repackaged_windows_deletion_attempt": true,
   "staged_privacy_scan_passed": true,
   "real_remote_key_injected_this_rebuild": false,
-  "completed": false,
-  "pending": "user manual removal or explicitly approved five-root retention exception",
+  "completed": true,
+  "pending": null,
   "remaining_inventory": "2026-10-08-remaining-cleanup-inventory.json",
-  "external_cleanup_recheck": "All five Windows roots remain; all source directories absent; no owned inference/test/server process running"
+  "external_cleanup_recheck": "User cleared sandboxes; all five roots absent; no owned inference/test/server process running",
+  "historical_windows_remaining_roots": [
+    "nl-caption-phase5-409-20261008-r1",
+    "nl-caption-phase5-409-20261008-r2",
+    "nl-caption-phase5-409-20261008-r3",
+    "nl-caption-phase5-409-20261008-r4",
+    "nl-caption-phase5-409-20261008-r5"
+  ],
+  "closure_date": "2026-10-09",
+  "closure_evidence": "2026-10-09-cleanup-closure.json"
 }

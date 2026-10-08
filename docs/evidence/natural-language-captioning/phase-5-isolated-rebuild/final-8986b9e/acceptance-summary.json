@@ -23,7 +23,8 @@
   "source_runtime_and_dependencies_fresh": true,
   "all_public_inputs_redownloaded": true,
   "all_real_and_browser_checks_passed": true,
-  "cleanup_completed": false,
+  "cleanup_completed": true,
   "cleanup_status": "../../phase-5-isolated-rebuild/2026-10-08-cleanup-status.json",
-  "goal_complete": false
+  "goal_complete": true,
+  "closure_evidence": "../2026-10-09-cleanup-closure.json"
 }
