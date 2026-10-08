@@ -11,7 +11,7 @@
 - Contract：[#409 模型打标界面与自然语言标注](https://github.com/wochenlong/lora-scripts-next/issues/409)
 - Related issues：#365 数据集工作区、#405 user_data/任务契约
 - Current branch：`feat/NL-Captioning`
-- Current active phase：Phase4真实资源与完成门审计；Phase5等待前置门
+- Current active phase：Phase5全新隔离重建
 - Execution readiness：`executing`（用户已于2026-10-07明确建立goal并全面执行）
 - Scale：Full
 
@@ -239,8 +239,8 @@
 | Phase 1 LLM/模型能力契约 | done | 共享配置/掩码/迁移、能力参数拒绝、预设进程事务和fake/gray回归通过 |
 | Phase 2 后端 Caption/Tag 任务 | done | 假模型失败矩阵/持久化/预览/取消/恢复/写回/真实灰度通过，完成门复核完成 |
 | Phase 3 前端/Editor/user_data | done | model-first/预设/任务联动/390px/键盘及前端342项通过；真实Editor安全复核完成 |
-| Phase 4 真实资源/EDD | in progress | 当前ONNX/Qwen/正式Zero-Short通过；最新功能矩阵509通过/4Windows环境失败，0skip；用户评分/验收环境待答 |
-| Phase 5 隔离重建 | pending | 最终完成门 |
+| Phase 4 真实资源/EDD | pass-with-boundary | 当前真实模型/UI/Zero-Short通过；511通过与四项Linux原case组合验收获用户批准，新火箭五维各4分；Windows原生symlink未验 |
+| Phase 5 隔离重建 | in progress | 用户前置验收已批准；必须新源码/依赖/资产/状态完整重跑 |
 
 ### 当前验证状态
 
@@ -313,3 +313,9 @@ fbf28e6冻结Phase5输入，未创建重建环境。对照实际#405存储约定
 ## 2026-10-08 阻塞门审计
 
 同两项用户输入连续三个goal轮次未到；已完成可独立推进的实现/验证/发布审计与输入冻结。本轮原四Windows case仍WinError1314/4失败，未检测到开发者模式启用；新UI火箭评分仍缺。Phase5前置门不能跳过，不创建重建环境、不自动批准默认选项、不代填评分。当前执行状态blocked/等待用户输入，目标与交付标准保持完整；证据2026-10-08-blocked-gate-audit.md。唯一下一步是接收上述答复，核销Phase4后继续Phase5。
+
+## 2026-10-08 用户验收门批准与Phase5开工
+
+用户答复“4分 all，全部通过”。新UI火箭精确文本五维各4分/20分；四项Windows权限失败采用Linux原case真实symlink补验的组合口径获批准，保留Windows原生场景未验边界。独立事件见phase-4-real-evaluation/2026-10-08-user-gate-approval.json，既有冻结评分不改写。Phase4完成门pass-with-boundary，Phase5解锁；该批准不代替任何尚未执行的从零重建。
+
+唯一下一步：冻结候选提交，在全新隔离root建立源码/依赖，按公开URL重新下载全部样本和模型/运行时，完成Phase5全矩阵及真实验收。既有DiffSynth测试修改保留在开发树，不进入候选。

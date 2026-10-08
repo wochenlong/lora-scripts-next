@@ -20,6 +20,7 @@ def main():
     parser.add_argument('--manifest', type=Path, required=True)
     parser.add_argument('--tag-models', type=Path, required=True)
     parser.add_argument('--commit', required=True)
+    parser.add_argument('--rebuild-inputs', type=Path)
     args = parser.parse_args()
     root = args.root.resolve()
     if root.exists():
@@ -34,6 +35,11 @@ def main():
     from mikazuki.tagger.progress import tagger_progress
     from mikazuki.tagger.task_bridge import CaptionTaskBridge
 
+    if args.rebuild_inputs:
+        from download_caption_rebuild_inputs import validate_inputs
+        fresh, _ = validate_inputs(args.rebuild_inputs)
+        if args.samples.resolve() != fresh / 'samples' or args.tag_models.resolve() != fresh / 'tag-models':
+            raise ValueError('rebuild Tag must use its fresh downloaded inputs')
     manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
     old, new = root / 'legacy', root / 'new'
     for folder in (old, new):
@@ -48,7 +54,7 @@ def main():
             raise AssertionError('Tag must not call an LLM')
 
     report = {'source_commit': args.commit, 'phase_4': False, 'provider': 'real-ONNX-CPU',
-              'model': 'wd14-convnextv2-v2', 'samples': []}
+              'model': 'wd14-convnextv2-v2', 'samples': [], 'fresh_rebuild_inputs': bool(args.rebuild_inputs)}
     started = time.perf_counter()
     try:
         tagger_progress.reset_idle()

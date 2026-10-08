@@ -83,3 +83,7 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 ## 2026-10-08 真实链路与验收修复增量
 
 真实Tag/本地Qwen/正式Zero-Short及真实UI生成/取消/Editor通过；完整功能矩阵506通过/4Windows权限失败，补充Linux四原始case通过。Windows验收环境口径和新UI火箭人工评分正在等待用户答复。Tag下载取消和档案损坏类型隔离、支持语言/停止弹窗/取消模板选择等修复后专项50、前端342通过。最新证据phase-4-real-evaluation三份报告；下一步提交后完整功能矩阵复跑，Phase5未解锁，GATE09/10未通过。
+
+## 2026-10-08 用户完成门批准
+
+新UI火箭五维各4分，四项symlink跨平台组合验收获用户批准，保留Windows权限失败。Phase4 pass-with-boundary，Phase5 in progress；独立授权事件2026-10-08-user-gate-approval.json。下一步全新源码/依赖/URL资产重建，GATE10仍未通过，整体goal active。

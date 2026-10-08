@@ -3,10 +3,7 @@
   "schema_version": 1,
   "candidate_business_commit": "f53582e",
   "execution_started": false,
-  "blocked_gates": [
-    "new_ui_rocket_human_score",
-    "windows_symlink_acceptance_environment"
-  ],
+  "blocked_gates": [],
   "samples": [
     {
       "id": "chelsea",
@@ -97,5 +94,6 @@
     "old_caption_cache",
     "old_queue",
     "old_outputs"
-  ]
+  ],
+  "phase4_approval": "2026-10-08-user-gate-approval.json"
 }

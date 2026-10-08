@@ -1,3 +1,9 @@
+# 当前续接状态：2026-10-08 用户前置门批准
+
+用户“4分 all，全部通过”批准新火箭五维各4分与仅四项symlink跨平台组合验收。Phase4 pass-with-boundary；Windows原生symlink未验限制保留。Phase5已解锁，需新源码、新venv、新node_modules和公开URL全新下载全部样本/模型/runtime，不能用批准替代从零重建。goal active。唯一下一步冻结候选、建立全新重建root。既有tests/test_diffsynth_review.py修改保留不提交。
+
+以下是历史状态，不覆盖本条。
+
 # 2026-10-08 真实验收与修复续接（当前）
 
 当前阻塞审计：046cff5之后连续第三个goal轮次仍未收到新UI火箭五维评分与Windows/跨平台四case验收选择；本轮原Windows四case重跑仍WinError1314，无开发者模式启用。无live handle；独立发布审计/输入冻结已完成，Phase5前置门未通过且没启动。目标应标记blocked而非暂停/complete，不再空转或重复提问。用户答复后记录评分与环境授权、执行对应复验、再开展全部Phase5。证据2026-10-08-blocked-gate-audit.md，后续HEAD读git log；tests/test_diffsynth_review.py既有未提交修改保留。

@@ -1,0 +1,28 @@
+{
+  "kind": "user-acceptance-event",
+  "date": "2026-10-08",
+  "reviewer": "当前会话用户",
+  "user_statement": "4分 all，全部通过",
+  "context": "答复新UI火箭五维人工评分及四项Windows符号链接测试采用跨平台组合验收的待审批请求",
+  "caption": {
+    "sample": "rocket.jpg",
+    "text_sha256": "1df733846810cc99cf4eda6293dc739c2a35a21caa081ee7e77ab51932d466ef",
+    "prompt_revision": "543e625a7759e434bf355f7e",
+    "scores": {"主体": 4, "可见事实": 4, "中文": 4, "训练效用": 4, "精简": 4},
+    "total": 20,
+    "reason": "用户明确全部通过；未补充逐维理由"
+  },
+  "test_environment_approval": {
+    "decision": "批准以下四项采用Windows完整功能矩阵与Linux原始真实符号链接测试组合验收",
+    "cases": [
+      "tests/test_datasets_api.py::test_list_datasets_excludes_symlinked_directories",
+      "tests/test_datasets_api.py::test_resolve_dataset_dir_rejects_symlink_escape",
+      "tests/test_datasets_export.py::test_zip_export_skips_symlinked_files",
+      "tests/test_datasets_export.py::test_zip_export_skips_symlinked_directories"
+    ],
+    "windows_result": "511 passed / 4 failed / 0 skipped；四项创建symlink前因WinError1314失败",
+    "linux_result": "四项原始case真实POSIX symlink，4 passed",
+    "remaining_boundary": "Windows原生symlink场景尚未验证；批准不把环境失败改写为Windows通过，不扩大到其他测试"
+  },
+  "phase5": "仅解除开工前置门；仍须完整全新隔离重建，不能用本次全部通过代替未执行验收"
+}

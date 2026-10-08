@@ -76,6 +76,11 @@ def run_job(manager, request):
 
 
 async def verify(args, key):
+    if args.rebuild_inputs:
+        from download_caption_rebuild_inputs import validate_inputs
+        fresh, executable = validate_inputs(args.rebuild_inputs)
+        if args.samples.resolve() != fresh / "samples" or args.assets.resolve() != fresh / "vision" or args.runtime.resolve() != executable:
+            raise ValueError("rebuild acceptance must use its fresh downloaded inputs")
     root = args.root.resolve()
     if root.exists():
         raise RuntimeError("verification root must be new")
@@ -116,7 +121,7 @@ async def verify(args, key):
     manager = CaptionJobManager(service, cache=cache, job_store=journal, task_bridge=CaptionTaskBridge(root / "user_data"))
     report = {"phase_4": False, "kind": "current-production-real", "mode": "remote" if args.remote else "local",
               "caption_mode": args.mode,
-              "source_commit": args.commit, "reuses_probe_assets": args.local, "peak_rss_bytes": 0,
+              "source_commit": args.commit, "reuses_probe_assets": args.local and not bool(args.rebuild_inputs), "fresh_rebuild_inputs": bool(args.rebuild_inputs), "peak_rss_bytes": 0,
               "samples": [], "human_scores": None}
     sampler = None
     try:
@@ -255,6 +260,7 @@ if __name__ == "__main__":
     parser.add_argument("--runtime", type=Path)
     parser.add_argument("--mode", choices=["natural"], default="natural")
     parser.add_argument("--tag-models", type=Path)
+    parser.add_argument("--rebuild-inputs", type=Path)
     args = parser.parse_args()
     if not args.remote and not args.local:
         parser.error("select remote or local")

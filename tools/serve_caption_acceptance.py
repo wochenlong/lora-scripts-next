@@ -9,6 +9,8 @@ import argparse
 import getpass
 import os
 import secrets
+import shutil
+import json
 import sys
 from pathlib import Path
 
@@ -23,7 +25,15 @@ def main():
     parser.add_argument('--remote', action='store_true', help='Inject the authorized profile through a hidden backend prompt')
     parser.add_argument('--local-assets', type=Path, help='Intermediate UI acceptance only: use explicit locked visual assets')
     parser.add_argument('--local-runtime', type=Path, help='Intermediate UI acceptance only: existing llama-server')
+    parser.add_argument('--rebuild-inputs', type=Path, help='Verified assets freshly downloaded for this rebuild')
     args = parser.parse_args()
+    fresh = None
+    if args.rebuild_inputs:
+        if args.local_assets or args.local_runtime:
+            raise SystemExit('Fresh rebuild inputs cannot be combined with intermediate inputs')
+        from download_caption_rebuild_inputs import validate_inputs
+        fresh, executable = validate_inputs(args.rebuild_inputs)
+        args.local_assets, args.local_runtime = fresh / 'vision', executable
     root = args.root.resolve()
     if root.exists():
         raise SystemExit('Acceptance state root must be new')
@@ -63,8 +73,16 @@ def main():
             source = args.local_assets.resolve() / name
             if not source.is_file() or source.stat().st_size != size or asset_digest(source) != digest:
                 raise SystemExit('Explicit local assets do not match the locked manifest')
-            os.link(source, local.root / name)
-        print('Intermediate real local UI acceptance; linked probe assets; not Phase5', flush=True)
+            if fresh:
+                shutil.copy2(source, local.root / name)
+            else:
+                os.link(source, local.root / name)
+        if fresh:
+            shutil.copytree(fresh / 'tag-models', root / 'tag-models', dirs_exist_ok=True)
+            (root / 'rebuild-source.json').write_text(json.dumps({'fresh_inputs': True, 'linked_probe_assets': False}), encoding='utf-8')
+            print('Fresh rebuild real UI acceptance; verified public downloads; no probe assets', flush=True)
+        else:
+            print('Intermediate real local UI acceptance; linked probe assets; not Phase5', flush=True)
     if args.remote:
         if not sys.stdin.isatty():
             raise SystemExit('Remote acceptance requires protected terminal input')
