@@ -18,6 +18,7 @@ from mikazuki.download_sources import (
     install_process_env,
     pytorch_extra_index_url,
 )
+from mikazuki.engines.portable_venv import read_venv_home, relocate_venv_home, venv_base_missing
 from mikazuki.networking import redact
 from mikazuki.tasks import LANE_MAINTENANCE, tm
 from mikazuki.train_log_hub import hub as train_log_hub
@@ -480,6 +481,13 @@ def install_environment(
     facts["phase"] = "venv"
     _emit_progress(progress, "venv", "Creating ai-toolkit extension virtual environment")
     write_install_state(plan.layout, STATE_INSTALLING, facts, "creating ai-toolkit extension venv")
+    if plan.venv_python.is_file() and venv_base_missing(plan.venv_python):
+        # Venv relocated after install (e.g. trainer folder moved, see #406):
+        # repoint pyvenv.cfg at the current interpreter instead of rebuilding,
+        # keeping the installed torch/dependencies usable.
+        stale_home = read_venv_home(plan.venv_python)
+        relocate_venv_home(plan.venv_python, base_python)
+        _append(log, f"[repair] ai-toolkit venv 引用的基础 Python 已失效（{stale_home}），已迁移到 {base_python}")
     if not plan.venv_python.is_file():
         plan.venv_python.parent.parent.mkdir(parents=True, exist_ok=True)
         _run_streaming(
