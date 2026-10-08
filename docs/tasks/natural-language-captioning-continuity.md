@@ -1,3 +1,15 @@
+# 最小续接：Phase5 r3准备中（2026-10-08）
+
+当前候选813429558aeb51cff742a24952e42abe521bc62f；开发树既有tests/test_diffsynth_review.py未提交保留，无业务代码新修改。r3新root workspace/sandboxes/nl-caption-phase5-409-20261008-r3/source detached该候选。live句柄：52627=新Python/venv/requirements+CPU torch2.7.0+pytest9.1.1安装（无缓存）；83595=新Node22 npm ci/type/lint/完整Vitest maxWorkers2/build，日志写r3根。先轮询同一handle；Python新解释器创建后用r3 Python启动tools/download_caption_rebuild_inputs.py下载新inputs（不能使用r2旧venv或模型），该下载尚未启动。
+
+r1前端超时，r2HTTP脚本缺显式runtime start，两个根均不接受。r2修正诊断脚本完整通过，固化tools/verify_caption_rebuild_http.py --root r3根 --port28766。该工具需要server tools/serve_caption_acceptance.py --root r3/http-state --frontend-dist frontend/dist --port28766 --rebuild-inputs r3/inputs，等待明确ready后调用；它自行显式启动runtime。r2所有Windows自建服务器已停止，模型已停止；r2Linux bootstrap仍live handle42117（仅诊断，不能为r3验收复用），native根/home/displace/.local/share/nl-caption-phase5-409-20261008-r2。
+
+r3须完整重跑52文件515case（Windows四权限失败已批准跨平台组合）、342前端、formal Zero-Short、fresh ONNX灰度和Qwen三图、真实HTTP工具、浏览器UI/390px/键盘/预设/任务刷新，隐私扫描与停止清理。Linux四原case也需当前候选新源码/新Python/新依赖补验；可参考r2 linux-inputs/bootstrap.py，但必须公开URL重新下载Python和头less wheel，不能复用r2二进制。
+
+用户“4分 all，全部通过”已经批准新UI火箭五维4分和仅四项symlink跨平台组合口径；不再发问。人工评分绑定精确输出，可沿用原B组同文本。r2 CLI三条与原B精确相同（猫/coffee/rocket）；r2输出仅诊断，r3需重新生成并SHA核对。远程profile未配置，无本轮runtimeKey，按goal可选路径记录未执行，不虚称远程fresh通过。Phase4 pass-with-boundary/Phase5 in progress/goal active。
+
+当前唯一下一步：轮询r3安装，启动新输入下载并完成第三根真实验收；最终完成前更新canonical/gates/design/goal对应状态、privacy/cleanup与隔离证据。以下为历史，不覆盖本条。
+
 # 当前续接状态：2026-10-08 Phase5重新重建
 
 r1前端超时失效，r2全部前端/后端（四批准环境失败）、正式Zero-Short和真实ONNX/Qwen通过。r2初次HTTP脚本漏启动runtime，502正确但脚本断言失败；补显式start的诊断21项全部通过，仍不核销r2根。固化tools/verify_caption_rebuild_http.py，下一步r3 fresh源码/Python/依赖/样本模型再下载完整重跑，业务源码未变。Phase5 in progress/goal active。新用户两项批准已记录，不再提问。其他旧状态为历史。

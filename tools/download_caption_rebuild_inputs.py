@@ -11,6 +11,7 @@ import json
 import os
 import stat
 import urllib.request
+import urllib.error
 import zipfile
 from datetime import datetime, timezone
 from pathlib import Path
@@ -25,21 +26,29 @@ def filename(value):
 def download(opener, asset, target):
     target.parent.mkdir(parents=True, exist_ok=True)
     temporary = target.with_suffix(target.suffix + ".part")
-    digest = hashlib.sha256()
-    count = 0
     request = urllib.request.Request(asset["url"], headers={"User-Agent": "caption-isolated-rebuild"})
-    with opener.open(request, timeout=60) as response, temporary.open("xb") as stream:
-        while data := response.read(1024 * 1024):
-            stream.write(data)
-            digest.update(data)
-            count += len(data)
-        stream.flush()
-        os.fsync(stream.fileno())
-    if digest.hexdigest() != asset["sha256"] or (asset.get("size_bytes") is not None and count != asset["size_bytes"]):
-        raise ValueError("download differs from the locked manifest")
+    for attempt in range(1, 4):
+        digest = hashlib.sha256()
+        count = 0
+        try:
+            with opener.open(request, timeout=60) as response, temporary.open("xb") as stream:
+                while data := response.read(1024 * 1024):
+                    stream.write(data)
+                    digest.update(data)
+                    count += len(data)
+                stream.flush()
+                os.fsync(stream.fileno())
+            if digest.hexdigest() != asset["sha256"] or (asset.get("size_bytes") is not None and count != asset["size_bytes"]):
+                raise ValueError("download differs from the locked manifest")
+            break
+        except (OSError, urllib.error.URLError, ValueError):
+            if attempt == 3:
+                raise
+            temporary.unlink(missing_ok=True)
+            print(json.dumps({"whole_file_retry": target.name, "attempt": attempt + 1}), flush=True)
     os.replace(temporary, target)
     return {"url": asset["url"], "filename": target.name, "sha256": digest.hexdigest(), "size_bytes": count,
-            "downloaded_at": datetime.now(timezone.utc).isoformat(), "fresh_download": True}
+            "downloaded_at": datetime.now(timezone.utc).isoformat(), "fresh_download": True, "download_attempts": attempt}
 
 
 def extract_runtime(archive, directory, expected):

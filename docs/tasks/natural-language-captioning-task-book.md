@@ -325,3 +325,7 @@ fbf28e6冻结Phase5输入，未创建重建环境。对照实际#405存储约定
 候选25ef85b。首次fresh根前端341通过/1项5s超时，诊断限制worker后该原文件4通过；首次后端508通过/4批准的权限失败/3TaskInsights缺torch skip。首次根不接受，不补丁式宣告通过，资产下载已停止。正在另建r2 fresh worktree/Python/venv/Node依赖/公开URL资产；限制前端并行数且不延长时限，新增下载CPU torch用于三项日志测试，无业务源码修改。证据phase-5-isolated-rebuild/2026-10-08-rebuild-execution.md。
 
 唯一下一步：完成r2环境与完整矩阵，然后正式lifespan Zero-Short、真实模型/HTTP和浏览器验收、隐私清理。Phase5 in progress，goal active。
+
+## 2026-10-08 Phase5网络截断与第四次重建
+
+r3首样本网络截断被SHA/size拒绝，根不接受；r2修正HTTP诊断22项通过但不核销失败。下载器增加有界整文件重试/不复用part/固定SHA，验证截断恢复及三次坏SHA仍拒绝。业务源码未变。唯一下一步：从最新工具提交建立r4全新根，完整重下/依赖/矩阵/真实验收；此前所有根只保留诊断。goal active，不能complete。
