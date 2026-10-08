@@ -319,3 +319,9 @@ fbf28e6冻结Phase5输入，未创建重建环境。对照实际#405存储约定
 用户答复“4分 all，全部通过”。新UI火箭精确文本五维各4分/20分；四项Windows权限失败采用Linux原case真实symlink补验的组合口径获批准，保留Windows原生场景未验边界。独立事件见phase-4-real-evaluation/2026-10-08-user-gate-approval.json，既有冻结评分不改写。Phase4完成门pass-with-boundary，Phase5解锁；该批准不代替任何尚未执行的从零重建。
 
 唯一下一步：冻结候选提交，在全新隔离root建立源码/依赖，按公开URL重新下载全部样本和模型/运行时，完成Phase5全矩阵及真实验收。既有DiffSynth测试修改保留在开发树，不进入候选。
+
+## 2026-10-08 Phase5首次失败与全新第二次重建
+
+候选25ef85b。首次fresh根前端341通过/1项5s超时，诊断限制worker后该原文件4通过；首次后端508通过/4批准的权限失败/3TaskInsights缺torch skip。首次根不接受，不补丁式宣告通过，资产下载已停止。正在另建r2 fresh worktree/Python/venv/Node依赖/公开URL资产；限制前端并行数且不延长时限，新增下载CPU torch用于三项日志测试，无业务源码修改。证据phase-5-isolated-rebuild/2026-10-08-rebuild-execution.md。
+
+唯一下一步：完成r2环境与完整矩阵，然后正式lifespan Zero-Short、真实模型/HTTP和浏览器验收、隐私清理。Phase5 in progress，goal active。

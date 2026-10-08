@@ -1,3 +1,7 @@
+# 当前续接状态：2026-10-08 Phase5重新重建
+
+r1前端超时失效，r2全部前端/后端（四批准环境失败）、正式Zero-Short和真实ONNX/Qwen通过。r2初次HTTP脚本漏启动runtime，502正确但脚本断言失败；补显式start的诊断21项全部通过，仍不核销r2根。固化tools/verify_caption_rebuild_http.py，下一步r3 fresh源码/Python/依赖/样本模型再下载完整重跑，业务源码未变。Phase5 in progress/goal active。新用户两项批准已记录，不再提问。其他旧状态为历史。
+
 # 当前续接状态：2026-10-08 用户前置门批准
 
 用户“4分 all，全部通过”批准新火箭五维各4分与仅四项symlink跨平台组合验收。Phase4 pass-with-boundary；Windows原生symlink未验限制保留。Phase5已解锁，需新源码、新venv、新node_modules和公开URL全新下载全部样本/模型/runtime，不能用批准替代从零重建。goal active。唯一下一步冻结候选、建立全新重建root。既有tests/test_diffsynth_review.py修改保留不提交。
