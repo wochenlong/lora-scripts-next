@@ -212,6 +212,13 @@
   font-size: 12px;
 }
 
+.tasks-batch-button {
+  width: 100%;
+  margin: 10px 0 0;
+  justify-content: center;
+  font-size: 12px;
+}
+
 .tasks-filters {
   display: grid;
   grid-template-columns: 1fr 1fr;

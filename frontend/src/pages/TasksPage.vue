@@ -770,7 +770,7 @@ onBeforeUnmount(() => {
             <span v-for="stage in group.stages" :key="stage.id" class="task-stage" :data-status="stage.status.toLowerCase()">{{ stageLabelKey(stage.name) ? t(stageLabelKey(stage.name)) : stage.name }}</span>
           </div>
         </article>
-        <button class="ghost-button tasks-purge-button" @click="openBatchEnqueue">{{ t("tasks.batchEnqueue.button") }}</button>
+        <button class="ghost-button tasks-batch-button" @click="openBatchEnqueue">{{ t("tasks.batchEnqueue.button") }}</button>
       </aside>
 
       <section v-if="selected" class="task-detail" :data-status="selected.status.toLowerCase()">
