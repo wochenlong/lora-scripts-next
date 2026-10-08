@@ -1,5 +1,7 @@
 # 2026-10-08 真实验收与修复续接（当前）
 
+当前阻塞审计：046cff5之后连续第三个goal轮次仍未收到新UI火箭五维评分与Windows/跨平台四case验收选择；本轮原Windows四case重跑仍WinError1314，无开发者模式启用。无live handle；独立发布审计/输入冻结已完成，Phase5前置门未通过且没启动。目标应标记blocked而非暂停/complete，不再空转或重复提问。用户答复后记录评分与环境授权、执行对应复验、再开展全部Phase5。证据2026-10-08-blocked-gate-audit.md，后续HEAD读git log；tests/test_diffsynth_review.py既有未提交修改保留。
+
 续接最新：fbf28e6加入发布前审计与Phase5输入冻结，后续docs提交读git log。对照#405和实际源代码资源注册表，user_data结构匹配，Agent/plugin生产路径改动0；WD输入仓库修正为SmilingWolf/wd-v1-4-convnextv2-tagger-v2，公开Hub实核Qwen/WD revision，GitHub实核runtime发布SHA。完整范围漏项local_text_registry两测试已加入，新组合r3结束：52文件/515case，511passed/4同样Win权限失败/0skip/17subtests；无活动handle。两个用户问题仍未答，Phase5没有创建根目录，execution_started=false。下一步Phase4评分/环境口径后才解锁Phase5；未改变goal。所有自己启动进程已停止，唯一未提交既有修改仍tests/test_diffsynth_review.py。
 
 最新：HEAD f53582e业务修复已提交，后续文档提交读git log。f53582e完整功能矩阵r2结束，51文件/513case，509通过/4同样Win symlink权限失败/0skip，无新增失败。Phase2/3完成门已复核为done，Phase4in progress，Phase5pending。两个用户问题仍待答；不是停止goal，goal active。下一步Phase4评分/环境口径与发布前审计，之后才新建Phase5。没有活动exec句柄，所有自建模型/server已停止。

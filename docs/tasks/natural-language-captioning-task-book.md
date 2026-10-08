@@ -309,3 +309,7 @@ f53582e提交后的完整复验：51文件/513 case，509 passed/4同样Windows�
 fbf28e6冻结Phase5输入，未创建重建环境。对照实际#405存储约定、Git生产变更与资源来源，确认Agent/plugin生产路径变更0；未实施#405端口仲裁。范围runner补入此前漏列的local_text_registry，两项单独及完整组合复验通过：最新52文件/515case，511passed/4Windows权限失败/0skip/17subtests。重建输入WD仓库名已修正，Qwen/WD revision由公开Hub API实核，runtime发布URL与SHA由GitHub API实核。前两项用户问题仍待答；没有核销Windows失败或代填新火箭评分。
 
 唯一下一步：取得Phase4两项门禁答复后更新完成门并执行Phase5；若待答期间继续准备，限于当前发布审计/重建执行工具，不提前建立或运行Phase5环境。证据2026-10-08-pre-release-audit.md和phase5-frozen-inputs.json；goal保持active。
+
+## 2026-10-08 阻塞门审计
+
+同两项用户输入连续三个goal轮次未到；已完成可独立推进的实现/验证/发布审计与输入冻结。本轮原四Windows case仍WinError1314/4失败，未检测到开发者模式启用；新UI火箭评分仍缺。Phase5前置门不能跳过，不创建重建环境、不自动批准默认选项、不代填评分。当前执行状态blocked/等待用户输入，目标与交付标准保持完整；证据2026-10-08-blocked-gate-audit.md。唯一下一步是接收上述答复，核销Phase4后继续Phase5。
