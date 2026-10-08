@@ -19,6 +19,7 @@ from mikazuki.engines.musubi.extension_state import (
     STATE_READY as MUSUBI_STATE_READY,
     default_layout as musubi_default_layout,
     read_extension_status as read_musubi_extension_status,
+    repair_layout_venv as repair_musubi_layout_venv,
     write_install_state as write_musubi_install_state,
 )
 from mikazuki.engines.musubi.installer import (
@@ -59,6 +60,9 @@ async def status():
 async def preflight(config: dict):
     if not musubi_feature_enabled():
         return musubi_disabled_response()
+    # A packaged venv extracted elsewhere still points at the build machine's
+    # interpreter (#406); heal it before the dependency probe runs.
+    repair_musubi_layout_venv(musubi_default_layout(Path.cwd()))
     runtime = musubi_runtime()
     run_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-musubi"
     try:
