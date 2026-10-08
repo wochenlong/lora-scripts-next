@@ -26,3 +26,5 @@ Phase4已按用户批准的环境口径通过；候选8986b9e已在新r5根完�
 原[人工评分事件](phase-3-evaluation/human-evaluation-approval.json)和[冻结公开样本](phase-3-evaluation/frozen-eval-manifest.json)保留；重建输出只在精确文本SHA匹配时引用已有评分。初始manifest中的空评分不得改写。远程真实历史见phase-3-evaluation；当前fresh远程Profile未配置，不能标记本轮远程通过。
 
 - [用户手动清理与最终闭门](phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json)
+
+- [goal完成后全新手测项目交付](phase-5-isolated-rebuild/2026-10-09-manual-test-delivery.md)

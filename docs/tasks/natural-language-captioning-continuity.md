@@ -1,3 +1,11 @@
+# 当前最小续接：goal已完成，全新手动测试项目已交付（2026-10-09）
+
+原goal已调用update_goal complete。清理实际闭门证据2026-10-09-cleanup-closure.json；之后才新建nl-caption-manual-20261009，干净源码c3b4a7f、新Python/venv/Node依赖/源构建及公开URL资产，新state与数据集。12项真实就绪检查、新BrowserContext桌面/390px和实际停止重启均通过，服务127.0.0.1:28766运行，视觉模型已安装但停止。两个手测集各3图且零TXT；没有Key预填。项目与启动/停止脚本、中文README保留供用户最后手测，不自动删除。详情2026-10-09-manual-test-delivery.md。
+
+无施工/验收门剩余，用户最后手动测试待其自行进行；不要重新建立原goal或重复全部矩阵。既有tests/test_diffsynth_review.py保留不提交，无live安装/测试句柄要poll。
+
+以下为历史。
+
 # 当前最小续接：原goal完成门全部关闭（2026-10-09）
 
 2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。
