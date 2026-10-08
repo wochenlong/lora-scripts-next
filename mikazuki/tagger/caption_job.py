@@ -16,6 +16,7 @@ from mikazuki.tagger.progress import tagger_progress
 
 CaptionConflict = Literal["ignore", "copy", "prepend", "append"]
 _UNSET_HASH = object()
+_AUTO_BRIDGE = object()
 
 
 class CaptionWriteConflict(RuntimeError):
@@ -120,7 +121,7 @@ def discover_images(root: str | Path, recursive: bool = False) -> list[Path]:
 class CaptionJobManager:
     """Single active caption job with cooperative cancellation and retry support."""
 
-    def __init__(self, service=None, cache=None, job_store=None):
+    def __init__(self, service=None, cache=None, job_store=None, task_bridge=_AUTO_BRIDGE):
         self.service = service
         self.cache = cache
         self._lock = threading.RLock()
@@ -134,12 +135,21 @@ class CaptionJobManager:
             from mikazuki.llm.runtime import caption_job_store
             job_store = caption_job_store
         self.job_store = job_store
+        if task_bridge is _AUTO_BRIDGE:
+            if service is None:
+                from .task_bridge import CaptionTaskBridge
+                task_bridge = CaptionTaskBridge()
+            else:
+                task_bridge = None
+        self.task_bridge = task_bridge
         self._paths: list[str] = []
         self._completed: list[int] = []
         self._item_index = 0
         self._intent: dict | None = None
         if self.job_store:
             self._recover()
+        if self.task_bridge:
+            self.task_bridge.restore(self.job_store)
 
     def _recover(self):
         saved = self.job_store.get()
@@ -183,6 +193,11 @@ class CaptionJobManager:
                 self.job_store.save(self._status, self._request, self._paths, self._completed, self._failed, self._intent)
             except (sqlite3.Error, OSError):
                 raise CaptionPersistenceError("无法保存任务记录；请检查磁盘和数据库后重试") from None
+        if self.task_bridge and self._status.get("job_id") and self._request:
+            try:
+                self.task_bridge.update(self._status, self._request)
+            except (OSError, ValueError, KeyError):
+                raise CaptionPersistenceError("无法保存任务档案；请检查user_data并重试") from None
 
     def detail(self, job_id):
         if self.status().get("job_id") == job_id:
@@ -220,7 +235,7 @@ class CaptionJobManager:
         with self._lock:
             return self._status["phase"] in {"pending", "captioning", "cancelling"}
 
-    def start(self, request: dict, *, retry_failed: bool = False) -> dict:
+    def start(self, request: dict, *, retry_failed: bool = False, parent_job_id: str | None = None) -> dict:
         if request.get("mode", "natural") not in {"tag", "natural"}:
             raise RuntimeError("当前版本不支持组合打标；历史任务仅可查看或回滚")
         if request.get("mode", "natural") == "natural" and request.get("conflict_action", "ignore") not in {"ignore", "copy"}:
@@ -239,7 +254,7 @@ class CaptionJobManager:
                 from mikazuki.llm.runtime import llm_service
                 job_service = llm_service
             from mikazuki.llm.service import UnifiedLLMService
-            if isinstance(job_service, UnifiedLLMService):
+            if isinstance(job_service, UnifiedLLMService) and request.get("mode") != "tag":
                 job_service = UnifiedLLMService(
                     job_service.config_store,
                     session_factory=job_service.session_factory,
@@ -249,12 +264,18 @@ class CaptionJobManager:
             if request.get("mode") != "tag":
                 config = job_service.config(masked=False) if request.get("prompt_id") and not request.get("_prompt_frozen") and hasattr(job_service, "config") else {}
                 request = snapshot_prompt(request, config)
+                if hasattr(job_service, "resolve"):
+                    from mikazuki.llm.config import config_revision
+                    selected = job_service.resolve("vision", language=request["language"], profile_id=request.get("profile_id"), allow_local_fallback=bool(request.get("allow_local_fallback", False)))
+                    request["model_snapshot"] = {"id": selected.id, "model": selected.model, "source": selected.source, "capabilities": list(selected.capabilities), "revision": config_revision(selected)}
+            else:
+                request["model_snapshot"] = {"id": request.get("interrogator_model"), "model": request.get("interrogator_model"), "source": "local", "capabilities": ["tag"]}
             if not tagger_progress.try_begin("captioning", str(request.get("interrogator_model") or ""), "自然语言打标任务已提交"):
                 raise RuntimeError("已有打标或下载任务进行中")
             job_id = str(uuid.uuid4())
             self._cancel.clear()
             self._failed = []
-            parent_job_id = self._status.get("job_id") if retry_failed else None
+            parent_job_id = (parent_job_id or self._status.get("job_id")) if retry_failed else None
             self._request = request
             self._request["path"] = str(Path(request.get("path", "")).expanduser().absolute())
             self._request["expected_hashes"] = {str(path.absolute()): request["expected_hashes"].get(str(path)) for path in paths}
@@ -275,6 +296,7 @@ class CaptionJobManager:
                     "mode": request.get("mode") or "natural", "language": request.get("language") or "zh-CN",
                     "model_id": request.get("model_id") or request.get("interrogator_model"),
                     "runtime": request.get("runtime"), "profile_id": request.get("profile_id"),
+                    "model_snapshot": request.get("model_snapshot"),
                     "max_tokens": request.get("max_tokens", 512), "temperature": request.get("temperature", 0.0),
                     "conflict_action": request.get("conflict_action"), "recursive": bool(request.get("recursive", False)),
                     "prompt_id": request.get("prompt_id"),
@@ -286,11 +308,21 @@ class CaptionJobManager:
             }
             self._thread = threading.Thread(target=self._run, args=(job_id,), daemon=True, name="caption-job")
             try:
+                if self.task_bridge:
+                    self._request["_task_archive"] = self.task_bridge.prepare(self._status, self._request, self._paths, lambda: self.cancel_task(job_id))
                 self._persist_locked()
                 self._thread.start()
-            except Exception:
+            except Exception as exc:
                 tagger_progress.release()
                 self._status["phase"] = "error"
+                self._status["message"] = "任务未启动，请检查任务档案和数据库存储"
+                if self.task_bridge:
+                    try:
+                        self.task_bridge.update(self._status, self._request)
+                    except (OSError, ValueError, KeyError):
+                        self.task_bridge._project(self._status)
+                if isinstance(exc, (OSError, ValueError)):
+                    raise CaptionPersistenceError("无法保存任务档案，任务未启动") from None
                 raise
             return self.status()
 
@@ -305,15 +337,31 @@ class CaptionJobManager:
             self._persist_locked()
             return self.status()
 
-    def retry_failed(self) -> dict:
+    def cancel_task(self, job_id: str) -> dict:
+        with self._lock:
+            if self._status.get("job_id") != job_id:
+                return self.status()
+            return self.cancel()
+
+    def retry_failed(self, job_id: str | None = None) -> dict:
         with self._lock:
             if self.is_busy():
                 raise RuntimeError("已有自然语言打标任务进行中")
-            if not self._failed or not self._request:
+            if job_id and job_id != self._status.get("job_id"):
+                saved = self.job_store.get(job_id) if self.job_store else None
+                if saved is None:
+                    raise RuntimeError("任务不存在或已清理")
+                request = dict(saved["recovery"]["request"])
+                failed = saved["recovery"]["failed"]
+            else:
+                request = dict(self._request or {})
+                failed = self._failed
+                job_id = self._status.get("job_id")
+            if not failed or not request:
                 raise RuntimeError("没有可重试的失败项")
-            request = dict(self._request)
-            request["paths"] = [item["path"] for item in self._failed]
-        return self.start(request, retry_failed=True)
+            request.pop("_task_archive", None)
+            request["paths"] = [item["path"] for item in failed]
+        return self.start(request, retry_failed=True, parent_job_id=job_id)
 
     def _touch_locked(self) -> None:
         self._status["updated_at"] = time.time()
@@ -321,6 +369,8 @@ class CaptionJobManager:
     def _set(self, **values) -> None:
         with self._lock:
             self._status.update(values)
+            if values.get("phase") in {"done", "error", "cancelled"}:
+                self._status.setdefault("finished_at", time.time())
             self._touch_locked()
             self._persist_locked()
 
@@ -388,6 +438,8 @@ class CaptionJobManager:
                     pass
         finally:
             terminal = self.status()
+            if self.task_bridge:
+                self.task_bridge._project(terminal)
             tagger_progress._touch(
                 phase="done" if terminal["phase"] == "done" else "idle" if terminal["phase"] == "cancelled" else "error",
                 message=terminal["message"],
@@ -402,6 +454,8 @@ class CaptionJobManager:
 
         mode = str(request.get("mode") or "natural")
         profile_id_for_report = None
+        model_for_report = request.get("interrogator_model") if mode == "tag" else None
+        source_for_report = "local" if mode == "tag" else None
         profile_revision_for_report = None
         prompt_revision_for_report = None
         cache_hit = False
@@ -459,6 +513,8 @@ class CaptionJobManager:
                 parse_caption_response(json.dumps({"caption": cached, "language": language}), language=language, max_length=maximum)
                 generated = cached
                 profile_id_for_report = selected_profile.id
+                model_for_report = selected_profile.model
+                source_for_report = selected_profile.source
                 profile_revision_for_report = config_revision(selected_profile)
                 cache_hit = True
             else:
@@ -490,6 +546,8 @@ class CaptionJobManager:
                             raise
                 generated = result.caption
                 profile_id_for_report = _profile.id
+                model_for_report = _profile.model
+                source_for_report = _profile.source
                 profile_revision_for_report = config_revision(_profile)
                 if caption_sha256(image_path) != image_hash:
                     raise CaptionWriteConflict("source image changed during caption generation")
@@ -527,6 +585,8 @@ class CaptionJobManager:
             "before_hash": before_hash,
             "after_hash": hashlib.sha256((merged if mode == "tag" or merged.endswith("\n") else merged + "\n").encode("utf-8")).hexdigest(),
             "profile_id": profile_id_for_report,
+            "model": model_for_report,
+            "source": source_for_report,
             "profile_revision": profile_revision_for_report,
             "prompt_revision": prompt_revision_for_report,
             "cached": cache_hit,

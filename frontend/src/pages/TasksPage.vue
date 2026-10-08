@@ -249,6 +249,7 @@ const KIND_LABEL_KEYS: Record<string, string> = {
   anima_fast_install: "tasks.kind.animaFastInstall",
   ai_toolkit_install: "tasks.kind.aiToolkitInstall",
   assets_download: "tasks.kind.assetsDownload",
+  dataset_caption: "tasks.kind.datasetCaption",
 }
 
 function kindLabelKey(task: TrainingTask): string {
@@ -295,6 +296,10 @@ async function copyOutputDir(task: TrainingTask) {
 }
 
 function taskDetail(task: TrainingTask) {
+  if (task.metadata.kind === "dataset_caption") return t("tasks.detail.captionProgress", {
+    current: task.metadata.caption_current || 0, total: task.metadata.caption_total || 0,
+    succeeded: task.metadata.caption_succeeded || 0, failed: task.metadata.caption_failed || 0,
+  })
   return String(task.metadata.config_path || task.metadata.command || t("tasks.noDetail"))
 }
 
@@ -522,7 +527,7 @@ async function moveToFront(task: TrainingTask) {
 
 async function retry(task: TrainingTask) {
   try {
-    await ElMessageBox.confirm(t("tasks.retryTask.confirm", { id: task.id }), t("tasks.retryTask.title"), {
+    await ElMessageBox.confirm(task.metadata.kind === "dataset_caption" ? t("tasks.detail.captionRetryConfirm") : t("tasks.retryTask.confirm", { id: task.id }), t("tasks.retryTask.title"), {
       confirmButtonText: t("tasks.retryTask.confirmButton"),
       cancelButtonText: t("tasks.terminate.cancel"),
       type: "warning",
@@ -609,7 +614,7 @@ onBeforeUnmount(() => {
             <button v-else-if="isHeld(selected)" class="primary-action" :disabled="actionBusyId === selected.id" @click="resume(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.starting") : t("tasks.detail.resume") }}</button>
             <button v-else-if="selected.status === 'QUEUED'" class="danger-action" :disabled="terminatingId === selected.id" @click="dequeue(selected)">{{ terminatingId === selected.id ? t("tasks.detail.stopping") : t("tasks.detail.dequeue") }}</button>
             <button v-if="selected.status === 'QUEUED'" class="secondary-action" :disabled="actionBusyId === selected.id" @click="moveToFront(selected)">{{ t("tasks.detail.moveToFront") }}</button>
-            <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : t("tasks.detail.retry") }}</button>
+            <button v-if="isTerminal(selected) && (!selectedIsMaintenance || (selected.metadata.kind === 'dataset_caption' && Number(selected.metadata.caption_failed) > 0))" class="secondary-action" :disabled="actionBusyId === selected.id" @click="retry(selected)">{{ actionBusyId === selected.id ? t("tasks.detail.retrying") : selected.metadata.kind === 'dataset_caption' ? t('tagger.caption.retryFailed') : t("tasks.detail.retry") }}</button>
             <button v-if="isTerminal(selected)" class="danger-action" :disabled="actionBusyId === selected.id" @click="removeTask(selected)">{{ t("tasks.detail.delete") }}</button>
           </div>
         </header>
@@ -635,6 +640,7 @@ onBeforeUnmount(() => {
           <pre v-if="selectedErrorLines.length" class="log-lines">{{ selectedErrorLines.join("\n") }}</pre>
         </section>
         <div class="task-detail-actions">
+          <RouterLink v-if="selected.metadata.kind === 'dataset_caption'" class="ghost-button" :to="{ path: '/dataset/tagger', query: { job_id: selected.id } }">{{ t('tasks.detail.captionReport') }}</RouterLink>
           <a class="ghost-button" :href="`/train-log?task_id=${encodeURIComponent(selected.id)}`" target="_blank" rel="noreferrer">{{ t("tasks.detail.viewLog") }}</a>
           <RouterLink v-if="selected.status !== 'QUEUED' && !selectedIsMaintenance" class="ghost-button" to="/tensorboard.html?from=tasks">{{ t("tasks.detail.tensorboard") }}</RouterLink>
           <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="importToTraining(selected)">{{ t("tasks.detail.importTrain") }}</button>

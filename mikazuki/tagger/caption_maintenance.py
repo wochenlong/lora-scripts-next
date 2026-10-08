@@ -127,6 +127,14 @@ def delete_history(manager, job_id):
     if not tagger_progress.try_begin("captioning", "", "正在清理任务记录"):
         raise RuntimeError("已有打标或下载任务进行中")
     try:
+        if manager.task_bridge:
+            bridge = manager.task_bridge
+            task = bridge.task_manager.tasks.get(job_id)
+            if task is not None:
+                if not bridge.task_manager.delete_task(job_id):
+                    raise RuntimeError("任务档案仍在使用中")
+            else:
+                bridge.hide(job_id)
         manager.job_store.delete_history(job_id)
         with manager._lock:
             if manager._status["job_id"] == job_id:

@@ -20,6 +20,8 @@ REQUEST_FIELDS = {
     "replace_underscore", "replace_underscore_excludes", "expected_hashes", "retry_failed",
     "_prompt_frozen",
     "max_caption_length",
+    "system_prompt", "max_tokens", "temperature", "model_id", "runtime", "preset_revision", "_task_archive",
+    "model_snapshot",
 }
 
 

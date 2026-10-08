@@ -1,4 +1,11 @@
-# 2026-10-08 预设事务与导入续接（当前）
+# 2026-10-08 任务档案联动续接（当前）
+
+Goal active；HEAD读git log。本批CaptionTaskBridge接既有TaskManager maintenance lane与user_data/tasks/dataset-tagger档案，先config/task/SQLite后worker；冻结系统提示词/生成参数/模型snapshot；停止实际cancel，终态/日志重启恢复不推理，未完成标失败，原失败任务重试，删除隐藏投影不删图片/txt/模型。相关296、API增量39、桥接10通过，前端340/52/check/build。实际fake browser三图成功、cancel1/0txt、部分失败1/成功1→任务页仅retry1/providerDelta1/原maxTokens223；重启5条状态/时间/provider0，删除1再重启4条无复活且文件不变。证据2026-10-08-task-archives-bridge.md。所有自建server停止、browser blank、tracked dist恢复。tests/test_diffsynth_review.py既有修改保留未提交。Agent接口未修改。
+
+单一下一步：Tag页面由旧/interrogate接同一持久化任务与进度，Tag单图预览复用生成配置且零写盘；报告deep-link支持Tag。当前假模型浏览器证据不能替代Real/正式lifespan/最终矩阵/Phase5 fresh rebuild。新阶段真实验证工具使用自定义service时须显式注入task_bridge，并将user_data root指向隔离目录。四项Windows symlink权限失败未豁免。保留用户原六条精确A/B评分，变更输出不得沿用。
+
+以下历史仅保留线索，以本段和canonical最新为准。
+# 2026-10-08 预设事务与导入续接
 
 HEAD读取git log。本轮完成preset OS跨进程锁、prepared/committed journal、异常/硬退出恢复、完整settings revision、备份与路径约束；系统提示词编辑、全草稿撤销、保留草稿刷新；一次性明确导入，旧源与用户版本保留。16专项真实进程/故障/junction测试；相关后端223，API最后37；前端340/52/check/build通过。Browser：新的fake root nl-caption-presets-browser-20261008，取消0/确认1旧源1、另存模板跨独立BrowserContext和后端重启正文/system/default一致，console0error。不是Real或Phase5。报告2026-10-08-preset-transactions-import.md。
 

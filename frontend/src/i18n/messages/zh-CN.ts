@@ -347,6 +347,7 @@ translationPrompt: "翻译系统提示词（仅用于标签翻译）", reasoning
       aiToolkitInstall: "插件安装 · AI Toolkit",
       animaFastInstall: "插件安装 · Anima Fast",
       assetsDownload: "模型资产下载",
+      datasetCaption: "模型打标",
     },
     stage: {
       cacheLatents: "缓存 Latents",
@@ -425,6 +426,9 @@ translationPrompt: "翻译系统提示词（仅用于标签翻译）", reasoning
       delete: "删除",
       queuePosition: "队列位置",
       viewLog: "查看日志",
+      captionReport: "查看打标报告",
+      captionProgress: "{current}/{total} · 成功 {succeeded} · 失败 {failed}",
+      captionRetryConfirm: "仅重试此打标任务的失败项？已完成的标注不会再次生成。",
       tensorboard: "TensorBoard",
       importTrain: "导入再训",
       exportConfig: "导出 TOML",

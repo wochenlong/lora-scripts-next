@@ -377,7 +377,19 @@ onActivated(() => {
   refreshGeneration += 1
   captionJob.activate()
   void refresh()
-  void initialiseCatalog()
+  const requestedJob = route?.query.job_id
+  const generation = refreshGeneration
+  void initialiseCatalog().then(async () => {
+    if (generation !== refreshGeneration || typeof requestedJob !== "string" || !requestedJob) return
+    await captionJob.loadReport(requestedJob)
+    if (generation !== refreshGeneration || !captionJob.report.value) return
+    const snapshot = captionJob.report.value.snapshot
+    const model = catalog.value.find(item => item.id === snapshot.model_id && item.output === "natural")
+      || catalog.value.find(item => item.output === "natural")
+    if (model) selectModel(model.id)
+    historyJobId.value = requestedJob
+    await captionJob.loadHistory()
+  })
   if (mode.value !== "tag") void captionJob.loadHistory()
   timer = window.setInterval(refresh, 1200)
 })

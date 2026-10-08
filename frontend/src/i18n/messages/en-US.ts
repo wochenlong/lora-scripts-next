@@ -347,6 +347,7 @@ translationPrompt: "Translation system prompt (tag translation only)", reasoning
       aiToolkitInstall: "Plugin Install · AI Toolkit",
       animaFastInstall: "Plugin Install · Anima Fast",
       assetsDownload: "Model Assets Download",
+      datasetCaption: "Dataset tagging",
     },
     stage: {
       cacheLatents: "Cache Latents",
@@ -425,6 +426,9 @@ translationPrompt: "Translation system prompt (tag translation only)", reasoning
       delete: "Delete",
       queuePosition: "Queue Position",
       viewLog: "View Log",
+      captionReport: "View tagging report",
+      captionProgress: "{current}/{total} · Succeeded {succeeded} · Failed {failed}",
+      captionRetryConfirm: "Retry only this tagging job's failed items? Completed captions will not be generated again.",
       tensorboard: "TensorBoard",
       importTrain: "Edit & Rerun",
       exportConfig: "Export TOML",

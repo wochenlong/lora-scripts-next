@@ -279,3 +279,9 @@ GET /api/tagger/models和本地/API一级选择已实现；系列折叠/原名�
 本轮预设事务/journal恢复、OS跨进程锁、完整settings revision、上一版本备份、路径约束、明确确认的一次性导入、系统提示词编辑/全草稿撤销、保留草稿刷新已实现。专项真实进程并发和硬退出16通过；相关223通过，随后APIfocused37；前端340/52/check/build通过。实际fake browser取消导入0写入/确认导入保留旧源和草稿，另存默认模板跨独立BrowserContext及后端重启保留正文/系统提示词；非真实模型或Phase5。
 
 证据2026-10-08-preset-transactions-import.md。单一下一步：既有TaskManager+user_data/tasks/dataset-tagger档案，任务页停止真正取消、重启状态和档案写入失败不开始。不要将Task.start_log_only简单注册后当完成：Task.terminate目前只杀process，Caption没有独立process，必须打通取消回调。既有tests/test_diffsynth_review.py保留未提交；全部自建进程停止、dist恢复。
+
+## 2026-10-08 任务归档与任务页联动增量
+
+自然语言任务已接入既有TaskManager maintenance lane和user_data/tasks/dataset-tagger归档；冻结配置先落盘再启动，取消回调实际取消推理，逐文件失败/只重试失败项/原参数恢复、任务报告链接和安全删除均已实施。后端相关296通过，API增量39、桥接专项10通过；前端340/52/check/build通过。实际fake浏览器取消零写盘、两图部分失败后仅重试1项/额外请求1，服务重启状态与完成时间保持/provider0、删除后再次重启不复活且图片/txt保留。证据2026-10-08-task-archives-bridge.md。不是Real、正式Zero-Short或全新隔离重建。
+
+唯一下一步：将Tag页面批量操作接入同一持久化任务链路并完成Tag单图试标（相同配置、不写盘）。随后执行当前源码完整矩阵、真实模型、正式lifespan和全新隔离重建。Phase0/1仍in progress，goal active，Agent/plugin接口不纳入施工。

@@ -678,6 +678,13 @@ async def retry_task(task_id: str):
     """Re-queue a finished/failed/terminated training task (stage groups are
     rebuilt as a whole)."""
     original = tm.tasks.get(task_id)
+    if original and original.metadata.get("kind") == "dataset_caption":
+        from mikazuki.tagger.caption_job import caption_job_manager
+        try:
+            state = caption_job_manager.retry_failed(task_id)
+        except RuntimeError as exc:
+            return APIResponseFail(message=str(exc))
+        return APIResponseSuccess(data={"task_id": state["job_id"], "task_ids": [state["job_id"]], "queued": False})
     if original and original.metadata.get("backend") == "diffsynth" and original.status.name in {"FINISHED", "FAILED", "TERMINATED"} and original.lane == "compute":
         config = task_insights.resolve_task_config(original.metadata)
         result = dispatch_run("qwen-image-21-lora", config, RunContext(
