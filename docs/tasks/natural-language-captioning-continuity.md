@@ -1,3 +1,19 @@
+# 最小续接：Phase5 r4执行中（2026-10-08）
+
+候选 b0a9eb2，分支feat/NL-Captioning。仅tools/evidence/governance新增，业务源码最后f53582e不变。开发树只剩既有tests/test_diffsynth_review.py未提交，请保留。当前fresh root workspace/sandboxes/nl-caption-phase5-409-20261008-r4；source detached b0a9eb2。
+
+已确认live handles：99947=新Python3.11.15/venv已建立，正在公开URLfresh输入下载，完成才无缓存安装requirements+torch2.7.0+cpu+pytest9.1.1，日志input-download.log/python-install.log；10356已完成exit0，前端342/52/type/lint/build全部通过，日志frontend-*.log；48434=新Linux Python/headless OpenCV/numpy从公开URL下载并SHA已完成，WSL全新venv安装与四原symlink case执行，native根/home/displace/.local/share/nl-caption-phase5-409-20261008-r4，结果会写r4/linux-inputs/result.json；42117旧r2诊断已终止，仅诊断bootstrap247/pip294核对/proc精确root后停止，不再poll。已结束的r3安装52627/前端83595不再poll。其余server/llama全部已停止。
+
+r4全部样本/Qwen/mmproj/ONNX/runtime fresh下载凭据passed=True；前端全部已通过。当前99947正在全新venv下载安装后端requirements/CPU torch/pytest，48434仍在Linux新venv安装。preflight.json已记录源commit和锁文件SHA。没有r4业务测试结果，不能complete。r1前端5s超时，r2HTTP验收脚本漏启动runtime，r3首图传输截断48210/240512被SHA拒绝，三根均记录不接受。r2修正脚本诊断22项通过；tool已固化tools/verify_caption_rebuild_http.py。下载器最多3次整文件下载/不复用part/固定SHA，截断恢复和三次坏SHA仍拒绝测试通过。
+
+下一步：先wait相同live handles，完成r4资源/环境；再全部执行：tools/run_caption_scope_tests.py --root r4/backend-tests（52文件515case；Windows仅四已批准权限失败、不得有skip）；tools/verify_caption_real_tag.py --root r4/real-tag --samples r4/inputs/samples --manifest source/docs/evidence/natural-language-captioning/phase-4-real-evaluation/phase5-frozen-inputs.json --tag-models r4/inputs/tag-models --commit b0a9eb2 --rebuild-inputs r4/inputs；tools/verify_caption_production.py --root r4/real-natural --samples... --manifest... --commit b0a9eb2 --local --assets r4/inputs/vision --runtime r4/inputs/runtime/llama-server.exe --rebuild-inputs r4/inputs。以上必须r4新venv Python、source cwd。
+
+Formal Zero-Short：tools/serve_caption_acceptance.py --root r4/zero-state --frontend-dist frontend/dist --port28765，明确ready后API/config/profiles为空、模型missing、dict missing、idle、UI Qwen安装入口/禁用生成/API空入口不存在/390px。Real HTTP：另新r4/http-state、port28766，launcher加--rebuild-inputs r4/inputs，明确ready后tools/verify_caption_rebuild_http.py --root r4 --port28766；工具自行先POST /llm/local-vision/start，再真实preview/batch/skip/取消0写回/坏图部分失败后修复重试仅1/parent/推理中外部冲突/Editor原文单字undo redo/rollback clear/presets revision/stop/原子残留22checks。脚本不会伪造provider。需要补真实浏览器页面/任务刷新/预设/窄屏键盘，最后privacy/cleanup与gate审计。
+
+用户4分all全部通过已批准新UI火箭五维4分及仅四项symlink跨平台组合口径，独立JSON已提交。不再问同两项。CLI生成三文本此前r2与旧B组逐SHA完全相同；r4重新生成后须精确核对人工评分，不自动扩大。远程Profile未配置且无本轮runtimeKey，goal允许可选路径未配置准确记录；不可宣称fresh remote通过。Agent/plugin不纳入施工。Phase4 pass-with-boundary、Phase5 in progress、goal active。任何真实失败均记录并新root重跑，不把诊断绿当整体完成。
+
+以下为历史，不覆盖本条。
+
 # 最小续接：Phase5 r3准备中（2026-10-08）
 
 当前候选813429558aeb51cff742a24952e42abe521bc62f；开发树既有tests/test_diffsynth_review.py未提交保留，无业务代码新修改。r3新root workspace/sandboxes/nl-caption-phase5-409-20261008-r3/source detached该候选。live句柄：52627=新Python/venv/requirements+CPU torch2.7.0+pytest9.1.1安装（无缓存）；83595=新Node22 npm ci/type/lint/完整Vitest maxWorkers2/build，日志写r3根。先轮询同一handle；Python新解释器创建后用r3 Python启动tools/download_caption_rebuild_inputs.py下载新inputs（不能使用r2旧venv或模型），该下载尚未启动。

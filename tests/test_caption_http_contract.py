@@ -267,6 +267,14 @@ def test_user_data_preset_freezes_system_prompt_for_preview_and_batch(api_client
     assert manager._request["preset_revision"]
 
 
+def test_openapi_does_not_advertise_unsupported_combined_output(api_client):
+    client, *_ = api_client
+    schemas = client.get("/openapi.json").json()["components"]["schemas"]
+    for name in ("CaptionJobRequest", "CaptionPreviewRequest"):
+        assert schemas[name]["properties"]["mode"]["enum"] == ["natural", "tag"]
+        assert schemas[name]["properties"]["layout"]["enum"] == ["tags_only", "caption_only"]
+
+
 def test_combined_preview_is_rejected_by_issue_409_contract(api_client):
     client, image, _manager, _service = api_client
     response = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image), "mode": "combined", "layout": "caption_then_tags"})

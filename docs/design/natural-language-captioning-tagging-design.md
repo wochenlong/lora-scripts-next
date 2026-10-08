@@ -1,6 +1,6 @@
 # 数据集模型打标与自然语言 Caption 设计书（Issue #409 对齐版）
 
-2026-10-08实施补充：Tag与自然语言前端共用既有/tagger/jobs持久化任务、TaskManager maintenance lane及user_data/tasks/dataset-tagger日期/UUID档案；SQLite是执行/恢复权威，TaskManager与task.json是状态投影，不增加调度器。冻结config/task/SQLite成功后才启动推理。任务页停止通过协作回调实际取消，历史失败项重试读取原配置，重启仅恢复状态。Tag单图试标复用批量模型与后处理，原生调用结束并卸载前保持共享占用；预览不写盘。新API请求和公开快照按Tag/Caption能力隔离。删除任务页记录隐藏投影且重启不复活，保留数据集/模型/档案；打标页历史清理另删除SQLite备份并保留图片/当前标注。实现与当前验证见2026-10-08-task-archives-bridge.md和2026-10-08-tag-preview-durable-ui.md；真实模型和最终完成门仍待验证。
+2026-10-08实施补充：Tag与自然语言前端共用既有/tagger/jobs持久化任务、TaskManager maintenance lane及user_data/tasks/dataset-tagger日期/UUID档案；SQLite是执行/恢复权威，TaskManager与task.json是状态投影，不增加调度器。冻结config/task/SQLite成功后才启动推理。任务页停止通过协作回调实际取消，历史失败项重试读取原配置，重启仅恢复状态。Tag单图试标复用批量模型与后处理，原生调用结束并卸载前保持共享占用；预览不写盘。新API请求和公开快照按Tag/Caption能力隔离。删除任务页记录隐藏投影且重启不复活，保留数据集/模型/档案；打标页历史清理另删除SQLite备份并保留图片/当前标注。实现与当前验证见2026-10-08-task-archives-bridge.md和2026-10-08-tag-preview-durable-ui.md；真实模型与浏览器已通过当前实现验证；最终完成门以隔离重建证据为准。
 
 ## 1. 文档状态与契约来源
 
@@ -223,3 +223,5 @@ Node 22 check/typecheck/lint/Vitest/build 通过；桌面、390px、键盘、空
 ## 2026-10-08 当前实现契约增量
 
 模型目录为GET /api/tagger/models；具体模型id绑定旧Tag id或llm:<profile_id>。新请求保留mode=tag/natural表示输出能力，runtime/model_id/profile_id需一致；生成字段为flat max_tokens/temperature/max_caption_length，与旧接口同源兼容，不额外引入parameters/output别名。实现与证据见phase-0-contract-alignment/2026-10-08-model-catalog-browser.md。Goal active，最终完成门未通过。
+
+2026-10-08契约审计：公开OpenAPI的mode枚举仅natural/tag；layout只列tags_only/caption_only。旧combined和组合layout输入得到明确400，不能作为可选项宣称可用。API、model catalog、前端TS和页面同时遵守首版范围。

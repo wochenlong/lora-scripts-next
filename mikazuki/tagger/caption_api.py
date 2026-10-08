@@ -6,7 +6,7 @@ import asyncio
 import sqlite3
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, validator
 
 from mikazuki.llm.runtime import llm_service
 from mikazuki.llm.config import config_revision
@@ -30,7 +30,7 @@ class CaptionJobRequest(BaseModel):
     path: str
     model_id: str | None = Field(default=None, max_length=200)
     runtime: Literal["local", "api"] | None = None
-    mode: Literal["natural", "combined", "tag"] = "natural"
+    mode: Literal["natural", "tag"] = "natural"
     recursive: bool = False
     allow_local_fallback: bool = False
     use_cache: bool = True
@@ -42,7 +42,7 @@ class CaptionJobRequest(BaseModel):
     max_tokens: int = Field(default=512, ge=1, le=8192)
     temperature: float = Field(default=0.0, ge=0, le=2)
     language: Literal["zh-CN", "zh-TW", "en", "ja"] = "zh-CN"
-    layout: Literal["tags_then_caption", "caption_then_tags", "tags_only", "caption_only"] = "tags_then_caption"
+    layout: Literal["tags_only", "caption_only"] = "caption_only"
     conflict_action: Literal["ignore", "copy", "prepend", "append"] = "ignore"
     interrogator_model: str = "wd14-convnextv2-v2"
     download_endpoint: str = ""
@@ -56,6 +56,18 @@ class CaptionJobRequest(BaseModel):
     replace_underscore: bool = True
     replace_underscore_excludes: str = ""
 
+    @validator("mode", pre=True)
+    def reject_combined(cls, value):
+        if value == "combined":
+            raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标，请选择 Tag 或自然语言 Caption"})
+        return value
+
+    @validator("layout", pre=True)
+    def reject_combined_layout(cls, value):
+        if value in {"tags_then_caption", "caption_then_tags"}:
+            raise HTTPException(status_code=400, detail={"code": "tagger_parameter_unsupported", "message": "所选模型不支持组合布局"})
+        return value
+
 
 class CaptionPreviewRequest(CaptionJobRequest):
     image_path: str
@@ -67,8 +79,6 @@ def _success(data=None, message=None):
 
 def _snapshot_request(req):
     from .catalog import TAG_PARAMETERS, CAPTION_PARAMETERS, validate_model_selection
-    if req.mode == "combined":
-        raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标"})
     invalid = req.__fields_set__ & set(TAG_PARAMETERS if req.mode == "natural" else CAPTION_PARAMETERS)
     if invalid or (req.mode == "natural" and (req.conflict_action not in {"ignore", "copy"} or ("layout" in req.__fields_set__ and req.layout != "caption_only"))):
         raise HTTPException(status_code=400, detail={"code": "tagger_parameter_unsupported", "message": "所选模型不支持这些参数或输出操作"})
@@ -100,8 +110,6 @@ async def caption_job_status():
 
 @router.post("/tagger/jobs")
 async def start_caption_job(req: CaptionJobRequest):
-    if req.mode == "combined":
-        raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标，请选择 Tag 或自然语言 Caption"})
     try:
         payload = _snapshot_request(req)
     except ValueError as exc:
@@ -204,8 +212,6 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
     image_path = Path(req.image_path).expanduser()
     if not image_path.is_file():
         raise HTTPException(status_code=400, detail="预览图片不存在")
-    if req.mode == "combined":
-        raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标"})
     try:
         payload = _snapshot_request(req)
     except ValueError:

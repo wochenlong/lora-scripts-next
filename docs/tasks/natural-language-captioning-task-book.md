@@ -329,3 +329,13 @@ fbf28e6冻结Phase5输入，未创建重建环境。对照实际#405存储约定
 ## 2026-10-08 Phase5网络截断与第四次重建
 
 r3首样本网络截断被SHA/size拒绝，根不接受；r2修正HTTP诊断22项通过但不核销失败。下载器增加有界整文件重试/不复用part/固定SHA，验证截断恢复及三次坏SHA仍拒绝。业务源码未变。唯一下一步：从最新工具提交建立r4全新根，完整重下/依赖/矩阵/真实验收；此前所有根只保留诊断。goal active，不能complete。
+
+## 2026-10-08 Phase5第四根执行进度
+
+当前候选b0a9eb2，r4 fresh源码/Python3.11.15/Node22已建立；全部公开样本、Qwen/mmproj、ONNX/CSV和runtime的新下载凭据passed，前端342/52、typecheck/lint/build全部通过。后端新依赖安装句柄99947及Linux四原case新依赖安装句柄48434确认live。前几次根均不接受，没有复用其二进制/依赖/模型。
+
+唯一下一步：轮询同一安装句柄，完成当前根后端全矩阵、正式Zero-Short、真实Tag/natural/HTTP及浏览器验收，最后隐私清理和完成门审计。goal active，Phase5未完成。最小续接和实际命令见continuity顶部。
+
+## 2026-10-08 首版OpenAPI完成门修复
+
+r4全部功能矩阵/真实HTTP22checks/浏览器/新Linux四原case通过，但审计发现OpenAPI仍把combined和组合layout列为可选；运行时拒绝不等于声明正确。已收敛schema，保留400拒绝，专项41通过。r4不作为最终通过，唯一下一步：提交修复建立r5最新源码、全新依赖和公开URL资产，再完整重跑与清理。源修复仅Caption API，Agent/plugin不触碰；goal active。

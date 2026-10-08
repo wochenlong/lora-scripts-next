@@ -27,3 +27,11 @@ HTTP脚本初次漏先调用本地runtime启动；正确返回502/llm_capability
 ## 第三次重建下载失败与第四次准备
 
 候选8134295的r3根在首个公开样本下载后校验失败：chelsea应240512字节，收到48210字节，尾部无PNG IEND，证明网络传输截断；SHA不匹配，未发布文件、未进入真实验收。r3根不接受。下载器新增至多3次从头下载，每次清除part，不复用部分内容；始终固定SHA/size，三次不匹配仍失败并要求新根。可控截断首失败次成功/持久坏SHA拒绝已通过。业务代码未改，第四次将从最新工具提交和全新公开下载开始。
+
+## 第四次重建完成的检查与契约遗漏
+
+当前b0a9eb2/r4：前端342/52/type/lint/build通过，Windows后端511/4批准的权限失败/0skip，独立新Linux/Python3.11同commit四原case真实symlink4通过。全新公开URL全部资产SHA通过，正式lifespan Zero-Short及fresh BrowserContext 390px通过。真实ONNX三图新旧逐字节和HTTP预览一致；Qwen启动3.892s、batch18.532s、RSS3,069,624,320B、三图/JSON/data URL/cache3零新请求/默认跳过/preview通过。真实HTTP22checks全部通过，浏览器真实preview零写盘和批量3/3、任务页刷新最近记录与报告deep-link、三图hash精确绑定已有人工评分（UI火箭为新批准文本）、模板Esc/Tab/另存为跨BrowserContext/恢复默认/WD折叠原名搜索和参数草稿通过。截图等待侧栏resize动画结束后390px无溢出，无组合选项。
+
+完成门审计发现真正契约遗漏：OpenAPI仍宣称mode=combined及组合layout可选，虽运行时拒绝仍不符合首版不展示不可用入口。r4根不作为最终通过。现在mode schema只保留natural/tag，layout只保留tags_only/caption_only；pre-validator保留明确400拒绝，删除不可达重复分支。新增OpenAPI合同断言，专项41通过。必须提交修复后另建r5完整从零重建。未触碰Agent/plugin；不复用此前资产/venv/Node/DB。
+
+浏览器脚本一度引用旧已选模型名、包含option文本的exact label、success而非written状态，或resize动画未结束截图；均只影响定位/取样，读取实际DOM后完成同操作，不作为应用失败或通过证据。一次环境元数据检查混用slash样式，改用Path.resolve().relative_to()确认新Python base位于r4/python。以上诊断与真正OpenAPI遗漏区分记录。
