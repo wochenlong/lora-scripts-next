@@ -49,29 +49,34 @@
         "sha256": "f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82",
         "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
       }
-    ]
+    ],
+    "remote_revision_verified": true
   },
   "runtime": {
     "version": "b11327",
     "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11327/llama-b11327-bin-win-cpu-x64.zip",
     "archive_sha256": "4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f",
-    "executable_sha256": "32d43779061d318ab36d0cf8156f314f81ac7e5b805298b7fe9facf3cf0cc82d"
+    "executable_sha256": "32d43779061d318ab36d0cf8156f314f81ac7e5b805298b7fe9facf3cf0cc82d",
+    "remote_release_verified": true,
+    "size_bytes": 19275534,
+    "release_digest": "sha256:4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f"
   },
   "onnx": {
-    "repository": "SmilingWolf/wd-convnextv2-tagger-v2",
+    "repository": "SmilingWolf/wd-v1-4-convnextv2-tagger-v2",
     "revision": "bf364499ea843a403cc2770072f31f5cfb2ffa58",
     "files": [
       {
         "filename": "model.onnx",
         "sha256": "e91daa19cd9e8725125b7d70702d1560855fb687f8d8c4218eddaa821f41834a",
-        "url": "https://huggingface.co/SmilingWolf/wd-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/model.onnx"
+        "url": "https://huggingface.co/SmilingWolf/wd-v1-4-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/model.onnx"
       },
       {
         "filename": "selected_tags.csv",
         "sha256": "8c8750600db36233a1b274ac88bd46289e588b338218c2e4c62bbc9f2b516368",
-        "url": "https://huggingface.co/SmilingWolf/wd-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/selected_tags.csv"
+        "url": "https://huggingface.co/SmilingWolf/wd-v1-4-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/selected_tags.csv"
       }
-    ]
+    ],
+    "remote_revision_verified": true
   },
   "environment": {
     "python": "3.11.15",

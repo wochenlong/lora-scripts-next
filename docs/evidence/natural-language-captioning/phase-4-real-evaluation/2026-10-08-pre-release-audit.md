@@ -10,4 +10,8 @@
 
 phase5-frozen-inputs.json登记公开样本、许可证、SHA、Qwen/mmproj、runtime压缩包/可执行文件及ONNX/CSV的锁定来源。runtime压缩包SHA仅用于定义预期输入；Phase5须从公开URL重新下载并复核，不能链接或复制旧包。Python3.11.15、Node22.17.1以及所有新配置/缓存/输出规则已登记。尚未创建Phase5环境，execution_started=false。
 
+输入清单复核修正了WD仓库名为实际注册表的SmilingWolf/wd-v1-4-convnextv2-tagger-v2。随后从公开Hub API确认Qwen与WD的固定revision真实存在，从GitHub release API确认b11327压缩包URL和发布SHA与冻结值一致。没有将尚未下载的Phase5资产记为已获取。
+
+加入local_text_registry后的完整组合实际复验：52文件/515case，511通过/4相同Windows权限失败/0skip，17subtests通过；无新增失败。该集合替代先前遗漏两项的51文件集合，四项失败继续按原记录待用户决定环境口径。
+
 剩余硬门：新UI火箭文本的人工评分、四个Windows权限测试的验收环境选择、包含local_text_registry的完整组合复验、Phase5本地从零真实验收、最终隐私和清理签字。前两项已发问，未答不视为批准；其余准备可继续。本轮不发布、不push，也不将旧combined/Agent证据作为完成门。

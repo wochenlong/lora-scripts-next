@@ -303,3 +303,9 @@ Tag页面接入统一/tagger/jobs持久化、取消/仅失败重试、底部进�
 唯一下一步：本批提交后完整功能矩阵复跑并核对Phase2/3完成门；同时保持两项用户问题待答，再解锁Phase5全新隔离重建。Agent/plugin不纳入施工，既有tests/test_diffsynth_review.py保留未提交。
 
 f53582e提交后的完整复验：51文件/513 case，509 passed/4同样Windows权限失败/0skip，其他失败无新增。Phase2/3对应focused/真实路径/前端与Editor完成门已复核；整项目仍不complete。下一步：完成Phase4用户评分与Windows/跨平台环境口径核销、发布前审计；之后开始Phase5新源码/新依赖/新资产重建。
+
+## 2026-10-08 发布前覆盖审计与重建输入准备
+
+fbf28e6冻结Phase5输入，未创建重建环境。对照实际#405存储约定、Git生产变更与资源来源，确认Agent/plugin生产路径变更0；未实施#405端口仲裁。范围runner补入此前漏列的local_text_registry，两项单独及完整组合复验通过：最新52文件/515case，511passed/4Windows权限失败/0skip/17subtests。重建输入WD仓库名已修正，Qwen/WD revision由公开Hub API实核，runtime发布URL与SHA由GitHub API实核。前两项用户问题仍待答；没有核销Windows失败或代填新火箭评分。
+
+唯一下一步：取得Phase4两项门禁答复后更新完成门并执行Phase5；若待答期间继续准备，限于当前发布审计/重建执行工具，不提前建立或运行Phase5环境。证据2026-10-08-pre-release-audit.md和phase5-frozen-inputs.json；goal保持active。
