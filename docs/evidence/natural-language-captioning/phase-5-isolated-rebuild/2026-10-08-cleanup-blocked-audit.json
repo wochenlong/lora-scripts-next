@@ -1,0 +1,21 @@
+{
+  "kind": "blocked-gate-audit",
+  "date": "2026-10-08",
+  "consecutive_goal_turns_with_same_blocker": 3,
+  "blocker": "Windows residual rebuild directories remain after automatic approval rejects recursive deletion; no user manual-cleanup confirmation or explicit retention exception received",
+  "roots_still_present": [
+    "r1",
+    "r2",
+    "r3",
+    "r4",
+    "r5"
+  ],
+  "all_owned_source_worktrees_removed": true,
+  "all_owned_processes_stopped": true,
+  "live_handles": [],
+  "required_acceptance_other_than_cleanup": "verified; see final-8986b9e and final acceptance audit",
+  "approval_question_already_pending": true,
+  "default_option_is_not_approval": true,
+  "no_additional_meaningful_safe_action_without_user_or_policy_change": true,
+  "decision": "set goal blocked; do not redefine objective or mark complete"
+}
