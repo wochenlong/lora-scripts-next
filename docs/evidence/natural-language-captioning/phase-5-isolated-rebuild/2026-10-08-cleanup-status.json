@@ -36,5 +36,7 @@
   "staged_privacy_scan_passed": true,
   "real_remote_key_injected_this_rebuild": false,
   "completed": false,
-  "pending": "user manual removal or explicitly approved five-root retention exception"
+  "pending": "user manual removal or explicitly approved five-root retention exception",
+  "remaining_inventory": "2026-10-08-remaining-cleanup-inventory.json",
+  "external_cleanup_recheck": "All five Windows roots remain; all source directories absent; no owned inference/test/server process running"
 }

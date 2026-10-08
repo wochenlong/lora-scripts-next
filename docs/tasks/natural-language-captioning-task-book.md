@@ -345,3 +345,7 @@ r4全部功能矩阵/真实HTTP22checks/浏览器/新Linux四原case通过，但
 候选8986b9e完整新r5验收：前端342/52/type/lint/build；后端52文件516项Windows512通过/四权限失败/0skip，独立新Linux同commit四原case真实symlink4通过且用户已批准组合口径。所有公共资产/依赖重新下载；真实Qwen3图/JSON/data URL/cache/资源、ONNX旧输出灰度、HTTP22项、formal Zero-Short、浏览器真实preview和batch3/3、预设跨Context/Esc/Tab/模型参数隔离、精确SHA人工评分绑定均通过。OpenAPI只有natural/tag和单模式layout。最终逐项证据2026-10-08-final-acceptance-audit.md及final-8986b9e包。
 
 清理：所有自建模型/应用停止，五个临时Git源码树与三个Linux根已移除。Windows五个剩余根的组合/单目录递归删除均被自动审批拒绝blocked by policy；不改用其他工具绕过。已向用户请求手动删除或明确保留例外；此前评分与symlink批准不扩大到此次拒绝。唯一下一步：接收该处理结果，核销cleanup并更新最终GATE后才complete。其余工作完成，不继续重复已通过测试。
+
+## 2026-10-08 清理门第二轮复核
+
+五个Windows剩余根仍存在，源码树全部已移除，自建模型/服务无活动进程，清理选择尚无用户答复。本轮只读清单确认约27.27GiB逻辑文件长度（硬链接可能重复计数，不等同实际磁盘占用），跳过目录重解析点，不删除或绕过拒绝。证据2026-10-08-remaining-cleanup-inventory.json。功能证据不变，不重复测试。唯一下一步仍为用户手动清理或明确保留例外，goal active，清理门未核销。

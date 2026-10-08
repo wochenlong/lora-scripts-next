@@ -1,0 +1,45 @@
+{
+  "kind": "remaining-cleanup-inventory",
+  "date": "2026-10-08",
+  "read_only": true,
+  "logical_bytes_not_allocated_disk_usage": true,
+  "roots": [
+    {
+      "root_id": "nl-caption-phase5-409-20261008-r1",
+      "file_count": 16525,
+      "logical_bytes": 2886075040,
+      "reparse_directories_skipped": 1,
+      "source_worktree_absent": true
+    },
+    {
+      "root_id": "nl-caption-phase5-409-20261008-r2",
+      "file_count": 30720,
+      "logical_bytes": 7972658248,
+      "reparse_directories_skipped": 1,
+      "source_worktree_absent": true
+    },
+    {
+      "root_id": "nl-caption-phase5-409-20261008-r3",
+      "file_count": 28469,
+      "logical_bytes": 2437106788,
+      "reparse_directories_skipped": 1,
+      "source_worktree_absent": true
+    },
+    {
+      "root_id": "nl-caption-phase5-409-20261008-r4",
+      "file_count": 30748,
+      "logical_bytes": 7991295438,
+      "reparse_directories_skipped": 1,
+      "source_worktree_absent": true
+    },
+    {
+      "root_id": "nl-caption-phase5-409-20261008-r5",
+      "file_count": 30747,
+      "logical_bytes": 7991298904,
+      "reparse_directories_skipped": 1,
+      "source_worktree_absent": true
+    }
+  ],
+  "total_logical_bytes": 29278434418,
+  "deletion_approval_received": false
+}
