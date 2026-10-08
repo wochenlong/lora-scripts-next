@@ -269,7 +269,8 @@ class CaptionJobManager:
                     selected = job_service.resolve("vision", language=request["language"], profile_id=request.get("profile_id"), allow_local_fallback=bool(request.get("allow_local_fallback", False)))
                     request["model_snapshot"] = {"id": selected.id, "model": selected.model, "source": selected.source, "capabilities": list(selected.capabilities), "revision": config_revision(selected)}
             else:
-                request["model_snapshot"] = {"id": request.get("interrogator_model"), "model": request.get("interrogator_model"), "source": "local", "capabilities": ["tag"]}
+                request.setdefault("interrogator_model", "wd14-convnextv2-v2")
+                request["model_snapshot"] = {"id": request["interrogator_model"], "model": request["interrogator_model"], "source": "local", "capabilities": ["tag"]}
             if not tagger_progress.try_begin("captioning", str(request.get("interrogator_model") or ""), "自然语言打标任务已提交"):
                 raise RuntimeError("已有打标或下载任务进行中")
             job_id = str(uuid.uuid4())
@@ -306,6 +307,11 @@ class CaptionJobManager:
                     "allow_local_fallback": bool(request.get("allow_local_fallback", False)),
                 },
             }
+            if request.get("mode") == "tag":
+                from .catalog import TAG_PARAMETERS, CAPTION_PARAMETERS
+                for field in (*CAPTION_PARAMETERS, "preset_revision", "template_revision"):
+                    self._status["snapshot"].pop(field, None)
+                self._status["snapshot"].update({key: request[key] for key in TAG_PARAMETERS if key in request})
             self._thread = threading.Thread(target=self._run, args=(job_id,), daemon=True, name="caption-job")
             try:
                 if self.task_bridge:
@@ -378,7 +384,7 @@ class CaptionJobManager:
         request = dict(self._request or {})
         try:
             paths = [Path(item) for item in self._paths]
-            self._set(phase="captioning", message="正在生成自然语言描述…", total=len(paths))
+            self._set(phase="captioning", message="正在生成模型标签…" if request.get("mode") == "tag" else "正在生成自然语言描述…", total=len(paths))
             if not paths:
                 self._set(phase="done", message="没有找到图片")
                 return
@@ -425,7 +431,7 @@ class CaptionJobManager:
             elif self._status["failed"]:
                 self._set(phase="done", message="任务完成，但存在失败项")
             else:
-                self._set(phase="done", message="自然语言打标完成")
+                self._set(phase="done", message="模型打标完成")
             self._set(current=len(paths), filename="")
         except Exception as exc:
             message = safe_error_message(exc)

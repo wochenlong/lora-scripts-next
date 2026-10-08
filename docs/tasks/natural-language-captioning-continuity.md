@@ -1,4 +1,11 @@
-# 2026-10-08 任务档案联动续接（当前）
+# 2026-10-08 Tag统一任务与试标续接（当前）
+
+Goal active；HEAD读git log。Tag前端已走统一/tagger/jobs持久化并共享进度/停止/重试/历史，旧interrogate保留兼容；TagJobRequest去掉LLM及旧字段、Tag公开snapshot仅适用参数。Tag单图预览复用_prepare_tag_model/_generate_tags且无写盘，native取消等待调用结束再release。报告deep-link支持Tag。独立mount加载状态修复并全回归通过。后端299/4warning/39.69秒，专项44；前端341/52/check/type/lint/build，2既有warning。新fake browser nl-caption-tag-browser-20261008：preview与batch3txt一致/provider0，任务页报告WD正确/390px无横溢出。证据2026-10-08-tag-preview-durable-ui.md。真实工具已去combined入口、隔离user_data并注入bridge、TagHTTPpreview及copy/cache+ignore/skip分离，尚未实际运行。用户文档同步。
+
+唯一下一步：当前提交源码真实ONNX Tag/HTTPpreview/旧输出gray与本地Qwen/cache/任务档案验收；之后正式lifespan/最终矩阵/Phase5 fresh rebuild。中间可用P1资产，Phase5必须fresh下载/venv/deps/root。不要沿用旧combined证据或给新输出套旧人工评分。tests/test_diffsynth_review.py既有未提交保留；Agent接口不动。四项Windows symlink权限仍未豁免。
+
+以下为历史增量。
+# 2026-10-08 任务档案联动续接
 
 Goal active；HEAD读git log。本批CaptionTaskBridge接既有TaskManager maintenance lane与user_data/tasks/dataset-tagger档案，先config/task/SQLite后worker；冻结系统提示词/生成参数/模型snapshot；停止实际cancel，终态/日志重启恢复不推理，未完成标失败，原失败任务重试，删除隐藏投影不删图片/txt/模型。相关296、API增量39、桥接10通过，前端340/52/check/build。实际fake browser三图成功、cancel1/0txt、部分失败1/成功1→任务页仅retry1/providerDelta1/原maxTokens223；重启5条状态/时间/provider0，删除1再重启4条无复活且文件不变。证据2026-10-08-task-archives-bridge.md。所有自建server停止、browser blank、tracked dist恢复。tests/test_diffsynth_review.py既有修改保留未提交。Agent接口未修改。
 

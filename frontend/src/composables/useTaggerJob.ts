@@ -1,5 +1,5 @@
 import { computed, ref } from "vue"
-import { taggerApi, type CaptionJobReport, type CaptionJobRequest, type CaptionJobStatus } from "../api/tagger"
+import { taggerApi, type CaptionJobReport, type ModelTaggingRequest, type CaptionJobStatus } from "../api/tagger"
 
 export function useTaggerJob() {
   const status = ref<CaptionJobStatus>({ job_id: null, phase: "idle", mode: null, message: "", current: 0, total: 0,
@@ -67,7 +67,7 @@ export function useTaggerJob() {
     }
   }
 
-  const start = (request: CaptionJobRequest) => mutate(() => taggerApi.captionStart(request))
+  const start = (request: ModelTaggingRequest) => mutate(() => taggerApi.captionStart(request))
   const cancel = () => mutate(() => taggerApi.captionCancel())
   const retry = () => mutate(() => taggerApi.captionRetryFailed())
 

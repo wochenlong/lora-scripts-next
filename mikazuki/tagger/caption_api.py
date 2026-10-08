@@ -84,7 +84,7 @@ def _snapshot_request(req):
         for field in ("prompt", "language", "max_caption_length", "system_prompt"):
             if field not in req.__fields_set__:
                 payload.pop(field)
-    config = llm_service.config(masked=False) if req.prompt_id else {}
+    config = llm_service.config(masked=False) if req.prompt_id and req.mode != "tag" else {}
     if req.prompt_id:
         from mikazuki.llm.prompt_presets import list_presets
         config = {**config, "prompt_presets": [*config.get("prompt_presets", []), *list_presets()]}
@@ -204,8 +204,6 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
     image_path = Path(req.image_path).expanduser()
     if not image_path.is_file():
         raise HTTPException(status_code=400, detail="预览图片不存在")
-    if req.mode == "tag":
-        raise HTTPException(status_code=400, detail="Tag 模式预览请使用既有 Tagger")
     if req.mode == "combined":
         raise HTTPException(status_code=400, detail={"code": "caption_combined_unsupported", "message": "当前版本不支持组合打标"})
     try:
@@ -215,6 +213,15 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
     if not tagger_progress.try_begin("captioning", req.interrogator_model, "正在预览当前图片"):
         raise HTTPException(status_code=409, detail={"code": "tagger_busy", "message": "已有打标或下载任务进行中"})
     try:
+        if req.mode == "tag":
+            def generate():
+                caption_job_manager._prepare_tag_model(payload)
+                tagger_progress.check_cancelled()
+                return caption_job_manager._generate_tags(image_path, payload)
+
+            tags = await _preview_operation(asyncio.to_thread(generate), request, blocking=True)
+            tagger_progress.check_cancelled()
+            return _success({"caption": ", ".join(tags), "tags": tags, "language": "native", "model_id": payload["interrogator_model"]})
         language = payload["language"]
         profile = llm_service.resolve("vision", language=language, profile_id=req.profile_id, allow_local_fallback=req.allow_local_fallback)
         prompt, snapshot = render_prompt(payload["prompt"], language=language, mode=req.mode, image_name="image")
@@ -233,7 +240,6 @@ async def preview_caption(req: CaptionPreviewRequest, request: Request):
             from mikazuki.llm.contracts import LLMContractError
             raise LLMContractError("caption preview response was truncated")
         result = parse_caption_response(content, language=language, max_length=payload["max_caption_length"])
-        tagger_progress.check_cancelled()
         tagger_progress.check_cancelled()
         caption = result.caption
     except (CaptionJobCancelled, TaggerCancelled):

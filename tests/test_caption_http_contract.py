@@ -60,6 +60,52 @@ def test_preview_never_writes_caption_and_fallback_defaults_off(api_client):
     assert service.calls[0][1]["allow_local_fallback"] is False
 
 
+def test_tag_preview_and_batch_use_same_generation_parameters_without_llm(api_client, monkeypatch):
+    client, image, manager, service = api_client
+    calls = []
+    monkeypatch.setattr(manager, "_prepare_tag_model", lambda payload: None)
+
+    def generate(path, payload):
+        calls.append((path, payload.copy()))
+        return ["cat", "window"]
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Tag mode must not use LLM configuration")
+
+    monkeypatch.setattr(manager, "_generate_tags", generate)
+    monkeypatch.setattr(service, "resolve", forbidden)
+    monkeypatch.setattr(service, "config", forbidden, raising=False)
+    payload = {"path": str(image.parent), "mode": "tag", "model_id": "wd14-convnextv2-v2", "runtime": "local", "threshold": .45, "additional_tags": "example"}
+    original = b"old caption\r\n"
+    image.with_suffix(".txt").write_bytes(original)
+    preview = client.post("/api/tagger/jobs/preview", json={**payload, "image_path": str(image)})
+    assert preview.status_code == 200, preview.text
+    assert preview.json()["data"]["tags"] == ["cat", "window"]
+    assert preview.json()["data"]["language"] == "native"
+    assert image.with_suffix(".txt").read_bytes() == original
+    batch = client.post("/api/tagger/jobs", json={**payload, "conflict_action": "copy"})
+    assert batch.status_code == 200, batch.text
+    manager._thread.join(timeout=5)
+    assert manager.status()["succeeded"] == 1
+    assert image.with_suffix(".txt").read_text(encoding="utf-8").strip() == preview.json()["data"]["caption"]
+    assert calls[0][1]["threshold"] == calls[1][1]["threshold"] == .45
+    assert calls[0][1]["additional_tags"] == calls[1][1]["additional_tags"] == "example"
+    assert not service.calls
+    assert "max_tokens" not in manager.status()["snapshot"]
+    assert "prompt" not in manager.status()["snapshot"]
+
+
+@pytest.mark.parametrize("parameters", [{"prompt": "bad"}, {"max_tokens": 300}, {"language": "en"}, {"profile_id": "remote"}])
+def test_tag_requests_reject_caption_parameters_in_preview_and_batch(api_client, parameters):
+    client, image, manager, service = api_client
+    for url, extra in [("/api/tagger/jobs", {}), ("/api/tagger/jobs/preview", {"image_path": str(image)})]:
+        result = client.post(url, json={"path": str(image.parent), "mode": "tag", **extra, **parameters})
+        assert result.status_code == 400
+        assert result.json()["detail"]["code"] == "tagger_parameter_unsupported"
+    assert not manager.is_busy()
+    assert not service.calls
+
+
 def test_job_real_api_writes_and_exposes_report(api_client):
     client, image, manager, _service = api_client
     response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "mode": "natural", "profile_id": "remote"})
@@ -257,6 +303,41 @@ def test_preview_cancel_aborts_provider_and_releases_reservation(api_client, mon
     assert aborted == [True]
     assert not tagger_progress.is_busy()
     assert not image.with_suffix(".txt").exists()
+
+
+def test_tag_preview_cancel_holds_reservation_until_native_inference_finishes(api_client, monkeypatch):
+    import threading
+    client, image, manager, service = api_client
+    started = threading.Event()
+    finish = threading.Event()
+    response = []
+    monkeypatch.setattr(manager, "_prepare_tag_model", lambda payload: None)
+
+    def generate(*args):
+        started.set()
+        assert finish.wait(timeout=5)
+        return ["cat"]
+
+    monkeypatch.setattr(manager, "_generate_tags", generate)
+    original = b"keep original\r\n"
+    image.with_suffix(".txt").write_bytes(original)
+    worker = threading.Thread(target=lambda: response.append(client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image), "mode": "tag"})))
+    worker.start()
+    try:
+        assert started.wait(timeout=3)
+        tagger_progress.request_cancel()
+        assert tagger_progress.is_busy()
+        assert not tagger_progress.try_begin("captioning", "other", "must remain locked")
+        assert image.with_suffix(".txt").read_bytes() == original
+    finally:
+        finish.set()
+        worker.join(timeout=5)
+    assert not worker.is_alive()
+    assert response[0].status_code == 409
+    assert response[0].json()["detail"]["code"] == "caption_cancelled"
+    assert not tagger_progress.is_busy()
+    assert not service.calls
+    assert image.with_suffix(".txt").read_bytes() == original
 
 
 def test_preset_length_limit_is_frozen_and_excess_output_is_rejected(api_client, monkeypatch):

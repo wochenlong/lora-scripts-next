@@ -285,3 +285,9 @@ GET /api/tagger/models和本地/API一级选择已实现；系列折叠/原名�
 自然语言任务已接入既有TaskManager maintenance lane和user_data/tasks/dataset-tagger归档；冻结配置先落盘再启动，取消回调实际取消推理，逐文件失败/只重试失败项/原参数恢复、任务报告链接和安全删除均已实施。后端相关296通过，API增量39、桥接专项10通过；前端340/52/check/build通过。实际fake浏览器取消零写盘、两图部分失败后仅重试1项/额外请求1，服务重启状态与完成时间保持/provider0、删除后再次重启不复活且图片/txt保留。证据2026-10-08-task-archives-bridge.md。不是Real、正式Zero-Short或全新隔离重建。
 
 唯一下一步：将Tag页面批量操作接入同一持久化任务链路并完成Tag单图试标（相同配置、不写盘）。随后执行当前源码完整矩阵、真实模型、正式lifespan和全新隔离重建。Phase0/1仍in progress，goal active，Agent/plugin接口不纳入施工。
+
+## 2026-10-08 Tag持久化与单图试标增量
+
+Tag页面接入统一/tagger/jobs持久化、取消/仅失败重试、底部进度/历史；旧/interrogate保留兼容。单图Tag试标复用批量参数与后处理且零写盘，原生推理结束前不释放占用。快照按能力隔离、报告deep-link支持Tag，独立mount/KeepAlive初始化均验证。相关后端299、专项44、前端341/52/check/build通过；实际fake browser三图Tag/单图结果一致、provider0、任务报告和390px无溢出。证据2026-10-08-tag-preview-durable-ui.md。使用文档与真实验证工具同步本版边界。
+
+唯一下一步：在当前提交源码上执行真实ONNX Tag/HTTP试标/旧输出灰度及本地Qwen自然语言/缓存/归档验证；随后正式lifespan、最终矩阵与Phase5全新重建。尚不宣告阶段/goal完成，不复用旧combined证据或把fake当Real。

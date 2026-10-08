@@ -80,6 +80,7 @@ async def verify(args, key):
     if root.exists():
         raise RuntimeError("verification root must be new")
     os.environ["MIKAZUKI_TAG_TRANSLATION_ROOT"] = str(root)
+    os.environ["MIKAZUKI_USER_DATA_ROOT"] = str(root / "user_data")
     if args.tag_models:
         os.environ["MIKAZUKI_TAGGER_MODELS_DIR"] = str(args.tag_models.resolve())
     from mikazuki.llm.config import UnifiedConfigStore
@@ -87,6 +88,7 @@ async def verify(args, key):
     from mikazuki.llm.cache import CaptionCache
     from mikazuki.tagger.caption_store import CaptionJobStore
     from mikazuki.tagger.caption_job import CaptionJobManager, caption_sha256
+    from mikazuki.tagger.task_bridge import CaptionTaskBridge
     from mikazuki.tagger.caption import CAPTION_SCHEMA, parse_caption_response, DEFAULT_CAPTION_PROMPT, render_prompt
     from mikazuki.tag_translation.translation_config import OnlineServiceConfig
     root.mkdir(parents=True, exist_ok=True)
@@ -111,7 +113,7 @@ async def verify(args, key):
             "api_key": key, "capabilities": ["text", "vision"], "languages": ["zh-CN"]}]})
     cache = CaptionCache(root / "translations.sqlite3")
     journal = CaptionJobStore(cache.path)
-    manager = CaptionJobManager(service, cache=cache, job_store=journal)
+    manager = CaptionJobManager(service, cache=cache, job_store=journal, task_bridge=CaptionTaskBridge(root / "user_data"))
     report = {"phase_4": False, "kind": "current-production-real", "mode": "remote" if args.remote else "local",
               "caption_mode": args.mode,
               "source_commit": args.commit, "reuses_probe_assets": args.local, "peak_rss_bytes": 0,
@@ -140,8 +142,7 @@ async def verify(args, key):
         if not args.remote:
             config.save({"profiles": [p for p in config.load()["profiles"] if p["source"] != "remote"]})
         started = time.perf_counter()
-        request = {"path": str(images), "mode": args.mode, "use_cache": True,
-            "interrogator_model": "wd14-convnextv2-v2",
+        request = {"path": str(images), "mode": "natural", "use_cache": True, "conflict_action": "copy",
             "allow_local_fallback": args.local, "profile_id": remote_id if args.remote else None}
         status = await asyncio.to_thread(run_job, manager, request)
         report["batch_seconds"] = round(time.perf_counter() - started, 3)
@@ -152,12 +153,8 @@ async def verify(args, key):
             text = target.read_text(encoding="utf-8").strip()
             assert item["after_hash"] == caption_sha256(target)
             detail = journal.find_format_detail(target, item["after_hash"])
-            assert detail["format"] == ("mixed" if args.mode == "combined" else "natural")
+            assert detail["format"] == "natural"
             assert item["profile_id"] == (remote_id if args.remote else "qwen3-vl-2b-local")
-            if args.mode == "combined":
-                tag_line, text = text.split("\n\n", 1)
-                assert tag_line == ", ".join(detail["tags"]) and detail["tags"]
-                report["real_tag_counts"] = report.get("real_tag_counts", []) + [len(detail["tags"])]
             parsed = parse_caption_response(json.dumps({"caption": text, "language": "zh-CN"}), language="zh-CN")
             report["samples"].append({"id": Path(item["filename"]).stem, "schema_valid": True,
                 "caption_length": len(parsed.caption), "profile_id": item["profile_id"],
@@ -169,6 +166,14 @@ async def verify(args, key):
         report["cache_replay_no_requests"] = budget.calls == before_calls
         report["cache_hits"] = sum(bool(item.get("cached")) for item in cached["report"]["items"])
         assert report["cache_replay_no_requests"] and report["cache_hits"] == 3
+        archive = manager.task_bridge.locations[status["job_id"]]
+        report["task_archive_present"] = (archive / "config.json").is_file() and (archive / "task.json").is_file()
+        assert report["task_archive_present"]
+        before_calls = budget.calls
+        manager.start({**request, "conflict_action": "ignore"})
+        await asyncio.to_thread(manager._thread.join, 60)
+        assert manager.status()["skipped"] == 3 and budget.calls == before_calls
+        report["default_skip_zero_requests"] = True
         before = {p.name: caption_sha256(p) for p in images.glob("*.txt")}
         prompt, _ = render_prompt(DEFAULT_CAPTION_PROMPT, language="zh-CN", mode="natural", image_name="image")
         _profile, envelope, content, _info = await service.complete_vision(images / "chelsea.png", prompt,
@@ -248,15 +253,13 @@ if __name__ == "__main__":
     parser.add_argument("--local", action="store_true")
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--runtime", type=Path)
-    parser.add_argument("--mode", choices=["natural", "combined"], default="natural")
+    parser.add_argument("--mode", choices=["natural"], default="natural")
     parser.add_argument("--tag-models", type=Path)
     args = parser.parse_args()
     if not args.remote and not args.local:
         parser.error("select remote or local")
     if args.local and (not args.assets or not args.runtime):
         parser.error("local requires locked assets and runtime")
-    if args.mode == "combined" and not args.tag_models:
-        parser.error("combined requires isolated Tag model assets")
     key = ""
     if args.remote:
         print('{"awaiting_runtime_secret":true}', flush=True)

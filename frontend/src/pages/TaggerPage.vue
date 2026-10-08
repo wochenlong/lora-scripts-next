@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from "vue"
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import { useTaggerStore } from "../stores/tagger"
 import { llmApi, type CaptionPromptPreset, type LocalVisionStatus } from "../api/llm"
-import { taggerApi, type CaptionJobRequest, type TaggerModel, type TaggerRequest, type CaptionRollbackResult } from "../api/tagger"
+import { taggerApi, tagJobRequest, type CaptionJobRequest, type TaggerModel, type TaggerRequest, type CaptionRollbackResult } from "../api/tagger"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
 import CaptionJobProgress from "../components/CaptionJobProgress.vue"
@@ -91,7 +91,6 @@ const committedPrompt = ref<PromptState>({ prompt: captionForm.prompt, language:
 let timer: number | undefined
 
 const downloadPercent = computed(() => status.value.download.percent || (status.value.download.total ? Math.round(status.value.download.current / status.value.download.total * 100) : 0))
-const taggingPercent = computed(() => status.value.tagging.total ? Math.round(status.value.tagging.current / status.value.tagging.total * 100) : 0)
 
 function selectModel(identifier: string) {
   const next = catalog.value.find(model => model.id === identifier)
@@ -256,7 +255,7 @@ function validCaptionLimit() {
 async function start() {
   if (!form.path.trim()) return ElMessage.error(t("tagger.msg.pathRequired"))
   try {
-    await store.start({ ...form, path: form.path.replaceAll("\\", "/") })
+    await captionJob.start(tagJobRequest(form))
     ElMessage.success(t("tagger.msg.submitted"))
   } catch (caught) {
     ElMessage.error(caught instanceof Error ? caught.message : t("tagger.msg.submitFail"))
@@ -284,12 +283,12 @@ async function startCaption() {
 async function previewCaption() {
   if (previewBusy.value) return
   syncCaptionPath()
-  if (!validCaptionLimit()) return ElMessage.error(t("tagger.caption.maxLengthRequired"))
+  if (mode.value !== "tag" && !validCaptionLimit()) return ElMessage.error(t("tagger.caption.maxLengthRequired"))
   if (!previewImagePath.value.trim()) return ElMessage.error(t("tagger.caption.previewPathRequired"))
-  if (!captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
+  if (mode.value !== "tag" && !captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
   previewBusy.value = true
   try {
-    const result = await taggerApi.captionPreview({ ...captionForm, image_path: previewImagePath.value })
+    const result = await taggerApi.captionPreview({ ...(mode.value === "tag" ? tagJobRequest(form) : captionForm), image_path: previewImagePath.value })
     previewResult.value = result.caption
   } catch (caught) {
     captionError.value = caught instanceof Error ? caught.message : String(caught)
@@ -320,14 +319,6 @@ async function invoke(kind: "prefetch" | "cancel" | "reset") {
   }
 }
 
-watch(mode, value => {
-  if (value !== "tag") {
-    captionJob.activate()
-    void captionJob.refresh()
-    void captionJob.loadHistory()
-  } else captionJob.deactivate()
-})
-
 const picking = ref(false)
 const { open: pathPickerOpen, mode: pathPickerMode, initialPath: pathPickerInitial, nameFilter: pathPickerFilter, pick: pickServerPath, onConfirm: onPathConfirm, onCancel: onPathCancel } = useServerPathPick()
 async function browsePath() {
@@ -357,8 +348,8 @@ async function refresh() {
   const revision = refreshGeneration
   try {
     await store.refresh()
+    await captionJob.refresh()
     if (mode.value !== "tag") {
-      await captionJob.refresh()
       const local = await llmApi.localVisionStatus()
       if (revision === refreshGeneration) localVision.value = local
     }
@@ -384,13 +375,14 @@ onActivated(() => {
     await captionJob.loadReport(requestedJob)
     if (generation !== refreshGeneration || !captionJob.report.value) return
     const snapshot = captionJob.report.value.snapshot
-    const model = catalog.value.find(item => item.id === snapshot.model_id && item.output === "natural")
-      || catalog.value.find(item => item.output === "natural")
+    const output = snapshot.mode === "tag" ? "tag" : "natural"
+    const model = catalog.value.find(item => item.id === snapshot.model_id && item.output === output)
+      || catalog.value.find(item => item.output === output)
     if (model) selectModel(model.id)
     historyJobId.value = requestedJob
     await captionJob.loadHistory()
   })
-  if (mode.value !== "tag") void captionJob.loadHistory()
+  void captionJob.loadHistory()
   timer = window.setInterval(refresh, 1200)
 })
 let catalogOperation: Promise<void> | undefined
@@ -403,7 +395,15 @@ function initialiseCatalog() {
   catalogOperation = operation
   return catalogOperation
 }
-onMounted(() => { queueMicrotask(() => { void initialiseCatalog() }) })
+onMounted(() => { queueMicrotask(() => {
+  // KeepAlive activation starts polling; standalone mounts still load state.
+  if (timer === undefined) {
+    captionJob.activate()
+    void refresh()
+    void captionJob.loadHistory()
+  }
+  void initialiseCatalog()
+}) })
 onDeactivated(() => { refreshGeneration += 1; stopPolling() })
 onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
 </script>
@@ -441,12 +441,12 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
           <label>{{ t('tagger.models.temperature') }}<input v-model.number="captionForm.temperature" type="number" min="0" max="2" step="0.1" /></label>
           <CaptionPromptEditor v-model:preset-id="presetId" v-model:name="presetName" v-model:prompt="captionForm.prompt" v-model:system-prompt="selectedSystemPrompt" v-model:maximum="captionForm.max_caption_length" :presets="captionPresets" :builtins="builtinPresets" :saving="presetSaving" :legacy-count="legacyPresetCount" @select="selectPreset" @save="savePreset()" @save-as="savePreset(false, true)" @restore-default="selectPreset('builtin-caption-zh')" @restore="restorePrompt" @remove="savePreset(true)" @import-legacy="importLegacyPresets" @refresh="refreshPromptPresets" />
           <label>{{ t("tagger.caption.conflict") }}<select v-model="captionForm.conflict_action"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option></select></label>
-          <label class="wide-field">{{ t("tagger.caption.previewPath") }}<input v-model="previewImagePath" placeholder="/data/datasets/images/example.png" /></label>
           <div class="caption-privacy wide-field">{{ t("tagger.caption.privacy") }}</div>
           <ManagedVisionModel v-if="selectedModel?.profile_id === 'qwen3-vl-2b-local'" :status="localVision" :busy="localVisionBusy" :locked="captionBusy || previewBusy" @action="manageLocalVision" />
 
-          <div v-if="previewResult" class="caption-preview wide-field"><strong>{{ t("tagger.caption.previewResult") }}</strong><p>{{ previewResult }}</p></div>
         </template>
+        <label class="wide-field">{{ t("tagger.caption.previewPath") }}<input v-model="previewImagePath" placeholder="/data/datasets/images/example.png" /></label>
+        <div v-if="previewResult" class="caption-preview wide-field"><strong>{{ t("tagger.caption.previewResult") }}</strong><p>{{ previewResult }}</p></div>
       </div>
       <div class="check-row">
         <label v-if="mode === 'tag'"><input v-model="form.batch_input_recursive" type="checkbox" />{{ t("tagger.recursive") }}</label>
@@ -458,21 +458,20 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
         <label v-if="mode !== 'natural'"><input v-model="form.add_model_tag" type="checkbox" />{{ t("tagger.addModelTag") }}</label>
       </div>
     </section>
-    <aside class="tagger-status" :class="{ 'caption-status-panel': mode !== 'tag' }">
-      <template v-if="mode === 'tag'">
+    <aside class="tagger-status caption-status-panel">
+      <template v-if="busy && !captionBusy">
         <span class="task-status">{{ status.phase }}</span><h2>{{ status.message || t("tagger.idle") }}</h2><p v-if="error">{{ error }}</p>
         <div class="meter"><header><span>{{ t("tagger.downloadMeter") }}</span><b>{{ downloadPercent }}%</b></header><div><i :style="{ width: downloadPercent + '%' }" /></div><small>{{ status.download.filename || t("tagger.downloadIdle") }}</small></div>
-        <div class="meter"><header><span>{{ t("tagger.taggingMeter") }}</span><b>{{ taggingPercent }}%</b></header><div><i :style="{ width: taggingPercent + '%' }" /></div><small>{{ status.tagging.current }} / {{ status.tagging.total }} {{ status.tagging.filename }}</small></div>
-        <div class="tagger-actions"><button v-if="busy" class="danger-action" :disabled="submitting" @click="invoke('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="submitting || catalogLoading || !modelReady" @click="start">{{ t("tagger.start") }}</button><button class="secondary-action" :disabled="submitting || status.phase === 'tagging'" @click="invoke('prefetch')">{{ t("tagger.prefetch") }}</button><button class="secondary-action" :disabled="submitting" @click="invoke('reset')">{{ t("tagger.reset") }}</button></div>
+        <div class="tagger-actions"><button class="danger-action" :disabled="submitting" @click="invoke('cancel')">{{ t("tagger.cancel") }}</button></div>
       </template>
       <template v-else>
         <span class="task-status">{{ t('tagger.caption.phases.' + captionStatus.phase) }}</span>
-        <h2>{{ captionStatus.message || t("tagger.caption.idle") }}</h2>
+        <h2>{{ captionStatus.message || t(mode === 'tag' ? "tagger.idle" : "tagger.caption.idle") }}</h2>
         <p v-if="captionError">{{ captionError }}</p>
-        <p class="caption-route-hint">{{ t("tagger.caption.remoteFirst") }}</p>
+        <p v-if="mode !== 'tag'" class="caption-route-hint">{{ t("tagger.caption.remoteFirst") }}</p>
         <CaptionJobProgress :status="captionStatus" />
         <div v-if="captionStatus.failed" class="caption-failures">{{ t("tagger.caption.failed", { n: captionStatus.failed }) }}</div>
-        <div class="tagger-actions"><button v-if="captionBusy" class="danger-action" :disabled="captionSubmitting" @click="captionAction('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="captionSubmitting || previewBusy || catalogLoading || !modelReady" @click="startCaption">{{ t("tagger.start") }}</button><button v-if="captionStatus.failed" class="secondary-action" :disabled="captionBusy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || previewBusy || captionBusy || catalogLoading || !modelReady || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button></div>
+        <div class="tagger-actions"><button v-if="captionBusy" class="danger-action" :disabled="captionSubmitting" @click="captionAction('cancel')">{{ t("tagger.cancel") }}</button><button v-else class="primary-action" :disabled="captionSubmitting || previewBusy || busy || catalogLoading || !modelReady" @click="mode === 'tag' ? start() : startCaption()">{{ t("tagger.start") }}</button><button v-if="captionStatus.failed" class="secondary-action" :disabled="captionBusy || captionSubmitting || busy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || previewBusy || captionBusy || busy || catalogLoading || !modelReady || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button><button v-if="mode === 'tag'" class="secondary-action" :disabled="submitting || captionBusy || previewBusy" @click="invoke('prefetch')">{{ t("tagger.prefetch") }}</button></div>
         <section class="caption-history">
           <h3>{{ t("tagger.caption.history") }}</h3>
           <button type="button" :disabled="maintenanceBusy || captionJob.historyBusy.value" @click="captionJob.loadHistory">{{ t("tagger.caption.refreshHistory") }}</button>

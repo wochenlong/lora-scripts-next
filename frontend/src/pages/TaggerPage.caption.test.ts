@@ -28,7 +28,8 @@ vi.mock("../api/llm", () => ({
     importLegacyPromptPresets: vi.fn(),
   },
 }))
-vi.mock("../api/tagger", () => ({
+vi.mock("../api/tagger", async importOriginal => ({
+  tagJobRequest: (await importOriginal<typeof import("../api/tagger")>()).tagJobRequest,
   taggerApi: {
     models: vi.fn().mockResolvedValue({ models: [
       { id: "wd14-convnextv2-v2", name: "WD", model: "wd14-convnextv2-v2", family: "WD", author: "SmilingWolf", runtime: "local", output: "tag", ready: true, downloaded: false, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
@@ -70,6 +71,27 @@ async function naturalPage() {
 }
 
 describe("natural-language TaggerPage", () => {
+  it("submits Tag previews and batches through the same durable API with only Tag parameters", async () => {
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
+    await flushPromises()
+    await wrapper.get('input[placeholder="/data/datasets/images"]').setValue("D:\\samples")
+    await wrapper.get('input[placeholder="/data/datasets/images/example.png"]').setValue("D:/samples/a.png")
+    vi.mocked(taggerApi.captionPreview).mockResolvedValueOnce({ caption: "cat, window", tags: ["cat", "window"], language: "native" })
+    await wrapper.findAll(".tagger-actions button").find(button => button.text().includes("测试当前图片"))!.trigger("click")
+    await flushPromises()
+    expect(wrapper.get(".caption-preview").text()).toContain("cat, window")
+    await wrapper.get(".tagger-actions .primary-action").trigger("click")
+    await flushPromises()
+    const preview = vi.mocked(taggerApi.captionPreview).mock.calls[0][0]
+    const batch = vi.mocked(taggerApi.captionStart).mock.calls[0][0]
+    const { image_path, ...configuration } = preview
+    expect(image_path).toBe("D:/samples/a.png")
+    expect(batch).toEqual(configuration)
+    expect(batch).toMatchObject({ path: "D:/samples", mode: "tag", runtime: "local", model_id: "wd14-convnextv2-v2", threshold: .35, recursive: false, conflict_action: "ignore" })
+    expect(Object.keys(batch)).not.toEqual(expect.arrayContaining(["prompt", "profile_id"]))
+    expect(batch).not.toHaveProperty("batch_input_recursive")
+    expect(batch).not.toHaveProperty("max_tokens")
+  })
   it("imports legacy presets only after confirmation and preserves the current draft", async () => {
     const config = await llmApi.profiles()
     vi.mocked(llmApi.profiles).mockResolvedValueOnce({ ...config, prompt_presets: [{ id: "legacy", name: "旧预设", template: "旧提示词", language: "zh-CN" }] })
@@ -185,6 +207,7 @@ describe("natural-language TaggerPage", () => {
       path: "D:/sample", mode: "natural", prompt: "只描述主体，使用{{language}}", profile_id: "remote",
     }))
     const submitted = vi.mocked(taggerApi.captionStart).mock.calls[0][0]
+    if (submitted.mode !== "natural") throw new Error("Expected natural Caption request")
     expect(submitted.allow_local_fallback).toBeFalsy()
     expect(submitted.runtime).toBe("api")
     expect(submitted.model_id).toBe("llm:remote")

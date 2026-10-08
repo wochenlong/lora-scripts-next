@@ -75,3 +75,7 @@ Agent/plugin/sidecar 相关内容不得通过“兼容性”名义重新加入�
 ## 2026-10-08 预设事务增量
 
 预设多文件事务/进程恢复/OS跨进程锁和明确导入、系统提示词/草稿保护已实现；专项16、相关223与最后focused37、前端340/52通过，实际跨浏览器/后端重启fake验收通过。详见2026-10-08-preset-transactions-import.md。下一步TaskManager/user_data任务档案。Goal active，GATE09/10未通过。
+
+## 2026-10-08 任务档案与Tag试标增量
+
+既有TaskManager与user_data/tasks/dataset-tagger联动（35e5189），Tag/natural前端共用持久化链路；Tag单图HTTP预览、适用参数快照、状态恢复/真正取消/仅失败重试/安全删除和报告链接已实现。相关后端299、专项44、前端341/52/check/build与fake browser通过。证据2026-10-08-task-archives-bridge.md和2026-10-08-tag-preview-durable-ui.md。下一步真实ONNX与Qwen当前源码验收，随后正式lifespan/最终矩阵/Phase5。GATE09/10未通过。

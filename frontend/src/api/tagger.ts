@@ -19,7 +19,7 @@ export interface CaptionJobRequest {
   prompt_id?: string
   max_caption_length?: number
   path: string
-  mode: CaptionMode
+  mode: "natural"
   recursive: boolean
   allow_local_fallback?: boolean
   profile_id?: string
@@ -29,6 +29,18 @@ export interface CaptionJobRequest {
   conflict_action: "ignore" | "copy"
   max_tokens?: number
   temperature?: number
+}
+
+export type TagJobRequest = Omit<TaggerRequest, "batch_input_recursive" | "batch_output_action_on_conflict"> & {
+  mode: "tag"; model_id: string; runtime: "local"; recursive: boolean; conflict_action: CaptionConflictAction
+}
+export type ModelTaggingRequest = CaptionJobRequest | TagJobRequest
+export interface TaggingPreview { caption: string; language: string; tags?: string[]; model_id?: string; profile_id?: string; profile_revision?: string }
+
+export function tagJobRequest(form: TaggerRequest): TagJobRequest {
+  const { batch_input_recursive, batch_output_action_on_conflict, ...parameters } = form
+  return { ...parameters, path: form.path.replaceAll("\\", "/"), mode: "tag", model_id: form.interrogator_model,
+    runtime: "local", recursive: batch_input_recursive, conflict_action: batch_output_action_on_conflict }
 }
 
 export interface TaggerModel {
@@ -98,8 +110,8 @@ export const taggerApi = {
   captionStatus: (signal?: AbortSignal) => apiData<CaptionJobStatus>("/api/tagger/jobs", { signal }),
   captionHistory: () => apiData<{ jobs: CaptionJobStatus[] }>("/api/tagger/jobs/history"),
   captionReport: (jobId: string) => apiData<CaptionJobReport>(`/api/tagger/jobs/${encodeURIComponent(jobId)}/report`),
-  captionStart: (body: CaptionJobRequest) => apiData<CaptionJobStatus>("/api/tagger/jobs", { method: "POST", body: JSON.stringify(body) }),
+  captionStart: (body: ModelTaggingRequest) => apiData<CaptionJobStatus>("/api/tagger/jobs", { method: "POST", body: JSON.stringify(body) }),
   captionCancel: () => apiData<CaptionJobStatus>("/api/tagger/jobs/cancel", { method: "POST" }),
   captionRetryFailed: () => apiData<CaptionJobStatus>("/api/tagger/jobs/retry-failed", { method: "POST" }),
-  captionPreview: (body: CaptionJobRequest & { image_path: string }) => apiData<{ caption: string; language: string; profile_id: string; profile_revision: string }>("/api/tagger/jobs/preview", { method: "POST", body: JSON.stringify(body) }),
+  captionPreview: (body: ModelTaggingRequest & { image_path: string }) => apiData<TaggingPreview>("/api/tagger/jobs/preview", { method: "POST", body: JSON.stringify(body) }),
 }

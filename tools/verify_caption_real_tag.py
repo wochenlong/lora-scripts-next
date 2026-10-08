@@ -25,12 +25,14 @@ def main():
     if root.exists():
         raise RuntimeError('Tag verification requires a new root')
     os.environ['MIKAZUKI_TAG_TRANSLATION_ROOT'] = str(root / 'state')
+    os.environ['MIKAZUKI_USER_DATA_ROOT'] = str(root / 'user_data')
     os.environ['MIKAZUKI_TAGGER_MODELS_DIR'] = str(args.tag_models.resolve())
     from mikazuki.app.models import TaggerInterrogateRequest
     from mikazuki.tagger import jobs
     from mikazuki.tagger.caption_job import CaptionJobManager, caption_sha256
     from mikazuki.tagger.caption_store import CaptionJobStore
     from mikazuki.tagger.progress import tagger_progress
+    from mikazuki.tagger.task_bridge import CaptionTaskBridge
 
     manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
     old, new = root / 'legacy', root / 'new'
@@ -53,7 +55,21 @@ def main():
         jobs.run_interrogate_job(TaggerInterrogateRequest(path=str(old), batch_output_action_on_conflict='copy'))
         assert tagger_progress.get()['phase'] == 'done'
         journal = CaptionJobStore(root / 'state' / 'translations.sqlite3')
-        manager = CaptionJobManager(NoLLM(), job_store=journal)
+        manager = CaptionJobManager(NoLLM(), job_store=journal, task_bridge=CaptionTaskBridge(root / 'user_data'))
+        from fastapi import FastAPI
+        from fastapi.testclient import TestClient
+        from mikazuki.tagger import caption_api
+        caption_api.caption_job_manager = manager
+        app = FastAPI()
+        app.include_router(caption_api.router, prefix='/api')
+        with TestClient(app) as client:
+            previews = {}
+            for sample in manifest['samples']:
+                preview = client.post('/api/tagger/jobs/preview', json={'path': str(new), 'image_path': str(new / sample['filename']),
+                    'mode': 'tag', 'model_id': report['model'], 'runtime': 'local'})
+                assert preview.status_code == 200
+                previews[sample['filename']] = preview.json()['data']['caption']
+                assert not (new / Path(sample['filename']).with_suffix('.txt')).exists()
         manager.start({'path': str(new), 'mode': 'tag', 'conflict_action': 'copy',
                        'interrogator_model': report['model']})
         manager._thread.join(300)
@@ -66,10 +82,20 @@ def main():
             filename = Path(sample['filename']).with_suffix('.txt')
             left, right = old / filename, new / filename
             assert left.read_bytes() == right.read_bytes()
+            assert right.read_text(encoding='utf-8').strip() == previews[sample['filename']]
             detail = journal.find_format_detail(right, caption_sha256(right))
             assert detail['format'] == 'tag' and detail['tags']
             report['samples'].append({'id': sample['id'], 'bytes_equal': True,
+                                      'preview_equal': True,
                                       'tag_count': len(detail['tags']), 'after_hash': caption_sha256(right)})
+        archive = manager.task_bridge.locations[manager.status()['job_id']]
+        assert (archive / 'config.json').is_file() and (archive / 'task.json').is_file()
+        report['task_archive_present'] = True
+        report['preview_no_write'] = True
+        manager.start({'path': str(new), 'mode': 'tag', 'conflict_action': 'ignore', 'interrogator_model': report['model']})
+        manager._thread.join(60)
+        assert manager.status()['skipped'] == 3 and manager.status()['succeeded'] == 0
+        report['default_skip'] = True
         report['passed'] = True
     except Exception as error:
         report['passed'] = False
