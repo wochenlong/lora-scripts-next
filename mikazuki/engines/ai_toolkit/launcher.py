@@ -35,16 +35,17 @@ def build_train_spec(
     # run.py enables hf-xet by default; the xet CAS backend 401s behind
     # proxies/mirrors. Fall back to plain CDN download unless the user opted in.
     env.setdefault("HF_HUB_DISABLE_XET", "1")
+    env["HF_HUB_OFFLINE"] = "1"
+    env["TRANSFORMERS_OFFLINE"] = "1"
+    env["HF_DATASETS_OFFLINE"] = "1"
+    env.pop("AI_TOOLKIT_TE_PATH", None)
     if te_path:
         env["AI_TOOLKIT_TE_PATH"] = te_path
     # run.py does sys.path.insert(0, os.getcwd()); keep cwd at the source root
     # and mirror it in PYTHONPATH for child processes.
     src = str(runtime.toolkit_root.resolve())
-    existing = env.get("PYTHONPATH", "")
-    parts = [p for p in existing.split(os.pathsep) if p]
-    if src not in parts:
-        parts.insert(0, src)
-    env["PYTHONPATH"] = os.pathsep.join(parts)
+    env.pop("PYTHONHOME", None)
+    env["PYTHONPATH"] = src
     if runtime.hf_home is not None:
         env["HF_HOME"] = str(runtime.hf_home)
     if gpu_ids:

@@ -8,7 +8,7 @@
 
 Next Trainer brings dataset management, tagging, caption editing, training configuration and task monitoring into one Web UI, for local use or browser access to a remote training server.
 
-Building on the Akegarasu training workflow, it integrates engines such as Kohya, Anima Fast and Musubi. The goal is a professional, extensible workspace rather than a separate application for every model.
+Building on the Akegarasu training workflow, it integrates engines such as Kohya, Anima Fast, Musubi, DiffSynth and AI Toolkit. The goal is a professional, extensible workspace rather than a separate application for every model.
 
 > This is the **`dev` development branch**. Features here may not be included in published portable packages. For everyday use, prefer a [Release](https://github.com/wochenlong/lora-scripts-next/releases); development progress is not a release announcement.
 
@@ -24,7 +24,7 @@ Building on the Akegarasu training workflow, it integrates engines such as Kohya
 | Tagging and editing | Local WD-family tagging, image-centered caption editing, shared dataset paths across tools |
 | Training | Model / engine / target selection, TOML preview and import/export, LoRA and full finetuning where supported |
 | Monitoring | Training queues, task status, logs, Loss and previews; TensorBoard remains an option |
-| Engine management | Manage training environments, search and filter engines, drag to reorder, five items per page; order saved in the current browser |
+| Engine management | Manage training environments, search and filter engines, drag to reorder, five items per page; engine preferences and order saved on the server |
 
 ### Models and Engines
 
@@ -36,8 +36,13 @@ Building on the Akegarasu training workflow, it integrates engines such as Kohya
 | Anima Fast | Anima 2B / 2.9B LoRA | Isolated runtime with explicit base-model path selection |
 | Musubi | Krea 2 LoRA | Optional installation; see the Linux multi-GPU guide |
 | DiffSynth | Qwen-Image-2.1 text-to-image / image-editing LoRA | Single-GPU BF16; Edit currently uses batch size 1 |
+| AI Toolkit | SDXL, Flux.1 Dev, Klein 4B / 9B, Krea 2 RAW, Anima, Qwen-Image-2.1 LoRA | Optional installation with an isolated runtime; Klein supports base / distilled variants, and Klein and Qwen offer image-editing entry points |
+
+Install AI Toolkit from **Settings → Training Engines**, then select the model and engine on the training page. Depending on the model, supply a local model directory, single file or component paths, along with the required text encoder, VAE, configuration and tokenizer files. Model components and datasets are checked before launch. Image editing uses target and reference-image folders; preview samples have individual prompts, dimensions, seeds and reference images.
 
 Anima's default paths are guidance, **not downloaded model weights**. Prepare models, datasets, GPU resources and dependencies for your chosen engine.
+
+AI Toolkit acceptance: Qwen-Image-2.1 text-to-image and image editing passed three-step GPU smoke tests with saved LoRAs and preview generation. This is not full-model or long-run validation. See the [acceptance report](docs/team/pr399-acceptance-2026-10-03.md).
 
 Guides: [Anima](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [Krea 2](docs/krea2-linux-multigpu.md) · [DiffSynth / Qwen](docs/diffsynth.md)
 
@@ -55,12 +60,23 @@ Guides: [Anima](docs/anima-training.md) · [Anima Fast](docs/anima-fast.md) · [
 | Monitoring and command-line use | [Train monitor](docs/train-monitor.md) · [CLI](docs/cli-args.md) |
 | Development and packaging | [Repository layout](docs/repo-layout.md) · [Build guide](docs/portable-build-guide.md) |
 
+### User Data
+
+Engine preferences and ordering are stored in project-root `user_data/`, so they
+survive browser and port changes. This branch also adds user preset CRUD and
+configuration archives for new training tasks. GUI, monitor and TensorBoard
+startup settings share a configuration file with GUI port priority.
+
+See [user data and migration boundaries](docs/user-data.md). Existing history is
+not migrated; this is not a complete migration of every browser preference.
+
 ## What We Have Built
 
 Recent work integrated into `dev`:
 
 - **Dataset workspace:** managed roots, nested uploads, batch conflict decisions, export and recoverable deletion.
 - **Image-editing training:** target/reference-image workflows for DiffSynth / Qwen-Image-2.1.
+- **AI Toolkit model entries:** configure LoRA in the shared training page, with model-specific quantization, memory offloading and sampling options, using the existing task queue, logs and Loss monitoring.
 - **Anima path guidance:** separate defaults and remembered paths for Anima 2B / 2.9B, preserving imported paths.
 - **Engine environments and UI:** standalone Kohya management, compact searchable lists, persistent drag ordering and five-item pagination.
 - **Reliability:** stronger environment installation checks, configuration boundaries and portable update handling.
@@ -72,7 +88,7 @@ See [development progress and limitations](docs/dev-progress.md). Historical ver
 | Milestone | Direction |
 | --- | --- |
 | **3.2.0** | Dataset preparation, tagging and caption editing; continued model integrations |
-| **3.3.0** | Complete and validate the AI Toolkit product integration |
+| **3.3.0** | Expand AI Toolkit model-format support and improve training workflows |
 | **Later 3.x** | Update reliability, an EXE client, API captioning and model publishing; individual versions not assigned |
 | **4.0.0** | Official Agent support across data preparation, training and testing |
 

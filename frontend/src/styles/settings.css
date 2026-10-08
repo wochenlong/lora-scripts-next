@@ -652,3 +652,16 @@
 .settings-card {
   border-radius: var(--radius-lg);
 }
+/* Shared server-settings feedback sits inside the content area, clear of navigation. */
+.engine-settings-error {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  color: var(--text);
+  background: var(--bg);
+  overflow-wrap: anywhere;
+}

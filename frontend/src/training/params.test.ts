@@ -9,6 +9,32 @@ import {
 } from "./params"
 
 describe("training parameter conversion", () => {
+  it.each([
+    "klein-lora",
+    "ai-toolkit-sdxl-lora",
+    "ai-toolkit-flux-lora",
+    "ai-toolkit-anima-lora",
+    "ai-toolkit-krea2-lora",
+    "ai-toolkit-qwen-image-21-lora",
+  ])("normalizes GPU labels for %s without mutating the form", (schemaName) => {
+    const source = { gpu_ids: ["GPU 0: NVIDIA RTX 4090", "GPU 12: NVIDIA RTX 3090", "3", 2, ""] }
+    const result = buildTrainingConfig(source, schemaName)
+
+    expect(result.gpu_ids).toEqual(["0", "12", "3", "2"])
+    expect(source.gpu_ids).toEqual(["GPU 0: NVIDIA RTX 4090", "GPU 12: NVIDIA RTX 3090", "3", 2, ""])
+  })
+
+  it("preserves DiffSynth GPU values", () => {
+    const gpu_ids = ["GPU 0: NVIDIA RTX 4090", 2, ""]
+    expect(buildTrainingConfig({ gpu_ids }, "qwen-image-21-lora").gpu_ids).toEqual(gpu_ids)
+  })
+
+  it("preserves absent, empty, and scalar Toolkit GPU selections", () => {
+    expect(buildTrainingConfig({}, "klein-lora")).not.toHaveProperty("gpu_ids")
+    expect(buildTrainingConfig({ gpu_ids: [] }, "klein-lora").gpu_ids).toEqual([])
+    expect(buildTrainingConfig({ gpu_ids: "0,2" }, "klein-lora").gpu_ids).toBe("0,2")
+  })
+
   it("fills basic defaults and normalizes paths and GPU ids", () => {
     const result = buildTrainingConfig({
       pretrained_model_name_or_path: "D:\\models\\base.safetensors",

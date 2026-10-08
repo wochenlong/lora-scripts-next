@@ -88,7 +88,7 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     requiresGpu: true,
     managesRuntime: true,
     mark: "AT",
-    tags: ["lora", "klein", "nvidia"],
+    tags: ["lora", "sdxl", "flux", "klein", "krea2", "anima", "qwen-image-21", "nvidia"],
     version: "plugin",
     updatedAt: "2026-08",
   },

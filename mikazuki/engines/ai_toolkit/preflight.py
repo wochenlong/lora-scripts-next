@@ -4,15 +4,14 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Callable
 import json
-import re
 import subprocess
 
 from .adapter import VARIANTS
 from .settings import RuntimeConfig
+from .environment import probe_env
 
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".avif"}
-HF_REPO_ID_RE = re.compile(r"^[A-Za-z0-9][\w.-]*/[A-Za-z0-9][\w.-]*$")
 
 
 @dataclass
@@ -70,6 +69,7 @@ print(json.dumps(facts))
     completed = subprocess.run(
         [str(runtime.python), "-c", script],
         cwd=str(runtime.toolkit_root),
+        env=probe_env(runtime),
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -95,12 +95,6 @@ print(json.dumps(facts))
     )
 
 
-def _dataset_images(root: Path) -> list[Path]:
-    if not root.exists():
-        return []
-    return [p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in IMAGE_EXTS]
-
-
 def run_preflight(
     config: dict[str, Any],
     runtime: RuntimeConfig,
@@ -123,85 +117,33 @@ def run_preflight(
         errors.append(f"ai-toolkit venv python 不存在: {runtime.python}")
 
     process = (config.get("config", {}).get("process") or [{}])[0]
-    model = process.get("model", {})
     datasets = process.get("datasets", [])
 
-    name_or_path = str(model.get("name_or_path") or "").strip()
-    if not name_or_path:
-        errors.append("缺少 model.name_or_path（Klein DiT）")
+    assets = config.get("meta", {}).get("next_trainer", {}).get("assets")
+    if not assets:
+        errors.append("缺少模型输入模式与本地资产声明，请重新生成配置")
     else:
-        candidate = Path(name_or_path)
-        if candidate.is_dir():
-            dit_file = candidate / spec.get("dit_filename", "")
-            if not dit_file.is_file():
-                errors.append(f"DiT 文件不存在: {dit_file}（变体 {variant} 期望 {spec.get('dit_filename')}）")
-            # VAE is a required local asset: runtime auto-download via hf-xet
-            # proved unreliable (CAS 401); toolkit consumes <name_or_path>/ae.safetensors.
-            if not (candidate / "ae.safetensors").is_file():
-                errors.append(
-                    f"VAE 未就位: {candidate / 'ae.safetensors'}。"
-                    "请在「训练用模型」区下载 VAE（须与 DiT 同目录）"
-                )
-        elif not candidate.is_file():
-            # Anything that is neither an existing path nor a syntactically
-            # valid HF repo id is a typo'd local path; error instead of
-            # silently falling through to a runtime download (P8).
-            if not HF_REPO_ID_RE.match(name_or_path):
-                errors.append(
-                    f"DiT 路径不存在且不是合法的 HF repo id: {name_or_path}。"
-                    "请在「训练用模型」区下载，或检查路径是否写错"
-                )
-            else:
-                facts["dit_source"] = "huggingface"
-                warnings.append(f"DiT 将按 HF repo 下载: {name_or_path}（需网络/HF 镜像可达）")
-    facts["text_encoder"] = te_path or spec.get("text_encoder", "")
-    facts["vae"] = "ae.safetensors（与 DiT 同目录）"
-    if not te_path:
-        errors.append("缺少本地文本编码器目录（text_encoder），请在「训练用模型」区下载")
-    else:
-        te_dir = Path(te_path)
-        for name in ("config.json", "tokenizer.json", "tokenizer_config.json"):
-            if not (te_dir / name).is_file():
-                errors.append(f"文本编码器目录缺少 {name}: {te_dir}")
-        if not any(te_dir.glob("*.safetensors")):
-            errors.append(f"文本编码器目录缺少权重文件（*.safetensors）: {te_dir}")
-        expected_hidden = spec.get("te_hidden_size")
-        config_file = te_dir / "config.json"
-        if expected_hidden and config_file.is_file():
-            try:
-                actual_hidden = json.loads(config_file.read_text(encoding="utf-8")).get("hidden_size")
-            except (json.JSONDecodeError, OSError):
-                actual_hidden = None
-            if isinstance(actual_hidden, int) and actual_hidden != expected_hidden:
-                warnings.append(
-                    f"文本编码器与变体不匹配：{te_dir} 的 hidden_size={actual_hidden}，"
-                    f"变体 {variant} 期望 {spec.get('text_encoder')}（hidden_size={expected_hidden}），"
-                    "训练可能加载失败或产出错误"
-                )
-
-    images: list[Path] = []
-    for entry in datasets:
-        folder = Path(str(entry.get("folder_path", "")))
-        found = _dataset_images(folder)
-        images.extend(found)
-        if not found:
-            errors.append(f"数据集目录没有图片: {folder}")
-        for control_dir in entry.get("control_path") or []:
-            if not Path(str(control_dir)).is_dir():
-                errors.append(f"参考图目录不存在: {control_dir}")
-    facts["dataset_image_count"] = len(images)
-    if images and datasets:
-        caption_ext = "." + str(datasets[0].get("caption_ext", "txt")).lstrip(".")
-        captioned = sum(1 for image in images if image.with_suffix(caption_ext).is_file())
-        if captioned < len(images):
-            warnings.append(f"{len(images) - captioned} 张图片缺少 {caption_ext} caption 文件")
-
+        from .model_inputs import validate_assets
+        try:
+            validate_assets(assets)
+            facts["model_assets"] = assets
+        except (ValueError, OSError, KeyError, TypeError) as exc:
+            errors.append(str(exc))
+    if not (runtime.toolkit_root / "run.py").is_file():
+        errors.append(f"AI Toolkit 启动脚本不存在: {runtime.toolkit_root / 'run.py'}")
+    if variant == "qwen-image-21" and not (runtime.toolkit_root / "extensions_built_in/diffusion_models/qwen_image_2/qwen_image_2.py").is_file():
+        errors.append("当前 AI Toolkit 版本不含 Qwen Image 2.1，请在设置中卸载后安装当前固定版本")
+    facts["dataset_image_count"] = len({str(image.resolve()) for entry in datasets for image in Path(entry["folder_path"]).iterdir() if image.is_file() and image.suffix.lower() in IMAGE_EXTS})
+    if not facts["dataset_image_count"]:
+        errors.append("数据集目录没有图片")
     if not errors:
-        dep = probe(runtime)
-        facts.update(dep.__dict__)
-        if dep.probe_error:
-            errors.append(f"ai-toolkit 运行时探测失败（{runtime.python}）: {dep.probe_error}")
-        elif not dep.cuda_available:
-            errors.append("ai-toolkit 环境的 torch 未检测到 CUDA")
-
+        try:
+            dep = probe(runtime)
+            facts.update(dep.__dict__)
+            if dep.probe_error:
+                errors.append(f"AI Toolkit 运行时探测失败: {dep.probe_error}")
+            elif not dep.cuda_available:
+                errors.append("AI Toolkit 环境的 torch 未检测到 CUDA")
+        except (OSError, subprocess.TimeoutExpired) as exc:
+            errors.append(f"AI Toolkit 运行时探测失败: {exc}")
     return PreflightResult(ok=not errors, errors=errors, warnings=warnings, facts=facts)

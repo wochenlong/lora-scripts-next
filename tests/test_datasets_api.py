@@ -175,6 +175,23 @@ def test_overview_endpoint_is_async_and_eventually_ready(datasets_root):
     assert overview["total_bytes"] > 0
 
 
+def test_overview_refresh_bypasses_cached_result(datasets_root):
+    make_dataset(datasets_root, "refresh-ds")
+
+    client = TestClient(app)
+    ready = poll_overview(client, "refresh-ds")
+    assert ready["state"] == "ready"
+
+    refreshed = client.get("/api/datasets/refresh-ds/overview", params={"refresh": "1"})
+    assert refreshed.status_code == 200
+    overview = refreshed.json()["data"]["overview"]
+    if overview["state"] == "ready":
+        assert overview["computed_at"] >= ready["computed_at"]
+    else:
+        assert overview["state"] == "computing"
+        assert poll_overview(client, "refresh-ds")["state"] == "ready"
+
+
 def test_overview_endpoint_missing_dataset(datasets_root):
     datasets_root.mkdir(parents=True)
     client = TestClient(app)

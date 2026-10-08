@@ -12,13 +12,14 @@ from mikazuki.engines.ai_toolkit.adapter import (
     AdapterError as AiToolkitAdapterError,
     VARIANTS,
     adapt_config as adapt_ai_toolkit_config,
-    dump_yaml as dump_ai_toolkit_yaml,
+    write_job,
 )
 from mikazuki.engines.ai_toolkit.environment import start_install_task as start_ai_toolkit_install_task
 from mikazuki.engines.ai_toolkit.extension_state import (
     STATE_READY as AI_TOOLKIT_STATE_READY,
     default_layout as ai_toolkit_default_layout,
     read_extension_status as read_ai_toolkit_extension_status,
+    repair_layout_venv as repair_ai_toolkit_layout_venv,
     write_install_state as write_ai_toolkit_install_state,
 )
 from mikazuki.engines.ai_toolkit.installer import (
@@ -43,7 +44,9 @@ def _resolve_variant(payload: dict) -> str:
     if train_type in AI_TOOLKIT_TRAIN_TYPE_MAP:
         return AI_TOOLKIT_TRAIN_TYPE_MAP[train_type]
     variant = str(payload.get("model_version") or "").strip()
-    return variant if variant in VARIANTS else "klein-4b"
+    if variant in VARIANTS:
+        return variant
+    raise AiToolkitAdapterError(f"未知 AI Toolkit model_train_type: {train_type}")
 
 
 async def status():
@@ -52,6 +55,7 @@ async def status():
     runtime = ai_toolkit_runtime()
     data["feature_enabled"] = ai_toolkit_feature_enabled()
     data["train_types"] = list(AI_TOOLKIT_TRAIN_TYPE_MAP)
+    data["models"] = VARIANTS
     data["runtime"] = {
         "toolkit_root": str(runtime.toolkit_root),
         "python": str(runtime.python),
@@ -68,12 +72,15 @@ async def status():
 async def preflight(config: dict):
     if not ai_toolkit_feature_enabled():
         return ai_toolkit_disabled_response()
+    # Heal a venv whose base interpreter moved (e.g. trainer folder relocated,
+    # see #406) before the dependency probe runs.
+    repair_ai_toolkit_layout_venv(ai_toolkit_default_layout(Path.cwd()))
     runtime = ai_toolkit_runtime()
     run_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-ai-toolkit"
-    variant = _resolve_variant(config)
     try:
+        variant = _resolve_variant(config)
         adapted = adapt_ai_toolkit_config(config, runtime, run_id, variant)
-    except AiToolkitAdapterError as exc:
+    except (ValueError, OSError) as exc:
         return APIResponseFail(message=str(exc))
     result = run_ai_toolkit_preflight(adapted.config, runtime, variant, te_path=adapted.te_path)
     result.warnings = [*adapted.warnings, *result.warnings]
@@ -90,15 +97,16 @@ async def dry_run(config: dict):
     os.makedirs(autosave_dir, exist_ok=True)
     config = dict(config)
     config.pop("gpu_ids", None)
-    variant = _resolve_variant(config)
     runtime = ai_toolkit_runtime()
-    run_id = f"{timestamp}-ai-toolkit"
+    from uuid import uuid4
+    run_id = f"{timestamp}-ai-toolkit-{uuid4().hex[:8]}"
     try:
+        variant = _resolve_variant(config)
         adapted = adapt_ai_toolkit_config(config, runtime, run_id, variant)
-    except AiToolkitAdapterError as exc:
+    except (ValueError, OSError) as exc:
         return APIResponseFail(message=str(exc))
     yaml_file_path = Path(autosave_dir) / f"{run_id}.yaml"
-    yaml_file_path.write_text(dump_ai_toolkit_yaml(adapted.config), encoding="utf-8")
+    write_job(adapted, yaml_file_path)
     return APIResponseSuccess(data={
         "yaml_path": str(yaml_file_path),
         "variant": variant,

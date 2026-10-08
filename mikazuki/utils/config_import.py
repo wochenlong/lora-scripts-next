@@ -676,6 +676,11 @@ def validate_config_import(page_train_type: str, config: dict) -> dict[str, Any]
 
     config = _unwrap_history_row_config(config)
 
+    from mikazuki.engines.ai_toolkit.config_import import validate_import as validate_toolkit_import
+    toolkit_result = validate_toolkit_import(page_train_type, config)
+    if toolkit_result is not None:
+        return toolkit_result
+
     if _looks_like_sd_scripts_toml(config):
         return {
             "result": "reject",

@@ -1,3 +1,4 @@
+import { isAiToolkitSchema, moduleForTrainType } from "./modules"
 import { validateQwenConfig } from "./qwenValidation"
 import { cloneFormModel, type FormModel, type FormValue } from "../schema/adapter"
 import { i18n } from "../i18n"
@@ -39,6 +40,7 @@ export const CROSS_SCHEMA_DENY_KEYS = [
   "dit",
   // krea2's text_encoder is Qwen3-VL; klein's is Qwen3 — never cross them.
   "text_encoder",
+  "model_input_mode", "model_variant", "model_path", "model_config_dir", "dit_path", "text_encoder_path", "vae_path", "training_task", "control_data_dirs",
 ] as const
 
 /** schemaName → locked model_train_type for pages that own a single train type. */
@@ -81,6 +83,8 @@ export function pickCarryOverFields(
 export function sanitizePersistedDraft(saved: FormModel, defaults: FormModel): FormModel {
   const draft = cloneFormModel(saved)
   const expected = defaults.model_train_type
+  const kleinTypes = ["klein-4b-lora", "klein-9b-lora"]
+  if (kleinTypes.includes(String(expected)) && kleinTypes.includes(String(draft.model_train_type))) return draft
   if (expected === undefined || draft.model_train_type === undefined || draft.model_train_type === expected) {
     return draft
   }
@@ -113,6 +117,29 @@ export function buildTrainingConfig(source: FormModel, schemaName: string) {
         } catch { /* Preserve malformed samples for the existing validation path. */ }
         return value
       })
+    }
+    return config
+  }
+  if (isAiToolkitSchema(schemaName)) {
+    if (schemaName !== "klein-lora") config.model_train_type = schemaName
+    if (config.model_input_mode === "model_directory") delete config.dit_path
+    else delete config.model_path
+    if (config.training_task !== "image-edit") {
+      delete config.control_data_dirs
+      if (Array.isArray(config.preview_samples)) {
+        config.preview_samples = config.preview_samples.map(value => {
+          if (typeof value !== "string") return value
+          try { return JSON.stringify({ ...JSON.parse(value), controlImages: [] }) }
+          catch { return value }
+        })
+      }
+    }
+    if (!config.enable_preview) remove(config, [...PREVIEW_PARAMS, "preview_samples"])
+    if (typeof config.learning_rate === "string" && Number.isFinite(Number(config.learning_rate))) {
+      config.learning_rate = Number(config.learning_rate)
+    }
+    if (Array.isArray(config.gpu_ids)) {
+      config.gpu_ids = config.gpu_ids.map((value) => String(value).match(/GPU (\d+):/)?.[1] || String(value)).filter(Boolean)
     }
     return config
   }
@@ -216,6 +243,12 @@ export function hydrateImportedConfig(source: FormModel) {
 export function checkTrainingConfig(config: FormModel): ParamDiagnostics {
   const warnings: string[] = []
   const errors: string[] = config.model_train_type === "qwen-image-21-lora" ? Object.values(validateQwenConfig(config)) : []
+  if (moduleForTrainType(config.model_train_type)?.engine === "ai-toolkit") {
+    const lr = config.learning_rate
+    if ((typeof lr !== "number" && typeof lr !== "string") || !Number.isFinite(Number(lr)) || Number(lr) < 1e-12) {
+      errors.push(i18n.global.t("training.diagnostics.toolkitLearningRate"))
+    }
+  }
   const optimizer = String(config.optimizer_type || "")
   if (optimizer.startsWith("DAdapt") && config.lr_scheduler !== "constant") warnings.push(i18n.global.t("training.diagnostics.dadaptScheduler"))
   if (optimizer.toLowerCase().startsWith("prodigy") && (config.unet_lr !== 1 || config.text_encoder_lr !== 1)) warnings.push(i18n.global.t("training.diagnostics.prodigyLr"))

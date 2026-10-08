@@ -1,9 +1,12 @@
 """ai-toolkit adapter: UI (kohya-dialect) -> toolkit YAML tree, Klein variants."""
 
 from pathlib import Path
+import json
+import struct
 
 import pytest
 import yaml
+from PIL import Image
 
 from mikazuki.engines.ai_toolkit.adapter import (
     AdapterError,
@@ -27,11 +30,18 @@ def _runtime(tmp_path: Path) -> RuntimeConfig:
 def _source(tmp_path: Path, **overrides) -> dict:
     data = tmp_path / "train" / "klein"
     data.mkdir(parents=True, exist_ok=True)
+    Image.new("RGB", (8, 8)).save(data / "img.png")
     te = tmp_path / "models" / "qwen3-4b"
     te.mkdir(parents=True, exist_ok=True)
+    (te / "config.json").write_text('{"hidden_size": 2560}', encoding="utf-8")
+    for name in ("tokenizer.json", "tokenizer_config.json"):
+        (te / name).write_text("{}", encoding="utf-8")
+    for path in (te / "model.safetensors", te.parent / "flux-2-klein-base-4b.safetensors",
+                 te.parent / "ae.safetensors"):
+        _weights(path)
     base = {
         "model_train_type": "klein-4b-lora",
-        "pretrained_model_name_or_path": "black-forest-labs/FLUX.2-klein-base-4B",
+        "pretrained_model_name_or_path": str(te.parent),
         "text_encoder": str(te),
         "train_data_dir": str(data),
         "max_train_steps": 2000,
@@ -48,6 +58,12 @@ def _source(tmp_path: Path, **overrides) -> dict:
     return base
 
 
+def _weights(path: Path):
+    header = json.dumps({"weight": {"dtype": "F32", "shape": [1], "data_offsets": [0, 4]}}).encode()
+    header += b" " * (-len(header) % 8)
+    path.write_bytes(struct.pack("<Q", len(header)) + header + struct.pack("<f", 0))
+
+
 def _process(adapted):
     return adapted.config["config"]["process"][0]
 
@@ -58,7 +74,7 @@ def test_basic_mapping_4b(tmp_path):
     assert adapted.config["job"] == "extension"
     assert process["type"] == "sd_trainer"
     assert process["model"]["arch"] == "flux2_klein_4b"
-    assert process["model"]["name_or_path"] == "black-forest-labs/FLUX.2-klein-base-4B"
+    assert Path(process["model"]["name_or_path"]) == tmp_path / "models" / "flux-2-klein-base-4b.safetensors"
     assert process["model"]["quantize"] is True
     assert process["model"]["low_vram"] is False
     assert process["network"] == {"type": "lora", "linear": 32, "linear_alpha": 32}
@@ -78,14 +94,14 @@ def test_basic_mapping_4b(tmp_path):
 def test_log_dir_defaults_to_runtime(tmp_path):
     adapted = adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-4b")
     process = _process(adapted)
-    assert process["log_dir"] == (tmp_path / "logs" / "ai-toolkit").as_posix()
+    assert Path(process["log_dir"]) == tmp_path / "logs" / "ai-toolkit"
     assert process["logging"] == {"log_every": 20}
 
 
 def test_log_dir_ui_override(tmp_path):
     adapted = adapt_config(_source(tmp_path, logging_dir="my-logs"), _runtime(tmp_path), "run-1", "klein-4b")
     process = _process(adapted)
-    assert process["log_dir"] == (tmp_path / "my-logs").resolve().as_posix()
+    assert Path(process["log_dir"]) == (tmp_path / "my-logs").resolve()
 
 
 def test_log_every_floored_for_short_runs(tmp_path):
@@ -105,9 +121,7 @@ def test_gradient_checkpointing_truthy_strings(tmp_path):
 
 def test_sample_neg_from_negative_prompts(tmp_path):
     data = _source(tmp_path)
-    prompts = tmp_path / "prompts.txt"
-    prompts.write_text("a cat\n", encoding="utf-8")
-    data["sample_prompts"] = str(prompts)
+    data["preview_samples"] = [{"prompt": "a cat"}]
     data["negative_prompts"] = "blurry"
     adapted = adapt_config(data, _runtime(tmp_path), "run-1", "klein-4b")
     assert _process(adapted)["sample"]["neg"] == "blurry"
@@ -115,21 +129,19 @@ def test_sample_neg_from_negative_prompts(tmp_path):
 
 def test_max_grad_norm_mapped(tmp_path):
     adapted = adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-4b")
-    assert "max_grad_norm" not in _process(adapted)["train"]
+    assert _process(adapted)["train"]["max_grad_norm"] == pytest.approx(1.0)
     adapted = adapt_config(_source(tmp_path, max_grad_norm=0.5), _runtime(tmp_path), "run-1", "klein-4b")
     assert _process(adapted)["train"]["max_grad_norm"] == pytest.approx(0.5)
 
 
-def test_control_dirs_blank_rows_ignored(tmp_path):
+def test_control_dirs_blank_rows_rejected(tmp_path):
     ctrl = tmp_path / "control"
     ctrl.mkdir()
-    adapted = adapt_config(
-        _source(tmp_path, control_data_dirs=[str(ctrl), "", "   "]),
-        _runtime(tmp_path),
-        "run-1",
-        "klein-4b",
-    )
-    assert _process(adapted)["datasets"][0]["control_path"] == [ctrl.resolve().as_posix()]
+    with pytest.raises(AdapterError, match="control_data_dirs"):
+        adapt_config(
+            _source(tmp_path, control_data_dirs=[str(ctrl), "", "   "]),
+            _runtime(tmp_path), "run-1", "klein-4b",
+        )
 
 
 def test_control_dirs_non_list_rejected(tmp_path):
@@ -138,13 +150,18 @@ def test_control_dirs_non_list_rejected(tmp_path):
 
 
 def test_variant_9b(tmp_path):
+    source = _source(tmp_path)
+    dit = tmp_path / "models" / "flux-2-klein-base-9b.safetensors"
+    _weights(dit)
+    (Path(source["text_encoder"]) / "config.json").write_text('{"hidden_size": 4096}', encoding="utf-8")
     adapted = adapt_config(
-        _source(tmp_path, pretrained_model_name_or_path="black-forest-labs/FLUX.2-klein-base-9B"),
+        source,
         _runtime(tmp_path),
         "run-1",
         "klein-9b",
     )
     assert _process(adapted)["model"]["arch"] == "flux2_klein_9b"
+    assert Path(_process(adapted)["model"]["name_or_path"]) == dit
 
 
 def test_unknown_variant_rejected(tmp_path):
@@ -154,44 +171,46 @@ def test_unknown_variant_rejected(tmp_path):
 
 def test_te_path_side_channel(tmp_path):
     adapted = adapt_config(_source(tmp_path), _runtime(tmp_path), "run-1", "klein-4b")
-    assert adapted.te_path == (tmp_path / "models" / "qwen3-4b").resolve().as_posix()
-    # TE path must NOT leak into the yaml (upstream has no such config key)
-    text = dump_yaml(adapted.config)
-    assert "qwen3-4b" not in text
+    assert Path(adapted.te_path) == (tmp_path / "models" / "qwen3-4b").resolve()
+    # The asset manifest retains the TE, but upstream model keys do not.
+    assert "text_encoder" not in _process(adapted)["model"]
+    assert adapted.config["meta"]["next_trainer"]["assets"]["text_encoder"] == adapted.te_path
 
 
 def test_missing_te_rejected(tmp_path):
     source = _source(tmp_path)
     source["text_encoder"] = ""
-    with pytest.raises(AdapterError, match="文本编码器"):
+    with pytest.raises(AdapterError, match="模型路径不能为空"):
         adapt_config(source, _runtime(tmp_path), "run-1", "klein-4b")
 
 
-def test_te_dir_missing_rejected(tmp_path):
+def test_te_dir_missing_preserved_for_preflight(tmp_path):
     source = _source(tmp_path, text_encoder=str(tmp_path / "nope"))
-    with pytest.raises(AdapterError, match="文本编码器目录不存在"):
-        adapt_config(source, _runtime(tmp_path), "run-1", "klein-4b")
+    adapted = adapt_config(source, _runtime(tmp_path), "run-1", "klein-4b")
+    assert Path(adapted.te_path) == tmp_path / "nope"
+    assert adapted.config["meta"]["next_trainer"]["assets"]["text_encoder"] == adapted.te_path
 
 
-def test_local_dit_file_maps_to_parent(tmp_path):
+def test_local_dit_file_preserves_exact_path(tmp_path):
     dit = tmp_path / "models" / "flux-2-klein-base-4b.safetensors"
     dit.parent.mkdir(parents=True)
-    dit.write_bytes(b"")
+    _weights(dit)
     adapted = adapt_config(
         _source(tmp_path, pretrained_model_name_or_path=str(dit)), _runtime(tmp_path), "run-1", "klein-4b"
     )
-    assert _process(adapted)["model"]["name_or_path"] == dit.parent.resolve().as_posix()
+    assert Path(_process(adapted)["model"]["name_or_path"]) == dit.resolve()
     assert adapted.warnings == []
 
 
-def test_local_dit_file_wrong_name_warns(tmp_path):
+def test_local_dit_file_custom_name_is_preserved(tmp_path):
     dit = tmp_path / "models" / "whatever.safetensors"
     dit.parent.mkdir(parents=True)
-    dit.write_bytes(b"")
+    _weights(dit)
     adapted = adapt_config(
         _source(tmp_path, pretrained_model_name_or_path=str(dit)), _runtime(tmp_path), "run-1", "klein-4b"
     )
-    assert any("不一致" in w for w in adapted.warnings)
+    assert Path(_process(adapted)["model"]["name_or_path"]) == dit
+    assert adapted.warnings == []
 
 
 def test_epochs_rejected_without_steps(tmp_path):
@@ -204,12 +223,9 @@ def test_epochs_rejected_without_steps(tmp_path):
         )
 
 
-def test_epochs_warn_when_steps_present(tmp_path):
-    adapted = adapt_config(
-        _source(tmp_path, max_train_epochs=16), _runtime(tmp_path), "run-1", "klein-4b"
-    )
-    assert any("epoch" in w for w in adapted.warnings)
-    assert _process(adapted)["train"]["steps"] == 2000
+def test_epochs_rejected_when_steps_present(tmp_path):
+    with pytest.raises(AdapterError, match="max_train_epochs"):
+        adapt_config(_source(tmp_path, max_train_epochs=16), _runtime(tmp_path), "run-1", "klein-4b")
 
 
 def test_missing_dataset_dir_rejected(tmp_path):
@@ -225,14 +241,15 @@ def test_missing_dataset_dir_rejected(tmp_path):
 def test_control_dirs_become_control_path(tmp_path):
     ctrl = tmp_path / "ctrl"
     ctrl.mkdir()
+    Image.new("RGB", (8, 8)).save(ctrl / "img.png")
     adapted = adapt_config(
         _source(tmp_path, control_data_dirs=[str(ctrl)]), _runtime(tmp_path), "run-1", "klein-4b"
     )
-    assert _process(adapted)["datasets"][0]["control_path"] == [ctrl.resolve().as_posix()]
+    assert [Path(p) for p in _process(adapted)["datasets"][0]["control_path"]] == [ctrl.resolve()]
 
 
 def test_control_dir_missing_rejected(tmp_path):
-    with pytest.raises(AdapterError, match="参考图目录不存在"):
+    with pytest.raises(AdapterError, match="参考图目录必须存在"):
         adapt_config(
             _source(tmp_path, control_data_dirs=[str(tmp_path / "nope")]),
             _runtime(tmp_path),
@@ -241,11 +258,14 @@ def test_control_dir_missing_rejected(tmp_path):
         )
 
 
-def test_sample_prompts_file_inline(tmp_path):
+def test_sample_prompts_file_requires_explicit_conversion(tmp_path):
     prompts = tmp_path / "prompts.txt"
     prompts.write_text("a cat --n dog\n\na dog\n", encoding="utf-8")
+    with pytest.raises(AdapterError, match="preview_samples"):
+        adapt_config(_source(tmp_path, sample_prompts=str(prompts)), _runtime(tmp_path), "run-1", "klein-4b")
     adapted = adapt_config(
-        _source(tmp_path, sample_prompts=str(prompts), sample_every_n_steps=100, sample_cfg=4.0),
+        _source(tmp_path, preview_samples=[{"prompt": "a cat"}, {"prompt": "a dog"}],
+                sample_every_n_steps=100, sample_cfg=4.0),
         _runtime(tmp_path),
         "run-1",
         "klein-4b",
@@ -262,7 +282,9 @@ def test_unknown_fields_warn(tmp_path):
         _source(tmp_path, some_random_field=1, _private=2), _runtime(tmp_path), "run-1", "klein-4b"
     )
     assert any("some_random_field" in w for w in adapted.warnings)
-    assert not any("_private" in w for w in adapted.warnings)
+    assert any("_private" in w for w in adapted.warnings)
+    assert "some_random_field" not in dump_yaml(adapted.config)
+    assert "_private" not in dump_yaml(adapted.config)
 
 
 def test_ema_opt_in(tmp_path):
@@ -279,5 +301,6 @@ def test_dump_yaml_roundtrip(tmp_path):
     text = dump_yaml(adapted.config)
     loaded = yaml.safe_load(text)
     assert loaded == adapted.config
-    assert "klein-4b" not in text  # variant is not a toolkit key; arch carries it
+    assert "variant" not in _process(adapted)["model"]
+    assert loaded["meta"]["next_trainer"]["assets"]["variant"] == "klein-4b"
     assert "flux2_klein_4b" in text

@@ -13,7 +13,9 @@ import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultMod
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
 import { QWEN_VALIDATION_FIELDS, validateQwenConfig } from "../training/qwenValidation"
-import { moduleForTrainType } from "../training/modules"
+import { isAiToolkitSchema, moduleForSchema, moduleForTrainType } from "../training/modules"
+import { collectDatasetCheckTargets } from "../training/datasetCheck"
+import { datasetsApi, type DatasetValidation, type ValidateFinding } from "../api/datasets"
 import { copyText } from "../utils/clipboard"
 import { useTasksStore } from "../stores/tasks"
 
@@ -33,6 +35,8 @@ const historyOpen = ref(false)
 const tasksStore = useTasksStore()
 const currentRunning = computed(() => tasksStore.runningTasks.at(-1))
 let tasksTimer: number | undefined
+let loadGeneration = 0
+let disposed = false
 
 function readPreviewCollapsed(): boolean {
   try {
@@ -101,10 +105,15 @@ function loadHistory() {
 }
 
 async function applyImportedConfig(config: FormModel, successMessage?: string) {
+  if (disposed) return
+  const generation = loadGeneration
+  const pending = sessionStorage.getItem("mikazuki-pending-import")
   const result = await trainingApi.validateImport(props.schemaName, config)
+  if (generation !== loadGeneration) return
   if (result.result === "reject") throw new Error(result.errors?.join("\n") || result.message || t("training.importMsg.reject"))
   if (result.result === "redirect" && result.target_path) {
     await ElMessageBox.confirm(result.message || t("training.importMsg.mismatchConfirm"), t("training.importMsg.mismatchTitle"), { confirmButtonText: t("training.importMsg.jump"), cancelButtonText: t("training.importMsg.cancel"), type: "warning" })
+    if (generation !== loadGeneration) return
     sessionStorage.setItem("mikazuki-pending-import", JSON.stringify(result.config || config))
     // 后端 target_path 基于旧 IA（sd/sdxl 都指向 master 页），优先按 config 的
     // model_train_type 精确落到拆分后的模块，查不到再走后端路径。
@@ -119,6 +128,10 @@ async function applyImportedConfig(config: FormModel, successMessage?: string) {
   const importedConfig = hydrateImportedConfig(validatedConfig)
   model.value = normalizeModelForSchema(schema.value!, { ...cloneFormModel(defaults), ...importedConfig }, { explicitKeys })
   applyReadonlyDefaults(schema.value!, model.value, defaults)
+  if (pending && sessionStorage.getItem("mikazuki-pending-import") === pending) {
+    sessionStorage.removeItem("mikazuki-pending-import")
+  }
+  error.value = ""
   if (
     props.schemaName === "anima-lora-fast"
     && importedConfig.training_duration_mode !== "steps"
@@ -147,26 +160,40 @@ function migrateQwenDraft(model: FormModel) {
 }
 
 async function load() {
+  const generation = ++loadGeneration
+  const isCurrent = () => generation === loadGeneration
+  if (hostSyncTimer) { window.clearTimeout(hostSyncTimer); hostSyncTimer = undefined }
   loading.value = true
   error.value = ""
   try {
     const loaded = await loadTrainingSchema(props.schemaName)
+    if (!isCurrent()) return
     const defaults = resolveEffectiveDefaults(loaded)
     effectiveDefaults.value = cloneFormModel(defaults)
     const carry = readCarryOver()
     sessionStorage.removeItem("mikazuki-carry-over")
     const carried = pickCarryOverFields(carry, defaults, props.fieldDefaults)
     const base = { ...cloneFormModel(defaults), ...carried }
+    let saved: FormModel | undefined
     try {
-      const saved = JSON.parse(localStorage.getItem(autosaveKey()) || "null")
-      model.value = saved && typeof saved === "object"
-        ? { ...base, ...sanitizePersistedDraft(saved as FormModel, defaults) }
-        : base
-      model.value = normalizeModelForSchema(loaded, model.value)
-      migrateQwenDraft(model.value)
-    } catch { model.value = normalizeModelForSchema(loaded, base) }
+      const parsed = JSON.parse(localStorage.getItem(autosaveKey()) || "null")
+      if (parsed && typeof parsed === "object" && !Array.isArray(parsed)) saved = parsed
+    } catch { /* Malformed JSON cannot be restored. */ }
+    if (saved && isAiToolkitSchema(props.schemaName) && !saved.model_input_mode) {
+      const result = await trainingApi.validateImport(props.schemaName, saved)
+      if (!isCurrent()) return
+      if (result.result !== "ok") {
+        schema.value = loaded // Keep import/reset available while preserving the rejected draft.
+        throw new Error(result.errors?.join("\n") || result.message || t("training.importMsg.reject"))
+      }
+      saved = result.config || saved
+      if (result.notice) ElMessage.info(result.notice)
+    }
+    model.value = normalizeModelForSchema(loaded, saved ? { ...base, ...sanitizePersistedDraft(saved, defaults) } : base)
+    migrateQwenDraft(model.value)
     applyReadonlyDefaults(loaded, model.value, defaults)
     const cards = await schemasApi.graphicCards()
+    if (!isCurrent()) return
     if (cards.length > 1) {
       const options = cards.map((card, index) => typeof card === "object" ? (card.value ?? card.label ?? index) : card)
       const field: FormField = { key: "gpu_ids", type: "array", role: "select", description: t("training.gpu.fieldDescription"), options, conditions: [] }
@@ -175,11 +202,14 @@ async function load() {
     schema.value = loaded
     const pending = sessionStorage.getItem("mikazuki-pending-import")
     if (pending) {
-      sessionStorage.removeItem("mikazuki-pending-import")
       await applyImportedConfig(JSON.parse(pending), t("training.importMsg.importedRedirect"))
+      if (isCurrent() && sessionStorage.getItem("mikazuki-pending-import") === pending) {
+        sessionStorage.removeItem("mikazuki-pending-import")
+      }
     }
-  } catch (reason) { error.value = reason instanceof Error ? reason.message : t("training.schemaLoadFail") }
-  finally { loading.value = false }
+  } catch (reason) {
+    if (isCurrent()) error.value = reason instanceof Error ? reason.message : t("training.schemaLoadFail")
+  } finally { if (isCurrent()) loading.value = false }
 }
 
 function resolveEffectiveDefaults(loaded: AdaptedSchema) {
@@ -200,6 +230,38 @@ function validate() {
   if (diagnostics.value.warnings.length) ElMessage.warning(diagnostics.value.warnings[0])
   else ElMessage.success(t("training.validatePassed"))
   return true
+}
+
+const datasetCheckOpen = ref(false)
+const datasetChecking = ref(false)
+const datasetCheckResults = ref<{ path: string; result?: DatasetValidation; error?: string }[]>([])
+
+function findingText(finding: ValidateFinding) {
+  const params: Record<string, unknown> = { ...finding.params }
+  if (Array.isArray(params.samples)) params.samples = params.samples.join(", ")
+  return t(`datasetValidate.findings.${finding.code}`, params)
+}
+
+async function checkDatasets() {
+  const config = output.value
+  const targets = collectDatasetCheckTargets(config)
+  if (!targets.length) { ElMessage.info(t("datasetValidate.noTargets")); return }
+  const engine = moduleForSchema(props.schemaName)?.engine
+  const caption = {
+    extension: typeof config.caption_extension === "string" ? config.caption_extension : undefined,
+    preferJson: config.prefer_json_caption === true,
+  }
+  datasetCheckOpen.value = true
+  datasetChecking.value = true
+  try {
+    datasetCheckResults.value = await Promise.all(targets.map(async (path) => {
+      try {
+        return { path, result: await datasetsApi.validatePath(path, engine, caption) }
+      } catch (reason) {
+        return { path, error: reason instanceof Error ? reason.message : String(reason) }
+      }
+    }))
+  } finally { datasetChecking.value = false }
 }
 
 function saveHistory() {
@@ -274,7 +336,7 @@ async function submit() {
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
-    if (props.schemaName === "klein-lora") {
+    if (isAiToolkitSchema(props.schemaName)) {
       const preflight = await trainingApi.aiToolkitPreflight(output.value)
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
@@ -295,12 +357,16 @@ async function submit() {
 
 async function resetConfig() {
   if (!schema.value) return
+  const generation = loadGeneration
   try {
     await ElMessageBox.confirm(t("training.actions.resetConfirm"), t("training.resetDialog.title"), { confirmButtonText: t("training.actions.reset"), cancelButtonText: t("training.resetDialog.cancel"), type: "warning" })
   } catch { return }
+  if (generation !== loadGeneration) return
   localStorage.removeItem(autosaveKey())
+  sessionStorage.removeItem("mikazuki-pending-import")
   model.value = normalizeModelForSchema(schema.value, effectiveDefaults.value)
   applyReadonlyDefaults(schema.value, model.value, effectiveDefaults.value)
+  error.value = ""
   ElMessage.success(t("training.actions.resetDone"))
 }
 
@@ -312,8 +378,15 @@ function resetField(key: string) {
   errors.value = validateModel(schema.value, model.value)
 }
 
-function applyHistory(row: FormModel) {
+async function applyHistory(row: FormModel) {
   if (!schema.value) return
+  if (isAiToolkitSchema(props.schemaName)) {
+    try {
+      await applyImportedConfig(row)
+      historyOpen.value = false
+    } catch (reason) { ElMessage.error(reason instanceof Error ? reason.message : t("training.importMsg.reject")) }
+    return
+  }
   const defaults = effectiveDefaults.value
   model.value = normalizeModelForSchema(schema.value, { ...cloneFormModel(defaults), ...sanitizePersistedDraft(row, defaults) })
   applyReadonlyDefaults(schema.value, model.value, defaults)
@@ -355,6 +428,7 @@ function scheduleHostSync() {
 
 watch(() => props.schemaName, () => { started.value = undefined; loadHistory(); load() })
 watch(model, (value) => {
+  if (loading.value || error.value) return
   localStorage.setItem(autosaveKey(), JSON.stringify(value))
   scheduleHostSync()
   if (props.schemaName === "qwen-image-21-lora") {
@@ -365,8 +439,11 @@ watch(model, (value) => {
 watch(previewCollapsed, (value) => persistPreviewCollapsed(value))
 onMounted(() => { migrateLegacyStorage(); loadHistory(); load(); tasksStore.refresh(); tasksTimer = window.setInterval(() => tasksStore.refresh({ silent: true }), 2000) })
 onBeforeUnmount(() => {
+  disposed = true
+  ++loadGeneration
   window.clearInterval(tasksTimer)
   if (hostSyncTimer) { window.clearTimeout(hostSyncTimer); hostSyncTimer = undefined }
+  if (loading.value || error.value) return
   localStorage.setItem(autosaveKey(), JSON.stringify(model.value))
   sessionStorage.setItem("mikazuki-carry-over", JSON.stringify(model.value))
   pushParamsToHost()
@@ -380,7 +457,7 @@ onBeforeUnmount(() => {
         <SectionToc v-if="tocSections.length > 1" :sections="tocSections" />
         <div class="schema-form-binder">
           <div v-if="!bare" class="section-heading"><span>{{ area }}</span><h1>{{ title }}</h1><p>{{ t("training.intro") }}</p></div>
-          <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" @change="importFile">
+          <input ref="importInput" class="visually-hidden" type="file" accept=".toml,.json" :disabled="loading" @change="importFile">
           <slot name="form-top" />
           <div v-if="schemaName === 'qwen-image-21-lora' && schema && !loading" class="qwen-training-mode" data-testid="qwen-training-mode">
             <strong>训练模式</strong>
@@ -394,7 +471,7 @@ onBeforeUnmount(() => {
           <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
           <DynamicSchemaForm v-else-if="schema" :model-value="model" :schema="schema" :errors="errors" :effective-defaults="effectiveDefaults" @update:model-value="updateModel" @reset-field="resetField">
         <template #[modelToolsSlot]>
-          <ModelAssetsTools v-if="schemaName !== 'qwen-image-21-lora'" :schema-name="schemaName" :model="model" />
+          <ModelAssetsTools v-if="schemaName !== 'qwen-image-21-lora' && !isAiToolkitSchema(schemaName)" :schema-name="schemaName" :model="model" />
         </template>
       </DynamicSchemaForm>
         </div>
@@ -418,11 +495,25 @@ onBeforeUnmount(() => {
         <section class="preview-panel" :class="{ collapsed: previewCollapsed }"><header><span>{{ t("training.preview.panelTitle") }}</span><b>{{ t("training.preview.count", { n: Object.keys(output).length }) }}</b><span class="preview-actions"><button class="preview-collapse" :title="previewCollapsed ? t('training.preview.expand') : t('training.preview.collapse')" :aria-label="previewCollapsed ? t('training.preview.expand') : t('training.preview.collapse')" @click="previewCollapsed = !previewCollapsed">{{ previewCollapsed ? "←" : "→" }}</button><button @click="copyToml">{{ t("training.preview.copy") }}</button></span></header><pre v-show="!previewCollapsed">{{ outputText }}</pre></section>
         <div class="panel-actions"><button @click="openPresets">{{ t("training.toolbar.presets") }}</button><button @click="saveHistory">{{ t("training.toolbar.save") }}</button><button @click="openImport">{{ t("training.toolbar.import") }}</button><button @click="historyOpen = true">{{ t("training.toolbar.history") }}</button><button @click="exportConfig">{{ t("training.toolbar.export") }}</button><button @click="resetConfig">{{ t("training.toolbar.reset") }}</button></div>
         <button class="secondary-action schema-validate" :disabled="!schema" @click="validate">{{ t("training.validate") }}</button>
+        <button class="secondary-action schema-validate" :disabled="!schema || datasetChecking" @click="checkDatasets">{{ datasetChecking ? t("datasetValidate.checking") : t("datasetValidate.button") }}</button>
         <div class="submit-row"><button class="primary-action train-submit" :disabled="!schema || submitting || diagnostics.errors.length > 0" @click="submit">{{ submitting ? t("training.submitting") : t("training.start") }}</button><button class="danger-action stop-training" :disabled="!currentRunning || Boolean(tasksStore.terminatingId)" @click="stopTraining">{{ tasksStore.terminatingId ? t("tasks.detail.stopping") : t("training.stop") }}</button></div>
       </div>
     </aside>
   </div>
 
+  <el-dialog v-model="datasetCheckOpen" :title="t('datasetValidate.title')" width="min(680px, 92vw)">
+    <div v-loading="datasetChecking" class="dataset-check-list">
+      <article v-for="item in datasetCheckResults" :key="item.path" class="dataset-check-item">
+        <code class="dataset-check-path">{{ item.path }}</code>
+        <p v-if="item.error" class="dataset-check-finding error">{{ item.error }}</p>
+        <template v-else-if="item.result">
+          <p v-if="item.result.stats" class="dataset-check-stats">{{ t("datasetValidate.stats", item.result.stats) }}</p>
+          <p v-for="(finding, index) in item.result.findings" :key="index" class="dataset-check-finding" :class="finding.level">{{ findingText(finding) }}</p>
+          <p v-if="item.result.exists && !item.result.findings.length" class="dataset-check-finding info">{{ t("datasetValidate.ok") }}</p>
+        </template>
+      </article>
+    </div>
+  </el-dialog>
   <el-dialog v-model="historyOpen" :title="t('training.historyDialog.title')" width="min(760px, 92vw)"><div class="config-list"><article v-for="(row, index) in history" :key="`${row.time}-${index}`"><div><strong>{{ row.name || t('training.historyDialog.unnamed') }}</strong><span>{{ row.time }}</span></div><button @click="applyHistory(row.value)">{{ t("training.historyDialog.use") }}</button><button class="danger" @click="deleteHistory(index)">{{ t("training.historyDialog.delete") }}</button></article><p v-if="!history.length">{{ t("training.historyDialog.empty") }}</p></div></el-dialog>
   <el-dialog v-model="presetsOpen" :title="t('training.presetsDialog.title')" width="min(760px, 92vw)"><div v-loading="presetsLoading" class="config-list"><article v-for="preset in filteredPresets" :key="preset.metadata.name"><div><strong>{{ preset.metadata.name }}</strong><span>{{ preset.metadata.description || `${preset.metadata.author || ''} ${preset.metadata.version || ''}` }}</span></div><button @click="applyPreset(preset)">{{ t("training.presetsDialog.apply") }}</button></article><p v-if="!presetsLoading && !filteredPresets.length">{{ t("training.presetsDialog.empty") }}</p></div></el-dialog>
 </template>

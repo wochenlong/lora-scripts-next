@@ -8,7 +8,7 @@ import EngineStatusBar from "../components/EngineStatusBar.vue"
 import TrainingPage from "./TrainingPage.vue"
 import { SCHEMA_META } from "../training/modules"
 
-withDefaults(defineProps<{ bare?: boolean }>(), { bare: false })
+const props = withDefaults(defineProps<{ bare?: boolean; schemaName?: string }>(), { bare: false, schemaName: "klein-lora" })
 
 const status = ref<EngineStatus>({ id: "ai-toolkit", state: "unknown", featureEnabled: true })
 const loading = ref(false)
@@ -20,9 +20,9 @@ let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
 const { t } = useI18n()
-const meta = SCHEMA_META["klein-lora"]
-const title = computed(() => t(meta.titleKey))
-const area = computed(() => t(meta.areaKey))
+const meta = computed(() => SCHEMA_META[props.schemaName])
+const title = computed(() => t(meta.value.titleKey))
+const area = computed(() => t(meta.value.areaKey))
 const ready = computed(() => status.value.state === "ready")
 const working = computed(() => ["installing", "auditing"].includes(status.value.state))
 const label = computed(() => {
@@ -131,9 +131,10 @@ onBeforeUnmount(() => {
 <template>
   <TrainingPage
     v-if="ready"
+    :key="schemaName"
     :title="title"
     :area="area"
-    schema-name="klein-lora"
+    :schema-name="schemaName"
     :bare="bare"
   >
     <template #form-top>

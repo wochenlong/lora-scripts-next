@@ -27,7 +27,7 @@ Schema.intersect([
     ]),
 
     Schema.object({
-        train_data_dir: Schema.string().role("filepicker", { type: "folder" }).default("./train/aki").description("训练数据集路径"),
+        train_data_dir: Schema.string().role("filepicker", { type: "folder", internal: "train-dir" }).default("./train/aki").description("训练数据集路径"),
         reg_data_dir: Schema.string().role("filepicker", { type: "folder" }).description("正则化数据集路径。默认留空，不使用正则化图像"),
         prior_loss_weight: Schema.number().step(0.1).description("正则化 - 先验损失权重"),
         resolution: Schema.string().default("512,512").description("训练图片分辨率，宽x高。支持非正方形，但必须是 64 倍数。"),

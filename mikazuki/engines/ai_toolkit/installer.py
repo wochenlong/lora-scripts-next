@@ -132,6 +132,8 @@ def _extract_git_archive(plan: InstallPlan, commit: str) -> None:
                 destination.relative_to(target)
             tar.extractall(target)
     (plan.target_source / ".source_commit").write_text(resolved_commit + "\n", encoding="utf-8")
+    # git archive does not retain empty directories, but get_model.py scans it.
+    (plan.target_source / "extensions").mkdir(exist_ok=True)
 
 
 def copy_source_snapshot(plan: InstallPlan) -> None:

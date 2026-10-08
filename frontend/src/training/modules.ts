@@ -43,9 +43,21 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
   { model: "lumina", engine: "kohya", target: "lora", schemaName: "lumina2-lora" },
   { model: "krea2", engine: "musubi", target: "lora", schemaName: "krea2-lora" },
   { model: "klein", engine: "ai-toolkit", target: "lora", schemaName: "klein-lora" },
+  { model: "sdxl", engine: "ai-toolkit", target: "lora", schemaName: "ai-toolkit-sdxl-lora" },
+  { model: "flux", engine: "ai-toolkit", target: "lora", schemaName: "ai-toolkit-flux-lora" },
+  { model: "anima", engine: "ai-toolkit", target: "lora", schemaName: "ai-toolkit-anima-lora" },
+  { model: "krea2", engine: "ai-toolkit", target: "lora", schemaName: "ai-toolkit-krea2-lora" },
+  { model: "qwen-image-21", engine: "ai-toolkit", target: "lora", schemaName: "ai-toolkit-qwen-image-21-lora" },
+
 ]
 
 export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> = {
+  "ai-toolkit-sdxl-lora": { titleKey: "training.schemas.ai-toolkit-sdxl-lora.title", areaKey: "training.schemas.ai-toolkit-sdxl-lora.area" },
+  "ai-toolkit-flux-lora": { titleKey: "training.schemas.ai-toolkit-flux-lora.title", areaKey: "training.schemas.ai-toolkit-flux-lora.area" },
+  "ai-toolkit-anima-lora": { titleKey: "training.schemas.ai-toolkit-anima-lora.title", areaKey: "training.schemas.ai-toolkit-anima-lora.area" },
+  "ai-toolkit-krea2-lora": { titleKey: "training.schemas.ai-toolkit-krea2-lora.title", areaKey: "training.schemas.ai-toolkit-krea2-lora.area" },
+  "ai-toolkit-qwen-image-21-lora": { titleKey: "training.schemas.ai-toolkit-qwen-image-21-lora.title", areaKey: "training.schemas.ai-toolkit-qwen-image-21-lora.area" },
+
   "qwen-image-21-lora": { titleKey: "training.schemas.qwen-image-21-lora.title", areaKey: "training.schemas.qwen-image-21-lora.area" },
   "sd3-lora": { titleKey: "training.schemas.sd3-lora.title", areaKey: "training.schemas.sd3-lora.area" },
   "anima-lora-fast": { titleKey: "training.schemas.anima-lora-fast.title", areaKey: "training.schemas.anima-lora-fast.area" },
@@ -81,6 +93,7 @@ export function moduleForSchema(schemaName: string): TrainingModule | undefined 
  */
 export function moduleForTrainType(trainType: unknown): TrainingModule | undefined {
   if (typeof trainType !== "string" || !trainType) return undefined
+  if (["klein-4b-lora", "klein-9b-lora"].includes(trainType)) return moduleForSchema("klein-lora")
   return TRAINING_MODULES.find((module) => module.defaults?.model_train_type === trainType)
     ?? TRAINING_MODULES.find((module) => module.schemaName === trainType)
 }
@@ -99,4 +112,8 @@ export function firstSupportedEngine(model: TrainingModel): TrainingEngine | und
 
 export function firstSupportedTarget(model: TrainingModel, engine: TrainingEngine): TrainingTarget | undefined {
   return TRAINING_TARGETS.find((target) => isTargetSupported(model, engine, target))
+}
+
+export function isAiToolkitSchema(name: string): boolean {
+  return TRAINING_MODULES.some(module => module.engine === "ai-toolkit" && module.schemaName === name)
 }

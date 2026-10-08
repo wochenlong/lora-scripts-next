@@ -3,16 +3,12 @@
 ENGINE_ID = "ai-toolkit"
 KIND = "plugin"
 
-TRAIN_TYPES = {
-    "klein-4b-lora": "klein-4b",
-    "klein-9b-lora": "klein-9b",
-}
+from .capabilities import MODELS, TRAIN_TYPES
 
 UPSTREAM = {
     "repo": "ostris/ai-toolkit",
-    # Pinned at research snapshot (2026-08-28). config/ai_toolkit_backend.toml
-    # or the install API payload may override.
-    "commit": "5497a001cb8752c665f93907a0393fc612116fd5",
+    # Includes Qwen Image 2.1 and the local-first component loaders.
+    "commit": "ecee894ed2b1f3716d9d7326693061ec1a3105bb",
     "zip": None,
     "github": "https://github.com/ostris/ai-toolkit.git",
     "gitee": None,
@@ -21,9 +17,10 @@ UPSTREAM = {
 FEATURE_FLAG_ENV = "LORA_ENABLE_AI_TOOLKIT"
 
 CAPABILITIES = {
-    "model_families": ["flux2-klein"],
+    "model_families": ["sdxl", "flux", "flux2-klein", "krea2", "anima", "qwen-image-21"],
     "tasks": ["lora"],
-    "variants": ["klein-4b", "klein-9b"],
+    "variants": list(MODELS),
+    "models": MODELS,
 }
 
 PATCHES = []

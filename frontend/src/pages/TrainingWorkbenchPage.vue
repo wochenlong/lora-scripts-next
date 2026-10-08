@@ -11,12 +11,13 @@ import AiToolkitGatePage from "./AiToolkitGatePage.vue"
 import TrainingPage from "./TrainingPage.vue"
 import TrainingSelector from "../components/TrainingSelector.vue"
 import WorkbenchHeader from "../components/WorkbenchHeader.vue"
-import { lastSelectionFor, rememberSelection } from "../engines/prefs"
+import { lastSelectionFor, readEnginePrefs, rememberSelection } from "../engines/prefs"
 import {
   DEFAULT_SELECTION,
   SCHEMA_META,
   TRAINING_ENGINES,
   TRAINING_TARGETS,
+  TRAINING_MODULES,
   firstSupportedEngine,
   firstSupportedTarget,
   isEngineSupported,
@@ -52,9 +53,16 @@ function initFromQuery() {
   const hasExplicit = Boolean(query.model || query.engine || query.target)
   const normalized = normalizeModel(query.model)
   if (normalized) model.value = normalized
+  const preferred = readEnginePrefs().defaultEngine ?? DEFAULT_SELECTION.engine
+  if (!normalized && !isEngine(query.engine)) {
+    const entry = TRAINING_MODULES.find((item) => item.engine === preferred && item.model === model.value)
+      ?? TRAINING_MODULES.find((item) => item.engine === preferred)
+    if (entry) model.value = entry.model
+  }
+  engine.value = isEngineSupported(model.value, preferred) ? preferred : firstSupportedEngine(model.value) ?? DEFAULT_SELECTION.engine
   if (isEngine(query.engine)) engine.value = query.engine
   if (isTarget(query.target)) target.value = query.target
-  // Cold start stays on Kohya; only restore last engine when URL has no explicit selection.
+  // Explicit links win; remembered selections override the configured default.
   if (!hasExplicit) {
     const remembered = lastSelectionFor(model.value)
     if (remembered) {
@@ -84,7 +92,9 @@ watch([model, engine, target], () => {
     adjusted = true
   }
   if (adjusted) ElMessage.info(t("training.selector.autoAdjusted"))
-  rememberSelection(model.value, engine.value, target.value)
+  void rememberSelection(model.value, engine.value, target.value).catch((error: unknown) => {
+    ElMessage.error(error instanceof Error ? error.message : t("engineSettings.saveFailed"))
+  })
   router.replace({ query: { model: model.value, engine: engine.value, target: target.value } })
 })
 </script>
@@ -114,7 +124,7 @@ watch([model, engine, target], () => {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </MusubiGatePage>
-    <AiToolkitGatePage v-else-if="resolved.engine === 'ai-toolkit'" bare>
+    <AiToolkitGatePage v-else-if="resolved.engine === 'ai-toolkit'" :schema-name="resolved.schemaName" bare>
       <template #form-top>
         <WorkbenchHeader />
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
