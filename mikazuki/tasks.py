@@ -248,6 +248,33 @@ class TaskManager:
         self._compute_queue: deque = deque()
         self._worker: Optional[threading.Thread] = None
         self._persist_path: Optional[Path] = Path(persist_path) if persist_path else None
+        self._auto_retry_max = self._load_auto_retry_max()
+
+    # ---- global auto re-queue on failure (#357) ----
+
+    def _load_auto_retry_max(self) -> int:
+        try:
+            from mikazuki.user_data import UserDataStore
+            value = UserDataStore().read_settings().get("tasks", {}).get("auto_retry_max", 0)
+            return max(0, min(9, int(value)))
+        except Exception:
+            return 0
+
+    @property
+    def auto_retry_max(self) -> int:
+        return self._auto_retry_max
+
+    def set_global_auto_retry(self, count: int) -> int:
+        """Set the global failure re-queue budget (0 disables) and persist it."""
+        count = max(0, min(9, int(count)))
+        self._auto_retry_max = count
+        try:
+            from mikazuki.user_data import UserDataStore
+            store = UserDataStore()
+            store.patch_settings({"tasks": {"auto_retry_max": count}}, store.read_settings()["revision"])
+        except Exception as exc:
+            log.warning(f"auto-retry setting kept in memory only; persist failed: {exc}")
+        return count
 
     # ---- queue persistence ----
 
@@ -497,25 +524,29 @@ class TaskManager:
         self._maybe_auto_requeue(task, rc)
 
     def _maybe_auto_requeue(self, task: Task, rc: int) -> None:
-        """Re-queue a failed task when the user armed auto-retry (#357).
+        """Re-queue a failed task while the global auto-retry budget allows (#357).
 
         Only failures after the training process actually launched qualify:
         adapter/preflight failures never create a task, and a process that
         could not even spawn would fail identically on every retry. Manual
-        termination and skipped group remainders are excluded.
+        termination and skipped group remainders are excluded. The usage
+        counter lives on the task itself so one flaky task cannot loop
+        forever.
         """
         if rc == 0 or task.status != TaskStatus.FAILED or task.process is None:
             return
         if task.lane != LANE_COMPUTE or not task.command:
             return
+        max_retries = self._auto_retry_max
+        if max_retries <= 0:
+            return
         try:
-            max_retries = int(task.metadata.get("auto_retry_max") or 0)
             used = int(task.metadata.get("auto_retry_used") or 0)
         except (TypeError, ValueError):
+            used = 0
+        if used >= max_retries:
             return
-        if max_retries <= 0 or used >= max_retries:
-            return
-        # Set before retry_task() so the rebuilt task(s) inherit the counters.
+        # Set before retry_task() so the rebuilt task(s) inherit the counter.
         task.metadata["auto_retry_used"] = used + 1
         task.metadata["auto_requeued"] = True
         self._persist()
@@ -524,18 +555,6 @@ class TaskManager:
             f"/ 任务失败，自动重新排队（第 {used + 1}/{max_retries} 次）"
         )
         self.retry_task(task.task_id)
-
-    def set_auto_retry(self, task_id: str, count: int) -> Optional["Task"]:
-        """Arm/disarm auto re-queue for an active compute task (#357)."""
-        with self._cond:
-            task = self.tasks.get(task_id)
-            if task is None or task.lane != LANE_COMPUTE:
-                return None
-            if task.status not in (TaskStatus.CREATED, TaskStatus.QUEUED, TaskStatus.RUNNING):
-                return None
-            task.metadata["auto_retry_max"] = max(0, min(9, int(count)))
-            self._persist()
-            return task
 
     def _skip_group_remainder(self, failed_task: Task, rc: int):
         label = failed_task.metadata.get("stage_label") \

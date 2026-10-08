@@ -7,6 +7,7 @@ import tempfile
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 from unittest.mock import patch
 
 from mikazuki.tasks import LANE_MAINTENANCE, TaskManager, TaskStatus
@@ -380,13 +381,13 @@ if __name__ == "__main__":
 class AutoRequeueTests(unittest.TestCase):
     def test_failed_task_auto_requeues_until_budget_exhausted(self):
         tm = TaskManager()
+        tm._auto_retry_max = 1
         fail = [sys.executable, "-c", "import sys; sys.exit(3)"]
-        a = tm.create_task(fail, dict(os.environ), task_id="a", metadata={"auto_retry_max": 1})
+        a = tm.create_task(fail, dict(os.environ), task_id="a")
         tm.submit(a)
         self.assertTrue(_wait_status(a, {TaskStatus.FAILED}))
         retried = next((t for t in tm.tasks.values() if t.metadata.get("retry_of") == "a"), None)
         self.assertIsNotNone(retried)
-        self.assertEqual(retried.metadata["auto_retry_max"], 1)
         self.assertEqual(retried.metadata["auto_retry_used"], 1)
         self.assertTrue(_wait_status(retried, {TaskStatus.FAILED}))
         time.sleep(0.5)
@@ -394,7 +395,8 @@ class AutoRequeueTests(unittest.TestCase):
 
     def test_successful_task_is_not_requeued(self):
         tm = TaskManager()
-        a = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="a", metadata={"auto_retry_max": 2})
+        tm._auto_retry_max = 2
+        a = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="a")
         tm.submit(a)
         self.assertTrue(_wait_status(a, {TaskStatus.FINISHED}))
         time.sleep(0.5)
@@ -402,7 +404,8 @@ class AutoRequeueTests(unittest.TestCase):
 
     def test_spawn_failure_is_not_requeued(self):
         tm = TaskManager()
-        a = tm.create_task(["/nonexistent/python-xyz-357"], dict(os.environ), task_id="a", metadata={"auto_retry_max": 2})
+        tm._auto_retry_max = 2
+        a = tm.create_task(["/nonexistent/python-xyz-357"], dict(os.environ), task_id="a")
         tm.submit(a)
         self.assertTrue(_wait_status(a, {TaskStatus.FAILED}))
         time.sleep(0.5)
@@ -410,7 +413,8 @@ class AutoRequeueTests(unittest.TestCase):
 
     def test_terminated_task_is_not_requeued(self):
         tm = TaskManager()
-        a = tm.create_task(_sleeper(5), dict(os.environ), task_id="a", metadata={"auto_retry_max": 2})
+        tm._auto_retry_max = 2
+        a = tm.create_task(_sleeper(5), dict(os.environ), task_id="a")
         tm.submit(a)
         self.assertTrue(_wait_status(a, {TaskStatus.RUNNING}))
         tm.terminate_task("a")
@@ -418,15 +422,28 @@ class AutoRequeueTests(unittest.TestCase):
         time.sleep(0.5)
         self.assertEqual(len(tm.tasks), 1)
 
-    def test_set_auto_retry_arms_active_task_only(self):
+    def test_global_budget_applies_without_per_task_metadata(self):
         tm = TaskManager()
-        a = tm.create_task(_sleeper(0.8), dict(os.environ), task_id="a")
+        self.assertEqual(tm.auto_retry_max, 0)
+        fail = [sys.executable, "-c", "import sys; sys.exit(3)"]
+        a = tm.create_task(fail, dict(os.environ), task_id="a")
         tm.submit(a)
-        b = tm.create_task([sys.executable, "-c", "pass"], dict(os.environ), task_id="b")
-        tm.submit(b)
-        armed = tm.set_auto_retry("b", 3)
-        self.assertIsNotNone(armed)
-        self.assertEqual(armed.metadata["auto_retry_max"], 3)
-        self.assertTrue(_wait_status(b, {TaskStatus.FINISHED}))
-        self.assertIsNone(tm.set_auto_retry("b", 1))
-        self.assertIsNone(tm.set_auto_retry("missing", 1))
+        self.assertTrue(_wait_status(a, {TaskStatus.FAILED}))
+        time.sleep(0.5)
+        self.assertEqual(len(tm.tasks), 1)
+
+    def test_set_global_auto_retry_persists_and_clamps(self):
+        tm = TaskManager()
+        store = mock.Mock()
+        store.read_settings.return_value = {"revision": 3}
+        with mock.patch("mikazuki.user_data.UserDataStore", return_value=store):
+            self.assertEqual(tm.set_global_auto_retry(4), 4)
+            store.patch_settings.assert_called_once_with({"tasks": {"auto_retry_max": 4}}, 3)
+            self.assertEqual(tm.set_global_auto_retry(99), 9)
+        self.assertEqual(tm.auto_retry_max, 9)
+
+    def test_persist_failure_keeps_memory_value(self):
+        tm = TaskManager()
+        with mock.patch("mikazuki.user_data.UserDataStore", side_effect=RuntimeError("boom")):
+            self.assertEqual(tm.set_global_auto_retry(2), 2)
+        self.assertEqual(tm.auto_retry_max, 2)

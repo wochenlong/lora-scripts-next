@@ -754,9 +754,15 @@ async def resume_task(task_id: str):
     return APIResponseFail(message="Task is not a held queued task / 任务不在待确认队列中")
 
 
-@router.post("/tasks/auto_retry/{task_id}")
-async def set_task_auto_retry(task_id: str, request: Request):
-    """Arm/disarm automatic re-queue on failure for an active task (#357)."""
+@router.get("/tasks/auto_retry")
+async def get_task_auto_retry():
+    """Current global failure re-queue budget (#357)."""
+    return APIResponseSuccess(data={"auto_retry_max": tm.auto_retry_max})
+
+
+@router.post("/tasks/auto_retry")
+async def set_task_auto_retry(request: Request):
+    """Set the global failure re-queue budget for training tasks (#357)."""
     try:
         payload = json.loads((await request.body()).decode("utf-8") or "{}")
         count = int(payload.get("count"))
@@ -764,10 +770,7 @@ async def set_task_auto_retry(task_id: str, request: Request):
         return APIResponseFail(message="count must be an integer / 重试次数必须是整数")
     if not 0 <= count <= 9:
         return APIResponseFail(message="count must be 0-9 / 重试次数需在 0-9 之间（0 表示不重试）")
-    task = tm.set_auto_retry(task_id, count)
-    if task is None:
-        return APIResponseFail(message="只能在排队或运行中的训练任务上设置自动重排")
-    return APIResponseSuccess(data={"task_id": task_id, "auto_retry_max": task.metadata["auto_retry_max"]})
+    return APIResponseSuccess(data={"auto_retry_max": tm.set_global_auto_retry(count)})
 
 
 @router.get("/tasks/retry/{task_id}", response_model_exclude_none=True)
