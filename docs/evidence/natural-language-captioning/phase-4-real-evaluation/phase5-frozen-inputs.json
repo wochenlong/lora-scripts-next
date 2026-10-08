@@ -1,0 +1,96 @@
+{
+  "kind": "phase5-inputs-preparation-only",
+  "schema_version": 1,
+  "candidate_business_commit": "f53582e",
+  "execution_started": false,
+  "blocked_gates": [
+    "new_ui_rocket_human_score",
+    "windows_symlink_acceptance_environment"
+  ],
+  "samples": [
+    {
+      "id": "chelsea",
+      "filename": "chelsea.png",
+      "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/chelsea.png",
+      "sha256": "596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb",
+      "size_bytes": 240512,
+      "license": "CC0"
+    },
+    {
+      "id": "coffee",
+      "filename": "coffee.png",
+      "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/coffee.png",
+      "sha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "size_bytes": 466706,
+      "license": "CC0"
+    },
+    {
+      "id": "rocket",
+      "filename": "rocket.jpg",
+      "url": "https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/rocket.jpg",
+      "sha256": "c2dd0de7c538df8d111e479619b129464d0269d0ae5fd18ca91d33a7fdfea95c",
+      "size_bytes": 112525,
+      "license": "Public domain (scikit-image attribution to SpaceX)"
+    }
+  ],
+  "vision": {
+    "revision": "52d6c8ffea26cc873ac5ad116f8631268d7eb503",
+    "repository": "Qwen/Qwen3-VL-2B-Instruct-GGUF",
+    "files": [
+      {
+        "filename": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
+        "size_bytes": 1107409952,
+        "sha256": "089d75c52f4b7ffc56ba998ffc50aae89fcafc755f9e7208aacca281dca6c2ae",
+        "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/Qwen3VL-2B-Instruct-Q4_K_M.gguf"
+      },
+      {
+        "filename": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
+        "size_bytes": 445053216,
+        "sha256": "f9a68fabba69c3b81e153367b2c7521030b0fa8bb0de400c9599c8e6725f9c82",
+        "url": "https://huggingface.co/Qwen/Qwen3-VL-2B-Instruct-GGUF/resolve/52d6c8ffea26cc873ac5ad116f8631268d7eb503/mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"
+      }
+    ]
+  },
+  "runtime": {
+    "version": "b11327",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11327/llama-b11327-bin-win-cpu-x64.zip",
+    "archive_sha256": "4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f",
+    "executable_sha256": "32d43779061d318ab36d0cf8156f314f81ac7e5b805298b7fe9facf3cf0cc82d"
+  },
+  "onnx": {
+    "repository": "SmilingWolf/wd-convnextv2-tagger-v2",
+    "revision": "bf364499ea843a403cc2770072f31f5cfb2ffa58",
+    "files": [
+      {
+        "filename": "model.onnx",
+        "sha256": "e91daa19cd9e8725125b7d70702d1560855fb687f8d8c4218eddaa821f41834a",
+        "url": "https://huggingface.co/SmilingWolf/wd-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/model.onnx"
+      },
+      {
+        "filename": "selected_tags.csv",
+        "sha256": "8c8750600db36233a1b274ac88bd46289e588b338218c2e4c62bbc9f2b516368",
+        "url": "https://huggingface.co/SmilingWolf/wd-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/selected_tags.csv"
+      }
+    ]
+  },
+  "environment": {
+    "python": "3.11.15",
+    "node": "22.17.1",
+    "requirements": "requirements.txt",
+    "frontend_lock": "frontend/package-lock.json"
+  },
+  "no_reuse": [
+    "old_worktree_outputs",
+    "old_venv",
+    "old_node_modules",
+    "old_dist",
+    "old_models",
+    "old_runtime",
+    "old_samples",
+    "old_config",
+    "old_sqlite",
+    "old_caption_cache",
+    "old_queue",
+    "old_outputs"
+  ]
+}

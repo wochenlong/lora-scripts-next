@@ -15,7 +15,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 PREFIXES = ("test_caption_", "test_llm_", "test_tagger_", "test_tag_translation_", "test_dataset", "test_task_")
-EXTRA = {"test_local_vision_manager.py", "test_vision_service.py", "test_train_log_hub.py", "test_process_train_log_url.py",
+EXTRA = {"test_local_text_registry.py", "test_local_vision_manager.py", "test_vision_service.py", "test_train_log_hub.py", "test_process_train_log_url.py",
          "test_config_import.py", "test_config_export.py", "test_vue_spa_routes.py", "test_train_utils_dataset_config.py"}
 
 
