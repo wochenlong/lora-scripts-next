@@ -12,6 +12,7 @@ export interface TaggerRequest {
 }
 
 export const taggerApi = {
+  models: async () => (await apiData<{ models: Array<{ id: string; downloaded: boolean }> }>("/api/tagger/models")).models,
   status: () => apiData<TaggerStatus>("/api/tagger/status"),
   start: (body: TaggerRequest) => apiRequest("/api/interrogate", { method: "POST", body: JSON.stringify(body) }),
   prefetch: (interrogator_model: string, download_endpoint: string) => apiRequest("/api/tagger/prefetch", { method: "POST", body: JSON.stringify({ interrogator_model, download_endpoint }) }),

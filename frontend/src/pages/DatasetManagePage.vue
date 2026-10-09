@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { onActivated, onBeforeUnmount, onDeactivated, ref, watch } from "vue"
+import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { useRouter } from "vue-router"
-import { datasetDownloadUrl, datasetsApi, type DatasetEntry, type DatasetOverview } from "../api/datasets"
+import { FolderOpened, Folder, Search, MoreFilled, Fold, Expand, Warning, Loading, Refresh, Setting, Delete, Plus } from "@element-plus/icons-vue"
+import { datasetsApi, type DatasetEntry, type DatasetOverview } from "../api/datasets"
 import DatasetTrashDialog from "../components/dataset/DatasetTrashDialog.vue"
-import DatasetUploadDialog from "../components/dataset/DatasetUploadDialog.vue"
+import DatasetDirectoryNode from "../components/dataset/DatasetDirectoryNode.vue"
 
 const POLL_INTERVAL_MS = 1500
 const READY_REFRESH_MS = 15000
@@ -17,7 +18,8 @@ const router = useRouter()
 const rootPath = ref("")
 const rootExists = ref(true)
 const datasets = ref<DatasetEntry[]>([])
-const loading = ref(false)
+const loading = ref(true)
+const loadError = ref(false)
 const refreshing = ref(false)
 const rootDialogOpen = ref(false)
 const rootInput = ref("")
@@ -25,15 +27,41 @@ const rootSaving = ref(false)
 const createDialogOpen = ref(false)
 const createName = ref("")
 const creating = ref(false)
-const uploadTarget = ref("")
 const trashOpen = ref(false)
-const copySource = ref("")
-const copyName = ref("")
-const copyFlatten = ref(false)
-const copyLayout = ref<"preserve" | "flatten" | "kohya">("preserve")
-const copyRepeats = ref(10)
-const copying = ref(false)
+const renaming = ref(false)
 const autoRefresh = ref(localStorage.getItem(AUTO_REFRESH_KEY) === "1")
+const treeOpen = ref(localStorage.getItem("dataset-tree-open") === "1"
+  || (localStorage.getItem("dataset-tree-open") !== "0" && window.innerWidth > 760))
+const search = ref("")
+const sort = ref("updated")
+watch(treeOpen, value => localStorage.setItem("dataset-tree-open", value ? "1" : "0"))
+const visibleDatasets = computed(() => {
+  const query = search.value.trim().toLocaleLowerCase()
+  return datasets.value.filter(entry => entry.name.toLocaleLowerCase().includes(query)).sort((a, b) => {
+    const value = (entry: DatasetEntry) => {
+      if (sort.value === "images") return entry.overview?.file_count ?? -1
+      if (sort.value === "created") return Date.parse(entry.created_at || "") || 0
+      return Math.max(Date.parse(entry.overview?.updated_at || "") || 0, Date.parse(entry.updated_at || "") || 0)
+    }
+    return value(b) - value(a) || a.name.localeCompare(b.name)
+  })
+})
+const rootLabel = computed(() => rootPath.value.replace(/\\/g, "/").split("/").filter(Boolean).pop() || "datasets")
+function openDirectory(path: string) {
+  const normalize = (value: string) => value.replace(/\\/g, "/").replace(/\/$/, "")
+  const selected = normalize(path)
+  const entry = datasets.value.find(item => selected === normalize(item.path) || selected.startsWith(`${normalize(item.path)}/`))
+  if (!entry) return
+  const directory = selected.slice(normalize(entry.path).length).replace(/^\//, "")
+  void router.push({ path: "/dataset/manage", query: { dataset: entry.name, ...(directory ? { directory } : {}) } })
+}
+function entryAction(command: string, entry: DatasetEntry) {
+  if (command === "manage") openDirectory(entry.path)
+  else if (!entry.in_use) {
+    if (command === "rename") void renameDataset(entry)
+    else if (command === "delete") void deleteDataset(entry)
+  }
+}
 let timer: number | undefined
 
 function formatBytes(bytes: number | null | undefined) {
@@ -119,6 +147,8 @@ watch(autoRefresh, (enabled) => {
 })
 
 async function load(silent = false) {
+  if (refreshing.value) return
+  loadError.value = false
   if (silent) refreshing.value = true
   else loading.value = true
   try {
@@ -130,6 +160,7 @@ async function load(silent = false) {
       if (autoRefresh.value || hasUnsettled()) ensurePolling()
     })
   } catch (e) {
+    loadError.value = true
     ElMessage.error(e instanceof Error ? e.message : t("datasetManage.msg.loadFail"))
   } finally {
     loading.value = false
@@ -176,12 +207,25 @@ async function createDataset() {
   }
 }
 
-function openTool(tool: "tagger" | "editor", entry: DatasetEntry) {
-  void router.push({ path: `/dataset/${tool}`, query: { path: entry.path } })
-}
-
-function openUpload(entry: DatasetEntry) {
-  uploadTarget.value = entry.name
+async function renameDataset(entry: DatasetEntry) {
+  if (renaming.value) return
+  let name: string
+  try {
+    const result = await ElMessageBox.prompt(t("datasetManage.rename"), {
+      inputValue: entry.name,
+      inputValidator: value => Boolean(value?.trim()) || t("datasetManage.createPlaceholder"),
+    })
+    name = result.value.trim()
+  } catch { return }
+  if (name === entry.name) return
+  renaming.value = true
+  try {
+    await datasetsApi.rename(entry.name, name)
+    ElMessage.success(t("datasetManage.renamed"))
+    await load(true)
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : String(caught))
+  } finally { renaming.value = false }
 }
 
 async function deleteDataset(entry: DatasetEntry) {
@@ -199,30 +243,6 @@ async function deleteDataset(entry: DatasetEntry) {
   }
 }
 
-function openCopy(entry: DatasetEntry) {
-  copySource.value = entry.name
-  copyName.value = `${entry.name}-copy`
-  copyFlatten.value = false
-  copyLayout.value = "preserve"
-  copyRepeats.value = 10
-}
-
-async function copyDataset() {
-  const name = copyName.value.trim()
-  if (!name || copying.value) return
-  copying.value = true
-  try {
-    const data = await datasetsApi.copy(copySource.value, name, { flattenTransparent: copyFlatten.value, layout: copyLayout.value, repeats: copyRepeats.value })
-    copySource.value = ""
-    ElMessage.success(t("datasetManage.msg.copied", { n: data.copied, m: data.flattened }))
-    await load(true)
-  } catch (e) {
-    ElMessage.error(e instanceof Error ? e.message : t("datasetManage.msg.copyFail"))
-  } finally {
-    copying.value = false
-  }
-}
-
 function onUploaded() {
   void load(true)
 }
@@ -235,61 +255,81 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <template>
-  <div class="dataset-manage">
-    <section class="dataset-manage-toolbar">
-      <div class="dataset-manage-root">
-        <span class="eyebrow">{{ t("datasetManage.rootLabel") }}</span>
-        <code>{{ rootPath || "-" }}</code>
-        <span v-if="!rootExists" class="dataset-manage-root-missing">{{ t("datasetManage.rootMissing") }}</span>
+  <div class="dataset-manager-workspace" :class="{ 'tree-collapsed': !treeOpen }">
+    <aside v-if="treeOpen" class="dataset-explorer" :aria-label="t('datasetManage.explorer')">
+      <header><strong>{{ t("datasetManage.explorer") }}</strong><button class="dataset-icon-button" :title="t('datasetManage.collapseTree')" :aria-label="t('datasetManage.collapseTree')" @click="treeOpen = false"><Fold /></button></header>
+      <div class="dataset-tree-root">
+        <FolderOpened /><span :title="rootPath">{{ rootLabel }}</span>
+        <button class="dataset-icon-button" :title="t('datasetManage.rootSettings')" :aria-label="t('datasetManage.rootSettings')" @click="openRootDialog"><Setting /></button>
       </div>
-      <div class="dataset-manage-actions">
-        <label class="dataset-manage-autorefresh">
-          <ElSwitch v-model="autoRefresh" />
-          <span>{{ t("datasetManage.autoRefresh") }}</span>
-        </label>
-        <button class="secondary-action" :disabled="loading || refreshing" @click="load(true)">{{ t("datasetManage.refresh") }}</button>
-        <button class="secondary-action" @click="openRootDialog">{{ t("datasetManage.rootSettings") }}</button>
-        <button class="secondary-action" @click="trashOpen = true">{{ t("datasetManage.trash") }}</button>
-        <button class="primary-action" @click="createDialogOpen = true">{{ t("datasetManage.create") }}</button>
+      <ul class="dataset-directory-tree">
+        <DatasetDirectoryNode v-for="entry in datasets" :key="entry.path" :name="entry.name" :path="entry.path" :locked="entry.in_use" @select="openDirectory" />
+      </ul>
+      <button class="dataset-trash-link" @click="trashOpen = true"><Delete />{{ t("datasetManage.trash") }}</button>
+    </aside>
+    <main class="dataset-manage dataset-list-main">
+      <header class="dataset-list-heading">
+        <div>
+          <button v-if="!treeOpen" class="dataset-icon-button" :title="t('datasetManage.explorer')" :aria-label="t('datasetManage.explorer')" @click="treeOpen = true"><Expand /></button>
+          <h2>{{ t("datasetManage.title") }}</h2><span class="dataset-count">{{ datasets.length }}</span>
+        </div>
+        <button class="primary-action" :disabled="loading || loadError || !rootExists" @click="createDialogOpen = true"><Plus />{{ t("datasetManage.create") }}</button>
+      </header>
+      <div class="dataset-list-toolbar">
+        <label class="dataset-search"><Search /><input v-model="search" :placeholder="t('datasetManage.search')" :aria-label="t('datasetManage.search')"></label>
+        <select v-model="sort" :aria-label="t('datasetManage.sort')">
+          <option value="updated">{{ t("datasetManage.sortUpdated") }}</option>
+          <option value="created">{{ t("datasetManage.sortCreated") }}</option>
+          <option value="images">{{ t("datasetManage.sortImages") }}</option>
+        </select>
+        <button class="dataset-icon-button" :title="t('datasetManage.refresh')" :aria-label="t('datasetManage.refresh')" :disabled="loading || refreshing" @click="load(true)"><Refresh :class="{ 'is-loading': refreshing }" /></button>
       </div>
+      <div class="dataset-location-row">
+        <button :title="rootPath" @click="openRootDialog"><FolderOpened /><span>{{ rootPath || rootLabel }}</span><Setting /></button>
+        <label class="dataset-manage-autorefresh"><ElSwitch v-model="autoRefresh" /><span>{{ t("datasetManage.autoRefresh") }}</span></label>
+      </div>
+
+    <section
+      v-if="loading || (!datasets.length && refreshing) || loadError || !rootExists || !datasets.length"
+      class="dataset-manage-empty" role="status" aria-live="polite" :aria-busy="loading || refreshing">
+      <div class="dataset-manage-empty-icon" aria-hidden="true">
+        <Loading v-if="loading || (!datasets.length && refreshing)" class="is-loading" />
+        <Warning v-else-if="loadError || !rootExists" />
+        <FolderOpened v-else />
+      </div>
+      <h2>{{ t(loading || (!datasets.length && refreshing) ? "datasetManage.loadingTitle" : loadError ? "datasetManage.loadErrorTitle" : !rootExists ? "datasetManage.missingTitle" : "datasetManage.emptyTitle") }}</h2>
+      <template v-if="!loading && !(!datasets.length && refreshing)">
+        <p>{{ t(loadError ? "datasetManage.loadErrorHint" : !rootExists ? "datasetManage.missingHint" : "datasetManage.emptyHint") }}</p>
+        <button v-if="loadError" class="primary-action" :disabled="refreshing" @click="load(true)"><Refresh />{{ t("datasetManage.retry") }}</button>
+        <button v-else-if="!rootExists" class="primary-action" @click="openRootDialog"><Setting />{{ t("datasetManage.rootSettings") }}</button>
+        <button v-else class="primary-action" @click="createDialogOpen = true"><Plus />{{ t("datasetManage.create") }}</button>
+      </template>
     </section>
 
-    <p v-if="!loading && !datasets.length" class="dataset-manage-empty">{{ t("datasetManage.empty") }}</p>
-
-    <section v-else class="dataset-manage-grid">
-      <article v-for="entry in datasets" :key="entry.name" class="dataset-card" :class="{ 'in-use': entry.in_use }">
-        <header class="dataset-card-header">
-          <div class="dataset-card-title">
-            <h2>{{ entry.name }}</h2>
-            <span v-if="entry.in_use" class="dataset-card-in-use">{{ t("datasetManage.inUse") }}</span>
-            <button
-              class="danger-action dataset-card-delete"
-              :title="entry.in_use ? t('datasetManage.inUseHint') : t('datasetManage.deleteDataset')"
-              :disabled="entry.in_use"
-              @click="deleteDataset(entry)"
-            >{{ t("datasetManage.deleteDataset") }}</button>
-          </div>
-          <span class="dataset-card-path" :title="entry.path">{{ entry.path }}</span>
-        </header>
-        <dl class="dataset-card-stats">
-          <div><dt>{{ t("datasetManage.files") }}</dt><dd>{{ statValue(entry, "file_count") }}</dd></div>
-          <div><dt>{{ t("datasetManage.captioned") }}</dt><dd>{{ statValue(entry, "captioned_count") }}</dd></div>
-          <div><dt>{{ t("datasetManage.size") }}</dt><dd>{{ statValue(entry, "total_bytes") }}</dd></div>
-          <div><dt>{{ t("datasetManage.updatedAt") }}</dt><dd>{{ statValue(entry, "updated_at") }}</dd></div>
-        </dl>
-        <footer class="dataset-card-actions">
-          <div class="dataset-card-actions-row">
-            <button class="primary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openUpload(entry)">{{ t("datasetManage.upload") }}</button>
-            <button class="secondary-action" @click="openCopy(entry)">{{ t("datasetManage.copy") }}</button>
-            <a class="secondary-action" :href="datasetDownloadUrl(entry.name)" download>{{ t("datasetManage.downloadZip") }}</a>
-          </div>
-          <div class="dataset-card-actions-row">
-            <button class="secondary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openTool('tagger', entry)">{{ t("datasetManage.openTagger") }}</button>
-            <button class="secondary-action" :disabled="entry.in_use" :title="entry.in_use ? t('datasetManage.inUseHint') : ''" @click="openTool('editor', entry)">{{ t("datasetManage.openEditor") }}</button>
-          </div>
-        </footer>
-      </article>
-    </section>
+    <div v-else class="dataset-table-scroll">
+      <table class="dataset-table">
+        <thead><tr><th>{{ t("datasetManage.name") }}</th><th>{{ t("datasetManage.files") }}</th><th>{{ t("datasetManage.captioned") }}</th><th>{{ t("datasetManage.updatedAt") }}</th><th><span class="dataset-visually-hidden">{{ t("datasetManage.actions") }}</span></th></tr></thead>
+        <tbody>
+          <tr v-for="entry in visibleDatasets" :key="entry.name">
+            <td><button class="dataset-row-name" :disabled="entry.in_use" :title="entry.path" @click="openDirectory(entry.path)"><Folder /><span>{{ entry.name }}</span></button><span v-if="entry.in_use" class="dataset-card-in-use">{{ t("datasetManage.inUse") }}</span></td>
+            <td>{{ statValue(entry, "file_count") }}</td>
+            <td>{{ statValue(entry, "captioned_count") }}</td>
+            <td>{{ statValue(entry, "updated_at") }}</td>
+            <td><ElDropdown trigger="click" @command="entryAction($event, entry)">
+              <button class="dataset-icon-button" :aria-label="t('datasetManage.actions') + ': ' + entry.name" :title="t('datasetManage.actions')"><MoreFilled /></button>
+              <template #dropdown><ElDropdownMenu>
+                <ElDropdownItem command="manage">{{ t("datasetManage.manage") }}</ElDropdownItem>
+                <ElDropdownItem command="rename" :disabled="entry.in_use || renaming">{{ t("datasetManage.rename") }}</ElDropdownItem>
+                <ElDropdownItem command="delete" :disabled="entry.in_use" divided>{{ t("datasetManage.deleteDataset") }}</ElDropdownItem>
+              </ElDropdownMenu></template>
+            </ElDropdown></td>
+          </tr>
+          <tr v-if="!visibleDatasets.length"><td colspan="5" class="dataset-no-results">{{ t("datasetManage.noResults") }}</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <footer v-if="datasets.length && !loadError" class="dataset-list-count">{{ t("datasetManage.total", { n: visibleDatasets.length }) }}</footer>
+    </main>
 
     <ElDialog v-model="rootDialogOpen" :title="t('datasetManage.rootDialogTitle')" width="480px">
       <ElInput v-model="rootInput" :placeholder="t('datasetManage.rootDialogPlaceholder')" @keyup.enter="saveRoot" />
@@ -299,39 +339,6 @@ onBeforeUnmount(stopPolling)
         <button class="primary-action" :disabled="rootSaving || !rootInput.trim()" @click="saveRoot">{{ t("datasetManage.save") }}</button>
       </template>
     </ElDialog>
-
-    <ElDialog :model-value="!!copySource" :title="t('datasetManage.copyDialogTitle', { name: copySource })" width="480px" @update:model-value="copySource = ''">
-      <ElInput v-model="copyName" :placeholder="t('datasetManage.createPlaceholder')" @keyup.enter="copyDataset" />
-      <div class="dataset-copy-option">
-        <span class="dataset-copy-label">{{ t("datasetManage.layoutLabel") }}</span>
-        <ElSelect v-model="copyLayout">
-          <ElOption value="preserve" :label="t('datasetManage.layoutPreserve')" />
-          <ElOption value="flatten" :label="t('datasetManage.layoutFlatten')" />
-          <ElOption value="kohya" :label="t('datasetManage.layoutKohya')" />
-        </ElSelect>
-      </div>
-      <div v-if="copyLayout === 'kohya'" class="dataset-copy-option">
-        <span class="dataset-copy-label">{{ t("datasetManage.repeatsLabel") }}</span>
-        <ElInputNumber v-model="copyRepeats" :min="1" :max="999" controls-position="right" />
-      </div>
-      <p v-if="copyLayout === 'kohya'" class="dataset-manage-dialog-hint">{{ t("datasetManage.layoutKohyaHint") }}</p>
-      <label class="dataset-copy-option">
-        <ElCheckbox v-model="copyFlatten" />
-        <span>{{ t("datasetManage.flattenOption") }}</span>
-      </label>
-      <p class="dataset-manage-dialog-hint">{{ t("datasetManage.flattenHint") }}</p>
-      <template #footer>
-        <button class="secondary-action" @click="copySource = ''">{{ t("datasetManage.cancel") }}</button>
-        <button class="primary-action" :disabled="copying || !copyName.trim()" @click="copyDataset">{{ t("datasetManage.copyConfirm") }}</button>
-      </template>
-    </ElDialog>
-
-    <DatasetUploadDialog
-      :model-value="!!uploadTarget"
-      :dataset-name="uploadTarget"
-      @update:model-value="uploadTarget = ''"
-      @uploaded="onUploaded"
-    />
 
     <DatasetTrashDialog
       :model-value="trashOpen"

@@ -5,12 +5,14 @@ import os
 import shutil
 import time
 import uuid
+from contextlib import suppress
 from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import HTTPException
 
 from mikazuki.dataset_editor import IMAGE_EXTENSIONS
+from mikazuki.datasets.inuse import ensure_dataset_not_in_use
 from mikazuki.datasets.locks import dataset_operation
 from mikazuki.datasets.sandbox import resolve_dataset_dir
 
@@ -155,11 +157,65 @@ def list_all_trash(datasets_root: Path) -> list[dict]:
     return batches
 
 
+def rename_with_trash(datasets_root: Path, source: Path, target: Path) -> None:
+    """Rename with owned trash metadata; caller holds both dataset locks."""
+    if list_trash(datasets_root, target.name):
+        raise HTTPException(status_code=409, detail="target dataset name has unrestored trash")
+    staged: list[tuple[Path, Path, Path]] = []
+    published: list[tuple[Path, Path]] = []
+    moved = False
+    cleanup = True
+    try:
+        for batch in list_trash(datasets_root, source.name):
+            manifest_path = trash_root(datasets_root) / batch["id"] / "manifest.json"
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            manifest["dataset"] = target.name
+            token = uuid.uuid4().hex
+            replacement = manifest_path.with_name(f".rename-{token}.tmp")
+            backup = manifest_path.with_name(f".rename-{token}.bak")
+            staged.append((manifest_path, replacement, backup))
+            shutil.copyfile(manifest_path, backup)
+            replacement.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
+
+        source.rename(target)
+        moved = True
+        for manifest_path, replacement, backup in staged:
+            replacement.replace(manifest_path)
+            published.append((manifest_path, backup))
+    except OSError:
+        try:
+            for manifest_path, backup in reversed(published):
+                backup.replace(manifest_path)
+            if moved:
+                target.rename(source)
+        except OSError as exc:
+            cleanup = False
+            raise HTTPException(
+                status_code=500,
+                detail="rename rollback failed; recovery files retained in trash",
+            ) from exc
+        raise
+    finally:
+        if cleanup:
+            for _manifest_path, replacement, backup in staged:
+                for temporary in (replacement, backup):
+                    with suppress(OSError):
+                        temporary.unlink(missing_ok=True)
+
+
 def _batch_dir(datasets_root: Path, batch_id: str) -> Path:
     batch_dir = trash_root(datasets_root) / validate_batch_id(batch_id)
     if not batch_dir.is_dir() or _load_manifest(batch_dir) is None:
         raise HTTPException(status_code=404, detail="trash batch not found")
     return batch_dir
+
+
+def _batch_owned_by(datasets_root: Path, batch_id: str, dataset_name: str) -> tuple[Path, dict]:
+    batch_dir = _batch_dir(datasets_root, batch_id)
+    manifest = _load_manifest(batch_dir) or {}
+    if manifest.get("dataset") != dataset_name:
+        raise HTTPException(status_code=409, detail="trash batch ownership changed; retry the operation")
+    return batch_dir, manifest
 
 
 def _move_no_overwrite(source: Path, target: Path) -> bool:
@@ -271,6 +327,8 @@ def restore_batch_by_id(datasets_root: Path, batch_id: str) -> dict:
     dataset_name = manifest.get("dataset") or ""
     dataset_dir = resolve_dataset_dir(datasets_root, dataset_name)
     with dataset_operation(dataset_name):
+        _batch_owned_by(datasets_root, batch_id, dataset_name)
+        ensure_dataset_not_in_use(dataset_name)
         dataset_dir.mkdir(parents=True, exist_ok=True)
         result = restore_batch(datasets_root, dataset_dir, batch_id)
     result["dataset"] = dataset_name
@@ -284,16 +342,16 @@ def empty_trash_any(datasets_root: Path, batch_id: str | None = None) -> dict:
         manifest = _load_manifest(batch_dir) or {}
         dataset_name = manifest.get("dataset") or ""
         with dataset_operation(dataset_name):
-            batch_dir = _batch_dir(datasets_root, batch_id)
-            _ensure_sealed(_load_manifest(batch_dir) or {})
+            batch_dir, manifest = _batch_owned_by(datasets_root, batch_id, dataset_name)
+            _ensure_sealed(manifest)
             shutil.rmtree(batch_dir, ignore_errors=True)
         removed = 1
     else:
         for batch in list_all_trash(datasets_root):
             dataset_name = batch.get("dataset") or ""
             with dataset_operation(dataset_name):
-                batch_dir = _batch_dir(datasets_root, batch["id"])
-                _ensure_sealed(_load_manifest(batch_dir) or {})
+                batch_dir, manifest = _batch_owned_by(datasets_root, batch["id"], dataset_name)
+                _ensure_sealed(manifest)
                 shutil.rmtree(batch_dir, ignore_errors=True)
                 removed += 1
     return {"removed": removed}

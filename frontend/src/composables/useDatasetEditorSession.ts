@@ -161,8 +161,25 @@ function resetInMemoryDataset() {
   history.value = { can_undo: false, can_redo: false, changes: [] }
 }
 
+function unload() {
+  const prefix = `${lastRoot.value}\u0000`
+  drafts.value = Object.fromEntries(Object.entries(drafts.value).filter(([key]) => !key.startsWith(prefix)))
+  resetInMemoryDataset()
+  lastRoot.value = ""
+  lastPath.value = ""
+  category.value = ""
+  query.value = ""
+  page.value = 1
+  rightPanelMode.value = "caption"
+  tagFilter.selectedTags.clear()
+  tagFilter.search = ""
+  tagFilter.excludeInput = ""
+  persist()
+}
+
 export function useDatasetEditorSession() {
   return {
+    unload,
     lastPath,
     lastRoot,
     selected,

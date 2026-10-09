@@ -2,21 +2,21 @@
 import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue"
 import { ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
-import { useRoute } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type LlmProfile, type TagDictionaryStatus } from "../api/dataset"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import TagTranslationControls from "../components/dataset/TagTranslationControls.vue"
 import TagTranslationSettingsDialog from "../components/dataset/TagTranslationSettingsDialog.vue"
-import PathPickerDialog from "../components/PathPickerDialog.vue"
+import ManagedDatasetPicker from "../components/dataset/ManagedDatasetPicker.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
-import { useServerPathPick } from "../composables/useServerPathPick"
 import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 import { useTagTranslations } from "../composables/useTagTranslations"
 import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 
 type RightPanelMode = "caption" | "filter" | "batch"
 
@@ -45,16 +45,6 @@ const sort = ref(false)
 const underscoreToSpace = ref(false)
 const stripEscapeChars = ref(false)
 const loading = ref(false)
-const picking = ref(false)
-const {
-  open: pathPickerOpen,
-  mode: pathPickerMode,
-  initialPath: pathPickerInitial,
-  nameFilter: pathPickerFilter,
-  pick: pickServerPath,
-  onConfirm: onPathConfirm,
-  onCancel: onPathCancel,
-} = useServerPathPick()
 const appendPosition = ref<"front" | "back">("back")
 const newCaptionTag = ref("")
 const page = editorSession.page
@@ -542,15 +532,54 @@ function rebuildTags() {
 }
 
 async function refreshHistory() {
-  if (root.value) sessionHistory.value = await datasetApi.history(root.value)
+  const requestedRoot = root.value
+  const request = scanGeneration
+  if (!requestedRoot) return
+  const data = await datasetApi.history(requestedRoot)
+  if (root.value === requestedRoot && request === scanGeneration) sessionHistory.value = data
+}
+
+let scanGeneration = 0
+async function toggleDataset() {
+  if (!root.value) return scan()
+  rememberCurrentDraft()
+  const hasDrafts = Object.keys(editorSession.drafts.value).some(key => key.startsWith(`${root.value}\u0000`))
+  if (hasDrafts) {
+    try { await ElMessageBox.confirm(t("datasetManage.unloadConfirm"), { type: "warning" }) }
+    catch { return }
+  }
+  scanGeneration++
+  cancelTranslations()
+  if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
+  captionHydrated = false
+  caption.value = ""
+  previewOpen.value = false
+  historyOpen.value = false
+  selectMenuOpen.value = false
+  editorSession.unload()
+  resetTagFilter()
+  path.value = ""
+  loading.value = false
+  if (route.query.path) {
+    const nextQuery = { ...route.query }
+    delete nextQuery.path
+    await router.replace({ query: nextQuery })
+  }
+}
+
+function selectManagedPath(next: string) {
+  path.value = next
+  void scan()
 }
 
 async function scan() {
   if (!path.value.trim()) return
+  const request = ++scanGeneration
   rememberCurrentDraft()
   loading.value = true
   try {
     const data = await datasetApi.scan(path.value)
+    if (request !== scanGeneration) return
     const restoring = editorSession.lastRoot.value === data.root
     const restoredPanel = rightPanelMode.value
     // Keep server data as the baseline. Unsaved captions live in the session
@@ -586,20 +615,25 @@ async function scan() {
     }
     if (restoring) rightPanelMode.value = restoredPanel
     await Promise.all([refreshHistory(), refreshManagedPaths()])
+    if (request !== scanGeneration) return
     if (showTranslations.value) void translateWholeDataset()
     ElMessage.success(t("datasetEditor.scanMsg.loaded", { n: data.total }))
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.scanMsg.fail"))
+    if (request === scanGeneration) ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.scanMsg.fail"))
   } finally {
-    loading.value = false
+    if (request === scanGeneration) loading.value = false
   }
 }
 
 async function save() {
   if (!current.value) return
+  const request = scanGeneration
   try {
-    apply([await datasetApi.save(root.value, current.value.relative_path, caption.value)])
+    const saved = await datasetApi.save(root.value, current.value.relative_path, caption.value)
+    if (request !== scanGeneration) return
+    apply([saved])
     await refreshHistory()
+    if (request !== scanGeneration) return
     ElMessage.success(t("datasetEditor.caption.saved"))
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.caption.saveFail"))
@@ -610,25 +644,15 @@ function splitTags(value: string) {
   return value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean)
 }
 
-async function browsePath() {
-  picking.value = true
-  try {
-    const next = await pickServerPath({ mode: "folder", initialPath: path.value })
-    if (next) path.value = next
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : t("schemaForm.pickFail"))
-  } finally {
-    picking.value = false
-  }
-}
-
 async function batch() {
   if (!targets.value.length) return
+  const request = scanGeneration
   try {
     await ElMessageBox.confirm(
       t("datasetEditor.batch.confirm", { n: targets.value.length }),
       selectedPaths.value.size ? t("datasetEditor.batch.confirmSelected") : t("datasetEditor.batch.confirmFiltered"),
     )
+    if (request !== scanGeneration) return
     const replacements = replaceFrom.value.trim() ? [{ from: replaceFrom.value.trim(), to: replaceTo.value.trim() }] : []
     const data = await datasetApi.batch({
       root: root.value,
@@ -642,8 +666,10 @@ async function batch() {
       underscore_to_space: underscoreToSpace.value,
       strip_escape_chars: stripEscapeChars.value,
     })
+    if (request !== scanGeneration) return
     apply(data.items)
     await refreshHistory()
+    if (request !== scanGeneration) return
     ElMessage.success(t("datasetEditor.batch.done", { n: data.changed }))
     rightPanelMode.value = "caption"
   } catch (error) {
@@ -653,6 +679,7 @@ async function batch() {
 
 async function deleteTargets() {
   if (!managedName.value || !targets.value.length) return
+  const request = scanGeneration
   try {
     await ElMessageBox.confirm(
       t("datasetEditor.batch.deleteConfirm", { n: targets.value.length }),
@@ -661,8 +688,10 @@ async function deleteTargets() {
   } catch {
     return
   }
+  if (request !== scanGeneration) return
   try {
     const data = await datasetsApi.deleteFiles(managedName.value, targets.value.map((item) => item.relative_path))
+    if (request !== scanGeneration) return
     ElMessage.success(t("datasetEditor.batch.deleteDone", { n: data.deleted.length }))
     if (data.missing.length) ElMessage.warning(t("datasetEditor.batch.deleteMissing", { n: data.missing.length }))
     await scan()
@@ -672,10 +701,13 @@ async function deleteTargets() {
 }
 
 async function changeHistory(kind: "undo" | "redo") {
+  const request = scanGeneration
   try {
     const data = await datasetApi[kind](root.value)
+    if (request !== scanGeneration) return
     apply(data.items)
     await refreshHistory()
+    if (request !== scanGeneration) return
     ElMessage.success(
       data.changed
         ? kind === "undo"
@@ -758,6 +790,7 @@ onDeactivated(() => {
   historyOpen.value = false
 })
 onUnmounted(() => {
+  scanGeneration++
   window.removeEventListener("keydown", onPreviewKeydown)
   if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
   if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
@@ -768,27 +801,14 @@ onUnmounted(() => {
   <div class="dataset-page" :class="{ 'tool-panel-open': rightPanelMode !== 'caption' || Boolean(current) }">
     <div class="dataset-workspace">
       <header class="dataset-toolbar">
-        <label class="dataset-toolbar-field dataset-toolbar-path">
-          <span>{{ t("datasetEditor.pathLabel") }}</span>
-          <span class="path-row">
-            <el-input v-model="path" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="scan" />
-            <button
-              type="button"
-              class="dataset-browse-icon"
-              :disabled="picking"
-              :title="t('datasetEditor.toolbar.browseTip')"
-              :aria-label="t('datasetEditor.toolbar.browseTip')"
-              @click.prevent="browsePath"
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l1.8 2.2H19.5A1.5 1.5 0 0 1 21 9.7v7.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
-              </svg>
-            </button>
-            <button type="button" class="primary-action dataset-toolbar-scan" :disabled="loading" @click="scan">
-              {{ loading ? t("datasetEditor.scanning") : t("datasetEditor.scan") }}
-            </button>
-          </span>
-        </label>
+        <div class="dataset-load-row">
+          <label for="editor-dataset-path">{{ t("datasetEditor.pathLabel") }}</label>
+          <input id="editor-dataset-path" v-model="path" class="dataset-direct-path" :disabled="loading" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="!loading && scan()" />
+          <button v-if="path.trim() && path.trim() !== root" type="button" class="dataset-tool-entry" :disabled="loading" @click="scan">{{ t("datasetEditor.scan") }}</button>
+          <ManagedDatasetPicker :disabled="loading" :loaded="Boolean(root)" :initial-path="path" @select="selectManagedPath" />
+          <span v-if="loading" role="status">{{ t("datasetEditor.scanning") }}</span>
+          <button v-if="root" type="button" class="dataset-tool-entry dataset-toolbar-scan" :disabled="loading" @click="toggleDataset">{{ t("datasetManage.unload") }}</button>
+        </div>
         <label class="dataset-toolbar-field dataset-toolbar-folder">
           <span>{{ t("datasetEditor.toolbar.folderLabel") }}</span>
           <el-select v-model="category" :disabled="!root" :aria-label="t('datasetEditor.toolbar.folderLabel')">
@@ -1125,12 +1145,4 @@ onUnmounted(() => {
     </div>
   </el-dialog>
 
-  <PathPickerDialog
-    v-model="pathPickerOpen"
-    :mode="pathPickerMode"
-    :initial-path="pathPickerInitial"
-    :name-filter="pathPickerFilter"
-    @confirm="onPathConfirm"
-    @cancel="onPathCancel"
-  />
 </template>

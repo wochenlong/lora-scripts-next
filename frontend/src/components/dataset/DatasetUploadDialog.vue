@@ -4,7 +4,7 @@ import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { datasetsApi, type UploadFailure, type UploadFileItem, type UploadResult } from "../../api/datasets"
 
-const props = defineProps<{ modelValue: boolean; datasetName: string }>()
+const props = defineProps<{ modelValue: boolean; datasetName: string; targetDirectory?: string }>()
 const emit = defineEmits<{ "update:modelValue": [boolean]; uploaded: [] }>()
 const { t } = useI18n()
 
@@ -53,9 +53,10 @@ function onDialogUpdate(open: boolean) {
 function addFiles(list: Iterable<{ file: File; path: string }>) {
   const existing = new Set(staged.value.map((item) => item.path))
   for (const item of list) {
-    if (existing.has(item.path)) continue
-    existing.add(item.path)
-    staged.value.push(item)
+    const path = props.targetDirectory ? `${props.targetDirectory}/${item.path}` : item.path
+    if (existing.has(path)) continue
+    existing.add(path)
+    staged.value.push({ ...item, path })
   }
   conflicts.value = []
   invalid.value = []
