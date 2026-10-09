@@ -501,10 +501,6 @@
   display: none;
 }
 
-.caption-raw:not([open]) > .caption-editor {
-  display: none;
-}
-
 .batch-box button {
   min-height: 36px;
   color: var(--accent-dark);
@@ -679,16 +675,6 @@
   font-size: 11px;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.caption-raw > summary {
-  color: var(--text-soft);
-  font-size: 12px;
-  cursor: pointer;
-}
-
-.caption-raw .caption-editor {
-  margin-top: 9px;
 }
 
 .caption-panel textarea {

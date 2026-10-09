@@ -1140,16 +1140,9 @@ onUnmounted(() => {
             </span>
           </div>
           <small class="caption-drag-hint">{{ t("datasetEditor.caption.dragHint") }}</small>
-          <details class="caption-raw">
-            <summary>{{ t("datasetEditor.caption.rawToggle") }}</summary>
-            <div class="caption-editor">
-              <el-input v-model="caption" type="textarea" :rows="8" :aria-label="t('datasetEditor.caption.rawToggle')" />
-              <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
-            </div>
-          </details>
           </template>
           <div v-else class="caption-editor">
-            <el-input v-model="caption" type="textarea" :rows="12" :aria-label="t('datasetEditor.caption.modeRaw')" />
+            <el-input v-model="caption" type="textarea" :autosize="{ minRows: 4, maxRows: 24 }" :aria-label="t('datasetEditor.caption.modeRaw')" />
             <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
           </div>
           <button type="button" class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button>

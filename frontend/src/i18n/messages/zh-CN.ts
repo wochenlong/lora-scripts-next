@@ -1078,7 +1078,6 @@ export default {
       removeAria: "删除标签 {tag}",
       dragTip: "拖动可调整顺序",
       dragHint: "拖动标签可调整顺序；改完后点下方保存",
-      rawToggle: "查看 / 编辑 caption 原文",
       save: "保存 Caption",
       saved: "Caption 已保存",
       saveFail: "保存失败",
