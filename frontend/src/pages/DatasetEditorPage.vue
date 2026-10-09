@@ -21,7 +21,6 @@ const router = useRouter()
 type RightPanelMode = "caption" | "filter" | "batch"
 
 const PAGE_SIZE_KEY = "dataset-editor-page-size"
-const DRAWER_WIDTH = "380px"
 const editorSession = useDatasetEditorSession()
 const path = ref(editorSession.lastPath.value)
 const root = editorSession.lastRoot
@@ -107,6 +106,8 @@ const filtered = computed(() =>
 const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
 const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const current = computed(() => items.value.find((item) => item.relative_path === selected.value))
+/** The single-image panel only earns its 320px when it has something to show. */
+const panelOpen = computed(() => rightPanelMode.value !== "caption" || Boolean(current.value))
 const targets = computed(() =>
   selectedPaths.value.size ? items.value.filter((item) => selectedPaths.value.has(item.relative_path)) : filtered.value,
 )
@@ -798,11 +799,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="dataset-page" :class="{ 'tool-panel-open': rightPanelMode !== 'caption' || Boolean(current) }">
+  <div class="dataset-page" :class="{ 'tool-panel-open': panelOpen }">
     <div class="dataset-workspace">
       <header class="dataset-toolbar">
-        <div class="dataset-toolbar-row dataset-toolbar-path">
-          <label for="editor-dataset-path">{{ t("datasetEditor.pathLabel") }}</label>
+        <div class="dataset-toolbar-top">
+          <label class="dataset-toolbar-label" for="editor-dataset-path">{{ t("datasetEditor.pathLabel") }}</label>
           <span class="dataset-toolbar-controls">
             <input id="editor-dataset-path" v-model="path" class="dataset-direct-path" :disabled="loading" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="!loading && scan()" />
             <button v-if="path.trim() && path.trim() !== root" type="button" class="dataset-tool-entry" :disabled="loading" @click="scan">{{ t("datasetEditor.scan") }}</button>
@@ -810,18 +811,18 @@ onUnmounted(() => {
             <span v-if="loading" role="status">{{ t("datasetEditor.scanning") }}</span>
             <button v-if="root" type="button" class="dataset-tool-entry dataset-toolbar-scan" :disabled="loading" @click="toggleDataset">{{ t("datasetManage.unload") }}</button>
           </span>
+          <label class="dataset-toolbar-inline dataset-toolbar-folder">
+            <span>{{ t("datasetEditor.toolbar.folderLabel") }}</span>
+            <el-select v-model="category" :disabled="!root" :aria-label="t('datasetEditor.toolbar.folderLabel')">
+              <el-option value="" :label="t('datasetEditor.toolbar.folderAll', { n: totalImageCount || 0 })" />
+              <el-option v-for="item in categories" :key="`tb-${item.value || '__root__'}`" :value="item.value" :label="`${item.name} (${item.count})`" />
+            </el-select>
+          </label>
+          <label class="dataset-toolbar-inline dataset-toolbar-search">
+            <span>{{ t("datasetEditor.toolbar.searchLabel") }}</span>
+            <el-input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" :disabled="!root" />
+          </label>
         </div>
-        <label class="dataset-toolbar-row dataset-toolbar-folder">
-          <span>{{ t("datasetEditor.toolbar.folderLabel") }}</span>
-          <el-select v-model="category" :disabled="!root" :aria-label="t('datasetEditor.toolbar.folderLabel')">
-            <el-option value="" :label="t('datasetEditor.toolbar.folderAll', { n: totalImageCount || 0 })" />
-            <el-option v-for="item in categories" :key="`tb-${item.value || '__root__'}`" :value="item.value" :label="`${item.name} (${item.count})`" />
-          </el-select>
-        </label>
-        <label class="dataset-toolbar-row dataset-toolbar-search">
-          <span>{{ t("datasetEditor.toolbar.searchLabel") }}</span>
-          <el-input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" :disabled="!root" />
-        </label>
         <div class="dataset-toolbar-actions">
           <button
             type="button"
@@ -918,9 +919,9 @@ onUnmounted(() => {
     </div>
 
     <aside
+      v-show="panelOpen"
       class="dataset-tool-panel"
       :class="[`is-${rightPanelMode}`, { glass: rightPanelMode !== 'caption' }]"
-      :style="{ width: DRAWER_WIDTH }"
       :aria-label="panelTitle"
     >
       <header class="dataset-tool-panel-header">

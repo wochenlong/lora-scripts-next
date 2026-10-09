@@ -1,9 +1,14 @@
 /* dataset — split from layout.css / features.css (issue #235) */
 .dataset-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 320px;
+  grid-template-columns: minmax(0, 1fr);
   height: calc(100vh - 72px);
   min-height: 0;
+}
+
+/* The single-image panel only takes a column when it has content to show. */
+.dataset-page.tool-panel-open {
+  grid-template-columns: minmax(0, 1fr) 320px;
 }
 
 .dataset-workspace {
@@ -15,41 +20,54 @@
 
 .dataset-toolbar {
   display: grid;
-  gap: 16px;
+  gap: 14px;
   padding: 20px 24px;
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
 }
 
-/* One field per row — 130px label column with the control filling the rest,
-   matching the tagger page instead of the old label-above-small-widget style. */
-.dataset-toolbar-row {
-  display: grid;
-  grid-template-columns: 130px minmax(0, 1fr);
+/* Path controls and the folder/search filters share the top line; the filters
+   sit on the right and wrap below only when the single-image panel is open. */
+.dataset-toolbar-top {
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 16px;
+  gap: 14px 20px;
   min-width: 0;
+}
+
+.dataset-toolbar-label {
+  flex: 0 0 auto;
   color: var(--text-soft);
   font-size: 14px;
+  white-space: nowrap;
 }
 
 .dataset-toolbar-controls {
   display: flex;
   align-items: center;
   gap: 10px;
+  flex: 1 1 300px;
   min-width: 0;
 }
 
-.dataset-toolbar-row .el-select__wrapper,
-.dataset-toolbar-row .el-input__wrapper { min-height: 40px; border-radius: 10px; }
-
-.dataset-toolbar-row .el-select { width: 100%; }
-
-.dataset-toolbar-path {
-  padding-bottom: 16px;
-  border-bottom: 1px solid var(--border);
+.dataset-toolbar-inline {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 1 auto;
+  min-width: 0;
+  color: var(--text-soft);
+  font-size: 14px;
 }
+
+.dataset-toolbar-inline > span { white-space: nowrap; }
+.dataset-toolbar-folder .el-select { width: 200px; }
+.dataset-toolbar-search .el-input { width: 220px; }
+
+.dataset-toolbar-inline .el-select__wrapper,
+.dataset-toolbar-inline .el-input__wrapper { min-height: 40px; border-radius: 10px; }
 
 .dataset-toolbar-scan {
   flex: 0 0 auto;
@@ -64,7 +82,6 @@
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  padding-left: 146px;
 }
 
 .dataset-toolbar-actions > button,
