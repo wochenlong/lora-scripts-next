@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -294,12 +296,24 @@ class AuditEnvironmentTests(unittest.TestCase):
 
 
 class SettingsDiscoveryTests(unittest.TestCase):
+    def _ready_layout(self, root: Path):
+        layout = default_layout(root)
+        (layout.source / "src" / "musubi_tuner").mkdir(parents=True)
+        layout.venv_python.parent.mkdir(parents=True, exist_ok=True)
+        return layout
+
+    def _symlink_venv_python(self, venv_python: Path, base_python: Path) -> None:
+        base_python.parent.mkdir(parents=True, exist_ok=True)
+        base_python.write_text("", encoding="utf-8")
+        try:
+            venv_python.symlink_to(base_python)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+
     def test_prefers_extension_layout_source(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            layout = default_layout(root)
-            (layout.source / "src" / "musubi_tuner").mkdir(parents=True)
-            layout.venv_python.parent.mkdir(parents=True)
+            layout = self._ready_layout(root)
             layout.venv_python.write_text("", encoding="utf-8")
             runtime = discover_runtime(config={}, lora_next_root=root)
             self.assertEqual(runtime.musubi_root, layout.source.resolve())
@@ -310,6 +324,68 @@ class SettingsDiscoveryTests(unittest.TestCase):
             root = Path(td)
             runtime = discover_runtime(config={}, lora_next_root=root)
             self.assertEqual(runtime.musubi_root, (root / "vendor" / "musubi-tuner").resolve())
+
+    def test_musubi_python_env_does_not_follow_resolve_hijack(self):
+        """Regression for #415 without requiring OS symlink privileges.
+
+        Simulate Linux venv ``bin/python`` → base by making ``Path.resolve()``
+        rewrite venv interpreter paths; discovery must keep ``absolute()``.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = self._ready_layout(root)
+            layout.venv_python.write_text("", encoding="utf-8")
+            hijacked = root / "base-without-site-packages" / layout.venv_python.name
+            real_resolve = Path.resolve
+
+            def fake_resolve(self, *args, **kwargs):
+                path = Path(self)
+                if ".venv" in path.parts and path.name in {"python", "python.exe", "python3"}:
+                    return hijacked
+                return real_resolve(self, *args, **kwargs)
+
+            with mock.patch.object(Path, "resolve", fake_resolve), mock.patch.dict(
+                os.environ, {"MUSUBI_PYTHON": str(layout.venv_python)}, clear=False
+            ):
+                runtime = discover_runtime(config={}, lora_next_root=root)
+            self.assertEqual(runtime.python, layout.venv_python.absolute())
+            self.assertNotEqual(runtime.python, hijacked)
+
+    def test_musubi_python_env_keeps_venv_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = self._ready_layout(root)
+            base_python = root / "base" / ("python.exe" if sys.platform == "win32" else "python")
+            self._symlink_venv_python(layout.venv_python, base_python)
+            self.assertEqual(layout.venv_python.resolve(), base_python.resolve())
+            with mock.patch.dict(os.environ, {"MUSUBI_PYTHON": str(layout.venv_python)}, clear=False):
+                runtime = discover_runtime(config={}, lora_next_root=root)
+            self.assertEqual(runtime.python, layout.venv_python.absolute())
+            self.assertNotEqual(runtime.python, base_python.resolve())
+
+    def test_config_venv_python_keeps_venv_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = self._ready_layout(root)
+            base_python = root / "base" / ("python.exe" if sys.platform == "win32" else "python")
+            self._symlink_venv_python(layout.venv_python, base_python)
+            config = {"backend": {"venv_python": str(layout.venv_python)}}
+            with mock.patch.dict(os.environ, {"MUSUBI_PYTHON": ""}, clear=False):
+                runtime = discover_runtime(config=config, lora_next_root=root)
+            self.assertEqual(runtime.python, layout.venv_python.absolute())
+            self.assertNotEqual(runtime.python, base_python.resolve())
+
+    def test_relative_musubi_python_stays_under_venv(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = self._ready_layout(root)
+            base_python = root / "base" / ("python.exe" if sys.platform == "win32" else "python")
+            self._symlink_venv_python(layout.venv_python, base_python)
+            rel = layout.venv_python.relative_to(root).as_posix()
+            with mock.patch.dict(os.environ, {"MUSUBI_PYTHON": rel}, clear=False):
+                runtime = discover_runtime(config={}, lora_next_root=root)
+            self.assertEqual(runtime.python, (root / rel).absolute())
+            self.assertNotEqual(runtime.python, base_python.resolve())
 
 
 class PreflightTests(unittest.TestCase):
