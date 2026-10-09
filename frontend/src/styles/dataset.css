@@ -1,7 +1,7 @@
 /* dataset — split from layout.css / features.css (issue #235) */
 .dataset-page {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 380px;
+  grid-template-columns: minmax(0, 1fr) 320px;
   height: calc(100vh - 72px);
   min-height: 0;
 }
@@ -16,9 +16,9 @@
 .dataset-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px 12px;
+  gap: 14px 20px;
   align-items: end;
-  padding: 12px 16px;
+  padding: 20px 24px;
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
@@ -26,10 +26,10 @@
 
 .dataset-toolbar-field {
   display: grid;
-  gap: 5px;
+  gap: 7px;
   min-width: 0;
   color: var(--text-soft);
-  font-size: 11px;
+  font-size: 12px;
 }
 
 .dataset-toolbar-path {
@@ -48,7 +48,7 @@
 .dataset-toolbar-field input,
 .dataset-toolbar-field select {
   width: 100%;
-  min-height: 36px;
+  min-height: 40px;
   padding: 8px 10px;
   color: var(--text);
   background: var(--surface-soft);
@@ -59,7 +59,7 @@
 .dataset-toolbar-scan {
   flex: 0 0 auto;
   margin: 0;
-  min-height: 36px;
+  min-height: 40px;
   padding: 0 14px;
   border: 0;
 }
@@ -67,7 +67,7 @@
 .dataset-toolbar-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 10px;
   align-items: center;
   margin-left: auto;
 }
@@ -82,6 +82,15 @@
   border-radius: 8px;
   cursor: pointer;
 }
+
+/* Editor page follows the newer spacing scale of the dataset workspace. */
+.dataset-page .dataset-tool-entry,
+.dataset-page .dataset-toolbar-actions > button { min-height: 40px; padding: 0 14px; }
+.dataset-page .dataset-pager { padding: 16px 0 20px; gap: 9px; }
+.dataset-page .dataset-pager button,
+.dataset-page .dataset-pager select { padding: 7px 11px; }
+.dataset-page .dataset-pager button { flex: 0 0 auto; white-space: nowrap; }
+.dataset-page .dataset-pager .dataset-page-size { flex: 0 0 auto; width: 132px; }
 
 .dataset-tool-entry {
   display: inline-flex;
@@ -427,7 +436,7 @@
   min-height: 0;
   flex-direction: column;
   overflow: auto;
-  padding: 16px 20px 20px;
+  padding: 20px 24px 24px;
 }
 
 .dataset-gallery > header,
@@ -662,14 +671,14 @@
   display: grid;
   flex: 1;
   place-content: center;
-  gap: 8px;
+  gap: 10px;
   text-align: center;
   color: var(--text-soft);
 }
 
 .dataset-empty strong {
   color: var(--text);
-  font-size: 14px;
+  font-size: 16px;
 }
 
 .dataset-empty span {
