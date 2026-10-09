@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed, onActivated, onBeforeUnmount, onDeactivated, reactive, ref, watch } from "vue"
-import { ElMessage, ElSelect, ElOption, ElOptionGroup } from "element-plus"
+import { computed, onActivated, onBeforeUnmount, onDeactivated, onMounted, reactive, ref, watch } from "vue"
+import { ElMessage, ElMessageBox, ElSelect, ElOption, ElOptionGroup } from "element-plus"
 import { Setting, Close, RefreshLeft } from "@element-plus/icons-vue"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
@@ -8,6 +8,7 @@ import { useRoute } from "vue-router"
 import { useTaggerStore } from "../stores/tagger"
 import { taggerApi, type TaggerRequest } from "../api/tagger"
 import ManagedDatasetPicker from "../components/dataset/ManagedDatasetPicker.vue"
+import { createCaptionPresetService, type CaptionPreset } from "../tagger/captionPresets"
 
 const models = [
   "wd14-convnextv2-v2",
@@ -43,50 +44,102 @@ const { t } = useI18n()
 const route = useRoute()
 const parametersOpen = ref(false)
 const parameterTab = ref("model")
-const CAPTION_TEMPLATES_KEY = "nt.tagger.captionTemplates"
 const defaultCaptionPrompt = t("tagger.workspace.defaultPrompt")
 const captionPrompt = ref(defaultCaptionPrompt)
+const captionLanguage = ref("en")
 const captionTemplate = ref("default")
-const captionTemplates = ref<Record<string, string>>({})
-function readCaptionTemplates() {
+const captionTemplates = ref<CaptionPreset[]>([])
+const captionPresetsLoading = ref(false)
+const captionPresetMutating = ref(false)
+const captionPresetService = createCaptionPresetService()
+async function refreshCaptionTemplates() {
+  captionPresetsLoading.value = true
   try {
-    const value = JSON.parse(localStorage.getItem(CAPTION_TEMPLATES_KEY) || "{}")
-    captionTemplates.value = value && typeof value === "object" && !Array.isArray(value) ? value : {}
-  } catch {
-    captionTemplates.value = {}
+    captionTemplates.value = await captionPresetService.load()
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("tagger.msg.templateLoadFail"))
+  } finally {
+    captionPresetsLoading.value = false
   }
 }
-readCaptionTemplates()
 function loadCaptionTemplate() {
-  captionPrompt.value = captionTemplate.value === "default"
-    ? defaultCaptionPrompt
-    : captionTemplates.value[captionTemplate.value] || defaultCaptionPrompt
+  if (captionTemplate.value === "default") {
+    resetCaptionPrompt()
+    return
+  }
+  const template = captionTemplates.value.find(item => item.id === captionTemplate.value)
+  if (!template) return
+  captionPrompt.value = template.prompt
+  captionLanguage.value = template.language
 }
-function saveCaptionTemplate() {
-  const key = `custom-${Date.now()}`
-  captionTemplates.value = { ...captionTemplates.value, [key]: captionPrompt.value }
-  localStorage.setItem(CAPTION_TEMPLATES_KEY, JSON.stringify(captionTemplates.value))
-  captionTemplate.value = key
-  ElMessage.success(t("tagger.msg.templateSaved"))
+async function saveCaptionTemplate() {
+  let name: string
+  try {
+    const result = await ElMessageBox.prompt(t("tagger.workspace.templateNamePrompt"), t("tagger.workspace.saveAsTemplate"), {
+      confirmButtonText: t("pathPicker.confirm"),
+      cancelButtonText: t("pathPicker.cancel"),
+      inputPattern: /\S+/,
+      inputErrorMessage: t("tagger.msg.templateNameRequired"),
+    })
+    name = result.value.trim()
+  } catch {
+    return
+  }
+  captionPresetMutating.value = true
+  try {
+    const created = await captionPresetService.create({
+      name,
+      prompt: captionPrompt.value,
+      language: captionLanguage.value,
+    })
+    captionTemplates.value = [...captionTemplates.value, created]
+    captionTemplate.value = created.id
+    ElMessage.success(t("tagger.msg.templateSaved"))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("tagger.msg.templateSaveFail"))
+  } finally {
+    captionPresetMutating.value = false
+  }
 }
-function updateCaptionTemplate() {
+async function updateCaptionTemplate() {
   if (captionTemplate.value === "default") return
-  captionTemplates.value = { ...captionTemplates.value, [captionTemplate.value]: captionPrompt.value }
-  localStorage.setItem(CAPTION_TEMPLATES_KEY, JSON.stringify(captionTemplates.value))
-  ElMessage.success(t("tagger.msg.templateUpdated"))
+  const current = captionTemplates.value.find(item => item.id === captionTemplate.value)
+  if (!current) return
+  captionPresetMutating.value = true
+  try {
+    const updated = await captionPresetService.update(current.id, {
+      name: current.name,
+      prompt: captionPrompt.value,
+      language: captionLanguage.value,
+    })
+    captionTemplates.value = captionTemplates.value.map(item => item.id === updated.id ? updated : item)
+    captionTemplate.value = updated.id
+    ElMessage.success(t("tagger.msg.templateUpdated"))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("tagger.msg.templateUpdateFail"))
+  } finally {
+    captionPresetMutating.value = false
+  }
 }
-function deleteCaptionTemplate() {
+async function deleteCaptionTemplate() {
   if (captionTemplate.value === "default") return
-  const next = { ...captionTemplates.value }
-  delete next[captionTemplate.value]
-  captionTemplates.value = next
-  localStorage.setItem(CAPTION_TEMPLATES_KEY, JSON.stringify(next))
-  resetCaptionPrompt()
-  ElMessage.success(t("tagger.msg.templateDeleted"))
+  const id = captionTemplate.value
+  captionPresetMutating.value = true
+  try {
+    await captionPresetService.remove(id)
+    captionTemplates.value = captionTemplates.value.filter(item => item.id !== id)
+    resetCaptionPrompt()
+    ElMessage.success(t("tagger.msg.templateDeleted"))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("tagger.msg.templateDeleteFail"))
+  } finally {
+    captionPresetMutating.value = false
+  }
 }
 function resetCaptionPrompt() {
   captionTemplate.value = "default"
   captionPrompt.value = defaultCaptionPrompt
+  captionLanguage.value = "en"
 }
 const modelAvailability = ref<Record<string, boolean>>({})
 const availabilityError = ref(false)
@@ -152,12 +205,12 @@ function stopPolling() {
   window.clearInterval(timer)
   timer = undefined
 }
+onMounted(() => void refreshCaptionTemplates())
 onActivated(() => {
   const queryPath = route?.query.path
   if (typeof queryPath === "string" && queryPath.trim()) form.path = queryPath
   void store.refresh()
   void refreshModels()
-  readCaptionTemplates()
   stopPolling()
   timer = window.setInterval(store.refresh, 1200)
 })
@@ -263,15 +316,15 @@ onBeforeUnmount(stopPolling)
         <summary>{{ t("tagger.workspace.caption") }}</summary>
         <fieldset>
           <div class="tagger-grid">
-            <label>{{ t("tagger.workspace.template") }}<select v-model="captionTemplate" data-testid="caption-template-select"><option value="default">{{ t("tagger.workspace.defaultTemplate") }}</option><option v-for="(_, key) in captionTemplates" :key="key" :value="key">{{ t("tagger.workspace.customTemplate") }}</option></select></label>
-            <label>{{ t("tagger.workspace.language") }}<select><option>English</option><option>中文</option></select></label>
+            <label>{{ t("tagger.workspace.template") }}<select v-model="captionTemplate" data-testid="caption-template-select" :disabled="captionPresetsLoading"><option value="default">{{ t("tagger.workspace.defaultTemplate") }}</option><option v-for="template in captionTemplates" :key="template.id" :value="template.id">{{ template.name }}</option></select></label>
+            <label>{{ t("tagger.workspace.language") }}<select v-model="captionLanguage" data-testid="caption-language"><option value="en">English</option><option value="zh-CN">中文</option></select></label>
             <label class="tagger-dataset-path">{{ t("tagger.workspace.prompt") }}<textarea v-model="captionPrompt" data-testid="caption-prompt" rows="4" /></label>
           </div>
           <div class="tagger-actions">
             <button data-testid="caption-load" type="button" class="secondary-action" @click="loadCaptionTemplate">{{ t("tagger.workspace.load") }}</button>
-            <button data-testid="caption-save-template" type="button" class="secondary-action" @click="saveCaptionTemplate">{{ t("tagger.workspace.saveAsTemplate") }}</button>
-            <button data-testid="caption-update-template" type="button" class="secondary-action" :disabled="captionTemplate === 'default'" @click="updateCaptionTemplate">{{ t("tagger.workspace.updateTemplate") }}</button>
-            <button data-testid="caption-delete-template" type="button" class="danger-action" :disabled="captionTemplate === 'default'" @click="deleteCaptionTemplate">{{ t("tagger.workspace.deleteTemplate") }}</button>
+            <button data-testid="caption-save-template" type="button" class="secondary-action" :disabled="captionPresetsLoading || captionPresetMutating" @click="saveCaptionTemplate">{{ t("tagger.workspace.saveAsTemplate") }}</button>
+            <button data-testid="caption-update-template" type="button" class="secondary-action" :disabled="captionPresetsLoading || captionPresetMutating || captionTemplate === 'default'" @click="updateCaptionTemplate">{{ t("tagger.workspace.updateTemplate") }}</button>
+            <button data-testid="caption-delete-template" type="button" class="danger-action" :disabled="captionPresetsLoading || captionPresetMutating || captionTemplate === 'default'" @click="deleteCaptionTemplate">{{ t("tagger.workspace.deleteTemplate") }}</button>
             <button data-testid="caption-reset" type="button" class="secondary-action" @click="resetCaptionPrompt">{{ t("tagger.workspace.reset") }}</button>
           </div>
         </fieldset>
