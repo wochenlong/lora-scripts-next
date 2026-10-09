@@ -3,11 +3,13 @@ import hashlib
 import json
 import os
 import re
+import toml
+import uuid
 
 from glob import glob
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import List, Optional
 
 from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, Response, UploadFile, File
 from fastapi.responses import FileResponse, StreamingResponse
@@ -21,6 +23,7 @@ from mikazuki.engines.kohya.run import TRAINER_MAPPING as trainer_mapping
 from mikazuki.engines.manifest import KIND_BUILTIN
 from mikazuki.engines.musubi import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
 from mikazuki.engines.runner import RunContext, dispatch_run
+from mikazuki.utils.output_naming import ensure_unique_output_name
 from mikazuki.model_assets import (
     check_assets as check_model_assets,
     resolve_train_type as resolve_model_asset_train_type,
@@ -251,6 +254,7 @@ async def create_toml_file(request: Request):
     gpu_ids = config.pop("gpu_ids", None)
     model_train_type = config.pop("model_train_type", "sd-lora")
 
+    renamed_from = ensure_unique_output_name(config, tm)
     result = dispatch_run(
         model_train_type,
         config,
@@ -266,7 +270,122 @@ async def create_toml_file(request: Request):
             message=f"不支持的训练类型: {model_train_type}",
             data={"model_train_type": model_train_type},
         )
+    if renamed_from and result.status == "success":
+        data = dict(result.data or {})
+        data["output_name_renamed"] = {"from": renamed_from, "to": config["output_name"]}
+        result.data = data
     return result
+
+
+@router.post("/tasks/batch-enqueue")
+async def batch_enqueue_training(files: List[UploadFile] = File(...)):
+    """Enqueue several exported training configs (TOML/JSON) at once (#357).
+
+    Each file must carry model_train_type and goes through the same
+    preparation + dispatch pipeline as /api/run; files that fail validation
+    are reported without blocking the rest. Successfully enqueued configs
+    already live in the engine autosave and the task archive, so their
+    staging copies are removed; only failed files stay in
+    config/batch-queue/ for diagnosis (pruned to the newest 100).
+    """
+    MAX_FILES = 32
+    MAX_FILE_BYTES = 256 * 1024
+    RETENTION_FILES = 100
+
+    if len(files) > MAX_FILES:
+        return APIResponseFail(message=f"一次最多入队 {MAX_FILES} 个配置文件")
+    queue_dir = Path(os.getcwd()) / "config" / "batch-queue"
+    queue_dir.mkdir(parents=True, exist_ok=True)
+    autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
+    os.makedirs(autosave_dir, exist_ok=True)
+    # Per-request random component: two batches starting within the same
+    # second must not share archive names or engine autosave timestamps.
+    base_timestamp = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
+
+    results: list[dict] = []
+    for index, upload in enumerate(files):
+        name = Path(upload.filename or f"config-{index}.toml").name
+        entry: dict = {"file": name, "ok": False}
+        results.append(entry)
+        if not name.lower().endswith(".toml"):
+            entry["error"] = "仅支持训练页导出的 TOML 配置文件（.toml）"
+            await upload.close()
+            continue
+        # Bounded read: reject oversize configs without ever holding more
+        # than MAX_FILE_BYTES + 1 in memory.
+        raw_bytes = await upload.read(MAX_FILE_BYTES + 1)
+        await upload.close()
+        if len(raw_bytes) > MAX_FILE_BYTES:
+            entry["error"] = f"配置文件超过大小上限（{MAX_FILE_BYTES // 1024} KB）"
+            continue
+        try:
+            raw = raw_bytes.decode("utf-8-sig")
+        except UnicodeDecodeError:
+            entry["error"] = "文件编码不是有效的 UTF-8"
+            continue
+        try:
+            config = toml.loads(raw)
+        except Exception as exc:
+            entry["error"] = f"配置解析失败: {exc}"
+            continue
+        if not isinstance(config, dict):
+            entry["error"] = "配置内容不是键值表"
+            continue
+        staged_path = queue_dir / f"{base_timestamp}-{index:02d}-{name}"
+        staged_path.write_text(raw, encoding="utf-8")
+
+        model_train_type = str(config.get("model_train_type") or "").strip()
+        if not model_train_type or registry.resolve_train_type(model_train_type) is None:
+            entry["error"] = f"无法识别训练类型: {model_train_type or '(缺失 model_train_type)'}"
+            continue
+        try:
+            train_utils.fix_config_types(config)
+            normalize_custom_args(config)
+            train_utils.ensure_enable_preview_flag(config)
+            gpu_ids = config.pop("gpu_ids", None)
+            config.pop("model_train_type", None)
+            renamed_from = ensure_unique_output_name(config, tm)
+            result = dispatch_run(
+                model_train_type,
+                config,
+                RunContext(
+                    timestamp=f"{base_timestamp}-{index:02d}",
+                    autosave_dir=autosave_dir,
+                    gpu_ids=gpu_ids,
+                    model_train_type=model_train_type,
+                ),
+            )
+        except Exception as exc:
+            entry["error"] = str(exc)
+            continue
+        if result is None or result.status != "success":
+            entry["error"] = (result.message if result is not None else None) or f"不支持的训练类型: {model_train_type}"
+            continue
+        entry["ok"] = True
+        data = result.data or {}
+        if data.get("task_id"):
+            entry["task_id"] = data["task_id"]
+        entry["queued"] = bool(data.get("queued"))
+        if renamed_from:
+            entry["output_name_renamed"] = {"from": renamed_from, "to": config["output_name"]}
+        # The enqueued config already lives in the engine autosave and the
+        # task archive; drop the staging copy. Only failed files stay behind
+        # for diagnosis.
+        staged_path.unlink(missing_ok=True)
+
+    ok_count = sum(1 for item in results if item["ok"])
+    try:
+        archives = sorted(queue_dir.iterdir(), key=lambda p: p.name, reverse=True)
+        for stale in archives[RETENTION_FILES:]:
+            stale.unlink(missing_ok=True)
+    except OSError:
+        pass
+    return APIResponseSuccess(data={
+        "results": results,
+        "ok_count": ok_count,
+        "fail_count": len(results) - ok_count,
+        "queue_dir": str(queue_dir),
+    })
 
 
 def _engine_routes_module(engine_id: str):
@@ -676,6 +795,31 @@ async def resume_task(task_id: str):
     if tm.resume_task(task_id):
         return APIResponseSuccess(data={"resumed": True})
     return APIResponseFail(message="Task is not a held queued task / 任务不在待确认队列中")
+
+
+@router.get("/tasks/auto_retry")
+async def get_task_auto_retry():
+    """Current global failure re-queue budget (#357)."""
+    return APIResponseSuccess(data={"auto_retry_max": tm.auto_retry_max})
+
+
+@router.post("/tasks/auto_retry")
+async def set_task_auto_retry(request: Request):
+    """Set the global failure re-queue budget for training tasks (#357)."""
+    try:
+        payload = json.loads((await request.body()).decode("utf-8") or "{}")
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return APIResponseFail(message="invalid JSON body / 请求体不是有效 JSON")
+    if not isinstance(payload, dict):
+        return APIResponseFail(message="request body must be an object / 请求体必须是对象")
+    count = payload.get("count")
+    if type(count) is not int or not 0 <= count <= 9:
+        return APIResponseFail(message="count must be an integer 0-9 / 重试次数必须是 0-9 的整数（0 表示不重试）")
+    try:
+        applied = tm.set_global_auto_retry(count)
+    except Exception as exc:
+        return APIResponseFail(message=f"设置保存失败，重启后将恢复原值: {exc}")
+    return APIResponseSuccess(data={"auto_retry_max": applied})
 
 
 @router.get("/tasks/retry/{task_id}", response_model_exclude_none=True)

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import sys
 import tempfile
 import unittest
 from pathlib import Path
@@ -100,6 +102,103 @@ class ExtensionStateTests(unittest.TestCase):
             layout.source.mkdir(parents=True)
             status = read_extension_status(layout)
         self.assertEqual(status.state, STATE_BROKEN)
+
+
+def make_installed_layout(root: Path) -> tuple:
+    layout = default_layout(root)
+    (layout.source / "src" / "musubi_tuner").mkdir(parents=True)
+    (layout.source / "pyproject.toml").write_text("", encoding="utf-8")
+    (layout.source / "krea2_train_network.py").write_text("", encoding="utf-8")
+    layout.venv_python.parent.mkdir(parents=True)
+    layout.venv_python.write_text("", encoding="utf-8")
+    return layout
+
+
+def write_venv_cfg(layout, home: Path) -> None:
+    cfg = layout.venv_python.parent.parent / "pyvenv.cfg"
+    cfg.write_text(
+        f"home = {home}\n"
+        "include-system-site-packages = false\n"
+        "version = 3.12.1\n"
+        f"executable = {home / 'python.exe'}\n"
+        f"command = {home / 'python.exe'} -m venv {layout.root / '.venv'}\n",
+        encoding="utf-8",
+    )
+
+
+def make_packaged_python(root: Path) -> Path:
+    import sys
+
+    if sys.platform == "win32":
+        python = root / ".python" / "cpython-3.12.11-windows-x86_64-none" / "python.exe"
+    else:
+        python = root / ".python" / "cpython-3.12.11-linux-x86_64-gnu" / "bin" / "python3"
+    python.parent.mkdir(parents=True)
+    python.write_text("", encoding="utf-8")
+    return python
+
+
+class PortableVenvRepairTests(unittest.TestCase):
+    def test_status_relocates_stale_build_machine_home(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = make_installed_layout(root)
+            write_venv_cfg(layout, root / "build-machine" / ".python" / "cpython-3.12")
+            base = make_packaged_python(root)
+            write_install_state(layout, STATE_READY, {"audit": {"ok": True}})
+            status = read_extension_status(layout)
+            self.assertEqual(status.state, STATE_READY)
+            cfg = (layout.venv_python.parent.parent / "pyvenv.cfg").read_text(encoding="utf-8")
+            self.assertIn(f"home = {base.parent}", cfg)
+            self.assertNotIn("build-machine", cfg)
+
+    def test_status_marks_broken_when_no_packaged_python(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = make_installed_layout(root)
+            write_venv_cfg(layout, root / "build-machine" / ".python" / "cpython-3.12")
+            write_install_state(layout, STATE_READY, {"audit": {"ok": True}})
+            status = read_extension_status(layout)
+            self.assertEqual(status.state, STATE_BROKEN)
+            self.assertIn("3.12", status.reason)
+
+    def test_status_leaves_user_built_venv_untouched(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = make_installed_layout(root)
+            home = root / "system-python"
+            home.mkdir()
+            write_venv_cfg(layout, home)
+            make_packaged_python(root)
+            before = (layout.venv_python.parent.parent / "pyvenv.cfg").read_bytes()
+            read_extension_status(layout)
+            self.assertEqual((layout.venv_python.parent.parent / "pyvenv.cfg").read_bytes(), before)
+
+    def test_install_relocates_stale_venv_instead_of_rebuilding(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = default_layout(root)
+            source = root / "upstream"
+            (source / "src" / "musubi_tuner").mkdir(parents=True)
+            layout.venv_python.parent.mkdir(parents=True)
+            layout.venv_python.write_text("", encoding="utf-8")
+            write_venv_cfg(layout, root / "build-machine" / ".python" / "cpython-3.12")
+            base_python = root / "base-python" / "python3"
+            base_python.parent.mkdir(parents=True)
+            base_python.write_text("", encoding="utf-8")
+            plan = build_environment_install_plan(root, layout, source)
+            commands: list[list[str]] = []
+            with mock.patch("mikazuki.engines.musubi.environment.ensure_install_source_ready", return_value=source), \
+                    mock.patch("mikazuki.engines.musubi.environment.copy_source_snapshot"), \
+                    mock.patch("mikazuki.engines.musubi.environment._uv_command", return_value="uv"), \
+                    mock.patch("mikazuki.engines.musubi.environment._find_base_python", return_value=base_python), \
+                    mock.patch("mikazuki.engines.musubi.environment._run_streaming", side_effect=lambda cmd, *_a, **_k: commands.append(cmd)), \
+                    mock.patch("mikazuki.engines.musubi.environment.audit_environment", return_value=AuditResult(ok=True)):
+                result = install_environment(plan, lambda _line: None)
+            self.assertTrue(result.ok)
+            cfg = (layout.venv_python.parent.parent / "pyvenv.cfg").read_text(encoding="utf-8")
+            self.assertIn(f"home = {base_python.parent}", cfg)
+            self.assertFalse(any("-m" in cmd and "venv" in cmd for cmd in commands))
 
 
 class InstallerTests(unittest.TestCase):
@@ -291,12 +390,24 @@ class AuditEnvironmentTests(unittest.TestCase):
 
 
 class SettingsDiscoveryTests(unittest.TestCase):
+    def _ready_layout(self, root: Path):
+        layout = default_layout(root)
+        (layout.source / "src" / "musubi_tuner").mkdir(parents=True)
+        layout.venv_python.parent.mkdir(parents=True, exist_ok=True)
+        return layout
+
+    def _symlink_venv_python(self, venv_python: Path, base_python: Path) -> None:
+        base_python.parent.mkdir(parents=True, exist_ok=True)
+        base_python.write_text("", encoding="utf-8")
+        try:
+            venv_python.symlink_to(base_python)
+        except OSError as exc:
+            self.skipTest(f"symlinks unavailable: {exc}")
+
     def test_prefers_extension_layout_source(self):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
-            layout = default_layout(root)
-            (layout.source / "src" / "musubi_tuner").mkdir(parents=True)
-            layout.venv_python.parent.mkdir(parents=True)
+            layout = self._ready_layout(root)
             layout.venv_python.write_text("", encoding="utf-8")
             runtime = discover_runtime(config={}, lora_next_root=root)
             self.assertEqual(runtime.musubi_root, layout.source.resolve())
@@ -307,6 +418,68 @@ class SettingsDiscoveryTests(unittest.TestCase):
             root = Path(td)
             runtime = discover_runtime(config={}, lora_next_root=root)
             self.assertEqual(runtime.musubi_root, (root / "vendor" / "musubi-tuner").resolve())
+
+    def test_musubi_python_env_does_not_follow_resolve_hijack(self):
+        """Regression for #415 without requiring OS symlink privileges.
+
+        Simulate Linux venv ``bin/python`` → base by making ``Path.resolve()``
+        rewrite venv interpreter paths; discovery must keep ``absolute()``.
+        """
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = self._ready_layout(root)
+            layout.venv_python.write_text("", encoding="utf-8")
+            hijacked = root / "base-without-site-packages" / layout.venv_python.name
+            real_resolve = Path.resolve
+
+            def fake_resolve(self, *args, **kwargs):
+                path = Path(self)
+                if ".venv" in path.parts and path.name in {"python", "python.exe", "python3"}:
+                    return hijacked
+                return real_resolve(self, *args, **kwargs)
+
+            with mock.patch.object(Path, "resolve", fake_resolve), mock.patch.dict(
+                os.environ, {"MUSUBI_PYTHON": str(layout.venv_python)}, clear=False
+            ):
+                runtime = discover_runtime(config={}, lora_next_root=root)
+            self.assertEqual(runtime.python, layout.venv_python.absolute())
+            self.assertNotEqual(runtime.python, hijacked)
+
+    def test_musubi_python_env_keeps_venv_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = self._ready_layout(root)
+            base_python = root / "base" / ("python.exe" if sys.platform == "win32" else "python")
+            self._symlink_venv_python(layout.venv_python, base_python)
+            self.assertEqual(layout.venv_python.resolve(), base_python.resolve())
+            with mock.patch.dict(os.environ, {"MUSUBI_PYTHON": str(layout.venv_python)}, clear=False):
+                runtime = discover_runtime(config={}, lora_next_root=root)
+            self.assertEqual(runtime.python, layout.venv_python.absolute())
+            self.assertNotEqual(runtime.python, base_python.resolve())
+
+    def test_config_venv_python_keeps_venv_symlink(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = self._ready_layout(root)
+            base_python = root / "base" / ("python.exe" if sys.platform == "win32" else "python")
+            self._symlink_venv_python(layout.venv_python, base_python)
+            config = {"backend": {"venv_python": str(layout.venv_python)}}
+            with mock.patch.dict(os.environ, {"MUSUBI_PYTHON": ""}, clear=False):
+                runtime = discover_runtime(config=config, lora_next_root=root)
+            self.assertEqual(runtime.python, layout.venv_python.absolute())
+            self.assertNotEqual(runtime.python, base_python.resolve())
+
+    def test_relative_musubi_python_stays_under_venv(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            layout = self._ready_layout(root)
+            base_python = root / "base" / ("python.exe" if sys.platform == "win32" else "python")
+            self._symlink_venv_python(layout.venv_python, base_python)
+            rel = layout.venv_python.relative_to(root).as_posix()
+            with mock.patch.dict(os.environ, {"MUSUBI_PYTHON": rel}, clear=False):
+                runtime = discover_runtime(config={}, lora_next_root=root)
+            self.assertEqual(runtime.python, (root / rel).absolute())
+            self.assertNotEqual(runtime.python, base_python.resolve())
 
 
 class PreflightTests(unittest.TestCase):

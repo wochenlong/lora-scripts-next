@@ -98,11 +98,17 @@ def _mapping(value, label):
 
 def validate_settings(value):
     _keys(value, {"schema_version", "revision", "startup", "engine_prefs", "engine_order",
-                  "paths", "default_presets"}, "settings")
+                  "paths", "default_presets", "tasks"}, "settings")
     if type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         raise UserDataError("Unsupported settings schema_version")
     if type(value.get("revision")) is not int or value["revision"] < 0:
         raise UserDataError("Invalid settings revision")
+    if "tasks" in value:
+        tasks = value["tasks"]
+        _keys(tasks, {"auto_retry_max"}, "tasks")
+        if "auto_retry_max" in tasks and (type(tasks["auto_retry_max"]) is not int
+                                          or not 0 <= tasks["auto_retry_max"] <= 9):
+            raise UserDataError("tasks.auto_retry_max must be an integer between 0 and 9")
     if "engine_prefs" in value:
         prefs = value["engine_prefs"]
         _keys(prefs, {"defaultEngine", "rememberLast", "lastByModel"}, "engine_prefs")

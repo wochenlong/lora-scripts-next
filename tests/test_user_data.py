@@ -34,6 +34,13 @@ def test_patch_preserves_nested_values_and_rejects_stale_revision(tmp_path):
     assert store.read_settings() == second
 
 
+def test_tasks_auto_retry_max_patch_roundtrip(tmp_path):
+    store = UserDataStore(tmp_path)
+    updated = store.patch_settings({"tasks": {"auto_retry_max": 2}}, 0)
+    assert updated["tasks"] == {"auto_retry_max": 2}
+    assert UserDataStore(tmp_path).read_settings()["tasks"]["auto_retry_max"] == 2
+
+
 def test_paths_and_defaults_are_preserved_across_instances(tmp_path):
     original = UserDataStore(tmp_path)
     expected = original.patch_settings({
@@ -58,6 +65,10 @@ def test_paths_and_defaults_are_preserved_across_instances(tmp_path):
     {"startup": {"gui": {"port_conflict": []}}},
     {"paths": {"tagger_models": {"wd": 123}}},
     {"api": {"provider": {"api_key": "do-not-store"}}},
+    {"tasks": {"auto_retry_max": 10}},
+    {"tasks": {"auto_retry_max": "2"}},
+    {"tasks": {"auto_retry_max": -1}},
+    {"tasks": {"unknown": 1}},
 ])
 def test_invalid_patch_never_creates_settings(tmp_path, patch):
     store = UserDataStore(tmp_path)
