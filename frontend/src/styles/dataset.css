@@ -975,6 +975,10 @@
 
 .dataset-section-header { flex-shrink: 0; }
 
+/* Auto margins on a flex item absorb free space and shrink it to fit, which
+   made the tagger page 519px wide; keep it full width instead. */
+.dataset-section > .tagger-page { width: 100%; }
+
 .dataset-section-header {
   display: grid;
   grid-template-columns: 1fr auto 1fr;
