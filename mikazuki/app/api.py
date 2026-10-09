@@ -283,8 +283,10 @@ async def batch_enqueue_training(files: List[UploadFile] = File(...)):
 
     Each file must carry model_train_type and goes through the same
     preparation + dispatch pipeline as /api/run; files that fail validation
-    are reported without blocking the rest. Uploaded files are kept under
-    config/batch-queue/ as a record of what was submitted.
+    are reported without blocking the rest. Successfully enqueued configs
+    already live in the engine autosave and the task archive, so their
+    staging copies are removed; only failed files stay in
+    config/batch-queue/ for diagnosis (pruned to the newest 100).
     """
     MAX_FILES = 32
     MAX_FILE_BYTES = 256 * 1024
@@ -322,7 +324,8 @@ async def batch_enqueue_training(files: List[UploadFile] = File(...)):
         if not isinstance(config, dict):
             entry["error"] = "配置内容不是键值表"
             continue
-        (queue_dir / f"{base_timestamp}-{index:02d}-{name}").write_text(raw, encoding="utf-8")
+        staged_path = queue_dir / f"{base_timestamp}-{index:02d}-{name}"
+        staged_path.write_text(raw, encoding="utf-8")
 
         model_train_type = str(config.get("model_train_type") or "").strip()
         if not model_train_type or registry.resolve_train_type(model_train_type) is None:
@@ -358,6 +361,10 @@ async def batch_enqueue_training(files: List[UploadFile] = File(...)):
         entry["queued"] = bool(data.get("queued"))
         if renamed_from:
             entry["output_name_renamed"] = {"from": renamed_from, "to": config["output_name"]}
+        # The enqueued config already lives in the engine autosave and the
+        # task archive; drop the staging copy. Only failed files stay behind
+        # for diagnosis.
+        staged_path.unlink(missing_ok=True)
 
     ok_count = sum(1 for item in results if item["ok"])
     try:

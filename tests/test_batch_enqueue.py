@@ -59,7 +59,7 @@ class BatchEnqueueTests(unittest.TestCase):
         self.dispatched.append((model_train_type, dict(config)))
         return APIResponseSuccess(data={"task_id": f"task-{len(self.dispatched)}", "queued": True})
 
-    def test_valid_toml_is_enqueued_and_archived(self):
+    def test_valid_toml_is_enqueued_and_staging_removed(self):
         with mock.patch("mikazuki.app.api.os.getcwd", return_value=self._tmp()):
             response = run_endpoint([make_upload("run1.toml", VALID_TOML)])
         data = response.data
@@ -70,8 +70,16 @@ class BatchEnqueueTests(unittest.TestCase):
         self.assertTrue(item["queued"])
         self.assertEqual(self.dispatched[0][0], "sd-lora")
         self.assertNotIn("model_train_type", self.dispatched[0][1])
-        saved = list(Path(data["queue_dir"]).glob("*-run1.toml"))
-        self.assertEqual(len(saved), 1)
+        # Successful configs live in autosave/task archives; the staging copy
+        # is removed so the batch-queue dir does not accumulate.
+        self.assertFalse(list(Path(data["queue_dir"]).glob("*-run1.toml")))
+
+    def test_failed_file_stays_in_queue_dir(self):
+        with mock.patch("mikazuki.app.api.os.getcwd", return_value=self._tmp()):
+            response = run_endpoint([make_upload("bad.toml", b'output_name = "x"\n')])
+        self.assertEqual(response.data["fail_count"], 1)
+        self.assertFalse(self.dispatched)
+        self.assertTrue(list(Path(response.data["queue_dir"]).glob("*-bad.toml")))
 
     def _tmp(self) -> str:
         import tempfile
@@ -186,7 +194,7 @@ class AutoRetryApiTests(unittest.TestCase):
 
 
 class BatchArchiveUniquenessTests(unittest.TestCase):
-    def test_same_second_batches_get_distinct_archives(self):
+    def test_same_second_batches_get_distinct_timestamps(self):
         import tempfile
 
         dispatched = []
@@ -201,7 +209,7 @@ class BatchArchiveUniquenessTests(unittest.TestCase):
                 mock.patch("mikazuki.app.api.os.getcwd", return_value=td):
             run_endpoint([make_upload("run1.toml", VALID_TOML)])
             run_endpoint([make_upload("run1.toml", VALID_TOML)])
-            archives = sorted(p.name for p in (Path(td) / "config" / "batch-queue").iterdir())
-        self.assertEqual(len(archives), 2)
-        self.assertEqual(len(set(archives)), 2)
+        # Both succeeded, so staging copies are gone; what must differ are the
+        # per-request autosave timestamps handed to the engine.
+        self.assertEqual(len(dispatched), 2)
         self.assertEqual(len(set(dispatched)), 2)
