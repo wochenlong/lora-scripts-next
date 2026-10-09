@@ -1,18 +1,22 @@
 // @vitest-environment jsdom
 import { mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
-import { expect, it, vi } from "vitest"
+import { beforeEach, expect, it, vi } from "vitest"
 import { i18n } from "../i18n"
 import TaggerPage from "./TaggerPage.vue"
 
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }))
 
-it("keeps future controls disabled and uses a searchable grouped model selector", async () => {
+beforeEach(() => localStorage.clear())
+
+it("keeps unavailable modes quietly disabled and uses a searchable grouped model selector", async () => {
   const wrapper = mount(TaggerPage, { global: {
     plugins: [createPinia(), i18n], stubs: { ManagedDatasetPicker: true },
   } })
-  expect(wrapper.get('[data-testid="caption-pending"]').attributes("disabled")).toBeDefined()
-  expect(wrapper.get('[data-testid="preview-pending"]').attributes("disabled")).toBeDefined()
+  expect(wrapper.text()).not.toContain("待接入")
+  expect(wrapper.find('[data-testid="preview-pending"]').exists()).toBe(false)
+  expect(wrapper.find('[data-testid="retry-failed"]').exists()).toBe(false)
+  expect(wrapper.find('input[placeholder*="huggingface"]').exists()).toBe(false)
   expect(wrapper.find("aside.tagger-status").exists()).toBe(false)
   const select = wrapper.findComponent({ name: "ElSelect" })
   expect(select.props("filterable")).toBe(true)
@@ -27,5 +31,17 @@ it("keeps future controls disabled and uses a searchable grouped model selector"
   await wrapper.get('[data-testid="parameter-close"]').trigger("click")
   await wrapper.get('[data-testid="parameter-toggle"]').trigger("click")
   expect((wrapper.get('#tagger-parameters input[type="number"]').element as HTMLInputElement).value).toBe("0.5")
+  wrapper.unmount()
+})
+
+it("provides load, save-as-template and reset actions for natural-language prompts", async () => {
+  const wrapper = mount(TaggerPage, { global: {
+    plugins: [createPinia(), i18n], stubs: { ManagedDatasetPicker: true },
+  } })
+  await wrapper.get('[data-testid="parameter-toggle"]').trigger("click")
+  await wrapper.get('[data-testid="tab-advanced"]').trigger("click")
+  expect(wrapper.get('[data-testid="caption-load"]').text()).toContain("加载")
+  expect(wrapper.get('[data-testid="caption-save-template"]').text()).toContain("保存为模板")
+  expect(wrapper.get('[data-testid="caption-reset"]').text()).toContain("重置")
   wrapper.unmount()
 })

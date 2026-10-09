@@ -34,7 +34,6 @@ const form = reactive<TaggerRequest>({
   batch_input_recursive: false,
   batch_output_action_on_conflict: "ignore",
   replace_underscore: true,
-  download_endpoint: "",
   replace_underscore_excludes:
     "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||",
 })
@@ -44,6 +43,35 @@ const { t } = useI18n()
 const route = useRoute()
 const parametersOpen = ref(false)
 const parameterTab = ref("model")
+const CAPTION_TEMPLATES_KEY = "nt.tagger.captionTemplates"
+const defaultCaptionPrompt = t("tagger.workspace.defaultPrompt")
+const captionPrompt = ref(defaultCaptionPrompt)
+const captionTemplate = ref("default")
+const captionTemplates = ref<Record<string, string>>({})
+function readCaptionTemplates() {
+  try {
+    const value = JSON.parse(localStorage.getItem(CAPTION_TEMPLATES_KEY) || "{}")
+    captionTemplates.value = value && typeof value === "object" && !Array.isArray(value) ? value : {}
+  } catch {
+    captionTemplates.value = {}
+  }
+}
+function loadCaptionTemplate() {
+  captionPrompt.value = captionTemplate.value === "default"
+    ? defaultCaptionPrompt
+    : captionTemplates.value[captionTemplate.value] || defaultCaptionPrompt
+}
+function saveCaptionTemplate() {
+  const key = `custom-${Date.now()}`
+  captionTemplates.value = { ...captionTemplates.value, [key]: captionPrompt.value }
+  localStorage.setItem(CAPTION_TEMPLATES_KEY, JSON.stringify(captionTemplates.value))
+  captionTemplate.value = key
+  ElMessage.success(t("tagger.msg.templateSaved"))
+}
+function resetCaptionPrompt() {
+  captionTemplate.value = "default"
+  captionPrompt.value = defaultCaptionPrompt
+}
 const modelAvailability = ref<Record<string, boolean>>({})
 const availabilityError = ref(false)
 async function refreshModels() {
@@ -69,7 +97,6 @@ function restoreParameters() {
     threshold: 0.35, character_threshold: 0.6, additional_tags: "", exclude_tags: "",
     batch_output_action_on_conflict: "ignore", batch_input_recursive: false,
     replace_underscore: true, escape_tag: true, add_rating_tag: false, add_model_tag: false,
-    download_endpoint: "",
   })
 }
 const modelGroups = [
@@ -96,7 +123,7 @@ async function start() {
 }
 async function invoke(kind: "prefetch" | "cancel" | "reset") {
   try {
-    if (kind === "prefetch") await store.prefetch(form.interrogator_model, form.download_endpoint)
+    if (kind === "prefetch") await store.prefetch(form.interrogator_model)
     else await store[kind]()
     ElMessage.success(
       kind === "cancel" ? t("tagger.msg.cancelRequested") : kind === "reset" ? t("tagger.msg.resetDone") : t("tagger.msg.prefetchStarted"),
@@ -114,6 +141,7 @@ onActivated(() => {
   if (typeof queryPath === "string" && queryPath.trim()) form.path = queryPath
   void store.refresh()
   void refreshModels()
+  readCaptionTemplates()
   stopPolling()
   timer = window.setInterval(store.refresh, 1200)
 })
@@ -137,11 +165,11 @@ onBeforeUnmount(stopPolling)
       </div>
       <div class="tagger-choice-row">
         <span>{{ t("tagger.workspace.method") }}</span>
-        <div class="tagger-segments"><button class="selected" aria-pressed="true">Tag</button><button disabled :title="t('tagger.workspace.pending')">{{ t("tagger.workspace.caption") }} · {{ t("tagger.workspace.pending") }}</button></div>
+        <div class="tagger-segments"><button class="selected" aria-pressed="true">Tag</button><button disabled>{{ t("tagger.workspace.caption") }}</button></div>
       </div>
       <div class="tagger-choice-row">
         <span>{{ t("tagger.workspace.source") }}</span>
-        <div class="tagger-segments"><button class="selected" aria-pressed="true">{{ t("tagger.workspace.local") }}</button><button disabled :title="t('tagger.workspace.pending')">API · {{ t("tagger.workspace.pending") }}</button></div>
+        <div class="tagger-segments"><button class="selected" aria-pressed="true">{{ t("tagger.workspace.local") }}</button><button disabled>API</button></div>
       </div>
       <div class="tagger-model-row">
         <label class="tagger-model-field"><span>{{ t("tagger.modelLabel") }}</span>
@@ -177,9 +205,7 @@ onBeforeUnmount(stopPolling)
           </div>
         </div>
         <div class="tagger-actions">
-          <button data-testid="preview-pending" class="secondary-action" disabled :title="t('tagger.workspace.pending')">{{ t("tagger.workspace.preview") }} · {{ t("tagger.workspace.pending") }}</button>
           <button class="secondary-action" :disabled="submitting || busy" @click="invoke('reset')">{{ t("tagger.reset") }}</button>
-          <button class="secondary-action" disabled :title="t('tagger.workspace.pending')">{{ t("tagger.workspace.retry") }}</button>
         </div>
       </section>
     </section>
@@ -188,7 +214,7 @@ onBeforeUnmount(stopPolling)
       <header><h2>{{ t("tagger.workspace.parameters") }}</h2><button class="tagger-settings-button" data-testid="parameter-close" :aria-label="t('tagger.workspace.close')" @click="parametersOpen = false"><Close /></button></header>
       <div class="tagger-panel-model"><span>{{ form.interrogator_model }}</span><button class="tagger-restore" :disabled="busy" @click="restoreParameters"><RefreshLeft />{{ t("tagger.workspace.restore") }}</button></div>
       <div class="tagger-panel-tabs" role="tablist">
-        <button v-for="tab in ['model', 'tags', 'advanced']" :key="tab" role="tab" :aria-selected="parameterTab === tab" @click="parameterTab = tab">{{ t(`tagger.workspace.tab_${tab}`) }}</button>
+        <button v-for="tab in ['model', 'tags', 'advanced']" :key="tab" :data-testid="`tab-${tab}`" role="tab" :aria-selected="parameterTab === tab" @click="parameterTab = tab">{{ t(`tagger.workspace.tab_${tab}`) }}</button>
       </div>
       <fieldset :disabled="busy">
       <div v-show="parameterTab === 'model'">
@@ -217,22 +243,18 @@ onBeforeUnmount(stopPolling)
       </div>
       </div>
       <div v-show="parameterTab === 'advanced'">
-      <details class="tagger-advanced">
-        <summary>{{ t("tagger.workspace.advanced") }}</summary>
-        <div class="tagger-grid"><label>{{ t("tagger.endpointLabel") }}<input v-model="form.download_endpoint" :placeholder="t('tagger.endpointPlaceholder')" /></label></div>
-      </details>
       <details class="tagger-future">
-        <summary>{{ t("tagger.workspace.caption") }} <small>{{ t("tagger.workspace.pending") }}</small></summary>
-        <fieldset data-testid="caption-pending" disabled>
+        <summary>{{ t("tagger.workspace.caption") }}</summary>
+        <fieldset>
           <div class="tagger-grid">
-            <label>{{ t("tagger.workspace.template") }}<select><option>{{ t("tagger.workspace.defaultTemplate") }}</option></select></label>
+            <label>{{ t("tagger.workspace.template") }}<select v-model="captionTemplate"><option value="default">{{ t("tagger.workspace.defaultTemplate") }}</option><option v-for="(_, key) in captionTemplates" :key="key" :value="key">{{ t("tagger.workspace.customTemplate") }}</option></select></label>
             <label>{{ t("tagger.workspace.language") }}<select><option>English</option><option>中文</option></select></label>
-            <label class="tagger-dataset-path">{{ t("tagger.workspace.prompt") }}<textarea rows="4" :value="t('tagger.workspace.defaultPrompt')" /></label>
+            <label class="tagger-dataset-path">{{ t("tagger.workspace.prompt") }}<textarea v-model="captionPrompt" rows="4" /></label>
           </div>
           <div class="tagger-actions">
-            <button class="secondary-action" disabled>{{ t("tagger.workspace.save") }}</button>
-            <button class="secondary-action" disabled>{{ t("tagger.workspace.saveAs") }}</button>
-            <button class="secondary-action" disabled>{{ t("tagger.workspace.restore") }}</button>
+            <button data-testid="caption-load" type="button" class="secondary-action" @click="loadCaptionTemplate">{{ t("tagger.workspace.load") }}</button>
+            <button data-testid="caption-save-template" type="button" class="secondary-action" @click="saveCaptionTemplate">{{ t("tagger.workspace.saveAsTemplate") }}</button>
+            <button data-testid="caption-reset" type="button" class="secondary-action" @click="resetCaptionPrompt">{{ t("tagger.workspace.reset") }}</button>
           </div>
         </fieldset>
       </details>
