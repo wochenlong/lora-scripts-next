@@ -140,10 +140,19 @@ class BatchEnqueueTests(unittest.TestCase):
         self.assertNotEqual(renamed["to"], "batch-test")
         self.assertEqual(self.dispatched[0][1]["output_name"], renamed["to"])
 
-    def test_json_config_is_accepted(self):
+    def test_json_config_is_rejected(self):
         with mock.patch("mikazuki.app.api.os.getcwd", return_value=self._tmp()):
             response = run_endpoint([make_upload("run.json", b'{"model_train_type": "sd-lora"}')])
-        self.assertEqual(response.data["ok_count"], 1)
+        self.assertEqual(response.data["ok_count"], 0)
+        self.assertIn("TOML", response.data["results"][0]["error"])
+        self.assertFalse(self.dispatched)
+
+    def test_oversize_config_is_rejected_after_bounded_read(self):
+        with mock.patch("mikazuki.app.api.os.getcwd", return_value=self._tmp()):
+            response = run_endpoint([make_upload("big.toml", b"#" * (300 * 1024))])
+        self.assertEqual(response.data["ok_count"], 0)
+        self.assertIn("大小上限", response.data["results"][0]["error"])
+        self.assertFalse(self.dispatched)
 
 
 if __name__ == "__main__":

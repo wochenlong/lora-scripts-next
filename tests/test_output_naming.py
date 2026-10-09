@@ -78,6 +78,47 @@ class EnsureUniqueOutputNameTests(unittest.TestCase):
             config = {"output_name": "mylora", "output_dir": td}
             self.assertIsNone(ensure_unique_output_name(config, make_tm(), NOW))
 
+    def test_epoch_checkpoint_collision(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "mylora-000003.safetensors").write_text("", encoding="utf-8")
+            config = {"output_name": "mylora", "output_dir": td}
+            self.assertEqual(ensure_unique_output_name(config, make_tm(), NOW), "mylora")
+
+    def test_step_checkpoint_collision(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "mylora-step00001000.safetensors").write_text("", encoding="utf-8")
+            config = {"output_name": "mylora", "output_dir": td}
+            self.assertEqual(ensure_unique_output_name(config, make_tm(), NOW), "mylora")
+
+    def test_optimizer_state_dir_collision(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "mylora-000002-state").mkdir()
+            config = {"output_name": "mylora", "output_dir": td}
+            self.assertEqual(ensure_unique_output_name(config, make_tm(), NOW), "mylora")
+
+    def test_case_insensitive_on_windows(self):
+        from unittest import mock
+
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "MyLora.safetensors").write_text("", encoding="utf-8")
+            config = {"output_name": "mylora", "output_dir": td}
+            with mock.patch("mikazuki.utils.output_naming.sys") as fake_sys:
+                fake_sys.platform = "win32"
+                self.assertEqual(ensure_unique_output_name(config, make_tm(), NOW), "mylora")
+
+    def test_case_sensitive_elsewhere(self):
+        import sys as real_sys
+        from unittest import mock
+
+        if real_sys.platform == "win32":
+            self.skipTest("case sensitivity only applies off Windows")
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "MyLora.safetensors").write_text("", encoding="utf-8")
+            config = {"output_name": "mylora", "output_dir": td}
+            with mock.patch("mikazuki.utils.output_naming.sys") as fake_sys:
+                fake_sys.platform = "linux"
+                self.assertIsNone(ensure_unique_output_name(config, make_tm(), NOW))
+
     def test_digit_cycles_until_free(self):
         from mikazuki.tasks import TaskStatus
 

@@ -28,18 +28,43 @@ def _active_output_names(tm) -> set[str]:
     return names
 
 
-def _output_artifacts_exist(output_dir: str, name: str) -> bool:
-    """True when <output_dir> already holds artifacts for this output_name.
+from datetime import datetime
+from pathlib import Path
+import re
+import sys
+import uuid
 
-    Engines disagree on layout: some write a directory <output_dir>/<name>,
-    Kohya writes files like <name>.safetensors next to it. Treat any entry
-    equal to the name or starting with "<name>." as a collision.
+
+def _artifact_pattern(name: str) -> re.Pattern:
+    """Match any artifact an engine may write for this output_name.
+
+    Layouts seen across engines (Kohya/sd-scripts, musubi, DiffSynth):
+    - ``<name>`` directory or exact file
+    - ``<name>.safetensors`` (final checkpoint)
+    - ``<name>-000001.safetensors`` / ``<name>-step00001000.safetensors``
+      (epoch/step checkpoints)
+    - ``<name>-000001-state`` (optimizer state directory)
+    Suffixes like ``<name>-v2`` are NOT artifacts of this run and must not
+    force a rename.
     """
+    return re.compile(rf"^{re.escape(name)}(?:\..+|-\d+(?:\..+|-state.*)?|-step\d+(?:\..+)?)?$")
+
+
+def _output_artifacts_exist(output_dir: str, name: str) -> bool:
+    """True when <output_dir> already holds artifacts for this output_name."""
     if not output_dir:
         return False
+    # Windows filesystems are case-insensitive: submitting 'Lora' next to an
+    # existing 'lora.safetensors' would collide at write time there.
+    if sys.platform == "win32":
+        pattern = _artifact_pattern(name.lower())
+        probe = lambda entry_name: entry_name.lower()
+    else:
+        pattern = _artifact_pattern(name)
+        probe = lambda entry_name: entry_name
     try:
         for entry in Path(output_dir).iterdir():
-            if entry.name == name or entry.name.startswith(name + "."):
+            if pattern.match(probe(entry.name)):
                 return True
     except OSError:
         return False

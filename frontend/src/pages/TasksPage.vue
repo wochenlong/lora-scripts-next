@@ -459,8 +459,7 @@ function openBatchEnqueue() {
 }
 
 function acceptBatchFiles(files: File[]) {
-  const accepted = files.filter((file) => /\.(toml|json)$/i.test(file.name))
-  batchFiles.value = accepted
+  batchFiles.value = files.filter((file) => /\.toml$/i.test(file.name))
   batchResults.value = null
 }
 
@@ -902,7 +901,7 @@ onBeforeUnmount(() => {
           <div class="upload-dropzone-actions">
             <button class="secondary-action" :disabled="batchBusy" @click="batchFileInput?.click()">{{ t("tasks.batchEnqueue.pickFiles") }}</button>
           </div>
-          <input ref="batchFileInput" type="file" multiple accept=".toml,.json" hidden @change="onBatchFilesChange">
+          <input ref="batchFileInput" type="file" multiple accept=".toml" hidden @change="onBatchFilesChange">
         </div>
         <p class="purge-hint">{{ t("tasks.batchEnqueue.hint") }}</p>
         <p v-if="batchFiles.length" class="purge-hint">{{ t("tasks.batchEnqueue.selected", { n: batchFiles.length }) }}</p>

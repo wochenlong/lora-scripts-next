@@ -307,7 +307,14 @@ async def batch_enqueue_training(files: List[UploadFile] = File(...)):
         name = Path(upload.filename or f"config-{index}.toml").name
         entry: dict = {"file": name, "ok": False}
         results.append(entry)
-        raw_bytes = await upload.read()
+        if not name.lower().endswith(".toml"):
+            entry["error"] = "仅支持训练页导出的 TOML 配置文件（.toml）"
+            await upload.close()
+            continue
+        # Bounded read: reject oversize configs without ever holding more
+        # than MAX_FILE_BYTES + 1 in memory.
+        raw_bytes = await upload.read(MAX_FILE_BYTES + 1)
+        await upload.close()
         if len(raw_bytes) > MAX_FILE_BYTES:
             entry["error"] = f"配置文件超过大小上限（{MAX_FILE_BYTES // 1024} KB）"
             continue
@@ -317,7 +324,7 @@ async def batch_enqueue_training(files: List[UploadFile] = File(...)):
             entry["error"] = "文件编码不是有效的 UTF-8"
             continue
         try:
-            config = json.loads(raw) if name.lower().endswith(".json") else toml.loads(raw)
+            config = toml.loads(raw)
         except Exception as exc:
             entry["error"] = f"配置解析失败: {exc}"
             continue
