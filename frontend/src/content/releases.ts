@@ -6,6 +6,16 @@ export interface ReleaseEntry {
 
 export const releases: readonly ReleaseEntry[] = [
   {
+    version: "v3.1.3",
+    date: "2026-10-09",
+    items: [
+      "整合包 Musubi / AI Toolkit venv 失效基础 Python 时可自动修复",
+      "Anima 训练支持 2B / 2.9B 规格选择与底模路径记忆",
+      "Kohya 拆为独立引擎，可在设置中安装、修复与卸载",
+      "支持配置默认训练引擎，以及记住上次使用的引擎",
+    ],
+  },
+  {
     version: "v3.1.2",
     date: "2026-10-09",
     items: [
