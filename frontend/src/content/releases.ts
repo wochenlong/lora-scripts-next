@@ -6,6 +6,16 @@ export interface ReleaseEntry {
 
 export const releases: readonly ReleaseEntry[] = [
   {
+    version: "v3.1.2",
+    date: "2026-10-09",
+    items: [
+      "Kohya 拆为独立引擎，可在设置中安装、修复与卸载",
+      "卸载仅清理 extensions/kohya，不触碰 GUI Python / Torch",
+      "支持配置默认训练引擎，以及记住上次使用的引擎",
+      "升级后首次 Kohya 训练前需先安装引擎",
+    ],
+  },
+  {
     version: "v3.1.1",
     date: "2026-09-22",
     items: [
