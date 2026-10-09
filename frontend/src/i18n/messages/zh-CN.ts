@@ -504,7 +504,7 @@ export default {
       rememberLast: {
         label: "记住上次选择的训练引擎",
         hint: "按基础模型记住引擎与训练目标；不影响新人冷启动默认（仍为 Kohya）。",
-        hintShort: "按基础模型记住上次引擎，冷启动仍默认 Kohya",
+        hintShort: "按基础模型记住上次引擎；未记忆时使用默认引擎",
       },
       listTitle: "引擎列表",
       badges: {
