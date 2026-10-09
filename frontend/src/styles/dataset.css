@@ -1257,7 +1257,39 @@
   cursor: not-allowed;
 }
 
-.caption-preview {
+/* Compact preview row: the caption itself is the working area, the image is a
+   thumbnail that opens the full-size lightbox on click. */
+.caption-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.caption-head-text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.caption-head .caption-filename {
+  color: var(--text);
+  font-size: 13px;
+}
+
+.caption-preview-hint {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+/* Needs to out-specify the generic .caption-panel img rule below. */
+.caption-head .caption-preview {
+  flex: 0 0 auto;
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border: 1px solid var(--border);
+  border-radius: 10px;
   cursor: zoom-in;
 }
 

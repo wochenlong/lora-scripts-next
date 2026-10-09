@@ -1086,14 +1086,19 @@ onUnmounted(() => {
 
       <div v-if="rightPanelMode === 'caption'" class="dataset-tool-panel-body caption-panel">
         <div v-if="current">
-          <img
-            class="caption-preview"
-            :src="current.thumb_url + '&size=512'"
-            :alt="current.name"
-            :title="t('datasetEditor.caption.previewTip')"
-            @click="previewOpen = true"
-          >
-          <span class="caption-filename" :title="current.relative_path">{{ current.name }}</span>
+          <div class="caption-head">
+            <img
+              class="caption-preview"
+              :src="current.thumb_url + '&size=512'"
+              :alt="current.name"
+              :title="t('datasetEditor.caption.previewTip')"
+              @click="previewOpen = true"
+            >
+            <span class="caption-head-text">
+              <span class="caption-filename" :title="current.relative_path">{{ current.name }}</span>
+              <small class="caption-preview-hint">{{ t("datasetEditor.caption.previewTip") }}</small>
+            </span>
+          </div>
           <div v-if="managedName" class="caption-file-actions">
             <a :href="datasetFileUrl(managedName, current.relative_path)" download>{{ t("datasetEditor.caption.downloadImage") }}</a>
             <a
