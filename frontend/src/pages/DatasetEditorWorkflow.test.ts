@@ -77,8 +77,8 @@ it("does not apply a late save from A to B or clear B's draft", async () => {
 
 it("loads a directly typed path with Enter without opening the dataset selector", async () => {
   const wrapper = await render()
-  await wrapper.get(".dataset-load-row input").setValue("/typed-folder")
-  await wrapper.get(".dataset-load-row input").trigger("keyup.enter")
+  await wrapper.get("#editor-dataset-path").setValue("/typed-folder")
+  await wrapper.get("#editor-dataset-path").trigger("keyup.enter")
   await flushPromises()
   expect(datasetApi.scan).toHaveBeenLastCalledWith("/typed-folder")
   expect(state.lastRoot.value).toBe("/typed-folder")

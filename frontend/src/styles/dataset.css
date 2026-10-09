@@ -14,46 +14,41 @@
 }
 
 .dataset-toolbar {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px 20px;
-  align-items: end;
+  display: grid;
+  gap: 16px;
   padding: 20px 24px;
   background: color-mix(in srgb, var(--surface) 88%, transparent);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(12px);
 }
 
-.dataset-toolbar-field {
+/* One field per row — 130px label column with the control filling the rest,
+   matching the tagger page instead of the old label-above-small-widget style. */
+.dataset-toolbar-row {
   display: grid;
-  gap: 7px;
+  grid-template-columns: 130px minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
   min-width: 0;
   color: var(--text-soft);
-  font-size: 12px;
+  font-size: 14px;
 }
+
+.dataset-toolbar-controls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.dataset-toolbar-row .el-select__wrapper,
+.dataset-toolbar-row .el-input__wrapper { min-height: 40px; border-radius: 10px; }
+
+.dataset-toolbar-row .el-select { width: 100%; }
 
 .dataset-toolbar-path {
-  flex: 1 1 240px;
-}
-
-.dataset-toolbar-folder {
-  flex: 0 1 180px;
-}
-
-.dataset-toolbar-search {
-  flex: 1 1 180px;
-  max-width: 280px;
-}
-
-.dataset-toolbar-field input,
-.dataset-toolbar-field select {
-  width: 100%;
-  min-height: 40px;
-  padding: 8px 10px;
-  color: var(--text);
-  background: var(--surface-soft);
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border);
 }
 
 .dataset-toolbar-scan {
@@ -69,7 +64,7 @@
   flex-wrap: wrap;
   gap: 10px;
   align-items: center;
-  margin-left: auto;
+  padding-left: 146px;
 }
 
 .dataset-toolbar-actions > button,
@@ -148,12 +143,12 @@
   gap: 10px;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 16px;
+  padding: 18px 20px;
   border-bottom: 1px solid color-mix(in srgb, var(--border) 80%, transparent);
 }
 
 .dataset-tool-panel-header strong {
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 650;
 }
 
@@ -176,12 +171,12 @@
 
 .dataset-tool-panel-body {
   display: grid;
-  gap: 12px;
+  gap: 14px;
   flex: 1;
   align-content: start;
   min-height: 0;
   overflow: auto;
-  padding: 14px 16px 18px;
+  padding: 18px 20px 22px;
 }
 
 .dataset-tool-panel-footer {
@@ -1907,9 +1902,7 @@
 
 .managed-picker { position: relative; display: inline-flex; flex: 0 0 auto; }
 .managed-picker svg { width: 18px; height: 18px; flex: 0 0 auto; }
-.dataset-load-row { flex: 0 0 100%; display: flex; align-items: center; gap: 10px; min-width: 0; padding-bottom: 12px; border-bottom: 1px solid var(--border); }
-.dataset-load-row > label { flex-shrink: 0; font-size: 13px; color: var(--text-soft); }
-.dataset-direct-path { min-width: 0; flex: 1; min-height: 36px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-soft); color: var(--text); font: inherit; font-size: 13px; }
+.dataset-direct-path { min-width: 0; flex: 1; min-height: 40px; padding: 8px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface-soft); color: var(--text); font: inherit; font-size: 14px; }
 .dataset-direct-path:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
 .dataset-load-entry { display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; }
 .dataset-load-entry.is-primary { background: var(--accent); color: white; border-color: var(--accent); }
