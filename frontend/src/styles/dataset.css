@@ -4,11 +4,27 @@
   grid-template-columns: minmax(0, 1fr);
   height: calc(100vh - 72px);
   min-height: 0;
+  transition: grid-template-columns 240ms ease;
 }
 
-/* The single-image panel only takes a column when it has content to show. */
+/* The single-image panel only takes a column when it has content to show,
+   sliding in while the gallery narrows but stays fully usable. */
 .dataset-page.tool-panel-open {
   grid-template-columns: minmax(0, 1fr) 320px;
+}
+
+.dataset-page:not(.tool-panel-open) .dataset-tool-panel {
+  visibility: hidden;
+  opacity: 0;
+  transform: translateX(20px);
+  transition: opacity 160ms ease, transform 240ms ease, visibility 0s linear 240ms;
+}
+
+.dataset-page.tool-panel-open .dataset-tool-panel {
+  visibility: visible;
+  opacity: 1;
+  transform: none;
+  transition: opacity 200ms ease, transform 240ms ease;
 }
 
 .dataset-workspace {
@@ -140,12 +156,17 @@
 .dataset-tool-panel {
   display: flex;
   flex-direction: column;
+  width: 100%;
   min-width: 0;
   min-height: 0;
   overflow: hidden;
   background: var(--surface);
   border-left: 1px solid var(--border);
 }
+
+/* Keep the panel layout at its real width while the column animates, so the
+   content is revealed instead of squeezed. */
+.dataset-tool-panel > * { min-width: 300px; }
 
 .dataset-tool-panel.glass {
   background: color-mix(in srgb, var(--surface) 72%, transparent);
@@ -457,6 +478,8 @@
   justify-content: space-between;
   margin-bottom: 16px;
 }
+
+.dataset-gallery-hint { color: var(--text-soft); font-size: 13px; }
 
 .dataset-gallery header button {
   margin-left: 7px;

@@ -153,6 +153,10 @@ describe("DatasetEditorPage route session", () => {
     })
     await flushPromises()
 
+    // Default state stays a pure gallery; the editor opens once an image is picked.
+    expect(wrapper.find(".caption-panel .primary-action").exists()).toBe(false)
+    await wrapper.get(".image-grid button").trigger("click")
+    await nextTick()
     expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes")
     wrapper.unmount()
 

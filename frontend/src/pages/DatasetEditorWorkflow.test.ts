@@ -62,6 +62,10 @@ it("does not apply a late save from A to B or clear B's draft", async () => {
   const wrapper = await render()
   let finish!: (value: ChangedItem) => void
   vi.spyOn(datasetApi, "save").mockReturnValue(new Promise(resolve => { finish = resolve }))
+  // Scanning keeps the pure gallery; the editor only opens once an image is picked.
+  expect(wrapper.find(".caption-panel .primary-action").exists()).toBe(false)
+  await wrapper.get(".image-grid button").trigger("click")
+  await flushPromises()
   await wrapper.get(".caption-panel .primary-action").trigger("click")
   await wrapper.get(".dataset-toolbar-scan").trigger("click")
   await flushPromises()

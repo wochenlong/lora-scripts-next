@@ -442,6 +442,17 @@ function closeToolPanel() {
   rightPanelMode.value = "caption"
 }
 
+/** Closing the single-image panel goes back to the pure gallery. */
+function closePanel() {
+  if (rightPanelMode.value !== "caption") {
+    closeToolPanel()
+    return
+  }
+  rememberCurrentDraft()
+  selected.value = ""
+  editorSession.rememberSelection("")
+}
+
 function addCaptionTag() {
   const next = addTagToCaption(caption.value, newCaptionTag.value)
   if (next !== caption.value) caption.value = next
@@ -603,11 +614,11 @@ async function scan() {
       page.value = 1
       rightPanelMode.value = "caption"
     }
+    // Default state is the pure gallery; only an explicit (restored) selection reopens the editor.
     const restoredItem = restoring && selected.value
       ? restoredItems.find((item) => item.relative_path === selected.value)
       : undefined
-    const nextItem = restoredItem || restoredItems[0]
-    if (nextItem) choose(nextItem)
+    if (restoredItem) choose(restoredItem)
     else {
       restoringCaption = true
       caption.value = ""
@@ -852,6 +863,7 @@ onUnmounted(() => {
       <main class="dataset-gallery">
         <header class="dataset-gallery-bar">
           <strong>{{ t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size }) }}</strong>
+          <span v-if="root && items.length && !selected" class="dataset-gallery-hint">{{ t("datasetEditor.gallery.pickHint") }}</span>
           <div class="dataset-select-scope" :class="{ open: selectMenuOpen }">
             <button
               type="button"
@@ -919,7 +931,6 @@ onUnmounted(() => {
     </div>
 
     <aside
-      v-show="panelOpen"
       class="dataset-tool-panel"
       :class="[`is-${rightPanelMode}`, { glass: rightPanelMode !== 'caption' }]"
       :aria-label="panelTitle"
@@ -927,11 +938,10 @@ onUnmounted(() => {
       <header class="dataset-tool-panel-header">
         <strong>{{ panelTitle }}</strong>
         <button
-          v-if="rightPanelMode !== 'caption'"
           type="button"
           class="dataset-tool-panel-close"
           :aria-label="t('datasetEditor.filter.close')"
-          @click="closeToolPanel"
+          @click="closePanel"
         >
           ×
         </button>

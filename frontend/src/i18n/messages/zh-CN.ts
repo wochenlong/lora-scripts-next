@@ -1040,6 +1040,7 @@ export default {
     },
     gallery: {
       count: "{filtered} / {total} 张，已选 {selected} 张",
+      pickHint: "点击图片进入单图编辑",
       selectAll: "全选（{n}）",
       deselectAll: "取消全选（{n}）",
       selectEntire: "全部图片（{n}）",

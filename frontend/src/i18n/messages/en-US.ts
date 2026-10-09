@@ -1040,6 +1040,7 @@ export default {
     },
     gallery: {
       count: "{filtered} / {total} images, {selected} selected",
+      pickHint: "Click an image to open the single-image editor",
       selectAll: "Select all ({n})",
       deselectAll: "Deselect all ({n})",
       selectEntire: "Entire dataset ({n})",
