@@ -624,7 +624,7 @@ if ($SkipTaggerPrefetch) {
 
 # ==== Step 3c: Bundle the Danbooru Chinese tag dictionary (offline 中文释义) ====
 Write-Host "[3c/6] Bundling Danbooru Chinese tag dictionary (~23 MB, offline 中文释义)..." -ForegroundColor Cyan
-$dictionaryDir = Join-Path $portableDir "assets\tag_translation\danbooru"
+$dictionaryDir = Join-Path $sdtDir "assets\tag_translation\danbooru"
 New-Item -ItemType Directory -Path $dictionaryDir -Force | Out-Null
 $dictionaryScript = Join-Path $sdtDir "scripts\prefetch_tag_dictionary.py"
 $dictionaryFile = Join-Path $dictionaryDir "tag.sqlite"

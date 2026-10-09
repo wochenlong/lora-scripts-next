@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { ElButton, ElInput, ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { datasetApi, type LlmProfile, type LocalModelStatus } from "../api/dataset"
+import { useTagTranslations } from "../composables/useTagTranslations"
 
 /**
  * Global API settings: LLM/API profiles (endpoint, model, key) and the managed
@@ -166,6 +167,9 @@ async function clearCache() {
   clearingCache.value = true
   try {
     await datasetApi.clearTagTranslationCache()
+    // The editor's translations are cached in this module-scoped composable;
+    // clearing only the server cache would keep showing stale text.
+    useTagTranslations().clearCache()
     cacheCount.value = 0
     ElMessage.success(t("settings.api.cacheCleared"))
   } catch (caught) {

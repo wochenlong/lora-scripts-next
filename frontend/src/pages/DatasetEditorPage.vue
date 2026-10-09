@@ -179,6 +179,8 @@ async function setTranslationsEnabled(value: boolean) {
   }
   showTranslations.value = true
   if (!translationReadinessLoaded.value) await loadTranslationReadiness()
+  // Readiness can reset the switch while its request is in flight; re-assert it.
+  showTranslations.value = true
   if (!translationAvailable.value) {
     // 翻译是刚需：首次打开就用默认方式（Danbooru 词库）自动补齐。
     ElMessage.info(t("datasetEditor.caption.translationDownloading"))
@@ -195,6 +197,8 @@ async function setTranslationsEnabled(value: boolean) {
 }
 
 const dictionaryDownloading = ref(false)
+/** Set on unmount so the download poll stops touching a disposed page. */
+let dictionaryPollDisposed = false
 
 /** Wait for the auto-started dictionary download, then translate. */
 async function startDefaultDictionaryDownload() {
@@ -204,7 +208,7 @@ async function startDefaultDictionaryDownload() {
     await datasetApi.updateTagDictionary(false)
     for (let attempt = 0; attempt < 240; attempt += 1) {
       await new Promise((resolve) => setTimeout(resolve, 1500))
-      if (!showTranslations.value) return
+      if (dictionaryPollDisposed || !showTranslations.value) return
       await loadDictionaryStatus()
       if (dictionaryStatus.value.installed) {
         ElMessage.success(t("datasetEditor.caption.translationDownloaded"))
@@ -289,7 +293,8 @@ async function loadTranslationSettings(force = false) {
 async function loadTranslationReadiness() {
   await Promise.all([loadTranslationSettings(), loadDictionaryStatus(), loadLocalModelStatus()])
   translationReadinessLoaded.value = true
-  if (!translationAvailable.value && showTranslations.value) {
+  // Never turn the switch off while the first-use dictionary download is running.
+  if (!translationAvailable.value && showTranslations.value && !dictionaryDownloading.value) {
     showTranslations.value = false
     cancelTranslations()
   }
@@ -851,6 +856,7 @@ onDeactivated(() => {
 })
 onUnmounted(() => {
   scanGeneration++
+  dictionaryPollDisposed = true
   window.removeEventListener("keydown", onPreviewKeydown)
   closeDatasetMenu()
   if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
