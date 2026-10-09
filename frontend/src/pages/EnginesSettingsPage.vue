@@ -27,8 +27,9 @@ let timer: number | undefined
 let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
-const MANAGED_ENGINES = new Set(["anima-fast", "musubi", "ai-toolkit", "diffsynth"])
+const MANAGED_ENGINES = new Set(["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth"])
 const INSTALL_STREAM_BASE: Record<string, string> = {
+  kohya: "/api/engines/kohya/install",
   "anima-fast": "/api/engines/anima-fast/install",
   musubi: "/api/engines/musubi/install",
   diffsynth: "/api/engines/diffsynth/install",
@@ -310,13 +311,7 @@ onBeforeUnmount(() => {
         </div>
 
         <div class="engine-row-actions">
-          <template v-if="isProductDefault(card.engine.id)">
-            <div class="engine-default-lock">
-              <b>{{ t("settings.engines.badges.currentDefault") }}</b>
-              <small>{{ t("settings.engines.defaultEngine.locked") }}</small>
-            </div>
-          </template>
-          <template v-else-if="isManaged(card.engine.id)">
+          <template v-if="isManaged(card.engine.id)">
             <button
               v-if="card.status.state === 'ready' || card.status.state === 'broken' || card.status.state === 'installed_unverified'"
               type="button"

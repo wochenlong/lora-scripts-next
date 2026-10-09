@@ -35,10 +35,6 @@ Write-Output "Installing deps..."
 # the 0 left by `python -m venv` and report "Install completed" over an empty venv.
 python -m pip install --upgrade "pip>=23.1"
 if ($LASTEXITCODE -ne 0) { Write-Output "pip upgrade failed. Check your network and retry."; InstallFail }
-python -m pip install torch==2.7.0+cu128 torchvision==0.22.0+cu128 --index-url https://download.pytorch.org/whl/cu128
-if ($LASTEXITCODE -ne 0) { Write-Output "torch install failed. Delete venv and retry."; InstallFail }
-python -m pip install -U -I --no-deps xformers==0.0.30 --index-url https://download.pytorch.org/whl/cu128
-if ($LASTEXITCODE -ne 0) { Write-Output "xformers install failed."; InstallFail }
 python -m pip install --upgrade -r requirements.txt
 if ($LASTEXITCODE -ne 0) { Write-Output "requirements install failed."; InstallFail }
 
@@ -48,15 +44,8 @@ if ($LASTEXITCODE -ne 0) {
     Write-Output "Warning: default tagger prefetch failed; it will download on first tag run."
 }
 
-Write-Output "Verifying the install..."
-python -c "import torch; print('torch', torch.__version__)"
-if ($LASTEXITCODE -ne 0) {
-    Write-Output "Verification failed: cannot import torch inside venv."
-    Write-Output "Scroll up for the pip error, or delete the venv folder and retry."
-    InstallFail
-}
-
 Write-Output "Install completed"
 Write-Output ""
-Write-Output "Optional: run install_flash_attn.bat to enable Flash Attention 2 acceleration."
+Write-Output "Note: training dependencies (torch, sd-scripts stack) are no longer part of"
+Write-Output "this environment. Install training engines from the UI: Settings -> Training Engines."
 Read-Host | Out-Null
