@@ -337,6 +337,18 @@ export default {
       uploadFail: "上传失败",
     },
   },
+  datasetDrop: {
+    release: "松开鼠标上传",
+    intoCurrent: "上传到当前目录",
+    intoRow: "上传到「{name}」",
+    intoRowHint: "松开鼠标即上传到该数据集",
+    blankHint: "松开后按文件夹名新建数据集，或上传到已有数据集",
+    needsName: "输入数据集名称后上传",
+    uploading: "上传中 {percent}%",
+    ignored: "已忽略 {n} 个不支持的文件",
+    noneAccepted: "没有可上传的文件（支持 .png .jpg .jpeg .webp .bmp .txt）",
+    inUse: "该数据集正在使用中，无法上传",
+  },
   datasetTrash: {
     title: "回收站 · {name}",
     titleGlobal: "回收站",

@@ -3,10 +3,12 @@ import { computed, onActivated, onBeforeUnmount, onDeactivated, ref, watch } fro
 import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { useRouter } from "vue-router"
-import { FolderOpened, Folder, Search, MoreFilled, Fold, Expand, Warning, Loading, Refresh, Setting, Delete, Plus } from "@element-plus/icons-vue"
+import { FolderOpened, Folder, Search, MoreFilled, Fold, Expand, Warning, Loading, Refresh, Setting, Delete, Plus, Upload } from "@element-plus/icons-vue"
 import { datasetsApi, type DatasetEntry, type DatasetOverview } from "../api/datasets"
 import DatasetTrashDialog from "../components/dataset/DatasetTrashDialog.vue"
 import DatasetDirectoryNode from "../components/dataset/DatasetDirectoryNode.vue"
+import { useDragOverState } from "../composables/useDragOverState"
+import { collectUploadItems, commonTopFolder, partitionAccepted } from "../dataset/uploadSources"
 
 const POLL_INTERVAL_MS = 1500
 const READY_REFRESH_MS = 15000
@@ -34,6 +36,10 @@ const treeOpen = ref(localStorage.getItem("dataset-tree-open") === "1"
   || (localStorage.getItem("dataset-tree-open") !== "0" && window.innerWidth > 760))
 const search = ref("")
 const sort = ref("updated")
+const { active: dropActive, onDragEnter, onDragLeave, onDragOver, onDrop: resetDragOver } = useDragOverState()
+const dropTargetName = ref<string | null>(null)
+const dropUploading = ref(false)
+const dropProgress = ref(0)
 watch(treeOpen, value => localStorage.setItem("dataset-tree-open", value ? "1" : "0"))
 const visibleDatasets = computed(() => {
   const query = search.value.trim().toLocaleLowerCase()
@@ -247,6 +253,60 @@ function onUploaded() {
   void load(true)
 }
 
+function onWorkspaceDragOver(event: DragEvent) {
+  onDragOver(event)
+  const row = (event.target as HTMLElement | null)?.closest?.("[data-dataset-name]") ?? null
+  dropTargetName.value = row?.getAttribute("data-dataset-name") ?? null
+}
+
+async function onWorkspaceDrop(event: DragEvent) {
+  const rowName = dropTargetName.value
+  dropTargetName.value = null
+  resetDragOver()
+  if (dropUploading.value) return
+  if (rowName && datasets.value.find(entry => entry.name === rowName)?.in_use) {
+    ElMessage.error(t("datasetDrop.inUse"))
+    return
+  }
+  const { accepted, ignored } = partitionAccepted(await collectUploadItems(event.dataTransfer))
+  if (!accepted.length) {
+    ElMessage.error(t("datasetDrop.noneAccepted"))
+    return
+  }
+  let target = rowName
+  if (!target) {
+    try {
+      const result = await ElMessageBox.prompt(t("datasetDrop.needsName"), t("datasetManage.create"), {
+        inputValue: commonTopFolder(accepted) ?? "",
+        inputPattern: /\S+/,
+        inputErrorMessage: t("datasetManage.createPlaceholder"),
+        confirmButtonText: t("datasetManage.createConfirm"),
+        cancelButtonText: t("datasetManage.cancel"),
+      })
+      target = result.value.trim()
+    } catch {
+      return
+    }
+  }
+  dropUploading.value = true
+  dropProgress.value = 0
+  try {
+    try {
+      await datasetsApi.create(target)
+    } catch {
+      // Name already taken — upload into the existing dataset instead.
+    }
+    const data = await datasetsApi.upload(target, accepted, "skip", (percent) => { dropProgress.value = percent })
+    const summary = t("datasetUpload.resultSummary", { ok: data.succeeded.length, skipped: data.skipped.length, failed: data.failed.length })
+    ElMessage.success(ignored ? `${summary} · ${t("datasetDrop.ignored", { n: ignored })}` : summary)
+    await load(true)
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("datasetUpload.msg.uploadFail"))
+  } finally {
+    dropUploading.value = false
+  }
+}
+
 onActivated(() => {
   void load()
 })
@@ -255,7 +315,14 @@ onBeforeUnmount(stopPolling)
 </script>
 
 <template>
-  <div class="dataset-manager-workspace" :class="{ 'tree-collapsed': !treeOpen }">
+  <div
+    class="dataset-manager-workspace"
+    :class="{ 'tree-collapsed': !treeOpen, 'is-drop-active': dropActive }"
+    @dragenter.prevent="onDragEnter"
+    @dragover="onWorkspaceDragOver"
+    @dragleave.prevent="onDragLeave"
+    @drop.prevent="onWorkspaceDrop"
+  >
     <aside v-if="treeOpen" class="dataset-explorer" :aria-label="t('datasetManage.explorer')">
       <header><strong>{{ t("datasetManage.explorer") }}</strong><button class="dataset-icon-button" :title="t('datasetManage.collapseTree')" :aria-label="t('datasetManage.collapseTree')" @click="treeOpen = false"><Fold /></button></header>
       <div class="dataset-tree-root">
@@ -282,11 +349,13 @@ onBeforeUnmount(stopPolling)
           <option value="created">{{ t("datasetManage.sortCreated") }}</option>
           <option value="images">{{ t("datasetManage.sortImages") }}</option>
         </select>
-        <button class="dataset-icon-button" :title="t('datasetManage.refresh')" :aria-label="t('datasetManage.refresh')" :disabled="loading || refreshing" @click="load(true)"><Refresh :class="{ 'is-loading': refreshing }" /></button>
       </div>
       <div class="dataset-location-row">
         <button :title="rootPath" @click="openRootDialog"><FolderOpened /><span>{{ rootPath || rootLabel }}</span><Setting /></button>
-        <label class="dataset-manage-autorefresh"><ElSwitch v-model="autoRefresh" /><span>{{ t("datasetManage.autoRefresh") }}</span></label>
+        <div class="dataset-location-actions">
+          <button class="dataset-icon-button" :title="t('datasetManage.refresh')" :aria-label="t('datasetManage.refresh')" :disabled="loading || refreshing" @click="load(true)"><Refresh :class="{ 'is-loading': refreshing }" /></button>
+          <label class="dataset-manage-autorefresh"><ElSwitch v-model="autoRefresh" /><span>{{ t("datasetManage.autoRefresh") }}</span></label>
+        </div>
       </div>
 
     <section
@@ -310,7 +379,7 @@ onBeforeUnmount(stopPolling)
       <table class="dataset-table">
         <thead><tr><th>{{ t("datasetManage.name") }}</th><th>{{ t("datasetManage.files") }}</th><th>{{ t("datasetManage.captioned") }}</th><th>{{ t("datasetManage.updatedAt") }}</th><th><span class="dataset-visually-hidden">{{ t("datasetManage.actions") }}</span></th></tr></thead>
         <tbody>
-          <tr v-for="entry in visibleDatasets" :key="entry.name">
+          <tr v-for="entry in visibleDatasets" :key="entry.name" :data-dataset-name="entry.name" :class="{ 'is-drop-target': dropTargetName === entry.name }">
             <td><button class="dataset-row-name" :disabled="entry.in_use" :title="entry.path" @click="openDirectory(entry.path)"><Folder /><span>{{ entry.name }}</span></button><span v-if="entry.in_use" class="dataset-card-in-use">{{ t("datasetManage.inUse") }}</span></td>
             <td>{{ statValue(entry, "file_count") }}</td>
             <td>{{ statValue(entry, "captioned_count") }}</td>
@@ -353,5 +422,12 @@ onBeforeUnmount(stopPolling)
         <button class="primary-action" :disabled="creating || !createName.trim()" @click="createDataset">{{ t("datasetManage.createConfirm") }}</button>
       </template>
     </ElDialog>
+
+    <div v-if="dropActive" class="dataset-drop-overlay" aria-hidden="true">
+      <Upload />
+      <strong>{{ dropTargetName ? t("datasetDrop.intoRow", { name: dropTargetName }) : t("datasetDrop.release") }}</strong>
+      <span>{{ dropTargetName ? t("datasetDrop.intoRowHint") : t("datasetDrop.blankHint") }}</span>
+      <span v-if="dropUploading">{{ t("datasetDrop.uploading", { percent: dropProgress }) }}</span>
+    </div>
   </div>
 </template>

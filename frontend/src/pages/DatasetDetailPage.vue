@@ -6,6 +6,8 @@ import { ElMessage } from "element-plus"
 import { ArrowLeft, Folder, Document, Picture, Upload, View, Hide, Refresh, Download } from "@element-plus/icons-vue"
 import { datasetDownloadUrl, datasetFileUrl, datasetsApi, type DatasetContents } from "../api/datasets"
 import DatasetUploadDialog from "../components/dataset/DatasetUploadDialog.vue"
+import { useDragOverState } from "../composables/useDragOverState"
+import { collectUploadItems, partitionAccepted } from "../dataset/uploadSources"
 
 const props = defineProps<{ name: string; directory?: string }>()
 const { t } = useI18n()
@@ -22,6 +24,10 @@ const copyFlatten = ref(true)
 const copyLayout = ref<"preserve" | "flatten" | "kohya">("preserve")
 const copyRepeats = ref(10)
 const page = ref(1)
+const { active: dropActive, onDragEnter, onDragLeave, onDragOver, onDrop: resetDragOver } = useDragOverState()
+const dropUploading = ref(false)
+const dropProgress = ref(0)
+const dropBlocked = computed(() => !content.value || Boolean(content.value.in_use))
 const pageCount = computed(() => Math.max(1, Math.ceil((content.value?.entries.length ?? 0) / 48)))
 const entries = computed(() => content.value?.entries.slice((page.value - 1) * 48, page.value * 48) ?? [])
 let generation = 0
@@ -70,12 +76,47 @@ async function createCopy() {
     ElMessage.error(caught instanceof Error ? caught.message : String(caught))
   } finally { copying.value = false }
 }
+async function onPageDrop(event: DragEvent) {
+  resetDragOver()
+  if (dropUploading.value || !content.value) return
+  if (content.value.in_use) {
+    ElMessage.error(t("datasetDrop.inUse"))
+    return
+  }
+  const { accepted, ignored } = partitionAccepted(await collectUploadItems(event.dataTransfer))
+  if (!accepted.length) {
+    ElMessage.error(t("datasetDrop.noneAccepted"))
+    return
+  }
+  const prefix = props.directory ? `${props.directory}/` : ""
+  const targets = accepted.map((item) => ({ file: item.file, path: prefix + item.path }))
+  dropUploading.value = true
+  dropProgress.value = 0
+  try {
+    const data = await datasetsApi.upload(props.name, targets, "skip", (percent) => { dropProgress.value = percent })
+    const summary = t("datasetUpload.resultSummary", { ok: data.succeeded.length, skipped: data.skipped.length, failed: data.failed.length })
+    ElMessage.success(ignored ? `${summary} · ${t("datasetDrop.ignored", { n: ignored })}` : summary)
+    await load()
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("datasetUpload.msg.uploadFail"))
+  } finally {
+    dropUploading.value = false
+  }
+}
+
 watch(() => [props.name, props.directory], () => { showImages.value = false; void load() }, { immediate: true })
 onBeforeUnmount(() => generation++)
 </script>
 
 <template>
-  <main class="dataset-detail">
+  <main
+    class="dataset-detail"
+    :class="{ 'is-drop-active': dropActive }"
+    @dragenter.prevent="onDragEnter"
+    @dragover="onDragOver"
+    @dragleave.prevent="onDragLeave"
+    @drop.prevent="onPageDrop"
+  >
     <header class="dataset-detail-heading">
       <button class="dataset-icon-button" :aria-label="t('datasetManage.back')" :title="t('datasetManage.back')" @click="back"><ArrowLeft /></button>
       <div><h2>{{ name }}</h2><span>{{ t("datasetManage.preview") }}</span></div>
@@ -136,5 +177,11 @@ onBeforeUnmount(() => generation++)
         <button class="primary-action" :disabled="copying || !copyName.trim()" @click="createCopy">{{ t("datasetManage.preprocessConfirm") }}</button>
       </template>
     </ElDialog>
+    <div v-if="dropActive" class="dataset-drop-overlay" :class="{ blocked: dropBlocked }" aria-hidden="true">
+      <Upload />
+      <strong>{{ dropBlocked ? t("datasetDrop.inUse") : t("datasetDrop.release") }}</strong>
+      <span v-if="!dropBlocked">{{ t("datasetDrop.intoCurrent") }} · {{ content?.path || directory || name }}</span>
+      <span v-if="dropUploading">{{ t("datasetDrop.uploading", { percent: dropProgress }) }}</span>
+    </div>
   </main>
 </template>

@@ -337,6 +337,18 @@ export default {
       uploadFail: "Upload failed",
     },
   },
+  datasetDrop: {
+    release: "Release to upload",
+    intoCurrent: "into the current folder",
+    intoRow: "Upload to \"{name}\"",
+    intoRowHint: "Release to upload into this dataset",
+    blankHint: "Release to create a dataset from the folder name, or upload into an existing one",
+    needsName: "Name the dataset to upload",
+    uploading: "Uploading {percent}%",
+    ignored: "{n} unsupported file(s) ignored",
+    noneAccepted: "No uploadable files (supported: .png .jpg .jpeg .webp .bmp .txt)",
+    inUse: "This dataset is in use and cannot accept uploads",
+  },
   datasetTrash: {
     title: "Trash · {name}",
     titleGlobal: "Trash",

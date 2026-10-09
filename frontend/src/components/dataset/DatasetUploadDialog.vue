@@ -3,12 +3,13 @@ import { computed, ref, watch } from "vue"
 import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { datasetsApi, type UploadFailure, type UploadFileItem, type UploadResult } from "../../api/datasets"
+import { collectUploadItems, itemsFromFileList, UPLOAD_ACCEPT } from "../../dataset/uploadSources"
 
 const props = defineProps<{ modelValue: boolean; datasetName: string; targetDirectory?: string }>()
 const emit = defineEmits<{ "update:modelValue": [boolean]; uploaded: [] }>()
 const { t } = useI18n()
 
-const ACCEPT = ".png,.jpg,.jpeg,.webp,.bmp,.txt"
+const ACCEPT = UPLOAD_ACCEPT
 
 const staged = ref<UploadFileItem[]>([])
 const conflicts = ref<string[]>([])
@@ -65,54 +66,19 @@ function addFiles(list: Iterable<{ file: File; path: string }>) {
 
 function onPickFiles(event: Event) {
   const input = event.target as HTMLInputElement
-  const items = Array.from(input.files ?? []).map((file) => ({ file, path: file.name }))
-  addFiles(items)
+  addFiles(itemsFromFileList(input.files ?? []))
   input.value = ""
 }
 
 function onPickFolder(event: Event) {
   const input = event.target as HTMLInputElement
-  const items = Array.from(input.files ?? []).map((file) => ({
-    file,
-    path: (file as File & { webkitRelativePath?: string }).webkitRelativePath || file.name,
-  }))
-  addFiles(items)
+  addFiles(itemsFromFileList(input.files ?? [], true))
   input.value = ""
-}
-
-async function readEntry(entry: FileSystemEntry, prefix: string, out: UploadFileItem[]): Promise<void> {
-  if (entry.isFile) {
-    const file = await new Promise<File>((resolve, reject) => (entry as FileSystemFileEntry).file(resolve, reject))
-    out.push({ file, path: prefix + file.name })
-    return
-  }
-  if (entry.isDirectory) {
-    const reader = (entry as FileSystemDirectoryEntry).createReader()
-    while (true) {
-      const entries = await new Promise<FileSystemEntry[]>((resolve, reject) => reader.readEntries(resolve, reject))
-      if (!entries.length) break
-      for (const child of entries) await readEntry(child, `${prefix}${entry.name}/`, out)
-    }
-  }
 }
 
 async function onDrop(event: DragEvent) {
   dragOver.value = false
-  const items = event.dataTransfer?.items
-  if (!items) return
-  const entries: FileSystemEntry[] = []
-  for (const item of Array.from(items)) {
-    const entry = item.webkitGetAsEntry?.()
-    if (entry) entries.push(entry)
-  }
-  if (!entries.length) {
-    const files = Array.from(event.dataTransfer?.files ?? []).map((file) => ({ file, path: file.name }))
-    addFiles(files)
-    return
-  }
-  const collected: UploadFileItem[] = []
-  for (const entry of entries) await readEntry(entry, "", collected)
-  addFiles(collected)
+  addFiles(await collectUploadItems(event.dataTransfer))
 }
 
 function removeStaged(index: number) {
