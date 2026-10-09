@@ -28,6 +28,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/tasks", component: TasksPage, meta: { titleKey: "tasks.title" } },
   { path: "/settings", redirect: "/settings/ui" },
   { path: "/settings/ui", component: SettingsContainerPage, props: { tab: "ui" }, meta: { titleKey: "settings.title" } },
+  { path: "/settings/api", component: SettingsContainerPage, props: { tab: "api" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/engines", component: SettingsContainerPage, props: { tab: "engines" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/update", component: SettingsContainerPage, props: { tab: "update" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/plugins", component: SettingsContainerPage, props: { tab: "plugins" }, meta: { titleKey: "marketplace.title" } },

@@ -558,8 +558,17 @@ export default {
   settings: {
     title: "Settings",
     subtitle: "Training UI, engines, updates, and about",
+    api: {
+      title: "API settings",
+      hint: "Endpoints, models and API keys are configured once here; translation and tagging share this configuration.",
+      save: "Save API settings",
+      reset: "Revert",
+      saved: "API settings saved",
+      cacheCleared: "Translation cache cleared",
+    },
     nav: {
       ui: "UI",
+      api: "API",
       engines: "Engines",
       update: "Updates",
       plugins: "Plugin Marketplace",
@@ -1100,6 +1109,7 @@ export default {
       translationUnavailable: "Open Translation settings first, then download the Danbooru dictionary or configure an available LLM interface.",
       translationSettingsTitle: "Translation settings",
       translationSettingsHint: "The dictionary works offline and is tried first; the local model and API run only when you enable Chinese meanings.",
+      translationSettingsMoved: "Endpoints and API keys are configured in Settings:",
       translationCancel: "Cancel",
       translationCache: "Cached translations: {n}",
       translationCacheClear: "Clear network/LLM cache",

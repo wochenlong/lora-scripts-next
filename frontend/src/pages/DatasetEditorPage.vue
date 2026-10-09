@@ -58,10 +58,9 @@ const showTranslations = editorSession.showTranslations
 /** 标签编辑 = chips; 自由编辑 = raw caption text. */
 const captionMode = ref<"tags" | "raw">("tags")
 const translationProvider = editorSession.translationProvider
-const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, clearExternalCache, cancelCurrent: cancelTranslations } = useTagTranslations()
+const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
-const translationSettingsSaving = ref(false)
 const translationSettingsError = ref("")
 const translationReadinessLoaded = ref(false)
 const llmProfiles = ref<LlmProfile[]>([])
@@ -71,11 +70,9 @@ const committedLlmProfiles = ref<LlmProfile[]>([])
 const committedActiveRemoteId = ref("default")
 const committedLlmMode = ref<"remote" | "local">("remote")
 const translationCacheCount = ref(0)
-const translationCacheClearing = ref(false)
 const dictionaryStatus = ref<TagDictionaryStatus>({ state: "missing", installed: false, row_count: 0, size_bytes: 0, error: null })
 const dictionaryBusy = ref(false)
 const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "internal://dataset-translation", port: 0, error: null })
-const localModelBusy = ref(false)
 let translationSettingsPoll: ReturnType<typeof setTimeout> | undefined
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
@@ -227,6 +224,21 @@ async function startDefaultDictionaryDownload() {
   }
 }
 
+/** The dialog's source picker persists the LLM mode so the choice sticks. */
+async function onLlmModeChange(value: "remote" | "local") {
+  llmMode.value = value
+  try {
+    await datasetApi.saveTagTranslationConfig({
+      llm_mode: value,
+      active_remote_id: activeRemoteId.value,
+      remote_profiles: llmProfiles.value,
+      local: { enabled: value === "local" },
+    })
+  } catch {
+    // The settings page owns the full config; a transient failure keeps the local choice.
+  }
+}
+
 function setTranslationProvider(value: typeof translationProvider.value) {
   translationProvider.value = value
   cancelTranslations()
@@ -281,36 +293,6 @@ async function loadTranslationReadiness() {
     showTranslations.value = false
     cancelTranslations()
   }
-}
-
-async function saveTranslationSettings() {
-  translationSettingsSaving.value = true
-  translationSettingsError.value = ""
-  try {
-    await datasetApi.saveTagTranslationConfig({
-      llm_mode: llmMode.value,
-      active_remote_id: activeRemoteId.value,
-      remote_profiles: llmProfiles.value,
-      local: { enabled: llmMode.value === "local" },
-    })
-    snapshotTranslationSettings()
-    clearExternalCache()
-    if (showTranslations.value) void refreshTranslationsAfterSettingsChange()
-  } catch (caught) {
-    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
-    restoreTranslationSettings()
-  } finally {
-    translationSettingsSaving.value = false
-  }
-}
-
-async function refreshTranslationsAfterSettingsChange() {
-  if (!showTranslations.value) return
-  if (translationProvider.value === "llm") {
-    const ready = await ensureLlmReady()
-    if (!ready || !showTranslations.value || translationProvider.value !== "llm") return
-  }
-  await translateWholeDataset()
 }
 
 const activeRemoteProfile = computed(() => llmProfiles.value.find((profile) => profile.id === activeRemoteId.value))
@@ -412,47 +394,6 @@ async function cancelDictionary() {
   finally { dictionaryBusy.value = false }
 }
 
-async function setupLocalModel() {
-  localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.setupLocalModel(); scheduleTranslationSettingsPoll() }
-  catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
-  finally { localModelBusy.value = false }
-}
-
-async function cancelLocalModel() {
-  localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.cancelLocalModel() }
-  catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
-  finally { localModelBusy.value = false }
-}
-
-async function startLocalModel() {
-  localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.startLocalModel() }
-  catch (caught) { translationSettingsError.value = caught instanceof Error ? caught.message : String(caught) }
-  finally { localModelBusy.value = false }
-}
-
-async function stopLocalModel() {
-  localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.stopLocalModel() }
-  catch (caught) { translationSettingsError.value = caught instanceof Error ? caught.message : String(caught) }
-  finally { localModelBusy.value = false }
-}
-
-async function clearTranslationCacheFromSettings() {
-  translationCacheClearing.value = true
-  try {
-    await datasetApi.clearTagTranslationCache()
-    clearExternalCache()
-    translationCacheCount.value = 0
-    if (showTranslations.value) void refreshTranslationsAfterSettingsChange()
-  } catch (caught) {
-    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
-  } finally {
-    translationCacheClearing.value = false
-  }
-}
 const selectAllLabel = computed(() =>
   workingScopeFullySelected.value
     ? t("datasetEditor.gallery.deselectAll", { n: workingScopeCount.value })
@@ -1259,35 +1200,18 @@ onUnmounted(() => {
   <TagTranslationSettingsDialog
     :model-value="translationSettingsOpen"
     :loading="translationSettingsLoading"
-    :saving="translationSettingsSaving"
     :error="translationSettingsError"
     :provider="translationProvider"
-    :profiles="llmProfiles"
-    :active-remote-id="activeRemoteId"
     :llm-mode="llmMode"
-    :cache-count="translationCacheCount"
-    :clearing-cache="translationCacheClearing"
     :dictionary="dictionaryStatus"
     :dictionary-busy="dictionaryBusy"
-    :local-model="localModelStatus"
-    :local-model-busy="localModelBusy"
-    :remote-configured="remoteProfileConfigured"
     @update:model-value="onTranslationSettingsModelChange"
-    @update:profiles="llmProfiles = $event"
     @update:provider="setTranslationProvider"
-    @update:active-remote-id="activeRemoteId = $event"
-    @update:llm-mode="llmMode = $event"
-    @save="saveTranslationSettings"
-    @clear-cache="clearTranslationCacheFromSettings"
+    @update:llm-mode="onLlmModeChange"
     @check-dictionary="checkDictionary"
     @update-dictionary="updateDictionary"
     @retry-dictionary="retryDictionary"
     @cancel-dictionary="cancelDictionary"
-    @setup-local-model="setupLocalModel"
-    @cancel-local-model="cancelLocalModel"
-    @start-local-model="startLocalModel"
-    @stop-local-model="stopLocalModel"
-    @use-remote-mode="llmMode = 'remote'"
   />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">

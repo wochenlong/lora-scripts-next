@@ -558,8 +558,17 @@ export default {
   settings: {
     title: "设置",
     subtitle: "训练 UI、引擎、更新与关于信息",
+    api: {
+      title: "API 设置",
+      hint: "接口、模型与 API Key 在这里统一配置；翻译、打标等功能共用这一份配置。",
+      save: "保存 API 设置",
+      reset: "还原",
+      saved: "API 设置已保存",
+      cacheCleared: "翻译缓存已清理",
+    },
     nav: {
       ui: "UI 设置",
+      api: "API",
       engines: "训练引擎",
       update: "更新",
       plugins: "插件市场",
@@ -1100,6 +1109,7 @@ export default {
       translationUnavailable: "请先打开“翻译设置”，下载 Danbooru 词库或配置可用的 LLM 接口。",
       translationSettingsTitle: "翻译设置",
       translationSettingsHint: "词库离线可用、始终优先；本地模型和 API 只在你打开「中文释义」时调用。",
+      translationSettingsMoved: "接口与 API Key 统一在设置里配置：",
       translationCancel: "取消",
       translationCache: "已缓存译文：{n} 条",
       translationCacheClear: "清理网络/LLM缓存",
