@@ -1,11 +1,14 @@
 import { createApp } from "vue"
 import { createPinia } from "pinia"
-import { ElButton, ElCheckbox, ElConfigProvider, ElDialog, ElIcon, ElInput, ElInputNumber, ElOption, ElProgress, ElSelect, ElSwitch, vLoading } from "element-plus"
+import { ElButton, ElCheckbox, ElConfigProvider, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElIcon, ElInput, ElInputNumber, ElOption, ElProgress, ElSelect, ElSwitch, vLoading } from "element-plus"
 import "element-plus/theme-chalk/base.css"
 import "element-plus/es/components/button/style/css"
 import "element-plus/es/components/checkbox/style/css"
 import "element-plus/es/components/config-provider/style/css"
 import "element-plus/es/components/dialog/style/css"
+import "element-plus/es/components/dropdown/style/css"
+import "element-plus/es/components/dropdown-item/style/css"
+import "element-plus/es/components/dropdown-menu/style/css"
 import "element-plus/es/components/icon/style/css"
 import "element-plus/es/components/input/style/css"
 import "element-plus/es/components/input-number/style/css"
@@ -36,7 +39,7 @@ import "./styles/extensions.css"
 import "./styles/dark-theme.css"
 
 const app = createApp(App)
-for (const component of [ElButton, ElCheckbox, ElConfigProvider, ElDialog, ElIcon, ElInput, ElInputNumber, ElOption, ElProgress, ElSelect, ElSwitch]) app.component(component.name!, component)
+for (const component of [ElButton, ElCheckbox, ElConfigProvider, ElDialog, ElDropdown, ElDropdownItem, ElDropdownMenu, ElIcon, ElInput, ElInputNumber, ElOption, ElProgress, ElSelect, ElSwitch]) app.component(component.name!, component)
 async function bootstrap() {
   // Hydrate before installing the router, which starts the initial navigation.
   try { await loadEngineSettings() } catch { /* App renders the shared error and retry action. */ }

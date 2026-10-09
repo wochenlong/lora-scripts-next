@@ -574,6 +574,16 @@ async def tagger_status():
     return APIResponseSuccess(data=tagger_progress.get())
 
 
+@router.get("/tagger/models")
+def tagger_models():
+    from mikazuki.tagger.model_fetch import interrogator_assets_ready
+
+    return APIResponseSuccess(data={"models": [
+        {"id": key, "downloaded": interrogator_assets_ready(interrogator, key)}
+        for key, interrogator in available_interrogators.items()
+    ]})
+
+
 @router.get("/tagger/download-status")
 async def tagger_download_status():
     snap = tagger_progress.get()

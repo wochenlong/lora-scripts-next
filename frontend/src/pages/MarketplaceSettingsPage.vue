@@ -1,5 +1,4 @@
 <script setup lang="ts">
-import NetworkSettingsPanel from "../components/NetworkSettingsPanel.vue"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { Refresh } from "@element-plus/icons-vue"
@@ -361,7 +360,6 @@ onMounted(() => void load())
 
 <template>
   <section class="marketplace-page" aria-labelledby="marketplace-title">
-    <NetworkSettingsPanel />
     <header class="marketplace-header">
       <div>
         <h2 id="marketplace-title">{{ t("marketplace.title") }}</h2>

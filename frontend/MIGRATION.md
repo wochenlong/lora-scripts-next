@@ -228,3 +228,19 @@ for the proposal-to-current-API mapping and outstanding real-training acceptance
 Validation: Node 22 `npm run check` passed (221 tests, typecheck, lint, production build);
 related backend regression: 27 passed, 3 skipped (optional torch/DiffSynth dependencies).
 No browser interaction or GPU training was performed for this merge.
+
+### Dataset source selection (2026-10-07)
+
+The editor and tagger share one dataset selector with existing-dataset and new-dataset
+tabs. Both pages retain directly editable folder paths. Browsing uses the shared
+native-first picker for local hosts (respecting the explicit picker preference),
+with the web picker available for remote hosts or unavailable desktop dialogs.
+Folder browsing and pasted paths remain server-side paths; selection requires
+confirmation. The editor shows change/unload only after a successful scan, including
+empty datasets. Unload clears session state, not files, and confirms unsaved drafts.
+The editor source row is separate from filtering and batch actions. The source dialog
+and nested server browser are teleported to avoid toolbar clipping.
+
+The dataset list menu is limited to manage, rename and delete. Upload, ZIP export,
+tagging, caption editing and copy/preprocessing are available inside the detail page.
+Copy retains directory layout, Kohya repeats and transparency options.

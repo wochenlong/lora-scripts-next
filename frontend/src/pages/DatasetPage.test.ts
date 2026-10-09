@@ -153,6 +153,13 @@ describe("DatasetEditorPage route session", () => {
     })
     await flushPromises()
 
+    // Default state stays a pure gallery; the editor opens once an image is picked.
+    expect(wrapper.find(".caption-panel .primary-action").exists()).toBe(false)
+    await wrapper.get(".image-grid button").trigger("click")
+    await nextTick()
+    // The raw caption textarea lives in the 自由编辑 mode; 标签编辑 shows chips.
+    await wrapper.findAll(".caption-mode button").find((button) => button.text().includes("自由编辑"))!.trigger("click")
+    await nextTick()
     expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes")
     wrapper.unmount()
 
@@ -167,6 +174,8 @@ describe("DatasetEditorPage route session", () => {
       },
     })
     await flushPromises()
+    await refreshed.findAll(".caption-mode button").find((button) => button.text().includes("自由编辑"))!.trigger("click")
+    await nextTick()
     expect((refreshed.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes")
 
     const editor = refreshed.find("textarea")
@@ -184,6 +193,8 @@ describe("DatasetEditorPage route session", () => {
     })
     await flushPromises()
 
+    await restored.findAll(".caption-mode button").find((button) => button.text().includes("自由编辑"))!.trigger("click")
+    await nextTick()
     expect((restored.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes, long_hair")
     expect(session.lastRoot.value).toBe("D:/datasets/sample")
     expect(session.getDraft("D:/datasets/sample", "sample.png")).toBe("blue_eyes, long_hair")

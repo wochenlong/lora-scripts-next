@@ -1,27 +1,27 @@
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue"
-import { ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
+import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
+import { Setting } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
-import { useRoute } from "vue-router"
+import { useRoute, useRouter } from "vue-router"
 import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type LlmProfile, type TagDictionaryStatus } from "../api/dataset"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import TagTranslationControls from "../components/dataset/TagTranslationControls.vue"
 import TagTranslationSettingsDialog from "../components/dataset/TagTranslationSettingsDialog.vue"
-import PathPickerDialog from "../components/PathPickerDialog.vue"
+import ManagedDatasetPicker from "../components/dataset/ManagedDatasetPicker.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
-import { useServerPathPick } from "../composables/useServerPathPick"
 import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
 import { useTagTranslations } from "../composables/useTagTranslations"
 import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
 
 const { t } = useI18n()
 const route = useRoute()
+const router = useRouter()
 
 type RightPanelMode = "caption" | "filter" | "batch"
 
 const PAGE_SIZE_KEY = "dataset-editor-page-size"
-const DRAWER_WIDTH = "380px"
 const editorSession = useDatasetEditorSession()
 const path = ref(editorSession.lastPath.value)
 const root = editorSession.lastRoot
@@ -45,16 +45,6 @@ const sort = ref(false)
 const underscoreToSpace = ref(false)
 const stripEscapeChars = ref(false)
 const loading = ref(false)
-const picking = ref(false)
-const {
-  open: pathPickerOpen,
-  mode: pathPickerMode,
-  initialPath: pathPickerInitial,
-  nameFilter: pathPickerFilter,
-  pick: pickServerPath,
-  onConfirm: onPathConfirm,
-  onCancel: onPathCancel,
-} = useServerPathPick()
 const appendPosition = ref<"front" | "back">("back")
 const newCaptionTag = ref("")
 const page = editorSession.page
@@ -65,11 +55,12 @@ const selectMenuOpen = ref(false)
 const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
+/** 标签编辑 = chips; 自由编辑 = raw caption text. */
+const captionMode = ref<"tags" | "raw">("tags")
 const translationProvider = editorSession.translationProvider
-const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, clearExternalCache, cancelCurrent: cancelTranslations } = useTagTranslations()
+const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
 const translationSettingsLoading = ref(false)
-const translationSettingsSaving = ref(false)
 const translationSettingsError = ref("")
 const translationReadinessLoaded = ref(false)
 const llmProfiles = ref<LlmProfile[]>([])
@@ -79,11 +70,9 @@ const committedLlmProfiles = ref<LlmProfile[]>([])
 const committedActiveRemoteId = ref("default")
 const committedLlmMode = ref<"remote" | "local">("remote")
 const translationCacheCount = ref(0)
-const translationCacheClearing = ref(false)
 const dictionaryStatus = ref<TagDictionaryStatus>({ state: "missing", installed: false, row_count: 0, size_bytes: 0, error: null })
 const dictionaryBusy = ref(false)
 const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "internal://dataset-translation", port: 0, error: null })
-const localModelBusy = ref(false)
 let translationSettingsPoll: ReturnType<typeof setTimeout> | undefined
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
@@ -117,6 +106,8 @@ const filtered = computed(() =>
 const pageCount = computed(() => Math.max(1, Math.ceil(filtered.value.length / pageSize.value)))
 const paged = computed(() => filtered.value.slice((page.value - 1) * pageSize.value, page.value * pageSize.value))
 const current = computed(() => items.value.find((item) => item.relative_path === selected.value))
+/** The single-image panel only earns its 320px when it has something to show. */
+const panelOpen = computed(() => rightPanelMode.value !== "caption" || Boolean(current.value))
 const targets = computed(() =>
   selectedPaths.value.size ? items.value.filter((item) => selectedPaths.value.has(item.relative_path)) : filtered.value,
 )
@@ -180,15 +171,20 @@ function scheduleTranslationRefresh() {
   }, 350)
 }
 
-function setTranslationsEnabled(value: boolean) {
-  if (value && !translationAvailable.value) {
-    translationSettingsOpen.value = true
-    ElMessage.warning(translationUnavailableHint.value)
+async function setTranslationsEnabled(value: boolean) {
+  if (!value) {
+    showTranslations.value = false
+    cancelTranslations()
     return
   }
-  showTranslations.value = value
-  if (!value) {
-    cancelTranslations()
+  showTranslations.value = true
+  if (!translationReadinessLoaded.value) await loadTranslationReadiness()
+  // Readiness can reset the switch while its request is in flight; re-assert it.
+  showTranslations.value = true
+  if (!translationAvailable.value) {
+    // 翻译是刚需：首次打开就用默认方式（Danbooru 词库）自动补齐。
+    ElMessage.info(t("datasetEditor.caption.translationDownloading"))
+    void startDefaultDictionaryDownload()
     return
   }
   if (translationProvider.value === "llm") {
@@ -198,6 +194,53 @@ function setTranslationsEnabled(value: boolean) {
     return
   }
   void translateWholeDataset()
+}
+
+const dictionaryDownloading = ref(false)
+/** Set on unmount so the download poll stops touching a disposed page. */
+let dictionaryPollDisposed = false
+
+/** Wait for the auto-started dictionary download, then translate. */
+async function startDefaultDictionaryDownload() {
+  if (dictionaryDownloading.value) return
+  dictionaryDownloading.value = true
+  try {
+    await datasetApi.updateTagDictionary(false)
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      if (dictionaryPollDisposed || !showTranslations.value) return
+      await loadDictionaryStatus()
+      if (dictionaryStatus.value.installed) {
+        ElMessage.success(t("datasetEditor.caption.translationDownloaded"))
+        void translateWholeDataset()
+        return
+      }
+      if (dictionaryStatus.value.state === "error") {
+        ElMessage.error(dictionaryStatus.value.error || t("datasetEditor.caption.translationUnavailable"))
+        return
+      }
+    }
+    ElMessage.warning(t("datasetEditor.caption.translationUnavailable"))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.caption.translationUnavailable"))
+  } finally {
+    dictionaryDownloading.value = false
+  }
+}
+
+/** The dialog's source picker persists the LLM mode so the choice sticks. */
+async function onLlmModeChange(value: "remote" | "local") {
+  llmMode.value = value
+  try {
+    await datasetApi.saveTagTranslationConfig({
+      llm_mode: value,
+      active_remote_id: activeRemoteId.value,
+      remote_profiles: llmProfiles.value,
+      local: { enabled: value === "local" },
+    })
+  } catch {
+    // The settings page owns the full config; a transient failure keeps the local choice.
+  }
 }
 
 function setTranslationProvider(value: typeof translationProvider.value) {
@@ -250,40 +293,11 @@ async function loadTranslationSettings(force = false) {
 async function loadTranslationReadiness() {
   await Promise.all([loadTranslationSettings(), loadDictionaryStatus(), loadLocalModelStatus()])
   translationReadinessLoaded.value = true
-  if (!translationAvailable.value && showTranslations.value) {
+  // Never turn the switch off while the first-use dictionary download is running.
+  if (!translationAvailable.value && showTranslations.value && !dictionaryDownloading.value) {
     showTranslations.value = false
     cancelTranslations()
   }
-}
-
-async function saveTranslationSettings() {
-  translationSettingsSaving.value = true
-  translationSettingsError.value = ""
-  try {
-    await datasetApi.saveTagTranslationConfig({
-      llm_mode: llmMode.value,
-      active_remote_id: activeRemoteId.value,
-      remote_profiles: llmProfiles.value,
-      local: { enabled: llmMode.value === "local" },
-    })
-    snapshotTranslationSettings()
-    clearExternalCache()
-    if (showTranslations.value) void refreshTranslationsAfterSettingsChange()
-  } catch (caught) {
-    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
-    restoreTranslationSettings()
-  } finally {
-    translationSettingsSaving.value = false
-  }
-}
-
-async function refreshTranslationsAfterSettingsChange() {
-  if (!showTranslations.value) return
-  if (translationProvider.value === "llm") {
-    const ready = await ensureLlmReady()
-    if (!ready || !showTranslations.value || translationProvider.value !== "llm") return
-  }
-  await translateWholeDataset()
 }
 
 const activeRemoteProfile = computed(() => llmProfiles.value.find((profile) => profile.id === activeRemoteId.value))
@@ -385,47 +399,6 @@ async function cancelDictionary() {
   finally { dictionaryBusy.value = false }
 }
 
-async function setupLocalModel() {
-  localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.setupLocalModel(); scheduleTranslationSettingsPoll() }
-  catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
-  finally { localModelBusy.value = false }
-}
-
-async function cancelLocalModel() {
-  localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.cancelLocalModel() }
-  catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
-  finally { localModelBusy.value = false }
-}
-
-async function startLocalModel() {
-  localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.startLocalModel() }
-  catch (caught) { translationSettingsError.value = caught instanceof Error ? caught.message : String(caught) }
-  finally { localModelBusy.value = false }
-}
-
-async function stopLocalModel() {
-  localModelBusy.value = true
-  try { localModelStatus.value = await datasetApi.stopLocalModel() }
-  catch (caught) { translationSettingsError.value = caught instanceof Error ? caught.message : String(caught) }
-  finally { localModelBusy.value = false }
-}
-
-async function clearTranslationCacheFromSettings() {
-  translationCacheClearing.value = true
-  try {
-    await datasetApi.clearTagTranslationCache()
-    clearExternalCache()
-    translationCacheCount.value = 0
-    if (showTranslations.value) void refreshTranslationsAfterSettingsChange()
-  } catch (caught) {
-    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
-  } finally {
-    translationCacheClearing.value = false
-  }
-}
 const selectAllLabel = computed(() =>
   workingScopeFullySelected.value
     ? t("datasetEditor.gallery.deselectAll", { n: workingScopeCount.value })
@@ -449,6 +422,17 @@ function openRightPanel(mode: RightPanelMode) {
 
 function closeToolPanel() {
   rightPanelMode.value = "caption"
+}
+
+/** Closing the single-image panel goes back to the pure gallery. */
+function closePanel() {
+  if (rightPanelMode.value !== "caption") {
+    closeToolPanel()
+    return
+  }
+  rememberCurrentDraft()
+  selected.value = ""
+  editorSession.rememberSelection("")
 }
 
 function addCaptionTag() {
@@ -497,6 +481,11 @@ function rememberCurrentDraft() {
 }
 
 function choose(item: DatasetItem, event?: MouseEvent) {
+  // Shift/Ctrl/Cmd click is a batch-selection gesture, not an editor switch.
+  if (event && (event.shiftKey || event.ctrlKey || event.metaKey)) {
+    toggleChecked(item, event)
+    return
+  }
   rememberCurrentDraft()
   selected.value = item.relative_path
   editorSession.rememberSelection(item.relative_path)
@@ -505,23 +494,29 @@ function choose(item: DatasetItem, event?: MouseEvent) {
   restoringCaption = false
   captionHydrated = true
   rightPanelMode.value = "caption"
-  if (!event) return
+  lastSelectedIndex.value = filtered.value.findIndex((candidate) => candidate.relative_path === item.relative_path)
+}
+
+/** Batch selection lives on the tile checkbox; Shift extends a range. */
+function toggleChecked(item: DatasetItem, event?: MouseEvent) {
   const index = filtered.value.findIndex((candidate) => candidate.relative_path === item.relative_path)
-  const multi = event.ctrlKey || event.metaKey || event.shiftKey
-  const next = new Set(multi ? selectedPaths.value : [])
-  if (event.shiftKey && lastSelectedIndex.value !== undefined) {
+  const next = new Set(selectedPaths.value)
+  if (event?.shiftKey && lastSelectedIndex.value !== undefined && lastSelectedIndex.value >= 0) {
     const [start, end] = [lastSelectedIndex.value, index].sort((a, b) => a - b)
     filtered.value.slice(start, end + 1).forEach((candidate) => next.add(candidate.relative_path))
-  } else if (multi) {
-    if (next.has(item.relative_path)) next.delete(item.relative_path)
-    else next.add(item.relative_path)
-  } else if (selectedPaths.value.has(item.relative_path) && selectedPaths.value.size === 1) {
-    // Plain click on the only selected image toggles it off.
+  } else if (next.has(item.relative_path)) {
+    next.delete(item.relative_path)
   } else {
     next.add(item.relative_path)
   }
   selectedPaths.value = next
   lastSelectedIndex.value = index
+}
+
+/** Double clicking a tile opens the full-size preview for it. */
+function openLightbox(item: DatasetItem) {
+  if (selected.value !== item.relative_path) choose(item)
+  previewOpen.value = true
 }
 
 function apply(changes: ChangedItem[]) {
@@ -542,15 +537,114 @@ function rebuildTags() {
 }
 
 async function refreshHistory() {
-  if (root.value) sessionHistory.value = await datasetApi.history(root.value)
+  const requestedRoot = root.value
+  const request = scanGeneration
+  if (!requestedRoot) return
+  const data = await datasetApi.history(requestedRoot)
+  if (root.value === requestedRoot && request === scanGeneration) sessionHistory.value = data
+}
+
+let scanGeneration = 0
+async function toggleDataset() {
+  if (!root.value) return scan()
+  rememberCurrentDraft()
+  const hasDrafts = Object.keys(editorSession.drafts.value).some(key => key.startsWith(`${root.value}\u0000`))
+  if (hasDrafts) {
+    try { await ElMessageBox.confirm(t("datasetManage.unloadConfirm"), { type: "warning" }) }
+    catch { return }
+  }
+  scanGeneration++
+  cancelTranslations()
+  if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
+  captionHydrated = false
+  caption.value = ""
+  previewOpen.value = false
+  historyOpen.value = false
+  selectMenuOpen.value = false
+  editorSession.unload()
+  resetTagFilter()
+  path.value = ""
+  loading.value = false
+  if (route.query.path) {
+    const nextQuery = { ...route.query }
+    delete nextQuery.path
+    await router.replace({ query: nextQuery })
+  }
+}
+
+function selectManagedPath(next: string) {
+  path.value = next
+  void scan()
+}
+
+const pickerOpen = ref(false)
+const datasetMenuOpen = ref(false)
+
+let datasetMenuOutside: ((event: MouseEvent) => void) | undefined
+function closeDatasetMenu() {
+  datasetMenuOpen.value = false
+  if (datasetMenuOutside) {
+    document.removeEventListener("click", datasetMenuOutside)
+    datasetMenuOutside = undefined
+  }
+}
+
+function toggleDatasetMenu() {
+  if (datasetMenuOpen.value) {
+    closeDatasetMenu()
+    return
+  }
+  datasetMenuOpen.value = true
+  datasetMenuOutside = (event: MouseEvent) => {
+    if (!(event.target as HTMLElement | null)?.closest?.(".dataset-split")) closeDatasetMenu()
+  }
+  // Defer so the click that opened the menu does not close it again.
+  window.setTimeout(() => {
+    if (datasetMenuOpen.value && datasetMenuOutside) document.addEventListener("click", datasetMenuOutside)
+  }, 0)
+}
+
+/** The button tracks the typed path: load it, then re-load it as "更换". */
+const scannerAction = computed<"load" | "replace">(() => (root.value ? "replace" : "load"))
+const scannerLabel = computed(() => (scannerAction.value === "replace" ? t("datasetEditor.replace") : t("datasetEditor.scan")))
+
+function runScannerAction() {
+  if (!path.value.trim()) {
+    pickerOpen.value = true
+    return
+  }
+  void scan()
+}
+
+function onDatasetMenuAction(command: "pick" | "unload") {
+  closeDatasetMenu()
+  if (command === "pick") {
+    pickerOpen.value = true
+    return
+  }
+  void toggleDataset()
+}
+
+function onToolCommand(command: string | number | object) {
+  if (command === "translation") {
+    void openTranslationSettings()
+    return
+  }
+  if (command === "history") {
+    historyOpen.value = true
+    return
+  }
+  if (command === "undo" || command === "redo") changeHistory(command)
 }
 
 async function scan() {
   if (!path.value.trim()) return
+  const request = ++scanGeneration
   rememberCurrentDraft()
   loading.value = true
   try {
     const data = await datasetApi.scan(path.value)
+    if (request !== scanGeneration) return
     const restoring = editorSession.lastRoot.value === data.root
     const restoredPanel = rightPanelMode.value
     // Keep server data as the baseline. Unsaved captions live in the session
@@ -573,11 +667,11 @@ async function scan() {
       page.value = 1
       rightPanelMode.value = "caption"
     }
+    // Default state is the pure gallery; only an explicit (restored) selection reopens the editor.
     const restoredItem = restoring && selected.value
       ? restoredItems.find((item) => item.relative_path === selected.value)
       : undefined
-    const nextItem = restoredItem || restoredItems[0]
-    if (nextItem) choose(nextItem)
+    if (restoredItem) choose(restoredItem)
     else {
       restoringCaption = true
       caption.value = ""
@@ -586,20 +680,25 @@ async function scan() {
     }
     if (restoring) rightPanelMode.value = restoredPanel
     await Promise.all([refreshHistory(), refreshManagedPaths()])
+    if (request !== scanGeneration) return
     if (showTranslations.value) void translateWholeDataset()
     ElMessage.success(t("datasetEditor.scanMsg.loaded", { n: data.total }))
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.scanMsg.fail"))
+    if (request === scanGeneration) ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.scanMsg.fail"))
   } finally {
-    loading.value = false
+    if (request === scanGeneration) loading.value = false
   }
 }
 
 async function save() {
   if (!current.value) return
+  const request = scanGeneration
   try {
-    apply([await datasetApi.save(root.value, current.value.relative_path, caption.value)])
+    const saved = await datasetApi.save(root.value, current.value.relative_path, caption.value)
+    if (request !== scanGeneration) return
+    apply([saved])
     await refreshHistory()
+    if (request !== scanGeneration) return
     ElMessage.success(t("datasetEditor.caption.saved"))
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.caption.saveFail"))
@@ -610,25 +709,15 @@ function splitTags(value: string) {
   return value.split(/[,，\n]/).map((item) => item.trim()).filter(Boolean)
 }
 
-async function browsePath() {
-  picking.value = true
-  try {
-    const next = await pickServerPath({ mode: "folder", initialPath: path.value })
-    if (next) path.value = next
-  } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : t("schemaForm.pickFail"))
-  } finally {
-    picking.value = false
-  }
-}
-
 async function batch() {
   if (!targets.value.length) return
+  const request = scanGeneration
   try {
     await ElMessageBox.confirm(
       t("datasetEditor.batch.confirm", { n: targets.value.length }),
       selectedPaths.value.size ? t("datasetEditor.batch.confirmSelected") : t("datasetEditor.batch.confirmFiltered"),
     )
+    if (request !== scanGeneration) return
     const replacements = replaceFrom.value.trim() ? [{ from: replaceFrom.value.trim(), to: replaceTo.value.trim() }] : []
     const data = await datasetApi.batch({
       root: root.value,
@@ -642,8 +731,10 @@ async function batch() {
       underscore_to_space: underscoreToSpace.value,
       strip_escape_chars: stripEscapeChars.value,
     })
+    if (request !== scanGeneration) return
     apply(data.items)
     await refreshHistory()
+    if (request !== scanGeneration) return
     ElMessage.success(t("datasetEditor.batch.done", { n: data.changed }))
     rightPanelMode.value = "caption"
   } catch (error) {
@@ -653,6 +744,7 @@ async function batch() {
 
 async function deleteTargets() {
   if (!managedName.value || !targets.value.length) return
+  const request = scanGeneration
   try {
     await ElMessageBox.confirm(
       t("datasetEditor.batch.deleteConfirm", { n: targets.value.length }),
@@ -661,8 +753,10 @@ async function deleteTargets() {
   } catch {
     return
   }
+  if (request !== scanGeneration) return
   try {
     const data = await datasetsApi.deleteFiles(managedName.value, targets.value.map((item) => item.relative_path))
+    if (request !== scanGeneration) return
     ElMessage.success(t("datasetEditor.batch.deleteDone", { n: data.deleted.length }))
     if (data.missing.length) ElMessage.warning(t("datasetEditor.batch.deleteMissing", { n: data.missing.length }))
     await scan()
@@ -672,10 +766,13 @@ async function deleteTargets() {
 }
 
 async function changeHistory(kind: "undo" | "redo") {
+  const request = scanGeneration
   try {
     const data = await datasetApi[kind](root.value)
+    if (request !== scanGeneration) return
     apply(data.items)
     await refreshHistory()
+    if (request !== scanGeneration) return
     ElMessage.success(
       data.changed
         ? kind === "undo"
@@ -758,49 +855,57 @@ onDeactivated(() => {
   historyOpen.value = false
 })
 onUnmounted(() => {
+  scanGeneration++
+  dictionaryPollDisposed = true
   window.removeEventListener("keydown", onPreviewKeydown)
+  closeDatasetMenu()
   if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
   if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
 })
 </script>
 
 <template>
-  <div class="dataset-page" :class="{ 'tool-panel-open': rightPanelMode !== 'caption' || Boolean(current) }">
+  <div class="dataset-page" :class="{ 'tool-panel-open': panelOpen }">
     <div class="dataset-workspace">
       <header class="dataset-toolbar">
-        <label class="dataset-toolbar-field dataset-toolbar-path">
-          <span>{{ t("datasetEditor.pathLabel") }}</span>
-          <span class="path-row">
-            <el-input v-model="path" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="scan" />
-            <button
-              type="button"
-              class="dataset-browse-icon"
-              :disabled="picking"
-              :title="t('datasetEditor.toolbar.browseTip')"
-              :aria-label="t('datasetEditor.toolbar.browseTip')"
-              @click.prevent="browsePath"
-            >
-              <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-                <path d="M3 7.5A1.5 1.5 0 0 1 4.5 6H9l1.8 2.2H19.5A1.5 1.5 0 0 1 21 9.7v7.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" />
-              </svg>
-            </button>
-            <button type="button" class="primary-action dataset-toolbar-scan" :disabled="loading" @click="scan">
-              {{ loading ? t("datasetEditor.scanning") : t("datasetEditor.scan") }}
-            </button>
+        <div class="dataset-toolbar-top">
+          <label class="dataset-toolbar-label" for="editor-dataset-path">{{ t("datasetEditor.pathLabel") }}</label>
+          <span class="dataset-toolbar-controls">
+            <input id="editor-dataset-path" v-model="path" class="dataset-direct-path" :disabled="loading" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="!loading && scan()" />
+            <div class="dataset-split" :class="{ open: datasetMenuOpen }">
+              <button data-testid="scan-action" type="button" class="dataset-tool-entry dataset-split-main" :class="{ 'is-primary': !root }" :disabled="loading" @click="runScannerAction">{{ scannerLabel }}</button>
+              <button
+                type="button"
+                class="dataset-tool-entry dataset-split-caret"
+                :class="{ 'is-primary': !root }"
+                :disabled="loading"
+                :aria-label="t('datasetEditor.datasetMenu')"
+                :title="t('datasetEditor.datasetMenu')"
+                :aria-expanded="datasetMenuOpen"
+                @click="toggleDatasetMenu"
+              >▼</button>
+              <div v-if="datasetMenuOpen" class="dataset-split-menu" role="menu">
+                <button type="button" role="menuitem" @click="onDatasetMenuAction('pick')">{{ t("datasetManage.selectDataset") }}</button>
+                <button type="button" role="menuitem" :disabled="!root" @click="onDatasetMenuAction('unload')">{{ t("datasetManage.unload") }}</button>
+              </div>
+            </div>
+            <ManagedDatasetPicker v-model:open="pickerOpen" hide-button :disabled="loading" :loaded="Boolean(root)" :initial-path="path" @select="selectManagedPath" />
+            <span v-if="loading" role="status">{{ t("datasetEditor.scanning") }}</span>
           </span>
-        </label>
-        <label class="dataset-toolbar-field dataset-toolbar-folder">
-          <span>{{ t("datasetEditor.toolbar.folderLabel") }}</span>
-          <el-select v-model="category" :disabled="!root" :aria-label="t('datasetEditor.toolbar.folderLabel')">
-            <el-option value="" :label="t('datasetEditor.toolbar.folderAll', { n: totalImageCount || 0 })" />
-            <el-option v-for="item in categories" :key="`tb-${item.value || '__root__'}`" :value="item.value" :label="`${item.name} (${item.count})`" />
-          </el-select>
-        </label>
-        <label class="dataset-toolbar-field dataset-toolbar-search">
-          <span>{{ t("datasetEditor.toolbar.searchLabel") }}</span>
-          <el-input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" :disabled="!root" />
-        </label>
-        <div class="dataset-toolbar-actions">
+          <label class="dataset-toolbar-inline dataset-toolbar-search">
+            <span>{{ t("datasetEditor.toolbar.searchLabel") }}</span>
+            <el-input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" :disabled="!root" />
+          </label>
+        </div>
+        <div class="dataset-toolbar-bottom">
+          <label class="dataset-toolbar-inline dataset-toolbar-folder">
+            <span>{{ t("datasetEditor.toolbar.folderLabel") }}</span>
+            <el-select v-model="category" :disabled="!root" :aria-label="t('datasetEditor.toolbar.folderLabel')">
+              <el-option value="" :label="t('datasetEditor.toolbar.folderAll', { n: totalImageCount || 0 })" />
+              <el-option v-for="item in categories" :key="`tb-${item.value || '__root__'}`" :value="item.value" :label="`${item.name} (${item.count})`" />
+            </el-select>
+          </label>
+          <div class="dataset-toolbar-actions">
           <button
             type="button"
             class="dataset-tool-entry"
@@ -820,15 +925,27 @@ onUnmounted(() => {
           >
             {{ t("datasetEditor.batch.toolbar", { n: selectedPaths.size }) }}
           </button>
-          <button type="button" :disabled="!sessionHistory.can_undo" @click="changeHistory('undo')">{{ t("datasetEditor.gallery.undo") }}</button>
-          <button type="button" :disabled="!sessionHistory.can_redo" @click="changeHistory('redo')">{{ t("datasetEditor.gallery.redo") }}</button>
-          <button type="button" :disabled="!root" @click="historyOpen = true">{{ t("datasetEditor.gallery.history") }}</button>
+          <ElDropdown trigger="click" @command="onToolCommand">
+            <button type="button" class="dataset-tool-entry dataset-tool-more" :disabled="!root" :aria-label="t('datasetEditor.gallery.more')" :title="t('datasetEditor.gallery.more')"><Setting /></button>
+            <template #dropdown>
+              <ElDropdownMenu>
+                <ElDropdownItem command="translation">{{ t("datasetEditor.caption.translationSettings") }}</ElDropdownItem>
+                <ElDropdownItem command="undo" :disabled="!sessionHistory.can_undo" divided>{{ t("datasetEditor.gallery.undo") }}</ElDropdownItem>
+                <ElDropdownItem command="redo" :disabled="!sessionHistory.can_redo">{{ t("datasetEditor.gallery.redo") }}</ElDropdownItem>
+                <ElDropdownItem command="history" :disabled="!root">{{ t("datasetEditor.gallery.history") }}</ElDropdownItem>
+              </ElDropdownMenu>
+            </template>
+          </ElDropdown>
+          </div>
         </div>
       </header>
 
       <main class="dataset-gallery">
         <header class="dataset-gallery-bar">
-          <strong>{{ t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size }) }}</strong>
+          <strong>{{ selectedPaths.size
+            ? t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size })
+            : t("datasetEditor.gallery.countPlain", { filtered: filtered.length, total: items.length }) }}</strong>
+          <span v-if="root && items.length && !selectedPaths.size" class="dataset-gallery-hint">{{ selected ? t("datasetEditor.gallery.shiftHint") : t("datasetEditor.gallery.pickHint") }}</span>
           <div class="dataset-select-scope" :class="{ open: selectMenuOpen }">
             <button
               type="button"
@@ -875,9 +992,19 @@ onUnmounted(() => {
             :key="item.relative_path"
             type="button"
             :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }"
+            :title="t('datasetEditor.gallery.dblClickHint', { name: item.name })"
             @click="choose(item, $event)"
+            @dblclick="openLightbox(item)"
           >
-            <i v-if="selectedPaths.has(item.relative_path)">✓</i>
+            <span
+              class="image-grid-check"
+              :class="{ checked: selectedPaths.has(item.relative_path) }"
+              role="checkbox"
+              :aria-checked="selectedPaths.has(item.relative_path)"
+              :aria-label="t('datasetEditor.gallery.toggleSelect', { name: item.name })"
+              :title="t('datasetEditor.gallery.toggleSelect', { name: item.name })"
+              @click.stop="toggleChecked(item, $event)"
+            ><i v-if="selectedPaths.has(item.relative_path)">✓</i></span>
             <img :src="item.thumb_url" :alt="item.name" loading="lazy">
             <span>{{ item.name }}</span>
           </button>
@@ -898,17 +1025,15 @@ onUnmounted(() => {
     <aside
       class="dataset-tool-panel"
       :class="[`is-${rightPanelMode}`, { glass: rightPanelMode !== 'caption' }]"
-      :style="{ width: DRAWER_WIDTH }"
       :aria-label="panelTitle"
     >
       <header class="dataset-tool-panel-header">
         <strong>{{ panelTitle }}</strong>
         <button
-          v-if="rightPanelMode !== 'caption'"
           type="button"
           class="dataset-tool-panel-close"
           :aria-label="t('datasetEditor.filter.close')"
-          @click="closeToolPanel"
+          @click="closePanel"
         >
           ×
         </button>
@@ -916,14 +1041,19 @@ onUnmounted(() => {
 
       <div v-if="rightPanelMode === 'caption'" class="dataset-tool-panel-body caption-panel">
         <div v-if="current">
-          <img
-            class="caption-preview"
-            :src="current.thumb_url + '&size=512'"
-            :alt="current.name"
-            :title="t('datasetEditor.caption.previewTip')"
-            @click="previewOpen = true"
-          >
-          <span class="caption-filename" :title="current.relative_path">{{ current.name }}</span>
+          <div class="caption-head">
+            <img
+              class="caption-preview"
+              :src="current.thumb_url + '&size=512'"
+              :alt="current.name"
+              :title="t('datasetEditor.caption.previewTip')"
+              @click="previewOpen = true"
+            >
+            <span class="caption-head-text">
+              <span class="caption-filename" :title="current.relative_path">{{ current.name }}</span>
+              <small class="caption-preview-hint">{{ t("datasetEditor.caption.previewTip") }}</small>
+            </span>
+          </div>
           <div v-if="managedName" class="caption-file-actions">
             <a :href="datasetFileUrl(managedName, current.relative_path)" download>{{ t("datasetEditor.caption.downloadImage") }}</a>
             <a
@@ -936,16 +1066,18 @@ onUnmounted(() => {
             :enabled="showTranslations"
             :available="translationAvailable"
             :unavailable-hint="translationUnavailableHint"
-            :provider="translationProvider"
             :loading="translationsLoading"
             :error="translationsError"
             :progress-completed="translationProgress.completed"
             :progress-total="translationProgress.total"
             :progress-unresolved="translationUnresolved"
             @update:enabled="setTranslationsEnabled"
-            @update:provider="setTranslationProvider"
-            @settings="openTranslationSettings"
           />
+          <div class="caption-mode" role="group" :aria-label="t('datasetEditor.caption.modeAria')">
+            <button type="button" :class="{ active: captionMode === 'tags' }" :aria-pressed="captionMode === 'tags'" @click="captionMode = 'tags'">{{ t("datasetEditor.caption.modeTags") }}</button>
+            <button type="button" :class="{ active: captionMode === 'raw' }" :aria-pressed="captionMode === 'raw'" @click="captionMode = 'raw'">{{ t("datasetEditor.caption.modeRaw") }}</button>
+          </div>
+          <template v-if="captionMode === 'tags'">
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
               v-for="(tag, index) in captionTags"
@@ -962,19 +1094,17 @@ onUnmounted(() => {
               <small v-if="showTranslations && translationFor(tag, translationProvider)" class="caption-tag-translation">{{ translationFor(tag, translationProvider) }}</small>
               <button type="button" :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)" @mousedown.stop>×</button>
             </span>
-            <span class="chip-add">
-              <el-input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag" />
-              <button type="button" @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button>
-            </span>
+          </div>
+          <div class="chip-add">
+            <el-input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag" />
+            <button type="button" @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button>
           </div>
           <small class="caption-drag-hint">{{ t("datasetEditor.caption.dragHint") }}</small>
-          <details class="caption-raw">
-            <summary>{{ t("datasetEditor.caption.rawToggle") }}</summary>
-            <div class="caption-editor">
-              <el-input v-model="caption" type="textarea" :rows="8" :aria-label="t('datasetEditor.caption.rawToggle')" />
-              <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
-            </div>
-          </details>
+          </template>
+          <div v-else class="caption-editor">
+            <el-input v-model="caption" type="textarea" :autosize="{ minRows: 4, maxRows: 24 }" :aria-label="t('datasetEditor.caption.modeRaw')" />
+            <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
+          </div>
           <button type="button" class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button>
         </div>
         <p v-else>{{ t("datasetEditor.caption.empty") }}</p>
@@ -1076,33 +1206,18 @@ onUnmounted(() => {
   <TagTranslationSettingsDialog
     :model-value="translationSettingsOpen"
     :loading="translationSettingsLoading"
-    :saving="translationSettingsSaving"
     :error="translationSettingsError"
-    :profiles="llmProfiles"
-    :active-remote-id="activeRemoteId"
+    :provider="translationProvider"
     :llm-mode="llmMode"
-    :cache-count="translationCacheCount"
-    :clearing-cache="translationCacheClearing"
     :dictionary="dictionaryStatus"
     :dictionary-busy="dictionaryBusy"
-    :local-model="localModelStatus"
-    :local-model-busy="localModelBusy"
-    :remote-configured="remoteProfileConfigured"
     @update:model-value="onTranslationSettingsModelChange"
-    @update:profiles="llmProfiles = $event"
-    @update:active-remote-id="activeRemoteId = $event"
-    @update:llm-mode="llmMode = $event"
-    @save="saveTranslationSettings"
-    @clear-cache="clearTranslationCacheFromSettings"
+    @update:provider="setTranslationProvider"
+    @update:llm-mode="onLlmModeChange"
     @check-dictionary="checkDictionary"
     @update-dictionary="updateDictionary"
     @retry-dictionary="retryDictionary"
     @cancel-dictionary="cancelDictionary"
-    @setup-local-model="setupLocalModel"
-    @cancel-local-model="cancelLocalModel"
-    @start-local-model="startLocalModel"
-    @stop-local-model="stopLocalModel"
-    @use-remote-mode="llmMode = 'remote'"
   />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">
@@ -1125,12 +1240,4 @@ onUnmounted(() => {
     </div>
   </el-dialog>
 
-  <PathPickerDialog
-    v-model="pathPickerOpen"
-    :mode="pathPickerMode"
-    :initial-path="pathPickerInitial"
-    :name-filter="pathPickerFilter"
-    @confirm="onPathConfirm"
-    @cancel="onPathCancel"
-  />
 </template>

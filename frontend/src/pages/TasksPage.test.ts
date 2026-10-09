@@ -133,7 +133,7 @@ it("shows the global auto-retry budget and saves a new one", async () => {
 
 it("batch dialog filters dropped files to .toml and renders partial failures", async () => {
   const enqueued: string[] = []
-  const wrapper = mountTasks((url, init) => {
+  const wrapper = mountTasks((url) => {
     if (url === "/api/tasks/batch-enqueue") {
       enqueued.push(url)
       return {
