@@ -455,7 +455,9 @@ export default {
     batchEnqueue: {
       button: "Batch Enqueue",
       title: "Batch Enqueue (upload training configs)",
-      hint: "Pick TOML/JSON configs exported from the training page (with model_train_type). Each file goes through the same checks and queueing as Start Training; files that fail are listed individually and do not block the rest.",
+      dropHint: "Drop TOML/JSON configs exported from the training page, or",
+      pickFiles: "Pick Files",
+      hint: "Only training config exports (TOML/JSON) carrying model_train_type are accepted. Each file goes through the same checks and queueing as Start Training; files that fail are listed individually and do not block the rest.",
       selected: "{n} file(s) selected",
       confirm: "Enqueue All",
       submitting: "Enqueueing…",

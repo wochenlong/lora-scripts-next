@@ -455,7 +455,9 @@ export default {
     batchEnqueue: {
       button: "批量入队",
       title: "批量入队（上传训练配置）",
-      hint: "选择训练页导出的 TOML/JSON 配置（含 model_train_type），每个文件走与「开始训练」相同的检查与入队流程；校验失败的文件会单独列出，不影响其余文件。",
+      dropHint: "拖入训练页导出的 TOML/JSON 配置，或",
+      pickFiles: "选择文件",
+      hint: "仅接受含 model_train_type 的训练配置导出文件（TOML/JSON），每个文件走与「开始训练」相同的检查与入队流程；校验失败的文件会单独列出，不影响其余文件。",
       selected: "已选择 {n} 个文件",
       confirm: "全部入队",
       submitting: "入队中…",

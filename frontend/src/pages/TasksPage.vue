@@ -448,11 +448,25 @@ const batchOpen = ref(false)
 const batchFiles = ref<File[]>([])
 const batchBusy = ref(false)
 const batchResults = ref<BatchEnqueueItem[] | null>(null)
+const batchDragOver = ref(false)
+const batchFileInput = ref<HTMLInputElement | null>(null)
 
 function openBatchEnqueue() {
   batchFiles.value = []
   batchResults.value = null
+  batchDragOver.value = false
   batchOpen.value = true
+}
+
+function acceptBatchFiles(files: File[]) {
+  const accepted = files.filter((file) => /\.(toml|json)$/i.test(file.name))
+  batchFiles.value = accepted
+  batchResults.value = null
+}
+
+function onBatchDrop(event: DragEvent) {
+  batchDragOver.value = false
+  acceptBatchFiles(Array.from(event.dataTransfer?.files ?? []))
 }
 
 function openAutoRetry() {
@@ -477,8 +491,8 @@ async function saveAutoRetry() {
 
 function onBatchFilesChange(event: Event) {
   const input = event.target as HTMLInputElement
-  batchFiles.value = Array.from(input.files ?? [])
-  batchResults.value = null
+  acceptBatchFiles(Array.from(input.files ?? []))
+  input.value = ""
 }
 
 async function submitBatchEnqueue() {
@@ -877,7 +891,19 @@ onBeforeUnmount(() => {
 
     <el-dialog v-model="batchOpen" :title="t('tasks.batchEnqueue.title')" width="min(560px, 94vw)" align-center>
       <div class="purge-form">
-        <input type="file" multiple accept=".toml,.json" @change="onBatchFilesChange">
+        <div
+          class="upload-dropzone"
+          :class="{ over: batchDragOver }"
+          @dragover.prevent="batchDragOver = true"
+          @dragleave.prevent="batchDragOver = false"
+          @drop.prevent="onBatchDrop"
+        >
+          <p>{{ t("tasks.batchEnqueue.dropHint") }}</p>
+          <div class="upload-dropzone-actions">
+            <button class="secondary-action" :disabled="batchBusy" @click="batchFileInput?.click()">{{ t("tasks.batchEnqueue.pickFiles") }}</button>
+          </div>
+          <input ref="batchFileInput" type="file" multiple accept=".toml,.json" hidden @change="onBatchFilesChange">
+        </div>
         <p class="purge-hint">{{ t("tasks.batchEnqueue.hint") }}</p>
         <p v-if="batchFiles.length" class="purge-hint">{{ t("tasks.batchEnqueue.selected", { n: batchFiles.length }) }}</p>
         <ul v-if="batchResults" class="batch-enqueue-results">
