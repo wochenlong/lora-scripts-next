@@ -44,12 +44,28 @@ const emit = defineEmits<{
 const { t } = useI18n()
 const expandedProfiles = ref(new Set<string>())
 
-const providerOptions = computed<Array<{ value: TagTranslationProvider; label: string }>>(() => [
-  { value: "auto", label: t("datasetEditor.caption.translationAuto") },
-  { value: "danbooru", label: t("datasetEditor.caption.translationProviderDanbooru") },
-  { value: "mymemory", label: t("datasetEditor.caption.translationProviderMymemory") },
-  { value: "llm", label: t("datasetEditor.caption.translationProviderLlm") },
+const providerOptions = computed<Array<{ key: TranslationSource; label: string }>>(() => [
+  { key: "dictionary", label: t("datasetEditor.caption.translationProviderDanbooru") },
+  { key: "local", label: t("datasetEditor.caption.translationProviderLocalModel") },
+  { key: "api", label: t("datasetEditor.caption.translationProviderApi") },
 ])
+
+/** Three concrete sources map onto the backend's dictionary/LLM providers. */
+type TranslationSource = "dictionary" | "local" | "api"
+
+const activeSource = computed<TranslationSource>(() => {
+  if (props.provider !== "llm") return "dictionary"
+  return props.llmMode === "local" ? "local" : "api"
+})
+
+function selectSource(key: TranslationSource) {
+  if (key === "dictionary") {
+    emit("update:provider", "danbooru")
+    return
+  }
+  emit("update:provider", "llm")
+  emit("update:llm-mode", key === "local" ? "local" : "remote")
+}
 
 watch(() => [props.activeRemoteId, ...props.profiles.map((profile) => profile.id)], () => {
   const next = new Set(expandedProfiles.value)
@@ -114,12 +130,12 @@ function activateProfile(id: string) {
         <div class="caption-translation-provider" role="radiogroup" :aria-label="t('datasetEditor.caption.translationProvider')">
           <button
             v-for="option in providerOptions"
-            :key="option.value"
+            :key="option.key"
             type="button"
             role="radio"
-            :aria-checked="provider === option.value"
-            :class="{ active: provider === option.value }"
-            @click="emit('update:provider', option.value)"
+            :aria-checked="activeSource === option.key"
+            :class="{ active: activeSource === option.key }"
+            @click="selectSource(option.key)"
           >{{ option.label }}</button>
         </div>
       </section>
