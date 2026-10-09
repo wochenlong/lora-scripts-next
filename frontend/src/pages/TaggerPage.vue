@@ -234,11 +234,11 @@ onBeforeUnmount(stopPolling)
       </div>
       <div class="tagger-choice-row">
         <span>{{ t("tagger.workspace.method") }}</span>
-        <div class="tagger-segments"><button class="selected" aria-pressed="true">Tag</button><button disabled>{{ t("tagger.workspace.caption") }}</button></div>
+        <div class="tagger-segments"><button class="selected" aria-pressed="true">Tag</button><button disabled :title="t('tagger.workspace.pending')">{{ t("tagger.workspace.caption") }} · {{ t("tagger.workspace.pending") }}</button></div>
       </div>
       <div class="tagger-choice-row">
         <span>{{ t("tagger.workspace.source") }}</span>
-        <div class="tagger-segments"><button class="selected" aria-pressed="true">{{ t("tagger.workspace.local") }}</button><button disabled>API</button></div>
+        <div class="tagger-segments"><button class="selected" aria-pressed="true">{{ t("tagger.workspace.local") }}</button><button disabled :title="t('tagger.workspace.pending')">API · {{ t("tagger.workspace.pending") }}</button></div>
       </div>
       <div class="tagger-model-row">
         <label class="tagger-model-field"><span>{{ t("tagger.modelLabel") }}</span>
@@ -274,7 +274,9 @@ onBeforeUnmount(stopPolling)
           </div>
         </div>
         <div class="tagger-actions">
+          <button data-testid="preview-pending" class="secondary-action" disabled :title="t('tagger.workspace.pending')">{{ t("tagger.workspace.preview") }} · {{ t("tagger.workspace.pending") }}</button>
           <button class="secondary-action" :disabled="submitting || busy" @click="invoke('reset')">{{ t("tagger.reset") }}</button>
+          <button data-testid="retry-failed" class="secondary-action" disabled :title="t('tagger.workspace.pending')">{{ t("tagger.workspace.retry") }}</button>
         </div>
       </section>
     </section>

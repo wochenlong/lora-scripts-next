@@ -39,11 +39,11 @@ async function openCaptionSettings(wrapper: ReturnType<typeof mountPage>) {
   await wrapper.get('[data-testid="tab-advanced"]').trigger("click")
 }
 
-it("keeps unavailable modes quietly disabled and uses a searchable grouped model selector", async () => {
+it("keeps unavailable modes disabled with coming-soon labels and uses a searchable grouped model selector", async () => {
   const wrapper = mountPage()
-  expect(wrapper.text()).not.toContain("待接入")
-  expect(wrapper.find('[data-testid="preview-pending"]').exists()).toBe(false)
-  expect(wrapper.find('[data-testid="retry-failed"]').exists()).toBe(false)
+  expect(wrapper.text()).toContain("待接入")
+  expect(wrapper.get('[data-testid="preview-pending"]').attributes("disabled")).toBeDefined()
+  expect(wrapper.get('[data-testid="retry-failed"]').attributes("disabled")).toBeDefined()
   expect(wrapper.find('input[placeholder*="huggingface"]').exists()).toBe(false)
   expect(wrapper.find("aside.tagger-status").exists()).toBe(false)
   const select = wrapper.findComponent({ name: "ElSelect" })
