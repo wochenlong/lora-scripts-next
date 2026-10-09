@@ -566,13 +566,18 @@ export default {
       saved: "API settings saved",
       cacheCleared: "Translation cache cleared",
     },
+    advanced: {
+      title: "Advanced",
+      hint: "Network and download sources are managed here: engine installs, tagger model downloads, plugins and dependencies all follow these settings.",
+    },
     nav: {
       ui: "UI",
-      api: "API",
       engines: "Engines",
-      update: "Updates",
+      api: "API",
       plugins: "Plugin Marketplace",
+      advanced: "Advanced",
       about: "About",
+      update: "Updates",
       changelog: "Changelog",
     },
     ui: {

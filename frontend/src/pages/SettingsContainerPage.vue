@@ -4,6 +4,7 @@ import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { storeToRefs } from "pinia"
 import AboutPage from "./AboutPage.vue"
+import AdvancedSettingsPage from "./AdvancedSettingsPage.vue"
 import ApiSettingsPage from "./ApiSettingsPage.vue"
 import ChangelogPage from "./ChangelogPage.vue"
 import EnginesSettingsPage from "./EnginesSettingsPage.vue"
@@ -19,7 +20,7 @@ import {
 import { releases } from "../content/releases"
 import { useAppStore } from "../stores/app"
 
-const props = defineProps<{ tab: "ui" | "api" | "engines" | "update" | "plugins" | "about" | "changelog" }>()
+const props = defineProps<{ tab: "ui" | "engines" | "api" | "plugins" | "advanced" | "about" }>()
 const { t } = useI18n()
 const appStore = useAppStore()
 const { version } = storeToRefs(appStore)
@@ -42,12 +43,11 @@ const form = reactive({
 
 const tabs = computed(() => [
   { key: "ui", to: "/settings/ui", label: t("settings.nav.ui") },
-  { key: "api", to: "/settings/api", label: t("settings.nav.api") },
   { key: "engines", to: "/settings/engines", label: t("settings.nav.engines") },
-  { key: "update", to: "/settings/update", label: t("settings.nav.update") },
+  { key: "api", to: "/settings/api", label: t("settings.nav.api") },
   { key: "plugins", to: "/settings/plugins", label: t("settings.nav.plugins") },
+  { key: "advanced", to: "/settings/advanced", label: t("settings.nav.advanced") },
   { key: "about", to: "/settings/about", label: t("settings.nav.about") },
-  { key: "changelog", to: "/settings/changelog", label: t("settings.nav.changelog") },
 ] as const)
 
 function changeLanguage(value: AppLocale) {
@@ -151,10 +151,13 @@ function reset() {
         </template>
         <EnginesSettingsPage v-else-if="props.tab === 'engines'" />
         <ApiSettingsPage v-else-if="props.tab === 'api'" />
-        <UpdateSettingsPage v-else-if="props.tab === 'update'" />
         <MarketplaceSettingsPage v-else-if="props.tab === 'plugins'" />
-        <AboutPage v-else-if="props.tab === 'about'" />
-        <ChangelogPage v-else />
+        <AdvancedSettingsPage v-else-if="props.tab === 'advanced'" />
+        <template v-else>
+          <AboutPage />
+          <UpdateSettingsPage />
+          <ChangelogPage />
+        </template>
       </main>
     </div>
   </div>

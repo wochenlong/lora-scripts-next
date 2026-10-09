@@ -566,13 +566,18 @@ export default {
       saved: "API 设置已保存",
       cacheCleared: "翻译缓存已清理",
     },
+    advanced: {
+      title: "高级设置",
+      hint: "网络与下载源在这里统一管理：训练引擎安装、打标模型下载、插件与依赖都使用这里的设置。",
+    },
     nav: {
       ui: "UI 设置",
-      api: "API",
       engines: "训练引擎",
-      update: "更新",
+      api: "API",
       plugins: "插件市场",
+      advanced: "高级设置",
       about: "关于",
+      update: "更新",
       changelog: "更新日志",
     },
     ui: {
