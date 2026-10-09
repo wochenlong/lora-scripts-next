@@ -1014,21 +1014,35 @@
 .caption-chips {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
+  gap: 8px;
   max-height: 42vh;
   overflow: auto;
   padding: 2px;
 }
 
+/* Tag mode: let the chip list use the panel's leftover height instead of a
+   fixed cap, so a tall panel shows more tags without scrolling. */
+.caption-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.caption-panel .caption-chips {
+  flex: 1 1 auto;
+  min-height: 120px;
+  max-height: none;
+}
+
 .chip {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  padding: 4px 6px 4px 10px;
+  gap: 6px;
+  min-height: 30px;
+  padding: 6px 8px 6px 12px;
   color: var(--accent-dark);
   background: var(--accent-soft);
-  border-radius: 7px;
-  font-size: 12px;
+  border-radius: 8px;
+  font-size: 13px;
   cursor: grab;
   user-select: none;
 }
@@ -1037,12 +1051,16 @@
   opacity: 0.45;
 }
 
+/* Keep the remove affordance quiet until the chip is touched, so long tags
+   keep the width instead of competing with a permanent × on every chip. */
 .chip button {
   display: grid;
   width: 16px;
   height: 16px;
   place-items: center;
   padding: 0;
+  opacity: 0.4;
+  transition: opacity 120ms ease;
   color: inherit;
   background: transparent;
   border: 0;
@@ -1050,6 +1068,9 @@
   font-size: 12px;
   cursor: pointer;
 }
+
+.chip:hover button,
+.chip:focus-within button { opacity: 1; }
 
 .chip button:hover {
   background: rgba(37, 99, 235, 0.18);
