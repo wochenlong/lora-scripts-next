@@ -151,6 +151,8 @@
 .tagger-settings-button { display: inline-flex; align-items: center; justify-content: center; width: 40px; height: 40px; flex-shrink: 0; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); color: var(--text); cursor: pointer; }
 .tagger-settings-button svg, .tagger-restore svg { width: 20px; height: 20px; }
 .tagger-settings-label { width: auto; gap: 8px; padding: 0 12px; color: #3261e8; white-space: nowrap; }
+.tagger-header-actions { display: flex; align-items: center; gap: 10px; flex-shrink: 0; }
+.tagger-header-actions .secondary-action { min-height: 40px; padding: 0 14px; white-space: nowrap; }
 .tagger-panel-tabs { display: flex; border-bottom: 1px solid var(--border); margin: 20px 0; }
 .tagger-panel-tabs button { flex: 1; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--text-soft); padding: 12px 4px; cursor: pointer; }
 .tagger-panel-tabs button[aria-selected="true"] { color: #3261e8; border-bottom-color: #3261e8; }

@@ -223,7 +223,10 @@ onBeforeUnmount(stopPolling)
     <section class="tagger-form">
       <header>
         <h1>{{ t("datasetManage.openTagger") }}</h1>
-        <button class="tagger-settings-button tagger-settings-label" data-testid="parameter-toggle" :aria-label="t('tagger.workspace.parameters')" :title="t('tagger.workspace.parameters')" :aria-expanded="parametersOpen" aria-controls="tagger-parameters" @click="parametersOpen = !parametersOpen"><Setting />{{ t("tagger.workspace.settings") }}</button>
+        <div class="tagger-header-actions">
+          <button class="secondary-action" data-testid="reset-status" :disabled="submitting || busy" @click="invoke('reset')">{{ t("tagger.reset") }}</button>
+          <button class="tagger-settings-button tagger-settings-label" data-testid="parameter-toggle" :aria-label="t('tagger.workspace.parameters')" :title="t('tagger.workspace.parameters')" :aria-expanded="parametersOpen" aria-controls="tagger-parameters" @click="parametersOpen = !parametersOpen"><Setting />{{ t("tagger.workspace.settings") }}</button>
+        </div>
       </header>
       <div class="tagger-grid">
         <label class="tagger-dataset-path"
@@ -272,9 +275,6 @@ onBeforeUnmount(stopPolling)
             <div><i :style="{ width: `${taggingPercent}%` }" /></div>
             <small>{{ status.tagging.current }} / {{ status.tagging.total }} {{ status.tagging.filename }}</small>
           </div>
-        </div>
-        <div class="tagger-actions">
-          <button class="secondary-action" :disabled="submitting || busy" @click="invoke('reset')">{{ t("tagger.reset") }}</button>
         </div>
       </section>
     </section>
