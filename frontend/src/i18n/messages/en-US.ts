@@ -446,7 +446,7 @@ export default {
       title: "Auto Re-queue on Failure",
       countLabel: "Auto re-queue up to",
       countSuffix: "time(s)",
-      hint: "Global setting for all training tasks: when a task fails after its training process launched, it is automatically re-queued (appended to the back), up to the chosen count per task. Bad parameters fail at preflight without consuming attempts. Use 0 to disable.",
+      hint: "Global setting for all training tasks: when a task fails after its training process launched, it is re-queued with the same parameters (appended to the back), up to the chosen count per task. Note: re-queueing does not resume from a checkpoint — without save_state/resume configured, every retry trains from scratch. Parameter or path errors usually fail immediately and may not consume attempts. Use 0 to disable.",
       confirm: "Save",
       cancel: "Cancel",
       saved: "Auto re-queue setting saved",

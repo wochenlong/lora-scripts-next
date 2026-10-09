@@ -265,15 +265,20 @@ class TaskManager:
         return self._auto_retry_max
 
     def set_global_auto_retry(self, count: int) -> int:
-        """Set the global failure re-queue budget (0 disables) and persist it."""
+        """Set the global failure re-queue budget (0 disables).
+
+        Persists first and only then commits the in-memory value, so a
+        persistence failure propagates instead of reporting a save that
+        silently vanishes on restart.
+        """
         count = max(0, min(9, int(count)))
-        self._auto_retry_max = count
+        from mikazuki.user_data import RevisionConflict, UserDataStore
+        store = UserDataStore()
         try:
-            from mikazuki.user_data import UserDataStore
-            store = UserDataStore()
             store.patch_settings({"tasks": {"auto_retry_max": count}}, store.read_settings()["revision"])
-        except Exception as exc:
-            log.warning(f"auto-retry setting kept in memory only; persist failed: {exc}")
+        except RevisionConflict:
+            store.patch_settings({"tasks": {"auto_retry_max": count}}, store.read_settings()["revision"])
+        self._auto_retry_max = count
         return count
 
     # ---- queue persistence ----
@@ -547,7 +552,13 @@ class TaskManager:
         if used >= max_retries:
             return
         # Set before retry_task() so the rebuilt task(s) inherit the counter.
-        task.metadata["auto_retry_used"] = used + 1
+        # For stage groups the rebuild copies each member's own metadata, so
+        # the increment must reach every member — otherwise a different stage
+        # failing next attempt would see used == 0 and rerun the whole group
+        # beyond the configured budget.
+        for member in self.tasks.values():
+            if member is task or (task.group and member.group == task.group):
+                member.metadata["auto_retry_used"] = used + 1
         task.metadata["auto_requeued"] = True
         self._persist()
         log.info(

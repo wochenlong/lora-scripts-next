@@ -28,11 +28,30 @@ def _active_output_names(tm) -> set[str]:
     return names
 
 
+def _output_artifacts_exist(output_dir: str, name: str) -> bool:
+    """True when <output_dir> already holds artifacts for this output_name.
+
+    Engines disagree on layout: some write a directory <output_dir>/<name>,
+    Kohya writes files like <name>.safetensors next to it. Treat any entry
+    equal to the name or starting with "<name>." as a collision.
+    """
+    if not output_dir:
+        return False
+    try:
+        for entry in Path(output_dir).iterdir():
+            if entry.name == name or entry.name.startswith(name + "."):
+                return True
+    except OSError:
+        return False
+    return False
+
+
 def ensure_unique_output_name(config: dict, tm, now: datetime | None = None) -> str | None:
     """Rename ``config["output_name"]`` on collision; return the original name.
 
-    Collision sources: active/queued compute tasks and an existing directory
-    ``<output_dir>/<output_name>``. Returns None when no rename was needed.
+    Collision sources: active/queued compute tasks and existing artifacts
+    under ``<output_dir>`` (directory or ``<name>.*`` files). Returns None
+    when no rename was needed.
     """
     name = str(config.get("output_name") or "").strip()
     if not name:
@@ -44,7 +63,7 @@ def ensure_unique_output_name(config: dict, tm, now: datetime | None = None) -> 
     def conflicts(candidate: str) -> bool:
         if candidate in active:
             return True
-        return bool(output_dir) and (Path(output_dir) / candidate).exists()
+        return _output_artifacts_exist(output_dir, candidate)
 
     if not conflicts(name):
         return None

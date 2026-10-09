@@ -140,3 +140,68 @@ class BatchEnqueueTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def make_request(body: bytes) -> "object":
+    from starlette.requests import Request
+
+    async def receive():
+        return {"type": "http.request", "body": body, "more_body": False}
+
+    return Request({"type": "http", "method": "POST", "path": "/api/tasks/auto_retry", "headers": []}, receive)
+
+
+class AutoRetryApiTests(unittest.TestCase):
+    def setUp(self):
+        self._patch = mock.patch.object(api.tm, "set_global_auto_retry", side_effect=lambda c: c)
+        self._patch.start()
+
+    def tearDown(self):
+        self._patch.stop()
+
+    def _post(self, body: bytes):
+        return asyncio.run(api.set_task_auto_retry(make_request(body)))
+
+    def test_valid_count(self):
+        response = self._post(b'{"count": 2}')
+        self.assertEqual(response.status, "success")
+        self.assertEqual(response.data["auto_retry_max"], 2)
+
+    def test_scalar_body_is_rejected_not_500(self):
+        for body in (b"[1]", b'"2"', b"2", b"true"):
+            self.assertEqual(self._post(body).status, "fail", body)
+
+    def test_non_integer_counts_rejected(self):
+        for body in (b'{"count": "2"}', b'{"count": 2.5}', b'{"count": true}', b'{"count": -1}', b'{"count": 10}'):
+            self.assertEqual(self._post(body).status, "fail", body)
+
+    def test_invalid_json_rejected(self):
+        self.assertEqual(self._post(b"{broken").status, "fail")
+
+    def test_persist_failure_reports_fail(self):
+        with mock.patch.object(api.tm, "set_global_auto_retry", side_effect=RuntimeError("disk full")):
+            response = self._post(b'{"count": 1}')
+        self.assertEqual(response.status, "fail")
+        self.assertIn("保存失败", response.message)
+
+
+class BatchArchiveUniquenessTests(unittest.TestCase):
+    def test_same_second_batches_get_distinct_archives(self):
+        import tempfile
+
+        dispatched = []
+
+        def fake_dispatch(model_train_type, config, ctx):
+            dispatched.append(ctx.timestamp)
+            return APIResponseSuccess(data={"task_id": "t", "queued": True})
+
+        with tempfile.TemporaryDirectory() as td, \
+                mock.patch.object(api.registry, "resolve_train_type", side_effect=lambda t: ("pack", "") if t == "sd-lora" else None), \
+                mock.patch.object(api, "dispatch_run", side_effect=fake_dispatch), \
+                mock.patch("mikazuki.app.api.os.getcwd", return_value=td):
+            run_endpoint([make_upload("run1.toml", VALID_TOML)])
+            run_endpoint([make_upload("run1.toml", VALID_TOML)])
+            archives = sorted(p.name for p in (Path(td) / "config" / "batch-queue").iterdir())
+        self.assertEqual(len(archives), 2)
+        self.assertEqual(len(set(archives)), 2)
+        self.assertEqual(len(set(dispatched)), 2)

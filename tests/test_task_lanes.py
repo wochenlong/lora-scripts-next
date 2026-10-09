@@ -22,6 +22,15 @@ def _wait_status(task, statuses, timeout=30.0) -> bool:
     return False
 
 
+def _wait_until(predicate, timeout=30.0) -> bool:
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        if predicate():
+            return True
+        time.sleep(0.05)
+    return False
+
+
 def _wait_persisted(path: Path, task_id: str, status: str, timeout=30.0) -> bool:
     """Wait until the persist file records the task's terminal status.
 
@@ -386,12 +395,39 @@ class AutoRequeueTests(unittest.TestCase):
         a = tm.create_task(fail, dict(os.environ), task_id="a")
         tm.submit(a)
         self.assertTrue(_wait_status(a, {TaskStatus.FAILED}))
-        retried = next((t for t in tm.tasks.values() if t.metadata.get("retry_of") == "a"), None)
-        self.assertIsNotNone(retried)
+        # The worker re-queues asynchronously after marking the original
+        # FAILED; poll instead of assuming the replacement exists already.
+        found = _wait_until(lambda: any(t.metadata.get("retry_of") == "a" for t in tm.tasks.values()))
+        self.assertTrue(found)
+        retried = next(t for t in tm.tasks.values() if t.metadata.get("retry_of") == "a")
         self.assertEqual(retried.metadata["auto_retry_used"], 1)
         self.assertTrue(_wait_status(retried, {TaskStatus.FAILED}))
         time.sleep(0.5)
         self.assertFalse(any(t.metadata.get("retry_of") == retried.task_id for t in tm.tasks.values()))
+
+    def test_group_retry_budget_is_shared_across_stages(self):
+        tm = TaskManager()
+        tm._auto_retry_max = 1
+        fail = [sys.executable, "-c", "import sys; sys.exit(3)"]
+        noop = [sys.executable, "-c", "pass"]
+        cache = tm.create_task(fail, dict(os.environ), task_id="g-cache",
+                               metadata={"stage": "cache_latents"}, group="g1")
+        train = tm.create_task(noop, dict(os.environ), task_id="g-train",
+                               metadata={"stage": "train"}, group="g1")
+        tm.submit_group([cache, train])
+        self.assertTrue(_wait_status(cache, {TaskStatus.FAILED}))
+        self.assertTrue(_wait_status(train, {TaskStatus.FAILED}))  # skipped remainder
+        # Group rebuilt once; every rebuilt stage must inherit used=1 so the
+        # group cannot be rebuilt again when its first stage fails.
+        found = _wait_until(lambda: any(t.metadata.get("retry_of") == "g-cache" for t in tm.tasks.values()))
+        self.assertTrue(found)
+        rebuilt = [t for t in tm.tasks.values() if t.metadata.get("retry_of") in {"g-cache", "g-train"}]
+        self.assertEqual(len(rebuilt), 2)
+        self.assertTrue(all(t.metadata.get("auto_retry_used") == 1 for t in rebuilt))
+        for task in rebuilt:
+            self.assertTrue(_wait_status(task, {TaskStatus.FAILED, TaskStatus.FINISHED}))
+        time.sleep(0.5)
+        self.assertEqual(len(tm.tasks), 4)
 
     def test_successful_task_is_not_requeued(self):
         tm = TaskManager()
@@ -442,8 +478,12 @@ class AutoRequeueTests(unittest.TestCase):
             self.assertEqual(tm.set_global_auto_retry(99), 9)
         self.assertEqual(tm.auto_retry_max, 9)
 
-    def test_persist_failure_keeps_memory_value(self):
+    def test_persist_failure_propagates_and_keeps_old_value(self):
         tm = TaskManager()
-        with mock.patch("mikazuki.user_data.UserDataStore", side_effect=RuntimeError("boom")):
-            self.assertEqual(tm.set_global_auto_retry(2), 2)
-        self.assertEqual(tm.auto_retry_max, 2)
+        store = mock.Mock()
+        store.read_settings.return_value = {"revision": 0}
+        store.patch_settings.side_effect = RuntimeError("boom")
+        with mock.patch("mikazuki.user_data.UserDataStore", return_value=store):
+            with self.assertRaises(RuntimeError):
+                tm.set_global_auto_retry(2)
+        self.assertEqual(tm.auto_retry_max, 0)

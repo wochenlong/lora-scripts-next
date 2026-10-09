@@ -65,6 +65,19 @@ class EnsureUniqueOutputNameTests(unittest.TestCase):
             self.assertEqual(ensure_unique_output_name(config, make_tm(), NOW), "mylora")
             self.assertEqual(config["output_name"], f"mylora-{STAMP}-0")
 
+    def test_existing_checkpoint_file_collision(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "mylora.safetensors").write_text("", encoding="utf-8")
+            config = {"output_name": "mylora", "output_dir": td}
+            self.assertEqual(ensure_unique_output_name(config, make_tm(), NOW), "mylora")
+            self.assertEqual(config["output_name"], f"mylora-{STAMP}-0")
+
+    def test_unrelated_prefix_files_do_not_collide(self):
+        with tempfile.TemporaryDirectory() as td:
+            (Path(td) / "mylora-v2.safetensors").write_text("", encoding="utf-8")
+            config = {"output_name": "mylora", "output_dir": td}
+            self.assertIsNone(ensure_unique_output_name(config, make_tm(), NOW))
+
     def test_digit_cycles_until_free(self):
         from mikazuki.tasks import TaskStatus
 

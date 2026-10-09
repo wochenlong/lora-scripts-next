@@ -4,6 +4,7 @@ import json
 import os
 import re
 import toml
+import uuid
 
 from glob import glob
 from datetime import datetime, timezone
@@ -285,19 +286,31 @@ async def batch_enqueue_training(files: List[UploadFile] = File(...)):
     are reported without blocking the rest. Uploaded files are kept under
     config/batch-queue/ as a record of what was submitted.
     """
+    MAX_FILES = 32
+    MAX_FILE_BYTES = 256 * 1024
+    RETENTION_FILES = 100
+
+    if len(files) > MAX_FILES:
+        return APIResponseFail(message=f"一次最多入队 {MAX_FILES} 个配置文件")
     queue_dir = Path(os.getcwd()) / "config" / "batch-queue"
     queue_dir.mkdir(parents=True, exist_ok=True)
     autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
     os.makedirs(autosave_dir, exist_ok=True)
-    base_timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+    # Per-request random component: two batches starting within the same
+    # second must not share archive names or engine autosave timestamps.
+    base_timestamp = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:4]}"
 
     results: list[dict] = []
     for index, upload in enumerate(files):
         name = Path(upload.filename or f"config-{index}.toml").name
         entry: dict = {"file": name, "ok": False}
         results.append(entry)
+        raw_bytes = await upload.read()
+        if len(raw_bytes) > MAX_FILE_BYTES:
+            entry["error"] = f"配置文件超过大小上限（{MAX_FILE_BYTES // 1024} KB）"
+            continue
         try:
-            raw = (await upload.read()).decode("utf-8-sig")
+            raw = raw_bytes.decode("utf-8-sig")
         except UnicodeDecodeError:
             entry["error"] = "文件编码不是有效的 UTF-8"
             continue
@@ -347,6 +360,12 @@ async def batch_enqueue_training(files: List[UploadFile] = File(...)):
             entry["output_name_renamed"] = {"from": renamed_from, "to": config["output_name"]}
 
     ok_count = sum(1 for item in results if item["ok"])
+    try:
+        archives = sorted(queue_dir.iterdir(), key=lambda p: p.name, reverse=True)
+        for stale in archives[RETENTION_FILES:]:
+            stale.unlink(missing_ok=True)
+    except OSError:
+        pass
     return APIResponseSuccess(data={
         "results": results,
         "ok_count": ok_count,
@@ -765,12 +784,18 @@ async def set_task_auto_retry(request: Request):
     """Set the global failure re-queue budget for training tasks (#357)."""
     try:
         payload = json.loads((await request.body()).decode("utf-8") or "{}")
-        count = int(payload.get("count"))
-    except (ValueError, TypeError):
-        return APIResponseFail(message="count must be an integer / 重试次数必须是整数")
-    if not 0 <= count <= 9:
-        return APIResponseFail(message="count must be 0-9 / 重试次数需在 0-9 之间（0 表示不重试）")
-    return APIResponseSuccess(data={"auto_retry_max": tm.set_global_auto_retry(count)})
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return APIResponseFail(message="invalid JSON body / 请求体不是有效 JSON")
+    if not isinstance(payload, dict):
+        return APIResponseFail(message="request body must be an object / 请求体必须是对象")
+    count = payload.get("count")
+    if type(count) is not int or not 0 <= count <= 9:
+        return APIResponseFail(message="count must be an integer 0-9 / 重试次数必须是 0-9 的整数（0 表示不重试）")
+    try:
+        applied = tm.set_global_auto_retry(count)
+    except Exception as exc:
+        return APIResponseFail(message=f"设置保存失败，重启后将恢复原值: {exc}")
+    return APIResponseSuccess(data={"auto_retry_max": applied})
 
 
 @router.get("/tasks/retry/{task_id}", response_model_exclude_none=True)
