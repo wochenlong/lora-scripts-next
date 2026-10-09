@@ -19,6 +19,7 @@ from mikazuki.engines.ai_toolkit.extension_state import (
     STATE_READY as AI_TOOLKIT_STATE_READY,
     default_layout as ai_toolkit_default_layout,
     read_extension_status as read_ai_toolkit_extension_status,
+    repair_layout_venv as repair_ai_toolkit_layout_venv,
     write_install_state as write_ai_toolkit_install_state,
 )
 from mikazuki.engines.ai_toolkit.installer import (
@@ -68,6 +69,9 @@ async def status():
 async def preflight(config: dict):
     if not ai_toolkit_feature_enabled():
         return ai_toolkit_disabled_response()
+    # Heal a venv whose base interpreter moved (e.g. trainer folder relocated,
+    # see #406) before the dependency probe runs.
+    repair_ai_toolkit_layout_venv(ai_toolkit_default_layout(Path.cwd()))
     runtime = ai_toolkit_runtime()
     run_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-ai-toolkit"
     variant = _resolve_variant(config)
