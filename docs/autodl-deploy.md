@@ -1,5 +1,7 @@
 # AutoDL 5090 部署 lora-scripts-next 指导
 
+> **注意（2026-09 起）**：训练依赖（PyTorch、sd-scripts 训练栈）已不再装进主环境，改由各训练引擎的独立 venv 承载——启动后在 WebUI「设置 → 训练引擎」页一键安装即可（自带镜像源选择）。本文的手工 torch/训练栈安装步骤仅适合需要自定义训练环境的高级场景，普通用户装 GUI 依赖（`requirements.txt`）后即可启动。
+
 本文用于指导 AutoDL 实例上的 Cursor/Agent 部署 `lora-scripts-next` 训练环境。目标硬件是 RTX 5090 / 50 系显卡，重点是保证 CUDA、PyTorch、Python 与本项目依赖兼容。
 
 ## 1. AutoDL 镜像选择

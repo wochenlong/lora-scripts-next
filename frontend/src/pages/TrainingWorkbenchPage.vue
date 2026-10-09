@@ -5,17 +5,19 @@ import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import AnimaFastPage from "./AnimaFastPage.vue"
 import DiffSynthGatePage from "./DiffSynthGatePage.vue"
+import KohyaGatePage from "./KohyaGatePage.vue"
 import MusubiGatePage from "./MusubiGatePage.vue"
 import AiToolkitGatePage from "./AiToolkitGatePage.vue"
 import TrainingPage from "./TrainingPage.vue"
 import TrainingSelector from "../components/TrainingSelector.vue"
 import WorkbenchHeader from "../components/WorkbenchHeader.vue"
-import { lastSelectionFor, rememberSelection } from "../engines/prefs"
+import { lastSelectionFor, readEnginePrefs, rememberSelection } from "../engines/prefs"
 import {
   DEFAULT_SELECTION,
   SCHEMA_META,
   TRAINING_ENGINES,
   TRAINING_TARGETS,
+  TRAINING_MODULES,
   firstSupportedEngine,
   firstSupportedTarget,
   isEngineSupported,
@@ -51,9 +53,16 @@ function initFromQuery() {
   const hasExplicit = Boolean(query.model || query.engine || query.target)
   const normalized = normalizeModel(query.model)
   if (normalized) model.value = normalized
+  const preferred = readEnginePrefs().defaultEngine ?? DEFAULT_SELECTION.engine
+  if (!normalized && !isEngine(query.engine)) {
+    const entry = TRAINING_MODULES.find((item) => item.engine === preferred && item.model === model.value)
+      ?? TRAINING_MODULES.find((item) => item.engine === preferred)
+    if (entry) model.value = entry.model
+  }
+  engine.value = isEngineSupported(model.value, preferred) ? preferred : firstSupportedEngine(model.value) ?? DEFAULT_SELECTION.engine
   if (isEngine(query.engine)) engine.value = query.engine
   if (isTarget(query.target)) target.value = query.target
-  // Cold start stays on Kohya; only restore last engine when URL has no explicit selection.
+  // Explicit links win; remembered selections override the configured default.
   if (!hasExplicit) {
     const remembered = lastSelectionFor(model.value)
     if (remembered) {
@@ -119,6 +128,12 @@ watch([model, engine, target], () => {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </AiToolkitGatePage>
+    <KohyaGatePage v-else-if="resolved.engine === 'kohya' && schemaMeta" :key="resolved.storageKey || resolved.schemaName" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName" :field-defaults="resolved.defaults" :storage-key="resolved.storageKey" :legacy-storage-key="resolved.legacyStorageKey">
+      <template #form-top>
+        <WorkbenchHeader />
+        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
+      </template>
+    </KohyaGatePage>
     <TrainingPage v-else-if="schemaMeta" :key="resolved.storageKey || resolved.schemaName" bare :title="schemaMeta.title" :area="schemaMeta.area" :schema-name="resolved.schemaName" :field-defaults="resolved.defaults" :storage-key="resolved.storageKey" :legacy-storage-key="resolved.legacyStorageKey">
       <template #form-top>
         <WorkbenchHeader />

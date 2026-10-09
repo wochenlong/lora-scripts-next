@@ -13,6 +13,15 @@ describe("engine prefs", () => {
     expect(readEnginePrefs().rememberLast).toBe(true)
   })
 
+  it("retains a valid default engine and falls back for invalid values", () => {
+    localStorage.setItem(KEY, '{"defaultEngine":"ai-toolkit","rememberLast":false}')
+    expect(readEnginePrefs().defaultEngine).toBe("ai-toolkit")
+    rememberSelection("anima", "kohya", "lora")
+    expect(readEnginePrefs().defaultEngine).toBe("ai-toolkit")
+    localStorage.setItem(KEY, '{"defaultEngine":"missing"}')
+    expect(readEnginePrefs().defaultEngine).toBe("kohya")
+  })
+
   it("remembers last engine per model when enabled", () => {
     rememberSelection("anima", "anima-fast", "lora")
     expect(lastSelectionFor("anima")).toEqual({ engine: "anima-fast", target: "lora" })
