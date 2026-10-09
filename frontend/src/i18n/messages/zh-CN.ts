@@ -1041,7 +1041,10 @@ export default {
     },
     gallery: {
       count: "{filtered} / {total} 张，已选 {selected} 张",
-      pickHint: "点击图片进入单图编辑",
+      countPlain: "{filtered} / {total} 张",
+      toggleSelect: "选中/取消选中 {name}",
+      pickHint: "点击图片进入单图编辑 · 按住 Shift 点击可多选",
+      shiftHint: "按住 Shift 点击可多选",
       more: "更多操作",
       selectAll: "全选（{n}）",
       deselectAll: "取消全选（{n}）",

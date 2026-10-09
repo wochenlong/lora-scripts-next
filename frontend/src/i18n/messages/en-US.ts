@@ -1041,7 +1041,10 @@ export default {
     },
     gallery: {
       count: "{filtered} / {total} images, {selected} selected",
-      pickHint: "Click an image to open the single-image editor",
+      countPlain: "{filtered} / {total} images",
+      toggleSelect: "Select or deselect {name}",
+      pickHint: "Click an image to edit it · Shift-click to multi-select",
+      shiftHint: "Shift-click to multi-select",
       more: "More actions",
       selectAll: "Select all ({n})",
       deselectAll: "Deselect all ({n})",

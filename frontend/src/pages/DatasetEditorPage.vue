@@ -500,6 +500,11 @@ function rememberCurrentDraft() {
 }
 
 function choose(item: DatasetItem, event?: MouseEvent) {
+  // Shift/Ctrl/Cmd click is a batch-selection gesture, not an editor switch.
+  if (event && (event.shiftKey || event.ctrlKey || event.metaKey)) {
+    toggleChecked(item, event)
+    return
+  }
   rememberCurrentDraft()
   selected.value = item.relative_path
   editorSession.rememberSelection(item.relative_path)
@@ -508,18 +513,18 @@ function choose(item: DatasetItem, event?: MouseEvent) {
   restoringCaption = false
   captionHydrated = true
   rightPanelMode.value = "caption"
-  if (!event) return
+  lastSelectedIndex.value = filtered.value.findIndex((candidate) => candidate.relative_path === item.relative_path)
+}
+
+/** Batch selection lives on the tile checkbox; Shift extends a range. */
+function toggleChecked(item: DatasetItem, event?: MouseEvent) {
   const index = filtered.value.findIndex((candidate) => candidate.relative_path === item.relative_path)
-  const multi = event.ctrlKey || event.metaKey || event.shiftKey
-  const next = new Set(multi ? selectedPaths.value : [])
-  if (event.shiftKey && lastSelectedIndex.value !== undefined) {
+  const next = new Set(selectedPaths.value)
+  if (event?.shiftKey && lastSelectedIndex.value !== undefined && lastSelectedIndex.value >= 0) {
     const [start, end] = [lastSelectedIndex.value, index].sort((a, b) => a - b)
     filtered.value.slice(start, end + 1).forEach((candidate) => next.add(candidate.relative_path))
-  } else if (multi) {
-    if (next.has(item.relative_path)) next.delete(item.relative_path)
-    else next.add(item.relative_path)
-  } else if (selectedPaths.value.has(item.relative_path) && selectedPaths.value.size === 1) {
-    // Plain click on the only selected image toggles it off.
+  } else if (next.has(item.relative_path)) {
+    next.delete(item.relative_path)
   } else {
     next.add(item.relative_path)
   }
@@ -587,24 +592,12 @@ function selectManagedPath(next: string) {
 
 const pickerOpen = ref(false)
 
-/** One button covers the dataset source: pick, load a typed path, or switch. */
-const scannerAction = computed<"pick" | "load" | "replace">(() => {
-  if (!path.value.trim()) return "pick"
-  if (!root.value) return "load"
-  return path.value.trim() === root.value ? "pick" : "replace"
-})
-const scannerLabel = computed(() =>
-  scannerAction.value === "pick"
-    ? root.value
-      ? t("datasetManage.changeDataset")
-      : t("datasetManage.loadDataset")
-    : scannerAction.value === "replace"
-      ? t("datasetEditor.replace")
-      : t("datasetEditor.scan"),
-)
+/** The button tracks the typed path: load it, then re-load it as "更换". */
+const scannerAction = computed<"load" | "replace">(() => (root.value ? "replace" : "load"))
+const scannerLabel = computed(() => (scannerAction.value === "replace" ? t("datasetEditor.replace") : t("datasetEditor.scan")))
 
 function runScannerAction() {
-  if (scannerAction.value === "pick") {
+  if (!path.value.trim()) {
     pickerOpen.value = true
     return
   }
@@ -915,8 +908,10 @@ onUnmounted(() => {
 
       <main class="dataset-gallery">
         <header class="dataset-gallery-bar">
-          <strong>{{ t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size }) }}</strong>
-          <span v-if="root && items.length && !selected" class="dataset-gallery-hint">{{ t("datasetEditor.gallery.pickHint") }}</span>
+          <strong>{{ selectedPaths.size
+            ? t("datasetEditor.gallery.count", { filtered: filtered.length, total: items.length, selected: selectedPaths.size })
+            : t("datasetEditor.gallery.countPlain", { filtered: filtered.length, total: items.length }) }}</strong>
+          <span v-if="root && items.length && !selectedPaths.size" class="dataset-gallery-hint">{{ selected ? t("datasetEditor.gallery.shiftHint") : t("datasetEditor.gallery.pickHint") }}</span>
           <div class="dataset-select-scope" :class="{ open: selectMenuOpen }">
             <button
               type="button"
@@ -965,7 +960,15 @@ onUnmounted(() => {
             :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }"
             @click="choose(item, $event)"
           >
-            <i v-if="selectedPaths.has(item.relative_path)">✓</i>
+            <span
+              class="image-grid-check"
+              :class="{ checked: selectedPaths.has(item.relative_path) }"
+              role="checkbox"
+              :aria-checked="selectedPaths.has(item.relative_path)"
+              :aria-label="t('datasetEditor.gallery.toggleSelect', { name: item.name })"
+              :title="t('datasetEditor.gallery.toggleSelect', { name: item.name })"
+              @click.stop="toggleChecked(item, $event)"
+            ><i v-if="selectedPaths.has(item.relative_path)">✓</i></span>
             <img :src="item.thumb_url" :alt="item.name" loading="lazy">
             <span>{{ item.name }}</span>
           </button>

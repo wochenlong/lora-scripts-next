@@ -508,6 +508,7 @@
 }
 
 .image-grid button {
+  position: relative;
   overflow: hidden;
   padding: 0;
   text-align: left;
@@ -516,6 +517,28 @@
   border-radius: 10px;
   cursor: pointer;
 }
+
+/* Batch-selection checkbox: always visible so multi-select stays discoverable. */
+.image-grid-check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  color: #fff;
+  background: color-mix(in srgb, #000 35%, transparent);
+  border: 1px solid rgb(255 255 255 / 55%);
+  border-radius: 6px;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.image-grid-check:hover { border-color: var(--accent); }
+.image-grid-check.checked { background: var(--accent); border-color: var(--accent); }
 
 .image-grid button.active {
   border-color: var(--accent);
