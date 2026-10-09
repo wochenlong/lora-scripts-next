@@ -45,3 +45,26 @@ it("provides load, save-as-template and reset actions for natural-language promp
   expect(wrapper.get('[data-testid="caption-reset"]').text()).toContain("重置")
   wrapper.unmount()
 })
+
+it("updates and deletes the selected custom prompt template", async () => {
+  localStorage.setItem("nt.tagger.captionTemplates", JSON.stringify({ "custom-existing": "Original prompt" }))
+  const wrapper = mount(TaggerPage, { global: {
+    plugins: [createPinia(), i18n], stubs: { ManagedDatasetPicker: true },
+  } })
+  await wrapper.get('[data-testid="parameter-toggle"]').trigger("click")
+  await wrapper.get('[data-testid="tab-advanced"]').trigger("click")
+  const select = wrapper.get('[data-testid="caption-template-select"]')
+  await select.setValue("custom-existing")
+  await wrapper.get('[data-testid="caption-load"]').trigger("click")
+  const prompt = wrapper.get('[data-testid="caption-prompt"]')
+  expect((prompt.element as HTMLTextAreaElement).value).toBe("Original prompt")
+
+  await prompt.setValue("Edited prompt")
+  await wrapper.get('[data-testid="caption-update-template"]').trigger("click")
+  expect(JSON.parse(localStorage.getItem("nt.tagger.captionTemplates") || "{}")["custom-existing"]).toBe("Edited prompt")
+
+  await wrapper.get('[data-testid="caption-delete-template"]').trigger("click")
+  expect(JSON.parse(localStorage.getItem("nt.tagger.captionTemplates") || "{}")["custom-existing"]).toBeUndefined()
+  expect((select.element as HTMLSelectElement).value).toBe("default")
+  wrapper.unmount()
+})

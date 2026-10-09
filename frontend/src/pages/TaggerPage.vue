@@ -56,6 +56,7 @@ function readCaptionTemplates() {
     captionTemplates.value = {}
   }
 }
+readCaptionTemplates()
 function loadCaptionTemplate() {
   captionPrompt.value = captionTemplate.value === "default"
     ? defaultCaptionPrompt
@@ -67,6 +68,21 @@ function saveCaptionTemplate() {
   localStorage.setItem(CAPTION_TEMPLATES_KEY, JSON.stringify(captionTemplates.value))
   captionTemplate.value = key
   ElMessage.success(t("tagger.msg.templateSaved"))
+}
+function updateCaptionTemplate() {
+  if (captionTemplate.value === "default") return
+  captionTemplates.value = { ...captionTemplates.value, [captionTemplate.value]: captionPrompt.value }
+  localStorage.setItem(CAPTION_TEMPLATES_KEY, JSON.stringify(captionTemplates.value))
+  ElMessage.success(t("tagger.msg.templateUpdated"))
+}
+function deleteCaptionTemplate() {
+  if (captionTemplate.value === "default") return
+  const next = { ...captionTemplates.value }
+  delete next[captionTemplate.value]
+  captionTemplates.value = next
+  localStorage.setItem(CAPTION_TEMPLATES_KEY, JSON.stringify(next))
+  resetCaptionPrompt()
+  ElMessage.success(t("tagger.msg.templateDeleted"))
 }
 function resetCaptionPrompt() {
   captionTemplate.value = "default"
@@ -247,13 +263,15 @@ onBeforeUnmount(stopPolling)
         <summary>{{ t("tagger.workspace.caption") }}</summary>
         <fieldset>
           <div class="tagger-grid">
-            <label>{{ t("tagger.workspace.template") }}<select v-model="captionTemplate"><option value="default">{{ t("tagger.workspace.defaultTemplate") }}</option><option v-for="(_, key) in captionTemplates" :key="key" :value="key">{{ t("tagger.workspace.customTemplate") }}</option></select></label>
+            <label>{{ t("tagger.workspace.template") }}<select v-model="captionTemplate" data-testid="caption-template-select"><option value="default">{{ t("tagger.workspace.defaultTemplate") }}</option><option v-for="(_, key) in captionTemplates" :key="key" :value="key">{{ t("tagger.workspace.customTemplate") }}</option></select></label>
             <label>{{ t("tagger.workspace.language") }}<select><option>English</option><option>中文</option></select></label>
-            <label class="tagger-dataset-path">{{ t("tagger.workspace.prompt") }}<textarea v-model="captionPrompt" rows="4" /></label>
+            <label class="tagger-dataset-path">{{ t("tagger.workspace.prompt") }}<textarea v-model="captionPrompt" data-testid="caption-prompt" rows="4" /></label>
           </div>
           <div class="tagger-actions">
             <button data-testid="caption-load" type="button" class="secondary-action" @click="loadCaptionTemplate">{{ t("tagger.workspace.load") }}</button>
             <button data-testid="caption-save-template" type="button" class="secondary-action" @click="saveCaptionTemplate">{{ t("tagger.workspace.saveAsTemplate") }}</button>
+            <button data-testid="caption-update-template" type="button" class="secondary-action" :disabled="captionTemplate === 'default'" @click="updateCaptionTemplate">{{ t("tagger.workspace.updateTemplate") }}</button>
+            <button data-testid="caption-delete-template" type="button" class="danger-action" :disabled="captionTemplate === 'default'" @click="deleteCaptionTemplate">{{ t("tagger.workspace.deleteTemplate") }}</button>
             <button data-testid="caption-reset" type="button" class="secondary-action" @click="resetCaptionPrompt">{{ t("tagger.workspace.reset") }}</button>
           </div>
         </fieldset>
