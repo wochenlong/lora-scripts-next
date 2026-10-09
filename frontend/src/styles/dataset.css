@@ -67,6 +67,52 @@
 
 .dataset-tool-more { min-width: 40px; padding: 0 10px; }
 
+/* Split dataset button: state action on the left, source actions in the caret. */
+.dataset-split { position: relative; display: inline-flex; align-items: stretch; }
+.dataset-split .dataset-split-main { border-top-right-radius: 0; border-bottom-right-radius: 0; border-right: 0; }
+.dataset-split .dataset-split-caret {
+  min-width: 30px;
+  padding: 0 8px;
+  border-top-left-radius: 0;
+  border-bottom-left-radius: 0;
+  font-size: 10px;
+  line-height: 1;
+}
+.dataset-split .dataset-split-caret.is-primary {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.dataset-split-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 30;
+  display: grid;
+  min-width: 180px;
+  padding: 6px;
+  background: color-mix(in srgb, var(--surface) 94%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 18%);
+  backdrop-filter: blur(12px);
+}
+
+.dataset-split-menu button {
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 14px;
+  text-align: left;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.dataset-split-menu button:hover:not(:disabled) { background: var(--surface-soft); }
+.dataset-split-menu button:disabled { opacity: 0.5; cursor: not-allowed; }
+
 .dataset-toolbar-label {
   flex: 0 0 auto;
   color: var(--text-soft);

@@ -47,13 +47,18 @@ it("confirms draft loss and unloads without any file deletion", async () => {
   state.setDraft("/A", "a.png", "draft")
   state.setDraft("/A", "other.png", "draft")
   const confirm = vi.spyOn(ElMessageBox, "confirm").mockRejectedValueOnce("cancel").mockResolvedValue("confirm" as never)
-  // Unload lives in the toolbar's "more actions" menu.
-  const menu = wrapper.findComponent({ name: "ElDropdown" })
-  menu.vm.$emit("command", "unload")
-  await flushPromises()
+  // Unload lives in the dataset button's caret menu.
+  const unload = async () => {
+    await wrapper.get(".dataset-split-caret").trigger("click")
+    await flushPromises()
+    const item = wrapper.findAll(".dataset-split-menu button").find(candidate => candidate.text().includes("卸载"))
+    if (!item) throw new Error("unload menu item missing")
+    await item.trigger("click")
+    await flushPromises()
+  }
+  await unload()
   expect(state.lastRoot.value).toBe("/A")
-  menu.vm.$emit("command", "unload")
-  await flushPromises()
+  await unload()
   expect(confirm).toHaveBeenCalledTimes(2)
   expect(state.lastRoot.value).toBe("")
   expect((wrapper.find('[data-testid="scan-action"]').element as HTMLButtonElement).textContent).toContain("加载")

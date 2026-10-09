@@ -959,6 +959,7 @@ export default {
     scan: "Load",
     replace: "Replace",
     scanning: "Loading…",
+    datasetMenu: "Dataset actions",
     categoryLabel: "Category",
     allCategories: "All",
     queryLabel: "Caption / Filename Filter",

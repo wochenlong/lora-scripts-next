@@ -591,6 +591,31 @@ function selectManagedPath(next: string) {
 }
 
 const pickerOpen = ref(false)
+const datasetMenuOpen = ref(false)
+
+let datasetMenuOutside: ((event: MouseEvent) => void) | undefined
+function closeDatasetMenu() {
+  datasetMenuOpen.value = false
+  if (datasetMenuOutside) {
+    document.removeEventListener("click", datasetMenuOutside)
+    datasetMenuOutside = undefined
+  }
+}
+
+function toggleDatasetMenu() {
+  if (datasetMenuOpen.value) {
+    closeDatasetMenu()
+    return
+  }
+  datasetMenuOpen.value = true
+  datasetMenuOutside = (event: MouseEvent) => {
+    if (!(event.target as HTMLElement | null)?.closest?.(".dataset-split")) closeDatasetMenu()
+  }
+  // Defer so the click that opened the menu does not close it again.
+  window.setTimeout(() => {
+    if (datasetMenuOpen.value && datasetMenuOutside) document.addEventListener("click", datasetMenuOutside)
+  }, 0)
+}
 
 /** The button tracks the typed path: load it, then re-load it as "更换". */
 const scannerAction = computed<"load" | "replace">(() => (root.value ? "replace" : "load"))
@@ -604,15 +629,16 @@ function runScannerAction() {
   void scan()
 }
 
-function onToolCommand(command: string | number | object) {
+function onDatasetMenuAction(command: "pick" | "unload") {
+  closeDatasetMenu()
   if (command === "pick") {
     pickerOpen.value = true
     return
   }
-  if (command === "unload") {
-    void toggleDataset()
-    return
-  }
+  void toggleDataset()
+}
+
+function onToolCommand(command: string | number | object) {
   if (command === "history") {
     historyOpen.value = true
     return
@@ -840,6 +866,7 @@ onDeactivated(() => {
 onUnmounted(() => {
   scanGeneration++
   window.removeEventListener("keydown", onPreviewKeydown)
+  closeDatasetMenu()
   if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
   if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
 })
@@ -853,7 +880,23 @@ onUnmounted(() => {
           <label class="dataset-toolbar-label" for="editor-dataset-path">{{ t("datasetEditor.pathLabel") }}</label>
           <span class="dataset-toolbar-controls">
             <input id="editor-dataset-path" v-model="path" class="dataset-direct-path" :disabled="loading" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="!loading && scan()" />
-            <button data-testid="scan-action" type="button" class="dataset-tool-entry" :class="{ 'is-primary': !root }" :disabled="loading" @click="runScannerAction">{{ scannerLabel }}</button>
+            <div class="dataset-split" :class="{ open: datasetMenuOpen }">
+              <button data-testid="scan-action" type="button" class="dataset-tool-entry dataset-split-main" :class="{ 'is-primary': !root }" :disabled="loading" @click="runScannerAction">{{ scannerLabel }}</button>
+              <button
+                type="button"
+                class="dataset-tool-entry dataset-split-caret"
+                :class="{ 'is-primary': !root }"
+                :disabled="loading"
+                :aria-label="t('datasetEditor.datasetMenu')"
+                :title="t('datasetEditor.datasetMenu')"
+                :aria-expanded="datasetMenuOpen"
+                @click="toggleDatasetMenu"
+              >▼</button>
+              <div v-if="datasetMenuOpen" class="dataset-split-menu" role="menu">
+                <button type="button" role="menuitem" @click="onDatasetMenuAction('pick')">{{ t("datasetManage.selectDataset") }}</button>
+                <button type="button" role="menuitem" :disabled="!root" @click="onDatasetMenuAction('unload')">{{ t("datasetManage.unload") }}</button>
+              </div>
+            </div>
             <ManagedDatasetPicker v-model:open="pickerOpen" hide-button :disabled="loading" :loaded="Boolean(root)" :initial-path="path" @select="selectManagedPath" />
             <span v-if="loading" role="status">{{ t("datasetEditor.scanning") }}</span>
           </span>
@@ -894,9 +937,7 @@ onUnmounted(() => {
             <button type="button" class="dataset-tool-entry dataset-tool-more" :disabled="!root" :aria-label="t('datasetEditor.gallery.more')" :title="t('datasetEditor.gallery.more')"><Setting /></button>
             <template #dropdown>
               <ElDropdownMenu>
-                <ElDropdownItem command="pick">{{ t("datasetManage.selectDataset") }}</ElDropdownItem>
-                <ElDropdownItem command="unload" :disabled="!root">{{ t("datasetManage.unload") }}</ElDropdownItem>
-                <ElDropdownItem command="undo" :disabled="!sessionHistory.can_undo" divided>{{ t("datasetEditor.gallery.undo") }}</ElDropdownItem>
+                <ElDropdownItem command="undo" :disabled="!sessionHistory.can_undo">{{ t("datasetEditor.gallery.undo") }}</ElDropdownItem>
                 <ElDropdownItem command="redo" :disabled="!sessionHistory.can_redo">{{ t("datasetEditor.gallery.redo") }}</ElDropdownItem>
                 <ElDropdownItem command="history" :disabled="!root">{{ t("datasetEditor.gallery.history") }}</ElDropdownItem>
               </ElDropdownMenu>

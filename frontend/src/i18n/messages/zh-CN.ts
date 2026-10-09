@@ -959,6 +959,7 @@ export default {
     scan: "加载",
     replace: "更换",
     scanning: "加载中…",
+    datasetMenu: "数据集操作",
     categoryLabel: "分类",
     allCategories: "全部",
     queryLabel: "Caption / 文件名筛选",
