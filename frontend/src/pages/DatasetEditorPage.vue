@@ -1139,10 +1139,10 @@ onUnmounted(() => {
               <small v-if="showTranslations && translationFor(tag, translationProvider)" class="caption-tag-translation">{{ translationFor(tag, translationProvider) }}</small>
               <button type="button" :aria-label="t('datasetEditor.caption.removeAria', { tag })" @click="removeCaptionTag(tag)" @mousedown.stop>×</button>
             </span>
-            <span class="chip-add">
-              <el-input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag" />
-              <button type="button" @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button>
-            </span>
+          </div>
+          <div class="chip-add">
+            <el-input v-model="newCaptionTag" :placeholder="t('datasetEditor.caption.addPlaceholder')" @keyup.enter="addCaptionTag" />
+            <button type="button" @click="addCaptionTag">{{ t("datasetEditor.caption.add") }}</button>
           </div>
           <small class="caption-drag-hint">{{ t("datasetEditor.caption.dragHint") }}</small>
           </template>

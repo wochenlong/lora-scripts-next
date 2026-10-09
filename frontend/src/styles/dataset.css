@@ -1011,26 +1011,15 @@
   font-size: 11px;
 }
 
+/* A long caption must not stretch the panel: the list is capped and scrolls
+   internally, leaving the add row, the hint and 保存 in place. */
 .caption-chips {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  max-height: 42vh;
+  max-height: min(42vh, 420px);
   overflow: auto;
   padding: 2px;
-}
-
-/* Tag mode: let the chip list use the panel's leftover height instead of a
-   fixed cap, so a tall panel shows more tags without scrolling. */
-.caption-panel {
-  display: flex;
-  flex-direction: column;
-}
-
-.caption-panel .caption-chips {
-  flex: 1 1 auto;
-  min-height: 120px;
-  max-height: none;
 }
 
 .chip {
@@ -1082,29 +1071,33 @@
   line-height: 1.4;
 }
 
+/* Sits below the scrolling chip list so it never scrolls out of reach. */
 .chip-add {
-  display: inline-flex;
-  gap: 5px;
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
 }
 
 .chip-add input {
-  width: 90px;
-  min-height: 26px;
-  padding: 0 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 32px;
+  padding: 0 10px;
   color: var(--text);
   background: var(--surface-soft);
   border: 1px solid var(--border);
-  border-radius: 7px;
-  font-size: 12px;
+  border-radius: 8px;
+  font-size: 13px;
 }
 
 .chip-add button {
-  padding: 0 10px;
+  flex: 0 0 auto;
+  padding: 0 14px;
   color: var(--accent-dark);
   background: var(--accent-soft);
   border: 0;
-  border-radius: 7px;
-  font-size: 12px;
+  border-radius: 8px;
+  font-size: 13px;
   cursor: pointer;
 }
 
