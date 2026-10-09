@@ -7,6 +7,13 @@ describe("caption tag helpers", () => {
     expect(splitCaptionTags("")).toEqual([])
   })
 
+  it("also splits Chinese commas and sentence-ending periods", () => {
+    expect(splitCaptionTags("solo，1girl")).toEqual(["solo", "1girl"])
+    expect(splitCaptionTags("cute animal. display piece.")).toEqual(["cute animal", "display piece"])
+    // Periods inside a token stay part of the tag.
+    expect(splitCaptionTags(".hack, 3.5")).toEqual([".hack", "3.5"])
+  })
+
   it("appends new tags and ignores duplicates or blanks", () => {
     expect(addTagToCaption("solo, 1girl", "cat ears")).toBe("solo, 1girl, cat ears")
     expect(addTagToCaption("solo, 1girl", "solo")).toBe("solo, 1girl")

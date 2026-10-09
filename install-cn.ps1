@@ -150,6 +150,12 @@ if ($LASTEXITCODE -ne 0) {
     Write-Output "警告: 默认打标模型预下载失败，可在启动后于「打标」页首次使用时自动下载。"
 }
 
+Write-Output "预下载 Danbooru 中文标签词库（约 23MB，供「中文释义」离线翻译）..."
+python scripts/prefetch_tag_dictionary.py --if-missing
+if ($LASTEXITCODE -ne 0) {
+    Write-Output "警告: 中文词库预下载失败，可在「标签编辑 → 设置 → 翻译设置」中手动下载。"
+}
+
 Write-Output "安装完成"
 Write-Output ""
 Write-Output "注意：训练依赖（torch、sd-scripts 训练栈）不再随本环境安装，"

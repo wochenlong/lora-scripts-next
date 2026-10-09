@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from starlette.datastructures import UploadFile as StarletteUploadFile
 
 from mikazuki.app.models import APIResponseSuccess
+from mikazuki.datasets.contents import dataset_contents
 from mikazuki.datasets.copy import LAYOUTS, copy_dataset
 from mikazuki.datasets.export import file_download_response, stream_dataset_zip
 from mikazuki.datasets.inuse import datasets_in_use, ensure_dataset_not_in_use
@@ -15,13 +16,14 @@ from mikazuki.datasets.root import (
     normalize_path,
     set_datasets_root,
 )
-from mikazuki.datasets.sandbox import resolve_dataset_dir
+from mikazuki.datasets.sandbox import resolve_dataset_dir, resolve_direct_dataset_dir
 from mikazuki.datasets.stats import cached_overview, get_overview, invalidate_overview
 from mikazuki.datasets.trash import (
     empty_trash,
     empty_trash_any,
     list_all_trash,
     list_trash,
+    rename_with_trash,
     restore_batch,
     restore_batch_by_id,
     soft_delete,
@@ -50,6 +52,10 @@ class RootUpdateRequest(BaseModel):
 
 
 class DatasetCreateRequest(BaseModel):
+    name: str
+
+
+class DatasetRenameRequest(BaseModel):
     name: str
 
 
@@ -178,6 +184,46 @@ def existing_dataset_dir(name: str) -> Path:
     if not dataset_dir.is_dir():
         raise HTTPException(status_code=404, detail="dataset not found")
     return dataset_dir
+
+
+@router.get("/datasets/{name}/contents")
+def contents(name: str, path: str = ""):
+    root = get_datasets_root()
+    dataset_dir = resolve_direct_dataset_dir(root, name)
+    with dataset_operation(dataset_dir.name):
+        if not dataset_dir.is_dir():
+            raise HTTPException(status_code=404, detail="dataset not found")
+        result = dataset_contents(dataset_dir, path)
+    return APIResponseSuccess(data={**result, "in_use": dataset_dir.name in datasets_in_use(root)})
+
+
+@router.post("/datasets/{name}/rename")
+def rename(name: str, req: DatasetRenameRequest):
+    root = get_datasets_root()
+    source = resolve_direct_dataset_dir(root, name)
+    target = resolve_direct_dataset_dir(root, req.name)
+    if source == target:
+        raise HTTPException(status_code=409, detail="target dataset already exists")
+    lock_order = sorted({source.name, target.name})
+    with dataset_operation(lock_order[0]):
+        with dataset_operation(lock_order[1]):
+            source = resolve_direct_dataset_dir(root, name)
+            target = resolve_direct_dataset_dir(root, req.name)
+            if not source.is_dir():
+                raise HTTPException(status_code=404, detail="dataset not found")
+            if target.exists() or target.is_symlink():
+                raise HTTPException(status_code=409, detail="target dataset already exists")
+            ensure_dataset_not_in_use(source.name)
+            ensure_dataset_not_in_use(target.name)
+            try:
+                rename_with_trash(root, source, target)
+            except OSError as exc:
+                # A filesystem-level failure is a conflict the client may retry,
+                # not an invalid request.
+                raise HTTPException(status_code=409, detail=f"cannot rename dataset (busy): {exc}") from exc
+            invalidate_overview(source)
+            invalidate_overview(target)
+    return APIResponseSuccess(data={"name": target.name, "path": normalize_path(target)})
 
 
 @router.post("/datasets/{name}/copy")

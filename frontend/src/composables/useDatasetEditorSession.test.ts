@@ -47,5 +47,25 @@ describe("useDatasetEditorSession", () => {
     expect(state.getDraft("D:/datasets/one", "first.png")).toBeUndefined()
     expect(state.getDraft("D:/datasets/one", "second.png")).toBe("long_hair")
   })
+
+  it("unloads the active dataset and its drafts without removing other dataset drafts", () => {
+    const state = useDatasetEditorSession()
+    state.rememberDataset("/datasets/one", "/datasets/one")
+    state.setDraft("/datasets/one", "a.png", "unsaved")
+    state.setDraft("/datasets/two", "a.png", "keep")
+    state.category.value = "sub"
+    state.query.value = "cat"
+    state.selectedPaths.value = new Set(["a.png"])
+    state.unload()
+    expect(state.lastRoot.value).toBe("")
+    expect(state.lastPath.value).toBe("")
+    expect(state.items.value).toEqual([])
+    expect(state.selectedPaths.value.size).toBe(0)
+    expect(state.category.value).toBe("")
+    expect(state.query.value).toBe("")
+    expect(state.getDraft("/datasets/one", "a.png")).toBeUndefined()
+    expect(state.getDraft("/datasets/two", "a.png")).toBe("keep")
+    expect(JSON.parse(localStorage.getItem("dataset-editor-session-v1")!).lastRoot).toBe("")
+  })
 })
 

@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import NetworkSettingsPanel from "../components/NetworkSettingsPanel.vue"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { Rank, Search, MoreFilled, RefreshLeft, ArrowLeft, ArrowRight } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import { enginesApi, type EngineStatus } from "../api/engines"
-import DownloadSourcesPanel from "../components/DownloadSourcesPanel.vue"
 import {
   ENGINE_CATALOG,
   type EngineDefinition,
@@ -26,7 +24,6 @@ const manageId = ref<string | null>(null)
 const menuId = ref<string | null>(null)
 const rememberLast = ref(readEnginePrefs().rememberLast)
 const defaultEngine = ref(readEnginePrefs().defaultEngine ?? "kohya")
-const downloadPanel = ref<{ openAdvanced: () => void } | null>(null)
 const catalogIds = ENGINE_CATALOG.map((engine) => engine.id)
 const order = ref(readEngineOrder(catalogIds))
 const saving = ref(false)
@@ -384,7 +381,6 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="engines-settings engines-manager">
-    <NetworkSettingsPanel />
     <header class="engines-page-head">
       <div>
         <h2>{{ t("settings.engines.title") }}</h2>
@@ -409,11 +405,6 @@ onBeforeUnmount(() => {
           <b>{{ t("settings.engines.rememberLast.label") }}</b>
           <small>{{ t("settings.engines.rememberLast.hintShort") }}</small>
         </span>
-      </label>
-
-      <label class="toolbar-field toolbar-source">
-        <span>{{ t("settings.engines.downloadSources.title") }}</span>
-        <DownloadSourcesPanel ref="downloadPanel" compact />
       </label>
     </section>
 
