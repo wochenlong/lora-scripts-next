@@ -567,6 +567,12 @@ function toggleChecked(item: DatasetItem, event?: MouseEvent) {
   lastSelectedIndex.value = index
 }
 
+/** Double clicking a tile opens the full-size preview for it. */
+function openLightbox(item: DatasetItem) {
+  if (selected.value !== item.relative_path) choose(item)
+  previewOpen.value = true
+}
+
 function apply(changes: ChangedItem[]) {
   const map = new Map(changes.map((item) => [item.image, item]))
   editorSession.clearDrafts(root.value, changes.map((item) => item.image))
@@ -1039,7 +1045,9 @@ onUnmounted(() => {
             :key="item.relative_path"
             type="button"
             :class="{ active: selected === item.relative_path, checked: selectedPaths.has(item.relative_path) }"
+            :title="t('datasetEditor.gallery.dblClickHint', { name: item.name })"
             @click="choose(item, $event)"
+            @dblclick="openLightbox(item)"
           >
             <span
               class="image-grid-check"
