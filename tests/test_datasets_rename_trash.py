@@ -99,7 +99,8 @@ def test_rename_metadata_failure_keeps_directory_and_all_manifests(workspace, mo
         monkeypatch.setattr(Path, "write_text", real_write)
         monkeypatch.setattr(Path, "replace", fail_second_publish)
     response = client.post("/api/datasets/source/rename", json={"name": "target"})
-    assert response.status_code == 400
+    # A filesystem failure is reported as a retryable conflict, not a bad request.
+    assert response.status_code == 409
     assert source.is_dir()
     assert not (root / "target").exists()
     for path, data in originals.items():
@@ -165,7 +166,7 @@ def test_rename_directory_move_failure_preserves_trash(workspace, monkeypatch):
         return real_rename(path, target)
 
     monkeypatch.setattr(Path, "rename", fail_directory_move)
-    assert client.post("/api/datasets/source/rename", json={"name": "target"}).status_code == 400
+    assert client.post("/api/datasets/source/rename", json={"name": "target"}).status_code == 409
     assert source.is_dir()
     assert not (root / "target").exists()
     assert manifest_path.read_bytes() == original

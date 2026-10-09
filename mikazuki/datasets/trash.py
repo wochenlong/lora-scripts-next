@@ -177,7 +177,20 @@ def rename_with_trash(datasets_root: Path, source: Path, target: Path) -> None:
             shutil.copyfile(manifest_path, backup)
             replacement.write_text(json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8")
 
-        source.rename(target)
+        # Windows can fail this with a transient sharing/handle conflict (antivirus,
+        # an open explorer window). Retry only this syscall; the manifest staging
+        # above must not be replayed.
+        last_error = None
+        for attempt in range(3):
+            try:
+                source.rename(target)
+                last_error = None
+                break
+            except OSError as error:
+                last_error = error
+                time.sleep(0.05 * (attempt + 1))
+        if last_error is not None:
+            raise last_error
         moved = True
         for manifest_path, replacement, backup in staged:
             replacement.replace(manifest_path)

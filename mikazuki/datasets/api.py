@@ -218,7 +218,9 @@ def rename(name: str, req: DatasetRenameRequest):
             try:
                 rename_with_trash(root, source, target)
             except OSError as exc:
-                raise HTTPException(status_code=400, detail=f"cannot rename dataset: {exc}") from exc
+                # A filesystem-level failure is a conflict the client may retry,
+                # not an invalid request.
+                raise HTTPException(status_code=409, detail=f"cannot rename dataset (busy): {exc}") from exc
             invalidate_overview(source)
             invalidate_overview(target)
     return APIResponseSuccess(data={"name": target.name, "path": normalize_path(target)})
