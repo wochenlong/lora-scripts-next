@@ -957,6 +957,7 @@ export default {
     title: "标签编辑器",
     pathLabel: "数据集目录",
     scan: "加载",
+    replace: "更换",
     scanning: "加载中…",
     categoryLabel: "分类",
     allCategories: "全部",
@@ -1041,6 +1042,7 @@ export default {
     gallery: {
       count: "{filtered} / {total} 张，已选 {selected} 张",
       pickHint: "点击图片进入单图编辑",
+      more: "更多操作",
       selectAll: "全选（{n}）",
       deselectAll: "取消全选（{n}）",
       selectEntire: "全部图片（{n}）",

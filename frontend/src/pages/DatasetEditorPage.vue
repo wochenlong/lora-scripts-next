@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue"
-import { ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
+import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
+import { Setting } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import { useRoute, useRouter } from "vue-router"
 import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type LlmProfile, type TagDictionaryStatus } from "../api/dataset"
@@ -584,6 +585,48 @@ function selectManagedPath(next: string) {
   void scan()
 }
 
+const pickerOpen = ref(false)
+
+/** One button covers the dataset source: pick, load a typed path, or switch. */
+const scannerAction = computed<"pick" | "load" | "replace">(() => {
+  if (!path.value.trim()) return "pick"
+  if (!root.value) return "load"
+  return path.value.trim() === root.value ? "pick" : "replace"
+})
+const scannerLabel = computed(() =>
+  scannerAction.value === "pick"
+    ? root.value
+      ? t("datasetManage.changeDataset")
+      : t("datasetManage.loadDataset")
+    : scannerAction.value === "replace"
+      ? t("datasetEditor.replace")
+      : t("datasetEditor.scan"),
+)
+
+function runScannerAction() {
+  if (scannerAction.value === "pick") {
+    pickerOpen.value = true
+    return
+  }
+  void scan()
+}
+
+function onToolCommand(command: string | number | object) {
+  if (command === "pick") {
+    pickerOpen.value = true
+    return
+  }
+  if (command === "unload") {
+    void toggleDataset()
+    return
+  }
+  if (command === "history") {
+    historyOpen.value = true
+    return
+  }
+  if (command === "undo" || command === "redo") changeHistory(command)
+}
+
 async function scan() {
   if (!path.value.trim()) return
   const request = ++scanGeneration
@@ -817,11 +860,16 @@ onUnmounted(() => {
           <label class="dataset-toolbar-label" for="editor-dataset-path">{{ t("datasetEditor.pathLabel") }}</label>
           <span class="dataset-toolbar-controls">
             <input id="editor-dataset-path" v-model="path" class="dataset-direct-path" :disabled="loading" :placeholder="t('datasetEditor.toolbar.pathPlaceholder')" @keyup.enter="!loading && scan()" />
-            <button v-if="path.trim() && path.trim() !== root" type="button" class="dataset-tool-entry" :disabled="loading" @click="scan">{{ t("datasetEditor.scan") }}</button>
-            <ManagedDatasetPicker :disabled="loading" :loaded="Boolean(root)" :initial-path="path" @select="selectManagedPath" />
+            <button data-testid="scan-action" type="button" class="dataset-tool-entry" :class="{ 'is-primary': !root }" :disabled="loading" @click="runScannerAction">{{ scannerLabel }}</button>
+            <ManagedDatasetPicker v-model:open="pickerOpen" hide-button :disabled="loading" :loaded="Boolean(root)" :initial-path="path" @select="selectManagedPath" />
             <span v-if="loading" role="status">{{ t("datasetEditor.scanning") }}</span>
-            <button v-if="root" type="button" class="dataset-tool-entry dataset-toolbar-scan" :disabled="loading" @click="toggleDataset">{{ t("datasetManage.unload") }}</button>
           </span>
+          <label class="dataset-toolbar-inline dataset-toolbar-search">
+            <span>{{ t("datasetEditor.toolbar.searchLabel") }}</span>
+            <el-input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" :disabled="!root" />
+          </label>
+        </div>
+        <div class="dataset-toolbar-bottom">
           <label class="dataset-toolbar-inline dataset-toolbar-folder">
             <span>{{ t("datasetEditor.toolbar.folderLabel") }}</span>
             <el-select v-model="category" :disabled="!root" :aria-label="t('datasetEditor.toolbar.folderLabel')">
@@ -829,12 +877,7 @@ onUnmounted(() => {
               <el-option v-for="item in categories" :key="`tb-${item.value || '__root__'}`" :value="item.value" :label="`${item.name} (${item.count})`" />
             </el-select>
           </label>
-          <label class="dataset-toolbar-inline dataset-toolbar-search">
-            <span>{{ t("datasetEditor.toolbar.searchLabel") }}</span>
-            <el-input v-model="query" :placeholder="t('datasetEditor.filter.queryPlaceholder')" :disabled="!root" />
-          </label>
-        </div>
-        <div class="dataset-toolbar-actions">
+          <div class="dataset-toolbar-actions">
           <button
             type="button"
             class="dataset-tool-entry"
@@ -854,9 +897,19 @@ onUnmounted(() => {
           >
             {{ t("datasetEditor.batch.toolbar", { n: selectedPaths.size }) }}
           </button>
-          <button type="button" :disabled="!sessionHistory.can_undo" @click="changeHistory('undo')">{{ t("datasetEditor.gallery.undo") }}</button>
-          <button type="button" :disabled="!sessionHistory.can_redo" @click="changeHistory('redo')">{{ t("datasetEditor.gallery.redo") }}</button>
-          <button type="button" :disabled="!root" @click="historyOpen = true">{{ t("datasetEditor.gallery.history") }}</button>
+          <ElDropdown trigger="click" @command="onToolCommand">
+            <button type="button" class="dataset-tool-entry dataset-tool-more" :disabled="!root" :aria-label="t('datasetEditor.gallery.more')" :title="t('datasetEditor.gallery.more')"><Setting /></button>
+            <template #dropdown>
+              <ElDropdownMenu>
+                <ElDropdownItem command="pick">{{ t("datasetManage.selectDataset") }}</ElDropdownItem>
+                <ElDropdownItem command="unload" :disabled="!root">{{ t("datasetManage.unload") }}</ElDropdownItem>
+                <ElDropdownItem command="undo" :disabled="!sessionHistory.can_undo" divided>{{ t("datasetEditor.gallery.undo") }}</ElDropdownItem>
+                <ElDropdownItem command="redo" :disabled="!sessionHistory.can_redo">{{ t("datasetEditor.gallery.redo") }}</ElDropdownItem>
+                <ElDropdownItem command="history" :disabled="!root">{{ t("datasetEditor.gallery.history") }}</ElDropdownItem>
+              </ElDropdownMenu>
+            </template>
+          </ElDropdown>
+          </div>
         </div>
       </header>
 

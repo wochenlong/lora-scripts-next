@@ -7,10 +7,22 @@ import { datasetsApi, type DatasetContents, type DatasetEntry } from "../../api/
 import PathPickerDialog from "../PathPickerDialog.vue"
 import { useServerPathPick } from "../../composables/useServerPathPick"
 
-const props = defineProps<{ disabled?: boolean; initialPath?: string; loaded?: boolean }>()
-const emit = defineEmits<{ select: [path: string] }>()
+const props = withDefaults(
+  defineProps<{ disabled?: boolean; initialPath?: string; loaded?: boolean; hideButton?: boolean; open?: boolean }>(),
+  // Explicit undefined keeps "not controlled" distinguishable from a passed false.
+  { disabled: undefined, initialPath: undefined, loaded: undefined, hideButton: undefined, open: undefined },
+)
+const emit = defineEmits<{ select: [path: string]; "update:open": [boolean] }>()
 const { t } = useI18n()
-const open = ref(false)
+const innerOpen = ref(false)
+/** Controlled by the host page when it passes `open`, standalone otherwise. */
+const open = computed({
+  get: () => props.open ?? innerOpen.value,
+  set: (value: boolean) => {
+    innerOpen.value = value
+    emit("update:open", value)
+  },
+})
 const loading = ref(false)
 const error = ref("")
 const datasets = ref<DatasetEntry[]>([])
@@ -76,7 +88,7 @@ onBeforeUnmount(close)
 
 <template>
   <span class="managed-picker">
-    <button type="button" class="dataset-tool-entry dataset-load-entry" :class="{ 'is-primary': !loaded }" :disabled="disabled" :aria-expanded="open" @click.prevent="toggle"><Folder />{{ loaded ? t("datasetManage.changeDataset") : t("datasetManage.loadDataset") }}</button>
+    <button v-if="!hideButton" type="button" class="dataset-tool-entry dataset-load-entry" :class="{ 'is-primary': !loaded }" :disabled="disabled" :aria-expanded="open" @click.prevent="toggle"><Folder />{{ loaded ? t("datasetManage.changeDataset") : t("datasetManage.loadDataset") }}</button>
     <ElDialog :model-value="open" :title="t('datasetManage.loadDataset')" width="560px" class="dataset-source-dialog" append-to-body :close-on-click-modal="false" @update:model-value="!$event && close()">
       <div class="dataset-source-tabs" role="tablist" :aria-label="t('datasetManage.loadDataset')">
         <button type="button" role="tab" :aria-selected="source === 'managed'" data-source="managed" @click="source = 'managed'">{{ t("datasetManage.registeredDatasets") }}</button>

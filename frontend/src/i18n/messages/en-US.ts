@@ -957,6 +957,7 @@ export default {
     title: "Tag Editor",
     pathLabel: "Dataset Directory",
     scan: "Load",
+    replace: "Replace",
     scanning: "Loading…",
     categoryLabel: "Category",
     allCategories: "All",
@@ -1041,6 +1042,7 @@ export default {
     gallery: {
       count: "{filtered} / {total} images, {selected} selected",
       pickHint: "Click an image to open the single-image editor",
+      more: "More actions",
       selectAll: "Select all ({n})",
       deselectAll: "Deselect all ({n})",
       selectEntire: "Entire dataset ({n})",

@@ -2,7 +2,10 @@
 .dataset-page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  height: calc(100vh - 72px);
+  grid-template-rows: minmax(0, 1fr);
+  /* flex-basis 0 keeps the workspace exactly one viewport tall so the gallery
+     scrolls internally instead of stretching the document. */
+  flex: 1 1 0;
   min-height: 0;
   transition: grid-template-columns 240ms ease;
 }
@@ -43,8 +46,7 @@
   backdrop-filter: blur(12px);
 }
 
-/* Path controls and the folder/search filters share the top line; the filters
-   sit on the right and wrap below only when the single-image panel is open. */
+/* Path row with the search filter on the right. */
 .dataset-toolbar-top {
   display: flex;
   flex-wrap: wrap;
@@ -52,6 +54,18 @@
   gap: 14px 20px;
   min-width: 0;
 }
+
+/* Folder filter under the path, with the mode actions on the right. */
+.dataset-toolbar-bottom {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px 20px;
+  min-width: 0;
+}
+
+.dataset-tool-more { min-width: 40px; padding: 0 10px; }
 
 .dataset-toolbar-label {
   flex: 0 0 auto;
@@ -84,14 +98,6 @@
 
 .dataset-toolbar-inline .el-select__wrapper,
 .dataset-toolbar-inline .el-input__wrapper { min-height: 40px; border-radius: 10px; }
-
-.dataset-toolbar-scan {
-  flex: 0 0 auto;
-  margin: 0;
-  min-height: 40px;
-  padding: 0 14px;
-  border: 0;
-}
 
 .dataset-toolbar-actions {
   display: flex;
@@ -468,9 +474,12 @@
   min-width: 0;
   min-height: 0;
   flex-direction: column;
-  overflow: auto;
-  padding: 20px 24px 24px;
+  overflow: hidden;
+  padding: 20px 24px 0;
 }
+
+/* Only the image grid scrolls; the count bar and the pager stay put. */
+.image-grid { overflow: auto; min-height: 0; }
 
 .dataset-gallery > header,
 .dataset-gallery-bar {
@@ -666,12 +675,6 @@
   align-items: stretch;
 }
 
-.path-row .dataset-toolbar-scan {
-  min-height: 36px;
-  padding: 0 14px;
-  white-space: nowrap;
-}
-
 .path-row .dataset-browse-icon {
   display: inline-flex;
   align-items: center;
@@ -865,9 +868,13 @@
 
 /* IA v1 dataset section */
 .dataset-section {
+  display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background: var(--bg);
 }
+
+.dataset-section-header { flex-shrink: 0; }
 
 .dataset-section-header {
   display: grid;
