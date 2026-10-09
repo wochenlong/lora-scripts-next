@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import { ElButton, ElOption, ElSelect, ElSwitch } from "element-plus"
+import { ElOption, ElSelect, ElSwitch } from "element-plus"
 import type { TagTranslationProvider } from "../../api/dataset"
 
 defineProps<{
@@ -18,7 +18,6 @@ defineProps<{
 const emit = defineEmits<{
   "update:enabled": [value: boolean]
   "update:provider": [value: TagTranslationProvider]
-  settings: []
 }>()
 
 const { t } = useI18n()
@@ -34,7 +33,6 @@ const { t } = useI18n()
         :aria-label="t('datasetEditor.caption.translationEnabled')"
         @update:model-value="emit('update:enabled', Boolean($event))"
       />
-      <el-button @click="emit('settings')">{{ t("datasetEditor.caption.translationSettings") }}</el-button>
     </div>
     <small v-if="!available" class="caption-translation-warning">{{ unavailableHint }}</small>
     <el-select :model-value="provider" :aria-label="t('datasetEditor.caption.translationProvider')" @update:model-value="emit('update:provider', $event)">

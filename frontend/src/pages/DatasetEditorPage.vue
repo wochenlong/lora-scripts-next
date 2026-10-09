@@ -639,6 +639,10 @@ function onDatasetMenuAction(command: "pick" | "unload") {
 }
 
 function onToolCommand(command: string | number | object) {
+  if (command === "translation") {
+    void openTranslationSettings()
+    return
+  }
   if (command === "history") {
     historyOpen.value = true
     return
@@ -937,7 +941,8 @@ onUnmounted(() => {
             <button type="button" class="dataset-tool-entry dataset-tool-more" :disabled="!root" :aria-label="t('datasetEditor.gallery.more')" :title="t('datasetEditor.gallery.more')"><Setting /></button>
             <template #dropdown>
               <ElDropdownMenu>
-                <ElDropdownItem command="undo" :disabled="!sessionHistory.can_undo">{{ t("datasetEditor.gallery.undo") }}</ElDropdownItem>
+                <ElDropdownItem command="translation">{{ t("datasetEditor.caption.translationSettings") }}</ElDropdownItem>
+                <ElDropdownItem command="undo" :disabled="!sessionHistory.can_undo" divided>{{ t("datasetEditor.gallery.undo") }}</ElDropdownItem>
                 <ElDropdownItem command="redo" :disabled="!sessionHistory.can_redo">{{ t("datasetEditor.gallery.redo") }}</ElDropdownItem>
                 <ElDropdownItem command="history" :disabled="!root">{{ t("datasetEditor.gallery.history") }}</ElDropdownItem>
               </ElDropdownMenu>
@@ -1074,7 +1079,6 @@ onUnmounted(() => {
             :progress-unresolved="translationUnresolved"
             @update:enabled="setTranslationsEnabled"
             @update:provider="setTranslationProvider"
-            @settings="openTranslationSettings"
           />
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
