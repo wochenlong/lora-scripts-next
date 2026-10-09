@@ -55,6 +55,8 @@ const selectMenuOpen = ref(false)
 const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
+/** 标签编辑 = chips; 自由编辑 = raw caption text. */
+const captionMode = ref<"tags" | "raw">("tags")
 const translationProvider = editorSession.translationProvider
 const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, clearExternalCache, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
@@ -172,15 +174,18 @@ function scheduleTranslationRefresh() {
   }, 350)
 }
 
-function setTranslationsEnabled(value: boolean) {
-  if (value && !translationAvailable.value) {
-    translationSettingsOpen.value = true
-    ElMessage.warning(translationUnavailableHint.value)
+async function setTranslationsEnabled(value: boolean) {
+  if (!value) {
+    showTranslations.value = false
+    cancelTranslations()
     return
   }
-  showTranslations.value = value
-  if (!value) {
-    cancelTranslations()
+  showTranslations.value = true
+  if (!translationReadinessLoaded.value) await loadTranslationReadiness()
+  if (!translationAvailable.value) {
+    // 翻译是刚需：首次打开就用默认方式（Danbooru 词库）自动补齐。
+    ElMessage.info(t("datasetEditor.caption.translationDownloading"))
+    void startDefaultDictionaryDownload()
     return
   }
   if (translationProvider.value === "llm") {
@@ -190,6 +195,36 @@ function setTranslationsEnabled(value: boolean) {
     return
   }
   void translateWholeDataset()
+}
+
+const dictionaryDownloading = ref(false)
+
+/** Wait for the auto-started dictionary download, then translate. */
+async function startDefaultDictionaryDownload() {
+  if (dictionaryDownloading.value) return
+  dictionaryDownloading.value = true
+  try {
+    await datasetApi.updateTagDictionary(false)
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 1500))
+      if (!showTranslations.value) return
+      await loadDictionaryStatus()
+      if (dictionaryStatus.value.installed) {
+        ElMessage.success(t("datasetEditor.caption.translationDownloaded"))
+        void translateWholeDataset()
+        return
+      }
+      if (dictionaryStatus.value.state === "error") {
+        ElMessage.error(dictionaryStatus.value.error || t("datasetEditor.caption.translationUnavailable"))
+        return
+      }
+    }
+    ElMessage.warning(t("datasetEditor.caption.translationUnavailable"))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.caption.translationUnavailable"))
+  } finally {
+    dictionaryDownloading.value = false
+  }
 }
 
 function setTranslationProvider(value: typeof translationProvider.value) {
@@ -1071,15 +1106,18 @@ onUnmounted(() => {
             :enabled="showTranslations"
             :available="translationAvailable"
             :unavailable-hint="translationUnavailableHint"
-            :provider="translationProvider"
             :loading="translationsLoading"
             :error="translationsError"
             :progress-completed="translationProgress.completed"
             :progress-total="translationProgress.total"
             :progress-unresolved="translationUnresolved"
             @update:enabled="setTranslationsEnabled"
-            @update:provider="setTranslationProvider"
           />
+          <div class="caption-mode" role="group" :aria-label="t('datasetEditor.caption.modeAria')">
+            <button type="button" :class="{ active: captionMode === 'tags' }" :aria-pressed="captionMode === 'tags'" @click="captionMode = 'tags'">{{ t("datasetEditor.caption.modeTags") }}</button>
+            <button type="button" :class="{ active: captionMode === 'raw' }" :aria-pressed="captionMode === 'raw'" @click="captionMode = 'raw'">{{ t("datasetEditor.caption.modeRaw") }}</button>
+          </div>
+          <template v-if="captionMode === 'tags'">
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
               v-for="(tag, index) in captionTags"
@@ -1109,6 +1147,11 @@ onUnmounted(() => {
               <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
             </div>
           </details>
+          </template>
+          <div v-else class="caption-editor">
+            <el-input v-model="caption" type="textarea" :rows="12" :aria-label="t('datasetEditor.caption.modeRaw')" />
+            <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
+          </div>
           <button type="button" class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button>
         </div>
         <p v-else>{{ t("datasetEditor.caption.empty") }}</p>
@@ -1212,6 +1255,7 @@ onUnmounted(() => {
     :loading="translationSettingsLoading"
     :saving="translationSettingsSaving"
     :error="translationSettingsError"
+    :provider="translationProvider"
     :profiles="llmProfiles"
     :active-remote-id="activeRemoteId"
     :llm-mode="llmMode"
@@ -1224,6 +1268,7 @@ onUnmounted(() => {
     :remote-configured="remoteProfileConfigured"
     @update:model-value="onTranslationSettingsModelChange"
     @update:profiles="llmProfiles = $event"
+    @update:provider="setTranslationProvider"
     @update:active-remote-id="activeRemoteId = $event"
     @update:llm-mode="llmMode = $event"
     @save="saveTranslationSettings"

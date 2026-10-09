@@ -536,6 +536,50 @@
 
 .dataset-gallery-hint { color: var(--text-soft); font-size: 13px; }
 
+/* Tag editing vs free-text editing. */
+.caption-mode {
+  display: inline-flex;
+  justify-self: start;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.caption-mode button {
+  padding: 8px 16px;
+  color: var(--text-soft);
+  font-size: 13px;
+  background: var(--surface);
+  border: 0;
+  cursor: pointer;
+}
+
+.caption-mode button.active { color: #fff; background: var(--accent); }
+
+/* Translation channel picker, inside the translation settings dialog. */
+.caption-translation-provider {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.caption-translation-provider button {
+  flex: 1 1 140px;
+  padding: 10px 12px;
+  color: var(--text-soft);
+  font-size: 13px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  cursor: pointer;
+}
+
+.caption-translation-provider button.active {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
 .dataset-gallery header button {
   margin-left: 7px;
   padding: 6px 10px;

@@ -1,14 +1,15 @@
 <script setup lang="ts">
-import { ref, watch } from "vue"
+import { computed, ref, watch } from "vue"
 import { useI18n } from "vue-i18n"
 import { ElButton, ElDialog, ElInput } from "element-plus"
-import type { LocalModelStatus, LlmProfile, TagDictionaryStatus } from "../../api/dataset"
+import type { LocalModelStatus, LlmProfile, TagDictionaryStatus, TagTranslationProvider } from "../../api/dataset"
 
 const props = defineProps<{
   modelValue: boolean
   loading: boolean
   saving: boolean
   error: string
+  provider: TagTranslationProvider
   profiles: LlmProfile[]
   activeRemoteId: string
   llmMode: "remote" | "local"
@@ -23,6 +24,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   "update:modelValue": [value: boolean]
+  "update:provider": [value: TagTranslationProvider]
   "update:profiles": [value: LlmProfile[]]
   "update:active-remote-id": [value: string]
   "update:llm-mode": [value: "remote" | "local"]
@@ -41,6 +43,13 @@ const emit = defineEmits<{
 
 const { t } = useI18n()
 const expandedProfiles = ref(new Set<string>())
+
+const providerOptions = computed<Array<{ value: TagTranslationProvider; label: string }>>(() => [
+  { value: "auto", label: t("datasetEditor.caption.translationAuto") },
+  { value: "danbooru", label: t("datasetEditor.caption.translationProviderDanbooru") },
+  { value: "mymemory", label: t("datasetEditor.caption.translationProviderMymemory") },
+  { value: "llm", label: t("datasetEditor.caption.translationProviderLlm") },
+])
 
 watch(() => [props.activeRemoteId, ...props.profiles.map((profile) => profile.id)], () => {
   const next = new Set(expandedProfiles.value)
@@ -100,6 +109,20 @@ function activateProfile(id: string) {
   <el-dialog :model-value="modelValue" :title="t('datasetEditor.caption.translationSettingsTitle')" width="min(720px, 94vw)" @update:model-value="emit('update:modelValue', $event)">
     <div class="caption-translation-dialog">
       <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationSettingsHint") }}</p>
+      <section class="translation-settings-section">
+        <div class="translation-settings-section-heading"><strong>{{ t("datasetEditor.caption.translationProvider") }}</strong></div>
+        <div class="caption-translation-provider" role="radiogroup" :aria-label="t('datasetEditor.caption.translationProvider')">
+          <button
+            v-for="option in providerOptions"
+            :key="option.value"
+            type="button"
+            role="radio"
+            :aria-checked="provider === option.value"
+            :class="{ active: provider === option.value }"
+            @click="emit('update:provider', option.value)"
+          >{{ option.label }}</button>
+        </div>
+      </section>
       <section class="translation-settings-section">
         <div class="translation-settings-section-heading"><strong>{{ t("datasetEditor.caption.translationDictionaryTitle") }}</strong><span>{{ dictionary.row_count || 0 }} {{ t("datasetEditor.caption.translationDictionaryRows") }}</span></div>
         <p class="caption-translation-dialog-hint">{{ dictionary.installed ? t("datasetEditor.caption.translationDictionaryReady") : t("datasetEditor.caption.translationDictionaryMissing") }}</p>

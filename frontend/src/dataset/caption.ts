@@ -1,5 +1,11 @@
+/**
+ * Tag separators: English comma, Chinese comma, and a sentence-ending period.
+ * A period inside a token (e.g. ".hack" or "3.5") is left alone.
+ */
+const TAG_SEPARATOR = /\s*[,，]\s*|\.\s+|\.$/
+
 export function splitCaptionTags(caption: string): string[] {
-  return caption.split(",").map((tag) => tag.trim()).filter(Boolean)
+  return caption.split(TAG_SEPARATOR).map((tag) => tag.trim()).filter(Boolean)
 }
 
 export function addTagToCaption(caption: string, tag: string): string {
