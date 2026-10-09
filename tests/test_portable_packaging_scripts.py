@@ -179,9 +179,8 @@ def test_portable_git_updater_is_not_legacy_pull_only():
         encoding="utf-8"
     )
     assert "Pulling latest code" not in bat
-    assert 'not exist ".git\\"' in bat
-    assert "print_version_info" in bat
-    assert "UPDATER_VERSION" in bat
+    assert "update_portable.py" in bat
+    assert "Install a complete portable package" in bat
 
 
 def test_portable_updater_version_file_exists():
@@ -209,18 +208,19 @@ def test_portable_updater_manifest_paths_exist():
     bat = (ROOT / "build-scripts" / "templates" / "Update-Next-Trainer.bat").read_text(
         encoding="utf-8"
     )
-    assert "bootstrap_updater_scripts" in bat
-    assert "--no-bootstrap" in bat
+    assert "update_portable.py" in bat
+    assert "--portable-root" in bat
 
 
 def test_git_updater_templates_delegate_to_safe_helper():
     source = (ROOT / "build-scripts/templates/Update-Next-Trainer.bat").read_bytes()
     assert source == (ROOT / "scripts/portable/templates/Update-Next-Trainer.bat").read_bytes()
     text = source.decode("utf-8")
-    assert '"%GIT_HELPER%" update --trainer-dir "%PROJECT_DIR%"' in text
+    assert 'update_portable.py" --portable-root' in text
     assert "git stash" not in text
     assert "git reset" not in text
     assert not any(line.strip().startswith("git pull ") for line in text.splitlines())
-    assert 'if defined NEXT_TRAINER_NETWORK_READY goto :network_policy_ready' in text
-    assert 'scripts\\network_run.py" --batch "%~f0" %*' in text
-    assert text.index(":network_policy_ready") < text.index("call :ensure_updater_bootstrap")
+    worker = (ROOT / "scripts/portable/update_portable.py").read_text()
+    assert "scripts/network_run.py" in worker
+    assert "--env-json" in worker
+    assert "bootstrap" not in text

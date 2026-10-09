@@ -14,6 +14,13 @@ $PortableRoot = Normalize-PortableRootPath $PortableRoot
 $trainerDir = Join-Path $PortableRoot "Next-Trainer"
 $updated = $false
 
+# Git owns tracked helpers and updates them from the selected branch. A main
+# bootstrap here would dirty dev before its fast-forward, including on retries.
+if (Test-Path -LiteralPath (Join-Path $trainerDir ".git")) {
+    Write-Host "Git checkout: keeping branch-local updater scripts."
+    exit 0
+}
+
 $localUpdater = (Read-LocalUpdaterVersion $trainerDir).Trim()
 $remoteUpdater = (Get-RemoteUpdaterVersionOnline).Trim()
 if ($localUpdater -and $localUpdater -ne "unknown") {
