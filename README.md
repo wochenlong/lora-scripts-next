@@ -21,12 +21,14 @@ Building on the Akegarasu training workflow, it integrates engines such as Kohya
 | Workflow | Current capabilities |
 | --- | --- |
 | Datasets | Create and discover datasets; upload images, TXT files and nested folders; check conflicts, retry failures, export ZIPs and recover deleted data |
-| Tagging and editing | Local WD-family tagging, image-centered caption editing, shared dataset paths across tools |
+| Tagging and editing | Local WD-family tagging; the caption editor offers tag and free-text modes, double-click full-size preview, batch selection and undo/redo; a bundled offline Chinese dictionary translates tags in bulk; datasets flow between management, tagging and editing |
 | Training | Model / engine / target selection, TOML preview and import/export, LoRA and full finetuning where supported |
 | Monitoring | Training queues, task status, logs, Loss and previews; TensorBoard remains an option |
 | Engine management | Manage training environments, search and filter engines, drag to reorder, five items per page; engine preferences and order saved on the server |
 
 ### Models and Engines
+
+Settings are organised as **UI, Training Engines, API, Plugins, Advanced** and **About**: endpoint and local-model configuration lives under Settings → API, network and download sources under Advanced, and the project introduction, updates and changelog under About.
 
 **An engine integration does not imply support for every upstream model or training mode.**
 
@@ -74,7 +76,9 @@ not migrated; this is not a complete migration of every browser preference.
 
 Recent work integrated into `dev`:
 
-- **Dataset workspace:** managed roots, nested uploads, batch conflict decisions, export and recoverable deletion.
+- **Dataset workspace:** managed roots, nested uploads, batch conflict decisions, export, rename and recoverable deletion.
+- **Caption editing and Chinese glosses:** a reworked editor that leads with the image wall, tag and free-text modes, double-click previews, batch selection and undo/redo; a bundled offline Danbooru Chinese dictionary (~330k entries) with dictionary / local model / API sources.
+- **Settings structure:** reordered to UI, Training Engines, API, Plugins, Advanced and About, with a new API page for shared endpoint and local-model configuration.
 - **Image-editing training:** target/reference-image workflows for DiffSynth / Qwen-Image-2.1.
 - **AI Toolkit model entries:** configure LoRA in the shared training page, with model-specific quantization, memory offloading and sampling options, using the existing task queue, logs and Loss monitoring.
 - **Anima path guidance:** separate defaults and remembered paths for Anima 2B / 2.9B, preserving imported paths.
