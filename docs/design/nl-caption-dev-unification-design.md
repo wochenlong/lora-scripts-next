@@ -1,5 +1,8 @@
 # 最新 dev 适配与统一 Qwen 本地模型设计增量
 
+> CC-06（2026-10-11，用户最新明确决策）：直接选定Qwen3.5-2B，不再进行U1选型/可行性对比探针。默认Unsloth Q4_K_M + 同revision F16 mmproj + b11327；AC-U1采用用户指定选型通过，探针为waived_by_user，质量/资源不能声称已验证。U4/U5功能、真实链路和从零验收仍执行。见U1/user-selection.json与selection-decision.md。
+
+
 2026-10-10，计划 `DATASET-NL-DEV-UNIFICATION-20261010`，设计已收敛、实施未开始。本增量覆盖[既有设计](natural-language-captioning-tagging-design.md)中与新 dev UI、模型选择、验收口径冲突的部分；不抹除旧实现历史。
 
 规范性详细方案与需求到测试映射统一放在[实施验收计划](../tasks/nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。进度只写入[主任务书](../tasks/natural-language-captioning-task-book.md)。

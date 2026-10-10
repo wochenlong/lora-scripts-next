@@ -1,5 +1,8 @@
 # U1 本地 Qwen 双用途探针与默认选型
 
+> CC-06（2026-10-11，用户最新明确决策）：直接选定Qwen3.5-2B，不再进行U1选型/可行性对比探针。默认Unsloth Q4_K_M + 同revision F16 mmproj + b11327；AC-U1采用用户指定选型通过，探针为waived_by_user，质量/资源不能声称已验证。U4/U5功能、真实链路和从零验收仍执行。见U1/user-selection.json与selection-decision.md。
+
+
 状态：planned，未执行。依赖 AC-U0；用户明确要求先本地合并冻结基线，再测试模型。GATE-11只认可验证计划齐全，不代表模型可行性已通过。
 
 ## 候选锁定资料

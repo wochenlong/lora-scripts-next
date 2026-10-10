@@ -8,7 +8,7 @@
 - Canonical progress file：本文，唯一进度入口
 - Related handoff file：本文“暂停现场与恢复入口”，不建立第二套进度账
 - Current branch：`feat/NL-Captioning`
-- Current active phase：U1 双用途模型探测与默认选型（in progress）
+- Current active phase：U2 共享LLM与配置预设迁移统一（in progress）
 - Execution readiness：`executing`（2026-10-11用户明确恢复全面施工；get_goal无现有目标后已创建同计划ID，工具确认active）
 - Plan package：[Full增量计划](nl-caption-dev-unification-plan/README.md)
 - Design：[当前设计增量](../design/nl-caption-dev-unification-design.md)
@@ -17,25 +17,25 @@
 
 ## 本轮目标与范围
 
-从开工最新dev本地合并并冻结基线，最终仍在feat/NL-Captioning；自主实测选择一个兼顾视觉打标与翻译的小Qwen，完成新dev UI、共享LLM/预设/任务适配，完整测试、真实远程/本地验收和从零隔离重建。最后另建并启动全新手测沙盒。**用户已明确：沙盒交付就绪后关闭goal，人工验收作为后续。**
+从开工最新dev本地合并并冻结基线，最终仍在feat/NL-Captioning；采用用户指定Qwen3.5-2B统一视觉打标与翻译，完成新dev UI、共享LLM/预设/任务适配，完整测试、真实远程/本地验收和从零隔离重建。最后另建并启动全新手测沙盒。**用户已明确：沙盒交付就绪后关闭goal，人工验收作为后续。**
 
 范围限数据集打标/编辑/翻译、共享LLM、相关配置预设任务与验收；不主动改造Agent/sidecar/plugin/训练引擎。保持remote-first、本地显式兜底、打标vision/翻译text、默认英文、预设统一控制语言/详略/格式、原文编辑与中文免模型翻译、自然语言禁止Tag变更、Key只运行时注入。保护用户既有数据和无关测试改动。
 
 ## 当前执行阶段与进度台账
 
-阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态；U0已签署，U1准备探测，U2–U6尚未开始，不继承下面历史Phase的complete。
+阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态；U0已签署，U1用户指定模型并豁免选型探针，U2施工中，U3–U6尚未验收，不继承下面历史Phase的complete。
 
 | 阶段 | 输出与完成口径 | 状态 | 当前证据 |
 |---|---|---|---|
 | U0 本地合并与开发基线冻结 | AC-U0，详见对应阶段任务书 | done | merge a1de47e5；完整前端418/67、后端98；安全FF与双祖先、用户hash通过，见U0完成门 |
-| U1 双用途模型探测与默认选型 | AC-U1，详见对应阶段任务书 | in progress | 探针/fixture/下载准备代码；模型实际验证尚未运行 |
-| U2 共享LLM与配置预设迁移统一 | AC-U2，详见对应阶段任务书 | pending | unrun |
+| U1 双用途模型探测与默认选型 | CC-06 用户指定选型 | done with user-authorized boundary | Qwen3.5-2B；选型探针waived_by_user，质量/资源unrun，U4/U5功能验收保留 |
+| U2 共享LLM与配置预设迁移统一 | AC-U2，详见对应阶段任务书 | in progress | 默认Qwen3.5-2B；单配置/预设事务/共享runtime正在实现 |
 | U3 最新dev打标与编辑UI完整适配 | AC-U3，详见对应阶段任务书 | pending | unrun |
 | U4 全量回归与真实链路审计 | AC-U4，详见对应阶段任务书 | pending | unrun |
 | U5 从零隔离重建真实验收 | AC-U5，详见对应阶段任务书 | pending | unrun |
 | U6 最终新沙盒启动与goal关闭 | AC-U6，详见对应阶段任务书 | pending | unrun |
 
-- Overall progress：goal active；AC-U0 pass，merge a1de47e5已非强制FF落位feat/NL-Captioning，15项冲突清零。U1启动准备；模型实测及U2–U6尚未验收。
+- Overall progress：goal active；AC-U0 pass，merge a1de47e5已非强制FF落位feat/NL-Captioning，15项冲突清零。U1按CC-06用户选型通过；U2–U6仍待完整功能验收。
 - Validation status：本轮U0后端98 passed/0 fail/0 skip；前端全量418 passed/67 files，typecheck/lint/build exit0。首败和并发争抢日志保留；独立审查pass。完整U4范围尚未执行。
 - Residual risks：dev漂移、双配置/预设语义、自然语言Tag化、模型双用途质量与资源、真实远程凭据、从零重建。
 - Human acceptance：`pending_followup`，不是goal硬门。
@@ -44,7 +44,7 @@
 
 - Verified facts：原已推送feature为21571c5e；计划提交9c059cce；分析dev d9535c35，冻结dev2bdccd1b；合并a1de47e5含双方父提交，正式分支名与双祖先通过。用户tests/test_diffsynth_review.py的SHA256仍与原备份一致。
 - Locked decisions：先本地merge再探测；保留目标分支名称；执行者自主选默认模型；完整验收+从零重建+最终沙盒都为硬门；用户手验后续。
-- Active assumptions：Qwen3.5-2B或VL-2B能满足统一模型标准，须U1证实；资源和API运行时凭据在执行前复核。
+- Active assumptions：Qwen3.5-2B为用户指定默认；选型探针已豁免，运行/功能在U4/U5验证，不能假称U1实测。资源与API运行时凭据在真实验收前复核。
 - Open questions：无待定产品决策；不得把模型可行性当成已验证事实。
 - Continuity：旧Phase0–5及参考项目优化为历史完成；新计划不继承旧可选远程/平台豁免/人工评分。
 
@@ -54,7 +54,7 @@
 
 ## 唯一下一步
 
-冻结U1六图/十二翻译/完整prompt与候选资产；下载校验后依次执行两款2B公平CPU探针，自主选型。
+实施U2单Profile/CAS/实际能力状态、单预设事务/明确导入与Qwen3.5-2B单资产/安装/runtime。
 
 ## 暂停现场与恢复入口（2026-10-11历史快照）
 
