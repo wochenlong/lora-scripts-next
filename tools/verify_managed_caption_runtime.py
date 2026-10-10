@@ -103,7 +103,11 @@ async def verify(args):
     store = UnifiedConfigStore(path)
     manager = LocalVisionService(root, legacy, store)
     for name, _size, _sha in FILES:
-        os.link(Path(args.assets) / name, manager.root / name)
+        source = Path(args.assets) / name
+        if args.fresh_inputs:
+            shutil.copy2(source, manager.root / name)
+        else:
+            os.link(source, manager.root / name)
     runtime_executable = Path(args.runtime).resolve()
     if not runtime_executable.is_file() or hashlib.sha256(runtime_executable.read_bytes()).hexdigest() != locked.EXECUTABLE_SHA256:
         raise RuntimeError("runtime executable does not match the locked receipt")
@@ -114,8 +118,9 @@ async def verify(args):
     shutil.copy2(runtime_archive, manager.archive_path)
     await asyncio.to_thread(manager._extract_runtime)
     service = UnifiedLLMService(store)
-    report = {"kind": "intermediate-managed-runtime", "reuses_probe_assets": True,
-              "phase_4": False, "samples": [], "peak_rss_bytes": 0,
+    report = {"kind": "fresh-managed-runtime" if args.fresh_inputs else "intermediate-managed-runtime",
+              "reuses_probe_assets": not args.fresh_inputs,
+              "fresh_rebuild_inputs": bool(args.fresh_inputs), "phase_4": False, "samples": [], "peak_rss_bytes": 0,
               "asset_id": locked.ASSET_ID, "revision": locked.REVISION,
               "model_sha256": FILES[0][2], "mmproj_sha256": FILES[1][2],
               "runtime_version": locked.RUNTIME_VERSION,
@@ -205,4 +210,5 @@ if __name__ == "__main__":
     parser.add_argument("--runtime-archive", required=True)
     parser.add_argument("--samples", nargs=3, required=True)
     parser.add_argument("--batch", action="store_true", help="verify real natural writes, conflict and job cancellation")
+    parser.add_argument("--fresh-inputs", action="store_true", help="assets come from a newly downloaded isolated rebuild root")
     asyncio.run(verify(parser.parse_args()))
