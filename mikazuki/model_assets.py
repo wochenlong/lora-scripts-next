@@ -47,6 +47,8 @@ class AssetDef:
 
 KREA2_REPO = "Comfy-Org/Krea-2"
 QWEN3_VL_REPO = "Qwen/Qwen3-VL-4B-Instruct"
+IDEOGRAM4_REPO = "Comfy-Org/Ideogram-4"
+IDEOGRAM4_TOKENIZER_REPO = "Qwen/Qwen3-VL-8B-Instruct"
 TOKENIZER_FILES = ["tokenizer.json", "tokenizer_config.json", "vocab.json", "merges.txt"]
 TOKENIZER_REQUIRED = ("tokenizer.json", "tokenizer_config.json")
 
@@ -112,6 +114,21 @@ ASSET_REGISTRY: dict[str, tuple[AssetDef, ...]] = {
                  ms_repo=KREA2_REPO, ms_file="diffusion_models/krea2_turbo_bf16.safetensors"),
         AssetDef("tokenizer", "Qwen3-VL tokenizer（目录）", "sd-models/krea2/qwen3-vl-tokenizer", kind="dir",
                  hf_repo=QWEN3_VL_REPO, ms_repo=QWEN3_VL_REPO),
+    ),
+    # Ideogram 4 ships quantized-only weights (FP8) under the Ideogram
+    # Non-Commercial license; the pack must not bundle them, users fetch them.
+    "ideogram4-lora": (
+        AssetDef("dit", "Ideogram 4 conditional DiT（FP8 底模，非商用许可）", "sd-models/ideogram4/ideogram4_fp8_scaled.safetensors",
+                 hf_repo=IDEOGRAM4_REPO, hf_file="diffusion_models/ideogram4_fp8_scaled.safetensors"),
+        AssetDef("unconditional_dit", "Ideogram 4 unconditional DiT（非对称 CFG，可选）",
+                 "sd-models/ideogram4/ideogram4_unconditional_fp8_scaled.safetensors", optional=True,
+                 hf_repo=IDEOGRAM4_REPO, hf_file="diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors"),
+        AssetDef("text_encoder", "文本编码器（Qwen3-VL-8B，FP8）", "sd-models/ideogram4/qwen3vl_8b_fp8_scaled.safetensors",
+                 hf_repo=IDEOGRAM4_REPO, hf_file="text_encoders/qwen3vl_8b_fp8_scaled.safetensors"),
+        AssetDef("vae", "VAE（Flux2）", "sd-models/ideogram4/flux2-vae.safetensors",
+                 hf_repo=IDEOGRAM4_REPO, hf_file="vae/flux2-vae.safetensors"),
+        AssetDef("tokenizer", "Qwen3-VL-8B tokenizer（目录）", "sd-models/ideogram4/qwen3-vl-8b-tokenizer", kind="dir",
+                 hf_repo=IDEOGRAM4_TOKENIZER_REPO, ms_repo=IDEOGRAM4_TOKENIZER_REPO),
     ),
 }
 
@@ -181,11 +198,15 @@ def asset_dir_complete(asset: AssetDef, path: Path) -> bool:
     return True
 
 
-def krea2_tokenizer_dir(project_root: Path) -> Path:
-    for asset in manifest_for("krea2-lora"):
+def tokenizer_dir_for(train_type: str, project_root: Path) -> Path:
+    for asset in manifest_for(train_type):
         if asset.key == "tokenizer":
             return _target_path(asset.default_path, project_root)
     return _target_path("sd-models/krea2/qwen3-vl-tokenizer", project_root)
+
+
+def krea2_tokenizer_dir(project_root: Path) -> Path:
+    return tokenizer_dir_for("krea2-lora", project_root)
 
 
 KREA2_ENCODER_REL = Path("src/musubi_tuner/krea2/krea2_encoder.py")
@@ -238,6 +259,76 @@ def patch_krea2_tokenizer_everywhere(project_root: Path, log: Callable[[str], No
         Path(project_root) / ".cache" / "musubi" / "upstream",
     ):
         patched = patch_krea2_tokenizer_path(root, tokenizer_dir, log) or patched
+    return patched
+
+
+IDEOGRAM4_UTILS_REL = Path("src/musubi_tuner/ideogram4/ideogram4_utils.py")
+_ROTARY_PATCH_MARK = "# mikazuki: rebuild rotary embedding after to_empty"
+_ROTARY_ANCHOR = "    _materialize_meta_tensors(model)"
+_ROTARY_PATCH = """    _materialize_meta_tensors(model)
+    # mikazuki: rebuild rotary embedding after to_empty (upstream #1139) — the
+    # non-persistent inv_freq buffer is not in the checkpoint, so to_empty()
+    # leaves it uninitialized and the cached text encoder outputs turn to junk.
+    _rotary = model.language_model.rotary_emb
+    model.language_model.rotary_emb = type(_rotary)(config.text_config, device=_rotary.inv_freq.device)"""
+_IDEOGRAM4_TOKENIZER_LINE = "    return AutoTokenizer.from_pretrained(QWEN3_VL_8B_INSTRUCT_REPO_ID)"
+
+
+def patch_ideogram4_source(source_root: Path, tokenizer_dir: Path, log: Callable[[str], None] = print) -> bool:
+    """Fix the Ideogram 4 text encoder in the musubi source tree.
+
+    Two idempotent source patches:
+    1. rebuild the Qwen3-VL rotary embedding after ``to_empty()`` (upstream #1139);
+    2. point the tokenizer at the local directory when it is complete, so
+       offline/China installs never fetch it from the Hub.
+    Refuses to write a result that does not compile.
+    """
+    module = Path(source_root) / IDEOGRAM4_UTILS_REL
+    if not module.is_file():
+        return False
+    text = module.read_text(encoding="utf-8")
+    patched = text
+    if _ROTARY_PATCH_MARK not in patched:
+        if _ROTARY_ANCHOR in patched:
+            patched = patched.replace(_ROTARY_ANCHOR, _ROTARY_PATCH, 1)
+        else:
+            log(f"[patch] rotary anchor not found in {module}; skipped")
+    if _TOKENIZER_PATCH_MARK not in patched:
+        tokenizer_dir = Path(tokenizer_dir)
+        if not dir_complete(tokenizer_dir):
+            pass
+        elif _IDEOGRAM4_TOKENIZER_LINE in patched:
+            patched = patched.replace(
+                _IDEOGRAM4_TOKENIZER_LINE,
+                f'    return AutoTokenizer.from_pretrained(r"{tokenizer_dir.as_posix()}")  {_TOKENIZER_PATCH_MARK}',
+                1,
+            )
+        else:
+            log(f"[patch] tokenizer load line not found in {module}; skipped")
+    if patched == text:
+        return False
+    try:
+        compile(patched, str(module), "exec")
+    except SyntaxError as exc:
+        log(f"[patch] result would not compile ({exc}); {module} left unchanged")
+        return False
+    module.write_text(patched, encoding="utf-8")
+    log(f"[patch] ideogram4 rotary rebuild + tokenizer -> {tokenizer_dir}")
+    return True
+
+
+def patch_ideogram4_everywhere(project_root: Path, log: Callable[[str], None] = print) -> bool:
+    """Patch every known musubi source root (installed extension, vendor, upstream cache)."""
+    from mikazuki.engines.musubi.extension_state import default_layout as musubi_default_layout
+
+    tokenizer_dir = tokenizer_dir_for("ideogram4-lora", project_root)
+    patched = False
+    for root in (
+        musubi_default_layout(project_root).source,
+        Path(project_root) / "vendor" / "musubi-tuner",
+        Path(project_root) / ".cache" / "musubi" / "upstream",
+    ):
+        patched = patch_ideogram4_source(root, tokenizer_dir, log) or patched
     return patched
 
 
@@ -298,6 +389,8 @@ def download_assets(
             log(f"[done] {asset.label}")
             if train_type == "krea2-lora" and asset.key == "tokenizer":
                 patch_krea2_tokenizer_everywhere(project_root, log)
+            elif train_type == "ideogram4-lora" and asset.key == "tokenizer":
+                patch_ideogram4_everywhere(project_root, log)
             continue
         target = _target_path(str(item.get("path") or asset.default_path), project_root)
         target.parent.mkdir(parents=True, exist_ok=True)

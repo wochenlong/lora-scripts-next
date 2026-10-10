@@ -484,6 +484,14 @@ class SettingsDiscoveryTests(unittest.TestCase):
 
 class PreflightTests(unittest.TestCase):
     def _values_and_dataset(self, root: Path) -> tuple[dict, dict]:
+        musubi_root = root / "vendor" / "musubi-tuner"
+        musubi_root.mkdir(parents=True, exist_ok=True)
+        for name in (
+            "krea2_cache_latents.py",
+            "krea2_cache_text_encoder_outputs.py",
+            "krea2_train_network.py",
+        ):
+            (musubi_root / name).write_text("", encoding="utf-8")
         models = root / "models"
         models.mkdir(exist_ok=True)
         for name in ("dit.safetensors", "vae.safetensors", "te.safetensors"):

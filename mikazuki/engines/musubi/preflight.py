@@ -7,6 +7,7 @@ import json
 import os
 import subprocess
 
+from .families import DEFAULT_FAMILY, family_for
 from .settings import RuntimeConfig
 
 
@@ -116,17 +117,31 @@ def run_preflight(
     runtime: RuntimeConfig,
     dataset: dict[str, Any] | None = None,
     probe: DependencyProbe = default_dependency_probe,
+    family: str = DEFAULT_FAMILY,
 ) -> PreflightResult:
     """Validate adapted musubi config values (post-adapter, absolute paths)."""
+    spec = family_for(family)
     errors: list[str] = []
     warnings: list[str] = []
     facts: dict[str, Any] = {
         "musubi_root": str(runtime.musubi_root),
         "python": str(runtime.python),
+        "model_family": spec.family,
     }
 
     if not runtime.python.is_file():
         errors.append(f"musubi-tuner venv python 不存在: {runtime.python}")
+
+    missing_scripts = [
+        name
+        for name in (spec.cache_latents_script, spec.cache_text_encoder_script, spec.train_script)
+        if not (runtime.musubi_root / name).is_file()
+    ]
+    if missing_scripts:
+        errors.append(
+            f"已安装的 musubi-tuner 缺少 {spec.label} 脚本（{', '.join(missing_scripts)}），"
+            "请在「设置 → 训练引擎」对 musubi-tuner 执行修复/重装"
+        )
 
     for field_name in ("dit", "vae", "text_encoder"):
         raw = values.get(field_name)
@@ -135,16 +150,25 @@ def run_preflight(
         elif not Path(str(raw)).is_file():
             errors.append(f"模型文件不存在: {field_name}={raw}")
     if values.get("text_encoder"):
-        from mikazuki.model_assets import dir_complete, krea2_tokenizer_dir
+        from mikazuki.model_assets import dir_complete, tokenizer_dir_for
 
-        tokenizer_dir = krea2_tokenizer_dir(runtime.lora_next_root)
+        tokenizer_dir = tokenizer_dir_for(spec.train_type, runtime.lora_next_root)
         if not dir_complete(tokenizer_dir):
-            errors.append(
+            message = (
                 f"Qwen3-VL tokenizer 文件不在 {tokenizer_dir}，请先在「训练用模型」区探测并下载 tokenizer"
             )
+            if spec.require_local_tokenizer:
+                errors.append(message)
+            else:
+                warnings.append(
+                    f"{message}；否则训练时将尝试从 Hugging Face 下载"
+                )
     turbo = values.get("turbo_dit")
     if turbo is not None and str(turbo).strip() and not Path(str(turbo)).is_file():
         errors.append(f"Turbo DiT 文件不存在: turbo_dit={turbo}")
+    unconditional = values.get("unconditional_dit")
+    if unconditional is not None and str(unconditional).strip() and not Path(str(unconditional)).is_file():
+        errors.append(f"unconditional DiT 文件不存在: unconditional_dit={unconditional}")
 
     images: list[Path] = []
     for entry in (dataset or {}).get("datasets", []):
@@ -175,11 +199,11 @@ def run_preflight(
                 major, minor = (int(part) for part in dep.transformers_version.split(".")[:2])
                 if (major, minor) < (4, 57):
                     errors.append(
-                        f"Krea 2 的 Qwen3-VL 文本编码器需要 transformers>=4.57，当前为 {dep.transformers_version}"
+                        f"{spec.label} 的 Qwen3-VL 文本编码器需要 transformers>=4.57，当前为 {dep.transformers_version}"
                     )
             except (ValueError, TypeError):
                 warnings.append(f"无法解析 transformers 版本: {dep.transformers_version}")
-        if dep.vram_total_mb and dep.vram_total_mb < 12000:
-            warnings.append(f"显存 {dep.vram_total_mb} MB 可能不足以训练 Krea 2，建议开启 fp8_base + blocks_to_swap")
+        if dep.vram_total_mb and dep.vram_total_mb < spec.vram_hint_mb:
+            warnings.append(f"显存 {dep.vram_total_mb} MB 可能不足以训练 {spec.label}，{spec.vram_hint}")
 
     return PreflightResult(ok=not errors, errors=errors, warnings=warnings, facts=facts)

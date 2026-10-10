@@ -7,7 +7,8 @@ from pathlib import Path
 
 from mikazuki.app.models import APIResponseFail, APIResponseSuccess
 from mikazuki.engines.musubi import TRAIN_TYPE as MUSUBI_TRAIN_TYPE
-from mikazuki.engines.musubi.manifest import UPSTREAM
+from mikazuki.engines.musubi.families import family_for_train_type
+from mikazuki.engines.musubi.manifest import TRAIN_TYPES, UPSTREAM
 from mikazuki.engines.musubi.adapter import (
     AdapterError as MusubiAdapterError,
     adapt_config as adapt_musubi_config,
@@ -45,6 +46,7 @@ async def status():
     runtime = musubi_runtime()
     data["feature_enabled"] = musubi_feature_enabled()
     data["train_type"] = MUSUBI_TRAIN_TYPE
+    data["train_types"] = sorted(TRAIN_TYPES)
     data["runtime"] = {
         "musubi_root": str(runtime.musubi_root),
         "python": str(runtime.python),
@@ -65,11 +67,12 @@ async def preflight(config: dict):
     repair_musubi_layout_venv(musubi_default_layout(Path.cwd()))
     runtime = musubi_runtime()
     run_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-musubi"
+    family = family_for_train_type(config.get("model_train_type"))
     try:
-        adapted = adapt_musubi_config(config, runtime, run_id)
+        adapted = adapt_musubi_config(config, runtime, run_id, family=family.family)
     except MusubiAdapterError as exc:
         return APIResponseFail(message=str(exc))
-    result = run_musubi_preflight(adapted.values, runtime, adapted.dataset)
+    result = run_musubi_preflight(adapted.values, runtime, adapted.dataset, family=family.family)
     result.warnings = [*adapted.warnings, *result.warnings]
     if result.ok:
         return APIResponseSuccess(data=result.as_dict())
@@ -82,12 +85,13 @@ async def dry_run(config: dict):
     timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
     autosave_dir = os.path.join(os.getcwd(), "config", "autosave")
     os.makedirs(autosave_dir, exist_ok=True)
+    family = family_for_train_type(config.get("model_train_type"))
     config.pop("gpu_ids", None)
     config.pop("model_train_type", None)
     runtime = musubi_runtime()
     run_id = f"{timestamp}-musubi"
     try:
-        adapted = adapt_musubi_config(config, runtime, run_id)
+        adapted = adapt_musubi_config(config, runtime, run_id, family=family.family)
     except MusubiAdapterError as exc:
         return APIResponseFail(message=str(exc))
     toml_file_path = Path(autosave_dir) / f"{run_id}.toml"

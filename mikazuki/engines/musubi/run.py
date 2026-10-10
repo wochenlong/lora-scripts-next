@@ -31,6 +31,7 @@ from mikazuki.engines.musubi.settings import (
     discover_runtime as discover_musubi_runtime,
     feature_enabled as musubi_feature_enabled,
 )
+from mikazuki.engines.musubi.families import DEFAULT_FAMILY, family_for
 from mikazuki.engines.runner import RunContext
 from mikazuki.utils import train_utils
 
@@ -81,21 +82,20 @@ def musubi_fail_from_preflight(result):
     return APIResponseFail(message=message, data=result.as_dict())
 
 
-def musubi_apply_sample_defaults(config: dict) -> None:
-    """Krea 2 sampling defaults: 1024px; Turbo schedule wants CFG off + few steps."""
+def musubi_apply_sample_defaults(config: dict, spec) -> None:
+    """Family sampling defaults: 1024px; Krea 2 Turbo wants CFG off + few steps."""
     config.setdefault("sample_width", 1024)
     config.setdefault("sample_height", 1024)
-    turbo = str(config.get("turbo_dit", "") or "").strip()
-    if turbo:
-        config.setdefault("sample_cfg", 1)
-        config.setdefault("sample_steps", 8)
-    else:
-        config.setdefault("sample_cfg", 4.5)
-        config.setdefault("sample_steps", 28)
+    defaults = dict(spec.sample_defaults)
+    if spec.turbo_sample_defaults and str(config.get("turbo_dit", "") or "").strip():
+        defaults.update(spec.turbo_sample_defaults)
+    for key, value in defaults.items():
+        config.setdefault(key, value)
 
 
 def handle_run(config: dict, ctx: RunContext):
-    model_train_type = "krea2-lora"
+    spec = family_for(getattr(ctx, "variant", "") or DEFAULT_FAMILY)
+    model_train_type = spec.train_type
     if not musubi_feature_enabled():
         return musubi_disabled_response()
     ready, failure = musubi_ready_gate()
@@ -116,7 +116,7 @@ def handle_run(config: dict, ctx: RunContext):
             config["sample_prompts"] = prompt_file
             train_utils.normalize_sample_prompt_file(prompt_file)
         elif should_generate_sample_prompts(config):
-            musubi_apply_sample_defaults(config)
+            musubi_apply_sample_defaults(config, spec)
             try:
                 positive_prompt, sample_prompts_arg = get_sample_prompts(config=config, model_train_type=model_train_type)
                 if positive_prompt is not None and train_utils.is_promopt_like(sample_prompts_arg):
@@ -141,8 +141,8 @@ def handle_run(config: dict, ctx: RunContext):
         sanitize_config(config)
 
         run_id = f"{ctx.timestamp}-musubi"
-        adapted = adapt_musubi_config(config, runtime, run_id)
-        preflight = run_musubi_preflight(adapted.values, runtime, adapted.dataset)
+        adapted = adapt_musubi_config(config, runtime, run_id, family=spec.family)
+        preflight = run_musubi_preflight(adapted.values, runtime, adapted.dataset, family=spec.family)
         if not preflight.ok:
             return musubi_fail_from_preflight(preflight)
         toml_file_path = Path(ctx.autosave_dir) / f"{run_id}.toml"
@@ -158,7 +158,7 @@ def handle_run(config: dict, ctx: RunContext):
             "warnings": [*adapted.warnings, *preflight.warnings],
         }
         return process.run_musubi_train(
-            str(toml_file_path), runtime, adapted.values, ctx.gpu_ids, metadata=metadata
+            str(toml_file_path), runtime, adapted.values, ctx.gpu_ids, metadata=metadata, family=spec.family
         )
     except MusubiAdapterError as exc:
         return APIResponseFail(message=str(exc))

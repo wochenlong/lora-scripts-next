@@ -293,10 +293,17 @@ def run_musubi_train(toml_path: str,
                      runtime,
                      values: dict,
                      gpu_ids: Optional[list] = None,
-                     metadata: Optional[dict] = None):
-    """Launch a musubi-tuner Krea 2 run: cache latents -> cache TE outputs -> train."""
-    from mikazuki.model_assets import krea2_tokenizer_dir, patch_krea2_tokenizer_path
+                     metadata: Optional[dict] = None,
+                     family: Optional[str] = None):
+    """Launch a musubi-tuner run: cache latents -> cache TE outputs -> train."""
+    from mikazuki.engines.musubi.families import cache_extra_args, family_for
+    from mikazuki.model_assets import (
+        patch_ideogram4_source,
+        patch_krea2_tokenizer_path,
+        tokenizer_dir_for,
+    )
 
+    spec = family_for(family)
     log.info(f"musubi-tuner training started with config file / musubi 训练开始，使用配置文件: {toml_path}")
     if gpu_ids:
         log.info(f"Using GPU(s) / 使用 GPU: {gpu_ids}")
@@ -307,20 +314,26 @@ def run_musubi_train(toml_path: str,
                 gpu_ids[0],
                 gpu_ids[0],
             )
-    patch_krea2_tokenizer_path(runtime.musubi_root, krea2_tokenizer_dir(runtime.lora_next_root), log=log.info)
+    tokenizer_dir = tokenizer_dir_for(spec.train_type, runtime.lora_next_root)
+    if spec.family == "krea2":
+        patch_krea2_tokenizer_path(runtime.musubi_root, tokenizer_dir, log=log.info)
+    else:
+        patch_ideogram4_source(runtime.musubi_root, tokenizer_dir, log=log.info)
     train_task_id = str(uuid.uuid4())
     dataset_toml = Path(str(values["dataset_config"]))
     cache_latents_spec = build_cache_latents_spec(
-        runtime, dataset_toml, str(values["vae"]), f"{train_task_id}-cache_latents", gpu_ids
+        runtime, dataset_toml, str(values["vae"]), f"{train_task_id}-cache_latents", gpu_ids,
+        family=spec.family, extra_args=cache_extra_args(spec, "cache_latents", values),
     )
     cache_te_spec = build_cache_text_encoder_spec(
-        runtime, dataset_toml, str(values["text_encoder"]), f"{train_task_id}-cache_text_encoder", gpu_ids
+        runtime, dataset_toml, str(values["text_encoder"]), f"{train_task_id}-cache_text_encoder", gpu_ids,
+        family=spec.family, extra_args=cache_extra_args(spec, "cache_text_encoder", values),
     )
-    train_spec = build_train_spec(runtime, Path(toml_path), train_task_id, gpu_ids)
+    train_spec = build_train_spec(runtime, Path(toml_path), train_task_id, gpu_ids, family=spec.family)
 
     base_metadata = {
         "backend": "musubi",
-        "train_type": "krea2-lora",
+        "train_type": spec.train_type,
         "config_path": str(Path(toml_path).resolve()),
         "dataset_config": str(dataset_toml.resolve()),
         "musubi_root": str(runtime.musubi_root),
