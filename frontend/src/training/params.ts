@@ -40,6 +40,14 @@ export const CROSS_SCHEMA_DENY_KEYS = [
   "dit",
   // krea2's text_encoder is Qwen3-VL; klein's is Qwen3 — never cross them.
   "text_encoder",
+  // Each musubi/klein family pairs its DiT with its own VAE and model-specific
+  // extras: Krea 2's Turbo DiT, Ideogram 4's asymmetric-CFG DiT and FP8 flags.
+  "vae",
+  "turbo_dit",
+  "turbo_dit_cache",
+  "unconditional_dit",
+  "fp8_base",
+  "fp8_scaled",
   "model_input_mode", "model_variant", "model_path", "model_config_dir", "dit_path", "text_encoder_path", "vae_path", "training_task", "control_data_dirs",
 ] as const
 
@@ -52,6 +60,7 @@ export const SCHEMA_TRAIN_TYPES: Record<string, string> = {
   "flux-lora": "flux-lora",
   "lumina2-lora": "lumina2-lora",
   "krea2-lora": "krea2-lora",
+  "ideogram4-lora": "ideogram4-lora",
 }
 
 export interface ParamDiagnostics {

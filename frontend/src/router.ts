@@ -55,6 +55,8 @@ const routes: RouteRecordRaw[] = [
   { path: "/lora/anima-finetune.html", redirect: () => trainingQuery("anima", "kohya", "finetune") },
   { path: "/lora/krea2.html", redirect: () => trainingQuery("krea2", "musubi", "lora") },
   { path: "/lora/krea2", redirect: () => trainingQuery("krea2", "musubi", "lora") },
+  { path: "/lora/ideogram4.html", redirect: () => trainingQuery("ideogram4", "musubi", "lora") },
+  { path: "/lora/ideogram4", redirect: () => trainingQuery("ideogram4", "musubi", "lora") },
   { path: "/lora/klein", redirect: () => trainingQuery("klein", "ai-toolkit", "lora") },
   { path: "/dreambooth/index.html", redirect: () => trainingQuery("sdxl", "kohya", "finetune") },
   { path: "/tagger.html", redirect: "/dataset/tagger" },

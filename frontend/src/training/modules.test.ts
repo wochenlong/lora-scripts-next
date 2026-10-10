@@ -78,10 +78,13 @@ describe("training module mapping", () => {
     expect(resolveModule("anima", "musubi", "lora")).toBeUndefined()
   })
 
-  it("limits musubi engine to the krea2 model", () => {
+  it("limits musubi engine to the krea2 and ideogram4 models", () => {
     expect(isEngineSupported("krea2", "musubi")).toBe(true)
+    expect(isEngineSupported("ideogram4", "musubi")).toBe(true)
+    expect(resolveModule("krea2", "musubi", "lora")?.schemaName).toBe("krea2-lora")
+    expect(resolveModule("ideogram4", "musubi", "lora")?.schemaName).toBe("ideogram4-lora")
     for (const model of TRAINING_MODELS) {
-      if (model === "krea2") continue
+      if (model === "krea2" || model === "ideogram4") continue
       expect(isEngineSupported(model, "musubi")).toBe(false)
     }
   })
