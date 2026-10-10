@@ -1,19 +1,19 @@
 # Plan manifest
 
 - Plan ID：`DATASET-NL-DEV-UNIFICATION-20261010`
-- Version：`1.0`
-- Last updated：2026-10-10 Asia/Shanghai
+- Version：`1.2`
+- Last updated：2026-10-11 Asia/Shanghai
 - Scale mode：Full；目标T1–T7合并为一份完整实施验收设计，七个阶段任务与开工清单独立。
 - Mode：replan with continuity（保留历史的增量重规划）
 - Canonical progress：[原主任务书](../natural-language-captioning-task-book.md)，唯一执行台账
 - Current branch：`feat/NL-Captioning`
-- Current active phase：U0 pending，全部AC-U0…6 unrun
-- Execution readiness：`drafting`（文档定稿、施工按用户要求暂停；等待明确启动）
+- Current active phase：U0 in progress，AC-U0…6尚未签署
+- Execution readiness：`executing`（用户明确恢复全面施工；goal工具active）
 - Planning review：`pass-with-boundary`，新模型验证安排在U0之后U1，没有免测
 - Design：[设计增量](../../design/nl-caption-dev-unification-design.md)
 - Goal：[全程执行提示词](03_goal提示词/最新dev适配与Qwen统一_goal提示词.md)
-- Evidence root：`docs/evidence/natural-language-captioning/dev-unification-20261010/`（未来执行写入，当前未创建执行结果）
-- Next action：交付长程任务书与goal，保持施工暂停，等待明确启动。
+- Evidence root：`docs/evidence/natural-language-captioning/dev-unification-20261010/`（临时集成根已有U0预检；完整执行证据尚未齐全）
+- Next action：完成U0验证、提交现有merge并安全落位feat/NL-Captioning。
 - Close rule：全部AC门pass且最终沙盒就绪后关闭，user_manual_acceptance=pending_followup。
 
 ## Artifact manifest

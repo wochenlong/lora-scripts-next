@@ -5,6 +5,12 @@ import EnginesSettingsPage from "./EnginesSettingsPage.vue"
 import { enginesApi, type EngineStatus } from "../api/engines"
 import { i18n } from "../i18n"
 import { ENGINE_CATALOG, type EngineDefinition } from "../engines/catalog"
+import { loadEngineSettings } from "../engines/settings"
+import type { UserSettings } from "../api/userSettings"
+import { ElMessage, ElMessageBox, type MessageBoxData } from "element-plus"
+
+let server: UserSettings
+const settingsFetch = vi.fn()
 
 vi.mock("../api/engines", () => ({
   enginesApi: { list: vi.fn(), install: vi.fn(), repair: vi.fn(), uninstall: vi.fn() },
@@ -18,6 +24,7 @@ const statuses: EngineStatus[] = [
 ]
 const wrappers: ReturnType<typeof mount>[] = []
 async function setup() {
+  await loadEngineSettings()
   const wrapper = mount(EnginesSettingsPage, {
     global: { plugins: [i18n], stubs: { NetworkSettingsPanel: true, DownloadSourcesPanel: true } },
   })
@@ -31,11 +38,23 @@ it("allows changing the default engine and retains it across mounts", async () =
   const select = wrapper.get(".toolbar-default select")
   expect(select.attributes("disabled")).toBeUndefined()
   await select.setValue("ai-toolkit")
-  expect(JSON.parse(localStorage.getItem("nt.training.enginePrefs")!).defaultEngine).toBe("ai-toolkit")
+  await flushPromises()
+  expect(server.engine_prefs?.defaultEngine).toBe("ai-toolkit")
+  expect(localStorage.getItem("nt.training.enginePrefs")).toBeNull()
   expect(((await setup()).get(".toolbar-default select").element as HTMLSelectElement).value).toBe("ai-toolkit")
 })
 beforeEach(() => {
   localStorage.clear()
+  server = { schema_version: 1, revision: 0 }
+  settingsFetch.mockReset().mockImplementation(async (_url, options) => {
+    if (options?.method === "PATCH") {
+      const body = JSON.parse(options.body)
+      expect(body.revision).toBe(server.revision)
+      server = { ...server, ...body.patch, revision: server.revision + 1 }
+    }
+    return new Response(JSON.stringify({ status: "success", data: server }))
+  })
+  vi.stubGlobal("fetch", settingsFetch)
   vi.mocked(enginesApi.list).mockResolvedValue(statuses)
 })
 afterEach(() => {
@@ -43,6 +62,7 @@ afterEach(() => {
   wrappers.length = 0
   ;(ENGINE_CATALOG as EngineDefinition[]).splice(5)
   vi.restoreAllMocks()
+  vi.unstubAllGlobals()
 })
 
 function addTestEngines() {
@@ -67,7 +87,7 @@ it("hides pagination for five engines and pages larger catalogs by five", async 
 
 it("moves a second-page engine to the global top and returns to page one", async () => {
   addTestEngines()
-  localStorage.setItem("nt.settings.engineOrder", JSON.stringify(["test-one", "test-two", ...statuses.map((s) => s.id)]))
+  server.engine_order = ["test-one", "test-two", ...statuses.map((s) => s.id)]
   const wrapper = await setup()
   await wrapper.get('[data-page="next"]').trigger("click")
   expect(order(wrapper)).toEqual(["ai-toolkit", "diffsynth"])
@@ -117,19 +137,24 @@ it("moves down within filtered results and restores the complete default order",
   await wrapper.get('[data-filter="installed"]').trigger("click")
   await wrapper.get('[data-engine="anima-fast"].engine-row .engine-more-btn').trigger("click")
   await wrapper.get('[data-action="down"]').trigger("click")
+  await flushPromises()
   expect(order(wrapper)).toEqual(["ai-toolkit", "anima-fast"])
   await wrapper.get('[data-filter="all"]').trigger("click")
   expect(order(wrapper)).toEqual(["kohya", "musubi", "ai-toolkit", "anima-fast", "diffsynth"])
   await wrapper.get('.engine-list-tools .engine-more-btn').trigger("click")
   await wrapper.get('.engine-list-tools .engine-more-menu button').trigger("click")
+  await flushPromises()
   expect(order(wrapper)).toEqual(statuses.map((status) => status.id))
 })
-it("keeps reordered view usable when storage fails", async () => {
+it("restores the server order and reports a rejected save", async () => {
   const wrapper = await setup()
-  vi.spyOn(Storage.prototype, "setItem").mockImplementation(() => { throw new Error("quota") })
+  settingsFetch.mockRejectedValueOnce(new Error("offline"))
+  const error = vi.spyOn(ElMessage, "error").mockImplementation(() => ({ close: vi.fn() }))
   await wrapper.get('[data-engine="musubi"].engine-row .engine-more-btn').trigger("click")
   await wrapper.get('[data-action="top"]').trigger("click")
-  expect(order(wrapper)[0]).toBe("musubi")
+  await flushPromises()
+  expect(order(wrapper)[0]).toBe("kohya")
+  expect(error).toHaveBeenCalled()
 })
 it("supports pointer dragging for mouse and touch without native HTML drag", async () => {
   const wrapper = await setup()
@@ -167,7 +192,7 @@ it("retains order across status refresh and clamps a shrinking filtered page", a
     id: engine.id, state: "ready" as const, featureEnabled: true,
   }))
   vi.mocked(enginesApi.list).mockResolvedValue(allReady)
-  localStorage.setItem("nt.settings.engineOrder", JSON.stringify(["test-one", "test-two", ...statuses.map((s) => s.id)]))
+  server.engine_order = ["test-one", "test-two", ...statuses.map((s) => s.id)]
   const wrapper = await setup()
   const savedOrder = localStorage.getItem("nt.settings.engineOrder")
   await wrapper.get('[data-filter="installed"]').trigger("click")
@@ -184,4 +209,32 @@ it("retains order across status refresh and clamps a shrinking filtered page", a
   expect(order(wrapper)).toEqual(["anima-fast"])
   expect(wrapper.find(".engine-pagination").exists()).toBe(false)
   expect(localStorage.getItem("nt.settings.engineOrder")).toBe(savedOrder)
+})
+
+it("requires confirmation for legacy import and hides it when server fields exist", async () => {
+  localStorage.setItem("nt.training.enginePrefs", '{"defaultEngine":"ai-toolkit","rememberLast":false}')
+  localStorage.setItem("nt.settings.engineOrder", '["musubi","kohya"]')
+  const confirm = vi.spyOn(ElMessageBox, "confirm").mockRejectedValueOnce("cancel").mockResolvedValueOnce("confirm" as MessageBoxData)
+  const wrapper = await setup()
+  await wrapper.get('[data-action="import-legacy"]').trigger("click")
+  await flushPromises()
+  expect(server.engine_prefs).toBeUndefined()
+  await wrapper.get('[data-action="import-legacy"]').trigger("click")
+  await flushPromises()
+  expect(confirm).toHaveBeenCalledTimes(2)
+  expect(server.engine_prefs?.defaultEngine).toBe("ai-toolkit")
+  expect(order(wrapper)[0]).toBe("musubi")
+  expect(wrapper.find('[data-action="import-legacy"]').exists()).toBe(false)
+  expect(localStorage.getItem("nt.training.enginePrefs")).not.toBeNull()
+})
+
+it("does not show success and restores preferences when saving fails", async () => {
+  const wrapper = await setup()
+  const success = vi.spyOn(ElMessage, "success")
+  vi.spyOn(ElMessage, "error").mockImplementation(() => ({ close: vi.fn() }))
+  settingsFetch.mockRejectedValueOnce(new Error("offline"))
+  await wrapper.get(".toolbar-default select").setValue("ai-toolkit")
+  await flushPromises()
+  expect(success).not.toHaveBeenCalled()
+  expect((wrapper.get(".toolbar-default select").element as HTMLSelectElement).value).toBe("kohya")
 })

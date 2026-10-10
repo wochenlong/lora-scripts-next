@@ -33,13 +33,26 @@ class RuntimeConfig:
     hf_home: Path | None = None
 
 
-def _as_path(value: str | os.PathLike | None, base: Path) -> Path | None:
+def _as_path(
+    value: str | os.PathLike | None,
+    base: Path,
+    *,
+    follow_symlinks: bool = True,
+) -> Path | None:
+    """Normalize a configured path.
+
+    Interpreter paths must keep ``follow_symlinks=False``: on Linux a venv's
+    ``bin/python`` is usually a symlink into the base runtime, and resolving it
+    drops the venv ``site-packages`` (no torch). Directories may still resolve.
+    """
     if value is None or str(value).strip() == "":
         return None
     path = Path(value)
     if not path.is_absolute():
         path = base / path
-    return path.resolve()
+    if follow_symlinks:
+        return path.resolve()
+    return path.absolute()
 
 
 def _venv_python_for_root(root: Path) -> Path:
@@ -209,8 +222,8 @@ def discover_runtime(config: dict | None = None, lora_next_root: Path | None = N
         or (layout.source if _has_package(layout.source) else None)
         or (lora_next_root / "vendor" / "musubi-tuner").resolve()
     )
-    config_python = _as_path(backend.get("venv_python"), lora_next_root)
-    env_python = _as_path(os.environ.get("MUSUBI_PYTHON"), lora_next_root)
+    config_python = _as_path(backend.get("venv_python"), lora_next_root, follow_symlinks=False)
+    env_python = _as_path(os.environ.get("MUSUBI_PYTHON"), lora_next_root, follow_symlinks=False)
     python = (
         (config_python if config_python and config_python.is_file() else None)
         or (env_python if env_python and env_python.is_file() else None)

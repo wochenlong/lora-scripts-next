@@ -14,6 +14,7 @@ export class ApiError extends Error {
     message: string,
     public readonly status: ApiStatus | "http" | "network",
     public readonly response?: ApiResponse<unknown>,
+    public readonly httpStatus?: number,
   ) {
     super(message)
     this.name = "ApiError"
@@ -45,12 +46,12 @@ export async function apiRequest<T>(path: string, options: ApiRequestOptions = {
   try {
     payload = await response.json() as ApiResponse<T>
   } catch {
-    throw new ApiError(i18n.global.t("api.unparseable", { status: response.status }), "http")
+    throw new ApiError(i18n.global.t("api.unparseable", { status: response.status }), "http", undefined, response.status)
   }
 
   if (!response.ok) {
     const detail = typeof payload.detail === "string" ? payload.detail : payload.detail?.message
-    throw new ApiError(payload.message || detail || i18n.global.t("api.httpFail", { status: response.status }), "http", payload)
+    throw new ApiError(payload.message || detail || i18n.global.t("api.httpFail", { status: response.status }), "http", payload, response.status)
   }
   if (payload.status !== "success" && !(allowPending && payload.status === "pending")) {
     throw new ApiError(payload.message || i18n.global.t("api.fail"), payload.status, payload)

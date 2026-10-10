@@ -7,11 +7,13 @@ import { stringify } from "smol-toml"
 import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useTasksStore } from "../stores/tasks"
-import { tasksApi, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
+import { tasksApi, type BatchEnqueueItem, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
 import { moduleForTrainType } from "../training/modules"
 import { copyText } from "../utils/clipboard"
 import LossChart from "../components/LossChart.vue"
 import TaskLogPanel from "../components/TaskLogPanel.vue"
+import { userPresetsApi, type UserPreset } from "../api/userPresets"
+import { taskArchivesApi, type TaskArchive } from "../api/taskArchives"
 
 const router = useRouter()
 
@@ -403,6 +405,17 @@ async function dequeue(task: TrainingTask) {
 }
 
 const actionBusyId = ref("")
+const presetDialogOpen = ref(false)
+const presetName = ref("")
+const presetDescription = ref("")
+const presetConfig = ref<Record<string, unknown> | null>(null)
+const presets = ref<UserPreset[]>([])
+const editingPresetId = ref("")
+const presetBusy = ref(false)
+const archiveDialogOpen = ref(false)
+const archives = ref<TaskArchive[]>([])
+const archiveId = ref("")
+const archiveBusy = ref(false)
 
 function isTerminal(task: TrainingTask): boolean {
   return task.status === "FINISHED" || task.status === "FAILED" || task.status === "TERMINATED"
@@ -431,6 +444,77 @@ async function removeTask(task: TrainingTask) {
 const purgeOpen = ref(false)
 const purgeKeepLast = ref(10)
 const purgeBusy = ref(false)
+
+const autoRetryOpen = ref(false)
+const autoRetryCount = ref(0)
+const autoRetryMax = ref(0)
+const autoRetryBusy = ref(false)
+
+const batchOpen = ref(false)
+const batchFiles = ref<File[]>([])
+const batchBusy = ref(false)
+const batchResults = ref<BatchEnqueueItem[] | null>(null)
+const batchDragOver = ref(false)
+const batchFileInput = ref<HTMLInputElement | null>(null)
+
+function openBatchEnqueue() {
+  batchFiles.value = []
+  batchResults.value = null
+  batchDragOver.value = false
+  batchOpen.value = true
+}
+
+function acceptBatchFiles(files: File[]) {
+  batchFiles.value = files.filter((file) => /\.toml$/i.test(file.name))
+  batchResults.value = null
+}
+
+function onBatchDrop(event: DragEvent) {
+  batchDragOver.value = false
+  acceptBatchFiles(Array.from(event.dataTransfer?.files ?? []))
+}
+
+function openAutoRetry() {
+  autoRetryCount.value = autoRetryMax.value
+  autoRetryOpen.value = true
+}
+
+async function saveAutoRetry() {
+  autoRetryBusy.value = true
+  try {
+    const data = await tasksApi.setAutoRetry(autoRetryCount.value)
+    autoRetryMax.value = data.auto_retry_max
+    autoRetryOpen.value = false
+    ElMessage.success(t("tasks.autoRetry.saved"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.autoRetry.fail"))
+  } finally {
+    autoRetryBusy.value = false
+  }
+}
+
+
+function onBatchFilesChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  acceptBatchFiles(Array.from(input.files ?? []))
+  input.value = ""
+}
+
+async function submitBatchEnqueue() {
+  if (!batchFiles.value.length || batchBusy.value) return
+  batchBusy.value = true
+  try {
+    const data = await tasksApi.batchEnqueue(batchFiles.value)
+    batchResults.value = data.results
+    await store.refresh({ silent: true })
+    if (data.fail_count === 0) ElMessage.success(t("tasks.batchEnqueue.allOk", { n: data.ok_count }))
+    else ElMessage.warning(t("tasks.batchEnqueue.partial", { ok: data.ok_count, fail: data.fail_count }))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.batchEnqueue.fail"))
+  } finally {
+    batchBusy.value = false
+  }
+}
 
 async function purgeTasks() {
   purgeBusy.value = true
@@ -500,6 +584,100 @@ async function copyTaskConfig(task: TrainingTask) {
   }
 }
 
+async function openSavePreset(task: TrainingTask) {
+  actionBusyId.value = task.id
+  try {
+    const data = await tasksApi.config(task.id)
+    presetConfig.value = data.config
+    presetName.value = String(data.output_name || taskName(task))
+    presetDescription.value = ""
+    editingPresetId.value = ""
+    presets.value = await userPresetsApi.list(metaString(task, "train_type") || undefined)
+    presetDialogOpen.value = true
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.presets.loadConfigFail"))
+  } finally {
+    actionBusyId.value = ""
+  }
+}
+
+async function savePreset(task: TrainingTask) {
+  if (!presetConfig.value || !presetName.value.trim()) return
+  presetBusy.value = true
+  try {
+    if (editingPresetId.value) {
+      await userPresetsApi.update(editingPresetId.value, {
+        name: presetName.value.trim(),
+        description: presetDescription.value.trim() || undefined,
+        config: presetConfig.value,
+      })
+    } else {
+      await userPresetsApi.create({
+        name: presetName.value.trim(),
+        description: presetDescription.value.trim() || undefined,
+        train_type: metaString(task, "train_type") || undefined,
+        config: presetConfig.value,
+      })
+    }
+    presetDialogOpen.value = false
+    ElMessage.success(t("tasks.presets.saved"))
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.presets.saveFail"))
+  } finally {
+    presetBusy.value = false
+  }
+}
+
+function editPreset(preset: UserPreset) {
+  editingPresetId.value = preset.id
+  presetName.value = preset.name
+  presetDescription.value = preset.description || ""
+  presetConfig.value = preset.config
+}
+
+async function deletePreset(preset: UserPreset) {
+  try {
+    await ElMessageBox.confirm(t("tasks.presets.deleteConfirm", { name: preset.name }), t("tasks.presets.deleteTitle"), { type: "warning" })
+    await userPresetsApi.remove(preset.id)
+    presets.value = presets.value.filter((item) => item.id !== preset.id)
+    if (editingPresetId.value === preset.id) editingPresetId.value = ""
+    ElMessage.success(t("tasks.presets.deleted"))
+  } catch (caught) {
+    if (caught !== "cancel" && caught !== "close") ElMessage.error(caught instanceof Error ? caught.message : t("tasks.presets.deleteFail"))
+  }
+}
+
+async function openArchiveDialog(task?: TrainingTask) {
+  archiveDialogOpen.value = true
+  archiveBusy.value = true
+  archiveId.value = ""
+  try {
+    archives.value = await taskArchivesApi.list(task ? metaString(task, "train_type") || undefined : undefined)
+  } catch (caught) {
+    archives.value = []
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.archives.loadFail"))
+  } finally {
+    archiveBusy.value = false
+  }
+}
+
+async function loadArchive() {
+  if (!archiveId.value) return
+  archiveBusy.value = true
+  try {
+    const archive = await taskArchivesApi.get(archiveId.value)
+    sessionStorage.setItem("mikazuki-pending-import", JSON.stringify(archive.config))
+    archiveDialogOpen.value = false
+    const targetModule = moduleForTrainType(archive.train_type)
+    if (targetModule) await router.push({ path: "/training", query: { model: targetModule.model, engine: targetModule.engine, target: targetModule.target } })
+    else await router.push("/training")
+  } catch (caught) {
+    ElMessage.error(caught instanceof Error ? caught.message : t("tasks.archives.loadFail"))
+  } finally {
+    archiveBusy.value = false
+  }
+}
+
 async function resume(task: TrainingTask) {
   actionBusyId.value = task.id
   try {
@@ -548,6 +726,10 @@ async function retry(task: TrainingTask) {
 
 onMounted(async () => {
   await store.refresh()
+  try {
+    const data = await tasksApi.getAutoRetry()
+    autoRetryMax.value = data.auto_retry_max
+  } catch { /* keep default 0 */ }
   timer = window.setInterval(() => {
     now.value = Date.now()
     const hasActive = tasks.value.some((task) => task.status === "RUNNING" || task.status === "CREATED" || task.status === "QUEUED")
@@ -569,6 +751,7 @@ onBeforeUnmount(() => {
   <div class="tasks-board">
     <header class="tasks-board-header">
       <h1>{{ t("tasks.title") }}</h1>
+      <button class="ghost-button" @click="openArchiveDialog()">{{ t("tasks.archives.loadButton") }}</button>
       <button class="ghost-button" :disabled="loading" @click="store.refresh()"><el-icon><Refresh /></el-icon>{{ t("tasks.refresh") }}</button>
     </header>
 
@@ -583,6 +766,7 @@ onBeforeUnmount(() => {
           <button :class="{ active: activeTab === 'running' }" @click="activeTab = 'running'">{{ t("tasks.tabs.running") }}<b>{{ runningList.length }}</b></button>
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
+        <button class="ghost-button tasks-purge-button" :data-armed="autoRetryMax > 0" @click="openAutoRetry">{{ autoRetryMax > 0 ? t("tasks.autoRetry.armed", { n: autoRetryMax }) : t("tasks.autoRetry.off") }}</button>
         <button v-if="activeTab === 'recent' && recentList.length" class="ghost-button tasks-purge-button" @click="purgeOpen = true">{{ t("tasks.purge.button") }}</button>
         <div class="tasks-filters">
           <el-select v-model="filterStatus" size="small" class="tasks-filter-status">
@@ -605,6 +789,7 @@ onBeforeUnmount(() => {
             <span v-for="stage in group.stages" :key="stage.id" class="task-stage" :data-status="stage.status.toLowerCase()">{{ stageLabelKey(stage.name) ? t(stageLabelKey(stage.name)) : stage.name }}</span>
           </div>
         </article>
+        <button class="ghost-button tasks-batch-button" @click="openBatchEnqueue">{{ t("tasks.batchEnqueue.button") }}</button>
       </aside>
 
       <section v-if="selected" class="task-detail" :data-status="selected.status.toLowerCase()">
@@ -647,6 +832,8 @@ onBeforeUnmount(() => {
           <button v-if="isTerminal(selected) && !selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="importToTraining(selected)">{{ t("tasks.detail.importTrain") }}</button>
           <button v-if="!selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="exportTaskConfig(selected)">{{ t("tasks.detail.exportConfig") }}</button>
           <button v-if="!selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="copyTaskConfig(selected)">{{ t("tasks.detail.copyConfig") }}</button>
+          <button v-if="!selectedIsMaintenance" class="ghost-button" :disabled="actionBusyId === selected.id" @click="openSavePreset(selected)">{{ t("tasks.presets.saveButton") }}</button>
+          <button v-if="!selectedIsMaintenance" class="ghost-button" @click="openArchiveDialog(selected)">{{ t("tasks.archives.loadButton") }}</button>
         </div>
         <section v-if="!selectedIsMaintenance" class="task-preview-strip task-placeholder" :class="{ 'has-data': previews.length > 0, collapsed: !previewOpen }">
           <header class="task-panel-header" @click="previewOpen = !previewOpen">
@@ -690,6 +877,87 @@ onBeforeUnmount(() => {
       <template #footer>
         <button class="ghost-button" @click="purgeOpen = false">{{ t("tasks.purge.cancel") }}</button>
         <button class="danger-action" :disabled="purgeBusy" @click="purgeTasks">{{ t("tasks.purge.confirmButton") }}</button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="autoRetryOpen" :title="t('tasks.autoRetry.title')" width="min(440px, 92vw)" align-center>
+      <div class="purge-form">
+        <label class="purge-keep">
+          <span>{{ t("tasks.autoRetry.countLabel") }}</span>
+          <el-input-number v-model="autoRetryCount" :min="0" :max="9" size="small" />
+          <span>{{ t("tasks.autoRetry.countSuffix") }}</span>
+        </label>
+        <p class="purge-hint">{{ t("tasks.autoRetry.hint") }}</p>
+      </div>
+      <template #footer>
+        <button class="ghost-button" @click="autoRetryOpen = false">{{ t("tasks.autoRetry.cancel") }}</button>
+        <button class="primary-action" :disabled="autoRetryBusy" @click="saveAutoRetry">{{ t("tasks.autoRetry.confirm") }}</button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="batchOpen" :title="t('tasks.batchEnqueue.title')" width="min(560px, 94vw)" align-center>
+      <div class="purge-form">
+        <div
+          class="upload-dropzone"
+          :class="{ over: batchDragOver }"
+          @dragover.prevent="batchDragOver = true"
+          @dragleave.prevent="batchDragOver = false"
+          @drop.prevent="onBatchDrop"
+        >
+          <p>{{ t("tasks.batchEnqueue.dropHint") }}</p>
+          <div class="upload-dropzone-actions">
+            <button class="secondary-action" :disabled="batchBusy" @click="batchFileInput?.click()">{{ t("tasks.batchEnqueue.pickFiles") }}</button>
+          </div>
+          <input ref="batchFileInput" type="file" multiple accept=".toml" hidden @change="onBatchFilesChange">
+        </div>
+        <p class="purge-hint">{{ t("tasks.batchEnqueue.hint") }}</p>
+        <p v-if="batchFiles.length" class="purge-hint">{{ t("tasks.batchEnqueue.selected", { n: batchFiles.length }) }}</p>
+        <ul v-if="batchResults" class="batch-enqueue-results">
+          <li v-for="item in batchResults" :key="item.file" :data-ok="item.ok">
+            <strong>{{ item.file }}</strong>
+            <span v-if="item.ok">{{ item.queued ? t("tasks.batchEnqueue.queued") : t("tasks.batchEnqueue.started") }}</span>
+            <span v-if="item.ok && item.output_name_renamed">{{ t("tasks.batchEnqueue.renamed", { from: item.output_name_renamed.from, to: item.output_name_renamed.to }) }}</span>
+            <span v-if="!item.ok" class="batch-enqueue-error">{{ item.error }}</span>
+          </li>
+        </ul>
+      </div>
+      <template #footer>
+        <button class="ghost-button" @click="batchOpen = false">{{ t("tasks.batchEnqueue.close") }}</button>
+        <button class="primary-action" :disabled="!batchFiles.length || batchBusy" @click="submitBatchEnqueue">{{ batchBusy ? t("tasks.batchEnqueue.submitting") : t("tasks.batchEnqueue.confirm") }}</button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="presetDialogOpen" :title="t('tasks.presets.title')" width="min(520px, 92vw)" align-center>
+      <div v-if="presets.length" class="task-preset-list">
+        <div v-for="preset in presets" :key="preset.id" class="task-preset-row">
+          <span>{{ preset.name }}</span>
+          <button type="button" @click="editPreset(preset)">{{ t("tasks.presets.edit") }}</button>
+          <button type="button" @click="deletePreset(preset)">{{ t("tasks.presets.delete") }}</button>
+        </div>
+      </div>
+      <div class="task-preset-form">
+        <label><span>{{ t("tasks.presets.name") }}</span><input v-model="presetName" type="text" autofocus></label>
+        <label><span>{{ t("tasks.presets.description") }}</span><textarea v-model="presetDescription" rows="3"></textarea></label>
+      </div>
+      <template #footer>
+        <button class="ghost-button" @click="presetDialogOpen = false">{{ t("tasks.presets.cancel") }}</button>
+        <button class="primary-action" :disabled="presetBusy || !presetName.trim()" @click="selected && savePreset(selected)">{{ editingPresetId ? t("tasks.presets.update") : t("tasks.presets.save") }}</button>
+      </template>
+    </el-dialog>
+
+    <el-dialog v-model="archiveDialogOpen" :title="t('tasks.archives.title')" width="min(620px, 92vw)" align-center>
+      <div v-if="archiveBusy" class="task-empty">{{ t("tasks.archives.loading") }}</div>
+      <div v-else-if="!archives.length" class="task-empty">{{ t("tasks.archives.empty") }}</div>
+      <label v-else class="task-archive-picker">
+        <span>{{ t("tasks.archives.select") }}</span>
+        <select v-model="archiveId">
+          <option value="" disabled>{{ t("tasks.archives.selectPlaceholder") }}</option>
+          <option v-for="archive in archives" :key="archive.id" :value="archive.id">{{ archive.name }}</option>
+        </select>
+      </label>
+      <template #footer>
+        <button class="ghost-button" @click="archiveDialogOpen = false">{{ t("tasks.archives.cancel") }}</button>
+        <button class="primary-action" :disabled="archiveBusy || !archiveId" @click="loadArchive">{{ t("tasks.archives.load") }}</button>
       </template>
     </el-dialog>
   </div>

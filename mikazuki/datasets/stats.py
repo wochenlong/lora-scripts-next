@@ -15,7 +15,7 @@ OVERVIEW_TTL_SECONDS = 15.0
 _executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix="dataset-overview")
 _lock = threading.Lock()
 _entries: dict[str, dict] = {}
-_inflight: set[str] = set()
+_inflight: dict[str, object] = {}
 
 
 def compute_overview(dataset_dir: Path) -> dict:
@@ -44,7 +44,7 @@ def compute_overview(dataset_dir: Path) -> dict:
     }
 
 
-def _compute_and_store(key: str, dataset_dir: Path) -> None:
+def _compute_and_store(key: str, dataset_dir: Path, token: object) -> None:
     try:
         entry = compute_overview(dataset_dir)
     except Exception as exc:
@@ -59,8 +59,10 @@ def _compute_and_store(key: str, dataset_dir: Path) -> None:
             "error": str(exc),
         }
     with _lock:
-        _entries[key] = entry
-        _inflight.discard(key)
+        # An invalidated scan must not repopulate the cache or replace a newer scan.
+        if _inflight.get(key) is token:
+            _entries[key] = entry
+            _inflight.pop(key, None)
 
 
 def _is_fresh(entry: dict) -> bool:
@@ -81,8 +83,9 @@ def get_overview(dataset_dir: Path) -> dict:
         if entry and _is_fresh(entry):
             return dict(entry)
         if key not in _inflight:
-            _inflight.add(key)
-            _executor.submit(_compute_and_store, key, dataset_dir)
+            token = object()
+            _inflight[key] = token
+            _executor.submit(_compute_and_store, key, dataset_dir, token)
         if entry:
             stale = dict(entry)
             stale["state"] = "computing"
@@ -101,3 +104,4 @@ def invalidate_overview(dataset_dir: Path) -> None:
     key = normalize_path(dataset_dir)
     with _lock:
         _entries.pop(key, None)
+        _inflight.pop(key, None)

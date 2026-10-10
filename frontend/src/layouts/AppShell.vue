@@ -9,7 +9,12 @@ import { useTasksStore } from "../stores/tasks"
 import GenericFloatingExtensionHost from "../components/extensions/GenericFloatingExtensionHost.vue"
 import { DEFAULT_SELECTION, normalizeModel, resolveModule, type TrainingEngine, type TrainingTarget } from "../training/modules"
 import { readRecentTrainingSelection, writeRecentTrainingSelection } from "../training/recent"
-import { ENGINE_PREFS_CHANGED, readEnginePrefs } from "../engines/prefs"
+import { ENGINE_PREFS_CHANGED, lastSelectionFor } from "../engines/prefs"
+import { engineSettingsState, loadEngineSettings } from "../engines/settings"
+
+async function retrySettings() {
+  try { await loadEngineSettings() } catch { /* Shared error remains visible. */ }
+}
 
 const route = useRoute()
 const { t } = useI18n()
@@ -30,14 +35,15 @@ const versionLabel = computed(() => {
 })
 
 const trainingTo = computed(() => {
-  // Re-read browser preferences after returning from settings.
+  // Re-read hydrated preferences after returning from settings.
   void route.fullPath
   void prefsRevision.value
-  if (!readEnginePrefs().rememberLast || !readRecentTrainingSelection()) return { path: "/training" }
+  const remembered = lastSelectionFor(recentTraining.value.model)
+  if (!remembered) return { path: "/training" }
   return { path: "/training", query: {
     model: recentTraining.value.model,
-    engine: recentTraining.value.engine,
-    target: recentTraining.value.target,
+    engine: remembered.engine,
+    target: remembered.target,
   } }
 })
 
@@ -134,7 +140,13 @@ onBeforeUnmount(() => {
         <a href="https://github.com/wochenlong/lora-scripts-next" target="_blank" rel="noreferrer" class="github-link">GitHub</a>
       </footer>
     </aside>
-    <main class="app-content"><RouterView /></main>
+    <main class="app-content">
+      <div v-if="engineSettingsState.error" role="alert" class="engine-settings-error">
+        <span>{{ engineSettingsState.error }}</span>
+        <el-button :loading="engineSettingsState.loading" @click="retrySettings">{{ t("engineSettings.retry") }}</el-button>
+      </div>
+      <RouterView />
+    </main>
     <GenericFloatingExtensionHost />
   </div>
 </template>

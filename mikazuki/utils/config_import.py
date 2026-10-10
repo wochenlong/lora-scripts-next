@@ -7,11 +7,13 @@ import re
 from dataclasses import dataclass, field
 from typing import Any
 
+from mikazuki.engines.musubi.families import IDEOGRAM4 as _IDEOGRAM4_SPEC, KREA2 as _KREA2_SPEC
 from mikazuki.utils.train_utils import ensure_enable_preview_flag
 
 ANIMA_TRAIN_TYPES = frozenset({"anima-lora", "sd3-lora"})
 ANIMA_FAST_TRAIN_TYPES = frozenset({"anima-lora-fast"})
 MUSUBI_TRAIN_TYPES = frozenset({"krea2-lora"})
+IDEOGRAM4_TRAIN_TYPES = frozenset({"ideogram4-lora"})
 FLUX_TRAIN_TYPES = frozenset({"flux-lora", "flux-finetune"})
 LUMINA_TRAIN_TYPES = frozenset({"lumina-lora"})
 SDXL_TRAIN_TYPES = frozenset({"sdxl-lora", "sdxl-finetune"})
@@ -61,6 +63,16 @@ MUSUBI_CONFIG_MARKERS = frozenset({
     "turbo_dit",
     "turbo_dit_cache",
     "fp8_scaled",
+})
+
+IDEOGRAM4_CONFIG_MARKERS = frozenset({
+    "unconditional_dit",
+    "use_unconditional_dit_for_lora_sampling",
+    "sampler_preset",
+    "text_cache_dtype",
+    "validate_caption_structure",
+    "warn_on_caption_issues",
+    "log_loss_stats",
 })
 
 LUMINA_CONFIG_MARKERS = frozenset({
@@ -118,6 +130,11 @@ MUSUBI_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"qwen3[-_]?vl", re.I), "文本编码器路径含 qwen3-vl"),
 )
 
+IDEOGRAM4_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
+    (re.compile(r"/ideogram4?/", re.I), "模型路径含 /ideogram/"),
+    (re.compile(r"ideogram", re.I), "模型路径含 ideogram"),
+)
+
 LUMINA_PATH_RULES: tuple[tuple[re.Pattern[str], str], ...] = (
     (re.compile(r"/lumina/", re.I), "模型路径含 /lumina/"),
     (re.compile(r"gemma2", re.I), "路径含 gemma2"),
@@ -168,6 +185,12 @@ PAGE_SPECS: dict[str, dict[str, Any]] = {
         "accepted": MUSUBI_TRAIN_TYPES,
         "default_train_type": "krea2-lora",
     },
+    "ideogram4-lora": {
+        "label": "Ideogram 4 LoRA 训练",
+        "path": "/lora/ideogram4.html",
+        "accepted": IDEOGRAM4_TRAIN_TYPES,
+        "default_train_type": "ideogram4-lora",
+    },
     "lumina-lora": {
         "label": "Lumina LoRA 训练",
         "path": "/lora/lumina.html",
@@ -206,6 +229,7 @@ TRAIN_TYPE_TARGETS: dict[str, dict[str, str]] = {
     "sd3-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "anima-lora-fast": {"path": "/lora/anima-fast.html", "label": "Anima Fast 训练"},
     "krea2-lora": {"path": "/lora/krea2.html", "label": "Krea 2 LoRA 训练"},
+    "ideogram4-lora": {"path": "/lora/ideogram4.html", "label": "Ideogram 4 LoRA 训练"},
     "flux-lora": {"path": "/lora/flux.html", "label": "Flux LoRA 训练"},
     "flux-finetune": {"path": "/lora/flux.html", "label": "Flux 训练"},
     "lumina-lora": {"path": "/lora/lumina.html", "label": "Lumina LoRA 训练"},
@@ -339,8 +363,17 @@ def analyze_train_type(config: dict) -> TrainTypeAnalysis:
         config,
         marker_keys=MUSUBI_CONFIG_MARKERS,
         path_rules=MUSUBI_PATH_RULES,
+        network_modules=frozenset({_KREA2_SPEC.network_module}),
     )
     families.append(("krea2-lora", musubi_score, musubi_reasons))
+
+    ideogram4_score, ideogram4_reasons = _score_family(
+        config,
+        marker_keys=IDEOGRAM4_CONFIG_MARKERS,
+        path_rules=IDEOGRAM4_PATH_RULES,
+        network_modules=frozenset({_IDEOGRAM4_SPEC.network_module}),
+    )
+    families.append(("ideogram4-lora", ideogram4_score, ideogram4_reasons))
 
     flux_score, flux_reasons = _score_family(
         config,

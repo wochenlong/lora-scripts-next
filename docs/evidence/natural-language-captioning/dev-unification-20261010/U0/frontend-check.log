@@ -1,0 +1,85 @@
+
+> next-trainer-frontend@0.1.0 check
+> npm run typecheck && npm run lint && npm test && npm run build
+
+
+> next-trainer-frontend@0.1.0 typecheck
+> vue-tsc -b
+
+
+> next-trainer-frontend@0.1.0 lint
+> eslint src vite.config.ts
+
+
+E:\OpenSourceTeamWork\workspace\branches\nl-caption-dev-merge-20261011\frontend\src\components\EngineStatusBar.vue
+   9:3  warning  Prop 'title' requires default value to be set  vue/require-default-prop
+  10:3  warning  Prop 'hint' requires default value to be set   vue/require-default-prop
+
+✖ 2 problems (0 errors, 2 warnings)
+
+
+> next-trainer-frontend@0.1.0 test
+> vitest run --maxWorkers=4
+
+
+ RUN  v4.1.10 E:/OpenSourceTeamWork/workspace/branches/nl-caption-dev-merge-20261011/frontend
+
+
+ Test Files  67 passed (67)
+      Tests  418 passed (418)
+   Start at  01:58:11
+   Duration  56.56s (transform 6.79s, setup 0ms, import 66.39s, tests 19.89s, environment 126.39s)
+
+
+> next-trainer-frontend@0.1.0 build
+> vue-tsc -b && vite build
+
+vite v7.3.6 building client environment for production...
+transforming...
+node_modules/@vueuse/core/dist/index.js (3362:0): A comment
+
+"/* #__PURE__ */"
+
+in "node_modules/@vueuse/core/dist/index.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+node_modules/@vueuse/core/dist/index.js (5780:22): A comment
+
+"/* #__PURE__ */"
+
+in "node_modules/@vueuse/core/dist/index.js" contains an annotation that Rollup cannot interpret due to the position of the comment. The comment will be removed to avoid issues.
+✓ 1895 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                         0.81 kB │ gzip:   0.48 kB
+dist/assets/svg-256-CcWyxtGm.png                      262.58 kB
+dist/assets/qwen-image-21-poster-16-9-Cdng6kcc.png  1,680.49 kB
+dist/assets/useServerPathPick-Dx1NB19y.css              2.22 kB │ gzip:   0.67 kB
+dist/assets/SettingsContainerPage-DWq1XXqS.css          2.36 kB │ gzip:   0.76 kB
+dist/assets/TrainingWorkbenchPage-ChED8RU8.css          2.37 kB │ gzip:   0.76 kB
+dist/assets/index-Be37f8KS.css                        242.15 kB │ gzip:  38.09 kB
+dist/assets/home-logo-Bq2pf2HD.js                       0.05 kB │ gzip:   0.07 kB
+dist/assets/NotFoundPage-B1XIuqJt.js                    0.50 kB │ gzip:   0.34 kB
+dist/assets/IntegrationPage-ChcK4Twr.js                 1.05 kB │ gzip:   0.64 kB
+dist/assets/ParamsPage-BFuGweDC.js                      1.43 kB │ gzip:   0.52 kB
+dist/assets/GenericPluginSettingsPage-D2SDbD-g.js       1.93 kB │ gzip:   0.95 kB
+dist/assets/GenericArtifactDetailPage-CjocBioC.js       1.95 kB │ gzip:   0.84 kB
+dist/assets/ToolsPage-zS_xGAL3.js                       2.32 kB │ gzip:   1.16 kB
+dist/assets/GuidePage-BoblZmaZ.js                       2.40 kB │ gzip:   0.80 kB
+dist/assets/clipboard-ZS14DWZB.js                       2.60 kB │ gzip:   1.22 kB
+dist/assets/downloadSources-DvngGFER.js                 3.14 kB │ gzip:   1.02 kB
+dist/assets/useTagTranslations-BoC9czgp.js              3.83 kB │ gzip:   1.42 kB
+dist/assets/HomePage-DLU8DtLd.js                        4.87 kB │ gzip:   2.03 kB
+dist/assets/engines-DRuVCCpZ.js                         6.36 kB │ gzip:   1.26 kB
+dist/assets/index-CpT1n6sn.js                           7.45 kB │ gzip:   3.23 kB
+dist/assets/useServerPathPick-BLMtH2kU.js               7.90 kB │ gzip:   3.04 kB
+dist/assets/index-C4NEdYWj.js                          11.32 kB │ gzip:   4.23 kB
+dist/assets/TasksPage-rheL6nKj.js                      38.48 kB │ gzip:  11.13 kB
+dist/assets/SettingsContainerPage-DQbnHlzq.js          65.85 kB │ gzip:  18.45 kB
+dist/assets/TrainingWorkbenchPage-BhCzhSKD.js         122.60 kB │ gzip:  35.27 kB
+dist/assets/DatasetPage-Bx_l6toD.js                   157.70 kB │ gzip:  44.77 kB
+dist/assets/index-BQhR5D7j.js                         599.92 kB │ gzip: 209.43 kB
+
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 10.93s

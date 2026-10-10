@@ -137,6 +137,23 @@ def _missing_runtime_files(layout: ExtensionLayout) -> list[str]:
     return [label for path, label in required if not path.exists()]
 
 
+# Keep in sync with environment.TOOLKIT_PYTHON_VERSION (extension_state cannot
+# import environment: environment already imports this module).
+BASE_PYTHON_VERSION = "3.11"
+
+
+def repair_layout_venv(layout: ExtensionLayout, log=None) -> str:
+    """Heal a venv whose base interpreter path is stale (see #406).
+
+    Returns portable_venv.REPAIR_*; REPAIR_BROKEN means the venv references a
+    missing interpreter and no matching packaged Python exists to relocate to.
+    """
+    from mikazuki.engines.portable_venv import repair_venv_base
+
+    project_root = layout.root.parent.parent
+    return repair_venv_base(layout.venv_python, project_root / ".python", BASE_PYTHON_VERSION, log=log)
+
+
 def read_extension_status(layout: ExtensionLayout) -> ExtensionStatus:
     if not layout.root.exists():
         return ExtensionStatus(STATE_NOT_INSTALLED, str(layout.source), str(layout.venv_python), "extension root missing")
@@ -152,6 +169,14 @@ def read_extension_status(layout: ExtensionLayout) -> ExtensionStatus:
         )
     if not layout.venv_python.is_file():
         return ExtensionStatus(STATE_INSTALLED_UNVERIFIED, str(layout.source), str(layout.venv_python), "python missing")
+    if repair_layout_venv(layout) == "broken":
+        return ExtensionStatus(
+            STATE_BROKEN,
+            str(layout.source),
+            str(layout.venv_python),
+            f"虚拟环境引用的基础 Python 已失效，且未在 .python 下找到匹配的 Python {BASE_PYTHON_VERSION}；"
+            "请在「设置 → 训练引擎」对 ai-toolkit 执行修复/重装",
+        )
     if not layout.install_state.is_file():
         return ExtensionStatus(STATE_INSTALLED_UNVERIFIED, str(layout.source), str(layout.venv_python), "install_state missing")
 

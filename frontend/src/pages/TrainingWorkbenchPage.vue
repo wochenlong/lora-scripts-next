@@ -92,7 +92,9 @@ watch([model, engine, target], () => {
     adjusted = true
   }
   if (adjusted) ElMessage.info(t("training.selector.autoAdjusted"))
-  rememberSelection(model.value, engine.value, target.value)
+  void rememberSelection(model.value, engine.value, target.value).catch((error: unknown) => {
+    ElMessage.error(error instanceof Error ? error.message : t("engineSettings.saveFailed"))
+  })
   router.replace({ query: { model: model.value, engine: engine.value, target: target.value } })
 })
 </script>
@@ -116,7 +118,7 @@ watch([model, engine, target], () => {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </DiffSynthGatePage>
-    <MusubiGatePage v-else-if="resolved.engine === 'musubi'" bare>
+    <MusubiGatePage v-else-if="resolved.engine === 'musubi'" :schema-name="resolved.schemaName" bare>
       <template #form-top>
         <WorkbenchHeader />
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />

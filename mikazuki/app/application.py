@@ -21,10 +21,6 @@ from mikazuki.app.proxy import router as proxy_router
 from mikazuki.utils.devices import check_torch_gpu
 from mikazuki.spa import (
     should_fallback_to_spa,
-    train_monitor_browser_host,
-    train_monitor_browser_url,
-    train_monitor_url,
-    wait_for_tcp_port,
 )
 
 mimetypes.add_type("application/javascript", ".js")
@@ -89,7 +85,11 @@ def _start_url() -> str:
     page = os.environ.get("MIKAZUKI_START_PAGE", _DEFAULT_START_PAGE).strip() or _DEFAULT_START_PAGE
     if not page.startswith("/"):
         page = f"/{page}"
-    return f'http://{os.environ["MIKAZUKI_HOST"]}:{os.environ["MIKAZUKI_PORT"]}{page}'
+    host = os.environ["MIKAZUKI_HOST"]
+    host = {"0.0.0.0": "127.0.0.1", "::": "::1"}.get(host, host)
+    if ":" in host and not host.startswith("["):
+        host = f"[{host}]"
+    return f'http://{host}:{os.environ["MIKAZUKI_PORT"]}{page}'
 
 
 async def _async_update_check():
@@ -127,7 +127,12 @@ async def app_startup():
     startup_apply_trust_update()
     asyncio.create_task(asyncio.to_thread(startup_resume_enabled))
 
-    if sys.platform == "win32" and os.environ.get("MIKAZUKI_DEV", "0") != "1":
+    open_browser = os.environ.get("MIKAZUKI_OPEN_BROWSER")
+    if open_browser == "1" or (
+        open_browser is None
+        and sys.platform == "win32"
+        and os.environ.get("MIKAZUKI_DEV", "0") != "1"
+    ):
         from mikazuki.log import log as app_log
 
         browser = _resolve_browser()
@@ -135,22 +140,7 @@ async def app_startup():
             app_log.info(f"Using browser: {os.environ.get('MIKAZUKI_BROWSER', 'default')}")
 
         browser.open(_start_url())
-        # Only open the monitor tab when gui.py actually started it, and only
-        # after the port accepts connections. Otherwise Windows users get a
-        # blank ERR_CONNECTION_REFUSED tab on a dead 6008.
-        monitor_url = train_monitor_browser_url()
-        if not monitor_url:
-            return
-        host = train_monitor_browser_host()
-        port = int(os.environ.get("TRAIN_MONITOR_PORT", "6008"))
-        if wait_for_tcp_port(host, port, timeout=12.0):
-            app_log.info(f"Opening train monitor in browser: {monitor_url}")
-            browser.open(monitor_url)
-        else:
-            app_log.warning(
-                f"Train monitor not ready at {monitor_url}; skip opening browser tab. "
-                f"Use /train-monitor from the WebUI after it comes up."
-            )
+        # The integrated monitor stays inside the GUI, without a separate tab.
 
 
 @asynccontextmanager
@@ -226,13 +216,6 @@ async def train_log_viewer():
     if not _TRAIN_LOG_HTML.is_file():
         raise HTTPException(status_code=404, detail="train_log.html not found")
     return FileResponse(str(_TRAIN_LOG_HTML))
-
-
-@app.get("/train-monitor")
-async def train_monitor_redirect(request: Request):
-    """Open the lightweight monitor on the actual runtime port."""
-    monitor_port = os.environ.get("TRAIN_MONITOR_PORT", "6008")
-    return RedirectResponse(url=train_monitor_url(str(request.url), int(monitor_port)), status_code=302)
 
 
 @app.get("/lora/sdxl.html")

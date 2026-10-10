@@ -6,6 +6,9 @@ param(
     [switch]$Clean,
     [switch]$Skip7z,
     [switch]$SkipTaggerPrefetch,
+    # The Danbooru Chinese dictionary is ~23 MB; bundling it makes 中文释义 work
+    # offline out of the box instead of asking the user to press 下载.
+    [switch]$SkipTagDictionaryPrefetch,
     [string]$TaggerCacheSource = "",
     # Lite (default): no Anima Fast runtime — GitHub upload target (<2 GB compressed).
     # Full: bundle extensions/anima_lora including .venv for Baidu Netdisk.
@@ -617,6 +620,42 @@ if ($SkipTaggerPrefetch) {
         Get-ChildItem $embedSitePackages -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
         Write-Host "  Cleared build-time pip packages from python_embeded" -ForegroundColor Green
     }
+}
+
+# ==== Step 3c: Bundle the Danbooru Chinese tag dictionary (offline 中文释义) ====
+Write-Host "[3c/6] Bundling Danbooru Chinese tag dictionary (~23 MB, offline 中文释义)..." -ForegroundColor Cyan
+$dictionaryDir = Join-Path $sdtDir "assets\tag_translation\danbooru"
+New-Item -ItemType Directory -Path $dictionaryDir -Force | Out-Null
+$dictionaryScript = Join-Path $sdtDir "scripts\prefetch_tag_dictionary.py"
+$dictionaryFile = Join-Path $dictionaryDir "tag.sqlite"
+if ($SkipTagDictionaryPrefetch) {
+    Write-Host "  Skipping dictionary prefetch (-SkipTagDictionaryPrefetch)" -ForegroundColor Yellow
+} elseif (Test-Path $dictionaryFile) {
+    Write-Host "  Dictionary already present, keeping it" -ForegroundColor Green
+} elseif (-not (Test-Path $dictionaryScript)) {
+    throw "dictionary prefetch script missing: $dictionaryScript"
+} else {
+    $prevDictEap = $ErrorActionPreference
+    $ErrorActionPreference = 'Continue'
+    # The translation service fetches over aiohttp; build-time packages are removed again below.
+    if (Test-Path $getPipPath) {
+        & $pythonExe $getPipPath --no-warn-script-location 2>&1 | Out-Null
+    }
+    & $pythonExe -s -m pip install -q aiohttp 2>&1 | Out-Null
+    & $pythonExe -s $dictionaryScript --directory $dictionaryDir --if-missing
+    $dictionaryExit = $LASTEXITCODE
+    $dictSitePackages = Join-Path $pythonDir "Lib\site-packages"
+    if (Test-Path $dictSitePackages) {
+        Get-ChildItem $dictSitePackages -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
+    }
+    $ErrorActionPreference = $prevDictEap
+    if ($dictionaryExit -ne 0) {
+        throw "tag dictionary prefetch failed (exit $dictionaryExit). Check GitHub reachability and retry."
+    }
+    if (-not (Test-Path $dictionaryFile)) {
+        throw "Dictionary missing after prefetch: $dictionaryFile"
+    }
+    Write-Host "  Bundled assets/tag_translation/danbooru/tag.sqlite" -ForegroundColor Green
 }
 
 Write-Host ""

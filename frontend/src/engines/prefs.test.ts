@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { lastSelectionFor, readEnginePrefs, rememberSelection, writeEnginePrefs } from "./prefs"
 
 const KEY = "nt.training.enginePrefs"
@@ -13,23 +13,24 @@ describe("engine prefs", () => {
     expect(readEnginePrefs().rememberLast).toBe(true)
   })
 
-  it("retains a valid default engine and falls back for invalid values", () => {
+  it("ignores legacy browser values until explicitly imported", () => {
     localStorage.setItem(KEY, '{"defaultEngine":"ai-toolkit","rememberLast":false}')
-    expect(readEnginePrefs().defaultEngine).toBe("ai-toolkit")
-    rememberSelection("anima", "kohya", "lora")
-    expect(readEnginePrefs().defaultEngine).toBe("ai-toolkit")
+    expect(readEnginePrefs().defaultEngine).toBe("kohya")
+    expect(readEnginePrefs().rememberLast).toBe(true)
     localStorage.setItem(KEY, '{"defaultEngine":"missing"}')
     expect(readEnginePrefs().defaultEngine).toBe("kohya")
   })
 
-  it("remembers last engine per model when enabled", () => {
-    rememberSelection("anima", "anima-fast", "lora")
-    expect(lastSelectionFor("anima")).toEqual({ engine: "anima-fast", target: "lora" })
+  it("rejects remembering without hydrated settings", async () => {
+    await expect(rememberSelection("anima", "anima-fast", "lora")).rejects.toThrow()
+    expect(lastSelectionFor("anima")).toBeUndefined()
   })
 
-  it("does not remember when disabled", () => {
-    writeEnginePrefs({ rememberLast: false, lastByModel: {} })
-    rememberSelection("anima", "anima-fast", "lora")
-    expect(lastSelectionFor("anima")).toBeUndefined()
+  it("does not treat an unavailable server save as persisted", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new Error("offline")))
+    await expect(writeEnginePrefs({ rememberLast: false })).rejects.toThrow()
+    expect(readEnginePrefs().rememberLast).toBe(true)
+    expect(localStorage.getItem(KEY)).toBeNull()
+    vi.unstubAllGlobals()
   })
 })

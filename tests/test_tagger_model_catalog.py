@@ -36,6 +36,36 @@ def test_catalog_reports_complete_local_tag_assets_without_download(monkeypatch,
     assert models[1]["downloaded"] is False
 
 
+def test_application_exposes_one_complete_catalog_for_tag_and_caption(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from fastapi.testclient import TestClient
+    from mikazuki.app.application import app
+    from mikazuki.llm import api as llm_api
+
+    monkeypatch.setenv("MIKAZUKI_TAGGER_MODELS_DIR", str(tmp_path))
+    monkeypatch.setattr("huggingface_hub.try_to_load_from_cache", lambda *args, **kwargs: None)
+    monkeypatch.setattr(llm_api, "_configuration", lambda: {
+        "profiles": [_profile("remote"), _profile("text", vision=False)],
+    })
+    monkeypatch.setattr(llm_api, "get_local_vision_service", lambda: SimpleNamespace(status=lambda: {"installed": False}))
+
+    routes = [route for route in app.routes if getattr(route, "path", None) == "/api/tagger/models"
+              and "GET" in getattr(route, "methods", set())]
+    assert len(routes) == 1
+    response = TestClient(app).get("/api/tagger/models")
+    assert response.status_code == 200
+    models = response.json()["data"]["models"]
+    assert {item["id"] for item in models if item["output"] == "tag"} == set(TAG_MODEL_IDS)
+    assert any(item["family"] == "CL" for item in models)
+    assert next(item for item in models if item["id"] == "llm:remote")["runtime"] == "api"
+    assert not any(item["id"] == "llm:text" for item in models)
+    assert all({"capabilities", "runtime", "output", "languages", "parameters", "ready", "downloaded"} <= item.keys()
+               for item in models)
+    assert "private-value" not in response.text
+    assert "https://example.test" not in response.text
+
+
 @pytest.mark.parametrize("runtime,profile_id,model_id", [
     ("local", "remote", "llm:remote"), ("api", "local", "llm:remote"), ("api", "remote", "llm:text"),
 ])

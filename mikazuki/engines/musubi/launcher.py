@@ -10,6 +10,7 @@ try:
 except ModuleNotFoundError:  # Python 3.10 runtime
     import toml as tomllib  # type: ignore
 
+from .families import DEFAULT_FAMILY, family_for
 from .settings import RuntimeConfig
 
 _VALID_ACCELERATE_MIXED_PRECISION = {"no", "fp16", "bf16", "fp8"}
@@ -83,14 +84,18 @@ def build_cache_latents_spec(
     task_id: str,
     gpu_ids: list[str] | None = None,
     skip_existing: bool = True,
+    *,
+    family: str = DEFAULT_FAMILY,
+    extra_args: list[str] | None = None,
 ) -> LaunchSpec:
     command = [
         str(runtime.python),
-        str(runtime.musubi_root / "krea2_cache_latents.py"),
+        str(runtime.musubi_root / family_for(family).cache_latents_script),
         "--dataset_config",
         str(dataset_toml),
         "--vae",
         vae,
+        *(extra_args or []),
     ]
     if skip_existing:
         command.append("--skip_existing")
@@ -108,14 +113,18 @@ def build_cache_text_encoder_spec(
     task_id: str,
     gpu_ids: list[str] | None = None,
     skip_existing: bool = True,
+    *,
+    family: str = DEFAULT_FAMILY,
+    extra_args: list[str] | None = None,
 ) -> LaunchSpec:
     command = [
         str(runtime.python),
-        str(runtime.musubi_root / "krea2_cache_text_encoder_outputs.py"),
+        str(runtime.musubi_root / family_for(family).cache_text_encoder_script),
         "--dataset_config",
         str(dataset_toml),
         "--text_encoder",
         text_encoder,
+        *(extra_args or []),
     ]
     if skip_existing:
         command.append("--skip_existing")
@@ -133,14 +142,15 @@ def build_train_spec(
     gpu_ids: list[str] | None = None,
     *,
     cpu_threads: int = 1,
+    family: str = DEFAULT_FAMILY,
 ) -> LaunchSpec:
-    """Build musubi Krea2 train argv via ``accelerate launch`` (multi-GPU capable).
+    """Build musubi train argv via ``accelerate launch`` (multi-GPU capable).
 
-    Upstream musubi-tuner documents ``accelerate launch … krea2_train_network.py``.
+    Upstream musubi-tuner documents ``accelerate launch … <family>_train_network.py``.
     We use the musubi venv's ``python -m accelerate.commands.launch`` so the
     correct Accelerate/Torch stack is used (not the Kohya/main env).
     """
-    script = runtime.musubi_root / "krea2_train_network.py"
+    script = runtime.musubi_root / family_for(family).train_script
     launch_opts = [
         "--num_cpu_threads_per_process",
         str(cpu_threads),

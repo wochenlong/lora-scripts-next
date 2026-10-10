@@ -23,6 +23,7 @@ def test_discovers_migrated_packs():
 def test_train_type_mapping():
     mapping = registry.train_type_map()
     assert mapping["krea2-lora"] == ("musubi", "krea2")
+    assert mapping["ideogram4-lora"] == ("musubi", "ideogram4")
     assert mapping["anima-lora-fast"] == ("anima-fast", "anima")
     assert mapping["sd-lora"] == ("kohya", "sd15")
     assert mapping["flux-finetune"] == ("kohya", "flux")
@@ -35,6 +36,9 @@ def test_resolve_train_type_roundtrip():
     pack, variant = registry.resolve_train_type("krea2-lora")
     assert pack.engine_id == "musubi"
     assert variant == "krea2"
+    pack, variant = registry.resolve_train_type("ideogram4-lora")
+    assert pack.engine_id == "musubi"
+    assert variant == "ideogram4"
     assert registry.resolve_train_type("no-such-type") is None
 
 

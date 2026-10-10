@@ -43,7 +43,9 @@ const lastRoot = ref(typeof persisted.lastRoot === "string" ? persisted.lastRoot
 const selected = ref(typeof persisted.selected === "string" ? persisted.selected : "")
 const drafts = ref<Record<string, string>>(persisted.drafts && typeof persisted.drafts === "object" ? { ...persisted.drafts } : {})
 const showTranslations = ref(Boolean(persisted.showTranslations))
-const translationProvider = ref<TagTranslationProvider>(persisted.translationProvider || "danbooru")
+// Only the dictionary and LLM sources are offered; legacy auto/mymemory values
+// fall back to the offline dictionary.
+const translationProvider = ref<TagTranslationProvider>(persisted.translationProvider === "llm" ? "llm" : "danbooru")
 const category = ref(typeof persisted.category === "string" ? persisted.category : "")
 const query = ref(typeof persisted.query === "string" ? persisted.query : "")
 const page = ref(typeof persisted.page === "number" && persisted.page > 0 ? persisted.page : 1)
@@ -161,8 +163,25 @@ function resetInMemoryDataset() {
   history.value = { can_undo: false, can_redo: false, changes: [] }
 }
 
+function unload() {
+  const prefix = `${lastRoot.value}\u0000`
+  drafts.value = Object.fromEntries(Object.entries(drafts.value).filter(([key]) => !key.startsWith(prefix)))
+  resetInMemoryDataset()
+  lastRoot.value = ""
+  lastPath.value = ""
+  category.value = ""
+  query.value = ""
+  page.value = 1
+  rightPanelMode.value = "caption"
+  tagFilter.selectedTags.clear()
+  tagFilter.search = ""
+  tagFilter.excludeInput = ""
+  persist()
+}
+
 export function useDatasetEditorSession() {
   return {
+    unload,
     lastPath,
     lastRoot,
     selected,

@@ -205,7 +205,7 @@ $robocopyArgs = @(
     $TrainerDir,
     "/E", "/IS", "/IT", "/R:2", "/W:2", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS",
     "/XD", "extensions", ".cache", "__pycache__", "node_modules", ".vscode", ".cursor",
-    "/XD", "config", "sd-models", "output", "logs", "train",
+    "/XD", "config", "sd-models", "output", "logs", "train", "user_data",
     "/XF", (Join-Path $stagingTrainer "assets\config.json")
 )
 & robocopy @robocopyArgs | Out-Null

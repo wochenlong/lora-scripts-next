@@ -21,6 +21,7 @@ function Get-CorePortableCopyPolicy {
             "build-scripts",
             "node_modules",
             "logs",
+            "user_data",
             "output",
             "huggingface",
             "tagger-models",

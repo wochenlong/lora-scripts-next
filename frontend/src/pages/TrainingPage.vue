@@ -13,7 +13,7 @@ import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultMod
 import { loadTrainingSchema } from "../schema/loader"
 import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
 import { QWEN_VALIDATION_FIELDS, validateQwenConfig } from "../training/qwenValidation"
-import { isAiToolkitSchema, moduleForSchema, moduleForTrainType } from "../training/modules"
+import { isAiToolkitSchema, isMusubiSchema, moduleForSchema, moduleForTrainType } from "../training/modules"
 import { collectDatasetCheckTargets } from "../training/datasetCheck"
 import { datasetsApi, type DatasetValidation, type ValidateFinding } from "../api/datasets"
 import { copyText } from "../utils/clipboard"
@@ -331,7 +331,7 @@ async function submit() {
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
-    if (props.schemaName === "krea2-lora") {
+    if (isMusubiSchema(props.schemaName)) {
       const preflight = await trainingApi.musubiPreflight(output.value)
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
@@ -349,7 +349,10 @@ async function submit() {
     tasksStore.markAttention()
     tasksStore.refresh({ silent: true })
     saveHistory()
-    ElMessage.success(t("training.submitConfirm.started", { id: started.value.task_id }))
+    ElMessage.success(t(started.value.queued ? "training.submitConfirm.queued" : "training.submitConfirm.started", { id: started.value.task_id }))
+    if (started.value.output_name_renamed) {
+      ElMessage.warning(t("training.submitConfirm.renamed", { from: started.value.output_name_renamed.from, to: started.value.output_name_renamed.to }))
+    }
   } catch (reason) {
     if (reason !== "cancel" && reason !== "close") ElMessage.error(reason instanceof Error ? reason.message : t("training.submitConfirm.fail"))
   } finally { submitting.value = false }

@@ -224,3 +224,21 @@ def test_git_updater_templates_delegate_to_safe_helper():
     assert 'if defined NEXT_TRAINER_NETWORK_READY goto :network_policy_ready' in text
     assert 'scripts\\network_run.py" --batch "%~f0" %*' in text
     assert text.index(":network_policy_ready") < text.index("call :ensure_updater_bootstrap")
+
+
+def test_installers_bundle_the_tag_dictionary_for_offline_translation():
+    prefetch = ROOT / "scripts" / "prefetch_tag_dictionary.py"
+    assert prefetch.is_file()
+    source = prefetch.read_text(encoding="utf-8")
+    assert "ChineseDictionaryService" in source
+    # The GitHub API is rate limited easily on shared build machines.
+    assert "raw.githubusercontent.com" in source
+    assert "_install_from_raw" in source
+
+    install = (ROOT / "install-cn.ps1").read_text(encoding="utf-8-sig")
+    assert "prefetch_tag_dictionary.py --if-missing" in install
+
+    builder = (ROOT / "build-scripts" / "build_portable.ps1").read_text(encoding="utf-8")
+    assert "prefetch_tag_dictionary.py" in builder
+    assert "assets\\tag_translation\\danbooru" in builder
+    assert "SkipTagDictionaryPrefetch" in builder

@@ -2,13 +2,15 @@
 // @vitest-environment jsdom
 import { defineComponent, h, nextTick, onActivated, onDeactivated, onMounted, onUnmounted, ref } from "vue"
 import { flushPromises, mount } from "@vue/test-utils"
-import { afterEach, describe, expect, it, vi } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import DatasetPage from "./DatasetPage.vue"
 import TaggerPage from "./TaggerPage.vue"
 import DatasetEditorPage from "./DatasetEditorPage.vue"
 import { i18n } from "../i18n"
 import { datasetApi } from "../api/dataset"
 import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
+
+vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }), useRouter: () => ({ replace: vi.fn() }) }))
 
 vi.mock("../stores/tagger", async () => {
   const { ref } = await import("vue")
@@ -36,7 +38,9 @@ vi.mock("../api/dataset", () => ({
   datasetApi: {
     scan: vi.fn(),
     tagTranslations: vi.fn().mockResolvedValue({ items: [], provider: "danbooru", locale: "zh-CN" }),
-    tagTranslationConfig: vi.fn(),
+    tagTranslationConfig: vi.fn().mockRejectedValue(new Error("not configured")),
+    tagDictionaryStatus: vi.fn().mockRejectedValue(new Error("not configured")),
+    localModelStatus: vi.fn().mockRejectedValue(new Error("not configured")),
     saveTagTranslationConfig: vi.fn(),
     saveCaption: vi.fn(),
     batchEdit: vi.fn(),
@@ -70,6 +74,16 @@ vi.mock("../composables/useServerPathPick", async () => {
 })
 
 const routerLinkStub = { props: ["to"], template: "<a><slot /></a>" }
+
+beforeEach(() => {
+  // The module-scoped editor session must not leak filters, drafts or selection.
+  const session = useDatasetEditorSession()
+  session.unload()
+  session.drafts.value = {}
+  session.showTranslations.value = false
+  i18n.global.locale.value = "zh-CN"
+  vi.mocked(datasetApi.scan).mockReset()
+})
 
 afterEach(() => {
   vi.restoreAllMocks()
@@ -128,18 +142,23 @@ describe("DatasetEditorPage route session", () => {
     const scan = { root: "D:/caption-test", total: 1, items: [item], tags: [], categories: [] }
     vi.mocked(datasetApi.scan).mockResolvedValueOnce(scan).mockResolvedValueOnce({ ...scan, items: [{ ...item, caption: "A cat by a window.", caption_exists: true, caption_format: "natural" }] })
     const harness = defineComponent({ components: { Page: DatasetEditorPage }, template: "<KeepAlive><Page /></KeepAlive>" })
-    const wrapper = mount(harness, { global: { plugins: [i18n], stubs: { PathPickerDialog: true, TagFilterPanel: true, "el-dialog": true } } })
+    const wrapper = mount(harness, { global: { plugins: [i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, TagTranslationSettingsDialog: true, TagFilterPanel: true, "el-dialog": true } } })
     await flushPromises()
-    await wrapper.findAll("button").find(button => button.text() === "加载")!.trigger("click")
+    expect(wrapper.find(".caption-panel .primary-action").exists()).toBe(false)
+    await wrapper.get(".image-grid button").trigger("click")
+    await nextTick()
+    expect(session.getDraft("D:/caption-test", "cat.png")).toBeUndefined()
+    await wrapper.get('[data-testid="scan-action"]').trigger("click")
     await flushPromises()
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("A cat by a window.")
     expect(session.getDraft("D:/caption-test", "cat.png")).toBeUndefined()
-    expect(wrapper.get(".caption-raw").attributes()).toHaveProperty("open")
+    expect(wrapper.find(".caption-mode").exists()).toBe(false)
+    expect(wrapper.find(".caption-editor textarea").exists()).toBe(true)
     expect(wrapper.find(".caption-chips").exists()).toBe(false)
     expect((wrapper.findAll("button").find(button => button.text().startsWith("批量编辑"))!.element as HTMLButtonElement).disabled).toBe(true)
     await wrapper.get("textarea").setValue("My real unsaved description.")
     vi.mocked(datasetApi.scan).mockResolvedValueOnce({ ...scan, items: [{ ...item, caption: "External newer caption.", caption_exists: true, caption_format: "natural" }] })
-    await wrapper.findAll("button").find(button => button.text() === "加载")!.trigger("click")
+    await wrapper.get('[data-testid="scan-action"]').trigger("click")
     await flushPromises()
     expect((wrapper.get("textarea").element as HTMLTextAreaElement).value).toBe("My real unsaved description.")
     wrapper.unmount()
@@ -175,11 +194,18 @@ describe("DatasetEditorPage route session", () => {
     const wrapper = mount(harness, {
       global: {
         plugins: [i18n],
-        stubs: { PathPickerDialog: true, TagFilterPanel: true, "el-dialog": true },
+        stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, TagTranslationSettingsDialog: true, TagFilterPanel: true, "el-dialog": true },
       },
     })
     await flushPromises()
 
+    // Default state stays a pure gallery; the editor opens once an image is picked.
+    expect(wrapper.find(".caption-panel .primary-action").exists()).toBe(false)
+    await wrapper.get(".image-grid button").trigger("click")
+    await nextTick()
+    // The raw caption textarea lives in the 自由编辑 mode; 标签编辑 shows chips.
+    await wrapper.get(".caption-mode button:nth-child(2)").trigger("click")
+    await nextTick()
     expect((wrapper.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes")
     wrapper.unmount()
 
@@ -190,10 +216,12 @@ describe("DatasetEditorPage route session", () => {
     const refreshed = mount(harness, {
       global: {
         plugins: [i18n],
-        stubs: { PathPickerDialog: true, TagFilterPanel: true, "el-dialog": true },
+        stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, TagTranslationSettingsDialog: true, TagFilterPanel: true, "el-dialog": true },
       },
     })
     await flushPromises()
+    await refreshed.get(".caption-mode button:nth-child(2)").trigger("click")
+    await nextTick()
     expect((refreshed.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes")
 
     const editor = refreshed.find("textarea")
@@ -206,11 +234,13 @@ describe("DatasetEditorPage route session", () => {
     const restored = mount(harness, {
       global: {
         plugins: [i18n],
-        stubs: { PathPickerDialog: true, TagFilterPanel: true, "el-dialog": true },
+        stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, TagTranslationSettingsDialog: true, TagFilterPanel: true, "el-dialog": true },
       },
     })
     await flushPromises()
 
+    await restored.get(".caption-mode button:nth-child(2)").trigger("click")
+    await nextTick()
     expect((restored.find("textarea").element as HTMLTextAreaElement).value).toBe("blue_eyes, long_hair")
     expect(session.lastRoot.value).toBe("D:/datasets/sample")
     expect(session.getDraft("D:/datasets/sample", "sample.png")).toBe("blue_eyes, long_hair")
@@ -283,7 +313,7 @@ describe("DatasetEditorPage keydown wiring under keep-alive", () => {
     const wrapper = mount(harness, {
       global: {
         plugins: [i18n],
-        stubs: { PathPickerDialog: true, TagFilterPanel: true, "el-dialog": true },
+        stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, TagTranslationSettingsDialog: true, TagFilterPanel: true, "el-dialog": true },
       },
     })
     await flushPromises()

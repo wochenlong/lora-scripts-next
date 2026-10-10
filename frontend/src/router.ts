@@ -28,8 +28,12 @@ const routes: RouteRecordRaw[] = [
   { path: "/tasks", component: TasksPage, meta: { titleKey: "tasks.title" } },
   { path: "/settings", redirect: "/settings/ui" },
   { path: "/settings/ui", component: SettingsContainerPage, props: { tab: "ui" }, meta: { titleKey: "settings.title" } },
+  { path: "/settings/api", component: SettingsContainerPage, props: { tab: "api" }, meta: { titleKey: "settings.title" } },
   { path: "/settings/engines", component: SettingsContainerPage, props: { tab: "engines" }, meta: { titleKey: "settings.title" } },
-  { path: "/settings/update", component: SettingsContainerPage, props: { tab: "update" }, meta: { titleKey: "settings.title" } },
+  { path: "/settings/advanced", component: SettingsContainerPage, props: { tab: "advanced" }, meta: { titleKey: "settings.title" } },
+  // Update and changelog now live inside the About tab.
+  { path: "/settings/update", redirect: "/settings/about" },
+  { path: "/settings/changelog", redirect: "/settings/about" },
   { path: "/settings/plugins", component: SettingsContainerPage, props: { tab: "plugins" }, meta: { titleKey: "marketplace.title" } },
   {
     path: "/settings/plugins/:pluginId",
@@ -38,7 +42,6 @@ const routes: RouteRecordRaw[] = [
     meta: { titleKey: "extensionHost.settings.title" },
   },
   { path: "/settings/about", component: SettingsContainerPage, props: { tab: "about" }, meta: { titleKey: "settings.title" } },
-  { path: "/settings/changelog", component: SettingsContainerPage, props: { tab: "changelog" }, meta: { titleKey: "settings.title" } },
   { path: "/help/guide.html", component: GuidePage, meta: { titleKey: "guide.title" } },
   // 旧 URL → 新 IA redirect
   { path: "/lora/index.html", redirect: "/training" },
@@ -52,6 +55,8 @@ const routes: RouteRecordRaw[] = [
   { path: "/lora/anima-finetune.html", redirect: () => trainingQuery("anima", "kohya", "finetune") },
   { path: "/lora/krea2.html", redirect: () => trainingQuery("krea2", "musubi", "lora") },
   { path: "/lora/krea2", redirect: () => trainingQuery("krea2", "musubi", "lora") },
+  { path: "/lora/ideogram4.html", redirect: () => trainingQuery("ideogram4", "musubi", "lora") },
+  { path: "/lora/ideogram4", redirect: () => trainingQuery("ideogram4", "musubi", "lora") },
   { path: "/lora/klein", redirect: () => trainingQuery("klein", "ai-toolkit", "lora") },
   { path: "/dreambooth/index.html", redirect: () => trainingQuery("sdxl", "kohya", "finetune") },
   { path: "/tagger.html", redirect: "/dataset/tagger" },

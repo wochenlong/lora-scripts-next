@@ -69,11 +69,9 @@ class VueSpaRouteTests(unittest.TestCase):
         source = (ROOT / "mikazuki/app/application.py").read_text(encoding="utf-8")
         self.assertIn("should_fallback_to_spa(path, ex.status_code)", source)
 
-    def test_gui_passes_its_final_host_to_train_monitor(self):
+    def test_gui_passes_internal_monitor_host(self):
         source = (ROOT / "gui.py").read_text(encoding="utf-8")
-        listen = source.index('if args.listen:')
-        monitor_host = source.index('os.environ["TRAIN_MONITOR_HOST"] = args.host')
-        self.assertLess(listen, monitor_host)
+        self.assertIn('os.environ["TRAIN_MONITOR_HOST"] = startup.monitor.host', source)
         self.assertIn('TRAIN_MONITOR_ENABLED', source)
 
     def test_train_monitor_browser_url_requires_enabled_flag(self):
@@ -95,11 +93,11 @@ class VueSpaRouteTests(unittest.TestCase):
     def test_wait_for_tcp_port_times_out_on_closed_port(self):
         self.assertFalse(wait_for_tcp_port("127.0.0.1", 1, timeout=0.3, interval=0.1))
 
-    def test_application_gates_monitor_browser_open(self):
+    def test_application_opens_no_separate_integrated_monitor_tab(self):
         source = (ROOT / "mikazuki/app/application.py").read_text(encoding="utf-8")
-        self.assertIn("train_monitor_browser_url()", source)
-        self.assertIn("wait_for_tcp_port", source)
-        self.assertNotIn('browser.open(f\'http://127.0.0.1:{monitor_port}\')', source)
+        self.assertNotIn("train_monitor_browser_url()", source)
+        self.assertNotIn("wait_for_tcp_port", source)
+        self.assertIn('MIKAZUKI_OPEN_BROWSER', source)
 
 
 if __name__ == "__main__":

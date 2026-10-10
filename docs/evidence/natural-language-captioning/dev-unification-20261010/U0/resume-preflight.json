@@ -1,0 +1,19 @@
+{
+  "original_feature": "21571c5ef72a61a5cd10203596e2653e37b2a8c4",
+  "feature_with_plan": "9c059ccec000d26b3d0da50e26071f1ab84d9b7d",
+  "frozen_dev": "2bdccd1b1252db9ba3158c30d56df0e292206c67",
+  "user_file": "tests/test_diffsynth_review.py",
+  "user_sha256": "8620db361c56816fe938c2b41f81b462a41233d39205dba5cee0a0b39dd2ed3d",
+  "patch_sha256": "d4b50e72a54a009a3df94b6ce26a5276b130ec29df6e29d6a2f34e00c94dbb57",
+  "merge_worktree": "E:\\OpenSourceTeamWork\\workspace\\branches\\nl-caption-dev-merge-20261011",
+  "goal_status": "active",
+  "phase": "U0 in progress",
+  "resumed_by_user": true,
+  "backend_smoke": {
+    "passed": 98,
+    "failed": 0,
+    "skipped": 0,
+    "log": "workspace/tools/nl-caption-u0-20261011/u0-resume-smoke.log"
+  },
+  "execution_gate": "not_yet_signed"
+}

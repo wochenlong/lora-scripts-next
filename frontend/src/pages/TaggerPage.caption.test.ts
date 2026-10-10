@@ -62,10 +62,12 @@ afterEach(() => {
 
 async function naturalPage(selectChinese = true) {
   wrapper = mount(TaggerPage, {
-    global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } },
+    global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } },
   })
   await flushPromises()
-  await wrapper.findAll(".tagger-mode-tabs button")[1].trigger("click")
+  await wrapper.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+  await wrapper.get('[data-testid="parameter-toggle"]').trigger("click")
+  await wrapper.get('[data-testid="tab-advanced"]').trigger("click")
   await flushPromises()
   if (selectChinese) {
     await wrapper.get(".caption-preset-select").setValue("builtin-caption-zh")
@@ -102,7 +104,7 @@ describe("natural-language TaggerPage", () => {
     const page = await naturalPage(false)
     await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue('D:/sample/a.png')
     expect(page.get('.caption-preset-incompatible').text()).toContain('预设语言')
-    expect((page.get('.tagger-actions .primary-action').element as HTMLButtonElement).disabled).toBe(true)
+    expect((page.get('.tagger-run > .primary-action').element as HTMLButtonElement).disabled).toBe(true)
     const preview = page.findAll('.tagger-actions button').find(button => button.text().includes('测试当前图片'))!
     expect((preview.element as HTMLButtonElement).disabled).toBe(true)
     await preview.trigger('click')
@@ -111,7 +113,7 @@ describe("natural-language TaggerPage", () => {
     await page.get('.caption-preset-select').setValue('builtin-caption-zh')
     await flushPromises()
     expect(page.find('.caption-preset-incompatible').exists()).toBe(false)
-    expect((page.get('.tagger-actions .primary-action').element as HTMLButtonElement).disabled).toBe(false)
+    expect((page.get('.tagger-run > .primary-action').element as HTMLButtonElement).disabled).toBe(false)
   })
   it("saves custom drafts with the base preset language and uses the same preset configuration for preview and batch", async () => {
     const document = await taggerApi.models()
@@ -130,7 +132,7 @@ describe("natural-language TaggerPage", () => {
     await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue('D:/sample/a.png')
     await page.findAll('.tagger-actions button').find(button => button.text().includes('测试当前图片'))!.trigger('click')
     await flushPromises()
-    await page.get('.tagger-actions .primary-action').trigger('click')
+    await page.get('.tagger-run > .primary-action').trigger('click')
     await flushPromises()
     const { image_path, ...configuration } = vi.mocked(taggerApi.captionPreview).mock.calls[0][0]
     expect(image_path).toBe('D:/sample/a.png')
@@ -140,14 +142,14 @@ describe("natural-language TaggerPage", () => {
   it("shows active Tag downloads beside the selected model", async () => {
     const idle = await taggerApi.status()
     vi.mocked(taggerApi.status).mockResolvedValueOnce({ ...idle, phase: "downloading", model: "wd14-convnextv2-v2", download: { ...idle.download, percent: 52, filename: "model.onnx" } })
-    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
     await flushPromises()
-    expect(wrapper.get(".tagger-model-download").text()).toContain("52%")
-    expect(wrapper.get(".tagger-model-download").text()).toContain("model.onnx")
-    expect(wrapper.find(".tagger-model-selector").exists()).toBe(true)
+    expect(wrapper.get(".tagger-model-row").text()).toContain("52%")
+    expect(wrapper.get(".tagger-model-row").text()).toContain("model.onnx")
+    expect(wrapper.findComponent({ name: "ElSelect" }).exists()).toBe(true)
   })
   it("submits Tag previews and batches through the same durable API with only Tag parameters", async () => {
-    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
     await flushPromises()
     await wrapper.get('input[placeholder="/data/datasets/images"]').setValue("D:\\samples")
     await wrapper.get('input[placeholder="/data/datasets/images/example.png"]').setValue("D:/samples/a.png")
@@ -155,7 +157,7 @@ describe("natural-language TaggerPage", () => {
     await wrapper.findAll(".tagger-actions button").find(button => button.text().includes("测试当前图片"))!.trigger("click")
     await flushPromises()
     expect(wrapper.get(".caption-preview").text()).toContain("cat, window")
-    await wrapper.get(".tagger-actions .primary-action").trigger("click")
+    await wrapper.get(".tagger-run > .primary-action").trigger("click")
     await flushPromises()
     const preview = vi.mocked(taggerApi.captionPreview).mock.calls[0][0]
     const batch = vi.mocked(taggerApi.captionStart).mock.calls[0][0]
@@ -232,10 +234,11 @@ describe("natural-language TaggerPage", () => {
 
   it("loads the initial catalog when mounted inside KeepAlive", async () => {
     const host = defineComponent({ components: { TaggerPage }, template: "<KeepAlive><TaggerPage /></KeepAlive>" })
-    wrapper = mount(host, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
+    wrapper = mount(host, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
     await flushPromises()
-    expect(wrapper.find(".tagger-model-selector summary").text()).toContain("wd14-convnextv2-v2")
-    expect(wrapper.findAll(".tagger-mode-tabs button").some(button => button.text() === "API 服务")).toBe(true)
+    expect(wrapper.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("wd14-convnextv2-v2")
+    await wrapper.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+    expect(wrapper.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("llm:remote")
   })
   it("protects unsaved prompt edits when a template switch is cancelled", async () => {
     vi.spyOn(ElMessageBox, "confirm").mockRejectedValue("cancel")
@@ -266,10 +269,9 @@ describe("natural-language TaggerPage", () => {
 
   it("selects API vision by model capability and excludes text-only models", async () => {
     const page = await naturalPage()
-    expect(page.findAll('[data-model-id="llm:remote"]')).toHaveLength(1)
-    expect(page.findAll('[data-model-id="llm:local"]')).toHaveLength(0)
+    expect(page.findAllComponents({ name: "ElOption" }).map(option => option.props("value"))).toEqual(["llm:remote"])
     expect(page.text()).not.toContain("Text only")
-    expect(page.find(".tagger-model-selector summary").text()).toContain("remote-vision")
+    expect(page.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("llm:remote")
     expect(llmApi.localVisionStatus).toHaveBeenCalledOnce()
   })
 
@@ -277,7 +279,7 @@ describe("natural-language TaggerPage", () => {
     const page = await naturalPage()
     await page.get('input[placeholder="/data/datasets/images"]').setValue("D:/sample")
     await page.get("textarea").setValue("只描述主体，使用{{language}}")
-    await page.get(".tagger-actions .primary-action").trigger("click")
+    await page.get(".tagger-run > .primary-action").trigger("click")
     await flushPromises()
     expect(taggerApi.captionStart).toHaveBeenCalledWith(expect.objectContaining({
       path: "D:/sample", mode: "natural", prompt: "只描述主体，使用{{language}}", profile_id: "remote",
@@ -331,7 +333,7 @@ describe("natural-language TaggerPage", () => {
     const page = await naturalPage()
     await page.get('input[placeholder="/data/datasets/images"]').setValue("D:/sample")
     await page.get(".caption-max-length").setValue("0")
-    await page.get(".tagger-actions .primary-action").trigger("click")
+    await page.get(".tagger-run > .primary-action").trigger("click")
     await page.findAll(".caption-preset-actions button")[0].trigger("click")
     await flushPromises()
     expect(taggerApi.captionStart).not.toHaveBeenCalled()
@@ -342,37 +344,37 @@ describe("natural-language TaggerPage", () => {
     const document = await taggerApi.models()
     vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: document.models.map(model => model.runtime === 'api' ? { ...model, languages: ['en'] } : model) })
     const page = await naturalPage(false)
-    await page.findAll('.tagger-mode-tabs button')[0].trigger('click')
-    await page.get('[data-model-id="llm:local"]').trigger('click')
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[0].trigger("click")
     await flushPromises()
     expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-en')
     expect(page.get('.caption-preset-properties').text()).toContain('English')
     expect(page.find('.caption-preset-incompatible').exists()).toBe(true)
-    await page.findAll('.tagger-mode-tabs button')[1].trigger('click')
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[1].trigger("click")
     await flushPromises()
     expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-en')
     expect(page.find('.caption-preset-incompatible').exists()).toBe(false)
   })
 
-  it("does not show an API tab when the model catalog has no ready API models", async () => {
+  it("disables the API source when the model catalog has no API vision models", async () => {
     const baseline = await taggerApi.models()
     vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: baseline.models.filter(model => model.runtime === "local") })
-    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } } })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
     await flushPromises()
-    expect(wrapper.findAll(".tagger-mode-tabs button").some(button => button.text() === "API 服务")).toBe(false)
-    expect(wrapper.findAll(".tagger-mode-tabs button").some(button => button.text() === "本地模型")).toBe(true)
+    await wrapper.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+    const sources = wrapper.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")
+    expect(sources[1].text()).toBe("API")
+    expect((sources[1].element as HTMLButtonElement).disabled).toBe(true)
+    expect(sources[0].attributes("aria-pressed")).toBe("true")
   })
 
   it("preserves each Caption model's settings across runtime switches", async () => {
     const page = await naturalPage()
     await page.get("textarea").setValue("远程提示词")
-    await page.findAll(".tagger-mode-tabs button")[0].trigger("click")
-    await page.get('[data-model-id="llm:local"]').trigger("click")
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[0].trigger("click")
     await page.get("textarea").setValue("本地提示词")
-    await page.findAll(".tagger-mode-tabs button")[1].trigger("click")
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[1].trigger("click")
     expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("远程提示词")
-    await page.findAll(".tagger-mode-tabs button")[0].trigger("click")
-    await page.get('[data-model-id="llm:local"]').trigger("click")
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[0].trigger("click")
     expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("本地提示词")
   })
 
@@ -444,4 +446,53 @@ describe("natural-language TaggerPage", () => {
     expect(taggerApi.captionRollback).toHaveBeenCalledWith("done")
     expect(page.get(".caption-report").text()).toContain("冲突保留 1")
   })
+  it("cancels the active durable job without creating a replacement batch", async () => {
+    const active = { job_id: "active", phase: "captioning" as const, mode: "natural" as const,
+      message: "running", current: 1, total: 3, filename: "b.png", succeeded: 1, failed: 0,
+      cancelled: 0, errors: [], updated_at: 1 }
+    vi.mocked(taggerApi.captionStatus).mockResolvedValueOnce(active)
+    vi.mocked(taggerApi.captionCancel).mockResolvedValueOnce({ ...active, phase: "cancelling" })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
+    await flushPromises()
+    await wrapper.get(".tagger-run > .danger-action").trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionCancel).toHaveBeenCalledOnce()
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+    expect(taggerApi.captionRetryFailed).not.toHaveBeenCalled()
+    expect(taggerApi.captionHistory).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not roll back or remove report history after confirmation is cancelled", async () => {
+    vi.spyOn(ElMessageBox, "confirm").mockRejectedValue("cancel")
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "retain", phase: "done", mode: "natural", message: "", current: 1, total: 1, filename: "", succeeded: 1, failed: 0, cancelled: 0, errors: [], updated_at: 1 }] })
+    vi.mocked(taggerApi.captionReport).mockResolvedValueOnce({ job_id: "retain", phase: "done", snapshot: {}, report: { items: [{ filename: "a.png", status: "written" }] } })
+    const page = await naturalPage()
+    await page.get(".caption-history select").setValue("retain")
+    await flushPromises()
+    await page.findAll(".caption-maintenance button")[0].trigger("click")
+    await flushPromises()
+    await page.findAll(".caption-maintenance button")[1].trigger("click")
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(2)
+    expect(taggerApi.captionRollback).not.toHaveBeenCalled()
+    expect(taggerApi.captionDeleteHistory).not.toHaveBeenCalled()
+    expect(page.get(".caption-report").text()).toContain("retain")
+  })
+
+  it("deletes only confirmed history and clears the selected report without rolling back files", async () => {
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue("confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "remove", phase: "done", mode: "natural", message: "", current: 1, total: 1, filename: "", succeeded: 1, failed: 0, cancelled: 0, errors: [], updated_at: 1 }] })
+    vi.mocked(taggerApi.captionReport).mockResolvedValueOnce({ job_id: "remove", phase: "done", snapshot: {}, report: { items: [{ filename: "a.png", status: "written" }] } })
+    vi.mocked(taggerApi.captionDeleteHistory).mockResolvedValueOnce({ deleted: true, job_id: "remove" })
+    const page = await naturalPage()
+    await page.get(".caption-history select").setValue("remove")
+    await flushPromises()
+    await page.findAll(".caption-maintenance button")[1].trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionDeleteHistory).toHaveBeenCalledWith("remove")
+    expect(taggerApi.captionRollback).not.toHaveBeenCalled()
+    expect(page.find(".caption-report").exists()).toBe(false)
+    expect((page.get(".caption-history select").element as HTMLSelectElement).value).toBe("")
+  })
+
 })

@@ -1,11 +1,9 @@
 <script setup lang="ts">
-import NetworkSettingsPanel from "../components/NetworkSettingsPanel.vue"
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue"
 import { ElMessage, ElMessageBox } from "element-plus"
 import { Rank, Search, MoreFilled, RefreshLeft, ArrowLeft, ArrowRight } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import { enginesApi, type EngineStatus } from "../api/engines"
-import DownloadSourcesPanel from "../components/DownloadSourcesPanel.vue"
 import {
   ENGINE_CATALOG,
   type EngineDefinition,
@@ -13,6 +11,7 @@ import {
 import { readEnginePrefs, writeEnginePrefs } from "../engines/prefs"
 import { readEngineOrder, saveEngineOrder, moveEngine, matchesEngineFilter, type EngineFilter } from "../engines/listPreferences"
 import type { TrainingEngine } from "../training/modules"
+import { engineSettingsState, legacyEngineImport, importLegacyEngineSettings } from "../engines/settings"
 
 const { t } = useI18n()
 const loadingId = ref<string | null>(null)
@@ -25,9 +24,18 @@ const manageId = ref<string | null>(null)
 const menuId = ref<string | null>(null)
 const rememberLast = ref(readEnginePrefs().rememberLast)
 const defaultEngine = ref(readEnginePrefs().defaultEngine ?? "kohya")
-const downloadPanel = ref<{ openAdvanced: () => void } | null>(null)
 const catalogIds = ENGINE_CATALOG.map((engine) => engine.id)
 const order = ref(readEngineOrder(catalogIds))
+const saving = ref(false)
+const settingsDisabled = computed(() => saving.value || !engineSettingsState.ready || engineSettingsState.loading)
+const canImportLegacy = computed(() => Object.keys(legacyEngineImport()).length > 0)
+function syncSettings() {
+  const prefs = readEnginePrefs()
+  defaultEngine.value = prefs.defaultEngine ?? "kohya"
+  rememberLast.value = prefs.rememberLast
+  order.value = readEngineOrder(catalogIds)
+}
+watch(() => engineSettingsState.settings, syncSettings)
 const query = ref("")
 const filter = ref<EngineFilter>("all")
 const page = ref(1)
@@ -80,10 +88,19 @@ watch(pageCount, (count) => { page.value = Math.min(page.value, count) })
 watch(page, () => { menuId.value = null; endDrag() })
 const manageCard = computed(() => cards.value.find((card) => card.engine.id === manageId.value) || null)
 
-function persistOrder(next: string[]) {
+async function persistOrder(next: string[]) {
+  if (settingsDisabled.value) return
+  saving.value = true
   order.value = next
   menuId.value = null
-  if (!saveEngineOrder(next)) ElMessage.error(t("settings.engines.list.saveFailed"))
+  try {
+    await saveEngineOrder(next)
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("engineSettings.saveFailed"))
+  } finally {
+    syncSettings()
+    saving.value = false
+  }
 }
 
 function moveByMenu(id: string, direction: "top" | "up" | "down") {
@@ -100,6 +117,7 @@ function restoreOrder() {
 }
 
 function startDrag(event: DragEvent, id: string) {
+  if (settingsDisabled.value) { event.preventDefault(); return }
   draggedId.value = id
   menuId.value = null
   if (event.dataTransfer) {
@@ -122,7 +140,7 @@ function endDrag() {
 }
 
 function startPointer(event: PointerEvent, id: string) {
-  if (event.button !== 0) return
+  if (event.button !== 0 || settingsDisabled.value) return
   event.preventDefault()
   pointerStart = { x: event.clientX, y: event.clientY, id }
   ;(event.currentTarget as HTMLElement).setPointerCapture?.(event.pointerId)
@@ -273,12 +291,37 @@ async function uninstall(engineId: TrainingEngine) {
   }
 }
 
-function saveRemember() {
-  const prefs = readEnginePrefs()
-  prefs.rememberLast = rememberLast.value
-  prefs.defaultEngine = defaultEngine.value
-  writeEnginePrefs(prefs)
-  ElMessage.success(t("settings.engines.msg.prefsSaved"))
+async function saveRemember(field: "defaultEngine" | "rememberLast") {
+  if (settingsDisabled.value) return
+  saving.value = true
+  try {
+    await writeEnginePrefs(field === "defaultEngine"
+      ? { defaultEngine: defaultEngine.value }
+      : { rememberLast: rememberLast.value })
+    ElMessage.success(t("settings.engines.msg.prefsSaved"))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("engineSettings.saveFailed"))
+  } finally {
+    syncSettings()
+    saving.value = false
+  }
+}
+
+async function importLegacy() {
+  if (settingsDisabled.value) return
+  saving.value = true
+  try {
+    await ElMessageBox.confirm(t("engineSettings.importConfirm"), t("engineSettings.import"), { type: "warning" })
+    await importLegacyEngineSettings()
+    ElMessage.success(t("settings.engines.msg.prefsSaved"))
+  } catch (error) {
+    if (error !== "cancel" && error !== "close") {
+      ElMessage.error(error instanceof Error ? error.message : t("engineSettings.saveFailed"))
+    }
+  } finally {
+    syncSettings()
+    saving.value = false
+  }
 }
 
 function openManage(engineId: string) {
@@ -338,18 +381,18 @@ onBeforeUnmount(() => {
 
 <template>
   <div class="engines-settings engines-manager">
-    <NetworkSettingsPanel />
     <header class="engines-page-head">
       <div>
         <h2>{{ t("settings.engines.title") }}</h2>
       </div>
     </header>
+    <button v-if="canImportLegacy" type="button" data-action="import-legacy" :disabled="settingsDisabled" @click="importLegacy">{{ t("engineSettings.import") }}</button>
 
     <section class="engines-toolbar" :aria-label="t('settings.engines.toolbarAria')">
       <label class="toolbar-field">
         <span>{{ t("settings.engines.defaultEngine.label") }}</span>
         <div class="toolbar-default">
-          <select v-model="defaultEngine" :aria-label="t('settings.engines.defaultEngine.label')" @change="saveRemember">
+          <select v-model="defaultEngine" :disabled="settingsDisabled" :aria-label="t('settings.engines.defaultEngine.label')" @change="saveRemember('defaultEngine')">
             <option v-for="item in ENGINE_CATALOG" :key="item.id" :value="item.id">{{ t(item.nameKey) }}</option>
           </select>
           <i class="engine-badge is-default">{{ t("settings.engines.badges.currentDefault") }}</i>
@@ -357,16 +400,11 @@ onBeforeUnmount(() => {
       </label>
 
       <label class="toolbar-remember">
-        <input v-model="rememberLast" type="checkbox" @change="saveRemember">
+        <input v-model="rememberLast" :disabled="settingsDisabled" type="checkbox" @change="saveRemember('rememberLast')">
         <span>
           <b>{{ t("settings.engines.rememberLast.label") }}</b>
           <small>{{ t("settings.engines.rememberLast.hintShort") }}</small>
         </span>
-      </label>
-
-      <label class="toolbar-field toolbar-source">
-        <span>{{ t("settings.engines.downloadSources.title") }}</span>
-        <DownloadSourcesPanel ref="downloadPanel" compact />
       </label>
     </section>
 
@@ -383,7 +421,7 @@ onBeforeUnmount(() => {
         <div class="engine-more">
           <button type="button" class="engine-more-btn" :title="t('settings.engines.list.options')" :aria-label="t('settings.engines.list.options')" :aria-expanded="menuId === 'list'" @click.stop="toggleMenu('list')"><MoreFilled /></button>
           <div v-if="menuId === 'list'" class="engine-more-menu">
-            <button type="button" @click="restoreOrder"><RefreshLeft />{{ t("settings.engines.list.restore") }}</button>
+            <button type="button" :disabled="settingsDisabled" @click="restoreOrder"><RefreshLeft />{{ t("settings.engines.list.restore") }}</button>
           </div>
         </div>
       </div>
@@ -403,6 +441,7 @@ onBeforeUnmount(() => {
       >
         <button
 type="button" class="engine-drag-handle" draggable="true"
+          :disabled="settingsDisabled"
           :title="t('settings.engines.list.reorder', { name: t(card.engine.nameKey) })"
           :aria-label="t('settings.engines.list.reorder', { name: t(card.engine.nameKey) })"
           @dragstart="startDrag($event, card.engine.id)" @dragend="endDrag"
@@ -454,9 +493,9 @@ type="button" class="engine-drag-handle" draggable="true"
             <div class="engine-more">
               <button type="button" class="engine-more-btn" :title="t('settings.engines.actions.more')" :aria-label="t('settings.engines.actions.more')" :aria-expanded="menuId === card.engine.id" @click.stop="toggleMenu(card.engine.id)"><MoreFilled /></button>
               <div v-if="menuId === card.engine.id" class="engine-more-menu" @keydown.esc="menuId = null">
-                <button type="button" data-action="top" :disabled="order[0] === card.engine.id" @click="moveByMenu(card.engine.id, 'top')">{{ t("settings.engines.list.top") }}</button>
-                <button type="button" data-action="up" :disabled="index === 0" @click="moveByMenu(card.engine.id, 'up')">{{ t("settings.engines.list.up") }}</button>
-                <button type="button" data-action="down" :disabled="index === pageCards.length - 1" @click="moveByMenu(card.engine.id, 'down')">{{ t("settings.engines.list.down") }}</button>
+                <button type="button" data-action="top" :disabled="settingsDisabled || order[0] === card.engine.id" @click="moveByMenu(card.engine.id, 'top')">{{ t("settings.engines.list.top") }}</button>
+                <button type="button" data-action="up" :disabled="settingsDisabled || index === 0" @click="moveByMenu(card.engine.id, 'up')">{{ t("settings.engines.list.up") }}</button>
+                <button type="button" data-action="down" :disabled="settingsDisabled || index === pageCards.length - 1" @click="moveByMenu(card.engine.id, 'down')">{{ t("settings.engines.list.down") }}</button>
                 <hr>
                 <button type="button" @click="openManage(card.engine.id)">{{ t("settings.engines.list.details") }}</button>
                 <button type="button" @click="refresh()">{{ t("settings.engines.actions.refresh") }}</button>

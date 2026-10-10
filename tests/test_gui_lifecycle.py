@@ -9,6 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 import gui
+import pytest
 
 
 class FakeProcess:
@@ -176,6 +177,7 @@ def test_launch_cleans_up_helpers_when_server_fails():
     args = gui.parser.parse_args([
         "--skip-prepare-environment",
         "--disable-train-monitor",
+        "--enable-tensorboard",
     ])
     uvicorn = types.SimpleNamespace(run=mock.Mock(side_effect=RuntimeError("server failed")))
 
@@ -183,7 +185,8 @@ def test_launch_cleans_up_helpers_when_server_fails():
             mock.patch.object(gui, "sanitize_embedded_deps"), \
             mock.patch.object(gui, "train_env_overrides", return_value={}), \
             mock.patch.object(gui, "ensure_requirements_installed"), \
-            mock.patch.object(gui, "ensure_port_available", side_effect=lambda port, *_args, **_kwargs: port), \
+            mock.patch.object(gui, "read_startup_settings", return_value={}), \
+            mock.patch("mikazuki.startup_settings.port_available", return_value=True), \
             mock.patch.object(gui, "run_tensorboard", return_value=process), \
             mock.patch("mikazuki.china_hub.enable_china_hub", return_value=False), \
             mock.patch("mikazuki.update_check.local_version", return_value="test"), \
@@ -197,3 +200,34 @@ def test_launch_cleans_up_helpers_when_server_fails():
 
     assert process.terminated is True
     assert process.running is False
+
+
+@pytest.mark.parametrize("service,url", [
+    ("Server", "http://127.0.0.1:28000"),
+    ("Train monitor", "http://127.0.0.1:6008"),
+])
+def test_launch_logs_starting_not_readiness_before_bind(service, url):
+    args = gui.parser.parse_args(["--skip-prepare-environment"])
+    process = FakeProcess(109)
+    uvicorn = types.SimpleNamespace(run=mock.Mock(side_effect=OSError("bind failed")))
+
+    with mock.patch.object(gui, "args", args, create=True), \
+            mock.patch.object(gui, "sanitize_embedded_deps"), \
+            mock.patch.object(gui, "train_env_overrides", return_value={}), \
+            mock.patch.object(gui, "ensure_requirements_installed"), \
+            mock.patch.object(gui, "read_startup_settings", return_value={}), \
+            mock.patch("mikazuki.startup_settings.port_available", return_value=True), \
+            mock.patch.object(gui, "run_train_monitor", return_value=process), \
+            mock.patch("mikazuki.china_hub.enable_china_hub", return_value=False), \
+            mock.patch("mikazuki.update_check.local_version", return_value="test"), \
+            mock.patch.dict(sys.modules, {"uvicorn": uvicorn}), \
+            mock.patch.dict(os.environ), \
+            mock.patch.object(gui.log, "info") as info:
+        with pytest.raises(OSError, match="bind failed"):
+            gui.launch()
+
+    messages = [call.args[0] for call in info.call_args_list if url in call.args[0]]
+    assert len(messages) == 1
+    assert messages[0].startswith(f"Starting {service.lower()} at {url}")
+    assert "readiness not verified" in messages[0]
+    assert process.terminated

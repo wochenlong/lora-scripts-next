@@ -21,15 +21,17 @@ const installing: EngineStatus = { id: "musubi", state: "installing", featureEna
 const notInstalled: EngineStatus = { id: "musubi", state: "not_installed", featureEnabled: true }
 
 const trainingPageStub = {
-  template: '<div class="training-page-stub"><slot name="form-top" /></div>',
+  props: ["schemaName", "title", "area"],
+  template: '<div class="training-page-stub" :data-schema="schemaName"><slot name="form-top" /></div>',
 }
 const routerLinkStub = {
   props: ["to"],
   template: '<a class="ghost-button"><slot /></a>',
 }
 
-function mountPage() {
+function mountPage(props: Record<string, unknown> = {}) {
   return mount(MusubiGatePage, {
+    props,
     global: { plugins: [i18n], stubs: { TrainingPage: trainingPageStub, RouterLink: routerLinkStub } },
   })
 }
@@ -49,7 +51,17 @@ describe("MusubiGatePage", () => {
     expect(status).toHaveBeenCalledWith("musubi")
     expect(setInterval).not.toHaveBeenCalled()
     expect(wrapper.find(".training-page-stub").exists()).toBe(true)
+    expect(wrapper.get(".training-page-stub").attributes("data-schema")).toBe("krea2-lora")
     expect(wrapper.get('[data-testid="engine-ready-chip"]').text()).toContain("训练环境准备就绪")
+    wrapper.unmount()
+  })
+
+  it("forwards the selected musubi schema to the training form", async () => {
+    status.mockResolvedValue(ready)
+    const wrapper = mountPage({ schemaName: "ideogram4-lora" })
+    await flushPromises()
+
+    expect(wrapper.get(".training-page-stub").attributes("data-schema")).toBe("ideogram4-lora")
     wrapper.unmount()
   })
 

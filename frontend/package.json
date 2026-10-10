@@ -10,7 +10,7 @@
     "dev": "vite",
     "build": "vue-tsc -b && vite build",
     "typecheck": "vue-tsc -b",
-    "test": "vitest run",
+    "test": "vitest run --maxWorkers=4",
     "lint": "eslint src vite.config.ts",
     "format": "prettier --write src vite.config.ts",
     "format:check": "prettier --check src vite.config.ts",

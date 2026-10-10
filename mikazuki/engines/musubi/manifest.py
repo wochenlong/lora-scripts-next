@@ -5,6 +5,7 @@ KIND = "plugin"
 
 TRAIN_TYPES = {
     "krea2-lora": "krea2",
+    "ideogram4-lora": "ideogram4",
 }
 
 UPSTREAM = {
@@ -20,9 +21,9 @@ UPSTREAM = {
 FEATURE_FLAG_ENV = "LORA_ENABLE_MUSUBI"
 
 CAPABILITIES = {
-    "model_families": ["krea2"],
+    "model_families": ["krea2", "ideogram4"],
     "tasks": ["lora"],
-    "variants": ["krea2"],
+    "variants": ["krea2", "ideogram4"],
 }
 
 PATCHES = []

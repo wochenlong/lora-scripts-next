@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 from typing import TYPE_CHECKING
+from mikazuki.user_data import UserDataStore
 
 if TYPE_CHECKING:
     from mikazuki.tagger.interrogators.base import Interrogator
@@ -24,6 +25,10 @@ def local_models_root() -> Path:
 
 
 def local_model_dir(model_key: str) -> Path:
+    if not os.environ.get(TAGGER_MODELS_DIR_ENV):
+        configured = UserDataStore().model_path("tagger_models", model_key)
+        if configured is not None:
+            return configured
     return local_models_root() / local_model_family(model_key) / model_key
 
 

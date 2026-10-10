@@ -1,10 +1,10 @@
 {
   "kind": "planning-document-validation-only",
-  "date": "2026-10-10",
+  "date": "2026-10-11",
   "result": "pass",
   "artifact_count": 35,
-  "checked_markdown_files": 35,
-  "checked_local_links": 61,
+  "checked_markdown_files": 33,
+  "checked_local_links": 67,
   "broken_links": [],
   "manifest_missing": [],
   "manifest_extra": [],
@@ -27,10 +27,20 @@
     "RQ-13",
     "RQ-14"
   ],
-  "implementation": "not_started",
+  "implementation": "u0_partial_merge_uncommitted",
   "construction": "paused_by_user",
+  "goal_tool_status": "paused",
+  "execution_gates": "AC-U0..AC-U6 not_passed",
   "model_probe": "unrun",
-  "business_tests": "unrun_docs_only",
+  "business_tests": "not_run_during_document_finalization",
+  "prior_u0_validation": {
+    "backend_smoke_passed": 88,
+    "frontend_typecheck": "pass_reported",
+    "frontend_build": "pass_reported",
+    "targeted_frontend_passed": 19,
+    "targeted_frontend_failed": 26,
+    "source": "prior_execution_summary_not_rerun"
+  },
   "user_manual_acceptance": "pending_followup",
   "unrelated_test_sha256": "8620db361c56816fe938c2b41f81b462a41233d39205dba5cee0a0b39dd2ed3d"
 }

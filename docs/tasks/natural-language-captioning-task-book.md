@@ -3,13 +3,13 @@
 ## 当前计划元数据（2026-10-10 增量）
 
 - Plan ID：`DATASET-NL-DEV-UNIFICATION-20261010`
-- Version：`1.0-dev-unification`
-- Last updated：2026-10-10 Asia/Shanghai
+- Version：`1.2-dev-unification-executing`
+- Last updated：2026-10-11 Asia/Shanghai
 - Canonical progress file：本文，唯一进度入口
-- Related handoff file：none（本轮为开工计划）
+- Related handoff file：本文“暂停现场与恢复入口”，不建立第二套进度账
 - Current branch：`feat/NL-Captioning`
-- Current active phase：U0 本地合并与开发基线冻结（pending）
-- Execution readiness：`drafting`（完整计划已定稿；用户最新明确暂停施工，仅交付任务书与goal，等待明确启动后转approved for execution/executing）
+- Current active phase：U0 本地合并与开发基线冻结（in progress）
+- Execution readiness：`executing`（2026-10-11用户明确恢复全面施工；get_goal无现有目标后已创建同计划ID，工具确认active）
 - Plan package：[Full增量计划](nl-caption-dev-unification-plan/README.md)
 - Design：[当前设计增量](../design/nl-caption-dev-unification-design.md)
 - Goal：[全程执行提示词](nl-caption-dev-unification-plan/03_goal提示词/最新dev适配与Qwen统一_goal提示词.md)
@@ -23,11 +23,11 @@
 
 ## 当前执行阶段与进度台账
 
-阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态，全部pending，不继承下面历史Phase的complete。
+阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态；U0恢复执行，U1–U6尚未开始，不继承下面历史Phase的complete。
 
 | 阶段 | 输出与完成口径 | 状态 | 当前证据 |
 |---|---|---|---|
-| U0 本地合并与开发基线冻结 | AC-U0，详见对应阶段任务书 | pending | unrun |
+| U0 本地合并与开发基线冻结 | AC-U0，详见对应阶段任务书 | in progress | 计划快照9c059cce、冻结dev2bdccd1b；merge未提交，AC-U0未通过 |
 | U1 双用途模型探测与默认选型 | AC-U1，详见对应阶段任务书 | pending | unrun |
 | U2 共享LLM与配置预设迁移统一 | AC-U2，详见对应阶段任务书 | pending | unrun |
 | U3 最新dev打标与编辑UI完整适配 | AC-U3，详见对应阶段任务书 | pending | unrun |
@@ -35,14 +35,14 @@
 | U5 从零隔离重建真实验收 | AC-U5，详见对应阶段任务书 | pending | unrun |
 | U6 最终新沙盒启动与goal关闭 | AC-U6，详见对应阶段任务书 | pending | unrun |
 
-- Overall progress：计划定稿，尚未merge/模型下载/业务适配/执行验收/创建新goal。
-- Validation status：本轮仅文档链接、manifest、需求到阶段/门追踪和Git范围核查；结果见计划复盘。
+- Overall progress：goal active；计划快照9c059cce；实际fetch冻结dev2bdccd1b；临时合并根nl-caption-dev-merge-20261011，15项index仍为unmerged，现场保留。模型探针与后续验收尚未开始。
+- Validation status：已有执行摘要记录后端冒烟88 passed，前端typecheck/build通过；定向前端45项中19通过/26失败。恢复后正在重新验证U0，尚未签署AC-U0。
 - Residual risks：dev漂移、双配置/预设语义、自然语言Tag化、模型双用途质量与资源、真实远程凭据、从零重建。
 - Human acceptance：`pending_followup`，不是goal硬门。
 
 ## 决策记录
 
-- Verified facts：feature HEAD 21571c5e；dev分析快照d9535c35；模拟15处冲突；当前无关dirty为tests/test_diffsynth_review.py。详见预检证据。
+- Verified facts：原已推送feature为21571c5e；计划提交后HEAD为9c059cce；分析dev为d9535c35，实际冻结为2bdccd1b；临时根15项index未解决。用户tests/test_diffsynth_review.py的SHA256仍与原备份一致。
 - Locked decisions：先本地merge再探测；保留目标分支名称；执行者自主选默认模型；完整验收+从零重建+最终沙盒都为硬门；用户手验后续。
 - Active assumptions：Qwen3.5-2B或VL-2B能满足统一模型标准，须U1证实；资源和API运行时凭据在执行前复核。
 - Open questions：无待定产品决策；不得把模型可行性当成已验证事实。
@@ -50,11 +50,36 @@
 
 ## 关键制品与环境
 
-工作目录E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning；裸仓库workspace/repo.git；独立dev分析根workspace/branches/dev-ui-analysis-20261010；中间探针及最终沙盒用workspace/sandboxes新根。Python 3.11.15、Node 22.17.1，开工复核。前端全量命令npm run check，后端先审计扩充tools/run_caption_scope_tests.py范围再执行。新证据根docs/evidence/natural-language-captioning/dev-unification-20261010/。
+工作目录E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning；裸仓库workspace/repo.git；独立dev分析根workspace/branches/dev-ui-analysis-20261010；中间探针及最终沙盒用workspace/sandboxes新根。Python 3.11.15、Node 22.17.1，恢复后复核实际路径。Windows默认python为3.14、npm.ps1可能强制Node24；检查时用显式Python3.11与Node22调用npm-cli.js，不仅修改PATH。中间验证可只读复用既有工具链，U5必须重新下载独立安装。前端全量命令npm run check，后端先审计扩充tools/run_caption_scope_tests.py范围再执行。新证据根docs/evidence/natural-language-captioning/dev-unification-20261010/。
 
 ## 唯一下一步
 
-保持施工暂停，交付已完成的长程任务书与goal提示词；等待用户明确启动后再从U0执行。
+完成U0模型目录/新DOM测试与最小验证，安全提交merge并快进正式feature，冻结开发基线。
+
+## 暂停现场与恢复入口（2026-10-11历史快照）
+
+**恢复更新：用户已明确全面执行，goal active。下述禁止施工措辞记录的是先前暂停时授权，已由新指令解除；现场保护和接续规则仍生效。**
+
+最新用户指令优先于旧goal与会话摘要。当前只允许完善计划文档，不改业务代码、不测试、不下载模型、不git add/commit、不完成merge或快进分支。暂停不是回滚，不执行merge --abort、reset、stash或删除现场；已结束子代理不再派工。
+
+| 项目 | 已核对事实 / 接续约束 |
+|---|---|
+| 正式feature | E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning，HEAD 9c059ccec000d26b3d0da50e26071f1ab84d9b7d |
+| 临时集成根 | E:/OpenSourceTeamWork/workspace/branches/nl-caption-dev-merge-20261011，分支tmp/nl-caption-dev-unification-merge，HEAD同上 |
+| 冻结dev / MERGE_HEAD | 2bdccd1b1252db9ba3158c30d56df0e292206c67；恢复不重fetch替换冻结 |
+| index状态 | 15项UU；已进行文本融合，尚未stage、merge commit或落位feature |
+| 用户修改 | tests/test_diffsynth_review.py；SHA256 8620db361c56816fe938c2b41f81b462a41233d39205dba5cee0a0b39dd2ed3d；原字节/patch/preflight备份在workspace/tools/nl-caption-u0-20261011/ |
+| 中间验证 | 后端u0-smoke.log/xml在该tools根；前端typecheck/build通过、定向测试失败依据已有执行摘要，未持久化的原始输出不得伪作完整验收证据 |
+| 构建产物 | 临时根frontend/dist有构建dirty，恢复时单列审查，不混报index旧产物与工作树新产物 |
+
+恢复后先只读核对两个worktree的HEAD、MERGE_HEAD、status与用户文件hash。现场一致则接续已有U0 merge，不重新建根或发起第二次merge。依次补齐：
+
+1. 检查并修复 `/api/tagger/models` 自动融合可能丢失完整capability/runtime/output/language目录的语义回归，不能只列为U3欠项。
+2. 更新TaggerPage两套旧DOM/ElSelect/stub测试契约，保留原业务断言，复核26项失败；禁止删除用例核销。
+3. 旧预设服务、共享readiness及默认资产统一在U2/U3完成；U3补保存期间继续编辑防覆盖、同原文恢复选择后译文加载、中文零请求和自然语言Tag守卫。
+4. 审查dist、15项冲突决策、检查绑定的dirty业务树与证据。之后显式stage本任务路径、创建merge commit、非强制快进feature并检查双祖先，保护用户修改。
+
+完整前后端矩阵、真实远程/本地/WD/CL、从零重建、最终手测沙盒均未执行；AC-U0…AC-U6均未通过。
 
 ---
 

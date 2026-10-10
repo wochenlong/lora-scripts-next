@@ -15,17 +15,20 @@ export function detectCaptionFormat(caption: string): CaptionFormat {
   const text = caption.trim()
   if (!text) return "unknown"
   const blocks = text.split(/\n\s*\n/).map((block) => block.trim()).filter(Boolean)
-  const looksLikeTags = (value: string) => value.split(/[,，；;\n]/).map((tag) => tag.trim()).filter(Boolean).every((tag) => tag.length <= 120 && tag.split(/\s+/).length <= 4 && !/[。！？.!?]/.test(tag) && (tag.match(/[\u3400-\u9fff]/g)?.length ?? 0) <= 12)
+  const looksLikeTags = (value: string) => value.split(/[,，；;\n]/).map((tag) => tag.trim()).filter(Boolean).every((tag) => tag.length <= 120 && tag.split(/\s+/).length <= 4 && !/[。！？!?]/.test(tag) && !/(?:[A-Za-z]\.(?:\s|$))/.test(tag) && (tag.match(/[\u3400-\u9fff]/g)?.length ?? 0) <= 12)
   if (blocks.length > 1 && blocks.some(looksLikeTags)) return "mixed"
   return looksLikeTags(text) ? "tag" : "natural"
 }
+
+// Separators apply only to a known Tag source; prose must retain punctuation.
+const TAG_SEPARATOR = /\s*[,，]\s*|\.\s+|\.$/
 
 export function splitCaptionTags(caption: string, format: CaptionFormat = detectCaptionFormat(caption)): string[] {
   if (format === "natural" || format === "unknown") return []
   const source = format === "mixed"
     ? caption.split(/\n\s*\n/).find((block) => detectCaptionFormat(block) === "tag") ?? ""
     : caption
-  return source.split(",").map((tag) => tag.trim()).filter(Boolean)
+  return source.split(TAG_SEPARATOR).map((tag) => tag.trim()).filter(Boolean)
 }
 
 export function addTagToCaption(caption: string, tag: string): string {

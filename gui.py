@@ -6,23 +6,35 @@ import sys
 import time
 
 from mikazuki.launch_utils import (base_dir_path, catch_exception, git_tag,
-                                   prepare_environment, check_port_avaliable,
+                                   prepare_environment,
                                    ensure_requirements_installed)
 from mikazuki.log import log
 from mikazuki.portable_utils import sanitize_embedded_deps, train_env_overrides
+from mikazuki.startup_settings import read_startup_settings, resolve_startup
 
 parser = argparse.ArgumentParser(description="GUI for stable diffusion training")
-parser.add_argument("--host", type=str, default="127.0.0.1")
-parser.add_argument("--port", type=int, default=28000, help="Port to run the server on")
+parser.add_argument("--host", type=str, default=None)
+parser.add_argument("--port", type=int, default=None, help="Port to run the server on")
 parser.add_argument("--listen", action="store_true")
 parser.add_argument("--skip-prepare-environment", action="store_true")
 parser.add_argument("--skip-prepare-onnxruntime", action="store_true")
-parser.add_argument("--disable-tensorboard", action="store_true", default=False)
-parser.add_argument("--disable-train-monitor", action="store_true")
+tb_flags = parser.add_mutually_exclusive_group()
+tb_flags.add_argument("--disable-tensorboard", action="store_true", default=None)
+tb_flags.add_argument("--enable-tensorboard", dest="disable_tensorboard", action="store_false")
+monitor_flags = parser.add_mutually_exclusive_group()
+monitor_flags.add_argument("--disable-train-monitor", action="store_true", default=None)
+monitor_flags.add_argument("--enable-train-monitor", dest="disable_train_monitor", action="store_false")
 parser.add_argument("--disable-auto-mirror", action="store_true")
-parser.add_argument("--tensorboard-host", type=str, default="127.0.0.1", help="Port to run the tensorboard")
-parser.add_argument("--tensorboard-port", type=int, default=6006, help="Port to run the tensorboard")
-parser.add_argument("--train-monitor-port", type=int, default=6008, help="Port to run the train status monitor")
+parser.add_argument("--tensorboard-host", type=str, default=None, help="Host to run the tensorboard")
+parser.add_argument("--tensorboard-port", type=int, default=None,
+                    help="TensorBoard port; enables TensorBoard unless --disable-tensorboard is set")
+parser.add_argument("--train-monitor-port", type=int, default=None, help="Port to run the train status monitor")
+parser.add_argument("--port-conflict", choices=["error", "next_available"])
+parser.add_argument("--tensorboard-port-conflict", choices=["error", "disable", "next_available"])
+parser.add_argument("--train-monitor-port-conflict", choices=["error", "disable", "next_available"])
+browser_flags = parser.add_mutually_exclusive_group()
+browser_flags.add_argument("--open-browser", action="store_true", default=None)
+browser_flags.add_argument("--no-open-browser", dest="open_browser", action="store_false")
 parser.add_argument("--localization", type=str)
 parser.add_argument("--browser", type=str, default=None,
                     choices=["chrome", "edge", "default"],
@@ -39,30 +51,6 @@ def _popen(command: list[str], **kwargs) -> subprocess.Popen:
             *command,
         ]
     return subprocess.Popen(command, **kwargs)
-
-
-def ensure_port_available(
-    port: int,
-    fallback_start: int,
-    fallback_end: int,
-    label: str,
-    reserved_ports: set[int],
-    preferred_reserved_port: int | None = None,
-) -> int:
-    if (port == preferred_reserved_port or port not in reserved_ports) and check_port_avaliable(port):
-        reserved_ports.add(port)
-        return port
-
-    for candidate in range(fallback_start, fallback_end):
-        if candidate in reserved_ports and candidate != preferred_reserved_port:
-            continue
-        if check_port_avaliable(candidate):
-            reserved_ports.add(candidate)
-            log.warning(f"{label} port {port} is already in use, using {candidate} instead.")
-            return candidate
-
-    log.error(f"{label}: no available port in range {fallback_start}-{fallback_end}.")
-    return port
 
 
 @catch_exception
@@ -125,6 +113,7 @@ def stop_child_processes(
 
 
 def launch():
+    startup = resolve_startup(read_startup_settings(), args)
     sanitize_embedded_deps(log.warning)
     from mikazuki.china_hub import enable_china_hub
 
@@ -146,52 +135,27 @@ def launch():
         # of silently breaking tagging/training.
         ensure_requirements_installed("requirements.txt")
 
-    # Protect each service's default port before scanning fallbacks. Otherwise
-    # TensorBoard can claim 6008 as a fallback and make monitor links open it.
-    protected_default_ports = {args.port}
-    if not args.disable_tensorboard:
-        protected_default_ports.add(args.tensorboard_port)
-    if not args.disable_train_monitor:
-        protected_default_ports.add(args.train_monitor_port)
-
-    reserved_ports: set[int] = set(protected_default_ports)
-    args.port = ensure_port_available(
-        args.port, args.port, args.port + 20, "GUI", reserved_ports, preferred_reserved_port=args.port
-    )
-    if not args.disable_tensorboard:
-        args.tensorboard_port = ensure_port_available(
-            args.tensorboard_port,
-            args.tensorboard_port,
-            args.tensorboard_port + 20,
-            "TensorBoard",
-            reserved_ports,
-            preferred_reserved_port=args.tensorboard_port,
-        )
-    if not args.disable_train_monitor:
-        args.train_monitor_port = ensure_port_available(
-            args.train_monitor_port,
-            args.train_monitor_port,
-            args.train_monitor_port + 20,
-            "Train monitor",
-            reserved_ports,
-            preferred_reserved_port=args.train_monitor_port,
-        )
+    args.host, args.port = startup.gui.host, startup.gui.port
+    args.tensorboard_host, args.tensorboard_port = startup.tensorboard.host, startup.tensorboard.port
+    args.train_monitor_port = startup.monitor.port
+    args.disable_tensorboard = not startup.tensorboard.enabled
+    args.disable_train_monitor = not startup.monitor.enabled
 
     from mikazuki.update_check import local_version
     log.info(f"SD-Trainer Version: {local_version()}")
-
-    if args.listen:
-        args.host = "0.0.0.0"
-        args.tensorboard_host = "0.0.0.0"
 
     os.environ["MIKAZUKI_HOST"] = args.host
     os.environ["MIKAZUKI_PORT"] = str(args.port)
     os.environ["MIKAZUKI_TENSORBOARD_HOST"] = args.tensorboard_host
     os.environ["MIKAZUKI_TENSORBOARD_PORT"] = str(args.tensorboard_port)
-    os.environ["TRAIN_MONITOR_HOST"] = args.host
+    os.environ["MIKAZUKI_TENSORBOARD_ENABLED"] = "0" if args.disable_tensorboard else "1"
+    os.environ["TRAIN_MONITOR_HOST"] = startup.monitor.host
     os.environ["TRAIN_MONITOR_PORT"] = str(args.train_monitor_port)
     os.environ["TRAIN_MONITOR_ENABLED"] = "0" if args.disable_train_monitor else "1"
+    os.environ["TRAIN_MONITOR_MODE"] = "integrated"
     os.environ["MIKAZUKI_DEV"] = "1" if args.dev else "0"
+    if startup.open_browser is not None:
+        os.environ["MIKAZUKI_OPEN_BROWSER"] = "1" if startup.open_browser else "0"
     if args.browser:
         os.environ["MIKAZUKI_BROWSER"] = args.browser
 
@@ -208,11 +172,14 @@ def launch():
                 child_processes.append(("train monitor", process))
 
         import uvicorn
-        log.info(f"Server started at http://{args.host}:{args.port}")
+        log.info(f"Starting server at http://{args.host}:{args.port} (readiness not verified)")
         if not args.disable_train_monitor:
-            log.info(f"Train monitor at http://{args.host}:{args.train_monitor_port}")
+            log.info(
+                f"Starting train monitor at http://{startup.monitor.host}:{args.train_monitor_port} "
+                "(readiness not verified)"
+            )
         else:
-            log.info("Train monitor disabled (--disable-train-monitor)")
+            log.info("Train monitor disabled by startup settings or port conflict policy")
         uvicorn.run("mikazuki.app:app", host=args.host, port=args.port, log_level="error", reload=args.dev)
     finally:
         stop_child_processes(child_processes)
