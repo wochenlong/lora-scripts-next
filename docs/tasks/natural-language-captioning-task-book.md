@@ -3,12 +3,12 @@
 ## 当前计划元数据（2026-10-10 增量）
 
 - Plan ID：`DATASET-NL-DEV-UNIFICATION-20261010`
-- Version：`1.2-dev-unification-executing`
+- Version：`1.4-dev-unification-u6-delivered`
 - Last updated：2026-10-11 Asia/Shanghai
 - Canonical progress file：本文，唯一进度入口
 - Related handoff file：本文“暂停现场与恢复入口”，不建立第二套进度账
 - Current branch：`feat/NL-Captioning`
-- Current active phase：U4 全量回归与真实链路审计（in progress）
+- Current active phase：U6 最终新沙盒启动与交付（ready for manual acceptance）
 - Execution readiness：`executing`（2026-10-11用户明确恢复全面施工；get_goal无现有目标后已创建同计划ID，工具确认active）
 - Plan package：[Full增量计划](nl-caption-dev-unification-plan/README.md)
 - Design：[当前设计增量](../design/nl-caption-dev-unification-design.md)
@@ -23,7 +23,7 @@
 
 ## 当前执行阶段与进度台账
 
-阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态；U0已签署，U1用户指定模型并豁免选型探针，U2施工中，U3–U6尚未验收，不继承下面历史Phase的complete。
+阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态；U0–U3 已签署，U1 用户指定模型并豁免选型探针，U4/U5 已完成并保留平台边界，当前进入 U6。
 
 | 阶段 | 输出与完成口径 | 状态 | 当前证据 |
 |---|---|---|---|
@@ -31,13 +31,13 @@
 | U1 双用途模型探测与默认选型 | CC-06 用户指定选型 | done with user-authorized boundary | Qwen3.5-2B；选型探针waived_by_user，质量/资源unrun，U4/U5功能验收保留 |
 | U2 共享LLM与配置预设迁移统一 | AC-U2，详见对应阶段任务书 | done | 共享Profile/CAS/事务/managed runtime；完成门见`U2/completion-gate.md` |
 | U3 最新dev打标与编辑UI完整适配 | AC-U3，详见对应阶段任务书 | done | 新dev Tagger/Editor/settings 接入共享LLM；完成门见`U3/completion-gate.md` |
-| U4 全量回归与真实链路审计 | AC-U4，详见对应阶段任务书 | pending | unrun |
-| U5 从零隔离重建真实验收 | AC-U5，详见对应阶段任务书 | pending | unrun |
-| U6 最终新沙盒启动与goal关闭 | AC-U6，详见对应阶段任务书 | pending | unrun |
+| U4 全量回归与真实链路审计 | AC-U4，详见对应阶段任务书 | done_with_platform_skips | `U4/completion-gate.md`；最终候选 `70ae1c0f` |
+| U5 从零隔离重建真实验收 | AC-U5，详见对应阶段任务书 | done_with_platform_skips | `U5/completion-gate.md`；独立项目/输入根和真实报告 |
+| U6 最终新沙盒启动与goal关闭 | AC-U6，详见对应阶段任务书 | ready_for_manual_acceptance | `U6/completion-gate.md`；`workspace/sandboxes/nl-caption-u6-manual-20261011` |
 
-- Overall progress：goal active；AC-U0/U1/U2/U3 已按边界记录，U4 正在执行，U5/U6 未签署。U1 的用户选择豁免不替代真实本地功能验收。
-- Validation status：U2 定向后端 153 passed/1 skipped；前端历史全量 418 passed/67 files，最新 UI 改动后的完整 `npm run check` 待重跑。完整 U4/U5/U6 尚未完成。
-- Residual risks：真实远程凭据、本地 Qwen3.5-2B 启动与视觉能力、取消/恢复、中文零请求、从零重建和最终沙盒。
+- Overall progress：AC-U0–U6 已按边界记录，U6 沙盒已交付并等待用户手测。U1 的用户选择豁免不替代真实本地功能验收，真实本地/远程和 WD/CL 验收已在 U4/U5 完成。
+- Validation status：U4 后端 799 passed/6 symlink skips；U4/U5 前端 67 files / 421 tests passed，typecheck、lint 和 build 通过；U5 三样本本地、远程和 WD/CL 报告齐全。
+- Residual risks：用户人工手测尚未完成；启动日志中的 `torch` 缺失只影响训练侧可选模块；6 个 Windows symlink 安全用例保留平台 skip。
 - Human acceptance：`pending_followup`，不是goal硬门。
 
 ## 决策记录
@@ -54,7 +54,7 @@
 
 ## 唯一下一步
 
-完成 U4 全量前后端与真实 remote/local/WD/CL 验收，随后在全新隔离根执行 U5，从验收版本建立 U6 手测沙盒；每阶段完成门必须与最终业务源码和脱敏证据一致。
+U6 沙盒已在 `workspace/sandboxes/nl-caption-u6-manual-20261011` 启动并交付；后续唯一动作是用户按沙盒内 `MANUAL-ACCEPTANCE.md` 手测，人工验收保持 `pending_followup`。
 
 ## 暂停现场与恢复入口（2026-10-11历史快照）
 

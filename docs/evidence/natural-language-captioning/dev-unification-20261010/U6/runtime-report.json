@@ -1,0 +1,30 @@
+{
+  "kind": "u6-manual-sandbox-ready",
+  "source_commit": "70ae1c0f",
+  "sandbox": "E:/OpenSourceTeamWork/workspace/sandboxes/nl-caption-u6-manual-20261011",
+  "server": {
+    "pid": 203924,
+    "host": "127.0.0.1",
+    "port": 28767,
+    "listener": true,
+    "root_http": 200,
+    "tagger_http": 200,
+    "tagger_route": "/dataset/tagger"
+  },
+  "frontend": {
+    "dist_built": true,
+    "node": "22.17.1"
+  },
+  "local_model": {
+    "asset_id": "qwen3.5-2b-local",
+    "model": "Qwen3.5-2B-Q4_K_M.gguf",
+    "mmproj": "mmproj-F16.gguf",
+    "runtime": "b11327",
+    "state": "running",
+    "ready": true,
+    "capabilities": ["text", "vision"]
+  },
+  "remote_key_injected": false,
+  "manual_acceptance": "pending_followup",
+  "platform_note": "The server log reports optional torch unavailable; this does not affect the Caption/translation FastAPI or llama.cpp path."
+}
