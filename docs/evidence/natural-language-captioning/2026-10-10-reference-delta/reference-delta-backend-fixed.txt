@@ -1,0 +1,22 @@
+........................................................................ [ 54%]
+.............................................................            [100%]
+============================== warnings summary ===============================
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\formparsers.py:10
+  E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\formparsers.py:10: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+mikazuki\launch_utils.py:15
+  E:\OpenSourceTeamWork\workspace\branches\feat-NL-Captioning\mikazuki\launch_utils.py:15: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+    import pkg_resources
+
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\pkg_resources\__init__.py:3148
+  E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\pkg_resources\__init__.py:3148: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('google')`.
+  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
+    declare_namespace(pkg)
+
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:29
+  E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:29: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+133 passed, 4 warnings in 21.69s

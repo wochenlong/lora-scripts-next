@@ -5,9 +5,12 @@ import pytest
 from mikazuki.llm.config import validate_profile
 from mikazuki.tagger.caption import (
     CaptionContractError,
+    DEFAULT_CAPTION_PROMPTS,
     compose_caption,
+    default_caption_prompt,
     parse_caption_response,
     render_prompt,
+    snapshot_prompt,
     require_vision_profile,
 )
 
@@ -36,6 +39,25 @@ def test_prompt_render_is_bounded_and_keeps_a_snapshot():
     assert "zh-CN" in rendered
     assert "a.png" in rendered
     assert '"mode": "natural"' in snapshot
+
+
+def test_default_prompt_is_a_complete_template_for_each_language():
+    assert set(DEFAULT_CAPTION_PROMPTS) == {"en", "zh-CN", "zh-TW", "ja"}
+    assert "Output only" in default_caption_prompt("en")
+    assert "只返回 JSON" in default_caption_prompt("zh-CN")
+    assert "只返回 JSON" not in default_caption_prompt("en")
+    assert '"zh-TW"' in default_caption_prompt("zh-TW")
+    assert "繁體中文" in default_caption_prompt("zh-TW")
+    assert "JSON" in default_caption_prompt("ja")
+
+
+def test_snapshot_selects_language_specific_default_without_overwriting_custom_prompt():
+    chinese = snapshot_prompt({"language": "zh-CN", "mode": "natural"})
+    assert chinese["prompt"] == default_caption_prompt("zh-CN")
+    custom = snapshot_prompt({"language": "zh-CN", "mode": "natural", "prompt": "CUSTOM {{language}}"})
+    assert custom["prompt"] == "CUSTOM {{language}}"
+    with pytest.raises(CaptionContractError, match="empty"):
+        snapshot_prompt({"language": "en", "prompt": ""})
 
 
 def test_caption_response_requires_exact_schema_and_language():

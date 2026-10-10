@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field, validator
 
 from mikazuki.llm.runtime import llm_service
 from mikazuki.llm.config import config_revision
-from mikazuki.tagger.caption import DEFAULT_CAPTION_PROMPT, parse_caption_response, render_prompt, snapshot_prompt
+from mikazuki.tagger.caption import parse_caption_response, render_prompt, snapshot_prompt
 from mikazuki.tagger.caption_job import CaptionJobCancelled, caption_job_manager
 from mikazuki.tagger.progress import TaggerCancelled, tagger_progress
 
@@ -36,7 +36,9 @@ class CaptionJobRequest(BaseModel):
     use_cache: bool = True
     profile_id: str | None = None
     prompt_id: str | None = Field(default=None, max_length=80)
-    prompt: str = Field(default=DEFAULT_CAPTION_PROMPT, max_length=8000)
+    # An omitted prompt is resolved after language validation so the backend
+    # can choose a complete language-specific built-in template.
+    prompt: str = Field(default="", max_length=8000)
     system_prompt: str = Field(default="", max_length=8000)
     max_caption_length: int = Field(default=2000, ge=1, le=2000)
     max_tokens: int = Field(default=512, ge=1, le=8192)
@@ -86,6 +88,10 @@ def _snapshot_request(req):
     for field in (TAG_PARAMETERS if req.mode == "natural" else CAPTION_PARAMETERS):
         payload.pop(field, None)
     payload.pop("layout", None)
+    if req.mode == "natural":
+        for field in ("prompt", "system_prompt"):
+            if field not in req.__fields_set__:
+                payload.pop(field, None)
     try:
         validate_model_selection(payload, llm_service.config(masked=False) if req.model_id and req.mode != "tag" else {})
     except ValueError:
@@ -93,7 +99,7 @@ def _snapshot_request(req):
     if req.prompt_id:
         for field in ("prompt", "language", "max_caption_length", "system_prompt"):
             if field not in req.__fields_set__:
-                payload.pop(field)
+                payload.pop(field, None)
     config = llm_service.config(masked=False) if req.prompt_id and req.mode != "tag" else {}
     if req.prompt_id:
         from mikazuki.llm.prompt_presets import list_presets

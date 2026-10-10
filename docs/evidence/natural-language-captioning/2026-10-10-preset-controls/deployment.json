@@ -1,0 +1,28 @@
+{
+  "delivery_kind": "working tree delta; no commit or push",
+  "copied_sha256": {
+    "frontend/src/components/CaptionPromptEditor.vue": "8ef9014c4ad8e1ed96239a187416f51eb81929109723e8ffd9ccb21f49076889",
+    "frontend/src/dataset/captionPrompts.ts": "5b103c134c7babe98da33400363762b8a70f3010e330f1b4b4eaecfaf819ce4a",
+    "frontend/src/i18n/messages/en-US.ts": "1d31eec3c4a47c7b8335040289d02ea0771404990eeb9e9086b3e0db6427fd8c",
+    "frontend/src/i18n/messages/zh-CN.ts": "d764e3a268a27082e5ec4b4bc4a619da488583627929768a596fd81351cb7b04",
+    "frontend/src/pages/TaggerPage.vue": "14926ce916628d2ae58c0ba1f0f0b6616b1955647c77a3d81389a86e52dba4d7",
+    "frontend/src/pages/TaggerPage.caption.test.ts": "bbf1f8e22f8ae2847552213be16570c3c6285f240955b3215835c3a07a484cd7",
+    "docs/design/kohya-natural-captioning-reference-review.md": "8e510950227b6b75f3f6aa61c3c58be3fe83f71ad7b1cfef90aa5a97140a1c2e",
+    "docs/design/natural-language-captioning-tagging-design.md": "f3398726b5f2fcfd05d5cf553eac6f2564431f77c7913aaacc969e54ac01ddf0",
+    "docs/tasks/natural-language-captioning-reference-modification-task-book.md": "d489593f7e37a7dbb90dae161405d3843b01e2a4c808975e44295f02160f63d5",
+    "docs/tasks/natural-language-captioning-task-book.md": "52fba40797eeefe93bcbd9bc3ffecb719d8e77ac5aa9225b4d8e802dbbb19a02",
+    "docs/tasks/natural-language-captioning-plan/plan-manifest.md": "55fb46e72408e93b4b43eefb4de50d339b10a2431b7945918636a7b593331e8f",
+    "docs/tasks/natural-language-captioning-plan/03_goal提示词/自然语言打标全程执行_goal提示词.md": "239153d3c530953560538718848bfdfd101d72c82ef543da65e466e4af5564a8",
+    "docs/natural-language-captioning-usage.md": "3ff6e97ab2ae7e6e1776618d25d6442ecd7e8c003237f33a357ac996ef19b531"
+  },
+  "protected_files": 53,
+  "user_data_unchanged": true,
+  "backup": "E:\\OpenSourceTeamWork\\workspace\\sandboxes\\nl-caption-manual-20261009\\preset-controls-backup-20261010",
+  "manual_build": "pass: Node22 npm run build",
+  "real_generation": "not-run",
+  "after_startup_changed_protected_files": [],
+  "after_startup_protected_unchanged": true,
+  "final_source_files_match": true,
+  "http_status": 200,
+  "served_index_sha256": "a275acbf2076d7882ac1c13f44fa8ebb3e1d60500951ec9ff65152b21217e41c"
+}

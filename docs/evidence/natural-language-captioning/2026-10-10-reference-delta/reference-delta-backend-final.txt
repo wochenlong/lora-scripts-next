@@ -1,0 +1,316 @@
+............................................FF.......F.....F............ [ 54%]
+.............................................................            [100%]
+================================== FAILURES ===================================
+________ test_prompt_id_resolves_preset_and_does_not_transmit_filename ________
+tests\test_caption_http_contract.py:230: in test_prompt_id_resolves_preset_and_does_not_transmit_filename
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "prompt_id": "short"})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:590: in post
+    return super().post(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:1132: in post
+    return self.request(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:465: in request
+    return super().request(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:814: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:901: in send
+    response = self._send_handling_auth(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:929: in _send_handling_auth
+    response = self._send_handling_redirects(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:966: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:1002: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:342: in handle_request
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:339: in handle_request
+    portal.call(self.app, scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\anyio\from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\_base.py:449: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\_base.py:401: in __get_result
+    raise self._exception
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\anyio\from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\applications.py:276: in __call__
+    await super().__call__(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\applications.py:122: in __call__
+    await self.middleware_stack(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\errors.py:184: in __call__
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\errors.py:162: in __call__
+    await self.app(scope, receive, _send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\exceptions.py:79: in __call__
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\exceptions.py:68: in __call__
+    await self.app(scope, receive, sender)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:21: in __call__
+    raise e
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:718: in __call__
+    await route.handle(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:276: in handle
+    await self.app(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:66: in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\routing.py:237: in app
+    raw_response = await run_endpoint_function(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\routing.py:163: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+mikazuki\tagger\caption_api.py:120: in start_caption_job
+    payload = _snapshot_request(req)
+              ^^^^^^^^^^^^^^^^^^^^^^
+mikazuki\tagger\caption_api.py:102: in _snapshot_request
+    payload.pop(field)
+E   KeyError: 'prompt'
+_____________ test_unknown_preset_rejected_before_job_or_request ______________
+tests\test_caption_http_contract.py:241: in test_unknown_preset_rejected_before_job_or_request
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "prompt_id": "missing"})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:590: in post
+    return super().post(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:1132: in post
+    return self.request(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:465: in request
+    return super().request(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:814: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:901: in send
+    response = self._send_handling_auth(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:929: in _send_handling_auth
+    response = self._send_handling_redirects(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:966: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:1002: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:342: in handle_request
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:339: in handle_request
+    portal.call(self.app, scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\anyio\from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\_base.py:456: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\_base.py:401: in __get_result
+    raise self._exception
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\anyio\from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\applications.py:276: in __call__
+    await super().__call__(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\applications.py:122: in __call__
+    await self.middleware_stack(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\errors.py:184: in __call__
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\errors.py:162: in __call__
+    await self.app(scope, receive, _send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\exceptions.py:79: in __call__
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\exceptions.py:68: in __call__
+    await self.app(scope, receive, sender)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:21: in __call__
+    raise e
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:718: in __call__
+    await route.handle(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:276: in handle
+    await self.app(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:66: in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\routing.py:237: in app
+    raw_response = await run_endpoint_function(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\routing.py:163: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+mikazuki\tagger\caption_api.py:120: in start_caption_job
+    payload = _snapshot_request(req)
+              ^^^^^^^^^^^^^^^^^^^^^^
+mikazuki\tagger\caption_api.py:102: in _snapshot_request
+    payload.pop(field)
+E   KeyError: 'prompt'
+______ test_user_data_preset_freezes_system_prompt_for_preview_and_batch ______
+tests\test_caption_http_contract.py:289: in test_user_data_preset_freezes_system_prompt_for_preview_and_batch
+    preview = client.post("/api/tagger/jobs/preview", json={"path": str(image.parent), "image_path": str(image), "prompt_id": "user"})
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:590: in post
+    return super().post(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:1132: in post
+    return self.request(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:465: in request
+    return super().request(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:814: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:901: in send
+    response = self._send_handling_auth(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:929: in _send_handling_auth
+    response = self._send_handling_redirects(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:966: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:1002: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:342: in handle_request
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:339: in handle_request
+    portal.call(self.app, scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\anyio\from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\_base.py:456: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\_base.py:401: in __get_result
+    raise self._exception
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\anyio\from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\applications.py:276: in __call__
+    await super().__call__(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\applications.py:122: in __call__
+    await self.middleware_stack(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\errors.py:184: in __call__
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\errors.py:162: in __call__
+    await self.app(scope, receive, _send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\exceptions.py:79: in __call__
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\exceptions.py:68: in __call__
+    await self.app(scope, receive, sender)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:21: in __call__
+    raise e
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:718: in __call__
+    await route.handle(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:276: in handle
+    await self.app(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:66: in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\routing.py:237: in app
+    raw_response = await run_endpoint_function(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\routing.py:163: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+mikazuki\tagger\caption_api.py:222: in preview_caption
+    payload = _snapshot_request(req)
+              ^^^^^^^^^^^^^^^^^^^^^^
+mikazuki\tagger\caption_api.py:102: in _snapshot_request
+    payload.pop(field)
+E   KeyError: 'prompt'
+______ test_preset_length_limit_is_frozen_and_excess_output_is_rejected _______
+tests\test_caption_http_contract.py:386: in test_preset_length_limit_is_frozen_and_excess_output_is_rejected
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "prompt_id": "tiny"})
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:590: in post
+    return super().post(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:1132: in post
+    return self.request(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:465: in request
+    return super().request(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:814: in request
+    return self.send(request, auth=auth, follow_redirects=follow_redirects)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:901: in send
+    response = self._send_handling_auth(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:929: in _send_handling_auth
+    response = self._send_handling_redirects(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:966: in _send_handling_redirects
+    response = self._send_single_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\httpx\_client.py:1002: in _send_single_request
+    response = transport.handle_request(request)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:342: in handle_request
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:339: in handle_request
+    portal.call(self.app, scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\anyio\from_thread.py:340: in call
+    return cast(T_Retval, self.start_task_soon(func, *args).result())
+                          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\_base.py:456: in result
+    return self.__get_result()
+           ^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\python\cpython-3.11-windows-x86_64-none\Lib\concurrent\futures\_base.py:401: in __get_result
+    raise self._exception
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\anyio\from_thread.py:265: in _call_func
+    retval = await retval_or_awaitable
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\applications.py:276: in __call__
+    await super().__call__(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\applications.py:122: in __call__
+    await self.middleware_stack(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\errors.py:184: in __call__
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\errors.py:162: in __call__
+    await self.app(scope, receive, _send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\exceptions.py:79: in __call__
+    raise exc
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\middleware\exceptions.py:68: in __call__
+    await self.app(scope, receive, sender)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:21: in __call__
+    raise e
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\middleware\asyncexitstack.py:18: in __call__
+    await self.app(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:718: in __call__
+    await route.handle(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:276: in handle
+    await self.app(scope, receive, send)
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\routing.py:66: in app
+    response = await func(request)
+               ^^^^^^^^^^^^^^^^^^^
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\routing.py:237: in app
+    raw_response = await run_endpoint_function(
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\fastapi\routing.py:163: in run_endpoint_function
+    return await dependant.call(**values)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+mikazuki\tagger\caption_api.py:120: in start_caption_job
+    payload = _snapshot_request(req)
+              ^^^^^^^^^^^^^^^^^^^^^^
+mikazuki\tagger\caption_api.py:102: in _snapshot_request
+    payload.pop(field)
+E   KeyError: 'prompt'
+============================== warnings summary ===============================
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\formparsers.py:10
+  E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\formparsers.py:10: PendingDeprecationWarning: Please use `import python_multipart` instead.
+    import multipart
+
+mikazuki\launch_utils.py:15
+  E:\OpenSourceTeamWork\workspace\branches\feat-NL-Captioning\mikazuki\launch_utils.py:15: UserWarning: pkg_resources is deprecated as an API. See https://setuptools.pypa.io/en/latest/pkg_resources.html. The pkg_resources package is slated for removal as early as 2025-11-30. Refrain from using this package or pin to Setuptools<81.
+    import pkg_resources
+
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\pkg_resources\__init__.py:3148
+  E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\pkg_resources\__init__.py:3148: DeprecationWarning: Deprecated call to `pkg_resources.declare_namespace('google')`.
+  Implementing implicit namespace packages (as specified in PEP 420) is preferred to `pkg_resources.declare_namespace`. See https://setuptools.pypa.io/en/latest/references/keywords.html#keyword-namespace-packages
+    declare_namespace(pkg)
+
+..\..\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:29
+  E:\OpenSourceTeamWork\workspace\sandboxes\nl-caption-manual-20261009\.venv\Lib\site-packages\starlette\testclient.py:29: DeprecationWarning: The anyio.abc.BlockingPortal alias is deprecated, use anyio.from_thread.BlockingPortal instead.
+    [], typing.ContextManager[anyio.abc.BlockingPortal]
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ===========================
+FAILED tests/test_caption_http_contract.py::test_prompt_id_resolves_preset_and_does_not_transmit_filename
+FAILED tests/test_caption_http_contract.py::test_unknown_preset_rejected_before_job_or_request
+FAILED tests/test_caption_http_contract.py::test_user_data_preset_freezes_system_prompt_for_preview_and_batch
+FAILED tests/test_caption_http_contract.py::test_preset_length_limit_is_frozen_and_excess_output_is_rejected
+4 failed, 129 passed, 4 warnings in 34.98s

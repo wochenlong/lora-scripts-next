@@ -1,5 +1,7 @@
 # 数据集模型打标与自然语言 Caption 设计书（Issue #409 对齐版）
 
+2026-10-10参考增量：Kohya-LoRA-Tool 仅采纳选项组织与完整双语提示词。英文继续默认；内置 user/system 模板完整覆盖英文、简体/繁体中文和日文；新增简短/详细模板选择，保留自定义草稿。后端省略 prompt 时按目标语言解析默认模板，显式空 prompt 仍拒绝。统一 LLM、翻译中文短路、Editor 原文与 Tag 安全边界沿用已有实现并回归。参见 `docs/design/kohya-natural-captioning-reference-review.md` 和父任务书的最新增量状态。
+
 2026-10-09用户手测增量：默认自然语言打标改为英文，内置提示词和System prompt随输出语言切换；自定义草稿保留并提示恢复对应模板。en正文含中文即拒绝，旧错误cache重新生成。Editor修复scan空草稿遮蔽及重新进入刷新，原文展开/恢复磁盘文本；新增只读中文译文，复用共享LLM text路由/运行时/密钥和同SQLite独立表，中文正文零模型请求、remote-first、本地显式兜底，无Key外部API不联系，取消/旧响应隔离。自然语言Tag批量入口禁用，390px面板宽度修复。原goal完成历史保留，新增验收独立记录，不把旧报告当新功能通过。
 
 2026-10-09最终闭门：用户已手动清空sandboxes，实测五个剩余Windows根全部不存在，无自建模型/应用进程，Git过期worktree注册已清理。功能源码与候选8986b9e的Git内容一致（仅65项LF/CRLF checkout行尾差异）；此前全部验收证据有效。GATE10/G-11通过，Phase0–5完成，保留四项Windows原生symlink未验与本轮远程未配置的批准/可选边界。详见phase-5-isolated-rebuild/2026-10-09-cleanup-closure.json。用户要求在goal完成后另建全新手动测试项目，此为后续独立交付，不能复用已删除沙盒。
@@ -234,3 +236,18 @@ Node 22 check/typecheck/lint/Vitest/build 通过；桌面、390px、键盘、空
 模型目录为GET /api/tagger/models；具体模型id绑定旧Tag id或llm:<profile_id>。新请求保留mode=tag/natural表示输出能力，runtime/model_id/profile_id需一致；生成字段为flat max_tokens/temperature/max_caption_length，与旧接口同源兼容，不额外引入parameters/output别名。实现与证据见phase-0-contract-alignment/2026-10-08-model-catalog-browser.md。Goal active，最终完成门未通过。
 
 2026-10-08契约审计：公开OpenAPI的mode枚举仅natural/tag；layout只列tags_only/caption_only。旧combined和组合layout输入得到明确400，不能作为可选项宣称可用。API、model catalog、前端TS和页面同时遵守首版范围。
+
+
+## 2026-10-10 预设统一控制（取代独立语言/详略选项）
+
+用户授权：移除重复的“输出语言”，让提示词预设成为语言和输出格式总控。本次一并将详略入口收敛为预设中的“详细/简短”，避免多个入口描述同一份模板。
+
+- 默认内置英文详细预设；选择预设一次应用完整 user/system prompt、语言与最大字符数。内置中英、繁体、日文各有详细/简短模板。
+- 页面仅显示只读预设语言与纯文本 `.txt` 落盘格式；内部严格 JSON 响应协议仍由后端校验，不引入 JSON 文件或组合打标。
+- 自定义模板继承当前预设的语言；先选择对应语言的基底再编辑、保存或另存。已有用户默认预设保持，未保存修改在切换时仍需确认。
+- 切换模型不再静默换语言或模板。模型不支持预设语言时明确提示、禁用预览和批量提交；用户可选兼容预设或模型。
+- 试标/批量从同一份预设草稿派生请求；重试继续使用既有冻结快照。后端 language 字段保留作为校验与 API 兼容契约，没有第二个用户语言控制来源。
+
+验证门：无独立语言/详略下拉；中英预设完整切换；自定义保存保留 language/plain_text；试标与批量配置一致；不兼容模型不会改预设且生成禁用；取消切换保留草稿。执行前端完整 check、Caption 后端组，更新现有手测源码/构建并保护数据 SHA。新真实模型生成质量交由用户亲测。
+
+执行记录：实现与简单验收完成；专项26项、前端349项/53文件/typecheck/lint/build、Caption后端133项、手测项目自身build、HTTP/浏览器/390px通过。手测应用已启动，53个用户数据与配置文件SHA保持。用户真实模型生成与人工验收 pending。证据目录 `docs/evidence/natural-language-captioning/2026-10-10-preset-controls/`。本次风险 P2，范围只涉及打标预设交互，API/Agent/训练不扩展；原公开完成门历史保留，不把旧证据当本次验收。

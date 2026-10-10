@@ -51,6 +51,34 @@ def api_client(tmp_path, monkeypatch):
     tagger_progress.reset_idle()
 
 
+@pytest.mark.parametrize("language", ["en", "zh-CN"])
+def test_omitted_prompt_uses_full_language_template_for_preview_and_batch(api_client, monkeypatch, language):
+    from mikazuki.tagger.caption import default_caption_prompt
+    client, image, manager, service = api_client
+    original = service.complete_vision
+    seen = []
+
+    async def record(image_path, prompt, **kwargs):
+        seen.append(prompt)
+        return await original(image_path, prompt, **kwargs)
+
+    monkeypatch.setattr(service, "complete_vision", record)
+    payload = {"path": str(image.parent), "language": language}
+    assert client.post("/api/tagger/jobs/preview", json={**payload, "image_path": str(image)}).status_code == 200
+    assert not image.with_suffix(".txt").exists()
+    assert client.post("/api/tagger/jobs", json=payload).status_code == 200
+    manager._thread.join(timeout=5)
+    assert manager.status()["succeeded"] == 1
+    assert seen == [default_caption_prompt(language)] * 2
+
+
+def test_explicit_empty_prompt_is_rejected_without_provider_request(api_client):
+    client, image, _manager, service = api_client
+    response = client.post("/api/tagger/jobs", json={"path": str(image.parent), "prompt": ""})
+    assert response.status_code == 400
+    assert not service.calls
+
+
 def test_preview_never_writes_caption_and_fallback_defaults_off(api_client):
     client, image, _manager, service = api_client
     response = client.post("/api/tagger/jobs/preview", json={

@@ -1,0 +1,32 @@
+{
+  "baseline_commit": "99272245218fa57c6685136acfca49c2334388d2",
+  "delivery_kind": "working tree delta, no commit or push",
+  "copied_sha256": {
+    "frontend/src/dataset/captionPrompts.ts": "8d1954c8af5a315c21533a7d1f3555c0ae51fdd54951af9d3835b81597b1b902",
+    "frontend/src/i18n/messages/en-US.ts": "c742126c510d603465307f4b9b3a0108456e91d4fa5a8abcb78b8e811913cf4a",
+    "frontend/src/i18n/messages/zh-CN.ts": "a1ab1a20c70e91b6d713095c80964c2656a760c335b0f478a5033d85ab6435ae",
+    "frontend/src/pages/TaggerPage.vue": "908723350a0c89bbf6b85cbf3c34f74ed8445e8e887ba186bfd33b1567d2bc5d",
+    "frontend/src/pages/TaggerPage.caption.test.ts": "6df473fd194fe9f6a9eed944b73d0dd0c93635c4a6daf56bf9096181a9a17abc",
+    "mikazuki/tagger/caption.py": "0672239ff1ac358dde62e7f7d6de271a0072c066836cc5db0c6e40e546a52785",
+    "mikazuki/tagger/caption_api.py": "3f997dbe903514ebaf4b60ee9c7af43d1cac82557be0098796d98e0cccada35f",
+    "mikazuki/tagger/caption_job.py": "9bd951e4b06c6c1bd2aa2639bbc1858e13584b614686a41aa1a78b0d79a6a5fa",
+    "tests/test_caption_contract.py": "a6192937c9f5b8af3f1526cba080a84322c5a5084a43338f419b7102b2a62133",
+    "tests/test_caption_http_contract.py": "24e8ca5c709a3147843887c80632bf2e8f49014bc05ad0b0f04d07aa8ff5de43",
+    "docs/design/kohya-natural-captioning-reference-review.md": "3e8a971855b6f367e3dcdd90aaac3f21bb1298e1746ae9bc30a008aafb8b4e6b",
+    "docs/design/natural-language-captioning-tagging-design.md": "b00a900978a1480ece54bc357df3e3ddbc7e768c2e99f0540b177fe04818b515",
+    "docs/tasks/natural-language-captioning-reference-modification-task-book.md": "8c23fcd0bb295d30219966dca496193102dcb95f3a08a3c9b5646a0c7096d437",
+    "docs/tasks/natural-language-captioning-task-book.md": "763d79a7d9afd93e4a73c2548f1cd7856c95297210841dc590eca8285baa0d21",
+    "docs/tasks/natural-language-captioning-plan/plan-manifest.md": "1cf7e233338e8f2458366a4c1d9c688b98b1083b96f1fad92fd800da62b22128",
+    "docs/natural-language-captioning-usage.md": "c8e961a583598309735f4db5f4dd8bfb5ddfc984f0eb80d54cc8e71a64f7362c",
+    "docs/tasks/natural-language-captioning-plan/03_goal提示词/自然语言打标全程执行_goal提示词.md": "82398f6d2539662ab10315740a5a5f32ffbf145c4a5a9ade90d65ac875ed67a1"
+  },
+  "protected_files": 53,
+  "user_data_unchanged": true,
+  "backup": "E:\\OpenSourceTeamWork\\workspace\\sandboxes\\nl-caption-manual-20261009\\reference-delta-backup-20261010",
+  "real_generation": "not-run",
+  "after_startup_changed_protected_files": [],
+  "after_startup_protected_unchanged": true,
+  "manual_build": "pass: Node 22.17.1 npm run build",
+  "served_index_sha256": "2996d83971b3679d8439505f424d4545583b274f7ce98225306d4ab32ebca889",
+  "final_source_files_match": true
+}

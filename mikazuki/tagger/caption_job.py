@@ -463,7 +463,7 @@ class CaptionJobManager:
             tagger_progress.release()
 
     async def _process_one(self, image_path: Path, request: dict) -> dict | bool:
-        from mikazuki.tagger.caption import DEFAULT_CAPTION_PROMPT, merge_tag_caption, parse_caption_response, render_prompt
+        from mikazuki.tagger.caption import default_caption_prompt, merge_tag_caption, parse_caption_response, render_prompt
         from mikazuki.llm.runtime import llm_service as runtime_llm_service
         from mikazuki.llm.config import config_revision
         service = self._job_service or runtime_llm_service
@@ -500,7 +500,7 @@ class CaptionJobManager:
         else:
             language = str(request.get("language") or "en")
             profile_id = request.get("profile_id") or None
-            prompt_template = str(request.get("prompt") or DEFAULT_CAPTION_PROMPT)
+            prompt_template = str(request.get("prompt") or default_caption_prompt(language))
             maximum = int(request.get("max_caption_length", 2000))
             prompt, _snapshot = render_prompt(prompt_template, language=language, mode=mode, image_name="image")
             system_prompt = str(request.get("system_prompt") or "")

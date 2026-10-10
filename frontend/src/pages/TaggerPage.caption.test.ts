@@ -60,31 +60,82 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-async function naturalPage() {
+async function naturalPage(selectChinese = true) {
   wrapper = mount(TaggerPage, {
     global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true } },
   })
   await flushPromises()
   await wrapper.findAll(".tagger-mode-tabs button")[1].trigger("click")
   await flushPromises()
+  if (selectChinese) {
+    await wrapper.get(".caption-preset-select").setValue("builtin-caption-zh")
+    await flushPromises()
+  }
   return wrapper
 }
 
 describe("natural-language TaggerPage", () => {
-  it("starts English-first and switches both built-in prompt fields with output language", async () => {
-    const document = await taggerApi.models()
-    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: document.models.map(model => model.output === "natural" ? { ...model, languages: ["en", "zh-CN"] } : model) })
-    const page = await naturalPage()
-    expect((page.get('.caption-output-language').element as HTMLSelectElement).value).toBe('en')
-    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('en means English')
+  it("uses presets for language and detail and protects custom drafts", async () => {
+    const page = await naturalPage(false)
+    expect(page.find('.caption-output-language').exists()).toBe(false)
+    expect(page.find('.caption-detail').exists()).toBe(false)
+    expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-en')
+    expect(page.get('.caption-preset-properties').text()).toContain('English')
+    expect(page.get('.caption-preset-properties').text()).toContain('.txt')
     expect((page.get('.caption-system-prompt').element as HTMLTextAreaElement).value).not.toMatch(/[\u3400-\u9fff]/)
-    await page.get('.caption-output-language').setValue('zh-CN')
-    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('请用')
-    await page.get('.caption-output-language').setValue('en')
-    expect((page.get('textarea').element as HTMLTextAreaElement).value).not.toMatch(/[\u3400-\u9fff]/)
-    await page.get('textarea').setValue('我自己的草稿')
-    await page.get('.caption-output-language').setValue('zh-CN')
-    expect((page.get('textarea').element as HTMLTextAreaElement).value).toBe('我自己的草稿')
+    await page.get('.caption-preset-select').setValue('builtin-caption-en-brief')
+    await flushPromises()
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('one or two concise sentences')
+    await page.get('.caption-preset-select').setValue('builtin-caption-zh-brief')
+    await flushPromises()
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('一到两句简短描述')
+    expect(page.get('.caption-preset-properties').text()).toContain('简体中文')
+    await page.get('textarea').setValue('我的未保存提示词')
+    vi.spyOn(ElMessageBox, 'confirm').mockRejectedValueOnce('cancel')
+    await page.get('.caption-preset-select').setValue('builtin-caption-en')
+    await flushPromises()
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toBe('我的未保存提示词')
+    expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-zh-brief')
+    expect(page.get('.caption-preset-properties').text()).toContain('简体中文')
+  })
+  it("preserves the English preset on an incompatible model and blocks generation until a compatible preset is selected", async () => {
+    const page = await naturalPage(false)
+    await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue('D:/sample/a.png')
+    expect(page.get('.caption-preset-incompatible').text()).toContain('预设语言')
+    expect((page.get('.tagger-actions .primary-action').element as HTMLButtonElement).disabled).toBe(true)
+    const preview = page.findAll('.tagger-actions button').find(button => button.text().includes('测试当前图片'))!
+    expect((preview.element as HTMLButtonElement).disabled).toBe(true)
+    await preview.trigger('click')
+    expect(taggerApi.captionPreview).not.toHaveBeenCalled()
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('language must be "en"')
+    await page.get('.caption-preset-select').setValue('builtin-caption-zh')
+    await flushPromises()
+    expect(page.find('.caption-preset-incompatible').exists()).toBe(false)
+    expect((page.get('.tagger-actions .primary-action').element as HTMLButtonElement).disabled).toBe(false)
+  })
+  it("saves custom drafts with the base preset language and uses the same preset configuration for preview and batch", async () => {
+    const document = await taggerApi.models()
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: document.models.map(model => model.output === 'natural' ? { ...model, languages: ['en', 'zh-CN'] } : model) })
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => update)
+    const page = await naturalPage(false)
+    await page.get('.caption-preset-select').setValue('builtin-caption-en-brief')
+    await flushPromises()
+    await page.get('.caption-preset-name').setValue('My brief preset')
+    await page.get('textarea').setValue('Describe visible facts in English. Return JSON with caption and language="en".')
+    await page.findAll('.caption-preset-actions button')[0].trigger('click')
+    await flushPromises()
+    const saved = vi.mocked(llmApi.savePromptPresets).mock.calls[0][0].presets[0]
+    expect(saved).toMatchObject({ language: 'en', output_format: 'plain_text', name: 'My brief preset' })
+    await page.get('input[placeholder="/data/datasets/images"]').setValue('D:/sample')
+    await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue('D:/sample/a.png')
+    await page.findAll('.tagger-actions button').find(button => button.text().includes('测试当前图片'))!.trigger('click')
+    await flushPromises()
+    await page.get('.tagger-actions .primary-action').trigger('click')
+    await flushPromises()
+    const { image_path, ...configuration } = vi.mocked(taggerApi.captionPreview).mock.calls[0][0]
+    expect(image_path).toBe('D:/sample/a.png')
+    expect(configuration).toMatchObject({ language: saved.language, prompt_id: saved.id, prompt: saved.template, system_prompt: saved.system_prompt, max_caption_length: saved.max_length })
+    expect(taggerApi.captionStart).toHaveBeenCalledWith(configuration)
   })
   it("shows active Tag downloads beside the selected model", async () => {
     const idle = await taggerApi.status()
@@ -287,12 +338,20 @@ describe("natural-language TaggerPage", () => {
     expect(llmApi.savePromptPresets).not.toHaveBeenCalled()
   })
 
-  it("offers only model-supported output languages", async () => {
-    const page = await naturalPage()
-    const language = page.get(".caption-output-language")
-    expect(language.findAll("option").map(option => option.attributes("value"))).toEqual(["zh-CN"])
-    expect((page.get(".tagger-actions .primary-action").element as HTMLButtonElement).disabled).toBe(false)
-    expect(page.text()).toContain("remote-vision")
+  it("does not silently change the preset language when switching models", async () => {
+    const document = await taggerApi.models()
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: document.models.map(model => model.runtime === 'api' ? { ...model, languages: ['en'] } : model) })
+    const page = await naturalPage(false)
+    await page.findAll('.tagger-mode-tabs button')[0].trigger('click')
+    await page.get('[data-model-id="llm:local"]').trigger('click')
+    await flushPromises()
+    expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-en')
+    expect(page.get('.caption-preset-properties').text()).toContain('English')
+    expect(page.find('.caption-preset-incompatible').exists()).toBe(true)
+    await page.findAll('.tagger-mode-tabs button')[1].trigger('click')
+    await flushPromises()
+    expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-en')
+    expect(page.find('.caption-preset-incompatible').exists()).toBe(false)
   })
 
   it("does not show an API tab when the model catalog has no ready API models", async () => {

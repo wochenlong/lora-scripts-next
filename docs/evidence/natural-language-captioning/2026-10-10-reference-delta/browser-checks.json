@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-10",
+  "application": "http://127.0.0.1:28766",
+  "real_llm_generation": "not-run",
+  "saved_user_default_preset_preserved": true,
+  "initial_detailed_builtin_detected": false,
+  "initial_complete_new_english_builtin_detected": false,
+  "explicit_detailed_template": {
+    "new_full_english_template": true,
+    "detail": "detailed",
+    "english_system_prompt": true
+  },
+  "option_checks": {
+    "brief_english": true,
+    "brief_chinese": true,
+    "brief_retained_after_language_change": true,
+    "no_horizontal_overflow_390": true
+  },
+  "editor_chinese_checks": {
+    "original_text_visible": true,
+    "translation_requests": 0,
+    "translated_matches_original": true,
+    "no_tag_chips": true,
+    "original_unchanged": true
+  }
+}
