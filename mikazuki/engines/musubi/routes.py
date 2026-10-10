@@ -14,6 +14,7 @@ from mikazuki.engines.musubi.adapter import (
     adapt_config as adapt_musubi_config,
     dump_dataset_toml as dump_musubi_dataset_toml,
     dump_train_toml as dump_musubi_train_toml,
+    train_toml_values as musubi_train_toml_values,
 )
 from mikazuki.engines.musubi.environment import start_install_task as start_musubi_install_task
 from mikazuki.engines.musubi.extension_state import (
@@ -102,7 +103,7 @@ async def dry_run(config: dict):
     return APIResponseSuccess(data={
         "toml_path": str(toml_file_path),
         "dataset_toml_path": str(dataset_file_path),
-        "config": adapted.values,
+        "config": musubi_train_toml_values(adapted.values),
         "dataset": adapted.dataset,
         "warnings": adapted.warnings,
     })

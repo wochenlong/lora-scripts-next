@@ -73,8 +73,6 @@ SUPPORTED_FIELDS = {
     "log_loss_stats",
     "sampler_preset",
     "initial_sigma",
-    "ideogram4_timestep_mu",
-    "ideogram4_timestep_std",
     # training
     "max_train_epochs",
     "max_train_steps",
@@ -233,15 +231,15 @@ FLOAT_FIELDS = {
     "scale_weight_norms",
     "base_weights_multiplier",
     "initial_sigma",
-    "ideogram4_timestep_mu",
-    "ideogram4_timestep_std",
 }
 
 DATASET_GENERAL_KEYS = {"resolution", "caption_extension", "batch_size", "enable_bucket", "bucket_no_upscale"}
 
 # Cache-stage flags: forwarded to the caching scripts as CLI flags, but never
 # written into the train TOML (the train script only shares a subset of args).
-CACHE_ONLY_FIELDS = {"vae_dtype", "text_cache_dtype"}
+# NB: ``vae_dtype`` is also a legitimate train arg (the sampling VAE load), so it
+# stays in the TOML on purpose.
+CACHE_ONLY_FIELDS = {"text_cache_dtype"}
 
 SUBSET_REPEAT_PATTERN = re.compile(r"^(\d+)_(.+)$")
 
@@ -574,11 +572,15 @@ def toml_scalar(value: Any) -> str:
     return f'"{escaped}"'
 
 
+def train_toml_values(values: dict[str, Any]) -> dict[str, Any]:
+    """Values that belong in the train TOML (drops cache-stage-only flags)."""
+    return {key: value for key, value in values.items() if key not in CACHE_ONLY_FIELDS}
+
+
 def dump_train_toml(values: dict[str, Any]) -> str:
     return "".join(
         f"{key} = {toml_scalar(value)}\n"
-        for key, value in values.items()
-        if key not in CACHE_ONLY_FIELDS
+        for key, value in train_toml_values(values).items()
     )
 
 

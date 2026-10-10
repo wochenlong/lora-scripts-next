@@ -40,7 +40,7 @@ class FamilySpec:
     # the directory is absent, so it only warns.
     require_local_tokenizer: bool = True
     vram_hint_mb: int = 12000
-    vram_hint: str = "建议开启 fp8_base + blocks_to_swap"
+    vram_hint: str = ""
     default_network_dim: int = 32
     default_network_alpha: int = 32
     # Config keys forwarded to the cache stages as CLI flags.
@@ -65,6 +65,7 @@ KREA2 = FamilySpec(
     text_encoder_label="Qwen3-VL-4B 文本编码器路径",
     supports_turbo_dit=True,
     supports_fp8_pair=True,
+    vram_hint="建议开启 fp8_base + blocks_to_swap",
     sample_defaults={"sample_cfg": 4.5, "sample_steps": 28},
     turbo_sample_defaults={"sample_cfg": 1, "sample_steps": 8},
 )

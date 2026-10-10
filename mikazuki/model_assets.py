@@ -18,6 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Callable
 import os
+import re
 
 try:
     import tomllib
@@ -117,16 +118,22 @@ ASSET_REGISTRY: dict[str, tuple[AssetDef, ...]] = {
     ),
     # Ideogram 4 ships quantized-only weights (FP8) under the Ideogram
     # Non-Commercial license; the pack must not bundle them, users fetch them.
+    # ModelScope carries the same Comfy-Org mirror layout (verified 2026-10-10),
+    # so both download sources work out of the box.
     "ideogram4-lora": (
         AssetDef("dit", "Ideogram 4 conditional DiT（FP8 底模，非商用许可）", "sd-models/ideogram4/ideogram4_fp8_scaled.safetensors",
-                 hf_repo=IDEOGRAM4_REPO, hf_file="diffusion_models/ideogram4_fp8_scaled.safetensors"),
+                 hf_repo=IDEOGRAM4_REPO, hf_file="diffusion_models/ideogram4_fp8_scaled.safetensors",
+                 ms_repo=IDEOGRAM4_REPO, ms_file="diffusion_models/ideogram4_fp8_scaled.safetensors"),
         AssetDef("unconditional_dit", "Ideogram 4 unconditional DiT（非对称 CFG，可选）",
                  "sd-models/ideogram4/ideogram4_unconditional_fp8_scaled.safetensors", optional=True,
-                 hf_repo=IDEOGRAM4_REPO, hf_file="diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors"),
+                 hf_repo=IDEOGRAM4_REPO, hf_file="diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors",
+                 ms_repo=IDEOGRAM4_REPO, ms_file="diffusion_models/ideogram4_unconditional_fp8_scaled.safetensors"),
         AssetDef("text_encoder", "文本编码器（Qwen3-VL-8B，FP8）", "sd-models/ideogram4/qwen3vl_8b_fp8_scaled.safetensors",
-                 hf_repo=IDEOGRAM4_REPO, hf_file="text_encoders/qwen3vl_8b_fp8_scaled.safetensors"),
+                 hf_repo=IDEOGRAM4_REPO, hf_file="text_encoders/qwen3vl_8b_fp8_scaled.safetensors",
+                 ms_repo=IDEOGRAM4_REPO, ms_file="text_encoders/qwen3vl_8b_fp8_scaled.safetensors"),
         AssetDef("vae", "VAE（Flux2）", "sd-models/ideogram4/flux2-vae.safetensors",
-                 hf_repo=IDEOGRAM4_REPO, hf_file="vae/flux2-vae.safetensors"),
+                 hf_repo=IDEOGRAM4_REPO, hf_file="vae/flux2-vae.safetensors",
+                 ms_repo=IDEOGRAM4_REPO, ms_file="vae/flux2-vae.safetensors"),
         AssetDef("tokenizer", "Qwen3-VL-8B tokenizer（目录）", "sd-models/ideogram4/qwen3-vl-8b-tokenizer", kind="dir",
                  hf_repo=IDEOGRAM4_TOKENIZER_REPO, ms_repo=IDEOGRAM4_TOKENIZER_REPO),
     ),
@@ -275,6 +282,18 @@ _ROTARY_PATCH = """    _materialize_meta_tensors(model)
     except TypeError:  # older/newer transformers builds may not accept the device kwarg
         model.language_model.rotary_emb = type(_rotary)(config.text_config)"""
 _IDEOGRAM4_TOKENIZER_LINE = "    return AutoTokenizer.from_pretrained(QWEN3_VL_8B_INSTRUCT_REPO_ID)"
+# Original Hub call or a previous local-directory patch: either shape can be
+# rewritten, so the patch can follow a moved/re-downloaded tokenizer directory
+# (and fall back to the Hub id when the local directory disappears).
+_IDEOGRAM4_TOKENIZER_CALL_RE = re.compile(
+    r'(?m)^\s*return AutoTokenizer\.from_pretrained\((?:r"[^"]*"|QWEN3_VL_8B_INSTRUCT_REPO_ID)\)(?:[^\n]*)$'
+)
+
+
+def _ideogram4_tokenizer_call(tokenizer_dir: Path) -> str:
+    if dir_complete(tokenizer_dir):
+        return f'    return AutoTokenizer.from_pretrained(r"{tokenizer_dir.as_posix()}")  {_TOKENIZER_PATCH_MARK}'
+    return _IDEOGRAM4_TOKENIZER_LINE
 
 
 def patch_ideogram4_source(source_root: Path, tokenizer_dir: Path, log: Callable[[str], None] = print) -> bool:
@@ -282,8 +301,8 @@ def patch_ideogram4_source(source_root: Path, tokenizer_dir: Path, log: Callable
 
     Two idempotent source patches:
     1. rebuild the Qwen3-VL rotary embedding after ``to_empty()`` (upstream #1139);
-    2. point the tokenizer at the local directory when it is complete, so
-       offline/China installs never fetch it from the Hub.
+    2. point the tokenizer at the local directory when it is complete, and
+       re-point (or revert to the Hub id) when that directory changes.
     Refuses to write a result that does not compile.
     """
     module = Path(source_root) / IDEOGRAM4_UTILS_REL
@@ -296,18 +315,11 @@ def patch_ideogram4_source(source_root: Path, tokenizer_dir: Path, log: Callable
             patched = patched.replace(_ROTARY_ANCHOR, _ROTARY_PATCH, 1)
         else:
             log(f"[patch] rotary anchor not found in {module}; skipped")
-    if _TOKENIZER_PATCH_MARK not in patched:
-        tokenizer_dir = Path(tokenizer_dir)
-        if not dir_complete(tokenizer_dir):
-            pass
-        elif _IDEOGRAM4_TOKENIZER_LINE in patched:
-            patched = patched.replace(
-                _IDEOGRAM4_TOKENIZER_LINE,
-                f'    return AutoTokenizer.from_pretrained(r"{tokenizer_dir.as_posix()}")  {_TOKENIZER_PATCH_MARK}',
-                1,
-            )
-        else:
-            log(f"[patch] tokenizer load line not found in {module}; skipped")
+    desired_call = _ideogram4_tokenizer_call(Path(tokenizer_dir))
+    if _IDEOGRAM4_TOKENIZER_CALL_RE.search(patched):
+        patched = _IDEOGRAM4_TOKENIZER_CALL_RE.sub(desired_call, patched, count=1)
+    else:
+        log(f"[patch] tokenizer load line not found in {module}; skipped")
     if patched == text:
         return False
     try:
@@ -315,7 +327,10 @@ def patch_ideogram4_source(source_root: Path, tokenizer_dir: Path, log: Callable
     except SyntaxError as exc:
         log(f"[patch] result would not compile ({exc}); {module} left unchanged")
         return False
-    module.write_text(patched, encoding="utf-8")
+    # Write atomically: a partial file would break the installed snapshot.
+    tmp = module.with_name(module.name + ".mikazuki-tmp")
+    tmp.write_text(patched, encoding="utf-8")
+    os.replace(tmp, module)
     log(f"[patch] ideogram4 rotary rebuild + tokenizer -> {tokenizer_dir}")
     return True
 

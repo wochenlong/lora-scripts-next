@@ -20,7 +20,7 @@ from mikazuki.engines.musubi.launcher import (
 from mikazuki.engines.musubi.manifest import CAPABILITIES, TRAIN_TYPES
 from mikazuki.engines.musubi.preflight import ProbeFacts, run_preflight
 from mikazuki.engines.musubi.settings import RuntimeConfig
-from mikazuki.model_assets import manifest_for, patch_ideogram4_source, tokenizer_dir_for
+from mikazuki.model_assets import check_assets, manifest_for, patch_ideogram4_source, tokenizer_dir_for
 from mikazuki.utils.config_import import PAGE_SPECS, TRAIN_TYPE_TARGETS, analyze_train_type
 
 
@@ -232,12 +232,20 @@ class AdapterIdeogram4Tests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as td:
             root = Path(td)
             (root / "train").mkdir()
-            adapted = self.adapt(root, vae_dtype="bfloat16", text_cache_dtype="fp8_e4m3fn")
+            adapted = self.adapt(
+                root,
+                vae_dtype="bfloat16",
+                text_cache_dtype="fp8_e4m3fn",
+                validate_caption_structure=True,
+                dit_dtype="bfloat16",
+            )
+            toml_text = dump_train_toml(adapted.values)
 
-        self.assertEqual(adapted.values["vae_dtype"], "bfloat16")
-        toml_text = dump_train_toml(adapted.values)
-        self.assertNotIn("vae_dtype", toml_text)
+        # text_cache_dtype is cache-stage only; the rest must reach the train TOML
+        # (vae_dtype also drives the sampling VAE load upstream).
         self.assertNotIn("text_cache_dtype", toml_text)
+        for key in ("vae_dtype", "validate_caption_structure", "dit_dtype"):
+            self.assertIn(key, toml_text)
 
 
 class LauncherIdeogram4Tests(unittest.TestCase):
@@ -366,8 +374,8 @@ class Ideogram4PatchTests(unittest.TestCase):
         )
         return module
 
-    def _write_tokenizer_dir(self, root: Path) -> Path:
-        tokenizer_dir = root / "sd-models" / "ideogram4" / "qwen3-vl-8b-tokenizer"
+    def _write_tokenizer_dir(self, root: Path, name: str = "qwen3-vl-8b-tokenizer") -> Path:
+        tokenizer_dir = root / "sd-models" / "ideogram4" / name
         tokenizer_dir.mkdir(parents=True, exist_ok=True)
         (tokenizer_dir / "tokenizer.json").write_text("{}", encoding="utf-8")
         (tokenizer_dir / "tokenizer_config.json").write_text("{}", encoding="utf-8")
@@ -407,6 +415,42 @@ class Ideogram4PatchTests(unittest.TestCase):
             root = Path(td)
             self.assertFalse(patch_ideogram4_source(root, root / "nope", log=lambda _line: None))
 
+    def test_module_without_anchors_is_left_untouched(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            module = root / "src" / "musubi_tuner" / "ideogram4" / "ideogram4_utils.py"
+            module.parent.mkdir(parents=True, exist_ok=True)
+            module.write_text("def other():\n    return 1\n", encoding="utf-8")
+            original = module.read_text(encoding="utf-8")
+
+            patched = patch_ideogram4_source(root, root / "nope", log=lambda _line: None)
+            after = module.read_text(encoding="utf-8")
+
+        self.assertFalse(patched)
+        self.assertEqual(after, original)
+
+    def test_tokenizer_patch_follows_and_reverts_with_the_directory(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            module = self._write_module(root)
+            first_dir = self._write_tokenizer_dir(root, "first")
+            second_dir = self._write_tokenizer_dir(root, "second")
+
+            patch_ideogram4_source(root, first_dir, log=lambda _line: None)
+            text_first = module.read_text(encoding="utf-8")
+            patch_ideogram4_source(root, second_dir, log=lambda _line: None)
+            text_second = module.read_text(encoding="utf-8")
+
+            (second_dir / "tokenizer.json").unlink()
+            patch_ideogram4_source(root, second_dir, log=lambda _line: None)
+            text_reverted = module.read_text(encoding="utf-8")
+
+        self.assertIn(first_dir.as_posix(), text_first)
+        self.assertIn(second_dir.as_posix(), text_second)
+        self.assertNotIn(first_dir.as_posix(), text_second)
+        self.assertIn(self.TOKENIZER_LINE, text_reverted)
+        self.assertIn("rotary_emb = type(_rotary)(config.text_config", text_reverted)
+
 
 class Ideogram4AssetsTests(unittest.TestCase):
     def test_asset_manifest(self):
@@ -431,6 +475,16 @@ class Ideogram4AssetsTests(unittest.TestCase):
                 tokenizer_dir_for("ideogram4-lora", root),
                 (root / "sd-models" / "ideogram4" / "qwen3-vl-8b-tokenizer").resolve(),
             )
+
+    def test_both_download_sources_are_configured(self):
+        with tempfile.TemporaryDirectory() as td:
+            items = {item["key"]: item for item in check_assets("ideogram4-lora", {}, Path(td))}
+
+        # The assets dialog defaults to ModelScope; a missing mirror makes the
+        # whole batch fail, so every required asset needs both sources.
+        for key in ("dit", "unconditional_dit", "text_encoder", "vae", "tokenizer"):
+            self.assertTrue(items[key]["sources"]["huggingface"], key)
+            self.assertTrue(items[key]["sources"]["modelscope"], key)
 
 
 class Ideogram4ConfigImportTests(unittest.TestCase):
@@ -459,6 +513,17 @@ class Ideogram4ConfigImportTests(unittest.TestCase):
     def test_page_spec_and_target_registered(self):
         self.assertEqual(PAGE_SPECS["ideogram4-lora"]["default_train_type"], "ideogram4-lora")
         self.assertEqual(TRAIN_TYPE_TARGETS["ideogram4-lora"]["path"], "/lora/ideogram4.html")
+
+
+class DispatchGuardTests(unittest.TestCase):
+    def test_unknown_family_variant_fails_loudly(self):
+        from mikazuki.engines.musubi.run import handle_run
+        from mikazuki.engines.runner import RunContext
+
+        result = handle_run({}, RunContext(timestamp="t", autosave_dir=".", variant="ideogram4x"))
+
+        self.assertEqual(result.status, "fail")
+        self.assertIn("未注册的 musubi 模型族", result.message)
 
 
 if __name__ == "__main__":

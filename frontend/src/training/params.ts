@@ -40,16 +40,28 @@ export const CROSS_SCHEMA_DENY_KEYS = [
   "dit",
   // krea2's text_encoder is Qwen3-VL; klein's is Qwen3 — never cross them.
   "text_encoder",
-  // Each musubi/klein family pairs its DiT with its own VAE and model-specific
-  // extras: Krea 2's Turbo DiT, Ideogram 4's asymmetric-CFG DiT and FP8 flags.
-  "vae",
-  "turbo_dit",
-  "turbo_dit_cache",
-  "unconditional_dit",
-  "fp8_base",
-  "fp8_scaled",
   "model_input_mode", "model_variant", "model_path", "model_config_dir", "dit_path", "text_encoder_path", "vae_path", "training_task", "control_data_dirs",
 ] as const
+
+/**
+ * Asset paths that are only unsafe across *model-family* pages (musubi/klein):
+ * Krea 2's Turbo DiT, Ideogram 4's asymmetric-CFG DiT and the fp8 pairing flags
+ * must not leak between those pages. Kohya pages legitimately share an external
+ * VAE and their own fp8 switches, so these stay out of the global deny list.
+ */
+const MODEL_ASSET_DENY_TRAIN_TYPES = new Set([
+  "krea2-lora", "ideogram4-lora", "klein-lora", "klein-4b-lora", "klein-9b-lora",
+])
+const MODEL_ASSET_DENY_KEYS = ["vae", "turbo_dit", "turbo_dit_cache", "unconditional_dit", "fp8_base", "fp8_scaled"] as const
+
+/** Deny set for a carry-over / autosave-sanitize boundary, keyed on the target page. */
+export function denyKeysForDefaults(defaults: FormModel): Set<string> {
+  const deny = new Set<string>(CROSS_SCHEMA_DENY_KEYS)
+  if (MODEL_ASSET_DENY_TRAIN_TYPES.has(String(defaults.model_train_type ?? ""))) {
+    for (const key of MODEL_ASSET_DENY_KEYS) deny.add(key)
+  }
+  return deny
+}
 
 /** schemaName → locked model_train_type for pages that own a single train type. */
 export const SCHEMA_TRAIN_TYPES: Record<string, string> = {
@@ -74,7 +86,7 @@ export function pickCarryOverFields(
   defaults: FormModel,
   fieldDefaults?: FormModel,
 ): FormModel {
-  const deny = new Set<string>(CROSS_SCHEMA_DENY_KEYS)
+  const deny = denyKeysForDefaults(defaults)
   const carried: FormModel = {}
   for (const [key, value] of Object.entries(carry)) {
     if (deny.has(key)) continue
@@ -97,7 +109,7 @@ export function sanitizePersistedDraft(saved: FormModel, defaults: FormModel): F
   if (expected === undefined || draft.model_train_type === undefined || draft.model_train_type === expected) {
     return draft
   }
-  for (const key of CROSS_SCHEMA_DENY_KEYS) delete draft[key]
+  for (const key of denyKeysForDefaults(defaults)) delete draft[key]
   return draft
 }
 

@@ -31,7 +31,7 @@ from mikazuki.engines.musubi.settings import (
     discover_runtime as discover_musubi_runtime,
     feature_enabled as musubi_feature_enabled,
 )
-from mikazuki.engines.musubi.families import DEFAULT_FAMILY, family_for
+from mikazuki.engines.musubi.families import DEFAULT_FAMILY, FAMILIES, family_for
 from mikazuki.engines.runner import RunContext
 from mikazuki.utils import train_utils
 
@@ -94,7 +94,14 @@ def musubi_apply_sample_defaults(config: dict, spec) -> None:
 
 
 def handle_run(config: dict, ctx: RunContext):
-    spec = family_for(getattr(ctx, "variant", "") or DEFAULT_FAMILY)
+    variant = str(getattr(ctx, "variant", "") or "").strip() or DEFAULT_FAMILY
+    if variant not in FAMILIES:
+        # Never silently fall back to Krea 2: a wrong family would launch the
+        # wrong scripts against the user's weights.
+        return APIResponseFail(
+            message=f"未注册的 musubi 模型族: {variant}（可用: {', '.join(sorted(FAMILIES))}）"
+        )
+    spec = family_for(variant)
     model_train_type = spec.train_type
     if not musubi_feature_enabled():
         return musubi_disabled_response()

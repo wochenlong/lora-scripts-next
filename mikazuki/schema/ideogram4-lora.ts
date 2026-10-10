@@ -10,8 +10,6 @@ Schema.intersect([
 
     Schema.object({
         timestep_sampling: Schema.union(["ideogram4_shift", "sigma", "uniform", "sigmoid", "shift", "flux_shift"]).default("ideogram4_shift").description("时间步采样。Ideogram 4 官方对齐的取样器为 ideogram4_shift，通常无需修改"),
-        ideogram4_timestep_mu: Schema.number().step(0.001).description("ideogram4_shift 采样器的 mu（留空使用官方默认值）"),
-        ideogram4_timestep_std: Schema.number().step(0.001).description("ideogram4_shift 采样器的 std（留空使用官方默认值）"),
         min_timestep: Schema.number().min(0).max(1000).step(1).description("最小时间步（0-1000，留空不限制）"),
         max_timestep: Schema.number().min(0).max(1000).step(1).description("最大时间步（0-1000，留空不限制）"),
         validate_caption_structure: Schema.boolean().default(false).description("校验官方结构化 JSON caption（high_level_description / style_description / compositional_deconstruction）。纯文本 caption 默认也接受"),
@@ -94,9 +92,9 @@ Schema.intersect([
         initial_sigma: Schema.number().step(0.001).default(1.004).description("首个去噪 sigma（官方默认 1.004）"),
         sample_width: Schema.number().default(1024).description('预览图宽'),
         sample_height: Schema.number().default(1024).description('预览图高'),
-        sample_cfg: Schema.number().min(1).max(30).default(7).description('CFG Scale（官方采样主步 guidance 为 7）'),
+        sample_cfg: Schema.number().min(1).max(30).default(7).description('CFG Scale。Ideogram 4 预览的步数与引导由 sampler_preset 决定，此项不生效'),
         sample_seed: Schema.number().default(42).description('种子'),
-        sample_steps: Schema.number().min(1).max(300).default(20).description('迭代步数（与 sampler_preset 对应）'),
+        sample_steps: Schema.number().min(1).max(300).default(20).description('迭代步数。Ideogram 4 预览的步数由 sampler_preset 决定，此项不生效'),
         prompt_file: Schema.string().role('textarea').description('预览图 Prompt 文件路径。填写后将采用文件内的 prompt，而下方的选项将失效。'),
     }).description("采样预览设置"),
 

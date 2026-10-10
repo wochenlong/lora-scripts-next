@@ -204,6 +204,7 @@ def run_preflight(
             except (ValueError, TypeError):
                 warnings.append(f"无法解析 transformers 版本: {dep.transformers_version}")
         if dep.vram_total_mb and dep.vram_total_mb < spec.vram_hint_mb:
-            warnings.append(f"显存 {dep.vram_total_mb} MB 可能不足以训练 {spec.label}，{spec.vram_hint}")
+            hint = f"，{spec.vram_hint}" if spec.vram_hint else ""
+            warnings.append(f"显存 {dep.vram_total_mb} MB 可能不足以训练 {spec.label}{hint}")
 
     return PreflightResult(ok=not errors, errors=errors, warnings=warnings, facts=facts)

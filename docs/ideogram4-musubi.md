@@ -54,7 +54,7 @@ Ideogram 4 通过 **Musubi-Tuner** 引擎接入，训练入口：训练页选择
 
 ## 参数要点
 
-- **时间步采样**：默认 `ideogram4_shift`（官方对齐的分辨率感知采样器），通常无需修改；`ideogram4_timestep_mu/std` 留空即用官方值。
+- **时间步采样**：默认 `ideogram4_shift`（官方对齐的分辨率感知采样器），通常无需修改。上游另有 `ideogram4_timestep_mu/std` 两个兼容参数，但明确忽略其取值，界面不提供。
 - **损失**：纯 MSE flow matching，`weighting_scheme` 只能是 `none`（界面不提供该选项，导入其它值时会被忽略并提示）。
 - **caption**：官方用结构化 JSON（`high_level_description` / `style_description` / `compositional_deconstruction`）。纯文本也能训练；开启 `validate_caption_structure` 会校验结构，配合 `warn_on_caption_issues` 可只警告不中断。
 - **LoRA 目标**：仅训练 conditional transformer（`attention.qkv`、`attention.o`、`feed_forward.w1/w2/w3`）。

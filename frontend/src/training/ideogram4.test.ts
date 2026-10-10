@@ -73,4 +73,15 @@ describe("Ideogram 4 config serialization", () => {
       expect(carried).not.toHaveProperty(key)
     }
   })
+
+  it("still carries an external VAE between kohya pages", () => {
+    const kohyaDefaults = { model_train_type: "sdxl-lora", vae: "", fp8_base: false }
+    const carried = pickCarryOverFields(
+      { vae: "./models/vae.safetensors", fp8_base: true, learning_rate: "2e-4" },
+      kohyaDefaults,
+    )
+
+    expect(carried.vae).toBe("./models/vae.safetensors")
+    expect(carried.fp8_base).toBe(true)
+  })
 })
