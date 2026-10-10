@@ -1,3 +1,5 @@
+> 2026-10-10 当前适配计划已切换至[最新dev与Qwen统一计划](../tasks/nl-caption-dev-unification-plan/README.md)。以下内容为历史方案/验收记录；本轮U0–U6全部待执行，不继承旧远程可选、平台豁免和人工评分。当前规则：全部硬门完成且新沙盒就绪后关闭goal，用户手验后续。
+
 # 数据集模型打标与自然语言 Caption 设计书（Issue #409 对齐版）
 
 2026-10-10参考增量：Kohya-LoRA-Tool 仅采纳选项组织与完整双语提示词。英文继续默认；内置 user/system 模板完整覆盖英文、简体/繁体中文和日文；新增简短/详细模板选择，保留自定义草稿。后端省略 prompt 时按目标语言解析默认模板，显式空 prompt 仍拒绝。统一 LLM、翻译中文短路、Editor 原文与 Tag 安全边界沿用已有实现并回归。参见 `docs/design/kohya-natural-captioning-reference-review.md` 和父任务书的最新增量状态。

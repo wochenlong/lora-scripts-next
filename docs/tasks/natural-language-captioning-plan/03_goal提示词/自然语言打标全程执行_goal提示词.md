@@ -1,3 +1,5 @@
+> 2026-10-10 当前适配计划已切换至[最新dev与Qwen统一计划](../../nl-caption-dev-unification-plan/README.md)。以下内容为历史方案/验收记录；本轮U0–U6全部待执行，不继承旧远程可选、平台豁免和人工评分。当前规则：全部硬门完成且新沙盒就绪后关闭goal，用户手验后续。
+
 # 自然语言打标全程执行 Goal（Issue #409 对齐版）
 
 2026-10-10局部优化goal见 `../../natural-language-captioning-reference-modification-task-book.md` 的归档提示词：英文优先、完整语言模板、简短详细选项、中文免翻译和原文安全；实施与简单回归/手测更新已完成，用户人工验收待执行。本文件下方为已闭门原完整goal，不重启或重复旧全量验收。

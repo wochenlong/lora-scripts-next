@@ -1,3 +1,5 @@
+> 2026-10-10 当前适配计划已切换至[最新dev与Qwen统一计划](../nl-caption-dev-unification-plan/README.md)。以下内容为历史方案/验收记录；本轮U0–U6全部待执行，不继承旧远程可选、平台豁免和人工评分。当前规则：全部硬门完成且新沙盒就绪后关闭goal，用户手验后续。
+
 # Plan Manifest
 
 2026-10-10参考增量索引：`../../design/kohya-natural-captioning-reference-review.md` 为参考取舍与设计修改，`../natural-language-captioning-reference-modification-task-book.md` 为 Standard 增量执行台账（目标、任务、开工清单、证据治理、复盘与 goal 合并）。父 canonical 保持唯一；新增证据 `../../evidence/natural-language-captioning/2026-10-10-reference-delta/`。开发、回归和手测更新已完成，全部新增门通过；用户人工验收 pending，未宣称新真实生成或新从零验收。

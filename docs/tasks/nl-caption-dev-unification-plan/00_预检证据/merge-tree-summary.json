@@ -1,0 +1,24 @@
+{
+  "analysis_only": true,
+  "feature": "21571c5ef72a61a5cd10203596e2653e37b2a8c4",
+  "dev": "d9535c356c58c78f0f6b406538f861bafb04bb38",
+  "exit": 1,
+  "tree": "f49393bed1225135619936ca7b1ea1f1fcd48250",
+  "conflicts": [
+    "CONFLICT (content): Merge conflict in .gitignore",
+    "CONFLICT (content): Merge conflict in README-zh.md",
+    "CONFLICT (content): Merge conflict in README.md",
+    "CONFLICT (content): Merge conflict in frontend/src/api/client.ts",
+    "CONFLICT (content): Merge conflict in frontend/src/api/tagger.ts",
+    "CONFLICT (content): Merge conflict in frontend/src/components/dataset/TagTranslationSettingsDialog.vue",
+    "CONFLICT (content): Merge conflict in frontend/src/dataset/caption.ts",
+    "CONFLICT (content): Merge conflict in frontend/src/i18n/messages/en-US.ts",
+    "CONFLICT (content): Merge conflict in frontend/src/i18n/messages/zh-CN.ts",
+    "CONFLICT (content): Merge conflict in frontend/src/pages/DatasetEditorPage.vue",
+    "CONFLICT (content): Merge conflict in frontend/src/pages/TaggerPage.vue",
+    "CONFLICT (content): Merge conflict in frontend/src/styles/dataset.css",
+    "CONFLICT (content): Merge conflict in frontend/src/styles/settings.css",
+    "CONFLICT (content): Merge conflict in frontend/src/styles/tagger.css",
+    "CONFLICT (content): Merge conflict in mikazuki/app/proxy.py"
+  ]
+}

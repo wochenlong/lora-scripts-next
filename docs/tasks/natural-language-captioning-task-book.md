@@ -1,3 +1,65 @@
+# 数据集自然语言打标：当前主任务书
+
+## 当前计划元数据（2026-10-10 增量）
+
+- Plan ID：`DATASET-NL-DEV-UNIFICATION-20261010`
+- Version：`1.0-dev-unification`
+- Last updated：2026-10-10 Asia/Shanghai
+- Canonical progress file：本文，唯一进度入口
+- Related handoff file：none（本轮为开工计划）
+- Current branch：`feat/NL-Captioning`
+- Current active phase：U0 本地合并与开发基线冻结（pending）
+- Execution readiness：`drafting`（完整计划已定稿；用户最新明确暂停施工，仅交付任务书与goal，等待明确启动后转approved for execution/executing）
+- Plan package：[Full增量计划](nl-caption-dev-unification-plan/README.md)
+- Design：[当前设计增量](../design/nl-caption-dev-unification-design.md)
+- Goal：[全程执行提示词](nl-caption-dev-unification-plan/03_goal提示词/最新dev适配与Qwen统一_goal提示词.md)
+- Planning review：`pass-with-boundary`；U1新候选尚未验证，用户指定在U0合并之后执行，未豁免
+
+## 本轮目标与范围
+
+从开工最新dev本地合并并冻结基线，最终仍在feat/NL-Captioning；自主实测选择一个兼顾视觉打标与翻译的小Qwen，完成新dev UI、共享LLM/预设/任务适配，完整测试、真实远程/本地验收和从零隔离重建。最后另建并启动全新手测沙盒。**用户已明确：沙盒交付就绪后关闭goal，人工验收作为后续。**
+
+范围限数据集打标/编辑/翻译、共享LLM、相关配置预设任务与验收；不主动改造Agent/sidecar/plugin/训练引擎。保持remote-first、本地显式兜底、打标vision/翻译text、默认英文、预设统一控制语言/详略/格式、原文编辑与中文免模型翻译、自然语言禁止Tag变更、Key只运行时注入。保护用户既有数据和无关测试改动。
+
+## 当前执行阶段与进度台账
+
+阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态，全部pending，不继承下面历史Phase的complete。
+
+| 阶段 | 输出与完成口径 | 状态 | 当前证据 |
+|---|---|---|---|
+| U0 本地合并与开发基线冻结 | AC-U0，详见对应阶段任务书 | pending | unrun |
+| U1 双用途模型探测与默认选型 | AC-U1，详见对应阶段任务书 | pending | unrun |
+| U2 共享LLM与配置预设迁移统一 | AC-U2，详见对应阶段任务书 | pending | unrun |
+| U3 最新dev打标与编辑UI完整适配 | AC-U3，详见对应阶段任务书 | pending | unrun |
+| U4 全量回归与真实链路审计 | AC-U4，详见对应阶段任务书 | pending | unrun |
+| U5 从零隔离重建真实验收 | AC-U5，详见对应阶段任务书 | pending | unrun |
+| U6 最终新沙盒启动与goal关闭 | AC-U6，详见对应阶段任务书 | pending | unrun |
+
+- Overall progress：计划定稿，尚未merge/模型下载/业务适配/执行验收/创建新goal。
+- Validation status：本轮仅文档链接、manifest、需求到阶段/门追踪和Git范围核查；结果见计划复盘。
+- Residual risks：dev漂移、双配置/预设语义、自然语言Tag化、模型双用途质量与资源、真实远程凭据、从零重建。
+- Human acceptance：`pending_followup`，不是goal硬门。
+
+## 决策记录
+
+- Verified facts：feature HEAD 21571c5e；dev分析快照d9535c35；模拟15处冲突；当前无关dirty为tests/test_diffsynth_review.py。详见预检证据。
+- Locked decisions：先本地merge再探测；保留目标分支名称；执行者自主选默认模型；完整验收+从零重建+最终沙盒都为硬门；用户手验后续。
+- Active assumptions：Qwen3.5-2B或VL-2B能满足统一模型标准，须U1证实；资源和API运行时凭据在执行前复核。
+- Open questions：无待定产品决策；不得把模型可行性当成已验证事实。
+- Continuity：旧Phase0–5及参考项目优化为历史完成；新计划不继承旧可选远程/平台豁免/人工评分。
+
+## 关键制品与环境
+
+工作目录E:/OpenSourceTeamWork/workspace/branches/feat-NL-Captioning；裸仓库workspace/repo.git；独立dev分析根workspace/branches/dev-ui-analysis-20261010；中间探针及最终沙盒用workspace/sandboxes新根。Python 3.11.15、Node 22.17.1，开工复核。前端全量命令npm run check，后端先审计扩充tools/run_caption_scope_tests.py范围再执行。新证据根docs/evidence/natural-language-captioning/dev-unification-20261010/。
+
+## 唯一下一步
+
+保持施工暂停，交付已完成的长程任务书与goal提示词；等待用户明确启动后再从U0执行。
+
+---
+
+# 历史计划与完成记录（不代表本轮完成）
+
 # 数据集模型打标与自然语言 Caption 长程任务书（Issue #409 对齐版）
 
 2026-10-10 最新增量已交付：用户批准吸收参考项目选项组织与完整双语提示词，要求实施、简单测试后亲自测试。执行明细 `natural-language-captioning-reference-modification-task-book.md`；本文件保持唯一总进度。原 Phase0–5 闭门历史有效，本次 Standard 局部优化。完整语言模板/简短详细/默认后端模板选择完成；Caption133、前端348/53/type/lint/build和手测build/HTTP/浏览器通过；53个用户数据状态文件hash升级及启动后全一致。原文可见、中文译文0模型请求、390px通过。新模板真实质量/新远程生成未运行；人工验收待用户。证据 `docs/evidence/natural-language-captioning/2026-10-10-reference-delta/verification-report.md`，下一步用户按手测清单测试。
