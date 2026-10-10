@@ -1,11 +1,11 @@
 import { computed, ref, type Ref } from "vue"
-import { llmApi, type LlmConfig } from "../api/llm"
+import { isVerifiedProfile, llmApi, type LlmConfig } from "../api/llm"
 
 export function useLlmProfiles(capability: "text" | "vision", language?: Ref<string>) {
   const config = ref<LlmConfig>({ version: 5, profiles: [], routes: {}, prompt_presets: [], cache: { caption: true, translation: true } })
   const loading = ref(false)
   const error = ref("")
-  const profiles = computed(() => config.value.profiles.filter(profile => profile.enabled && profile.ready && profile.capabilities.includes(capability)
+  const profiles = computed(() => config.value.profiles.filter(profile => isVerifiedProfile(profile, capability)
     && (!language || profile.languages.includes(language.value) || profile.languages.includes("*")))
     .sort((a, b) => Number(b.source === "remote") - Number(a.source === "remote")))
   let generation = 0

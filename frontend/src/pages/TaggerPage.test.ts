@@ -10,13 +10,14 @@ import { englishCaptionPrompt } from "../dataset/captionPrompts"
 
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }))
 vi.mock("../api/llm", () => ({
+  isVerifiedProfile: (profile: { enabled: boolean; ready: boolean; capabilities: string[]; verified_capabilities?: string[] }, capability: string) => Boolean(profile.enabled && profile.ready && profile.capabilities.includes(capability) && profile.verified_capabilities?.includes(capability)),
   llmApi: {
     profiles: vi.fn().mockResolvedValue({
       version: 5, routes: {}, prompt_presets: [], cache: {},
       profiles: [
-        { id: "text", name: "Text only", source: "remote", capabilities: ["text"], languages: ["zh-CN"], enabled: true, ready: true },
-        { id: "local", name: "Local", source: "local-endpoint", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true },
-        { id: "remote", name: "Remote", source: "remote", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true },
+      { id: "text", name: "Text only", source: "remote", capabilities: ["text"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text"] },
+      { id: "local", name: "Local", source: "local-endpoint", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text", "vision"] },
+      { id: "remote", name: "Remote", source: "remote", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text", "vision"] },
       ],
     }),
     localVisionStatus: vi.fn().mockResolvedValue({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 }),

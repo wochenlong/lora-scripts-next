@@ -156,20 +156,19 @@ async def tag_translation_config():
 
 @router.put("/tag-translation/config")
 async def save_tag_translation_config(payload: dict):
-    if payload.get("llm_mode") == "local":
-        local_status = local_model_service.status()
-        from mikazuki.llm.config import UnifiedConfigStore
-        from mikazuki.llm.service import UnifiedLLMService
-        shared_profiles = UnifiedLLMService(UnifiedConfigStore(translation_manager.config_store.path)).profiles(masked=True)
-        shared_text_ready = any(
-            profile.get("source") != "remote" and profile.get("enabled") and profile.get("ready")
-            and "text" in profile.get("capabilities", []) for profile in shared_profiles
-        )
-        if not shared_text_ready and (not local_status.get("installed") or local_status.get("state") != "running"):
-            raise HTTPException(status_code=409, detail="Install and start the managed local runtime before enabling local LLM")
-    # Selecting the remote route disables translation fallback, but leaves the
-    # shared runtime available for captioning. Explicit stop owns its lifecycle.
-    return _success(translation_manager.save_config(payload))
+    from mikazuki.llm.config import LLMContractError
+    if not isinstance(payload.get("revision"), str) or not payload["revision"]:
+        raise HTTPException(status_code=409, detail={"code": "llm_config_conflict", "message": "请先刷新共享LLM配置再保存，当前草稿已保留"})
+    try:
+        translation_manager.save_config(payload)
+        return _success(translation_manager.get_config())
+    except LLMContractError as error:
+        conflict = "revision" in str(error).lower()
+        raise HTTPException(status_code=409 if conflict else 400,
+                            detail={"code": "llm_config_conflict" if conflict else "llm_config_invalid",
+                                    "message": "共享配置已更新，请刷新后重试" if conflict else "共享配置不合法，请检查输入"}) from None
+    except ValueError:
+        raise HTTPException(status_code=400, detail={"code": "llm_config_invalid", "message": "共享配置不合法，请检查输入"}) from None
 
 
 @router.get("/tag-translation/cache")

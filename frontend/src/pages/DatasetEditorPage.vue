@@ -4,7 +4,8 @@ import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElOption
 import { Setting } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import { useRoute, useRouter } from "vue-router"
-import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type LlmProfile, type TagDictionaryStatus } from "../api/dataset"
+import { datasetApi, type ChangedItem, type DatasetItem, type TagDictionaryStatus } from "../api/dataset"
+import { llmApi, type LlmProfile, type LocalVisionStatus } from "../api/llm"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import TagTranslationControls from "../components/dataset/TagTranslationControls.vue"
@@ -77,7 +78,8 @@ const committedLlmMode = ref<"remote" | "local">("remote")
 const translationCacheCount = ref(0)
 const dictionaryStatus = ref<TagDictionaryStatus>({ state: "missing", installed: false, row_count: 0, size_bytes: 0, error: null })
 const dictionaryBusy = ref(false)
-const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "internal://dataset-translation", port: 0, error: null })
+const localModelStatus = ref<LocalVisionStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, endpoint: "", port: 0, error: null })
+const sharedConfigRevision = ref("")
 let translationSettingsPoll: ReturnType<typeof setTimeout> | undefined
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
@@ -244,12 +246,14 @@ async function startDefaultDictionaryDownload() {
 async function onLlmModeChange(value: "remote" | "local") {
   llmMode.value = value
   try {
-    await datasetApi.saveTagTranslationConfig({
-      llm_mode: value,
-      active_remote_id: activeRemoteId.value,
-      remote_profiles: llmProfiles.value,
-      local: { enabled: value === "local" },
+    const current = await llmApi.config()
+    const saved = await llmApi.saveConfig({
+      ...current,
+      revision: sharedConfigRevision.value || current.revision,
+      local_fallback_enabled: value === "local",
+      routes: { ...current.routes, translation: activeRemoteId.value },
     })
+    sharedConfigRevision.value = saved.revision || ""
   } catch {
     // The settings page owns the full config; a transient failure keeps the local choice.
   }
@@ -293,13 +297,15 @@ async function loadTranslationSettings(force = false) {
   translationSettingsLoading.value = true
   translationSettingsError.value = ""
   try {
-    const config = await datasetApi.tagTranslationConfig()
-    sharedLocalTextReady.value = Boolean(config.llm?.profiles.some(profile => profile.source !== "remote" && profile.enabled && profile.ready && profile.capabilities.includes("text")))
-    llmProfiles.value = config.remote_profiles?.length
-      ? config.remote_profiles
-      : [{ ...config.deepseek, id: "default", name: t("datasetEditor.caption.translationProfileNew") }]
-    activeRemoteId.value = config.active_remote_id || llmProfiles.value[0]?.id || "default"
-    llmMode.value = config.llm_mode || (config.local?.enabled ? "local" : "remote")
+    const config = await llmApi.config()
+    sharedConfigRevision.value = config.revision || ""
+    sharedLocalTextReady.value = Boolean(config.profiles.some(profile => profile.source !== "remote" && profile.enabled && profile.ready && profile.verified_capabilities?.includes("text")))
+    llmProfiles.value = config.profiles
+    const configuredRoute = config.routes.translation
+    activeRemoteId.value = config.profiles.some(profile => profile.source === "remote" && profile.id === configuredRoute)
+      ? configuredRoute
+      : config.profiles.find(profile => profile.source === "remote")?.id || "default"
+    llmMode.value = config.local_fallback_enabled ? "local" : "remote"
     snapshotTranslationSettings()
   } catch (caught) {
     translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
@@ -335,10 +341,11 @@ const remoteProfileConfigured = computed(() => {
   const profile = activeRemoteProfile.value
   if (!profile) return false
   const endpoint = profile.endpoint.trim().toLowerCase()
-  return Boolean(profile.api_key_configured || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//.test(endpoint))
+  return Boolean(profile.source === "remote" && profile.ready && profile.verified_capabilities?.includes("text") &&
+    (profile.api_key_configured || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//.test(endpoint)))
 })
-const localTranslationReady = computed(() => localModelStatus.value.state === "running" || sharedLocalTextReady.value)
-const translationAvailable = computed(() => Boolean(dictionaryStatus.value.installed || remoteProfileConfigured.value || localTranslationReady.value))
+const localTranslationReady = computed(() => localModelStatus.value.state === "running" && localModelStatus.value.installed && sharedLocalTextReady.value)
+const translationAvailable = computed(() => Boolean(dictionaryStatus.value.installed || remoteProfileConfigured.value || (llmMode.value === "local" && localTranslationReady.value)))
 const translationUnavailableHint = computed(() => t("datasetEditor.caption.translationUnavailable"))
 
 async function ensureLlmReady() {
@@ -388,7 +395,7 @@ async function loadDictionaryStatus() {
 }
 
 async function loadLocalModelStatus() {
-  try { localModelStatus.value = await datasetApi.localModelStatus() }
+  try { localModelStatus.value = await llmApi.localVisionStatus() }
   catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
 }
 

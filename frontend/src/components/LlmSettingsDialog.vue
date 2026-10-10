@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from "vue"
 import { ElDialog } from "element-plus"
 import { useI18n } from "vue-i18n"
-import { llmApi, type LlmConfig, type LlmProfile, type LocalVisionStatus } from "../api/llm"
+import { isVerifiedProfile, llmApi, type LlmConfig, type LlmProfile, type LocalVisionStatus } from "../api/llm"
 import ManagedVisionModel from "./ManagedVisionModel.vue"
 
 const props = defineProps<{ modelValue: boolean; capability: "text" | "vision"; imagePath?: string }>()
@@ -56,8 +56,9 @@ async function manageLocal(action: "setup" | "start" | "stop" | "cancel") {
     const config = await llmApi.config()
     if (revision !== generation) return
     // Runtime actions own managed assets only; preserve all unsaved user inputs.
-    const managed = config.profiles.filter(profile => profile.asset_id === "qwen3-vl-2b-local")
-    draft.value.profiles = [...draft.value.profiles.filter(profile => profile.asset_id !== "qwen3-vl-2b-local"), ...managed]
+    const assetId = local.value.model_id || "qwen3.5-2b-local"
+    const managed = config.profiles.filter(profile => profile.source === "managed-local" && profile.asset_id === assetId)
+    draft.value.profiles = [...draft.value.profiles.filter(profile => !(profile.source === "managed-local" && profile.asset_id === assetId)), ...managed]
     emit("saved", config)
   } catch (caught) {
     if (revision === generation) error.value = caught instanceof Error ? caught.message : String(caught)
@@ -70,8 +71,8 @@ onBeforeUnmount(() => { generation += 1; stopMonitoring() })
 
 const profiles = computed(() => [...draft.value.profiles].sort((a, b) => Number(b.source === "remote") - Number(a.source === "remote")))
 const dirty = computed(() => JSON.stringify(draft.value) !== committed.value)
-const textProfiles = computed(() => profiles.value.filter(profile => profile.enabled && profile.capabilities.includes("text")))
-const visionProfiles = computed(() => profiles.value.filter(profile => profile.enabled && profile.capabilities.includes("vision")))
+const textProfiles = computed(() => profiles.value.filter(profile => isVerifiedProfile(profile, "text")))
+const visionProfiles = computed(() => profiles.value.filter(profile => isVerifiedProfile(profile, "vision")))
 
 watch(() => props.modelValue, async open => {
   const revision = ++generation
@@ -112,7 +113,7 @@ function close() {
 function add() {
   draft.value.profiles.push({ id: `profile-${Date.now()}`, name: t("llm.newProfile"), endpoint: "", model: "",
     source: "remote", capabilities: props.capability === "vision" ? ["text", "vision"] : ["text"],
-    languages: ["zh-CN", "en"], api_key: "", enabled: true, ready: true })
+    languages: ["zh-CN", "en"], api_key: "", enabled: true, ready: false })
 }
 
 function setCapability(profile: LlmProfile, value: string, selected: boolean) {
@@ -137,7 +138,7 @@ async function save() {
   error.value = ""
   try {
     // Save only fields this editor owns. Concurrent preset edits stay intact.
-    const config = await llmApi.saveConfig({ profiles: draft.value.profiles, routes: draft.value.routes, cache: draft.value.cache })
+    const config = await llmApi.saveConfig({ revision: draft.value.revision, profiles: draft.value.profiles, routes: draft.value.routes, cache: draft.value.cache })
     draft.value = JSON.parse(JSON.stringify(config))
     draft.value.cache = { translation: true, caption: true, ...config.cache }
     committed.value = JSON.stringify(draft.value)
@@ -201,7 +202,7 @@ async function test(profile: LlmProfile) {
             <label><input v-model="profile.enabled" type="checkbox" />{{ t("llm.enabled") }}</label>
           </div>
           <div class="llm-profile-actions">
-            <button type="button" :disabled="dirty || !profile.enabled || !profile.ready || !profile.capabilities.includes(capability) || (capability === 'vision' && !testImage)" @click="test(profile)">{{ t("llm.test") }}</button>
+            <button type="button" :disabled="dirty || !profile.enabled || !profile.capabilities.includes(capability) || (capability === 'vision' && !testImage)" @click="test(profile)">{{ t("llm.test") }}</button>
             <button type="button" :disabled="profile.source === 'managed-local'" @click="draft.profiles = draft.profiles.filter(item => item.id !== profile.id)">{{ t("llm.remove") }}</button>
           </div>
         </article>

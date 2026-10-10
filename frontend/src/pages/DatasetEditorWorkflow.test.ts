@@ -16,6 +16,9 @@ const wrappers: ReturnType<typeof mount>[] = []
 function scan(root: string): DatasetScan {
   return { root, total: 1, items: [{ name: "a.png", relative_path: "a.png", category: "", caption: "original", caption_exists: true, tags: ["original"], image_url: "", thumb_url: "" }], tags: [], categories: [] }
 }
+function naturalScan(root: string): DatasetScan {
+  return { root, total: 1, items: [{ name: "a.png", relative_path: "a.png", category: "", caption: "A cat by a window.", caption_exists: true, caption_format: "natural", tags: [], natural_text: "A cat by a window.", image_url: "", thumb_url: "" }], tags: [], categories: [] }
+}
 beforeEach(() => {
   state.unload()
   state.drafts.value = {}
@@ -93,4 +96,13 @@ it("loads a directly typed path with Enter without opening the dataset selector"
   await flushPromises()
   expect(datasetApi.scan).toHaveBeenLastCalledWith("/typed-folder")
   expect(state.lastRoot.value).toBe("/typed-folder")
+})
+
+it("disables batch Tag operations for a natural-language caption dataset", async () => {
+  vi.mocked(datasetApi.scan).mockImplementation(async path => naturalScan(path))
+  const batchRequest = vi.spyOn(datasetApi, "batch")
+  const wrapper = await render()
+  const batchButton = wrapper.get(".dataset-batch-entry")
+  expect((batchButton.element as HTMLButtonElement).disabled).toBe(true)
+  expect(batchRequest).not.toHaveBeenCalled()
 })

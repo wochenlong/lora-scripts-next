@@ -136,6 +136,31 @@ class DeepSeekClient:
         }
         if local_llm_endpoint(self.config.get("endpoint")):
             payload["thinking"] = {"type": "disabled"}
+        shared_service = self.config.get("_shared_service")
+        if shared_service is not None:
+            from mikazuki.llm.contracts import LLMRouteError
+            schema = {"type": "object", "additionalProperties": False, "required": ["translations"],
+                      "properties": {"translations": {"type": "array", "items": {
+                          "type": "object", "additionalProperties": False, "required": ["tag", "translation"],
+                          "properties": {"tag": {"type": "string", "enum": [item["name"] for item in items]},
+                                         "translation": {"type": "string", "minLength": 1}}}}}}
+            prompt = (payload["messages"][0]["content"] + "\n" + payload["messages"][1]["content"])
+            try:
+                _profile, envelope, content = await shared_service.complete_text(
+                    prompt, language={"zh": "zh-CN"}.get(locale, locale),
+                    profile_id=self.config.get("_shared_profile_id"), response_schema=schema,
+                    max_tokens=1024, temperature=.1,
+                    allow_local_fallback=bool(self.config.get("_allow_local_fallback")),
+                )
+                return {"content": content, "finish_reason": envelope["choices"][0].get("finish_reason")}
+            except LLMRouteError as error:
+                raise TranslationError("No verified shared text profile is ready", error.code) from None
+            except LLMRequestError as error:
+                if error.retryable:
+                    raise RetryableTranslationError("Shared LLM request failed") from None
+                raise TranslationError("Shared LLM request failed", error.code) from None
+            except LLMContractError:
+                raise TranslationError("LLM returned an invalid response envelope", "llm_invalid_response") from None
         try:
             try:
                 envelope, content = await post_chat(
@@ -185,11 +210,12 @@ class TranslationManager:
         self._last_status = {"state": "idle", "message": "", "updated_at": None}
 
     def get_config(self):
+        from mikazuki.llm.config import UnifiedConfigStore
+        from mikazuki.llm.service import UnifiedLLMService
         config = self.config_store.load()
-        if isinstance(config.get("llm"), dict):
-            from mikazuki.llm.config import UnifiedConfigStore
-            from mikazuki.llm.service import UnifiedLLMService
-            config["llm"] = UnifiedLLMService(UnifiedConfigStore(self.config_store.path)).config(masked=True)
+        config["llm"] = UnifiedLLMService(UnifiedConfigStore(self.config_store.path)).config(masked=True)
+        config["revision"] = config["llm"]["revision"]
+        config["routing_policy"] = "remote-first"
         return mask_config(config)
 
     def get_api_key(self):
@@ -199,49 +225,46 @@ class TranslationManager:
         return self.config_store.load().get("llm", {}).get("cache", {}).get("translation", True)
 
     def _active_llm_config(self, full_config):
+        from mikazuki.llm.config import UnifiedConfigStore
+        from mikazuki.llm.service import UnifiedLLMService
+        from mikazuki.llm.contracts import LLMRouteError
+
         section = full_config["deepseek"].copy()
-        shared = full_config.get("llm")
-        if isinstance(shared, dict):
-            from mikazuki.llm.config import UnifiedConfigStore
-            from mikazuki.llm.service import UnifiedLLMService
-            shared = UnifiedLLMService(UnifiedConfigStore(self.config_store.path)).config(masked=False)
-        section["_cache_enabled"] = not isinstance(shared, dict) or shared.get("cache", {}).get("translation", True)
-        if isinstance(shared, dict) and shared.get("profiles"):
-            from mikazuki.llm.routing import choose_profile
-            profile = choose_profile(
-                shared["profiles"], "text",
-                preferred_id=shared.get("routes", {}).get("translation"),
-                allow_local_fallback=bool(full_config.get("local", {}).get("enabled")),
-            )
-            legacy = next((item for item in full_config.get("remote_profiles", []) if item["id"] == profile.id), {})
-            section.update({key: value for key, value in legacy.items() if key in {"system_prompt", "reasoning_effort"}})
-            if "translation_system_prompt" in profile.metadata:
-                section["system_prompt"] = profile.metadata["translation_system_prompt"]
-            if "reasoning_effort" in profile.metadata:
-                section["reasoning_effort"] = profile.metadata["reasoning_effort"]
-            if profile.source == "managed-local":
-                section["reasoning_effort"] = "disabled"
+        service = UnifiedLLMService(UnifiedConfigStore(self.config_store.path), session_factory=self.session_factory)
+        shared = service.config(masked=False)
+        enabled_local = bool(shared.get("local_fallback_enabled", False))
+        section["_cache_enabled"] = shared.get("cache", {}).get("translation", True)
+        section["_shared_service"] = UnifiedLLMService(service.config_store, session_factory=self.session_factory,
+                                                      config_snapshot=shared)
+        section["_shared_revision"] = shared.get("revision", "")
+        section["_allow_local_fallback"] = enabled_local
+        preferred = shared.get("routes", {}).get("translation")
+        try:
+            profile = service.resolve("text", profile_id=preferred, allow_local_fallback=enabled_local)
+        except LLMRouteError:
+            # Dictionary/cache paths remain readable before an LLM is ready.
+            # Generation still calls the shared service and fails closed.
+            profile = None
+        section["_shared_profile_id"] = profile.id if profile else preferred
+        # The legacy adapter is only a compatibility facade. Keep its fallback
+        # list limited to explicitly enabled local profiles; remote profiles
+        # are selected and retried by the shared service itself. This prevents
+        # an old translation call from silently treating another remote as a
+        # local fallback or bypassing the global opt-in switch.
+        section["_fallbacks"] = [
+            {key: candidate.get(key) for key in ("id", "endpoint", "model", "revision", "secret_revision", "asset_id")}
+            for candidate in shared.get("profiles", [])
+            if candidate.get("enabled", True)
+            and candidate.get("source") != "remote"
+            and enabled_local
+            and candidate.get("ready", False)
+            and "text" in (candidate.get("capabilities") or [])
+        ]
+        if profile:
             section.update(endpoint=profile.endpoint, model=profile.model, api_key=profile.api_key)
             section["secret_revision"] = profile.metadata.get("secret_revision", 0)
-            section["_fallbacks"] = [
-                candidate for candidate in shared["profiles"]
-                if full_config.get("local", {}).get("enabled")
-                and profile.is_remote and candidate.get("source") != "remote"
-                and candidate.get("enabled") and candidate.get("ready")
-                and "text" in candidate.get("capabilities", [])
-            ]
-        native_ready = False
-        if full_config.get("local", {}).get("enabled"):
-            from mikazuki.llm.runtime import llm_config_store
-            if self.config_store.path == llm_config_store.path:
-                from mikazuki.tag_translation.runtime import local_model_service
-                native_ready = local_model_service.status()["state"] == "running"
-        if native_ready and section.get("api_key") and not any(profile.get("asset_id") == "qwen3.5-0.8b-local" for profile in section.get("_fallbacks", [])):
-            section.setdefault("_fallbacks", []).append({
-                "endpoint": local_proxy_endpoint(), "model": "qwen3.5-0.8b-q4_0", "api_key": "",
-            })
-        elif full_config.get("local", {}).get("enabled") and not section.get("api_key") and not shared:
-            section["endpoint"] = local_proxy_endpoint()
+            section["system_prompt"] = profile.metadata.get("translation_system_prompt", section["system_prompt"])
+            section["reasoning_effort"] = profile.metadata.get("reasoning_effort", "disabled")
         return section
 
     def profile_revision(self, config=None):
@@ -251,6 +274,7 @@ class TranslationManager:
         else:
             section = config
         payload = {
+            "shared_revision": section.get("_shared_revision", ""),
             "endpoint": section.get("endpoint", ""),
             "model": section.get("model", ""),
             "system_prompt": section.get("system_prompt", ""),

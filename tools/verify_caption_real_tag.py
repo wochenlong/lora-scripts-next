@@ -41,6 +41,9 @@ def main():
         if args.samples.resolve() != fresh / 'samples' or args.tag_models.resolve() != fresh / 'tag-models':
             raise ValueError('rebuild Tag must use its fresh downloaded inputs')
     manifest = json.loads(args.manifest.read_text(encoding='utf-8'))
+    expected_count = len(manifest.get('samples', []))
+    if expected_count < 1:
+        raise ValueError('Tag manifest must contain at least one sample')
     old, new = root / 'legacy', root / 'new'
     for folder in (old, new):
         folder.mkdir(parents=True)
@@ -83,7 +86,7 @@ def main():
             manager.cancel()
             manager._thread.join(15)
             raise RuntimeError('Tag verification time budget exceeded')
-        assert manager.status()['succeeded'] == 3 and manager.status()['failed'] == 0
+        assert manager.status()['succeeded'] == expected_count and manager.status()['failed'] == 0
         for sample in manifest['samples']:
             filename = Path(sample['filename']).with_suffix('.txt')
             left, right = old / filename, new / filename
@@ -100,7 +103,7 @@ def main():
         report['preview_no_write'] = True
         manager.start({'path': str(new), 'mode': 'tag', 'conflict_action': 'ignore', 'interrogator_model': report['model']})
         manager._thread.join(60)
-        assert manager.status()['skipped'] == 3 and manager.status()['succeeded'] == 0
+        assert manager.status()['skipped'] == expected_count and manager.status()['succeeded'] == 0
         report['default_skip'] = True
         report['passed'] = True
     except Exception as error:

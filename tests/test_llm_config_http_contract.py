@@ -29,7 +29,7 @@ def client(tmp_path, monkeypatch):
 ])
 def test_malformed_config_returns_400_without_partial_write(client, payload):
     http, store = client
-    response = http.put("/api/llm/config", json=payload)
+    response = http.put("/api/llm/config", json={**payload, "revision": store.load()["revision"]})
     assert response.status_code == 400
     assert not store.path.exists()
 
@@ -38,7 +38,7 @@ def test_zero_config_and_prompt_preset_round_trip_without_download(client):
     http, store = client
     assert http.get("/api/llm/config").json()["data"]["profiles"] == []
     preset = {"id": "zh", "name": "中文", "template": "Describe in {{language}}", "language": "zh-CN"}
-    response = http.put("/api/llm/config", json={"prompt_presets": [preset]})
+    response = http.put("/api/llm/config", json={"prompt_presets": [preset], "revision": http.get("/api/llm/config").json()["data"]["revision"]})
     assert response.status_code == 200
     saved = http.get("/api/llm/config").json()["data"]["prompt_presets"][0]
     assert all(saved[key] == value for key, value in preset.items())
@@ -68,9 +68,9 @@ def test_corrupt_configuration_returns_actionable_error_without_overwriting(clie
 def test_preset_length_limit_changes_server_computed_revision(client):
     http, _store = client
     preset = {"id": "short", "name": "Short", "template": "Describe {{language}}", "language": "zh-CN", "max_length": 20}
-    first = http.put("/api/llm/config", json={"prompt_presets": [preset]}).json()["data"]["prompt_presets"][0]
-    second = http.put("/api/llm/config", json={"prompt_presets": [{**preset, "max_length": 40, "revision": "caller-supplied"}]}).json()["data"]["prompt_presets"][0]
+    first = http.put("/api/llm/config", json={"prompt_presets": [preset], "revision": http.get("/api/llm/config").json()["data"]["revision"]}).json()["data"]["prompt_presets"][0]
+    second = http.put("/api/llm/config", json={"prompt_presets": [{**preset, "max_length": 40, "revision": "caller-supplied"}], "revision": http.get("/api/llm/config").json()["data"]["revision"]}).json()["data"]["prompt_presets"][0]
     assert first["revision"] != second["revision"] != "caller-supplied"
     before = http.get("/api/llm/config").json()["data"]
-    assert http.put("/api/llm/config", json={"prompt_presets": [{**preset, "max_length": False}]}).status_code == 400
+    assert http.put("/api/llm/config", json={"prompt_presets": [{**preset, "max_length": False}], "revision": before["revision"]}).status_code == 400
     assert http.get("/api/llm/config").json()["data"] == before

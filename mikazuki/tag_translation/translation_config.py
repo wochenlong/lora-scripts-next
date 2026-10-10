@@ -273,6 +273,12 @@ class OnlineServiceConfig:
             config = validate_config(raw)
             if isinstance(raw, dict) and isinstance(raw.get("llm"), dict):
                 config["llm"] = copy.deepcopy(raw["llm"])
+                # The unified document keeps remote as the primary route and
+                # stores local fallback as an explicit boolean. Reflect that
+                # opt-in in the legacy facade instead of deriving it from the
+                # compatibility-only llm_mode field, which is normalized to
+                # remote by the shared store.
+                config["local"]["enabled"] = bool(raw["llm"].get("local_fallback_enabled", config["local"].get("enabled", False)))
             return config
         except (OSError, json.JSONDecodeError, ValueError) as error:
             raise RuntimeError(f"Unable to load translation configuration: {error}") from error
@@ -283,41 +289,69 @@ class OnlineServiceConfig:
             return self._save(raw_config)
 
     def _save(self, raw_config):
+        from mikazuki.llm.config import UnifiedConfigStore
         current = self.load()
         config = validate_config(raw_config, current)
-        if isinstance(current.get("llm"), dict):
-            config["llm"] = copy.deepcopy(current["llm"])
-            from mikazuki.llm.config import validate_profile
-            old_profiles = {profile["id"]: profile for profile in config["llm"].get("profiles", [])}
+        shared_store = UnifiedConfigStore(self.path)
+        shared = shared_store.load()
+        profiles = copy.deepcopy(shared.get("profiles", []))
+        routes = copy.deepcopy(shared.get("routes", {}))
+        # A first write through the legacy adapter must migrate its default
+        # remote profile into the shared document. Without this bootstrap, a
+        # harmless legacy settings save could create an empty shared profile
+        # list and silently discard the translation endpoint. The profile is
+        # intentionally unverified; capability verification remains a server
+        # side operation before generation is allowed.
+        existing_document = shared_store._read_document()
+        if not profiles and "llm" not in existing_document:
+            profiles = [{
+                "id": remote["id"],
+                "name": remote["name"],
+                "endpoint": remote["endpoint"],
+                "model": remote["model"],
+                "source": "remote",
+                "api_key": remote.get("api_key", ""),
+                "capabilities": ["text"],
+                "languages": ["en", "zh", "zh-CN", "zh-TW", "ja"],
+                "metadata": {
+                    "translation_system_prompt": remote.get("system_prompt", DEFAULT_SYSTEM_PROMPT),
+                    "reasoning_effort": remote.get("reasoning_effort", "disabled"),
+                },
+            } for remote in config["remote_profiles"]]
+            routes["translation"] = config["active_remote_id"]
+        update_remote = any(key in raw_config for key in ("deepseek", "remote_profiles", "active_remote_id"))
+        if update_remote:
+            old_profiles = {profile["id"]: profile for profile in profiles}
             shared_remote = []
             for remote in config["remote_profiles"]:
-                previous = old_profiles.get(remote["id"])
-                shared_remote.append(validate_profile({
-                    **(previous or {}),
-                    "id": remote["id"],
-                    "name": remote["name"],
-                    "endpoint": remote["endpoint"],
-                    "model": remote["model"],
-                    "source": "remote",
-                    "api_key": remote["api_key"],
-                    "capabilities": (previous or {}).get("capabilities", ["text"]),
-                    "languages": (previous or {}).get("languages", ["en", "zh", "zh-CN", "zh-TW", "ja"]),
-                    "metadata": {
-                        **(previous or {}).get("metadata", {}),
-                        "translation_system_prompt": remote["system_prompt"],
-                        "reasoning_effort": remote["reasoning_effort"],
-                    },
-                }, previous))
-            config["llm"]["profiles"] = shared_remote + [
-                profile for profile in old_profiles.values() if profile.get("source") != "remote"
-            ]
-            config["llm"].setdefault("routes", {})["translation"] = config["active_remote_id"]
-            profile_ids = {profile["id"] for profile in config["llm"]["profiles"]}
-            if config["llm"]["routes"].get("caption") not in profile_ids:
-                config["llm"]["routes"].pop("caption", None)
-        from mikazuki.llm.secrets import write_configuration
-        write_configuration(self.path, config)
-        return config
+                previous = old_profiles.get(remote["id"], {})
+                shared_remote.append({
+                    **previous, "id": remote["id"], "name": remote["name"],
+                    "endpoint": remote["endpoint"], "model": remote["model"],
+                    "source": "remote", "api_key": remote["api_key"],
+                    "capabilities": previous.get("capabilities", ["text"]),
+                    "languages": previous.get("languages", ["en", "zh", "zh-CN", "zh-TW", "ja"]),
+                    "metadata": {**previous.get("metadata", {}),
+                                 "translation_system_prompt": remote["system_prompt"],
+                                 "reasoning_effort": remote["reasoning_effort"]},
+                })
+            profiles = shared_remote + [profile for profile in profiles if profile.get("source") != "remote"]
+            routes["translation"] = config["active_remote_id"]
+            if routes.get("caption") not in {profile["id"] for profile in profiles}:
+                routes.pop("caption", None)
+        fallback = shared.get("local_fallback_enabled", False)
+        if "llm_mode" in raw_config or "enabled" in raw_config.get("local", {}):
+            fallback = bool(config["local"].get("enabled"))
+        payload = {"profiles": profiles, "routes": routes, "local_fallback_enabled": fallback}
+        if "revision" in raw_config:
+            payload["revision"] = raw_config["revision"]
+        legacy_settings = {
+            "features": config["features"],
+            "deepseek": {key: config["deepseek"][key] for key in (
+                "batch_size", "max_retries", "timeout_seconds", "concurrency")},
+        }
+        shared_store.save(payload, legacy_settings=legacy_settings)
+        return self.load()
 
 
 def _validate_string(value, name, maximum_length):

@@ -1,0 +1,37 @@
+{
+  "kind": "qwen35-isolated-rebuild-inputs",
+  "schema_version": 1,
+  "blocked_gates": [],
+  "candidate": {
+    "base_commit": "37dc62b400ee0319ac90331e7a8842c245c89cea",
+    "working_tree_diff_sha256": "357f8918e4ef9626f4cd9d43413208756c14756b6c2afec1ec5ff23200b63279"
+  },
+  "samples": [
+    {"id":"chelsea","filename":"chelsea.png","url":"https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/chelsea.png","sha256":"596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb","size_bytes":240512,"license":"CC0"},
+    {"id":"coffee","filename":"coffee.png","url":"https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/coffee.png","sha256":"cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7","size_bytes":466706,"license":"CC0"},
+    {"id":"rocket","filename":"rocket.jpg","url":"https://raw.githubusercontent.com/scikit-image/scikit-image/v0.19.3/skimage/data/rocket.jpg","sha256":"c2dd0de7c538df8d111e479619b129464d0269d0ae5fd18ca91d33a7fdfea95c","size_bytes":112525,"license":"Public domain"}
+  ],
+  "vision": {
+    "repository": "unsloth/Qwen3.5-2B-GGUF",
+    "revision": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
+    "files": [
+      {"filename":"Qwen3.5-2B-Q4_K_M.gguf","size_bytes":1280835840,"sha256":"aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223","url":"https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf"},
+      {"filename":"mmproj-F16.gguf","size_bytes":668227264,"sha256":"7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7","url":"https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf"}
+    ]
+  },
+  "onnx": {
+    "repository": "SmilingWolf/wd-v1-4-convnextv2-tagger-v2",
+    "revision": "bf364499ea843a403cc2770072f31f5cfb2ffa58",
+    "files": [
+      {"filename":"model.onnx","sha256":"e91daa19cd9e8725125b7d70702d1560855fb687f8d8c4218eddaa821f41834a","url":"https://huggingface.co/SmilingWolf/wd-v1-4-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/model.onnx"},
+      {"filename":"selected_tags.csv","sha256":"8c8750600db36233a1b274ac88bd46289e588b338218c2e4c62bbc9f2b516368","url":"https://huggingface.co/SmilingWolf/wd-v1-4-convnextv2-tagger-v2/resolve/bf364499ea843a403cc2770072f31f5cfb2ffa58/selected_tags.csv"}
+    ]
+  },
+  "runtime": {
+    "version":"b11327",
+    "url":"https://github.com/ggml-org/llama.cpp/releases/download/b11327/llama-b11327-bin-win-cpu-x64.zip",
+    "archive_sha256":"4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f",
+    "executable_sha256":"32d43779061d318ab36d0cf8156f314f81ac7e5b805298b7fe9facf3cf0cc82d",
+    "size_bytes":19275534
+  }
+}

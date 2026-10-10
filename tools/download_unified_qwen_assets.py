@@ -1,4 +1,4 @@
-"""U1：在独立新目录下载已锁定的两个 Qwen 图文候选及 CPU runtime。
+"""在独立新目录下载已锁定的 Qwen3.5-2B 图文资产及 CPU runtime。
 
 默认拒绝已有目录；--resume 仅续接本工具建立且输入锁未变化的目录。
 下载使用显式代理、.part/Range、有界重试，全部 size/SHA 校验后才生成
@@ -33,8 +33,6 @@ RUNTIME_SHA = "4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f"
 EXECUTABLE_SHA = "32d43779061d318ab36d0cf8156f314f81ac7e5b805298b7fe9facf3cf0cc82d"
 RUNTIME_URL = "https://github.com/ggml-org/llama.cpp/releases/download/b11327/llama-b11327-bin-win-cpu-x64.zip"
 CANDIDATES = (
-    ("qwen3-vl-2b", "Qwen/Qwen3-VL-2B-Instruct-GGUF", "52d6c8ffea26cc873ac5ad116f8631268d7eb503",
-     "Qwen3VL-2B-Instruct-Q4_K_M.gguf", "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf"),
     ("qwen3.5-2b", "unsloth/Qwen3.5-2B-GGUF", "f6d5376be1edb4d416d56da11e5397a961aca8ae",
      "Qwen3.5-2B-Q4_K_M.gguf", "mmproj-F16.gguf"),
 )
@@ -242,7 +240,7 @@ def main():
     parser.add_argument("--proxy", default="http://127.0.0.1:11809")
     parser.add_argument("--attempts", type=int, choices=range(1, 6), default=3)
     parser.add_argument("--resume", action="store_true", help="仅续接本工具拥有且输入锁不变的失败目录")
-    parser.add_argument("--candidate", choices=[item[0] for item in CANDIDATES], help="只下载指定候选；选型锁进ownership，不复用不同选型根")
+    parser.add_argument("--candidate", choices=[item[0] for item in CANDIDATES], help="下载锁定的 Qwen3.5-2B 资产")
     args = parser.parse_args()
     require(urlparse(args.proxy).scheme == "http" and urlparse(args.proxy).hostname in {"127.0.0.1", "localhost"}
             and urlparse(args.proxy).port is not None, "proxy must be an explicit loopback HTTP proxy")

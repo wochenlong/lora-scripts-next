@@ -6,7 +6,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 import aiohttp
 import pytest
 
-from mikazuki.llm.config import UnifiedConfigStore
+from mikazuki.llm.config import UnifiedConfigStore, config_revision
 from mikazuki.llm.service import UnifiedLLMService
 from mikazuki.tag_translation.translation_config import OnlineServiceConfig
 from mikazuki.tag_translation.translation_service import DeepSeekClient, TranslationManager
@@ -41,10 +41,12 @@ def test_legacy_translation_and_unified_text_path_share_migrated_route_and_resul
             "model": "text-model", "api_key": "fixture-runtime-key",
         }})
         manager = TranslationManager(path, store=None)
-        before = manager._active_llm_config(legacy_store.load())
         shared = UnifiedConfigStore(path)
         migrated = shared.load()
         shared.save(migrated)
+        selected = migrated["profiles"][0]
+        shared.record_verification(selected["id"], config_revision(selected), "text")
+        before = manager._active_llm_config(legacy_store.load())
         after = manager._active_llm_config(legacy_store.load())
         unified = UnifiedLLMService(shared)
         selected = unified.resolve("text")
@@ -71,13 +73,20 @@ def test_legacy_translation_and_unified_text_path_share_migrated_route_and_resul
 def test_translation_fallback_requires_explicit_local_enable(tmp_path, local_enabled):
     path = tmp_path / "translation.json"
     legacy = OnlineServiceConfig(path)
-    legacy.save({"llm_mode": "local" if local_enabled else "remote"})
+    legacy.save({"llm_mode": "local" if local_enabled else "remote", "deepseek": {"api_key": "fixture-runtime-key"}})
     shared = UnifiedConfigStore(path)
     profiles = shared.load()["profiles"]
+    remote = next((item for item in profiles if item.get("source") == "remote"), None)
+    if remote:
+        shared.record_verification(remote["id"], config_revision(remote), "text")
+        profiles = shared.load()["profiles"]
     profiles.append({"id": "local", "name": "local", "source": "managed-local",
                      "endpoint": "http://127.0.0.1:8080/v1/chat/completions", "model": "local",
                      "capabilities": ["text"], "languages": ["zh"]})
     shared.save({"profiles": profiles})
+    if local_enabled:
+        selected = next(item for item in shared.load()["profiles"] if item["id"] == "local")
+        shared.record_verification("local", config_revision(selected), "text")
     manager = TranslationManager(path, store=None)
     section = manager._active_llm_config(legacy.load())
     assert section["endpoint"].startswith("https://")  # Remote always wins, including legacy local mode.
@@ -95,6 +104,8 @@ def test_translation_cache_disable_skips_existing_results_failures_and_writes(tm
         legacy.save({"deepseek": {"endpoint": f"http://127.0.0.1:{server.server_port}/v1/chat/completions", "model": "text-model", "api_key": "fixture-runtime-key"}})
         shared = UnifiedConfigStore(path)
         shared.save({"cache": {"translation": False, "caption": True}})
+        selected = shared.load()["profiles"][0]
+        shared.record_verification(selected["id"], config_revision(selected), "text")
         store = TranslationStore(str(tmp_path / "translations.sqlite3"))
         manager = TranslationManager(path, store)
         config = manager._active_llm_config(legacy.load())

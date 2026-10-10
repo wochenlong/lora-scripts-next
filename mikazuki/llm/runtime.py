@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import threading
 from pathlib import Path
 
 import aiohttp
@@ -30,14 +31,13 @@ caption_cache = CaptionCache(SHARED_CACHE_PATH)
 caption_job_store = CaptionJobStore(SHARED_CACHE_PATH)
 
 _local_vision_service = None
+_local_service_lock = threading.Lock()
 
 
 def get_local_vision_service():
     global _local_vision_service
-    if _local_vision_service is None:
-        from .local_vision import LocalVisionService
-        from mikazuki.tag_translation.translation_config import OnlineServiceConfig
-        _local_vision_service = LocalVisionService(
-            TRANSLATION_ROOT, OnlineServiceConfig(SHARED_CONFIG_PATH), llm_config_store,
-        )
+    with _local_service_lock:
+        if _local_vision_service is None:
+            from .local_vision import LocalVisionService
+            _local_vision_service = LocalVisionService(TRANSLATION_ROOT, unified_config_store=llm_config_store)
     return _local_vision_service

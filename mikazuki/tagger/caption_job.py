@@ -587,6 +587,12 @@ class CaptionJobManager:
         self._guard_path(image_path)
         if caption_sha256(image_path) != image_hash:
             raise CaptionWriteConflict("source image changed before caption write")
+        # The caption can be edited while a remote/local model is generating.
+        # Recheck the destination immediately before formatting and atomic
+        # replacement so a late model response cannot overwrite that edit.
+        current_target_hash = caption_sha256(target) if target.is_file() else None
+        if current_target_hash != before_hash:
+            raise CaptionWriteConflict("caption changed during caption generation")
         if mode == "tag":
             format_hint = self.job_store.find_format(target, before_hash) if self.job_store else None
             merged, should_write = merge_tag_caption(existing, generated, action, existed=target.is_file(), format_hint=format_hint), True

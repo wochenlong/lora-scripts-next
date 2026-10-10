@@ -10,6 +10,15 @@ from mikazuki.app.application import app
 from mikazuki.app.config import app_config
 
 
+def symlink_or_skip(link: Path, target: Path, *, directory: bool = False):
+    try:
+        link.symlink_to(target, target_is_directory=directory)
+    except OSError as error:
+        if getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows symlink privilege is unavailable in this environment")
+        raise
+
+
 @pytest.fixture
 def dataset(tmp_path, monkeypatch):
     root = tmp_path / "datasets"
@@ -69,7 +78,7 @@ def test_zip_export_skips_symlinked_files(dataset):
     outside = dataset.parent / "outside"
     outside.mkdir()
     (outside / "secret.txt").write_text("topsecret", encoding="utf-8")
-    (dataset / "link.txt").symlink_to(outside / "secret.txt")
+    symlink_or_skip(dataset / "link.txt", outside / "secret.txt")
 
     client = TestClient(app)
     response = client.get("/api/datasets/ds/download")
@@ -84,7 +93,7 @@ def test_zip_export_skips_symlinked_directories(dataset):
     outside = dataset.parent / "outside-dir"
     outside.mkdir()
     (outside / "leak.png").write_bytes(b"leak")
-    (dataset / "linked").symlink_to(outside, target_is_directory=True)
+    symlink_or_skip(dataset / "linked", outside, directory=True)
 
     client = TestClient(app)
     response = client.get("/api/datasets/ds/download")

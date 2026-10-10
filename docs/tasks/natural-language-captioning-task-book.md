@@ -8,12 +8,12 @@
 - Canonical progress file：本文，唯一进度入口
 - Related handoff file：本文“暂停现场与恢复入口”，不建立第二套进度账
 - Current branch：`feat/NL-Captioning`
-- Current active phase：U2 共享LLM与配置预设迁移统一（in progress）
+- Current active phase：U4 全量回归与真实链路审计（in progress）
 - Execution readiness：`executing`（2026-10-11用户明确恢复全面施工；get_goal无现有目标后已创建同计划ID，工具确认active）
 - Plan package：[Full增量计划](nl-caption-dev-unification-plan/README.md)
 - Design：[当前设计增量](../design/nl-caption-dev-unification-design.md)
 - Goal：[全程执行提示词](nl-caption-dev-unification-plan/03_goal提示词/最新dev适配与Qwen统一_goal提示词.md)
-- Planning review：`pass-with-boundary`；U1新候选尚未验证，用户指定在U0合并之后执行，未豁免
+- Planning review：`pass-with-boundary`；U1按用户明确决策锁定Qwen3.5-2B，候选比较探针`waived_by_user`，质量/资源不宣称通过
 
 ## 本轮目标与范围
 
@@ -29,15 +29,15 @@
 |---|---|---|---|
 | U0 本地合并与开发基线冻结 | AC-U0，详见对应阶段任务书 | done | merge a1de47e5；完整前端418/67、后端98；安全FF与双祖先、用户hash通过，见U0完成门 |
 | U1 双用途模型探测与默认选型 | CC-06 用户指定选型 | done with user-authorized boundary | Qwen3.5-2B；选型探针waived_by_user，质量/资源unrun，U4/U5功能验收保留 |
-| U2 共享LLM与配置预设迁移统一 | AC-U2，详见对应阶段任务书 | in progress | 默认Qwen3.5-2B；单配置/预设事务/共享runtime正在实现 |
-| U3 最新dev打标与编辑UI完整适配 | AC-U3，详见对应阶段任务书 | pending | unrun |
+| U2 共享LLM与配置预设迁移统一 | AC-U2，详见对应阶段任务书 | done | 共享Profile/CAS/事务/managed runtime；完成门见`U2/completion-gate.md` |
+| U3 最新dev打标与编辑UI完整适配 | AC-U3，详见对应阶段任务书 | done | 新dev Tagger/Editor/settings 接入共享LLM；完成门见`U3/completion-gate.md` |
 | U4 全量回归与真实链路审计 | AC-U4，详见对应阶段任务书 | pending | unrun |
 | U5 从零隔离重建真实验收 | AC-U5，详见对应阶段任务书 | pending | unrun |
 | U6 最终新沙盒启动与goal关闭 | AC-U6，详见对应阶段任务书 | pending | unrun |
 
-- Overall progress：goal active；AC-U0 pass，merge a1de47e5已非强制FF落位feat/NL-Captioning，15项冲突清零。U1按CC-06用户选型通过；U2–U6仍待完整功能验收。
-- Validation status：本轮U0后端98 passed/0 fail/0 skip；前端全量418 passed/67 files，typecheck/lint/build exit0。首败和并发争抢日志保留；独立审查pass。完整U4范围尚未执行。
-- Residual risks：dev漂移、双配置/预设语义、自然语言Tag化、模型双用途质量与资源、真实远程凭据、从零重建。
+- Overall progress：goal active；AC-U0/U1/U2/U3 已按边界记录，U4 正在执行，U5/U6 未签署。U1 的用户选择豁免不替代真实本地功能验收。
+- Validation status：U2 定向后端 153 passed/1 skipped；前端历史全量 418 passed/67 files，最新 UI 改动后的完整 `npm run check` 待重跑。完整 U4/U5/U6 尚未完成。
+- Residual risks：真实远程凭据、本地 Qwen3.5-2B 启动与视觉能力、取消/恢复、中文零请求、从零重建和最终沙盒。
 - Human acceptance：`pending_followup`，不是goal硬门。
 
 ## 决策记录
@@ -54,7 +54,7 @@
 
 ## 唯一下一步
 
-实施U2单Profile/CAS/实际能力状态、单预设事务/明确导入与Qwen3.5-2B单资产/安装/runtime。
+完成 U4 全量前后端与真实 remote/local/WD/CL 验收，随后在全新隔离根执行 U5，从验收版本建立 U6 手测沙盒；每阶段完成门必须与最终业务源码和脱敏证据一致。
 
 ## 暂停现场与恢复入口（2026-10-11历史快照）
 

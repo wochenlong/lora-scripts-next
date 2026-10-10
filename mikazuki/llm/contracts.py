@@ -12,6 +12,11 @@ class LLMContractError(ValueError):
     code = "llm_invalid_response"
 
 
+class LLMConfigConflict(LLMContractError):
+    """The configuration changed after the caller read its revision."""
+    code = "llm_config_conflict"
+
+
 class LLMRouteError(RuntimeError):
     """No profile can satisfy a requested capability."""
 
@@ -35,6 +40,7 @@ class LLMProfile:
     enabled: bool = True
     ready: bool = True
     metadata: Mapping[str, object] = field(default_factory=dict)
+    verified_capabilities: tuple[LLMCapability, ...] | None = None
 
     @property
     def is_remote(self) -> bool:
@@ -46,5 +52,7 @@ class LLMProfile:
 
     def supports(self, capability: LLMCapability, language: str | None = None) -> bool:
         if not self.enabled or not self.ready or capability not in self.capabilities:
+            return False
+        if self.verified_capabilities is not None and capability not in self.verified_capabilities:
             return False
         return language is None or language in self.languages or "*" in self.languages

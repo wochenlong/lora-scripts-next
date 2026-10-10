@@ -101,13 +101,15 @@ def test_truncated_translation_not_cached(tmp_path):
 
 
 def test_unconfigured_remote_is_not_contacted_and_local_cache_replays(tmp_path, monkeypatch):
-    from mikazuki.llm.config import UnifiedConfigStore
+    from mikazuki.llm.config import UnifiedConfigStore, config_revision
     from mikazuki.llm.service import UnifiedLLMService
     store = UnifiedConfigStore(tmp_path / "config.json")
     store.save({"profiles": [
         {"id": "empty", "endpoint": "https://unconfigured.test/v1/chat/completions", "model": "remote", "source": "remote", "capabilities": ["text"], "languages": ["zh-CN"]},
         {"id": "local", "endpoint": "http://127.0.0.1:9999/v1/chat/completions", "model": "local", "source": "local-endpoint", "capabilities": ["text"], "languages": ["zh-CN"]},
     ]})
+    local = next(item for item in store.load()["profiles"] if item["id"] == "local")
+    store.record_verification("local", config_revision(local), "text")
     calls = []
     async def complete(service, prompt, **options):
         profile = service.resolve("text", language=options["language"], allow_local_fallback=options["allow_local_fallback"])
@@ -120,7 +122,7 @@ def test_unconfigured_remote_is_not_contacted_and_local_cache_replays(tmp_path, 
     asyncio.run(translator.translate("A cat.", allow_local_fallback=True))
     assert asyncio.run(translator.translate("A cat.", allow_local_fallback=True))["cached"]
     assert calls == ["local"]
-    assert store.load()["profiles"][0]["ready"] is True
+    assert next(item for item in store.load()["profiles"] if item["id"] == "local")["ready"] is True
 
 
 def test_disconnected_translation_cancels_provider_without_caching(tmp_path, monkeypatch):

@@ -9,7 +9,7 @@ import threading
 from pathlib import Path
 from urllib.parse import urlparse
 
-from .contracts import LLMCapability, LLMContractError, LLMProfile, LLMSource
+from .contracts import LLMCapability, LLMConfigConflict, LLMContractError, LLMProfile, LLMSource
 from .secrets import read_configuration, write_configuration
 
 CURRENT_CONFIG_VERSION = 5
@@ -53,7 +53,7 @@ def _validate_endpoint(value: str) -> str:
     return value
 
 
-def validate_profile(raw: dict, previous: dict | None = None) -> dict:
+def validate_profile(raw: dict, previous: dict | None = None, *, stored=False) -> dict:
     if not isinstance(raw, dict):
         raise LLMContractError("profile must be an object")
     profile_id = _string(raw.get("id", ""), "profile.id", 80)
@@ -93,7 +93,10 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
     for flag in ("enabled", "ready"):
         if flag in raw and not isinstance(raw[flag], bool):
             raise LLMContractError(f"profile.{flag} must be a boolean")
-    secret_revision = (previous or raw).get("secret_revision", 0)
+    supplied_secret_revision = raw.get("secret_revision", 0)
+    if isinstance(supplied_secret_revision, bool) or not isinstance(supplied_secret_revision, int) or supplied_secret_revision < 0:
+        raise LLMContractError("profile.secret_revision must be a non-negative integer")
+    secret_revision = (previous or (raw if stored else {})).get("secret_revision", 0)
     if isinstance(secret_revision, bool) or not isinstance(secret_revision, int) or secret_revision < 0:
         raise LLMContractError("profile.secret_revision must be a non-negative integer")
     metadata = raw.get("metadata", {})
@@ -105,9 +108,9 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
         _string(metadata["translation_system_prompt"], "profile.metadata.translation_system_prompt", 20_000)
     if "reasoning_effort" in metadata and (not isinstance(metadata["reasoning_effort"], str) or metadata["reasoning_effort"] not in {"disabled", "high", "max"}):
         raise LLMContractError("profile.metadata.reasoning_effort must be disabled, high, or max")
-    if previous and api_key != previous.get("api_key", ""):
+    if (previous and api_key != previous.get("api_key", "")) or (not previous and not stored and api_key):
         secret_revision += 1
-    return {
+    result = {
         "id": profile_id,
         "name": name,
         "endpoint": endpoint,
@@ -119,10 +122,22 @@ def validate_profile(raw: dict, previous: dict | None = None) -> dict:
         "asset_id": asset_id,
         "revision": revision,
         "enabled": bool(raw.get("enabled", True)),
-        "ready": bool(raw.get("ready", True)),
+        "ready": False,
         "metadata": copy.deepcopy(metadata),
         "secret_revision": secret_revision,
     }
+    verification = copy.deepcopy((raw if stored else previous or {}).get("verification", {}))
+    fingerprint = config_revision(result)
+    if not isinstance(verification, dict) or verification.get("fingerprint") != fingerprint:
+        verification = {}
+    capabilities_verified = verification.get("capabilities", [])
+    if not isinstance(capabilities_verified, list) or any(cap not in capabilities for cap in capabilities_verified):
+        verification = {}
+        capabilities_verified = []
+    result["verification"] = verification
+    result["verified_capabilities"] = list(capabilities_verified)
+    result["ready"] = profile_ready(result)
+    return result
 
 
 def _profile_from_legacy(section: dict, profile_id: str, source: LLMSource = "remote") -> dict:
@@ -155,7 +170,7 @@ def migrate_legacy_translation_config(raw: dict | None) -> dict:
     if not isinstance(raw, dict):
         raise LLMContractError("configuration must be an object")
     if raw.get("version") == CURRENT_CONFIG_VERSION and isinstance(raw.get("profiles"), list):
-        profiles = [validate_profile(item) for item in raw["profiles"]]
+        profiles = [validate_profile(item, stored=True) for item in raw["profiles"]]
         return {
             "version": CURRENT_CONFIG_VERSION,
             "profiles": profiles,
@@ -214,7 +229,30 @@ def mask_profiles(config: dict) -> dict:
     return masked
 
 
+def document_revision(config: dict) -> str:
+    """Stable CAS identity includes key generations, never key bytes."""
+    canonical = copy.deepcopy(config)
+    canonical.pop("revision", None)
+    for profile in canonical.get("profiles", []):
+        profile.pop("api_key", None)
+        profile.pop("api_key_configured", None)
+    return hashlib.sha256(json.dumps(canonical, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:24]
+
+
+def profile_ready(profile: dict) -> bool:
+    endpoint = urlparse(profile.get("endpoint", ""))
+    anonymous_loopback = endpoint.scheme == "http" and endpoint.hostname in {"localhost", "127.0.0.1", "::1"}
+    has_credentials = profile.get("source") != "remote" or bool(profile.get("api_key")) or anonymous_loopback
+    verification = profile.get("verification", {})
+    verified = profile.get("verified_capabilities", [])
+    return bool(profile.get("enabled", True) and has_credentials and verified and isinstance(verification, dict)
+                and verification.get("fingerprint") == config_revision(profile)
+                and all(cap in profile.get("capabilities", []) for cap in verified))
+
+
 def validate_options(config: dict) -> None:
+    if not isinstance(config.get("local_fallback_enabled", False), bool):
+        raise LLMContractError("local_fallback_enabled must be a boolean")
     routes = config.get("routes", {})
     if not isinstance(routes, dict) or any(key not in {"translation", "caption"} or not isinstance(value, str) for key, value in routes.items()):
         raise LLMContractError("routes must map translation or caption to a profile id")
@@ -258,12 +296,15 @@ def config_revision(profile: dict | LLMProfile, prompt_revision: str | None = No
             "asset_id": profile.asset_id,
             "revision": profile.revision,
             "secret_revision": profile.metadata.get("secret_revision", 0),
+            "metadata": {key: value for key, value in profile.metadata.items() if key != "secret_revision"},
         }
     else:
         data = {
             key: profile.get(key)
-            for key in ("id", "endpoint", "model", "source", "capabilities", "languages", "asset_id", "revision", "secret_revision")
+            for key in ("id", "endpoint", "model", "source", "capabilities", "languages", "asset_id", "revision", "secret_revision", "metadata")
         }
+    # Tuples from dataclass profiles serialize identically to stored lists.
+    data.setdefault("metadata", {})
     data["prompt_revision"] = prompt_revision
     return hashlib.sha256(json.dumps(data, sort_keys=True, ensure_ascii=False).encode("utf-8")).hexdigest()[:24]
 
@@ -286,13 +327,25 @@ class UnifiedConfigStore:
         return payload
 
     def load(self) -> dict:
+        with configuration_lock(self.path):
+            config = self._load()
+            config["revision"] = document_revision(config)
+            return config
+
+    def current_revision(self) -> str:
+        return self.load()["revision"]
+
+    def save_if_current(self, payload: dict, expected_revision: str) -> dict:
+        return self.save({**payload, "revision": expected_revision})
+
+    def _load(self) -> dict:
         document = self._read_document()
         raw = document.get("llm")
         if isinstance(raw, dict):
             if not isinstance(raw.get("profiles"), list) or len(raw["profiles"]) > 24 or any(not isinstance(item, dict) for item in raw["profiles"]):
                 raise LLMContractError("stored profiles must be an array of at most 24 objects")
             profiles = [
-                validate_profile(item, None)
+                validate_profile(item, None, stored=True)
                 for item in raw.get("profiles", [])
                 if isinstance(item, dict)
             ]
@@ -305,6 +358,7 @@ class UnifiedConfigStore:
                     "routes": copy.deepcopy(raw.get("routes", {})),
                     "prompt_presets": copy.deepcopy(raw.get("prompt_presets", [])),
                     "cache": copy.deepcopy(raw.get("cache", {"translation": True, "caption": True})),
+                    "local_fallback_enabled": raw.get("local_fallback_enabled", False),
                 }
                 validate_options(config)
                 return config
@@ -315,20 +369,23 @@ class UnifiedConfigStore:
                 "routes": {},
                 "prompt_presets": [],
                 "cache": {"translation": True, "caption": True},
+                "local_fallback_enabled": False,
             }
         return migrate_legacy_translation_config(document)
 
     def load_masked(self) -> dict:
         return mask_profiles(self.load())
 
-    def save(self, payload: dict) -> dict:
+    def save(self, payload: dict, *, legacy_settings: dict | None = None) -> dict:
         with configuration_lock(self.path):
-            return self._save(payload)
+            return self._save(payload, legacy_settings=legacy_settings)
 
-    def _save(self, payload: dict) -> dict:
+    def _save(self, payload: dict, *, legacy_settings: dict | None = None) -> dict:
         if not isinstance(payload, dict):
             raise LLMContractError("shared LLM configuration must be an object")
         current = self.load()
+        if "revision" in payload and payload["revision"] != current["revision"]:
+            raise LLMConfigConflict("shared LLM configuration revision conflict")
         previous = {item["id"]: item for item in current.get("profiles", [])}
         raw_profiles = payload.get("profiles", current.get("profiles", []))
         if not isinstance(raw_profiles, list) or len(raw_profiles) > 24:
@@ -358,13 +415,55 @@ class UnifiedConfigStore:
             "routes": routes,
             "prompt_presets": copy.deepcopy(payload.get("prompt_presets", current.get("prompt_presets", []))),
             "cache": copy.deepcopy(payload.get("cache", current.get("cache", {"translation": True, "caption": True}))),
+            "local_fallback_enabled": payload.get("local_fallback_enabled", current.get("local_fallback_enabled", False)),
         }
         validate_options(config)
         document = self._read_document()
+        if legacy_settings is not None:
+            allowed = {"batch", "timeout", "concurrency", "features", "local", "llm_mode", "source", "dictionary", "deepseek"}
+            if not isinstance(legacy_settings, dict) or set(legacy_settings) - allowed:
+                raise LLMContractError("legacy settings contain non-adapter fields")
+            for section in ("deepseek", "local"):
+                settings = legacy_settings.get(section, {})
+                if not isinstance(settings, dict):
+                    raise LLMContractError("legacy adapter settings must be objects")
+                if section == "deepseek" and set(settings) - {"batch_size", "max_retries", "timeout_seconds", "concurrency"}:
+                    raise LLMContractError("legacy adapter cannot overwrite shared remote credentials or model")
+                if section == "local" and set(settings) & {"endpoint", "model", "api_key", "asset_id", "ready", "verified_capabilities"}:
+                    raise LLMContractError("legacy adapter cannot overwrite shared local runtime identity")
+            for key, value in legacy_settings.items():
+                if isinstance(value, dict):
+                    document[key] = {**copy.deepcopy(document.get(key, {})), **copy.deepcopy(value)}
+                else:
+                    document[key] = copy.deepcopy(value)
+        document.setdefault("local", {})["enabled"] = config["local_fallback_enabled"]
+        document["llm_mode"] = "remote"
         document["llm"] = config
         self._sync_legacy_translation_fields(document, profiles, routes)
         write_configuration(self.path, document)
-        return config
+        return self.load()
+
+    def record_verification(self, profile_id: str, fingerprint: str, capability: LLMCapability, *, successful=True) -> dict:
+        """Only server-side probes call this method, never incoming profile payloads."""
+        with configuration_lock(self.path):
+            current = self.load()
+            selected = next((item for item in current["profiles"] if item["id"] == profile_id), None)
+            if selected is None or config_revision(selected) != fingerprint:
+                raise LLMConfigConflict("profile changed while capability verification was running")
+            if capability not in selected["capabilities"]:
+                raise LLMContractError("verification capability was not declared")
+            verified = set(selected.get("verified_capabilities", []))
+            if successful:
+                verified.add(capability)
+            else:
+                verified.discard(capability)
+            selected["verification"] = {"fingerprint": fingerprint, "capabilities": sorted(verified)}
+            # Bypass public profile payload validation solely for this trusted server result.
+            document = self._read_document()
+            document["llm"] = {key: value for key, value in current.items() if key != "revision"}
+            self._sync_legacy_translation_fields(document, current["profiles"], current["routes"])
+            write_configuration(self.path, document)
+            return self.load()
 
     @staticmethod
     def _sync_legacy_translation_fields(document: dict, profiles: list[dict], routes: dict) -> None:

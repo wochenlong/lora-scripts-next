@@ -1,33 +1,29 @@
 from __future__ import annotations
 
 import copy
-import base64
 import hashlib
 import json
 import os
 import re
-import threading
-import tempfile
-import time
-import stat
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Any
 
 from .config import LLMContractError
+from mikazuki import user_data_transactions as tx
 
 _LANGUAGES = {"zh-CN", "zh-TW", "en", "ja"}
 _KINDS = {"caption_prompt"}
-_LOCK = threading.RLock()
-_LOCK_OWNER = threading.local()
-_JOURNAL = ".caption-preset-transaction.json"
+_JOURNAL = tx.JOURNAL
+CAPTION_TYPE = "tagger-caption"
 
 
 def user_data_root() -> Path:
-    configured = os.environ.get("MIKAZUKI_USER_DATA_ROOT", "").strip()
-    root = Path(__file__).resolve().parents[2]
-    path = Path(configured).expanduser() if configured else Path("user_data")
-    return path if path.is_absolute() else root / path
+    return tx.resolve_root()
+
+
+def at_root(root):
+    return tx.at_root(root)
 
 
 def presets_dir() -> Path:
@@ -50,7 +46,7 @@ def _text(value: Any, field: str, limit: int) -> str:
 def validate_preset(raw: dict[str, Any]) -> dict[str, Any]:
     if not isinstance(raw, dict):
         raise LLMContractError("caption preset must be an object")
-    allowed = {"schema_version", "id", "kind", "name", "template", "system_prompt", "output_format", "language", "max_length", "model_capabilities", "revision"}
+    allowed = {"schema_version", "id", "kind", "name", "template", "system_prompt", "output_format", "language", "max_length", "model_capabilities", "revision", "train_type", "description", "created_at", "updated_at", "builtin_id"}
     if set(raw) - allowed:
         raise LLMContractError("caption preset contains unknown fields")
     if type(raw.get("schema_version", 1)) is not int or raw.get("schema_version", 1) != 1:
@@ -63,6 +59,8 @@ def validate_preset(raw: dict[str, Any]) -> dict[str, Any]:
     kind = raw.get("kind", "caption_prompt")
     if not isinstance(kind, str) or kind not in _KINDS:
         raise LLMContractError("preset.kind is invalid")
+    if raw.get("train_type", CAPTION_TYPE) != CAPTION_TYPE:
+        raise LLMContractError("caption preset train_type is immutable")
     name = _text(raw.get("name"), "preset.name", 120)
     template = _text(raw.get("template"), "preset.template", 8000)
     system_prompt = raw.get("system_prompt", "")
@@ -71,7 +69,7 @@ def validate_preset(raw: dict[str, Any]) -> dict[str, Any]:
     system_prompt = system_prompt.strip()
     if len(system_prompt) > 8000:
         raise LLMContractError("preset.system_prompt is too long")
-    language = raw.get("language", "zh-CN")
+    language = raw.get("language", "en")
     if not isinstance(language, str) or language not in _LANGUAGES:
         raise LLMContractError("preset.language is unsupported")
     output_format = raw.get("output_format", "plain_text")
@@ -83,197 +81,128 @@ def validate_preset(raw: dict[str, Any]) -> dict[str, Any]:
     capabilities = raw.get("model_capabilities", ["vision", "caption"])
     if not isinstance(capabilities, list) or any(not isinstance(item, str) or item not in {"vision", "caption"} for item in capabilities) or "vision" not in capabilities:
         raise LLMContractError("preset.model_capabilities must include vision")
-    variables = re.findall(r"\{\{([^{}]*)\}\}", template)
+    capabilities = sorted(set(capabilities))
+    variables = re.findall(r"\{\{([^{}]*)\}\}", template + system_prompt)
     if any(variable not in {"language", "mode", "image_name", "existing_caption", "existing_tags"} for variable in variables):
         raise LLMContractError("preset.template contains an unknown variable")
     revision = hashlib.sha256(json.dumps({"kind": kind, "template": template, "system_prompt": system_prompt, "language": language, "max_length": maximum, "output_format": output_format, "model_capabilities": capabilities}, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:24]
-    return {"schema_version": 1, "id": identifier, "kind": kind, "name": name, "template": template, "system_prompt": system_prompt, "output_format": output_format, "language": language, "max_length": maximum, "model_capabilities": list(dict.fromkeys(capabilities)), "revision": revision}
+    result = {"schema_version": 1, "id": identifier, "kind": kind, "train_type": CAPTION_TYPE, "name": name, "template": template, "system_prompt": system_prompt, "output_format": output_format, "language": language, "max_length": maximum, "model_capabilities": list(dict.fromkeys(capabilities)), "revision": revision}
+    for field in ("description", "created_at", "updated_at"):
+        if field in raw:
+            value = raw[field]
+            if not isinstance(value, str) or len(value) > 2000:
+                raise LLMContractError(f"preset.{field} is invalid")
+            result[field] = value
+    if "builtin_id" in raw:
+        builtin = raw["builtin_id"]
+        # Only an explicitly declared builtin identity is projected. Display names
+        # never confer builtin status or permit replacing a user's prompt.
+        if builtin is not None and builtin not in {"builtin-caption-en", "builtin-caption-zh", "builtin-caption-en-concise", "builtin-caption-en-detailed"}:
+            raise LLMContractError("preset.builtin_id is invalid")
+        result["builtin_id"] = builtin
+    tx.json_bytes(result)
+    return result
 
 
-def _read_json(path: Path, default: Any) -> Any:
-    _check_path(path)
-    if not path.is_file():
-        return copy.deepcopy(default)
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as exc:
-        raise LLMContractError(f"user data is unreadable: {path.name}") from exc
-    return value
+def _check_path(path):
+    tx.check_path(path)
 
 
-def list_presets() -> list[dict[str, Any]]:
-    with _store_guard():
-        directory = presets_dir()
-        _check_path(directory)
-        if not directory.is_dir():
-            return []
-        result = []
-        for path in sorted(directory.glob("*.json")):
-            raw = _read_json(path, {})
-            if isinstance(raw, dict) and raw.get("kind") == "caption_prompt":
-                result.append(validate_preset(raw))
-        return result
+def _read_json(path, default):
+    return tx.read_json(path, default)
 
 
-def document_revision() -> str:
-    with _store_guard():
-        # Include all settings fields, so another settings editor cannot silently
-        # overwrite changes through this Caption-only projection.
-        value = {"presets": list_presets(), "settings": _read_json(settings_path(), {})}
-        return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True).encode("utf-8")).hexdigest()[:24]
+def _bytes(path):
+    return tx.read_bytes(path)
 
 
-def _check_path(path: Path) -> None:
-    root = user_data_root().absolute()
-    try:
-        path.absolute().relative_to(root)
-        path.resolve().relative_to(root.resolve())
-    except ValueError:
-        raise LLMContractError("caption preset path escapes user_data") from None
-    current = path.absolute()
-    while True:
-        if current.exists() or current.is_symlink():
-            attributes = getattr(current.lstat(), "st_file_attributes", 0)
-            if current.is_symlink() or attributes & getattr(stat, "FILE_ATTRIBUTE_REPARSE_POINT", 0x400):
-                raise LLMContractError("user data cannot use symbolic links or junctions")
-        if current == root:
-            break
-        current = current.parent
+def _json_bytes(value):
+    return tx.json_bytes(value)
 
 
-def _bytes(path: Path) -> bytes | None:
-    _check_path(path)
-    return path.read_bytes() if path.exists() else None
+def _atomic_bytes(path, value):
+    tx.atomic_bytes(path, value)
 
 
-def _encoded(value: bytes | None) -> str | None:
-    return None if value is None else base64.b64encode(value).decode("ascii")
-
-
-def _decoded(value) -> bytes | None:
-    if value is None:
-        return None
-    if not isinstance(value, str):
-        raise LLMContractError("caption preset transaction is invalid")
-    try:
-        return base64.b64decode(value, validate=True)
-    except ValueError:
-        raise LLMContractError("caption preset transaction is invalid") from None
-
-
-def _json_bytes(payload: dict) -> bytes:
-    return (json.dumps(payload, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-
-
-def _atomic_bytes(target: Path, value: bytes | None) -> None:
-    _check_path(target)
-    if value is None:
-        target.unlink(missing_ok=True)
-        return
-    target.parent.mkdir(parents=True, exist_ok=True)
-    descriptor, temporary_name = tempfile.mkstemp(prefix=".caption-", suffix=".tmp", dir=target.parent)
-    try:
-        with os.fdopen(descriptor, "wb") as stream:
-            stream.write(value)
-            stream.flush()
-            os.fsync(stream.fileno())
-        _check_path(target)
-        os.replace(temporary_name, target)
-    finally:
-        Path(temporary_name).unlink(missing_ok=True)
-
-
-def _recover() -> None:
-    journal_path = user_data_root() / _JOURNAL
-    journal = _read_json(journal_path, None)
-    if journal is None:
-        return
-    if not isinstance(journal, dict) or journal.get("schema_version") != 1 or journal.get("state") not in {"prepared", "committed"} or not isinstance(journal.get("files"), list):
-        raise LLMContractError("caption preset transaction is invalid")
-    files = []
-    seen = set()
-    for entry in journal["files"]:
-        if not isinstance(entry, dict):
-            raise LLMContractError("caption preset transaction is invalid")
-        relative = entry.get("path")
-        if not isinstance(relative, str) or not (relative in {"settings.json", "settings.json.bak"} or re.fullmatch(r"presets/[A-Za-z0-9][A-Za-z0-9._-]*\.json(?:\.bak)?", relative)) or relative.casefold() in seen:
-            raise LLMContractError("caption preset transaction path is invalid")
-        seen.add(relative.casefold())
-        target = user_data_root() / relative
-        _check_path(target)
-        before, after = _decoded(entry.get("before")), _decoded(entry.get("after"))
-        files.append((target, before, after))
-    if journal["state"] == "prepared":
-        # Do not erase an unrelated edit made outside the cooperating lock.
-        if any(_bytes(target) not in (before, after) for target, before, after in files):
-            raise LLMContractError("caption preset recovery conflict")
-        for target, before, _after in reversed(files):
-            if _bytes(target) != before:
-                _atomic_bytes(target, before)
-    journal_path.unlink()
+def _recover():
+    tx.recover(_atomic_bytes)
 
 
 @contextmanager
 def _store_guard():
-    with _LOCK:
-        root = user_data_root()
-        if getattr(_LOCK_OWNER, "root", None) == str(root.absolute()):
-            yield
-            return
-        _check_path(root)
-        root.mkdir(parents=True, exist_ok=True)
-        lock_path = root / ".caption-presets.lock"
-        _check_path(lock_path)
-        with lock_path.open("a+b") as stream:
-            if stream.seek(0, os.SEEK_END) == 0:
-                stream.write(b"0")
-                stream.flush()
-            deadline = time.monotonic() + 5.0
-            while True:
-                try:
-                    stream.seek(0)
-                    if os.name == "nt":
-                        import msvcrt
-                        msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-                    else:
-                        import fcntl
-                        fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-                    break
-                except OSError:
-                    if time.monotonic() >= deadline:
-                        raise LLMContractError("caption preset store is busy") from None
-                    time.sleep(.025)
-            _LOCK_OWNER.root = str(root.absolute())
-            try:
-                _recover()
-                yield
-            finally:
-                _LOCK_OWNER.root = None
-                stream.seek(0)
-                if os.name == "nt":
-                    import msvcrt
-                    msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-                else:
-                    import fcntl
-                    fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
-
-
-def _transaction(changes: dict[Path, bytes | None]) -> None:
-    files = [{"path": target.relative_to(user_data_root()).as_posix(), "before": _encoded(_bytes(target)), "after": _encoded(value)} for target, value in changes.items()]
-    if all(entry["before"] == entry["after"] for entry in files):
-        return
-    journal_path = user_data_root() / _JOURNAL
-    journal = {"schema_version": 1, "state": "prepared", "files": files}
-    _atomic_bytes(journal_path, _json_bytes(journal))
     try:
-        for target, value in changes.items():
-            _atomic_bytes(target, value)
-        journal["state"] = "committed"
-        _atomic_bytes(journal_path, _json_bytes(journal))
-    except BaseException:
-        _recover()
-        raise
-    journal_path.unlink()
+        with tx.guard(write=_atomic_bytes):
+            yield
+    except tx.TransactionError as exc:
+        raise LLMContractError(str(exc)) from exc
+
+
+def _transaction(changes):
+    tx.transaction(changes, _atomic_bytes)
+
+
+def is_caption(raw):
+    return isinstance(raw, dict) and (raw.get("kind") == "caption_prompt" or raw.get("train_type") == CAPTION_TYPE)
+
+
+def from_envelope(raw):
+    if raw.get("kind") == "caption_prompt":
+        return validate_preset(raw)
+    if raw.get("train_type") != CAPTION_TYPE or not isinstance(raw.get("config"), dict):
+        raise LLMContractError("caption preset envelope is invalid")
+    config = copy.deepcopy(raw["config"])
+    template = config.pop("prompt", None)
+    if template is None:
+        template = config.pop("template", None)
+    elif "template" in config and config.pop("template") != template:
+        raise LLMContractError("caption prompt and template disagree")
+    # Dev's old envelope exposes only prompt. Keep its original template and
+    # explicitly carry the generation metadata rather than silently dropping it.
+    result = {**config, "id": raw.get("id"), "name": raw.get("name"),
+              "kind": "caption_prompt", "train_type": CAPTION_TYPE, "template": template}
+    for key in ("description", "created_at", "updated_at"):
+        if key in raw:
+            result[key] = raw[key]
+    return validate_preset(result)
+
+
+def to_envelope(item):
+    item = validate_preset(item)
+    config = {key: copy.deepcopy(value) for key, value in item.items()
+              if key not in {"id", "name", "kind", "train_type", "template", "description", "created_at", "updated_at"}}
+    config["prompt"] = item["template"]
+    result = {"id": item["id"], "name": item["name"], "train_type": CAPTION_TYPE, "config": config}
+    for key in ("description", "created_at", "updated_at"):
+        if key in item:
+            result[key] = item[key]
+    return result
+
+
+def _records():
+    directory = presets_dir()
+    _check_path(directory)
+    return [(path, _read_json(path, {})) for path in sorted(directory.glob("*.json"))] if directory.is_dir() else []
+
+
+def list_presets():
+    with _store_guard():
+        result = [from_envelope(raw) for _path, raw in _records() if is_caption(raw)]
+        if len({item["id"].casefold() for item in result}) != len(result):
+            raise LLMContractError("caption preset ids must be unique")
+        return result
+
+
+def document_revision():
+    with _store_guard():
+        # Raw legacy envelopes are part of CAS as well: projection alone must
+        # not conceal an external edit before confirmed migration.
+        value = {"presets": list_presets(), "settings": _read_json(settings_path(), {}),
+                 "sources": {path.name: raw for path, raw in _records() if is_caption(raw)}}
+        return _hash(value)[:24]
+
+
+def _hash(value):
+    return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, allow_nan=False).encode("utf-8")).hexdigest()
 
 
 def _validate_items(items) -> list[dict]:
@@ -285,68 +214,90 @@ def _validate_items(items) -> list[dict]:
     return validated
 
 
-def _preset_changes(validated: list[dict]) -> dict[Path, bytes | None]:
-    directory = presets_dir()
-    _check_path(directory)
+def _preset_changes(validated, *, migrating=False):
     wanted = {item["id"].casefold(): item for item in validated}
     changes = {}
-    for path in sorted(directory.glob("*.json")):
-        raw = _read_json(path, {})
+    for path, raw in _records():
         existing_id = path.stem.casefold()
-        if existing_id in wanted and (not isinstance(raw, dict) or raw.get("kind") != "caption_prompt" or path.stem != wanted[existing_id]["id"]):
+        if existing_id in wanted and (not is_caption(raw) or path.stem != wanted[existing_id]["id"]):
             raise LLMContractError("caption preset id collides with another preset type or spelling")
-        if isinstance(raw, dict) and raw.get("kind") == "caption_prompt":
-            validate_preset(raw)
+        if is_caption(raw):
+            from_envelope(raw)
+            if (raw.get("kind") != "caption_prompt" or raw.get("train_type") != CAPTION_TYPE) and not migrating:
+                raise LLMContractError("legacy caption preset requires explicit import preview and confirmation")
             changes[path.with_suffix(".json.bak")] = _bytes(path)
             if existing_id not in wanted:
                 changes[path] = None
     for item in validated:
-        changes[directory / f"{item['id']}.json"] = _json_bytes(item)
+        changes[presets_dir() / f"{item['id']}.json"] = _json_bytes(item)
     return changes
 
 
-def save_presets(items: list[dict[str, Any]], *, expected_revision: str | None = None) -> list[dict[str, Any]]:
-    validated = _validate_items(items)
+def _settings_raw():
+    value = _read_json(settings_path(), {"schema_version": 1, "revision": 0})
+    if not isinstance(value, dict):
+        raise LLMContractError("user settings must be an object")
+    if type(value.get("revision", 0)) is not int or value.get("revision", 0) < 0:
+        raise LLMContractError("user settings revision is invalid")
+    return value
+
+
+def settings():
     with _store_guard():
-        if expected_revision is not None and expected_revision != document_revision():
-            raise LLMContractError("caption preset revision conflict")
-        _transaction(_preset_changes(validated))
-        return validated
+        value = _settings_raw()
+        state = value.get("caption_presets", {})
+        defaults = value.get("default_presets", {})
+        return {"default_caption_preset_id": defaults.get(CAPTION_TYPE, value.get("default_caption_preset_id")) or None,
+                "legacy_imported": bool(state.get("imports")) or value.get("caption_legacy_imported") is True}
 
 
-def settings() -> dict[str, Any]:
-    with _store_guard():
-        value = _read_json(settings_path(), {})
-        if not isinstance(value, dict):
-            raise LLMContractError("user settings must be an object")
-        return {"default_caption_preset_id": value.get("default_caption_preset_id") or None, "legacy_imported": value.get("caption_legacy_imported") is True}
-
-
-def document() -> dict:
+def document():
     with _store_guard():
         return {"presets": list_presets(), "settings": settings(), "revision": document_revision()}
 
 
-def save_settings(default_caption_preset_id: str | None) -> dict[str, Any]:
+def _save(validated, default_id, *, imports=None, migrating=False):
+    if default_id is not None and default_id not in {item["id"] for item in validated}:
+        raise LLMContractError("default caption preset does not exist")
+    value = _settings_raw()
+    if not isinstance(value.get("default_presets", {}), dict) or not isinstance(value.get("caption_presets", {}), dict):
+        raise LLMContractError("caption preset settings are invalid")
+    # Preserve unrelated existing settings, including legacy extension fields.
+    # Only the Caption authority is canonicalized, never write both defaults.
+    value.setdefault("schema_version", 1)
+    value["revision"] = value.get("revision", 0) + 1
+    value.setdefault("default_presets", {})[CAPTION_TYPE] = default_id or ""
+    value.pop("default_caption_preset_id", None)
+    value.pop("caption_legacy_imported", None)
+    state = value.setdefault("caption_presets", {"schema_version": 1, "imports": {}})
+    state.setdefault("schema_version", 1)
+    state.setdefault("imports", {})
+    if imports is not None:
+        state["imports"] = imports
+    changes = _preset_changes(validated, migrating=migrating)
+    target = settings_path()
+    if target.is_file():
+        changes[target.with_suffix(".json.bak")] = _bytes(target)
+    changes[target] = _json_bytes(value)
+    return changes
+
+
+def save_presets(items, *, expected_revision=None):
+    validated = _validate_items(items)
     with _store_guard():
-        if default_caption_preset_id is not None:
-            default_caption_preset_id = _text(default_caption_preset_id, "default_caption_preset_id", 80)
-            if default_caption_preset_id not in {item["id"] for item in list_presets()}:
-                raise LLMContractError("default caption preset does not exist")
-        target = settings_path()
-        value = _read_json(target, {})
-        if not isinstance(value, dict):
-            raise LLMContractError("user settings must be an object")
-        value.setdefault("schema_version", 1)
-        value["default_caption_preset_id"] = default_caption_preset_id
-        changes = {target: _json_bytes(value)}
-        if target.is_file():
-            changes[target.with_suffix(".json.bak")] = _bytes(target)
-        _transaction(changes)
+        if expected_revision is not None and expected_revision != document_revision():
+            raise LLMContractError("caption preset revision conflict")
+        _transaction(_save(validated, settings()["default_caption_preset_id"]))
+        return validated
+
+
+def save_settings(default_caption_preset_id):
+    with _store_guard():
+        _transaction(_save(list_presets(), default_caption_preset_id))
         return settings()
 
 
-def save_document(payload: dict, *, mark_legacy_imported: bool = False) -> dict:
+def save_document(payload, *, mark_legacy_imported=False):
     with _store_guard():
         if not isinstance(payload, dict) or set(payload) - {"presets", "settings", "revision"}:
             raise LLMContractError("caption preset document is invalid")
@@ -356,37 +307,126 @@ def save_document(payload: dict, *, mark_legacy_imported: bool = False) -> dict:
         options = payload.get("settings", {})
         if not isinstance(options, dict) or set(options) - {"default_caption_preset_id", "legacy_imported"}:
             raise LLMContractError("caption preset settings are invalid")
-        default_id = options.get("default_caption_preset_id")
-        if default_id is not None and default_id not in {item["id"] for item in validated}:
-            raise LLMContractError("default caption preset does not exist")
-        # Settings validation must precede any preset mutation.
-        existing_settings = _read_json(settings_path(), {})
-        if not isinstance(existing_settings, dict):
-            raise LLMContractError("user settings must be an object")
-        if "legacy_imported" in options and options["legacy_imported"] is not (existing_settings.get("caption_legacy_imported") is True):
+        if "legacy_imported" in options and options["legacy_imported"] is not settings()["legacy_imported"]:
             raise LLMContractError("legacy import state is read-only")
-        changes = _preset_changes(validated)
-        existing_settings.setdefault("schema_version", 1)
-        existing_settings["default_caption_preset_id"] = default_id
         if mark_legacy_imported:
-            existing_settings["caption_legacy_imported"] = True
-        target = settings_path()
-        if target.is_file():
-            changes[target.with_suffix(".json.bak")] = _bytes(target)
-        changes[target] = _json_bytes(existing_settings)
-        _transaction(changes)
+            raise LLMContractError("legacy import requires preview and confirmation")
+        _transaction(_save(validated, options.get("default_caption_preset_id")))
         return document()
 
 
-def import_legacy(items: list[dict], *, expected_revision: str) -> dict:
-    """Explicit import only; existing user ids win and originals stay intact."""
+def _import_source(payload):
+    source = payload.get("source")
+    if source not in {"browser", "legacy_config", "user_data"}:
+        raise LLMContractError("caption import source is invalid")
+    if source == "user_data":
+        if "presets" in payload:
+            raise LLMContractError("user_data import source is server-owned")
+        records = [(path, raw) for path, raw in _records() if is_caption(raw) and
+                   (raw.get("kind") != "caption_prompt" or raw.get("train_type") != CAPTION_TYPE)]
+        raw_items = [raw for _path, raw in records]
+        source_value = [{"path": path.name, "raw": raw} for path, raw in records]
+        if not records:
+            # After a successful in-place migration the original files are no
+            # longer legacy. Resolve the receipt's immutable source snapshot so
+            # repeating the same import returns the same successful receipt.
+            previous = [receipt for receipt in _settings_raw().get("caption_presets", {}).get("imports", {}).values()
+                        if receipt.get("source") == "user_data"]
+            if previous:
+                snapshot = user_data_root() / previous[-1]["snapshot"]
+                preserved = _read_json(snapshot, {})
+                source_value = preserved.get("presets", [])
+                raw_items = [item["raw"] for item in source_value]
+    else:
+        raw_items = payload.get("presets")
+        if not isinstance(raw_items, list) or len(raw_items) > 24:
+            raise LLMContractError("caption import presets must be an array of at most 24 objects")
+        records, source_value = [], raw_items
+    # A migration snapshot is deliberately only a bounded preset source, never
+    # the parent config document (which could contain an API key).
+    from mikazuki.user_data import without_credentials
+    if without_credentials(source_value) != source_value:
+        raise LLMContractError("caption import cannot contain credentials")
+    items = []
+    for raw in raw_items:
+        if not isinstance(raw, dict):
+            raise LLMContractError("caption import preset is invalid")
+        if raw.get("train_type") == CAPTION_TYPE and "config" in raw:
+            items.append(from_envelope(raw))
+        else:
+            items.append(validate_preset({**raw, "kind": "caption_prompt"}))
+    fingerprint = _hash({"source": source, "presets": source_value})
+    return source, fingerprint, items, records, source_value
+
+
+def preview_import(payload):
     with _store_guard():
-        if expected_revision != document_revision():
-            raise LLMContractError("caption preset revision conflict")
-        if settings()["legacy_imported"]:
-            return document()
-        current = {item["id"].casefold(): item for item in list_presets()}
+        if not isinstance(payload, dict) or set(payload) - {"source", "presets", "id_map", "default_preset_id", "confirmed", "preview_revision", "revision"}:
+            raise LLMContractError("caption import request is invalid")
+        source, fingerprint, items, records, source_value = _import_source(payload)
+        id_map = payload.get("id_map", {})
+        if not isinstance(id_map, dict) or set(id_map) - {item["id"] for item in items}:
+            raise LLMContractError("caption import id_map is invalid")
+        current = list_presets()
+        record_ids = {raw.get("id", path.stem).casefold() for path, raw in records}
+        retained = [item for item in current if item["id"].casefold() not in record_ids]
+        occupied = {path.stem.casefold() for path, _raw in _records() if path.stem.casefold() not in record_ids}
+        proposed, conflicts, mapped = [], [], {}
         for item in items:
-            migrated = validate_preset({**{key: value for key, value in item.items() if key != "revision"}, "kind": "caption_prompt"})
-            current.setdefault(migrated["id"].casefold(), migrated)
-        return save_document({"presets": list(current.values()), "settings": settings(), "revision": expected_revision}, mark_legacy_imported=True)
+            identifier = id_map.get(item["id"], item["id"])
+            candidate = validate_preset({**item, "id": identifier})
+            mapped[item["id"]] = identifier
+            if identifier.casefold() in occupied:
+                conflicts.append({"id": item["id"], "target_id": identifier, "reason": "id_collision"})
+            occupied.add(identifier.casefold())
+            proposed.append(candidate)
+        default_id = payload.get("default_preset_id", settings()["default_caption_preset_id"])
+        default_id = mapped.get(default_id, default_id)
+        if default_id is not None and default_id not in {item["id"] for item in retained + proposed}:
+            conflicts.append({"id": default_id, "reason": "missing_default"})
+        state = _settings_raw().get("caption_presets", {})
+        receipt = state.get("imports", {}).get(fingerprint)
+        result = {"source": source, "source_fingerprint": fingerprint, "revision": document_revision(),
+                  "presets": proposed, "id_map": mapped, "conflicts": conflicts,
+                  "default_preset_id": default_id, "already_imported": receipt is not None, "receipt": receipt}
+        result["preview_revision"] = _hash(result)[:24]
+        return result
+
+
+def commit_import(payload):
+    with _store_guard():
+        if not isinstance(payload, dict) or payload.get("confirmed") is not True:
+            raise LLMContractError("caption import confirmation is required")
+        preview = preview_import(payload)
+        if preview["already_imported"]:
+            return {"document": document(), "receipt": preview["receipt"]}
+        if payload.get("revision") != preview["revision"] or payload.get("preview_revision") != preview["preview_revision"]:
+            raise LLMContractError("caption import revision conflict; preview again")
+        if preview["conflicts"]:
+            raise LLMContractError("caption import has unresolved id/default conflicts")
+        source, fingerprint, _items, records, source_value = _import_source(payload)
+        replaced = {raw.get("id", path.stem).casefold() for path, raw in records}
+        current = [item for item in list_presets() if item["id"].casefold() not in replaced]
+        validated = _validate_items(current + preview["presets"])
+        snapshot = user_data_root() / "migrations" / "caption-presets" / f"{fingerprint}.source.json"
+        snapshot_bytes = _json_bytes({"source": source, "presets": source_value})
+        existing = _bytes(snapshot)
+        if existing is not None and existing != snapshot_bytes:
+            raise LLMContractError("caption import source snapshot conflict")
+        receipt = {"source": source, "source_fingerprint": fingerprint, "ids": preview["id_map"],
+                   "snapshot": snapshot.relative_to(user_data_root()).as_posix()}
+        state = _settings_raw().get("caption_presets", {})
+        imports = {**state.get("imports", {}), fingerprint: receipt}
+        changes = _save(validated, preview["default_preset_id"], imports=imports, migrating=True)
+        if existing is None:
+            changes[snapshot] = snapshot_bytes
+        _transaction(changes)
+        return {"document": document(), "receipt": receipt}
+
+
+def import_legacy(items, *, expected_revision):
+    """Compatibility entry, never silently choose a winner for colliding IDs."""
+    payload = {"source": "legacy_config", "presets": items}
+    preview = preview_import(payload)
+    return commit_import({**payload, "confirmed": True, "revision": expected_revision,
+                          "preview_revision": preview["preview_revision"]})["document"]

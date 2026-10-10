@@ -3,7 +3,7 @@ import asyncio
 import pytest
 from PIL import Image
 
-from mikazuki.llm.config import UnifiedConfigStore
+from mikazuki.llm.config import UnifiedConfigStore, config_revision
 from mikazuki.llm.contracts import LLMContractError
 from mikazuki.llm.service import UnifiedLLMService
 
@@ -17,6 +17,10 @@ def service(tmp_path):
          "source": source, "capabilities": ["text", "vision"], "languages": ["zh-CN"]}
         for identifier, source in [("remote", "remote"), ("local", "managed-local")]
     ]})
+    for identifier in ("remote", "local"):
+        selected = next(item for item in store.load()["profiles"] if item["id"] == identifier)
+        for capability in ("text", "vision"):
+            store.record_verification(identifier, config_revision(selected), capability)
     return UnifiedLLMService(store)
 
 
@@ -27,7 +31,7 @@ def test_connection_test_targets_selected_local_and_sends_safe_image(service, tm
 
     async def completion(profile, payload, **kwargs):
         calls.append((profile.id, payload))
-        return {"choices": [{"finish_reason": "stop"}]}, '{"ok":true}'
+        return {"choices": [{"finish_reason": "stop"}]}, '{"red_shape":"square","blue_shape":"circle","green_shape":"triangle"}'
 
     monkeypatch.setattr("mikazuki.llm.service.chat_completion", completion)
     result = asyncio.run(service.connection_test(capability="vision", profile_id="local", image_path=image_path))

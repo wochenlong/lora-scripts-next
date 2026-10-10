@@ -2,7 +2,8 @@
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { ElButton, ElInput, ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
-import { datasetApi, type LlmProfile, type LocalModelStatus } from "../api/dataset"
+import { datasetApi } from "../api/dataset"
+import { llmApi, type LlmProfile, type LocalVisionStatus } from "../api/llm"
 import { useTagTranslations } from "../composables/useTagTranslations"
 
 /**
@@ -16,6 +17,7 @@ const loading = ref(false)
 const saving = ref(false)
 const error = ref("")
 const profiles = ref<LlmProfile[]>([])
+const configRevision = ref("")
 const activeRemoteId = ref("default")
 const llmMode = ref<"remote" | "local">("remote")
 const committedProfiles = ref<LlmProfile[]>([])
@@ -24,10 +26,10 @@ const committedLlmMode = ref<"remote" | "local">("remote")
 const cacheCount = ref(0)
 const clearingCache = ref(false)
 const expandedProfiles = ref(new Set<string>())
-const localModel = ref<LocalModelStatus>({
+const localModel = ref<LocalVisionStatus>({
   state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "",
   installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0,
-  runtime_path: "", endpoint: "internal://dataset-translation", port: 0, error: null,
+  endpoint: "", port: 0, error: null,
 })
 const localModelBusy = ref(false)
 let poll: ReturnType<typeof setTimeout> | undefined
@@ -37,7 +39,8 @@ const remoteConfigured = computed(() => {
   const profile = activeProfile.value
   if (!profile) return false
   const endpoint = profile.endpoint.trim().toLowerCase()
-  return Boolean(profile.api_key_configured || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//.test(endpoint))
+  return Boolean(profile.source === "remote" && profile.ready && profile.verified_capabilities?.includes("text") &&
+    (profile.api_key_configured || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//.test(endpoint)))
 })
 
 function cloneProfiles(list: LlmProfile[]): LlmProfile[] {
@@ -91,7 +94,12 @@ function addProfile() {
       endpoint: "",
       model: "",
       api_key: "",
-      api_key_configured: false,
+       api_key_configured: false,
+       source: "remote",
+       capabilities: ["text"],
+       languages: ["en", "zh-CN"],
+       enabled: true,
+       ready: false,
     },
   ]
   activeRemoteId.value = id
@@ -108,7 +116,7 @@ async function loadCacheCount() {
 
 async function loadLocalModel() {
   try {
-    localModel.value = await datasetApi.localModelStatus()
+    localModel.value = await llmApi.localVisionStatus()
   } catch (caught) {
     localModel.value = { ...localModel.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) }
   }
@@ -128,12 +136,14 @@ async function load() {
   loading.value = true
   error.value = ""
   try {
-    const config = await datasetApi.tagTranslationConfig()
-    profiles.value = config.remote_profiles?.length
-      ? config.remote_profiles
-      : [{ ...config.deepseek, id: "default", name: t("datasetEditor.caption.translationProfileNew") }]
-    activeRemoteId.value = config.active_remote_id || profiles.value[0]?.id || "default"
-    llmMode.value = config.llm_mode || (config.local?.enabled ? "local" : "remote")
+    const config = await llmApi.config()
+    configRevision.value = config.revision || ""
+    profiles.value = config.profiles.filter(profile => profile.source === "remote")
+    const configuredRoute = config.routes.translation
+    activeRemoteId.value = profiles.value.some(profile => profile.id === configuredRoute)
+      ? configuredRoute
+      : profiles.value[0]?.id || "default"
+    llmMode.value = config.local_fallback_enabled ? "local" : "remote"
     expandedProfiles.value = new Set(activeRemoteId.value ? [activeRemoteId.value] : [])
     snapshot()
   } catch (caught) {
@@ -147,12 +157,15 @@ async function save() {
   saving.value = true
   error.value = ""
   try {
-    await datasetApi.saveTagTranslationConfig({
-      llm_mode: llmMode.value,
-      active_remote_id: activeRemoteId.value,
-      remote_profiles: profiles.value,
-      local: { enabled: llmMode.value === "local" },
+    const current = await llmApi.config()
+    const saved = await llmApi.saveConfig({
+      ...current,
+      revision: configRevision.value || current.revision,
+      profiles: [...profiles.value, ...current.profiles.filter(profile => profile.source !== "remote")],
+      routes: { ...current.routes, translation: activeRemoteId.value },
+      local_fallback_enabled: llmMode.value === "local",
     })
+    configRevision.value = saved.revision || ""
     snapshot()
     ElMessage.success(t("settings.api.saved"))
   } catch (caught) {
@@ -181,28 +194,28 @@ async function clearCache() {
 
 async function setupLocalModel() {
   localModelBusy.value = true
-  try { localModel.value = await datasetApi.setupLocalModel(); schedulePoll() }
+  try { localModel.value = await llmApi.localVisionAction("setup"); schedulePoll() }
   catch (caught) { error.value = caught instanceof Error ? caught.message : String(caught) }
   finally { localModelBusy.value = false }
 }
 
 async function cancelLocalModel() {
   localModelBusy.value = true
-  try { localModel.value = await datasetApi.cancelLocalModel() }
+  try { localModel.value = await llmApi.localVisionAction("cancel") }
   catch (caught) { error.value = caught instanceof Error ? caught.message : String(caught) }
   finally { localModelBusy.value = false }
 }
 
 async function startLocalModel() {
   localModelBusy.value = true
-  try { localModel.value = await datasetApi.startLocalModel() }
+  try { localModel.value = await llmApi.localVisionAction("start") }
   catch (caught) { error.value = caught instanceof Error ? caught.message : String(caught) }
   finally { localModelBusy.value = false }
 }
 
 async function stopLocalModel() {
   localModelBusy.value = true
-  try { localModel.value = await datasetApi.stopLocalModel() }
+  try { localModel.value = await llmApi.localVisionAction("stop") }
   catch (caught) { error.value = caught instanceof Error ? caught.message : String(caught) }
   finally { localModelBusy.value = false }
 }

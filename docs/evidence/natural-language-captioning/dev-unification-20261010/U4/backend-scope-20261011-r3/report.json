@@ -1,0 +1,46 @@
+{
+  "source_commit": "37dc62b400ee0319ac90331e7a8842c245c89cea",
+  "selected_files": 68,
+  "testcases": 805,
+  "exit_code": 0,
+  "failures": [],
+  "skipped": [
+    {
+      "classname": "tests.test_datasets_api",
+      "name": "test_list_datasets_excludes_symlinked_directories",
+      "time": "0.002",
+      "reason": "Windows symlink privilege is unavailable in this environment"
+    },
+    {
+      "classname": "tests.test_datasets_api",
+      "name": "test_resolve_dataset_dir_rejects_symlink_escape",
+      "time": "0.001",
+      "reason": "Windows symlink privilege is unavailable in this environment"
+    },
+    {
+      "classname": "tests.test_datasets_detail",
+      "name": "test_contents_symlink_escape",
+      "time": "0.003",
+      "reason": "Windows symlink privilege unavailable"
+    },
+    {
+      "classname": "tests.test_datasets_export",
+      "name": "test_zip_export_skips_symlinked_files",
+      "time": "0.003",
+      "reason": "Windows symlink privilege is unavailable in this environment"
+    },
+    {
+      "classname": "tests.test_datasets_export",
+      "name": "test_zip_export_skips_symlinked_directories",
+      "time": "0.003",
+      "reason": "Windows symlink privilege is unavailable in this environment"
+    },
+    {
+      "classname": "tests.test_user_data",
+      "name": "test_symlink_settings_outside_root_is_rejected",
+      "time": "0.002",
+      "reason": "symlinks unavailable"
+    }
+  ],
+  "passed": false
+}

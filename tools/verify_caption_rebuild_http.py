@@ -79,16 +79,17 @@ try:
     started = call('POST', '/llm/local-vision/start')
     check('explicit_local_runtime_started', call('GET', '/llm/local-vision/status')['state'] == 'running')
     root = prepare('natural', ('chelsea.png', 'coffee.png', 'rocket.jpg'))
+    natural_count = 3
     preview = call('POST', '/tagger/jobs/preview', {**request(root), 'image_path': str(root / 'chelsea.png')})
     check('natural_preview_no_write', bool(preview['caption']) and not list(root.glob('*.txt')))
     job = start(root)
     state = wait(job)
-    check('natural_three_written', state['succeeded'] == 3 and state['failed'] == 0)
+    check('natural_written', state['succeeded'] == natural_count and state['failed'] == 0)
     originals = {p.name: p.read_bytes() for p in root.glob('*.txt')}
     REPORT['caption_sha256'] = {name: hashlib.sha256(data).hexdigest() for name, data in originals.items()}
     check('task_archives', len(list((ROOT / 'http-state/user_data/tasks/dataset-tagger').rglob('task.json'))) >= 1)
     skip = wait(start(root, conflict_action='ignore'))
-    check('default_skip_three', skip['skipped'] == 3 and skip['succeeded'] == 0)
+    check('default_skip_natural', skip['skipped'] == natural_count and skip['succeeded'] == 0)
     items = call('POST', '/dataset-editor/scan', {'path': str(root)})['items']
     item = next(x for x in items if x['relative_path'] == 'chelsea.png')
     check('editor_natural_not_tags', all(x['caption_format'] == 'natural' and x['tags'] == [] for x in items))

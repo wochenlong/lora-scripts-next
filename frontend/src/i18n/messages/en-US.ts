@@ -1517,7 +1517,7 @@ translationPrompt: "Translation system prompt (tag translation only)", reasoning
       profileSaved: "Vision profile saved",
       profileFieldsRequired: "Enter an endpoint and model",
       enableLocalFallback: "Allow local vision fallback when remote is unavailable",
-      localRuntimeTitle: "Optional local vision · Qwen3-VL-2B",
+      localRuntimeTitle: "Optional local vision · Qwen3.5-2B",
       localRuntimeHint: "About 1.55 GB to download and 3.1 GB peak CPU memory. Shares llama.cpp with translation; captioning uses it only when local fallback is enabled.",
       setupLocal: "Install local vision model and runtime",
       startLocal: "Start local vision service",

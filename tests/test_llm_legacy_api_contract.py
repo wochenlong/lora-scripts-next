@@ -43,7 +43,8 @@ def test_old_translation_api_masks_keys_and_remote_selection_keeps_shared_runtim
     app = FastAPI()
     app.include_router(translation_api.router, prefix="/api")
     with TestClient(app) as http:
-        response = http.put("/api/tag-translation/config", json={"llm_mode": "remote", "deepseek": {"api_key": "fixture-runtime-key"}})
+        revision = http.get("/api/tag-translation/config").json()["data"]["revision"]
+        response = http.put("/api/tag-translation/config", json={"revision": revision, "llm_mode": "remote", "deepseek": {"api_key": "fixture-runtime-key"}})
         assert response.status_code == 200
         assert "fixture-runtime-key" not in response.text
         assert response.json()["data"]["deepseek"]["api_key"] == "********"
@@ -64,6 +65,7 @@ def test_old_translation_can_enable_fallback_using_shared_ready_text_model(tmp_p
     app = FastAPI()
     app.include_router(translation_api.router, prefix="/api")
     with TestClient(app) as http:
-        response = http.put("/api/tag-translation/config", json={"llm_mode": "local"})
+        revision = http.get("/api/tag-translation/config").json()["data"]["revision"]
+        response = http.put("/api/tag-translation/config", json={"revision": revision, "llm_mode": "local"})
         assert response.status_code == 200
         assert response.json()["data"]["local"]["enabled"] is True

@@ -94,16 +94,27 @@ def test_invalid_default_reference_is_rejected_before_write(monkeypatch, tmp_pat
 
 
 def test_explicit_legacy_import_preserves_current_user_version(monkeypatch, tmp_path):
-    from mikazuki.llm.prompt_presets import import_legacy
+    from mikazuki.llm.prompt_presets import import_legacy, preview_import, commit_import
     monkeypatch.setenv("MIKAZUKI_USER_DATA_ROOT", str(tmp_path))
     save_presets([_preset()])
     legacy = {"id": "caption-zh", "name": "旧版本", "template": "旧提示词", "language": "en"}
-    imported = import_legacy([legacy, {**legacy, "id": "legacy-en"}], expected_revision=document_revision())
-    assert len(imported["presets"]) == 2
+    source = {"source": "legacy_config", "presets": [legacy, {**legacy, "id": "legacy-en"}]}
+    preview = preview_import(source)
+    assert preview["conflicts"] == [{"id": "caption-zh", "target_id": "caption-zh", "reason": "id_collision"}]
+    with pytest.raises(LLMContractError, match="unresolved"):
+        import_legacy(source["presets"], expected_revision=document_revision())
+    source["id_map"] = {"caption-zh": "legacy-zh"}
+    preview = preview_import(source)
+    confirmed = {**source, "confirmed": True, "revision": preview["revision"], "preview_revision": preview["preview_revision"]}
+    result = commit_import(confirmed)
+    imported = result["document"]
+    assert len(imported["presets"]) == 3
     assert next(item for item in list_presets() if item["id"] == "caption-zh")["name"] == "中文描述"
     assert imported["settings"]["legacy_imported"] is True
-    again = import_legacy([{**legacy, "id": "not-imported-twice"}], expected_revision=imported["revision"])
-    assert again == imported
+    assert commit_import(confirmed) == result
+    # A changed source is a new explicit import, not blocked by an old boolean.
+    another = {"source": "legacy_config", "presets": [{**legacy, "id": "new-source"}]}
+    assert preview_import(another)["already_imported"] is False
 
 
 def test_preset_http_conflict_and_import_confirmation(monkeypatch, tmp_path):

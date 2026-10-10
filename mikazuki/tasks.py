@@ -546,7 +546,8 @@ class TaskManager:
         counter lives on the task itself so one flaky task cannot loop
         forever.
         """
-        if rc == 0 or task.status != TaskStatus.FAILED or task.process is None:
+        process = getattr(task, "process", None)
+        if rc == 0 or task.status != TaskStatus.FAILED or process is None:
             return
         if task.lane != LANE_COMPUTE or not task.command:
             return

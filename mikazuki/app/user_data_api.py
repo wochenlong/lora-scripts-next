@@ -28,6 +28,9 @@ async def _call(operation, *args, data_key=None):
         return _response(message=str(exc), status=409)
     except UserDataError as exc:
         return _response(message=str(exc), status=422)
+    except RecursionError:
+        # Deeply nested JSON is rejected without entering the transactional store.
+        return _response(message="Invalid JSON", status=422)
     except OSError:
         return _response(message="User data storage is unavailable; nothing was saved", status=503)
 
@@ -91,7 +94,23 @@ def _preset_payload(data):
 
 @router.get("/presets")
 async def list_presets(train_type: str | None = None):
-    return await _call(store.list_presets, train_type, data_key="presets")
+    return await _call(store.preset_document, train_type)
+
+
+@router.post("/caption-presets/import-preview")
+async def preview_caption_import(request: Request):
+    data = await _body(request, {"source", "presets", "id_map", "default_preset_id"}, partial=True)
+    if isinstance(data, JSONResponse):
+        return data
+    return await _call(store.preview_caption_import, data)
+
+
+@router.post("/caption-presets/import-confirmed")
+async def commit_caption_import(request: Request):
+    data = await _body(request, {"source", "presets", "id_map", "default_preset_id", "confirmed", "preview_revision", "revision"}, partial=True)
+    if isinstance(data, JSONResponse):
+        return data
+    return await _call(store.commit_caption_import, data)
 
 
 @router.get("/presets/{preset_id}")
@@ -101,7 +120,7 @@ async def read_preset(preset_id: str):
 
 @router.post("/presets")
 async def create_preset(request: Request):
-    data = await _body(request, {"id", "name", "description", "train_type", "config"}, partial=True)
+    data = await _body(request, {"id", "name", "description", "train_type", "config", "document_revision"}, partial=True)
     if isinstance(data, JSONResponse):
         return data
     try:
@@ -117,28 +136,21 @@ async def create_preset(request: Request):
 
 @router.patch("/presets/{preset_id}")
 async def update_preset(preset_id: str, request: Request):
-    data = await _body(request, {"name", "description", "train_type", "config"}, partial=True)
+    data = await _body(request, {"name", "description", "train_type", "config", "document_revision"}, partial=True)
     if isinstance(data, JSONResponse):
         return data
-    try:
-        current = await run_in_threadpool(store.get_preset, preset_id)
-        current.update(data)
-        return _response(await run_in_threadpool(store.save_preset, preset_id, current, True))
-    except UserDataError as exc:
-        return _response(message=str(exc), status=422)
-    except OSError:
-        return _response(message="User data storage is unavailable; nothing was saved", status=503)
+    return await _call(store.patch_preset, preset_id, data)
 
 
 @router.delete("/presets/{preset_id}")
 async def remove_preset(preset_id: str, request: Request):
     if request.headers.get("sec-fetch-site") == "cross-site":
         return _response(message="Cross-site configuration writes are not allowed", status=403)
-    try:
-        await run_in_threadpool(store.delete_preset, preset_id)
-        return _response({"removed": True})
-    except UserDataError as exc:
-        return _response(message=str(exc), status=422)
+    revision = request.headers.get("if-match")
+    if revision is not None:
+        revision = revision.strip('"')
+    result = await _call(store.delete_preset, preset_id, revision)
+    return _response({"removed": True}) if result.status_code == 200 else result
 
 
 @router.get("/task-archives")

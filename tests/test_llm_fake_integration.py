@@ -8,7 +8,7 @@ from pathlib import Path
 
 from PIL import Image
 
-from mikazuki.llm.config import UnifiedConfigStore
+from mikazuki.llm.config import UnifiedConfigStore, config_revision
 from mikazuki.llm.service import UnifiedLLMService
 
 
@@ -77,6 +77,10 @@ def test_fake_openai_vision_server_data_url_and_remote_first_fallback(tmp_path: 
                 },
             ],
         })
+        for identifier in ("remote", "local"):
+            selected = next(item for item in store.load()["profiles"] if item["id"] == identifier)
+            for capability in ("text", "vision"):
+                store.record_verification(identifier, config_revision(selected), capability)
         service = UnifiedLLMService(store)
         profile, _envelope, content, _image = asyncio.run(
             service.complete_vision(image_path, "describe {{language}}", language="zh-CN")

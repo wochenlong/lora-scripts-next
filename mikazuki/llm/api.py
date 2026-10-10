@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field
 
 from .config import LLMContractError
+from .contracts import LLMConfigConflict
 from .runtime import llm_service, get_local_vision_service, caption_cache
 
 
@@ -87,28 +88,19 @@ async def get_llm_config():
 
 @router.get("/llm/local-vision/manifest")
 async def local_vision_manifest():
-    from .local_vision import FILES, REVISION
-    return _success({
-        "id": "qwen3-vl-2b-local",
-        "model": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
-        "mmproj": "mmproj-Qwen3VL-2B-Instruct-Q8_0.gguf",
-        "source": "Qwen/Qwen3-VL-2B-Instruct-GGUF",
-        "revision": REVISION,
-        "files": [{"name": name, "size_bytes": size, "sha256": sha} for name, size, sha in FILES],
-        "capabilities": ["text", "vision"],
-        "languages": ["zh-CN"],
-        "estimated_download_bytes": 1552463168,
-        "estimated_peak_rss_bytes": 3097571328,
-        "runtime": "llama.cpp b11327",
-        "notes": "CPU-only fallback candidate; remote profile remains preferred.",
-    })
+    from .model_manifest import manifest
+    return _success(manifest())
 
 
 @router.put("/llm/config")
 async def save_llm_config(payload: dict):
     try:
+        if not isinstance(payload.get("revision"), str):
+            raise LLMConfigConflict("请先读取共享配置，再带 revision 保存；当前草稿已保留")
         llm_service.save_config(payload)
         return _success(llm_service.config(masked=True))
+    except LLMConfigConflict as exc:
+        raise HTTPException(status_code=409, detail={"code": exc.code, "message": "共享配置已改变或缺少 revision，请刷新配置后重试；当前草稿已保留"}) from None
     except LLMContractError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
 
@@ -139,11 +131,33 @@ async def save_prompt_presets(payload: dict):
 
 @router.post("/llm/prompt-presets/import-legacy")
 async def import_legacy_prompt_presets(payload: dict):
-    from .prompt_presets import import_legacy
-    if payload.get("confirmed") is not True:
-        raise HTTPException(status_code=400, detail={"code": "caption_preset_confirmation_required", "message": "请先确认导入旧提示词预设"})
+    return await confirm_prompt_preset_import({**payload, "source": "legacy_config"})
+
+
+def _preset_import_payload(payload):
+    if payload.get("source") == "legacy_config":
+        return {**payload, "presets": llm_service.config(masked=True).get("prompt_presets", [])}
+    return payload
+
+
+@router.post("/llm/prompt-presets/import-preview")
+async def preview_prompt_preset_import(payload: dict):
+    from .prompt_presets import preview_import
     try:
-        return _success(import_legacy(llm_service.config(masked=True).get("prompt_presets", []), expected_revision=payload.get("revision")))
+        return _success(preview_import(_preset_import_payload(payload)))
+    except LLMContractError as exc:
+        raise HTTPException(status_code=400, detail={"code": "caption_preset_import_invalid", "message": str(exc)}) from None
+    except OSError:
+        raise HTTPException(status_code=503, detail={"code": "caption_preset_storage_failed", "message": "无法预览预设导入"}) from None
+
+
+@router.post("/llm/prompt-presets/import-confirmed")
+async def confirm_prompt_preset_import(payload: dict):
+    from .prompt_presets import commit_import
+    if payload.get("confirmed") is not True:
+        raise HTTPException(status_code=400, detail={"code": "caption_preset_confirmation_required", "message": "请先预览并确认导入提示词预设"})
+    try:
+        return _success(commit_import(_preset_import_payload(payload)))
     except LLMContractError as exc:
         raise HTTPException(status_code=409, detail={"code": "caption_preset_import_failed", "message": str(exc)}) from exc
     except OSError:

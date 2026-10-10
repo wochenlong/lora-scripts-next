@@ -19,7 +19,7 @@ def test_model_catalog_preserves_tag_ids_and_excludes_text_profiles(monkeypatch,
     assert not any(item["id"] == "llm:text" for item in models)
     assert next(item for item in models if item["id"] == "llm:remote")["runtime"] == "api"
     assert next(item for item in models if item["id"] == "llm:local")["runtime"] == "local"
-    assert next(item for item in models if item["id"] == "llm:qwen3-vl-2b-local")["ready"] is False
+    assert next(item for item in models if item["id"] == "llm:qwen3.5-2b-local")["ready"] is False
     assert "private-value" not in str(models)
     assert "https://example.test" not in str(models)
 

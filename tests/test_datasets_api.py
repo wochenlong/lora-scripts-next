@@ -26,6 +26,15 @@ def make_dataset(root: Path, name: str):
     return dataset_dir
 
 
+def symlink_or_skip(link: Path, target: Path, *, directory: bool = False):
+    try:
+        link.symlink_to(target, target_is_directory=directory)
+    except OSError as error:
+        if getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows symlink privilege is unavailable in this environment")
+        raise
+
+
 def test_default_root_resolves_against_repo_root(monkeypatch):
     monkeypatch.delitem(app_config._stored, "datasets_root", raising=False)
     assert root_module.get_datasets_root() == (root_module.REPO_ROOT / "datasets").resolve()
@@ -100,7 +109,7 @@ def test_list_datasets_excludes_symlinked_directories(datasets_root, tmp_path):
     make_dataset(datasets_root, "real")
     outside = tmp_path / "outside"
     outside.mkdir()
-    (datasets_root / "linked").symlink_to(outside, target_is_directory=True)
+    symlink_or_skip(datasets_root / "linked", outside, directory=True)
 
     client = TestClient(app)
     data = client.get("/api/datasets").json()["data"]
@@ -206,7 +215,7 @@ def test_resolve_dataset_dir_rejects_symlink_escape(datasets_root, tmp_path):
     datasets_root.mkdir(parents=True)
     outside = tmp_path / "outside"
     outside.mkdir()
-    (datasets_root / "link").symlink_to(outside, target_is_directory=True)
+    symlink_or_skip(datasets_root / "link", outside, directory=True)
 
     with pytest.raises(HTTPException) as exc_info:
         resolve_dataset_dir(datasets_root.resolve(), "link")

@@ -1,0 +1,44 @@
+{
+  "owner": "dataset-nl-unified-qwen-assets-v1",
+  "started_at": "2026-10-10T18:18:05.110063+00:00",
+  "passed": true,
+  "receipts": [
+    {
+      "relative_path": "archives/llama-b11327-bin-win-cpu-x64.zip",
+      "version": "b11327",
+      "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11327/llama-b11327-bin-win-cpu-x64.zip",
+      "filename": "llama-b11327-bin-win-cpu-x64.zip",
+      "size_bytes": 19275534,
+      "sha256": "4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f",
+      "executable_sha256": "32d43779061d318ab36d0cf8156f314f81ac7e5b805298b7fe9facf3cf0cc82d",
+      "downloaded_at": "2026-10-10T18:18:14.126485+00:00",
+      "attempts": 1,
+      "range_resume": false,
+      "failures": []
+    },
+    {
+      "relative_path": "candidates/qwen3.5-2b/Qwen3.5-2B-Q4_K_M.gguf",
+      "filename": "Qwen3.5-2B-Q4_K_M.gguf",
+      "size_bytes": 1280835840,
+      "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf",
+      "downloaded_at": "2026-10-10T18:21:10.823476+00:00",
+      "attempts": 1,
+      "range_resume": false,
+      "failures": []
+    },
+    {
+      "relative_path": "candidates/qwen3.5-2b/mmproj-F16.gguf",
+      "filename": "mmproj-F16.gguf",
+      "size_bytes": 668227264,
+      "sha256": "7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7",
+      "url": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf",
+      "downloaded_at": "2026-10-10T18:22:27.642255+00:00",
+      "attempts": 1,
+      "range_resume": false,
+      "failures": []
+    }
+  ],
+  "finished_at": "2026-10-10T18:22:27.646300+00:00",
+  "output_sha256": "b36968d3362432f7a9e371eb37f61ee4b336b5cc90192f842074002197814fec"
+}

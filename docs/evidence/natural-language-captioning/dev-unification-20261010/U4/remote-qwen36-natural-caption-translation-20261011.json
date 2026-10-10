@@ -1,0 +1,100 @@
+{
+  "phase_4": false,
+  "kind": "current-production-real",
+  "mode": "remote",
+  "caption_mode": "natural",
+  "source_commit": "37dc62b4",
+  "reuses_probe_assets": false,
+  "fresh_rebuild_inputs": false,
+  "peak_rss_bytes": 0,
+  "samples": [
+    {
+      "id": "chelsea",
+      "schema_valid": true,
+      "caption_length": 624,
+      "profile_id": "siliconflow-qwen3.6",
+      "profile_revision": "7d1ba8bf0a99d517ad7a5be5",
+      "prompt_revision": "c8d9e955b3a48393f25b662f",
+      "image_sha256": "596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb",
+      "after_hash": "56cb64ca8e612189e72d0c7a7cafd548c0a1a832f4c6b634a6f4a3ad22ee36cd"
+    },
+    {
+      "id": "coffee",
+      "schema_valid": true,
+      "caption_length": 502,
+      "profile_id": "siliconflow-qwen3.6",
+      "profile_revision": "7d1ba8bf0a99d517ad7a5be5",
+      "prompt_revision": "c8d9e955b3a48393f25b662f",
+      "image_sha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "after_hash": "1e97e6febde245997925d514d44e8b978d270b6c557f6087eb3f7296aed452d6"
+    },
+    {
+      "id": "count-red-circles-blue-squares",
+      "schema_valid": true,
+      "caption_length": 381,
+      "profile_id": "siliconflow-qwen3.6",
+      "profile_revision": "7d1ba8bf0a99d517ad7a5be5",
+      "prompt_revision": "c8d9e955b3a48393f25b662f",
+      "image_sha256": "68f5748a6c581242b3bf4ebd66f03e98a0eec92b6870229ba37de332d3bc9576",
+      "after_hash": "495e0d863fbeece4671d8694bd680b5efea831bcf5b7af53aa77ad13217257ed"
+    },
+    {
+      "id": "illustration-house-tree",
+      "schema_valid": true,
+      "caption_length": 447,
+      "profile_id": "siliconflow-qwen3.6",
+      "profile_revision": "7d1ba8bf0a99d517ad7a5be5",
+      "prompt_revision": "c8d9e955b3a48393f25b662f",
+      "image_sha256": "306e850cb0663067c8768871d1aa13385dfddc38224a5e71d6cb6a2eee413d11",
+      "after_hash": "b6f53fe0cf923c7df976edc2274fbc9214ff18080c78d4a027753b989390fdf0"
+    },
+    {
+      "id": "position-open-sign",
+      "schema_valid": true,
+      "caption_length": 445,
+      "profile_id": "siliconflow-qwen3.6",
+      "profile_revision": "7d1ba8bf0a99d517ad7a5be5",
+      "prompt_revision": "c8d9e955b3a48393f25b662f",
+      "image_sha256": "fcc6efb1baf4daf453c0448a22e204a6e4f4497dd1bb44df64a2414c1795aceb",
+      "after_hash": "6ca16bfe2af8961c4d594647df86b6afbdd8013dc5e073274755b9c85306f2b1"
+    },
+    {
+      "id": "rocket",
+      "schema_valid": true,
+      "caption_length": 576,
+      "profile_id": "siliconflow-qwen3.6",
+      "profile_revision": "7d1ba8bf0a99d517ad7a5be5",
+      "prompt_revision": "c8d9e955b3a48393f25b662f",
+      "image_sha256": "c2dd0de7c538df8d111e479619b129464d0269d0ae5fd18ca91d33a7fdfea95c",
+      "after_hash": "af40718a2572d41672897a49c8f1843083a0768c81d77356bfe14d17b612c462"
+    }
+  ],
+  "human_scores": null,
+  "remote_capability_verification": [
+    "text",
+    "vision"
+  ],
+  "translation": {
+    "schema_valid": true,
+    "source_language": "other",
+    "target_language": "zh-CN",
+    "source": "remote",
+    "profile_id": "siliconflow-qwen3.6",
+    "translation_length": 19,
+    "cache_replay": true,
+    "cache_replay_no_requests": true,
+    "chinese_short_circuit": true,
+    "chinese_short_circuit_no_requests": true,
+    "provider_requests": 1
+  },
+  "batch_seconds": 144.171,
+  "written": 6,
+  "cache_replay_no_requests": true,
+  "cache_hits": 6,
+  "task_archive_present": true,
+  "default_skip_zero_requests": true,
+  "preview_no_write": true,
+  "passed": true,
+  "requests": 10,
+  "data_url_requests": 8
+}

@@ -1,0 +1,51 @@
+{
+  "schema_version": 1,
+  "kind": "locked-qwen-probe-candidates",
+  "runtime": {
+    "executable_path": "E:\\OpenSourceTeamWork\\workspace\\sandboxes\\nl-caption-selected-qwen35-assets-20261011\\runtime\\llama-server.exe",
+    "executable_sha256": "32d43779061d318ab36d0cf8156f314f81ac7e5b805298b7fe9facf3cf0cc82d",
+    "version": "b11327",
+    "archive_path": "E:\\OpenSourceTeamWork\\workspace\\sandboxes\\nl-caption-selected-qwen35-assets-20261011\\archives\\llama-b11327-bin-win-cpu-x64.zip",
+    "archive_sha256": "4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f",
+    "source": "https://github.com/ggml-org/llama.cpp/releases/download/b11327/llama-b11327-bin-win-cpu-x64.zip",
+    "url": "https://github.com/ggml-org/llama.cpp/releases/download/b11327/llama-b11327-bin-win-cpu-x64.zip",
+    "size_bytes": 19275534
+  },
+  "candidates": [
+    {
+      "id": "qwen3.5-2b",
+      "model_path": "E:\\OpenSourceTeamWork\\workspace\\sandboxes\\nl-caption-selected-qwen35-assets-20261011\\candidates\\qwen3.5-2b\\Qwen3.5-2B-Q4_K_M.gguf",
+      "mmproj_path": "E:\\OpenSourceTeamWork\\workspace\\sandboxes\\nl-caption-selected-qwen35-assets-20261011\\candidates\\qwen3.5-2b\\mmproj-F16.gguf",
+      "model_sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+      "mmproj_sha256": "7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7",
+      "revision": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
+      "repository": "unsloth/Qwen3.5-2B-GGUF",
+      "license": "Apache-2.0",
+      "quantization": "Q4_K_M",
+      "model_size_bytes": 1280835840,
+      "mmproj_size_bytes": 668227264,
+      "sizes": {
+        "model": 1280835840,
+        "mmproj": 668227264
+      },
+      "urls": {
+        "model": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf",
+        "mmproj": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf"
+      },
+      "files": [
+        {
+          "filename": "Qwen3.5-2B-Q4_K_M.gguf",
+          "size_bytes": 1280835840,
+          "sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+          "url": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/Qwen3.5-2B-Q4_K_M.gguf"
+        },
+        {
+          "filename": "mmproj-F16.gguf",
+          "size_bytes": 668227264,
+          "sha256": "7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7",
+          "url": "https://huggingface.co/unsloth/Qwen3.5-2B-GGUF/resolve/f6d5376be1edb4d416d56da11e5397a961aca8ae/mmproj-F16.gguf"
+        }
+      ]
+    }
+  ]
+}

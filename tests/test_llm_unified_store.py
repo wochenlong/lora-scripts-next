@@ -164,6 +164,8 @@ def test_remote_failure_uses_configured_local_fallback(tmp_path, monkeypatch):
             },
         ],
     })
+    for selected in store.load()["profiles"]:
+        store.record_verification(selected["id"], config_revision(selected), "text")
     calls = []
 
     async def fake_completion(profile, payload, **kwargs):

@@ -6,13 +6,16 @@ import LlmSettingsDialog from "./LlmSettingsDialog.vue"
 import { i18n } from "../i18n"
 import { llmApi, type LlmConfig } from "../api/llm"
 
-vi.mock("../api/llm", () => ({ llmApi: { config: vi.fn(), saveConfig: vi.fn(), connectionTest: vi.fn(), localVisionStatus: vi.fn(), localVisionAction: vi.fn() } }))
+vi.mock("../api/llm", () => ({
+  llmApi: { config: vi.fn(), saveConfig: vi.fn(), connectionTest: vi.fn(), localVisionStatus: vi.fn(), localVisionAction: vi.fn() },
+  isVerifiedProfile: (profile: { enabled: boolean; ready: boolean; capabilities: string[]; verified_capabilities?: string[] }, capability: string) => Boolean(profile.enabled && profile.ready && profile.capabilities.includes(capability) && profile.verified_capabilities?.includes(capability)),
+}))
 const Dialog = defineComponent({ props: { modelValue: { type: Boolean, required: true } }, template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' })
 let page: VueWrapper | undefined
 const config = (): LlmConfig => ({ version: 5, routes: { translation: "text", caption: "vision" }, prompt_presets: [], cache: {},
   profiles: [
-    { id: "text", name: "Text only", model: "text", endpoint: "https://example.test/chat/completions", source: "remote", capabilities: ["text"], languages: ["zh-CN"], api_key: "********", api_key_configured: true, enabled: true, ready: true },
-    { id: "vision", name: "Vision", model: "vision", endpoint: "https://example.test/chat/completions", source: "remote", capabilities: ["text", "vision"], languages: ["zh-CN"], api_key: "********", api_key_configured: true, enabled: true, ready: true },
+    { id: "text", name: "Text only", model: "text", endpoint: "https://example.test/chat/completions", source: "remote", capabilities: ["text"], languages: ["zh-CN"], api_key: "********", api_key_configured: true, enabled: true, ready: true, verified_capabilities: ["text"] },
+    { id: "vision", name: "Vision", model: "vision", endpoint: "https://example.test/chat/completions", source: "remote", capabilities: ["text", "vision"], languages: ["zh-CN"], api_key: "********", api_key_configured: true, enabled: true, ready: true, verified_capabilities: ["text", "vision"] },
   ] })
 
 async function open(capability: "text" | "vision" = "vision") {
@@ -77,7 +80,7 @@ describe("shared LLM settings", () => {
   it("shares the vision asset controls with translation without an automatic download", async () => {
     vi.useFakeTimers()
     const wrapper = await open("text")
-    expect(wrapper.get(".managed-vision-model").text()).toContain("Qwen3-VL-2B")
+    expect(wrapper.get(".managed-vision-model").text()).toContain("Qwen3.5-2B")
     expect(llmApi.localVisionAction).not.toHaveBeenCalled()
     vi.mocked(llmApi.localVisionStatus).mockImplementation(() => new Promise(() => {}))
     vi.advanceTimersByTime(1200)
@@ -90,14 +93,14 @@ describe("shared LLM settings", () => {
     const wrapper = await open("text")
     await wrapper.get('[data-profile-id="text"] .llm-profile-name').setValue("Unsaved name")
     const updated = config()
-    updated.profiles.push({ ...updated.profiles[1], id: "qwen3-vl-2b-local", source: "managed-local", asset_id: "qwen3-vl-2b-local" })
+    updated.profiles.push({ ...updated.profiles[1], id: "qwen3.5-2b-local", source: "managed-local", asset_id: "qwen3.5-2b-local" })
     vi.mocked(llmApi.config).mockResolvedValue(updated)
     vi.mocked(llmApi.localVisionAction).mockResolvedValue({ state: "running", installed: true, runtime_installed: true, downloaded_bytes: 0, total_bytes: 0 })
     await wrapper.get(".managed-vision-model button").trigger("click")
     await flushPromises()
     expect(llmApi.localVisionAction).toHaveBeenCalledWith("setup")
     expect((wrapper.get('[data-profile-id="text"] .llm-profile-name').element as HTMLInputElement).value).toBe("Unsaved name")
-    expect(wrapper.find('[data-profile-id="qwen3-vl-2b-local"]').exists()).toBe(true)
+    expect(wrapper.find('[data-profile-id="qwen3.5-2b-local"]').exists()).toBe(true)
     expect(llmApi.saveConfig).not.toHaveBeenCalled()
   })
 

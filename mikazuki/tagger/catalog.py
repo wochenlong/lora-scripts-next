@@ -46,7 +46,7 @@ def model_catalog(config: dict, local_status: dict) -> list[dict]:
         remote = profile.get("source") == "remote"
         models.append({
             "id": "llm:" + profile["id"], "name": profile.get("name") or model_name, "model": model_name,
-            "family": "Qwen-VL" if "qwen" in model_name.lower() else "Vision LLM",
+            "family": "Qwen" if "qwen" in model_name.lower() else "Vision LLM",
             "author": model_name.split("/")[0] if "/" in model_name else "",
             "runtime": "api" if remote else "local", "output": "natural",
             "capabilities": ["caption", "vision"], "languages": profile.get("languages", []),
@@ -54,11 +54,12 @@ def model_catalog(config: dict, local_status: dict) -> list[dict]:
             "ready": bool(profile.get("ready", False)), "profile_id": profile["id"],
             "parameters": list(CAPTION_PARAMETERS),
         })
-    local_id = "qwen3-vl-2b-local"
+    from mikazuki.llm.model_manifest import ASSET_ID, FILES
+    local_id = ASSET_ID
     if not any(item.get("profile_id") == local_id for item in models):
         models.append({
-            "id": "llm:" + local_id, "name": "Qwen3-VL-2B", "model": "Qwen3VL-2B-Instruct-Q4_K_M.gguf",
-            "family": "Qwen-VL", "author": "Qwen", "runtime": "local", "output": "natural",
+            "id": "llm:" + local_id, "name": "Qwen3.5-2B", "model": FILES[0][0],
+            "family": "Qwen", "author": "Qwen", "runtime": "local", "output": "natural",
             "capabilities": ["caption", "vision"], "languages": ["zh-CN", "en"],
             "downloaded": bool(local_status.get("installed")), "ready": False,
             "profile_id": local_id, "parameters": list(CAPTION_PARAMETERS),

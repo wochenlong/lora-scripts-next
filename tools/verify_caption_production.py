@@ -95,11 +95,15 @@ async def verify(args, key):
     from mikazuki.tagger.caption_job import CaptionJobManager, caption_sha256
     from mikazuki.tagger.task_bridge import CaptionTaskBridge
     from mikazuki.tagger.caption import CAPTION_SCHEMA, parse_caption_response, DEFAULT_CAPTION_PROMPT, render_prompt
+    from mikazuki.llm.caption_translation import CaptionTextTranslator
     from mikazuki.tag_translation.translation_config import OnlineServiceConfig
     root.mkdir(parents=True, exist_ok=True)
     images = root / "images"
     images.mkdir()
     manifest = json.loads(args.manifest.read_text(encoding="utf-8"))
+    expected_sample_count = len(manifest.get("samples", []))
+    if expected_sample_count < 1:
+        raise ValueError("acceptance manifest must contain at least one sample")
     for item in manifest["samples"]:
         source = args.samples / item["filename"]
         assert hashlib.sha256(source.read_bytes()).hexdigest() == item["sha256"]
@@ -110,12 +114,15 @@ async def verify(args, key):
     config = UnifiedConfigStore(config_path)
     remote_id = "siliconflow-qwen3.6"
     local = None
-    budget = BudgetSessions(8)
+    # The manifest may contain more than the original three-sample probe. Keep
+    # the acceptance bounded while leaving room for capability checks, preview,
+    # and the explicit remote-failure/fallback assertions.
+    budget = BudgetSessions(max(16, expected_sample_count + 10))
     service = UnifiedLLMService(config, session_factory=budget)
     if args.remote:
         config.save({"profiles": [{"id": remote_id, "name": "SiliconFlow Qwen3.6", "source": "remote",
             "endpoint": "https://api.siliconflow.cn/v1/chat/completions", "model": "Qwen/Qwen3.6-27B",
-            "api_key": key, "capabilities": ["text", "vision"], "languages": ["zh-CN"]}]})
+            "api_key": key, "capabilities": ["text", "vision"], "languages": ["en", "zh-CN"]}]})
     cache = CaptionCache(root / "translations.sqlite3")
     journal = CaptionJobStore(cache.path)
     manager = CaptionJobManager(service, cache=cache, job_store=journal, task_bridge=CaptionTaskBridge(root / "user_data"))
@@ -125,13 +132,27 @@ async def verify(args, key):
               "samples": [], "human_scores": None}
     sampler = None
     try:
+        if args.remote:
+            # Capability readiness is server-verified. Exercise both text and
+            # vision diagnostics against the real endpoint before production
+            # jobs; the verifier's request budget includes these calls.
+            await service.connection_test(profile_id=remote_id, capability="text")
+            await service.connection_test(profile_id=remote_id, capability="vision")
+            report["remote_capability_verification"] = ["text", "vision"]
         if args.local:
             from mikazuki.llm.local_vision import FILES
+            from mikazuki.llm import model_manifest as locked
             from mikazuki.llm.runtime import get_local_vision_service
             import psutil
             local = get_local_vision_service()
             for name, _size, _sha in FILES:
                 os.link(args.assets / name, local.root / name)
+            archive = args.runtime_archive.resolve()
+            if archive.stat().st_size != locked.RUNTIME_SIZE or hashlib.sha256(archive.read_bytes()).hexdigest() != locked.RUNTIME_SHA256:
+                raise RuntimeError("managed runtime archive does not match the locked manifest")
+            local.archive_path.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(archive, local.archive_path)
+            await asyncio.to_thread(local._extract_runtime)
             started = time.perf_counter()
             await local.start_runtime()
             report["startup_seconds"] = round(time.perf_counter() - started, 3)
@@ -146,6 +167,61 @@ async def verify(args, key):
             sampler = asyncio.create_task(sample_memory())
         if not args.remote:
             config.save({"profiles": [p for p in config.load()["profiles"] if p["source"] != "remote"]})
+        # Exercise the same natural-caption translation path used by the
+        # editor. The translator owns strict JSON validation and the shared
+        # cache; this verifier additionally proves a cache replay is network
+        # free and that Chinese input is short-circuited before profile
+        # resolution or a provider request.
+        translator = CaptionTextTranslator(service, cache)
+        translation_source = "A red circle is on the left of a blue square."
+        translation_before = budget.calls
+        translated = await translator.translate(
+            translation_source,
+            allow_local_fallback=args.local,
+            use_cache=True,
+        )
+        translation_after = budget.calls
+        if translated.get("skipped") or translated.get("cached") or translated.get("target_language") != "zh-CN":
+            raise RuntimeError("real natural translation contract failed")
+        if not isinstance(translated.get("translation"), str) or not translated["translation"].strip():
+            raise RuntimeError("real natural translation returned empty text")
+        translation_profile = service.resolve(
+            "text",
+            language="zh-CN",
+            profile_id=translated.get("profile_id"),
+            allow_local_fallback=args.local,
+        )
+        expected_translation_source = "remote" if args.remote else "managed-local"
+        if translation_profile.source != expected_translation_source:
+            raise RuntimeError("natural translation used an unexpected provider")
+        translation_cached = await translator.translate(
+            translation_source,
+            allow_local_fallback=args.local,
+            use_cache=True,
+        )
+        if not translation_cached.get("cached") or budget.calls != translation_after:
+            raise RuntimeError("natural translation cache replay made a provider request")
+        chinese_before = budget.calls
+        chinese = await translator.translate(
+            "一只猫坐在窗边。",
+            allow_local_fallback=args.local,
+            use_cache=True,
+        )
+        if not chinese.get("skipped") or chinese.get("translation") != "一只猫坐在窗边。" or budget.calls != chinese_before:
+            raise RuntimeError("Chinese caption was not short-circuited")
+        report["translation"] = {
+            "schema_valid": True,
+            "source_language": translated.get("source_language"),
+            "target_language": translated.get("target_language"),
+            "source": translation_profile.source,
+            "profile_id": translated.get("profile_id"),
+            "translation_length": len(translated["translation"]),
+            "cache_replay": bool(translation_cached.get("cached")),
+            "cache_replay_no_requests": True,
+            "chinese_short_circuit": True,
+            "chinese_short_circuit_no_requests": True,
+            "provider_requests": translation_after - translation_before,
+        }
         started = time.perf_counter()
         request = {"path": str(images), "mode": "natural", "use_cache": True, "conflict_action": "copy",
             "allow_local_fallback": args.local, "profile_id": remote_id if args.remote else None}
@@ -159,8 +235,8 @@ async def verify(args, key):
             assert item["after_hash"] == caption_sha256(target)
             detail = journal.find_format_detail(target, item["after_hash"])
             assert detail["format"] == "natural"
-            assert item["profile_id"] == (remote_id if args.remote else "qwen3-vl-2b-local")
-            parsed = parse_caption_response(json.dumps({"caption": text, "language": "zh-CN"}), language="zh-CN")
+            assert item["profile_id"] == (remote_id if args.remote else "qwen3.5-2b-local")
+            parsed = parse_caption_response(json.dumps({"caption": text, "language": "en"}), language="en")
             report["samples"].append({"id": Path(item["filename"]).stem, "schema_valid": True,
                 "caption_length": len(parsed.caption), "profile_id": item["profile_id"],
                 "profile_revision": item["profile_revision"], "prompt_revision": item["prompt_revision"],
@@ -170,21 +246,21 @@ async def verify(args, key):
         cached = await asyncio.to_thread(run_job, manager, request)
         report["cache_replay_no_requests"] = budget.calls == before_calls
         report["cache_hits"] = sum(bool(item.get("cached")) for item in cached["report"]["items"])
-        assert report["cache_replay_no_requests"] and report["cache_hits"] == 3
+        assert report["cache_replay_no_requests"] and report["cache_hits"] == expected_sample_count
         archive = manager.task_bridge.locations[status["job_id"]]
         report["task_archive_present"] = (archive / "config.json").is_file() and (archive / "task.json").is_file()
         assert report["task_archive_present"]
         before_calls = budget.calls
         manager.start({**request, "conflict_action": "ignore"})
         await asyncio.to_thread(manager._thread.join, 60)
-        assert manager.status()["skipped"] == 3 and budget.calls == before_calls
+        assert manager.status()["skipped"] == expected_sample_count and budget.calls == before_calls
         report["default_skip_zero_requests"] = True
         before = {p.name: caption_sha256(p) for p in images.glob("*.txt")}
-        prompt, _ = render_prompt(DEFAULT_CAPTION_PROMPT, language="zh-CN", mode="natural", image_name="image")
+        prompt, _ = render_prompt(DEFAULT_CAPTION_PROMPT, language="en", mode="natural", image_name="image")
         _profile, envelope, content, _info = await service.complete_vision(images / "chelsea.png", prompt,
-            language="zh-CN", response_schema=CAPTION_SCHEMA, allow_local_fallback=args.local)
+            language="en", response_schema=CAPTION_SCHEMA, allow_local_fallback=args.local)
         assert envelope["choices"][0].get("finish_reason") != "length"
-        parse_caption_response(content, language="zh-CN")
+        parse_caption_response(content, language="en")
         report["preview_no_write"] = before == {p.name: caption_sha256(p) for p in images.glob("*.txt")}
         assert report["preview_no_write"]
         if args.remote and args.local:
@@ -205,16 +281,16 @@ async def verify(args, key):
                 local_profiles = [p for p in config.load()["profiles"] if p["source"] != "remote"]
                 config.save({"profiles": [{"id": "failing-remote", "name": "Controlled failure", "source": "remote",
                     "endpoint": f"http://127.0.0.1:{failed.server_port}/v1/chat/completions", "model": "fixture",
-                    "api_key": "", "capabilities": ["text", "vision"], "languages": ["zh-CN"]}, *local_profiles]})
+                    "api_key": "", "capabilities": ["text", "vision"], "languages": ["en", "zh-CN"]}, *local_profiles]})
                 try:
-                    await service.complete_vision(images / "chelsea.png", prompt, language="zh-CN", response_schema=CAPTION_SCHEMA, allow_local_fallback=False)
+                    await service.complete_vision(images / "chelsea.png", prompt, language="en", response_schema=CAPTION_SCHEMA, allow_local_fallback=False)
                     raise AssertionError("disabled fallback unexpectedly succeeded")
                 except LLMRequestError:
                     report["local_disabled_remote_failure_rejected"] = True
                 actual, response, content, _ = await service.complete_vision(images / "chelsea.png", prompt,
-                    language="zh-CN", response_schema=CAPTION_SCHEMA, allow_local_fallback=True)
-                parse_caption_response(content, language="zh-CN")
-                report["explicit_fallback_actual_local"] = actual.id == "qwen3-vl-2b-local"
+                    language="en", response_schema=CAPTION_SCHEMA, allow_local_fallback=True)
+                parse_caption_response(content, language="en")
+                report["explicit_fallback_actual_local"] = actual.id == "qwen3.5-2b-local"
                 assert report["explicit_fallback_actual_local"]
             finally:
                 failed.shutdown()
@@ -227,6 +303,7 @@ async def verify(args, key):
         report["passed"] = False
         report["error_type"] = type(error).__name__
         report["error_code"] = getattr(error, "code", "production_acceptance_failed")
+        report["error_message"] = str(error)[:500]
         if "production batch failed:" in str(error):
             report["item_error_codes"] = str(error).split(": ", 1)[-1].split(",")
     finally:
@@ -258,14 +335,15 @@ if __name__ == "__main__":
     parser.add_argument("--local", action="store_true")
     parser.add_argument("--assets", type=Path)
     parser.add_argument("--runtime", type=Path)
+    parser.add_argument("--runtime-archive", type=Path)
     parser.add_argument("--mode", choices=["natural"], default="natural")
     parser.add_argument("--tag-models", type=Path)
     parser.add_argument("--rebuild-inputs", type=Path)
     args = parser.parse_args()
     if not args.remote and not args.local:
         parser.error("select remote or local")
-    if args.local and (not args.assets or not args.runtime):
-        parser.error("local requires locked assets and runtime")
+    if args.local and (not args.assets or not args.runtime or not args.runtime_archive):
+        parser.error("local requires locked assets, runtime executable, and runtime archive")
     key = ""
     if args.remote:
         print('{"awaiting_runtime_secret":true}', flush=True)

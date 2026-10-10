@@ -11,13 +11,14 @@ import { defineComponent } from "vue"
 
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }))
 vi.mock("../api/llm", () => ({
+  isVerifiedProfile: (profile: { enabled: boolean; ready: boolean; capabilities: string[]; verified_capabilities?: string[] }, capability: string) => Boolean(profile.enabled && profile.ready && profile.capabilities.includes(capability) && profile.verified_capabilities?.includes(capability)),
   llmApi: {
     profiles: vi.fn().mockResolvedValue({
       version: 5, routes: {}, prompt_presets: [], cache: {},
       profiles: [
-        { id: "text", name: "Text only", source: "remote", capabilities: ["text"], languages: ["zh-CN"], enabled: true, ready: true },
-        { id: "local", name: "Local", source: "local-endpoint", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true },
-        { id: "remote", name: "Remote", source: "remote", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true },
+        { id: "text", name: "Text only", source: "remote", capabilities: ["text"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text"] },
+        { id: "local", name: "Local", source: "local-endpoint", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text", "vision"] },
+        { id: "remote", name: "Remote", source: "remote", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text", "vision"] },
       ],
     }),
     localVisionStatus: vi.fn().mockResolvedValue({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 }),
@@ -77,6 +78,19 @@ async function naturalPage(selectChinese = true) {
 }
 
 describe("natural-language TaggerPage", () => {
+  it("does not expose an unverified visual API as an available method", async () => {
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: [
+      { id: "wd14-convnextv2-v2", name: "WD", model: "wd14-convnextv2-v2", family: "WD", author: "SmilingWolf", runtime: "local", output: "tag", ready: true, downloaded: false, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
+      { id: "llm:unverified", name: "Unverified API", model: "remote-vision", family: "Vision LLM", author: "", runtime: "api", output: "natural", ready: false, downloaded: false, languages: ["en"], capabilities: ["vision", "caption"], parameters: [], profile_id: "unverified" },
+    ] })
+    wrapper = mount(TaggerPage, {
+      global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } },
+    })
+    await flushPromises()
+    const methodButtons = wrapper.find(".tagger-choice-row .tagger-segments").findAll("button")
+    expect((methodButtons[1].element as HTMLButtonElement).disabled).toBe(true)
+  })
+
   it("uses presets for language and detail and protects custom drafts", async () => {
     const page = await naturalPage(false)
     expect(page.find('.caption-output-language').exists()).toBe(false)

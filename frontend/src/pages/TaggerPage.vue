@@ -33,7 +33,8 @@ const parametersOpen = ref(false)
 const parameterTab = ref("model")
 const availableModels = computed(() => catalog.value.filter(model => model.runtime === runtime.value && model.output === mode.value && (model.output === "tag" || model.capabilities.includes("vision"))))
 const modelGroups = computed(() => [...new Set(availableModels.value.map(model => model.family))].map(name => ({ name, models: availableModels.value.filter(model => model.family === name) })))
-const apiAvailable = computed(() => mode.value === "natural" && catalog.value.some(model => model.runtime === "api" && model.output === "natural" && model.capabilities.includes("vision")))
+const apiAvailable = computed(() => mode.value === "natural" && catalog.value.some(model => model.runtime === "api" && model.output === "natural" && model.capabilities.includes("vision") && model.ready))
+const naturalModelAvailable = computed(() => catalog.value.some(model => model.output === "natural" && model.capabilities.includes("vision") && model.ready))
 const controlsLocked = computed(() => catalogLoading.value || busy.value || captionBusy.value || previewBusy.value || presetSaving.value)
 const presetLanguageSupported = computed(() => selectedModel.value?.languages.includes(captionForm.language) || selectedModel.value?.languages.includes("*"))
 const modelReady = computed(() => selectedModel.value?.ready && (mode.value === "tag" || presetLanguageSupported.value))
@@ -477,7 +478,7 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
       </div>
       <div class="tagger-choice-row">
         <span>{{ t("tagger.workspace.method") }}</span>
-        <div class="tagger-segments"><button :class="{ selected: mode === 'tag' }" :aria-pressed="mode === 'tag'" :disabled="controlsLocked" @click="selectMethod('tag')">Tag</button><button :class="{ selected: mode === 'natural' }" :aria-pressed="mode === 'natural'" :disabled="controlsLocked || !catalog.some(model => model.output === 'natural' && model.capabilities.includes('vision'))" @click="selectMethod('natural')">{{ t("tagger.workspace.caption") }}</button></div>
+        <div class="tagger-segments"><button :class="{ selected: mode === 'tag' }" :aria-pressed="mode === 'tag'" :disabled="controlsLocked" @click="selectMethod('tag')">Tag</button><button :class="{ selected: mode === 'natural' }" :aria-pressed="mode === 'natural'" :disabled="controlsLocked || !naturalModelAvailable" @click="selectMethod('natural')">{{ t("tagger.workspace.caption") }}</button></div>
       </div>
       <div class="tagger-choice-row">
         <span>{{ t("tagger.workspace.source") }}</span>
@@ -497,7 +498,7 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
       </div>
       <p v-if="mode === 'natural'" class="caption-route-hint">{{ t("tagger.caption.remoteFirst") }}</p>
       <p v-if="mode === 'natural' && !presetLanguageSupported" class="caption-preset-incompatible" role="alert">{{ t("tagger.caption.unsupportedLanguage") }}</p>
-      <ManagedVisionModel v-if="selectedModel?.profile_id === 'qwen3-vl-2b-local'" :status="localVision" :busy="localVisionBusy" :locked="captionBusy || previewBusy" @action="manageLocalVision" />
+       <ManagedVisionModel v-if="selectedModel?.runtime === 'local' && selectedModel.output === 'natural' && (selectedModel.profile_id === localVision.model_id || selectedModel.profile_id === 'qwen3.5-2b-local')" :status="localVision" :busy="localVisionBusy" :locked="captionBusy || previewBusy" @action="manageLocalVision" />
       <div class="tagger-choice-row">
         <label for="tagger-conflict">{{ t("tagger.conflictLabel") }}</label>
         <select v-if="mode === 'tag'" id="tagger-conflict" v-model="form.batch_output_action_on_conflict" :disabled="controlsLocked" class="tagger-conflict-select"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select>

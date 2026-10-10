@@ -12,17 +12,27 @@ export interface LlmProfile {
   api_key_configured?: boolean
   asset_id?: string | null
   revision?: string | null
+  verified_capabilities?: string[]
+  verification?: { fingerprint?: string; capabilities?: string[]; verified_at?: string }
   enabled: boolean
   ready: boolean
   metadata?: Record<string, unknown>
 }
 
+/** Only real backend capability verification makes a profile usable. */
+export function isVerifiedProfile(profile: Pick<LlmProfile, "enabled" | "ready" | "capabilities" | "verified_capabilities">, capability: string): boolean {
+  return Boolean(profile.enabled && profile.ready && profile.capabilities.includes(capability)
+    && Array.isArray(profile.verified_capabilities) && profile.verified_capabilities.includes(capability))
+}
+
 export interface LlmConfig {
   version: number
+  revision?: string
   profiles: LlmProfile[]
   routes: Record<string, string>
   prompt_presets: Array<{ id?: string; name?: string; template?: string; language?: string; max_length?: number; revision?: string }>
   cache: { translation?: boolean; caption?: boolean }
+  local_fallback_enabled?: boolean
 }
 
 export interface CaptionPromptPreset {
@@ -46,8 +56,19 @@ export interface CaptionPromptPresetDocument {
 
 export interface LocalVisionStatus {
   state: string
+  model_id?: string
+  model_filename?: string
+  model_url?: string
+  model_path?: string
   installed: boolean
   runtime_installed?: boolean
+  runtime_state?: string
+  runtime_downloaded_bytes?: number
+  runtime_total_bytes?: number
+  endpoint?: string
+  port?: number
+  runtime_version?: string
+  size_bytes?: number
   downloaded_bytes: number
   total_bytes: number
   error?: string | null

@@ -11,8 +11,6 @@ from .chinese_dictionary_service import ChineseDictionaryService
 from .translation_config import OnlineServiceConfig
 from .translation_service import TranslationManager
 from .translation_store import TranslationStore
-from mikazuki.llm.config import UnifiedConfigStore
-from mikazuki.llm.local_text import LocalTextModelService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -39,4 +37,12 @@ translation_manager = TranslationManager(
     session_factory=_session_factory,
     primary_store=dictionary_service,
 )
-local_model_service = LocalTextModelService(str(LOCAL_MODEL_ROOT), translation_manager.config_store, UnifiedConfigStore(TRANSLATION_CONFIG_PATH))
+class SharedLocalModelFacade:
+    """Legacy endpoints delegate to the one shared text/vision runtime."""
+
+    def __getattr__(self, name):
+        from mikazuki.llm.runtime import get_local_vision_service
+        return getattr(get_local_vision_service(), name)
+
+
+local_model_service = SharedLocalModelFacade()

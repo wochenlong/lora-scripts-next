@@ -1517,7 +1517,7 @@ translationPrompt: "翻译系统提示词（仅用于标签翻译）", reasoning
       profileSaved: "视觉 Profile 已保存",
       profileFieldsRequired: "请填写接口地址和模型",
       enableLocalFallback: "远程不可用时允许本地视觉模型兜底",
-      localRuntimeTitle: "可选本地视觉模型 · Qwen3-VL-2B",
+      localRuntimeTitle: "可选本地视觉模型 · Qwen3.5-2B",
       localRuntimeHint: "下载约 1.55 GB，CPU 峰值内存约 3.1 GB。与翻译共用 llama.cpp；只有启用本地兜底后才用于打标。",
       setupLocal: "安装本地视觉模型和运行时",
       startLocal: "启动本地视觉服务",

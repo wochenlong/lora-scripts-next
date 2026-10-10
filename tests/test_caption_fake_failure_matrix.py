@@ -9,7 +9,7 @@ import aiohttp
 import pytest
 from PIL import Image
 
-from mikazuki.llm.config import UnifiedConfigStore
+from mikazuki.llm.config import UnifiedConfigStore, config_revision
 from mikazuki.llm.service import UnifiedLLMService
 from mikazuki.tagger.caption_job import CaptionJobManager
 from mikazuki.tagger.caption_store import CaptionJobStore
@@ -67,6 +67,9 @@ def manager_for(tmp_path, endpoint, model):
     store.save({"profiles": [{"id": "remote", "name": "remote", "model": model, "endpoint": endpoint,
                                "source": "remote", "capabilities": ["text", "vision"], "languages": ["zh-CN"],
                                "api_key": "fixture-runtime-key"}]})
+    selected = store.load()["profiles"][0]
+    for capability in ("text", "vision"):
+        store.record_verification("remote", config_revision(selected), capability)
 
     def sessions(**kwargs):
         return aiohttp.ClientSession(**{**kwargs, "timeout": aiohttp.ClientTimeout(total=.1 if model == "timeout" else 5), "trust_env": False})
@@ -145,6 +148,9 @@ def test_remote_failure_explicit_fallback_records_actual_local_profile(tmp_path,
     config["profiles"].append({"id": "local", "name": "local", "model": "fallback-local", "endpoint": endpoint,
                                "source": "managed-local", "capabilities": ["text", "vision"], "languages": ["zh-CN"], "ready": True})
     store.save(config)
+    selected = next(item for item in store.load()["profiles"] if item["id"] == "local")
+    for capability in ("text", "vision"):
+        store.record_verification("local", config_revision(selected), capability)
     manager.start({"path": str(tmp_path), "mode": "natural", "language": "zh-CN", "allow_local_fallback": True, "profile_id": "remote"})
     manager._thread.join(timeout=5)
     assert manager.status()["succeeded"] == 1

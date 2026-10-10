@@ -1,0 +1,55 @@
+{
+  "kind": "intermediate-managed-runtime",
+  "reuses_probe_assets": true,
+  "phase_4": false,
+  "samples": [
+    {
+      "index": 0,
+      "schema_valid": true,
+      "caption_length": 245,
+      "language": "en",
+      "image_sha256": "596aa1e7cb875eb79f437e310381d26b338a81c2da23439704a73c4651e8c4bb",
+      "after_hash": "c8e0cb0d3b30b8efdb4774a0124aaa670afac376c592ba9fc0dd7afdba98df30"
+    },
+    {
+      "index": 1,
+      "schema_valid": true,
+      "caption_length": 147,
+      "language": "en",
+      "image_sha256": "cc02f8ca188b167c775a7101b5d767d1e71792cf762c33d6fa15a4599b5a8de7",
+      "after_hash": "e7810157b388f9f1f0d3c12c90afcd9abc39dd08bb0485551bc35420b2f1f9e1"
+    },
+    {
+      "index": 2,
+      "schema_valid": true,
+      "caption_length": 167,
+      "language": "en",
+      "image_sha256": "c2dd0de7c538df8d111e479619b129464d0269d0ae5fd18ca91d33a7fdfea95c",
+      "after_hash": "e37ca32d53a3e157c4400e14492b1c59107e64a9e612afe97f20bc0a3046273c"
+    }
+  ],
+  "peak_rss_bytes": 3036708864,
+  "asset_id": "qwen3.5-2b-local",
+  "revision": "f6d5376be1edb4d416d56da11e5397a961aca8ae",
+  "model_sha256": "aaf42c8b7c3cab2bf3d69c355048d4a0ee9973d48f16c731c0520ee914699223",
+  "mmproj_sha256": "7035e9cb8d7c6a9681d07eef9a364783e86ea4cd73faab2eabb4f43a101830c7",
+  "runtime_version": "b11327",
+  "runtime_sha256": "4ac11772e7f9a313346ff2f4212b0608dd181130df81b9070cef377102faba8f",
+  "source_commit": "37dc62b4+working-tree",
+  "startup_seconds": 6.241,
+  "running": true,
+  "translation": {
+    "schema_valid": true,
+    "language": "zh-CN",
+    "source": "managed-local",
+    "finish_reason": "stop"
+  },
+  "batch_seconds": 19.309,
+  "batch_written": 3,
+  "real_conflict_preserved": true,
+  "request_cancelled": true,
+  "cancel_seconds": 0.024,
+  "job_history_count": 3,
+  "healthy_after_cancel": true,
+  "stopped": true
+}
