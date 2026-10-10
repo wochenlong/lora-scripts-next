@@ -270,7 +270,10 @@ _ROTARY_PATCH = """    _materialize_meta_tensors(model)
     # non-persistent inv_freq buffer is not in the checkpoint, so to_empty()
     # leaves it uninitialized and the cached text encoder outputs turn to junk.
     _rotary = model.language_model.rotary_emb
-    model.language_model.rotary_emb = type(_rotary)(config.text_config, device=_rotary.inv_freq.device)"""
+    try:
+        model.language_model.rotary_emb = type(_rotary)(config.text_config, device=_rotary.inv_freq.device)
+    except TypeError:  # older/newer transformers builds may not accept the device kwarg
+        model.language_model.rotary_emb = type(_rotary)(config.text_config)"""
 _IDEOGRAM4_TOKENIZER_LINE = "    return AutoTokenizer.from_pretrained(QWEN3_VL_8B_INSTRUCT_REPO_ID)"
 
 
