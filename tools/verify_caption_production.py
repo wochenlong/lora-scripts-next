@@ -79,8 +79,10 @@ async def verify(args, key):
     if args.rebuild_inputs:
         from download_caption_rebuild_inputs import validate_inputs
         fresh, executable = validate_inputs(args.rebuild_inputs)
-        if args.samples.resolve() != fresh / "samples" or args.assets.resolve() != fresh / "vision" or args.runtime.resolve() != executable:
+        if args.samples.resolve() != fresh / "samples":
             raise ValueError("rebuild acceptance must use its fresh downloaded inputs")
+        if args.local and (args.assets is None or args.runtime is None or args.runtime.resolve() != executable or args.assets.resolve() != fresh / "vision"):
+            raise ValueError("local rebuild acceptance must use its fresh model inputs")
     root = args.root.resolve()
     if root.exists():
         raise RuntimeError("verification root must be new")
