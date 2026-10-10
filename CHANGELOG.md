@@ -11,6 +11,13 @@
 
 - **修复 Git 更新收走模型和训练集（#356）**：停止自动 stash，自动补齐旧包缺失的程序文件；新包保留完整浅克隆工作树，并在打包前执行数据保留测试。已经受影响的用户请保留整个旧目录（含 `.git`），参见 [恢复说明](https://github.com/wochenlong/lora-scripts-next/issues/356)。
 
+### Musubi-tuner 新增 Ideogram 4（#424）
+
+- Musubi 引擎支持 **Ideogram 4 LoRA**：训练页新增模型入口（`/lora/ideogram4.html`），三阶段任务（缓存 latents → 缓存文本编码器输出 → 训练）与任务队列、日志、预览沿用现有能力
+- 组件只发**量化权重（FP8）**、许可为 **非商用**，整合包不预置；「训练用模型」区提供 conditional / unconditional DiT、Qwen3-VL-8B 文本编码器、Flux2 VAE 与 tokenizer 的清单与下载入口
+- 上游快照补丁：修正文本编码器 rotary embedding 在 `to_empty()` 后未初始化的问题（上游 v0.3.6 修复），并把 tokenizer 指向本地目录，离线可用
+- 引擎能力、预检与配置导入识别 `ideogram4-lora`（跨页导入自动跳转到对应训练页），详见 [Ideogram 4 训练指南](docs/ideogram4-musubi.md)
+
 ### 数据集标签编辑（#423）
 
 - **编辑页重做**：默认只展示图片墙，选中图片后才展开编辑面板

@@ -49,6 +49,7 @@ export default {
         flux: "Flux",
         lumina: "Lumina 2",
         krea2: "Krea 2",
+        ideogram4: "Ideogram 4",
         klein: "Klein (FLUX.2)",
         "qwen-image-21": "Qwen-Image-2.1",
       },
@@ -208,6 +209,7 @@ export default {
       "flux-lora": { title: "Flux LoRA", area: "Flux · Kohya-ss · LoRA" },
       "lumina2-lora": { title: "Lumina 2 LoRA", area: "Lumina 2 · Kohya-ss · LoRA" },
       "krea2-lora": { title: "Krea 2 LoRA", area: "Krea 2 · Musubi-Tuner · LoRA" },
+      "ideogram4-lora": { title: "Ideogram 4 LoRA", area: "Ideogram 4 · Musubi-Tuner · LoRA" },
       "qwen-image-21-lora": { title: "Qwen-Image-2.1 LoRA", area: "Qwen-Image-2.1 · DiffSynth-Studio · LoRA" },
       "ai-toolkit-sdxl-lora": { title: "SDXL LoRA", area: "SDXL · AI Toolkit · LoRA" },
       "ai-toolkit-flux-lora": { title: "Flux LoRA", area: "Flux · AI Toolkit · LoRA" },
@@ -711,6 +713,7 @@ export default {
         flux: "Flux",
         anima: "Anima",
         krea2: "Krea 2",
+        ideogram4: "Ideogram 4",
         klein: "Klein",
         "qwen-image-21": "Qwen-Image-2.1",
         nvidia: "NVIDIA",
@@ -806,7 +809,7 @@ export default {
         },
         musubi: {
           name: "Musubi-Tuner",
-          summary: "Optional engine for Krea 2 and other image-model LoRA.",
+          summary: "Optional engine for Krea 2, Ideogram 4 and other image-model LoRA.",
           sizeHint: "Large download (usually several GB); extra disk space and download time required",
         },
         "ai-toolkit": {

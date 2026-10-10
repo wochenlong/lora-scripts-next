@@ -75,7 +75,7 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     requiresGpu: true,
     managesRuntime: true,
     mark: "M",
-    tags: ["lora", "krea2", "nvidia"],
+    tags: ["lora", "krea2", "ideogram4", "nvidia"],
     version: "plugin",
     updatedAt: "2026-08",
   },

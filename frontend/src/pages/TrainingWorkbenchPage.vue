@@ -118,7 +118,7 @@ watch([model, engine, target], () => {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </DiffSynthGatePage>
-    <MusubiGatePage v-else-if="resolved.engine === 'musubi'" bare>
+    <MusubiGatePage v-else-if="resolved.engine === 'musubi'" :schema-name="resolved.schemaName" bare>
       <template #form-top>
         <WorkbenchHeader />
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />

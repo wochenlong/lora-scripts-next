@@ -36,7 +36,7 @@ Next Trainer 把数据集管理、打标、标签编辑、训练配置与任务�
 | --- | --- | --- |
 | Kohya | SD 1.5、SDXL、Flux、Anima | 支持范围随模型而异；已接入独立环境管理 |
 | Anima Fast | Anima 2B / 2.9B LoRA | 独立运行环境；两种规格有明确的底模路径入口 |
-| Musubi | Krea 2 LoRA | 可选安装；Linux 多卡见专项指南 |
+| Musubi | Krea 2 / Ideogram 4 LoRA | 可选安装；Ideogram 4 为非商用许可的量化权重，需自行下载；Linux 多卡见专项指南 |
 | DiffSynth | Qwen-Image-2.1 文生图 / 图像编辑 LoRA | 当前为单卡 BF16；Edit 使用 Batch 1 |
 | AI Toolkit | SDXL、Flux.1 Dev、Klein 4B / 9B、Krea 2 RAW、Anima、Qwen-Image-2.1 LoRA | 可选安装、独立环境；Klein 支持 base / distilled，Klein 与 Qwen 提供图像编辑入口 |
 

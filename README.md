@@ -36,7 +36,7 @@ Settings are organised as **UI, Training Engines, API, Plugins, Advanced** and *
 | --- | --- | --- |
 | Kohya | SD 1.5, SDXL, Flux, Anima | Capabilities vary by model; standalone environment management is integrated |
 | Anima Fast | Anima 2B / 2.9B LoRA | Isolated runtime with explicit base-model path selection |
-| Musubi | Krea 2 LoRA | Optional installation; see the Linux multi-GPU guide |
+| Musubi | Krea 2 / Ideogram 4 LoRA | Optional installation; Ideogram 4 ships non-commercial quantized weights you fetch yourself; see the Linux multi-GPU guide |
 | DiffSynth | Qwen-Image-2.1 text-to-image / image-editing LoRA | Single-GPU BF16; Edit currently uses batch size 1 |
 | AI Toolkit | SDXL, Flux.1 Dev, Klein 4B / 9B, Krea 2 RAW, Anima, Qwen-Image-2.1 LoRA | Optional installation with an isolated runtime; Klein supports base / distilled variants, and Klein and Qwen offer image-editing entry points |
 

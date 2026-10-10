@@ -8,6 +8,7 @@
 
 | 方向 | 已集成内容 | 边界 |
 | --- | --- | --- |
+| Musubi / Ideogram 4（#424） | Musubi 引擎新增 Ideogram 4 LoRA：训练页模型入口、三阶段缓存与训练、条件化/非条件化 DiT 与采样参数、配置导入识别；本仓补丁修正上游文本编码器 rotary 未初始化问题并支持本地 tokenizer | 官方仅发 FP8 量化权重且为**非商用**许可，整合包不预置，需自行下载；LoRA 不能合并回 FP8 基座；上游为 experimental，真机验收见 #424 |
 | 标签编辑与中文释义（#423） | 编辑页重做（图片墙优先、标签/自由两种编辑模式、批量操作与历史记录）；内置 Danbooru 中文词典（约 33 万条），翻译来源为词库 / 本地模型 / API；翻译设置与 API 配置进入全局设置 | 词库可完全离线；本地模型与 API 来源依赖用户自行安装或配置；全局 API 配置的存储统一仍在推进，打标页当前只选择来源 |
 | AI Toolkit（#399 及验收修复） | 独立环境、多模型 LoRA 入口、本地模型组件、文生图与图像编辑、统一任务和预览 | Qwen-Image-2.1 两种模式各通过 3 步真机冒烟及 20 步预览采样；不等于全模型、浏览器全流程或长期稳定性验收 |
 | 引擎列表（#398） | 搜索、安装状态筛选、置顶与排序 | 顺序按浏览器及访问地址保存，不同步到其他设备，也不改变默认训练引擎 |
@@ -54,6 +55,13 @@ AI Toolkit 本轮修复包括 GPU 显示名称转设备编号、Windows 中文�
 ### Anima
 
 Anima 底模选择适用于 Kohya LoRA、Anima Fast LoRA 和 Anima 全量微调。Anima Fast 另有明确的训练时长模式及验证集拆分配置；引擎参数与限制见 [Anima Fast 指南](anima-fast.md)。
+
+### Musubi / Ideogram 4
+
+- Musubi 引擎的训练类型从 Krea 2 扩展为 Krea 2 / Ideogram 4 两个模型族：训练页模型入口、三阶段缓存与训练、模型族专属参数与约束（量化-only 基座、非对称 CFG 采样开关、blocks_to_swap 上限 33）。
+- 组件只发 FP8 量化权重（非商用许可），整合包不预置；「训练用模型」区提供清单与下载入口，tokenizer 建议本地放置以支持离线。
+- 本仓补丁修正上游快照中文本编码器 rotary embedding 未初始化的问题（上游 v0.3.6 修复）；文档见 [Ideogram 4 训练指南](ideogram4-musubi.md)。
+- 真机验收（3 步冒烟、缓存复用、显存实测）在 [#424](https://github.com/wochenlong/lora-scripts-next/issues/424) 跟踪，不代表已完成。
 
 ### DiffSynth / Qwen-Image-2.1
 
