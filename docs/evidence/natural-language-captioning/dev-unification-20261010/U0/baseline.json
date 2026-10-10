@@ -1,0 +1,60 @@
+{
+  "plan_id": "DATASET-NL-DEV-UNIFICATION-20261010",
+  "gate": "AC-U0",
+  "status": "pass",
+  "original_pushed_feature": "21571c5ef72a61a5cd10203596e2653e37b2a8c4",
+  "feature_with_plan": "9c059ccec000d26b3d0da50e26071f1ab84d9b7d",
+  "frozen_dev": "2bdccd1b1252db9ba3158c30d56df0e292206c67",
+  "merge_commit": "a1de47e57e8add745d8e3afc4c062a56f39cede5",
+  "branch": "feat/NL-Captioning",
+  "safe_fast_forward": true,
+  "both_ancestors": true,
+  "unmerged_index_entries": 0,
+  "user_file": {
+    "path": "tests/test_diffsynth_review.py",
+    "sha256": "8620db361c56816fe938c2b41f81b462a41233d39205dba5cee0a0b39dd2ed3d",
+    "preserved": true,
+    "excluded_from_commit": true
+  },
+  "frontend": {
+    "command": "npm run check",
+    "node": "22.17.1",
+    "exit_code": 0,
+    "passed": 418,
+    "files": 67,
+    "typecheck": "pass",
+    "lint": "pass_with_2_existing_warnings",
+    "build": "pass",
+    "test_workers": 4,
+    "log": "frontend-check.log"
+  },
+  "backend": {
+    "python": "3.11.15",
+    "command": "pytest tests/test_tagger_model_catalog.py tests/test_startup_proxy.py tests/test_caption_http_contract.py tests/test_llm_config_http_contract.py tests/test_user_data_api.py tests/test_user_data_tagger.py",
+    "exit_code": 0,
+    "passed": 98,
+    "failed": 0,
+    "skipped": 0,
+    "log": "backend-smoke.log",
+    "junit": "backend-smoke.xml"
+  },
+  "conflicts": "merge-decisions.md",
+  "source_build_artifacts_committed": false,
+  "independent_review": "merge_editor: pass, no new P0/P1 blocking U0",
+  "known_gaps": {
+    "U2": [
+      "one profile/settings authority and CAS",
+      "persist actual text/vision verification",
+      "remote candidate order before explicit local fallback",
+      "unified asset installer/runtime",
+      "one preset schema, transaction, lock and revision; explicit migration"
+    ],
+    "U3": [
+      "save during edit must preserve newer draft",
+      "same-source restored selection must reload translation",
+      "shared readiness and new UI full adaptation"
+    ]
+  },
+  "next_phase": "U1",
+  "manual_acceptance": "pending_followup"
+}

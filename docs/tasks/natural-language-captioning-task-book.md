@@ -8,7 +8,7 @@
 - Canonical progress file：本文，唯一进度入口
 - Related handoff file：本文“暂停现场与恢复入口”，不建立第二套进度账
 - Current branch：`feat/NL-Captioning`
-- Current active phase：U0 本地合并与开发基线冻结（in progress）
+- Current active phase：U1 双用途模型探测与默认选型（in progress）
 - Execution readiness：`executing`（2026-10-11用户明确恢复全面施工；get_goal无现有目标后已创建同计划ID，工具确认active）
 - Plan package：[Full增量计划](nl-caption-dev-unification-plan/README.md)
 - Design：[当前设计增量](../design/nl-caption-dev-unification-design.md)
@@ -23,26 +23,26 @@
 
 ## 当前执行阶段与进度台账
 
-阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态；U0恢复执行，U1–U6尚未开始，不继承下面历史Phase的complete。
+阶段定义与验收详见[总控目标](nl-caption-dev-unification-plan/00_总控目标索引.md)和[实施验收设计](nl-caption-dev-unification-plan/01_目标计划书/01_适配与模型统一实施验收计划.md)。下表是唯一执行状态；U0已签署，U1准备探测，U2–U6尚未开始，不继承下面历史Phase的complete。
 
 | 阶段 | 输出与完成口径 | 状态 | 当前证据 |
 |---|---|---|---|
-| U0 本地合并与开发基线冻结 | AC-U0，详见对应阶段任务书 | in progress | 计划快照9c059cce、冻结dev2bdccd1b；merge未提交，AC-U0未通过 |
-| U1 双用途模型探测与默认选型 | AC-U1，详见对应阶段任务书 | pending | unrun |
+| U0 本地合并与开发基线冻结 | AC-U0，详见对应阶段任务书 | done | merge a1de47e5；完整前端418/67、后端98；安全FF与双祖先、用户hash通过，见U0完成门 |
+| U1 双用途模型探测与默认选型 | AC-U1，详见对应阶段任务书 | in progress | 探针/fixture/下载准备代码；模型实际验证尚未运行 |
 | U2 共享LLM与配置预设迁移统一 | AC-U2，详见对应阶段任务书 | pending | unrun |
 | U3 最新dev打标与编辑UI完整适配 | AC-U3，详见对应阶段任务书 | pending | unrun |
 | U4 全量回归与真实链路审计 | AC-U4，详见对应阶段任务书 | pending | unrun |
 | U5 从零隔离重建真实验收 | AC-U5，详见对应阶段任务书 | pending | unrun |
 | U6 最终新沙盒启动与goal关闭 | AC-U6，详见对应阶段任务书 | pending | unrun |
 
-- Overall progress：goal active；计划快照9c059cce；实际fetch冻结dev2bdccd1b；临时合并根nl-caption-dev-merge-20261011，15项index仍为unmerged，现场保留。模型探针与后续验收尚未开始。
-- Validation status：已有执行摘要记录后端冒烟88 passed，前端typecheck/build通过；定向前端45项中19通过/26失败。恢复后正在重新验证U0，尚未签署AC-U0。
+- Overall progress：goal active；AC-U0 pass，merge a1de47e5已非强制FF落位feat/NL-Captioning，15项冲突清零。U1启动准备；模型实测及U2–U6尚未验收。
+- Validation status：本轮U0后端98 passed/0 fail/0 skip；前端全量418 passed/67 files，typecheck/lint/build exit0。首败和并发争抢日志保留；独立审查pass。完整U4范围尚未执行。
 - Residual risks：dev漂移、双配置/预设语义、自然语言Tag化、模型双用途质量与资源、真实远程凭据、从零重建。
 - Human acceptance：`pending_followup`，不是goal硬门。
 
 ## 决策记录
 
-- Verified facts：原已推送feature为21571c5e；计划提交后HEAD为9c059cce；分析dev为d9535c35，实际冻结为2bdccd1b；临时根15项index未解决。用户tests/test_diffsynth_review.py的SHA256仍与原备份一致。
+- Verified facts：原已推送feature为21571c5e；计划提交9c059cce；分析dev d9535c35，冻结dev2bdccd1b；合并a1de47e5含双方父提交，正式分支名与双祖先通过。用户tests/test_diffsynth_review.py的SHA256仍与原备份一致。
 - Locked decisions：先本地merge再探测；保留目标分支名称；执行者自主选默认模型；完整验收+从零重建+最终沙盒都为硬门；用户手验后续。
 - Active assumptions：Qwen3.5-2B或VL-2B能满足统一模型标准，须U1证实；资源和API运行时凭据在执行前复核。
 - Open questions：无待定产品决策；不得把模型可行性当成已验证事实。
@@ -54,7 +54,7 @@
 
 ## 唯一下一步
 
-完成U0模型目录/新DOM测试与最小验证，安全提交merge并快进正式feature，冻结开发基线。
+冻结U1六图/十二翻译/完整prompt与候选资产；下载校验后依次执行两款2B公平CPU探针，自主选型。
 
 ## 暂停现场与恢复入口（2026-10-11历史快照）
 
