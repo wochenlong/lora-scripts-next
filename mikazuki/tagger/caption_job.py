@@ -144,7 +144,6 @@ class CaptionJobManager:
         self.task_bridge = task_bridge
         self._paths: list[str] = []
         self._completed: list[int] = []
-        self._item_index = 0
         self._intent: dict | None = None
         if self.job_store:
             self._recover()
@@ -184,6 +183,7 @@ class CaptionJobManager:
         self._status.update(phase="error" if self._failed else "done",
                             message="上次任务被服务重启中断；已保留完成项，可重试未完成项" if self._failed else "服务重启后已核验全部完成项", filename="",
                             failed=len(self._failed), current=len(self._completed), recovered=True)
+        self._status["report"]["items"].sort(key=lambda item: item.get("index", -1))
         self._touch_locked()
         self._persist_locked()
 
@@ -241,11 +241,16 @@ class CaptionJobManager:
         if request.get("mode", "natural") == "natural" and request.get("conflict_action", "ignore") not in {"ignore", "copy"}:
             raise RuntimeError("自然语言打标仅支持跳过或明确覆盖")
         with self._lock:
-            if self.is_busy():
+            if self.is_busy() or (self._thread and self._thread.is_alive()):
                 raise RuntimeError("已有自然语言打标任务进行中")
             request = copy.deepcopy(request)
             if request.get("mode", "natural") == "natural":
                 request.setdefault("conflict_action", "ignore")
+                request.setdefault("concurrency", 3)
+                if type(request["concurrency"]) is not int or not 1 <= request["concurrency"] <= 16:
+                    raise RuntimeError("并发请求数必须是 1 到 16 的整数")
+            elif "concurrency" in request:
+                raise RuntimeError("Tag 打标不支持并发请求参数")
             paths = [Path(item) for item in request.get("paths", [])] or discover_images(request.get("path", ""), bool(request.get("recursive", False)))
             if "expected_hashes" not in request:
                 request["expected_hashes"] = {str(path): caption_sha256(caption_path_for(path)) for path in paths}
@@ -255,11 +260,31 @@ class CaptionJobManager:
                 job_service = llm_service
             from mikazuki.llm.service import UnifiedLLMService
             if isinstance(job_service, UnifiedLLMService) and request.get("mode") != "tag":
-                job_service = UnifiedLLMService(
+                class CaptionLLMService(UnifiedLLMService):
+                    """Remote requests overlap; local/fallback inference stays serial."""
+
+                    async def _request(self, profile, payload):
+                        if profile.source == "remote":
+                            return await super()._request(profile, payload)
+                        from mikazuki.llm.http import LLMRequestError
+                        async with self.local_limit:
+                            while True:
+                                try:
+                                    return await super()._request(profile, payload)
+                                except LLMRequestError as error:
+                                    if error.code != "llm_local_queue_full":
+                                        raise
+                                    # Translation can already occupy all shared slots.
+                                    # No inference started: wait for admission rather
+                                    # than failing this image or adding another slot.
+                                    await asyncio.sleep(.05)
+
+                job_service = CaptionLLMService(
                     job_service.config_store,
                     session_factory=job_service.session_factory,
                     config_snapshot=job_service.config(masked=False),
                 )
+                job_service.local_limit = asyncio.Semaphore(1)
             from mikazuki.tagger.caption import snapshot_prompt
             if request.get("mode") != "tag":
                 config = job_service.config(masked=False) if request.get("prompt_id") and not request.get("_prompt_frozen") and hasattr(job_service, "config") else {}
@@ -299,6 +324,7 @@ class CaptionJobManager:
                     "runtime": request.get("runtime"), "profile_id": request.get("profile_id"),
                     "model_snapshot": request.get("model_snapshot"),
                     "max_tokens": request.get("max_tokens", 512), "temperature": request.get("temperature", 0.0),
+                    "concurrency": request.get("concurrency", 3),
                     "conflict_action": request.get("conflict_action"), "recursive": bool(request.get("recursive", False)),
                     "prompt_id": request.get("prompt_id"),
                     "max_caption_length": request.get("max_caption_length", 2000),
@@ -391,49 +417,17 @@ class CaptionJobManager:
                 return
             if str(request.get("mode") or "natural") == "tag":
                 self._prepare_tag_model(request)
-            for index, path in enumerate(paths, start=1):
-                self._item_index = index - 1
-                if self._cancel.is_set():
-                    self._set(phase="cancelled", message="任务已取消", cancelled=len(paths) - index + 1)
-                    return
-                self._set(current=index - 1, filename=path.name, message=f"正在处理 {path.name}")
-                try:
-                    result = asyncio.run(self._process_one(path, request))
-                    with self._lock:
-                        result["index"] = index - 1
-                        self._completed.append(index - 1)
-                        self._intent = None
-                        counter = "succeeded" if result["written"] else "skipped"
-                        self._set(report={"items": [*self._status["report"]["items"], result]},
-                                  current=index, **{counter: self._status[counter] + 1})
-                except (CaptionJobCancelled, TaggerCancelled):
-                    remaining = max(len(paths) - index + 1, 0)
-                    self._set(
-                        phase="cancelled",
-                        message="任务已取消",
-                        cancelled=self._status["cancelled"] + remaining,
-                    )
-                    return
-                except Exception as exc:
-                    message = safe_error_message(exc)
-                    item = {"path": str(path), "filename": path.name, "error": message, "code": getattr(exc, "code", "caption_failed")}
-                    self._failed.append(item)
-                    self._completed.append(index - 1)
-                    self._intent = None
-                    self._set(
-                        failed=self._status["failed"] + 1,
-                        errors=[*self._status["errors"], {"filename": path.name, "code": getattr(exc, "code", "caption_failed"), "message": message}],
-                        report={"items": [*self._status["report"]["items"], {"filename": path.name, "index": index - 1, "status": "error", "code": item["code"], "error": message}]},
-                    )
+            asyncio.run(self._run_items(paths, request))
             if self._cancel.is_set():
-                self._set(phase="cancelled", message="任务已取消")
+                self._set(phase="cancelled", message="任务已取消", cancelled=len(paths) - len(self._completed), filename="")
             elif self._status["failed"] == len(paths):
                 self._set(phase="error", message="任务失败，所有图片均未完成")
             elif self._status["failed"]:
                 self._set(phase="done", message="任务完成，但存在失败项")
             else:
                 self._set(phase="done", message="模型打标完成")
-            self._set(current=len(paths), filename="")
+            if not self._cancel.is_set():
+                self._set(current=len(paths), filename="")
         except (CaptionJobCancelled, TaggerCancelled):
             with self._lock:
                 self._status.update(phase="cancelled", message="任务已取消", cancelled=max(self._status["total"] - self._status["current"], 0))
@@ -462,11 +456,92 @@ class CaptionJobManager:
             )
             tagger_progress.release()
 
-    async def _process_one(self, image_path: Path, request: dict) -> dict | bool:
+    async def _run_items(self, paths: list[Path], request: dict) -> None:
+        # A fixed worker pool bounds both active requests and memory. Each
+        # worker keeps its own index; completion order may differ from discovery.
+        pending = iter(enumerate(paths))
+
+        async def worker():
+            while not self._cancel.is_set():
+                item = next(pending, None)
+                if item is None:
+                    return
+                index, path = item
+                try:
+                    self._set(filename=path.name, message=f"正在处理 {path.name}")
+                    await self._process_one(path, request, index)
+                except (CaptionJobCancelled, TaggerCancelled):
+                    self._cancel.set()
+                    return
+                except CaptionPersistenceError:
+                    raise
+                except Exception as exc:
+                    # A persisted write intent must remain the sole pending
+                    # transaction until recovery verifies it. Never let another
+                    # image replace it after a storage/commit failure.
+                    if isinstance(exc, sqlite3.Error) or self._intent is not None:
+                        raise CaptionPersistenceError("无法保存图片写回记录；任务已停止，可重启后恢复") from exc
+                    self._record_failure(index, path, exc)
+
+        async def guarded_worker():
+            try:
+                await worker()
+            except CaptionPersistenceError:
+                # Stop every ready sibling immediately. gather's exception
+                # propagation happens on a later loop turn, after another
+                # worker could otherwise overwrite the recovery intent.
+                self._cancel.set()
+                raise
+
+        count = 1 if request.get("mode") == "tag" else request.get("concurrency", 3)
+        tasks = [asyncio.create_task(guarded_worker()) for _ in range(min(count, len(paths)))]
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            for task in tasks:
+                if not task.done():
+                    task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+
+    def _record_success(self, index: int, result: dict) -> dict:
+        with self._lock:
+            if not result["written"] and self._cancel.is_set():
+                raise CaptionJobCancelled()
+            result["index"] = index
+            self._completed.append(index)
+            self._completed.sort()
+            intent = self._intent
+            self._intent = None
+            counter = "succeeded" if result["written"] else "skipped"
+            items = sorted([*self._status["report"]["items"], result], key=lambda item: item["index"])
+            try:
+                self._set(report={"items": items}, current=len(self._completed),
+                          **{counter: self._status[counter] + 1})
+            except CaptionPersistenceError:
+                self._intent = intent
+                raise
+            return result
+
+    def _record_failure(self, index: int, path: Path, error: Exception) -> None:
+        with self._lock:
+            message = safe_error_message(error)
+            code = getattr(error, "code", "caption_failed")
+            self._failed.append({"path": str(path), "filename": path.name, "index": index, "error": message, "code": code})
+            self._failed.sort(key=lambda item: item["index"])
+            self._completed.append(index)
+            self._completed.sort()
+            items = sorted([*self._status["report"]["items"], {"filename": path.name, "index": index, "status": "error", "code": code, "error": message}], key=lambda item: item["index"])
+            errors = [{"filename": item["filename"], "code": item["code"], "message": item["error"]} for item in self._failed]
+            self._set(failed=len(self._failed), errors=errors, report={"items": items}, current=len(self._completed))
+
+    async def _process_one(self, image_path: Path, request: dict, index: int) -> dict:
         from mikazuki.tagger.caption import default_caption_prompt, merge_tag_caption, parse_caption_response, render_prompt
         from mikazuki.llm.runtime import llm_service as runtime_llm_service
         from mikazuki.llm.config import config_revision
         service = self._job_service or runtime_llm_service
+
+        if self._cancel.is_set() or tagger_progress.is_cancel_requested():
+            raise CaptionJobCancelled()
 
         mode = str(request.get("mode") or "natural")
         profile_id_for_report = None
@@ -493,7 +568,7 @@ class CaptionJobManager:
         if before_hash != expected:
             raise CaptionWriteConflict("caption changed since the job snapshot")
         if action == "ignore" and target.exists():
-            return {"filename": image_path.name, "status": "skipped", "written": False, "before_hash": before_hash, "after_hash": before_hash}
+            return self._record_success(index, {"filename": image_path.name, "status": "skipped", "written": False, "before_hash": before_hash, "after_hash": before_hash})
         if mode == "tag":
             training_tags = self._generate_tags(image_path, request)
             generated = ", ".join(training_tags)
@@ -582,56 +657,54 @@ class CaptionJobManager:
                         generated,
                     )
             prompt_revision_for_report = prompt_revision
-        if self._cancel.is_set():
-            raise CaptionJobCancelled()
-        self._guard_path(image_path)
-        if caption_sha256(image_path) != image_hash:
-            raise CaptionWriteConflict("source image changed before caption write")
-        # The caption can be edited while a remote/local model is generating.
-        # Recheck the destination immediately before formatting and atomic
-        # replacement so a late model response cannot overwrite that edit.
-        current_target_hash = caption_sha256(target) if target.is_file() else None
-        if current_target_hash != before_hash:
-            raise CaptionWriteConflict("caption changed during caption generation")
-        if mode == "tag":
-            format_hint = self.job_store.find_format(target, before_hash) if self.job_store else None
-            merged, should_write = merge_tag_caption(existing, generated, action, existed=target.is_file(), format_hint=format_hint), True
-        else:
-            merged, should_write = merge_caption(existing, generated, "copy" if action == "ignore" else action)
-        if not should_write:
-            return False
-        output_format = "tag" if mode == "tag" else "natural"
-        result = {
-            "filename": image_path.name,
-            "index": self._item_index,
-            "image_sha256": image_hash,
-            "caption_format": output_format,
-            "tags": training_tags,
-            "status": "written",
-            "written": True,
-            "before_hash": before_hash,
-            "after_hash": hashlib.sha256((merged if mode == "tag" or merged.endswith("\n") else merged + "\n").encode("utf-8")).hexdigest(),
-            "profile_id": profile_id_for_report,
-            "model": model_for_report,
-            "source": source_for_report,
-            "profile_revision": profile_revision_for_report,
-            "prompt_revision": prompt_revision_for_report,
-            "cached": cache_hit,
-        }
-        if self.job_store:
-            if existing_bytes is not None and hashlib.sha256(existing_bytes).hexdigest() != before_hash:
-                raise CaptionWriteConflict("caption changed before backup")
-            from mikazuki.dataset_editor import detect_caption_format
-            before_detail = self.job_store.find_format_detail(target, before_hash) or {"format": detect_caption_format(existing), "tags": []}
-            before_detail["writer_job_id"] = self.job_store.format_owner(target, before_hash)
-            self.job_store.backup(self._status["job_id"], self._item_index, existing_bytes, before_hash, before_detail)
-            with self._lock:
-                self._intent = {"index": self._item_index, "after_hash": result["after_hash"], "result": result}
+        # No await occurs in this commit block: concurrent generation cannot
+        # overlap backups, the single recovery intent, replacement or completion.
+        # The lock also makes cancellation atomic with respect to a write.
+        with self._lock:
+            if self._cancel.is_set() or tagger_progress.is_cancel_requested():
+                raise CaptionJobCancelled()
+            self._guard_path(image_path)
+            if caption_sha256(image_path) != image_hash:
+                raise CaptionWriteConflict("source image changed before caption write")
+            current_target_hash = caption_sha256(target) if target.is_file() else None
+            if current_target_hash != before_hash:
+                raise CaptionWriteConflict("caption changed during caption generation")
+            if mode == "tag":
+                format_hint = self.job_store.find_format(target, before_hash) if self.job_store else None
+                merged = merge_tag_caption(existing, generated, action, existed=target.is_file(), format_hint=format_hint)
+            else:
+                merged, _should_write = merge_caption(existing, generated, "copy" if action == "ignore" else action)
+            output_format = "tag" if mode == "tag" else "natural"
+            result = {
+                "filename": image_path.name,
+                "index": index,
+                "image_sha256": image_hash,
+                "caption_format": output_format,
+                "tags": training_tags,
+                "status": "written",
+                "written": True,
+                "before_hash": before_hash,
+                "after_hash": hashlib.sha256((merged if mode == "tag" or merged.endswith("\n") else merged + "\n").encode("utf-8")).hexdigest(),
+                "profile_id": profile_id_for_report,
+                "model": model_for_report,
+                "source": source_for_report,
+                "profile_revision": profile_revision_for_report,
+                "prompt_revision": prompt_revision_for_report,
+                "cached": cache_hit,
+            }
+            if self.job_store:
+                if existing_bytes is not None and hashlib.sha256(existing_bytes).hexdigest() != before_hash:
+                    raise CaptionWriteConflict("caption changed before backup")
+                from mikazuki.dataset_editor import detect_caption_format
+                before_detail = self.job_store.find_format_detail(target, before_hash) or {"format": detect_caption_format(existing), "tags": []}
+                before_detail["writer_job_id"] = self.job_store.format_owner(target, before_hash)
+                self.job_store.backup(self._status["job_id"], index, existing_bytes, before_hash, before_detail)
+                self._intent = {"index": index, "after_hash": result["after_hash"], "result": result}
                 self._persist_locked()
-        write_caption_atomic(target, merged, expected_sha256=expected, trailing_newline=mode != "tag")
-        if self.job_store:
-            self.job_store.remember_format(target, result["after_hash"], result["caption_format"], training_tags, self._status["job_id"])
-        return result
+            write_caption_atomic(target, merged, expected_sha256=expected, trailing_newline=mode != "tag")
+            if self.job_store:
+                self.job_store.remember_format(target, result["after_hash"], result["caption_format"], training_tags, self._status["job_id"])
+            return self._record_success(index, result)
 
     async def _cancellable(self, operation):
         task = asyncio.create_task(operation)

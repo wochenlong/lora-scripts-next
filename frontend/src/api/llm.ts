@@ -83,7 +83,7 @@ export const llmApi = {
   promptPresets: (signal?: AbortSignal) => apiData<CaptionPromptPresetDocument>("/api/llm/prompt-presets", { signal }),
   savePromptPresets: (body: CaptionPromptPresetDocument) => apiData<CaptionPromptPresetDocument>("/api/llm/prompt-presets", { method: "PUT", body: JSON.stringify(body) }),
   importLegacyPromptPresets: (revision: string) => apiData<CaptionPromptPresetDocument>("/api/llm/prompt-presets/import-legacy", { method: "POST", body: JSON.stringify({ confirmed: true, revision }) }),
-  connectionTest: (body: { capability: "text" | "vision"; profile_id?: string; image_path?: string; prompt?: string; language?: string }) =>
+  connectionTest: (body: { capability?: "text" | "vision"; profile_id?: string; image_path?: string; prompt?: string; language?: string }) =>
     apiData<Record<string, unknown>>("/api/llm/connection-test", { method: "POST", body: JSON.stringify(body) }),
   localVisionManifest: () => apiData<Record<string, unknown>>("/api/llm/local-vision/manifest"),
   localVisionStatus: (signal?: AbortSignal) => apiData<LocalVisionStatus>("/api/llm/local-vision/status", { signal }),

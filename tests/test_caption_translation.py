@@ -107,7 +107,7 @@ def test_unconfigured_remote_is_not_contacted_and_local_cache_replays(tmp_path, 
     store.save({"profiles": [
         {"id": "empty", "endpoint": "https://unconfigured.test/v1/chat/completions", "model": "remote", "source": "remote", "capabilities": ["text"], "languages": ["zh-CN"]},
         {"id": "local", "endpoint": "http://127.0.0.1:9999/v1/chat/completions", "model": "local", "source": "local-endpoint", "capabilities": ["text"], "languages": ["zh-CN"]},
-    ]})
+    ], "local_fallback_enabled": False})
     local = next(item for item in store.load()["profiles"] if item["id"] == "local")
     store.record_verification("local", config_revision(local), "text")
     calls = []

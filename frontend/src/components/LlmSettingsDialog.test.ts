@@ -71,7 +71,7 @@ describe("shared LLM settings", () => {
     const button = wrapper.get('[data-profile-id="vision"]').findAll("button")[0]
     await button.trigger("click")
     await flushPromises()
-    expect(llmApi.connectionTest).toHaveBeenCalledWith({ capability: "vision", profile_id: "vision", image_path: "D:/public/a.png" })
+    expect(llmApi.connectionTest).toHaveBeenCalledWith({ profile_id: "vision" })
     await wrapper.get('[data-profile-id="vision"] .llm-profile-name').setValue("Draft")
     expect((button.element as HTMLButtonElement).disabled).toBe(true)
     expect(wrapper.text()).toContain("请先保存修改")
@@ -80,7 +80,7 @@ describe("shared LLM settings", () => {
   it("shares the vision asset controls with translation without an automatic download", async () => {
     vi.useFakeTimers()
     const wrapper = await open("text")
-    expect(wrapper.get(".managed-vision-model").text()).toContain("Qwen3.5-2B")
+    expect(wrapper.get(".llm-managed-profile").text()).toContain("Qwen3.5-2B")
     expect(llmApi.localVisionAction).not.toHaveBeenCalled()
     vi.mocked(llmApi.localVisionStatus).mockImplementation(() => new Promise(() => {}))
     vi.advanceTimersByTime(1200)
@@ -116,15 +116,67 @@ describe("shared LLM settings", () => {
     expect(llmApi.saveConfig).not.toHaveBeenCalled()
   })
 
-  it("edits translation prompt and reasoning in the shared profile without changing caption presets", async () => {
+  it("keeps the translation prompt internal while allowing reasoning without changing caption presets", async () => {
     const wrapper = await open("text")
     vi.mocked(llmApi.saveConfig).mockResolvedValue(config())
-    await wrapper.get('[data-profile-id="text"] .llm-translation-prompt').setValue("Translate tags concisely.")
+    expect(wrapper.find(".llm-translation-prompt").exists()).toBe(false)
+    expect(wrapper.find(".llm-capabilities").exists()).toBe(false)
     await wrapper.get('[data-profile-id="text"] .llm-reasoning').setValue("high")
     await wrapper.get(".llm-save").trigger("click")
     await flushPromises()
     const payload = vi.mocked(llmApi.saveConfig).mock.calls[0][0]
-    expect(payload.profiles?.find(profile => profile.id === "text")?.metadata).toEqual({ translation_system_prompt: "Translate tags concisely.", reasoning_effort: "high" })
+    expect(payload.profiles?.find(profile => profile.id === "text")?.metadata).toEqual({ reasoning_effort: "high" })
     expect(payload).not.toHaveProperty("prompt_presets")
+  })
+
+  it("starts with collapsed model cards and enabled advanced defaults, saving an explicit fallback disable", async () => {
+    const wrapper = await open()
+    for (const card of wrapper.findAll(".llm-profile-card")) expect(card.attributes("open")).toBeUndefined()
+    expect(wrapper.get(".llm-advanced-settings").attributes("open")).toBeUndefined()
+    expect((wrapper.get(".llm-translation-cache").element as HTMLInputElement).checked).toBe(true)
+    expect((wrapper.get(".llm-caption-cache").element as HTMLInputElement).checked).toBe(true)
+    expect((wrapper.get(".llm-local-fallback").element as HTMLInputElement).checked).toBe(true)
+    vi.mocked(llmApi.saveConfig).mockResolvedValue(config())
+    await wrapper.get(".llm-local-fallback").setValue(false)
+    await wrapper.get(".llm-save").trigger("click")
+    await flushPromises()
+    expect(vi.mocked(llmApi.saveConfig).mock.calls[0][0].local_fallback_enabled).toBe(false)
+  })
+
+  it("detects all capabilities without requiring a user image and refreshes verified routes", async () => {
+    const wrapper = await open()
+    expect(wrapper.find(".llm-test-image").exists()).toBe(false)
+    const updated = config()
+    updated.profiles[0].capabilities = ["text", "vision"]
+    updated.profiles[0].verified_capabilities = ["text", "vision"]
+    vi.mocked(llmApi.config).mockResolvedValue(updated)
+    vi.mocked(llmApi.connectionTest).mockResolvedValue({ ok: true })
+    await wrapper.get('[data-profile-id="text"]').findAll("button")[0].trigger("click")
+    await flushPromises()
+    expect(llmApi.connectionTest).toHaveBeenCalledWith({ profile_id: "text" })
+    expect(wrapper.findAll("select")[1].findAll("option").map(option => option.attributes("value"))).toContain("text")
+  })
+
+  it("reports a text-only detection as unavailable for image captioning", async () => {
+    const wrapper = await open()
+    vi.mocked(llmApi.connectionTest).mockResolvedValue({ verified_capabilities: ["text"], vision_error_code: "unsupported_content" })
+    await wrapper.get('[data-profile-id="text"]').findAll("button")[0].trigger("click")
+    await flushPromises()
+    const result = wrapper.findAll('[role="status"]').find(item => item.text().includes("Text only"))
+    expect(result?.text()).toContain("文本")
+    expect(result?.text()).toContain("不能用于图像打标")
+    expect(result?.text()).not.toContain("unsupported_content")
+  })
+
+  it("renders the same editor inline without closing after save", async () => {
+    const wrapper = await open("text")
+    await wrapper.setProps({ embedded: true })
+    vi.mocked(llmApi.saveConfig).mockResolvedValue(config())
+    await wrapper.get(".llm-save").trigger("click")
+    await flushPromises()
+    expect(llmApi.saveConfig).toHaveBeenCalledOnce()
+    expect(wrapper.emitted("update:modelValue")).toBeUndefined()
+    expect(wrapper.find(".llm-settings").exists()).toBe(true)
+    expect(wrapper.find(".llm-cancel").exists()).toBe(false)
   })
 })

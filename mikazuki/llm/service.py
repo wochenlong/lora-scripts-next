@@ -143,11 +143,13 @@ class UnifiedLLMService:
     async def connection_test(
         self,
         *,
-        capability: LLMCapability = "text",
+        capability: LLMCapability | None = "text",
         profile_id: str | None = None,
         image_path: str | Path | None = None,
         prompt: str = 'Reply with JSON: {"ok": true}.',
         language: str | None = None,
+        _record: bool = True,
+        _discover: bool = False,
     ) -> dict[str, Any]:
         from .config import config_revision
         from .contracts import LLMRouteError
@@ -155,7 +157,35 @@ class UnifiedLLMService:
         selected = next((item for item in config["profiles"] if item["id"] == (profile_id or config.get("routes", {}).get("caption" if capability == "vision" else "translation"))), None)
         if selected is None:
             raise LLMRouteError("selected profile does not exist", "llm_profile_not_found")
-        if not selected.get("enabled") or capability not in selected["capabilities"]:
+        if capability is None:
+            # Probe the exact endpoint, regardless of old manually declared
+            # capabilities. Never use fallback or infer vision from its name.
+            fingerprint = config_revision(selected)
+            try:
+                text_result = await self.connection_test(capability="text", profile_id=selected["id"],
+                    language=language, _record=False, _discover=True)
+            except (LLMRequestError, LLMContractError):
+                if "text" in selected["capabilities"]:
+                    self.config_store.record_verification(selected["id"], fingerprint, "text", successful=False)
+                raise
+            detected = ["text"]
+            vision_error_code = None
+            if selected.get("asset_id") != "qwen3.5-0.8b-local":
+                try:
+                    await self.connection_test(capability="vision", profile_id=selected["id"],
+                        language=language, _record=False, _discover=True)
+                    detected.append("vision")
+                except (LLMRequestError, LLMContractError) as exc:
+                    # Translation stays usable when the image probe fails.
+                    # Failed vision never becomes an enabled capability.
+                    vision_error_code = getattr(exc, "code", "llm_vision_verification_failed")
+            document = self.config_store.record_capability_detection(selected["id"], fingerprint, detected)
+            verified = next(item for item in document["profiles"] if item["id"] == selected["id"])
+            return {**text_result, "capability": "auto", "capabilities": verified["capabilities"],
+                    "verified_capabilities": verified["verified_capabilities"],
+                    "profile_revision": config_revision(verified), "config_revision": document["revision"],
+                    "verification_method": "automatic-text-and-vision-v1", "vision_error_code": vision_error_code}
+        if not selected.get("enabled") or (not _discover and capability not in selected["capabilities"]):
             raise LLMRouteError("selected profile does not declare the requested capability", "llm_capability_vision_required" if capability == "vision" else "llm_capability_text_required")
         from urllib.parse import urlparse
         endpoint = urlparse(selected["endpoint"])
@@ -204,9 +234,10 @@ class UnifiedLLMService:
             if not valid:
                 raise LLMContractError("capability verification did not match visible facts or text meaning")
         except Exception:
-            self.config_store.record_verification(profile.id, fingerprint, capability, successful=False)
+            if _record:
+                self.config_store.record_verification(profile.id, fingerprint, capability, successful=False)
             raise
-        document = self.config_store.record_verification(profile.id, fingerprint, capability)
+        document = self.config_store.record_verification(profile.id, fingerprint, capability) if _record else config
         verified = next(item for item in document["profiles"] if item["id"] == profile.id)
         result = {"profile_id": profile.id, "profile_revision": fingerprint, "capability": capability,
                   "ok": True, "verified_capabilities": verified["verified_capabilities"],

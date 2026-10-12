@@ -178,10 +178,11 @@ describe("natural-language TaggerPage", () => {
     const { image_path, ...configuration } = preview
     expect(image_path).toBe("D:/samples/a.png")
     expect(batch).toEqual(configuration)
-    expect(batch).toMatchObject({ path: "D:/samples", mode: "tag", runtime: "local", model_id: "wd14-convnextv2-v2", threshold: .35, recursive: false, conflict_action: "ignore" })
+    expect(batch).toMatchObject({ path: "D:/samples", mode: "tag", runtime: "local", model_id: "wd14-convnextv2-v2", threshold: .35, recursive: true, conflict_action: "ignore" })
     expect(Object.keys(batch)).not.toEqual(expect.arrayContaining(["prompt", "profile_id"]))
     expect(batch).not.toHaveProperty("batch_input_recursive")
     expect(batch).not.toHaveProperty("max_tokens")
+    expect(batch).not.toHaveProperty("concurrency")
   })
   it("imports legacy presets only after confirmation and preserves the current draft", async () => {
     const config = await llmApi.profiles()
@@ -286,7 +287,7 @@ describe("natural-language TaggerPage", () => {
     expect(page.findAllComponents({ name: "ElOption" }).map(option => option.props("value"))).toEqual(["llm:remote"])
     expect(page.text()).not.toContain("Text only")
     expect(page.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("llm:remote")
-    expect(llmApi.localVisionStatus).toHaveBeenCalledOnce()
+    expect(llmApi.localVisionStatus).not.toHaveBeenCalled()
   })
 
   it("submits edited prompt through the caption API with local fallback off by default", async () => {
@@ -384,12 +385,16 @@ describe("natural-language TaggerPage", () => {
   it("preserves each Caption model's settings across runtime switches", async () => {
     const page = await naturalPage()
     await page.get("textarea").setValue("远程提示词")
+    await page.get('[data-testid="caption-concurrency"]').setValue("6")
     await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[0].trigger("click")
     await page.get("textarea").setValue("本地提示词")
+    await page.get('[data-testid="caption-concurrency"]').setValue("2")
     await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[1].trigger("click")
     expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("远程提示词")
+    expect((page.get('[data-testid="caption-concurrency"]').element as HTMLInputElement).value).toBe("6")
     await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[0].trigger("click")
     expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("本地提示词")
+    expect((page.get('[data-testid="caption-concurrency"]').element as HTMLInputElement).value).toBe("2")
   })
 
   it("disables repeat previews while an inference request is pending", async () => {

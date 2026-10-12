@@ -49,7 +49,7 @@ async def translate_caption_text(req: CaptionTranslationRequest, request: Reques
 
 
 class LLMConnectionTestRequest(BaseModel):
-    capability: Literal["text", "vision"] = "text"
+    capability: Literal["text", "vision"] | None = None
     profile_id: str | None = None
     image_path: str | None = None
     prompt: str = Field(default='Reply with JSON: {"ok": true}.', max_length=8000)

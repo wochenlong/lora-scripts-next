@@ -177,6 +177,7 @@ def migrate_legacy_translation_config(raw: dict | None) -> dict:
             "routes": dict(raw.get("routes") or {}),
             "prompt_presets": copy.deepcopy(raw.get("prompt_presets") or []),
             "cache": copy.deepcopy(raw.get("cache") or {"translation": True, "caption": True}),
+            "local_fallback_enabled": raw.get("local_fallback_enabled", True),
         }
 
     profiles: list[dict] = []
@@ -217,6 +218,7 @@ def migrate_legacy_translation_config(raw: dict | None) -> dict:
         "routes": {"translation": active_remote, "caption": active_remote},
         "prompt_presets": [],
         "cache": {"translation": True, "caption": True},
+        "local_fallback_enabled": (raw.get("local") or {}).get("enabled", True),
     }
 
 
@@ -251,7 +253,7 @@ def profile_ready(profile: dict) -> bool:
 
 
 def validate_options(config: dict) -> None:
-    if not isinstance(config.get("local_fallback_enabled", False), bool):
+    if not isinstance(config.get("local_fallback_enabled", True), bool):
         raise LLMContractError("local_fallback_enabled must be a boolean")
     routes = config.get("routes", {})
     if not isinstance(routes, dict) or any(key not in {"translation", "caption"} or not isinstance(value, str) for key, value in routes.items()):
@@ -358,7 +360,7 @@ class UnifiedConfigStore:
                     "routes": copy.deepcopy(raw.get("routes", {})),
                     "prompt_presets": copy.deepcopy(raw.get("prompt_presets", [])),
                     "cache": copy.deepcopy(raw.get("cache", {"translation": True, "caption": True})),
-                    "local_fallback_enabled": raw.get("local_fallback_enabled", False),
+                    "local_fallback_enabled": raw.get("local_fallback_enabled", True),
                 }
                 validate_options(config)
                 return config
@@ -369,7 +371,7 @@ class UnifiedConfigStore:
                 "routes": {},
                 "prompt_presets": [],
                 "cache": {"translation": True, "caption": True},
-                "local_fallback_enabled": False,
+                "local_fallback_enabled": True,
             }
         return migrate_legacy_translation_config(document)
 
@@ -415,7 +417,7 @@ class UnifiedConfigStore:
             "routes": routes,
             "prompt_presets": copy.deepcopy(payload.get("prompt_presets", current.get("prompt_presets", []))),
             "cache": copy.deepcopy(payload.get("cache", current.get("cache", {"translation": True, "caption": True}))),
-            "local_fallback_enabled": payload.get("local_fallback_enabled", current.get("local_fallback_enabled", False)),
+            "local_fallback_enabled": payload.get("local_fallback_enabled", current.get("local_fallback_enabled", True)),
         }
         validate_options(config)
         document = self._read_document()
@@ -459,6 +461,26 @@ class UnifiedConfigStore:
                 verified.discard(capability)
             selected["verification"] = {"fingerprint": fingerprint, "capabilities": sorted(verified)}
             # Bypass public profile payload validation solely for this trusted server result.
+            document = self._read_document()
+            document["llm"] = {key: value for key, value in current.items() if key != "revision"}
+            self._sync_legacy_translation_fields(document, current["profiles"], current["routes"])
+            write_configuration(self.path, document)
+            return self.load()
+
+    def record_capability_detection(self, profile_id: str, fingerprint: str, capabilities: list[str]) -> dict:
+        """Enable only capabilities proven by server probes, with one atomic CAS write."""
+        with configuration_lock(self.path):
+            current = self.load()
+            selected = next((item for item in current["profiles"] if item["id"] == profile_id), None)
+            if selected is None or config_revision(selected) != fingerprint:
+                raise LLMConfigConflict("profile changed while capability verification was running")
+            if not capabilities or set(capabilities) - _ALLOWED_CAPABILITIES:
+                raise LLMContractError("detected capabilities are invalid")
+            selected["capabilities"] = sorted(set(capabilities))
+            selected["verified_capabilities"] = list(selected["capabilities"])
+            selected["verification"] = {
+                "fingerprint": config_revision(selected), "capabilities": list(selected["capabilities"]),
+            }
             document = self._read_document()
             document["llm"] = {key: value for key, value in current.items() if key != "revision"}
             self._sync_legacy_translation_fields(document, current["profiles"], current["routes"])

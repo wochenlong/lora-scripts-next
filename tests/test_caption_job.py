@@ -116,6 +116,8 @@ def test_caption_job_cancel_preserves_completed_items(tmp_path):
         "language": "zh-CN",
         "prompt": "describe {{language}}",
         "conflict_action": "copy",
+        # This test specifically exercises cancellation after one serial write.
+        "concurrency": 1,
     })
     deadline = time.time() + 5
     while manager.status()["current"] < 1 and time.time() < deadline:

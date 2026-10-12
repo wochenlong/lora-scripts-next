@@ -47,6 +47,29 @@ def test_zero_config_and_prompt_preset_round_trip_without_download(client):
     assert sorted(item.name for item in store.path.parent.iterdir()) == ["translation.json"]
 
 
+def test_connection_test_without_capability_discovers_text_and_vision(client, monkeypatch):
+    import json
+    http, store = client
+    store.save({"profiles": [{"id": "model", "name": "Model", "source": "remote",
+                "model": "model", "endpoint": "http://127.0.0.1:8080/v1/chat/completions",
+                "capabilities": ["text"], "languages": ["en", "zh-CN"]}]})
+    calls = []
+
+    async def completion(profile, payload, **kwargs):
+        calls.append(payload)
+        response = ({"red_shape": "square", "blue_shape": "circle", "green_shape": "triangle"}
+                    if isinstance(payload["messages"][-1]["content"], list)
+                    else {"translation": "红色圆形在蓝色方块的左侧。", "language": "zh-CN"})
+        return {"choices": [{"finish_reason": "stop"}]}, json.dumps(response, ensure_ascii=False)
+
+    monkeypatch.setattr("mikazuki.llm.service.chat_completion", completion)
+    response = http.post("/api/llm/connection-test", json={"profile_id": "model"})
+    assert response.status_code == 200
+    assert response.json()["data"]["verified_capabilities"] == ["text", "vision"]
+    assert len(calls) == 2
+    assert http.get("/api/llm/profiles").json()["data"]["profiles"][0]["ready"] is True
+
+
 @pytest.mark.parametrize("contents", [
     "not json",
     '{"llm":{"profiles":false}}',

@@ -6,6 +6,7 @@ import { ElMessageBox } from "element-plus"
 import { i18n } from "../i18n"
 import { datasetApi, type ChangedItem, type DatasetScan } from "../api/dataset"
 import { datasetsApi } from "../api/datasets"
+import { llmApi } from "../api/llm"
 import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
 import DatasetEditorPage from "./DatasetEditorPage.vue"
 import ManagedDatasetPicker from "../components/dataset/ManagedDatasetPicker.vue"
@@ -105,4 +106,22 @@ it("disables batch Tag operations for a natural-language caption dataset", async
   const batchButton = wrapper.get(".dataset-batch-entry")
   expect((batchButton.element as HTMLButtonElement).disabled).toBe(true)
   expect(batchRequest).not.toHaveBeenCalled()
+})
+
+it("uses the shared LLM fallback setting without exposing a separate caption translation toggle", async () => {
+  vi.mocked(datasetApi.scan).mockImplementation(async path => naturalScan(path))
+  const request = vi.spyOn(llmApi, "translateCaption").mockResolvedValue({ translation: "一只猫在窗边。", cached: false, skipped: false })
+  const wrapper = await render()
+  await wrapper.get(".image-grid button").trigger("click")
+  await flushPromises()
+  expect(wrapper.find(".natural-caption-translation").exists()).toBe(true)
+  expect(wrapper.get(".natural-caption-translation").text()).not.toContain(i18n.global.t("datasetEditor.caption.naturalTranslationFallback"))
+  await wrapper.findComponent({ name: "ElSwitch" }).vm.$emit("update:modelValue", true)
+  await flushPromises()
+  expect(wrapper.get(".natural-caption-translation").find('label > input[type="checkbox"]').exists()).toBe(false)
+  const retry = wrapper.findAll(".natural-translation-controls button").find(button => button.text() === i18n.global.t("datasetEditor.caption.retryNaturalTranslation"))!
+  await retry.trigger("click")
+  await flushPromises()
+  expect(request).toHaveBeenCalledWith("A cat by a window.", false, expect.any(AbortSignal))
+  expect(wrapper.get(".natural-caption-translated").text()).toContain("一只猫在窗边。")
 })

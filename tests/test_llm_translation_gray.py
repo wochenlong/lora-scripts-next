@@ -9,6 +9,7 @@ import pytest
 from mikazuki.llm.config import UnifiedConfigStore, config_revision
 from mikazuki.llm.service import UnifiedLLMService
 from mikazuki.tag_translation.translation_config import OnlineServiceConfig
+from mikazuki.tag_translation.translation_config import DEFAULT_SYSTEM_PROMPT
 from mikazuki.tag_translation.translation_service import DeepSeekClient, TranslationManager
 
 
@@ -127,7 +128,7 @@ def test_translation_cache_disable_skips_existing_results_failures_and_writes(tm
         thread.join(timeout=2)
 
 
-def test_translation_options_roundtrip_through_shared_and_legacy_settings(tmp_path):
+def test_translation_prompt_is_fixed_while_legacy_settings_remain_compatible(tmp_path):
     path = tmp_path / "translation.json"
     legacy = OnlineServiceConfig(path)
     legacy.save({"deepseek": {"system_prompt": "Translate visible training tags only.", "reasoning_effort": "high"}})
@@ -136,21 +137,21 @@ def test_translation_options_roundtrip_through_shared_and_legacy_settings(tmp_pa
     shared = UnifiedConfigStore(path)
     shared.save(shared.load())
     after = manager._active_llm_config(legacy.load())
-    assert before["system_prompt"] == after["system_prompt"]
+    assert before["system_prompt"] == after["system_prompt"] == DEFAULT_SYSTEM_PROMPT
     assert before["reasoning_effort"] == after["reasoning_effort"] == "high"
     revision = manager.profile_revision(after)
     config = shared.load()
     config["profiles"][0]["metadata"].update(translation_system_prompt="Return concise Chinese translations.", reasoning_effort="max")
     shared.save({"profiles": config["profiles"]})
     shared_result = manager._active_llm_config(legacy.load())
-    assert shared_result["system_prompt"] == "Return concise Chinese translations."
+    assert shared_result["system_prompt"] == DEFAULT_SYSTEM_PROMPT
     assert shared_result["reasoning_effort"] == "max"
     assert manager.profile_revision(shared_result) != revision
     legacy.save({"deepseek": {"system_prompt": "Updated through the legacy API.", "reasoning_effort": "disabled"}})
     current = manager._active_llm_config(legacy.load())
-    assert current["system_prompt"] == "Updated through the legacy API."
+    assert current["system_prompt"] == DEFAULT_SYSTEM_PROMPT
     assert current["reasoning_effort"] == "disabled"
-    assert shared.load()["profiles"][0]["metadata"]["translation_system_prompt"] == current["system_prompt"]
+    assert shared.load()["profiles"][0]["metadata"]["translation_system_prompt"] == "Updated through the legacy API."
 
 
 @pytest.mark.parametrize("key,value", [("reasoning_effort", {}), ("reasoning_effort", ["high"]), ("translation_system_prompt", [])])

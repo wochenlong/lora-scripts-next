@@ -13,7 +13,7 @@ from datetime import datetime, timezone
 
 import aiohttp
 
-from .translation_config import OnlineServiceConfig, local_llm_endpoint, local_proxy_endpoint, mask_config
+from .translation_config import DEFAULT_SYSTEM_PROMPT, OnlineServiceConfig, local_llm_endpoint, local_proxy_endpoint, mask_config
 from .translation_store import is_translation_acceptable
 from mikazuki.llm.http import LLMRequestError, post_chat
 from mikazuki.llm.contracts import LLMContractError
@@ -230,6 +230,9 @@ class TranslationManager:
         from mikazuki.llm.contracts import LLMRouteError
 
         section = full_config["deepseek"].copy()
+        # User-editable legacy/profile prompts remain stored for compatibility,
+        # but every tag translation uses the same internal prompt.
+        section["system_prompt"] = DEFAULT_SYSTEM_PROMPT
         service = UnifiedLLMService(UnifiedConfigStore(self.config_store.path), session_factory=self.session_factory)
         shared = service.config(masked=False)
         enabled_local = bool(shared.get("local_fallback_enabled", False))
@@ -263,7 +266,6 @@ class TranslationManager:
         if profile:
             section.update(endpoint=profile.endpoint, model=profile.model, api_key=profile.api_key)
             section["secret_revision"] = profile.metadata.get("secret_revision", 0)
-            section["system_prompt"] = profile.metadata.get("translation_system_prompt", section["system_prompt"])
             section["reasoning_effort"] = profile.metadata.get("reasoning_effort", "disabled")
         return section
 

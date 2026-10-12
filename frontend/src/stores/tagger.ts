@@ -10,6 +10,6 @@ export const useTaggerStore = defineStore("tagger", () => {
   const submitting = ref(false)
   const busy = computed(() => ["downloading", "tagging", "captioning", "pending", "cancelling"].includes(status.value.phase))
   async function refresh() { try { status.value = await taggerApi.status(); error.value = "" } catch (e) { error.value = e instanceof Error ? e.message : i18n.global.t("tagger.msg.statusFail") } }
-  async function action(run: () => Promise<unknown>) { submitting.value = true; try { await run(); await refresh() } finally { submitting.value = false } }
+  async function action<T>(run: () => Promise<T>) { submitting.value = true; try { const result = await run(); await refresh(); return result } finally { submitting.value = false } }
   return { status, error, submitting, busy, refresh, start: (body: TaggerRequest) => action(() => taggerApi.start(body)), prefetch: (model: string) => action(() => taggerApi.prefetch(model)), cancel: () => action(taggerApi.cancel), reset: () => action(taggerApi.reset) }
 })

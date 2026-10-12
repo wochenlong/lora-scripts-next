@@ -39,7 +39,7 @@ def _file_cached(kwargs: dict, filename: str) -> bool:
         filename=filename,
         revision=revision,
     )
-    if cached is not None:
+    if isinstance(cached, str) and os.path.isfile(cached):
         return True
     try:
         hf_hub_download(**kwargs, filename=filename, local_files_only=True)
@@ -53,7 +53,12 @@ def describe_interrogator_asset_status(
     interrogator: "Interrogator",
 ) -> tuple[bool, str]:
     """Return (ready, multi-line console message)."""
-    local_paths = local_model_asset_paths(model_key, interrogator)
+    identifiers = (model_key, *getattr(interrogator, "local_model_aliases", ()))
+    local_paths = None
+    for identifier in identifiers:
+        local_paths = local_model_asset_paths(identifier, interrogator)
+        if local_paths:
+            break
     if local_paths:
         return True, (
             f"[tagger] 模型 {model_key} 已在本地"
@@ -141,8 +146,10 @@ def format_tagger_download_error(model_key: str, exc: BaseException) -> str:
 
 def interrogator_assets_ready(interrogator: "Interrogator", model_key: str | None = None) -> bool:
     """Return True when all HF files for this interrogator are already in the local cache."""
-    if model_key and local_model_asset_paths(model_key, interrogator):
-        return True
+    if model_key:
+        identifiers = (model_key, *getattr(interrogator, "local_model_aliases", ()))
+        if any(local_model_asset_paths(identifier, interrogator) for identifier in identifiers):
+            return True
     kwargs = _hf_kwargs(interrogator)
     files = _asset_filenames(interrogator)
     if not files:

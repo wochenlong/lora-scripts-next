@@ -6,7 +6,7 @@ import asyncio
 import sqlite3
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from pydantic import BaseModel, Field, validator
+from pydantic import BaseModel, Field, conint, validator
 
 from mikazuki.llm.runtime import llm_service
 from mikazuki.llm.config import config_revision
@@ -31,7 +31,7 @@ class CaptionJobRequest(BaseModel):
     model_id: str | None = Field(default=None, max_length=200)
     runtime: Literal["local", "api"] | None = None
     mode: Literal["natural", "tag"] = "natural"
-    recursive: bool = False
+    recursive: bool = True
     allow_local_fallback: bool = False
     use_cache: bool = True
     profile_id: str | None = None
@@ -41,8 +41,9 @@ class CaptionJobRequest(BaseModel):
     prompt: str = Field(default="", max_length=8000)
     system_prompt: str = Field(default="", max_length=8000)
     max_caption_length: int = Field(default=2000, ge=1, le=2000)
-    max_tokens: int = Field(default=512, ge=1, le=8192)
-    temperature: float = Field(default=0.0, ge=0, le=2)
+    max_tokens: int = Field(default=1024, ge=1, le=8192)
+    temperature: float = Field(default=0.7, ge=0, le=2)
+    concurrency: conint(strict=True, ge=1, le=16) = 3
     language: Literal["zh-CN", "zh-TW", "en", "ja"] = "en"
     layout: Literal["tags_only", "caption_only"] = "caption_only"
     conflict_action: Literal["ignore", "copy", "prepend", "append"] = "ignore"

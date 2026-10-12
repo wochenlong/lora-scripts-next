@@ -6,13 +6,12 @@ import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useRoute } from "vue-router"
 import { useTaggerStore } from "../stores/tagger"
-import { llmApi, type CaptionPromptPreset, type LocalVisionStatus } from "../api/llm"
+import { llmApi, type CaptionPromptPreset } from "../api/llm"
 import { taggerApi, tagJobRequest, type CaptionJobRequest, type TaggerModel, type TaggerRequest, type CaptionRollbackResult } from "../api/tagger"
 import PathPickerDialog from "../components/PathPickerDialog.vue"
 import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
 import CaptionJobProgress from "../components/CaptionJobProgress.vue"
 import CaptionPromptEditor from "../components/CaptionPromptEditor.vue"
-import ManagedVisionModel from "../components/ManagedVisionModel.vue"
 import ManagedDatasetPicker from "../components/dataset/ManagedDatasetPicker.vue"
 import { useLlmProfiles } from "../composables/useLlmProfiles"
 import { useTaggerJob } from "../composables/useTaggerJob"
@@ -20,8 +19,8 @@ import { useServerPathPick } from "../composables/useServerPathPick"
 import { builtinCaptionPreset, captionBuiltins, englishCaptionPrompt } from "../dataset/captionPrompts"
 
 const models = ["wd14-convnextv2-v2", "wd-convnext-v3", "wd-swinv2-v3", "wd-vit-v3", "wd14-swinv2-v2", "wd14-vit-v2", "wd14-moat-v2", "wd-eva02-large-tagger-v3", "wd-vit-large-tagger-v3", "cl_tagger_1_01"]
-const form = reactive<TaggerRequest>({ path: "", interrogator_model: models[0], threshold: .35, character_threshold: .6, add_rating_tag: false, add_model_tag: false, additional_tags: "", exclude_tags: "", escape_tag: true, batch_input_recursive: false, batch_output_action_on_conflict: "copy", replace_underscore: true, replace_underscore_excludes: "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||" })
-const captionForm = reactive<CaptionJobRequest>({ path: "", mode: "natural", recursive: false, profile_id: undefined, prompt: englishCaptionPrompt, language: "en", conflict_action: "ignore", max_tokens: 512, temperature: 0, allow_local_fallback: false })
+const form = reactive<TaggerRequest>({ path: "", interrogator_model: models[0], threshold: .35, character_threshold: .6, add_rating_tag: false, add_model_tag: false, additional_tags: "", exclude_tags: "", escape_tag: true, batch_input_recursive: true, batch_output_action_on_conflict: "copy", replace_underscore: true, replace_underscore_excludes: "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||" })
+const captionForm = reactive<CaptionJobRequest>({ path: "", mode: "natural", recursive: true, profile_id: undefined, prompt: englishCaptionPrompt, language: "en", conflict_action: "ignore", max_tokens: 1024, temperature: 0.7, concurrency: 3 })
 form.batch_output_action_on_conflict = "ignore"
 const runtime = ref<"local" | "api">("local")
 const catalog = ref<TaggerModel[]>([])
@@ -81,8 +80,6 @@ async function maintainHistory(action: "rollback" | "delete") {
 const previewImagePath = ref("")
 const previewResult = ref("")
 const profileEditorOpen = ref(false)
-const localVision = ref<LocalVisionStatus>({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 })
-const localVisionBusy = ref(false)
 const previewBusy = ref(false)
 const presetId = ref(captionBuiltins[0].id)
 const presetName = ref(captionBuiltins[0].name)
@@ -105,9 +102,11 @@ let timer: number | undefined
 
 const downloadPercent = computed(() => status.value.download.percent || (status.value.download.total ? Math.round(status.value.download.current / status.value.download.total * 100) : 0))
 
-watch([() => status.value.phase, () => captionStatus.value.phase], async (next, previous) => {
+watch([() => status.value.phase, () => captionStatus.value.phase, () => status.value.updated_at] as const, async ([tagPhase, captionPhase, updatedAt], [previousTagPhase, previousCaptionPhase, previousUpdatedAt]) => {
   const active = ["downloading", "tagging", "captioning", "pending", "cancelling"]
-  if (!previous.some(phase => active.includes(phase)) || next.some(phase => active.includes(phase))) return
+  const wasActive = [previousTagPhase, previousCaptionPhase].some(phase => active.includes(phase))
+  const completedBetweenPolls = ["done", "error"].includes(tagPhase) && updatedAt !== previousUpdatedAt
+  if ([tagPhase, captionPhase].some(phase => active.includes(phase)) || (!wasActive && !completedBetweenPolls)) return
   const generation = refreshGeneration
   try {
     const document = await taggerApi.models()
@@ -166,15 +165,16 @@ function availabilityLabel(model: TaggerModel) {
 
 function restoreParameters() {
   if (mode.value === "natural") {
-    captionForm.max_tokens = 512
-    captionForm.temperature = 0
+    captionForm.max_tokens = 1024
+    captionForm.temperature = 0.7
+    captionForm.concurrency = 3
     captionForm.conflict_action = "ignore"
-    captionForm.recursive = false
+    captionForm.recursive = true
     // A custom prompt is restored only through the editor's explicit controls.
     return
   }
   Object.assign(form, { threshold: .35, character_threshold: .6, additional_tags: "", exclude_tags: "",
-    batch_output_action_on_conflict: "ignore", batch_input_recursive: false, replace_underscore: true,
+    batch_output_action_on_conflict: "ignore", batch_input_recursive: true, replace_underscore: true,
     escape_tag: true, add_rating_tag: false, add_model_tag: false })
 }
 
@@ -270,8 +270,6 @@ async function loadLlmProfiles() {
       const defaultId = promptDocument.settings.default_caption_preset_id
       if ((!presetId.value || presetId.value.startsWith("builtin-caption-")) && defaultId && captionForm.prompt === defaultPrompt) await selectPreset(defaultId)
     }
-    const local = await llmApi.localVisionStatus()
-    if (revision === refreshGeneration) localVision.value = local
     const modelDocument = await taggerApi.models()
     if (revision === refreshGeneration) {
       catalog.value = modelDocument.models
@@ -280,18 +278,6 @@ async function loadLlmProfiles() {
       if (!selected) selectRuntime("local")
     }
   } catch (caught) { captionError.value = caught instanceof Error ? caught.message : String(caught) }
-}
-
-async function manageLocalVision(action: "setup" | "start" | "stop" | "cancel") {
-  localVisionBusy.value = true
-  try {
-    localVision.value = await llmApi.localVisionAction(action)
-    await loadLlmProfiles()
-  } catch (caught) {
-    ElMessage.error(caught instanceof Error ? caught.message : String(caught))
-  } finally {
-    localVisionBusy.value = false
-  }
 }
 
 function syncCaptionPath() {
@@ -307,6 +293,11 @@ function validCaptionLimit() {
   return Number.isInteger(maximum) && maximum >= 1 && maximum <= 2000
 }
 
+function validCaptionConcurrency() {
+  const concurrency = captionForm.concurrency
+  return Number.isInteger(concurrency) && concurrency !== undefined && concurrency >= 1 && concurrency <= 16
+}
+
 async function start() {
   if (!form.path.trim()) return ElMessage.error(t("tagger.msg.pathRequired"))
   try {
@@ -320,6 +311,7 @@ async function start() {
 async function startCaption() {
   syncCaptionPath()
   if (!validCaptionLimit()) return ElMessage.error(t("tagger.caption.maxLengthRequired"))
+  if (!validCaptionConcurrency()) return ElMessage.error(t("tagger.models.concurrencyRequired"))
   if (!captionForm.path.trim()) return ElMessage.error(t("tagger.msg.pathRequired"))
   if (!captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
   if (!captionForm.prompt.trim()) return ElMessage.error(t("tagger.caption.promptRequired"))
@@ -339,6 +331,7 @@ async function previewCaption() {
   if (previewBusy.value) return
   syncCaptionPath()
   if (mode.value !== "tag" && !validCaptionLimit()) return ElMessage.error(t("tagger.caption.maxLengthRequired"))
+  if (mode.value !== "tag" && !validCaptionConcurrency()) return ElMessage.error(t("tagger.models.concurrencyRequired"))
   if (!previewImagePath.value.trim()) return ElMessage.error(t("tagger.caption.previewPathRequired"))
   if (mode.value !== "tag" && !captionForm.profile_id) return ElMessage.error(t("tagger.caption.profileRequired"))
   previewBusy.value = true
@@ -366,9 +359,18 @@ async function captionAction(kind: "cancel" | "retry") {
 
 async function invoke(kind: "prefetch" | "cancel" | "reset") {
   try {
-    if (kind === "prefetch") await store.prefetch(form.interrogator_model)
-    else await store[kind]()
-    ElMessage.success(kind === "cancel" ? t("tagger.msg.cancelRequested") : kind === "reset" ? t("tagger.msg.resetDone") : t("tagger.msg.prefetchStarted"))
+    if (kind === "prefetch") {
+      const model = selectedModel.value
+      if (controlsLocked.value || submitting.value || !model || model.output !== "tag" || model.runtime !== "local" || model.downloaded) return
+      const response = await store.prefetch(model.id)
+      ElMessage.success(t(response.data?.already_downloaded ? "tagger.msg.alreadyDownloaded" : "tagger.msg.prefetchStarted"))
+      // Refresh after every prefetch response; a cached download can finish
+      // before polling observes the transient downloading phase.
+      catalog.value = (await taggerApi.models()).models
+    } else {
+      await store[kind]()
+      ElMessage.success(t(kind === "cancel" ? "tagger.msg.cancelRequested" : "tagger.msg.resetDone"))
+    }
   } catch (caught) {
     ElMessage.error(caught instanceof Error ? caught.message : t("tagger.msg.actionFail"))
   }
@@ -404,10 +406,6 @@ async function refresh() {
   try {
     await store.refresh()
     await captionJob.refresh()
-    if (mode.value !== "tag") {
-      const local = await llmApi.localVisionStatus()
-      if (revision === refreshGeneration) localVision.value = local
-    }
   } catch (caught) {
     if (revision === refreshGeneration) captionError.value = caught instanceof Error ? caught.message : t("tagger.msg.statusFail")
   } finally { refreshing = false }
@@ -494,27 +492,26 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
         <span v-if="catalogLoading" role="status">{{ t("tagger.models.loading") }}</span>
         <button v-if="captionError" class="secondary-action" :disabled="catalogLoading" @click="initialiseCatalog">{{ t("datasetManage.retry") }}</button>
         <span v-if="status.phase === 'downloading'">{{ t("tagger.downloadMeter") }} {{ downloadPercent }}% · {{ status.download.filename }}</span>
-        <button type="button" class="inline-config-button" @click="profileEditorOpen = true">{{ t("tagger.caption.manageProfiles") }}</button>
+        <button v-if="mode === 'tag'" type="button" class="inline-config-button" data-testid="prefetch-model" :disabled="controlsLocked || submitting || !selectedModel || selectedModel.runtime !== 'local' || selectedModel.downloaded" :title="selectedModel?.downloaded ? t('tagger.msg.alreadyDownloaded') : undefined" @click="invoke('prefetch')">{{ t("tagger.prefetch") }}</button>
+        <button v-else type="button" class="inline-config-button" data-testid="llm-model-management" @click="profileEditorOpen = true">{{ t("tagger.caption.manageProfiles") }}</button>
       </div>
       <p v-if="mode === 'natural'" class="caption-route-hint">{{ t("tagger.caption.remoteFirst") }}</p>
       <p v-if="mode === 'natural' && !presetLanguageSupported" class="caption-preset-incompatible" role="alert">{{ t("tagger.caption.unsupportedLanguage") }}</p>
-       <ManagedVisionModel v-if="selectedModel?.runtime === 'local' && selectedModel.output === 'natural' && (selectedModel.profile_id === localVision.model_id || selectedModel.profile_id === 'qwen3.5-2b-local')" :status="localVision" :busy="localVisionBusy" :locked="captionBusy || previewBusy" @action="manageLocalVision" />
       <div class="tagger-choice-row">
         <label for="tagger-conflict">{{ t("tagger.conflictLabel") }}</label>
         <select v-if="mode === 'tag'" id="tagger-conflict" v-model="form.batch_output_action_on_conflict" :disabled="controlsLocked" class="tagger-conflict-select"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option><option value="prepend">{{ t("tagger.conflict.prepend") }}</option><option value="append">{{ t("tagger.conflict.append") }}</option></select>
         <select v-else id="tagger-conflict" v-model="captionForm.conflict_action" :disabled="controlsLocked" class="tagger-conflict-select"><option value="ignore">{{ t("tagger.conflict.ignore") }}</option><option value="copy">{{ t("tagger.conflict.copy") }}</option></select>
-      </div>
-      <div v-if="mode === 'natural'" class="check-row"><label><input v-model="captionForm.allow_local_fallback" type="checkbox" :disabled="captionBusy || previewBusy" />{{ t("tagger.caption.enableLocalFallback") }}</label></div>
-      <div class="tagger-grid caption-preview-controls">
-        <label class="tagger-dataset-path">{{ t("tagger.caption.previewPath") }}<span class="path-row"><input v-model="previewImagePath" :disabled="previewBusy || captionBusy" placeholder="/data/datasets/images/example.png" /><button type="button" :disabled="picking || previewBusy || captionBusy" @click="browsePreview">{{ t("schemaForm.browse") }}</button></span></label>
-        <div v-if="previewResult" class="caption-preview wide-field"><strong>{{ t("tagger.caption.previewResult") }}</strong><p>{{ previewResult }}</p></div>
       </div>
       <section class="tagger-run">
         <p>{{ t("tagger.conflictLabel") }}: {{ t(`tagger.conflict.${mode === 'tag' ? form.batch_output_action_on_conflict : captionForm.conflict_action}`) }}</p>
         <button v-if="busy && !captionBusy" class="danger-action tagger-start" :disabled="submitting" @click="invoke('cancel')">{{ t("tagger.cancel") }}</button>
         <button v-else-if="captionBusy" class="danger-action tagger-start" :disabled="captionSubmitting" @click="captionAction('cancel')">{{ t("tagger.cancel") }}</button>
         <button v-else class="primary-action tagger-start" :disabled="captionSubmitting || submitting || previewBusy || catalogLoading || !modelReady" @click="mode === 'tag' ? start() : startCaption()">{{ t("tagger.start") }}</button>
-        <div class="tagger-actions"><button v-if="captionStatus.failed" class="secondary-action" data-testid="retry-failed" :disabled="captionBusy || captionSubmitting || busy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || previewBusy || captionBusy || busy || catalogLoading || !modelReady || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button><button v-if="mode === 'tag'" class="secondary-action" :disabled="submitting || captionBusy || previewBusy || busy" @click="invoke('prefetch')">{{ t("tagger.prefetch") }}</button></div>
+        <div class="tagger-grid caption-preview-controls">
+          <label class="tagger-dataset-path">{{ t("tagger.caption.previewPath") }}<span class="path-row"><input v-model="previewImagePath" :disabled="previewBusy || captionBusy" placeholder="/data/datasets/images/example.png" /><button type="button" :disabled="picking || previewBusy || captionBusy" @click="browsePreview">{{ t("schemaForm.browse") }}</button></span></label>
+          <div v-if="previewResult" class="caption-preview wide-field"><strong>{{ t("tagger.caption.previewResult") }}</strong><p>{{ previewResult }}</p></div>
+        </div>
+        <div class="tagger-actions"><button v-if="captionStatus.failed" class="secondary-action" data-testid="retry-failed" :disabled="captionBusy || captionSubmitting || busy" @click="captionAction('retry')">{{ t("tagger.caption.retryFailed") }}</button><button class="secondary-action" :disabled="captionSubmitting || previewBusy || captionBusy || busy || catalogLoading || !modelReady || !previewImagePath" @click="previewCaption">{{ t("tagger.caption.preview") }}</button></div>
         <div class="tagger-run-status" aria-live="polite">
           <template v-if="busy && !captionBusy"><p>{{ status.message || t("tagger.idle") }}</p><p v-if="error" role="alert">{{ error }}</p><div class="meter"><header><span>{{ t("tagger.downloadMeter") }}</span><b>{{ downloadPercent }}%</b></header><div><i :style="{ width: downloadPercent + '%' }" /></div><small>{{ status.download.filename }}</small></div></template>
           <template v-else><p>{{ captionStatus.message || t(mode === 'tag' ? "tagger.idle" : "tagger.caption.idle") }}</p><p v-if="captionError" role="alert">{{ captionError }}</p><CaptionJobProgress :status="captionStatus" /><p v-if="captionStatus.failed">{{ t("tagger.caption.failed", { n: captionStatus.failed }) }}</p></template>
@@ -548,8 +545,7 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
         <div v-show="parameterTab === 'model'">
           <h2>{{ t("tagger.workspace.parameters") }}</h2>
           <div v-if="mode === 'tag'" class="tagger-grid"><label>{{ t("tagger.thresholdLabel") }}<input v-model.number="form.threshold" type="number" min="0" max="1" step="0.05" /></label><label>{{ t("tagger.characterThresholdLabel") }}<input v-model.number="form.character_threshold" type="number" min="0" max="1" step="0.05" /></label></div>
-          <div v-else class="tagger-grid"><label>{{ t("tagger.models.maxTokens") }}<input v-model.number="captionForm.max_tokens" type="number" min="1" max="8192" /></label><label>{{ t("tagger.models.temperature") }}<input v-model.number="captionForm.temperature" type="number" min="0" max="2" step="0.1" /></label></div>
-          <div class="check-row"><label v-if="mode === 'tag'"><input v-model="form.batch_input_recursive" type="checkbox" />{{ t("tagger.recursive") }}</label><label v-else><input v-model="captionForm.recursive" type="checkbox" />{{ t("tagger.recursive") }}</label></div>
+          <div v-else class="tagger-grid"><label>{{ t("tagger.models.maxTokens") }}<input v-model.number="captionForm.max_tokens" type="number" min="1" max="8192" /></label><label>{{ t("tagger.models.temperature") }}<input v-model.number="captionForm.temperature" type="number" min="0" max="2" step="0.1" /></label><label>{{ t("tagger.models.concurrency") }}<input v-model.number="captionForm.concurrency" data-testid="caption-concurrency" type="number" min="1" max="16" step="1" /></label></div>
           <dl v-if="selectedModel" class="tagger-model-info"><dt>{{ t("tagger.modelLabel") }}</dt><dd>{{ selectedModel.model }}</dd><dt>{{ t("tagger.workspace.source") }}</dt><dd>{{ t(runtime === 'api' ? "tagger.models.api" : "tagger.workspace.local") }}</dd><dt>{{ t("tagger.models.output") }}</dt><dd>{{ t(mode === 'tag' ? "tagger.modeTag" : "tagger.modeNatural") }}</dd></dl>
         </div>
         <div v-if="mode === 'tag'" v-show="parameterTab === 'tags'">

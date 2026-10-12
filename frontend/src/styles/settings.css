@@ -19,7 +19,7 @@
   line-height: 1.5;
 }
 
-.settings-card input {
+.settings-card input:not(:where([type="checkbox"], [type="radio"])) {
   width: 100%;
   min-height: 40px;
   padding: 0 12px;
@@ -655,7 +655,25 @@
 .llm-settings fieldset { border: 0; padding: 0; display: grid; gap: 14px; min-width: 0; }
 .llm-settings label { display: grid; gap: 5px; }
 .llm-settings input:not([type="checkbox"]), .llm-settings select, .llm-settings textarea { min-width: 0; width: 100%; padding: 8px; border: 1px solid var(--border); border-radius: 6px; color: var(--text); background: var(--surface); }
+.llm-settings input[type="checkbox"] { width: 16px; height: 16px; min-width: 16px; min-height: 0; margin: 0; padding: 0; flex: 0 0 16px; accent-color: var(--accent); }
 .llm-profile-card { padding: 14px; border: 1px solid var(--border); border-radius: 8px; }
+.llm-profile-card > summary { display: flex; gap: 12px; align-items: center; cursor: pointer; list-style: none; }
+.llm-profile-card > summary::before { content: "›"; flex: 0 0 auto; font-size: 20px; line-height: 1; }
+.llm-profile-card[open] > summary::before { transform: rotate(90deg); }
+.llm-profile-card > summary strong { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.llm-profile-card[open] > summary { margin-bottom: 14px; }
+.llm-settings .llm-profile-enabled { display: flex; gap: 5px; align-items: center; flex: 0 0 auto; white-space: nowrap; }
+.llm-settings .llm-profile-enabled input { flex: 0 0 auto; }
+.llm-advanced-settings { padding: 12px 14px; border: 1px solid var(--border); border-radius: 8px; }
+.llm-advanced-settings > summary { cursor: pointer; color: var(--text); }
+.llm-advanced-fields { display: grid; gap: 12px; margin-top: 14px; }
+.llm-settings .llm-advanced-fields label { display: flex; gap: 8px; align-items: center; }
+.llm-managed-profile .managed-vision-model { padding: 0; border: 0; font-size: 13px; line-height: 1.6; color: var(--text-soft); }
+.managed-model-facts { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 8px 14px; }
+.managed-model-facts dd { margin: 0; color: var(--text); }
+.managed-model-facts dt { color: var(--text-soft); }
+.llm-detected-capabilities { color: var(--text-soft); font-size: 13px; }
+.api-cache-maintenance { margin-top: 20px; }
 .llm-profile-card header, .llm-capabilities, .llm-profile-actions { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .llm-profile-card header { justify-content: space-between; margin-bottom: 12px; }
 .llm-profile-fields { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 12px; }

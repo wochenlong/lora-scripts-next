@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { i18n } from "../i18n"
 import TaggerPage from "./TaggerPage.vue"
 import { llmApi, type CaptionPromptPreset } from "../api/llm"
+import { taggerApi } from "../api/tagger"
+import { useTaggerStore } from "../stores/tagger"
 import { englishCaptionPrompt } from "../dataset/captionPrompts"
 
 vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }))
@@ -39,6 +41,7 @@ vi.mock("../api/tagger", async importOriginal => ({
       { id: "llm:remote", name: "Remote", model: "remote-vision", family: "Vision LLM", author: "", runtime: "api", output: "natural", ready: true, downloaded: false, languages: ["zh-CN"], capabilities: ["vision", "caption"], parameters: [], profile_id: "remote" },
     ] }),
     status: vi.fn().mockResolvedValue({ phase: "idle", message: "", model: "", download: { current: 0, total: 0, percent: 0, filename: "", bytes_current: 0, bytes_total: 0 }, tagging: { current: 0, total: 0, percent: 0, filename: "", bytes_current: 0, bytes_total: 0 }, updated_at: 0 }),
+    prefetch: vi.fn(),
     captionStatus: vi.fn().mockResolvedValue({ job_id: null, phase: "idle", mode: null, message: "", current: 0, total: 0, filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 0 }),
     captionHistory: vi.fn().mockResolvedValue({ jobs: [] }),
     captionReport: vi.fn(),
@@ -95,10 +98,14 @@ it("keeps unavailable sources disabled and uses a searchable grouped selector wi
   expect(page.find("aside.tagger-status").exists()).toBe(false)
   expect((page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[1].element as HTMLButtonElement).disabled).toBe(true)
   const select = page.findComponent({ name: "ElSelect" })
+  expect(page.find('[data-testid="prefetch-model"]').exists()).toBe(true)
   expect(select.props("filterable")).toBe(true)
   expect(page.findAllComponents({ name: "ElOptionGroup" })).toHaveLength(2)
   await select.vm.$emit("update:modelValue", "wd-eva02-large-tagger-v3")
   expect(select.props("modelValue")).toBe("wd-eva02-large-tagger-v3")
+  expect((page.get('[data-testid="prefetch-model"]').element as HTMLButtonElement).disabled).toBe(true)
+  await page.get('[data-testid="prefetch-model"]').trigger("click")
+  expect(taggerApi.prefetch).not.toHaveBeenCalled()
   expect(page.get("#tagger-parameters").isVisible()).toBe(false)
   await page.get('[data-testid="parameter-toggle"]').trigger("click")
   expect(page.get("#tagger-parameters").isVisible()).toBe(true)
@@ -106,6 +113,136 @@ it("keeps unavailable sources disabled and uses a searchable grouped selector wi
   await page.get('[data-testid="parameter-close"]').trigger("click")
   await page.get('[data-testid="parameter-toggle"]').trigger("click")
   expect((page.get('#tagger-parameters input[type="number"]').element as HTMLInputElement).value).toBe("0.5")
+})
+
+it.each([false, true])("refreshes downloaded models after prefetch without observing an active phase (already_downloaded=%s)", async alreadyDownloaded => {
+  const success = vi.spyOn(ElMessage, "success").mockImplementation(() => ({ close: vi.fn() }) as never)
+  const page = mountPage()
+  await flushPromises()
+  const document = await taggerApi.models()
+  const modelId = "wd14-convnextv2-v2"
+  const complete = { models: document.models.map(model => model.id === modelId ? { ...model, downloaded: true } : model) }
+  vi.mocked(taggerApi.models).mockResolvedValueOnce(complete)
+  vi.mocked(taggerApi.prefetch).mockResolvedValueOnce({ status: "success", data: { model_id: modelId, already_downloaded: alreadyDownloaded } })
+  await page.get('[data-testid="prefetch-model"]').trigger("click")
+  await flushPromises()
+  expect(taggerApi.prefetch).toHaveBeenCalledWith(modelId)
+  expect(success).toHaveBeenCalledWith(i18n.global.t(alreadyDownloaded ? "tagger.msg.alreadyDownloaded" : "tagger.msg.prefetchStarted"))
+  expect((page.get('[data-testid="prefetch-model"]').element as HTMLButtonElement).disabled).toBe(true)
+  expect(page.get(".tagger-model-state").text()).toBe(i18n.global.t("tagger.workspace.downloaded"))
+})
+
+it("refreshes assets when a fast download completes between status polls", async () => {
+  const page = mountPage()
+  await flushPromises()
+  const document = await taggerApi.models()
+  const modelId = "wd14-convnextv2-v2"
+  vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: document.models.map(model => model.id === modelId ? { ...model, downloaded: true } : model) })
+  const store = useTaggerStore()
+  store.status = { ...store.status, phase: "done", model: modelId, updated_at: 1 }
+  await flushPromises()
+  expect((page.get('[data-testid="prefetch-model"]').element as HTMLButtonElement).disabled).toBe(true)
+})
+
+it("shares the model-row action position between Tag downloads and Caption LLM management", async () => {
+  const page = mountPage()
+  await flushPromises()
+  expect(page.get('.tagger-model-row [data-testid="prefetch-model"]').text()).toBe(i18n.global.t("tagger.prefetch"))
+  expect(page.find('.tagger-actions [data-testid="prefetch-model"]').exists()).toBe(false)
+  expect(page.find('[data-testid="llm-model-management"]').exists()).toBe(false)
+  await page.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+  expect(page.find('[data-testid="prefetch-model"]').exists()).toBe(false)
+  const manage = page.get('.tagger-model-row [data-testid="llm-model-management"]')
+  expect(manage.text()).toBe(i18n.global.t("tagger.caption.manageProfiles"))
+  await manage.trigger("click")
+  expect(page.getComponent({ name: "LlmSettingsDialog" }).props("modelValue")).toBe(true)
+  await page.get(".tagger-choice-row .tagger-segments").findAll("button")[0].trigger("click")
+  expect(page.find('[data-testid="llm-model-management"]').exists()).toBe(false)
+  expect(page.find('.tagger-model-row [data-testid="prefetch-model"]').exists()).toBe(true)
+})
+
+it("uses recursive Tag jobs without exposing recursive or local-model controls", async () => {
+  const page = mountPage()
+  await flushPromises()
+  await page.get('[data-testid="parameter-toggle"]').trigger("click")
+  expect(page.text()).not.toContain(i18n.global.t("tagger.recursive"))
+  expect(page.findComponent({ name: "ManagedVisionModel" }).exists()).toBe(false)
+  expect(page.get(".tagger-model-row .inline-config-button").text()).toBe(i18n.global.t("tagger.prefetch"))
+  expect(page.find('[data-testid="caption-concurrency"]').exists()).toBe(false)
+  const startButton = page.get(".tagger-start").element
+  const previewControls = page.get(".caption-preview-controls").element
+  expect(startButton.compareDocumentPosition(previewControls) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+  await page.get('input[placeholder="/data/datasets/images"]').setValue("/data/datasets/images")
+  await page.get(".tagger-start").trigger("click")
+  await flushPromises()
+  expect(taggerApi.captionStart).toHaveBeenCalledWith(expect.objectContaining({ mode: "tag", recursive: true }))
+  expect(vi.mocked(taggerApi.captionStart).mock.calls[0][0]).not.toHaveProperty("concurrency")
+})
+
+it("restores caption generation defaults and leaves fallback to the shared configuration", async () => {
+  const page = mountPage()
+  await openCaptionSettings(page)
+  expect(page.text()).not.toContain(i18n.global.t("tagger.caption.enableLocalFallback"))
+  expect(page.text()).not.toContain(i18n.global.t("tagger.recursive"))
+  await page.get('[data-testid="tab-model"]').trigger("click")
+  const parameters = page.findAll('#tagger-parameters input[type="number"]')
+  expect((parameters[0].element as HTMLInputElement).value).toBe("1024")
+  expect((parameters[1].element as HTMLInputElement).value).toBe("0.7")
+  expect((parameters[2].element as HTMLInputElement).value).toBe("3")
+  await parameters[0].setValue("768")
+  await parameters[1].setValue("0.2")
+  await parameters[2].setValue("7")
+  await page.get(".tagger-restore").trigger("click")
+  expect((parameters[0].element as HTMLInputElement).value).toBe("1024")
+  expect((parameters[1].element as HTMLInputElement).value).toBe("0.7")
+  expect((parameters[2].element as HTMLInputElement).value).toBe("3")
+  await page.get('[data-testid="tab-advanced"]').trigger("click")
+  await page.get(".caption-preset-select").setValue("builtin-caption-zh")
+  await page.get('input[placeholder="/data/datasets/images"]').setValue("/data/datasets/images")
+  await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue("/data/datasets/images/example.png")
+  await page.get(".tagger-actions button").trigger("click")
+  await flushPromises()
+  const previewRequest = vi.mocked(taggerApi.captionPreview).mock.calls[0]?.[0]
+  expect(previewRequest).toMatchObject({ mode: "natural", recursive: true, max_tokens: 1024, temperature: 0.7, concurrency: 3 })
+  expect(previewRequest).not.toHaveProperty("allow_local_fallback")
+  await page.get(".tagger-start").trigger("click")
+  await flushPromises()
+  const startRequest = vi.mocked(taggerApi.captionStart).mock.calls[0]?.[0]
+  expect(startRequest).toMatchObject({ mode: "natural", recursive: true, max_tokens: 1024, temperature: 0.7, concurrency: 3 })
+  expect(startRequest).not.toHaveProperty("allow_local_fallback")
+})
+
+it("sends the edited Caption concurrency with both preview and batch requests", async () => {
+  const page = mountPage()
+  await openCaptionSettings(page)
+  await page.get(".caption-preset-select").setValue("builtin-caption-zh")
+  await page.get('[data-testid="tab-model"]').trigger("click")
+  await page.get('[data-testid="caption-concurrency"]').setValue("6")
+  await page.get('input[placeholder="/data/datasets/images"]').setValue("/data/datasets/images")
+  await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue("/data/datasets/images/example.png")
+  await page.get(".tagger-actions button").trigger("click")
+  await flushPromises()
+  expect(taggerApi.captionPreview).toHaveBeenCalledWith(expect.objectContaining({ concurrency: 6 }))
+  await page.get(".tagger-start").trigger("click")
+  await flushPromises()
+  expect(taggerApi.captionStart).toHaveBeenCalledWith(expect.objectContaining({ concurrency: 6 }))
+})
+
+it.each(["0", "17", "1.5", ""])("blocks Caption preview and batch for invalid concurrency %s", async concurrency => {
+  const error = vi.spyOn(ElMessage, "error").mockImplementation(() => ({ close: vi.fn() }) as never)
+  const page = mountPage()
+  await openCaptionSettings(page)
+  await page.get(".caption-preset-select").setValue("builtin-caption-zh")
+  await page.get('[data-testid="tab-model"]').trigger("click")
+  await page.get('[data-testid="caption-concurrency"]').setValue(concurrency)
+  await page.get('input[placeholder="/data/datasets/images"]').setValue("/data/datasets/images")
+  await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue("/data/datasets/images/example.png")
+  await page.get(".tagger-actions button").trigger("click")
+  await page.get(".tagger-start").trigger("click")
+  await flushPromises()
+  expect(taggerApi.captionPreview).not.toHaveBeenCalled()
+  expect(taggerApi.captionStart).not.toHaveBeenCalled()
+  expect(error).toHaveBeenCalledWith(i18n.global.t("tagger.models.concurrencyRequired"))
 })
 
 it("provides preset selection, save-as and explicit restore actions with no independent language selector", async () => {

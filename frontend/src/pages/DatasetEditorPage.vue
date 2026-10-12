@@ -5,11 +5,12 @@ import { Setting } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import { useRoute, useRouter } from "vue-router"
 import { datasetApi, type ChangedItem, type DatasetItem, type TagDictionaryStatus } from "../api/dataset"
-import { llmApi, type LlmProfile, type LocalVisionStatus } from "../api/llm"
+import { llmApi, type LlmConfig, type LlmProfile, type LocalVisionStatus } from "../api/llm"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import TagTranslationControls from "../components/dataset/TagTranslationControls.vue"
 import TagTranslationSettingsDialog from "../components/dataset/TagTranslationSettingsDialog.vue"
+import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
 import ManagedDatasetPicker from "../components/dataset/ManagedDatasetPicker.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
 import { addTagToCaption, captionEditingFormat, captionEditingTags, moveCaptionTag, removeTagFromCaption } from "../dataset/caption"
@@ -58,13 +59,16 @@ const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
 const captionTranslation = useCaptionTranslation()
-const allowCaptionTranslationFallback = ref(false)
 let captionTranslationTimer: ReturnType<typeof setTimeout> | undefined
 /** 标签编辑 = chips; 自由编辑 = raw caption text. */
 const captionMode = ref<"tags" | "raw">("tags")
 const translationProvider = editorSession.translationProvider
 const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, cancelCurrent: cancelTranslations } = useTagTranslations()
 const translationSettingsOpen = ref(false)
+const profileEditorOpen = ref(false)
+let editorActive = true
+let editorLifecycleGeneration = 0
+let translationConfigGeneration = 0
 const sharedLocalTextReady = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsError = ref("")
@@ -259,8 +263,17 @@ async function onLlmModeChange(value: "remote" | "local") {
   }
 }
 
-async function refreshTranslationSettings() {
-  await loadTranslationSettings(true)
+async function refreshTranslationSettings(config: LlmConfig) {
+  const lifecycle = editorLifecycleGeneration
+  // Saved/test/runtime events carry the authoritative shared config. A late
+  // settings request must not replace it with a pre-save snapshot.
+  translationConfigGeneration += 1
+  translationSettingsLoading.value = false
+  translationSettingsError.value = ""
+  applyTranslationSettings(config)
+  await Promise.all([loadLocalModelStatus(), loadTranslationCacheStatus(), loadDictionaryStatus()])
+  if (!editorActive || lifecycle !== editorLifecycleGeneration) return
+  translationReadinessLoaded.value = true
   await refreshTranslationsAfterSettingsChange()
 }
 
@@ -292,25 +305,31 @@ function restoreTranslationSettings() {
   llmMode.value = committedLlmMode.value
 }
 
+function applyTranslationSettings(config: LlmConfig) {
+  sharedConfigRevision.value = config.revision || ""
+  sharedLocalTextReady.value = Boolean(config.profiles.some(profile => profile.source !== "remote" && profile.enabled && profile.ready && profile.verified_capabilities?.includes("text")))
+  llmProfiles.value = config.profiles
+  const configuredRoute = config.routes.translation
+  activeRemoteId.value = config.profiles.some(profile => profile.source === "remote" && profile.id === configuredRoute)
+    ? configuredRoute
+    : config.profiles.find(profile => profile.source === "remote")?.id || "default"
+  llmMode.value = config.local_fallback_enabled ? "local" : "remote"
+  snapshotTranslationSettings()
+}
+
 async function loadTranslationSettings(force = false) {
   if (translationSettingsLoading.value || (!force && llmProfiles.value.length)) return
+  const generation = ++translationConfigGeneration
   translationSettingsLoading.value = true
   translationSettingsError.value = ""
   try {
     const config = await llmApi.config()
-    sharedConfigRevision.value = config.revision || ""
-    sharedLocalTextReady.value = Boolean(config.profiles.some(profile => profile.source !== "remote" && profile.enabled && profile.ready && profile.verified_capabilities?.includes("text")))
-    llmProfiles.value = config.profiles
-    const configuredRoute = config.routes.translation
-    activeRemoteId.value = config.profiles.some(profile => profile.source === "remote" && profile.id === configuredRoute)
-      ? configuredRoute
-      : config.profiles.find(profile => profile.source === "remote")?.id || "default"
-    llmMode.value = config.local_fallback_enabled ? "local" : "remote"
-    snapshotTranslationSettings()
+    if (generation !== translationConfigGeneration) return
+    applyTranslationSettings(config)
   } catch (caught) {
-    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
+    if (generation === translationConfigGeneration) translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
   } finally {
-    translationSettingsLoading.value = false
+    if (generation === translationConfigGeneration) translationSettingsLoading.value = false
   }
 }
 
@@ -326,7 +345,7 @@ async function loadTranslationReadiness() {
 async function refreshTranslationsAfterSettingsChange() {
   if (!showTranslations.value) return
   if (!tagEditingAllowed.value) {
-    await captionTranslation.translate(caption.value, allowCaptionTranslationFallback.value)
+    await captionTranslation.translate(caption.value)
     return
   }
   if (translationProvider.value === "llm") {
@@ -349,7 +368,9 @@ const translationAvailable = computed(() => Boolean(dictionaryStatus.value.insta
 const translationUnavailableHint = computed(() => t("datasetEditor.caption.translationUnavailable"))
 
 async function ensureLlmReady() {
+  const lifecycle = editorLifecycleGeneration
   await Promise.all([loadTranslationSettings(true), loadLocalModelStatus()])
+  if (!editorActive || lifecycle !== editorLifecycleGeneration) return false
   const ready = remoteProfileConfigured.value || (llmMode.value === "local" && localTranslationReady.value)
   if (!ready) {
     const message = llmMode.value === "local"
@@ -374,6 +395,9 @@ async function openTranslationSettings() {
 }
 
 function onTranslationSettingsModelChange(value: boolean) {
+  // ElDialog emits false after its leave transition when we hide it to
+  // show model management. Keep the return destination open in that case.
+  if (!value && profileEditorOpen.value) return
   translationSettingsOpen.value = value
   if (!value) restoreTranslationSettings()
 }
@@ -547,12 +571,12 @@ function cancelCaptionTranslation() {
   captionTranslation.cancel()
 }
 
-watch([caption, selected, root, showTranslations, tagEditingAllowed, allowCaptionTranslationFallback], () => {
+watch([caption, selected, root, showTranslations, tagEditingAllowed], () => {
   cancelCaptionTranslation()
   if (!showTranslations.value || tagEditingAllowed.value || !caption.value.trim()) return
   captionTranslationTimer = setTimeout(() => {
     captionTranslationTimer = undefined
-    void captionTranslation.translate(caption.value, allowCaptionTranslationFallback.value)
+    void captionTranslation.translate(caption.value)
   }, 350)
 })
 
@@ -925,6 +949,7 @@ watch(pageCount, (count) => {
 })
 onActivated(() => window.addEventListener("keydown", onPreviewKeydown))
 onActivated(() => {
+  editorActive = true
   void loadTranslationReadiness()
   const queryPath = route?.query.path
   if (typeof queryPath === "string" && queryPath.trim() && queryPath !== path.value) {
@@ -935,6 +960,10 @@ onActivated(() => {
   }
 })
 onDeactivated(() => {
+  editorActive = false
+  editorLifecycleGeneration += 1
+  translationConfigGeneration += 1
+  translationSettingsLoading.value = false
   rememberCurrentDraft()
   cancelCaptionTranslation()
   cancelTranslations()
@@ -942,8 +971,14 @@ onDeactivated(() => {
   previewOpen.value = false
   selectMenuOpen.value = false
   historyOpen.value = false
+  translationSettingsOpen.value = false
+  profileEditorOpen.value = false
+  restoreTranslationSettings()
 })
 onUnmounted(() => {
+  editorActive = false
+  editorLifecycleGeneration += 1
+  translationConfigGeneration += 1
   cancelCaptionTranslation()
   scanGeneration++
   dictionaryPollDisposed = true
@@ -1164,14 +1199,14 @@ onUnmounted(() => {
             :progress-total="translationProgress.total"
             :progress-unresolved="translationUnresolved"
             @update:enabled="setTranslationsEnabled"
+            @open-settings="openTranslationSettings"
           />
           <section v-else class="natural-caption-translation">
             <div class="natural-translation-controls">
               <label>{{ t('datasetEditor.caption.naturalTranslation') }} <el-switch v-model="showTranslations" :aria-label="t('datasetEditor.caption.naturalTranslation')" /></label>
-              <el-button @click="openTranslationSettings">{{ t('datasetEditor.caption.translationSettings') }}</el-button>
-              <el-button v-if="showTranslations" :disabled="captionTranslation.loading.value" @click="captionTranslation.translate(caption, allowCaptionTranslationFallback)">{{ t('datasetEditor.caption.retryNaturalTranslation') }}</el-button>
+              <el-button class="caption-translation-settings-action" @click="openTranslationSettings">{{ t('datasetEditor.caption.translationSettings') }}</el-button>
+              <el-button v-if="showTranslations" :disabled="captionTranslation.loading.value" @click="captionTranslation.translate(caption)">{{ t('datasetEditor.caption.retryNaturalTranslation') }}</el-button>
             </div>
-            <label v-if="showTranslations"><input v-model="allowCaptionTranslationFallback" type="checkbox"> {{ t('datasetEditor.caption.naturalTranslationFallback') }}</label>
             <p v-if="showTranslations && captionTranslation.loading.value" role="status">{{ t('datasetEditor.caption.naturalTranslating') }}</p>
             <p v-if="showTranslations && captionTranslation.error.value" role="alert">{{ captionTranslation.error.value }}</p>
             <div v-if="showTranslations && captionTranslation.text.value" class="natural-caption-translated" aria-live="polite">
@@ -1312,7 +1347,7 @@ onUnmounted(() => {
   </div>
 
   <TagTranslationSettingsDialog
-    :model-value="translationSettingsOpen"
+    :model-value="translationSettingsOpen && !profileEditorOpen"
     :loading="translationSettingsLoading"
     :error="translationSettingsError"
     :provider="translationProvider"
@@ -1324,12 +1359,14 @@ onUnmounted(() => {
     @update:model-value="onTranslationSettingsModelChange"
     @update:provider="setTranslationProvider"
     @update:llm-mode="onLlmModeChange"
-    @shared-saved="refreshTranslationSettings"
+    @manage-llm="profileEditorOpen = true"
     @check-dictionary="checkDictionary"
     @update-dictionary="updateDictionary"
     @retry-dictionary="retryDictionary"
     @cancel-dictionary="cancelDictionary"
   />
+
+  <LlmSettingsDialog v-model="profileEditorOpen" capability="text" @saved="refreshTranslationSettings" />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">
     <div class="dataset-history">

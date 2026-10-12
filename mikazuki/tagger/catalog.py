@@ -13,7 +13,7 @@ TAG_PARAMETERS = (
     "additional_tags", "exclude_tags", "escape_tag", "replace_underscore",
     "replace_underscore_excludes", "download_endpoint", "interrogator_model",
 )
-CAPTION_PARAMETERS = ("prompt", "system_prompt", "prompt_id", "language", "max_caption_length", "max_tokens", "temperature", "allow_local_fallback", "use_cache", "profile_id")
+CAPTION_PARAMETERS = ("prompt", "system_prompt", "prompt_id", "language", "max_caption_length", "max_tokens", "temperature", "concurrency", "allow_local_fallback", "use_cache", "profile_id")
 
 
 def model_catalog(config: dict, local_status: dict) -> list[dict]:

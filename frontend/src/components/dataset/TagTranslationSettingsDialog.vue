@@ -24,7 +24,7 @@ const emit = defineEmits<{
   updateDictionary: []
   retryDictionary: []
   cancelDictionary: []
-  sharedSaved: []
+  manageLlm: []
 }>()
 
 const { t } = useI18n()
@@ -89,11 +89,10 @@ function selectSource(key: TranslationSource) {
         </div>
       </section>
 
-      <p v-if="provider === 'llm'" class="caption-translation-dialog-hint">{{ t("llm.sharedHint") }}</p>
-      <p class="caption-translation-dialog-hint">
-        {{ t("datasetEditor.caption.translationSettingsMoved") }}
-        <RouterLink class="translation-settings-link" to="/settings/api">{{ t("settings.nav.api") }}</RouterLink>
-      </p>
+      <section class="translation-settings-section">
+        <p class="caption-translation-dialog-hint">{{ t("datasetEditor.caption.translationSettingsMoved") }}</p>
+        <el-button class="translation-manage-llm" @click="emit('manageLlm')">{{ t("llm.title") }}</el-button>
+      </section>
       <small v-if="loading">{{ t("datasetEditor.caption.translationLoading") }}</small>
       <small v-if="error" class="caption-translation-error">{{ error }}</small>
     </div>

@@ -34,6 +34,7 @@ export interface CaptionJobRequest {
   conflict_action: "ignore" | "copy"
   max_tokens?: number
   temperature?: number
+  concurrency?: number
 }
 
 export type TagJobRequest = Omit<TaggerRequest, "batch_input_recursive" | "batch_output_action_on_conflict"> & {
@@ -109,7 +110,7 @@ export const taggerApi = {
   captionDeleteHistory: (jobId: string) => apiData<{ deleted: boolean; job_id: string }>(`/api/tagger/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }),
   status: () => apiData<TaggerStatus>("/api/tagger/status"),
   start: (body: TaggerRequest) => apiRequest("/api/interrogate", { method: "POST", body: JSON.stringify(withDownloadEndpoint(body)) }),
-  prefetch: (interrogator_model: string) => apiRequest("/api/tagger/prefetch", { method: "POST", body: JSON.stringify(withDownloadEndpoint({ interrogator_model })) }),
+  prefetch: (interrogator_model: string) => apiRequest<{ model_id: string; already_downloaded: boolean }>("/api/tagger/prefetch", { method: "POST", body: JSON.stringify(withDownloadEndpoint({ interrogator_model })) }),
   cancel: () => apiRequest("/api/tagger/cancel", { method: "POST" }),
   reset: () => apiRequest("/api/tagger/reset", { method: "POST" }),
   captionStatus: (signal?: AbortSignal) => apiData<CaptionJobStatus>("/api/tagger/jobs", { signal }),

@@ -69,6 +69,7 @@ from mikazuki.plugin_host.agent_tools import router as agent_tools_router
 from mikazuki.log import log
 from mikazuki.tagger.interrogator import available_interrogators
 from mikazuki.tagger.jobs import run_interrogate_job, run_prefetch_job
+from mikazuki.tagger.model_fetch import interrogator_assets_ready
 from mikazuki.tagger.progress import tagger_progress
 from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
@@ -614,8 +615,10 @@ async def tagger_prefetch(req: TaggerPrefetchRequest, background_tasks: Backgrou
         return APIResponseFail(message=f"未知模型: {req.interrogator_model}")
     if tagger_progress.is_busy():
         return APIResponseFail(message="已有打标或下载任务进行中")
+    if interrogator_assets_ready(available_interrogators[req.interrogator_model], req.interrogator_model):
+        return APIResponseSuccess(message="Tag 模型已下载，无需重复下载", data={"model_id": req.interrogator_model, "already_downloaded": True})
     background_tasks.add_task(run_prefetch_job, req)
-    return APIResponseSuccess(message="模型下载已开始")
+    return APIResponseSuccess(message="已提交 Tag 模型下载任务", data={"model_id": req.interrogator_model, "already_downloaded": False})
 
 
 @router.post("/interrogate")
