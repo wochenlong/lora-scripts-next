@@ -10,6 +10,7 @@ import time
 import datetime
 from contextlib import contextmanager
 from pathlib import Path
+from mikazuki import user_data_transactions as tx
 
 
 MAX_BYTES = 1024 * 1024
@@ -98,11 +99,31 @@ def _mapping(value, label):
 
 def validate_settings(value):
     _keys(value, {"schema_version", "revision", "startup", "engine_prefs", "engine_order",
-                  "paths", "default_presets", "tasks"}, "settings")
+                  "paths", "default_presets", "tasks", "caption_presets",
+                  "default_caption_preset_id", "caption_legacy_imported"}, "settings")
     if type(value.get("schema_version")) is not int or value["schema_version"] != 1:
         raise UserDataError("Unsupported settings schema_version")
     if type(value.get("revision")) is not int or value["revision"] < 0:
         raise UserDataError("Invalid settings revision")
+    if "default_caption_preset_id" in value and value["default_caption_preset_id"] is not None:
+        _string(value["default_caption_preset_id"], "default caption preset")
+    if "caption_legacy_imported" in value:
+        _boolean(value["caption_legacy_imported"], "caption legacy imported")
+    if "caption_presets" in value:
+        state = value["caption_presets"]
+        _keys(state, {"schema_version", "imports"}, "caption_presets")
+        if type(state.get("schema_version")) is not int or state.get("schema_version") != 1:
+            raise UserDataError("Invalid caption_presets schema")
+        _object(state.get("imports"), "caption import receipts")
+        for fingerprint, receipt in state["imports"].items():
+            if not isinstance(fingerprint, str) or not re.fullmatch(r"[a-f0-9]{64}", fingerprint):
+                raise UserDataError("Invalid caption import fingerprint")
+            _keys(receipt, {"source", "source_fingerprint", "ids", "snapshot"}, "caption import receipt")
+            if receipt.get("source_fingerprint") != fingerprint or receipt.get("source") not in {"browser", "legacy_config", "user_data"}:
+                raise UserDataError("Invalid caption import receipt")
+            _mapping(receipt.get("ids"), "caption import ids")
+            if receipt.get("snapshot") != f"migrations/caption-presets/{fingerprint}.source.json":
+                raise UserDataError("Invalid caption import snapshot")
     if "tasks" in value:
         tasks = value["tasks"]
         _keys(tasks, {"auto_retry_max"}, "tasks")
@@ -177,10 +198,14 @@ def _merge(target, patch):
 
 class UserDataStore:
     def __init__(self, root=None):
-        self.root = Path(root).absolute() if root is not None else Path(__file__).resolve().parents[1] / "user_data"
+        self.root = tx.resolve_root(root)
 
     def _path(self, name):
         path = self.root / name
+        try:
+            tx.check_path(path, self.root)
+        except tx.TransactionError as exc:
+            raise UserDataError(str(exc)) from exc
         if path.is_symlink() or path.resolve().parent != self.root.resolve():
             raise UserDataError("User data file must remain within its directory")
         return path
@@ -203,38 +228,21 @@ class UserDataStore:
             raise UserDataError(f"Cannot read {name}; original file has been preserved") from exc
 
     @contextmanager
-    def _locked(self):
-        # Serialize threads and processes, including separate GUI instances.
-        with _LOCK:
-            self.root.mkdir(parents=True, exist_ok=True)
-            lock_path = self._path(".write.lock")
-            with lock_path.open("a+b") as stream:
-                if stream.tell() == 0:
-                    stream.write(b"\0")
-                    stream.flush()
-                stream.seek(0)
-                if os.name == "nt":
-                    import msvcrt
-                    deadline = time.monotonic() + 10
-                    while True:
-                        try:
-                            msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
-                            break
-                        except OSError as exc:
-                            if time.monotonic() >= deadline:
-                                raise UserDataError("User data is busy; retry saving") from exc
-                            time.sleep(0.05)
-                else:
-                    import fcntl
-                    fcntl.flock(stream.fileno(), fcntl.LOCK_EX)
-                try:
-                    yield
-                finally:
-                    stream.seek(0)
-                    if os.name == "nt":
-                        msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
-                    else:
-                        fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+    def _locked(self, create=True):
+        try:
+            with tx.guard(self.root, create=create):
+                yield
+        except tx.TransactionError as exc:
+            raise UserDataError(str(exc)) from exc
+
+    def _caption(self, operation, *args, **kwargs):
+        from mikazuki.llm.config import LLMContractError
+        try:
+            with tx.at_root(self.root):
+                return operation(*args, **kwargs)
+        except (LLMContractError, tx.TransactionError) as exc:
+            error = RevisionConflict if "revision conflict" in str(exc).lower() else UserDataError
+            raise error(str(exc)) from exc
 
     def _stage(self, name, raw):
         fd, temporary = tempfile.mkstemp(prefix=f".{name}-", dir=self.root)
@@ -293,9 +301,10 @@ class UserDataStore:
                 Path(previous_temporary).unlink(missing_ok=True)
 
     def read_settings(self):
-        value = self._read("settings.json")
-        validate_settings(value)
-        return value
+        with self._locked(create=False):
+            value = self._read("settings.json")
+            validate_settings(value)
+            return value
 
     def model_path(self, category, model_id):
         if category not in {"tagger_models", "models", "python"}:
@@ -308,8 +317,8 @@ class UserDataStore:
 
     def patch_settings(self, patch, revision):
         _object(patch, "patch")
-        if "revision" in patch or "schema_version" in patch:
-            raise UserDataError("Revision and schema_version are managed by the server")
+        if {"revision", "schema_version", "caption_presets", "default_caption_preset_id", "caption_legacy_imported"} & set(patch):
+            raise UserDataError("Revision, schema and caption migration state are managed by the server")
         with self._locked():
             current = self.read_settings()
             if type(revision) is not int or revision != current["revision"]:
@@ -317,6 +326,12 @@ class UserDataStore:
             updated = _merge(current, patch)
             updated["revision"] += 1
             validate_settings(updated)
+            default_id = updated.get("default_presets", {}).get("tagger-caption")
+            if default_id:
+                from mikazuki.llm import prompt_presets
+                known = {item["id"] for item in self._caption(prompt_presets.list_presets)}
+                if default_id not in known:
+                    raise UserDataError("Default caption preset does not exist")
             self._write("settings.json", updated)
             return updated
 
@@ -368,6 +383,10 @@ class UserDataStore:
     def _record_path(self, category, record_id):
         self._safe_id(record_id)
         directory = self.root / category
+        try:
+            tx.check_path(directory, self.root)
+        except tx.TransactionError as exc:
+            raise UserDataError(str(exc)) from exc
         directory.mkdir(parents=True, exist_ok=True)
         path = directory / f"{record_id}.json"
         if path.resolve().parent != directory.resolve() or path.is_symlink():
@@ -375,59 +394,139 @@ class UserDataStore:
         return path
 
     def list_presets(self, train_type=None):
-        directory = self.root / "presets"
-        if not directory.is_dir():
-            return []
-        result = []
-        for path in sorted(directory.glob("*.json")):
-            try:
-                item = json.loads(path.read_text(encoding="utf-8"))
-                if train_type and item.get("train_type") != train_type:
+        from mikazuki.llm import prompt_presets as caption
+        with self._locked(create=False):
+            if train_type == caption.CAPTION_TYPE:
+                return [caption.to_envelope(item) for item in self._caption(caption.list_presets)]
+            directory = self.root / "presets"
+            tx.check_path(directory, self.root)
+            if not directory.is_dir():
+                return []
+            result = []
+            for path in sorted(directory.glob("*.json")):
+                try:
+                    tx.check_path(path, self.root)
+                    item = json.loads(path.read_text(encoding="utf-8"))
+                    if caption.is_caption(item) or (train_type and item.get("train_type") != train_type):
+                        continue
+                    result.append(item)
+                except (OSError, UnicodeError, json.JSONDecodeError):
                     continue
-                result.append(item)
-            except (OSError, UnicodeError, json.JSONDecodeError):
-                continue
-        return result
+            return result
 
-    def get_preset(self, preset_id):
-        path = self._record_path("presets", preset_id)
+    def preset_document(self, train_type=None):
+        with self._locked(create=False):
+            result = {"presets": self.list_presets(train_type)}
+            if train_type == "tagger-caption":
+                from mikazuki.llm import prompt_presets
+                result["revision"] = self._caption(prompt_presets.document_revision)
+            return result
+
+    def _raw_preset(self, preset_id):
+        self._safe_id(preset_id)
+        path = self.root / "presets" / f"{preset_id}.json"
+        tx.check_path(path, self.root)
         if not path.is_file():
             raise UserDataError("Preset not found")
         try:
-            return json.loads(path.read_text(encoding="utf-8"))
-        except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-            raise UserDataError("Preset is invalid") from exc
+            item = tx.read_json(path, {})
+            _object(item, "preset")
+            return item
+        except tx.TransactionError as exc:
+            raise UserDataError(str(exc)) from exc
+
+    def get_preset(self, preset_id):
+        from mikazuki.llm import prompt_presets as caption
+        with self._locked(create=False):
+            item = self._raw_preset(preset_id)
+            if caption.is_caption(item):
+                result = self._caption(caption.from_envelope, item)
+                result = caption.to_envelope(result)
+                result["document_revision"] = self._caption(caption.document_revision)
+                return result
+            return item
 
     def save_preset(self, preset_id, value, replace=False):
+        from mikazuki.llm import prompt_presets as caption
         self._safe_id(preset_id, "preset id")
         _object(value, "preset")
-        _keys(value, {"id", "name", "description", "train_type", "config", "created_at", "updated_at"}, "preset")
+        _keys(value, {"id", "name", "description", "train_type", "config", "created_at", "updated_at", "document_revision"}, "preset")
         _string(value.get("name"), "preset name")
         _object(value.get("config"), "preset config")
         if without_credentials(value["config"]) != value["config"]:
             raise UserDataError("Preset cannot contain credentials")
-        now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-        value = copy.deepcopy(value)
-        value["id"] = preset_id
-        value.setdefault("created_at", now)
-        value["updated_at"] = now
-        path = self._record_path("presets", preset_id)
         with self._locked():
-            if path.exists() and not replace:
+            path = self.root / "presets" / f"{preset_id}.json"
+            tx.check_path(path, self.root)
+            existing = self._raw_preset(preset_id) if path.exists() else None
+            if existing is not None and not replace:
                 raise RevisionConflict("Preset already exists")
-            self._write_path(path, value)
-        return value
+            is_caption = value.get("train_type") == caption.CAPTION_TYPE
+            if existing is not None and caption.is_caption(existing) != is_caption:
+                raise UserDataError("Preset domain identity is immutable")
+            now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+            value = copy.deepcopy(value)
+            value["id"] = preset_id
+            value.setdefault("created_at", now)
+            value["updated_at"] = now
+            revision = value.pop("document_revision", None)
+            if is_caption:
+                if not isinstance(revision, str) or not revision:
+                    raise RevisionConflict("Caption document_revision is required; reload before saving")
+                current = self._caption(caption.document)
+                if revision != current["revision"]:
+                    raise RevisionConflict("Caption preset revision conflict")
+                item = self._caption(caption.from_envelope, value)
+                items = [entry for entry in current["presets"] if entry["id"] != preset_id] + [item]
+                saved = self._caption(caption.save_document, {**current, "presets": items})
+                result = caption.to_envelope(next(entry for entry in saved["presets"] if entry["id"] == preset_id))
+                result["document_revision"] = saved["revision"]
+                return result
+            if revision is not None:
+                raise UserDataError("document_revision belongs to Caption presets")
+            changes = {path: tx.json_bytes(value)}
+            if path.exists():
+                changes[path.with_suffix(".json.bak")] = tx.read_bytes(path)
+            tx.transaction(changes)
+            return value
 
-    def delete_preset(self, preset_id):
-        path = self._record_path("presets", preset_id)
+    def patch_preset(self, preset_id, patch):
         with self._locked():
-            if not path.exists():
-                raise UserDataError("Preset not found")
-            settings = self.read_settings()
-            defaults = settings.get("default_presets", {})
-            if preset_id in defaults.values():
+            current = self.get_preset(preset_id)
+            # The caller must supply CAS for this write, not inherit the version
+            # read by this operation and accidentally bypass client protection.
+            current.pop("document_revision", None)
+            if current.get("train_type") == "tagger-caption" and isinstance(patch.get("config"), dict):
+                patch = {**patch, "config": {**current["config"], **patch["config"]}}
+            current.update(patch)
+            return self.save_preset(preset_id, current, True)
+
+    def delete_preset(self, preset_id, document_revision=None):
+        from mikazuki.llm import prompt_presets as caption
+        with self._locked():
+            item = self._raw_preset(preset_id)
+            if caption.is_caption(item):
+                if not isinstance(document_revision, str) or not document_revision:
+                    raise RevisionConflict("Caption If-Match document revision is required")
+                current = self._caption(caption.document)
+                if document_revision != current["revision"]:
+                    raise RevisionConflict("Caption preset revision conflict")
+                if current["settings"]["default_caption_preset_id"] == preset_id:
+                    raise UserDataError("Preset is selected as a default")
+                self._caption(caption.save_document, {**current, "presets": [entry for entry in current["presets"] if entry["id"] != preset_id]})
+                return
+            if preset_id in self.read_settings().get("default_presets", {}).values():
                 raise UserDataError("Preset is selected as a default")
-            path.unlink()
+            path = self.root / "presets" / f"{preset_id}.json"
+            tx.transaction({path.with_suffix(".json.bak"): tx.read_bytes(path), path: None})
+
+    def preview_caption_import(self, payload):
+        from mikazuki.llm import prompt_presets
+        return self._caption(prompt_presets.preview_import, payload)
+
+    def commit_caption_import(self, payload):
+        from mikazuki.llm import prompt_presets
+        return self._caption(prompt_presets.commit_import, payload)
 
     def _write_path(self, path, value):
         raw = json.dumps(value, ensure_ascii=False, indent=2, allow_nan=False).encode("utf-8")

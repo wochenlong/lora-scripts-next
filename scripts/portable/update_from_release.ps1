@@ -198,6 +198,37 @@ if (-not (Test-Path (Join-Path $stagingTrainer "gui.py"))) {
     }
 }
 
+# Validate a new-format Release before changing the installed project. Legacy
+# Releases remain compatible but cannot bypass this gate for a new-format bundle.
+$targetDictionary = Join-Path $TrainerDir "assets\tag_translation\danbooru"
+$sourceDictionary = Join-Path $stagingTrainer "assets\tag_translation\danbooru"
+$seedScript = Join-Path $stagingTrainer "scripts\portable\seed_tag_dictionary.py"
+$seedPython = Join-Path $PortableRoot "python_embeded\python.exe"
+$stagingSourceLock = Join-Path $stagingTrainer "scripts\assets\tag-dictionary-manifest.json"
+$stagingSourceManifest = Join-Path $sourceDictionary "source-manifest.json"
+$hasDictionaryBundleContract = (Test-Path -LiteralPath $seedScript) -or
+    (Test-Path -LiteralPath $stagingSourceLock) -or (Test-Path -LiteralPath $stagingSourceManifest)
+if ($hasDictionaryBundleContract) {
+    $stagingVerifier = Join-Path $stagingTrainer "scripts\prefetch_tag_dictionary.py"
+    if (-not (Test-Path -LiteralPath $seedScript -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $stagingSourceLock -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $stagingVerifier -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $seedPython -PathType Leaf)) {
+        throw "Release dictionary verification requires its verifier and portable Python."
+    }
+    $previousVerifyPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $seedPython -S $stagingVerifier --directory $sourceDictionary --verify-only --strict
+        $sourceDictionaryExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousVerifyPreference
+    }
+    if ($sourceDictionaryExit -ne 0) {
+        throw "Release Tag dictionary validation failed (exit $sourceDictionaryExit); installed files are unchanged."
+    }
+}
+
 Write-Step ""
 Write-Step "Merging Next-Trainer / 合并项目文件（保留用户数据）..."
 $robocopyArgs = @(
@@ -206,11 +237,36 @@ $robocopyArgs = @(
     "/E", "/IS", "/IT", "/R:2", "/W:2", "/NFL", "/NDL", "/NJH", "/NJS", "/NC", "/NS",
     "/XD", "extensions", ".cache", "__pycache__", "node_modules", ".vscode", ".cursor",
     "/XD", "config", "sd-models", "output", "logs", "train", "user_data",
+    "/XD", (Join-Path $stagingTrainer "assets\tag_translation"),
     "/XF", (Join-Path $stagingTrainer "assets\config.json")
 )
 & robocopy @robocopyArgs | Out-Null
 if ($LASTEXITCODE -ge 8) {
     throw "robocopy failed with exit code $LASTEXITCODE"
+}
+
+# The public dictionary may seed an older installation, but runtime settings,
+# translations.sqlite3, installed models and a newer user dictionary stay put.
+if (Test-Path -LiteralPath (Join-Path $targetDictionary "tag.sqlite")) {
+    Write-Step "Existing Tag dictionary and translation data preserved."
+} elseif (Test-Path -LiteralPath (Join-Path $sourceDictionary "tag.sqlite")) {
+    if (-not (Test-Path -LiteralPath $seedScript -PathType Leaf) -or
+        -not (Test-Path -LiteralPath $seedPython -PathType Leaf)) {
+        throw "Missing verified dictionary seed helper or portable Python. Translation user data was preserved."
+    }
+    $previousSeedPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $seedPython -S $seedScript --source $sourceDictionary --target $targetDictionary
+        $seedExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousSeedPreference
+    }
+    if ($seedExit -ne 0) {
+        throw "Verified Tag dictionary seed failed (exit $seedExit). Existing translation data was preserved."
+    }
+} else {
+    Write-Step "Legacy Release has no bundled Tag dictionary; existing translation data preserved."
 }
 
 $stagingGit = Join-Path $stagingTrainer ".git"
@@ -290,6 +346,7 @@ Write-Step ""
 Write-Step 'Preserved / user data kept:'
 Write-Step '  Next-Trainer\sd-models\  Next-Trainer\output\  Next-Trainer\logs\  Next-Trainer\train\'
 Write-Step '  Next-Trainer\config\  Next-Trainer\assets\config.json'
+Write-Step '  Next-Trainer\assets\tag_translation\  (settings, caches, models and existing dictionary)'
 Write-Step '  huggingface\  tagger-models\  (portable root)'
 Write-Step '  Next-Trainer\extensions\  (Anima Fast plugin, if installed)'
 Write-Step ""

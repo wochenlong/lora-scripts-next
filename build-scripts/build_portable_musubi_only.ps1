@@ -22,6 +22,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $start = Get-Date
+. (Join-Path $PSScriptRoot "tag-dictionary-bundle.ps1")
 
 if (-not $Version) {
     $versionFile = Join-Path $ProjectRoot "VERSION"
@@ -66,6 +67,8 @@ if ($SkipSkeleton) {
     }
     if (-not (Test-Path $pythonExe)) { throw "missing $pythonExe" }
 }
+
+Invoke-PortableTagDictionary -PythonExe $pythonExe -TrainerDir $sdtDir -Mode Prepare
 
 Write-Log "[2/4] Minimal WebUI deps (no torch index)..." "Cyan"
 $guiPkgs = @(
@@ -142,6 +145,7 @@ if (Test-Path $note) {
 "@
 }
 
+Invoke-PortableTagDictionary -PythonExe $pythonExe -TrainerDir $sdtDir -Mode Verify
 $archiveName = "Next-Trainer-v${Version}-musubi.7z"
 $archivePath = Join-Path $buildDir $archiveName
 $7zExe = "C:\Program Files\7-Zip\7z.exe"

@@ -56,3 +56,5 @@ Command-line runs use `scripts/cli/train_anima_by_toml.sh` and `scripts/cli/trai
 ---
 
 [Documentation](docs/README.md) · [Report an issue](https://github.com/wochenlong/lora-scripts-next/issues) · [Credits](docs/credits.md) · [Contributors](CONTRIBUTORS.md)
+
+Natural language captioning and shared LLM management support remote vision APIs, local Qwen3.5-2B and whole-caption translation. See the [usage guide](docs/natural-language-captioning-usage.md). Portable packages include the Chinese Tag dictionary.

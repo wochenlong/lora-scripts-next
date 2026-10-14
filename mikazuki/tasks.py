@@ -63,7 +63,7 @@ class TaskStatus(Enum):
 
 class Task:
     def __init__(self, task_id, command, environ=None, metadata=None, cwd=None,
-                 lane=LANE_COMPUTE, group=None):
+                 lane=LANE_COMPUTE, group=None, on_cancel=None, on_delete=None):
         self.task_id = task_id
         self.lock = threading.Lock()
         self.command = command
@@ -79,6 +79,8 @@ class Task:
         # None) is how callers tell "never started" from "running" (#446 run).
         self.log_file = self.metadata.get("log_file")
         self._stdout_thread = None
+        self._on_cancel = on_cancel
+        self._on_delete = on_delete
 
     def _append_disk_log(self, text: str):
         if not self.log_file:
@@ -223,6 +225,11 @@ class Task:
         self._stdout_thread.start()
 
     def terminate(self):
+        if self._on_cancel is not None:
+            # In-process maintenance jobs remain RUNNING until their worker
+            # confirms cancellation. They have no subprocess to kill.
+            self._on_cancel()
+            return
         # Mark TERMINATED before killing: the worker's wait() returns as soon
         # as the process dies and must already see the final status, otherwise
         # _record_completion() races and logs the -9 exit as a failure.
@@ -443,7 +450,7 @@ class TaskManager:
         )
 
     def create_task(self, command: List[str], environ, metadata=None, cwd=None,
-                    task_id=None, lane=LANE_COMPUTE, group=None) -> Task:
+                    task_id=None, lane=LANE_COMPUTE, group=None, on_cancel=None, on_delete=None) -> Task:
         """Register a task. Compute tasks are queued (never rejected) when the
         lane is busy; call submit()/submit_group() to schedule execution."""
         with self._cond:
@@ -455,7 +462,8 @@ class TaskManager:
                     task_id, metadata, metadata.get("config_path"))
                 metadata["task_archive"] = archive
             task = Task(task_id=task_id, command=command, environ=environ,
-                        metadata=metadata, cwd=cwd, lane=lane, group=group)
+                        metadata=metadata, cwd=cwd, lane=lane, group=group,
+                        on_cancel=on_cancel, on_delete=on_delete)
             if lane == LANE_COMPUTE and self._compute_busy_locked():
                 task.status = TaskStatus.QUEUED
                 log.info(f"Task {task_id} created and queued (compute lane busy) / 任务已加入队列")
@@ -540,7 +548,8 @@ class TaskManager:
         counter lives on the task itself so one flaky task cannot loop
         forever.
         """
-        if rc == 0 or task.status != TaskStatus.FAILED or getattr(task, "process", None) is None:
+        process = getattr(task, "process", None)
+        if rc == 0 or task.status != TaskStatus.FAILED or process is None:
             return
         if task.lane != LANE_COMPUTE or not task.command:
             return
@@ -597,7 +606,7 @@ class TaskManager:
         if task is None:
             return
         if task.status in (TaskStatus.CREATED, TaskStatus.QUEUED) \
-                and getattr(task, "process", None) is None:
+                and getattr(task, "process", None) is None and getattr(task, "_on_cancel", None) is None:
             # Still waiting in the queue: drop it without touching any process.
             task.status = TaskStatus.TERMINATED
             task.metadata.setdefault("finished_at", datetime.now().timestamp())
@@ -671,6 +680,8 @@ class TaskManager:
             else:
                 doomed = [task]
             for member in doomed:
+                if getattr(member, "_on_delete", None) is not None:
+                    member._on_delete()
                 try:
                     self._compute_queue.remove(member.task_id)
                 except ValueError:
@@ -704,6 +715,8 @@ class TaskManager:
             eligible.sort(key=finished_at, reverse=True)
             doomed = [t for members in eligible[max(0, keep_last):] for t in members]
             for task in doomed:
+                if getattr(task, "_on_delete", None) is not None:
+                    task._on_delete()
                 try:
                     self._compute_queue.remove(task.task_id)
                 except ValueError:

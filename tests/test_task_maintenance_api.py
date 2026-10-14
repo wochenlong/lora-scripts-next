@@ -18,6 +18,8 @@ stub_jobs = types.ModuleType("mikazuki.tagger.jobs")
 stub_jobs.run_interrogate_job = lambda *args, **kwargs: None
 stub_jobs.run_prefetch_job = lambda *args, **kwargs: None
 stub_progress = types.ModuleType("mikazuki.tagger.progress")
+from mikazuki.tagger.progress import TaggerCancelled
+stub_progress.TaggerCancelled = TaggerCancelled
 stub_progress.tagger_progress = types.SimpleNamespace(
     get=lambda: {},
     request_cancel=lambda: False,

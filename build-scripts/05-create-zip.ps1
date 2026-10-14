@@ -7,6 +7,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "tag-dictionary-bundle.ps1")
 
 Write-Host "=== 创建 ZIP 压缩包 ===" -ForegroundColor Cyan
 
@@ -17,6 +18,8 @@ $zipFile = Join-Path $BuildDir "Next-Trainer-v$Version.zip"
 if (-not (Test-Path $portableDir)) {
     throw "便携式目录不存在: $portableDir"
 }
+Invoke-PortableTagDictionary -PythonExe (Join-Path $portableDir "python\python.exe") `
+    -TrainerDir (Join-Path $portableDir "lora-scripts-next") -Mode Verify
 
 # 删除旧的 ZIP 文件
 if (Test-Path $zipFile) {

@@ -26,6 +26,7 @@ function pickerError(code: string) {
 
 describe("useServerPathPick", () => {
   beforeEach(() => {
+    vi.unstubAllGlobals()
     pickFile.mockReset()
     readPathPickerPreference.mockReset()
     readPathPickerPreference.mockReturnValue("auto")
@@ -65,13 +66,67 @@ describe("useServerPathPick", () => {
     expect(picker.open.value).toBe(false)
   })
 
+  it("requests image files explicitly from the native picker", async () => {
+    pickFile.mockResolvedValue({ path: "D:/images/preview.png" })
+    const picker = useServerPathPick()
+
+    await expect(picker.pick({ mode: "file", fileType: "image" })).resolves.toBe("D:/images/preview.png")
+
+    expect(pickFile).toHaveBeenCalledWith("image")
+    expect(picker.open.value).toBe(false)
+  })
+
+  it.each(["web", "remote"])("uses image filters for %s web selection", async (selection) => {
+    if (selection === "web") {
+      readPathPickerPreference.mockReturnValue("web")
+    } else {
+      vi.stubGlobal("location", { hostname: "trainer.example.com" })
+    }
+    const picker = useServerPathPick()
+
+    const result = picker.pick({ mode: "file", fileType: "image", initialPath: "D:/images" })
+
+    expect(pickFile).not.toHaveBeenCalled()
+    expect(picker.mode.value).toBe("file")
+    expect(picker.initialPath.value).toBe("D:/images")
+    expect(picker.nameFilter.value).toBe("*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff")
+    picker.onConfirm("D:/images/preview.webp")
+    await expect(result).resolves.toBe("D:/images/preview.webp")
+  })
+
   it("treats native cancellation as cancellation without opening the web picker", async () => {
     pickFile.mockRejectedValue(pickerError("CANCELLED"))
     const picker = useServerPathPick()
 
     await expect(picker.pick()).resolves.toBeNull()
 
+    expect(pickFile).toHaveBeenCalledWith("folder")
     expect(picker.open.value).toBe(false)
+  })
+
+  it("returns null when native image selection is cancelled", async () => {
+    pickFile.mockRejectedValue(pickerError("CANCELLED"))
+    const picker = useServerPathPick()
+
+    await expect(picker.pick({ mode: "file", fileType: "image" })).resolves.toBeNull()
+
+    expect(pickFile).toHaveBeenCalledWith("image")
+    expect(picker.open.value).toBe(false)
+  })
+
+  it.each([undefined, "*.png"])("preserves image options in web fallback with filter %s", async (nameFilter) => {
+    pickFile.mockRejectedValue(pickerError("GUI_PICKER_UNAVAILABLE"))
+    const picker = useServerPathPick()
+
+    const result = picker.pick({ mode: "file", fileType: "image", initialPath: "D:/images/preview.jpg", nameFilter })
+    await vi.waitFor(() => expect(picker.open.value).toBe(true))
+
+    expect(pickFile).toHaveBeenCalledWith("image")
+    expect(picker.mode.value).toBe("file")
+    expect(picker.initialPath.value).toBe("D:/images/preview.jpg")
+    expect(picker.nameFilter.value).toBe(nameFilter ?? "*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff")
+    picker.onCancel()
+    await expect(result).resolves.toBeNull()
   })
 
   it.each([

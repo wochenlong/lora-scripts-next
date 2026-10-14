@@ -22,6 +22,9 @@ function Get-CorePortableCopyPolicy {
             "node_modules",
             "logs",
             "user_data",
+            # Match the absolute runtime-data tree, not a basename that could
+            # also hide source code or unrelated model directories.
+            (Join-Path ([System.IO.Path]::GetFullPath($ProjectRoot)) "assets\tag_translation"),
             "output",
             "huggingface",
             "tagger-models",

@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "source_url": "https://raw.githubusercontent.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/623a41c0ba1ea8b7be0ccf7cc925b15f8ec77222/tag.sqlite",
+  "source_commit": "623a41c0ba1ea8b7be0ccf7cc925b15f8ec77222",
+  "git_blob_sha": "d9e302a6078ac266ab17c48aa79477c262cc1da9",
+  "sha256": "876ee9885218a7c1dbf7c879ef7b3339024eb47b3f9e8b98fbb77af16897a2bb",
+  "size_bytes": 24678400,
+  "row_count": 332385,
+  "license": "MIT",
+  "license_sha256": "014b110a69780163b0a0a2ed87465d950dc3841694342115aab0db49fc2f3ccc",
+  "license_file": "docs/third_party/ffdkj-danbooru-tag-table-MIT.txt",
+  "license_source_url": "https://raw.githubusercontent.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/623a41c0ba1ea8b7be0ccf7cc925b15f8ec77222/LICENSE",
+  "download_urls": [
+    "https://raw.githubusercontent.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/623a41c0ba1ea8b7be0ccf7cc925b15f8ec77222/tag.sqlite",
+    "https://api.github.com/repos/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/contents/tag.sqlite?ref=623a41c0ba1ea8b7be0ccf7cc925b15f8ec77222",
+    "https://github.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/raw/623a41c0ba1ea8b7be0ccf7cc925b15f8ec77222/tag.sqlite",
+    "https://ghfast.top/https://raw.githubusercontent.com/ffdkj/ffdkj-Danbooru_Tag-Chinese-English-Translation-Table/623a41c0ba1ea8b7be0ccf7cc925b15f8ec77222/tag.sqlite"
+  ]
+}

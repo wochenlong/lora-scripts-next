@@ -20,6 +20,8 @@ Windows 便携整合包构建脚本。
 
 产品默认：**带环境包只预装 Kohya**；Musubi 与 Anima Fast 为可选项。详见指南 §1.0。
 
+所有正式包型默认内置 Danbooru 中文 Tag 词库。`tag-dictionary-bundle.ps1` 统一执行纯标准库下载与严格验证；正常、恢复、跳过骨架和旧 ZIP 入口都在归档前验证公开四文件边界。详见指南 §5，禁止复制维护机翻译配置和缓存。
+
 ## Anima Fast（v2.7.0+）
 
 **整合包不预装** `extensions/anima_lora/.venv`。`build_portable.ps1` 与 `03-copy-project.ps1` 在 robocopy 时排除整个 `extensions/`。用户在 WebUI **设置 → 训练引擎** 或 Anima Fast 页内安装。

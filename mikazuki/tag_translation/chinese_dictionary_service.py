@@ -8,6 +8,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 import sqlite3
 import tempfile
 import threading
@@ -17,6 +18,8 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import aiohttp
+
+from .dictionary_bundle import validate_database
 
 
 GITHUB_CONTENTS_URL = (
@@ -39,6 +42,7 @@ MAX_TAG_LENGTH = 200
 MAX_SEARCH_LENGTH = 100
 MAX_SEARCH_RESULTS = 200
 LOGGER = logging.getLogger(__name__)
+TAG_PARENTHESIS_ESCAPE = re.compile(r"(?<!\\)\\([()])")
 
 
 def normalize_tag_key(value):
@@ -80,6 +84,7 @@ class ChineseDictionaryService:
         self._database_lock = threading.RLock()
         self._task = None
         self._auto_attempted = False
+        self._invalid_database = False
         self._runtime = {
             "state": "ready" if os.path.exists(self.database_path) else "missing",
             "downloaded_bytes": 0,
@@ -90,8 +95,10 @@ class ChineseDictionaryService:
 
     def status(self):
         metadata = self._load_metadata()
-        installed = os.path.exists(self.database_path)
+        installed = os.path.exists(self.database_path) and not self._invalid_database
         state = self._runtime["state"]
+        if self._invalid_database and state == "ready":
+            state = "error"
         if state not in {"downloading", "checking", "error", "cancelled"}:
             state = "ready" if installed else "missing"
         return {
@@ -109,7 +116,9 @@ class ChineseDictionaryService:
                 metadata.get("remote_sha")
                 and metadata.get("installed_sha") != metadata.get("remote_sha")
             ),
-            "error": self._runtime["error"],
+            "error": self._runtime["error"] or (
+                "当前词库未通过校验，请重新下载词库。" if self._invalid_database else None
+            ),
         }
 
     async def ensure(self, locale):
@@ -182,7 +191,7 @@ class ChineseDictionaryService:
         return self._lookup(tag_names, None)
 
     def _lookup(self, tag_names, limit):
-        if not os.path.exists(self.database_path):
+        if self._invalid_database or not os.path.exists(self.database_path):
             return {}
         names = []
         seen = set()
@@ -198,8 +207,19 @@ class ChineseDictionaryService:
         if not names:
             return {}
         rows = []
-        lookup_keys = {name: normalize_tag_key(name) for name in names}
-        variants = list(dict.fromkeys([key for key in lookup_keys.values() if key]))
+        # The native tagger escapes parentheses when writing training TXT.
+        # Prefer an exact dictionary key; only a single parenthesis escape
+        # gets a fallback alias. Literal backslashes and other escapes remain.
+        lookup_keys = {
+            name: tuple(dict.fromkeys((
+                normalize_tag_key(name),
+                normalize_tag_key(TAG_PARENTHESIS_ESCAPE.sub(r"\1", name)),
+            )))
+            for name in names
+        }
+        variants = list(dict.fromkeys(
+            key for keys in lookup_keys.values() for key in keys if key
+        ))
         with self._database_lock, closing(self._connect_readonly()) as connection:
             for start in range(0, len(variants), 400):
                 chunk = variants[start : start + 400]
@@ -224,8 +244,8 @@ class ChineseDictionaryService:
             if previous is None or len(row["name"]) > len(previous["name"]):
                 by_key[key] = row
         result = {}
-        for raw_name, key in lookup_keys.items():
-            row = by_key.get(key)
+        for raw_name, keys in lookup_keys.items():
+            row = next((by_key[key] for key in keys if key in by_key), None)
             if row is not None:
                 result[raw_name] = {
                     "tag_name": raw_name,
@@ -238,7 +258,7 @@ class ChineseDictionaryService:
 
     def search(self, query, limit=50):
         value = normalize_search_query(query)
-        if not value or len(value) > MAX_SEARCH_LENGTH or not os.path.exists(self.database_path):
+        if self._invalid_database or not value or len(value) > MAX_SEARCH_LENGTH or not os.path.exists(self.database_path):
             return []
         try:
             bounded_limit = min(max(int(limit), 1), MAX_SEARCH_RESULTS)
@@ -307,6 +327,7 @@ class ChineseDictionaryService:
                 }
             if (
                 not force
+                and not self._invalid_database
                 and os.path.exists(self.database_path)
                 and metadata.get("installed_sha") == remote["sha"]
             ):
@@ -330,6 +351,7 @@ class ChineseDictionaryService:
             row_count = await asyncio.to_thread(self._validate_database, temp_path)
             with self._database_lock:
                 os.replace(temp_path, self.database_path)
+                self._invalid_database = False
             temp_path = None
             now = utc_now()
             metadata.update(
@@ -424,26 +446,7 @@ class ChineseDictionaryService:
 
     @staticmethod
     def _validate_database(path):
-        with open(path, "rb") as database_file:
-            if database_file.read(16) != b"SQLite format 3\x00":
-                raise RuntimeError("Downloaded dictionary is not a SQLite database")
-        connection = sqlite3.connect(f"file:{path}?mode=ro", uri=True)
-        try:
-            columns = {
-                row[1] for row in connection.execute("PRAGMA table_info(tags)").fetchall()
-            }
-            required = {"name", "category", "cn_name", "post_count"}
-            if not required.issubset(columns):
-                raise RuntimeError("Downloaded dictionary is missing required tags columns")
-            quick_check = connection.execute("PRAGMA quick_check").fetchone()
-            if not quick_check or quick_check[0] != "ok":
-                raise RuntimeError("Downloaded dictionary failed SQLite quick_check")
-            row_count = int(connection.execute("SELECT COUNT(*) FROM tags").fetchone()[0])
-            if row_count <= 0:
-                raise RuntimeError("Downloaded dictionary contains no tags")
-            return row_count
-        finally:
-            connection.close()
+        return validate_database(path)
 
     def _connect_readonly(self):
         connection = sqlite3.connect(f"file:{self.database_path}?mode=ro", uri=True, timeout=10)

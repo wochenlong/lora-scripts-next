@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { useI18n } from "vue-i18n"
-import { ElSwitch } from "element-plus"
+import { ElButton, ElSwitch } from "element-plus"
 
 defineProps<{
   enabled: boolean
@@ -15,6 +15,7 @@ defineProps<{
 
 const emit = defineEmits<{
   "update:enabled": [value: boolean]
+  openSettings: []
 }>()
 
 const { t } = useI18n()
@@ -29,6 +30,7 @@ const { t } = useI18n()
         :aria-label="t('datasetEditor.caption.translationEnabled')"
         @update:model-value="emit('update:enabled', Boolean($event))"
       />
+      <el-button class="caption-translation-settings-action" @click="emit('openSettings')">{{ t("datasetEditor.caption.translationSettings") }}</el-button>
     </div>
     <small v-if="!available" class="caption-translation-warning">{{ unavailableHint }}</small>
     <small v-if="loading || progressTotal" class="caption-translation-progress">

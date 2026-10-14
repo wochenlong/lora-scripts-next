@@ -1,13 +1,32 @@
 import io
+import hashlib
 from pathlib import Path
+import pytest
 
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from mikazuki.app.application import app
+from mikazuki.tagger.caption_store import CaptionJobStore
 
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+@pytest.fixture(autouse=True)
+def isolated_caption_store(tmp_path, monkeypatch):
+    monkeypatch.setattr("mikazuki.llm.runtime.caption_job_store", CaptionJobStore(tmp_path / "caption-state.sqlite3"))
+
+
+def confirm_tag_fixture(client, root, *images):
+    # These fixtures intentionally represent user-confirmed legacy Tag files.
+    for image in images:
+        target = root / Path(image).with_suffix(".txt")
+        response = client.post("/api/dataset-editor/caption/format", json={
+            "root": str(root), "image": image, "caption_format": "tag",
+            "expected_sha256": hashlib.sha256(target.read_bytes()).hexdigest(),
+        })
+        assert response.status_code == 200
 
 
 def make_image(path: Path, color=(220, 80, 80)):
@@ -21,6 +40,7 @@ def test_dataset_editor_scan_lists_images_and_captions(tmp_path):
     make_image(tmp_path / "beta.jpg", color=(80, 120, 220))
 
     client = TestClient(app)
+    confirm_tag_fixture(client, tmp_path, "alpha.png")
     response = client.post("/api/dataset-editor/scan", json={"path": str(tmp_path)})
 
     assert response.status_code == 200
@@ -129,6 +149,7 @@ def test_dataset_editor_batch_replace_remove_append_and_sort(tmp_path):
     (tmp_path / "beta.txt").write_text("solo, blue eyes", encoding="utf-8")
 
     client = TestClient(app)
+    confirm_tag_fixture(client, tmp_path, "alpha.png", "beta.png")
     response = client.post(
         "/api/dataset-editor/batch",
         json={
@@ -160,6 +181,7 @@ def test_dataset_editor_batch_prepend_appends_tags_at_front(tmp_path):
     (tmp_path / "beta.txt").write_text("masterpiece, solo", encoding="utf-8")
 
     client = TestClient(app)
+    confirm_tag_fixture(client, tmp_path, "alpha.png", "beta.png")
     response = client.post(
         "/api/dataset-editor/batch",
         json={
@@ -195,6 +217,7 @@ def test_dataset_editor_batch_cleans_obvious_caption_noise(tmp_path):
     )
 
     client = TestClient(app)
+    confirm_tag_fixture(client, tmp_path, "alpha.png")
     response = client.post(
         "/api/dataset-editor/batch",
         json={
@@ -301,6 +324,7 @@ def test_dataset_editor_undo_restores_batch_edit(tmp_path):
     (tmp_path / "beta.txt").write_text("solo, blue eyes", encoding="utf-8")
 
     client = TestClient(app)
+    confirm_tag_fixture(client, tmp_path, "alpha.png", "beta.png")
     client.post(
         "/api/dataset-editor/batch",
         json={

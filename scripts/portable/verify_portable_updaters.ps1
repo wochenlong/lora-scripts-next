@@ -82,7 +82,9 @@ if (Test-Path $ps1) {
         "output",
         "logs",
         "train",
-        "assets\config.json"
+        "assets\config.json",
+        "assets\tag_translation",
+        "seed_tag_dictionary.py"
     )
     $missingUserDataMarkers = @(
         $requiredUserDataMarkers | Where-Object { -not $content.Contains($_) }

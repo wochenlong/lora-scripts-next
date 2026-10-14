@@ -12,6 +12,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $startTime = Get-Date
+. (Join-Path $PSScriptRoot "tag-dictionary-bundle.ps1")
 $buildDir = Join-Path $ProjectRoot "build"
 $portableDir = Join-Path $buildDir "Next-Trainer-Portable"
 $pythonExe = Join-Path $portableDir "python_embeded\python.exe"
@@ -28,6 +29,7 @@ function Write-Log([string]$Message, [string]$Color = "Gray") {
 }
 
 if (-not (Test-Path $pythonExe)) { throw "Missing $pythonExe — run full build first" }
+Invoke-PortableTagDictionary -PythonExe $pythonExe -TrainerDir $sdtDir -Mode Prepare
 
 Write-Log "Resume portable 2026 FULL  v$Version" "Cyan"
 
@@ -66,6 +68,7 @@ Write-Log "[2/3] Applying 2026 root..." "Cyan"
 # ---- launcher exe (thin shell over the .bat entries, #435) ----
 & (Join-Path $PSScriptRoot "06-build-launcher.ps1") -PackageRoot $portableDir
 
+Invoke-PortableTagDictionary -PythonExe $pythonExe -TrainerDir $sdtDir -Mode Verify
 $archiveName = "Next-Trainer-v${Version}-kohya-musubi.7z"
 $archivePath = Join-Path $buildDir $archiveName
 $7zExe = "C:\Program Files\7-Zip\7z.exe"

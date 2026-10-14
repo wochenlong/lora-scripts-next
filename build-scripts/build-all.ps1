@@ -9,6 +9,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "tag-dictionary-bundle.ps1")
 $buildDir = Join-Path $ProjectRoot "build"
 $portableDir = Join-Path $buildDir "next-trainer-portable"
 
@@ -44,12 +45,17 @@ try {
     & (Join-Path $ProjectRoot "build-scripts\03-copy-project.ps1") -BuildDir $portableDir -ProjectRoot $ProjectRoot
     if ($LASTEXITCODE -ne 0) { throw "项目文件复制失败" }
 
+    $packagePython = Join-Path $portableDir "python\python.exe"
+    $packageTrainer = Join-Path $portableDir "lora-scripts-next"
+    Invoke-PortableTagDictionary -PythonExe $packagePython -TrainerDir $packageTrainer -Mode Prepare
+
     # 步骤 4: 创建启动脚本
     Write-Host "`n[4/5] 创建启动脚本..." -ForegroundColor Cyan
     & (Join-Path $ProjectRoot "build-scripts\04-create-launchers.ps1") -BuildDir $portableDir
     if ($LASTEXITCODE -ne 0) { throw "启动脚本创建失败" }
 
     # 步骤 5: 创建 ZIP 压缩包
+    Invoke-PortableTagDictionary -PythonExe $packagePython -TrainerDir $packageTrainer -Mode Verify
     if (-not $SkipZip) {
         Write-Host "`n[5/5] 创建 ZIP 压缩包..." -ForegroundColor Cyan
         & (Join-Path $ProjectRoot "build-scripts\05-create-zip.ps1") -BuildDir $buildDir -Version $Version

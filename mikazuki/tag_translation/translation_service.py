@@ -13,8 +13,10 @@ from datetime import datetime, timezone
 
 import aiohttp
 
-from .translation_config import OnlineServiceConfig, local_llm_endpoint, local_proxy_endpoint, mask_config
+from .translation_config import DEFAULT_SYSTEM_PROMPT, OnlineServiceConfig, local_llm_endpoint, local_proxy_endpoint, mask_config
 from .translation_store import is_translation_acceptable
+from mikazuki.llm.http import LLMRequestError, post_chat
+from mikazuki.llm.contracts import LLMContractError
 
 
 DEEPSEEK_CHAT_URL = "https://api.deepseek.com/chat/completions"
@@ -134,34 +136,58 @@ class DeepSeekClient:
         }
         if local_llm_endpoint(self.config.get("endpoint")):
             payload["thinking"] = {"type": "disabled"}
-        headers = {
-            "Content-Type": "application/json",
-            "Accept": "application/json",
-            "User-Agent": USER_AGENT,
-        }
-        if self.config.get("api_key"):
-            headers["Authorization"] = f"Bearer {self.config['api_key']}"
-        async with self.session.post(self.config.get("endpoint") or DEEPSEEK_CHAT_URL, json=payload, headers=headers) as response:
-            body = await response.text()
-            if response.status == 401:
-                raise TranslationError("LLM rejected the API key", "llm_auth_failed")
-            if response.status == 429 or 500 <= response.status < 600:
-                raise RetryableTranslationError(
-                    f"LLM returned retryable HTTP {response.status}", response.headers.get("Retry-After")
-                )
-            if response.status != 200:
-                raise TranslationError(f"LLM returned HTTP {response.status}", "llm_request_failed")
+        shared_service = self.config.get("_shared_service")
+        if shared_service is not None:
+            from mikazuki.llm.contracts import LLMRouteError
+            schema = {"type": "object", "additionalProperties": False, "required": ["translations"],
+                      "properties": {"translations": {"type": "array", "items": {
+                          "type": "object", "additionalProperties": False, "required": ["tag", "translation"],
+                          "properties": {"tag": {"type": "string", "enum": [item["name"] for item in items]},
+                                         "translation": {"type": "string", "minLength": 1}}}}}}
+            prompt = (payload["messages"][0]["content"] + "\n" + payload["messages"][1]["content"])
             try:
-                result = json.loads(body)
-                choice = result["choices"][0]
-                return {
-                    "content": choice["message"]["content"],
-                    "finish_reason": choice.get("finish_reason"),
-                }
-            except (json.JSONDecodeError, KeyError, IndexError, TypeError) as error:
-                raise TranslationError(
-                    "LLM returned an invalid response envelope", "llm_invalid_response"
-                ) from error
+                _profile, envelope, content = await shared_service.complete_text(
+                    prompt, language={"zh": "zh-CN"}.get(locale, locale),
+                    profile_id=self.config.get("_shared_profile_id"), response_schema=schema,
+                    max_tokens=1024, temperature=.1,
+                    allow_local_fallback=bool(self.config.get("_allow_local_fallback")),
+                )
+                return {"content": content, "finish_reason": envelope["choices"][0].get("finish_reason")}
+            except LLMRouteError as error:
+                raise TranslationError("No verified shared text profile is ready", error.code) from None
+            except LLMRequestError as error:
+                if error.retryable:
+                    raise RetryableTranslationError("Shared LLM request failed") from None
+                raise TranslationError("Shared LLM request failed", error.code) from None
+            except LLMContractError:
+                raise TranslationError("LLM returned an invalid response envelope", "llm_invalid_response") from None
+        try:
+            try:
+                envelope, content = await post_chat(
+                    self.session,
+                    self.config.get("endpoint") or DEEPSEEK_CHAT_URL,
+                    payload,
+                    self.config.get("api_key", ""),
+                    extra_headers={"User-Agent": USER_AGENT},
+                )
+            except (LLMRequestError, aiohttp.ClientError, asyncio.TimeoutError):
+                fallbacks = self.config.get("_fallbacks") or []
+                if not fallbacks:
+                    raise
+                fallback = fallbacks[0]
+                envelope, content = await post_chat(
+                    self.session, fallback["endpoint"],
+                    {**payload, "model": fallback["model"]},
+                    fallback.get("api_key", ""),
+                    extra_headers={"User-Agent": USER_AGENT},
+                )
+            return {"content": content, "finish_reason": envelope["choices"][0].get("finish_reason")}
+        except LLMRequestError as error:
+            if error.retryable:
+                raise RetryableTranslationError(str(error)) from error
+            raise TranslationError(str(error), error.code) from error
+        except LLMContractError as error:
+            raise TranslationError("LLM returned an invalid response envelope", "llm_invalid_response") from error
 
     async def _retry_delay(self, attempt, retry_after=None):
         try:
@@ -184,24 +210,82 @@ class TranslationManager:
         self._last_status = {"state": "idle", "message": "", "updated_at": None}
 
     def get_config(self):
-        return mask_config(self.config_store.load())
+        from mikazuki.llm.config import UnifiedConfigStore
+        from mikazuki.llm.service import UnifiedLLMService
+        config = self.config_store.load()
+        config["llm"] = UnifiedLLMService(UnifiedConfigStore(self.config_store.path)).config(masked=True)
+        config["revision"] = config["llm"]["revision"]
+        config["routing_policy"] = "remote-first"
+        return mask_config(config)
 
     def get_api_key(self):
         return self.config_store.load()["deepseek"]["api_key"]
 
+    def cache_enabled(self):
+        return self.config_store.load().get("llm", {}).get("cache", {}).get("translation", True)
+
+    def _active_llm_config(self, full_config):
+        from mikazuki.llm.config import UnifiedConfigStore
+        from mikazuki.llm.service import UnifiedLLMService
+        from mikazuki.llm.contracts import LLMRouteError
+
+        section = full_config["deepseek"].copy()
+        # User-editable legacy/profile prompts remain stored for compatibility,
+        # but every tag translation uses the same internal prompt.
+        section["system_prompt"] = DEFAULT_SYSTEM_PROMPT
+        service = UnifiedLLMService(UnifiedConfigStore(self.config_store.path), session_factory=self.session_factory)
+        shared = service.config(masked=False)
+        enabled_local = bool(shared.get("local_fallback_enabled", True))
+        section["_cache_enabled"] = shared.get("cache", {}).get("translation", True)
+        section["_shared_service"] = UnifiedLLMService(service.config_store, session_factory=self.session_factory,
+                                                      config_snapshot=shared)
+        section["_shared_revision"] = shared.get("revision", "")
+        section["_allow_local_fallback"] = enabled_local
+        preferred = shared.get("routes", {}).get("translation")
+        try:
+            profile = service.resolve("text", profile_id=preferred, allow_local_fallback=enabled_local)
+        except LLMRouteError:
+            # Dictionary/cache paths remain readable before an LLM is ready.
+            # Generation still calls the shared service and fails closed.
+            profile = None
+        section["_shared_profile_id"] = profile.id if profile else preferred
+        # The legacy adapter is only a compatibility facade. Keep its fallback
+        # list limited to explicitly enabled local profiles; remote profiles
+        # are selected and retried by the shared service itself. This prevents
+        # an old translation call from silently treating another remote as a
+        # local fallback or bypassing the global opt-in switch.
+        section["_fallbacks"] = [
+            {key: candidate.get(key) for key in ("id", "endpoint", "model", "revision", "secret_revision", "asset_id")}
+            for candidate in shared.get("profiles", [])
+            if candidate.get("enabled", True)
+            and candidate.get("source") != "remote"
+            and enabled_local
+            and candidate.get("ready", False)
+            and "text" in (candidate.get("capabilities") or [])
+        ]
+        if profile:
+            section.update(endpoint=profile.endpoint, model=profile.model, api_key=profile.api_key)
+            section["secret_revision"] = profile.metadata.get("secret_revision", 0)
+            section["reasoning_effort"] = profile.metadata.get("reasoning_effort", "disabled")
+        return section
+
     def profile_revision(self, config=None):
         if config is None:
             full_config = self.config_store.load()
-            section = full_config["deepseek"].copy()
-            if full_config.get("local", {}).get("enabled"):
-                section["endpoint"] = full_config["local"].get("endpoint") or section.get("endpoint")
+            section = self._active_llm_config(full_config)
         else:
             section = config
         payload = {
+            "shared_revision": section.get("_shared_revision", ""),
             "endpoint": section.get("endpoint", ""),
             "model": section.get("model", ""),
             "system_prompt": section.get("system_prompt", ""),
             "reasoning_effort": section.get("reasoning_effort", "disabled"),
+            "secret_revision": section.get("secret_revision", 0),
+            "fallback_revisions": [
+                {key: profile.get(key) for key in ("endpoint", "model", "revision", "secret_revision")}
+                for profile in section.get("_fallbacks", [])
+            ],
         }
         return hashlib.sha256(json.dumps(payload, sort_keys=True).encode("utf-8")).hexdigest()[:24]
 
@@ -297,32 +381,26 @@ class TranslationManager:
             raise
 
     async def resolve(self, locale, raw_items, refresh=False):
-        async for _translations in self.resolve_stream(locale, raw_items, refresh=refresh):
-            pass
-        locale = normalize_locale(locale)
-        tag_names = [item["name"] for item in normalize_items(raw_items)]
-        full_config = self.config_store.load()
-        active_config = full_config["deepseek"].copy()
-        if full_config.get("local", {}).get("enabled"):
-            active_config["endpoint"] = local_proxy_endpoint()
-        profile_revision = self.profile_revision(active_config)
-        cached = await asyncio.to_thread(
-            self.store.get_results, locale, tag_names, "llm", profile_revision
-        )
-        primary = await self._get_primary(locale, tag_names)
-        return {**cached, **primary}
+        live = {}
+        async for chunk in self.resolve_stream(locale, raw_items, refresh=refresh):
+            for tag, text in chunk["translations"].items():
+                live[tag] = {"text": text, "origin": chunk["sources"].get(tag, "deepseek")}
+        # The stream is authoritative for this request's frozen configuration.
+        # A failed refresh must not turn an old successful cache row into a
+        # seemingly fresh result, or reload a different profile after an await.
+        return live
 
     async def resolve_stream(self, locale, raw_items, refresh=False):
         locale = normalize_locale(locale)
         normalized_items = normalize_items(raw_items)
         full_config = self.config_store.load()
-        config = full_config["deepseek"]
-        local_config = full_config.get("local", {})
-        if local_config.get("enabled"):
-            config = config.copy()
-            config["endpoint"] = local_proxy_endpoint()
-            config["model"] = config.get("model") or "qwen3.5-0.8b-q4_0"
+        config = self._active_llm_config(full_config)
+        cache_enabled = config["_cache_enabled"]
         profile_revision = self.profile_revision(config)
+        cache_generation = self.store.cache_generation("llm") if cache_enabled else None
+        # Clearing a cache detaches subsequent requests from old in-flight
+        # work. Explicit refresh also bypasses ordinary in-flight lookups.
+        inflight_revision = f"{profile_revision}:{cache_generation}:refresh={refresh}"
         primary = await self._get_primary(locale, [item["name"] for item in normalized_items])
         primary_translations = {
             tag_name: row["text"] for tag_name, row in primary.items() if row.get("text")
@@ -338,7 +416,7 @@ class TranslationManager:
             if item["category"] != 1 and item["name"] not in primary
         ]
         tag_names = [item["name"] for item in items]
-        cached = {} if refresh else await asyncio.to_thread(
+        cached = {} if refresh or not cache_enabled else await asyncio.to_thread(
             self.store.get_results, locale, tag_names, "llm", profile_revision
         )
         cached_translations = {
@@ -370,13 +448,11 @@ class TranslationManager:
         missing = [item for item in missing if has_translatable_characters(item["name"])]
         # Tags that already exhausted retries with this model and prompt are
         # treated as resolved-without-translation instead of being re-asked.
-        prompt_hash = hashlib.sha256(config["system_prompt"].encode("utf-8")).hexdigest()
-        known_failures = set() if refresh else await asyncio.to_thread(
+        known_failures = set() if refresh or not cache_enabled else await asyncio.to_thread(
             self.store.get_failures,
             locale,
             [item["name"] for item in missing],
-            config["model"],
-            prompt_hash,
+            profile_revision=profile_revision,
         )
         if known_failures:
             yield {"translations": {}, "sources": {}, "completed": sorted(known_failures)}
@@ -392,7 +468,7 @@ class TranslationManager:
             # Another request can finish between the first SQLite lookup and
             # acquiring this lock. Refresh here so a just-persisted translation
             # is not purchased again after its in-flight entry was removed.
-            refreshed = {} if refresh else await asyncio.to_thread(
+            refreshed = {} if refresh or not cache_enabled else await asyncio.to_thread(
                 self.store.get_results,
                 locale,
                 [item["name"] for item in missing],
@@ -408,7 +484,7 @@ class TranslationManager:
             for item in missing:
                 if item["name"] in cached:
                     continue
-                key = (locale, profile_revision, item["name"])
+                key = (locale, inflight_revision, item["name"])
                 future = self._inflight.get(key)
                 if future is None:
                     future = loop.create_future()
@@ -424,7 +500,8 @@ class TranslationManager:
             }
 
         if owned:
-            worker = asyncio.create_task(self._translate_owned(locale, profile_revision, owned, config))
+            worker = asyncio.create_task(self._translate_owned(locale, inflight_revision, owned, config,
+                                                               cache_revision=profile_revision, cache_generation=cache_generation))
             self._workers.add(worker)
             worker.add_done_callback(self._workers.discard)
 
@@ -468,7 +545,7 @@ class TranslationManager:
         lookup = getattr(self.primary_store, "lookup_all", self.primary_store.lookup)
         return lookup(tag_names)
 
-    async def _translate_owned(self, locale, profile_revision, items, config):
+    async def _translate_owned(self, locale, profile_revision, items, config, *, cache_revision=None, cache_generation=None):
         translations = {}
         errors = []
         try:
@@ -498,24 +575,24 @@ class TranslationManager:
                         await self._finish_inflight_batch(locale, profile_revision, batch, {})
                         continue
                     translations.update(result.translations)
-                    prompt_hash = hashlib.sha256(config["system_prompt"].encode("utf-8")).hexdigest()
-                    if result.translations:
+                    if result.translations and config.get("_cache_enabled", True):
                         await asyncio.to_thread(
                             self.store.save_results,
                             locale,
                             "llm",
-                            self.profile_revision(config),
+                            cache_revision or self.profile_revision(config),
                             batch,
                             result.translations,
+                            expected_generation=cache_generation,
                         )
-                    if result.failures:
+                    if result.failures and config.get("_cache_enabled", True):
                         await asyncio.to_thread(
                             self.store.save_failures,
                             locale,
                             batch,
                             result.failures,
-                            config["model"],
-                            prompt_hash,
+                            profile_revision=cache_revision or self.profile_revision(config),
+                            expected_generation=cache_generation,
                         )
                     await self._finish_inflight_batch(locale, profile_revision, batch, result.translations)
             if errors:
