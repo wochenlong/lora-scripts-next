@@ -156,19 +156,26 @@ async def tag_translation_config():
 
 @router.put("/tag-translation/config")
 async def save_tag_translation_config(payload: dict):
-    if payload.get("llm_mode") == "local":
-        local_status = local_model_service.status()
-        if not local_status.get("installed") or local_status.get("state") != "running":
-            raise HTTPException(status_code=409, detail="Install and start the managed local runtime before enabling local LLM")
-    elif payload.get("llm_mode") == "remote":
-        await local_model_service.stop_runtime()
-    return _success(translation_manager.save_config(payload))
+    from mikazuki.llm.config import LLMContractError
+    if not isinstance(payload.get("revision"), str) or not payload["revision"]:
+        raise HTTPException(status_code=409, detail={"code": "llm_config_conflict", "message": "请先刷新共享LLM配置再保存，当前草稿已保留"})
+    try:
+        translation_manager.save_config(payload)
+        return _success(translation_manager.get_config())
+    except LLMContractError as error:
+        conflict = "revision" in str(error).lower()
+        raise HTTPException(status_code=409 if conflict else 400,
+                            detail={"code": "llm_config_conflict" if conflict else "llm_config_invalid",
+                                    "message": "共享配置已更新，请刷新后重试" if conflict else "共享配置不合法，请检查输入"}) from None
+    except ValueError:
+        raise HTTPException(status_code=400, detail={"code": "llm_config_invalid", "message": "共享配置不合法，请检查输入"}) from None
 
 
 @router.get("/tag-translation/cache")
 async def tag_translation_cache_status():
+    from mikazuki.llm.runtime import caption_cache
     return _success({
-        "total": translation_store.result_count(),
+        "total": translation_store.result_count() + caption_cache.translation_count() + caption_cache.count(),
         "mymemory": translation_store.result_count("mymemory"),
         "llm": translation_store.result_count("llm"),
     })
@@ -176,8 +183,12 @@ async def tag_translation_cache_status():
 
 @router.delete("/tag-translation/cache")
 async def clear_tag_translation_cache(provider: Literal["mymemory", "llm"] | None = None):
+    from mikazuki.llm.runtime import caption_cache
     translation_store.clear_results(provider)
-    return _success({"provider": provider, "total": translation_store.result_count()})
+    if provider in {None, "llm"}:
+        caption_cache.clear_translations()
+        caption_cache.clear()
+    return _success({"provider": provider, "total": translation_store.result_count() + caption_cache.translation_count() + caption_cache.count()})
 
 
 @router.post("/tag-translation/resolve")
@@ -197,30 +208,49 @@ async def resolve_tag_translations(req: TagTranslationRequest):
     network_error: str | None = None
     llm_error: str | None = None
     mymemory_revision = "mymemory-v1"
-    llm_revision = translation_manager.profile_revision()
+    cache_enabled = False
+    if unresolved and not req.local_only and req.provider in {"mymemory", "auto", "llm"}:
+        try:
+            cache_enabled = translation_manager.cache_enabled()
+        except Exception:
+            # An unreadable shared configuration must not block dictionary
+            # results or free translation. Disable caching rather than guess
+            # the user's cache policy.
+            cache_enabled = False
+    network_generation = (
+        translation_store.cache_generation("mymemory")
+        if cache_enabled and req.provider in {"mymemory", "auto"}
+        else None
+    )
     if not req.refresh:
-        if not req.local_only and req.provider in {"mymemory", "auto"}:
+        if cache_enabled and not req.local_only and req.provider in {"mymemory", "auto"}:
             cached = translation_store.get_results(storage_locale, unresolved, "mymemory", mymemory_revision)
             network = {tag: str(row["text"]) for tag, row in cached.items() if row.get("text")}
             network_cached = set(network)
-        if not req.local_only and req.provider in {"llm", "auto"}:
-            cached = translation_store.get_results(storage_locale, unresolved, "llm", llm_revision)
-            llm = {tag: str(row["text"]) for tag, row in cached.items() if row.get("text")}
-            llm_cached = set(llm)
     if not req.local_only and req.provider in {"mymemory", "auto"}:
         missing = [tag for tag in unresolved if tag not in network]
         if missing:
             try:
                 fetched = await translate_mymemory(missing, storage_locale)
                 network.update(fetched)
-                translation_store.save_results(storage_locale, "mymemory", mymemory_revision, items, fetched)
+                if cache_enabled:
+                    translation_store.save_results(storage_locale, "mymemory", mymemory_revision, items, fetched,
+                                                   expected_generation=network_generation)
                 if not fetched:
                     network_error = "network_no_result"
             except Exception as error:
                 network_error = getattr(error, "code", "network_unavailable")
     if not req.local_only and req.provider in {"llm", "auto"}:
-        missing = [item for item in items if str(item["name"]) in unresolved and str(item["name"]) not in network and str(item["name"]) not in llm]
+        missing = [item for item in items if str(item["name"]) in unresolved and str(item["name"]) not in network]
         try:
+            if missing and cache_enabled and not req.refresh:
+                llm_revision = translation_manager.profile_revision()
+                cached = translation_store.get_results(
+                    storage_locale, [str(item["name"]) for item in missing], "llm", llm_revision,
+                )
+                llm = {tag: str(row["text"]) for tag, row in cached.items() if row.get("text")}
+                llm_cached = set(llm)
+                missing = [item for item in missing if str(item["name"]) not in llm]
             if missing:
                 llm_rows = (
                     await translation_manager.resolve(storage_locale, missing, refresh=True)

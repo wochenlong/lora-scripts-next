@@ -42,10 +42,12 @@ const lastPath = ref(typeof persisted.lastPath === "string" ? persisted.lastPath
 const lastRoot = ref(typeof persisted.lastRoot === "string" ? persisted.lastRoot : "")
 const selected = ref(typeof persisted.selected === "string" ? persisted.selected : "")
 const drafts = ref<Record<string, string>>(persisted.drafts && typeof persisted.drafts === "object" ? { ...persisted.drafts } : {})
-const showTranslations = ref(Boolean(persisted.showTranslations))
-// Only the dictionary and LLM sources are offered; legacy auto/mymemory values
-// fall back to the offline dictionary.
-const translationProvider = ref<TagTranslationProvider>(persisted.translationProvider === "llm" ? "llm" : "danbooru")
+// Moving an explicitly offline session to a hybrid source must not silently
+// enable new network requests. The user re-enables translation after migration.
+const showTranslations = ref(Boolean(persisted.showTranslations) && ["mymemory", "llm", "auto"].includes(persisted.translationProvider || ""))
+// The UI offers dictionary + MyMemory and dictionary + LLM. Legacy auto maps
+// to the free source without retaining its additional LLM fallback.
+const translationProvider = ref<TagTranslationProvider>(persisted.translationProvider === "llm" ? "llm" : "mymemory")
 const category = ref(typeof persisted.category === "string" ? persisted.category : "")
 const query = ref(typeof persisted.query === "string" ? persisted.query : "")
 const page = ref(typeof persisted.page === "number" && persisted.page > 0 ? persisted.page : 1)

@@ -2,6 +2,22 @@
 
 > 打标页进度条与后台任务状态。完整 #40 范围见 `docs/issues/40-dataset-tagging-backend-alignment.md`。
 
+## POST `/api/tagger/jobs` 自然语言并发参数
+
+自然语言 Caption 批量请求支持 `concurrency`：默认 `3`，必须是 `1` 到 `16` 的整数。`0`、超上限、小数、布尔、字符串和 `null` 返回校验错误（HTTP 422）。Tag 请求不支持此参数，显式传入会返回 HTTP 400；Tag 的 ONNX 推理继续串行。
+
+```json
+{
+  "path": "/data/datasets/images",
+  "mode": "natural",
+  "concurrency": 3,
+  "max_tokens": 1024,
+  "temperature": 0.7
+}
+```
+
+`concurrency` 限制同一任务内并行处理的图片数，任务快照及失败重试保存该值。远程生成可以重叠，本地及本地兜底仍按共享资源上限一次执行一项；完成后的文件写回、备份与报告登记保持串行。此参数不发送给 LLM provider，不改变提示词或描述缓存指纹。`/api/tagger/jobs/preview` 接受同样的参数，但仍只预览一张图片。
+
 ## GET `/api/tagger/status`
 
 轮询打标/下载任务状态。
@@ -62,7 +78,7 @@
 - `https://hf-mirror.com`
 - `https://modelscope.cn`
 
-**成功**：`status: success`，`message: 模型下载已开始`  
+**成功**：缺少资产时返回 `message: 已提交 Tag 模型下载任务`，并在 `data.already_downloaded` 返回 `false`；资产已完整存在时返回 `message: Tag 模型已下载，无需重复下载`，并返回 `data.already_downloaded: true`。已下载时不会创建后台任务，也不会进入 busy 状态。
 **失败**：已有任务进行中、未知模型等返回 `status: fail`。
 
 ## 本地打标模型目录

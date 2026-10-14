@@ -18,6 +18,7 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+. (Join-Path $PSScriptRoot "tag-dictionary-bundle.ps1")
 
 if (-not $Version) {
     $versionFile = Join-Path $ProjectRoot "VERSION"
@@ -47,6 +48,8 @@ if ($LASTEXITCODE -ne 0 -and $null -ne $LASTEXITCODE) {
 $buildDir = Join-Path $ProjectRoot "build"
 $portableDir = Join-Path $buildDir "Next-Trainer-Portable"
 $sdtDir = Join-Path $portableDir "Next-Trainer"
+Invoke-PortableTagDictionary -PythonExe (Join-Path $portableDir "python_embeded\python.exe") `
+    -TrainerDir $sdtDir -Mode Verify
 $builtMusubiName = Join-Path $buildDir "Next-Trainer-v${Version}-kohya-musubi.7z"
 $kohyaName = Join-Path $buildDir "Next-Trainer-v${Version}-kohya.7z"
 

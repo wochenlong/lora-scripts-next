@@ -1,8 +1,10 @@
 import { apiData, apiRequest } from "./client"
 import { readDownloadSources, resolveHfEndpoint } from "../engines/downloadSources"
 
-export type TaggerPhase = "idle" | "downloading" | "tagging" | "done" | "error" | "pending" | "cancelling"
-export type CaptionConflictAction = "ignore" | "copy" | "prepend"
+export type TaggerPhase = "idle" | "downloading" | "tagging" | "captioning" | "done" | "error" | "pending" | "cancelling"
+export type CaptionMode = "natural" | "tag"
+export type CaptionJobPhase = "idle" | "pending" | "captioning" | "cancelling" | "cancelled" | "done" | "error"
+export type CaptionConflictAction = "ignore" | "copy" | "prepend" | "append"
 export interface TaggerStep { current: number; total: number; filename: string; bytes_current: number; bytes_total: number; percent: number }
 export interface TaggerStatus { phase: TaggerPhase; message: string; model: string; download: TaggerStep; tagging: TaggerStep; error?: string | null; updated_at: number }
 export interface TaggerRequest {
@@ -16,11 +18,106 @@ function withDownloadEndpoint<T extends object>(body: T) {
   return { ...body, download_endpoint: resolveHfEndpoint(readDownloadSources()) }
 }
 
+export interface CaptionJobRequest {
+  model_id?: string
+  runtime?: "local" | "api"
+  prompt_id?: string
+  max_caption_length?: number
+  path: string
+  mode: "natural"
+  recursive: boolean
+  allow_local_fallback?: boolean
+  profile_id?: string
+  prompt: string
+  system_prompt?: string
+  language: string
+  conflict_action: "ignore" | "copy"
+  max_tokens?: number
+  temperature?: number
+  concurrency?: number
+}
+
+export type TagJobRequest = Omit<TaggerRequest, "batch_input_recursive" | "batch_output_action_on_conflict"> & {
+  mode: "tag"; model_id: string; runtime: "local"; recursive: boolean; conflict_action: CaptionConflictAction
+}
+export type ModelTaggingRequest = CaptionJobRequest | TagJobRequest
+export interface TaggingPreview { caption: string; language: string; tags?: string[]; model_id?: string; profile_id?: string; profile_revision?: string }
+
+export function tagJobRequest(form: TaggerRequest): TagJobRequest {
+  const { batch_input_recursive, batch_output_action_on_conflict, ...parameters } = form
+  return { ...parameters, path: form.path.replaceAll("\\", "/"), mode: "tag", model_id: form.interrogator_model,
+    runtime: "local", recursive: batch_input_recursive, conflict_action: batch_output_action_on_conflict }
+}
+
+export interface TaggerModel {
+  id: string
+  name: string
+  model: string
+  family: string
+  author: string
+  runtime: "local" | "api"
+  output: "tag" | "natural"
+  capabilities: string[]
+  languages: string[]
+  downloaded: boolean
+  ready: boolean
+  profile_id: string | null
+  parameters: string[]
+}
+
+export interface CaptionJobStatus {
+  job_id: string | null
+  phase: CaptionJobPhase
+  mode: CaptionMode | null
+  message: string
+  current: number
+  total: number
+  filename: string
+  succeeded: number
+  failed: number
+  cancelled: number
+  errors: Array<{ filename?: string; code?: string; message?: string }>
+  updated_at: number
+  skipped?: number
+  recovered?: boolean
+  parent_job_id?: string | null
+  snapshot?: Record<string, unknown>
+  report?: { items: CaptionReportItem[] }
+}
+
+export interface CaptionReportItem {
+  filename: string
+  status: string
+  index?: number
+  code?: string
+  error?: string
+  before_hash?: string | null
+  after_hash?: string | null
+  image_sha256?: string | null
+  profile_id?: string | null
+  profile_revision?: string | null
+  prompt_revision?: string | null
+  cached?: boolean
+  recovered_write?: boolean
+  rollback_status?: string | null
+}
+export interface CaptionRollbackResult { job_id: string; restored: number; conflicts: number; skipped: number; items: Array<{ filename: string; status: string; code?: string; after_hash?: string | null }> }
+export interface CaptionJobReport { job_id: string; phase: CaptionJobPhase; snapshot: Record<string, unknown>; report: { items: CaptionReportItem[] } }
+
 export const taggerApi = {
-  models: async () => (await apiData<{ models: Array<{ id: string; downloaded: boolean }> }>("/api/tagger/models")).models,
+  models: (signal?: AbortSignal) => apiData<{ models: TaggerModel[] }>("/api/tagger/models", { signal }),
+  captionRollback: (jobId: string) => apiData<CaptionRollbackResult>(`/api/tagger/jobs/${encodeURIComponent(jobId)}/rollback`, { method: "POST" }),
+  captionDeleteHistory: (jobId: string) => apiData<{ deleted: boolean; job_id: string }>(`/api/tagger/jobs/${encodeURIComponent(jobId)}`, { method: "DELETE" }),
   status: () => apiData<TaggerStatus>("/api/tagger/status"),
   start: (body: TaggerRequest) => apiRequest("/api/interrogate", { method: "POST", body: JSON.stringify(withDownloadEndpoint(body)) }),
-  prefetch: (interrogator_model: string) => apiRequest("/api/tagger/prefetch", { method: "POST", body: JSON.stringify(withDownloadEndpoint({ interrogator_model })) }),
+  prefetch: (interrogator_model: string) => apiRequest<{ model_id: string; already_downloaded: boolean }>("/api/tagger/prefetch", { method: "POST", body: JSON.stringify(withDownloadEndpoint({ interrogator_model })) }),
   cancel: () => apiRequest("/api/tagger/cancel", { method: "POST" }),
   reset: () => apiRequest("/api/tagger/reset", { method: "POST" }),
+  captionStatus: (signal?: AbortSignal) => apiData<CaptionJobStatus>("/api/tagger/jobs", { signal }),
+  captionHistory: () => apiData<{ jobs: CaptionJobStatus[] }>("/api/tagger/jobs/history"),
+  captionReport: (jobId: string) => apiData<CaptionJobReport>(`/api/tagger/jobs/${encodeURIComponent(jobId)}/report`),
+  captionStart: (body: ModelTaggingRequest) => apiData<CaptionJobStatus>("/api/tagger/jobs", { method: "POST", body: JSON.stringify(body.mode === "tag" ? withDownloadEndpoint(body) : body) }),
+  captionCancel: () => apiData<CaptionJobStatus>("/api/tagger/jobs/cancel", { method: "POST" }),
+  captionRetryFailed: () => apiData<CaptionJobStatus>("/api/tagger/jobs/retry-failed", { method: "POST" }),
+  captionPreview: (body: ModelTaggingRequest & { image_path: string }) => apiData<TaggingPreview>("/api/tagger/jobs/preview", { method: "POST", body: JSON.stringify(body.mode === "tag" ? withDownloadEndpoint(body) : body) }),
 }

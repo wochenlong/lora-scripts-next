@@ -1826,14 +1826,21 @@
 }
 
 .caption-translation-heading {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 8px;
+  flex-basis: 100%;
+  min-width: 0;
   min-height: 32px;
   color: var(--text-soft);
   font-size: 12px;
   font-weight: 600;
 }
+
+.caption-translation-heading > span { min-width: 0; }
+.caption-translation-heading .el-switch { flex-shrink: 0; }
+.caption-translation-heading .caption-translation-settings-action { margin-left: auto; }
+.caption-translation-settings-action { flex-shrink: 0; padding: 8px; font-size: 12px; }
 
 .caption-translation-toolbar .el-select {
   min-width: 170px;
@@ -1863,6 +1870,7 @@
 }
 
 .caption-translation-error {
+  flex-basis: 100%;
   color: var(--danger, #d14d4d);
 }
 
@@ -1876,6 +1884,7 @@
 
 .caption-translation-progress {
   display: inline-flex;
+  flex-basis: 100%;
   gap: 5px;
   align-items: center;
   color: var(--text-soft);
@@ -1916,8 +1925,34 @@
   font-size: 12px;
 }
 
+.natural-translation-parameters .caption-translation-settings {
+  margin: 8px 0;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.natural-translation-parameters input {
+  min-width: 0;
+  width: 100%;
+  min-height: 34px;
+  box-sizing: border-box;
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+@media (max-width: 540px) {
+  .natural-translation-parameters .caption-translation-settings {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
 .caption-translation-dialog {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 12px;
 }
 
@@ -1941,6 +1976,9 @@
 
 .caption-translation-cache-row {
   display: flex;
+  flex-wrap: wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1950,6 +1988,8 @@
 
 .translation-settings-section {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 8px;
   padding: 12px;
   background: var(--surface-soft);
@@ -1960,10 +2000,14 @@
 .translation-settings-section-heading,
 .translation-settings-actions {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
+
+.translation-settings-actions .el-button + .el-button { margin-left: 0; }
+.caption-translation-dialog label.translation-fallback { display: flex; align-items: flex-start; gap: 8px; }
 
 .translation-settings-section-heading span {
   color: var(--text-faint);
@@ -2094,6 +2138,33 @@
 
 .translation-profile-add {
   width: 100%;
+}
+
+.natural-caption-translation {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  margin: 16px 0;
+  padding: 12px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.natural-translation-controls,
+.natural-caption-translation label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.natural-translation-controls .el-button + .el-button { margin-left: 0; }
+.natural-caption-translated { white-space: pre-wrap; overflow-wrap: anywhere; }
+.caption-restore-disk { margin-bottom: 12px; }
+
+@media (max-width: 700px) {
+  .dataset-tool-panel { max-width: 100%; }
 }
 
 .managed-picker { position: relative; display: inline-flex; flex: 0 0 auto; }

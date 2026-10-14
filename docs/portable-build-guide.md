@@ -55,6 +55,7 @@
 - **不预装** Anima Fast（`extensions/anima_lora/.venv`）  
 - **不预装** 训练底模（Anima / Krea2 权重等）  
 - **建议预置** 默认 WD 打标：`tagger-models/wd14/wd14-convnextv2-v2/`  
+- **默认内置** Danbooru 中文 Tag 词库：`Next-Trainer/assets/tag_translation/danbooru/`。所有正式包型必须通过词库验证，解压后可离线查已有 Tag 的中文释义。词库未命中的内容继续按用户选择使用免费接口或 LLM；自然语言正文翻译继续使用 LLM。
 - 解压路径避免中文与空格；目标：Windows 10/11 + NVIDIA（建议 RTX 20+）  
 - 30G 云系统盘：**不要**把三引擎硬塞进同一包；用分轨  
 
@@ -83,6 +84,8 @@ Next-Trainer-v{VERSION}-musubi.7z          # 可选 Krea2 分轨
 | Python | **官方 CPython 3.10**（带 `tcl/`），用于给 embed 补 tkinter。优先 `C:\Program Files\Python310\`。**不要用**缺 tcl 的 conda |
 | 权限 | 能在仓库旁写 `build/`；正式上传需 GitHub Release / 魔搭权限（见 §6） |
 | 可选 | 本机已有旧整合包或完整 `tagger-models/`，作 `-TaggerCacheSource` 种子，避免重复下 ONNX |
+
+词库构建步骤仅使用嵌入 Python 的标准库，不安装依赖、不读取维护机的翻译配置、不清理 `site-packages`。首次构建会从固定上游版本下载词库；下载失败、文件损坏、来源锁或许可证不符都会阻止生成正式包。构建机需能访问 GitHub 原始资产下载地址；可沿用本机已有的网络代理设置。
 
 **不要用「正在开发、脏工作区」直接打进包。** 见 §3。
 
@@ -154,6 +157,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\build-scripts\build_portab
 
 常用参数：`-Skip7z`、`-SkipTaggerPrefetch`、`-TaggerCacheSource <含 tagger-models 的旧包或仓库>`。
 
+`-SkipTagDictionaryPrefetch` 仅兼容“跳过词库下载”，仍要求输出目录已有完整、通过校验的公开词库包；它不能生成缺词库的正式包。`-Skip7z` 同样执行词库最终验证。恢复构建与 Musubi 的 `-SkipSkeleton` 会重新准备并验证词库，不能绕过验收。
+
 入口：用户双击 **`run_gui.bat`**（首次联网装主环境 ≈ 自助装 Kohya）。
 
 ### 4.3 kohya-musubi（可选满配，非默认）
@@ -200,6 +205,18 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_po
 
 （lite 的 `-ArchivePath` 换成实际 7z 名；`-ExpectedVersion` 与 `VERSION` 一致。）
 
+验证器会实际运行 `scripts/prefetch_tag_dictionary.py --verify-only --strict`，检查固定来源锁、数据库哈希、SQLite 完整性及必需列、记录数、元数据和许可证。`assets/tag_translation/` 在发行包中只允许以下四份公开资产，出现用户配置、译文缓存、模型或运行状态则验收失败：
+
+```text
+Next-Trainer/assets/tag_translation/danbooru/
+  tag.sqlite
+  metadata.json
+  source-manifest.json
+  LICENSE.ffdkj.txt
+```
+
+固定下载来源清单位于 `scripts/assets/tag-dictionary-manifest.json`，数据许可证和来源信息随包保留。不要复制维护机的整个 `assets/tag_translation/` 作为打包种子。
+
 ### 5.2 手工冒烟（至少）
 
 1. 解压到**干净路径**（非构建目录亦可）。  
@@ -208,6 +225,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\portable\verify_po
 4. 设置 → 引擎：Kohya 就绪；Musubi / Fast 可为未安装（默认包预期）  
 5. **P0**：能提交一次训练或至少 `POST /api/run` 不因缺 `config/autosave` 等 500（见打包规范历史教训）。  
 6. 确认包内**无**维护机 `extensions/anima_lora/.venv`、无训练底模、无个人数据。
+7. **断网首次启动**：打开标签编辑的翻译设置，词库应已安装；已收录的英文 Tag 可显示中文释义，且不触发词库下载、免费翻译接口或 LLM 请求。词库未命中的 Tag 不属于离线词库验收范围。
+8. **Release 升级保护**：在测试副本中放入翻译设置、译文缓存和较新词库后升级，文件内容应原样保留。只有未安装词库时才从通过校验的新包播种四份公开词库资产；升级不回退用户已更新的词库，也不清空缓存或覆盖模型。
 
 把 commit、`PORTABLE_BUILD` 内容、7z 大小/SHA256 记在 Release 说明或内部验收帖。
 
@@ -242,6 +261,7 @@ gh release create v3.0.0 `
 
 - 改名/移动契约：`python_embeded/`、`Next-Trainer/`、`gui.py`、`run_gui.bat` 等（见 [`repo-layout.md`](repo-layout.md)）  
 - 把完整 `.git` 历史打进包（应用浅克隆元数据；体积异常大要返工）  
+- 将 `assets/tag_translation/` 下的翻译/LLM 配置、缓存、模型、运行状态混入发行包，或在 Release 更新中覆盖这些用户数据
 - 用脏工作区、本机模型、Token、`doc/local` 私货进包  
 - 预装 Fast venv「图省事」  
 - 未跑 §5 就上传对外链接  

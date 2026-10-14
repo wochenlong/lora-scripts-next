@@ -1,0 +1,22 @@
+[
+  {"id":"english_plain","text":"A cat sits by a window.","chinese":false},
+  {"id":"chinese_plain","text":"一只猫坐在窗边。","chinese":true},
+  {"id":"english_long_ascii_quoted_sign","text":"A storefront with a sign reading \"欢迎光临祝您购物愉快\".","chinese":false},
+  {"id":"english_long_chinese_quoted_sign","text":"A shop with a sign reading “欢迎光临祝您购物愉快”.","chinese":false},
+  {"id":"english_long_single_quoted_sign","text":"A sign says '欢迎光临祝您购物愉快'.","chinese":false},
+  {"id":"english_unquoted_sign","text":"A sign says 欢迎光临祝您购物愉快","chinese":false},
+  {"id":"english_unquoted_function_words","text":"Storefront with a sign 欢迎光临祝您购物愉快","chinese":false},
+  {"id":"english_short_sign","text":"A cat next to a box labelled 猫.","chinese":false},
+  {"id":"chinese_brand","text":"一只猫坐在 Qwen 标牌前。","chinese":true},
+  {"id":"chinese_multiple_brand_words","text":"一台 Apple MacBook Pro 笔记本电脑放在木桌上。","chinese":true},
+  {"id":"chinese_quoted_english_sign","text":"一家商店门口写着 \"Welcome to the store and enjoy your shopping\"，门边放着盆栽。","chinese":true},
+  {"id":"chinese_quoted_chinese_sign","text":"商店门口写着“欢迎光临”，门边放着盆栽。","chinese":true},
+  {"id":"entire_chinese_quote","text":"“一只猫坐在窗边。”","chinese":true},
+  {"id":"japanese_with_han","text":"猫が窓の近くに座っています。","chinese":false},
+  {"id":"japanese_halfwidth_kana","text":"猫の看板とｶﾌｪ","chinese":false},
+  {"id":"japanese_only_halfwidth_kana","text":"猫ｶﾌｪ","chinese":false},
+  {"id":"japanese_only_extended_kana","text":"猫ㇰ","chinese":false},
+  {"id":"mixed_english_sentence","text":"一张海报。The poster reads 欢迎光临祝您购物愉快。","chinese":false},
+  {"id":"english_apostrophe","text":"A woman's shirt says '欢迎光临祝您购物愉快'.","chinese":false},
+  {"id":"empty","text":"","chinese":false}
+]

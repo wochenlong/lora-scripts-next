@@ -22,6 +22,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $startTime = Get-Date
+. (Join-Path $PSScriptRoot "tag-dictionary-bundle.ps1")
 
 $buildPortable = Join-Path $PSScriptRoot "build_portable.ps1"
 $applyRoot = Join-Path $PSScriptRoot "apply_portable_2026_root.ps1"
@@ -139,6 +140,7 @@ Write-Log "[4b/5] Building NextTrainer.exe launcher..." "Cyan"
 & (Join-Path $PSScriptRoot "06-build-launcher.ps1") -PackageRoot $portableDir
 
 # ---- Step 5: 7z ----
+Invoke-PortableTagDictionary -PythonExe $pythonExe -TrainerDir $sdtDir -Mode Verify
 $7zExe = "C:\Program Files\7-Zip\7z.exe"
 if (-not (Test-Path $7zExe)) {
     $found = Get-Command 7z -ErrorAction SilentlyContinue

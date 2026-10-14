@@ -58,6 +58,8 @@ from mikazuki.app.models import (APIResponse, APIResponseFail,
                                  TaggerPrefetchRequest)
 from mikazuki.dataset_editor import router as dataset_editor_router
 from mikazuki.tag_translation.api import router as tag_translation_router
+from mikazuki.llm.api import router as llm_router
+from mikazuki.tagger.caption_api import router as caption_router
 from mikazuki.datasets.api import router as datasets_router
 from mikazuki.datasets.inuse import ensure_path_not_in_use
 from mikazuki.plugin_marketplace.api import host_router as plugin_host_router
@@ -67,6 +69,7 @@ from mikazuki.plugin_host.agent_tools import router as agent_tools_router
 from mikazuki.log import log
 from mikazuki.tagger.interrogator import available_interrogators
 from mikazuki.tagger.jobs import run_interrogate_job, run_prefetch_job
+from mikazuki.tagger.model_fetch import interrogator_assets_ready
 from mikazuki.tagger.progress import tagger_progress
 from mikazuki.tasks import tm
 from mikazuki.train_log_hub import hub as train_log_hub
@@ -85,6 +88,8 @@ router = APIRouter()
 router.include_router(user_data_router)
 router.include_router(dataset_editor_router)
 router.include_router(tag_translation_router)
+router.include_router(llm_router)
+router.include_router(caption_router)
 router.include_router(datasets_router)
 router.include_router(plugin_marketplace_router)
 router.include_router(plugin_host_router)
@@ -587,16 +592,6 @@ async def tagger_status():
     return APIResponseSuccess(data=tagger_progress.get())
 
 
-@router.get("/tagger/models")
-def tagger_models():
-    from mikazuki.tagger.model_fetch import interrogator_assets_ready
-
-    return APIResponseSuccess(data={"models": [
-        {"id": key, "downloaded": interrogator_assets_ready(interrogator, key)}
-        for key, interrogator in available_interrogators.items()
-    ]})
-
-
 @router.get("/tagger/download-status")
 async def tagger_download_status():
     snap = tagger_progress.get()
@@ -618,6 +613,9 @@ async def tagger_cancel():
 
 @router.post("/tagger/reset")
 async def tagger_reset():
+    from mikazuki.tagger.caption_job import caption_job_manager
+    if caption_job_manager.is_busy():
+        return APIResponseFail(message="自然语言打标仍在进行，请先取消并等待完成")
     if tagger_progress.is_busy():
         tagger_progress.request_cancel()
     tagger_progress.reset_idle("配置参数后点击启动")
@@ -630,8 +628,10 @@ async def tagger_prefetch(req: TaggerPrefetchRequest, background_tasks: Backgrou
         return APIResponseFail(message=f"未知模型: {req.interrogator_model}")
     if tagger_progress.is_busy():
         return APIResponseFail(message="已有打标或下载任务进行中")
+    if interrogator_assets_ready(available_interrogators[req.interrogator_model], req.interrogator_model):
+        return APIResponseSuccess(message="Tag 模型已下载，无需重复下载", data={"model_id": req.interrogator_model, "already_downloaded": True})
     background_tasks.add_task(run_prefetch_job, req)
-    return APIResponseSuccess(message="模型下载已开始")
+    return APIResponseSuccess(message="已提交 Tag 模型下载任务", data={"model_id": req.interrogator_model, "already_downloaded": False})
 
 
 @router.post("/interrogate")
@@ -662,6 +662,9 @@ async def pick_file(picker_type: str):
     elif picker_type == "model-file":
         file_types = [("checkpoints", "*.safetensors;*.ckpt;*.pt"), ("all files", "*.*")]
         coro = asyncio.to_thread(open_file_selector, "", "Select file", file_types)
+    elif picker_type == "image":
+        file_types = [("images", "*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff"), ("all files", "*.*")]
+        coro = asyncio.to_thread(open_file_selector, "", "Select image", file_types)
     else:
         return APIResponseFail(message=f"不支持的 picker_type: {picker_type}")
 
@@ -840,6 +843,13 @@ async def retry_task(task_id: str):
     """Re-queue a finished/failed/terminated training task (stage groups are
     rebuilt as a whole)."""
     original = tm.tasks.get(task_id)
+    if original and original.metadata.get("kind") == "dataset_caption":
+        from mikazuki.tagger.caption_job import caption_job_manager
+        try:
+            state = caption_job_manager.retry_failed(task_id)
+        except RuntimeError as exc:
+            return APIResponseFail(message=str(exc))
+        return APIResponseSuccess(data={"task_id": state["job_id"], "task_ids": [state["job_id"]], "queued": False})
     if original and original.metadata.get("backend") == "diffsynth" and original.status.name in {"FINISHED", "FAILED", "TERMINATED"} and original.lane == "compute":
         config = task_insights.resolve_task_config(original.metadata)
         result = dispatch_run("qwen-image-21-lora", config, RunContext(

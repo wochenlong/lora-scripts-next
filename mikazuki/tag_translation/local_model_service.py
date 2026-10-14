@@ -53,12 +53,12 @@ def utc_now():
 
 
 class LocalModelService:
-    def __init__(self, root: str | Path, config_store):
+    def __init__(self, root: str | Path, config_store, *, runtime_root=None):
         self.root = Path(root)
         self.root.mkdir(parents=True, exist_ok=True)
         self.metadata_path = self.root / "local-model.json"
         self.model_path = self.root / MODEL_FILENAME
-        self.runtime_root = self.root / "llama-runtime"
+        self.runtime_root = Path(runtime_root) if runtime_root is not None else self.root / "llama-runtime"
         self.runtime_executable = self.runtime_root / ("llama-server.exe" if os.name == "nt" else "llama-server")
         self.config_store = config_store
         self.session_factory = aiohttp.ClientSession
@@ -332,6 +332,7 @@ class LocalModelService:
         executable = str(config.get("runtime_path") or self.runtime_executable).strip()
         if not self.model_path.exists():
             raise RuntimeError("Install the Qwen GGUF model first")
+        self._validate_model_install()
         if not os.path.isfile(executable):
             raise RuntimeError("The configured llama-server executable does not exist")
         port = self._allocate_loopback_port()
@@ -350,10 +351,12 @@ class LocalModelService:
             "--reasoning-budget", "0",
             "--chat-template-kwargs", '{"enable_thinking":false}',
         ]
+        command.extend(self._runtime_extra_arguments())
         self._process = await asyncio.create_subprocess_exec(
             *command,
             stdout=asyncio.subprocess.DEVNULL,
             stderr=asyncio.subprocess.PIPE,
+            creationflags=0x08000000 if os.name == "nt" else 0,
         )
         self._stderr_tail = ""
         self._stderr_task = asyncio.create_task(self._drain_stderr(self._process.stderr))
@@ -385,6 +388,12 @@ class LocalModelService:
         self._runtime.update(state="ready", error=None)
         LOGGER.info("local tag translation runtime started: pid=%s port=%s", self._process.pid, port)
         return self.status()
+
+    def _validate_model_install(self):
+        return
+
+    def _runtime_extra_arguments(self):
+        return []
 
     async def _drain_stderr(self, stream):
         if stream is None:

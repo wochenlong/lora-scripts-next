@@ -56,3 +56,5 @@
 ---
 
 [使用文档](docs/README.md) · [问题反馈](https://github.com/wochenlong/lora-scripts-next/issues) · [开源致谢](docs/credits.md) · [贡献者](CONTRIBUTORS.md)
+
+自然语言打标与共享 LLM 管理支持远程视觉 API、本地 Qwen3.5-2B 和正文翻译，详见[使用说明](docs/natural-language-captioning-usage.md)。Tag 翻译默认随整合包附带中文词库。

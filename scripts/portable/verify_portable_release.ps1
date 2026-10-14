@@ -57,6 +57,13 @@ $requiredRoot = @(
     "python_embeded\python.exe",
     "Next-Trainer\gui.py",
     "Next-Trainer\VERSION",
+    "Next-Trainer\assets\tag_translation\danbooru\tag.sqlite",
+    "Next-Trainer\assets\tag_translation\danbooru\metadata.json",
+    "Next-Trainer\assets\tag_translation\danbooru\source-manifest.json",
+    "Next-Trainer\assets\tag_translation\danbooru\LICENSE.ffdkj.txt",
+    "Next-Trainer\scripts\assets\tag-dictionary-manifest.json",
+    "Next-Trainer\scripts\prefetch_tag_dictionary.py",
+    "Next-Trainer\scripts\portable\seed_tag_dictionary.py",
     "Next-Trainer\scripts\portable\UPDATER_VERSION",
     "Next-Trainer\scripts\portable\bootstrap_portable_updaters.ps1",
     "Next-Trainer\scripts\portable\portable_updater_common.ps1",
@@ -152,6 +159,27 @@ if (Test-Path $hfHub) {
     }
 } else {
     Pass "huggingface/hub optional (tagger-models is primary)"
+}
+
+$dictionaryVerifier = Join-Path $TrainerDir "scripts\prefetch_tag_dictionary.py"
+$dictionaryDirectory = Join-Path $TrainerDir "assets\tag_translation\danbooru"
+if ((Test-Path -LiteralPath $PythonExe -PathType Leaf) -and
+    (Test-Path -LiteralPath $dictionaryVerifier -PathType Leaf)) {
+    $previousDictionaryPreference = $ErrorActionPreference
+    try {
+        $ErrorActionPreference = "Continue"
+        & $PythonExe -S $dictionaryVerifier --directory $dictionaryDirectory --verify-only --strict
+        $dictionaryVerifyExit = $LASTEXITCODE
+    } finally {
+        $ErrorActionPreference = $previousDictionaryPreference
+    }
+    if ($dictionaryVerifyExit -eq 0) {
+        Pass "Bundled Tag dictionary integrity, source lock, license and public-only assets"
+    } else {
+        Fail "Bundled Tag dictionary validation failed (exit $dictionaryVerifyExit)"
+    }
+} else {
+    Fail "Package Python or dictionary verifier missing; cannot validate bundled Tag dictionary"
 }
 
 if ($ArchivePath) {

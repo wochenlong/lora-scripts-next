@@ -26,6 +26,9 @@ export interface PickerFile {
   mtime?: number
 }
 
+export type FilePickerType = "model-file" | "image"
+export type NativePickerType = "folder" | FilePickerType
+
 export const schemasApi = {
   hashes: () => apiData<{ schemas: SchemaHash[] }>("/api/schemas/hashes"),
   all: () => apiData<{ schemas: SchemaSource[] }>("/api/schemas/all"),
@@ -33,7 +36,7 @@ export const schemasApi = {
     const response = await apiRequest<{ cards: Array<string | number | GraphicCard> }>("/api/graphic_cards", { allowPending: true })
     return response.status === "success" ? response.data?.cards ?? [] : []
   },
-  pickFile: (pickerType: string) => apiData<{ path: string }>(`/api/pick_file?picker_type=${encodeURIComponent(pickerType)}`),
+  pickFile: (pickerType: NativePickerType) => apiData<{ path: string }>(`/api/pick_file?picker_type=${encodeURIComponent(pickerType)}`),
   files: (pickType: string) => apiData<{ files: PickerFile[] }>(`/api/get_files?pick_type=${encodeURIComponent(pickType)}`),
   uploadPreviewImage: async (file: File) => {
     const body = new FormData()

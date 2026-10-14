@@ -1,19 +1,22 @@
 <script setup lang="ts">
 import { computed, onActivated, onDeactivated, onUnmounted, ref, watch } from "vue"
-import { ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
+import { ElButton, ElDropdown, ElDropdownItem, ElDropdownMenu, ElInput, ElOption, ElSelect, ElSwitch, ElMessage, ElMessageBox } from "element-plus"
 import { Setting } from "@element-plus/icons-vue"
 import { useI18n } from "vue-i18n"
 import { useRoute, useRouter } from "vue-router"
-import { datasetApi, type ChangedItem, type DatasetItem, type LocalModelStatus, type LlmProfile, type TagDictionaryStatus } from "../api/dataset"
+import { datasetApi, type CaptionFormat, type ChangedItem, type DatasetItem, type TagDictionaryStatus } from "../api/dataset"
+import { DEFAULT_CAPTION_TRANSLATION_SETTINGS, llmApi, type CaptionTranslationSettings, type LlmConfig, type LlmProfile, type LocalVisionStatus } from "../api/llm"
 import { datasetFileUrl, datasetsApi } from "../api/datasets"
 import TagFilterPanel from "../components/dataset/TagFilterPanel.vue"
 import TagTranslationControls from "../components/dataset/TagTranslationControls.vue"
 import TagTranslationSettingsDialog from "../components/dataset/TagTranslationSettingsDialog.vue"
+import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
 import ManagedDatasetPicker from "../components/dataset/ManagedDatasetPicker.vue"
 import { useDatasetTagFilter } from "../composables/useDatasetTagFilter"
-import { addTagToCaption, moveCaptionTag, removeTagFromCaption, splitCaptionTags } from "../dataset/caption"
+import { addTagToCaption, captionEditingFormat, captionEditingTags, moveCaptionTag, removeTagFromCaption } from "../dataset/caption"
 import { useTagTranslations } from "../composables/useTagTranslations"
 import { useDatasetEditorSession } from "../composables/useDatasetEditorSession"
+import { useCaptionTranslation } from "../composables/useCaptionTranslation"
 
 const { t } = useI18n()
 const route = useRoute()
@@ -45,6 +48,7 @@ const sort = ref(false)
 const underscoreToSpace = ref(false)
 const stripEscapeChars = ref(false)
 const loading = ref(false)
+const mutationBusy = ref(false)
 const appendPosition = ref<"front" | "back">("back")
 const newCaptionTag = ref("")
 const page = editorSession.page
@@ -55,11 +59,27 @@ const selectMenuOpen = ref(false)
 const sessionHistory = editorSession.history
 const previewOpen = ref(false)
 const showTranslations = editorSession.showTranslations
+const captionTranslation = useCaptionTranslation()
+let captionTranslationTimer: ReturnType<typeof setTimeout> | undefined
 /** 标签编辑 = chips; 自由编辑 = raw caption text. */
 const captionMode = ref<"tags" | "raw">("tags")
+const newTagDraftImages = ref(new Set<string>())
 const translationProvider = editorSession.translationProvider
-const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, cancelCurrent: cancelTranslations } = useTagTranslations()
+const { loading: translationsLoading, error: translationsError, progress: translationProgress, unresolved: translationUnresolved, resolve: resolveTranslations, translationFor, cancelCurrent: cancelTranslations, configureCache } = useTagTranslations()
 const translationSettingsOpen = ref(false)
+const profileEditorOpen = ref(false)
+const captionSettings = ref<CaptionTranslationSettings>({ ...DEFAULT_CAPTION_TRANSLATION_SETTINGS })
+const captionSettingsRevision = ref("")
+const captionSettingsLoaded = ref(false)
+const captionSettingsLoading = ref(false)
+const captionSettingsSaving = ref(false)
+const captionSettingsError = ref("")
+let captionSettingsGeneration = 0
+let editorActive = true
+let editorLifecycleGeneration = 0
+let translationConfigGeneration = 0
+let translationSettingsPending: Promise<void> | undefined
+const sharedLocalTextReady = ref(false)
 const translationSettingsLoading = ref(false)
 const translationSettingsError = ref("")
 const translationReadinessLoaded = ref(false)
@@ -72,7 +92,8 @@ const committedLlmMode = ref<"remote" | "local">("remote")
 const translationCacheCount = ref(0)
 const dictionaryStatus = ref<TagDictionaryStatus>({ state: "missing", installed: false, row_count: 0, size_bytes: 0, error: null })
 const dictionaryBusy = ref(false)
-const localModelStatus = ref<LocalModelStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, runtime_path: "", endpoint: "internal://dataset-translation", port: 0, error: null })
+const localModelStatus = ref<LocalVisionStatus>({ state: "missing", model_id: "", model_filename: "", model_url: "", model_path: "", installed: false, size_bytes: 0, downloaded_bytes: 0, total_bytes: 0, endpoint: "", port: 0, error: null })
+const sharedConfigRevision = ref("")
 let translationSettingsPoll: ReturnType<typeof setTimeout> | undefined
 const managedPaths = ref<Array<{ name: string; path: string }>>([])
 const managedName = computed(() => managedPaths.value.find((item) => item.path === root.value)?.name ?? "")
@@ -111,13 +132,20 @@ const panelOpen = computed(() => rightPanelMode.value !== "caption" || Boolean(c
 const targets = computed(() =>
   selectedPaths.value.size ? items.value.filter((item) => selectedPaths.value.has(item.relative_path)) : filtered.value,
 )
-const captionTags = computed(() => splitCaptionTags(caption.value))
+const captionFormat = computed(() => !current.value?.caption_exists && newTagDraftImages.value.has(editKey(selected.value))
+  ? "tag" : captionEditingFormat(caption.value, current.value))
+const captionTags = computed(() => current.value ? captionEditingTags(caption.value, { ...current.value, caption_exists: newTagDraftImages.value.has(editKey(selected.value)) || current.value.caption_exists, caption_format: captionFormat.value }) : [])
+const tagEditingAllowed = computed(() => captionFormat.value === "tag" || (!current.value?.caption_exists && !caption.value.trim()))
+const batchTagEditingAllowed = computed(() => targets.value.every(item => {
+  const text = editorSession.getDraft(root.value, item.relative_path) ?? item.caption
+  return captionEditingFormat(text, item) === "tag" || (!item.caption_exists && !text.trim())
+}))
 const allDatasetTags = computed(() => {
   const unique = new Set<string>(tags.value.map((item) => item.tag))
   items.value.forEach((item) => {
     item.tags.forEach((tag) => unique.add(tag))
     const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
-    splitCaptionTags(draft ?? item.caption).forEach((tag) => unique.add(tag))
+    if (draft !== undefined) captionEditingTags(draft, item).forEach((tag) => unique.add(tag))
   })
   return [...unique]
 })
@@ -126,14 +154,14 @@ const filterTagCounts = computed(() => {
   const counts = new Map<string, number>()
   items.value.forEach((item) => {
     const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
-    const sourceTags = draft === undefined ? item.tags : splitCaptionTags(draft)
+    const sourceTags = draft === undefined ? item.tags : captionEditingTags(draft, item)
     sourceTags.forEach((tag) => counts.set(tag, (counts.get(tag) || 0) + 1))
   })
   return [...counts].map(([tag, count]) => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag))
 })
 const filterItems = computed(() => items.value.map((item) => {
   const draft = root.value ? editorSession.getDraft(root.value, item.relative_path) : undefined
-  return draft === undefined ? item : { ...item, tags: splitCaptionTags(draft) }
+  return draft === undefined ? item : { ...item, tags: captionEditingTags(draft, item) }
 }))
 const { state: tagFilter, filteredItems: tagFilteredItems, visibleTagList, hasActiveFilter, toggleTag, clearTags, reset: resetTagFilter } =
   useDatasetTagFilter(filterItems, filterTagCounts, editorSession.tagFilter)
@@ -148,7 +176,8 @@ const workingScopeFullySelected = computed(
     filtered.value.every((item) => selectedPaths.value.has(item.relative_path)),
 )
 
-async function translateWholeDataset(localOnly = false) {
+async function translateWholeDataset() {
+  if (!tagEditingAllowed.value) return
   if (!translationReadinessLoaded.value) await loadTranslationReadiness()
   if (!translationAvailable.value) {
     showTranslations.value = false
@@ -157,7 +186,7 @@ async function translateWholeDataset(localOnly = false) {
     return
   }
   if (!allDatasetTags.value.length) return
-  await resolveTranslations(allDatasetTags.value, translationProvider.value, "zh-CN", localOnly)
+  await resolveTranslations(allDatasetTags.value, translationProvider.value, "zh-CN")
 }
 
 let translationRefreshTimer: ReturnType<typeof setTimeout> | undefined
@@ -181,16 +210,16 @@ async function setTranslationsEnabled(value: boolean) {
   if (!translationReadinessLoaded.value) await loadTranslationReadiness()
   // Readiness can reset the switch while its request is in flight; re-assert it.
   showTranslations.value = true
-  if (!translationAvailable.value) {
-    // 翻译是刚需：首次打开就用默认方式（Danbooru 词库）自动补齐。
-    ElMessage.info(t("datasetEditor.caption.translationDownloading"))
-    void startDefaultDictionaryDownload()
-    return
-  }
   if (translationProvider.value === "llm") {
     void ensureLlmReady().then((ready) => {
       if (ready && showTranslations.value && translationProvider.value === "llm") void translateWholeDataset()
     })
+    return
+  }
+  if (!translationAvailable.value) {
+    // 翻译是刚需：首次打开就用默认方式（Danbooru 词库）自动补齐。
+    ElMessage.info(t("datasetEditor.caption.translationDownloading"))
+    void startDefaultDictionaryDownload()
     return
   }
   void translateWholeDataset()
@@ -232,15 +261,31 @@ async function startDefaultDictionaryDownload() {
 async function onLlmModeChange(value: "remote" | "local") {
   llmMode.value = value
   try {
-    await datasetApi.saveTagTranslationConfig({
-      llm_mode: value,
-      active_remote_id: activeRemoteId.value,
-      remote_profiles: llmProfiles.value,
-      local: { enabled: value === "local" },
+    const current = await llmApi.config()
+    const saved = await llmApi.saveConfig({
+      ...current,
+      revision: sharedConfigRevision.value || current.revision,
+      local_fallback_enabled: value === "local",
+      routes: { ...current.routes, translation: activeRemoteId.value },
     })
+    sharedConfigRevision.value = saved.revision || ""
   } catch {
     // The settings page owns the full config; a transient failure keeps the local choice.
   }
+}
+
+async function refreshTranslationSettings(config: LlmConfig) {
+  const lifecycle = editorLifecycleGeneration
+  // Saved/test/runtime events carry the authoritative shared config. A late
+  // settings request must not replace it with a pre-save snapshot.
+  translationConfigGeneration += 1
+  translationSettingsLoading.value = false
+  translationSettingsError.value = ""
+  applyTranslationSettings(config)
+  await Promise.all([loadLocalModelStatus(), loadTranslationCacheStatus(), loadDictionaryStatus()])
+  if (!editorActive || lifecycle !== editorLifecycleGeneration) return
+  translationReadinessLoaded.value = true
+  await refreshTranslationsAfterSettingsChange()
 }
 
 function setTranslationProvider(value: typeof translationProvider.value) {
@@ -271,49 +316,85 @@ function restoreTranslationSettings() {
   llmMode.value = committedLlmMode.value
 }
 
-async function loadTranslationSettings(force = false) {
-  if (translationSettingsLoading.value || (!force && llmProfiles.value.length)) return
-  translationSettingsLoading.value = true
-  translationSettingsError.value = ""
-  try {
-    const config = await datasetApi.tagTranslationConfig()
-    llmProfiles.value = config.remote_profiles?.length
-      ? config.remote_profiles
-      : [{ ...config.deepseek, id: "default", name: t("datasetEditor.caption.translationProfileNew") }]
-    activeRemoteId.value = config.active_remote_id || llmProfiles.value[0]?.id || "default"
-    llmMode.value = config.llm_mode || (config.local?.enabled ? "local" : "remote")
-    snapshotTranslationSettings()
-  } catch (caught) {
-    translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
-  } finally {
-    translationSettingsLoading.value = false
-  }
+function applyTranslationSettings(config: LlmConfig) {
+  sharedConfigRevision.value = config.revision || ""
+  configureCache(config.cache.translation !== false, config.revision || JSON.stringify(config.profiles))
+  sharedLocalTextReady.value = config.profiles.some(profile => profile.source !== "remote" && translationProfileReady(profile))
+  llmProfiles.value = config.profiles
+  const configuredRoute = config.routes.translation
+  activeRemoteId.value = config.profiles.some(profile => profile.source === "remote" && profile.id === configuredRoute)
+    ? configuredRoute
+    : config.profiles.find(profile => profile.source === "remote")?.id || "default"
+  llmMode.value = config.local_fallback_enabled ? "local" : "remote"
+  snapshotTranslationSettings()
 }
 
-async function loadTranslationReadiness() {
-  await Promise.all([loadTranslationSettings(), loadDictionaryStatus(), loadLocalModelStatus()])
+function loadTranslationSettings(force = false): Promise<void> {
+  if (translationSettingsLoading.value && translationSettingsPending) return translationSettingsPending
+  if (!force && llmProfiles.value.length) return Promise.resolve()
+  const generation = ++translationConfigGeneration
+  translationSettingsLoading.value = true
+  translationSettingsError.value = ""
+  translationSettingsPending = (async () => {
+    try {
+      const config = await llmApi.config()
+      if (generation !== translationConfigGeneration) return
+      applyTranslationSettings(config)
+    } catch (caught) {
+      if (generation === translationConfigGeneration) translationSettingsError.value = caught instanceof Error ? caught.message : String(caught)
+    } finally {
+      if (generation === translationConfigGeneration) translationSettingsLoading.value = false
+    }
+  })()
+  return translationSettingsPending
+}
+
+async function loadTranslationReadiness(force = false) {
+  const lifecycle = editorLifecycleGeneration
+  await Promise.all([loadTranslationSettings(force), loadDictionaryStatus(), loadLocalModelStatus()])
+  if (!editorActive || lifecycle !== editorLifecycleGeneration) return
   translationReadinessLoaded.value = true
-  // Never turn the switch off while the first-use dictionary download is running.
-  if (!translationAvailable.value && showTranslations.value && !dictionaryDownloading.value) {
+  if (tagEditingAllowed.value && !translationAvailable.value && showTranslations.value && !dictionaryDownloading.value) {
     showTranslations.value = false
     cancelTranslations()
   }
 }
 
-const activeRemoteProfile = computed(() => llmProfiles.value.find((profile) => profile.id === activeRemoteId.value))
-const remoteProfileConfigured = computed(() => {
-  const profile = activeRemoteProfile.value
-  if (!profile) return false
+async function refreshTranslationsAfterSettingsChange() {
+  if (!showTranslations.value) return
+  if (!tagEditingAllowed.value) {
+    await captionTranslation.translate(caption.value)
+    return
+  }
+  if (translationProvider.value === "llm") {
+    const ready = await ensureLlmReady()
+    if (!ready || !showTranslations.value || translationProvider.value !== "llm") return
+  }
+  await translateWholeDataset()
+}
+
+function translationProfileReady(profile: LlmProfile) {
+  return Boolean(profile.enabled && profile.ready && profile.capabilities.includes("text") &&
+    profile.verified_capabilities?.includes("text") &&
+    (profile.languages.includes("zh-CN") || profile.languages.includes("*")))
+}
+const remoteProfileConfigured = computed(() => llmProfiles.value.some(profile => {
+  if (profile.source !== "remote" || !translationProfileReady(profile)) return false
   const endpoint = profile.endpoint.trim().toLowerCase()
   return Boolean(profile.api_key_configured || /^http:\/\/(127\.0\.0\.1|localhost|\[::1\])(?::\d+)?\//.test(endpoint))
-})
-const localTranslationReady = computed(() => localModelStatus.value.state === "running")
-const translationAvailable = computed(() => Boolean(dictionaryStatus.value.installed || remoteProfileConfigured.value || localTranslationReady.value))
+}))
+const localTranslationReady = computed(() => llmProfiles.value.some(profile => translationProfileReady(profile) && (
+  profile.source === "local-endpoint" ||
+  (profile.source === "managed-local" && localModelStatus.value.state === "running" && localModelStatus.value.installed)
+)))
+const translationAvailable = computed(() => Boolean(translationProvider.value === "mymemory" || dictionaryStatus.value.installed || remoteProfileConfigured.value || (llmMode.value === "local" && localTranslationReady.value)))
 const translationUnavailableHint = computed(() => t("datasetEditor.caption.translationUnavailable"))
 
 async function ensureLlmReady() {
+  const lifecycle = editorLifecycleGeneration
   await Promise.all([loadTranslationSettings(true), loadLocalModelStatus()])
-  const ready = llmMode.value === "local" ? localModelStatus.value.state === "running" : remoteProfileConfigured.value
+  if (!editorActive || lifecycle !== editorLifecycleGeneration) return false
+  const ready = dictionaryStatus.value.installed || remoteProfileConfigured.value || (llmMode.value === "local" && localTranslationReady.value)
   if (!ready) {
     const message = llmMode.value === "local"
       ? t("datasetEditor.caption.translationLocalUnavailable")
@@ -328,6 +409,7 @@ async function ensureLlmReady() {
 async function openTranslationSettings() {
   translationSettingsOpen.value = true
   await Promise.all([
+    ...(!tagEditingAllowed.value ? [loadCaptionTranslationSettings()] : []),
     loadTranslationSettings(true),
     loadTranslationCacheStatus(),
     loadDictionaryStatus(),
@@ -337,8 +419,71 @@ async function openTranslationSettings() {
 }
 
 function onTranslationSettingsModelChange(value: boolean) {
+  // ElDialog emits false after its leave transition when we hide it to
+  // show model management. Keep the return destination open in that case.
+  if (!value && profileEditorOpen.value) return
   translationSettingsOpen.value = value
-  if (!value) restoreTranslationSettings()
+  if (!value) {
+    invalidateCaptionSettings()
+    restoreTranslationSettings()
+  }
+}
+
+function invalidateCaptionSettings() {
+  captionSettingsGeneration += 1
+  captionSettingsLoading.value = false
+  captionSettingsSaving.value = false
+  captionSettingsLoaded.value = false
+}
+
+async function loadCaptionTranslationSettings() {
+  const generation = ++captionSettingsGeneration
+  const lifecycle = editorLifecycleGeneration
+  captionSettingsLoading.value = true
+  captionSettingsLoaded.value = false
+  captionSettingsError.value = ""
+  try {
+    const result = await llmApi.captionTranslationSettings()
+    if (!editorActive || lifecycle !== editorLifecycleGeneration || generation !== captionSettingsGeneration) return
+    captionSettings.value = { ...result.settings }
+    captionSettingsRevision.value = result.revision
+    captionSettingsLoaded.value = true
+  } catch (caught) {
+    if (generation === captionSettingsGeneration && editorActive) captionSettingsError.value = caught instanceof Error ? caught.message : String(caught)
+  } finally {
+    if (generation === captionSettingsGeneration) captionSettingsLoading.value = false
+  }
+}
+
+async function saveCaptionTranslationSettings(settings: CaptionTranslationSettings) {
+  if (!captionSettingsLoaded.value || captionSettingsLoading.value || captionSettingsSaving.value) return
+  const generation = ++captionSettingsGeneration
+  const lifecycle = editorLifecycleGeneration
+  captionSettingsSaving.value = true
+  captionSettingsError.value = ""
+  try {
+    const result = await llmApi.saveCaptionTranslationSettings(settings, captionSettingsRevision.value)
+    if (!editorActive || lifecycle !== editorLifecycleGeneration || generation !== captionSettingsGeneration) return
+    captionSettings.value = { ...result.settings }
+    captionSettingsRevision.value = result.revision
+    ElMessage.success(t("datasetEditor.caption.naturalParametersSaved"))
+    if (showTranslations.value && !tagEditingAllowed.value) void captionTranslation.translate(caption.value)
+  } catch (caught) {
+    if (generation === captionSettingsGeneration && editorActive) {
+      captionSettingsError.value = caught instanceof Error ? caught.message : String(caught)
+      // Reload explicitly before another save: another writer may own a newer revision.
+      captionSettingsLoaded.value = false
+    }
+  } finally {
+    if (generation === captionSettingsGeneration) captionSettingsSaving.value = false
+  }
+}
+
+function goToLlmPage() {
+  if (captionSettingsSaving.value) return
+  rememberCurrentDraft()
+  onTranslationSettingsModelChange(false)
+  void router.push("/settings/api")
 }
 
 async function loadTranslationCacheStatus() {
@@ -358,7 +503,7 @@ async function loadDictionaryStatus() {
 }
 
 async function loadLocalModelStatus() {
-  try { localModelStatus.value = await datasetApi.localModelStatus() }
+  try { localModelStatus.value = await llmApi.localVisionStatus() }
   catch (caught) { localModelStatus.value = { ...localModelStatus.value, state: "error", error: caught instanceof Error ? caught.message : String(caught) } }
 }
 
@@ -436,18 +581,30 @@ function closePanel() {
 }
 
 function addCaptionTag() {
-  const next = addTagToCaption(caption.value, newCaptionTag.value)
-  if (next !== caption.value) caption.value = next
+  if (!tagEditingAllowed.value) {
+    ElMessage.warning(t("datasetEditor.caption.naturalTagEditBlocked"))
+    return
+  }
+  const next = addTagToCaption(caption.value, newCaptionTag.value, tagEditingAllowed.value ? "tag" : captionFormat.value)
+  if (next !== caption.value) {
+    if (!current.value?.caption_exists) newTagDraftImages.value = new Set([...newTagDraftImages.value, editKey(selected.value)])
+    caption.value = next
+  }
   newCaptionTag.value = ""
 }
 
 function removeCaptionTag(tag: string) {
-  caption.value = removeTagFromCaption(caption.value, tag)
+  if (!tagEditingAllowed.value) {
+    ElMessage.warning(t("datasetEditor.caption.naturalTagEditBlocked"))
+    return
+  }
+  caption.value = removeTagFromCaption(caption.value, tag, captionFormat.value)
 }
 
 const dragTagIndex = ref<number | null>(null)
 
 function onChipDragStart(index: number, event: DragEvent) {
+  if (!tagEditingAllowed.value) { event.preventDefault(); return }
   dragTagIndex.value = index
   event.dataTransfer?.setData("text/plain", String(index))
   if (event.dataTransfer) event.dataTransfer.effectAllowed = "move"
@@ -460,17 +617,25 @@ function onChipDragOver(event: DragEvent) {
 
 function onChipDrop(toIndex: number, event: DragEvent) {
   event.preventDefault()
+  if (!tagEditingAllowed.value) return
   const from = dragTagIndex.value
   dragTagIndex.value = null
   if (from == null || from === toIndex) return
-  caption.value = moveCaptionTag(caption.value, from, toIndex)
+  caption.value = moveCaptionTag(caption.value, from, toIndex, captionFormat.value)
 }
 
 function onChipDragEnd() {
   dragTagIndex.value = null
 }
 
+watch(tagEditingAllowed, (allowed) => {
+  if (!allowed) captionMode.value = "raw"
+}, { immediate: true })
+
 let restoringCaption = false
+const captionEdits = new Map<string, { version: number; text: string }>()
+
+function editKey(image: string) { return `${root.value}\u0000${image}` }
 
 function rememberCurrentDraft() {
   if (!captionHydrated || !root.value || !selected.value) return
@@ -480,13 +645,38 @@ function rememberCurrentDraft() {
   else editorSession.setDraft(root.value, selected.value, caption.value)
 }
 
-function choose(item: DatasetItem, event?: MouseEvent) {
-  // Shift/Ctrl/Cmd click is a batch-selection gesture, not an editor switch.
+async function restoreDiskCaption() {
+  if (!current.value) return
+  try { await ElMessageBox.confirm(t('datasetEditor.caption.restoreDiskConfirm'), { type: "warning" }) }
+  catch { return }
+  editorSession.clearDraft(root.value, current.value.relative_path)
+  restoringCaption = true
+  caption.value = current.value.caption
+  restoringCaption = false
+}
+
+function cancelCaptionTranslation() {
+  if (captionTranslationTimer) clearTimeout(captionTranslationTimer)
+  captionTranslationTimer = undefined
+  captionTranslation.cancel()
+}
+
+watch([caption, selected, root, showTranslations, tagEditingAllowed], () => {
+  cancelCaptionTranslation()
+  if (!showTranslations.value || tagEditingAllowed.value || !caption.value.trim()) return
+  captionTranslationTimer = setTimeout(() => {
+    captionTranslationTimer = undefined
+    void captionTranslation.translate(caption.value)
+  }, 350)
+})
+
+function choose(item: DatasetItem, event?: MouseEvent, remember = true) {
+  // Modifier clicks update batch selection without switching the editor.
   if (event && (event.shiftKey || event.ctrlKey || event.metaKey)) {
     toggleChecked(item, event)
     return
   }
-  rememberCurrentDraft()
+  if (remember) rememberCurrentDraft()
   selected.value = item.relative_path
   editorSession.rememberSelection(item.relative_path)
   restoringCaption = true
@@ -519,14 +709,32 @@ function openLightbox(item: DatasetItem) {
   previewOpen.value = true
 }
 
-function apply(changes: ChangedItem[]) {
+function draftSnapshot(images: string[]) {
+  return new Map(images.map(image => [image, {
+    draft: editorSession.getDraft(root.value, image), version: captionEdits.get(editKey(image))?.version ?? 0,
+  }]))
+}
+
+function apply(changes: ChangedItem[], consumedDrafts = new Map<string, { draft: string | undefined; version: number }>()) {
   const map = new Map(changes.map((item) => [item.image, item]))
-  editorSession.clearDrafts(root.value, changes.map((item) => item.image))
+  for (const change of changes) {
+    const snapshot = consumedDrafts.get(change.image)
+    const edited = captionEdits.get(editKey(change.image))
+    if (snapshot && edited && edited.version !== snapshot.version) {
+      editorSession.setDraft(root.value, change.image, edited.text)
+    } else if (snapshot && editorSession.getDraft(root.value, change.image) === snapshot.draft) {
+      editorSession.clearDraft(root.value, change.image)
+    }
+  }
   items.value = items.value.map((item) => {
     const change = map.get(item.relative_path)
-    return change ? { ...item, caption: change.caption, tags: change.tags, caption_exists: change.caption_exists } : item
+    return change ? { ...item, caption: change.caption, tags: change.tags, caption_exists: change.caption_exists, caption_format: change.caption_format ?? item.caption_format, caption_sha256: change.caption_sha256 } : item
   })
-  if (current.value) caption.value = current.value.caption
+  if (current.value) {
+    restoringCaption = true
+    caption.value = editorSession.getDraft(root.value, current.value.relative_path) ?? current.value.caption
+    restoringCaption = false
+  }
   rebuildTags()
 }
 
@@ -554,6 +762,7 @@ async function toggleDataset() {
     catch { return }
   }
   scanGeneration++
+  cancelCaptionTranslation()
   cancelTranslations()
   if (translationRefreshTimer) clearTimeout(translationRefreshTimer)
   captionHydrated = false
@@ -671,7 +880,7 @@ async function scan() {
     const restoredItem = restoring && selected.value
       ? restoredItems.find((item) => item.relative_path === selected.value)
       : undefined
-    if (restoredItem) choose(restoredItem)
+    if (restoredItem) choose(restoredItem, undefined, false)
     else {
       restoringCaption = true
       caption.value = ""
@@ -691,17 +900,45 @@ async function scan() {
 }
 
 async function save() {
-  if (!current.value) return
+  if (!current.value || mutationBusy.value) return
   const request = scanGeneration
+  const requestedRoot = root.value
+  const image = current.value.relative_path
+  const submitted = caption.value
+  const expectedHash = current.value.caption_sha256
+  const explicitFormat = !current.value.caption_exists && newTagDraftImages.value.has(editKey(image)) ? "tag" as const : undefined
+  const drafts = draftSnapshot([image])
+  mutationBusy.value = true
   try {
-    const saved = await datasetApi.save(root.value, current.value.relative_path, caption.value)
+    const saved = await datasetApi.save(requestedRoot, image, submitted, expectedHash, explicitFormat)
     if (request !== scanGeneration) return
-    apply([saved])
+    apply([saved], drafts)
     await refreshHistory()
     if (request !== scanGeneration) return
     ElMessage.success(t("datasetEditor.caption.saved"))
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.caption.saveFail"))
+    if (request === scanGeneration) ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.caption.saveFail"))
+  } finally {
+    mutationBusy.value = false
+  }
+}
+
+async function confirmCaptionFormat(format: Extract<CaptionFormat, "tag" | "natural">) {
+  if (!current.value || mutationBusy.value) return
+  const request = scanGeneration
+  const requestedRoot = root.value
+  const image = current.value.relative_path
+  const expectedHash = current.value.caption_sha256 ?? null
+  mutationBusy.value = true
+  try {
+    const changed = await datasetApi.confirmCaptionFormat(requestedRoot, image, format, expectedHash)
+    if (request !== scanGeneration) return
+    // This action only confirms the disk format; unsaved raw text stays a draft.
+    apply([changed])
+  } catch (error) {
+    if (request === scanGeneration) ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.caption.formatConfirmFailed"))
+  } finally {
+    mutationBusy.value = false
   }
 }
 
@@ -710,18 +947,25 @@ function splitTags(value: string) {
 }
 
 async function batch() {
-  if (!targets.value.length) return
+  if (!targets.value.length || mutationBusy.value) return
   const request = scanGeneration
+  if (!batchTagEditingAllowed.value) {
+    ElMessage.warning(t("datasetEditor.caption.naturalBatchBlocked"))
+    return
+  }
+  mutationBusy.value = true
   try {
     await ElMessageBox.confirm(
       t("datasetEditor.batch.confirm", { n: targets.value.length }),
       selectedPaths.value.size ? t("datasetEditor.batch.confirmSelected") : t("datasetEditor.batch.confirmFiltered"),
     )
     if (request !== scanGeneration) return
+    const drafts = draftSnapshot(targets.value.map(item => item.relative_path))
     const replacements = replaceFrom.value.trim() ? [{ from: replaceFrom.value.trim(), to: replaceTo.value.trim() }] : []
     const data = await datasetApi.batch({
       root: root.value,
       images: targets.value.map((item) => item.relative_path),
+      expected_hashes: Object.fromEntries(targets.value.map((item) => [item.relative_path, item.caption_sha256 ?? null])),
       append: splitTags(append.value),
       append_position: appendPosition.value,
       remove: splitTags(remove.value),
@@ -732,13 +976,18 @@ async function batch() {
       strip_escape_chars: stripEscapeChars.value,
     })
     if (request !== scanGeneration) return
-    apply(data.items)
+    apply(data.items, drafts)
     await refreshHistory()
     if (request !== scanGeneration) return
     ElMessage.success(t("datasetEditor.batch.done", { n: data.changed }))
     rightPanelMode.value = "caption"
   } catch (error) {
-    if (error !== "cancel" && error !== "close") ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.batch.fail"))
+    if (error !== "cancel" && error !== "close") {
+      await refreshHistory().catch(() => undefined)
+      ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.batch.fail"))
+    }
+  } finally {
+    mutationBusy.value = false
   }
 }
 
@@ -766,11 +1015,14 @@ async function deleteTargets() {
 }
 
 async function changeHistory(kind: "undo" | "redo") {
+  if (mutationBusy.value) return
   const request = scanGeneration
+  const drafts = draftSnapshot(items.value.map(item => item.relative_path))
+  mutationBusy.value = true
   try {
     const data = await datasetApi[kind](root.value)
     if (request !== scanGeneration) return
-    apply(data.items)
+    apply(data.items, drafts)
     await refreshHistory()
     if (request !== scanGeneration) return
     ElMessage.success(
@@ -781,7 +1033,10 @@ async function changeHistory(kind: "undo" | "redo") {
         : t("datasetEditor.historyMsg.none"),
     )
   } catch (error) {
+    await refreshHistory().catch(() => undefined)
     ElMessage.error(error instanceof Error ? error.message : t("datasetEditor.historyMsg.fail"))
+  } finally {
+    mutationBusy.value = false
   }
 }
 
@@ -819,7 +1074,13 @@ watch([category, query, pageSize], () => {
   localStorage.setItem(PAGE_SIZE_KEY, String(pageSize.value))
 })
 watch(caption, () => {
-  if (!restoringCaption) rememberCurrentDraft()
+  if (!restoringCaption) {
+    if (captionHydrated && root.value && selected.value) {
+      const key = editKey(selected.value)
+      captionEdits.set(key, { version: (captionEdits.get(key)?.version ?? 0) + 1, text: caption.value })
+    }
+    rememberCurrentDraft()
+  }
 }, { flush: "sync" })
 watch(allDatasetTagSignature, () => {
   scheduleTranslationRefresh()
@@ -838,25 +1099,46 @@ watch(pageCount, (count) => {
   if (page.value > count) page.value = count
 })
 onActivated(() => window.addEventListener("keydown", onPreviewKeydown))
-onActivated(() => {
-  void loadTranslationReadiness()
+onActivated(async () => {
+  editorActive = true
+  const lifecycle = editorLifecycleGeneration
+  translationReadinessLoaded.value = false
+  await loadTranslationReadiness(true)
+  if (!editorActive || lifecycle !== editorLifecycleGeneration) return
   const queryPath = route?.query.path
   if (typeof queryPath === "string" && queryPath.trim() && queryPath !== path.value) {
     path.value = queryPath
     void scan()
-  } else if (!items.value.length && path.value.trim()) {
+  } else if (path.value.trim()) {
     void scan()
   }
 })
 onDeactivated(() => {
+  invalidateCaptionSettings()
+  editorActive = false
+  editorLifecycleGeneration += 1
+  translationConfigGeneration += 1
+  translationSettingsLoading.value = false
+  rememberCurrentDraft()
+  cancelCaptionTranslation()
+  cancelTranslations()
   window.removeEventListener("keydown", onPreviewKeydown)
   previewOpen.value = false
   selectMenuOpen.value = false
   historyOpen.value = false
+  translationSettingsOpen.value = false
+  profileEditorOpen.value = false
+  restoreTranslationSettings()
 })
 onUnmounted(() => {
+  invalidateCaptionSettings()
+  editorActive = false
+  editorLifecycleGeneration += 1
+  translationConfigGeneration += 1
+  cancelCaptionTranslation()
   scanGeneration++
   dictionaryPollDisposed = true
+  cancelTranslations()
   window.removeEventListener("keydown", onPreviewKeydown)
   closeDatasetMenu()
   if (translationSettingsPoll) clearTimeout(translationSettingsPoll)
@@ -920,7 +1202,7 @@ onUnmounted(() => {
             type="button"
             class="dataset-tool-entry dataset-batch-entry"
             :class="{ active: rightPanelMode === 'batch' || selectedPaths.size > 0 }"
-            :disabled="!root"
+            :disabled="!root || !batchTagEditingAllowed"
             @click="openRightPanel('batch')"
           >
             {{ t("datasetEditor.batch.toolbar", { n: selectedPaths.size }) }}
@@ -1063,6 +1345,7 @@ onUnmounted(() => {
             >{{ t("datasetEditor.caption.downloadCaption") }}</a>
           </div>
           <TagTranslationControls
+            v-if="tagEditingAllowed"
             :enabled="showTranslations"
             :available="translationAvailable"
             :unavailable-hint="translationUnavailableHint"
@@ -1072,12 +1355,32 @@ onUnmounted(() => {
             :progress-total="translationProgress.total"
             :progress-unresolved="translationUnresolved"
             @update:enabled="setTranslationsEnabled"
+            @open-settings="openTranslationSettings"
           />
-          <div class="caption-mode" role="group" :aria-label="t('datasetEditor.caption.modeAria')">
+          <section v-else class="natural-caption-translation">
+            <div class="natural-translation-controls">
+              <label>{{ t('datasetEditor.caption.naturalTranslation') }} <el-switch v-model="showTranslations" :aria-label="t('datasetEditor.caption.naturalTranslation')" /></label>
+              <el-button class="caption-translation-settings-action" @click="openTranslationSettings">{{ t('datasetEditor.caption.translationSettings') }}</el-button>
+              <el-button v-if="showTranslations" :disabled="captionTranslation.loading.value" @click="captionTranslation.translate(caption)">{{ t('datasetEditor.caption.retryNaturalTranslation') }}</el-button>
+            </div>
+            <p v-if="showTranslations && captionTranslation.loading.value" role="status">{{ t('datasetEditor.caption.naturalTranslating') }}</p>
+            <p v-if="showTranslations && captionTranslation.error.value" role="alert">{{ captionTranslation.error.value }}</p>
+            <div v-if="showTranslations && captionTranslation.text.value" class="natural-caption-translated" aria-live="polite">
+              <small v-if="captionTranslation.alreadyChinese.value">{{ t('datasetEditor.caption.alreadyChinese') }}</small>
+              <p>{{ captionTranslation.text.value }}</p>
+            </div>
+          </section>
+          <p v-if="!tagEditingAllowed" class="caption-format-warning">{{ t("datasetEditor.caption.naturalCaptionReadOnly", { format: captionFormat }) }}</p>
+          <div v-if="captionFormat === 'unknown' && current.caption_exists" class="caption-format-confirmation">
+            <p>{{ t('datasetEditor.caption.unknownFormatHint') }}</p>
+            <el-button class="caption-confirm-tag" :disabled="mutationBusy" @click="confirmCaptionFormat('tag')">{{ t('datasetEditor.caption.confirmTag') }}</el-button>
+            <el-button class="caption-confirm-natural" :disabled="mutationBusy" @click="confirmCaptionFormat('natural')">{{ t('datasetEditor.caption.confirmNatural') }}</el-button>
+          </div>
+          <div v-if="tagEditingAllowed" class="caption-mode" role="group" :aria-label="t('datasetEditor.caption.modeAria')">
             <button type="button" :class="{ active: captionMode === 'tags' }" :aria-pressed="captionMode === 'tags'" @click="captionMode = 'tags'">{{ t("datasetEditor.caption.modeTags") }}</button>
             <button type="button" :class="{ active: captionMode === 'raw' }" :aria-pressed="captionMode === 'raw'" @click="captionMode = 'raw'">{{ t("datasetEditor.caption.modeRaw") }}</button>
           </div>
-          <template v-if="captionMode === 'tags'">
+          <template v-if="tagEditingAllowed && captionMode === 'tags'">
           <div class="caption-chips" @dragover="onChipDragOver">
             <span
               v-for="(tag, index) in captionTags"
@@ -1105,7 +1408,8 @@ onUnmounted(() => {
             <el-input v-model="caption" type="textarea" :autosize="{ minRows: 4, maxRows: 24 }" :aria-label="t('datasetEditor.caption.modeRaw')" />
             <small class="caption-count">{{ t("datasetEditor.caption.chars", { n: caption.length }) }}</small>
           </div>
-          <button type="button" class="primary-action" @click="save">{{ t("datasetEditor.caption.save") }}</button>
+          <el-button v-if="caption !== current.caption" class="caption-restore-disk" @click="restoreDiskCaption">{{ t('datasetEditor.caption.restoreDisk') }}</el-button>
+          <button type="button" class="primary-action" :disabled="mutationBusy" @click="save">{{ t("datasetEditor.caption.save") }}</button>
         </div>
         <p v-else>{{ t("datasetEditor.caption.empty") }}</p>
       </div>
@@ -1185,7 +1489,7 @@ onUnmounted(() => {
             {{ t("datasetEditor.batch.deleteFiles", { n: targets.length }) }}
           </button>
           <button type="button" class="dataset-tool-secondary" @click="closeToolPanel">{{ t("datasetEditor.batch.cancel") }}</button>
-          <button type="button" class="primary-action" :disabled="!targets.length" @click="batch">
+          <button type="button" class="primary-action" :disabled="mutationBusy || !targets.length" @click="batch">
             {{ t("datasetEditor.batch.applyTo", { n: targets.length }) }}
           </button>
         </div>
@@ -1204,21 +1508,35 @@ onUnmounted(() => {
   </div>
 
   <TagTranslationSettingsDialog
-    :model-value="translationSettingsOpen"
+    :model-value="translationSettingsOpen && !profileEditorOpen"
     :loading="translationSettingsLoading"
     :error="translationSettingsError"
     :provider="translationProvider"
+    :content-type="tagEditingAllowed ? 'tag' : 'natural'"
+    :caption-settings="captionSettings"
+    :caption-settings-loaded="captionSettingsLoaded"
+    :caption-settings-loading="captionSettingsLoading"
+    :caption-settings-saving="captionSettingsSaving"
+    :caption-settings-error="captionSettingsError"
     :llm-mode="llmMode"
     :dictionary="dictionaryStatus"
     :dictionary-busy="dictionaryBusy"
+    :remote-configured="remoteProfileConfigured"
+    :shared-local-ready="sharedLocalTextReady"
     @update:model-value="onTranslationSettingsModelChange"
     @update:provider="setTranslationProvider"
     @update:llm-mode="onLlmModeChange"
+    @manage-llm="profileEditorOpen = true"
+    @go-to-llm-page="goToLlmPage"
+    @save-caption-settings="saveCaptionTranslationSettings"
+    @reload-caption-settings="loadCaptionTranslationSettings"
     @check-dictionary="checkDictionary"
     @update-dictionary="updateDictionary"
     @retry-dictionary="retryDictionary"
     @cancel-dictionary="cancelDictionary"
   />
+
+  <LlmSettingsDialog v-model="profileEditorOpen" capability="text" @saved="refreshTranslationSettings" />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">
     <div class="dataset-history">

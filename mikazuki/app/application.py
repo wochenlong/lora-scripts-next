@@ -143,10 +143,55 @@ async def app_startup():
         # The integrated monitor stays inside the GUI, without a separate tab.
 
 
+async def _resume_shared_local_model():
+    from mikazuki.llm.runtime import llm_service, get_local_vision_service
+    from mikazuki.log import log as app_log
+    try:
+        if not llm_service.config(masked=True).get("local_fallback_enabled", True):
+            return
+        service = get_local_vision_service()
+        # A newly-created manager starts unverified even when its pinned
+        # assets already exist on disk. Reconcile first so restart recovery
+        # can validate those assets without downloading anything.
+        await service.reconcile_installation()
+        status = service.status()
+        if status.get("installed") and status.get("runtime_installed"):
+            await service.start_runtime()
+    except Exception:
+        app_log.warning("共享本地模型恢复失败，请在API设置中检查并重试")
+
+
+async def _shutdown_shared_llm():
+    from mikazuki.tagger.caption_job import caption_job_manager
+    from mikazuki.tag_translation.runtime import translation_manager
+    from mikazuki.llm import runtime as llm_runtime
+    if caption_job_manager.is_busy():
+        caption_job_manager.cancel()
+    thread = caption_job_manager._thread
+    if thread and thread.is_alive():
+        await asyncio.to_thread(thread.join, 10)
+    workers = list(translation_manager._workers)
+    for worker in workers:
+        worker.cancel()
+    if workers:
+        await asyncio.gather(*workers, return_exceptions=True)
+    service = llm_runtime._local_vision_service
+    if service is not None:
+        await service.shutdown()
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    await app_startup()
-    yield
+    resume_task = None
+    try:
+        await app_startup()
+        resume_task = asyncio.create_task(_resume_shared_local_model())
+        yield
+    finally:
+        if resume_task and not resume_task.done():
+            resume_task.cancel()
+            await asyncio.gather(resume_task, return_exceptions=True)
+        await _shutdown_shared_llm()
 
 
 app = FastAPI(lifespan=lifespan)

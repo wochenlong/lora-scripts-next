@@ -8,6 +8,9 @@ class TaggerPrefetchRequest(BaseModel):
 
 
 class TaggerInterrogateRequest(BaseModel):
+    class Config:
+        extra = "forbid"
+
     path: str
     interrogator_model: str = Field(
         default="wd14-convnextv2-v2"
@@ -27,7 +30,7 @@ class TaggerInterrogateRequest(BaseModel):
     additional_tags: str = ""
     exclude_tags: str = ""
     escape_tag: bool = True
-    batch_input_recursive: bool = False
+    batch_input_recursive: bool = True
     batch_output_action_on_conflict: str = "ignore"
     replace_underscore: bool = True
     download_endpoint: str = Field(default="")

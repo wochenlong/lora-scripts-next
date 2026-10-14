@@ -230,17 +230,26 @@ def test_installers_bundle_the_tag_dictionary_for_offline_translation():
     prefetch = ROOT / "scripts" / "prefetch_tag_dictionary.py"
     assert prefetch.is_file()
     source = prefetch.read_text(encoding="utf-8")
-    assert "ChineseDictionaryService" in source
-    # The GitHub API is rate limited easily on shared build machines.
-    assert "raw.githubusercontent.com" in source
-    assert "_install_from_raw" in source
+    assert "dictionary_bundle" in source
+    assert "tag_translation.runtime" not in source
 
     install = (ROOT / "install-cn.ps1").read_text(encoding="utf-8-sig")
     assert "prefetch_tag_dictionary.py --if-missing" in install
+    # Normal installs contain user settings/cache and must use the non-strict
+    # compatibility path. Dedicated CLI regressions verify legacy DB retention.
+    assert "prefetch_tag_dictionary.py --if-missing --strict" not in install
 
     builder = (ROOT / "build-scripts" / "build_portable.ps1").read_text(encoding="utf-8")
-    assert "prefetch_tag_dictionary.py" in builder
-    assert "assets\\tag_translation\\danbooru" in builder
+    assert "Invoke-PortableTagDictionary" in builder
+    helper = (ROOT / "build-scripts" / "tag-dictionary-bundle.ps1").read_text(encoding="utf-8")
+    assert "prefetch_tag_dictionary.py" in helper
+    assert "assets\\tag_translation\\danbooru" in helper
+    assert '"--strict"' in helper
+    assert '"--verify-only"' in helper
+    verifier = (ROOT / "scripts/portable/verify_portable_release.ps1").read_text(encoding="utf-8-sig")
+    for public_file in ("tag.sqlite", "metadata.json", "source-manifest.json", "LICENSE.ffdkj.txt"):
+        assert f"Next-Trainer\\assets\\tag_translation\\danbooru\\{public_file}" in verifier
+    assert "--verify-only --strict" in verifier
     assert "SkipTagDictionaryPrefetch" in builder
 
 

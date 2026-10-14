@@ -1,8 +1,27 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from "vitest"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 import { useDatasetEditorSession } from "./useDatasetEditorSession"
 
 describe("useDatasetEditorSession", () => {
+  it.each([
+    { source: "danbooru", provider: "mymemory", enabled: false },
+    { source: "mymemory", provider: "mymemory", enabled: true },
+    { source: "auto", provider: "mymemory", enabled: true },
+    { source: "llm", provider: "llm", enabled: true },
+    { source: undefined, provider: "mymemory", enabled: false },
+  ])("restores $source into the two hybrid sources without silently enabling offline sessions", async ({ source, provider, enabled }) => {
+    localStorage.setItem("dataset-editor-session-v1", JSON.stringify({
+      translationProvider: source, showTranslations: true,
+      lastRoot: "/source-migration", drafts: { "/source-migration\u0000a.png": "keep draft" },
+    }))
+    vi.resetModules()
+    const restored = (await import("./useDatasetEditorSession")).useDatasetEditorSession()
+    expect(restored.translationProvider.value).toBe(provider)
+    expect(restored.showTranslations.value).toBe(enabled)
+    expect(restored.getDraft("/source-migration", "a.png")).toBe("keep draft")
+    restored.rememberPreferences()
+    expect(JSON.parse(localStorage.getItem("dataset-editor-session-v1")!).translationProvider).toBe(provider)
+  })
   beforeEach(() => {
     const state = useDatasetEditorSession()
     state.lastPath.value = ""

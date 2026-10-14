@@ -108,6 +108,13 @@ class TranslationStore:
                 )
                 """
             )
+            connection.execute("""CREATE TABLE IF NOT EXISTS translation_failures_v2 (
+                tag_name TEXT NOT NULL, locale TEXT NOT NULL, profile_revision TEXT NOT NULL,
+                updated_at TEXT NOT NULL, PRIMARY KEY(tag_name, locale, profile_revision))""")
+            connection.execute("""CREATE TABLE IF NOT EXISTS translation_cache_generations (
+                provider TEXT PRIMARY KEY, generation INTEGER NOT NULL)""")
+            connection.executemany("INSERT OR IGNORE INTO translation_cache_generations VALUES (?, 0)",
+                                   [("llm",), ("mymemory",)])
             invalid_rows = [
                 (row["tag_name"], row["locale"])
                 for row in connection.execute(
@@ -143,7 +150,7 @@ class TranslationStore:
                 )
         return {row["tag_name"]: dict(row) for row in rows}
 
-    def get_failures(self, locale, tag_names, model, prompt_hash):
+    def get_failures(self, locale, tag_names, model=None, prompt_hash=None, *, profile_revision=None):
         names = list(dict.fromkeys(tag_names))
         if not names:
             return set()
@@ -152,15 +159,22 @@ class TranslationStore:
             for index in range(0, len(names), SQLITE_LOOKUP_CHUNK_SIZE):
                 chunk = names[index : index + SQLITE_LOOKUP_CHUNK_SIZE]
                 placeholders = ",".join("?" for _ in chunk)
-                rows = connection.execute(
-                    f"SELECT tag_name FROM translation_failures"
-                    f" WHERE locale = ? AND model = ? AND prompt_hash = ? AND tag_name IN ({placeholders})",
-                    (locale, model, prompt_hash, *chunk),
-                ).fetchall()
+                if profile_revision is not None:
+                    rows = connection.execute(
+                        f"SELECT tag_name FROM translation_failures_v2 WHERE locale = ?"
+                        f" AND profile_revision = ? AND tag_name IN ({placeholders})",
+                        (locale, profile_revision, *chunk),
+                    ).fetchall()
+                else:
+                    rows = connection.execute(
+                        f"SELECT tag_name FROM translation_failures"
+                        f" WHERE locale = ? AND model = ? AND prompt_hash = ? AND tag_name IN ({placeholders})",
+                        (locale, model, prompt_hash, *chunk),
+                    ).fetchall()
                 found.update(row["tag_name"] for row in rows)
         return found
 
-    def save_failures(self, locale, items, tag_names, model, prompt_hash):
+    def save_failures(self, locale, items, tag_names, model=None, prompt_hash=None, *, profile_revision=None, expected_generation=None):
         known = {item["name"] for item in items}
         now = utc_now()
         rows = [
@@ -171,6 +185,14 @@ class TranslationStore:
         if not rows:
             return
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if not self._generation_matches(connection, "llm", expected_generation):
+                return
+            if profile_revision is not None:
+                connection.executemany("""INSERT INTO translation_failures_v2 VALUES (?, ?, ?, ?)
+                    ON CONFLICT(tag_name, locale, profile_revision) DO UPDATE SET updated_at=excluded.updated_at""",
+                    [(row[0], locale, profile_revision, now) for row in rows])
+                return
             connection.executemany(
                 """
                 INSERT INTO translation_failures(tag_name, locale, model, prompt_hash, updated_at)
@@ -278,6 +300,8 @@ class TranslationStore:
         items,
         translations,
         normalization_version=TRANSLATION_NORMALIZATION_VERSION,
+        *,
+        expected_generation=None,
     ):
         if not translations:
             return
@@ -297,6 +321,9 @@ class TranslationStore:
         if not rows:
             return
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            if not self._generation_matches(connection, provider, expected_generation):
+                return
             connection.executemany(
                 """
                 INSERT INTO translation_results_v2(
@@ -313,13 +340,34 @@ class TranslationStore:
                 """,
                 rows,
             )
+            if provider == "llm":
+                connection.executemany("DELETE FROM translation_failures_v2 WHERE tag_name=? AND locale=? AND profile_revision=?",
+                                       [(row[1], locale, profile_revision) for row in rows])
+
+    @staticmethod
+    def _generation_matches(connection, provider, expected_generation):
+        if expected_generation is None:
+            return True
+        row = connection.execute("SELECT generation FROM translation_cache_generations WHERE provider=?", (provider,)).fetchone()
+        return (row[0] if row else 0) == expected_generation
+
+    def cache_generation(self, provider):
+        with self._connect() as connection:
+            row = connection.execute("SELECT generation FROM translation_cache_generations WHERE provider=?", (provider,)).fetchone()
+        return row[0] if row else 0
 
     def clear_results(self, provider=None):
         with self._connect() as connection:
+            connection.execute("BEGIN IMMEDIATE")
+            connection.executemany("UPDATE translation_cache_generations SET generation=generation+1 WHERE provider=?",
+                                   [(provider,)] if provider else [("llm",), ("mymemory",)])
             if provider:
                 connection.execute("DELETE FROM translation_results_v2 WHERE provider = ?", (provider,))
             else:
                 connection.execute("DELETE FROM translation_results_v2")
+            if provider in {None, "llm"}:
+                connection.execute("DELETE FROM translation_failures")
+                connection.execute("DELETE FROM translation_failures_v2")
 
     def result_count(self, provider=None):
         with self._connect() as connection:

@@ -1,0 +1,602 @@
+// @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils"
+import { createPinia } from "pinia"
+import TaggerPage from "./TaggerPage.vue"
+import { i18n } from "../i18n"
+import { llmApi } from "../api/llm"
+import { taggerApi } from "../api/tagger"
+import { schemasApi } from "../api/schemas"
+import { useTaggerStore } from "../stores/tagger"
+import { readPathPickerPreference, writePathPickerPreference } from "../utils/pathPickerPreference"
+import { ElMessageBox } from "element-plus"
+import { defineComponent } from "vue"
+import LlmSettingsDialog from "../components/LlmSettingsDialog.vue"
+
+vi.mock("vue-router", () => ({ useRoute: () => ({ query: {} }) }))
+vi.mock("../api/llm", () => ({
+  isVerifiedProfile: (profile: { enabled: boolean; ready: boolean; capabilities: string[]; verified_capabilities?: string[] }, capability: string) => Boolean(profile.enabled && profile.ready && profile.capabilities.includes(capability) && profile.verified_capabilities?.includes(capability)),
+  llmApi: {
+    profiles: vi.fn().mockResolvedValue({
+      version: 5, routes: {}, prompt_presets: [], cache: {},
+      profiles: [
+        { id: "text", name: "Text only", source: "remote", capabilities: ["text"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text"] },
+        { id: "local", name: "Local", source: "local-endpoint", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text", "vision"] },
+        { id: "remote", name: "Remote", source: "remote", capabilities: ["text", "vision"], languages: ["zh-CN"], enabled: true, ready: true, verified_capabilities: ["text", "vision"] },
+      ],
+    }),
+    localVisionStatus: vi.fn().mockResolvedValue({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 }),
+    localVisionAction: vi.fn(),
+    saveConfig: vi.fn(),
+    promptPresets: vi.fn().mockResolvedValue({ presets: [], settings: { default_caption_preset_id: null }, revision: "r1" }),
+    savePromptPresets: vi.fn(),
+    importLegacyPromptPresets: vi.fn(),
+  },
+}))
+vi.mock("../api/tagger", async importOriginal => ({
+  tagJobRequest: (await importOriginal<typeof import("../api/tagger")>()).tagJobRequest,
+  taggerApi: {
+    models: vi.fn().mockResolvedValue({ models: [
+      { id: "wd14-convnextv2-v2", name: "WD", model: "wd14-convnextv2-v2", family: "WD", author: "SmilingWolf", runtime: "local", output: "tag", ready: true, downloaded: false, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
+      { id: "llm:local", name: "Local", model: "local-vision", family: "Vision LLM", author: "", runtime: "local", output: "natural", ready: true, downloaded: false, languages: ["zh-CN"], capabilities: ["vision", "caption"], parameters: [], profile_id: "local" },
+      { id: "llm:remote", name: "Remote", model: "remote-vision", family: "Vision LLM", author: "", runtime: "api", output: "natural", ready: true, downloaded: false, languages: ["zh-CN"], capabilities: ["vision", "caption"], parameters: [], profile_id: "remote" },
+    ] }),
+    status: vi.fn().mockResolvedValue({ phase: "idle", message: "", model: "", download: { current: 0, total: 0, percent: 0, filename: "", bytes_current: 0, bytes_total: 0 }, tagging: { current: 0, total: 0, percent: 0, filename: "", bytes_current: 0, bytes_total: 0 }, updated_at: 0 }),
+    captionStatus: vi.fn().mockResolvedValue({ job_id: null, phase: "idle", mode: null, message: "", current: 0, total: 0, filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 0 }),
+    captionHistory: vi.fn().mockResolvedValue({ jobs: [] }),
+    captionReport: vi.fn(),
+    captionStart: vi.fn().mockResolvedValue({
+      job_id: "job", phase: "pending", mode: "natural", message: "", current: 0, total: 1,
+      filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 0,
+    }),
+    captionPreview: vi.fn().mockResolvedValue({ caption: "一只猫。", language: "zh-CN", profile_id: "remote", profile_revision: "rev" }),
+    captionCancel: vi.fn(),
+    captionRetryFailed: vi.fn(),
+    captionRollback: vi.fn(),
+    captionDeleteHistory: vi.fn(),
+  },
+}))
+
+let wrapper: VueWrapper | undefined
+afterEach(() => {
+  wrapper?.unmount()
+  wrapper = undefined
+  vi.clearAllMocks()
+  vi.restoreAllMocks()
+})
+
+async function naturalPage(selectChinese = true, pinia = createPinia()) {
+  wrapper = mount(TaggerPage, {
+    global: { plugins: [pinia, i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } },
+  })
+  await flushPromises()
+  await wrapper.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+  await wrapper.get('[data-testid="parameter-toggle"]').trigger("click")
+  await wrapper.get('[data-testid="tab-advanced"]').trigger("click")
+  await flushPromises()
+  if (selectChinese) {
+    await wrapper.get(".caption-preset-select").setValue("builtin-caption-zh")
+    await flushPromises()
+  }
+  return wrapper
+}
+
+describe("natural-language TaggerPage", () => {
+  it("allows first-time Caption configuration while keeping unverified generation disabled", async () => {
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: [
+      { id: "wd14-convnextv2-v2", name: "WD", model: "wd14-convnextv2-v2", family: "WD", author: "SmilingWolf", runtime: "local", output: "tag", ready: true, downloaded: false, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
+      { id: "llm:unverified", name: "Unverified API", model: "remote-vision", family: "Vision LLM", author: "", runtime: "api", output: "natural", ready: false, downloaded: false, languages: ["en"], capabilities: ["vision", "caption"], parameters: [], profile_id: "unverified" },
+    ] })
+    wrapper = mount(TaggerPage, {
+      global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } },
+    })
+    await flushPromises()
+    const methodButtons = wrapper.find(".tagger-choice-row .tagger-segments").findAll("button")
+    expect((methodButtons[1].element as HTMLButtonElement).disabled).toBe(false)
+    await methodButtons[1].trigger("click")
+    await flushPromises()
+    expect(wrapper.find('[data-testid="llm-model-management"]').exists()).toBe(true)
+    expect((wrapper.get(".tagger-run > .primary-action").element as HTMLButtonElement).disabled).toBe(true)
+    await wrapper.get('input[placeholder="/data/datasets/images/example.png"]').setValue('D:/sample/a.png')
+    const preview = wrapper.findAll('.tagger-actions button').find(button => button.text().includes('测试当前图片'))!
+    expect((preview.element as HTMLButtonElement).disabled).toBe(true)
+    await wrapper.get('[data-testid="llm-model-management"]').trigger("click")
+    expect(wrapper.findComponent(LlmSettingsDialog).props("modelValue")).toBe(true)
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+    expect(taggerApi.captionPreview).not.toHaveBeenCalled()
+  })
+
+  it("opens model management with no Caption candidates and selects a newly verified remote", async () => {
+    const original = await taggerApi.models()
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: original.models.filter(model => model.output === "tag") })
+    wrapper = mount(TaggerPage, {
+      global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } },
+    })
+    await flushPromises()
+    await wrapper.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+    await flushPromises()
+    expect(wrapper.find('[data-testid="llm-model-management"]').exists()).toBe(true)
+    expect((wrapper.get(".tagger-run > .primary-action").element as HTMLButtonElement).disabled).toBe(true)
+    await wrapper.get('[data-testid="llm-model-management"]').trigger("click")
+    const document = { models: original.models.map(model => model.output === "natural" ? { ...model, languages: ["en", "zh-CN"] } : model) }
+    vi.mocked(taggerApi.models).mockResolvedValueOnce(document)
+    wrapper.findComponent(LlmSettingsDialog).vm.$emit("saved")
+    await flushPromises()
+    expect(wrapper.get('[data-testid="model-select"]').text()).toContain("remote-vision")
+    expect((wrapper.get(".tagger-run > .primary-action").element as HTMLButtonElement).disabled).toBe(false)
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+  })
+
+  it("uses presets for language and detail and protects custom drafts", async () => {
+    const page = await naturalPage(false)
+    expect(page.find('.caption-output-language').exists()).toBe(false)
+    expect(page.find('.caption-detail').exists()).toBe(false)
+    expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-en')
+    expect(page.get('.caption-preset-properties').text()).toContain('English')
+    expect(page.get('.caption-preset-properties').text()).toContain('.txt')
+    expect((page.get('.caption-system-prompt').element as HTMLTextAreaElement).value).not.toMatch(/[\u3400-\u9fff]/)
+    await page.get('.caption-preset-select').setValue('builtin-caption-en-brief')
+    await flushPromises()
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('one or two concise sentences')
+    await page.get('.caption-preset-select').setValue('builtin-caption-zh-brief')
+    await flushPromises()
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('一到两句简短描述')
+    expect(page.get('.caption-preset-properties').text()).toContain('简体中文')
+    await page.get('textarea').setValue('我的未保存提示词')
+    vi.spyOn(ElMessageBox, 'confirm').mockRejectedValueOnce('cancel')
+    await page.get('.caption-preset-select').setValue('builtin-caption-en')
+    await flushPromises()
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toBe('我的未保存提示词')
+    expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-zh-brief')
+    expect(page.get('.caption-preset-properties').text()).toContain('简体中文')
+  })
+  it("preserves the English preset on an incompatible model and blocks generation until a compatible preset is selected", async () => {
+    const page = await naturalPage(false)
+    await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue('D:/sample/a.png')
+    expect(page.get('.caption-preset-incompatible').text()).toContain('预设语言')
+    expect((page.get('.tagger-run > .primary-action').element as HTMLButtonElement).disabled).toBe(true)
+    const preview = page.findAll('.tagger-actions button').find(button => button.text().includes('测试当前图片'))!
+    expect((preview.element as HTMLButtonElement).disabled).toBe(true)
+    await preview.trigger('click')
+    expect(taggerApi.captionPreview).not.toHaveBeenCalled()
+    expect((page.get('textarea').element as HTMLTextAreaElement).value).toContain('language must be "en"')
+    await page.get('.caption-preset-select').setValue('builtin-caption-zh')
+    await flushPromises()
+    expect(page.find('.caption-preset-incompatible').exists()).toBe(false)
+    expect((page.get('.tagger-run > .primary-action').element as HTMLButtonElement).disabled).toBe(false)
+  })
+  it("saves custom drafts with the base preset language and uses the same preset configuration for preview and batch", async () => {
+    const document = await taggerApi.models()
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: document.models.map(model => model.output === 'natural' ? { ...model, languages: ['en', 'zh-CN'] } : model) })
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => update)
+    const page = await naturalPage(false)
+    await page.get('.caption-preset-select').setValue('builtin-caption-en-brief')
+    await flushPromises()
+    await page.get('.caption-preset-name').setValue('My brief preset')
+    await page.get('textarea').setValue('Describe visible facts in English. Return JSON with caption and language="en".')
+    await page.findAll('.caption-preset-actions button')[0].trigger('click')
+    await flushPromises()
+    const saved = vi.mocked(llmApi.savePromptPresets).mock.calls[0][0].presets[0]
+    expect(saved).toMatchObject({ language: 'en', output_format: 'plain_text', name: 'My brief preset' })
+    await page.get('input[placeholder="/data/datasets/images"]').setValue('D:/sample')
+    await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue('D:/sample/a.png')
+    await page.findAll('.tagger-actions button').find(button => button.text().includes('测试当前图片'))!.trigger('click')
+    await flushPromises()
+    await page.get('.tagger-run > .primary-action').trigger('click')
+    await flushPromises()
+    const { image_path, ...configuration } = vi.mocked(taggerApi.captionPreview).mock.calls[0][0]
+    expect(image_path).toBe('D:/sample/a.png')
+    expect(configuration).toMatchObject({ language: saved.language, prompt_id: saved.id, prompt: saved.template, system_prompt: saved.system_prompt, max_caption_length: saved.max_length })
+    expect(taggerApi.captionStart).toHaveBeenCalledWith(configuration)
+  })
+  it("shows active Tag downloads beside the selected model", async () => {
+    const idle = await taggerApi.status()
+    vi.mocked(taggerApi.status).mockResolvedValueOnce({ ...idle, phase: "downloading", model: "wd14-convnextv2-v2", download: { ...idle.download, percent: 52, filename: "model.onnx" } })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
+    await flushPromises()
+    expect(wrapper.get(".tagger-model-row").text()).toContain("52%")
+    expect(wrapper.get(".tagger-model-row").text()).toContain("model.onnx")
+    expect(wrapper.get('[data-testid="tagger-download-progress"]').text()).toContain("52%")
+    expect(wrapper.get('[data-testid="tagger-download-progress"]').text()).toContain("model.onnx")
+    expect(wrapper.findComponent({ name: "ElSelect" }).exists()).toBe(true)
+  })
+  it("submits Tag previews and batches through the same durable API with only Tag parameters", async () => {
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
+    await flushPromises()
+    await wrapper.get('input[placeholder="/data/datasets/images"]').setValue("D:\\samples")
+    await wrapper.get('input[placeholder="/data/datasets/images/example.png"]').setValue("D:/samples/a.png")
+    vi.mocked(taggerApi.captionPreview).mockResolvedValueOnce({ caption: "cat, window", tags: ["cat", "window"], language: "native" })
+    await wrapper.findAll(".tagger-actions button").find(button => button.text().includes("测试当前图片"))!.trigger("click")
+    await flushPromises()
+    expect(wrapper.get(".caption-preview").text()).toContain("cat, window")
+    await wrapper.get(".tagger-run > .primary-action").trigger("click")
+    await flushPromises()
+    const preview = vi.mocked(taggerApi.captionPreview).mock.calls[0][0]
+    const batch = vi.mocked(taggerApi.captionStart).mock.calls[0][0]
+    const { image_path, ...configuration } = preview
+    expect(image_path).toBe("D:/samples/a.png")
+    expect(batch).toEqual(configuration)
+    expect(batch).toMatchObject({ path: "D:/samples", mode: "tag", runtime: "local", model_id: "wd14-convnextv2-v2", threshold: .35, recursive: true, conflict_action: "ignore" })
+    expect(Object.keys(batch)).not.toEqual(expect.arrayContaining(["prompt", "profile_id"]))
+    expect(batch).not.toHaveProperty("batch_input_recursive")
+    expect(batch).not.toHaveProperty("max_tokens")
+    expect(batch).not.toHaveProperty("concurrency")
+  })
+  it("imports legacy presets only after confirmation and preserves the current draft", async () => {
+    const config = await llmApi.profiles()
+    vi.mocked(llmApi.profiles).mockResolvedValueOnce({ ...config, prompt_presets: [{ id: "legacy", name: "旧预设", template: "旧提示词", language: "zh-CN" }] })
+    // Element Plus resolves confirmation actions as strings, while its type
+    // declares the input-dialog data/action intersection for all shortcuts.
+    vi.spyOn(ElMessageBox, "confirm").mockRejectedValueOnce("cancel").mockResolvedValueOnce("confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    vi.mocked(llmApi.importLegacyPromptPresets).mockResolvedValueOnce({ revision: "r2", presets: [{ id: "legacy", kind: "caption_prompt", name: "旧预设", template: "旧提示词", language: "zh-CN", max_length: 2000, output_format: "plain_text", model_capabilities: ["vision", "caption"], revision: "p1" }], settings: { default_caption_preset_id: null, legacy_imported: true } })
+    const page = await naturalPage()
+    await page.get("textarea").setValue("保留当前草稿")
+    await page.get(".caption-legacy-import button").trigger("click")
+    await flushPromises()
+    expect(llmApi.importLegacyPromptPresets).not.toHaveBeenCalled()
+    await page.get(".caption-legacy-import button").trigger("click")
+    await flushPromises()
+    expect(llmApi.importLegacyPromptPresets).toHaveBeenCalledWith("r1")
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("保留当前草稿")
+    expect(page.find('.caption-preset-select option[value="legacy"]').exists()).toBe(true)
+    expect(page.find(".caption-legacy-import").exists()).toBe(false)
+    expect(llmApi.saveConfig).not.toHaveBeenCalled()
+  })
+
+  it("retains the draft and import entry after an import conflict", async () => {
+    const config = await llmApi.profiles()
+    vi.mocked(llmApi.profiles).mockResolvedValueOnce({ ...config, prompt_presets: [{ id: "legacy", name: "旧预设", template: "旧提示词", language: "zh-CN" }] })
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue("confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    vi.mocked(llmApi.importLegacyPromptPresets).mockRejectedValueOnce(new Error("revision conflict"))
+    const page = await naturalPage()
+    await page.get("textarea").setValue("未保存草稿")
+    await page.get(".caption-legacy-import button").trigger("click")
+    await flushPromises()
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("未保存草稿")
+    expect(page.find(".caption-legacy-import").exists()).toBe(true)
+    expect(page.find('.caption-preset-select option[value="legacy"]').exists()).toBe(false)
+  })
+
+  it("discards unsaved system prompt and name changes together", async () => {
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => update)
+    const page = await naturalPage()
+    await page.get(".caption-preset-name").setValue("保存版本")
+    await page.get(".caption-system-prompt").setValue("只描述可见内容")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    await page.get(".caption-system-prompt").setValue("未保存系统提示词")
+    await page.get(".caption-preset-name").setValue("未保存名称")
+    await page.findAll(".caption-preset-actions button")[1].trigger("click")
+    expect((page.get(".caption-system-prompt").element as HTMLTextAreaElement).value).toBe("只描述可见内容")
+    expect((page.get(".caption-preset-name").element as HTMLInputElement).value).toBe("保存版本")
+  })
+
+  it("refreshes a conflicting revision without discarding unsaved edits", async () => {
+    const page = await naturalPage()
+    await page.get("textarea").setValue("并发时保留的草稿")
+    await page.get(".caption-preset-name").setValue("我的名称")
+    vi.mocked(llmApi.promptPresets).mockResolvedValueOnce({ presets: [], settings: {}, revision: "r2" })
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => update)
+    await page.get(".caption-refresh-presets").trigger("click")
+    await flushPromises()
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("并发时保留的草稿")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    expect(llmApi.savePromptPresets).toHaveBeenCalledWith(expect.objectContaining({ revision: "r2", presets: [expect.objectContaining({ name: "我的名称", template: "并发时保留的草稿" })] }))
+  })
+
+  it("loads the initial catalog when mounted inside KeepAlive", async () => {
+    const host = defineComponent({ components: { TaggerPage }, template: "<KeepAlive><TaggerPage /></KeepAlive>" })
+    wrapper = mount(host, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
+    await flushPromises()
+    expect(wrapper.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("wd14-convnextv2-v2")
+    await wrapper.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+    expect(wrapper.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("llm:remote")
+  })
+  it("protects unsaved prompt edits when a template switch is cancelled", async () => {
+    vi.spyOn(ElMessageBox, "confirm").mockRejectedValue("cancel")
+    const page = await naturalPage()
+    await page.get("textarea").setValue("保留我的修改")
+    await page.get(".caption-preset-select").setValue("builtin-caption-zh")
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledOnce()
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("保留我的修改")
+    expect((page.get(".caption-preset-select").element as HTMLSelectElement).value).toBe("builtin-caption-zh")
+    expect(llmApi.savePromptPresets).not.toHaveBeenCalled()
+    expect(page.text()).not.toContain("组合打标")
+  })
+
+  it("saves edited built-in templates as user copies", async () => {
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => update)
+    const page = await naturalPage()
+    await page.get(".caption-preset-select").setValue("builtin-caption-zh")
+    await flushPromises()
+    await page.get("textarea").setValue("我的模板 {{language}}")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    const saved = vi.mocked(llmApi.savePromptPresets).mock.calls[0][0]
+    expect(saved.presets[0].id).not.toBe("builtin-caption-zh")
+    expect(saved.presets[0].template).toBe("我的模板 {{language}}")
+    expect(saved.revision).toBe("r1")
+  })
+
+  it("selects API vision by model capability and excludes text-only models", async () => {
+    const page = await naturalPage()
+    expect(page.findAllComponents({ name: "ElOption" }).map(option => option.props("value"))).toEqual(["llm:remote"])
+    expect(page.text()).not.toContain("Text only")
+    expect(page.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("llm:remote")
+    expect(llmApi.localVisionStatus).not.toHaveBeenCalled()
+  })
+
+  it("submits edited prompt through the caption API with local fallback off by default", async () => {
+    const page = await naturalPage()
+    await page.get('input[placeholder="/data/datasets/images"]').setValue("D:/sample")
+    await page.get("textarea").setValue("只描述主体，使用{{language}}")
+    await page.get(".tagger-run > .primary-action").trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionStart).toHaveBeenCalledWith(expect.objectContaining({
+      path: "D:/sample", mode: "natural", prompt: "只描述主体，使用{{language}}", profile_id: "remote",
+    }))
+    const submitted = vi.mocked(taggerApi.captionStart).mock.calls[0][0]
+    if (submitted.mode !== "natural") throw new Error("Expected natural Caption request")
+    expect(submitted.allow_local_fallback).toBeFalsy()
+    expect(submitted.runtime).toBe("api")
+    expect(submitted.model_id).toBe("llm:remote")
+    expect(submitted).not.toHaveProperty("threshold")
+    expect(submitted).not.toHaveProperty("interrogator_model")
+  })
+
+  it("previews a single image through the preview endpoint without starting a batch", async () => {
+    const page = await naturalPage()
+    await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue("D:/sample/a.png")
+    await page.findAll(".tagger-actions .secondary-action").at(-1)!.trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionPreview).toHaveBeenCalledOnce()
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+    expect(page.get(".caption-preview").text()).toContain("一只猫。")
+  })
+
+  it("browses preview images using the image picker and applies the returned file path", async () => {
+    const previousPreference = readPathPickerPreference()
+    writePathPickerPreference("native")
+    const picked = vi.spyOn(schemasApi, "pickFile").mockResolvedValue({ path: "D:/sample/preview.png" })
+    try {
+      const page = await naturalPage()
+      await page.get(".caption-preview-controls button").trigger("click")
+      await flushPromises()
+      expect(picked.mock.calls[0]?.[0]).toBe("image")
+      expect((page.get('input[placeholder="/data/datasets/images/example.png"]').element as HTMLInputElement).value).toBe("D:/sample/preview.png")
+    } finally {
+      writePathPickerPreference(previousPreference)
+    }
+  })
+
+  it.each(["local", "api"] as const)("shows preview activity without a download meter for %s inference", async runtime => {
+    const pinia = createPinia()
+    const page = await naturalPage(true, pinia)
+    if (runtime === "api") {
+      await page.findAll(".tagger-choice-row")[1].findAll("button")[1].trigger("click")
+      await flushPromises()
+    }
+    let finish!: () => void
+    const pending = new Promise<void>(resolve => { finish = resolve })
+    vi.mocked(taggerApi.captionPreview).mockImplementationOnce(async () => {
+      await pending
+      return { caption: "一只猫。", language: "zh-CN", profile_id: runtime, profile_revision: "rev" }
+    })
+    await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue("D:/sample/a.png")
+    const button = page.findAll(".tagger-actions button").find(item => item.text().includes("测试当前图片"))!
+    await button.trigger("click")
+    const idle = await taggerApi.status()
+    vi.mocked(taggerApi.status).mockResolvedValueOnce({ ...idle, phase: "captioning", message: "正在预览当前图片", download: { ...idle.download, percent: 89, filename: "previous-model.onnx" } })
+    const sharedStatus = useTaggerStore(pinia)
+    await sharedStatus.refresh()
+    await flushPromises()
+    expect((button.element as HTMLButtonElement).disabled).toBe(true)
+    expect(page.get(".tagger-run-status").text()).toContain("正在预览当前图片")
+    expect(page.get(".tagger-run-status").text()).not.toContain(i18n.global.t("tagger.downloadMeter"))
+    expect(page.find('[data-testid="tagger-download-progress"]').exists()).toBe(false)
+    finish()
+    await flushPromises()
+    await sharedStatus.refresh()
+    await flushPromises()
+    expect(page.get(".caption-preview").text()).toContain("一只猫。")
+  })
+
+  it("saves a named prompt preset and discards later edits", async () => {
+    const page = await naturalPage()
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => ({ ...update, presets: update.presets, settings: update.settings }))
+    await page.get(".caption-preset-name").setValue("主体描述")
+    await page.get("textarea").setValue("只描述主体 {{language}}")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    expect(llmApi.savePromptPresets).toHaveBeenCalledWith(expect.objectContaining({ presets: [expect.objectContaining({ kind: "caption_prompt", name: "主体描述", template: "只描述主体 {{language}}", language: "zh-CN" })] }))
+    await page.get("textarea").setValue("未保存的修改")
+    await page.findAll(".caption-preset-actions button")[1].trigger("click")
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("只描述主体 {{language}}")
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+  })
+
+  it("keeps the saved length limit when discarding prompt changes", async () => {
+    const page = await naturalPage()
+    vi.mocked(llmApi.savePromptPresets).mockImplementationOnce(async update => ({ ...update, presets: update.presets, settings: update.settings }))
+    await page.get(".caption-preset-name").setValue("简洁")
+    await page.get(".caption-max-length").setValue("40")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    await page.get(".caption-max-length").setValue("120")
+    await page.findAll(".caption-preset-actions button")[1].trigger("click")
+    expect((page.get(".caption-max-length").element as HTMLInputElement).value).toBe("40")
+  })
+
+  it("does not submit or save an invalid caption length limit", async () => {
+    const page = await naturalPage()
+    await page.get('input[placeholder="/data/datasets/images"]').setValue("D:/sample")
+    await page.get(".caption-max-length").setValue("0")
+    await page.get(".tagger-run > .primary-action").trigger("click")
+    await page.findAll(".caption-preset-actions button")[0].trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+    expect(llmApi.savePromptPresets).not.toHaveBeenCalled()
+  })
+
+  it("does not silently change the preset language when switching models", async () => {
+    const document = await taggerApi.models()
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: document.models.map(model => model.runtime === 'api' ? { ...model, languages: ['en'] } : model) })
+    const page = await naturalPage(false)
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[0].trigger("click")
+    await flushPromises()
+    expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-en')
+    expect(page.get('.caption-preset-properties').text()).toContain('English')
+    expect(page.find('.caption-preset-incompatible').exists()).toBe(true)
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[1].trigger("click")
+    await flushPromises()
+    expect((page.get('.caption-preset-select').element as HTMLSelectElement).value).toBe('builtin-caption-en')
+    expect(page.find('.caption-preset-incompatible').exists()).toBe(false)
+  })
+
+  it("disables the API source when the model catalog has no API vision models", async () => {
+    const baseline = await taggerApi.models()
+    vi.mocked(taggerApi.models).mockResolvedValueOnce({ models: baseline.models.filter(model => model.runtime === "local") })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
+    await flushPromises()
+    await wrapper.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+    const sources = wrapper.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")
+    expect(sources[1].text()).toBe("API")
+    expect((sources[1].element as HTMLButtonElement).disabled).toBe(true)
+    expect(sources[0].attributes("aria-pressed")).toBe("true")
+  })
+
+  it("preserves each Caption model's settings across runtime switches", async () => {
+    const page = await naturalPage()
+    await page.get("textarea").setValue("远程提示词")
+    await page.get('[data-testid="caption-concurrency"]').setValue("6")
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[0].trigger("click")
+    await page.get("textarea").setValue("本地提示词")
+    await page.get('[data-testid="caption-concurrency"]').setValue("2")
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[1].trigger("click")
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("远程提示词")
+    expect((page.get('[data-testid="caption-concurrency"]').element as HTMLInputElement).value).toBe("6")
+    await page.findAll(".tagger-choice-row .tagger-segments")[1].findAll("button")[0].trigger("click")
+    expect((page.get("textarea").element as HTMLTextAreaElement).value).toBe("本地提示词")
+    expect((page.get('[data-testid="caption-concurrency"]').element as HTMLInputElement).value).toBe("2")
+  })
+
+  it("disables repeat previews while an inference request is pending", async () => {
+    let finish!: () => void
+    const pending = new Promise<void>(resolve => { finish = resolve })
+    vi.mocked(taggerApi.captionPreview).mockImplementationOnce(async () => {
+      await pending
+      return { caption: "一只猫。", language: "zh-CN", profile_id: "remote", profile_revision: "rev" }
+    })
+    const page = await naturalPage()
+    await page.get('input[placeholder="/data/datasets/images/example.png"]').setValue("D:/sample/a.png")
+    const button = page.findAll(".tagger-actions button").find(item => item.text().includes("测试当前图片"))!
+    await button.trigger("click")
+    expect((button.element as HTMLButtonElement).disabled).toBe(true)
+    await button.trigger("click")
+    expect(taggerApi.captionPreview).toHaveBeenCalledOnce()
+    finish()
+    await flushPromises()
+    expect((button.element as HTMLButtonElement).disabled).toBe(false)
+  })
+
+  it("shows recovered failures and exposes retry without rewriting completed files", async () => {
+    vi.mocked(taggerApi.captionStatus).mockResolvedValueOnce({ job_id: "recovered", phase: "error", mode: "natural", message: "recovered", current: 1, total: 2, filename: "", succeeded: 1, failed: 1, cancelled: 0, errors: [{ filename: "b.png", code: "caption_interrupted", message: "未完成" }], updated_at: 1, recovered: true })
+    vi.mocked(taggerApi.captionRetryFailed).mockResolvedValueOnce({ job_id: "retry", phase: "pending", mode: "natural", message: "retry", current: 0, total: 1, filename: "", succeeded: 0, failed: 0, cancelled: 0, errors: [], updated_at: 2 })
+    const page = await naturalPage()
+    expect(page.text()).toContain("已恢复上次任务")
+    const retry = page.findAll(".tagger-actions button").find(button => button.text().includes("重试失败项"))!
+    await retry.trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionRetryFailed).toHaveBeenCalledOnce()
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+  })
+
+  it("loads a historical report with actual profile revisions and write hashes", async () => {
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "old-job", phase: "done", mode: "natural", message: "", current: 1, total: 1, filename: "", succeeded: 1, failed: 0, cancelled: 0, errors: [], updated_at: 1 }] })
+    vi.mocked(taggerApi.captionReport).mockResolvedValueOnce({ job_id: "old-job", phase: "done", snapshot: {}, report: { items: [{ filename: "a.png", status: "written", profile_id: "remote", profile_revision: "profile-rev", before_hash: "before-sha", after_hash: "after-sha" }] } })
+    const page = await naturalPage()
+    await page.get(".caption-history select").setValue("old-job")
+    await flushPromises()
+    expect(taggerApi.captionReport).toHaveBeenCalledWith("old-job")
+    expect(page.get(".caption-report").text()).toContain("profile-rev")
+    expect(page.get(".caption-report").text()).toContain("before-sha → after-sha")
+  })
+
+  it("shows errors from older recovered reports even when they lack an error code", async () => {
+    vi.mocked(taggerApi.captionReport).mockResolvedValueOnce({ job_id: "old-interrupted", phase: "error", snapshot: {}, report: { items: [{ filename: "a.png", status: "interrupted", error: "服务重启前未完成此图片，可重试" }] } })
+    const page = await naturalPage()
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "old-interrupted", phase: "error", mode: "natural", message: "", current: 0, total: 1, filename: "", succeeded: 0, failed: 1, cancelled: 0, errors: [], updated_at: 1 }] })
+    await page.get(".caption-history button").trigger("click")
+    await flushPromises()
+    await page.get(".caption-history select").setValue("old-interrupted")
+    await flushPromises()
+    expect(page.get(".caption-report").text()).toContain("服务重启前未完成此图片，可重试")
+  })
+
+  it("requires confirmation before rollback and exposes partial conflicts", async () => {
+    vi.spyOn(ElMessageBox, "confirm").mockImplementation(vi.fn().mockResolvedValue("confirm"))
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "done", phase: "done", mode: "natural", message: "", current: 1, total: 1, filename: "", succeeded: 1, failed: 0, cancelled: 0, errors: [], updated_at: 1 }] })
+    vi.mocked(taggerApi.captionReport).mockResolvedValue({ job_id: "done", phase: "done", snapshot: {}, report: { items: [{ filename: "a.png", status: "written" }] } })
+    vi.mocked(taggerApi.captionRollback).mockResolvedValue({ job_id: "done", restored: 0, conflicts: 1, skipped: 0, items: [{ filename: "a.png", status: "conflict", code: "caption_conflict" }] })
+    const page = await naturalPage()
+    await page.get(".caption-history select").setValue("done")
+    await flushPromises()
+    expect(taggerApi.captionRollback).not.toHaveBeenCalled()
+    await page.get(".caption-maintenance button").trigger("click")
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalled()
+    expect(taggerApi.captionRollback).toHaveBeenCalledWith("done")
+    expect(page.get(".caption-report").text()).toContain("冲突保留 1")
+  })
+  it("cancels the active durable job without creating a replacement batch", async () => {
+    const active = { job_id: "active", phase: "captioning" as const, mode: "natural" as const,
+      message: "running", current: 1, total: 3, filename: "b.png", succeeded: 1, failed: 0,
+      cancelled: 0, errors: [], updated_at: 1 }
+    vi.mocked(taggerApi.captionStatus).mockResolvedValueOnce(active)
+    vi.mocked(taggerApi.captionCancel).mockResolvedValueOnce({ ...active, phase: "cancelling" })
+    wrapper = mount(TaggerPage, { global: { plugins: [createPinia(), i18n], stubs: { PathPickerDialog: true, ManagedDatasetPicker: true, LlmSettingsDialog: true } } })
+    await flushPromises()
+    await wrapper.get(".tagger-run > .danger-action").trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionCancel).toHaveBeenCalledOnce()
+    expect(taggerApi.captionStart).not.toHaveBeenCalled()
+    expect(taggerApi.captionRetryFailed).not.toHaveBeenCalled()
+    expect(taggerApi.captionHistory).toHaveBeenCalledTimes(2)
+  })
+
+  it("does not roll back or remove report history after confirmation is cancelled", async () => {
+    vi.spyOn(ElMessageBox, "confirm").mockRejectedValue("cancel")
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "retain", phase: "done", mode: "natural", message: "", current: 1, total: 1, filename: "", succeeded: 1, failed: 0, cancelled: 0, errors: [], updated_at: 1 }] })
+    vi.mocked(taggerApi.captionReport).mockResolvedValueOnce({ job_id: "retain", phase: "done", snapshot: {}, report: { items: [{ filename: "a.png", status: "written" }] } })
+    const page = await naturalPage()
+    await page.get(".caption-history select").setValue("retain")
+    await flushPromises()
+    await page.findAll(".caption-maintenance button")[0].trigger("click")
+    await flushPromises()
+    await page.findAll(".caption-maintenance button")[1].trigger("click")
+    await flushPromises()
+    expect(ElMessageBox.confirm).toHaveBeenCalledTimes(2)
+    expect(taggerApi.captionRollback).not.toHaveBeenCalled()
+    expect(taggerApi.captionDeleteHistory).not.toHaveBeenCalled()
+    expect(page.get(".caption-report").text()).toContain("retain")
+  })
+
+  it("deletes only confirmed history and clears the selected report without rolling back files", async () => {
+    vi.spyOn(ElMessageBox, "confirm").mockResolvedValue("confirm" as Awaited<ReturnType<typeof ElMessageBox.confirm>>)
+    vi.mocked(taggerApi.captionHistory).mockResolvedValueOnce({ jobs: [{ job_id: "remove", phase: "done", mode: "natural", message: "", current: 1, total: 1, filename: "", succeeded: 1, failed: 0, cancelled: 0, errors: [], updated_at: 1 }] })
+    vi.mocked(taggerApi.captionReport).mockResolvedValueOnce({ job_id: "remove", phase: "done", snapshot: {}, report: { items: [{ filename: "a.png", status: "written" }] } })
+    vi.mocked(taggerApi.captionDeleteHistory).mockResolvedValueOnce({ deleted: true, job_id: "remove" })
+    const page = await naturalPage()
+    await page.get(".caption-history select").setValue("remove")
+    await flushPromises()
+    await page.findAll(".caption-maintenance button")[1].trigger("click")
+    await flushPromises()
+    expect(taggerApi.captionDeleteHistory).toHaveBeenCalledWith("remove")
+    expect(taggerApi.captionRollback).not.toHaveBeenCalled()
+    expect(page.find(".caption-report").exists()).toBe(false)
+    expect((page.get(".caption-history select").element as HTMLSelectElement).value).toBe("")
+  })
+
+})

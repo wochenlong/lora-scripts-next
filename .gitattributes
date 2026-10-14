@@ -12,6 +12,8 @@ frontend/dist/**/*.html text eol=lf
 frontend/dist/**/*.js text eol=lf
 frontend/dist/**/*.css text eol=lf
 frontend/index.html text eol=lf
+# The pinned upstream dictionary license must keep its audited SHA256 on Windows.
+docs/third_party/ffdkj-danbooru-tag-table-MIT.txt text eol=lf
 
 
 # WSL/bash scripts stay LF (see agent-assets/.gitattributes same rule)

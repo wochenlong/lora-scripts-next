@@ -6,8 +6,8 @@ param(
     [switch]$Clean,
     [switch]$Skip7z,
     [switch]$SkipTaggerPrefetch,
-    # The Danbooru Chinese dictionary is ~23 MB; bundling it makes 中文释义 work
-    # offline out of the box instead of asking the user to press 下载.
+    # Compatibility switch: skip downloading only. A complete verified public
+    # dictionary bundle is still required, including when -Skip7z is used.
     [switch]$SkipTagDictionaryPrefetch,
     [string]$TaggerCacheSource = "",
     # Lite (default): no Anima Fast runtime — GitHub upload target (<2 GB compressed).
@@ -35,6 +35,7 @@ param(
 
 $ErrorActionPreference = "Stop"
 $startTime = Get-Date
+. (Join-Path $PSScriptRoot "tag-dictionary-bundle.ps1")
 
 $buildDir    = Join-Path $ProjectRoot "build"
 $portableDir = Join-Path $buildDir "Next-Trainer-Portable"
@@ -623,39 +624,11 @@ if ($SkipTaggerPrefetch) {
 }
 
 # ==== Step 3c: Bundle the Danbooru Chinese tag dictionary (offline 中文释义) ====
-Write-Host "[3c/6] Bundling Danbooru Chinese tag dictionary (~23 MB, offline 中文释义)..." -ForegroundColor Cyan
-$dictionaryDir = Join-Path $sdtDir "assets\tag_translation\danbooru"
-New-Item -ItemType Directory -Path $dictionaryDir -Force | Out-Null
-$dictionaryScript = Join-Path $sdtDir "scripts\prefetch_tag_dictionary.py"
-$dictionaryFile = Join-Path $dictionaryDir "tag.sqlite"
+Write-Host "[3c/6] Preparing the verified Danbooru Chinese dictionary bundle..." -ForegroundColor Cyan
 if ($SkipTagDictionaryPrefetch) {
-    Write-Host "  Skipping dictionary prefetch (-SkipTagDictionaryPrefetch)" -ForegroundColor Yellow
-} elseif (Test-Path $dictionaryFile) {
-    Write-Host "  Dictionary already present, keeping it" -ForegroundColor Green
-} elseif (-not (Test-Path $dictionaryScript)) {
-    throw "dictionary prefetch script missing: $dictionaryScript"
+    Invoke-PortableTagDictionary -PythonExe $pythonExe -TrainerDir $sdtDir -Mode Verify
 } else {
-    $prevDictEap = $ErrorActionPreference
-    $ErrorActionPreference = 'Continue'
-    # The translation service fetches over aiohttp; build-time packages are removed again below.
-    if (Test-Path $getPipPath) {
-        & $pythonExe $getPipPath --no-warn-script-location 2>&1 | Out-Null
-    }
-    & $pythonExe -s -m pip install -q aiohttp 2>&1 | Out-Null
-    & $pythonExe -s $dictionaryScript --directory $dictionaryDir --if-missing
-    $dictionaryExit = $LASTEXITCODE
-    $dictSitePackages = Join-Path $pythonDir "Lib\site-packages"
-    if (Test-Path $dictSitePackages) {
-        Get-ChildItem $dictSitePackages -Force | Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-    }
-    $ErrorActionPreference = $prevDictEap
-    if ($dictionaryExit -ne 0) {
-        throw "tag dictionary prefetch failed (exit $dictionaryExit). Check GitHub reachability and retry."
-    }
-    if (-not (Test-Path $dictionaryFile)) {
-        throw "Dictionary missing after prefetch: $dictionaryFile"
-    }
-    Write-Host "  Bundled assets/tag_translation/danbooru/tag.sqlite" -ForegroundColor Green
+    Invoke-PortableTagDictionary -PythonExe $pythonExe -TrainerDir $sdtDir -Mode Prepare
 }
 
 Write-Host ""
@@ -939,6 +912,7 @@ Write-Host "  Done" -ForegroundColor Green
 
 # ==== Step 5: 7z archive ====
 
+Invoke-PortableTagDictionary -PythonExe $pythonExe -TrainerDir $sdtDir -Mode Verify
 & $pythonExe -s (Join-Path $sdtDir "scripts/portable/portable_git.py") verify --trainer-dir $sdtDir
 if ($LASTEXITCODE -ne 0) { throw "Portable Git integrity check failed" }
 & $pythonExe -s (Join-Path $sdtDir "tests/test_portable_git_behavior.py")

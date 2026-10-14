@@ -39,6 +39,33 @@ def test_tagger_busy_guard():
     tagger_progress.reset_idle("test")
 
 
+def test_prefetch_reports_already_downloaded_without_starting_job(monkeypatch):
+    from mikazuki.app import api as app_api
+    tagger_progress.reset_idle("test")
+    called = []
+    monkeypatch.setattr(app_api, "interrogator_assets_ready", lambda *_args: True)
+    monkeypatch.setattr(app_api, "run_prefetch_job", lambda *_args: called.append(True))
+    response = TestClient(app).post("/api/tagger/prefetch", json={"interrogator_model": "wd14-convnextv2-v2"})
+    assert response.status_code == 200
+    assert response.json()["message"] == "Tag 模型已下载，无需重复下载"
+    assert response.json()["data"] == {"model_id": "wd14-convnextv2-v2", "already_downloaded": True}
+    assert called == []
+    assert tagger_progress.get()["phase"] == "idle"
+
+
+def test_prefetch_reports_started_for_missing_assets(monkeypatch):
+    from mikazuki.app import api as app_api
+    tagger_progress.reset_idle("test")
+    called = []
+    monkeypatch.setattr(app_api, "interrogator_assets_ready", lambda *_args: False)
+    monkeypatch.setattr(app_api, "run_prefetch_job", lambda *_args: called.append(True))
+    response = TestClient(app).post("/api/tagger/prefetch", json={"interrogator_model": "wd14-convnextv2-v2"})
+    assert response.status_code == 200
+    assert response.json()["data"]["already_downloaded"] is False
+    assert called == [True]
+    tagger_progress.reset_idle("test")
+
+
 def test_tagger_html_serves_progress_script():
     # /tagger.html now serves the Vue SPA shell; the progress UI lives in the
     # Vue tagger page (TaggerPage.vue), not a standalone tagger-progress.js.

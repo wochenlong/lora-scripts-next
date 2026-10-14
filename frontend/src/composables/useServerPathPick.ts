@@ -1,11 +1,21 @@
 import { ref } from "vue"
 import { ApiError } from "../api/client"
 import type { PathBrowserMode } from "../api/pathBrowser"
-import { schemasApi } from "../api/schemas"
+import { schemasApi, type FilePickerType } from "../api/schemas"
 import {
   readPathPickerPreference,
   type PathPickerPreference,
 } from "../utils/pathPickerPreference"
+
+interface ServerPathPickOptions {
+  mode?: PathBrowserMode
+  initialPath?: string
+  nameFilter?: string
+  /** 文件模式默认选择模型权重；图片调用须显式指定。 */
+  fileType?: FilePickerType
+}
+
+const IMAGE_NAME_FILTER = "*.png;*.jpg;*.jpeg;*.webp;*.bmp;*.gif;*.tif;*.tiff"
 
 export function shouldTryNativePicker(
   preference: PathPickerPreference,
@@ -27,31 +37,24 @@ export function useServerPathPick() {
   const nameFilter = ref("")
   let resolvePick: ((path: string | null) => void) | null = null
 
-  function openWebPicker(options?: {
-    mode?: PathBrowserMode
-    initialPath?: string
-    nameFilter?: string
-  }): Promise<string | null> {
+  function openWebPicker(options?: ServerPathPickOptions): Promise<string | null> {
     mode.value = options?.mode || "folder"
     initialPath.value = options?.initialPath || ""
-    nameFilter.value = options?.nameFilter || ""
+    nameFilter.value = options?.nameFilter
+      || (options?.mode === "file" && options.fileType === "image" ? IMAGE_NAME_FILTER : "")
     open.value = true
     return new Promise((resolve) => {
       resolvePick = resolve
     })
   }
 
-  async function pick(options?: {
-    mode?: PathBrowserMode
-    initialPath?: string
-    nameFilter?: string
-  }): Promise<string | null> {
+  async function pick(options?: ServerPathPickOptions): Promise<string | null> {
     if (!shouldTryNativePicker(readPathPickerPreference())) {
       return openWebPicker(options)
     }
 
     try {
-      const pickerType = options?.mode === "file" ? "model-file" : "folder"
+      const pickerType = options?.mode === "file" ? options.fileType ?? "model-file" : "folder"
       const result = await schemasApi.pickFile(pickerType)
       return result.path
     } catch (error) {
