@@ -40,10 +40,15 @@ logging_dir = "./logs/benchmark/anima_lora_kohya_bench"               # TensorBo
 # | 适配器 (lora_type) | network_module           | 额外必填项（示例）                    |
 # |--------------------|--------------------------|---------------------------------------|
 # | lora（默认）       | networks.lora_anima      | 无                                    |
+# | dora               | lycoris.kohya            | lora_type = "dora"（后端自动注入）    |
 # | lokr               | lycoris.kohya            | lycoris_algo = "lokr"                 |
 # | tlora              | networks.tlora_anima     | tlora_min_rank, tlora_rank_schedule   |
 # | loha               | networks.loha            | 无                                    |
 # | vera / lora_fa     | networks.lora_anima      | 无（模块内部分支）                    |
+#
+# DoRA 示例（独立入口；不要同时填写 LoKr 的 lokr_factor/full_matrix）：
+#   lora_type = "dora"
+#   dropout = 0.1             # 可选：LyCORIS DoRA dropout
 #
 # LoKr 示例（取消注释并注释掉上方 lora 块即可切换）：
 #   network_module = "lycoris.kohya"

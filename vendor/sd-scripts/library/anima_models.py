@@ -740,8 +740,10 @@ class FinalLayer(nn.Module):
         adaln_lora_B_T_3D: Optional[torch.Tensor] = None,
         use_fp32: bool = False,
     ):
-        # Compute AdaLN modulation parameters (in float32 when fp16 to avoid overflow in Linear layers)
-        with torch.autocast(device_type=x_B_T_H_W_D.device.type, dtype=torch.float32, enabled=use_fp32):
+        # Keep bf16 residuals in bf16, but run AdaLN modulation in float32 so
+        # LyCORIS DoRA's float32 delta weights match the modulation input.
+        modulation_fp32 = use_fp32 or x_B_T_H_W_D.dtype == torch.bfloat16
+        with torch.autocast(device_type=x_B_T_H_W_D.device.type, dtype=torch.float32, enabled=modulation_fp32):
             if self.use_adaln_lora:
                 assert adaln_lora_B_T_3D is not None
                 shift_B_T_D, scale_B_T_D = (
@@ -749,6 +751,9 @@ class FinalLayer(nn.Module):
                 ).chunk(2, dim=-1)
             else:
                 shift_B_T_D, scale_B_T_D = self.adaln_modulation(emb_B_T_D).chunk(2, dim=-1)
+
+        shift_B_T_D = shift_B_T_D.to(x_B_T_H_W_D.dtype)
+        scale_B_T_D = scale_B_T_D.to(x_B_T_H_W_D.dtype)
 
         shift_B_T_1_1_D = rearrange(shift_B_T_D, "b t d -> b t 1 1 d")
         scale_B_T_1_1_D = rearrange(scale_B_T_D, "b t d -> b t 1 1 d")
@@ -875,8 +880,10 @@ class Block(nn.Module):
         if extra_per_block_pos_emb is not None:
             x_B_T_H_W_D = x_B_T_H_W_D + extra_per_block_pos_emb
 
-        # Compute AdaLN modulation parameters (in float32 when fp16 to avoid overflow in Linear layers)
-        with torch.autocast(device_type=x_B_T_H_W_D.device.type, dtype=torch.float32, enabled=use_fp32):
+        # Keep bf16 residuals in bf16, but run AdaLN modulation in float32 so
+        # LyCORIS DoRA's float32 delta weights match the modulation input.
+        modulation_fp32 = use_fp32 or x_B_T_H_W_D.dtype == torch.bfloat16
+        with torch.autocast(device_type=x_B_T_H_W_D.device.type, dtype=torch.float32, enabled=modulation_fp32):
             if self.use_adaln_lora:
                 shift_self_attn_B_T_D, scale_self_attn_B_T_D, gate_self_attn_B_T_D = (
                     self.adaln_modulation_self_attn(emb_B_T_D) + adaln_lora_B_T_3D
@@ -895,6 +902,17 @@ class Block(nn.Module):
                     emb_B_T_D
                 ).chunk(3, dim=-1)
                 shift_mlp_B_T_D, scale_mlp_B_T_D, gate_mlp_B_T_D = self.adaln_modulation_mlp(emb_B_T_D).chunk(3, dim=-1)
+
+        modulation_dtype = x_B_T_H_W_D.dtype
+        shift_self_attn_B_T_D = shift_self_attn_B_T_D.to(modulation_dtype)
+        scale_self_attn_B_T_D = scale_self_attn_B_T_D.to(modulation_dtype)
+        gate_self_attn_B_T_D = gate_self_attn_B_T_D.to(modulation_dtype)
+        shift_cross_attn_B_T_D = shift_cross_attn_B_T_D.to(modulation_dtype)
+        scale_cross_attn_B_T_D = scale_cross_attn_B_T_D.to(modulation_dtype)
+        gate_cross_attn_B_T_D = gate_cross_attn_B_T_D.to(modulation_dtype)
+        shift_mlp_B_T_D = shift_mlp_B_T_D.to(modulation_dtype)
+        scale_mlp_B_T_D = scale_mlp_B_T_D.to(modulation_dtype)
+        gate_mlp_B_T_D = gate_mlp_B_T_D.to(modulation_dtype)
 
         # Reshape for broadcasting: (B, T, D) -> (B, T, 1, 1, D)
         shift_self_attn_B_T_1_1_D = rearrange(shift_self_attn_B_T_D, "b t d -> b t 1 1 d")

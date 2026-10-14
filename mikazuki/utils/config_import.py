@@ -565,7 +565,11 @@ def _hydrate_lycoris_ui_fields_from_network_args(config: dict) -> None:
 
     algo = str(parsed.get("algo") or config.get("lycoris_algo") or "").strip().lower()
     if algo and not config.get("lora_type"):
-        config["lora_type"] = _LYCORIS_ALGO_TO_LORA_TYPE.get(algo, algo)
+        if algo == "lora" and str(parsed.get("dora_wd", "")).strip().lower() in {"1", "true", "yes", "on"}:
+            # LyCORIS algo=lora + dora_wd=true is the DoRA adapter path (#30).
+            config["lora_type"] = "dora"
+        else:
+            config["lora_type"] = _LYCORIS_ALGO_TO_LORA_TYPE.get(algo, algo)
 
 
 def _sanitize_arg_lines(config: dict, key: str) -> None:

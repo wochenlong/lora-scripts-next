@@ -193,6 +193,32 @@ LYCORIS_NETWORK_ARG_MAP: dict[str, str] = {
     "dropout": "dropout",
 }
 
+DORA_LORA_TYPE = "dora"
+DORA_TOP_LEVEL_LYCORIS_FIELDS_TO_DROP = {
+    "lokr_factor",
+    "use_cp",
+    "use_scalar",
+    "decompose_both",
+    "bypass_mode",
+    "full_matrix",
+    "rank_dropout_scale",
+    "conv_dim",
+    "conv_alpha",
+}
+DORA_NETWORK_ARG_KEYS_TO_DROP = {
+    "algo",
+    "dora_wd",
+    "factor",
+    "use_cp",
+    "use_scalar",
+    "decompose_both",
+    "bypass_mode",
+    "full_matrix",
+    "rank_dropout_scale",
+    "conv_dim",
+    "conv_alpha",
+}
+
 LOKR_TRAIN_NORM_WARNING = (
     "LyCORIS train_norm is disabled for Anima LoKr because LyCORIS NormModule "
     "can crash on Anima norm layers without affine weights during preview sampling."
@@ -257,6 +283,15 @@ def _normalize_network_args(values: Any) -> list[str]:
             ordered.append(normalized)
 
     return ordered
+
+
+def _drop_network_arg_keys(values: list[str], keys_to_drop: set[str]) -> list[str]:
+    kept: list[str] = []
+    for item in values:
+        key, _, _ = item.partition("=")
+        if key.strip() not in keys_to_drop:
+            kept.append(item)
+    return kept
 
 
 def _apply_lr_fallback(source: dict[str, Any]) -> None:
@@ -331,6 +366,20 @@ def adapt_anima_config(
             source["network_args"] = normalized_network_args
         elif "network_args" in source:
             source.pop("network_args", None)
+
+        # DoRA first-class entry (#30): normalize to the verified LyCORIS path
+        # (algo=lora + dora_wd=True) and drop any LoKr-specific leftovers from
+        # a previous lora_type selection or an imported config.
+        if source.get("lora_type") == DORA_LORA_TYPE:
+            source["network_module"] = "lycoris.kohya"
+            source["lycoris_algo"] = "lora"
+            source["dora_wd"] = True
+            for field in DORA_TOP_LEVEL_LYCORIS_FIELDS_TO_DROP:
+                source.pop(field, None)
+            if isinstance(source.get("network_args"), list):
+                source["network_args"] = _drop_network_arg_keys(
+                    source["network_args"], DORA_NETWORK_ARG_KEYS_TO_DROP
+                )
 
         _apply_lr_fallback(source)
 

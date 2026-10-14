@@ -111,6 +111,55 @@ class AnimaBackendAdapterTests(unittest.TestCase):
 
         self.assertNotIn("lora_type", adapted)
 
+    def test_dora_lora_type_maps_to_lycoris_dora_args(self):
+        config = {
+            "lora_type": "dora",
+            "network_dim": 16,
+            "network_alpha": 16,
+            "network_args": ["algo=lokr", "dora_wd=False", "factor=8"],
+            "lokr_factor": 8,
+            "full_matrix": True,
+            "use_cp": True,
+            "conv_dim": 8,
+            "conv_alpha": 4,
+            "dropout": 0.1,
+            "rank_dropout": 0.05,
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        na = adapted["network_args"]
+        self.assertEqual(adapted["network_module"], "lycoris.kohya")
+        self.assertIn("algo=lora", na)
+        self.assertIn("dora_wd=True", na)
+        self.assertIn("dropout=0.1", na)
+        self.assertIn("rank_dropout=0.05", na)
+        self.assertTrue(any(item.startswith("preset=") for item in na))
+        self.assertNotIn("algo=lokr", na)
+        self.assertNotIn("dora_wd=False", na)
+        self.assertFalse(any(item.startswith("factor=") for item in na))
+        self.assertFalse(any(item.startswith("full_matrix=") for item in na))
+        self.assertFalse(any(item.startswith("use_cp=") for item in na))
+        self.assertFalse(any(item.startswith("conv_dim=") for item in na))
+        self.assertNotIn("lora_type", adapted)
+        self.assertNotIn("lokr_factor", adapted)
+        self.assertEqual(warnings, [])
+
+    def test_dora_lora_type_keeps_user_dropout_and_custom_args(self):
+        config = {
+            "lora_type": "dora",
+            "network_dim": 32,
+            "network_alpha": 16,
+            "network_args_custom": ["module_dropout=0.1"],
+        }
+        adapted, warnings = adapt_anima_config(config)
+
+        na = adapted["network_args"]
+        self.assertEqual(adapted["network_module"], "lycoris.kohya")
+        self.assertIn("algo=lora", na)
+        self.assertIn("dora_wd=True", na)
+        self.assertIn("module_dropout=0.1", na)
+        self.assertEqual(warnings, [])
+
     def test_lycoris_fields_injected_into_network_args(self):
         config = {
             "network_module": "lycoris.kohya",

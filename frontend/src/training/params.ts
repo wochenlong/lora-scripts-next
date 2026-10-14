@@ -169,7 +169,7 @@ export function buildTrainingConfig(source: FormModel, schemaName: string) {
 
   if (config.network_module === "lycoris.kohya") {
     networkArgs.push(`conv_dim=${config.conv_dim}`, `conv_alpha=${config.conv_alpha}`, `dropout=${config.dropout}`, `algo=${config.lycoris_algo}`)
-    if (config.lokr_factor) networkArgs.push(`factor=${config.lokr_factor}`)
+    if (config.lokr_factor && config.lycoris_algo === "lokr") networkArgs.push(`factor=${config.lokr_factor}`)
     if (config.train_norm) networkArgs.push("train_norm=True")
   } else if (config.network_module === "networks.dylora") {
     networkArgs.push(`unit=${config.dylora_unit}`)

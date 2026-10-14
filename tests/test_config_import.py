@@ -274,6 +274,29 @@ optimizer_args = ["decouple=True", "weight_deca"]
         self.assertEqual(result["config"]["lycoris_algo"], "lokr")
         self.assertEqual(result["config"]["lokr_factor"], -1)
 
+    def test_lycoris_dora_network_args_map_back_to_dora_lora_type(self):
+        config = {
+            "model_train_type": "anima-lora",
+            "network_module": "lycoris.kohya",
+            "network_args": ["algo=lora", "dora_wd=true", "dropout=0.1"],
+        }
+        result = validate_config_import("sd3-lora", config)
+        self.assertEqual(result["result"], "ok")
+        self.assertEqual(result["config"]["lora_type"], "dora")
+        self.assertEqual(result["config"]["lycoris_algo"], "lora")
+        self.assertTrue(result["config"]["dora_wd"])
+        self.assertEqual(result["config"]["dropout"], 0.1)
+
+    def test_lycoris_plain_lora_network_args_stay_lora(self):
+        config = {
+            "model_train_type": "anima-lora",
+            "network_module": "lycoris.kohya",
+            "network_args": ["algo=lora"],
+        }
+        result = validate_config_import("sd3-lora", config)
+        self.assertEqual(result["result"], "ok")
+        self.assertEqual(result["config"]["lora_type"], "lora")
+
 
 if __name__ == "__main__":
     unittest.main()
