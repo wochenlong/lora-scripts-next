@@ -27,15 +27,46 @@ def _torch_pins():
     return TORCH_PINS_AARCH64 if _linux_aarch64() else TORCH_PINS
 
 
-def install_commands(runtime, sources):
+def python_install_command(runtime, sources):
+    del sources  # sources unused; signature kept parallel with other planners
+    return ["uv", "python", "install", PYTHON_VERSION, "--install-dir", str(runtime.python_install_dir)]
+
+
+def venv_create_command(runtime):
+    return ["uv", "venv", "--clear", "--managed-python", "--python", PYTHON_VERSION, str(runtime.root / ".venv")]
+
+
+def deps_install_commands(runtime, sources):
+    """Install/refresh pinned deps into an existing venv (does not recreate it)."""
     index = ["--index-url", sources.pip_index_url] if sources.pip_index_url else []
     torch_pins = _torch_pins()
     return [
-        ["uv", "python", "install", PYTHON_VERSION, "--install-dir", str(runtime.python_install_dir)],
-        ["uv", "venv", "--clear", "--managed-python", "--python", PYTHON_VERSION, str(runtime.root / ".venv")],
         ["uv", "pip", "install", "--python", str(runtime.python), *_torch_index_args(sources), *torch_pins],
-        ["uv", "pip", "install", "--python", str(runtime.python), *index, "-e", str(runtime.source), "transformers>=4.57.1,<5", "tensorboard", "bitsandbytes==0.48.2", "opencv-python-headless==4.11.0.86", *torch_pins],
+        [
+            "uv",
+            "pip",
+            "install",
+            "--python",
+            str(runtime.python),
+            *index,
+            "-e",
+            str(runtime.source),
+            "transformers>=4.57.1,<5",
+            "tensorboard",
+            "bitsandbytes==0.48.2",
+            "opencv-python-headless==4.11.0.86",
+            *torch_pins,
+        ],
     ]
+
+
+def venv_install_commands(runtime, sources):
+    """Recreate venv then install deps."""
+    return [venv_create_command(runtime), *deps_install_commands(runtime, sources)]
+
+
+def install_commands(runtime, sources):
+    return [python_install_command(runtime, sources), *venv_install_commands(runtime, sources)]
 
 
 def process_env():

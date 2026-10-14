@@ -87,17 +87,32 @@ async function refresh(reportError = true) {
   }
 }
 
-async function install(forceReinstall = false) {
+const diagnosisHint = computed(() => status.value.diagnosis?.summary || "")
+
+async function runAction(kind: "install" | "repair" | "reinstall") {
   try {
-    await ElMessageBox.confirm(
-      forceReinstall ? t("settings.engines.confirm.reinstall") : t("settings.engines.confirm.install.diffsynth"),
-      forceReinstall ? t("settings.engines.actions.reinstall") : t("settings.engines.actions.install"),
-      { type: "warning" },
-    )
+    const confirmKey =
+      kind === "reinstall"
+        ? "settings.engines.confirm.reinstall"
+        : kind === "repair"
+          ? "settings.engines.confirm.repair"
+          : "settings.engines.confirm.install.diffsynth"
+    const titleKey =
+      kind === "reinstall"
+        ? "settings.engines.actions.reinstall"
+        : kind === "repair"
+          ? "settings.engines.actions.repair"
+          : "settings.engines.actions.install"
+    await ElMessageBox.confirm(t(confirmKey), t(titleKey), { type: "warning" })
     loading.value = true
     logs.value = []
     progress.value = 0
-    const data = forceReinstall ? await enginesApi.repair("diffsynth") : await enginesApi.install("diffsynth")
+    const data =
+      kind === "reinstall"
+        ? await enginesApi.reinstall("diffsynth")
+        : kind === "repair"
+          ? await enginesApi.repair("diffsynth")
+          : await enginesApi.install("diffsynth")
     if (data.alreadyReady) {
       status.value = data.status || status.value
       if (ready.value) stopPolling()
@@ -151,12 +166,14 @@ onBeforeUnmount(() => {
       <EngineStatusBar
         :state="status.state"
         :title="label"
-        :hint="hint"
+        :hint="diagnosisHint || hint"
         :loading="loading"
-        :show-install="status.featureEnabled && !working"
-        :show-reinstall="status.state === 'broken'"
-        @install="install(false)"
-        @reinstall="install(true)"
+        :show-install="status.featureEnabled && !working && status.state !== 'broken'"
+        :show-repair="status.state === 'broken' && status.diagnosis?.code !== 'host_no_gpu'"
+        :show-reinstall="status.state === 'broken' && status.diagnosis?.allows_full_reinstall !== false"
+        @install="runAction('install')"
+        @repair="runAction('repair')"
+        @reinstall="runAction('reinstall')"
       />
       <section class="fast-intro">
         <span v-if="!bare" class="eyebrow">DIFFSYNTH-STUDIO RUNTIME</span>
@@ -166,15 +183,34 @@ onBeforeUnmount(() => {
           <span>{{ label }}</span>
           <strong>{{ status.state }}</strong>
         </div>
+        <p v-if="diagnosisHint" class="audit-errors" data-testid="diffsynth-diagnosis">{{ diagnosisHint }}</p>
         <div v-if="status.facts?.audit?.errors?.length" class="audit-errors">
           <strong>{{ t("diffsynthGate.auditTitle") }}</strong>
           <p v-for="error in status.facts.audit.errors" :key="error">{{ error }}</p>
         </div>
         <div class="fast-actions">
-          <button class="primary-action" :disabled="loading || working || !status.featureEnabled" @click="install(false)">
+          <button
+            v-if="status.state !== 'broken'"
+            class="primary-action"
+            :disabled="loading || working || !status.featureEnabled"
+            @click="runAction('install')"
+          >
             {{ working ? t("diffsynthGate.installWorking") : t("diffsynthGate.install") }}
           </button>
-          <button v-if="status.state === 'broken'" class="secondary-action" :disabled="loading" @click="install(true)">
+          <button
+            v-if="status.state === 'broken' && status.diagnosis?.code !== 'host_no_gpu'"
+            class="primary-action"
+            :disabled="loading || working"
+            @click="runAction('repair')"
+          >
+            {{ t("settings.engines.actions.repair") }}
+          </button>
+          <button
+            v-if="status.state === 'broken' && status.diagnosis?.allows_full_reinstall !== false"
+            class="secondary-action"
+            :disabled="loading"
+            @click="runAction('reinstall')"
+          >
             {{ t("settings.engines.actions.reinstall") }}
           </button>
           <RouterLink class="secondary-action" to="/settings/engines">{{ t("settings.engines.actions.manage") }}</RouterLink>

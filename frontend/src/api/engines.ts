@@ -24,7 +24,8 @@ export interface EngineStatus {
     externalRuntimeExists?: boolean
   }
   facts?: AnimaFastStatus["facts"]
-  raw?: AnimaFastStatus | MusubiStatus | AiToolkitStatus
+  diagnosis?: DiffSynthStatus["diagnosis"]
+  raw?: AnimaFastStatus | MusubiStatus | AiToolkitStatus | DiffSynthStatus
 }
 
 export interface EngineActionResult {
@@ -53,9 +54,16 @@ function fromKohya(status: KohyaStatus): EngineStatus {
 }
 
 function fromDiffSynth(status: DiffSynthStatus): EngineStatus {
-  return { id: "diffsynth", state: mapAnimaState(status.state), featureEnabled: status.feature_enabled,
-    message: status.message || status.reason, facts: status.facts,
-    runtime: { python: status.runtime?.python, environmentPath: status.runtime?.environment_path } }
+  return {
+    id: "diffsynth",
+    state: mapAnimaState(status.state),
+    featureEnabled: status.feature_enabled,
+    message: status.message || status.reason,
+    facts: status.facts,
+    diagnosis: status.diagnosis,
+    runtime: { python: status.runtime?.python, environmentPath: status.runtime?.environment_path },
+    raw: status,
+  }
 }
 
 function fromAnima(status: AnimaFastStatus): EngineStatus {
@@ -191,6 +199,7 @@ export const enginesApi = {
         progressStream: result.progress_stream, status: result.status ? fromKohya(result.status) : undefined }
     }
     if (id === "diffsynth") {
+      // Surgical repair (#462): diagnose and fix the broken component only.
       const result = await diffsynthApi.repair(downloadSources)
       return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
         progressStream: result.progress_stream, status: result.status ? fromDiffSynth(result.status) : undefined }
@@ -199,6 +208,17 @@ export const enginesApi = {
     if (id === "musubi") return fromMusubiInstall(await musubiApi.repair(downloadSources))
     if (id === "ai-toolkit") return fromAiToolkitInstall(await aiToolkitApi.repair(downloadSources))
     throw new Error(`Repair is not supported for engine: ${id}`)
+  },
+
+  async reinstall(id: TrainingEngine): Promise<EngineActionResult> {
+    const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "diffsynth") {
+      const result = await diffsynthApi.reinstall(downloadSources)
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromDiffSynth(result.status) : undefined }
+    }
+    // Other engines: reinstall currently aliases force-repair.
+    return this.repair(id)
   },
 
   async uninstall(id: TrainingEngine): Promise<EngineStatus> {

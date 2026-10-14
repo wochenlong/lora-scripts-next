@@ -13,7 +13,7 @@ let server: UserSettings
 const settingsFetch = vi.fn()
 
 vi.mock("../api/engines", () => ({
-  enginesApi: { list: vi.fn(), install: vi.fn(), repair: vi.fn(), uninstall: vi.fn() },
+  enginesApi: { list: vi.fn(), install: vi.fn(), repair: vi.fn(), reinstall: vi.fn(), uninstall: vi.fn() },
 }))
 const statuses: EngineStatus[] = [
   { id: "kohya", state: "not_installed", featureEnabled: true },

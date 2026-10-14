@@ -238,19 +238,32 @@ async function refresh(reportError = true) {
   }
 }
 
-async function install(engineId: TrainingEngine, forceReinstall = false) {
+async function install(engineId: TrainingEngine, mode: "install" | "repair" | "reinstall" = "install") {
   menuId.value = null
   try {
-    await ElMessageBox.confirm(
-      forceReinstall ? t("settings.engines.confirm.reinstall") : t(`settings.engines.confirm.install.${engineId}`),
-      forceReinstall ? t("settings.engines.actions.reinstall") : t("settings.engines.actions.install"),
-      { type: "warning" },
-    )
+    const confirmKey =
+      mode === "reinstall"
+        ? "settings.engines.confirm.reinstall"
+        : mode === "repair"
+          ? "settings.engines.confirm.repair"
+          : `settings.engines.confirm.install.${engineId}`
+    const titleKey =
+      mode === "reinstall"
+        ? "settings.engines.actions.reinstall"
+        : mode === "repair"
+          ? "settings.engines.actions.repair"
+          : "settings.engines.actions.install"
+    await ElMessageBox.confirm(t(confirmKey), t(titleKey), { type: "warning" })
     loadingId.value = engineId
     logs.value = []
     progress.value = 0
     phase.value = ""
-    const result = forceReinstall ? await enginesApi.repair(engineId) : await enginesApi.install(engineId)
+    const result =
+      mode === "reinstall"
+        ? await enginesApi.reinstall(engineId)
+        : mode === "repair"
+          ? await enginesApi.repair(engineId)
+          : await enginesApi.install(engineId)
     if (result.alreadyReady) {
       if (result.status) statuses.value = { ...statuses.value, [engineId]: result.status }
       ElMessage.success(t("settings.engines.msg.ready"))
@@ -485,7 +498,7 @@ type="button" class="engine-drag-handle" draggable="true"
               type="button"
               class="primary-action engine-primary"
               :disabled="loadingId === card.engine.id || ['installing', 'auditing', 'coming_soon'].includes(card.status.state) || !card.status.featureEnabled"
-              @click="install(card.engine.id, false)"
+              @click="install(card.engine.id, 'install')"
             >
               {{ ["installing", "auditing"].includes(card.status.state) ? t("settings.engines.actions.installing") : t("settings.engines.actions.install") }}
             </button>
@@ -501,10 +514,19 @@ type="button" class="engine-drag-handle" draggable="true"
                 <button type="button" @click="refresh()">{{ t("settings.engines.actions.refresh") }}</button>
                 <button type="button" role="menuitem" :disabled="!runtimePath(card.status)" @click="copyPath(card.status)">{{ t("settings.engines.actions.copyPath") }}</button>
                 <button
+                  v-if="card.engine.id === 'diffsynth'"
+                  type="button"
+                  role="menuitem"
+                  :disabled="loadingId === card.engine.id || card.status.state !== 'broken' || card.status.diagnosis?.code === 'host_no_gpu'"
+                  @click="install(card.engine.id, 'repair')"
+                >
+                  {{ t("settings.engines.actions.repair") }}
+                </button>
+                <button
                   type="button"
                   role="menuitem"
                   :disabled="loadingId === card.engine.id || !['broken', 'installed_unverified', 'ready'].includes(card.status.state)"
-                  @click="install(card.engine.id, true)"
+                  @click="install(card.engine.id, card.engine.id === 'diffsynth' ? 'reinstall' : 'repair')"
                 >
                   {{ t("settings.engines.actions.reinstall") }}
                 </button>

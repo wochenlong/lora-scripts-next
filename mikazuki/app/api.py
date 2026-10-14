@@ -420,6 +420,15 @@ async def engine_status(engine_id: str):
     return await _engine_routes_module(engine_id).status()
 
 
+@router.get("/engines/{engine_id}/diagnose")
+async def engine_diagnose(engine_id: str):
+    routes = _engine_routes_module(engine_id)
+    handler = getattr(routes, "diagnose", None)
+    if handler is None:
+        raise HTTPException(status_code=404, detail=f"Engine {engine_id} has no diagnose")
+    return await handler()
+
+
 @router.post("/engines/{engine_id}/preflight")
 async def engine_preflight(engine_id: str, request: Request):
     routes = _engine_routes_module(engine_id)

@@ -10,6 +10,7 @@ const props = withDefaults(defineProps<{
   hint?: string
   loading?: boolean
   showInstall?: boolean
+  showRepair?: boolean
   showReinstall?: boolean
   showRefresh?: boolean
   /** When true, only show the manage link (typical for ready training form). */
@@ -17,6 +18,7 @@ const props = withDefaults(defineProps<{
   manageTo?: string
 }>(), {
   showRefresh: false,
+  showRepair: false,
   manageOnly: false,
   manageTo: "/settings/engines",
 })
@@ -24,6 +26,7 @@ const props = withDefaults(defineProps<{
 const emit = defineEmits<{
   refresh: []
   install: []
+  repair: []
   reinstall: []
 }>()
 
@@ -57,6 +60,9 @@ const resolvedHint = computed(() => {
         </button>
         <button v-if="showInstall" type="button" class="ghost-button" :disabled="loading" @click="emit('install')">
           {{ t("settings.engines.actions.install") }}
+        </button>
+        <button v-if="showRepair" type="button" class="ghost-button" :disabled="loading" @click="emit('repair')">
+          {{ t("settings.engines.actions.repair") }}
         </button>
         <button v-if="showReinstall" type="button" class="ghost-button" :disabled="loading" @click="emit('reinstall')">
           {{ t("settings.engines.actions.reinstall") }}
