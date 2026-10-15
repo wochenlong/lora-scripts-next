@@ -25,9 +25,8 @@ it("offers archive browsing with no queue history", async () => {
   })
   try {
     await flushPromises()
-    const action = wrapper.findAll("button").find(button => button.text() === i18n.global.t("tasks.archives.loadButton"))
-    expect(action).toBeDefined()
-    await action!.trigger("click")
+    const action = wrapper.get('[data-testid="tasks-load-archive"]')
+    await action.trigger("click")
     await flushPromises()
     expect(wrapper.text()).toContain(i18n.global.t("tasks.archives.empty"))
   } finally { wrapper.unmount() }
@@ -85,6 +84,16 @@ const numberStub = {
   template: '<input type="number" :value="modelValue" @input="$emit(\'update:modelValue\', Number($event.target.value))">',
 }
 
+const selectStub = {
+  props: ["modelValue"],
+  emits: ["update:modelValue"],
+  template: `<select :value="modelValue ?? ''" @change="$emit('update:modelValue', $event.target.value)"><slot /></select>`,
+}
+const optionStub = {
+  props: ["value", "label"],
+  template: `<option :value="value">{{ label }}</option>`,
+}
+
 function mountTasks(fetchImpl: (url: string, init?: RequestInit) => unknown) {
   vi.spyOn(globalThis, "fetch").mockImplementation(async (input, init) =>
     new Response(JSON.stringify({ status: "success", data: fetchImpl(String(input), init) })))
@@ -93,13 +102,73 @@ function mountTasks(fetchImpl: (url: string, init?: RequestInit) => unknown) {
       plugins: [createPinia(), i18n],
       stubs: {
         "el-dialog": { props: ["modelValue"], template: '<div v-if="modelValue"><slot /><slot name="footer" /></div>' },
-        "el-select": true, "el-option": true, "el-icon": true, RouterLink: true,
+        "el-select": selectStub, "el-option": optionStub, "el-icon": true, RouterLink: true,
         LossChart: true, TaskLogPanel: true,
         "el-input-number": numberStub,
+        SystemResourcesBar: true,
       },
     },
   })
 }
+
+it("keeps history list to the latest five tasks", async () => {
+  const base = Math.floor(new Date(2026, 9, 14, 12).getTime() / 1000)
+  const wrapper = mountTasks((url) => {
+    if (url === "/api/tasks/auto_retry") return { auto_retry_max: 0 }
+    return {
+      tasks: Array.from({ length: 7 }, (_, index) => ({
+        id: `task-${index}`,
+        status: "FINISHED",
+        metadata: {
+          train_type: "sdxl-lora",
+          created_at: base - index * 3600,
+          output_name: `run-${index}`,
+        },
+      })),
+    }
+  })
+  try {
+    await flushPromises()
+    await wrapper.findAll(".tasks-tabs button")[1]!.trigger("click")
+    await flushPromises()
+    expect(wrapper.findAll(".task-row")).toHaveLength(5)
+    expect(wrapper.get('[data-testid="tasks-history-cap"]').text()).toContain("5")
+    expect(wrapper.text()).toContain("run-0")
+    expect(wrapper.text()).not.toContain("run-5")
+  } finally { wrapper.unmount() }
+})
+
+it("filters history tasks by day and model", async () => {
+  const dayA = Math.floor(new Date(2026, 9, 10, 12).getTime() / 1000)
+  const dayB = Math.floor(new Date(2026, 9, 14, 12).getTime() / 1000)
+  const wrapper = mountTasks((url) => {
+    if (url === "/api/tasks/auto_retry") return { auto_retry_max: 0 }
+    return {
+      tasks: [
+        { id: "a", status: "FINISHED", metadata: { train_type: "anima-lora-fast", created_at: dayA, output_name: "anima-run" } },
+        { id: "b", status: "FINISHED", metadata: { train_type: "sdxl-lora", created_at: dayB, output_name: "sdxl-run" } },
+      ],
+    }
+  })
+  try {
+    await flushPromises()
+    await wrapper.findAll(".tasks-tabs button")[1]!.trigger("click")
+    await flushPromises()
+    expect(wrapper.find('[data-testid="tasks-history-filters"]').exists()).toBe(true)
+    expect(wrapper.findAll(".task-row")).toHaveLength(2)
+
+    await wrapper.get(".tasks-filter-model").setValue("anima")
+    await flushPromises()
+    expect(wrapper.findAll(".task-row")).toHaveLength(1)
+    expect(wrapper.get(".task-row").text()).toContain("anima-run")
+
+    await wrapper.get(".tasks-filter-model").setValue("")
+    await wrapper.get(".tasks-filter-day").setValue("2026-10-14")
+    await flushPromises()
+    expect(wrapper.findAll(".task-row")).toHaveLength(1)
+    expect(wrapper.get(".task-row").text()).toContain("sdxl-run")
+  } finally { wrapper.unmount() }
+})
 
 it("shows the global auto-retry budget and saves a new one", async () => {
   const posted: { url: string; body: string }[] = []
@@ -115,9 +184,10 @@ it("shows the global auto-retry budget and saves a new one", async () => {
   })
   try {
     await flushPromises()
-    const chip = wrapper.findAll("button").find(b => b.text().includes(i18n.global.t("tasks.autoRetry.armed", { n: 2 })))
-    expect(chip).toBeDefined()
-    await chip!.trigger("click")
+    await wrapper.get('[data-testid="tasks-more-toggle"]').trigger("click")
+    const chip = wrapper.get('[data-testid="tasks-auto-retry"]')
+    expect(chip.text()).toContain(i18n.global.t("tasks.autoRetry.menuArmed", { n: 2 }))
+    await chip.trigger("click")
     await flushPromises()
     expect(wrapper.text()).toContain(i18n.global.t("tasks.autoRetry.hint"))
     const numberInput = wrapper.find('input[type="number"]')
@@ -127,7 +197,8 @@ it("shows the global auto-retry budget and saves a new one", async () => {
     await flushPromises()
     expect(posted).toHaveLength(1)
     expect(JSON.parse(posted[0].body)).toEqual({ count: 3 })
-    expect(wrapper.findAll("button").some(b => b.text().includes(i18n.global.t("tasks.autoRetry.armed", { n: 3 })))).toBe(true)
+    await wrapper.get('[data-testid="tasks-more-toggle"]').trigger("click")
+    expect(wrapper.get('[data-testid="tasks-auto-retry"]').text()).toContain(i18n.global.t("tasks.autoRetry.menuArmed", { n: 3 }))
   } finally { wrapper.unmount() }
 })
 
@@ -149,9 +220,8 @@ it("batch dialog filters dropped files to .toml and renders partial failures", a
   })
   try {
     await flushPromises()
-    const entry = wrapper.findAll("button").find(b => b.text() === i18n.global.t("tasks.batchEnqueue.button"))
-    expect(entry).toBeDefined()
-    await entry!.trigger("click")
+    await wrapper.get('[data-testid="tasks-more-toggle"]').trigger("click")
+    await wrapper.get('[data-testid="tasks-batch-enqueue"]').trigger("click")
     await flushPromises()
     const dropzone = wrapper.find(".upload-dropzone")
     expect(dropzone.exists()).toBe(true)

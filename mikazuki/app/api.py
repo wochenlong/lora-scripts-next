@@ -1178,3 +1178,11 @@ async def check_update(force: bool = False):
 async def get_version():
     from mikazuki.update_check import local_version
     return APIResponseSuccess(data={"version": local_version()})
+
+
+@router.get("/system/resources")
+async def system_resources():
+    """Lightweight GPU VRAM + host RAM snapshot for the Tasks header."""
+    from mikazuki.system_resources import collect_resources
+
+    return APIResponseSuccess(data=await asyncio.to_thread(collect_resources))

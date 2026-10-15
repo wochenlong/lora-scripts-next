@@ -15,9 +15,18 @@ vi.mock("../api/engines", () => ({
   },
 }))
 
+vi.mock("../api/tasks", () => ({
+  tasksApi: { terminate: vi.fn() },
+}))
+
 const status = vi.mocked(enginesApi.status)
 const ready: EngineStatus = { id: "kohya", state: "ready", featureEnabled: true }
-const installing: EngineStatus = { id: "kohya", state: "installing", featureEnabled: true }
+const installing: EngineStatus = {
+  id: "kohya",
+  state: "installing",
+  featureEnabled: true,
+  facts: { task_id: "kohya-install-demo" },
+}
 const notInstalled: EngineStatus = { id: "kohya", state: "not_installed", featureEnabled: true }
 
 const trainingPageStub = {
@@ -63,6 +72,33 @@ describe("KohyaGatePage", () => {
     const bar = wrapper.get('[data-testid="engine-status-bar"]')
     expect(bar.attributes("data-state")).toBe("not_installed")
     expect(wrapper.text()).toContain("安装 Kohya 环境")
+    wrapper.unmount()
+  })
+
+  it("offers cancel while kohya install is running", async () => {
+    status.mockResolvedValue(installing)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.get('[data-testid="engine-cancel-install"]').text()).toContain("中止安装")
+    expect(wrapper.find('[data-testid="install-console"]').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it("keeps unknown state quiet in bare mode without a primary install CTA", async () => {
+    const unknown: EngineStatus = { id: "kohya", state: "unknown", featureEnabled: true }
+    status.mockResolvedValue(unknown)
+    const wrapper = mount(KohyaGatePage, {
+      props: { title: "SDXL LoRA", area: "LoRA", schemaName: "lora-master", bare: true },
+      global: { plugins: [i18n], stubs: { TrainingPage: trainingPageStub, RouterLink: routerLinkStub } },
+    })
+    await flushPromises()
+
+    const bar = wrapper.get('[data-testid="engine-status-bar"]')
+    expect(bar.attributes("data-state")).toBe("unknown")
+    expect(bar.text()).toMatch(/刷新|管理/)
+    expect(wrapper.text()).not.toContain("安装 Kohya 环境")
+    expect(wrapper.find(".fast-actions").exists()).toBe(false)
     wrapper.unmount()
   })
 

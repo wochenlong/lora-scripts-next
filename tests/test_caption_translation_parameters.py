@@ -261,8 +261,9 @@ def test_disconnected_queued_http_request_never_contacts_provider(tmp_path, monk
             return _result()
 
         class DisconnectedWhileQueued:
-            async def is_disconnected(self):
-                return gate.snapshot()["waiting"] > 0
+            async def receive(self):
+                await _until(lambda: gate.snapshot()["waiting"] > 0)
+                return {"type": "http.disconnect"}
 
         monkeypatch.setattr(UnifiedLLMService, "_request", request)
         running = asyncio.create_task(translator.translate("A running cat.", use_cache=False))
@@ -305,5 +306,55 @@ def test_managed_local_translation_still_uses_shared_local_scheduler(tmp_path, m
         await asyncio.wait_for(asyncio.gather(tasks[0], tasks[2]), timeout=3)
         assert len(calls) == 2 and not shared_local_scheduler.is_busy()
         assert translation_gate(service).snapshot()["active"] == 0
+
+    asyncio.run(verify())
+
+
+@pytest.mark.parametrize("late_failure", [False, True])
+@pytest.mark.parametrize("repeat_cancel", [False, True])
+def test_cancelled_display_bounds_unwind_and_discards_late_provider(tmp_path, monkeypatch, late_failure, repeat_cancel):
+    from mikazuki.llm import caption_translation as module
+    _store, service, cache, translator = _translator(tmp_path, concurrency=1)
+    monkeypatch.setattr(module, "_PROVIDER_UNWIND_SECONDS", 0.03)
+
+    async def verify():
+        started, cancelled, release = asyncio.Event(), asyncio.Event(), asyncio.Event()
+        errors = []
+        loop = asyncio.get_running_loop()
+        previous = loop.get_exception_handler()
+        loop.set_exception_handler(lambda _loop, context: errors.append(context))
+
+        async def request(*_args):
+            started.set()
+            try:
+                await asyncio.sleep(30)
+            except asyncio.CancelledError:
+                cancelled.set()
+                await release.wait()
+                if late_failure:
+                    raise RuntimeError("late provider failure")
+                return _result()
+
+        monkeypatch.setattr(UnifiedLLMService, "_request", request)
+        operation = asyncio.create_task(translator.translate("A late cat."))
+        await started.wait()
+        start = loop.time()
+        operation.cancel()
+        await cancelled.wait()
+        if repeat_cancel:
+            operation.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(operation, timeout=0.3)
+        assert loop.time() - start < 0.3
+        assert cache.translation_count() == 0
+        assert translation_gate(service).snapshot()["active"] == 1
+        # The still-running provider retains its slot until it actually exits.
+        assert module._PROVIDER_TASKS
+        release.set()
+        await _until(lambda: translation_gate(service).snapshot()["active"] == 0)
+        await _until(lambda: not module._PROVIDER_TASKS)
+        assert cache.translation_count() == 0
+        assert not errors
+        loop.set_exception_handler(previous)
 
     asyncio.run(verify())

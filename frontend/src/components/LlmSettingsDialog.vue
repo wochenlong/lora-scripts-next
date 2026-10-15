@@ -6,7 +6,7 @@ import { isVerifiedProfile, llmApi, type LlmConfig, type LlmProfile, type LocalV
 import ManagedVisionModel from "./ManagedVisionModel.vue"
 import { useTagTranslations } from "../composables/useTagTranslations"
 
-const props = defineProps<{ modelValue: boolean; capability: "text" | "vision"; imagePath?: string; embedded?: boolean }>()
+const props = defineProps<{ modelValue: boolean; embedded?: boolean }>()
 const emit = defineEmits<{ "update:modelValue": [value: boolean]; saved: [config: LlmConfig] }>()
 const { t } = useI18n()
 const draft = ref<LlmConfig>({ version: 5, profiles: [], routes: {}, prompt_presets: [], cache: {} })

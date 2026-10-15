@@ -12,12 +12,43 @@ from .contracts import LLMContractError
 from .service import UnifiedLLMService
 
 PROMPT_REVISION = "caption-translation-zh-v1"
+_PROVIDER_UNWIND_SECONDS = 0.5
+_PROVIDER_TASKS = set()
 _ENGLISH_FUNCTION_WORDS = {
     "the", "a", "an", "is", "are", "was", "were", "with", "of", "on", "in", "at",
     "to", "for", "and", "or", "next", "beside", "behind", "under", "above",
     "shows", "says", "reads",
 }
 _QUOTED_CONTENT = re.compile(r'"[^"\n]*"|“[^”\n]*”|「[^」\n]*」|『[^』\n]*』|(?<![A-Za-z])\'[^\'\n]*\'(?![A-Za-z])')
+
+
+def _provider_finished(task):
+    _PROVIDER_TASKS.discard(task)
+    # A provider can outlive a cancelled display request. Keep it referenced
+    # until done, and retrieve any late exception without logging private data.
+    if not task.cancelled():
+        task.exception()
+
+
+async def _complete_for_display(operation):
+    provider = asyncio.create_task(operation)
+    _PROVIDER_TASKS.add(provider)
+    provider.add_done_callback(_provider_finished)
+    try:
+        # Cancellation belongs to the display caller, even if a provider
+        # suppresses CancelledError. This works on Python 3.10 as well as 3.11+.
+        return await asyncio.shield(provider)
+    except asyncio.CancelledError:
+        provider.cancel()
+        try:
+            # wait_for(provider) can exceed its timeout when cancellation is
+            # swallowed. wait() bounds our cleanup without cancelling again.
+            await asyncio.wait({provider}, timeout=_PROVIDER_UNWIND_SECONDS)
+        except asyncio.CancelledError:
+            # Repeated caller cancellation must not interrupt ownership of
+            # the provider; its completion callback still handles cleanup.
+            pass
+        raise
 
 
 def translation_prompt_revision(settings):
@@ -115,15 +146,13 @@ class CaptionTextTranslator:
         cache_options = {"candidate_cache": lookup_candidate} if cache_enabled and isinstance(service, UnifiedLLMService) else {}
         options = {"language": "zh-CN", "profile_id": profile_id, "allow_local_fallback": allow_local_fallback,
                    "response_schema": schema, "max_tokens": settings["max_tokens"], "temperature": settings["temperature"], **cache_options}
-        if isinstance(service, UnifiedLLMService):
-            actual, envelope, content = await service.complete_text(prompt, **options)
-        else:
+        async def complete():
+            if isinstance(service, UnifiedLLMService):
+                return await service.complete_text(prompt, **options)
             async with translation_gate(self.service).slot(lambda: current_concurrency(self.service)):
-                actual, envelope, content = await service.complete_text(prompt, **options)
-        if asyncio.current_task().cancelling():
-            # A provider may suppress cancellation while unwinding. A cancelled
-            # display request must still never return or persist a late answer.
-            raise asyncio.CancelledError
+                return await service.complete_text(prompt, **options)
+
+        actual, envelope, content = await _complete_for_display(complete())
         if envelope.get("choices", [{}])[0].get("finish_reason") == "length":
             raise LLMContractError("caption translation was truncated")
         result = parse_json_content(content)

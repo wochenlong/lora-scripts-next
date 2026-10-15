@@ -100,7 +100,12 @@ def test_list_datasets_excludes_symlinked_directories(datasets_root, tmp_path):
     make_dataset(datasets_root, "real")
     outside = tmp_path / "outside"
     outside.mkdir()
-    (datasets_root / "linked").symlink_to(outside, target_is_directory=True)
+    try:
+        (datasets_root / "linked").symlink_to(outside, target_is_directory=True)
+    except OSError as error:
+        if getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows symlink privilege unavailable")
+        raise
 
     client = TestClient(app)
     data = client.get("/api/datasets").json()["data"]
@@ -206,7 +211,12 @@ def test_resolve_dataset_dir_rejects_symlink_escape(datasets_root, tmp_path):
     datasets_root.mkdir(parents=True)
     outside = tmp_path / "outside"
     outside.mkdir()
-    (datasets_root / "link").symlink_to(outside, target_is_directory=True)
+    try:
+        (datasets_root / "link").symlink_to(outside, target_is_directory=True)
+    except OSError as error:
+        if getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows symlink privilege unavailable")
+        raise
 
     with pytest.raises(HTTPException) as exc_info:
         resolve_dataset_dir(datasets_root.resolve(), "link")

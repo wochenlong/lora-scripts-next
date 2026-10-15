@@ -138,9 +138,10 @@ def test_disconnected_translation_cancels_provider_without_caching(tmp_path, mon
                 raise
     class Request:
         calls = 0
-        async def is_disconnected(self):
+        async def receive(self):
             self.calls += 1
-            return self.calls > 2
+            await asyncio.sleep(0.01)
+            return {"type": "http.disconnect" if self.calls > 2 else "http.request"}
     cache = CaptionCache(tmp_path / "cache.db")
     monkeypatch.setattr(api, "llm_service", Slow())
     monkeypatch.setattr(api, "caption_cache", cache)

@@ -35,6 +35,8 @@ vi.mock("../api/tagger", async importOriginal => ({
   taggerApi: {
     models: vi.fn().mockResolvedValue({ models: [
       { id: "wd14-convnextv2-v2", name: "WD", model: "wd14-convnextv2-v2", family: "WD", author: "SmilingWolf", runtime: "local", output: "tag", ready: true, downloaded: false, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
+      { id: "wd-swinv2-v3", name: "WD Swin", model: "wd-swinv2-v3", family: "WD", author: "", runtime: "local", output: "tag", ready: true, downloaded: true, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
+      { id: "wd-convnext-v3", name: "WD Conv", model: "wd-convnext-v3", family: "WD", author: "", runtime: "local", output: "tag", ready: true, downloaded: true, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
       { id: "wd-eva02-large-tagger-v3", name: "WD Eva", model: "wd-eva02-large-tagger-v3", family: "WD", author: "", runtime: "local", output: "tag", ready: true, downloaded: true, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
       { id: "cl_tagger_1_01", name: "CL", model: "cl_tagger_1_01", family: "CL", author: "", runtime: "local", output: "tag", ready: true, downloaded: false, languages: ["native"], capabilities: ["tag"], parameters: [], profile_id: null },
       { id: "llm:local", name: "Local", model: "local-vision", family: "Vision LLM", author: "", runtime: "local", output: "natural", ready: true, downloaded: false, languages: ["zh-CN"], capabilities: ["vision", "caption"], parameters: [], profile_id: "local" },
@@ -333,4 +335,26 @@ it("preserves the selected preset and editor when an update fails", async () => 
   expect(error).toHaveBeenCalled()
   expect((select.element as HTMLSelectElement).value).toBe("preset-existing")
   expect((page.get(".caption-prompt-editor textarea").element as HTMLTextAreaElement).value).toBe("Unsaved edit")
+})
+
+
+it("keeps dev task presets and manual model choice inside Tag mode", async () => {
+  const page = mountPage()
+  await flushPromises()
+  expect(page.get('[data-testid="tagger-task-hint"]').text()).toContain("一般用途")
+  expect(page.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("wd14-convnextv2-v2")
+  await page.get('[data-testid="tagger-task-character"]').trigger("click")
+  expect(page.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("wd-swinv2-v3")
+  await page.findComponent({ name: "ElSelect" }).vm.$emit("update:modelValue", "wd-eva02-large-tagger-v3")
+  expect(page.get(".tagger-model-hint").text()).toContain("已手动更换模型")
+  await page.get('[data-testid="parameter-toggle"]').trigger("click")
+  await page.get(".tagger-restore").trigger("click")
+  expect(page.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("wd-swinv2-v3")
+  const numbers = page.findAll('#tagger-parameters input[type="number"]')
+  expect((numbers[1].element as HTMLInputElement).value).toBe("0.55")
+  await page.get(".tagger-choice-row .tagger-segments").findAll("button")[1].trigger("click")
+  expect(page.find('[data-testid="tagger-task"]').exists()).toBe(false)
+  expect(page.find('[data-testid="llm-model-management"]').exists()).toBe(true)
+  await page.get(".tagger-choice-row .tagger-segments").findAll("button")[0].trigger("click")
+  expect(page.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("wd-swinv2-v3")
 })

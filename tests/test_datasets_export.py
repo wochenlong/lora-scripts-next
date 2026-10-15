@@ -69,7 +69,12 @@ def test_zip_export_skips_symlinked_files(dataset):
     outside = dataset.parent / "outside"
     outside.mkdir()
     (outside / "secret.txt").write_text("topsecret", encoding="utf-8")
-    (dataset / "link.txt").symlink_to(outside / "secret.txt")
+    try:
+        (dataset / "link.txt").symlink_to(outside / "secret.txt")
+    except OSError as error:
+        if getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows symlink privilege unavailable")
+        raise
 
     client = TestClient(app)
     response = client.get("/api/datasets/ds/download")
@@ -84,7 +89,12 @@ def test_zip_export_skips_symlinked_directories(dataset):
     outside = dataset.parent / "outside-dir"
     outside.mkdir()
     (outside / "leak.png").write_bytes(b"leak")
-    (dataset / "linked").symlink_to(outside, target_is_directory=True)
+    try:
+        (dataset / "linked").symlink_to(outside, target_is_directory=True)
+    except OSError as error:
+        if getattr(error, "winerror", None) == 1314:
+            pytest.skip("Windows symlink privilege unavailable")
+        raise
 
     client = TestClient(app)
     response = client.get("/api/datasets/ds/download")

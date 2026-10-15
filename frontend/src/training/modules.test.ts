@@ -5,12 +5,17 @@ import {
   TRAINING_MODELS,
   TRAINING_MODULES,
   TRAINING_TARGETS,
-  firstSupportedEngine,  firstSupportedTarget,
+  firstSupportedEngine,
+  firstSupportedTarget,
+  idealEngineFor,
   isEngineSupported,
+  modelForScenario,
   moduleForSchema,
   moduleForTrainType,
   normalizeModel,
+  recommendedEngineFor,
   resolveModule,
+  scenarioForModel,
 } from "./modules"
 
 describe("training module mapping", () => {
@@ -120,9 +125,40 @@ describe("training module mapping", () => {
     expect(isEngineSupported("lumina", "anima-fast")).toBe(false)
   })
 
+  it("maps beginner scenarios to the product-recommended models", () => {
+    expect(modelForScenario("anime")).toBe("anima")
+    expect(modelForScenario("general")).toBe("krea2")
+    expect(modelForScenario("edit")).toBe("klein")
+    expect(modelForScenario("explore")).toBe("qwen-image-21")
+    expect(scenarioForModel("anima")).toBe("anime")
+    expect(scenarioForModel("krea2")).toBe("general")
+    expect(scenarioForModel("sdxl")).toBeUndefined()
+  })
+
+  it("recommends the primary engine path for each model", () => {
+    // Cold start (unknown install state): Anima must not open uninstalled Fast.
+    expect(idealEngineFor("anima")).toBe("anima-fast")
+    expect(recommendedEngineFor("anima")).toBe("kohya")
+    expect(recommendedEngineFor("sd15")).toBe("kohya")
+    expect(recommendedEngineFor("sdxl")).toBe("kohya")
+    expect(recommendedEngineFor("flux")).toBe("kohya")
+    expect(recommendedEngineFor("lumina")).toBe("kohya")
+    expect(recommendedEngineFor("krea2")).toBe("musubi")
+    expect(recommendedEngineFor("ideogram4")).toBe("musubi")
+    expect(recommendedEngineFor("klein")).toBe("ai-toolkit")
+    expect(recommendedEngineFor("qwen-image-21")).toBe("diffsynth")
+  })
+
+  it("prefers Anima Fast when it is ready, otherwise falls back to Kohya", () => {
+    expect(recommendedEngineFor("anima", (engine) => engine === "anima-fast")).toBe("anima-fast")
+    expect(recommendedEngineFor("anima", (engine) => engine === "kohya")).toBe("kohya")
+    expect(recommendedEngineFor("anima", () => false)).toBe("kohya")
+  })
+
   it("suggests fallback engine and target for unsupported selections", () => {
     expect(firstSupportedEngine("sd15")).toBe("kohya")
     expect(firstSupportedEngine("sdxl")).toBe("kohya")
+    expect(firstSupportedEngine("qwen-image-21")).toBe("diffsynth")
     expect(firstSupportedTarget("anima", "kohya")).toBe("lora")
     expect(firstSupportedTarget("flux", "anima-fast")).toBeUndefined()
   })

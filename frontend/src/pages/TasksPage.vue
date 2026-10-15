@@ -8,9 +8,10 @@ import { storeToRefs } from "pinia"
 import { useI18n } from "vue-i18n"
 import { useTasksStore } from "../stores/tasks"
 import { tasksApi, type BatchEnqueueItem, type TaskMetrics, type TaskPreviewImage, type TaskProgress, type TaskStatus, type TrainingTask } from "../api/tasks"
-import { moduleForTrainType } from "../training/modules"
+import { moduleForTrainType, type TrainingModel } from "../training/modules"
 import { copyText } from "../utils/clipboard"
 import LossChart from "../components/LossChart.vue"
+import SystemResourcesBar from "../components/SystemResourcesBar.vue"
 import TaskLogPanel from "../components/TaskLogPanel.vue"
 import { userPresetsApi, type UserPreset } from "../api/userPresets"
 import { taskArchivesApi, type TaskArchive } from "../api/taskArchives"
@@ -203,46 +204,96 @@ const runningList = computed(() =>
       return groupCreatedAt(a) - groupCreatedAt(b)
     }),
 )
-const recentList = computed(() => allGroups.value.filter((group) => !group.tasks.some(isActiveTask)))
+const HISTORY_LIMIT = 5
+const recentList = computed(() =>
+  allGroups.value
+    .filter((group) => !group.tasks.some(isActiveTask))
+    .sort((a, b) => groupCreatedAt(b) - groupCreatedAt(a)),
+)
 
-const filterStatus = ref<"" | TaskStatus>("")
-const filterType = ref("")
-const filterKeyword = ref("")
+const filterDay = ref("")
+const filterModel = ref("")
+const moreOpen = ref(false)
+const UNKNOWN_MODEL = "__unknown__"
 
-const FILTER_STATUSES: TaskStatus[] = ["RUNNING", "QUEUED", "CREATED", "FINISHED", "FAILED", "TERMINATED"]
-
-function taskTypeLabel(task: TrainingTask): string {
-  return metaString(task, "train_type") || metaString(task, "backend")
+function localDayKey(date: Date): string {
+  const y = date.getFullYear()
+  const m = String(date.getMonth() + 1).padStart(2, "0")
+  const d = String(date.getDate()).padStart(2, "0")
+  return `${y}-${m}-${d}`
 }
 
-const typeOptions = computed(() => {
-  const values = new Set<string>()
-  for (const task of tasks.value) {
-    const label = taskTypeLabel(task)
-    if (label) values.add(label)
+function taskDayKey(task: TrainingTask): string {
+  const created = Number(task.metadata.created_at) || 0
+  if (!created) return ""
+  return localDayKey(new Date(created * 1000))
+}
+
+function taskModelFilterValue(task: TrainingTask): string {
+  const trainType = metaString(task, "train_type")
+  return moduleForTrainType(trainType)?.model ?? UNKNOWN_MODEL
+}
+
+function modelFilterLabel(value: string): string {
+  if (value === UNKNOWN_MODEL) return t("tasks.filters.unknownModel")
+  return t(`training.selector.models.${value as TrainingModel}`)
+}
+
+function formatDayLabel(day: string): string {
+  const [y, m, d] = day.split("-").map(Number)
+  if (!y || !m || !d) return day
+  const todayKey = localDayKey(new Date())
+  if (day === todayKey) return t("tasks.filters.today")
+  const yesterday = new Date()
+  yesterday.setDate(yesterday.getDate() - 1)
+  if (day === localDayKey(yesterday)) return t("tasks.filters.yesterday")
+  return t("tasks.filters.dayLabel", { month: m, day: d })
+}
+
+const historyDayOptions = computed(() => {
+  const counts = new Map<string, number>()
+  for (const group of recentList.value) {
+    const day = taskDayKey(group.representative)
+    if (!day) continue
+    counts.set(day, (counts.get(day) || 0) + 1)
   }
-  return [...values].sort()
+  return [...counts.entries()]
+    .sort((a, b) => b[0].localeCompare(a[0]))
+    .map(([value]) => ({ value, label: formatDayLabel(value) }))
 })
 
-function groupMatchesFilters(group: TaskGroup): boolean {
-  if (filterStatus.value && !group.tasks.some((task) => task.status === filterStatus.value)) return false
-  if (filterType.value && !group.tasks.some((task) => taskTypeLabel(task) === filterType.value)) return false
-  const keyword = filterKeyword.value.trim().toLowerCase()
-  if (keyword) {
-    const haystacks = group.tasks.flatMap((task) => [
-      task.id,
-      group.key,
-      taskName(task),
-      metaString(task, "config_path"),
-      metaString(task, "output_dir"),
-      metaString(task, "output_name"),
-    ])
-    if (!haystacks.some((text) => text.toLowerCase().includes(keyword))) return false
+const historyModelOptions = computed(() => {
+  const counts = new Map<string, number>()
+  for (const group of recentList.value) {
+    const model = taskModelFilterValue(group.representative)
+    counts.set(model, (counts.get(model) || 0) + 1)
   }
+  return [...counts.entries()]
+    .sort((a, b) => modelFilterLabel(a[0]).localeCompare(modelFilterLabel(b[0]), "zh"))
+    .map(([value]) => ({ value, label: modelFilterLabel(value) }))
+})
+
+function groupMatchesHistoryFilters(group: TaskGroup): boolean {
+  if (filterDay.value && taskDayKey(group.representative) !== filterDay.value) return false
+  if (filterModel.value && taskModelFilterValue(group.representative) !== filterModel.value) return false
   return true
 }
 
-const visibleList = computed(() => (activeTab.value === "running" ? runningList.value : recentList.value).filter(groupMatchesFilters))
+const filteredHistory = computed(() => recentList.value.filter(groupMatchesHistoryFilters))
+const visibleList = computed(() => {
+  if (activeTab.value === "running") return runningList.value
+  return filteredHistory.value.slice(0, HISTORY_LIMIT)
+})
+const historyTruncated = computed(() => (
+  activeTab.value === "recent" && filteredHistory.value.length > HISTORY_LIMIT
+))
+
+watch(activeTab, (tab) => {
+  if (tab === "running") {
+    filterDay.value = ""
+    filterModel.value = ""
+  }
+})
 const selected = computed(() => allGroups.value.find((group) => group.key === selectedId.value)?.representative)
 const selectedIsMaintenance = computed(() => (selected.value ? isMaintenanceTask(selected.value) : false))
 
@@ -477,6 +528,23 @@ function onBatchDrop(event: DragEvent) {
 function openAutoRetry() {
   autoRetryCount.value = autoRetryMax.value
   autoRetryOpen.value = true
+}
+
+function closeMoreMenu() {
+  moreOpen.value = false
+}
+
+function openTrainMonitor() {
+  window.open("/train-monitor", "_blank", "noopener,noreferrer")
+  closeMoreMenu()
+}
+
+function runListTool(action: "archive" | "batch" | "autoRetry" | "purge") {
+  closeMoreMenu()
+  if (action === "archive") openArchiveDialog()
+  else if (action === "batch") openBatchEnqueue()
+  else if (action === "autoRetry") openAutoRetry()
+  else purgeOpen.value = true
 }
 
 async function saveAutoRetry() {
@@ -751,35 +819,36 @@ onBeforeUnmount(() => {
   <div class="tasks-board">
     <header class="tasks-board-header">
       <h1>{{ t("tasks.title") }}</h1>
-      <button class="ghost-button" @click="openArchiveDialog()">{{ t("tasks.archives.loadButton") }}</button>
+      <SystemResourcesBar />
       <button class="ghost-button" :disabled="loading" @click="store.refresh()"><el-icon><Refresh /></el-icon>{{ t("tasks.refresh") }}</button>
     </header>
 
     <div v-if="error" class="task-error"><strong>{{ t("tasks.loadError") }}</strong><span>{{ error }}</span><button @click="store.refresh()">{{ t("tasks.retry") }}</button></div>
     <div v-else-if="loading && !tasks.length" class="task-empty">{{ t("tasks.loading") }}</div>
-    <div v-else-if="!tasks.length" class="task-empty"><strong>{{ t("tasks.emptyTitle") }}</strong><span>{{ t("tasks.emptyDesc") }}</span></div>
+    <div v-else-if="!tasks.length" class="task-empty">
+      <strong>{{ t("tasks.emptyTitle") }}</strong>
+      <span>{{ t("tasks.emptyDesc") }}</span>
+      <button type="button" class="ghost-button" data-testid="tasks-load-archive" @click="openArchiveDialog()">{{ t("tasks.archives.loadButton") }}</button>
+    </div>
 
     <div v-else class="tasks-columns">
       <aside class="tasks-list-panel">
-        <a class="tasks-monitor-link" href="/train-monitor" target="_blank" rel="noreferrer">{{ t("tasks.trainMonitor") }}</a>
         <div class="tasks-tabs" role="group" :aria-label="t('tasks.filterAria')">
           <button :class="{ active: activeTab === 'running' }" @click="activeTab = 'running'">{{ t("tasks.tabs.running") }}<b>{{ runningList.length }}</b></button>
           <button :class="{ active: activeTab === 'recent' }" @click="activeTab = 'recent'">{{ t("tasks.tabs.recent") }}<b>{{ recentList.length }}</b></button>
         </div>
-        <button class="ghost-button tasks-purge-button" :data-armed="autoRetryMax > 0" @click="openAutoRetry">{{ autoRetryMax > 0 ? t("tasks.autoRetry.armed", { n: autoRetryMax }) : t("tasks.autoRetry.off") }}</button>
-        <button v-if="activeTab === 'recent' && recentList.length" class="ghost-button tasks-purge-button" @click="purgeOpen = true">{{ t("tasks.purge.button") }}</button>
-        <div class="tasks-filters">
-          <el-select v-model="filterStatus" size="small" class="tasks-filter-status">
-            <el-option value="" :label="t('tasks.filters.allStatuses')" />
-            <el-option v-for="s in FILTER_STATUSES" :key="s" :value="s" :label="statusLabels[s] || s" />
+        <div v-if="activeTab === 'recent'" class="tasks-filters" data-testid="tasks-history-filters">
+          <el-select v-model="filterDay" size="small" class="tasks-filter-day" :placeholder="t('tasks.filters.allDays')" clearable>
+            <el-option value="" :label="t('tasks.filters.allDays')" />
+            <el-option v-for="item in historyDayOptions" :key="item.value" :value="item.value" :label="item.label" />
           </el-select>
-          <el-select v-model="filterType" size="small" class="tasks-filter-type">
-            <el-option value="" :label="t('tasks.filters.allTypes')" />
-            <el-option v-for="tp in typeOptions" :key="tp" :value="tp" :label="tp" />
+          <el-select v-model="filterModel" size="small" class="tasks-filter-model" :placeholder="t('tasks.filters.allModels')" clearable>
+            <el-option value="" :label="t('tasks.filters.allModels')" />
+            <el-option v-for="item in historyModelOptions" :key="item.value" :value="item.value" :label="item.label" />
           </el-select>
-          <input v-model="filterKeyword" class="tasks-filter-keyword" type="search" :placeholder="t('tasks.filters.keywordPlaceholder')">
         </div>
         <p v-if="!visibleList.length" class="tasks-tab-empty">{{ t("tasks.tabEmpty") }}</p>
+        <p v-else-if="historyTruncated" class="tasks-history-cap" data-testid="tasks-history-cap">{{ t("tasks.historyCap", { n: HISTORY_LIMIT }) }}</p>
         <article v-for="group in visibleList" :key="group.key" class="task-row" :class="{ selected: group.key === selectedId }" :data-status="group.representative.status.toLowerCase()" @click="select(group)">
           <span class="task-status">{{ statusLabel(group.representative) }}</span>
           <div class="task-row-main"><h2>{{ taskName(group.representative) }}</h2><code :title="group.key">{{ groupShortId(group) }}</code></div>
@@ -789,7 +858,34 @@ onBeforeUnmount(() => {
             <span v-for="stage in group.stages" :key="stage.id" class="task-stage" :data-status="stage.status.toLowerCase()">{{ stageLabelKey(stage.name) ? t(stageLabelKey(stage.name)) : stage.name }}</span>
           </div>
         </article>
-        <button class="ghost-button tasks-batch-button" @click="openBatchEnqueue">{{ t("tasks.batchEnqueue.button") }}</button>
+        <div class="tasks-list-tools" data-testid="tasks-list-tools">
+          <button
+            type="button"
+            class="ghost-button tasks-more-button"
+            data-testid="tasks-more-toggle"
+            :aria-expanded="moreOpen"
+            @click="moreOpen = !moreOpen"
+          >{{ t("tasks.moreActions") }}</button>
+          <div v-if="moreOpen" class="tasks-more-menu" data-testid="tasks-more-menu">
+            <button type="button" class="tasks-more-item" @click="openTrainMonitor">{{ t("tasks.trainMonitor") }}</button>
+            <button type="button" class="tasks-more-item" data-testid="tasks-load-archive" @click="runListTool('archive')">{{ t("tasks.archives.loadButton") }}</button>
+            <button type="button" class="tasks-more-item" data-testid="tasks-batch-enqueue" @click="runListTool('batch')">{{ t("tasks.batchEnqueue.button") }}</button>
+            <button
+              type="button"
+              class="tasks-more-item"
+              data-testid="tasks-auto-retry"
+              :data-armed="autoRetryMax > 0 || undefined"
+              @click="runListTool('autoRetry')"
+            >{{ autoRetryMax > 0 ? t("tasks.autoRetry.menuArmed", { n: autoRetryMax }) : t("tasks.autoRetry.menuOff") }}</button>
+            <button
+              v-if="activeTab === 'recent' && recentList.length"
+              type="button"
+              class="tasks-more-item"
+              data-testid="tasks-purge"
+              @click="runListTool('purge')"
+            >{{ t("tasks.purge.button") }}</button>
+          </div>
+        </div>
       </aside>
 
       <section v-if="selected" class="task-detail" :data-status="selected.status.toLowerCase()">

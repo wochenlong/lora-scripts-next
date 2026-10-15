@@ -17,14 +17,17 @@ import { useLlmProfiles } from "../composables/useLlmProfiles"
 import { useTaggerJob } from "../composables/useTaggerJob"
 import { useServerPathPick } from "../composables/useServerPathPick"
 import { builtinCaptionPreset, captionBuiltins, englishCaptionPrompt } from "../dataset/captionPrompts"
+import { presetForTask, TAGGER_TASKS, type TaggerTask } from "../tagger/presets"
 
-const models = ["wd14-convnextv2-v2", "wd-convnext-v3", "wd-swinv2-v3", "wd-vit-v3", "wd14-swinv2-v2", "wd14-vit-v2", "wd14-moat-v2", "wd-eva02-large-tagger-v3", "wd-vit-large-tagger-v3", "cl_tagger_1_01"]
-const form = reactive<TaggerRequest>({ path: "", interrogator_model: models[0], threshold: .35, character_threshold: .6, add_rating_tag: false, add_model_tag: false, additional_tags: "", exclude_tags: "", escape_tag: true, batch_input_recursive: true, batch_output_action_on_conflict: "copy", replace_underscore: true, replace_underscore_excludes: "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||" })
+const taggerTask = ref<TaggerTask>("general")
+const generalPreset = presetForTask("general")
+const form = reactive<TaggerRequest>({ path: "", interrogator_model: generalPreset.model, threshold: generalPreset.threshold, character_threshold: generalPreset.characterThreshold, add_rating_tag: false, add_model_tag: false, additional_tags: "", exclude_tags: "", escape_tag: true, batch_input_recursive: true, batch_output_action_on_conflict: "copy", replace_underscore: true, replace_underscore_excludes: "0_0, (o)_(o), +_+, +_-, ._., <o>_<o>, <|>_<|>, =_=, >_<, 3_3, 6_9, >_o, @_@, ^_^, o_o, u_u, x_x, |_|, ||_||" })
 const captionForm = reactive<CaptionJobRequest>({ path: "", mode: "natural", recursive: true, profile_id: undefined, prompt: englishCaptionPrompt, language: "en", conflict_action: "ignore", max_tokens: 1024, temperature: 0.7, concurrency: 3 })
 form.batch_output_action_on_conflict = "ignore"
 const runtime = ref<"local" | "api">("local")
 const catalog = ref<TaggerModel[]>([])
-const selectedModelId = ref(models[0])
+const selectedModelId = ref(generalPreset.model)
+const modelManual = computed(() => selectedModelId.value !== presetForTask(taggerTask.value).model)
 const selectedModel = computed(() => catalog.value.find(model => model.id === selectedModelId.value))
 const method = ref<"tag" | "natural">("tag")
 const mode = computed(() => method.value)
@@ -151,7 +154,8 @@ function selectMethod(next: "tag" | "natural") {
   if (controlsLocked.value || next === mode.value) return
   const candidates = catalog.value.filter(model => model.output === next && (next === "tag" || model.capabilities.includes("vision")))
   // Natural-language default follows the shared remote-first policy.
-  const selected = candidates.find(model => model.runtime === "api" && model.ready)
+  const selected = (next === "tag" ? candidates.find(model => model.id === form.interrogator_model) : undefined)
+    || candidates.find(model => model.runtime === "api" && model.ready)
     || candidates.find(model => model.runtime === "local" && model.ready)
     || candidates.find(model => model.runtime === "api") || candidates[0]
   if (selected) selectModel(selected.id)
@@ -174,6 +178,15 @@ function availabilityLabel(model: TaggerModel) {
   return t(model.ready ? "tagger.models.ready" : model.downloaded ? "tagger.models.downloaded" : "tagger.models.notReady")
 }
 
+function applyTaggerTask(task: TaggerTask) {
+  if (controlsLocked.value) return
+  taggerTask.value = task
+  const preset = presetForTask(task)
+  selectModel(preset.model)
+  form.threshold = preset.threshold
+  form.character_threshold = preset.characterThreshold
+}
+
 function restoreParameters() {
   if (mode.value === "natural") {
     captionForm.max_tokens = 1024
@@ -184,7 +197,9 @@ function restoreParameters() {
     // A custom prompt is restored only through the editor's explicit controls.
     return
   }
-  Object.assign(form, { threshold: .35, character_threshold: .6, additional_tags: "", exclude_tags: "",
+  applyTaggerTask(taggerTask.value)
+  const preset = presetForTask(taggerTask.value)
+  Object.assign(form, { threshold: preset.threshold, character_threshold: preset.characterThreshold, additional_tags: "", exclude_tags: "",
     batch_output_action_on_conflict: "ignore", batch_input_recursive: true, replace_underscore: true,
     escape_tag: true, add_rating_tag: false, add_model_tag: false })
 }
@@ -495,11 +510,18 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
         <span>{{ t("tagger.workspace.method") }}</span>
         <div class="tagger-segments"><button :class="{ selected: mode === 'tag' }" :aria-pressed="mode === 'tag'" :disabled="controlsLocked" @click="selectMethod('tag')">Tag</button><button :class="{ selected: mode === 'natural' }" :aria-pressed="mode === 'natural'" :disabled="controlsLocked" @click="selectMethod('natural')">{{ t("tagger.workspace.caption") }}</button></div>
       </div>
-      <div class="tagger-choice-row">
+      <div v-show="mode === 'natural'" class="tagger-choice-row">
         <span>{{ t("tagger.workspace.source") }}</span>
         <div class="tagger-segments"><button :class="{ selected: runtime === 'local' }" :aria-pressed="runtime === 'local'" :disabled="controlsLocked || !catalog.some(model => model.runtime === 'local' && model.output === mode)" @click="selectRuntime('local')">{{ t("tagger.workspace.local") }}</button><button :class="{ selected: runtime === 'api' }" :aria-pressed="runtime === 'api'" :disabled="controlsLocked || !apiAvailable" @click="selectRuntime('api')">API</button></div>
       </div>
-      <div class="tagger-model-row">
+      <div v-if="mode === 'tag'" class="tagger-choice-row" data-testid="tagger-task">
+        <span>{{ t("tagger.workspace.task") }}</span>
+        <div class="tagger-segments" role="group" :aria-label="t('tagger.workspace.task')">
+          <button v-for="task in TAGGER_TASKS" :key="task" type="button" :class="{ selected: taggerTask === task }" :aria-pressed="taggerTask === task" :disabled="controlsLocked" :data-testid="`tagger-task-${task}`" @click="applyTaggerTask(task)">{{ t(`tagger.workspace.tasks.${task}`) }}</button>
+        </div>
+      </div>
+      <p v-if="mode === 'tag'" class="tagger-task-hint" data-testid="tagger-task-hint">{{ t(`tagger.workspace.taskHints.${taggerTask}`) }}</p>
+      <div class="tagger-model-row" :class="{ 'tagger-model-row-secondary': mode === 'tag' }">
         <label class="tagger-model-field"><span>{{ t("tagger.modelLabel") }}</span>
           <ElSelect :model-value="selectedModelId" filterable :disabled="controlsLocked" :aria-label="t('tagger.modelLabel')" data-testid="model-select" @update:model-value="selectModel">
             <ElOptionGroup v-for="group in modelGroups" :key="group.name" :label="group.name"><ElOption v-for="model in group.models" :key="model.id" :label="model.model" :value="model.id"><span>{{ model.model }}</span><small class="tagger-option-state">{{ availabilityLabel(model) }}</small></ElOption></ElOptionGroup>
@@ -512,6 +534,7 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
         <button v-if="mode === 'tag'" type="button" class="inline-config-button" data-testid="prefetch-model" :disabled="controlsLocked || submitting || !selectedModel || selectedModel.runtime !== 'local' || selectedModel.downloaded" :title="selectedModel?.downloaded ? t('tagger.msg.alreadyDownloaded') : undefined" @click="invoke('prefetch')">{{ t("tagger.prefetch") }}</button>
         <button v-else type="button" class="inline-config-button" data-testid="llm-model-management" @click="profileEditorOpen = true">{{ t("tagger.caption.manageProfiles") }}</button>
       </div>
+      <p v-if="mode === 'tag'" class="tagger-model-hint">{{ modelManual ? t("tagger.workspace.modelManual") : t("tagger.workspace.modelHint") }}</p>
       <p v-if="mode === 'natural'" class="caption-route-hint">{{ t("tagger.caption.remoteFirst") }}</p>
       <p v-if="mode === 'natural' && !presetLanguageSupported" class="caption-preset-incompatible" role="alert">{{ t("tagger.caption.unsupportedLanguage") }}</p>
       <div class="tagger-choice-row">
@@ -579,7 +602,7 @@ onBeforeUnmount(() => { refreshGeneration += 1; stopPolling() })
         </div>
       </fieldset>
     </aside>
-    <LlmSettingsDialog v-model="profileEditorOpen" capability="vision" :image-path="previewImagePath" @saved="loadLlmProfiles" />
+    <LlmSettingsDialog v-model="profileEditorOpen" @saved="loadLlmProfiles" />
     <PathPickerDialog v-model="pathPickerOpen" :mode="pathPickerMode" :initial-path="pathPickerInitial" :name-filter="pathPickerFilter" @confirm="onPathConfirm" @cancel="onPathCancel" />
   </div>
 </template>

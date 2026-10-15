@@ -103,7 +103,7 @@ async function openManager(wrapper: VueWrapper) {
   await wrapper.get(".translation-manage-llm").trigger("click")
   await flushPromises()
   expect(wrapper.findComponent(TagTranslationSettingsDialog).props("modelValue")).toBe(false)
-  expect(wrapper.findComponent(LlmSettingsDialog).props()).toMatchObject({ modelValue: true, capability: "text" })
+  expect(wrapper.findComponent(LlmSettingsDialog).props()).toMatchObject({ modelValue: true })
   expect(replaceRoute).not.toHaveBeenCalled()
 }
 
