@@ -40,12 +40,22 @@ async def translate_caption_text(req: CaptionTranslationRequest, request: Reques
         except Exception:
             shared = {}
         payload["allow_local_fallback"] = bool(shared.get("local_fallback_enabled", True))
+    async def disconnected():
+        # FastAPI has already consumed the JSON body. Await the next ASGI
+        # message instead of is_disconnected(): its immediate cancelled poll
+        # can miss disconnects behind Starlette BaseHTTPMiddleware streams.
+        while True:
+            message = await request.receive()
+            if message["type"] == "http.disconnect":
+                return
+
     operation = asyncio.create_task(CaptionTextTranslator(llm_service, caption_cache).translate(**payload))
+    disconnect = asyncio.create_task(disconnected())
     try:
-        while not operation.done():
-            if await request.is_disconnected():
-                raise HTTPException(status_code=499, detail="译文请求已取消")
-            await asyncio.wait({operation}, timeout=0.1)
+        await asyncio.wait({operation, disconnect}, return_when=asyncio.FIRST_COMPLETED)
+        if disconnect.done():
+            await disconnect
+            raise HTTPException(status_code=499, detail="译文请求已取消")
         return _success(await operation)
     except HTTPException:
         raise
@@ -56,7 +66,8 @@ async def translate_caption_text(req: CaptionTranslationRequest, request: Reques
     finally:
         if not operation.done():
             operation.cancel()
-        await asyncio.gather(operation, return_exceptions=True)
+        disconnect.cancel()
+        await asyncio.gather(operation, disconnect, return_exceptions=True)
 
 
 class LLMConnectionTestRequest(BaseModel):

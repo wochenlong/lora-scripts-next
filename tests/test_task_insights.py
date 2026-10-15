@@ -8,8 +8,9 @@ from pathlib import Path
 from mikazuki.utils import task_insights
 
 try:
-    from tensorboard.summary.writer.event_file_writer import EventFileWriter  # noqa: F401
-    from torch.utils.tensorboard import SummaryWriter
+    from tensorboard.summary.writer.event_file_writer import EventFileWriter
+    from tensorboard.compat.proto.event_pb2 import Event
+    from tensorboard.compat.proto.summary_pb2 import Summary
     HAS_TENSORBOARD = True
 except Exception:
     HAS_TENSORBOARD = False
@@ -19,6 +20,20 @@ try:
     HAS_PIL = True
 except Exception:
     HAS_PIL = False
+
+
+class SummaryWriter:
+    """Write actual scalar events without importing a training-engine torch env."""
+
+    def __init__(self, log_dir):
+        self.writer = EventFileWriter(log_dir)
+
+    def add_scalar(self, tag, value, step):
+        self.writer.add_event(Event(wall_time=time.time(), step=step,
+                                    summary=Summary(value=[Summary.Value(tag=tag, simple_value=value)])))
+
+    def close(self):
+        self.writer.close()
 
 
 def _write_config(tmp: Path, output_dir: Path, logging_dir: Path, output_name: str = "aki") -> Path:

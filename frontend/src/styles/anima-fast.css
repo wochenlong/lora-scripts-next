@@ -18,25 +18,33 @@
   margin-top: 0;
 }
 
-.fast-page.bare {
-  grid-template-columns: minmax(0, 1fr) clamp(320px, 32%, 460px);
+.fast-page.bare.has-console {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(200px, 36vh);
 }
 
 .fast-page.bare .install-console {
-  align-self: start;
-  height: min(560px, 60vh);
-  min-height: 320px;
-  max-height: calc(100vh - 40px);
+  align-self: stretch;
+  height: min(320px, 36vh);
+  min-height: 180px;
+  max-height: 36vh;
+  margin: 16px 0 0;
 }
 
 .workbench-page .install-console {
-  margin: 0;
+  margin: 16px 0 0;
 }
 
 .fast-page {
   display: grid;
-  grid-template-columns: minmax(380px, 0.8fr) minmax(460px, 1.2fr);
+  grid-template-columns: 1fr;
   min-height: 100vh;
+}
+
+/* Install log sits under the gate content — easier to scan while CTAs stay on top. */
+.fast-page.has-console {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(240px, 42vh);
 }
 
 .fast-intro {
@@ -224,8 +232,8 @@
   background: rgba(220, 38, 38, 0.06);
 }
 .engine-status-bar[data-state="unknown"] {
-  border-left-color: #d97706;
-  background: rgba(217, 119, 6, 0.08);
+  border-left-color: var(--text-faint);
+  background: transparent;
 }
 .engine-status-bar[data-state="not_installed"] {
   border-left-color: #d97706;

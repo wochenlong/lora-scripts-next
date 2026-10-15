@@ -22,10 +22,10 @@ const config = (): LlmConfig => ({ version: 5, routes: { translation: "text", ca
     { id: "vision", name: "Vision", model: "vision", endpoint: "https://example.test/chat/completions", source: "remote", capabilities: ["text", "vision"], languages: ["zh-CN"], api_key: "********", api_key_configured: true, enabled: true, ready: true, verified_capabilities: ["text", "vision"] },
   ] })
 
-async function open(capability: "text" | "vision" = "vision") {
+async function open() {
   vi.mocked(llmApi.config).mockResolvedValue(config())
   vi.mocked(llmApi.localVisionStatus).mockResolvedValue({ state: "missing", installed: false, downloaded_bytes: 0, total_bytes: 0 })
-  page = mount(LlmSettingsDialog, { props: { modelValue: true, capability, imagePath: "D:/public/a.png" }, global: { plugins: [i18n], stubs: { ElDialog: Dialog } } })
+  page = mount(LlmSettingsDialog, { props: { modelValue: true }, global: { plugins: [i18n], stubs: { ElDialog: Dialog } } })
   await flushPromises()
   return page
 }
@@ -34,7 +34,7 @@ afterEach(() => { page?.unmount(); vi.resetAllMocks(); vi.restoreAllMocks(); vi.
 
 describe("shared LLM settings", () => {
   it("publishes the shared browser cache policy from every manager save", async () => {
-    const wrapper = await open("vision")
+    const wrapper = await open()
     expect(configureCache).toHaveBeenCalledWith(true, expect.any(String))
     const saved = config()
     saved.revision = "caption-manager-save"
@@ -84,7 +84,7 @@ describe("shared LLM settings", () => {
     expect(llmApi.saveConfig).toHaveBeenCalledWith(expect.objectContaining({ revision: "credential-rotation", profiles: expect.arrayContaining([expect.objectContaining({ id: "vision", api_key: "********", secret_revision: 2 })]) }))
   })
   it("allows text-only translation while the caption route contains only vision", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     const selectors = wrapper.findAll("select")
     expect(selectors[0].findAll("option").map(option => option.attributes("value"))).toEqual(["", "text", "vision"])
     expect(selectors[1].findAll("option").map(option => option.attributes("value"))).toEqual(["", "vision"])
@@ -133,7 +133,7 @@ describe("shared LLM settings", () => {
 
   it("shares the vision asset controls with translation without an automatic download", async () => {
     vi.useFakeTimers()
-    const wrapper = await open("text")
+    const wrapper = await open()
     expect(wrapper.get(".llm-managed-profile").text()).toContain("Qwen3.5-2B")
     expect(llmApi.localVisionAction).not.toHaveBeenCalled()
     vi.mocked(llmApi.localVisionStatus).mockImplementation(() => new Promise(() => {}))
@@ -145,7 +145,7 @@ describe("shared LLM settings", () => {
 
   it("publishes a completed background installation while preserving edits made during its config refresh", async () => {
     vi.useFakeTimers()
-    const wrapper = await open("text")
+    const wrapper = await open()
     vi.mocked(llmApi.localVisionAction).mockResolvedValue({ state: "downloading", installed: false, downloaded_bytes: 0, total_bytes: 100 })
     await wrapper.get(".managed-vision-model button").trigger("click")
     await flushPromises()
@@ -227,7 +227,7 @@ describe("shared LLM settings", () => {
   })
 
   it("keeps unsaved profile inputs when a runtime action refreshes the managed profile", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     await wrapper.get('[data-profile-id="text"] .llm-profile-name').setValue("Unsaved name")
     const updated = config()
     updated.profiles.push({ ...updated.profiles[1], id: "qwen3.5-2b-local", source: "managed-local", asset_id: "qwen3.5-2b-local" })
@@ -242,7 +242,7 @@ describe("shared LLM settings", () => {
   })
 
   it("merges unrelated server changes with local edits before adopting the runtime revision", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     await wrapper.get('[data-profile-id="text"] .llm-profile-name').setValue("My unsaved name")
     const updated = config()
     updated.revision = "external-update-and-runtime"
@@ -269,7 +269,7 @@ describe("shared LLM settings", () => {
   })
 
   it("retains and blocks a conflicting draft until server reload is explicitly confirmed", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     await wrapper.get('[data-profile-id="text"] .llm-profile-name').setValue("My conflicting name")
     const updated = config()
     updated.revision = "latest-conflicting-revision"
@@ -299,7 +299,7 @@ describe("shared LLM settings", () => {
   })
 
   it("keeps local route and cache edits while adopting a runtime-only configuration update", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     await wrapper.get(".llm-settings select").setValue("vision")
     await wrapper.get(".llm-translation-cache").setValue(false)
     await wrapper.get(".llm-local-fallback").setValue(false)
@@ -344,7 +344,7 @@ describe("shared LLM settings", () => {
   })
 
   it("absorbs server additions and removals without resurrecting an unchanged deleted endpoint", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     await wrapper.get('[data-profile-id="vision"] .llm-profile-name').setValue("My vision name")
     const updated = config()
     updated.revision = "external-profile-list-update"
@@ -366,7 +366,7 @@ describe("shared LLM settings", () => {
   })
 
   it("blocks merging an externally deleted endpoint that still has local edits", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     await wrapper.get('[data-profile-id="text"] .llm-profile-name').setValue("Do not lose this edit")
     const updated = config()
     updated.revision = "external-deletion"
@@ -394,7 +394,7 @@ describe("shared LLM settings", () => {
   })
 
   it("keeps the translation prompt internal while allowing reasoning without changing caption presets", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     vi.mocked(llmApi.saveConfig).mockResolvedValue(config())
     expect(wrapper.find(".llm-translation-prompt").exists()).toBe(false)
     expect(wrapper.find(".llm-capabilities").exists()).toBe(false)
@@ -446,7 +446,7 @@ describe("shared LLM settings", () => {
   })
 
   it("renders the same editor inline without closing after save", async () => {
-    const wrapper = await open("text")
+    const wrapper = await open()
     await wrapper.setProps({ embedded: true })
     vi.mocked(llmApi.saveConfig).mockResolvedValue(config())
     await wrapper.get(".llm-save").trigger("click")

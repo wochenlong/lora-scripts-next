@@ -1536,7 +1536,7 @@ onUnmounted(() => {
     @cancel-dictionary="cancelDictionary"
   />
 
-  <LlmSettingsDialog v-model="profileEditorOpen" capability="text" @saved="refreshTranslationSettings" />
+  <LlmSettingsDialog v-model="profileEditorOpen" @saved="refreshTranslationSettings" />
 
   <el-dialog v-model="historyOpen" :title="t('datasetEditor.historyDialog.title')" width="min(820px, 94vw)">
     <div class="dataset-history">

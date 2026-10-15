@@ -54,8 +54,8 @@ def test_caption_translation_omitted_fallback_uses_shared_default(monkeypatch):
     monkeypatch.setattr("mikazuki.llm.caption_translation.CaptionTextTranslator", FakeTranslator)
 
     class Request:
-        async def is_disconnected(self):
-            return False
+        async def receive(self):
+            await asyncio.Event().wait()
 
     asyncio.run(llm_api.translate_caption_text(llm_api.CaptionTranslationRequest(text="A cat."), Request()))
     assert captured["allow_local_fallback"] is True

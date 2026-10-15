@@ -93,6 +93,8 @@ describe("AnimaFastPage status bar", () => {
     const bar = wrapper.get('[data-testid="engine-status-bar"]')
     expect(bar.attributes("data-state")).toBe("unknown")
     expect(bar.text()).toContain("状态未知")
+    expect(bar.text()).toMatch(/刷新|管理/)
+    expect(wrapper.find(".fast-actions").exists()).toBe(false)
     wrapper.unmount()
   })
 })

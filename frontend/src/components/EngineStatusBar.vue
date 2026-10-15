@@ -15,11 +15,14 @@ const props = withDefaults(defineProps<{
   showRefresh?: boolean
   /** When true, only show the manage link (typical for ready training form). */
   manageOnly?: boolean
+  /** Hide the manage link when a sibling CTA already offers it. */
+  showManage?: boolean
   manageTo?: string
 }>(), {
   showRefresh: false,
   showRepair: false,
   manageOnly: false,
+  showManage: true,
   manageTo: "/settings/engines",
 })
 
@@ -45,6 +48,11 @@ const resolvedHint = computed(() => {
   const translated = t(key)
   return translated === key ? "" : translated
 })
+
+const showActionRow = computed(() => {
+  if (props.manageOnly) return props.showManage
+  return Boolean(props.showRefresh || props.showInstall || props.showReinstall || props.showManage)
+})
 </script>
 
 <template>
@@ -53,7 +61,7 @@ const resolvedHint = computed(() => {
       <b>{{ label }}</b>
       <span v-if="resolvedHint">{{ resolvedHint }}</span>
     </div>
-    <div class="engine-status-actions">
+    <div v-if="showActionRow" class="engine-status-actions">
       <template v-if="!manageOnly">
         <button v-if="showRefresh" type="button" class="ghost-button" :disabled="loading" @click="emit('refresh')">
           {{ t("settings.engines.actions.refresh") }}
@@ -68,7 +76,7 @@ const resolvedHint = computed(() => {
           {{ t("settings.engines.actions.reinstall") }}
         </button>
       </template>
-      <RouterLink class="ghost-button" :to="manageTo">{{ t("settings.engines.actions.manage") }}</RouterLink>
+      <RouterLink v-if="showManage" class="ghost-button" :to="manageTo">{{ t("settings.engines.actions.manage") }}</RouterLink>
     </div>
   </div>
 </template>

@@ -51,6 +51,272 @@
   box-shadow: 0 0 0 3px var(--accent-soft);
 }
 
+.network-settings-card {
+  margin-top: 16px;
+}
+
+.network-settings-form fieldset {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.network-field {
+  display: grid;
+  gap: 6px;
+}
+
+.network-field-wide {
+  grid-column: 1 / -1;
+}
+
+.network-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.network-effective,
+.network-warning {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.network-effective code {
+  margin-left: 4px;
+  color: var(--text);
+  font-size: 11px;
+  word-break: break-all;
+}
+
+.network-warning {
+  color: #b45309;
+}
+
+.network-error {
+  margin: 0;
+  padding: 10px 12px;
+  color: var(--danger, #dc2626);
+  background: var(--danger-soft, rgba(220, 38, 38, 0.08));
+  border: 1px solid color-mix(in srgb, var(--danger, #dc2626) 28%, transparent);
+  border-radius: 10px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 720px) {
+  .network-settings-form fieldset {
+    grid-template-columns: 1fr;
+  }
+}
+
+.download-sources-card {
+  margin-top: 16px;
+}
+
+.ds-field {
+  display: grid;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.ds-field-label {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.ds-segments {
+  display: inline-flex;
+  max-width: 100%;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-soft);
+}
+
+.ds-segment {
+  min-height: 40px;
+  padding: 0 16px;
+  border: 0;
+  border-right: 1px solid var(--border);
+  background: transparent;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ds-segment:last-child {
+  border-right: 0;
+}
+
+.ds-segment.selected {
+  background: #3261e8;
+  color: #fff;
+}
+
+.ds-segment:hover:not(.selected) {
+  background: var(--surface);
+}
+
+.ds-preset-note {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.ds-preset-note[data-custom="true"] {
+  color: #b45309;
+}
+
+.ds-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 8px 0 0;
+  padding: 0;
+  list-style: none;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--border);
+}
+
+.ds-summary li {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 12px 14px;
+  background: var(--surface-soft);
+}
+
+.ds-summary span {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.ds-summary strong {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.ds-summary small {
+  overflow-wrap: anywhere;
+  color: var(--text-soft);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ds-channels-panel {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+
+.ds-channels-panel > summary {
+  cursor: pointer;
+  color: var(--text-soft);
+  font-size: 13px;
+  font-weight: 650;
+  list-style: none;
+}
+
+.ds-channels-panel > summary::-webkit-details-marker {
+  display: none;
+}
+
+.ds-channels-panel > summary::before {
+  content: "";
+  display: inline-block;
+  width: 0.45em;
+  height: 0.45em;
+  margin-right: 8px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(-45deg) translateY(-1px);
+  transition: transform 0.15s ease;
+}
+
+.ds-channels-panel[open] > summary {
+  color: var(--text);
+}
+
+.ds-channels-panel[open] > summary::before {
+  transform: rotate(45deg) translateY(-2px);
+}
+
+.ds-channels-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+  margin-top: 14px;
+}
+
+.ds-channel-field {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.ds-channel-field > span {
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.ds-channel-field > small {
+  color: var(--text-faint);
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+.ds-footnote {
+  grid-column: 1 / -1;
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.ds-card-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+@media (max-width: 900px) {
+  .ds-segments {
+    display: grid;
+    grid-template-columns: 1fr;
+  }
+
+  .ds-segment {
+    border-right: 0;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .ds-segment:last-child {
+    border-bottom: 0;
+  }
+
+  .ds-summary,
+  .ds-channels-form {
+    grid-template-columns: 1fr;
+  }
+}
+
 .meter {
   margin-top: 28px;
 }

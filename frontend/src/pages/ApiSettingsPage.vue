@@ -42,7 +42,7 @@ onMounted(() => { void loadCacheCount() })
   <section class="settings-card">
     <h2>{{ t("settings.api.title") }}</h2>
     <small>{{ t("settings.api.hint") }}</small>
-    <LlmSettingsDialog :model-value="true" capability="text" embedded @saved="applyCachePolicy" />
+    <LlmSettingsDialog :model-value="true" embedded @saved="applyCachePolicy" />
     <details class="llm-advanced-settings api-cache-maintenance">
       <summary>{{ t("datasetEditor.caption.translationCache", { n: cacheCount }) }}</summary>
       <div class="caption-translation-cache-row">
