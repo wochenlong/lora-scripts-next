@@ -9,7 +9,7 @@ from mikazuki.tasks import tm
 from mikazuki.utils.task_insights import _load_toml, resolve_task_config
 
 ACTIVE_STATUSES = {"CREATED", "RUNNING", "QUEUED"}
-DIR_KEYS = ("train_data_dir", "reg_data_dir", "output_data_dir", "dataset_base_path", "source_image_dir")
+DIR_KEYS = ("train_data_dir", "reg_data_dir", "output_data_dir", "dataset_base_path", "source_image_dir", "src")
 ARRAY_DIR_KEYS = ("input_data_dirs", "control_data_dirs")
 
 

@@ -1,0 +1,185 @@
+"""Next Trainer form -> the pinned MOSS CacheRequest / TrainRequest flags.
+
+MOSS has no Anima TOML chain. Keep its native names and semantics; the only
+path conversion is Next Trainer's output_dir/output_name and cache_dir.
+This module intentionally never imports torch or the training environment.
+"""
+from dataclasses import asdict, dataclass
+import hashlib
+import json
+import math
+import os
+from pathlib import Path
+import re
+import sys
+
+
+TARGETS = r"layers\.\d+\.proj\.(q|k|v|o|ffn_up_gate|ffn_down)"
+TRAIN_DEFAULTS = {
+    "model": "base", "epochs": 8, "max_steps": 0, "rank": 16,
+    "lr": 1e-4, "warmup_ratio": 0.05, "save_every_epochs": 0,
+    "caption_dropout": 0.0, "lora_dtype": "bf16", "targets": TARGETS,
+    "sigma_mu": -1.09, "sigma_s": 0.95, "sigma_cutoff": 0.95,
+    "sigma_uniform": 0.01, "max_grad_norm": 1.0,
+    "grad_checkpointing": True, "blocks_to_swap": 0,
+    # Safer first launch and portable Windows default; explicitly emitted.
+    "compile": False, "log_every": 10, "seed": 0,
+}
+CACHE_DEFAULTS = {
+    "resolution": 1024, "save_crops": False,
+    "vae_dtype": "fp32", "max_text_tokens": 4096,
+}
+UI_FIELDS = {
+    "model_train_type", "gpu_ids", "src", "model_dir", "cache_dir",
+    "output_dir", "output_name", "run_preprocess", "overwrite_cache",
+}
+INT_BOUNDS = {
+    "epochs": (0, None), "max_steps": (0, None), "rank": (1, 3072),
+    "save_every_epochs": (0, None), "blocks_to_swap": (-1, 40),
+    "log_every": (1, None), "seed": (0, 2**63 - 1),
+    "resolution": (16, 4096), "max_text_tokens": (1, 4096),
+}
+FLOAT_BOUNDS = {
+    "lr": (0, None, False), "alpha": (0, None, False),
+    "warmup_ratio": (0, 1, True), "caption_dropout": (0, 1, True),
+    "sigma_mu": (-20, 20, True), "sigma_s": (0, 20, False),
+    "sigma_cutoff": (0, 1, False), "sigma_uniform": (0, 1, True),
+    "max_grad_norm": (0, None, False),
+}
+
+
+def absolute(value, root):
+    path = Path(str(value)).expanduser()
+    if not path.is_absolute():
+        path = root / path
+    return Path(os.path.abspath(str(path)))
+
+
+def _empty(value):
+    return value is None or isinstance(value, str) and not value.strip()
+
+
+def _bool(value, key):
+    if value is True or value == "true":
+        return True
+    if value is False or value == "false":
+        return False
+    raise ValueError(f"{key}: expected true/false / 必须为布尔值")
+
+
+def _number(value, key, *, integer=False):
+    if isinstance(value, bool):
+        raise ValueError(f"{key}: expected a number / 必须为数值")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{key}: expected a number / 必须为数值") from exc
+    if not math.isfinite(number) or integer and not number.is_integer():
+        raise ValueError(f"{key}: invalid numeric value / 数值无效")
+    return int(number) if integer else number
+
+
+def argv_for(values):
+    """BooleanOptionalAction spells false as --no-<name>, including underscores."""
+    argv = []
+    for key, value in values.items():
+        if isinstance(value, bool):
+            argv.append(f"--{key}" if value else f"--no-{key}")
+        elif value is not None:
+            argv.extend([f"--{key}", str(value)])
+    return argv
+
+
+@dataclass
+class AdaptedConfig:
+    cache: dict
+    train: dict
+    run_preprocess: bool
+    warnings: list[str]
+
+    def as_dict(self):
+        return asdict(self)
+
+
+def adapt_config(config, runtime):
+    allowed = set(TRAIN_DEFAULTS) | set(CACHE_DEFAULTS) | UI_FIELDS | {"alpha"}
+    unknown = sorted(key for key, value in config.items() if key not in allowed and not _empty(value))
+    if unknown:
+        raise ValueError("Unsupported MOSS fields / 不支持的 MOSS 参数: " + ", ".join(unknown))
+    train, cache = dict(TRAIN_DEFAULTS), dict(CACHE_DEFAULTS)
+    for key in set(train) | set(cache) | {"alpha"}:
+        if key not in config or _empty(config[key]):
+            continue
+        target = cache if key in cache else train
+        value = config[key]
+        if key in INT_BOUNDS:
+            value = _number(value, key, integer=True)
+            low, high = INT_BOUNDS[key]
+            if value < low or high is not None and value > high:
+                raise ValueError(f"{key}: outside supported range [{low}, {high}] / 超出范围")
+        elif key in FLOAT_BOUNDS:
+            value = _number(value, key)
+            low, high, inclusive = FLOAT_BOUNDS[key]
+            if value < low or not inclusive and value == low or high is not None and value > high:
+                raise ValueError(f"{key}: outside supported range / 超出支持范围")
+        elif isinstance(target.get(key), bool):
+            value = _bool(value, key)
+        else:
+            value = str(value).strip()
+        target[key] = value
+    if train["model"] not in {"base", "sft"}:
+        raise ValueError("model: choose base or sft / 请选择 Base 或 SFT")
+    if train["lora_dtype"] not in {"bf16", "fp16", "fp32"}:
+        raise ValueError("lora_dtype: choose bf16, fp16 or fp32")
+    if cache["vae_dtype"] not in {"fp32", "bf16"}:
+        raise ValueError("vae_dtype: choose fp32 or bf16")
+    if not train["epochs"] and not train["max_steps"]:
+        raise ValueError("epochs/max_steps: at least one must be positive / 至少一项必须大于 0")
+    if sys.platform == "win32" and train["compile"]:
+        raise ValueError("compile: disable torch.compile on Windows / Windows 请关闭编译")
+    try:
+        pattern = re.compile(train["targets"])
+    except re.error as exc:
+        raise ValueError(f"targets: invalid regular expression / 正则无效: {exc}") from exc
+    names = [f"layers.{i}.proj.{name}" for i in range(42)
+             for name in ("q", "k", "v", "o", "ffn_up_gate", "ffn_down")]
+    if not any(pattern.fullmatch(name) for name in names):
+        raise ValueError("targets: matches no MOSS LoRA layers / 未匹配任何 MOSS LoRA 层")
+    for key in ("model_dir", "output_dir", "output_name"):
+        if _empty(config.get(key)):
+            raise ValueError(f"{key}: required / 必填")
+    name = str(config["output_name"]).strip()
+    if name in {".", ".."} or re.search(r'[<>:"/\\|?*\x00-\x1f]', name) or name.endswith((".", " ")):
+        raise ValueError("output_name: use a filename without directory separators / 请填写文件名而非路径")
+    if name.lower().endswith(".safetensors"):
+        name = name[:-12]
+    if not name:
+        raise ValueError("output_name: required / 必填")
+    model_dir = absolute(config["model_dir"], runtime.project_root)
+    output = absolute(config["output_dir"], runtime.project_root) / f"{name}.safetensors"
+    run_preprocess = _bool(config.get("run_preprocess", True), "run_preprocess")
+    src = absolute(config["src"], runtime.project_root) if not _empty(config.get("src")) else None
+    if run_preprocess and src is None:
+        raise ValueError("src: required when preprocessing / 预处理需要数据集目录")
+    if not run_preprocess and _empty(config.get("cache_dir")):
+        raise ValueError("cache_dir: required without preprocessing / 跳过预处理时必填")
+    identity = {"src": str(src), "model_dir": str(model_dir), **cache}
+    digest = hashlib.sha256(json.dumps(identity, sort_keys=True).encode()).hexdigest()[:16]
+    cache_dir = absolute(config.get("cache_dir") or runtime.project_root / ".cache" / "moss" / digest, runtime.project_root)
+    cache.update(out=str(cache_dir), model_dir=str(model_dir), overwrite=_bool(config.get("overwrite_cache", False), "overwrite_cache"))
+    if src is not None:
+        cache["src"] = str(src)
+    train.update(cache=str(cache_dir), model_dir=str(model_dir), output=str(output))
+    warnings = ["MOSS upstream is alpha; real training and ComfyUI LoRA compatibility remain unverified. / MOSS 上游为 alpha，尚未验证真实训练和 ComfyUI LoRA 兼容性。"]
+    if train["epochs"] and train["max_steps"]:
+        warnings.append("max_steps caps epochs × cached pairs; batch size is fixed at 1. / 步数上限截断轮数 × 缓存样本数，批大小固定为 1。")
+    if not run_preprocess:
+        warnings.append("External cache headers cannot prove model/caption provenance; only reuse caches for these exact assets. / 外部缓存头不能证明模型和标注来源，请仅复用对应模型的缓存。")
+    return AdaptedConfig(cache, train, run_preprocess, warnings)
+
+
+def dump_config(adapted, directory, run_id):
+    path = Path(directory) / f"{run_id}-moss.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(adapted.as_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
+    return path.resolve()

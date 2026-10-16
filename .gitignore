@@ -141,6 +141,10 @@ extensions/diffsynth/
 # Isolated AI Toolkit runtime
 /extensions/ai_toolkit/
 
+# Isolated MOSS runtime and cross-process lock
+/extensions/moss/
+/extensions/.moss.lock
+
 # Local project memory
 /MEMORY.md
 

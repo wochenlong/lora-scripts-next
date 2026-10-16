@@ -244,3 +244,26 @@ and nested server browser are teleported to avoid toolbar clipping.
 The dataset list menu is limited to manage, rename and delete. Upload, ZIP export,
 tagging, caption editing and copy/preprocessing are available inside the detail page.
 Copy retains directory layout, Kohya repeats and transparency options.
+
+### MOSS-Image native LoRA integration (2026-10-16)
+
+MOSS-Image is a separate model family and optional MOSS (anima_lora) engine in the
+shared training selector and engine catalog. Its runtime gate reuses the managed
+install/status/progress conventions and opens the shared dynamic training form only
+when the engine is ready and enabled. The model uses native Base/SFT directory
+layout; it does not expose Anima assets, Comfy split files, or training-time samples.
+
+The schema preserves native MOSS request names and provides bilingual help. The
+normal path caches images plus TXT captions before training; existing-cache mode
+requires an explicit MOSS cache directory and omits the source folder. LoRA rank,
+alpha, noise sampling, block swapping, compile, and preprocessing controls are
+passed without Kohya network/optimizer conversions. Compile and cache overwrite
+are disabled by default. Output directory/name are resolved by the backend.
+Cross-schema carry-over excludes MOSS model/cache settings and incompatible
+integer-versus-width,height resolution values. Submission preflights the same flat
+config that the shared preview/export/run workflow uses.
+
+Validation is mocked and CPU-only: schema serialization/constraints, shared module
+selection, settings pagination, status gating, one-click install streams, cancellation,
+and preflight-before-submit are covered. No model download, runtime installation,
+or GPU training is performed by these frontend tests.

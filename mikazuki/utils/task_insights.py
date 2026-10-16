@@ -96,7 +96,7 @@ def _is_ai_toolkit(metadata: dict) -> bool:
 def resolve_task_dirs(metadata: dict) -> dict:
     # These engines keep UI configs separate from native runtime arguments.
     # Their run handlers carry the actual output/log directories in metadata.
-    if (metadata or {}).get("backend") in {AI_TOOLKIT_BACKEND, "diffsynth"}:
+    if (metadata or {}).get("backend") in {AI_TOOLKIT_BACKEND, "diffsynth", "moss"}:
         return {
             "output_dir": _resolve_dir((metadata or {}).get("output_dir")),
             "logging_dir": _resolve_dir((metadata or {}).get("logging_dir")),
@@ -190,6 +190,10 @@ def _until(metadata: dict) -> float | None:
 
 
 def _iter_preview_paths(metadata: dict) -> list[Path]:
+    # Pinned MOSS has no training sampler. Images in a shared output folder
+    # belong to another job, even when their names and timestamps match.
+    if (metadata or {}).get("backend") == "moss":
+        return []
     dirs = resolve_task_dirs(metadata)
     output_dir = dirs.get("output_dir")
     if output_dir is None:
@@ -276,6 +280,10 @@ def downsample(points: list[dict], limit: int = LOSS_POINT_LIMIT) -> list[dict]:
 
 
 def read_loss_scalars(metadata: dict, limit: int = LOSS_POINT_LIMIT) -> dict:
+    # MOSS reports loss on stdout and in its JSON report, not TensorBoard.
+    # Never fall back to a neighbouring engine's event files.
+    if (metadata or {}).get("backend") == "moss":
+        return {}
     dirs = resolve_task_dirs(metadata)
     logging_dir = dirs.get("logging_dir")
     if logging_dir is None or not logging_dir.exists():
