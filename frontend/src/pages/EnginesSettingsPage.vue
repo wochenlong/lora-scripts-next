@@ -48,12 +48,13 @@ let timer: number | undefined
 let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
-const MANAGED_ENGINES = new Set(["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth"])
+const MANAGED_ENGINES = new Set(["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"])
 const INSTALL_STREAM_BASE: Record<string, string> = {
   kohya: "/api/engines/kohya/install",
   "anima-fast": "/api/engines/anima-fast/install",
   musubi: "/api/engines/musubi/install",
   diffsynth: "/api/engines/diffsynth/install",
+  moss: "/api/engines/moss/install",
   "ai-toolkit": "/api/engines/ai-toolkit/install",
 }
 
@@ -526,7 +527,7 @@ type="button" class="engine-drag-handle" draggable="true"
                   type="button"
                   role="menuitem"
                   :disabled="loadingId === card.engine.id || !['broken', 'installed_unverified', 'ready'].includes(card.status.state)"
-                  @click="install(card.engine.id, card.engine.id === 'diffsynth' ? 'reinstall' : 'repair')"
+                  @click="install(card.engine.id, ['diffsynth', 'moss'].includes(card.engine.id) ? 'reinstall' : 'repair')"
                 >
                   {{ t("settings.engines.actions.reinstall") }}
                 </button>

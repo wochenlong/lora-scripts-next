@@ -52,12 +52,40 @@ def prepare_git():
         return False
 
 
+def _build_frontend_dist(frontend_path):
+    root = base_dir_path()
+    frontend = root / "frontend"
+    if frontend_path.resolve() != (frontend / "dist").resolve():
+        return
+    node = shutil.which("node")
+    npm = shutil.which("npm")
+    if not node or not npm or not (frontend / "package-lock.json").is_file():
+        return
+    version = subprocess.check_output([node, "--version"], text=True).strip()
+    if not re.match(r"^v22\.", version):
+        log.error("Node.js 22 is required to build the frontend / 构建前端需要 Node.js 22")
+        return
+    node_path = Path(node).resolve()
+    npm_cli = node_path.parent / "node_modules/npm/bin/npm-cli.js"
+    if not npm_cli.is_file():
+        npm_cli = Path(npm).resolve()
+    if npm_cli.suffix != ".js" or not npm_cli.is_file():
+        return
+    env = os.environ.copy()
+    env["PATH"] = str(node_path.parent) + os.pathsep + env.get("PATH", "")
+    log.info("Building the Vue frontend from the locked dependencies / 正在构建 Vue 前端")
+    subprocess.run([str(node_path), str(npm_cli), "ci"], cwd=frontend, env=env, check=True)
+    subprocess.run([str(node_path), str(npm_cli), "run", "build"], cwd=frontend, env=env, check=True)
+
+
 def ensure_frontend_dist():
     frontend_path = Path(os.environ.get("MIKAZUKI_FRONTEND_DIST", "frontend/dist"))
     if not frontend_path.is_absolute():
         frontend_path = base_dir_path() / frontend_path
 
-    if not frontend_path.exists():
+    if not (frontend_path / "index.html").is_file():
+        _build_frontend_dist(frontend_path)
+    if not (frontend_path / "index.html").is_file():
         log.error(
             "frontend/dist not found. Build or restore the Vue frontend before starting the GUI. / "
             "未找到 frontend/dist，请先构建或恢复 Vue 前端后再启动。"

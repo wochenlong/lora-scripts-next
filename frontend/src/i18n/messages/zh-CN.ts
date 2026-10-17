@@ -51,6 +51,7 @@ export default {
       target: "训练目标",
       targetType: "训练目标类型",
       models: {
+        "moss-image": "MOSS-Image",
         anima: "Anima DiT",
         sd15: "SD 1.5",
         sdxl: "SDXL",
@@ -62,6 +63,7 @@ export default {
         "qwen-image-21": "Qwen-Image-2.1",
       },
       modelTags: {
+        "moss-image": "实验性 LoRA",
         anima: "二次元首选",
         krea2: "通用写实",
         klein: "图像编辑",
@@ -73,6 +75,7 @@ export default {
         lumina: "",
       },
       modelHints: {
+        "moss-image": "MOSS-Image Base/SFT LoRA；使用独立模型目录与先缓存再训练流程",
         anima: "二次元角色、画风训练的首选",
         krea2: "写实与通用文生图训练",
         klein: "图像编辑类能力的模型训练",
@@ -89,6 +92,7 @@ export default {
         musubi: "Musubi-Tuner",
         "ai-toolkit": "AI Toolkit",
         diffsynth: "DiffSynth-Studio",
+        moss: "MOSS (anima_lora)",
       },
       targets: {
         lora: "LoRA",
@@ -240,13 +244,15 @@ export default {
       queued: "已有训练在运行，任务已加入队列：{id}",
       renamed: "输出名称 {from} 与已有任务或输出目录冲突，已自动改为 {to}",
       fail: "训练提交失败",
-      preflightFail: "Anima Fast 预检查未通过",
+      preflightFail: "训练预检查未通过",
     },
     resetDialog: {
       title: "重置参数",
       cancel: "取消",
     },
     diagnostics: {
+      mossSingleGpu: "MOSS 仅支持单卡，请选择一张 GPU。",
+      mossDuration: "MOSS 的 epochs 或 max_steps 至少一项需要大于 0。",
       toolkitLearningRate: "AI Toolkit 的 learning_rate 必须是大于等于 1e-12 的有限数值",
       dadaptScheduler: "DAdaptation 系列优化器建议将 lr_scheduler 设置为 constant",
       prodigyLr: "Prodigy 建议将 unet_lr、text_encoder_lr 设置为 1",
@@ -255,6 +261,7 @@ export default {
       animaFastTorchCompile: "attn_mode=torch 或留空时不能启用 torch_compile",
     },
     schemas: {
+      "moss-image-lora": { title: "MOSS-Image LoRA", area: "MOSS (anima_lora)" },
       "sd3-lora": { title: "Anima LoRA", area: "Anima DiT · Kohya-ss · LoRA" },
       "anima-lora-fast": { title: "Anima LoRA Fast", area: "Anima DiT · Anima Fast · LoRA" },
       "anima-finetune": { title: "Anima 全量微调", area: "Anima DiT · Kohya-ss · 全量微调" },
@@ -498,6 +505,7 @@ export default {
     historyCap: "仅显示最近 {n} 条，可用日期/模型筛选更早记录",
     defaultName: "训练任务",
     kind: {
+      mossInstall: "插件安装 · MOSS (anima_lora)",
       musubiInstall: "插件安装 · Musubi-Tuner",
       aiToolkitInstall: "插件安装 · AI Toolkit",
       animaFastInstall: "插件安装 · Anima Fast",
@@ -774,6 +782,7 @@ export default {
         recommended: "推荐",
       },
       tags: {
+        "moss-image": "MOSS-Image",
         lora: "LoRA",
         sd15: "SD 1.5",
         sdxl: "SDXL",
@@ -865,6 +874,11 @@ export default {
         resetDone: "已恢复官方默认",
       },
       catalog: {
+        moss: {
+          name: "MOSS (anima_lora)",
+          summary: "实验性 MOSS-Image Base/SFT LoRA · 独立运行环境 · 原生缓存后训练",
+          sizeHint: "运行环境需数 GB；模型权重需另行准备",
+        },
         diffsynth: {
           name: "DiffSynth-Studio",
           summary: "Qwen-Image-2.1 LoRA · 独立 Python / venv · 官方训练入口",
@@ -944,6 +958,7 @@ export default {
       confirm: {
         animaFast: "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
         install: {
+          moss: "MOSS (anima_lora) 将下载独立运行环境及依赖，需要 NVIDIA GPU，不包含模型权重。确认继续？",
           kohya: "Kohya (sd-scripts) 会下载独立 Python 和数 GB 依赖（含 PyTorch），并要求 NVIDIA GPU。确认继续？",
           diffsynth: "DiffSynth-Studio 会下载独立 Python 和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           "anima-fast": "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
@@ -1368,6 +1383,14 @@ export default {
     install: "安装 Kohya 环境",
     consoleIdle: "安装日志",
     consoleWaiting: "等待安装…",
+  },
+  mossGate: {
+    intro: "实验性 MOSS-Image LoRA 使用原生模型目录，先缓存再训练，固定 batch size 为 1；不能使用 Anima 模型或缓存。",
+    auditTitle: "环境审计",
+    installWorking: "安装中…",
+    install: "安装 MOSS 运行环境",
+    consoleIdle: "安装日志",
+    consoleWaiting: "等待安装任务输出…",
   },
   diffsynthGate: {
     intro: "Qwen-Image-2.1 LoRA。独立环境；暂不支持训练中采样预览。", auditTitle: "环境检查结果",

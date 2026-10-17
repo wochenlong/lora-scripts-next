@@ -81,7 +81,7 @@ describe("KohyaGatePage", () => {
     await flushPromises()
 
     expect(wrapper.get('[data-testid="engine-cancel-install"]').text()).toContain("中止安装")
-    expect(wrapper.get('[data-testid="install-console"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="install-console"]').exists()).toBe(true)
     wrapper.unmount()
   })
 

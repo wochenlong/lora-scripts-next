@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import io
+import json
 import re
 import time
 from pathlib import Path
@@ -96,7 +97,7 @@ def _is_ai_toolkit(metadata: dict) -> bool:
 def resolve_task_dirs(metadata: dict) -> dict:
     # These engines keep UI configs separate from native runtime arguments.
     # Their run handlers carry the actual output/log directories in metadata.
-    if (metadata or {}).get("backend") in {AI_TOOLKIT_BACKEND, "diffsynth"}:
+    if (metadata or {}).get("backend") in {AI_TOOLKIT_BACKEND, "diffsynth", "moss"}:
         return {
             "output_dir": _resolve_dir((metadata or {}).get("output_dir")),
             "logging_dir": _resolve_dir((metadata or {}).get("logging_dir")),
@@ -189,7 +190,67 @@ def _until(metadata: dict) -> float | None:
     return finished + UNTIL_TOLERANCE_SECONDS if finished > 0 else None
 
 
+def _moss_train_config(metadata: dict) -> dict:
+    config = metadata.get("engine_config")
+    if not isinstance(config, dict):
+        path = str(metadata.get("engine_config_path") or "").strip()
+        if not path:
+            return {}
+        try:
+            config = json.loads(Path(path).read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            return {}
+    train = config.get("train") if isinstance(config, dict) else None
+    return train if isinstance(train, dict) else {}
+
+
+def moss_preview_enabled(metadata: dict) -> bool:
+    try:
+        return int(_moss_train_config(metadata).get("preview_every_epochs") or 0) > 0
+    except (TypeError, ValueError):
+        return False
+
+
+def _moss_preview_paths(metadata: dict) -> list[Path]:
+    train = _moss_train_config(metadata)
+    if not moss_preview_enabled(metadata):
+        return []
+    dirs = resolve_task_dirs(metadata)
+    out, name = dirs.get("output_dir"), dirs.get("output_name")
+    if out is None or not name or Path(name).name != name:
+        return []
+    expected = _resolve_dir(train.get("output"))
+    if expected != out / (name + ".safetensors"):
+        return []
+    root = out / (name + "_samples")
+    try:
+        root.resolve().relative_to(out.resolve())
+    except ValueError:
+        return []
+    since, until = _since(metadata), _until(metadata)
+    found = []
+    for path in root.glob("epoch_[0-9]*/*.png"):
+        if not re.fullmatch(r"epoch_\d{2,}", path.parent.name):
+            continue
+        try:
+            path.resolve().relative_to(root.resolve())
+            mtime = path.stat().st_mtime
+        except (OSError, ValueError):
+            continue
+        if path.is_file() and not (since and mtime < since) and not (until and mtime > until):
+            found.append(path)
+    return sorted(found, key=lambda p: (int(p.parent.name.removeprefix("epoch_")), p.name))
+
+
+def _preview_name(metadata: dict, path: Path) -> str:
+    if metadata.get("backend") == "moss":
+        return path.parent.name + "__" + path.name
+    return path.name
+
+
 def _iter_preview_paths(metadata: dict) -> list[Path]:
+    if (metadata or {}).get("backend") == "moss":
+        return _moss_preview_paths(metadata)
     dirs = resolve_task_dirs(metadata)
     output_dir = dirs.get("output_dir")
     if output_dir is None:
@@ -247,7 +308,9 @@ def list_preview_images(metadata: dict) -> list[dict]:
         except OSError:
             continue
         step = parse_ai_toolkit_step(path.name) if ai_toolkit else parse_step(path.name)
-        image = {"name": path.name, "epoch": parse_epoch(path.name), "step": step, "mtime": mtime}
+        image = {"name": _preview_name(metadata, path), "epoch": parse_epoch(path.name), "step": step, "mtime": mtime}
+        if metadata.get("backend") == "moss":
+            image["epoch"] = int(path.parent.name.removeprefix("epoch_"))
         if metadata.get("backend") == "diffsynth":
             step_match = re.search(r"-step-(\d+)-sample-", path.name)
             image["step"] = int(step_match[1]) if step_match else None
@@ -260,7 +323,7 @@ def list_preview_images(metadata: dict) -> list[dict]:
 
 def resolve_preview_image(metadata: dict, filename: str) -> Path | None:
     for path in _iter_preview_paths(metadata):
-        if path.name == filename:
+        if _preview_name(metadata, path) == filename:
             return path
     return None
 
@@ -276,6 +339,10 @@ def downsample(points: list[dict], limit: int = LOSS_POINT_LIMIT) -> list[dict]:
 
 
 def read_loss_scalars(metadata: dict, limit: int = LOSS_POINT_LIMIT) -> dict:
+    # MOSS reports loss on stdout and in its JSON report, not TensorBoard.
+    # Never fall back to a neighbouring engine's event files.
+    if (metadata or {}).get("backend") == "moss":
+        return {}
     dirs = resolve_task_dirs(metadata)
     logging_dir = dirs.get("logging_dir")
     if logging_dir is None or not logging_dir.exists():

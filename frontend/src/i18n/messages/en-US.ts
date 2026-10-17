@@ -51,6 +51,7 @@ export default {
       target: "Training Target",
       targetType: "Training Target Type",
       models: {
+        "moss-image": "MOSS-Image",
         anima: "Anima DiT",
         sd15: "SD 1.5",
         sdxl: "SDXL",
@@ -62,6 +63,7 @@ export default {
         "qwen-image-21": "Qwen-Image-2.1",
       },
       modelTags: {
+        "moss-image": "experimental LoRA",
         anima: "best for anime",
         krea2: "general / realistic",
         klein: "image edit",
@@ -73,6 +75,7 @@ export default {
         lumina: "",
       },
       modelHints: {
+        "moss-image": "MOSS-Image Base/SFT LoRA with its own model directories and cache-then-train workflow",
         anima: "Best default for anime characters and art styles",
         krea2: "Realistic and general text-to-image training",
         klein: "Training for image-editing capabilities",
@@ -89,6 +92,7 @@ export default {
         musubi: "Musubi-Tuner",
         "ai-toolkit": "AI Toolkit",
         diffsynth: "DiffSynth-Studio",
+        moss: "MOSS (anima_lora)",
       },
       targets: {
         lora: "LoRA",
@@ -240,13 +244,15 @@ export default {
       queued: "Another training is running; task queued: {id}",
       renamed: "Output name {from} conflicts with an active task or existing output; renamed to {to}",
       fail: "Failed to submit training",
-      preflightFail: "Anima Fast preflight checks failed",
+      preflightFail: "Training preflight checks failed",
     },
     resetDialog: {
       title: "Reset Parameters",
       cancel: "Cancel",
     },
     diagnostics: {
+      mossSingleGpu: "MOSS supports one GPU; select a single device.",
+      mossDuration: "MOSS requires epochs > 0 or max_steps > 0.",
       toolkitLearningRate: "AI Toolkit learning_rate must be a finite number of at least 1e-12",
       dadaptScheduler: "DAdaptation-family optimizers work best with lr_scheduler set to constant",
       prodigyLr: "Prodigy works best with unet_lr and text_encoder_lr set to 1",
@@ -255,6 +261,7 @@ export default {
       animaFastTorchCompile: "torch_compile cannot be enabled when attn_mode is torch or empty",
     },
     schemas: {
+      "moss-image-lora": { title: "MOSS-Image LoRA", area: "MOSS (anima_lora)" },
       "sd3-lora": { title: "Anima LoRA", area: "Anima DiT · Kohya-ss · LoRA" },
       "anima-lora-fast": { title: "Anima LoRA Fast", area: "Anima DiT · Anima Fast · LoRA" },
       "anima-finetune": { title: "Anima Full Fine-tune", area: "Anima DiT · Kohya-ss · Full Fine-tune" },
@@ -498,6 +505,7 @@ export default {
     historyCap: "Showing the latest {n}; use date/model filters for older runs",
     defaultName: "Training Task",
     kind: {
+      mossInstall: "Plugin Install · MOSS (anima_lora)",
       musubiInstall: "Plugin Install · Musubi-Tuner",
       aiToolkitInstall: "Plugin Install · AI Toolkit",
       animaFastInstall: "Plugin Install · Anima Fast",
@@ -774,6 +782,7 @@ export default {
         recommended: "Recommended",
       },
       tags: {
+        "moss-image": "MOSS-Image",
         lora: "LoRA",
         sd15: "SD 1.5",
         sdxl: "SDXL",
@@ -865,6 +874,11 @@ export default {
         resetDone: "Reset to official defaults",
       },
       catalog: {
+        moss: {
+          name: "MOSS (anima_lora)",
+          summary: "Experimental MOSS-Image Base/SFT LoRA · isolated runtime · native cache then train",
+          sizeHint: "Runtime requires several GB; model weights are configured separately",
+        },
         diffsynth: {
           name: "DiffSynth-Studio",
           summary: "Qwen-Image-2.1 LoRA with isolated Python / venv and the official training entry",
@@ -944,6 +958,7 @@ export default {
       confirm: {
         animaFast: "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
         install: {
+          moss: "Download the isolated MOSS (anima_lora) runtime and dependencies? An NVIDIA GPU is required. Model weights are not included.",
           kohya: "Kohya (sd-scripts) downloads a standalone Python environment and several GB of dependencies (including PyTorch), and requires an NVIDIA GPU. Continue?",
           diffsynth: "Download the isolated DiffSynth Python runtime and several GB of dependencies? An NVIDIA GPU is required.",
           "anima-fast": "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
@@ -1366,6 +1381,14 @@ export default {
     intro: "Kohya (sd-scripts) training runs in an isolated Python runtime; finish the install to start training.",
     installWorking: "Installing…",
     install: "Install Kohya runtime",
+    consoleIdle: "Install log",
+    consoleWaiting: "Waiting for installation…",
+  },
+  mossGate: {
+    intro: "Experimental MOSS-Image LoRA uses its own native model folders and cache-then-train workflow. Batch size is fixed at 1; Anima models and caches are incompatible.",
+    auditTitle: "Environment audit",
+    installWorking: "Installing…",
+    install: "Install MOSS runtime",
     consoleIdle: "Install log",
     consoleWaiting: "Waiting for installation…",
   },

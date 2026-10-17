@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 MAX_BYTES = 1024 * 1024
-ENGINES = {"kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth"}
+ENGINES = {"kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"}
 _LOCK = threading.RLock()
 
 

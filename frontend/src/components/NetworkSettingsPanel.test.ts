@@ -29,7 +29,7 @@ describe("shared network settings", () => {
     const wrapper = mount(NetworkSettingsPanel)
     await flushPromises()
     expect(api.get).toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="network-settings-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="network-settings-card"]').exists()).toBe(true)
     expect(wrapper.text()).toContain("http://localhost:7890")
     await wrapper.get('[data-testid="network-mode"]').setValue("direct")
     await wrapper.get("form").trigger("submit")

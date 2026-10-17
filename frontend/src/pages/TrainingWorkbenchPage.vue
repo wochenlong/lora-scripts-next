@@ -5,6 +5,7 @@ import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import AnimaFastPage from "./AnimaFastPage.vue"
 import DiffSynthGatePage from "./DiffSynthGatePage.vue"
+import MossGatePage from "./MossGatePage.vue"
 import KohyaGatePage from "./KohyaGatePage.vue"
 import MusubiGatePage from "./MusubiGatePage.vue"
 import AiToolkitGatePage from "./AiToolkitGatePage.vue"
@@ -185,6 +186,12 @@ watch([model, engine, target], () => {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" @engine-picked="onEnginePickedByUser" />
       </template>
     </AnimaFastPage>
+    <MossGatePage v-else-if="resolved.engine === 'moss'" bare>
+      <template #form-top>
+        <WorkbenchHeader />
+        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" @engine-picked="onEnginePickedByUser" />
+      </template>
+    </MossGatePage>
     <DiffSynthGatePage v-else-if="resolved.engine === 'diffsynth'" bare>
       <template #form-top>
         <WorkbenchHeader />

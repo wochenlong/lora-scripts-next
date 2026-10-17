@@ -10,8 +10,8 @@ from mikazuki.engines.runner import RunContext, dispatch_run
 
 def test_discovers_migrated_packs():
     packs = registry.discover_packs()
-    assert set(packs) == {"musubi", "anima-fast", "kohya", "ai-toolkit", "diffsynth"}
-    for engine_id in ("musubi", "anima-fast", "kohya", "ai-toolkit", "diffsynth"):
+    assert set(packs) == {"musubi", "anima-fast", "kohya", "ai-toolkit", "diffsynth", "moss"}
+    for engine_id in ("musubi", "anima-fast", "kohya", "ai-toolkit", "diffsynth", "moss"):
         pack = packs[engine_id]
         assert pack.manifest.kind == KIND_PLUGIN
         assert pack.manifest.upstream["repo"]
@@ -30,6 +30,7 @@ def test_train_type_mapping():
     assert mapping["lumina-lora"] == ("kohya", "lumina")
     assert mapping["klein-4b-lora"] == ("ai-toolkit", "klein-4b")
     assert mapping["klein-9b-lora"] == ("ai-toolkit", "klein-9b")
+    assert mapping["moss-image-lora"] == ("moss", "moss-image")
 
 
 def test_resolve_train_type_roundtrip():

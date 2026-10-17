@@ -1,13 +1,15 @@
 // @vitest-environment jsdom
 import { flushPromises, mount } from "@vue/test-utils"
 import { createPinia } from "pinia"
-import { ElMessage } from "element-plus"
+import { ElMessage, ElMessageBox, type MessageBoxData } from "element-plus"
 import { defineComponent, type PropType } from "vue"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import Schema from "schemastery"
 import TrainingPage from "./TrainingPage.vue"
 import { i18n } from "../i18n"
-import type { AdaptedSchema } from "../schema/adapter"
+import { executeSchemaSources, type AdaptedSchema } from "../schema/adapter"
+import { readFileSync } from "node:fs"
+import { resolve } from "node:path"
 import { loadTrainingSchema } from "../schema/loader"
 import { schemasApi } from "../api/schemas"
 import { tasksApi } from "../api/tasks"
@@ -39,6 +41,7 @@ vi.mock("../api/training", () => ({
     run: vi.fn(),
     saveParams: vi.fn(),
     animaFastPreflight: vi.fn(),
+    mossPreflight: vi.fn(),
     musubiPreflight: vi.fn(),
     aiToolkitPreflight: vi.fn(),
   },
@@ -365,6 +368,45 @@ describe("TrainingPage Anima Fast imports", () => {
     expect(wrapper.get(".model").text()).toContain('"training_duration_mode":"steps"')
     expect(wrapper.get(".model").text()).not.toContain("max_train_epochs")
     expect(vi.mocked(ElMessage.info)).not.toHaveBeenCalledWith(i18n.global.t("training.importMsg.animaFastDurationConflict"))
+    wrapper.unmount()
+  })
+})
+
+
+describe("MOSS shared training submission", () => {
+  const source = readFileSync(resolve(process.cwd(), "../mikazuki/schema/moss-image-lora.ts"), "utf8")
+  const mossSchema = executeSchemaSources([{ name: "moss-image-lora", hash: "test", schema: source }], "moss-image-lora")
+
+  it("preflights the real serialized schema before submitting the same native config", async () => {
+    vi.mocked(loadTrainingSchema).mockResolvedValue(mossSchema)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue("confirm" as MessageBoxData)
+    vi.mocked(trainingApi.mossPreflight).mockResolvedValue({ ok: true, warnings: ["Experimental runtime"] })
+    vi.mocked(trainingApi.run).mockResolvedValue({ task_id: "mock-moss-train" })
+    const wrapper = mountPage("moss-image-lora")
+    await flushPromises()
+    await wrapper.get(".train-submit").trigger("click")
+    await flushPromises()
+    expect(trainingApi.mossPreflight).toHaveBeenCalledOnce()
+    const config = vi.mocked(trainingApi.mossPreflight).mock.calls[0][0]
+    expect(config).toMatchObject({ model_train_type: "moss-image-lora", model: "base", rank: 16, lr: 0.0001, compile: false })
+    expect(config).not.toHaveProperty("network_module")
+    expect(trainingApi.run).toHaveBeenCalledExactlyOnceWith(config)
+    expect(vi.mocked(trainingApi.mossPreflight).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(trainingApi.run).mock.invocationCallOrder[0])
+    expect(ElMessage.warning).toHaveBeenCalledWith("Experimental runtime")
+    wrapper.unmount()
+  })
+
+  it("blocks launch when MOSS preflight rejects the model or cache", async () => {
+    vi.mocked(loadTrainingSchema).mockResolvedValue(mossSchema)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue("confirm" as MessageBoxData)
+    vi.mocked(trainingApi.mossPreflight).mockResolvedValue({ ok: false, errors: ["MOSS cache is incomplete"] })
+    const wrapper = mountPage("moss-image-lora")
+    await flushPromises()
+    await wrapper.get(".train-submit").trigger("click")
+    await flushPromises()
+    expect(trainingApi.run).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalledWith("MOSS cache is incomplete")
+    expect(wrapper.get(".train-submit").attributes("disabled")).toBeUndefined()
     wrapper.unmount()
   })
 })

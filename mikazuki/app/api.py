@@ -966,6 +966,8 @@ async def task_previews(task_id: str) -> APIResponse:
     config = task_insights.resolve_task_config(task.metadata)
     preview_key = "sample_enabled" if task.metadata.get("backend") == "diffsynth" else "sample_prompts"
     preview_enabled = bool(config.get(preview_key)) if config else None
+    if task.metadata.get("backend") == "moss":
+        preview_enabled = task_insights.moss_preview_enabled(task.metadata)
     return APIResponseSuccess(data={"images": images, "preview_enabled": preview_enabled})
 
 

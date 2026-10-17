@@ -40,6 +40,7 @@ export const CROSS_SCHEMA_DENY_KEYS = [
   "dit",
   // krea2's text_encoder is Qwen3-VL; klein's is Qwen3 — never cross them.
   "text_encoder",
+  "model_dir", "model", "src", "cache_dir", "run_preprocess", "overwrite_cache",
   "model_input_mode", "model_variant", "model_path", "model_config_dir", "dit_path", "text_encoder_path", "vae_path", "training_task", "control_data_dirs",
 ] as const
 
@@ -57,6 +58,8 @@ const MODEL_ASSET_DENY_KEYS = ["vae", "turbo_dit", "turbo_dit_cache", "unconditi
 /** Deny set for a carry-over / autosave-sanitize boundary, keyed on the target page. */
 export function denyKeysForDefaults(defaults: FormModel): Set<string> {
   const deny = new Set<string>(CROSS_SCHEMA_DENY_KEYS)
+  // MOSS resolution is an integer pixel-area cap, unlike Kohya width,height.
+  if (defaults.model_train_type === "moss-image-lora") deny.add("resolution")
   if (MODEL_ASSET_DENY_TRAIN_TYPES.has(String(defaults.model_train_type ?? ""))) {
     for (const key of MODEL_ASSET_DENY_KEYS) deny.add(key)
   }
@@ -66,6 +69,7 @@ export function denyKeysForDefaults(defaults: FormModel): Set<string> {
 /** schemaName → locked model_train_type for pages that own a single train type. */
 export const SCHEMA_TRAIN_TYPES: Record<string, string> = {
   "qwen-image-21-lora": "qwen-image-21-lora",
+  "moss-image-lora": "moss-image-lora",
   "anima-lora-fast": "anima-lora-fast",
   "sd3-lora": "anima-lora",
   "anima-finetune": "anima-finetune",
@@ -87,6 +91,7 @@ export function pickCarryOverFields(
   fieldDefaults?: FormModel,
 ): FormModel {
   const deny = denyKeysForDefaults(defaults)
+  if (carry.model_train_type === "moss-image-lora") deny.add("resolution")
   const carried: FormModel = {}
   for (const [key, value] of Object.entries(carry)) {
     if (deny.has(key)) continue
@@ -125,6 +130,15 @@ export function buildTrainingConfig(source: FormModel, schemaName: string) {
   const config: FormModel = schemaName === "lora-basic" ? { ...BASIC_DEFAULTS, ...cloneFormModel(source) } : cloneFormModel(source)
   const lockedTrainType = SCHEMA_TRAIN_TYPES[schemaName]
   if (lockedTrainType) config.model_train_type = lockedTrainType
+  // MOSS uses its own CacheRequest / TrainRequest keys, never Kohya network or
+  // preview conversions. The backend resolves cache/output paths for execution.
+  if (schemaName === "moss-image-lora") {
+    // GPU selection belongs to the shared launcher, not the native request flags.
+    if (Array.isArray(config.gpu_ids)) {
+      config.gpu_ids = config.gpu_ids.map((value) => String(value).match(/GPU (\d+):/)?.[1] || String(value)).filter(Boolean)
+    }
+    return config
+  }
   if (schemaName === "qwen-image-21-lora") {
     // Keep Edit references in the draft while omitting them from T2I requests.
     if (config.training_task !== "image-edit" && Array.isArray(config.preview_samples)) {
@@ -319,6 +333,10 @@ export function checkTrainingConfig(config: FormModel): ParamDiagnostics {
     if ((typeof lr !== "number" && typeof lr !== "string") || !Number.isFinite(Number(lr)) || Number(lr) < 1e-12) {
       errors.push(i18n.global.t("training.diagnostics.toolkitLearningRate"))
     }
+  }
+  if (config.model_train_type === "moss-image-lora") {
+    if (Number(config.epochs ?? 8) <= 0 && Number(config.max_steps ?? 0) <= 0) errors.push(i18n.global.t("training.diagnostics.mossDuration"))
+    if (Array.isArray(config.gpu_ids) && config.gpu_ids.length > 1) errors.push(i18n.global.t("training.diagnostics.mossSingleGpu"))
   }
   const optimizer = String(config.optimizer_type || "")
   if (optimizer.startsWith("DAdapt") && config.lr_scheduler !== "constant") warnings.push(i18n.global.t("training.diagnostics.dadaptScheduler"))

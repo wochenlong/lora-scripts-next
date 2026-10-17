@@ -1,0 +1,90 @@
+[
+  {
+    "path": "tokenizer/tokenizer_config.json",
+    "source_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/main/tokenizer/tokenizer_config.json",
+    "retrieved_at_utc": "2026-10-16T19:16:49.449561+00:00",
+    "sha256_saved_json": "100618108923d8be4c6559c15c56c435283ea0cf3bd9222c3766037a2676c919",
+    "stored_format": "JSON parsed and pretty-printed; semantic contents preserved",
+    "resolved_url": "https://huggingface.co/api/resolve-cache/models/OpenMOSS-Team/MOSS-Image-Base/5f40f07a304541840b6019d2d34d30f966756787/tokenizer%2Ftokenizer_config.json?%2FOpenMOSS-Team%2FMOSS-Image-Base%2Fresolve%2Fmain%2Ftokenizer%2Ftokenizer_config.json=&etag=%226913705fa6a05ee4498df98d776803ba8b39f413%22",
+    "response_headers": {
+      "Content-Length": "1123",
+      "Date": "Fri, 16 Oct 2026 09:14:06 GMT",
+      "ETag": "\"6913705fa6a05ee4498df98d776803ba8b39f413\"",
+      "X-Repo-Commit": "5f40f07a304541840b6019d2d34d30f966756787"
+    }
+  },
+  {
+    "path": "text_encoder/config.json",
+    "source_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/main/text_encoder/config.json",
+    "retrieved_at_utc": "2026-10-16T19:16:49.449675+00:00",
+    "sha256_saved_json": "9465d086a58110b8a6df596c24f39f04ab08ef1b16edea537949780ecf081cff",
+    "stored_format": "JSON parsed and pretty-printed; semantic contents preserved",
+    "resolved_url": "https://huggingface.co/api/resolve-cache/models/OpenMOSS-Team/MOSS-Image-Base/5f40f07a304541840b6019d2d34d30f966756787/text_encoder%2Fconfig.json?%2FOpenMOSS-Team%2FMOSS-Image-Base%2Fresolve%2Fmain%2Ftext_encoder%2Fconfig.json=&etag=%22a745bd0815eddf6b913e3a4ecf9cc9ed5f5f5625%22",
+    "response_headers": {
+      "Content-Length": "2813",
+      "Date": "Fri, 16 Oct 2026 08:01:57 GMT",
+      "ETag": "\"a745bd0815eddf6b913e3a4ecf9cc9ed5f5f5625\"",
+      "X-Repo-Commit": "5f40f07a304541840b6019d2d34d30f966756787"
+    }
+  },
+  {
+    "path": "text_encoder/model.safetensors.index.json",
+    "source_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/main/text_encoder/model.safetensors.index.json",
+    "retrieved_at_utc": "2026-10-16T19:16:49.450145+00:00",
+    "sha256_saved_json": "2940bf0ce63fbc0c766fb13fd7558a8509717ecae4a053d243bbbb5a492330e6",
+    "stored_format": "JSON parsed and pretty-printed; semantic contents preserved",
+    "expected_key_count": 759,
+    "expected_keys_fixture": "text_encoder_keys.json",
+    "resolved_url": "https://huggingface.co/api/resolve-cache/models/OpenMOSS-Team/MOSS-Image-Base/5f40f07a304541840b6019d2d34d30f966756787/text_encoder%2Fmodel.safetensors.index.json?%2FOpenMOSS-Team%2FMOSS-Image-Base%2Fresolve%2Fmain%2Ftext_encoder%2Fmodel.safetensors.index.json=&etag=%22f0ed1b0ede41b6f8b6e1170abebf8d4468a93779%22",
+    "response_headers": {
+      "Content-Length": "64641",
+      "Date": "Fri, 16 Oct 2026 08:21:01 GMT",
+      "ETag": "\"f0ed1b0ede41b6f8b6e1170abebf8d4468a93779\"",
+      "X-Repo-Commit": "5f40f07a304541840b6019d2d34d30f966756787"
+    }
+  },
+  {
+    "path": "vae/config.json",
+    "source_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/main/vae/config.json",
+    "retrieved_at_utc": "2026-10-16T19:16:49.450514+00:00",
+    "sha256_saved_json": "a5de0061bbed3320dfe788c5e3e63126ab40a444b8b16a7790e6a22552e6215b",
+    "stored_format": "JSON parsed and pretty-printed; semantic contents preserved",
+    "resolved_url": "https://huggingface.co/api/resolve-cache/models/OpenMOSS-Team/MOSS-Image-Base/5f40f07a304541840b6019d2d34d30f966756787/vae%2Fconfig.json?%2FOpenMOSS-Team%2FMOSS-Image-Base%2Fresolve%2Fmain%2Fvae%2Fconfig.json=&etag=%223c982a055138a9d5b52bac025c1831949c489a92%22",
+    "response_headers": {
+      "Content-Length": "838",
+      "Date": "Fri, 16 Oct 2026 08:21:01 GMT",
+      "ETag": "\"3c982a055138a9d5b52bac025c1831949c489a92\"",
+      "X-Repo-Commit": "5f40f07a304541840b6019d2d34d30f966756787"
+    }
+  },
+  {
+    "path": "transformer/config.json",
+    "source_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/main/transformer/config.json",
+    "retrieved_at_utc": "2026-10-16T19:16:49.450566+00:00",
+    "sha256_saved_json": "2585fe2a7401cd03680f5cf678e3df2a7aee6acdd909fe5031b2bad4c25856a1",
+    "stored_format": "JSON parsed and pretty-printed; semantic contents preserved",
+    "resolved_url": "https://huggingface.co/api/resolve-cache/models/OpenMOSS-Team/MOSS-Image-Base/5f40f07a304541840b6019d2d34d30f966756787/transformer%2Fconfig.json?%2FOpenMOSS-Team%2FMOSS-Image-Base%2Fresolve%2Fmain%2Ftransformer%2Fconfig.json=&etag=%2209ba6435c9566086eab63a37366157a97d9fa2d8%22",
+    "response_headers": {
+      "Content-Length": "240",
+      "Date": "Fri, 16 Oct 2026 08:01:57 GMT",
+      "ETag": "\"09ba6435c9566086eab63a37366157a97d9fa2d8\"",
+      "X-Repo-Commit": "5f40f07a304541840b6019d2d34d30f966756787"
+    }
+  },
+  {
+    "path": "transformer/diffusion_pytorch_model.safetensors.index.json",
+    "source_url": "https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base/resolve/main/transformer/diffusion_pytorch_model.safetensors.index.json",
+    "retrieved_at_utc": "2026-10-16T19:16:49.450723+00:00",
+    "sha256_saved_json": "49930e173e9609458ba8c7a5d9a1d77147ebec55b5336a1bdeeaa82ce2008e9a",
+    "stored_format": "JSON parsed and pretty-printed; semantic contents preserved",
+    "expected_key_count": 463,
+    "expected_keys_fixture": "transformer_keys.json",
+    "resolved_url": "https://huggingface.co/api/resolve-cache/models/OpenMOSS-Team/MOSS-Image-Base/5f40f07a304541840b6019d2d34d30f966756787/transformer%2Fdiffusion_pytorch_model.safetensors.index.json?%2FOpenMOSS-Team%2FMOSS-Image-Base%2Fresolve%2Fmain%2Ftransformer%2Fdiffusion_pytorch_model.safetensors.index.json=&etag=%2297208f5194db604c0b57f5d3a983dc7ce0e53bb5%22",
+    "response_headers": {
+      "Content-Length": "40298",
+      "Date": "Fri, 16 Oct 2026 08:21:01 GMT",
+      "ETag": "\"97208f5194db604c0b57f5d3a983dc7ce0e53bb5\"",
+      "X-Repo-Commit": "5f40f07a304541840b6019d2d34d30f966756787"
+    }
+  }
+]

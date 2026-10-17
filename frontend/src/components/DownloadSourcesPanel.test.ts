@@ -19,7 +19,7 @@ describe("DownloadSourcesPanel", () => {
 
   it("shows a settings card with channel summary when not compact", () => {
     const wrapper = mount(DownloadSourcesPanel)
-    expect(wrapper.get('[data-testid="download-sources-card"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="download-sources-card"]').exists()).toBe(true)
     expect(wrapper.get('[data-testid="download-sources-summary"]').text()).toContain("https://pypi.org/simple")
     expect(wrapper.get('[data-testid="download-sources-summary"]').text()).toContain("https://huggingface.co")
     expect(wrapper.find(".ds-compact").exists()).toBe(false)

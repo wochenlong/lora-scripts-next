@@ -154,7 +154,7 @@ it("filters history tasks by day and model", async () => {
     await flushPromises()
     await wrapper.findAll(".tasks-tabs button")[1]!.trigger("click")
     await flushPromises()
-    expect(wrapper.get('[data-testid="tasks-history-filters"]').exists()).toBe(true)
+    expect(wrapper.find('[data-testid="tasks-history-filters"]').exists()).toBe(true)
     expect(wrapper.findAll(".task-row")).toHaveLength(2)
 
     await wrapper.get(".tasks-filter-model").setValue("anima")

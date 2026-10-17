@@ -13,7 +13,7 @@ READABILITY_SAMPLE_LIMIT = 20
 UNREADABLE_LIST_LIMIT = 10
 REPEATS_PREFIX = re.compile(r"^\d+_.+")
 
-KNOWN_ENGINES = {"kohya", "ai-toolkit", "musubi", "diffsynth", "anima-fast"}
+KNOWN_ENGINES = {"kohya", "ai-toolkit", "musubi", "diffsynth", "anima-fast", "moss"}
 
 
 def _finding(level: str, code: str, **params) -> dict:

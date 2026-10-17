@@ -1,3 +1,4 @@
+import { mossApi, type MossStatus } from "./moss"
 import { diffsynthApi, type DiffSynthStatus } from "./diffsynth"
 import { kohyaApi, type KohyaStatus } from "./kohya"
 import { animaFastApi, type AnimaFastState, type AnimaFastStatus, type InstallResult } from "./animaFast"
@@ -25,7 +26,7 @@ export interface EngineStatus {
   }
   facts?: AnimaFastStatus["facts"]
   diagnosis?: DiffSynthStatus["diagnosis"]
-  raw?: AnimaFastStatus | MusubiStatus | AiToolkitStatus | DiffSynthStatus
+  raw?: AnimaFastStatus | MusubiStatus | AiToolkitStatus | DiffSynthStatus | MossStatus
 }
 
 export interface EngineActionResult {
@@ -51,6 +52,22 @@ function fromKohya(status: KohyaStatus): EngineStatus {
   return { id: "kohya", state: mapAnimaState(status.state), featureEnabled: status.feature_enabled !== false,
     message: status.message || status.reason, facts: status.facts,
     runtime: { python: status.runtime?.python, environmentPath: status.runtime?.environment_path } }
+}
+
+function fromMoss(status: MossStatus): EngineStatus {
+  return {
+    id: "moss",
+    state: mapAnimaState(status.state),
+    featureEnabled: status.feature_enabled,
+    message: status.message || status.reason,
+    facts: status.facts,
+    runtime: {
+      python: status.runtime?.python,
+      environmentPath: status.runtime?.environment_path,
+      externalRuntimeExists: status.runtime?.external_runtime_exists,
+    },
+    raw: status,
+  }
 }
 
 function fromDiffSynth(status: DiffSynthStatus): EngineStatus {
@@ -152,6 +169,7 @@ function fromAiToolkitInstall(result: AiToolkitInstallResult): EngineActionResul
 
 export const enginesApi = {
   async status(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "moss") return fromMoss(await mossApi.status())
     if (id === "diffsynth") return fromDiffSynth(await diffsynthApi.status())
     if (id === "kohya") {
       return fromKohya(await kohyaApi.status())
@@ -169,12 +187,17 @@ export const enginesApi = {
   },
 
   async list(): Promise<EngineStatus[]> {
-    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth"]
+    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"]
     return Promise.all(ids.map((id) => this.status(id)))
   },
 
   async install(id: TrainingEngine): Promise<EngineActionResult> {
     const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "moss") {
+      const result = await mossApi.install(downloadSources)
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromMoss(result.status) : undefined }
+    }
     if (id === "kohya") {
       const result = await kohyaApi.install(downloadSources)
       return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
@@ -193,6 +216,11 @@ export const enginesApi = {
 
   async repair(id: TrainingEngine): Promise<EngineActionResult> {
     const downloadSources = resolvedDownloadSourcesPayload()
+    if (id === "moss") {
+      const result = await mossApi.repair(downloadSources)
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromMoss(result.status) : undefined }
+    }
     if (id === "kohya") {
       const result = await kohyaApi.repair(downloadSources)
       return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
@@ -222,6 +250,10 @@ export const enginesApi = {
   },
 
   async uninstall(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "moss") {
+      const result = await mossApi.uninstall()
+      return result.status ? fromMoss(result.status) : { id, state: "not_installed", featureEnabled: true }
+    }
     if (id === "kohya") {
       const result = await kohyaApi.uninstall()
       return result.status ? fromKohya(result.status) : { id, state: "not_installed", featureEnabled: true }

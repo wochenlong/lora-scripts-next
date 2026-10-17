@@ -98,6 +98,12 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     requiresGpu: true, managesRuntime: true, mark: "DS", tags: ["lora", "qwen-image-21", "nvidia"],
     version: "plugin", updatedAt: "2026-09",
   },
+  {
+    id: "moss", kind: "optional", nameKey: "settings.engines.catalog.moss.name",
+    summaryKey: "settings.engines.catalog.moss.summary", sizeHintKey: "settings.engines.catalog.moss.sizeHint",
+    requiresGpu: true, managesRuntime: true, mark: "MO", tags: ["lora", "moss-image", "nvidia"],
+    version: "alpha", updatedAt: "2026-10",
+  },
 ] as const
 
 export function engineDefinition(id: TrainingEngine): EngineDefinition | undefined {

@@ -1,7 +1,7 @@
 import type { FormModel } from "../schema/adapter"
 
-export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2" | "ideogram4" | "klein" | "qwen-image-21"
-export type TrainingEngine = "kohya" | "anima-fast" | "musubi" | "ai-toolkit" | "diffsynth"
+export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2" | "ideogram4" | "klein" | "qwen-image-21" | "moss-image"
+export type TrainingEngine = "kohya" | "anima-fast" | "musubi" | "ai-toolkit" | "diffsynth" | "moss"
 export type TrainingTarget = "lora" | "finetune"
 /** Beginner-facing use-case chips that map to a recommended base model. */
 export type TrainingScenario = "anime" | "general" | "edit" | "explore"
@@ -19,8 +19,8 @@ export interface TrainingModule {
   legacyStorageKey?: string
 }
 
-export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2", "ideogram4", "klein", "qwen-image-21"]
-export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth"]
+export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2", "ideogram4", "klein", "qwen-image-21", "moss-image"]
+export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"]
 export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "finetune"]
 
 /** Scenario → model. Order is the beginner decision path on the training page. */
@@ -38,6 +38,7 @@ export const MODEL_PICKER_ORDER: readonly TrainingModel[] = [
   "krea2",
   "klein",
   "qwen-image-21",
+  "moss-image",
   "ideogram4",
   "flux",
   "sdxl",
@@ -64,6 +65,7 @@ export function modelForScenario(scenario: TrainingScenario): TrainingModel {
 // resolves shared schemas (lora-master, dreambooth) to the sdxl module,
 // matching the previous single-SD default (schema default was sdxl-lora).
 export const TRAINING_MODULES: readonly TrainingModule[] = [
+  { model: "moss-image", engine: "moss", target: "lora", schemaName: "moss-image-lora" },
   { model: "qwen-image-21", engine: "diffsynth", target: "lora", schemaName: "qwen-image-21-lora" },
   { model: "anima", engine: "kohya", target: "lora", schemaName: "sd3-lora" },
   { model: "anima", engine: "anima-fast", target: "lora", schemaName: "anima-lora-fast" },
@@ -88,6 +90,7 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
 ]
 
 export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> = {
+  "moss-image-lora": { titleKey: "training.schemas.moss-image-lora.title", areaKey: "training.schemas.moss-image-lora.area" },
   "ai-toolkit-sdxl-lora": { titleKey: "training.schemas.ai-toolkit-sdxl-lora.title", areaKey: "training.schemas.ai-toolkit-sdxl-lora.area" },
   "ai-toolkit-sd15-lora": { titleKey: "training.schemas.ai-toolkit-sd15-lora.title", areaKey: "training.schemas.ai-toolkit-sd15-lora.area" },
   "ai-toolkit-ideogram4-lora": { titleKey: "training.schemas.ai-toolkit-ideogram4-lora.title", areaKey: "training.schemas.ai-toolkit-ideogram4-lora.area" },
@@ -162,6 +165,7 @@ export const ENGINE_PREFERENCE: Readonly<Record<TrainingModel, readonly Training
   ideogram4: ["musubi", "ai-toolkit"],
   klein: ["ai-toolkit"],
   "qwen-image-21": ["diffsynth", "ai-toolkit"],
+  "moss-image": ["moss"],
 }
 
 /** Ideal (first-choice) engine for a model, ignoring install state. */
