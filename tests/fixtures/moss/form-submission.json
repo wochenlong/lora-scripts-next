@@ -1,5 +1,6 @@
 {
   "model_train_type": "moss-image-lora",
+  "model_input_mode": "native_directory",
   "model_dir": "models/moss_image",
   "model": "base",
   "resolution": 1024,

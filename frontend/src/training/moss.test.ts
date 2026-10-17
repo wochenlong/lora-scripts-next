@@ -29,7 +29,8 @@ describe("MOSS native training schema", () => {
 
   it("uses native MOSS fields and conservative defaults through the actual serializer", () => {
     expect(output()).toMatchObject({
-      model_train_type: "moss-image-lora", model_dir: "./sd-models/moss-image", model: "base",
+      model_train_type: "moss-image-lora", model_input_mode: "native_directory",
+      model_dir: "./sd-models/moss-image", model: "base",
       src: "./train/moss-image", resolution: 1024, run_preprocess: true, overwrite_cache: false,
       output_dir: "./output/moss", output_name: "moss-image-lora", epochs: 8, max_steps: 0,
       rank: 16, lr: 1e-4, warmup_ratio: 0.05, save_every_epochs: 0, caption_dropout: 0,
@@ -40,9 +41,32 @@ describe("MOSS native training schema", () => {
     })
     expect(output()).not.toHaveProperty("alpha")
     expect(output()).not.toHaveProperty("cache_dir")
+    expect(output()).not.toHaveProperty("dit_path")
     expect(validateModel(schema, defaults)).toEqual({})
     expect(schema.sections).toHaveLength(6)
     expect(schema.sections.every(section => section.title.includes("/"))).toBe(true)
+  })
+
+  it("exposes Comfy single-file fields when model_input_mode is comfyui_files", () => {
+    const model = {
+      ...defaults, model_input_mode: "comfyui_files",
+      dit_path: "/models/moss/dit.safetensors",
+      text_encoder_path: "/models/moss/te.safetensors",
+      vae_path: "/models/moss/vae.safetensors",
+      tokenizer_path: "/models/moss/tokenizer",
+      sft_dit_path: "/models/moss/sft.safetensors",
+    }
+    expect(validateModel(schema, model)).toEqual({})
+    expect(output(model)).toMatchObject({
+      model_input_mode: "comfyui_files",
+      dit_path: "/models/moss/dit.safetensors",
+      text_encoder_path: "/models/moss/te.safetensors",
+      vae_path: "/models/moss/vae.safetensors",
+      tokenizer_path: "/models/moss/tokenizer",
+      sft_dit_path: "/models/moss/sft.safetensors",
+    })
+    expect(output(model)).not.toHaveProperty("model_dir")
+    expect(validateModel(schema, { ...model, dit_path: "" })).toHaveProperty("dit_path")
   })
 
   it("preserves native overrides without Kohya network, optimizer or sample conversions", () => {
@@ -50,10 +74,10 @@ describe("MOSS native training schema", () => {
       lr: 0.0002, compile: true, blocks_to_swap: -1, caption_dropout: 0.1,
       targets: "layers\\.0\\.proj\\.q", save_crops: true, overwrite_cache: true,
       network_module: "lycoris.kohya", network_dim: 99, optimizer_type: "Prodigy", sample_prompts: "unsupported" })
-    expect(config).toMatchObject({ model: "sft", src: "/数据/图片", cache_dir: "/缓存", rank: 32, alpha: 16,
+    expect(config).toMatchObject({ model: "sft", model_input_mode: "native_directory", src: "/数据/图片", cache_dir: "/缓存", rank: 32, alpha: 16,
       lr: 0.0002, compile: true, blocks_to_swap: -1, caption_dropout: 0.1,
       targets: "layers\\.0\\.proj\\.q", save_crops: true, overwrite_cache: true })
-    for (const key of ["network_module", "network_dim", "network_args", "optimizer_type", "learning_rate", "sample_prompts", "enable_preview", "train_batch_size", "dataset_repeats", "dit_path", "model_input_mode"]) {
+    for (const key of ["network_module", "network_dim", "network_args", "optimizer_type", "learning_rate", "sample_prompts", "enable_preview", "train_batch_size", "dataset_repeats", "dit_path"]) {
       expect(config).not.toHaveProperty(key)
     }
     expect(collectDatasetCheckTargets(config)).toEqual(["/数据/图片"])

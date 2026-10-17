@@ -41,7 +41,7 @@ export const CROSS_SCHEMA_DENY_KEYS = [
   // krea2's text_encoder is Qwen3-VL; klein's is Qwen3 — never cross them.
   "text_encoder",
   "model_dir", "model", "src", "cache_dir", "run_preprocess", "overwrite_cache",
-  "model_input_mode", "model_variant", "model_path", "model_config_dir", "dit_path", "text_encoder_path", "vae_path", "training_task", "control_data_dirs",
+  "model_input_mode", "model_variant", "model_path", "model_config_dir", "dit_path", "text_encoder_path", "vae_path", "tokenizer_path", "sft_dit_path", "training_task", "control_data_dirs",
 ] as const
 
 /**

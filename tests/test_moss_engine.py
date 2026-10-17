@@ -270,7 +270,7 @@ def test_api_preflight_dry_run_and_run_stop_at_task_boundary(configured, monkeyp
     assert captured[0]["metadata"]["backend"] == "moss"
     assert captured[0]["metadata"]["train_type"] == "moss-image-lora"
     assert captured[0]["env"]["CUDA_VISIBLE_DEVICES"] == "1"
-    saved = json.loads(Path(captured[0]["metadata"]["engine_config_path"]).read_text())
+    saved = json.loads(Path(captured[0]["metadata"]["engine_config_path"]).read_text(encoding="utf-8"))
     assert saved == dry["data"]["config"]
     assert captured[0]["metadata"]["pipeline_commands"] == dry["data"]["commands"]
     assert saved["train"]["rank"] == 8 and saved["cache"]["src"] == str(rt.project_root / "images")
@@ -477,3 +477,120 @@ def test_malformed_text_config_is_reported_without_crashing(configured):
     data["text_config"] = None
     path.write_text(json.dumps(data))
     assert "text_encoder" in run_preflight(config, rt)["errors"][0]
+
+
+def _comfy_flat_files(rt):
+    """Lay out Comfy-style single files beside the existing native fixture tree."""
+    import shutil
+
+    base = rt.project_root / "models/moss_image/MOSS-Image-Base"
+    comfy = rt.project_root / "models/moss_comfy"
+    comfy.mkdir(parents=True, exist_ok=True)
+    dit = comfy / "dit.safetensors"
+    te = comfy / "text_encoder.safetensors"
+    vae = comfy / "vae.safetensors"
+    tokenizer = comfy / "tokenizer"
+    for src, dest in (
+        (base / "transformer/diffusion_pytorch_model.safetensors", dit),
+        (base / "text_encoder/model.safetensors", te),
+        (base / "vae/diffusion_pytorch_model.safetensors", vae),
+    ):
+        if dest.exists() or dest.is_symlink():
+            dest.unlink()
+        os.link(src, dest)
+    if tokenizer.exists():
+        if tokenizer.is_symlink() or tokenizer.is_file():
+            tokenizer.unlink()
+        else:
+            shutil.rmtree(tokenizer)
+    shutil.copytree(base / "tokenizer", tokenizer)
+    return {
+        "model_input_mode": "comfyui_files",
+        "dit_path": str(dit.relative_to(rt.project_root)),
+        "text_encoder_path": str(te.relative_to(rt.project_root)),
+        "vae_path": str(vae.relative_to(rt.project_root)),
+        "tokenizer_path": str(tokenizer.relative_to(rt.project_root)),
+    }
+
+
+def test_comfy_files_preflight_materializes_native_layout(configured):
+    rt, config = configured
+    comfy = _comfy_flat_files(rt)
+    payload = {**config, **comfy}
+    payload.pop("model_dir", None)
+    result = run_preflight(payload, rt)
+    assert result["ok"], result["errors"]
+    facts = result["facts"]
+    assert facts["model_format"] == "comfyui_files"
+    staging = Path(facts["model_dir"])
+    assert (staging / "MOSS-Image-Base/transformer/diffusion_pytorch_model.safetensors").is_file()
+    assert (staging / "MOSS-Image-Base/text_encoder/config.json").is_file()
+    assert (staging / "MOSS-Image-Base/vae/diffusion_pytorch_model.safetensors").is_file()
+    assert (staging / "MOSS-Image-Base/tokenizer/tokenizer_config.json").is_file()
+    assert (staging / ".next-moss-comfy.json").is_file()
+    adapted = adapt_config(payload, rt)
+    assert adapted.model_input_mode == "comfyui_files"
+    assert adapted.comfy_paths is not None
+    assert check_inputs(adapted)["model_format"] == "comfyui_files"
+
+
+def test_comfy_sft_requires_separate_dit_and_stages_variant(configured):
+    rt, config = configured
+    comfy = _comfy_flat_files(rt)
+    payload = {**config, **comfy, "model": "sft"}
+    payload.pop("model_dir", None)
+    assert "sft_dit_path" in run_preflight(payload, rt)["errors"][0]
+    sft = rt.project_root / "models/moss_comfy/sft_dit.safetensors"
+    os.link(rt.project_root / "models/moss_comfy/dit.safetensors", sft)
+    payload["sft_dit_path"] = str(sft.relative_to(rt.project_root))
+    result = run_preflight(payload, rt)
+    assert result["ok"], result["errors"]
+    staging = Path(result["facts"]["model_dir"])
+    assert (staging / "MOSS-Image-SFT/transformer/diffusion_pytorch_model.safetensors").is_file()
+    assert (staging / "MOSS-Image-Base/text_encoder/model.safetensors").is_file()
+
+
+def test_comfy_rejects_stripped_text_prefix_and_sharded_dit(configured):
+    rt, config = configured
+    comfy = _comfy_flat_files(rt)
+    payload = {**config, **comfy}
+    payload.pop("model_dir", None)
+    te = rt.project_root / "models/moss_comfy/text_encoder.safetensors"
+    sparse_tensors(te, {"embed_tokens.weight": [248320, 4096]})
+    assert "language_model" in run_preflight(payload, rt)["errors"][0]
+    te_ok = {key: [1] for key in text_encoder_keys()}
+    te_ok["language_model.embed_tokens.weight"] = [248320, 4096]
+    sparse_tensors(te, te_ok)
+    dit_dir = rt.project_root / "models/moss_comfy/dit_shards"
+    dit_dir.mkdir(exist_ok=True)
+    (dit_dir / "diffusion_pytorch_model.safetensors.index.json").write_text(
+        json.dumps({"weight_map": {"layers.0.proj.q.weight": "part.safetensors"}})
+    )
+    payload["dit_path"] = str(dit_dir.relative_to(rt.project_root))
+    assert "单文件" in run_preflight(payload, rt)["errors"][0] or "single" in run_preflight(payload, rt)["errors"][0].lower()
+
+
+def test_comfy_dry_run_and_cache_identity_bind_source_files(configured, monkeypatch):
+    from fastapi.testclient import TestClient
+    from mikazuki.app.application import app
+    from mikazuki.engines.moss import routes, run
+
+    rt, config = configured
+    comfy = _comfy_flat_files(rt)
+    payload = {**config, **comfy}
+    payload.pop("model_dir", None)
+    monkeypatch.chdir(rt.project_root)
+    monkeypatch.setattr(run, "runtime", lambda: rt)
+    monkeypatch.setattr(routes, "runtime", lambda: rt)
+    monkeypatch.setattr(routes, "check_runtime", lambda _rt: None)
+    client = TestClient(app)
+    dry = client.post("/api/engines/moss/dry-run", json=payload).json()
+    assert dry["status"] == "success", dry
+    assert dry["data"]["facts"]["model_format"] == "comfyui_files"
+    assert dry["data"]["config"]["model_input_mode"] == "comfyui_files"
+    assert dry["data"]["config"]["comfy_paths"]
+    adapted = adapt_config(payload, rt)
+    make_cache(adapted)
+    identity = json.loads((Path(adapted.train["cache"]) / ".next-moss-cache.json").read_text())
+    assert identity["model_format"] == "comfyui_files"
+    assert any(item[0] == "dit_path" for item in identity["assets"])

@@ -173,9 +173,28 @@ def vae_sentinel_shapes():
 
 
 def validate_models(adapted):
+    mode = getattr(adapted, "model_input_mode", "native_directory") or "native_directory"
+    if mode == "comfyui_files":
+        from .comfy import materialize_comfy_layout, validate_comfy_components
+
+        paths = getattr(adapted, "comfy_paths", None) or {}
+        if not paths:
+            raise ValueError("comfy_paths: missing Comfy component paths / 缺少 Comfy 组件路径")
+        # Staging always materializes the full Base tree so upstream from_pretrained works.
+        facts = validate_comfy_components(
+            paths, model=adapted.train["model"], needs_text=True, needs_vae=True,
+        )
+        resolved = {key: facts[key] for key in ("dit_path", "text_encoder_path", "vae_path", "tokenizer_path")}
+        if "sft_dit_path" in facts:
+            resolved["sft_dit_path"] = facts["sft_dit_path"]
+        staging = materialize_comfy_layout(resolved, model=adapted.train["model"], staging_root=Path(adapted.train["model_dir"]))
+        facts["model_dir"] = str(staging)
+        facts["staging"] = "hardlink/symlink/copy into native Diffusers layout"
+        return facts
+
     model_dir = Path(adapted.train["model_dir"])
     if not model_dir.is_dir():
-        raise ValueError(f"model_dir: native MOSS parent directory required / 请选择原生 MOSS 目录，不支持 Comfy 拆分文件: {model_dir}")
+        raise ValueError(f"model_dir: native MOSS parent directory required / 请选择原生 MOSS 目录: {model_dir}")
     base = model_dir / "MOSS-Image-Base"
     variant = model_dir / ("MOSS-Image-SFT" if adapted.train["model"] == "sft" else "MOSS-Image-Base")
     transformer = variant / "transformer"
@@ -221,6 +240,28 @@ def validate_models(adapted):
 
 def cache_identity(adapted):
     """Upstream cache freshness omits model identity and VAE dtype; bind both."""
+    mode = getattr(adapted, "model_input_mode", "native_directory") or "native_directory"
+    comfy_paths = getattr(adapted, "comfy_paths", None) or {}
+    if mode == "comfyui_files" and comfy_paths:
+        assets = []
+        for key in ("dit_path", "text_encoder_path", "vae_path", "tokenizer_path", "sft_dit_path"):
+            raw = comfy_paths.get(key)
+            if not raw:
+                continue
+            path = Path(raw)
+            if path.is_file():
+                stat = path.stat()
+                assets.append([key, str(path.resolve()), stat.st_size, stat.st_mtime_ns])
+            elif path.is_dir():
+                for child in sorted(path.rglob("*")):
+                    if child.is_file():
+                        stat = child.stat()
+                        assets.append([key, str(child.resolve()), stat.st_size, stat.st_mtime_ns])
+        return {
+            "version": 1, "model_format": "comfyui_files", "model_dir": adapted.train["model_dir"],
+            "assets": assets, "src": adapted.cache.get("src", ""),
+            **{key: adapted.cache[key] for key in ("resolution", "vae_dtype", "max_text_tokens")},
+        }
     base = Path(adapted.train["model_dir"]) / "MOSS-Image-Base"
     assets = []
     for component in ("text_encoder", "tokenizer", "vae"):

@@ -1,9 +1,23 @@
 Schema.intersect([
     Schema.object({
         model_train_type: Schema.const("moss-image-lora").default("moss-image-lora").hidden(),
-        model_dir: Schema.string().role("filepicker", { type: "folder" }).required().default("./sd-models/moss-image").description("模型根目录 / Model root: contains MOSS-Image-Base/{transformer,text_encoder,vae,tokenizer}. SFT additionally requires MOSS-Image-SFT/transformer；仅支持原生目录结构"),
         model: Schema.union(["base", "sft"]).default("base").description("训练版本 / Transformer variant. SFT 仍使用 Base 的文本编码器、VAE 与 tokenizer / SFT reuses Base encoders"),
+        model_input_mode: Schema.union(["native_directory", "comfyui_files"]).default("native_directory").description("模型输入方式 / Input mode：native_directory = 官方 Diffusers 目录；comfyui_files = Comfy 风格 DiT/TE/VAE 单文件 + tokenizer 目录。Comfy 文件会物化为原生布局供上游加载，不改写权重"),
     }).description("MOSS 模型 / Model"),
+    Schema.union([
+        Schema.object({
+            model_input_mode: Schema.const("native_directory"),
+            model_dir: Schema.string().role("filepicker", { type: "folder" }).required().default("./sd-models/moss-image").description("模型根目录 / Model root: contains MOSS-Image-Base/{transformer,text_encoder,vae,tokenizer}. SFT additionally requires MOSS-Image-SFT/transformer"),
+        }),
+        Schema.object({
+            model_input_mode: Schema.const("comfyui_files"),
+            dit_path: Schema.string().role("filepicker", { type: "model-file", filter: "*.safetensors" }).required().default("./sd-models/moss-image/dit.safetensors").description("Comfy DiT 单文件 / MOSS transformer .safetensors（原生键名与尺寸；不支持分片索引）"),
+            text_encoder_path: Schema.string().role("filepicker", { type: "model-file", filter: "*.safetensors" }).required().default("./sd-models/moss-image/text_encoder.safetensors").description("文本编码器单文件 / Qwen3.5 权重，必须保留 language_model.* 前缀"),
+            vae_path: Schema.string().role("filepicker", { type: "model-file", filter: "*.safetensors" }).required().default("./sd-models/moss-image/vae.safetensors").description("VAE 单文件 / FLUX.2 AutoencoderKLFlux2 .safetensors"),
+            tokenizer_path: Schema.string().role("filepicker", { type: "folder" }).required().default("./sd-models/moss-image/tokenizer").description("Tokenizer 目录 / 含 tokenizer.json、tokenizer_config.json 与 MOSS chat template"),
+            sft_dit_path: Schema.string().role("filepicker", { type: "model-file", filter: "*.safetensors" }).description("SFT DiT 单文件 / Required when model=sft；Base 辅助组件仍用上面的 TE/VAE/tokenizer"),
+        }),
+    ]),
     Schema.intersect([
       Schema.object({
         resolution: Schema.number().role("number", { integer: true }).min(16).max(4096).step(1).default(1024).description("像素面积上限的平方边长 / Pixel-area cap: 1024 means about 1024² pixels. 保持原比例，边长为 16 倍数，不放大小图 / Native aspect, multiples of 16, no upscaling"),

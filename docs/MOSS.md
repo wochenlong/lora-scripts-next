@@ -16,7 +16,16 @@ Next Trainer 通过 **MOSS (anima_lora)** 引擎接入 MOSS-Image Base/SFT 的�
 
 修复会重建该引擎的 `source/`、`.python/`、`.venv/`；卸载会移除整个 `extensions/moss/`。请把模型、数据集、缓存、输出保存在该扩展目录之外。正在运行或排队的 MOSS 任务会阻止安装、修复和卸载。
 
-## 2. 原生模型目录
+## 2. 模型输入：原生目录或 Comfy 单文件
+
+`model_input_mode` 二选一：
+
+| 模式 | 说明 |
+|---|---|
+| `native_directory`（默认） | 官方 Diffusers 父目录（见下） |
+| `comfyui_files` | Comfy 风格：DiT / TE / VAE 各一个 `.safetensors` + tokenizer 目录 |
+
+### 2.1 原生目录（`native_directory`）
 
 `model_dir` 选择同时容纳各版本的**父目录**，不是直接选择 `transformer/` 或某个权重文件。例如：
 
@@ -33,7 +42,19 @@ sd-models/moss-image/             ← model_dir
 
 模型来源：[OpenMOSS-Team/MOSS-Image-Base](https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base)、[OpenMOSS-Team/MOSS-Image-SFT](https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT)。保留仓库原有配置、权重文件名、索引及分片；`model=sft` 仍使用 **Base** 的文本编码器、VAE 和 tokenizer。
 
-文本编码器必须保留原生 `Qwen3_5Model` / `language_model.*` 结构。此入口不支持 ComfyUI 平铺拆分文件、去掉前缀的纯文本模型或量化权重；也不执行权重转换或键名重写。预检对已覆盖的关键键缺失会报错；检查仅读取本地配置和 safetensors 头部，不等于已经真实加载全部模型。
+### 2.2 Comfy 单文件（`comfyui_files`）
+
+上游 `from_pretrained` 只认原生目录。适配层在预检/提交时把 Comfy 文件**物化**为 `.cache/moss/comfy-layout/<摘要>/` 下的原生布局（优先硬链，其次符号链接，最后复制），**不改写权重、不做键名重映射**。
+
+需要填写：
+
+- `dit_path`：MOSS transformer 单文件（键名/尺寸与原生一致；**不支持**分片 `*.index.json`，请先合并）
+- `text_encoder_path`：Qwen3.5 单文件，必须保留 `language_model.*` 前缀（去掉前缀的纯文本导出会拒绝）
+- `vae_path`：FLUX.2 VAE 单文件
+- `tokenizer_path`：含 `tokenizer.json`、`tokenizer_config.json` 与 MOSS chat template 的目录
+- `sft_dit_path`：仅 `model=sft` 时必填；TE/VAE/tokenizer 仍用上面的 Base 组件
+
+不支持量化权重。预检只读 safetensors 头部与本地 JSON，不等于已经 GPU 加载。ComfyUI 侧导出的 LoRA 回载验收仍待真机完成。
 
 路径均指训练服务所在机器；相对路径以 Next Trainer 项目根目录解析。
 
