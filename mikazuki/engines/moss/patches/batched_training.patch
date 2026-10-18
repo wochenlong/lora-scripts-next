@@ -1,0 +1,330 @@
+--- /dev/null
++++ b/library/moss/batching.py
+@@ -0,0 +1,20 @@
++"""Shape buckets with retained tails; one batch is one optimizer step."""
++from collections import defaultdict
++
++
++def bucket_batches(samples, shapes, batch_size, rng=None):
++    if isinstance(batch_size, bool) or not isinstance(batch_size, int) or batch_size < 1:
++        raise ValueError("batch_size must be a positive integer")
++    buckets = defaultdict(list)
++    for sample in samples:
++        buckets[tuple(shapes[sample.stem])].append(sample)
++    batches = []
++    for bucket in buckets.values():
++        if rng is not None:
++            rng.shuffle(bucket)
++        batches.extend(bucket[i:i + batch_size] for i in range(0, len(bucket), batch_size))
++    if rng is not None:
++        rng.shuffle(batches)
++    else:
++        batches.sort(key=lambda batch: len(batch) * max(s.n_img + s.n_text for s in batch), reverse=True)
++    return batches
+--- a/library/moss/lora.py
++++ b/library/moss/lora.py
+@@ -26,6 +26,35 @@
+ 
+ DEFAULT_TARGETS = TrainRequest.TARGETS
+ SAVED_DTYPES = {"bf16": torch.bfloat16, "fp16": torch.float16, "fp32": torch.float32}
++
++
++def export_comfy_state(state, target_names, alpha):
++    result = {}
++    for name in target_names:
++        source = "adapters." + name.replace(".", "_")
++        target = "diffusion_model." + name
++        result[target + ".lora_down.weight"] = state[source + ".down.weight"]
++        result[target + ".lora_up.weight"] = state[source + ".up.weight"]
++        result[target + ".alpha"] = torch.tensor(float(alpha), dtype=torch.float32)
++    if len(state) != 2 * len(target_names):
++        raise ValueError("Unexpected tensors in MOSS adapter state")
++    return result
++
++
++def import_comfy_state(state, target_names, alpha):
++    if not any(key.startswith("diffusion_model.") for key in state):
++        return state
++    result = {}
++    for name in target_names:
++        source = "diffusion_model." + name
++        target = "adapters." + name.replace(".", "_")
++        if float(state[source + ".alpha"]) != float(alpha):
++            raise ValueError("MOSS adapter alpha differs from its metadata")
++        result[target + ".down.weight"] = state[source + ".lora_down.weight"]
++        result[target + ".up.weight"] = state[source + ".lora_up.weight"]
++    if len(state) != 3 * len(target_names):
++        raise ValueError("Unexpected tensors in ComfyUI MOSS adapter state")
++    return result
+ 
+ 
+ class LoRAAdapter(nn.Module):
+@@ -137,7 +166,8 @@
+             k: v.detach().to("cpu", SAVED_DTYPES[dtype]).contiguous()
+             for k, v in self.state_dict().items()
+         }
+-        save_file(state, str(path), metadata=self.metadata(lora_dtype=dtype, **extra_meta))
++        save_file(export_comfy_state(state, self.target_names, self.alpha), str(path),
++                  metadata=self.metadata(lora_dtype=dtype, **extra_meta))
+ 
+ 
+ def _patched_forward(module: nn.Linear, adapter: LoRAAdapter):
+@@ -173,7 +203,7 @@
+         targets=meta["targets"],
+         dtype=dtype or SAVED_DTYPES.get(meta.get("lora_dtype", ""), torch.float32),
+     )
+-    network.load_state_dict(state)
++    network.load_state_dict(import_comfy_state(state, network.target_names, network.alpha))
+     return network, meta
+ 
+ 
+--- /dev/null
++++ b/library/moss/preview.py
+@@ -0,0 +1,93 @@
++"""One fixed-prompt epoch preview using the upstream sampler in a child process."""
++import hashlib
++import json
++from pathlib import Path
++import subprocess
++import sys
++
++
++def preview_directory(output, epoch):
++    output = Path(output)
++    return output.parent / (output.stem + "_samples") / f"epoch_{epoch:02d}"
++
++
++def render_epoch_preview(req, transformer, network, optimizer, epoch):
++    import torch
++    from library.moss.loader import empty_cache
++
++    prompt_file = Path(req.preview_prompt_file)
++    raw = prompt_file.read_bytes()
++    if hashlib.sha256(raw).hexdigest() != req.preview_caption_sha256:
++        raise ValueError("Preview caption changed since UI submission; refusing a different prompt")
++    if req.blocks_to_swap != 0:
++        raise ValueError("Epoch previews currently require blocks_to_swap=0")
++    out = preview_directory(req.output, epoch)
++    out.mkdir(parents=True, exist_ok=True)
++    job = out / "preview_request.json"
++    payload = {"model_dir": req.model_dir, "model": req.model,
++               "prompt_file": str(prompt_file), "caption_sha256": req.preview_caption_sha256,
++               "cache": req.cache, "lora": str(Path(req.output).with_name(
++                   f"{Path(req.output).stem}_e{epoch}{Path(req.output).suffix}")),
++               "width": req.preview_width, "height": req.preview_height,
++               "steps": req.preview_steps, "seed": req.preview_seed, "out_dir": str(out)}
++    job.write_text(json.dumps(payload, indent=2), encoding="utf-8")
++    # Keep optimizer step scalars on their original device, as well as moment tensors.
++    states = [(state, key, value.device) for state in optimizer.state.values()
++              for key, value in state.items() if torch.is_tensor(value)]
++    transformer.to("cpu")
++    network.to("cpu")
++    for state, key, _device in states:
++        state[key] = state[key].to("cpu")
++    empty_cache()
++    print(f"[moss-preview] epoch {epoch} started -> {out}", flush=True)
++    try:
++        subprocess.run([sys.executable, "-E", "-s", "-u", "-m", "library.moss.preview", str(job)], check=True)
++        images = list(out.glob("*.png"))
++        if len(images) != 1:
++            raise RuntimeError(f"Expected exactly one epoch preview, found {len(images)}")
++        print(f"[moss-preview] epoch {epoch} complete -> {images[0]}", flush=True)
++    finally:
++        transformer.to("cuda")
++        network.to("cuda")
++        for state, key, device in states:
++            state[key] = state[key].to(device)
++        empty_cache()
++
++
++def generate_from_job(job_path):
++    from library.moss.requests import GenerateRequest
++    from library.moss.generate import run_generate
++    from library.moss.loader import MAX_SEQUENCE_LENGTH
++    from safetensors import safe_open
++    from safetensors.torch import load_file, save_file
++
++    data = json.loads(Path(job_path).read_text(encoding="utf-8"))
++    raw = Path(data.pop("prompt_file")).read_bytes()
++    if hashlib.sha256(raw).hexdigest() != data.pop("caption_sha256"):
++        raise ValueError("Fixed preview caption fingerprint mismatch")
++    prompt = raw.decode("utf-8").strip()
++    if not prompt:
++        raise ValueError("Preview caption is empty")
++    cache = Path(data.pop("cache"))
++    out = Path(data["out_dir"])
++    shared = out / "_te_cache"
++    shared.mkdir(exist_ok=True)
++    # Reuse the training prompt/empty TE caches when their identities match.
++    from library.moss.scan import TE_SUFFIX
++    caption_hash = hashlib.sha256(prompt.encode()).hexdigest()
++    for text, source in [(prompt, cache / (Path(json.loads(Path(job_path).read_text())["prompt_file"]).stem + TE_SUFFIX)),
++                         ("", cache / ("_empty" + TE_SUFFIX))]:
++        if not source.is_file():
++            continue
++        with safe_open(source, framework="pt") as f:
++            meta = f.metadata() or {}
++        if text and (meta.get("caption_sha256") != caption_hash or meta.get("max_text_tokens") != str(MAX_SEQUENCE_LENGTH)):
++            continue
++        target = shared / (hashlib.sha1(f"{MAX_SEQUENCE_LENGTH}\0{text}".encode()).hexdigest()[:16] + ".safetensors")
++        if not target.exists():
++            save_file({"embeds": load_file(source)["embeds"].contiguous()}, str(target))
++    return run_generate(GenerateRequest(prompt=prompt, **data))
++
++
++if __name__ == "__main__":
++    generate_from_job(sys.argv[1])
+--- a/library/moss/requests.py
++++ b/library/moss/requests.py
+@@ -257,6 +257,14 @@
+         "LoRA output path (a .json run report lands beside it)",
+     )
+     model: str = _f("base", "which DiT to train on", choices=VARIANTS)
++    batch_size: int = _f(1, "real simultaneous samples per shape bucket; retain the last partial batch")
++    preview_every_epochs: int = _f(0, "one fixed-prompt preview every N epochs; 0 disables")
++    preview_prompt_file: str = _f("", "fixed reviewed caption file; never a remote URL")
++    preview_caption_sha256: str = _f("", "caption fingerprint captured at submission")
++    preview_width: int = _f(1024, "preview width, multiple of 16")
++    preview_height: int = _f(1024, "preview height, multiple of 16")
++    preview_steps: int = _f(30, "preview denoising steps")
++    preview_seed: int = _f(42, "same preview seed for every epoch")
+     epochs: int = _f(8, "passes over the cache")
+     max_steps: int = _f(0, "stop after this many steps (0 = epochs decide)")
+     rank: int = _f(16, "LoRA rank")
+--- a/library/moss/train.py
++++ b/library/moss/train.py
+@@ -95,13 +95,16 @@
+     return j / total
+ 
+ 
+-def training_loss(transformer, latent, embeds, sigma: float, gen=None):
++def training_loss(transformer, latent, embeds, sigma: float, gen=None, mask=None):
+     """``latent (1,128,h,w)`` fp32, ``embeds (1,S,4096)`` at true length."""
+     noise = torch.randn(latent.shape, generator=gen, device=latent.device, dtype=latent.dtype)
+     noisy = (1.0 - sigma) * latent + sigma * noise
+     target = noise - latent
+     timestep = torch.tensor([NUM_TRAIN_TIMESTEPS * sigma], device=latent.device)
+-    pred = transformer(noisy, timestep, embeds, return_dict=False)[0]
++    if latent.shape[0] > 1:
++        pred = transformer.forward_batched(noisy, timestep, embeds, mask)
++    else:
++        pred = transformer(noisy, timestep, embeds, mask, return_dict=False)[0]
+     return F.mse_loss(pred.float(), target.float())
+ 
+ 
+@@ -206,7 +209,7 @@
+     samples = samples_from_cache(cache_dir)
+     if not samples:
+         raise SystemExit(f"no cached pairs under {cache_dir}")
+-    empty = empty_prompt_embeds(req, cache_dir) if req.caption_dropout > 0 else None
++    empty = empty_prompt_embeds(req, cache_dir) if req.caption_dropout > 0 or req.preview_every_epochs > 0 else None
+     return train(req, samples, empty)
+ 
+ 
+@@ -224,7 +227,17 @@
+         f"{len(samples)} samples, image {img[0]}-{img[-1]} tokens, text {txt[0]}-{txt[-1]} tokens",
+         flush=True,
+     )
++    if req.batch_size < 1 or req.preview_every_epochs < 0:
++        raise ValueError("Invalid batch size or preview interval")
++    from library.moss.batching import bucket_batches
++    from library.moss.loader import pad_embeds
+     data = {s.stem: s.load() for s in samples}
++    shapes = {stem: pair[0].shape for stem, pair in data.items()}
++    first_batches = bucket_batches(samples, shapes, req.batch_size)
++    steps_per_epoch = len(first_batches)
++    print(f"[moss-batches] samples={len(samples)} batch_size={req.batch_size} "
++          f"steps_per_epoch={steps_per_epoch} tails={sum(len(b) < req.batch_size for b in first_batches)} "
++          "drop_last=False gradient_accumulation=1", flush=True)
+ 
+     transformer = load_transformer(req.model_dir, req.model)
+     transformer.requires_grad_(False)
+@@ -241,7 +254,7 @@
+ 
+     # A checkpointed step holds ~0.6 MB per joint token (qwen21's measured
+     # slope, same hidden width class) plus one recomputed block.
+-    reserve_gb = 1.5 + 0.6 * (img[-1] + txt[-1]) / 1024
++    reserve_gb = 1.5 + req.batch_size * 0.6 * (img[-1] + txt[-1]) / 1024
+     attached = place(transformer, device, req.blocks_to_swap, reserve_gb)
+     if req.compile:
+         compile_blocks(transformer.layers)
+@@ -252,22 +265,22 @@
+ 
+     params = list(network.parameters())
+     optimizer = torch.optim.AdamW(params, lr=req.lr)
+-    total = req.epochs * len(samples)
++    total = req.epochs * steps_per_epoch
+     if req.max_steps:
+         total = min(total, req.max_steps) if req.epochs else req.max_steps
+     warmup = max(1, int(total * req.warmup_ratio))
+     lr_sched = torch.optim.lr_scheduler.LambdaLR(
+         optimizer, lambda step: min(1.0, (step + 1) / warmup)
+     )
+-    epochs = math.ceil(total / len(samples))
+-    print(f"{total} steps ({epochs} epochs x {len(samples)}), warmup {warmup}", flush=True)
++    epochs = math.ceil(total / steps_per_epoch)
++    print(f"{total} steps ({epochs} epochs x {steps_per_epoch} bucket batches), warmup {warmup}", flush=True)
+ 
+     out_path = resolve_under_home(req.output)
+     out_path.parent.mkdir(parents=True, exist_ok=True)
+     meta = {
+         "base_variant": req.model,
+         "lr": req.lr,
+-        "samples": len(samples),
++        "samples": len(samples), "batch_size": req.batch_size, "steps_per_epoch": steps_per_epoch,
+         "steps": total,
+         "image_tokens": f"{img[0]}-{img[-1]}",
+         "sigma": f"mu={req.sigma_mu} s={req.sigma_s} cutoff={req.sigma_cutoff} "
+@@ -288,18 +301,21 @@
+     for epoch in range(epochs):
+         # The largest sample first in epoch 1, so step 1 is the worst case the
+         # fit report bounds; shuffled after that.
+-        order = by_size if epoch == 0 else random.sample(samples, len(samples))
++        order = first_batches if epoch == 0 else bucket_batches(samples, shapes, req.batch_size, random)
+         losses, t_epoch = [], time.time()
+-        for s in order:
++        for batch in order:
+             if step >= total:
+                 break
+-            latent, embeds = data[s.stem]
+-            if empty is not None and random.random() < req.caption_dropout:
+-                embeds = empty
+-            latent = latent.unsqueeze(0).to(device, torch.float32)
+-            embeds = embeds.unsqueeze(0).to(device)
++            rows = []
++            for sample in batch:
++                embed = data[sample.stem][1]
++                if empty is not None and random.random() < req.caption_dropout:
++                    embed = empty
++                rows.append(embed)
++            latent = torch.stack([data[s.stem][0] for s in batch]).to(device, torch.float32)
++            embeds, text_mask = pad_embeds(rows, device=device)
+             sigma = sample_sigma(gen, req.sigma_mu, req.sigma_s, req.sigma_cutoff, req.sigma_uniform)
+-            loss = training_loss(transformer, latent, embeds, sigma)
++            loss = training_loss(transformer, latent, embeds, sigma, mask=text_mask)
+             loss.backward()
+             grad_norm = torch.nn.utils.clip_grad_norm_(params, req.max_grad_norm)
+             optimizer.step()
+@@ -310,7 +326,7 @@
+             losses.append(value)
+             losses_all.append({"step": step, "loss": value, "sigma": sigma})
+             if step == 1:
+-                fit = report_fit(transformer, attached, s.n_img, embeds.shape[1])
++                fit = report_fit(transformer, attached, len(batch) * batch[0].n_img, len(batch) * embeds.shape[1])
+                 t_start = time.time()  # s/step excludes step 1's allocator warm-up
+             per_step = (time.time() - t_start) / max(1, step - 1)
+             eta = int(per_step * (total - step))
+@@ -337,8 +353,12 @@
+             f"peak {torch.cuda.max_memory_allocated() / 1024**3:.2f} GB",
+             flush=True,
+         )
+-        if req.save_every_epochs and (epoch + 1) % req.save_every_epochs == 0:
++        preview_due = req.preview_every_epochs and (epoch + 1) % req.preview_every_epochs == 0
++        if preview_due or req.save_every_epochs and (epoch + 1) % req.save_every_epochs == 0:
+             print(f"  saved {save(f'e{epoch + 1}')}", flush=True)
++        if preview_due:
++            from library.moss.preview import render_epoch_preview
++            render_epoch_preview(req, transformer, network, optimizer, epoch + 1)
+ 
+     final = save()
+     seconds = time.time() - t_start

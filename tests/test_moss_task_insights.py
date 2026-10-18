@@ -61,3 +61,37 @@ def test_moss_never_scans_tensorboard_files(moss_metadata, monkeypatch):
     monkeypatch.setattr(Path, "rglob", unexpected_scan)
     monkeypatch.setattr(task_insights, "_read_run_scalars", unexpected_scan)
     assert task_insights.read_loss_scalars(moss_metadata) == {}
+
+
+def test_moss_previews_have_distinct_epoch_names(moss_metadata):
+    output = Path(moss_metadata["output_dir"])
+    moss_metadata["engine_config"] = {"train": {"preview_every_epochs": 1, "output": str(output / "portrait.safetensors")}}
+    for epoch in (1, 2, 100):
+        root = output / "portrait_samples" / f"epoch_{epoch:02}"
+        root.mkdir(parents=True)
+        (root / "000_base_s42.png").write_bytes(b"fixture")
+    images = task_insights.list_preview_images(moss_metadata)
+    assert [image["epoch"] for image in images] == [1, 2, 100]
+    assert len({image["name"] for image in images}) == 3
+    for image in images:
+        path = task_insights.resolve_preview_image(moss_metadata, image["name"])
+        assert path.parent.name == f"epoch_{image['epoch']:02}"
+    assert task_insights.resolve_preview_image(moss_metadata, "../outside.png") is None
+    moss_metadata["engine_config"]["train"]["output"] = str(output / "other.safetensors")
+    assert task_insights.list_preview_images(moss_metadata) == []
+
+
+def test_moss_restores_native_preview_config(moss_metadata, tmp_path):
+    import json
+    output = Path(moss_metadata["output_dir"])
+    config = tmp_path / "engine-config.json"
+    config.write_text(json.dumps({"train": {"preview_every_epochs": 1, "output": str(output / "portrait.safetensors")}}))
+    moss_metadata["engine_config_path"] = str(config)
+    root = output / "portrait_samples" / "epoch_20"
+    root.mkdir(parents=True)
+    (root / "000_base_s42.png").write_bytes(b"fixture")
+    assert task_insights.moss_preview_enabled(moss_metadata)
+    assert task_insights.list_preview_images(moss_metadata)[0]["epoch"] == 20
+    config.write_text("invalid json")
+    assert not task_insights.moss_preview_enabled(moss_metadata)
+    assert task_insights.list_preview_images(moss_metadata) == []

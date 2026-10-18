@@ -14,6 +14,7 @@ from mikazuki.engines.moss.manifest import UPSTREAM
 from mikazuki.engines.moss.preflight import check_inputs
 from mikazuki.engines.moss.resource import environment_lock
 from mikazuki.engines.moss.settings import Runtime
+from mikazuki.engines.moss.source_integrity import verify_source
 
 
 def validate_requests(adapted):
@@ -56,7 +57,7 @@ def main(argv=None):
     with environment_lock(runtime.root):
         if source_commit(runtime) != UPSTREAM["commit"]:
             raise ValueError("MOSS source pin changed; repair the engine / 源码版本不匹配，请修复引擎")
-        subprocess.run(["git", "-C", str(runtime.source), "diff", "--exit-code", "HEAD", "--"], check=True)
+        verify_source(runtime)
         sys.path.insert(0, str(runtime.source))
         cache, train = validate_requests(adapted)
         if args.check_only:

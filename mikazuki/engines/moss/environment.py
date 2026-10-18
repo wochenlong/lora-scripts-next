@@ -44,7 +44,7 @@ def supported_platform():
 
 def process_env():
     env = os.environ.copy()
-    for name in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "UV_PYTHON"):
+    for name in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "UV_PYTHON", "UV_PYTHON_PREFERENCE"):
         env.pop(name, None)
     env.update(PYTHONNOUSERSITE="1", PYTHONUNBUFFERED="1", PYTHONIOENCODING="utf-8")
     return env
@@ -54,9 +54,9 @@ def install_env(runtime, sources=None):
     env = process_env()
     env.update(install_process_env(sources))
     # A host PYTHONPATH/venv must not leak back through a network-policy env.
-    for name in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "UV_PYTHON"):
+    for name in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "UV_PYTHON", "UV_PYTHON_PREFERENCE"):
         env.pop(name, None)
-    env.update(UV_PYTHON_INSTALL_DIR=str(runtime.python_install_dir), UV_PYTHON_PREFERENCE="only-managed")
+    env.update(UV_PYTHON_INSTALL_DIR=str(runtime.python_install_dir))
     return env
 
 
@@ -117,9 +117,11 @@ def audit_environment(runtime, *, runner=None):
         facts["source_commit"] = head.stdout.strip()
         if head.returncode or facts["source_commit"] != UPSTREAM["commit"]:
             errors.append("MOSS 源码版本与钉版提交不一致，请修复环境。")
-        dirty = run(["git", "-C", str(runtime.source), "diff", "--exit-code", "HEAD", "--"], **kwargs)
-        if dirty.returncode:
-            errors.append("MOSS 源码有本地改动，请修复环境。")
+        from .source_integrity import verify_source
+        try:
+            facts.update(verify_source(runtime))
+        except (ValueError, OSError, subprocess.SubprocessError) as exc:
+            errors.append(str(exc))
         if not errors:
             env = process_env()
             env.update(HF_HUB_OFFLINE="1", TRANSFORMERS_OFFLINE="1", HF_HUB_DISABLE_XET="1")

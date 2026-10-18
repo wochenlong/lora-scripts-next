@@ -50,7 +50,7 @@ describe("MOSS native training schema", () => {
     expect(output()).not.toHaveProperty("cache_dir")
     expect(output()).not.toHaveProperty("dit_path")
     expect(validateModel(schema, defaults)).toEqual({})
-    expect(schema.sections).toHaveLength(6)
+    expect(schema.sections).toHaveLength(7)
     expect(schema.sections.every(section => section.title.includes("/"))).toBe(true)
   })
 

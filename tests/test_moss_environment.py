@@ -19,6 +19,8 @@ def rt(tmp_path, monkeypatch):
     monkeypatch.setattr(environment.sys, "platform", "linux")
     monkeypatch.setattr(environment.platform, "machine", lambda: "x86_64")
     monkeypatch.setattr(extension_state, "source_commit", lambda runtime: manifest.UPSTREAM["commit"])
+    from mikazuki.engines.moss import source_integrity
+    monkeypatch.setattr(source_integrity, "verify_source", lambda runtime: {"source_commit": manifest.UPSTREAM["commit"]})
     return Runtime(tmp_path)
 
 
@@ -125,7 +127,7 @@ def test_windows_dependency_plan_and_unsupported_host(rt, monkeypatch):
     monkeypatch.setattr(environment.sys, "platform", "win32")
     commands = environment.install_commands(rt, DownloadSources())
     assert any("triton-windows==3.8.0.post29" in command for command in commands)
-    assert str(rt.python).endswith("Scripts/python.exe")
+    assert str(rt.python).replace("\\", "/").endswith("Scripts/python.exe")
     monkeypatch.setattr(environment.sys, "platform", "darwin")
     with pytest.raises(ValueError, match="CUDA"):
         installer.installation_plan(rt)
@@ -307,7 +309,7 @@ def test_background_install_task_contract_without_launch(rt, monkeypatch):
     result = installer.start_install(rt)
     command, env, metadata = created[0]
     assert command[0] != str(rt.python)  # GUI owns only the task supervisor
-    assert command[1].endswith("moss/install_worker.py")
+    assert command[1].replace("\\", "/").endswith("moss/install_worker.py")
     assert metadata["lane"] == "maintenance"
     assert metadata["metadata"]["backend"] == "moss"
     assert metadata["metadata"]["kind"] == "moss_install"

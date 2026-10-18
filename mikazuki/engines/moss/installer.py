@@ -28,14 +28,16 @@ def assert_idle(maintenance_only=False):
 
 def source_clone_commands(runtime, sources):
     return [
-        ["git", "clone", "--no-checkout", "--branch", UPSTREAM["branch"], apply_github_prefix(UPSTREAM["github"], sources.github_url_prefix), str(runtime.source)],
+        ["git", "clone", "--config", "core.autocrlf=false", "--config", "core.eol=lf", "--no-checkout", "--branch", UPSTREAM["branch"], apply_github_prefix(UPSTREAM["github"], sources.github_url_prefix), str(runtime.source)],
         ["git", "-C", str(runtime.source), "checkout", "--detach", UPSTREAM["commit"]],
     ]
 
 
 def installation_plan(runtime, sources=None):
     sources = sources or DownloadSources()
-    return [*source_clone_commands(runtime, sources), *install_commands(runtime, sources)]
+    return [*source_clone_commands(runtime, sources),
+            [sys.executable, "-m", "mikazuki.engines.moss.source_integrity", "--apply", str(runtime.source)],
+            *install_commands(runtime, sources)]
 
 
 def start_install(runtime, sources=None, repair=False):

@@ -5,6 +5,10 @@
 ---
 ## 未发布
 
+### 新增
+
+- **MOSS-Image LoRA（#480 / #483）**：接入 MOSS-Image 训练，Kohya 为推荐及默认引擎，内置原生 trainer、缓存与 ConvRot INT8 支持；`MOSS (anima_lora)` 保留为次选独立运行时。支持原生 Diffusers 与 Comfy 单文件输入，详见 [MOSS-Image 训练指南](docs/MOSS.md)。
+
 ### 修复
 
 - **DiffSynth 指纹不再包含 mtime（#410）**：目录拷贝、云镜像打包、解压或启动脚本触碰文件都会改写时间戳，导致可用环境被误报「环境或源码已变化」并要求重装（AutoDL 定制镜像上会反复复发）。指纹改为**内容哈希**（`content-v2`）并持久化方案标记：时间戳变化不再误报，旧状态**一次性迁移**（不要求重装），内容真的被改动、训练入口/独立 Python 缺失时仍会正确报错。

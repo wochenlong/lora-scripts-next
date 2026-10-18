@@ -385,6 +385,9 @@ def check_output(output):
     """Reserve the complete native output namespace, including periodic saves."""
     output = Path(output)
     pattern = re.compile(rf"^{re.escape(output.stem)}(?:\.safetensors|\.json|_e\d+\.safetensors)$", re.IGNORECASE)
+    preview_dir = output.parent / (output.stem + "_samples")
+    if preview_dir.exists() and any(preview_dir.iterdir()):
+        raise ValueError(f"preview output exists; choose a new name: {preview_dir}")
     if output.parent.is_dir():
         for path in output.parent.iterdir():
             if pattern.fullmatch(path.name):

@@ -24,6 +24,7 @@ Train Qwen-Image-2.1 LoRA with the DiffSynth engine, with training configuration
 - **Offline Chinese glosses:** a bundled Danbooru dictionary (~330k entries) with dictionary / local model / API sources; the dictionary works fully offline.
 - **Settings restructure:** UI, Training Engines, API, Plugins, Advanced, About; the new **API** page holds shared endpoint and local-model configuration, network and download sources moved under Advanced.
 - **Training task queue:** runs queue automatically, survives a service restart, and failed or stopped tasks can re-enter the queue with their original config.
+- **MOSS-Image LoRA:** MOSS-Image training is available with Kohya as the recommended/default engine; the anima_lora runtime remains an optional secondary path. See the [MOSS-Image guide](docs/MOSS.md).
 - **Ideogram 4 LoRA on Musubi:** FP8-only, non-commercial weights you fetch yourself (upstream still marks it experimental).
 - **Fixes:** LoKr / LoHa / T-LoRA parameters on the Anima page are no longer reset when reloading or importing a config; the dataset-config preflight now rejects subsets that would be skipped silently.
 
@@ -31,15 +32,17 @@ Train Qwen-Image-2.1 LoRA with the DiffSynth engine, with training configuration
 
 ## Supported training engines
 
-**Kohya · Anima Fast · Musubi · AI Toolkit · DiffSynth-Studio**
+**Kohya · Anima Fast · Musubi · AI Toolkit · DiffSynth-Studio · MOSS (anima_lora)**
 
 Install engines from **Settings → Training engines**, then select the appropriate engine on the training page. After upgrading from 3.1.1 or older, install Kohya once before running Kohya training. Available engines depend on your trainer version; not every model or feature supported upstream is integrated here.
 
 For Qwen-Image-2.1, select **DiffSynth-Studio → LoRA**, then choose **Text-to-image** or **Edit**. Edit currently requires batch size 1 and can use gradient accumulation for a larger effective batch.
 
+For MOSS-Image LoRA, use **Kohya** (recommended and selected by default). **MOSS (anima_lora)** remains available as a secondary engine; setup and model layout details are in the [MOSS-Image guide](docs/MOSS.md).
+
 ## Supported models
 
-**Qwen-Image-2.1 · Anima · SD 1.5 · SDXL · Flux · FLUX.2 Klein · Krea 2 · Ideogram 4**
+**MOSS-Image · Qwen-Image-2.1 · Anima · SD 1.5 · SDXL · Flux · FLUX.2 Klein · Krea 2 · Ideogram 4**
 
 Training targets, hardware requirements, and optional engine installation vary by model. See the [training guides](docs/README.md#training--训练).
 

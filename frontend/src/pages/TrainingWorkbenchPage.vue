@@ -116,7 +116,7 @@ watch([model, engine, target], () => {
     <MossGatePage v-else-if="resolved.engine === 'moss'" bare>
       <template #form-top>
         <WorkbenchHeader />
-        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" @engine-picked="onEnginePickedByUser" />
+        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" />
       </template>
     </MossGatePage>
     <DiffSynthGatePage v-else-if="resolved.engine === 'diffsynth'" bare>
