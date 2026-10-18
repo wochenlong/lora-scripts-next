@@ -6,6 +6,7 @@ import { musubiApi, type MusubiInstallResult, type MusubiStatus } from "./musubi
 import { aiToolkitApi, type AiToolkitInstallResult, type AiToolkitStatus } from "./aiToolkit"
 import { apiData } from "./client"
 import type { EngineRuntimeState } from "../engines/catalog"
+import { resolvedDownloadSourcesPayload } from "../engines/downloadSources"
 import type { TrainingEngine } from "../training/modules"
 
 export interface EngineStatus {
@@ -136,6 +137,34 @@ function fromAiToolkit(status: AiToolkitStatus): EngineStatus {
   }
 }
 
+interface GenericEngineStatus {
+  state: string
+  feature_enabled?: boolean
+  message?: string
+  reason?: string
+  facts?: AnimaFastStatus["facts"]
+  runtime?: { python?: string; environment_path?: string }
+}
+
+interface GenericInstallResult {
+  already_ready?: boolean
+  task_id?: string
+  log_stream?: string
+  progress_stream?: string
+  status?: GenericEngineStatus
+}
+
+function fromKohakuMoss(status: GenericEngineStatus): EngineStatus {
+  return {
+    id: "kohaku-moss",
+    state: mapAnimaState(status.state),
+    featureEnabled: status.feature_enabled !== false,
+    message: status.message || status.reason,
+    facts: status.facts,
+    runtime: { python: status.runtime?.python, environmentPath: status.runtime?.environment_path },
+  }
+}
+
 function fromInstall(result: InstallResult): EngineActionResult {
   return {
     alreadyReady: result.already_ready,
@@ -168,6 +197,9 @@ function fromAiToolkitInstall(result: AiToolkitInstallResult): EngineActionResul
 
 export const enginesApi = {
   async status(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "kohaku-moss") {
+      return fromKohakuMoss(await apiData<GenericEngineStatus>("/api/engines/kohaku-moss/status"))
+    }
     if (id === "moss") return fromMoss(await mossApi.status())
     if (id === "diffsynth") return fromDiffSynth(await diffsynthApi.status())
     if (id === "kohya") {
@@ -186,15 +218,20 @@ export const enginesApi = {
   },
 
   async list(): Promise<EngineStatus[]> {
-    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"]
+    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss", "kohaku-moss"]
     return Promise.all(ids.map((id) => this.status(id)))
   },
 
   async install(id: TrainingEngine): Promise<EngineActionResult> {
+    if (id === "kohaku-moss") {
+      const result = await apiData<GenericInstallResult>("/api/engines/kohaku-moss/install", { method: "POST", body: JSON.stringify({ dry_run: false, ...resolvedDownloadSourcesPayload() }) })
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromKohakuMoss(result.status) : undefined }
+    }
     // Download sources come from the server-persisted settings (#310); optional
     // body fields still win when a caller passes them explicitly.
     if (id === "moss") {
-      const result = await mossApi.install()
+      const result = await mossApi.install(resolvedDownloadSourcesPayload())
       return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
         progressStream: result.progress_stream, status: result.status ? fromMoss(result.status) : undefined }
     }
@@ -215,8 +252,13 @@ export const enginesApi = {
   },
 
   async repair(id: TrainingEngine): Promise<EngineActionResult> {
+    if (id === "kohaku-moss") {
+      const result = await apiData<GenericInstallResult>("/api/engines/kohaku-moss/repair", { method: "POST", body: JSON.stringify(resolvedDownloadSourcesPayload()) })
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromKohakuMoss(result.status) : undefined }
+    }
     if (id === "moss") {
-      const result = await mossApi.repair()
+      const result = await mossApi.repair(resolvedDownloadSourcesPayload())
       return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
         progressStream: result.progress_stream, status: result.status ? fromMoss(result.status) : undefined }
     }
@@ -248,6 +290,10 @@ export const enginesApi = {
   },
 
   async uninstall(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "kohaku-moss") {
+      const data = await apiData<{ status?: GenericEngineStatus }>("/api/engines/kohaku-moss/uninstall", { method: "POST", body: "{}" })
+      return data.status ? fromKohakuMoss(data.status) : { id, state: "not_installed", featureEnabled: true }
+    }
     if (id === "moss") {
       const result = await mossApi.uninstall()
       return result.status ? fromMoss(result.status) : { id, state: "not_installed", featureEnabled: true }

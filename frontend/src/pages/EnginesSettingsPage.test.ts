@@ -78,7 +78,7 @@ it("pages the catalog by five and hides pagination for filtered results", async 
   const wrapper = await setup()
   expect(order(wrapper)).toHaveLength(5)
   await wrapper.get('[data-page="next"]').trigger("click")
-  expect(order(wrapper)).toEqual(["moss", "test-one", "test-two"])
+  expect(order(wrapper)).toEqual(["moss", "kohaku-moss", "test-one", "test-two"])
   await wrapper.get('input[type="search"]').setValue("anima-fast")
   expect(order(wrapper)).toEqual(["anima-fast"])
   expect(wrapper.find(".engine-pagination").exists()).toBe(false)
@@ -91,7 +91,7 @@ it("moves a second-page engine to the global top and returns to page one", async
   server.engine_order = ["test-one", "test-two", ...statuses.map((s) => s.id)]
   const wrapper = await setup()
   await wrapper.get('[data-page="next"]').trigger("click")
-  expect(order(wrapper)).toEqual(["ai-toolkit", "diffsynth", "moss"])
+  expect(order(wrapper)).toEqual(["ai-toolkit", "diffsynth", "moss", "kohaku-moss"])
   await wrapper.get('[data-engine="diffsynth"].engine-row .engine-more-btn').trigger("click")
   await wrapper.get('[data-action="top"]').trigger("click")
   expect(order(wrapper)).toHaveLength(5)
@@ -198,7 +198,7 @@ it("retains order across status refresh and clamps a shrinking filtered page", a
   const savedOrder = localStorage.getItem("nt.settings.engineOrder")
   await wrapper.get('[data-filter="installed"]').trigger("click")
   await wrapper.get('[data-page="next"]').trigger("click")
-  expect(order(wrapper)).toEqual(["ai-toolkit", "diffsynth", "moss"])
+  expect(order(wrapper)).toEqual(["ai-toolkit", "diffsynth", "moss", "kohaku-moss"])
   vi.mocked(enginesApi.list).mockResolvedValue(allReady.map((s) => ({
     ...s, state: s.id === "anima-fast" ? "ready" : "not_installed",
   })))
@@ -242,7 +242,7 @@ it("does not show success and restores preferences when saving fails", async () 
 
 it("offers MOSS through the shared managed-engine install action", async () => {
   const wrapper = await setup()
-  await wrapper.get('input[type="search"]').setValue("MOSS")
+  await wrapper.get('input[type="search"]').setValue("anima_lora")
   expect(order(wrapper)).toEqual(["moss"])
   expect(wrapper.get('[data-engine="moss"]').text()).toContain("MOSS (anima_lora)")
   vi.spyOn(ElMessageBox, "confirm").mockResolvedValue("confirm" as MessageBoxData)
@@ -258,7 +258,7 @@ it("offers MOSS through the shared managed-engine install action", async () => {
 it("discloses MOSS's full runtime rebuild before reinstalling", async () => {
   vi.mocked(enginesApi.list).mockResolvedValue([...statuses, { id: "moss", state: "broken", featureEnabled: true }])
   const wrapper = await setup()
-  await wrapper.get('input[type="search"]').setValue("MOSS")
+  await wrapper.get('input[type="search"]').setValue("anima_lora")
   const confirm = vi.spyOn(ElMessageBox, "confirm").mockResolvedValue("confirm" as MessageBoxData)
   vi.spyOn(ElMessage, "success").mockImplementation(() => ({ close: vi.fn() }))
   vi.mocked(enginesApi.reinstall).mockResolvedValue({ alreadyReady: true })

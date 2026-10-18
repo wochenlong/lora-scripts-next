@@ -48,6 +48,12 @@ When redistributing source or portable builds, please keep [NOTICE.md](../NOTICE
 
 以可选插件形式集成（`extensions/anima_lora/`）。说明见 [docs/anima-fast.md](anima-fast.md)。
 
+## KohakuMossTrainer（实验性可选引擎）
+
+[KohakuBlueleaf/KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 由 Kohaku-Blueleaf（Kohaku / 龙娘）开发，为 MOSS-Image 提供高性能训练、显存方案与完整 LyCORIS 算法支持。Next Trainer 仅通过隔离 venv、钉版源码和官方 `kogine` CLI 做训练引擎集成，不维护新的 MOSS/Kohya fork。
+
+该上游采用 KohakuMoss License 1.0（Apache-2.0 加额外命名要求）；协调记录见[上游 issue #1](https://github.com/KohakuBlueleaf/KohakuMossTrainer/issues/1)。依赖的 [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS) 版本要求为 `lycoris-lora>=4.1.2`。
+
 ## 网络模块与其它组件
 
 | 项目 | 链接 | 说明 |
@@ -89,4 +95,4 @@ History includes a merge from that project and a later migration onto Kohya; pre
 
 ## English summary
 
-Next Trainer gratefully acknowledges Akegarasu/lora-scripts as part of its UX and packaging lineage, and continues to rely on kohya-ss/sd-scripts for major training backends (including current Anima). Early Anima integration historically referenced and adapted [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts); that is not the current backend. Optional Anima Fast uses [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora) (MIT). LoKr/LoHa via LyCORIS; default tagger from SmilingWolf WD models; forms powered by schemastery. Full notices: [NOTICE.md](../NOTICE.md).
+Next Trainer gratefully acknowledges Akegarasu/lora-scripts as part of its UX and packaging lineage, and continues to rely on kohya-ss/sd-scripts for major training backends (including current Anima). Early Anima integration historically referenced and adapted [WhitecrowAurora/lora-rescripts](https://github.com/WhitecrowAurora/lora-rescripts); that is not the current backend. Optional Anima Fast uses [sorryhyun/anima_lora](https://github.com/sorryhyun/anima_lora) (MIT). Experimental MOSS-Image training can use [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) through its official `kogine` CLI. LoKr/LoHa via LyCORIS; default tagger from SmilingWolf WD models; forms powered by schemastery. Full notices: [NOTICE.md](../NOTICE.md).

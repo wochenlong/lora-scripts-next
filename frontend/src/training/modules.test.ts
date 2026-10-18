@@ -30,6 +30,11 @@ describe("training module mapping", () => {
       if (model !== "qwen-image-21") expect(isEngineSupported(model, "diffsynth")).toBe(false)
     }
   })
+
+  it("keeps KohakuMossTrainer optional and Kohya first for MOSS-Image", () => {
+    expect(resolveModule("moss-image", "kohaku-moss", "lora")?.schemaName).toBe("kohaku-moss-image-lora")
+    expect(recommendedEngineFor("moss-image")).toBe("kohya")
+  })
   it("resolves every v1 minimal mapping", () => {
     expect(resolveModule("anima", "kohya", "lora")?.schemaName).toBe("sd3-lora")
     expect(resolveModule("anima", "anima-fast", "lora")?.schemaName).toBe("anima-lora-fast")

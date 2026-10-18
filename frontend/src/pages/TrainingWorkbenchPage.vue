@@ -6,6 +6,7 @@ import { useI18n } from "vue-i18n"
 import AnimaFastPage from "./AnimaFastPage.vue"
 import DiffSynthGatePage from "./DiffSynthGatePage.vue"
 import MossGatePage from "./MossGatePage.vue"
+import KohakuMossPage from "./KohakuMossPage.vue"
 import KohyaGatePage from "./KohyaGatePage.vue"
 import MusubiGatePage from "./MusubiGatePage.vue"
 import AiToolkitGatePage from "./AiToolkitGatePage.vue"
@@ -192,6 +193,12 @@ watch([model, engine, target], () => {
         <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" @engine-picked="onEnginePickedByUser" />
       </template>
     </MossGatePage>
+    <KohakuMossPage v-else-if="resolved.engine === 'kohaku-moss'" bare>
+      <template #form-top>
+        <WorkbenchHeader />
+        <TrainingSelector v-model:model="model" v-model:engine="engine" v-model:target="target" @engine-picked="onEnginePickedByUser" />
+      </template>
+    </KohakuMossPage>
     <DiffSynthGatePage v-else-if="resolved.engine === 'diffsynth'" bare>
       <template #form-top>
         <WorkbenchHeader />

@@ -20,6 +20,11 @@ const credits = [
     noteKey: "about.credits.animaFast",
   },
   {
+    name: "KohakuBlueleaf / KohakuMossTrainer",
+    href: "https://github.com/KohakuBlueleaf/KohakuMossTrainer",
+    noteKey: "about.credits.kohakuMoss",
+  },
+  {
     name: "KohakuBlueleaf / LyCORIS",
     href: "https://github.com/KohakuBlueleaf/LyCORIS",
     noteKey: "about.credits.lycoris",

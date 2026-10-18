@@ -2,16 +2,29 @@
 
 ## 1. 是什么
 
-Next Trainer 提供两条 **MOSS-Image LoRA** 路径：
+Next Trainer 提供三条 **MOSS-Image LoRA** 路径：
 
 - **Kohya（推荐、默认）**：使用内置 `sd-scripts` 的原生 MOSS trainer，功能和维护路径更稳定。
 - **MOSS (anima_lora)**：保留为独立运行时的备选方案（流程：预缓存文本/VAE → 训 DiT LoRA）。
+- **KohakuMossTrainer（实验性、高性能）**：Kohaku / 龙娘开发的独立训练框架，使用官方 `kogine` CLI、显存方案与 LyCORIS 算法；不是默认引擎。
 
 MOSS-Image 是独立模型家族，不能套用 Anima / AI Toolkit 的模型、缓存或配置；两种 MOSS 引擎的配置和缓存也不能混用。
 - 运行环境在 `extensions/moss/`（钉住上游 [`sorryhyun/anima_lora` @ `moss_lora`](https://github.com/sorryhyun/anima_lora/tree/moss_lora)），与 Anima Fast 分离。
 - 上游为 alpha：不保证每张卡的显存上限或成片质量；ComfyUI 侧 LoRA 回载验收可后续补丁。
 
 训练页默认选择：**模型 = MOSS-Image；引擎 = Kohya；目标 = LoRA**。需要原有流程时可手动切换到 **MOSS (anima_lora)**。
+
+### KohakuMossTrainer 实验路径
+
+在训练页手动选择 **KohakuMossTrainer** 后会先进入安装门页。Next Trainer 在 `extensions/kohaku-moss/` 创建独立 Python 3.12 与 venv，钉住上游提交 `5bb1a81ed030cc87c540d5e02fe60aab887199b4`，安装 `kohakumoss[cuda]` 与显式依赖 `lycoris-lora>=4.1.2`。训练命令保持上游原生形式：
+
+```text
+kogine run scripts/train/moss.py --config <Next Trainer 生成的 Python 配置>
+```
+
+首版表单覆盖权重目录、kohya 风格数据集、steps、LyCORIS 算法/rank、输出和 `speed` / `balanced` / `low` / `minimal` / `auto` 显存方案。上游原生按 steps 驱动，因此 v1 的 epoch 字段仅作计划备注，实际停止条件是 `max_train_steps`。完整 GPU 安装与训练 smoke 仍在 [#487](https://github.com/wochenlong/lora-scripts-next/issues/487) 跟踪；在此之前请先用短步数和独立输出目录验证。
+
+这一路径是训练引擎集成，不是新的 MOSS/Kohya fork。感谢 [KohakuBlueleaf/KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 与 [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS)；上游协作见 [KohakuMossTrainer issue #1](https://github.com/KohakuBlueleaf/KohakuMossTrainer/issues/1)。
 
 ## 2. 要提前下载什么模型
 

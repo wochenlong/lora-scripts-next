@@ -9,4 +9,13 @@ describe("engine catalog", () => {
     expect(engineDefinition("anima-fast")?.managesRuntime).toBe(true)
     expect(ENGINE_CATALOG.some((engine) => engine.id === "musubi" && engine.kind === "optional" && engine.managesRuntime)).toBe(true)
   })
+
+  it("labels KohakuMossTrainer as experimental high-performance", () => {
+    expect(engineDefinition("kohaku-moss")).toMatchObject({
+      kind: "optional",
+      managesRuntime: true,
+      version: "experimental",
+      tags: expect.arrayContaining(["experimental", "high-performance", "moss-image"]),
+    })
+  })
 })

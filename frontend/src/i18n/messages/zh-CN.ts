@@ -93,6 +93,7 @@ export default {
         "ai-toolkit": "AI Toolkit",
         diffsynth: "DiffSynth-Studio",
         moss: "MOSS (anima_lora)",
+        "kohaku-moss": "KohakuMossTrainer",
       },
       targets: {
         lora: "LoRA",
@@ -263,6 +264,7 @@ export default {
     schemas: {
       "moss-image-lora": { title: "MOSS-Image LoRA", area: "Kohya（推荐）" },
       "moss-image-anima-lora": { title: "MOSS-Image LoRA", area: "MOSS (anima_lora)" },
+      "kohaku-moss-image-lora": { title: "MOSS-Image LoRA", area: "KohakuMossTrainer · 实验性高性能" },
       "sd3-lora": { title: "Anima LoRA", area: "Anima DiT · Kohya-ss · LoRA" },
       "anima-lora-fast": { title: "Anima LoRA Fast", area: "Anima DiT · Anima Fast · LoRA" },
       "anima-finetune": { title: "Anima 全量微调", area: "Anima DiT · Kohya-ss · 全量微调" },
@@ -794,6 +796,8 @@ export default {
         klein: "Klein",
         "qwen-image-21": "Qwen-Image-2.1",
         nvidia: "NVIDIA",
+        experimental: "实验性",
+        "high-performance": "高性能",
       },
       downloadSources: {
         title: "下载源",
@@ -902,6 +906,11 @@ export default {
         },
       },
       catalog: {
+        "kohaku-moss": {
+          name: "KohakuMossTrainer",
+          summary: "实验性高性能 MOSS-Image / LyCORIS 引擎；感谢 Kohaku（龙娘）的开源工作",
+          sizeHint: "独立 Python 3.12 与 CUDA 运行时需数 GB；模型权重另行准备",
+        },
         moss: {
           name: "MOSS (anima_lora)",
           summary: "实验性 MOSS-Image Base/SFT LoRA · 独立运行环境 · 原生缓存后训练",
@@ -987,6 +996,7 @@ export default {
         animaFast: "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
         install: {
           moss: "MOSS (anima_lora) 将下载独立运行环境及依赖，需要 NVIDIA GPU，不包含模型权重。确认继续？",
+          "kohaku-moss": "KohakuMossTrainer 是实验性高性能引擎，将下载独立 Python/CUDA 环境与 LyCORIS，模型权重不包含在内。确认继续？",
           kohya: "Kohya (sd-scripts) 会下载独立 Python 和数 GB 依赖（含 PyTorch），并要求 NVIDIA GPU。确认继续？",
           diffsynth: "DiffSynth-Studio 会下载独立 Python 和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
           "anima-fast": "Anima Fast 会下载独立 Python 环境和数 GB 依赖，并要求 NVIDIA GPU。确认继续？",
@@ -1072,6 +1082,7 @@ export default {
       akegarasu: "体验谱系与社区整合包实践来源（SD-Trainer / lora-scripts）；详见上方专节致谢",
       kohya: "训练脚本与 Anima / Flux / SD 系列后端（AGPL-3.0）",
       animaFast: "Anima Fast 可选训练引擎（MIT）",
+      kohakuMoss: "Kohaku / 龙娘的 KohakuMossTrainer 实验性高性能引擎",
       lycoris: "LoKr / LoHa 等网络模块（Apache-2.0）",
       tagger: "默认 WD14 打标模型与标签表",
       schemastery: "动态表单 Schema 运行时",
@@ -1418,6 +1429,14 @@ export default {
     installWorking: "安装中…",
     install: "安装 MOSS 运行环境",
     consoleIdle: "安装日志",
+    consoleWaiting: "等待安装任务输出…",
+  },
+  kohakuMoss: {
+    title: "KohakuMossTrainer",
+    intro: "实验性高性能 MOSS-Image 训练引擎。使用独立 Python 3.12、官方 kogine CLI 与 LyCORIS；Kohya 仍是默认首选。",
+    credit: "本可选训练引擎集成自 Kohaku（龙娘）的开源项目 {upstream}，感谢作者及 LyCORIS 社区。请遵守上游 KohakuMoss License 1.0；完整声明见 {notice}。",
+    install: "安装实验性引擎",
+    installWorking: "安装中…",
     consoleWaiting: "等待安装任务输出…",
   },
   diffsynthGate: {
