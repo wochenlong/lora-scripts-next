@@ -48,7 +48,7 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     requiresGpu: true,
     managesRuntime: true,
     mark: "K",
-    tags: ["lora", "sd15", "sdxl", "flux", "anima"],
+    tags: ["lora", "sd15", "sdxl", "flux", "anima", "moss-image"],
     version: "plugin",
     updatedAt: "2026-09",
   },

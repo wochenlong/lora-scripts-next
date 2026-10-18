@@ -60,11 +60,11 @@ def handle_run(config, ctx):
             engine_config = dump_config(adapted, ctx.autosave_dir, run_id)
             spec = build_train_spec(rt, engine_config, ctx.gpu_ids)
             ui_config = Path(ctx.autosave_dir) / f"{run_id}.toml"
-            ui_config.write_text(toml.dumps({**config, "model_train_type": "moss-image-lora",
+            ui_config.write_text(toml.dumps({**config, "model_train_type": "moss-image-anima-lora",
                                             **({"gpu_ids": ctx.gpu_ids} if ctx.gpu_ids else {})}), encoding="utf-8")
             output = Path(adapted.train["output"])
             metadata = {
-                "backend": "moss", "train_type": "moss-image-lora", "job_label": "MOSS-Image LoRA (anima_lora)",
+                "backend": "moss", "train_type": "moss-image-anima-lora", "job_label": "MOSS-Image LoRA (anima_lora)",
                 "config_path": str(ui_config.resolve()), "engine_config_path": str(engine_config),
                 "output_dir": str(output.parent), "output_name": output.stem,
                 "logging_dir": str(rt.project_root / "logs" / "moss"),

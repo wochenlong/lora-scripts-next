@@ -19,6 +19,7 @@ TRAIN_TYPES = {
     "flux-lora": "flux",
     "flux-finetune": "flux",
     "lumina-lora": "lumina",
+    "moss-image-lora": "moss-image",
 }
 
 UPSTREAM = {
@@ -33,9 +34,9 @@ UPSTREAM = {
 FEATURE_FLAG_ENV = ""
 
 CAPABILITIES = {
-    "model_families": ["sd15", "sdxl", "anima", "flux", "lumina"],
+    "model_families": ["sd15", "sdxl", "anima", "flux", "lumina", "moss-image"],
     "tasks": ["lora", "finetune", "dreambooth"],
-    "variants": ["sd15", "sdxl", "anima", "flux", "lumina"],
+    "variants": ["sd15", "sdxl", "anima", "flux", "lumina", "moss-image"],
 }
 
 PATCHES = []

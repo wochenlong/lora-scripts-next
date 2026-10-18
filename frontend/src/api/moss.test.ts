@@ -37,7 +37,7 @@ describe("MOSS engine API", () => {
 
   it("submits native configs unchanged to preflight and dry-run", async () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => response({ ok: true, warnings: [] }))
-    const config = { model_train_type: "moss-image-lora", model_dir: "/models", src: "/images", rank: 16, run_preprocess: true, compile: false }
+    const config = { model_train_type: "moss-image-anima-lora", model_dir: "/models", src: "/images", rank: 16, run_preprocess: true, compile: false }
     await trainingApi.mossPreflight(config)
     expect(fetch).toHaveBeenLastCalledWith("/api/engines/moss/preflight", expect.objectContaining({ method: "POST", body: JSON.stringify(config) }))
     await mossApi.dryRun(config)

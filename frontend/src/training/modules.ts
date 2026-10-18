@@ -65,7 +65,8 @@ export function modelForScenario(scenario: TrainingScenario): TrainingModel {
 // resolves shared schemas (lora-master, dreambooth) to the sdxl module,
 // matching the previous single-SD default (schema default was sdxl-lora).
 export const TRAINING_MODULES: readonly TrainingModule[] = [
-  { model: "moss-image", engine: "moss", target: "lora", schemaName: "moss-image-lora" },
+  { model: "moss-image", engine: "kohya", target: "lora", schemaName: "moss-image-lora" },
+  { model: "moss-image", engine: "moss", target: "lora", schemaName: "moss-image-anima-lora" },
   { model: "qwen-image-21", engine: "diffsynth", target: "lora", schemaName: "qwen-image-21-lora" },
   { model: "anima", engine: "kohya", target: "lora", schemaName: "sd3-lora" },
   { model: "anima", engine: "anima-fast", target: "lora", schemaName: "anima-lora-fast" },
@@ -91,6 +92,7 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
 
 export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> = {
   "moss-image-lora": { titleKey: "training.schemas.moss-image-lora.title", areaKey: "training.schemas.moss-image-lora.area" },
+  "moss-image-anima-lora": { titleKey: "training.schemas.moss-image-anima-lora.title", areaKey: "training.schemas.moss-image-anima-lora.area" },
   "ai-toolkit-sdxl-lora": { titleKey: "training.schemas.ai-toolkit-sdxl-lora.title", areaKey: "training.schemas.ai-toolkit-sdxl-lora.area" },
   "ai-toolkit-sd15-lora": { titleKey: "training.schemas.ai-toolkit-sd15-lora.title", areaKey: "training.schemas.ai-toolkit-sd15-lora.area" },
   "ai-toolkit-ideogram4-lora": { titleKey: "training.schemas.ai-toolkit-ideogram4-lora.title", areaKey: "training.schemas.ai-toolkit-ideogram4-lora.area" },
@@ -165,7 +167,7 @@ export const ENGINE_PREFERENCE: Readonly<Record<TrainingModel, readonly Training
   ideogram4: ["musubi", "ai-toolkit"],
   klein: ["ai-toolkit"],
   "qwen-image-21": ["diffsynth", "ai-toolkit"],
-  "moss-image": ["moss"],
+  "moss-image": ["kohya", "moss"],
 }
 
 /** Ideal (first-choice) engine for a model, ignoring install state. */

@@ -23,9 +23,11 @@ TORCH_REQUIREMENTS_AARCH64 = TORCH_PINS_AARCH64
 XFORMERS_PIN = "xformers==0.0.30"
 
 TRAINING_DEPS = [
-    "accelerate==0.33.0",
-    "transformers==4.51.3",
-    "diffusers[torch]==0.33.1",
+    # MOSS-Image requires Qwen3.5 support from the current Kohya stack.
+    # Existing installations must use "repair" after this upgrade.
+    "accelerate==1.15.0",
+    "transformers==5.17.0",
+    "diffusers[torch]==0.40.0",
     "ftfy==6.1.1",
     "opencv-python==4.8.1.78",
     # flow_use_ot in sd-scripts uses scipy.optimize.linear_sum_assignment.
@@ -40,13 +42,14 @@ TRAINING_DEPS = [
     "prodigy-plus-schedule-free==1.9.0",
     "prodigyopt==1.1.2",
     "tensorboard==2.14.0",
-    "safetensors==0.4.4",
+    "safetensors==0.8.0",
     "setuptools<81",
     "altair==4.2.2",
     "easygui==0.98.3",
     "toml==0.10.2",
     "voluptuous==0.13.1",
-    "huggingface-hub==0.36.2",
+    "huggingface-hub==1.32.0",
+    "tokenizers==0.22.2",
     "imagesize==1.4.1",
     "sentencepiece==0.2.0",
     "protobuf==3.20.3",

@@ -261,7 +261,8 @@ export default {
       animaFastTorchCompile: "attn_mode=torch 或留空时不能启用 torch_compile",
     },
     schemas: {
-      "moss-image-lora": { title: "MOSS-Image LoRA", area: "MOSS (anima_lora)" },
+      "moss-image-lora": { title: "MOSS-Image LoRA", area: "Kohya（推荐）" },
+      "moss-image-anima-lora": { title: "MOSS-Image LoRA", area: "MOSS (anima_lora)" },
       "sd3-lora": { title: "Anima LoRA", area: "Anima DiT · Kohya-ss · LoRA" },
       "anima-lora-fast": { title: "Anima LoRA Fast", area: "Anima DiT · Anima Fast · LoRA" },
       "anima-finetune": { title: "Anima 全量微调", area: "Anima DiT · Kohya-ss · 全量微调" },

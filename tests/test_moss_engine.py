@@ -63,7 +63,7 @@ def configured(tmp_path):
     dataset.mkdir()
     Image.new("RGB", (32, 48), "blue").save(dataset / "sample.png")
     (dataset / "sample.txt").write_text("中文 caption", encoding="utf-8")
-    config = {"model_train_type": "moss-image-lora", "model_dir": "models/moss_image", "src": "images",
+    config = {"model_train_type": "moss-image-anima-lora", "model_dir": "models/moss_image", "src": "images",
               "output_dir": "output", "output_name": "moss_test", "epochs": 2, "rank": 8, "lr": 0.0002}
     return rt, config
 
@@ -226,8 +226,8 @@ def test_import_export_roundtrip_and_cross_family_redirect(configured):
     from mikazuki.utils.config_import import validate_config_import
     from mikazuki.utils.config_export import normalize_config_for_export
     rt, config = configured
-    exported, warnings = normalize_config_for_export(config, page_train_type="moss-image-lora")
-    result = validate_config_import("moss-image-lora", exported)
+    exported, warnings = normalize_config_for_export(config, page_train_type="moss-image-anima-lora")
+    result = validate_config_import("moss-image-anima-lora", exported)
     assert result["result"] == "ok" and not warnings
     assert result["config"]["rank"] == 8
     redirected = validate_config_import("sd3-lora", exported)
@@ -268,7 +268,7 @@ def test_api_preflight_dry_run_and_run_stop_at_task_boundary(configured, monkeyp
     assert response["status"] == "success", response
     assert len(captured) == len(submitted) == 1
     assert captured[0]["metadata"]["backend"] == "moss"
-    assert captured[0]["metadata"]["train_type"] == "moss-image-lora"
+    assert captured[0]["metadata"]["train_type"] == "moss-image-anima-lora"
     assert captured[0]["env"]["CUDA_VISIBLE_DEVICES"] == "1"
     saved = json.loads(Path(captured[0]["metadata"]["engine_config_path"]).read_text(encoding="utf-8"))
     assert saved == dry["data"]["config"]
@@ -383,7 +383,7 @@ def test_moss_dataset_is_guarded_while_queued(tmp_path, monkeypatch):
     dataset = root / "moss-experiment"
     dataset.mkdir(parents=True)
     config_path = tmp_path / "moss.toml"
-    config_path.write_text(toml.dumps({"model_train_type": "moss-image-lora", "src": str(dataset)}))
+    config_path.write_text(toml.dumps({"model_train_type": "moss-image-anima-lora", "src": str(dataset)}))
     monkeypatch.setattr(inuse.tm, "dump", lambda: [{"status": "QUEUED", "metadata": {"config_path": str(config_path)}}])
     assert inuse.datasets_in_use(root) == {"moss-experiment"}
 

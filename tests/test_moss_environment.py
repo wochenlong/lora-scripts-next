@@ -90,7 +90,7 @@ def test_manifest_and_paths_are_moss_only(rt):
     from mikazuki.engines.manifest import load_manifest
     parsed = load_manifest(manifest)
     assert parsed.engine_id == "moss"
-    assert parsed.train_types == {"moss-image-lora": "moss-image"}
+    assert parsed.train_types == {"moss-image-anima-lora": "moss-image"}
     assert parsed.capabilities["model_families"] == ["moss-image"]
     assert rt.root == rt.project_root / "extensions/moss"
     assert rt.python_install_dir == rt.root / ".python"

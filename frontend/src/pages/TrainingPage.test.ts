@@ -374,21 +374,21 @@ describe("TrainingPage Anima Fast imports", () => {
 
 
 describe("MOSS shared training submission", () => {
-  const source = readFileSync(resolve(process.cwd(), "../mikazuki/schema/moss-image-lora.ts"), "utf8")
-  const mossSchema = executeSchemaSources([{ name: "moss-image-lora", hash: "test", schema: source }], "moss-image-lora")
+  const source = readFileSync(resolve(process.cwd(), "../mikazuki/schema/moss-image-anima-lora.ts"), "utf8")
+  const mossSchema = executeSchemaSources([{ name: "moss-image-anima-lora", hash: "test", schema: source }], "moss-image-anima-lora")
 
   it("preflights the real serialized schema before submitting the same native config", async () => {
     vi.mocked(loadTrainingSchema).mockResolvedValue(mossSchema)
     vi.mocked(ElMessageBox.confirm).mockResolvedValue("confirm" as MessageBoxData)
     vi.mocked(trainingApi.mossPreflight).mockResolvedValue({ ok: true, warnings: ["Experimental runtime"] })
     vi.mocked(trainingApi.run).mockResolvedValue({ task_id: "mock-moss-train" })
-    const wrapper = mountPage("moss-image-lora")
+    const wrapper = mountPage("moss-image-anima-lora")
     await flushPromises()
     await wrapper.get(".train-submit").trigger("click")
     await flushPromises()
     expect(trainingApi.mossPreflight).toHaveBeenCalledOnce()
     const config = vi.mocked(trainingApi.mossPreflight).mock.calls[0][0]
-    expect(config).toMatchObject({ model_train_type: "moss-image-lora", model: "base", rank: 16, lr: 0.0001, compile: false })
+    expect(config).toMatchObject({ model_train_type: "moss-image-anima-lora", model: "base", rank: 16, lr: 0.0001, compile: false })
     expect(config).not.toHaveProperty("network_module")
     expect(trainingApi.run).toHaveBeenCalledExactlyOnceWith(config)
     expect(vi.mocked(trainingApi.mossPreflight).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(trainingApi.run).mock.invocationCallOrder[0])
@@ -400,7 +400,7 @@ describe("MOSS shared training submission", () => {
     vi.mocked(loadTrainingSchema).mockResolvedValue(mossSchema)
     vi.mocked(ElMessageBox.confirm).mockResolvedValue("confirm" as MessageBoxData)
     vi.mocked(trainingApi.mossPreflight).mockResolvedValue({ ok: false, errors: ["MOSS cache is incomplete"] })
-    const wrapper = mountPage("moss-image-lora")
+    const wrapper = mountPage("moss-image-anima-lora")
     await flushPromises()
     await wrapper.get(".train-submit").trigger("click")
     await flushPromises()

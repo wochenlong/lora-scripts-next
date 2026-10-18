@@ -196,7 +196,7 @@ async function load() {
     if (!isCurrent()) return
     if (cards.length > 1) {
       const options = cards.map((card, index) => typeof card === "object" ? (card.value ?? card.label ?? index) : card)
-      const field: FormField = { key: "gpu_ids", type: "array", role: "select", description: t(props.schemaName === "moss-image-lora" ? "training.diagnostics.mossSingleGpu" : "training.gpu.fieldDescription"), options, conditions: [] }
+      const field: FormField = { key: "gpu_ids", type: "array", role: "select", description: t(props.schemaName === "moss-image-anima-lora" ? "training.diagnostics.mossSingleGpu" : "training.gpu.fieldDescription"), options, conditions: [] }
       loaded.sections.push({ id: "gpu-settings", title: t("training.gpu.sectionTitle"), fields: [field] })
     }
     schema.value = loaded
@@ -341,7 +341,7 @@ async function submit() {
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
     }
-    if (props.schemaName === "moss-image-lora") {
+    if (props.schemaName === "moss-image-anima-lora") {
       const preflight = await trainingApi.mossPreflight(output.value)
       if (!preflight.ok) throw new Error(preflight.errors?.join("\n") || t("training.submitConfirm.preflightFail"))
       preflight.warnings?.forEach((warning) => ElMessage.warning(warning))
@@ -479,7 +479,7 @@ onBeforeUnmount(() => {
           <div v-else-if="error" class="schema-state schema-error"><strong>{{ t("training.schemaError") }}</strong><span>{{ error }}</span><button @click="load">{{ t("training.retry") }}</button></div>
           <DynamicSchemaForm v-else-if="schema" :model-value="model" :schema="schema" :errors="errors" :effective-defaults="effectiveDefaults" @update:model-value="updateModel" @reset-field="resetField">
         <template #[modelToolsSlot]>
-          <ModelAssetsTools v-if="schemaName !== 'qwen-image-21-lora' && schemaName !== 'moss-image-lora' && !isAiToolkitSchema(schemaName)" :schema-name="schemaName" :model="model" />
+          <ModelAssetsTools v-if="schemaName !== 'qwen-image-21-lora' && !schemaName.startsWith('moss-image-') && !isAiToolkitSchema(schemaName)" :schema-name="schemaName" :model="model" />
         </template>
       </DynamicSchemaForm>
         </div>
