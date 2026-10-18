@@ -11,6 +11,7 @@ vi.mock("../api/engines", () => ({
     list: vi.fn(),
     install: vi.fn(),
     repair: vi.fn(),
+    reinstall: vi.fn(),
     uninstall: vi.fn(),
   },
 }))
@@ -28,6 +29,7 @@ const installing: EngineStatus = {
   facts: { task_id: "kohya-install-demo" },
 }
 const notInstalled: EngineStatus = { id: "kohya", state: "not_installed", featureEnabled: true }
+const broken: EngineStatus = { id: "kohya", state: "broken", featureEnabled: true, reason: "环境已变化，请修复后重新检查。" }
 
 const trainingPageStub = {
   template: '<div class="training-page-stub"><slot name="form-top" /></div>',
@@ -72,6 +74,18 @@ describe("KohyaGatePage", () => {
     const bar = wrapper.get('[data-testid="engine-status-bar"]')
     expect(bar.attributes("data-state")).toBe("not_installed")
     expect(wrapper.text()).toContain("安装 Kohya 环境")
+    wrapper.unmount()
+  })
+
+  it("shows a primary Repair CTA when kohya is broken (not Install)", async () => {
+    status.mockResolvedValue(broken)
+    const wrapper = mountPage()
+    await flushPromises()
+
+    expect(wrapper.find(".training-page-stub").exists()).toBe(false)
+    expect(wrapper.get('[data-testid="kohya-repair"]').text()).toContain("修复")
+    expect(wrapper.get('[data-testid="kohya-reinstall"]').text()).toContain("重新安装")
+    expect(wrapper.text()).not.toContain("安装 Kohya 环境")
     wrapper.unmount()
   })
 
