@@ -94,6 +94,22 @@ describe("MOSS native training schema", () => {
     expect(output({ run_preprocess: true, src: "/source" })).toHaveProperty("src", "/source")
   })
 
+  it("places dataset fields before resolution and exposes inline preview prompt", () => {
+    const dataset = schema.sections.find((section) => section.title.includes("数据集"))
+    expect(dataset).toBeTruthy()
+    const keys = dataset!.fields.map((field) => field.key)
+    expect(keys.indexOf("src")).toBeGreaterThanOrEqual(0)
+    expect(keys.indexOf("resolution")).toBeGreaterThanOrEqual(0)
+    expect(keys.indexOf("src")).toBeLessThan(keys.indexOf("resolution"))
+    const preview = schema.sections.find((section) => section.title.includes("逐轮预览"))
+    expect(preview?.fields.map((field) => field.key)).toEqual(expect.arrayContaining(["preview_prompt", "preview_prompt_file"]))
+    expect(preview?.fields.find((field) => field.key === "preview_prompt")?.role).toBe("textarea")
+    expect(output({ preview_prompt: "a moss preview caption", preview_every_epochs: 1 })).toMatchObject({
+      preview_prompt: "a moss preview caption",
+      preview_every_epochs: 1,
+    })
+  })
+
   it("checks block-swap range and epoch/step termination", () => {
     expect(validateModel(schema, { ...defaults, rank: 3073 })).toHaveProperty("rank")
     expect(validateModel(schema, { ...defaults, resolution: 4097 })).toHaveProperty("resolution")

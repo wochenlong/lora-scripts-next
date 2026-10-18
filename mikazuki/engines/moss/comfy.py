@@ -3,15 +3,19 @@
 Upstream ``library/moss/loader.py`` only loads via ``from_pretrained`` on
 ``MOSS-Image-{Base,SFT}/{transformer,text_encoder,vae,tokenizer}``. Comfy users
 typically keep DiT / TE / VAE as flat ``.safetensors`` plus a tokenizer folder.
-This module validates those headers against the native key contract, then
-materializes a staging tree (links preferred) so training can keep using the
-pinned anima_lora entrypoints without rewriting weights (#474).
+
+This module validates those headers against the native key contract (or the
+Comfy-Org fused-``qkv`` variant), then materializes a staging tree. Native-key
+files prefer hardlink/symlink/copy; fused ``layers.*.proj.qkv`` weights are
+split into ``q`` / ``k`` / ``v`` once into the staging transformer file so the
+pinned anima_lora entrypoints keep working (#474).
 """
 from __future__ import annotations
 
 import hashlib
 import json
 import os
+import re
 import shutil
 from pathlib import Path
 
@@ -30,6 +34,9 @@ WEIGHT_NAMES = {
     "text_encoder": "model.safetensors",
     "vae": "diffusion_pytorch_model.safetensors",
 }
+# Bump when remap math or accepted fused layouts change.
+REMAP_SCHEME = "moss-comfy-qkv-split-v1"
+QKV_KEY_RE = re.compile(r"^(layers\.\d+\.proj)\.qkv\.weight$")
 
 
 def _link_or_copy(src: Path, dest: Path) -> str:
@@ -99,19 +106,95 @@ def _assert_headers(headers: dict, expected_shapes: dict, field: str, *, subset:
         raise ValueError(f"{field}: shape mismatch / 尺寸不匹配: {', '.join(bad[:8])}")
 
 
+def dit_layout_from_headers(headers: dict) -> str:
+    """Return ``native`` or ``fused_qkv`` (Comfy-Org packs fuse proj q/k/v)."""
+    has_qkv = "layers.0.proj.qkv.weight" in headers
+    has_q = "layers.0.proj.q.weight" in headers
+    if has_qkv and has_q:
+        raise ValueError(
+            "dit_path: mixed native and fused qkv keys / 同时存在 qkv 与拆分的 q/k/v，无法判断布局"
+        )
+    if has_qkv and not has_q:
+        return "fused_qkv"
+    if has_q and not has_qkv:
+        return "native"
+    raise ValueError("dit_path: unrecognized transformer layout / 无法识别 DiT 键名布局")
+
+
+def fused_qkv_transformer_shapes() -> dict:
+    """Native shapes with each layer's q/k/v replaced by a fused ``qkv`` weight."""
+    shapes = dict(transformer_shapes())
+    for i in range(42):
+        for name in ("q", "k", "v"):
+            del shapes[f"layers.{i}.proj.{name}.weight"]
+        shapes[f"layers.{i}.proj.qkv.weight"] = [9216, 3072]
+    return shapes
+
+
+def assert_dit_headers(headers: dict, field: str) -> str:
+    layout = dit_layout_from_headers(headers)
+    expected = fused_qkv_transformer_shapes() if layout == "fused_qkv" else transformer_shapes()
+    _assert_headers(headers, expected, field)
+    return layout
+
+
+def split_fused_qkv_state(tensors: dict) -> dict:
+    """Split ``layers.N.proj.qkv.weight`` → ``q`` / ``k`` / ``v`` (chunk dim 0)."""
+    result = {}
+    split = 0
+    for key, tensor in tensors.items():
+        match = QKV_KEY_RE.fullmatch(key)
+        if not match:
+            result[key] = tensor
+            continue
+        if getattr(tensor, "ndim", None) != 2 or int(tensor.shape[0]) % 3 != 0:
+            raise ValueError(f"{key}: expected 2D weight with out_features divisible by 3, got {list(tensor.shape)}")
+        q_w, k_w, v_w = tensor.chunk(3, dim=0)
+        prefix = match.group(1)
+        result[f"{prefix}.q.weight"] = q_w.contiguous()
+        result[f"{prefix}.k.weight"] = k_w.contiguous()
+        result[f"{prefix}.v.weight"] = v_w.contiguous()
+        split += 1
+    if split != 42:
+        raise ValueError(f"dit_path: expected 42 fused qkv layers, found {split} / 融合 qkv 层数应为 42")
+    return result
+
+
+def rewrite_fused_qkv_dit(src: Path, dest: Path) -> dict:
+    """Load a fused-qkv DiT, write native-key safetensors beside the staging tree."""
+    from safetensors import safe_open
+    from safetensors.torch import save_file
+
+    print(f"[moss-comfy] rewriting fused qkv DiT → native keys: {src}", flush=True)
+    loaded = {}
+    with safe_open(src, framework="pt", device="cpu") as handle:
+        for key in handle.keys():
+            loaded[key] = handle.get_tensor(key)
+    remapped = split_fused_qkv_state(loaded)
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    if dest.exists() or dest.is_symlink():
+        dest.unlink()
+    save_file(remapped, str(dest))
+    print(f"[moss-comfy] wrote remapped DiT ({len(remapped)} tensors): {dest}", flush=True)
+    return {"remap_scheme": REMAP_SCHEME, "fused_qkv_layers": 42, "tensors": len(remapped)}
+
+
 def validate_comfy_components(paths: dict, *, model: str, needs_text: bool, needs_vae: bool) -> dict:
     """Header-only validation for Comfy-style single files + tokenizer dir."""
     dit = resolve_weight_file(paths["dit_path"], "dit_path")
     dit_headers, _ = tensor_header(dit)
-    _assert_headers(dit_headers, transformer_shapes(), "dit_path")
+    dit_layout = assert_dit_headers(dit_headers, "dit_path")
 
     facts = {
         "model_format": "comfyui_files",
         "dit_path": str(dit),
+        "dit_layout": dit_layout,
         "transformer_tensors": len(dit_headers),
         "validation": "header-only; tensors not loaded",
         "model_variant": model,
     }
+    if dit_layout == "fused_qkv":
+        facts["dit_remap"] = REMAP_SCHEME
 
     if needs_text:
         te = resolve_weight_file(paths["text_encoder_path"], "text_encoder_path")
@@ -148,8 +231,11 @@ def validate_comfy_components(paths: dict, *, model: str, needs_text: bool, need
     if model == "sft":
         sft = resolve_weight_file(paths["sft_dit_path"], "sft_dit_path")
         sft_headers, _ = tensor_header(sft)
-        _assert_headers(sft_headers, transformer_shapes(), "sft_dit_path")
+        sft_layout = assert_dit_headers(sft_headers, "sft_dit_path")
         facts["sft_dit_path"] = str(sft)
+        facts["sft_dit_layout"] = sft_layout
+        if sft_layout == "fused_qkv":
+            facts["sft_dit_remap"] = REMAP_SCHEME
 
     return facts
 
@@ -178,6 +264,44 @@ def _stage_component(root: Path, component: str, weight: Path | None, *, link_to
     return methods
 
 
+def _stage_transformer(root: Path, weight: Path, *, layout: str) -> list[str]:
+    directory = root / "transformer"
+    directory.mkdir(parents=True, exist_ok=True)
+    _write_config(directory / "config.json", "transformer")
+    dest = directory / WEIGHT_NAMES["transformer"]
+    if layout == "fused_qkv":
+        rewrite_fused_qkv_dit(weight.resolve(), dest)
+        return ["remap-qkv"]
+    return [_link_or_copy(weight.resolve(), dest)]
+
+
+def _staging_reusable(staging_root: Path, resolved: dict, *, model: str, dit_layout: str, sft_layout: str | None) -> bool:
+    meta_path = staging_root / ".next-moss-comfy.json"
+    weight = staging_root / "MOSS-Image-Base" / "transformer" / WEIGHT_NAMES["transformer"]
+    if not meta_path.is_file() or not weight.is_file():
+        return False
+    try:
+        data = json.loads(meta_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return False
+    expected_scheme = REMAP_SCHEME if dit_layout == "fused_qkv" else None
+    if (
+        data.get("paths") != resolved
+        or data.get("model") != model
+        or data.get("dit_layout") != dit_layout
+        or data.get("remap_scheme") != expected_scheme
+    ):
+        return False
+    if model == "sft":
+        sft_weight = staging_root / "MOSS-Image-SFT" / "transformer" / WEIGHT_NAMES["transformer"]
+        if not sft_weight.is_file() or data.get("sft_dit_layout") != sft_layout:
+            return False
+        sft_scheme = REMAP_SCHEME if sft_layout == "fused_qkv" else None
+        if data.get("sft_remap_scheme") != sft_scheme:
+            return False
+    return True
+
+
 def materialize_comfy_layout(paths: dict, *, model: str, staging_root: Path) -> Path:
     """Build ``staging_root/MOSS-Image-Base`` (+ optional SFT) and return parent model_dir."""
     staging_root = Path(staging_root)
@@ -186,29 +310,47 @@ def materialize_comfy_layout(paths: dict, *, model: str, staging_root: Path) -> 
     vae = resolve_weight_file(paths["vae_path"], "vae_path")
     tokenizer = Path(paths["tokenizer_path"]).resolve()
     sft_dit = resolve_weight_file(paths["sft_dit_path"], "sft_dit_path") if model == "sft" else None
-    if staging_root.exists():
-        shutil.rmtree(staging_root)
-    base = staging_root / "MOSS-Image-Base"
-    methods = []
-    methods += _stage_component(base, "transformer", dit)
-    methods += _stage_component(base, "text_encoder", text_encoder)
-    methods += _stage_component(base, "vae", vae)
-    methods += _stage_component(base, "tokenizer", None, link_tokenizer=tokenizer)
-    if model == "sft":
-        sft = staging_root / "MOSS-Image-SFT"
-        methods += _stage_component(sft, "transformer", sft_dit)
-    # Smoke-check the staged native layout with the existing directory validators.
-    component_headers(base / "transformer")
-    component_headers(base / "text_encoder", text=True)
-    component_headers(base / "vae")
+    dit_headers, _ = tensor_header(dit)
+    dit_layout = assert_dit_headers(dit_headers, "dit_path")
+    sft_layout = None
+    if sft_dit is not None:
+        sft_headers, _ = tensor_header(sft_dit)
+        sft_layout = assert_dit_headers(sft_headers, "sft_dit_path")
     resolved = {
         "dit_path": str(dit), "text_encoder_path": str(text_encoder),
         "vae_path": str(vae), "tokenizer_path": str(tokenizer),
     }
     if sft_dit is not None:
         resolved["sft_dit_path"] = str(sft_dit)
+    if _staging_reusable(staging_root, resolved, model=model, dit_layout=dit_layout, sft_layout=sft_layout):
+        return staging_root
+    if staging_root.exists():
+        shutil.rmtree(staging_root)
+    base = staging_root / "MOSS-Image-Base"
+    methods = []
+    methods += _stage_transformer(base, dit, layout=dit_layout)
+    methods += _stage_component(base, "text_encoder", text_encoder)
+    methods += _stage_component(base, "vae", vae)
+    methods += _stage_component(base, "tokenizer", None, link_tokenizer=tokenizer)
+    if model == "sft":
+        sft = staging_root / "MOSS-Image-SFT"
+        methods += _stage_transformer(sft, sft_dit, layout=sft_layout or "native")
+    # Smoke-check the staged native layout with the existing directory validators.
+    component_headers(base / "transformer")
+    component_headers(base / "text_encoder", text=True)
+    component_headers(base / "vae")
+    meta = {
+        "paths": resolved,
+        "model": model,
+        "dit_layout": dit_layout,
+        "remap_scheme": REMAP_SCHEME if dit_layout == "fused_qkv" else None,
+        "link_methods": methods,
+    }
+    if sft_layout is not None:
+        meta["sft_dit_layout"] = sft_layout
+        meta["sft_remap_scheme"] = REMAP_SCHEME if sft_layout == "fused_qkv" else None
     (staging_root / ".next-moss-comfy.json").write_text(
-        json.dumps({"paths": resolved, "model": model, "link_methods": methods}, ensure_ascii=False, indent=2),
+        json.dumps(meta, ensure_ascii=False, indent=2),
         encoding="utf-8",
     )
     return staging_root
@@ -230,4 +372,5 @@ def comfy_layout_digest(paths: dict, *, model: str) -> str:
                     stat = child.stat()
                     payload.append([key, str(child.resolve()), stat.st_size, stat.st_mtime_ns])
     payload.append(["model", model])
+    payload.append(["remap_scheme", REMAP_SCHEME])
     return hashlib.sha256(json.dumps(payload, ensure_ascii=False).encode()).hexdigest()[:16]

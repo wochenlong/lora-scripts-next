@@ -2,7 +2,7 @@ Schema.intersect([
     Schema.object({
         model_train_type: Schema.const("moss-image-lora").default("moss-image-lora").hidden(),
         model: Schema.union(["base", "sft"]).default("base").description("训练版本 / Transformer variant. SFT 仍使用 Base 的文本编码器、VAE 与 tokenizer / SFT reuses Base encoders"),
-        model_input_mode: Schema.union(["native_directory", "comfyui_files"]).default("native_directory").description("模型输入方式 / Input mode：native_directory = 官方 Diffusers 目录；comfyui_files = Comfy 风格 DiT/TE/VAE 单文件 + tokenizer 目录。Comfy 文件会物化为原生布局供上游加载，不改写权重"),
+        model_input_mode: Schema.union(["native_directory", "comfyui_files"]).default("native_directory").description("模型输入方式 / Input mode：native_directory = 官方 Diffusers 目录；comfyui_files = Comfy 风格 DiT/TE/VAE 单文件 + tokenizer 目录。Comfy 文件会物化为原生布局；Comfy-Org 融合 qkv 的 DiT 会在物化时拆成 q/k/v"),
     }).description("MOSS 模型 / Model"),
     Schema.union([
         Schema.object({
@@ -11,7 +11,7 @@ Schema.intersect([
         }),
         Schema.object({
             model_input_mode: Schema.const("comfyui_files"),
-            dit_path: Schema.string().role("filepicker", { type: "model-file", filter: "*.safetensors" }).required().default("./sd-models/moss-image/dit.safetensors").description("Comfy DiT 单文件 / MOSS transformer .safetensors（原生键名与尺寸；不支持分片索引）"),
+            dit_path: Schema.string().role("filepicker", { type: "model-file", filter: "*.safetensors" }).required().default("./sd-models/moss-image/dit.safetensors").description("Comfy DiT 单文件 / MOSS transformer .safetensors（原生 q/k/v 或 Comfy-Org 融合 qkv；不支持分片索引）"),
             text_encoder_path: Schema.string().role("filepicker", { type: "model-file", filter: "*.safetensors" }).required().default("./sd-models/moss-image/text_encoder.safetensors").description("文本编码器单文件 / Qwen3.5 权重，必须保留 language_model.* 前缀"),
             vae_path: Schema.string().role("filepicker", { type: "model-file", filter: "*.safetensors" }).required().default("./sd-models/moss-image/vae.safetensors").description("VAE 单文件 / FLUX.2 AutoencoderKLFlux2 .safetensors"),
             tokenizer_path: Schema.string().role("filepicker", { type: "folder" }).required().default("./sd-models/moss-image/tokenizer").description("Tokenizer 目录 / 含 tokenizer.json、tokenizer_config.json 与 MOSS chat template"),
@@ -20,12 +20,7 @@ Schema.intersect([
     ]),
     Schema.intersect([
       Schema.object({
-        resolution: Schema.number().role("number", { integer: true }).min(16).max(4096).step(1).default(1024).description("像素面积上限的平方边长 / Pixel-area cap: 1024 means about 1024² pixels. 保持原比例，边长为 16 倍数，不放大小图 / Native aspect, multiples of 16, no upscaling"),
         run_preprocess: Schema.boolean().default(true).description("先缓存再训练 / Cache text embeddings and VAE latents before training. 关闭时必须已有完整的 MOSS 缓存 / Off requires a complete existing MOSS cache"),
-        overwrite_cache: Schema.boolean().default(false).description("强制重建缓存 / Re-encode current caches during preprocessing. 默认复用有效缓存 / Reuse valid caches by default"),
-        vae_dtype: Schema.union(["fp32", "bf16"]).default("fp32").description("VAE 缓存精度 / VAE encoding dtype during preprocessing. fp32 为上游默认 / Upstream default is fp32"),
-        max_text_tokens: Schema.number().role("number", { integer: true }).min(1).max(4096).step(1).default(4096).description("文本截断长度 / Maximum text tokens during preprocessing, up to the model limit of 4096"),
-        save_crops: Schema.boolean().default(false).description("保存缓存输入图 / Also save the exact pixels used to encode each latent during preprocessing"),
       }),
       Schema.union([
         Schema.object({
@@ -38,6 +33,13 @@ Schema.intersect([
             cache_dir: Schema.string().role("filepicker", { type: "folder" }).required().description("已有的完整 MOSS 缓存目录 / Existing complete MOSS cache directory (required when preprocessing is disabled)"),
         }),
       ]),
+      Schema.object({
+        resolution: Schema.number().role("number", { integer: true }).min(16).max(4096).step(1).default(1024).description("像素面积上限的平方边长 / Pixel-area cap: 1024 means about 1024² pixels. 保持原比例，边长为 16 倍数，不放大小图 / Native aspect, multiples of 16, no upscaling"),
+        overwrite_cache: Schema.boolean().default(false).description("强制重建缓存 / Re-encode current caches during preprocessing. 默认复用有效缓存 / Reuse valid caches by default"),
+        vae_dtype: Schema.union(["fp32", "bf16"]).default("fp32").description("VAE 缓存精度 / VAE encoding dtype during preprocessing. fp32 为上游默认 / Upstream default is fp32"),
+        max_text_tokens: Schema.number().role("number", { integer: true }).min(1).max(4096).step(1).default(4096).description("文本截断长度 / Maximum text tokens during preprocessing, up to the model limit of 4096"),
+        save_crops: Schema.boolean().default(false).description("保存缓存输入图 / Also save the exact pixels used to encode each latent during preprocessing"),
+      }),
     ]).description("数据集与预缓存 / Dataset and cache"),
     Schema.object({
         output_dir: Schema.string().role("filepicker", { type: "folder" }).required().default("./output/moss").description("输出目录 / LoRA output directory"),
@@ -46,7 +48,8 @@ Schema.intersect([
         save_every_epochs: Schema.number().role("number", { integer: true }).min(0).step(1).default(0).description("每 N 个 epoch 保存 / Save every N epochs; 0 = final only / 仅保存最终结果"),
     }).description("保存设置 / Output"),
     Schema.object({
-        epochs: Schema.number().role("number", { integer: true }).min(0).step(1).default(8).description("训练轮数 / Passes over the cached dataset; 0 requires max_steps > 0. 固定 batch size 1，不使用 repeats / Fixed batch size 1, no repeats"),
+        batch_size: Schema.number().role("number", { integer: true }).min(1).max(2).step(1).default(1).description("真实批大小 / Simultaneous images per shape bucket. 保留各 bucket 尾批；不使用梯度累积 / Keep partial tails; accumulation=1"),
+        epochs: Schema.number().role("number", { integer: true }).min(0).step(1).default(8).description("训练轮数 / Passes over the cached dataset; 0 requires max_steps > 0. 按同尺寸 bucket 组 batch，不使用 repeats / Shape-bucket batches, no repeats"),
         max_steps: Schema.number().role("number", { integer: true }).min(0).step(1).default(0).description("步数上限 / Stop after this many steps; 0 = epochs decide / 由轮数决定"),
         rank: Schema.number().role("number", { integer: true }).min(1).max(3072).step(1).default(16).description("LoRA 秩 / LoRA rank"),
         alpha: Schema.number().min(0.000001).step(1).description("LoRA alpha；留空等于 rank / Empty uses rank"),
@@ -56,6 +59,15 @@ Schema.intersect([
         seed: Schema.number().role("number", { integer: true }).min(0).step(1).default(0).description("随机种子 / Random seed"),
         log_every: Schema.number().role("number", { integer: true }).min(1).step(1).default(10).description("完整日志间隔 / Full log line every N steps"),
     }).description("训练与 LoRA / Training and LoRA"),
+    Schema.object({
+        preview_every_epochs: Schema.number().role("number", { integer: true }).min(0).step(1).default(0).description("每 N 轮生成一张预览 / One image every N epochs; 0 disables"),
+        preview_prompt: Schema.string().role("textarea").description("预览提示词 / Preview prompt（开启逐轮预览时优先使用；提交时写入缓存 TXT）"),
+        preview_prompt_file: Schema.string().role("filepicker", { type: "file" }).description("预览词 TXT 文件 / Caption TXT（未填上方提示词时使用；fingerprint fixed at submission）"),
+        preview_width: Schema.number().role("number", { integer: true }).min(16).max(2048).step(16).default(1024).description("预览宽度 / Preview width"),
+        preview_height: Schema.number().role("number", { integer: true }).min(16).max(2048).step(16).default(1024).description("预览高度 / Preview height"),
+        preview_steps: Schema.number().role("number", { integer: true }).min(1).max(100).step(1).default(30).description("预览采样步数 / Preview denoising steps"),
+        preview_seed: Schema.number().role("number", { integer: true }).min(0).step(1).default(42).description("固定预览种子 / Same seed for all epochs"),
+    }).description("逐轮预览 / Epoch previews"),
     Schema.object({
         grad_checkpointing: Schema.boolean().default(true).description("梯度检查点 / Per-block activation checkpointing to reduce VRAM use"),
         blocks_to_swap: Schema.number().role("number", { integer: true }).min(-1).max(40).step(1).default(0).description("CPU 交换块数 / DiT blocks swapped to CPU: -1 = auto from free VRAM, 0 = disabled, 1–40 = explicit blocks (at least two blocks remain resident)"),

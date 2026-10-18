@@ -570,6 +570,81 @@ def test_comfy_rejects_stripped_text_prefix_and_sharded_dit(configured):
     assert "单文件" in run_preflight(payload, rt)["errors"][0] or "single" in run_preflight(payload, rt)["errors"][0].lower()
 
 
+def test_fused_qkv_headers_accepted_and_split_state(configured):
+    from mikazuki.engines.moss.comfy import (
+        assert_dit_headers,
+        fused_qkv_transformer_shapes,
+        split_fused_qkv_state,
+        validate_comfy_components,
+    )
+
+    class _Chunkable:
+        def __init__(self, rows):
+            self._rows = rows
+            self.shape = (len(rows), len(rows[0]) if rows else 0)
+            self.ndim = 2
+
+        def chunk(self, parts, dim=0):
+            assert dim == 0 and parts == 3 and len(self._rows) % 3 == 0
+            step = len(self._rows) // 3
+            return tuple(_Chunkable(self._rows[i * step:(i + 1) * step]) for i in range(3))
+
+        def contiguous(self):
+            return self
+
+        def __eq__(self, other):
+            return isinstance(other, _Chunkable) and self._rows == other._rows
+
+    rt, _config = configured
+    comfy = _comfy_flat_files(rt)
+    dit = rt.project_root / "models/moss_comfy/dit.safetensors"
+    sparse_tensors(dit, fused_qkv_transformer_shapes())
+    headers, _ = tensor_header(dit)
+    assert assert_dit_headers(headers, "dit_path") == "fused_qkv"
+    facts = validate_comfy_components(
+        {
+            "dit_path": str(dit),
+            "text_encoder_path": str(rt.project_root / comfy["text_encoder_path"]),
+            "vae_path": str(rt.project_root / comfy["vae_path"]),
+            "tokenizer_path": str(rt.project_root / comfy["tokenizer_path"]),
+        },
+        model="base",
+        needs_text=True,
+        needs_vae=True,
+    )
+    assert facts["dit_layout"] == "fused_qkv"
+    assert facts["dit_remap"]
+
+    base_rows = [[i, i + 1, i + 2, i + 3] for i in range(12)]
+    base = _Chunkable(base_rows)
+    fused = {f"layers.{i}.proj.qkv.weight": base for i in range(42)}
+    remapped = split_fused_qkv_state(fused)
+    assert "layers.0.proj.qkv.weight" not in remapped
+    assert remapped["layers.0.proj.q.weight"].shape == (4, 4)
+    assert remapped["layers.0.proj.q.weight"] == _Chunkable(base_rows[:4])
+    assert remapped["layers.0.proj.k.weight"] == _Chunkable(base_rows[4:8])
+    assert remapped["layers.0.proj.v.weight"] == _Chunkable(base_rows[8:])
+    assert len([k for k in remapped if k.endswith(".q.weight")]) == 42
+
+
+def test_preview_prompt_text_materializes_caption_file(configured):
+    rt, config = configured
+    adapted = adapt_config(
+        {
+            **config,
+            "preview_every_epochs": 1,
+            "preview_prompt": "a custom moss preview",
+            "preview_prompt_file": "",
+            "blocks_to_swap": 0,
+        },
+        rt,
+    )
+    prompt = Path(adapted.train["preview_prompt_file"])
+    assert prompt.is_file()
+    assert prompt.read_text(encoding="utf-8").strip() == "a custom moss preview"
+    assert adapted.train["preview_caption_sha256"]
+
+
 def test_comfy_dry_run_and_cache_identity_bind_source_files(configured, monkeypatch):
     from fastapi.testclient import TestClient
     from mikazuki.app.application import app

@@ -18,7 +18,7 @@ TARGETS = r"layers\.\d+\.proj\.(q|k|v|o|ffn_up_gate|ffn_down)"
 TRAIN_DEFAULTS = {
     "model": "base", "epochs": 8, "max_steps": 0, "rank": 16,
     "batch_size": 1, "preview_every_epochs": 0, "preview_prompt_file": "",
-    "preview_width": 1024, "preview_height": 1024, "preview_steps": 30, "preview_seed": 42,
+    "preview_width": 1024, "preview_height": 1024, "preview_steps": 30, "preview_seed": 42,  # preview_prompt is UI-only
     "lr": 1e-4, "warmup_ratio": 0.05, "save_every_epochs": 0,
     "caption_dropout": 0.0, "lora_dtype": "bf16", "targets": TARGETS,
     "sigma_mu": -1.09, "sigma_s": 0.95, "sigma_cutoff": 0.95,
@@ -35,7 +35,7 @@ UI_FIELDS = {
     "model_train_type", "gpu_ids", "src", "model_dir", "cache_dir",
     "output_dir", "output_name", "run_preprocess", "overwrite_cache",
     "model_input_mode", "dit_path", "text_encoder_path", "vae_path",
-    "tokenizer_path", "sft_dit_path",
+    "tokenizer_path", "sft_dit_path", "preview_prompt",
 }
 INT_BOUNDS = {
     "epochs": (0, None), "max_steps": (0, None), "rank": (1, 3072),
@@ -208,19 +208,36 @@ def adapt_config(config, runtime):
             raise ValueError("preview_every_epochs: previews currently require blocks_to_swap=0")
         if train["preview_width"] % 16 or train["preview_height"] % 16:
             raise ValueError("preview_width/height must be multiples of 16")
-        prompt_file = absolute(train["preview_prompt_file"], runtime.project_root)
-        if not train["preview_prompt_file"] or not prompt_file.is_file() or prompt_file.suffix.lower() != ".txt":
-            raise ValueError("preview_prompt_file: choose a local caption TXT")
-        raw = prompt_file.read_bytes()
-        if not raw.decode("utf-8").strip():
-            raise ValueError("preview_prompt_file: caption is empty")
-        train["preview_prompt_file"] = str(prompt_file)
-        train["preview_caption_sha256"] = hashlib.sha256(raw).hexdigest()
+        prompt_text = str(config.get("preview_prompt") or "").strip()
+        if prompt_text:
+            prompt_dir = runtime.project_root / ".cache" / "moss" / "preview-prompts"
+            prompt_dir.mkdir(parents=True, exist_ok=True)
+            digest = hashlib.sha256(prompt_text.encode("utf-8")).hexdigest()[:16]
+            prompt_file = prompt_dir / f"{digest}.txt"
+            payload = prompt_text if prompt_text.endswith("\n") else prompt_text + "\n"
+            if not prompt_file.is_file() or prompt_file.read_text(encoding="utf-8") != payload:
+                prompt_file.write_text(payload, encoding="utf-8")
+            train["preview_prompt_file"] = str(prompt_file.resolve())
+            train["preview_caption_sha256"] = hashlib.sha256(payload.encode("utf-8")).hexdigest()
+        else:
+            prompt_file = absolute(train["preview_prompt_file"], runtime.project_root)
+            if not train["preview_prompt_file"] or not prompt_file.is_file() or prompt_file.suffix.lower() != ".txt":
+                raise ValueError(
+                    "preview_prompt / preview_prompt_file: enter a preview caption or choose a local TXT / "
+                    "请填写预览提示词或选择 TXT 文件"
+                )
+            raw = prompt_file.read_bytes()
+            if not raw.decode("utf-8").strip():
+                raise ValueError("preview_prompt_file: caption is empty")
+            train["preview_prompt_file"] = str(prompt_file)
+            train["preview_caption_sha256"] = hashlib.sha256(raw).hexdigest()
     warnings = ["MOSS upstream is alpha; use matching MOSS model weights. / MOSS 上游为 alpha，请使用对应的 MOSS 模型权重。"]
     if mode == "comfyui_files":
         warnings.append(
-            "Comfy files are staged into a native Diffusers layout (hardlink/symlink/copy); weights are not rewritten. / "
-            "Comfy 单文件会物化为原生 Diffusers 目录（优先硬链/符号链接），不改写权重。"
+            "Comfy files are staged into a native Diffusers layout (hardlink/symlink/copy); "
+            "Comfy-Org fused qkv DiT is split to q/k/v once in the staging tree. / "
+            "Comfy 单文件会物化为原生 Diffusers 目录（优先硬链/符号链接）；"
+            "Comfy-Org 融合 qkv 的 DiT 会在物化时拆成 q/k/v。"
         )
     if train["epochs"] and train["max_steps"]:
         warnings.append("max_steps caps epochs × shape-bucket batches; partial tails are retained. / 步数上限截断轮数 × 同形状批次数，保留尾批。")

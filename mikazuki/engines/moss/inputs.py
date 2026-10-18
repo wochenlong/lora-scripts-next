@@ -189,7 +189,10 @@ def validate_models(adapted):
             resolved["sft_dit_path"] = facts["sft_dit_path"]
         staging = materialize_comfy_layout(resolved, model=adapted.train["model"], staging_root=Path(adapted.train["model_dir"]))
         facts["model_dir"] = str(staging)
-        facts["staging"] = "hardlink/symlink/copy into native Diffusers layout"
+        if facts.get("dit_layout") == "fused_qkv":
+            facts["staging"] = "remap fused qkv → q/k/v into native Diffusers layout"
+        else:
+            facts["staging"] = "hardlink/symlink/copy into native Diffusers layout"
         return facts
 
     model_dir = Path(adapted.train["model_dir"])
