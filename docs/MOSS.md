@@ -1,121 +1,147 @@
-# MOSS-Image LoRA（实验性）
+# MOSS-Image LoRA 训练指南（实验性）
 
-Next Trainer 通过 **MOSS (anima_lora)** 引擎接入 MOSS-Image Base/SFT 的原生“预缓存 → LoRA 训练”流程。MOSS-Image 是独立模型，不能套用 Anima 的模型、缓存、LoRA 或训练配置。
+Next Trainer 通过 **MOSS (anima_lora)** 引擎接入 MOSS-Image Base/SFT 的「预缓存 → LoRA 训练」流程。MOSS-Image 是独立模型，不能套用 Anima / Kohya / AI Toolkit 的模型、缓存或配置。
 
-**当前验收为 CPU/模拟测试；浏览器渲染检查尚待完成，也未进行真实环境安装、GPU 训练或导出 LoRA 的 ComfyUI 加载验收。** 上游为 alpha；不要据此假定某张显卡的显存需求或训练质量已经得到保证。
+**过渡说明**：当前训练实现钉住上游 `anima_lora` 的 `moss_lora` 分支，运行环境在 `extensions/moss/`。后续可能迁到 Next 专用引擎；前端 schema、preflight、任务队列与输出契约保持不变。
 
-## 1. 安装与选择
+本机已做过原生目录与 Comfy 单文件（BF16、原生键名）的短训冒烟；ComfyUI 侧 LoRA 回载、浏览器渲染验收仍可后续补丁。上游为 alpha，不保证某张卡的显存上限或成片质量。
 
-1. 在“设置 → 训练引擎”中安装 **MOSS (anima_lora)**，或在训练页选中 MOSS-Image 后使用安装按钮。
-2. 安装日志及进度使用训练器现有任务系统；环境审计通过后才显示“就绪”。
-3. 训练页选择 **模型：MOSS-Image；引擎：MOSS (anima_lora)；目标：LoRA**。
+## 1. 安装引擎
 
-安装器需要可用的 Git、uv 与网络，使用训练器的下载源/网络设置。计划支持 Linux x86_64/aarch64、Windows x86_64 和支持 BF16 的 NVIDIA CUDA GPU；实际平台安装仍待验收。
+1. 在「设置 → 训练引擎」安装 **MOSS (anima_lora)**，或在训练页选中 MOSS-Image 后点安装。
+2. 安装走统一任务系统与下载源设置（Git / uv / 网络）；审计通过后显示「就绪」。
+3. 训练页：**模型 = MOSS-Image；引擎 = MOSS (anima_lora)；目标 = LoRA**。
 
-环境独立保存在 `extensions/moss/`：`source/` 为钉版源码，`.python/` 为托管 Python 3.13，`.venv/` 为依赖环境。当前计划使用 PyTorch 2.14.1 / CUDA 13.2、Transformers 5.16.1；不往 Kohya、Anima Fast 或 GUI Python 中安装训练依赖，也不执行上游整个项目的 `uv sync`。**安装引擎不会下载模型权重。**
+环境目录：`extensions/moss/`（`source/` 钉版源码、`.python/`、`.venv/`）。计划依赖：Python 3.13、PyTorch 2.14.1+cu132、Transformers 5.16.1。不往 GUI / Kohya / Anima Fast 环境装训练依赖，也不执行上游整仓 `uv sync`。**安装引擎不会下载模型权重。**
 
-修复会重建该引擎的 `source/`、`.python/`、`.venv/`；卸载会移除整个 `extensions/moss/`。请把模型、数据集、缓存、输出保存在该扩展目录之外。正在运行或排队的 MOSS 任务会阻止安装、修复和卸载。
+修复会重建该引擎的 `source/`、`.python/`、`.venv/`；卸载删除整个 `extensions/moss/`。模型、数据集、缓存、输出请放在扩展目录外。运行中或排队的 MOSS 任务会阻止安装/修复/卸载。
 
-## 2. 模型输入：原生目录或 Comfy 单文件
+## 2. 选哪种模型格式？
 
-`model_input_mode` 二选一：
+| `model_input_mode` | 适用 | 磁盘要点 |
+|---|---|---|
+| `native_directory`（默认） | [OpenMOSS Diffusers 仓库](https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base) | **支持分片**，无需合并成单文件 |
+| `comfyui_files` | Comfy 风格单文件 + tokenizer 目录 | 每个组件一个 `.safetensors`；物化优先硬链，一般不额外占一整份 |
 
-| 模式 | 说明 |
-|---|---|
-| `native_directory`（默认） | 官方 Diffusers 父目录（见下） |
-| `comfyui_files` | Comfy 风格：DiT / TE / VAE 各一个 `.safetensors` + tokenizer 目录 |
+有官方 Diffusers 目录时优先用原生模式，不必为了 Comfy 模式去合并分片。  
+[Comfy-Org/MOSS-Image](https://huggingface.co/Comfy-Org/MOSS-Image) 提供 DiT/VAE 单文件；其 TE 常见为 int8/GPTQ，**当前训练入口拒绝量化权重**。Comfy 模式请准备 **BF16 且保留 `language_model.*` 前缀** 的文本编码器（可用 OpenMOSS Base 里的 TE 单文件或自行合并后的 BF16 TE）。
 
-### 2.1 原生目录（`native_directory`）
+## 3. 原生目录格式（`native_directory`）
 
-`model_dir` 选择同时容纳各版本的**父目录**，不是直接选择 `transformer/` 或某个权重文件。例如：
+`model_dir` 选**父目录**（同时容纳 Base / 可选 SFT），不要直接选 `transformer/`：
 
 ```text
 sd-models/moss-image/             ← model_dir
 ├── MOSS-Image-Base/
-│   ├── transformer/             # config.json + 原生权重/完整分片及索引
-│   ├── text_encoder/            # Qwen3.5-9B 原生目录
-│   ├── vae/                     # FLUX.2 VAE 原生目录
-│   └── tokenizer/               # tokenizer 配置和 chat template
-└── MOSS-Image-SFT/               # 可选，仅 model=sft 时需要
+│   ├── transformer/             # config.json + 权重或分片+index
+│   ├── text_encoder/
+│   ├── vae/
+│   └── tokenizer/
+└── MOSS-Image-SFT/               # 仅 model=sft
     └── transformer/
 ```
 
-模型来源：[OpenMOSS-Team/MOSS-Image-Base](https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base)、[OpenMOSS-Team/MOSS-Image-SFT](https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT)。保留仓库原有配置、权重文件名、索引及分片；`model=sft` 仍使用 **Base** 的文本编码器、VAE 和 tokenizer。
+来源：[MOSS-Image-Base](https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base)、[MOSS-Image-SFT](https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT)。`model=sft` 仍用 Base 的 TE / VAE / tokenizer。
 
-### 2.2 Comfy 单文件（`comfyui_files`）
-
-上游 `from_pretrained` 只认原生目录。适配层在预检/提交时把 Comfy 文件**物化**为 `.cache/moss/comfy-layout/<摘要>/` 下的原生布局（优先硬链，其次符号链接，最后复制），**不改写权重、不做键名重映射**。
-
-需要填写：
-
-- `dit_path`：MOSS transformer 单文件（键名/尺寸与原生一致；**不支持**分片 `*.index.json`，请先合并）
-- `text_encoder_path`：Qwen3.5 单文件，必须保留 `language_model.*` 前缀（去掉前缀的纯文本导出会拒绝）
-- `vae_path`：FLUX.2 VAE 单文件
-- `tokenizer_path`：含 `tokenizer.json`、`tokenizer_config.json` 与 MOSS chat template 的目录
-- `sft_dit_path`：仅 `model=sft` 时必填；TE/VAE/tokenizer 仍用上面的 Base 组件
-
-不支持量化权重。预检只读 safetensors 头部与本地 JSON，不等于已经 GPU 加载。ComfyUI 侧导出的 LoRA 回载验收仍待真机完成。
-
-路径均指训练服务所在机器；相对路径以 Next Trainer 项目根目录解析。
-
-## 3. 数据集与缓存
-
-- `src`：PNG/JPEG/WebP 图片与同名 UTF-8 `.txt`，可包含子目录。无需 Kohya 的重复次数目录；每个图片文件按一个样本处理。
-- `run_preprocess=true`（默认）：先运行 MOSS 文本/latent 缓存，再检查缓存，最后训练。
-- `cache_dir` 留空：按数据集路径、模型路径和缓存参数分配 `.cache/moss/<摘要>/`。
-- `run_preprocess=false`：使用现有缓存，必须明确填写 `cache_dir`；表单不提交 `src`。
-- `resolution` 是像素面积上限的平方边长。例如 1024 约为 1024² 像素；保持长宽比、不放大小图，编码尺寸对齐 16。此入口接受 16–4096 的整数面积上限；上游对实际编码宽高对齐 16，不要求这个上限为 16 的倍数。
-- `overwrite_cache=false`（默认）：复用有效缓存。`vae_dtype=fp32`、`max_text_tokens=4096` 为默认缓存参数。
-
-不要混用其他引擎缓存。原生缓存包括 `*.moss_te.safetensors`、`*_宽x高.moss_latent.safetensors`；训练器另写 `.next-moss-cache.json` 绑定模型路径、辅助模型文件状态和缓存设置。修改模型/标注/设置、删除样本或出现旧缓存残留时，请优先使用新缓存目录。来源未知的外部缓存即使通过形状检查，也不能证明使用了正确模型和标注。
-
-`caption_dropout>0` 可能额外生成 `_empty.moss_te.safetensors`。已有空提示词缓存来源未知、模型改变或需覆盖时，必须换新缓存目录。`_empty` 为保留样本名。启用 `save_crops` 时，缓存目录不能放在 `src` 内。
-
-## 4. 参数与输出
-
-页面直接使用上游参数：`epochs`、`max_steps`、`rank`、`alpha`、`lr`、`warmup_ratio`、`caption_dropout`、`lora_dtype`、`targets`、`sigma_*`、`max_grad_norm`、`grad_checkpointing`、`blocks_to_swap`、`compile`、`log_every`、`seed` 等。它们不转换为 Kohya `network_*`、优化器参数或 Anima 方法配置。
-
-主要默认值：8 epochs、rank 16、AdamW `lr=0.0001`、warmup 0.05、alpha 留空则使用 rank、LoRA 保存 BF16、梯度检查点开启、`blocks_to_swap=0`、`compile=false`。上游默认启用 compile，本入口为更安全的首次启动显式关闭；Windows 当前拒绝开启 compile。
-
-- **单 GPU、固定 batch size 1**；没有多卡、batch size 或 repeats 参数。
-- `max_steps=0` 时由 epochs 决定。两者均大于 0 时，步数为 `min(epochs × 样本数, max_steps)`；`epochs=0` 时必须设置正的 `max_steps`。
-- `blocks_to_swap=-1` 自动估计，0 关闭，手动范围 1–40；42 个块至少保留两个在设备侧。自动模式也不保证显存一定足够。
-- `save_every_epochs=0` 只保存最终结果。
-
-训练器只做必要的共享表单适配：`cache_dir` → 缓存入口的 `out` / 训练入口的 `cache`，`overwrite_cache` → `overwrite`，`output_dir` + `output_name` → 原生 `output` 路径；GPU 选择用于单卡进程环境。
-
-输出为 `<output_name>.safetensors` 和同名 `.json` 训练报告；周期保存为 `<output_name>_eN.safetensors`。名称不能包含目录分隔符；填写 `.safetensors` 后缀时不会重复添加。已存在的最终文件、报告、周期文件以及排队任务保留的同名空间都会阻止覆盖，请换一个输出名称。
-
-当前不支持断点续训、加载已有 LoRA 继续训练、全量微调、训练中采样预览、图像编辑训练或量化模型训练。任务页读取原生进度/loss 日志，不把其他引擎的预览图当作 MOSS 结果。LoRA 在其他工具中的加载兼容性仍待真实验证。
-
-## 5. 只检查，不启动训练
-
-`POST /api/engines/moss/dry-run` 接收与表单相同的 JSON，返回解析后的 cache/train 参数、计划命令、输入检查结果及 `training_started=false`。它不要求安装完成，不下载模型、不创建训练任务，但要求指定的本地模型和数据/缓存有效。
-
-```sh
-curl -X POST http://127.0.0.1:28000/api/engines/moss/dry-run \
-  -H 'Content-Type: application/json' --data-binary @moss-config.json
-```
-
-最小 `moss-config.json` 示例（路径换成你的真实目录）：
+### 原生模式最小配置示例
 
 ```json
 {
   "model_train_type": "moss-image-lora",
+  "model_input_mode": "native_directory",
   "model_dir": "sd-models/moss-image",
   "model": "base",
   "src": "train/moss-image",
   "output_dir": "output/moss",
   "output_name": "my-moss-lora",
   "run_preprocess": true,
+  "epochs": 0,
+  "max_steps": 50,
   "compile": false
 }
 ```
 
-`POST /api/engines/moss/install` 加 `{"dry_run":true}` 只返回安装计划。训练提交前的 `/api/engines/moss/preflight` 还会检查已安装环境和 CUDA 可用性；成功也不代表已经验证训练效果。只有正常提交 `/api/run` 才会创建实际训练任务。
+## 4. Comfy 单文件格式（`comfyui_files`）
 
-## 来源与验收范围
+上游 loader 只认 Diffusers 目录。适配层在预检/提交时把单文件**物化**到 `.cache/moss/comfy-layout/<摘要>/`（硬链 → 符号链接 → 复制），**当前不做键名重写**；键名/尺寸须与原生一致。
 
-集成钉住 [`sorryhyun/anima_lora` 的 `moss_lora` 分支](https://github.com/sorryhyun/anima_lora/tree/moss_lora)，提交 [`1df6181fcea45926932fb63d5924f6f3dfd7c7d0`](https://github.com/sorryhyun/anima_lora/commit/1df6181fcea45926932fb63d5924f6f3dfd7c7d0)。原生接口见该提交的 [requests.py](https://github.com/sorryhyun/anima_lora/blob/1df6181fcea45926932fb63d5924f6f3dfd7c7d0/library/moss/requests.py) 和 [MOSS 说明](https://github.com/sorryhyun/anima_lora/blob/1df6181fcea45926932fb63d5924f6f3dfd7c7d0/docs/experimental/moss_lora.md)。升级分支并不会自动替换钉版。
+| 字段 | 内容 |
+|---|---|
+| `dit_path` | DiT `.safetensors`（或恰好含一个未分片权重的目录） |
+| `text_encoder_path` | Qwen3.5 BF16，键名以 `language_model.*` 开头 |
+| `vae_path` | FLUX.2 VAE `.safetensors` |
+| `tokenizer_path` | 含 `tokenizer.json`、`tokenizer_config.json`、MOSS chat template |
+| `sft_dit_path` | 仅 `model=sft` 时必填 |
 
-已覆盖表单序列化、原生参数解析、头部/缓存校验、导入导出、真实 API 到模拟任务边界、模拟安装状态、取消与恢复。测试没有下载权重、安装训练依赖或执行 GPU 训练。官方模型元数据来源、可复现轻量测试及仍需完成的实机验收见 [FIELD_NOTES](../mikazuki/engines/moss/FIELD_NOTES.md)。
+不支持：分片 `*.safetensors.index.json`、去掉前缀的纯文本 TE、int8/GPTQ 等量化权重。
+
+推荐布局示例（与 ComfyUI models 习惯接近）：
+
+```text
+sd-models/moss-image-comfy/
+├── diffusion_models/moss_image_base_bf16.safetensors   → dit_path
+├── text_encoders/<bf16-qwen-with-language_model>.safetensors
+├── vae/flux2-vae.safetensors
+└── tokenizer/   # 可从 OpenMOSS Base 复制
+```
+
+### Comfy 模式最小配置示例
+
+```json
+{
+  "model_train_type": "moss-image-lora",
+  "model_input_mode": "comfyui_files",
+  "model": "base",
+  "dit_path": "sd-models/moss-image-comfy/diffusion_models/moss_image_base_bf16.safetensors",
+  "text_encoder_path": "sd-models/moss-image-comfy/text_encoders/text_encoder.safetensors",
+  "vae_path": "sd-models/moss-image-comfy/vae/flux2-vae.safetensors",
+  "tokenizer_path": "sd-models/moss-image-comfy/tokenizer",
+  "src": "train/moss-image",
+  "output_dir": "output/moss",
+  "output_name": "my-moss-comfy-lora",
+  "run_preprocess": true,
+  "epochs": 0,
+  "max_steps": 50,
+  "compile": false
+}
+```
+
+## 5. 数据集与缓存
+
+- `src`：PNG/JPEG/WebP + 同名 UTF-8 `.txt`，可含子目录；无需 Kohya「重复次数_概念」目录。
+- `run_preprocess=true`（默认）：先缓存文本 embedding 与 VAE latent，再训练。
+- `cache_dir` 留空：自动分配 `.cache/moss/<摘要>/`。
+- `run_preprocess=false`：必须填已有完整缓存的 `cache_dir`，且不要混用其他引擎缓存。
+- `resolution`：像素面积上限的平方边长（如 1024 ≈ 1024²），保持比例、不放大小图，编码边长对齐 16。
+
+缓存文件：`*.moss_te.safetensors`、`*_宽x高.moss_latent.safetensors`，外加 `.next-moss-cache.json` 绑定模型与参数。改模型/标注/参数或缓存污染时换新目录。`caption_dropout>0` 可能生成 `_empty.moss_te.safetensors`。
+
+## 6. 推荐训练步骤
+
+1. 安装并等到 MOSS 引擎「就绪」。
+2. 准备模型（第三节或第四节）与数据集（第五节）。
+3. 训练页选好模式与路径；短训可设 `epochs=0`、`max_steps=50`、`compile=false`。
+4. 先 **dry-run / preflight**，确认 `model_format` 为 `native-diffusers` 或 `comfyui_files` 且无错误。
+5. 提交训练；任务页看原生 progress/loss。
+6. 输出：`<output_name>.safetensors` + 同名 `.json`；周期保存 `<output_name>_eN.safetensors`。
+
+### API dry-run
+
+```sh
+curl -X POST http://127.0.0.1:28000/api/engines/moss/dry-run \
+  -H 'Content-Type: application/json' --data-binary @moss-config.json
+```
+
+成功时 `training_started=false`，并返回解析后的 cache/train 与计划命令。只有 `/api/run` 会真正入队。
+
+## 7. 参数与限制（摘要）
+
+常用原生参数：`epochs`、`max_steps`、`rank`、`alpha`、`lr`、`warmup_ratio`、`caption_dropout`、`lora_dtype`、`targets`、`sigma_*`、`max_grad_norm`、`grad_checkpointing`、`blocks_to_swap`、`compile`、`log_every`、`seed`。
+
+默认倾向：8 epochs、rank 16、`lr=1e-4`、warmup 0.05、LoRA BF16、梯度检查点开、`blocks_to_swap=0`、`compile=false`（Windows 拒绝 compile）。**单卡**；无多卡 / repeats。
+
+当前不支持：断点续训、加载已有 LoRA 续训、全量微调、量化模型训练、图像编辑训练。预览相关能力仍受限。
+
+## 8. 来源
+
+钉版上游：[`sorryhyun/anima_lora` @ `moss_lora`](https://github.com/sorryhyun/anima_lora/tree/moss_lora)，提交 [`1df6181fcea45926932fb63d5924f6f3dfd7c7d0`](https://github.com/sorryhyun/anima_lora/commit/1df6181fcea45926932fb63d5924f6f3dfd7c7d0)。接口见该提交的 `library/moss/requests.py` 与上游 MOSS 说明。升级分支不会自动替换钉版。
