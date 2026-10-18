@@ -146,6 +146,29 @@ def add_moss_image_training_arguments(parser: argparse.ArgumentParser):
     # torch.compile (per-block compilation, Triton required) and CUDA performance switches
     compile_utils.add_compile_arguments(parser)
 
+    # Timestep visualization (upstream library/args.py). Our older train_util.add_dit_training_arguments
+    # does not register these yet; moss_image_train_network.py reads args.show_timesteps at startup.
+    parser.add_argument(
+        "--show_timesteps",
+        type=str,
+        default=None,
+        choices=["console", "image"],
+        help="visualize sampled timestep distribution and loss weighting, then exit "
+        "/ タイムステップ分布を可視化して終了",
+    )
+    parser.add_argument(
+        "--show_timesteps_resolution",
+        type=str,
+        default="1024",
+        help="image resolution assumed by --show_timesteps (H or H,W) / --show_timesteps の想定解像度",
+    )
+    parser.add_argument(
+        "--show_timesteps_offset",
+        type=float,
+        default=0.0,
+        help="timestep sampling offset for --show_timesteps / --show_timesteps のオフセット",
+    )
+
 
 # endregion
 

@@ -57,6 +57,7 @@ def load_safetensors_with_lora_and_fp8(
     exclude_keys: Optional[List[str]] = None,
     disable_numpy_memmap: bool = False,
     weight_transform_hooks: Optional[WeightTransformHooks] = None,
+    quantizer=None,
 ) -> dict[str, torch.Tensor]:
     """
     Merge LoRA weights into the state dict of a model with fp8 optimization if needed.
@@ -73,6 +74,7 @@ def load_safetensors_with_lora_and_fp8(
         exclude_keys (Optional[List[str]]): Keys to exclude from optimization.
         disable_numpy_memmap (bool): Whether to disable numpy memmap when loading safetensors.
         weight_transform_hooks (Optional[WeightTransformHooks]): Hooks for transforming weights during loading.
+        quantizer: Optional streaming quantizer such as ConvRotInt8Quantizer. Mutually exclusive with fp8_optimization.
     """
 
     # if the file name ends with 00001-of-00004 etc, we need to load the files with the same prefix
@@ -218,6 +220,7 @@ def load_safetensors_with_lora_and_fp8(
         weight_hook=weight_hook,
         disable_numpy_memmap=disable_numpy_memmap,
         weight_transform_hooks=weight_transform_hooks,
+        quantizer=quantizer,
     )
 
     for lora_weight_keys in list_of_lora_weight_keys:
@@ -241,10 +244,22 @@ def load_safetensors_with_fp8_optimization_and_hook(
     weight_hook: callable = None,
     disable_numpy_memmap: bool = False,
     weight_transform_hooks: Optional[WeightTransformHooks] = None,
+    quantizer=None,
 ) -> dict[str, torch.Tensor]:
     """
     Load state dict from safetensors files and merge LoRA weights into the state dict with fp8 optimization if needed.
     """
+    if quantizer is not None:
+        assert not fp8_optimization, "quantizer and fp8_optimization are mutually exclusive"
+        logger.info(f"Loading state dict with {type(quantizer).__name__}. Hook enabled: {weight_hook is not None}")
+        return quantizer.load_and_quantize(
+            model_files,
+            calc_device,
+            move_to_device=move_to_device,
+            weight_hook=weight_hook,
+            disable_numpy_memmap=disable_numpy_memmap,
+            weight_transform_hooks=weight_transform_hooks,
+        )
     if fp8_optimization:
         logger.info(
             f"Loading state dict with FP8 optimization. Dtype of weight: {dit_weight_dtype}, hook enabled: {weight_hook is not None}"
