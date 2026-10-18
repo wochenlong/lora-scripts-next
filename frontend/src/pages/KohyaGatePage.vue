@@ -83,17 +83,30 @@ async function refresh(reportError = true) {
   }
 }
 
-async function install(forceReinstall = false) {
+async function runAction(kind: "install" | "repair" | "reinstall") {
   try {
-    await ElMessageBox.confirm(
-      forceReinstall ? t("settings.engines.confirm.reinstall") : t("settings.engines.confirm.install.kohya"),
-      forceReinstall ? t("settings.engines.actions.reinstall") : t("settings.engines.actions.install"),
-      { type: "warning" },
-    )
+    const confirmKey =
+      kind === "reinstall"
+        ? "settings.engines.confirm.reinstall"
+        : kind === "repair"
+          ? "settings.engines.confirm.repair"
+          : "settings.engines.confirm.install.kohya"
+    const titleKey =
+      kind === "reinstall"
+        ? "settings.engines.actions.reinstall"
+        : kind === "repair"
+          ? "settings.engines.actions.repair"
+          : "settings.engines.actions.install"
+    await ElMessageBox.confirm(t(confirmKey), t(titleKey), { type: "warning" })
     loading.value = true
     logs.value = []
     progress.value = 0
-    const data = forceReinstall ? await enginesApi.repair("kohya") : await enginesApi.install("kohya")
+    const data =
+      kind === "reinstall"
+        ? await enginesApi.reinstall("kohya")
+        : kind === "repair"
+          ? await enginesApi.repair("kohya")
+          : await enginesApi.install("kohya")
     if (data.alreadyReady) {
       status.value = data.status || status.value
       if (ready.value) stopPolling()
@@ -153,10 +166,12 @@ onBeforeUnmount(() => {
         :title="label"
         :hint="hint"
         :loading="loading"
-        :show-install="!working"
+        :show-install="status.state !== 'broken' && !working"
+        :show-repair="status.state === 'broken'"
         :show-reinstall="status.state === 'broken'"
-        @install="install(false)"
-        @reinstall="install(true)"
+        @install="runAction('install')"
+        @repair="runAction('repair')"
+        @reinstall="runAction('reinstall')"
       />
       <section class="fast-intro">
         <span v-if="!bare" class="eyebrow">KOHYA SD-SCRIPTS RUNTIME</span>
@@ -167,10 +182,32 @@ onBeforeUnmount(() => {
           <strong>{{ status.state }}</strong>
         </div>
         <div class="fast-actions">
-          <button class="primary-action" :disabled="loading || working" @click="install(false)">
+          <!-- broken: primary Repair; secondary full reinstall. Install only when missing. -->
+          <button
+            v-if="status.state === 'broken'"
+            class="primary-action"
+            data-testid="kohya-repair"
+            :disabled="loading || working"
+            @click="runAction('repair')"
+          >
+            {{ t("settings.engines.actions.repair") }}
+          </button>
+          <button
+            v-else
+            class="primary-action"
+            :disabled="loading || working"
+            @click="runAction('install')"
+          >
             {{ working ? t("kohyaGate.installWorking") : t("kohyaGate.install") }}
           </button>
-          <button v-if="status.state === 'broken'" class="secondary-action" :disabled="loading" @click="install(true)">
+          <button
+            v-if="status.state === 'broken'"
+            type="button"
+            class="secondary-action"
+            data-testid="kohya-reinstall"
+            :disabled="loading || working"
+            @click="runAction('reinstall')"
+          >
             {{ t("settings.engines.actions.reinstall") }}
           </button>
           <RouterLink class="secondary-action" to="/settings/engines">{{ t("settings.engines.actions.manage") }}</RouterLink>

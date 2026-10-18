@@ -486,7 +486,17 @@ type="button" class="engine-drag-handle" draggable="true"
         <div class="engine-row-actions">
           <template v-if="isManaged(card.engine.id)">
             <button
-              v-if="card.status.state === 'ready' || card.status.state === 'broken' || card.status.state === 'installed_unverified'"
+              v-if="card.status.state === 'broken'"
+              type="button"
+              class="primary-action engine-primary"
+              data-testid="engine-repair"
+              :disabled="loadingId === card.engine.id || card.status.diagnosis?.code === 'host_no_gpu'"
+              @click="install(card.engine.id, 'repair')"
+            >
+              {{ t("settings.engines.actions.repair") }}
+            </button>
+            <button
+              v-else-if="card.status.state === 'ready' || card.status.state === 'installed_unverified'"
               type="button"
               class="secondary-action engine-primary"
               :disabled="loadingId === card.engine.id"
@@ -515,10 +525,10 @@ type="button" class="engine-drag-handle" draggable="true"
                 <button type="button" @click="refresh()">{{ t("settings.engines.actions.refresh") }}</button>
                 <button type="button" role="menuitem" :disabled="!runtimePath(card.status)" @click="copyPath(card.status)">{{ t("settings.engines.actions.copyPath") }}</button>
                 <button
-                  v-if="card.engine.id === 'diffsynth'"
+                  v-if="card.status.state === 'broken'"
                   type="button"
                   role="menuitem"
-                  :disabled="loadingId === card.engine.id || card.status.state !== 'broken' || card.status.diagnosis?.code === 'host_no_gpu'"
+                  :disabled="loadingId === card.engine.id || card.status.diagnosis?.code === 'host_no_gpu'"
                   @click="install(card.engine.id, 'repair')"
                 >
                   {{ t("settings.engines.actions.repair") }}
@@ -527,7 +537,7 @@ type="button" class="engine-drag-handle" draggable="true"
                   type="button"
                   role="menuitem"
                   :disabled="loadingId === card.engine.id || !['broken', 'installed_unverified', 'ready'].includes(card.status.state)"
-                  @click="install(card.engine.id, ['diffsynth', 'moss'].includes(card.engine.id) ? 'reinstall' : 'repair')"
+                  @click="install(card.engine.id, 'reinstall')"
                 >
                   {{ t("settings.engines.actions.reinstall") }}
                 </button>
@@ -584,6 +594,25 @@ type="button" class="engine-more-btn" data-page="next" :disabled="page === pageC
             <span>{{ t("settings.engines.meta.path") }}</span>
             <code>{{ runtimePath(manageCard.status) }}</code>
           </p>
+          <div v-if="manageCard.status.state === 'broken'" class="fast-actions" style="margin: 0.75rem 0">
+            <button
+              type="button"
+              class="primary-action"
+              data-testid="manage-repair"
+              :disabled="loadingId === manageCard.engine.id || manageCard.status.diagnosis?.code === 'host_no_gpu'"
+              @click="install(manageCard.engine.id, 'repair')"
+            >
+              {{ t("settings.engines.actions.repair") }}
+            </button>
+            <button
+              type="button"
+              class="secondary-action"
+              :disabled="loadingId === manageCard.engine.id"
+              @click="install(manageCard.engine.id, 'reinstall')"
+            >
+              {{ t("settings.engines.actions.reinstall") }}
+            </button>
+          </div>
           <div class="engine-console">
             <header>
               <span>{{ phase || t("settings.engines.console.idle") }}</span>
