@@ -7,9 +7,16 @@ import { collectDatasetCheckTargets } from "./datasetCheck"
 import { TRAINING_ENGINES, TRAINING_MODELS, isEngineSupported, moduleForTrainType, recommendedEngineFor, resolveModule } from "./modules"
 import { engineDefinition } from "../engines/catalog"
 
-const source = readFileSync(resolve(process.cwd(), "../mikazuki/schema/moss-image-lora.ts"), "utf8")
-const schema = executeSchemaSources([{ name: "moss-image-lora", hash: "test", schema: source }], "moss-image-lora")
+const source = readFileSync(resolve(process.cwd(), "../mikazuki/schema/moss-image-anima-lora.ts"), "utf8")
+const schema = executeSchemaSources([{ name: "moss-image-anima-lora", hash: "test", schema: source }], "moss-image-anima-lora")
 const defaults = createDefaultModel(schema)
+const kohyaSource = readFileSync(resolve(process.cwd(), "../mikazuki/schema/moss-image-lora.ts"), "utf8")
+const sharedSource = readFileSync(resolve(process.cwd(), "../mikazuki/schema/shared.ts"), "utf8")
+const kohyaSchema = executeSchemaSources([
+  { name: "shared", hash: "test-shared", schema: sharedSource },
+  { name: "moss-image-lora", hash: "test-kohya", schema: kohyaSource },
+], "moss-image-lora")
+const kohyaDefaults = createDefaultModel(kohyaSchema)
 
 function output(overrides = {}) {
   return buildTrainingConfig(serializeModel(schema, { ...defaults, ...overrides }), schema.name)
@@ -29,7 +36,7 @@ describe("MOSS native training schema", () => {
 
   it("uses native MOSS fields and conservative defaults through the actual serializer", () => {
     expect(output()).toMatchObject({
-      model_train_type: "moss-image-lora", model_input_mode: "native_directory",
+      model_train_type: "moss-image-anima-lora", model_input_mode: "native_directory",
       model_dir: "./sd-models/moss-image", model: "base",
       src: "./train/moss-image", resolution: 1024, run_preprocess: true, overwrite_cache: false,
       output_dir: "./output/moss", output_name: "moss-image-lora", epochs: 8, max_steps: 0,
@@ -81,7 +88,7 @@ describe("MOSS native training schema", () => {
       expect(config).not.toHaveProperty(key)
     }
     expect(collectDatasetCheckTargets(config)).toEqual(["/数据/图片"])
-    expect(buildTrainingConfig({ model_train_type: "anima-lora-fast", rank: 8 }, schema.name).model_train_type).toBe("moss-image-lora")
+    expect(buildTrainingConfig({ model_train_type: "anima-lora-fast", rank: 8 }, schema.name).model_train_type).toBe("moss-image-anima-lora")
   })
 
   it("switches between preprocessing and existing-cache mode without leaking the source", () => {
@@ -137,14 +144,38 @@ describe("MOSS native training schema", () => {
   })
 })
 
+describe("MOSS Kohya training schema", () => {
+  it("keeps dataset early, .txt captions, cached outputs and textarea previews", () => {
+    expect(kohyaDefaults).toMatchObject({
+      model_train_type: "moss-image-lora",
+      train_data_dir: "./train/moss-image",
+      network_module: "networks.lora_generic",
+      network_train_unet_only: true,
+      caption_extension: ".txt",
+      cache_latents: true,
+      cache_latents_to_disk: true,
+      cache_text_encoder_outputs: true,
+      cache_text_encoder_outputs_to_disk: true,
+    })
+    const datasetIndex = kohyaSchema.sections.findIndex(section => section.title === "数据集设置")
+    const saveIndex = kohyaSchema.sections.findIndex(section => section.title === "保存设置")
+    expect(datasetIndex).toBeGreaterThanOrEqual(0)
+    expect(datasetIndex).toBeLessThan(saveIndex)
+    expect(kohyaSchema.sections.flatMap(section => section.fields).find(field => field.key === "positive_prompts")?.role).toBe("textarea")
+    expect(kohyaSchema.sections.flatMap(section => section.fields).some(field => field.key === "fp8_base")).toBe(false)
+  })
+})
+
 describe("MOSS module and runtime catalog", () => {
-  it("supports only MOSS-Image LoRA, separate from Anima and all other engines", () => {
-    expect(resolveModule("moss-image", "moss", "lora")?.schemaName).toBe("moss-image-lora")
+  it("prefers Kohya while retaining the anima_lora engine", () => {
+    expect(resolveModule("moss-image", "kohya", "lora")?.schemaName).toBe("moss-image-lora")
+    expect(resolveModule("moss-image", "moss", "lora")?.schemaName).toBe("moss-image-anima-lora")
     expect(resolveModule("moss-image", "moss", "finetune")).toBeUndefined()
-    expect(moduleForTrainType("moss-image-lora")?.engine).toBe("moss")
+    expect(moduleForTrainType("moss-image-lora")?.engine).toBe("kohya")
+    expect(moduleForTrainType("moss-image-anima-lora")?.engine).toBe("moss")
     for (const model of TRAINING_MODELS) expect(isEngineSupported(model, "moss")).toBe(model === "moss-image")
-    for (const engine of TRAINING_ENGINES) expect(isEngineSupported("moss-image", engine)).toBe(engine === "moss")
-    expect(recommendedEngineFor("moss-image")).toBe("moss")
+    for (const engine of TRAINING_ENGINES) expect(isEngineSupported("moss-image", engine)).toBe(["kohya", "moss"].includes(engine))
+    expect(recommendedEngineFor("moss-image")).toBe("kohya")
     expect(engineDefinition("moss")).toMatchObject({ kind: "optional", managesRuntime: true, requiresGpu: true })
   })
 })

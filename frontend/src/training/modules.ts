@@ -1,8 +1,10 @@
 import type { FormModel } from "../schema/adapter"
 
-export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2" | "ideogram4" | "klein" | "qwen-image-21"
-export type TrainingEngine = "kohya" | "anima-fast" | "musubi" | "ai-toolkit" | "diffsynth"
+export type TrainingModel = "anima" | "sd15" | "sdxl" | "flux" | "lumina" | "krea2" | "ideogram4" | "klein" | "qwen-image-21" | "moss-image"
+export type TrainingEngine = "kohya" | "anima-fast" | "musubi" | "ai-toolkit" | "diffsynth" | "moss"
 export type TrainingTarget = "lora" | "finetune"
+/** Beginner-facing use-case chips that map to a recommended base model. */
+export type TrainingScenario = "anime" | "general" | "edit" | "explore"
 
 export interface TrainingModule {
   model: TrainingModel
@@ -17,9 +19,31 @@ export interface TrainingModule {
   legacyStorageKey?: string
 }
 
-export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2", "ideogram4", "klein", "qwen-image-21"]
-export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth"]
+export const TRAINING_MODELS: readonly TrainingModel[] = ["anima", "sd15", "sdxl", "flux", "lumina", "krea2", "ideogram4", "klein", "qwen-image-21", "moss-image"]
+export const TRAINING_ENGINES: readonly TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"]
 export const TRAINING_TARGETS: readonly TrainingTarget[] = ["lora", "finetune"]
+
+/** Scenario → model. Order is the beginner decision path on the training page. */
+export const TRAINING_SCENARIOS: readonly { id: TrainingScenario; model: TrainingModel }[] = [
+  { id: "anime", model: "anima" },
+  { id: "general", model: "krea2" },
+  { id: "edit", model: "klein" },
+  { id: "explore", model: "qwen-image-21" },
+]
+
+/** Model dropdown order: scenario recommendations first, then other families.
+ * Lumina is omitted — almost unused; deep links via ?model=lumina still work. */
+export const MODEL_PICKER_ORDER: readonly TrainingModel[] = [
+  "anima",
+  "krea2",
+  "klein",
+  "qwen-image-21",
+  "moss-image",
+  "ideogram4",
+  "flux",
+  "sdxl",
+  "sd15",
+]
 
 export const DEFAULT_SELECTION: { model: TrainingModel; engine: TrainingEngine; target: TrainingTarget } = {
   model: "anima",
@@ -27,10 +51,22 @@ export const DEFAULT_SELECTION: { model: TrainingModel; engine: TrainingEngine; 
   target: "lora",
 }
 
+export function scenarioForModel(model: TrainingModel): TrainingScenario | undefined {
+  return TRAINING_SCENARIOS.find((item) => item.model === model)?.id
+}
+
+export function modelForScenario(scenario: TrainingScenario): TrainingModel {
+  const match = TRAINING_SCENARIOS.find((item) => item.id === scenario)
+  if (!match) throw new Error(`unknown training scenario: ${scenario}`)
+  return match.model
+}
+
 // NOTE: sdxl entries intentionally precede sd15 ones so moduleForSchema()
 // resolves shared schemas (lora-master, dreambooth) to the sdxl module,
 // matching the previous single-SD default (schema default was sdxl-lora).
 export const TRAINING_MODULES: readonly TrainingModule[] = [
+  { model: "moss-image", engine: "kohya", target: "lora", schemaName: "moss-image-lora" },
+  { model: "moss-image", engine: "moss", target: "lora", schemaName: "moss-image-anima-lora" },
   { model: "qwen-image-21", engine: "diffsynth", target: "lora", schemaName: "qwen-image-21-lora" },
   { model: "anima", engine: "kohya", target: "lora", schemaName: "sd3-lora" },
   { model: "anima", engine: "anima-fast", target: "lora", schemaName: "anima-lora-fast" },
@@ -55,6 +91,8 @@ export const TRAINING_MODULES: readonly TrainingModule[] = [
 ]
 
 export const SCHEMA_META: Record<string, { titleKey: string; areaKey: string }> = {
+  "moss-image-lora": { titleKey: "training.schemas.moss-image-lora.title", areaKey: "training.schemas.moss-image-lora.area" },
+  "moss-image-anima-lora": { titleKey: "training.schemas.moss-image-anima-lora.title", areaKey: "training.schemas.moss-image-anima-lora.area" },
   "ai-toolkit-sdxl-lora": { titleKey: "training.schemas.ai-toolkit-sdxl-lora.title", areaKey: "training.schemas.ai-toolkit-sdxl-lora.area" },
   "ai-toolkit-sd15-lora": { titleKey: "training.schemas.ai-toolkit-sd15-lora.title", areaKey: "training.schemas.ai-toolkit-sd15-lora.area" },
   "ai-toolkit-ideogram4-lora": { titleKey: "training.schemas.ai-toolkit-ideogram4-lora.title", areaKey: "training.schemas.ai-toolkit-ideogram4-lora.area" },
@@ -112,8 +150,71 @@ export function isTargetSupported(model: TrainingModel, engine: TrainingEngine, 
   return Boolean(resolveModule(model, engine, target))
 }
 
+/**
+ * Preferred engines per model, best-first. Auto-select walks this list and
+ * skips engines that are not installed yet (see recommendedEngineFor).
+ *
+ * Anima: Fast first, Kohya fallback so users without Fast never land on an
+ * install gate by default.
+ */
+export const ENGINE_PREFERENCE: Readonly<Record<TrainingModel, readonly TrainingEngine[]>> = {
+  anima: ["anima-fast", "kohya"],
+  sd15: ["kohya", "ai-toolkit"],
+  sdxl: ["kohya", "ai-toolkit"],
+  flux: ["kohya", "ai-toolkit"],
+  lumina: ["kohya"],
+  krea2: ["musubi", "ai-toolkit"],
+  ideogram4: ["musubi", "ai-toolkit"],
+  klein: ["ai-toolkit"],
+  "qwen-image-21": ["diffsynth", "ai-toolkit"],
+  "moss-image": ["kohya", "moss"],
+}
+
+/** Ideal (first-choice) engine for a model, ignoring install state. */
+export function idealEngineFor(model: TrainingModel): TrainingEngine | undefined {
+  return enginePreferenceOrder(model)[0]
+}
+
+export function enginePreferenceOrder(model: TrainingModel): TrainingEngine[] {
+  const preferred = ENGINE_PREFERENCE[model] ?? []
+  const supported = preferred.filter((engine) => isEngineSupported(model, engine))
+  if (supported.length) return supported
+  const fromModules = TRAINING_MODULES.filter((module) => module.model === model)
+  const fallback = (fromModules.find((module) => module.target === "lora") ?? fromModules[0])?.engine
+  return fallback ? [fallback] : []
+}
+
+/** Runtime states safe to auto-enter without forcing an install flow. */
+export function isEngineReadyForAutoSelect(state: string | undefined): boolean {
+  return state === "ready" || state === "installed_unverified"
+}
+
+/**
+ * Product-recommended engine for a model.
+ *
+ * - With availability: first preferred engine that is ready; if none are ready,
+ *   fall back through the preference list (Anima → Kohya when Fast is missing).
+ * - Without availability (cold start / status unknown): use a safe entry —
+ *   Anima uses Kohya so users do not open an uninstalled Fast gate; others use
+ *   the ideal first preference.
+ */
+export function recommendedEngineFor(
+  model: TrainingModel,
+  isAvailable?: (engine: TrainingEngine) => boolean,
+): TrainingEngine | undefined {
+  const order = enginePreferenceOrder(model)
+  if (!order.length) return undefined
+  if (isAvailable) {
+    return order.find((engine) => isAvailable(engine)) ?? order[order.length - 1]
+  }
+  // Cold start: Anima must not enter Fast before we know it is installed.
+  if (model === "anima") return order.includes("kohya") ? "kohya" : order[0]
+  return order[0]
+}
+
 export function firstSupportedEngine(model: TrainingModel): TrainingEngine | undefined {
-  return TRAINING_ENGINES.find((engine) => isEngineSupported(model, engine))
+  return recommendedEngineFor(model)
+    ?? TRAINING_ENGINES.find((engine) => isEngineSupported(model, engine))
 }
 
 export function firstSupportedTarget(model: TrainingModel, engine: TrainingEngine): TrainingTarget | undefined {

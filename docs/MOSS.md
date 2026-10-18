@@ -2,13 +2,16 @@
 
 ## 1. 是什么
 
-Next Trainer 通过独立引擎 **MOSS (anima_lora)** 训练 **MOSS-Image** 的 LoRA（流程：预缓存文本/VAE → 训 DiT LoRA）。
+Next Trainer 提供两条 **MOSS-Image LoRA** 路径：
 
-- MOSS-Image 是独立模型家族，**不能**套用 Anima / Kohya / AI Toolkit 的模型、缓存或配置。
+- **Kohya（推荐、默认）**：使用内置 `sd-scripts` 的原生 MOSS trainer，功能和维护路径更稳定。
+- **MOSS (anima_lora)**：保留为独立运行时的备选方案（流程：预缓存文本/VAE → 训 DiT LoRA）。
+
+MOSS-Image 是独立模型家族，不能套用 Anima / AI Toolkit 的模型、缓存或配置；两种 MOSS 引擎的配置和缓存也不能混用。
 - 运行环境在 `extensions/moss/`（钉住上游 [`sorryhyun/anima_lora` @ `moss_lora`](https://github.com/sorryhyun/anima_lora/tree/moss_lora)），与 Anima Fast 分离。
 - 上游为 alpha：不保证每张卡的显存上限或成片质量；ComfyUI 侧 LoRA 回载验收可后续补丁。
 
-训练页选择：**模型 = MOSS-Image；引擎 = MOSS (anima_lora)；目标 = LoRA**。
+训练页默认选择：**模型 = MOSS-Image；引擎 = Kohya；目标 = LoRA**。需要原有流程时可手动切换到 **MOSS (anima_lora)**。
 
 ## 2. 要提前下载什么模型
 
@@ -85,14 +88,32 @@ PNG / JPEG / WebP + 同名 `.txt`，可含子目录；**无需** Kohya「重复�
 
 ## 4. 怎么训练
 
-### 4.1 安装引擎
+### 4.1 Kohya（推荐）
+
+在「设置 → 训练引擎」安装或**修复 Kohya**，然后在训练页选择 MOSS-Image / Kohya / LoRA。此次 MOSS 支持将 Kohya 环境升级为 Transformers 5.17.0、Diffusers 0.40.0、Accelerate 1.15.0；已有 Kohya 环境必须执行一次“修复”才能使用。
+
+模型路径填写规则：
+
+- `pretrained_model_name_or_path`：MOSS DiT 单文件；Diffusers 分片格式请选择第一个 shard（例如 `diffusion_pytorch_model-00001-of-00004.safetensors`）。
+- `text_encoder`：Qwen3.5-9B 单文件；分片格式同样选择第一个 shard。
+- `vae`：FLUX.2 VAE safetensors。
+- `tokenizer_cache_dir`：包含 MOSS chat template 的 tokenizer 目录。
+- 数据集使用 Kohya 目录结构，caption 默认并推荐 `.txt`；数据集设置在保存设置之前。
+
+默认启用 latent 与文本编码器输出的磁盘缓存，并只训练 DiT LoRA（`networks.lora_generic`）。预览提示词可直接在预览区文本框填写，提交时转换为 `sample_prompts` 文件。
+
+ConvRot INT8 可分别用于 DiT（`convrot_int8`）和文本编码器（`convrot_int8_text_encoder`）以降低基础权重显存。无 Triton 时可回退但更慢；`convrot_int8_bwd=int8` 则必须有 Triton/CUDA。MOSS 不支持 `fp8_base`。
+
+### 4.2 MOSS (anima_lora) 备选引擎
+
+#### 安装引擎
 
 1. 「设置 → 训练引擎」安装 **MOSS (anima_lora)**，或在训练页选中 MOSS-Image 后点安装。  
 2. 走统一任务系统与下载源设置；审计通过后显示「就绪」。  
 3. 环境：`extensions/moss/`（`source/`、`.python/`、`.venv/`）。计划依赖 Python 3.13、PyTorch 2.14.1+cu132、Transformers 5.16.1。  
 4. 修复会重建该引擎三目录；卸载删除整个 `extensions/moss/`。运行中或排队的 MOSS 任务会阻止安装/修复/卸载。
 
-### 4.2 训练页填写顺序（建议）
+#### 训练页填写顺序（建议）
 
 1. **模型**：`base` / `sft`；`model_input_mode` = 原生或 Comfy。  
 2. **数据集与预缓存**（`src` 已排在分辨率等选项之前）：填数据集目录；`cache_dir` 可留空（自动 `.cache/moss/<摘要>/`）。  
@@ -100,7 +121,7 @@ PNG / JPEG / WebP + 同名 `.txt`，可含子目录；**无需** Kohya「重复�
 4. **训练与 LoRA**：短训可用 `epochs=0`、`max_steps=50`、`compile=false`。  
 5. **逐轮预览（可选）**：`preview_every_epochs ≥ 1` 时，在 **`preview_prompt` 文本框**直接写提示词（也可用 `preview_prompt_file`；**文本优先**）。预览仍要求 `blocks_to_swap=0`。
 
-### 4.3 提交前检查
+#### 提交前检查
 
 - 用界面「校验 / 检查数据」，或 API dry-run（不会真正开训）：
 
@@ -112,13 +133,13 @@ curl -X POST http://127.0.0.1:28000/api/engines/moss/dry-run \
 - 成功时 `training_started=false`；`model_format` 为 `native-diffusers` 或 `comfyui_files`。Comfy-Org DiT 可为 `dit_layout=fused_qkv`。  
 - 只有 `/api/run`（或界面「开始训练」）会入队。首次物化融合 qkv 的 DiT 可能多花几分钟。
 
-### 4.4 配置示例
+#### 配置示例
 
 原生：
 
 ```json
 {
-  "model_train_type": "moss-image-lora",
+  "model_train_type": "moss-image-anima-lora",
   "model_input_mode": "native_directory",
   "model_dir": "sd-models/moss-image",
   "model": "base",
@@ -136,7 +157,7 @@ Comfy（含 Comfy-Org BF16 DiT）：
 
 ```json
 {
-  "model_train_type": "moss-image-lora",
+  "model_train_type": "moss-image-anima-lora",
   "model_input_mode": "comfyui_files",
   "model": "base",
   "dit_path": "sd-models/moss-image-comfy/diffusion_models/moss_image_base_bf16.safetensors",
@@ -155,7 +176,7 @@ Comfy（含 Comfy-Org BF16 DiT）：
 }
 ```
 
-### 4.5 训练中与产出
+#### 训练中与产出
 
 - 任务页看 progress / loss。  
 - 默认倾向：8 epochs、rank 16、`lr=1e-4`、warmup 0.05、LoRA BF16、梯度检查点开、`blocks_to_swap=0`、`compile=false`（Windows 拒绝 compile）。**单卡**；无多卡 / repeats。  

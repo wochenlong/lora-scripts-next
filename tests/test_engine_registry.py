@@ -30,7 +30,8 @@ def test_train_type_mapping():
     assert mapping["lumina-lora"] == ("kohya", "lumina")
     assert mapping["klein-4b-lora"] == ("ai-toolkit", "klein-4b")
     assert mapping["klein-9b-lora"] == ("ai-toolkit", "klein-9b")
-    assert mapping["moss-image-lora"] == ("moss", "moss-image")
+    assert mapping["moss-image-lora"] == ("kohya", "moss-image")
+    assert mapping["moss-image-anima-lora"] == ("moss", "moss-image")
 
 
 def test_resolve_train_type_roundtrip():

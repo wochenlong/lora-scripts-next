@@ -23,7 +23,7 @@ let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
 const { t } = useI18n()
-const meta = SCHEMA_META["moss-image-lora"]
+const meta = SCHEMA_META["moss-image-anima-lora"]
 const title = computed(() => t(meta.titleKey))
 const area = computed(() => t(meta.areaKey))
 const ready = computed(() => status.value.featureEnabled && status.value.state === "ready")
@@ -163,7 +163,7 @@ onBeforeUnmount(() => {
     v-if="ready"
     :title="title"
     :area="area"
-    schema-name="moss-image-lora"
+    schema-name="moss-image-anima-lora"
     :bare="bare"
   >
     <template #form-top>

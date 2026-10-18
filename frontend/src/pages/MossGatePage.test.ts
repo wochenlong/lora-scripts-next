@@ -57,7 +57,7 @@ describe("MOSS runtime gate", () => {
     const wrapper = mountPage()
     await flushPromises()
     expect(enginesApi.status).toHaveBeenCalledWith("moss")
-    expect(wrapper.get(".training-page-stub").attributes("data-schema")).toBe("moss-image-lora")
+    expect(wrapper.get(".training-page-stub").attributes("data-schema")).toBe("moss-image-anima-lora")
     expect(wrapper.find('[data-testid="engine-ready-chip"]').exists()).toBe(true)
     expect(vi.getTimerCount()).toBe(0)
   })

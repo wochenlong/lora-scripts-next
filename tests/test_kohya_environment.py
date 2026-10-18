@@ -7,6 +7,17 @@ def test_kohya_training_environment_includes_scipy():
     assert any(item == "scipy" or item.startswith("scipy=") for item in TRAINING_DEPS)
 
 
+def test_kohya_training_environment_includes_moss_compatible_stack():
+    from mikazuki.engines.kohya.environment import TRAINING_DEPS
+
+    assert "accelerate==1.15.0" in TRAINING_DEPS
+    assert "transformers==5.17.0" in TRAINING_DEPS
+    assert "diffusers[torch]==0.40.0" in TRAINING_DEPS
+    assert "safetensors==0.8.0" in TRAINING_DEPS
+    assert "huggingface-hub==1.32.0" in TRAINING_DEPS
+    assert "tokenizers==0.22.2" in TRAINING_DEPS
+
+
 def test_kohya_install_plan_installs_scipy(tmp_path):
     from mikazuki.download_sources import DownloadSources
     from mikazuki.engines.kohya.environment import install_commands

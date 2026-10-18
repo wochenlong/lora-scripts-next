@@ -36,6 +36,7 @@ TRAINER_MAPPING = {
     "flux-lora": "./scripts/dev/flux_train_network.py",
     "flux-finetune": "./scripts/dev/flux_train.py",
     "lumina-lora": "./scripts/dev/lumina_train_network.py",
+    "moss-image-lora": "./scripts/dev/moss_image_train_network.py",
 }
 
 
@@ -50,6 +51,16 @@ def handle_run(config: dict, ctx: RunContext):
 
     model_train_type = ctx.model_train_type
     toml_file = os.path.join(ctx.autosave_dir, f"{ctx.timestamp}.toml")
+    is_moss_image = model_train_type == "moss-image-lora"
+
+    if is_moss_image:
+        config.setdefault("network_module", "networks.lora_generic")
+        config.setdefault("network_train_unet_only", True)
+        config.setdefault("caption_extension", ".txt")
+        config.setdefault("cache_latents", True)
+        config.setdefault("cache_latents_to_disk", True)
+        config.setdefault("cache_text_encoder_outputs", True)
+        config.setdefault("cache_text_encoder_outputs_to_disk", True)
 
     train_data_dir = str(config.get("train_data_dir") or "").strip()
     if not train_data_dir:
@@ -60,6 +71,21 @@ def handle_run(config: dict, ctx: RunContext):
     if not pretrained_model:
         return _missing_standard_train_field("pretrained_model_name_or_path", "底模路径")
     config["pretrained_model_name_or_path"] = pretrained_model
+
+    if is_moss_image:
+        for field, label in (
+            ("text_encoder", "Qwen3.5 文本编码器路径"),
+            ("vae", "FLUX.2 VAE 路径"),
+            ("tokenizer_cache_dir", "Tokenizer 目录"),
+        ):
+            value = str(config.get(field) or "").strip()
+            if not value:
+                return _missing_standard_train_field(field, label)
+            if not os.path.exists(value):
+                return APIResponseFail(message=f"{label}不存在：{value}")
+            config[field] = value
+        if not os.path.exists(pretrained_model):
+            return APIResponseFail(message=f"MOSS-Image DiT 路径不存在：{pretrained_model}")
 
     suggest_cpu_threads = 8 if len(train_utils.get_total_images(train_data_dir, limit=200)) >= 200 else 2
     trainer_file = TRAINER_MAPPING[model_train_type]
@@ -83,9 +109,10 @@ def handle_run(config: dict, ctx: RunContext):
         if not dataset_ok:
             return APIResponseFail(message=dataset_message)
 
-    validated, message = train_utils.validate_model(pretrained_model, model_train_type)
-    if not validated:
-        return APIResponseFail(message=message)
+    if not is_moss_image:
+        validated, message = train_utils.validate_model(pretrained_model, model_train_type)
+        if not validated:
+            return APIResponseFail(message=message)
 
     if "prompt_file" in config and config["prompt_file"].strip() != "":
         prompt_file = config["prompt_file"].strip()

@@ -82,7 +82,7 @@ _PATH_FIELDS = {
     "pretrained_model_name_or_path", "vae", "qwen3", "llm_adapter_path",
     "t5_tokenizer_path", "resume", "train_data_dir", "reg_data_dir",
     "output_dir", "logging_dir", "network_weights", "sample_prompts",
-    "dit", "text_encoder", "turbo_dit",
+    "dit", "text_encoder", "turbo_dit", "tokenizer_cache_dir",
 }
 
 

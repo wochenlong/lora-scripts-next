@@ -146,8 +146,12 @@ TRAIN_TYPE_ALIASES = {
 
 PAGE_SPECS: dict[str, dict[str, Any]] = {
     "moss-image-lora": {
-        "label": "MOSS-Image LoRA", "path": "/training?model=moss-image&engine=moss&target=lora",
+        "label": "MOSS-Image LoRA (Kohya)", "path": "/training?model=moss-image&engine=kohya&target=lora",
         "accepted": frozenset({"moss-image-lora"}), "default_train_type": "moss-image-lora",
+    },
+    "moss-image-anima-lora": {
+        "label": "MOSS-Image LoRA (anima_lora)", "path": "/training?model=moss-image&engine=moss&target=lora",
+        "accepted": frozenset({"moss-image-anima-lora"}), "default_train_type": "moss-image-anima-lora",
     },
     "qwen-image-21-lora": {
         "label": "Qwen-Image-2.1 LoRA", "path": "/training?model=qwen-image-21&engine=diffsynth&target=lora",
@@ -228,7 +232,8 @@ PAGE_SPECS: dict[str, dict[str, Any]] = {
 }
 
 TRAIN_TYPE_TARGETS: dict[str, dict[str, str]] = {
-    "moss-image-lora": {"path": "/training?model=moss-image&engine=moss&target=lora", "label": "MOSS-Image LoRA"},
+    "moss-image-lora": {"path": "/training?model=moss-image&engine=kohya&target=lora", "label": "MOSS-Image LoRA (Kohya)"},
+    "moss-image-anima-lora": {"path": "/training?model=moss-image&engine=moss&target=lora", "label": "MOSS-Image LoRA (anima_lora)"},
     "qwen-image-21-lora": {"path": "/training?model=qwen-image-21&engine=diffsynth&target=lora", "label": "Qwen-Image-2.1 LoRA"},
     "anima-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "sd3-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},

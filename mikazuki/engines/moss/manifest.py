@@ -2,7 +2,7 @@
 
 ENGINE_ID = "moss"
 KIND = "plugin"
-TRAIN_TYPES = {"moss-image-lora": "moss-image"}
+TRAIN_TYPES = {"moss-image-anima-lora": "moss-image"}
 UPSTREAM = {
     "repo": "sorryhyun/anima_lora",
     "branch": "moss_lora",

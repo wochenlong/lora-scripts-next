@@ -1,5 +1,5 @@
 {
-  "model_train_type": "moss-image-lora",
+  "model_train_type": "moss-image-anima-lora",
   "model_input_mode": "native_directory",
   "model_dir": "models/moss_image",
   "model": "base",
