@@ -66,6 +66,39 @@ describe("dynamic schema adapter", () => {
     expect(modeFields[0].options).toEqual(["sd-lora", "sdxl-lora"])
   })
 
+  it("gates a branch on a required union of values without eating the enum field", () => {
+    const multiSources = [{
+      name: "multi",
+      hash: "multi",
+      schema: `Schema.intersect([
+        Schema.object({
+          batching: Schema.union(['tokens', 'tokens_ffd', 'count']).default('tokens'),
+          sampler: Schema.union(['euler', 'k_euler']).default('euler'),
+        }),
+        Schema.union([
+          Schema.object({ batching: Schema.const('count').required(), batch_size: Schema.number().default(4) }),
+          Schema.object({ batching: Schema.union(['tokens', 'tokens_ffd']).required(), max_tokens: Schema.number().default(8192) }),
+        ]),
+      ])`,
+    }]
+    const schema = executeSchemaSources(multiSources, "multi")
+    const keys = schema.sections.flatMap((section) => section.fields).map((field) => field.key)
+    // A defaulted enum stays an ordinary dropdown, it is not consumed as a discriminator.
+    expect(keys).toContain("sampler")
+    expect(keys).toContain("batching")
+
+    const model = createDefaultModel(schema)
+    expect(serializeModel(schema, model)).toMatchObject({ batching: "tokens", max_tokens: 8192 })
+    expect(serializeModel(schema, model)).not.toHaveProperty("batch_size")
+
+    model.batching = "tokens_ffd"
+    expect(serializeModel(schema, model)).toMatchObject({ batching: "tokens_ffd", max_tokens: 8192 })
+
+    model.batching = "count"
+    expect(serializeModel(schema, model)).toMatchObject({ batching: "count", batch_size: 4 })
+    expect(serializeModel(schema, model)).not.toHaveProperty("max_tokens")
+  })
+
   it("serializes hidden const fields instead of treating them as discriminators", () => {
     const conditionalSources = [{
       name: "conditional",

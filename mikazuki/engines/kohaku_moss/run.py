@@ -18,7 +18,7 @@ from .settings import runtime
 def build_dry_run(config, rt):
     try:
         adapted = adapt_config(config, rt)
-        preflight = check_inputs(adapted)
+        preflight = check_inputs(adapted, materialize=False)
         spec = build_launch_spec(rt, "<generated-config>", config.get("gpu_ids"))
         return {
             **preflight,
@@ -38,7 +38,7 @@ def handle_run(config, ctx):
         assert_idle(maintenance_only=True)
         check_runtime(rt)
         adapted = adapt_config(config, rt)
-        preflight = check_inputs(adapted)
+        preflight = check_inputs(adapted, materialize=True)
         if not preflight["ok"]:
             raise ValueError("; ".join(preflight["errors"]))
         run_id = f"{ctx.timestamp}-kohaku-moss-{uuid.uuid4().hex[:8]}"

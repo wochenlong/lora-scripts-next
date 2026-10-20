@@ -1,6 +1,7 @@
 import json
 import hashlib
 import os
+from pathlib import Path
 import subprocess
 import threading
 
@@ -17,9 +18,12 @@ FINGERPRINT_MAX_HASH_BYTES = 8 * 1024 * 1024
 
 # Serialize missing-state recovery so concurrent status polls only audit once.
 _missing_state_lock = threading.Lock()
+_fingerprint_cache: dict[str, tuple[float, int, str]] = {}
+_FINGERPRINT_TTL_SEC = 5.0
 
 
 def write_state(runtime, state, facts=None, reason=""):
+    _fingerprint_cache.pop(str(runtime.root), None)
     runtime.root.mkdir(parents=True, exist_ok=True)
     temporary = runtime.state_file.with_suffix(".tmp")
     temporary.write_text(
@@ -47,6 +51,46 @@ def _fingerprint_entry(path, runtime):
     return [identity, stat.st_size, "sha256", digest.hexdigest()]
 
 
+def _venv_dist_info_files(venv: Path, filename: str) -> list[Path]:
+    """Locate ``*.dist-info/<filename>`` without walking every package directory."""
+    found: set[Path] = set()
+    for pattern in (
+        f"Lib/site-packages/*.dist-info/{filename}",
+        f"Lib/site-packages/setuptools/_vendor/*.dist-info/{filename}",
+        f"lib/python*/site-packages/*.dist-info/{filename}",
+        f"lib/python*/site-packages/setuptools/_vendor/*.dist-info/{filename}",
+        f"lib/*.dist-info/{filename}",
+        f"*.dist-info/{filename}",
+    ):
+        found.update(venv.glob(pattern))
+    return sorted(found)
+
+
+def _git_head(source_dir: Path) -> str:
+    dot_git = source_dir / ".git"
+    try:
+        if dot_git.is_file():
+            gitdir = dot_git.read_text(encoding="utf-8").strip()
+            if gitdir.startswith("gitdir:"):
+                dot_git = (source_dir / gitdir.split(":", 1)[1].strip()).resolve()
+        head_file = dot_git / "HEAD"
+        if head_file.is_file():
+            head = head_file.read_text(encoding="utf-8").strip()
+            if not head.startswith("ref:"):
+                return head
+            ref_name = head.split(":", 1)[1].strip()
+            ref_file = dot_git / ref_name
+            if ref_file.is_file():
+                return ref_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
+    return subprocess.run(
+        ["git", "-C", str(source_dir), "rev-parse", "HEAD"],
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+
+
 def fingerprint(runtime):
     """Content-based fingerprint of the runtime (#410).
 
@@ -57,17 +101,13 @@ def fingerprint(runtime):
     """
     files = [runtime.python, runtime.source / TRAIN_SCRIPT, runtime.source / "pyproject.toml"]
     files += sorted(runtime.source.glob("diffsynth/**/*.py"))
-    files += sorted((runtime.root / ".venv").glob("**/*.dist-info/METADATA"))
+    files += _venv_dist_info_files(runtime.root / ".venv", "METADATA")
     entries = []
     for path in files:
         if not path.is_file() and not path.is_symlink():
             continue
         entries.append(_fingerprint_entry(path, runtime))
-    head = subprocess.run(
-        ["git", "-C", str(runtime.source), "rev-parse", "HEAD"],
-        capture_output=True,
-        text=True,
-    ).stdout.strip()
+    head = _git_head(runtime.source)
     return hashlib.sha256(json.dumps([FINGERPRINT_SCHEME, head, entries]).encode()).hexdigest()
 
 
@@ -145,6 +185,22 @@ def _load_or_recover_state(runtime, *, audit_fn=None):
         return recover_missing_state(runtime, audit_fn=audit_fn)
 
 
+def _cached_fingerprint(runtime):
+    import time
+    key = str(runtime.root)
+    try:
+        state_mtime = runtime.state_file.stat().st_mtime_ns
+    except OSError:
+        state_mtime = 0
+    hit = _fingerprint_cache.get(key)
+    now = time.monotonic()
+    if hit and hit[1] == state_mtime and (now - hit[0]) < _FINGERPRINT_TTL_SEC:
+        return hit[2]
+    value = fingerprint(runtime)
+    _fingerprint_cache[key] = (now, state_mtime, value)
+    return value
+
+
 def read_status(runtime, *, audit_fn=None):
     data = _load_or_recover_state(runtime, audit_fn=audit_fn)
     if data["state"] in {"installing", "auditing"}:
@@ -157,7 +213,7 @@ def read_status(runtime, *, audit_fn=None):
         data.update(state="broken", reason="训练入口或独立 Python 缺失，请修复环境。")
     if data["state"] == "ready":
         stored = data["facts"].get("fingerprint")
-        current = fingerprint(runtime)
+        current = _cached_fingerprint(runtime)
         if stored is None or data["facts"].get("fingerprint_scheme") != FINGERPRINT_SCHEME:
             # Legacy state (no scheme / size+mtime hash): its hash cannot be compared
             # with the content scheme, and the mtime rewrites this issue is about are

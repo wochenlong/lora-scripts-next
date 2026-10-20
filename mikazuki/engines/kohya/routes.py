@@ -10,7 +10,8 @@ from .preflight import check_runtime
 
 
 async def status():
-    data = read_status(runtime())
+    import asyncio
+    data = await asyncio.to_thread(read_status, runtime())
     data["train_types"] = sorted(TRAIN_TYPES)
     return APIResponseSuccess(data=data)
 

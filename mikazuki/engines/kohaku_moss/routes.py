@@ -7,7 +7,8 @@ from .settings import feature_enabled, runtime
 
 
 async def status():
-    return APIResponseSuccess(data=read_status(runtime()))
+    import asyncio
+    return APIResponseSuccess(data=await asyncio.to_thread(read_status, runtime()))
 
 
 async def install(payload, force_install=False):

@@ -151,7 +151,58 @@ function readCarryOver(): FormModel {
   } catch { return {} }
 }
 
-function migrateQwenDraft(model: FormModel) {
+function migrateQwenDraft(model: FormModel, defaults?: FormModel) {
+  if (props.schemaName === "kohaku-moss-image-lora" && defaults) {
+    if (!String(model.sample_prompts ?? "").trim() && defaults.sample_prompts) {
+      model.sample_prompts = defaults.sample_prompts
+    }
+    if (!String(model.sample_negative ?? "").trim() && defaults.sample_negative) {
+      model.sample_negative = defaults.sample_negative
+    }
+    if (model.latent_cache === "offline" && !String(model.cache_dir ?? "").trim()) {
+      model.latent_cache = defaults.latent_cache ?? "online"
+    }
+    if (model.text_cache === "offline" && !String(model.cache_dir ?? "").trim()) {
+      model.text_cache = defaults.text_cache ?? "online"
+    }
+    for (const key of ["dit_path", "text_encoder_path", "vae_path", "tokenizer_path", "pretrained_model_name_or_path"]) {
+      if (!String(model[key] ?? "").trim() && defaults[key]) {
+        model[key] = defaults[key]
+      }
+    }
+    if (typeof model.learning_rate === "string") {
+      const parsedLr = Number(model.learning_rate)
+      model.learning_rate = Number.isFinite(parsedLr) && parsedLr > 0 ? parsedLr : defaults.learning_rate
+    }
+    // Heal cross-schema carry-over pollution from Kohya (moss-image-lora)
+    if (model.output_name === "next-lora") model.output_name = defaults.output_name
+    if (model.sample_width === 512 && model.sample_height === 512 && model.sample_cfg === 7) {
+      model.sample_width = defaults.sample_width
+      model.sample_height = defaults.sample_height
+      model.sample_cfg = defaults.sample_cfg
+      model.sample_steps = defaults.sample_steps
+      model.sample_seed = defaults.sample_seed
+    }
+    if (model.seed === 1337 && model.max_train_epochs === 8) {
+      model.seed = defaults.seed
+      model.max_train_epochs = defaults.max_train_epochs
+      if (model.network_dim === 16 && model.network_alpha === 16) {
+        model.network_dim = defaults.network_dim
+        model.network_alpha = defaults.network_alpha
+      }
+    }
+    try {
+      const versionKey = "configs-kohaku-moss-image-lora-schema-v"
+      if (localStorage.getItem(versionKey) !== "2") {
+        if (model.network_algorithm === "lora") model.network_algorithm = defaults.network_algorithm ?? "lokr"
+        if (model.max_tokens === 16384) model.max_tokens = defaults.max_tokens ?? 12288
+        if (model.model_input_mode === "native_directory" && model.pretrained_model_name_or_path === defaults.pretrained_model_name_or_path) {
+          model.model_input_mode = defaults.model_input_mode ?? "comfyui_files"
+        }
+        localStorage.setItem(versionKey, "2")
+      }
+    } catch { /* Ignore localStorage quota/access errors. */ }
+  }
   if (props.schemaName !== "qwen-image-21-lora") return
   if (model.output_name === "aki") model.output_name = "qwen-image-21-lora"
   if (model.train_data_dir === "./train/aki") model.train_data_dir = "./train/qwen-image-21"
@@ -190,7 +241,7 @@ async function load() {
       if (result.notice) ElMessage.info(result.notice)
     }
     model.value = normalizeModelForSchema(loaded, saved ? { ...base, ...sanitizePersistedDraft(saved, defaults) } : base)
-    migrateQwenDraft(model.value)
+    migrateQwenDraft(model.value, defaults)
     applyReadonlyDefaults(loaded, model.value, defaults)
     const cards = await schemasApi.graphicCards()
     if (!isCurrent()) return

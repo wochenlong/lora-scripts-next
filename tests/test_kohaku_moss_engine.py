@@ -22,8 +22,7 @@ def test_install_plan_uses_isolated_python_and_explicit_lycoris(tmp_path):
     assert str(runtime.python) in flattened
 
 
-def test_adapter_writes_native_kogine_python_config(tmp_path):
-    runtime = Runtime(tmp_path)
+def _base(tmp_path=None, **overrides):
     config = {
         "model_train_type": "kohaku-moss-image-lora",
         "pretrained_model_name_or_path": "models/MOSS-Image-Base",
@@ -33,12 +32,173 @@ def test_adapter_writes_native_kogine_python_config(tmp_path):
         "max_train_steps": 20,
         "network_algorithm": "lokr",
         "network_dim": 16,
+        "network_preset": "attn-mlp",
+        "lokr_factor": 8,
+        "lokr_full_matrix": True,
         "memory_profile": "minimal",
+        "sample_every_n_steps": 10,
+        "sample_prompts": "a dragon girl\nanother prompt",
+        "sample_negative": "lowres",
+        "sample_width": 1024,
+        "sample_height": 768,
+        "sample_steps": 20,
+        "sample_cfg": 3.5,
+        "sample_shift": 5.0,
+        "sample_seed": 7,
+        "batching": "count",
+        "batch_size": 1,
+        "latent_cache": "online",
+        "text_cache": "online",
+        "lr_warmup_steps": 5,
+        "optimizer_type": "adamw",
+        "grad_acc": 2,
+        "tune_mode": "off",
     }
-    adapted = adapt_config(config, runtime)
+    config.update(overrides)
+    return config
+
+
+def test_adapter_writes_native_kogine_python_config(tmp_path):
+    runtime = Runtime(tmp_path)
+    adapted = adapt_config(_base(), runtime)
     assert adapted.values["ALGO"] == "lokr"
     assert adapted.values["STEPS"] == 20
+    assert adapted.values["PRESET"] == "attn-mlp"
+    assert adapted.values["ALGO_KWARGS"]["factor"] == 8
+    assert adapted.values["ALGO_KWARGS"]["full_matrix"] is True
+    assert adapted.values["BATCHING"] == "count"
+    assert adapted.values["BATCH_SIZE"] == 1
+    assert adapted.values["GRAD_ACC"] == 2
+    assert adapted.values["SCHEDULE"]["warmup"] == 5
+    assert adapted.values["TUNE"] == "off"
+    assert adapted.values["SAMPLE_EVERY"] == 10
+    assert adapted.values["SAMPLE_PROMPTS"] == ["a dragon girl", "another prompt"]
+    assert adapted.values["SAMPLE_SIZE"] == (1024, 768)
     path = dump_config(adapted, tmp_path / "autosave", "test")
     text = Path(path).read_text(encoding="utf-8")
     assert "MEMORY_PROFILE = 'minimal'" in text
     assert "EXPORT_FORMATS = ('comfy', 'lycoris')" in text
+    assert "SAMPLE_EVERY = 10" in text
+    assert "ALGO_KWARGS =" in text
+    assert "DROPOUT =" in text
+
+
+def test_adapter_hides_rank_for_ia3_and_maps_oft_kwargs(tmp_path):
+    runtime = Runtime(tmp_path)
+    ia3 = adapt_config(_base(network_algorithm="ia3", output_name="ia3-test", sample_every_n_steps=0), runtime)
+    assert ia3.values["ALGO"] == "ia3"
+    assert ia3.values["DIM"] == 1
+    assert ia3.values["ALGO_KWARGS"] == {"train_on_input": False}
+    oft = adapt_config(
+        _base(
+            output_name="oft-test", network_algorithm="oft", network_dim=64,
+            oft_constraint=0.1, oft_rescaled=True, network_dora=True, sample_every_n_steps=0,
+        ),
+        runtime,
+    )
+    assert oft.values["ALGO_KWARGS"] == {"constraint": 0.1, "rescaled": True}
+    assert oft.values["DORA"] is True
+
+
+def test_adapter_maps_tlora_masks_and_fp8_base(tmp_path):
+    runtime = Runtime(tmp_path)
+    adapted = adapt_config(
+        _base(
+            output_name="tlora-test",
+            network_algorithm="tlora",
+            adapter_mode="bypass",
+            tlora_mask_min_rank=2,
+            tlora_mask_alpha=1.5,
+            base_precision="fp8_compute",
+            fp8_recipe="block",
+            fp8_dgrad="16bit",
+            sample_every_n_steps=0,
+        ),
+        runtime,
+    )
+    assert adapted.values["ALGO_KWARGS"]["mask_min_rank"] == 2
+    assert adapted.values["ALGO_KWARGS"]["mask_alpha"] == 1.5
+    assert adapted.values["BASE_PRECISION"] == "fp8_compute"
+    assert adapted.values["FP8_RECIPE"] == "block"
+    assert adapted.values["FP8_DGRAD"] == "16bit"
+
+
+def test_adapter_rejects_warmup_not_less_than_steps(tmp_path):
+    runtime = Runtime(tmp_path)
+    try:
+        adapt_config(_base(lr_warmup_steps=20, max_train_steps=20, sample_every_n_steps=0), runtime)
+        assert False, "expected ValueError"
+    except ValueError as exc:
+        assert "lr_warmup_steps" in str(exc)
+
+
+def test_adapter_supports_comfyui_files_mode(tmp_path):
+    runtime = Runtime(tmp_path)
+    cfg = _base(
+        model_input_mode="comfyui_files",
+        pretrained_model_name_or_path="",
+        dit_path="models/dit.safetensors",
+        text_encoder_path="models/te.safetensors",
+        vae_path="models/vae.safetensors",
+        tokenizer_path="models/tokenizer",
+        sample_every_n_steps=0,
+    )
+    adapted = adapt_config(cfg, runtime)
+    assert adapted.model_input_mode == "comfyui_files"
+    assert adapted.staging_root is not None
+    assert Path(adapted.values["WEIGHTS"]) == tmp_path / "models" / "dit.safetensors"
+    assert Path(adapted.values["TEXT_ENCODER"]) == Path(adapted.staging_root) / "MOSS-Image-Base"
+    assert Path(adapted.values["VAE"]) == Path(adapted.staging_root) / "MOSS-Image-Base" / "vae"
+    assert adapted.values["DATASETS"][0]["include_root"] is True
+    assert adapted.values["DATASETS"][0]["txt_as"] == "nl"
+    assert adapted.values["CAPTION"] == {"template": "nl", "keep": ()}
+    assert adapted.values["OVERLONG"] == "drop_tokens"
+    assert adapted.values["TEXT_ENCODE"]["memory"] == "stream"
+    assert any("ComfyUI" in w for w in adapted.warnings)
+
+
+def test_adapter_resolves_parent_native_directory_for_sft(tmp_path):
+    runtime = Runtime(tmp_path)
+    root = tmp_path / "moss-root"
+    (root / "MOSS-Image-Base" / "transformer").mkdir(parents=True)
+    (root / "MOSS-Image-Base" / "text_encoder").mkdir(parents=True)
+    (root / "MOSS-Image-Base" / "vae").mkdir(parents=True)
+    (root / "MOSS-Image-SFT" / "transformer").mkdir(parents=True)
+
+    adapted = adapt_config(
+        _base(
+            model_input_mode="native_directory",
+            pretrained_model_name_or_path=str(root),
+            model_variant="sft",
+            caption_mode="tags",
+            sample_every_n_steps=0,
+        ),
+        runtime,
+    )
+    assert Path(adapted.values["WEIGHTS"]) == root / "MOSS-Image-SFT"
+    assert Path(adapted.values["TEXT_ENCODER"]) == root / "MOSS-Image-Base"
+    assert Path(adapted.values["VAE"]) == root / "MOSS-Image-Base" / "vae"
+    assert adapted.values["DATASETS"][0]["txt_as"] == "tags"
+    assert adapted.values["CAPTION"] == {"template": "tags", "shuffle": True, "keep": ()}
+
+
+def test_config_import_and_dataset_validate_accept_kohaku_moss():
+    import mikazuki.app  # noqa: F401
+    from mikazuki.datasets.validate import KNOWN_ENGINES
+    from mikazuki.utils.config_import import validate_config_import
+
+    assert "kohaku-moss" in KNOWN_ENGINES
+    payload = validate_config_import(
+        "kohaku-moss-image-lora",
+        {
+            "model_train_type": "kohaku-moss-image-lora",
+            "model_input_mode": "comfyui_files",
+            "dit_path": "./sd-models/moss-image/dit.safetensors",
+            "network_algorithm": "lokr",
+            "memory_profile": "balanced",
+            "sample_every_n_steps": 200,
+            "sample_prompts": "1girl, solo",
+        },
+    )
+    assert payload["result"] == "ok"
+    assert "enable_preview" not in payload["config"]

@@ -17,7 +17,7 @@ from .launcher import build_train_spec
 from .preflight import check_runtime
 
 
-async def status():
+def _read_status_with_diagnosis():
     rt = runtime()
     data = read_status(rt)
     if data.get("state") in {"broken", "not_installed", "installed_unverified"}:
@@ -33,7 +33,12 @@ async def status():
                 "allows_full_reinstall": data.get("state") == "broken",
                 "components": {},
             }
-    return APIResponseSuccess(data=data)
+    return data
+
+
+async def status():
+    import asyncio
+    return APIResponseSuccess(data=await asyncio.to_thread(_read_status_with_diagnosis))
 
 
 async def diagnose():

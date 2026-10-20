@@ -11,11 +11,25 @@ def write_state(runtime, state, facts=None, reason=""):
     temporary.replace(runtime.state_file)
 
 
+def _venv_dist_info_metadata(venv):
+    found = set()
+    for base in (
+        "Lib/site-packages",
+        "Lib/site-packages/setuptools/_vendor",
+        "lib/python*/site-packages",
+        "lib/python*/site-packages/setuptools/_vendor",
+        "lib",
+        ".",
+    ):
+        found.update(venv.glob(f"{base}/*.dist-info/METADATA"))
+    return sorted(found)
+
+
 def fingerprint(runtime):
     # The training source ships with the repository and updates via git pull;
     # only the venv content and the pinned dependency set gate readiness.
     files = [runtime.python]
-    files += sorted((runtime.root / ".venv").glob("**/*.dist-info/METADATA"))
+    files += _venv_dist_info_metadata(runtime.root / ".venv")
     stats = []
     for path in files:
         if not path.is_file():

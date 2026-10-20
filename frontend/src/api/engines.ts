@@ -195,31 +195,49 @@ function fromAiToolkitInstall(result: AiToolkitInstallResult): EngineActionResul
   }
 }
 
+const inFlightStatus = new Map<TrainingEngine, Promise<EngineStatus>>()
+let inFlightList: Promise<EngineStatus[]> | undefined
+
+async function fetchStatus(id: TrainingEngine): Promise<EngineStatus> {
+  if (id === "kohaku-moss") {
+    return fromKohakuMoss(await apiData<GenericEngineStatus>("/api/engines/kohaku-moss/status"))
+  }
+  if (id === "moss") return fromMoss(await mossApi.status())
+  if (id === "diffsynth") return fromDiffSynth(await diffsynthApi.status())
+  if (id === "kohya") {
+    return fromKohya(await kohyaApi.status())
+  }
+  if (id === "musubi") {
+    return fromMusubi(await musubiApi.status())
+  }
+  if (id === "anima-fast") {
+    return fromAnima(await animaFastApi.status())
+  }
+  if (id === "ai-toolkit") {
+    return fromAiToolkit(await aiToolkitApi.status())
+  }
+  return { id, state: "unknown", featureEnabled: false }
+}
+
 export const enginesApi = {
   async status(id: TrainingEngine): Promise<EngineStatus> {
-    if (id === "kohaku-moss") {
-      return fromKohakuMoss(await apiData<GenericEngineStatus>("/api/engines/kohaku-moss/status"))
-    }
-    if (id === "moss") return fromMoss(await mossApi.status())
-    if (id === "diffsynth") return fromDiffSynth(await diffsynthApi.status())
-    if (id === "kohya") {
-      return fromKohya(await kohyaApi.status())
-    }
-    if (id === "musubi") {
-      return fromMusubi(await musubiApi.status())
-    }
-    if (id === "anima-fast") {
-      return fromAnima(await animaFastApi.status())
-    }
-    if (id === "ai-toolkit") {
-      return fromAiToolkit(await aiToolkitApi.status())
-    }
-    return { id, state: "unknown", featureEnabled: false }
+    const existing = inFlightStatus.get(id)
+    if (existing) return existing
+    const promise = fetchStatus(id).finally(() => {
+      if (inFlightStatus.get(id) === promise) inFlightStatus.delete(id)
+    })
+    inFlightStatus.set(id, promise)
+    return promise
   },
 
   async list(): Promise<EngineStatus[]> {
+    if (inFlightList) return inFlightList
     const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss", "kohaku-moss"]
-    return Promise.all(ids.map((id) => this.status(id)))
+    const promise = Promise.all(ids.map((id) => this.status(id))).finally(() => {
+      if (inFlightList === promise) inFlightList = undefined
+    })
+    inFlightList = promise
+    return promise
   },
 
   async install(id: TrainingEngine): Promise<EngineActionResult> {

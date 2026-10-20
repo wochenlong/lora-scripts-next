@@ -14,9 +14,12 @@ from .settings import REQUIRED_SOURCE_FILES, feature_enabled
 FINGERPRINT_SCHEME = "moss-content-v1"
 VALID_STATES = {"not_installed", "installing", "auditing", "ready", "broken", "disabled"}
 _recovery_lock = threading.Lock()
+_fingerprint_cache: dict[str, tuple[float, int, str]] = {}
+_FINGERPRINT_TTL_SEC = 5.0
 
 
 def write_state(runtime, state, facts=None, reason=""):
+    _fingerprint_cache.pop(str(runtime.root), None)
     runtime.root.mkdir(parents=True, exist_ok=True)
     temporary = runtime.state_file.with_suffix(f".{uuid.uuid4().hex}.tmp")
     temporary.write_text(json.dumps({"state": state, "facts": facts or {}, "reason": reason}, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -24,11 +27,42 @@ def write_state(runtime, state, facts=None, reason=""):
 
 
 def source_commit(runtime):
+    dot_git = runtime.source / ".git"
+    try:
+        if dot_git.is_file():
+            gitdir = dot_git.read_text(encoding="utf-8").strip()
+            if gitdir.startswith("gitdir:"):
+                dot_git = (runtime.source / gitdir.split(":", 1)[1].strip()).resolve()
+        head_file = dot_git / "HEAD"
+        if head_file.is_file():
+            head = head_file.read_text(encoding="utf-8").strip()
+            if not head.startswith("ref:"):
+                return head
+            ref_file = dot_git / head.split(":", 1)[1].strip()
+            if ref_file.is_file():
+                return ref_file.read_text(encoding="utf-8").strip()
+    except OSError:
+        pass
     try:
         result = subprocess.run(["git", "-C", str(runtime.source), "rev-parse", "HEAD"], capture_output=True, text=True, timeout=15)
         return result.stdout.strip() if result.returncode == 0 else ""
     except (OSError, subprocess.TimeoutExpired):
         return ""
+
+
+def _venv_metadata_files(venv):
+    found = set()
+    for base in (
+        "Lib/site-packages",
+        "Lib/site-packages/setuptools/_vendor",
+        "lib/python*/site-packages",
+        "lib/python*/site-packages/setuptools/_vendor",
+        "lib",
+        ".",
+    ):
+        for suffix in ("*.dist-info/METADATA", "*.dist-info/direct_url.json", "*.pth"):
+            found.update(venv.glob(f"{base}/{suffix}"))
+    return found
 
 
 def fingerprint(runtime):
@@ -37,8 +71,7 @@ def fingerprint(runtime):
     files.update(runtime.source / name for name in REQUIRED_SOURCE_FILES)
     for pattern in ("library/moss/**/*.py", "library/runtime/**/*.py", "scripts/moss/**/*.py"):
         files.update(runtime.source.glob(pattern))
-    for pattern in ("**/*.dist-info/METADATA", "**/*.dist-info/direct_url.json", "**/*.pth"):
-        files.update((runtime.root / ".venv").glob(pattern))
+    files.update(_venv_metadata_files(runtime.root / ".venv"))
     entries = []
     for path in sorted(files):
         identity = path.relative_to(runtime.root).as_posix()
@@ -75,6 +108,22 @@ def _recover(runtime, audit_fn):
     return {"state": state, "facts": facts, "reason": reason}
 
 
+def _cached_fingerprint(runtime):
+    import time
+    key = str(runtime.root)
+    try:
+        state_mtime = runtime.state_file.stat().st_mtime_ns
+    except OSError:
+        state_mtime = 0
+    hit = _fingerprint_cache.get(key)
+    now = time.monotonic()
+    if hit and hit[1] == state_mtime and (now - hit[0]) < _FINGERPRINT_TTL_SEC:
+        return hit[2]
+    value = fingerprint(runtime)
+    _fingerprint_cache[key] = (now, state_mtime, value)
+    return value
+
+
 def read_status(runtime, *, audit_fn=None):
     from .environment import audit_environment
 
@@ -102,7 +151,7 @@ def read_status(runtime, *, audit_fn=None):
             data.update(state="broken", reason="MOSS 缺少当前版本的成功审计，请修复环境。")
         else:
             try:
-                if facts.get("fingerprint_scheme") != FINGERPRINT_SCHEME or facts.get("fingerprint") != fingerprint(runtime):
+                if facts.get("fingerprint_scheme") != FINGERPRINT_SCHEME or facts.get("fingerprint") != _cached_fingerprint(runtime):
                     data.update(state="broken", reason="MOSS 环境或源码已变化，请修复后重新检查。")
             except OSError as exc:
                 data.update(state="broken", reason=f"MOSS 环境文件无法读取，请修复：{exc}")

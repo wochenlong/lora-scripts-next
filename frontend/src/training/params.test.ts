@@ -175,4 +175,37 @@ describe("cross-schema carry-over (#271)", () => {
     }
     expect(sanitizePersistedDraft(saved, defaults)).toEqual(saved)
   })
+
+  it("isolates KohakuMossTrainer from Kohya carry-over pollution", () => {
+    const kohakuDefaults = {
+      model_train_type: "kohaku-moss-image-lora",
+      train_data_dir: "./train/moss",
+      output_dir: "./output",
+      output_name: "kohaku-moss-lora",
+      sample_width: 1024,
+      sample_height: 1024,
+      sample_cfg: 3,
+      sample_steps: 50,
+      learning_rate: 0.0001,
+      optimizer_type: "adamw",
+      network_dim: 32,
+    }
+    const kohyaCarry = {
+      model_train_type: "moss-image-lora",
+      train_data_dir: "./train/custom-moss",
+      output_dir: "./output/custom",
+      output_name: "next-lora",
+      sample_width: 512,
+      sample_height: 512,
+      sample_cfg: 7,
+      sample_steps: 24,
+      learning_rate: "1e-4",
+      optimizer_type: "AdamW8bit",
+      network_dim: 16,
+    }
+    expect(pickCarryOverFields(kohyaCarry, kohakuDefaults)).toEqual({
+      train_data_dir: "./train/custom-moss",
+      output_dir: "./output/custom",
+    })
+  })
 })
