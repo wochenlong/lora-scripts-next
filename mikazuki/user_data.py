@@ -67,9 +67,9 @@ def _object(value, label):
         raise UserDataError(f"{label} must be an object")
 
 
-def _keys(value, allowed, label):
+def _keys(value, allowed, label, strict=True):
     _object(value, label)
-    if set(value) - set(allowed):
+    if strict and set(value) - set(allowed):
         raise UserDataError(f"Unsupported field in {label}")
 
 
@@ -96,22 +96,23 @@ def _mapping(value, label):
         _string(item, label, allow_empty=True)
 
 
-def validate_settings(value):
+def validate_settings(value, *, strict=False, require_meta=True):
     _keys(value, {"schema_version", "revision", "startup", "engine_prefs", "engine_order",
-                  "paths", "default_presets", "tasks"}, "settings")
-    if type(value.get("schema_version")) is not int or value["schema_version"] != 1:
-        raise UserDataError("Unsupported settings schema_version")
-    if type(value.get("revision")) is not int or value["revision"] < 0:
-        raise UserDataError("Invalid settings revision")
+                  "paths", "default_presets", "tasks"}, "settings", strict)
+    if require_meta:
+        if type(value.get("schema_version")) is not int or value["schema_version"] != 1:
+            raise UserDataError("Unsupported settings schema_version")
+        if type(value.get("revision")) is not int or value["revision"] < 0:
+            raise UserDataError("Invalid settings revision")
     if "tasks" in value:
         tasks = value["tasks"]
-        _keys(tasks, {"auto_retry_max"}, "tasks")
+        _keys(tasks, {"auto_retry_max"}, "tasks", strict)
         if "auto_retry_max" in tasks and (type(tasks["auto_retry_max"]) is not int
                                           or not 0 <= tasks["auto_retry_max"] <= 9):
             raise UserDataError("tasks.auto_retry_max must be an integer between 0 and 9")
     if "engine_prefs" in value:
         prefs = value["engine_prefs"]
-        _keys(prefs, {"defaultEngine", "rememberLast", "lastByModel"}, "engine_prefs")
+        _keys(prefs, {"defaultEngine", "rememberLast", "lastByModel"}, "engine_prefs", strict)
         if "defaultEngine" in prefs and (
             not isinstance(prefs["defaultEngine"], str) or prefs["defaultEngine"] not in ENGINES
         ):
@@ -122,10 +123,12 @@ def validate_settings(value):
             _object(prefs["lastByModel"], "lastByModel")
             for model, selection in prefs["lastByModel"].items():
                 _string(model, "model")
-                _keys(selection, {"engine", "target"}, "selection")
-                if not isinstance(selection.get("engine"), str) or selection["engine"] not in ENGINES:
-                    raise UserDataError("Unknown remembered engine")
-                _string(selection.get("target"), "target")
+                _keys(selection, {"engine", "target"}, "selection", strict)
+                if "engine" in selection or require_meta:
+                    if not isinstance(selection.get("engine"), str) or selection["engine"] not in ENGINES:
+                        raise UserDataError("Unknown remembered engine")
+                if "target" in selection or require_meta:
+                    _string(selection.get("target"), "target")
     if "engine_order" in value:
         order = value["engine_order"]
         if not isinstance(order, list) or any(not isinstance(x, str) or x not in ENGINES for x in order):
@@ -134,21 +137,27 @@ def validate_settings(value):
             raise UserDataError("Duplicate engine order entry")
     if "paths" in value:
         paths = value["paths"]
-        _keys(paths, {"models", "tagger_models", "python", "datasets", "outputs"}, "paths")
+        _keys(paths, {"models", "tagger_models", "python", "datasets", "outputs", "diffsynth_cache"}, "paths", strict)
         for key, item in paths.items():
             if key in {"models", "tagger_models", "python"}:
                 _mapping(item, key)
-            else:
+            elif key in {"datasets", "outputs", "diffsynth_cache"}:
                 _string(item, key, allow_empty=True)
+            elif strict:
+                raise UserDataError(f"Unsupported field in paths")
     if "default_presets" in value:
         _mapping(value["default_presets"], "default_presets")
     if "startup" in value:
-        _keys(value["startup"], {"gui", "monitor", "tensorboard"}, "startup")
+        _keys(value["startup"], {"gui", "monitor", "tensorboard"}, "startup", strict)
         for service, config in value["startup"].items():
+            if service not in {"gui", "monitor", "tensorboard"}:
+                if strict:
+                    raise UserDataError(f"Unsupported field in startup")
+                continue
             allowed = {"port", "port_conflict"}
             allowed |= {"host", "open_browser"} if service == "gui" else {"enabled"}
             allowed |= {"mode"} if service == "monitor" else {"host"}
-            _keys(config, allowed, service)
+            _keys(config, allowed, service, strict)
             if "port" in config and (type(config["port"]) is not int or not 1 <= config["port"] <= 65535):
                 raise UserDataError(f"Invalid {service} port")
             if "host" in config:
@@ -310,6 +319,7 @@ class UserDataStore:
         _object(patch, "patch")
         if "revision" in patch or "schema_version" in patch:
             raise UserDataError("Revision and schema_version are managed by the server")
+        validate_settings(patch, strict=True, require_meta=False)
         with self._locked():
             current = self.read_settings()
             if type(revision) is not int or revision != current["revision"]:
@@ -322,7 +332,7 @@ class UserDataStore:
 
     def _credentials(self):
         data = self._read("auth.json")
-        _keys(data, {"schema_version", "revision", "providers"}, "auth")
+        _object(data, "auth")
         if type(data.get("schema_version")) is not int or data.get("schema_version") != 1:
             raise UserDataError("Invalid auth schema or revision")
         if type(data.get("revision")) is not int or data["revision"] < 0:
