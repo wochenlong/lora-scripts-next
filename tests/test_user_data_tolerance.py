@@ -59,6 +59,19 @@ def test_schema_version_still_enforced_on_read(tmp_path):
         UserDataStore(root=tmp_path).read_settings()
 
 
+def test_patch_allows_partial_remembered_selection(tmp_path):
+    store = UserDataStore(root=tmp_path)
+    store.patch_settings({"engine_prefs": {"lastByModel": {"anima": {"engine": "kohya", "target": "lora"}}}}, 0)
+    updated = store.patch_settings({"engine_prefs": {"lastByModel": {"anima": {"target": "finetune"}}}}, 1)
+    assert updated["engine_prefs"]["lastByModel"]["anima"] == {"engine": "kohya", "target": "finetune"}
+
+
+def test_preset_field_allowlist_stays_strict(tmp_path):
+    store = UserDataStore(root=tmp_path)
+    with pytest.raises(UserDataError, match="Unsupported field"):
+        store.save_preset("p1", {"name": "Probe", "config": {}, "api_key": "secret"})
+
+
 def test_auth_tolerates_and_preserves_unknown_fields(tmp_path):
     _write(tmp_path, "auth.json", {
         "schema_version": 1, "revision": 0, "providers": {"hf": "secret"}, "future_auth_meta": {"a": 1},

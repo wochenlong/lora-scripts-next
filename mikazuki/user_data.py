@@ -67,7 +67,7 @@ def _object(value, label):
         raise UserDataError(f"{label} must be an object")
 
 
-def _keys(value, allowed, label, strict=False):
+def _keys(value, allowed, label, strict=True):
     _object(value, label)
     if strict and set(value) - set(allowed):
         raise UserDataError(f"Unsupported field in {label}")
@@ -124,9 +124,11 @@ def validate_settings(value, *, strict=False, require_meta=True):
             for model, selection in prefs["lastByModel"].items():
                 _string(model, "model")
                 _keys(selection, {"engine", "target"}, "selection", strict)
-                if not isinstance(selection.get("engine"), str) or selection["engine"] not in ENGINES:
-                    raise UserDataError("Unknown remembered engine")
-                _string(selection.get("target"), "target")
+                if "engine" in selection or require_meta:
+                    if not isinstance(selection.get("engine"), str) or selection["engine"] not in ENGINES:
+                        raise UserDataError("Unknown remembered engine")
+                if "target" in selection or require_meta:
+                    _string(selection.get("target"), "target")
     if "engine_order" in value:
         order = value["engine_order"]
         if not isinstance(order, list) or any(not isinstance(x, str) or x not in ENGINES for x in order):
