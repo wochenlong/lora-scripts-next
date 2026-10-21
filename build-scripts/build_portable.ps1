@@ -822,6 +822,7 @@ foreach ($bat in @(
         "Update-SD-Trainer.bat",
         "Update-SD-Trainer-Release.bat",
         "Download-Anima-Model.bat",
+        "Download-MOSS-Model.bat",
         "Fix-Portable-Bats.bat"
     )) {
     $src = Join-Path $templateDir $bat

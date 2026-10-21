@@ -1,7 +1,7 @@
 """Persistent install state for the optional runtime."""
 import json
 
-from .settings import TRAIN_SCRIPT, feature_enabled
+from .settings import PYTHON_VERSION, TRAIN_SCRIPT, feature_enabled
 
 
 def write_state(runtime, state, facts=None, reason=""):
@@ -12,6 +12,13 @@ def write_state(runtime, state, facts=None, reason=""):
         encoding="utf-8",
     )
     temporary.replace(runtime.state_file)
+
+
+def repair_runtime_venv(runtime, log=None):
+    """Repair a packaged KohakuMoss venv after its project root moves."""
+    from mikazuki.engines.portable_venv import repair_venv_base
+
+    return repair_venv_base(runtime.python, runtime.python_install_dir, PYTHON_VERSION, log=log)
 
 
 def read_status(runtime):
@@ -30,6 +37,12 @@ def read_status(runtime):
         if task is None or task.status in {TaskStatus.FAILED, TaskStatus.TERMINATED, TaskStatus.FINISHED}:
             data.update(state="broken", reason="安装任务已中断；请重新安装或修复环境。")
     complete = runtime.python.is_file() and runtime.kogine.is_file() and (runtime.source / TRAIN_SCRIPT).is_file()
+    repair = repair_runtime_venv(runtime) if runtime.python.is_file() else "ok"
+    if repair == "broken":
+        data.update(
+            state="broken",
+            reason=f"独立环境引用的基础 Python 已失效，且 .python 下没有 Python {PYTHON_VERSION}；请修复整合包运行时。",
+        )
     if data["state"] == "ready" and not complete:
         data.update(state="broken", reason="独立 Python、kogine 或训练入口缺失。")
     data["feature_enabled"] = feature_enabled()

@@ -1,10 +1,15 @@
+import sys
 from pathlib import Path
 
 from mikazuki.download_sources import DownloadSources
 from mikazuki.engines.kohaku_moss.adapter import adapt_config, dump_config
 from mikazuki.engines.kohaku_moss.environment import install_commands
+from mikazuki.engines.kohaku_moss.extension_state import read_status, write_state
+from mikazuki.engines.kohaku_moss.installer import installation_plan
 from mikazuki.engines.kohaku_moss.manifest import ENGINE_ID, TRAIN_TYPES, UPSTREAM
+from mikazuki.engines.kohaku_moss.patch_upstream import apply_patch
 from mikazuki.engines.kohaku_moss.settings import Runtime
+from mikazuki.engines.portable_venv import read_venv_home
 
 
 def test_manifest_is_pinned_and_moss_only():
@@ -20,6 +25,53 @@ def test_install_plan_uses_isolated_python_and_explicit_lycoris(tmp_path):
     assert "3.12" in flattened
     assert "lycoris-lora>=4.1.2" in flattened
     assert str(runtime.python) in flattened
+
+
+def test_installation_plan_applies_windows_build_fallback_before_dependencies(tmp_path):
+    runtime = Runtime(tmp_path)
+    commands = installation_plan(runtime, DownloadSources())
+    patch_index = next(i for i, command in enumerate(commands) if "patch_upstream.py" in " ".join(command))
+    uv_index = next(i for i, command in enumerate(commands) if command[:2] == ["uv", "python"])
+    assert patch_index < uv_index
+
+
+def test_windows_build_fallback_patch_is_idempotent(tmp_path):
+    source = tmp_path / "source"
+    target = source / "src" / "kohakumoss_kernels" / "errors.py"
+    target.parent.mkdir(parents=True)
+    target.write_text(
+        '"""errors"""\n\nimport torch\n\nBUILD_ERRORS = (\n    RuntimeError,\n    UnicodeError,\n)\n',
+        encoding="utf-8",
+    )
+    assert apply_patch(source) is True
+    assert apply_patch(source) is False
+    text = target.read_text(encoding="utf-8")
+    assert text.count("import subprocess") == 1
+    assert text.count("subprocess.CalledProcessError") == 1
+
+
+def test_packaged_runtime_repairs_moved_python_home(tmp_path):
+    runtime = Runtime(tmp_path)
+    runtime.python.parent.mkdir(parents=True)
+    runtime.python.write_bytes(b"")
+    runtime.kogine.write_bytes(b"")
+    (runtime.source / "scripts" / "train").mkdir(parents=True)
+    (runtime.source / "scripts" / "train" / "moss.py").write_text("", encoding="utf-8")
+    (runtime.root / ".venv" / "pyvenv.cfg").write_text(
+        "home = Z:\\stale-build\\python\ninclude-system-site-packages = false\n",
+        encoding="utf-8",
+    )
+    base = (
+        runtime.python_install_dir / "cpython-3.12.12-windows-x86_64-none" / "python.exe"
+        if sys.platform == "win32"
+        else runtime.python_install_dir / "cpython-3.12.12-linux-x86_64-gnu" / "bin" / "python3"
+    )
+    base.parent.mkdir(parents=True)
+    base.write_bytes(b"")
+    write_state(runtime, "ready")
+    status = read_status(runtime)
+    assert status["state"] == "ready"
+    assert read_venv_home(runtime.python) == base.parent
 
 
 def _base(tmp_path=None, **overrides):

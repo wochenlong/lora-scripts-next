@@ -25,6 +25,7 @@ $moveNames = @(
     "Update-SD-Trainer.bat",
     "Update-SD-Trainer-Release.bat",
     "Download-Anima-Model.bat",
+    "Download-MOSS-Model.bat",
     "Fix-Portable-Bats.bat",
     "install_xformers.bat",
     "README.txt"

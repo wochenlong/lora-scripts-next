@@ -1,77 +1,34 @@
-# Quick Start
+# KohakuMoss Edition Quick Start
 
-[Home](../README.md) · [Documentation](README.md) · [中文](getting-started.md)
+[Home](../README.md) · [Training guide (Chinese)](MOSS.md) · [中文](getting-started.md)
 
-## Choose a Version
+> `KohakuMoss` is a standalone MOSS-Image edition, not the general-purpose `main` or `dev` product.
 
-The 3.1.0 source release is on `main`. The published portable release is still **v3.0.0** and does not include the 3.1.0 updates. Check [Releases](https://github.com/wochenlong/lora-scripts-next/releases) for 3.1.0 archive availability.
+## Windows Portable Package
 
-## Windows Portable
+Windows 10/11, an NVIDIA GPU, and sufficient local storage are required. The runtime is bundled; the MOSS model needs roughly 27 GB separately.
 
-Requires Windows 10/11 64-bit and an NVIDIA GPU; RTX 20 series or newer is recommended. VRAM requirements depend on the model, training target, and configuration. Check the relevant [training guide](README.md#training--训练) first.
+1. Extract the archive, keeping at least 60 GB of free space.
+2. Run `启动.bat`; the UI normally opens at `http://127.0.0.1:28000`.
+3. Training must open directly on **MOSS-Image / KohakuMossTrainer / LoRA** with the engine ready.
+4. Run `tools\Download-MOSS-Model.bat` and wait for the ModelScope download and SHA256 checks.
+5. Put each image and its matching UTF-8 `.txt` caption in `Next-Trainer\train\moss-image\`.
+6. Run a 50-step smoke test before full training.
 
-1. Download a formal package from [GitHub Releases](https://github.com/wochenlong/lora-scripts-next/releases) or a mirror linked in the release notes.
-2. Extract to a path without spaces or non-ASCII characters. Download all parts of a split archive before extracting.
-3. Use `run_gui.bat` for lite packages; for other packages, follow the included launcher instructions (for example, `启动.bat`).
-4. Complete environment setup as prompted, then open the address printed in the terminal, normally `http://127.0.0.1:28000`.
-5. Confirm the sidebar version matches your download before preparing models and datasets.
-
-### Package Selection
-
-| Package | Best suited for |
-| --- | --- |
-| lite | Smaller download; dependencies are prepared online on first launch |
-| Kohya | A preinstalled Kohya training environment |
-| Musubi / Kohya-Musubi | Musubi or dual-engine environments; availability depends on release assets |
-
-Anima Fast uses an optional, separate environment and is not preinstalled in these packages. In the 3.1.0 workspace, install engines from Settings; see [Anima Fast](anima-fast.md). Older archives may have a different interface.
-
-Some archives retain the `SD-Trainer/` directory and older updater names for compatibility. Do not rename them.
+If the portable package asks to install KohakuMossTrainer, the runtime was not bundled correctly.
 
 ## From Source
 
-Install Git and Python 3.10. Initial setup needs internet access for dependencies; training also requires the appropriate models, dataset, and engine environment.
-
-```sh
-git clone https://github.com/wochenlong/lora-scripts-next.git
-cd lora-scripts-next
-```
-
-Windows (PowerShell):
-
 ```powershell
+git clone --branch KohakuMoss https://github.com/wochenlong/lora-scripts-next.git
+cd lora-scripts-next
 .\run_gui.bat
 ```
 
-Linux:
+Install KohakuMossTrainer once from the Training page. It creates an isolated Python 3.12 runtime under `extensions/kohaku-moss/`.
 
-```sh
-bash run_gui.sh
-```
+## Updates
 
-Use the address printed in the terminal. See [frontend development](../frontend/README.md), [repository layout](repo-layout.md), and [TOML / CLI](cli-args.md) for development and command-line workflows.
+Portable updates must remain on the `KohakuMoss` branch. Do not overwrite this edition with a general `main` / `dev` release or copy Kohya, Musubi, or Anima Fast runtimes into it.
 
-## Branches and Updates
-
-| Branch | Purpose |
-| --- | --- |
-| `main` | Stable source release line, including 3.1.0 |
-| `dev` | Next-version integration and acceptance; may contain unreleased changes |
-| `legacy/v2.9.1` | Older UI baseline |
-
-Portable users should follow formal Releases and included update instructions, without switching Git branches.
-
-For source installations, check your branch with `git branch --show-current` and local changes with `git status`. Once local changes are handled, update the stable branch:
-
-```sh
-git switch main
-git pull --ff-only
-```
-
-For next-version development, use `git fetch origin` and `git switch dev`. Do not force-reset a workspace containing changes you need to keep.
-
-Import older TOML files through the training page, then review the model, engine, target, and generated configuration. Do not copy old browser storage directly into a new version.
-
-## Next Steps
-
-[Interface tour](interface-tour.md) · [Training guides](README.md#training--训练) · [Tagger models](tagger-models.md) · [Report an issue](README.md#help-and-credits--反馈与致谢)
+[Training guide](MOSS.md) · [Documentation](README.md) · [Report an issue](https://github.com/wochenlong/lora-scripts-next/issues)

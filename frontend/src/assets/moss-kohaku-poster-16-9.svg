@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">MOSS-Image KohakuMossTrainer &#x8BAD;&#x7EC3;&#x652F;&#x6301;</title>
+  <desc id="desc">Next Trainer &#x7684; MOSS-Image &#x4E0E; KohakuMossTrainer &#x8BAD;&#x7EC3;&#x5165;&#x53E3;</desc>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f8fbff"/>
+      <stop offset=".5" stop-color="#edf1ff"/>
+      <stop offset="1" stop-color="#dff6ed"/>
+    </linearGradient>
+    <linearGradient id="headline" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#284ca8"/>
+      <stop offset=".52" stop-color="#6358d7"/>
+      <stop offset="1" stop-color="#16866d"/>
+    </linearGradient>
+    <radialGradient id="planet" cx=".34" cy=".28" r=".82">
+      <stop offset="0" stop-color="#f7fffc"/>
+      <stop offset=".32" stop-color="#a9ead3"/>
+      <stop offset=".68" stop-color="#6269da"/>
+      <stop offset="1" stop-color="#27326e"/>
+    </radialGradient>
+    <pattern id="grid" width="52" height="52" patternUnits="userSpaceOnUse">
+      <path d="M52 0H0v52" fill="none" stroke="#5965b4" stroke-opacity=".07"/>
+    </pattern>
+    <filter id="blur">
+      <feGaussianBlur stdDeviation="38"/>
+    </filter>
+    <filter id="shadow" x="-35%" y="-35%" width="170%" height="170%">
+      <feDropShadow dx="0" dy="18" stdDeviation="24" flood-color="#26316e" flood-opacity=".22"/>
+    </filter>
+  </defs>
+
+  <rect width="1600" height="900" fill="url(#background)"/>
+  <rect width="1600" height="900" fill="url(#grid)"/>
+  <circle cx="1370" cy="90" r="330" fill="#8a82ff" opacity=".17" filter="url(#blur)"/>
+  <circle cx="1180" cy="800" r="380" fill="#4bdbaf" opacity=".21" filter="url(#blur)"/>
+
+  <g transform="translate(1150 455)" filter="url(#shadow)">
+    <circle r="252" fill="url(#planet)"/>
+    <circle r="213" fill="none" stroke="#fff" stroke-opacity=".5" stroke-width="2"/>
+    <ellipse rx="345" ry="118" fill="none" stroke="#6768d8" stroke-width="8" transform="rotate(-18)"/>
+    <ellipse rx="318" ry="96" fill="none" stroke="#36b698" stroke-width="4" stroke-dasharray="14 18" transform="rotate(28)"/>
+    <g fill="#fafffd">
+      <circle cx="-252" cy="-80" r="16"/>
+      <circle cx="270" cy="42" r="11"/>
+      <circle cx="82" cy="-278" r="13"/>
+    </g>
+    <path d="M-103 106C-20 61 49-7 94-123c26 111-4 216-106 278-43 27-87 33-138 29 39-22 53-48 47-78Z" fill="#ecfff8" opacity=".94"/>
+    <path d="M-102 122C-7 86 65 23 112-83" fill="none" stroke="#178f75" stroke-width="12" stroke-linecap="round"/>
+    <path d="M-35 83c-41-7-76 3-106 33 48 17 84 14 113-11M34 34c-35-18-69-19-105-2 37 31 72 38 106 22M80-26c-25-25-54-34-88-29 26 37 56 52 88 46" fill="none" stroke="#29a487" stroke-width="10" stroke-linecap="round" stroke-linejoin="round"/>
+  </g>
+
+  <g transform="translate(116 135)">
+    <rect width="192" height="44" rx="22" fill="#3153b9"/>
+    <text x="96" y="29" text-anchor="middle" fill="#fff" font-family="Inter, Segoe UI, sans-serif" font-size="18" font-weight="700" letter-spacing="2">NEXT TRAINER</text>
+
+    <text x="0" y="215" fill="url(#headline)" font-family="Inter, Segoe UI, sans-serif" font-size="108" font-weight="800" letter-spacing="-3">MOSS-Image</text>
+    <text x="4" y="292" fill="#20284b" font-family="Inter, Segoe UI, Microsoft YaHei, sans-serif" font-size="46" font-weight="700">KohakuMossTrainer &#x8BAD;&#x7EC3;&#x652F;&#x6301;</text>
+    <rect x="4" y="336" width="655" height="4" rx="2" fill="#5166cf" opacity=".7"/>
+    <text x="4" y="412" fill="#555d7c" font-family="Inter, Segoe UI, Microsoft YaHei, sans-serif" font-size="28">&#x9762;&#x5411; MOSS-Image &#x7684;&#x73B0;&#x4EE3;&#x5316;&#x4F4E;&#x663E;&#x5B58;&#x8BAD;&#x7EC3;&#x5DE5;&#x4F5C;&#x6D41;</text>
+
+    <g transform="translate(4 480)" font-family="Inter, Segoe UI, sans-serif" font-size="21" font-weight="650">
+      <rect width="126" height="52" rx="26" fill="#fff" fill-opacity=".78" stroke="#8893c7" stroke-opacity=".45"/>
+      <text x="63" y="34" text-anchor="middle" fill="#344175">LoRA</text>
+      <rect x="142" width="154" height="52" rx="26" fill="#fff" fill-opacity=".78" stroke="#8893c7" stroke-opacity=".45"/>
+      <text x="219" y="34" text-anchor="middle" fill="#344175">LyCORIS</text>
+      <rect x="312" width="190" height="52" rx="26" fill="#fff" fill-opacity=".78" stroke="#58aa94" stroke-opacity=".55"/>
+      <text x="407" y="34" text-anchor="middle" fill="#267763">24GB &#x4F18;&#x5316;</text>
+    </g>
+
+    <g transform="translate(4 630)">
+      <rect width="342" height="74" rx="19" fill="#4054c7"/>
+      <text x="38" y="48" fill="#fff" font-family="Inter, Segoe UI, Microsoft YaHei, sans-serif" font-size="25" font-weight="700">&#x8FDB;&#x5165;&#x8BAD;&#x7EC3;&#x5DE5;&#x4F5C;&#x533A;</text>
+      <path d="M285 37h24m-9-10 10 10-10 10" fill="none" stroke="#fff" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+    </g>
+  </g>
+</svg>

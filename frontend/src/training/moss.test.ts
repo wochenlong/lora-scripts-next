@@ -167,7 +167,7 @@ describe("MOSS Kohya training schema", () => {
 })
 
 describe("MOSS module and runtime catalog", () => {
-  it("prefers Kohya while retaining the anima_lora engine", () => {
+  it("prefers KohakuMossTrainer while retaining Kohya and anima_lora", () => {
     expect(resolveModule("moss-image", "kohya", "lora")?.schemaName).toBe("moss-image-lora")
     expect(resolveModule("moss-image", "moss", "lora")?.schemaName).toBe("moss-image-anima-lora")
     expect(resolveModule("moss-image", "kohaku-moss", "lora")?.schemaName).toBe("kohaku-moss-image-lora")
@@ -176,7 +176,7 @@ describe("MOSS module and runtime catalog", () => {
     expect(moduleForTrainType("moss-image-anima-lora")?.engine).toBe("moss")
     for (const model of TRAINING_MODELS) expect(isEngineSupported(model, "moss")).toBe(model === "moss-image")
     for (const engine of TRAINING_ENGINES) expect(isEngineSupported("moss-image", engine)).toBe(["kohya", "moss", "kohaku-moss"].includes(engine))
-    expect(recommendedEngineFor("moss-image")).toBe("kohya")
+    expect(recommendedEngineFor("moss-image")).toBe("kohaku-moss")
     expect(engineDefinition("moss")).toMatchObject({ kind: "optional", managesRuntime: true, requiresGpu: true })
   })
 })

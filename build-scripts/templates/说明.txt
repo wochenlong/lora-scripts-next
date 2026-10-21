@@ -1,20 +1,24 @@
-﻿Next Trainer 整合包（2026）
-========================
-
-根目录只有三个入口：
-  启动.bat       打开训练 WebUI
-  检查更新.bat   更新应用代码（失败见 tools\）
-  说明.txt       本文件
-
-本包默认：
-  · 已预装 Kohya 主环境（cu128）
-  · 已预装 Musubi（cu128）
-  · 不含 Anima Fast（设置 → 训练引擎 内安装）
-  · 不含训练底模（放入 Next-Trainer\sd-models\）
-
-使用：双击「启动.bat」→ 浏览器打开 http://127.0.0.1:28000
-
-常用目录：
-  Next-Trainer\sd-models\   模型
-  Next-Trainer\output\      训练输出
-  tools\                  高级工具
+﻿Next Trainer KohakuMoss 专用整合包（2026）
+=========================================
+
+根目录只有三个入口：
+  启动.bat       打开训练 WebUI
+  检查更新.bat   仅更新 KohakuMoss 独立分支
+  说明.txt       本文件
+
+本包包含：
+  · 完整 KohakuMossTrainer 训练环境
+  · 独立 Python 3.12、Torch cu130、kogine 与 LyCORIS
+
+本包不含：
+  · Kohya、Musubi、Anima Fast 训练环境
+  · MOSS-Image 训练底模（使用 tools\Download-MOSS-Model.bat 从魔搭下载）
+
+使用：双击「启动.bat」→ 浏览器打开 http://127.0.0.1:28000
+教程：Next-Trainer\docs\MOSS.md
+
+常用目录：
+  Next-Trainer\sd-models\   模型
+  Next-Trainer\output\      训练输出
+  tools\                    高级工具
+    Download-MOSS-Model.bat  从魔搭下载 MOSS-Image Base BF16 训练模型

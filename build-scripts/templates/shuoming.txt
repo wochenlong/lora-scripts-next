@@ -1,30 +1,30 @@
-Next Trainer 整合包（2026）· 1.5 测
-=================================
+Next Trainer 整合包（2026）· KohakuMoss 预览
+===========================================
 
-版本：2.9.2-beta.3.5（dev 通道）
-定位：一测与二测之间的满配预览包（Kohya + Musubi）
+版本：3.3.0-dev（KohakuMoss 独立分支）
+定位：MOSS-Image / KohakuMossTrainer 专用版（非 main / dev 通用整合包）
 
 根目录只有三个入口：
   启动.bat       打开训练 WebUI
-  检查更新.bat   仅用 Git 更新 origin/dev（见下）
+  检查更新.bat   仅更新 KohakuMoss 独立分支（见下）
   说明.txt       本文件
 
 本包包含：
-  · 已预装 Kohya 主环境（cu128）
-  · 已预装 Musubi（cu128，可训 Krea 2）
+  · 完整 KohakuMossTrainer 训练环境
+  · 独立 Python 3.12、Torch cu130、kogine 与 LyCORIS
   · 默认 WD 打标模型 + tokenizer 缓存
 
 本包不含：
-  · Anima Fast 运行时（设置 → 训练引擎 内安装）
-  · 训练底模（请自行放入 Next-Trainer\sd-models\）
+  · Kohya、Musubi、Anima Fast 训练环境
+  · MOSS-Image 训练底模（使用下方魔搭下载器）
 
-下载 Anima 底模（重要）：
-  · 不在根目录；请双击 tools\Download-Anima-Model.bat
-  · 权重会下到 Next-Trainer\sd-models\anima\
+下载训练底模（重要）：
+  · MOSS-Image：双击 tools\Download-MOSS-Model.bat
+  · MOSS 权重会从魔搭下载到 Next-Trainer\sd-models\moss-image\
 
 更新（重要）：
-  · 日常只用根目录「检查更新.bat」（跟踪 Git 分支 dev）
-  · 不要用 tools\Update-Next-Trainer-Release.bat 合并其它 Release/lite 包，以免环境被冲掉
+  · 日常只用根目录「检查更新.bat」（仅跟踪 KohakuMoss 独立分支）
+  · 禁止使用 tools\Update-Next-Trainer-Release.bat 覆盖 main / dev 通用版本
   · 代码更新后若依赖变化，可再运行 update\update_dependencies.bat
 
 使用：双击「启动.bat」→ 浏览器打开 http://127.0.0.1:28000
@@ -32,8 +32,9 @@ Next Trainer 整合包（2026）· 1.5 测
 常用目录：
   Next-Trainer\sd-models\   模型
   Next-Trainer\output\      训练输出
-  tools\                  高级工具（含 Download-Anima-Model.bat）
+  tools\                  高级工具（含 MOSS 魔搭模型下载器）
 
 教程：
-  tools\教程-整合包与Krea2上手.md
-  或魔搭 releases/v2.9.2-beta.3.5/portable-1.5-krea2-guide.md
+  训练页默认进入 MOSS-Image / KohakuMossTrainer。
+  用户训练教程见 Next-Trainer\docs\MOSS.md
+  打包人员验收方案见 Next-Trainer\docs\team\kohaku-moss-portable-build.md

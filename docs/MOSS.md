@@ -1,43 +1,57 @@
-# MOSS-Image LoRA 训练指南（实验性）
+# MOSS-Image × KohakuMossTrainer 训练教程
 
-## 1. 是什么
+> 本教程仅适用于 `KohakuMoss` 独立分支及其专用整合包。`main` / `dev` 的 Kohya、MOSS (anima_lora) 等训练路径不适用本文。
 
-Next Trainer 提供三条 **MOSS-Image LoRA** 路径：
+## 1. 先了解这个专用版
 
-- **Kohya（推荐、默认）**：使用内置 `sd-scripts` 的原生 MOSS trainer，功能和维护路径更稳定。
-- **MOSS (anima_lora)**：保留为独立运行时的备选方案（流程：预缓存文本/VAE → 训 DiT LoRA）。
-- **KohakuMossTrainer（实验性、高性能）**：Kohaku / 龙娘开发的独立训练框架，使用官方 `kogine` CLI、显存方案与 LyCORIS 算法；不是默认引擎。
+此版本只面向 **MOSS-Image Base / SFT**，默认且唯一推荐的训练路径是
+**KohakuMossTrainer → LyCORIS**。训练命令保持上游原生形式：
 
-MOSS-Image 是独立模型家族，不能套用 Anima / AI Toolkit 的模型、缓存或配置；两种 MOSS 引擎的配置和缓存也不能混用。
-- 运行环境在 `extensions/moss/`（钉住上游 [`sorryhyun/anima_lora` @ `moss_lora`](https://github.com/sorryhyun/anima_lora/tree/moss_lora)），与 Anima Fast 分离。
-- 上游为 alpha：不保证每张卡的显存上限或成片质量；ComfyUI 侧 LoRA 回载验收可后续补丁。
-
-训练页默认选择：**模型 = MOSS-Image；引擎 = Kohya；目标 = LoRA**。需要原有流程时可手动切换到 **MOSS (anima_lora)**。
-
-### KohakuMossTrainer 实验路径
-
-在训练页手动选择 **KohakuMossTrainer** 后会先进入安装门页。Next Trainer 在 `extensions/kohaku-moss/` 创建独立 Python 3.12 与 venv，钉住上游提交 `5bb1a81ed030cc87c540d5e02fe60aab887199b4`，安装 `kohakumoss[cuda]` 与显式依赖 `lycoris-lora>=4.1.2`。训练命令保持上游原生形式：
-
-```text
+```powershell
 kogine run scripts/train/moss.py --config <Next Trainer 生成的 Python 配置>
 ```
 
-首版表单覆盖权重目录、kohya 风格数据集、steps、LyCORIS 算法/rank、输出和 `speed` / `balanced` / `low` / `minimal` / `auto` 显存方案。上游原生按 steps 驱动，因此 v1 的 epoch 字段仅作计划备注，实际停止条件是 `max_train_steps`。完整 GPU 安装与训练 smoke 仍在 [#487](https://github.com/wochenlong/lora-scripts-next/issues/487) 跟踪；在此之前请先用短步数和独立输出目录验证。
+- 专用整合包已内置 `extensions/kohaku-moss/` 完整训练环境，首次启动应直接显示“就绪”。
+- 源码版需要在训练页安装一次 KohakuMossTrainer 独立环境。
+- 训练页默认选择：**MOSS-Image / KohakuMossTrainer / LoRA**。
+- 实际停止条件是 `max_train_steps`；`max_train_epochs` 仅作计划备注。
+- 每次训练同时导出 `*-lycoris.safetensors` 与 `*-comfy.safetensors`。
 
-这一路径是训练引擎集成，不是新的 MOSS/Kohya fork。感谢 [KohakuBlueleaf/KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 与 [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS)；上游协作见 [KohakuMossTrainer issue #1](https://github.com/KohakuBlueleaf/KohakuMossTrainer/issues/1)。
+MOSS-Image 不能使用 Anima、Flux 或其他模型家族的权重、缓存与配置。
 
-## 2. 要提前下载什么模型
+## 2. 下载训练模型
 
-安装引擎**不会**下载权重。请按你打算用的输入模式，事先备齐下列组件。
+### Windows 整合包：推荐一键下载
 
-### 方案 A：原生 Diffusers 目录（推荐有官方仓时用）
+双击：
+
+```text
+tools\Download-MOSS-Model.bat
+```
+
+下载器从魔搭获取约 27 GB 的 Base BF16 权重，支持断点续传和 SHA256 校验，并自动生成：
+
+```text
+Next-Trainer/sd-models/moss-image/
+├── dit.safetensors
+├── text_encoder.safetensors
+├── vae.safetensors
+├── tokenizer/
+└── download-manifest.json
+```
+
+训练页保持默认的 **ComfyUI 拆分单文件** 即可，四个模型路径已经对应这套目录。不要用 ComfyUI 的 INT8/GPTQ 文本编码器代替下载器生成的 BF16 文件。
+
+### 手动准备：原生 Diffusers 目录
+
+源码用户也可以手动下载完整 Hugging Face 目录：
 
 | 组件 | 来源 | 说明 |
 |---|---|---|
 | Base 全套 | [OpenMOSS-Team/MOSS-Image-Base](https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base) | `transformer` / `text_encoder` / `vae` / `tokenizer`；**支持分片**，无需合并 |
 | SFT transformer（可选） | [OpenMOSS-Team/MOSS-Image-SFT](https://huggingface.co/OpenMOSS-Team/MOSS-Image-SFT) | 仅 `model=sft` 时需要；TE/VAE/tokenizer 仍用 Base |
 
-### 方案 B：Comfy 单文件（`comfyui_files`）
+### 手动准备：Comfy 单文件（`comfyui_files`）
 
 | 组件 | 建议来源 | 说明 |
 |---|---|---|
@@ -50,7 +64,8 @@ kogine run scripts/train/moss.py --config <Next Trainer 生成的 Python 配置>
 
 ## 3. 怎么存放
 
-把权重放在扩展目录外（例如仓库下的 `sd-models/`）。数据集、缓存、输出也不要放进 `extensions/moss/`。
+把权重放在扩展目录外（例如仓库下的 `sd-models/`）。数据集、缓存、输出也不要放进
+`extensions/kohaku-moss/`；该目录只用于专用 Python、训练引擎源码和依赖。
 
 ### 原生目录（`native_directory`）
 
@@ -97,120 +112,125 @@ train/moss-image/          ← src
 └── 002.txt
 ```
 
-PNG / JPEG / WebP + 同名 `.txt`，可含子目录；**无需** Kohya「重复次数_概念」目录。
+PNG / JPEG / WebP + 同名 `.txt`，可含子目录。最简单的做法是直接把图片与标注放在
+`train/moss-image/`；若使用 `1_concept` 这类子目录，目录名前缀会作为重复次数读取。
 
 ## 4. 怎么训练
 
-### 4.1 Kohya（推荐）
+### 4.1 启动前检查
 
-在「设置 → 训练引擎」安装或**修复 Kohya**，然后在训练页选择 MOSS-Image / Kohya / LoRA。此次 MOSS 支持将 Kohya 环境升级为 Transformers 5.17.0、Diffusers 0.40.0、Accelerate 1.15.0；已有 Kohya 环境必须执行一次“修复”才能使用。
+1. 启动 WebUI，确认训练页显示 **MOSS-Image / KohakuMossTrainer / LoRA**。
+2. 引擎状态必须为“就绪”。专用整合包若提示安装，说明打包不完整，不要用临时联网安装掩盖问题。
+3. 模型使用一键下载器时，保持默认的四个路径：
+   - `dit_path = ./sd-models/moss-image/dit.safetensors`
+   - `text_encoder_path = ./sd-models/moss-image/text_encoder.safetensors`
+   - `vae_path = ./sd-models/moss-image/vae.safetensors`
+   - `tokenizer_path = ./sd-models/moss-image/tokenizer`
+4. 数据集每张图都应有同名 UTF-8 `.txt` 标注。
+5. 输出名称不要包含 `<>:"/\|?*` 等 Windows 非法字符。
 
-模型路径填写规则：
+### 4.2 第一次先跑 50 steps
 
-- `pretrained_model_name_or_path`：MOSS DiT 单文件；Diffusers 分片格式请选择第一个 shard（例如 `diffusion_pytorch_model-00001-of-00004.safetensors`）。
-- `text_encoder`：Qwen3.5-9B 单文件；分片格式同样选择第一个 shard。
-- `vae`：FLUX.2 VAE safetensors。
-- `tokenizer_cache_dir`：包含 MOSS chat template 的 tokenizer 目录。
-- 数据集使用 Kohya 目录结构，caption 默认并推荐 `.txt`；数据集设置在保存设置之前。
+第一次不要直接跑长任务，先按以下参数验证模型、数据集、缓存和导出：
 
-默认启用 latent 与文本编码器输出的磁盘缓存，并只训练 DiT LoRA（`networks.lora_generic`）。预览提示词可直接在预览区文本框填写，提交时转换为 `sample_prompts` 文件。
+| 参数 | 建议值 |
+|---|---|
+| 底模变体 | `base` |
+| 模型加载方式 | `comfyui_files` |
+| 训练总步数 | `50` |
+| 目标面积 | `1048576`（1024×1024） |
+| 标注模式 | 自然语言用 `nl`；逗号 Tag 用 `tags` |
+| 网络类型 | `lokr` |
+| Rank / Alpha | `32 / 32` |
+| 网络范围 | `attn-mlp` |
+| 学习率 | `0.0001` |
+| 优化器 | `adamw` |
+| 显存档位 | 24 GB 用 `balanced`；16 GB 用 `low`；12 GB 左右用 `minimal` |
+| 组批方式 | 首次验证用 `count`，Batch size = `1` |
+| 混合精度 | `bf16` |
+| 底模精度 | `compute` |
+| 编译模式 | `off` |
+| 算子调优 | Windows 首次验证用 `off` |
+| 预览图 | `0`，先关闭 |
 
-ConvRot INT8 可分别用于 DiT（`convrot_int8`）和文本编码器（`convrot_int8_text_encoder`）以降低基础权重显存。无 Triton 时可回退但更慢；`convrot_int8_bwd=int8` 则必须有 Triton/CUDA。MOSS 不支持 `fp8_base`。
+点击“校验”后再开始训练。任务应从 step 1 运行到 step 50，loss 必须是有限值，最终在输出目录看到：
 
-### 4.2 MOSS (anima_lora) 备选引擎
-
-#### 安装引擎
-
-1. 「设置 → 训练引擎」安装 **MOSS (anima_lora)**，或在训练页选中 MOSS-Image 后点安装。  
-2. 走统一任务系统与下载源设置；审计通过后显示「就绪」。  
-3. 环境：`extensions/moss/`（`source/`、`.python/`、`.venv/`）。计划依赖 Python 3.13、PyTorch 2.14.1+cu132、Transformers 5.16.1。  
-4. 修复会重建该引擎三目录；卸载删除整个 `extensions/moss/`。运行中或排队的 MOSS 任务会阻止安装/修复/卸载。
-
-#### 训练页填写顺序（建议）
-
-1. **模型**：`base` / `sft`；`model_input_mode` = 原生或 Comfy。  
-2. **数据集与预缓存**（`src` 已排在分辨率等选项之前）：填数据集目录；`cache_dir` 可留空（自动 `.cache/moss/<摘要>/`）。  
-3. **保存**：`output_dir` / `output_name`。  
-4. **训练与 LoRA**：短训可用 `epochs=0`、`max_steps=50`、`compile=false`。  
-5. **逐轮预览（可选）**：`preview_every_epochs ≥ 1` 时，在 **`preview_prompt` 文本框**直接写提示词（也可用 `preview_prompt_file`；**文本优先**）。预览仍要求 `blocks_to_swap=0`。
-
-#### 提交前检查
-
-- 用界面「校验 / 检查数据」，或 API dry-run（不会真正开训）：
-
-```sh
-curl -X POST http://127.0.0.1:28000/api/engines/moss/dry-run \
-  -H 'Content-Type: application/json' --data-binary @moss-config.json
+```text
+<output_name>-lycoris.safetensors
+<output_name>-comfy.safetensors
 ```
 
-- 成功时 `training_started=false`；`model_format` 为 `native-diffusers` 或 `comfyui_files`。Comfy-Org DiT 可为 `dit_layout=fused_qkv`。  
-- 只有 `/api/run`（或界面「开始训练」）会入队。首次物化融合 qkv 的 DiT 可能多花几分钟。
+### 4.3 正式训练建议
 
-#### 配置示例
+- 20～50 张图可先从 1000～2000 steps 起步；效果是否过拟合应以固定提示词的对比图判断。
+- LoKr 默认使用 `factor=8`、`attn-mlp`、Rank/Alpha 32；不熟悉 LyCORIS 时不要同时修改多项结构参数。
+- `bucket` 会尽量保留原图比例；数据尺寸混杂时优先使用。
+- `latent_cache=online`、`text_cache=online` 会边训练边建立缓存；第二次训练通常更快。
+- tokens 组批在图片尺寸不同的情况下吞吐更好；显存不足可把 `max_tokens` 从 12288 降到 8192 或 6144。
+- 开启预览会增加显存和耗时。正式训练稳定后再设置 `sample_every_n_steps=200～500`。
+- Windows 可以开启 `tune_mode=table`；没有可用 C 编译器时本分支会自动回退。遇到算子编译问题可直接改为 `off`。
+- `base_precision=fp8/int8` 属于进阶节省显存方案；首次成功训练前保持 `compute`。
 
-原生：
+### 4.4 配置示例
 
 ```json
 {
-  "model_train_type": "moss-image-anima-lora",
-  "model_input_mode": "native_directory",
-  "model_dir": "sd-models/moss-image",
-  "model": "base",
-  "src": "train/moss-image",
-  "output_dir": "output/moss",
-  "output_name": "my-moss-lora",
-  "run_preprocess": true,
-  "epochs": 0,
-  "max_steps": 50,
-  "compile": false
-}
-```
-
-Comfy（含 Comfy-Org BF16 DiT）：
-
-```json
-{
-  "model_train_type": "moss-image-anima-lora",
+  "model_train_type": "kohaku-moss-image-lora",
   "model_input_mode": "comfyui_files",
-  "model": "base",
-  "dit_path": "sd-models/moss-image-comfy/diffusion_models/moss_image_base_bf16.safetensors",
-  "text_encoder_path": "sd-models/moss-image-comfy-bf16/text_encoder.safetensors",
-  "vae_path": "sd-models/moss-image-comfy/vae/flux2-vae.safetensors",
-  "tokenizer_path": "sd-models/moss-image-comfy-bf16/tokenizer",
-  "src": "train/moss-image",
-  "output_dir": "output/moss",
-  "output_name": "my-moss-comfy-lora",
-  "run_preprocess": true,
-  "epochs": 0,
-  "max_steps": 50,
-  "compile": false,
-  "preview_every_epochs": 0,
-  "preview_prompt": ""
+  "model_variant": "base",
+  "dit_path": "./sd-models/moss-image/dit.safetensors",
+  "text_encoder_path": "./sd-models/moss-image/text_encoder.safetensors",
+  "vae_path": "./sd-models/moss-image/vae.safetensors",
+  "tokenizer_path": "./sd-models/moss-image/tokenizer",
+  "train_data_dir": "./train/moss-image",
+  "output_dir": "./output",
+  "output_name": "my-moss-lokr",
+  "max_train_steps": 50,
+  "network_algorithm": "lokr",
+  "network_dim": 32,
+  "network_alpha": 32,
+  "learning_rate": 0.0001,
+  "memory_profile": "minimal",
+  "batching": "count",
+  "batch_size": 1,
+  "mixed_precision": "bf16",
+  "compile_mode": "off",
+  "tune_mode": "off",
+  "sample_every_n_steps": 0
 }
 ```
 
-#### 训练中与产出
+## 5. 训练结果怎么用
 
-- 任务页看 progress / loss。  
-- 默认倾向：8 epochs、rank 16、`lr=1e-4`、warmup 0.05、LoRA BF16、梯度检查点开、`blocks_to_swap=0`、`compile=false`（Windows 拒绝 compile）。**单卡**；无多卡 / repeats。  
-- 缓存：`*.moss_te.safetensors`、`*_宽x高.moss_latent.safetensors`，以及 `.next-moss-cache.json`。改模型/标注/参数时换新 `cache_dir` 或开 `overwrite_cache`。  
-- 输出：`<output_name>.safetensors` + 同名 `.json`；周期保存 `<output_name>_eN.safetensors`。
+1. ComfyUI 优先加载 `*-comfy.safetensors`。
+2. 支持 LyCORIS 的加载器可使用 `*-lycoris.safetensors`。
+3. 推理必须使用与训练一致的 Base/SFT 变体。
+4. 对比训练效果时固定提示词、seed、采样器、steps、CFG 和底模。
+5. 不要把 Anima、Flux 或其他引擎的缓存和 LoRA 混入 MOSS 流程。
 
-当前不支持：断点续训、加载已有 LoRA 续训、全量微调、量化模型训练、图像编辑训练。
+## 6. 常见问题
 
-## 5. 怎么使用
+### 提示文本编码器不兼容
 
-1. 训练结束后，在 `output_dir` 取最终或 `_eN` 的 `.safetensors`。  
-2. 同名 `.json` 是训练报告（步数、峰值显存、loss 历史等），便于对照参数。  
-3. 推理侧：在支持 MOSS-Image 的工作流中加载该 LoRA（例如 ComfyUI 对应节点）。键名与导出格式随上游；若回载异常，先核对是否用了同一套 Base/SFT 变体。  
-4. 不要把 Anima / 其他引擎的缓存或 LoRA 混进 MOSS 流程。
+当前训练器要求 BF16 文本编码器保留 `language_model.*` 权重前缀。不要使用 ComfyUI 的 INT8/GPTQ 文本编码器；重新运行魔搭下载器。
 
-## 附录
+### 首次启动要求安装引擎
 
-### 常用参数
+源码版属于正常情况；专用整合包则说明训练环境没有正确打入 7z。应联系打包者，不要让最终用户临时重装数 GB 环境。
 
-`epochs`、`max_steps`、`rank`、`alpha`、`lr`、`warmup_ratio`、`caption_dropout`、`lora_dtype`、`targets`、`sigma_*`、`max_grad_norm`、`grad_checkpointing`、`blocks_to_swap`、`compile`、`log_every`、`seed`、`preview_every_epochs`、`preview_prompt`、`preview_prompt_file`。
+### Windows 出现 Triton / C 编译器错误
 
-### 钉版上游
+先把“算子自动调优”设为 `off`。本分支已对已知的 `CalledProcessError` 增加 eager 回退；若仍终止，请附完整任务日志反馈。
 
-[`sorryhyun/anima_lora` @ `moss_lora`](https://github.com/sorryhyun/anima_lora/tree/moss_lora)，提交 [`1df6181fcea45926932fb63d5924f6f3dfd7c7d0`](https://github.com/sorryhyun/anima_lora/commit/1df6181fcea45926932fb63d5924f6f3dfd7c7d0)。接口见该提交的 `library/moss/requests.py`。升级产品分支不会自动替换钉版。
+### 显存不足
+
+按顺序尝试：`balanced → low → minimal`、降低 `max_tokens`、改用 `count + batch_size=1`、关闭预览。不要一开始同时开启 FP8、编译与多卡。
+
+## 7. 上游
+
+- [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer)
+- [LyCORIS](https://github.com/KohakuBlueleaf/LyCORIS)
+- [MOSS-Image Base](https://huggingface.co/OpenMOSS-Team/MOSS-Image-Base)
+
+Next Trainer 钉住上游提交并应用 Windows Triton 编译失败回退补丁；具体版本以
+`mikazuki/engines/kohaku_moss/manifest.py` 为准。

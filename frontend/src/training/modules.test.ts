@@ -31,9 +31,9 @@ describe("training module mapping", () => {
     }
   })
 
-  it("keeps KohakuMossTrainer optional and Kohya first for MOSS-Image", () => {
+  it("puts KohakuMossTrainer first for MOSS-Image", () => {
     expect(resolveModule("moss-image", "kohaku-moss", "lora")?.schemaName).toBe("kohaku-moss-image-lora")
-    expect(recommendedEngineFor("moss-image")).toBe("kohya")
+    expect(recommendedEngineFor("moss-image")).toBe("kohaku-moss")
   })
   it("resolves every v1 minimal mapping", () => {
     expect(resolveModule("anima", "kohya", "lora")?.schemaName).toBe("sd3-lora")
@@ -78,8 +78,8 @@ describe("training module mapping", () => {
     expect(normalizeModel(42)).toBeUndefined()
   })
 
-  it("resolves the default selection to the acceptance path sd3-lora", () => {
-    expect(resolveModule(DEFAULT_SELECTION.model, DEFAULT_SELECTION.engine, DEFAULT_SELECTION.target)?.schemaName).toBe("sd3-lora")
+  it("opens KohakuMossTrainer as the default path on this branch", () => {
+    expect(resolveModule(DEFAULT_SELECTION.model, DEFAULT_SELECTION.engine, DEFAULT_SELECTION.target)?.schemaName).toBe("kohaku-moss-image-lora")
   })
 
   it("returns undefined for unmapped combinations", () => {

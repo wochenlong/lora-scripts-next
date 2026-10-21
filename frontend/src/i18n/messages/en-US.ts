@@ -1028,8 +1028,8 @@ export default {
     moreChangelog: "More changelog…",
   },
   home: {
-    heroTitle: "Next Trainer 3.0.0 is out",
-    heroSubtitle: "The four-pane workbench is ready — configure, dataset, tasks, and engines in one place.",
+    heroTitle: "Next Trainer 3.3.0 Development Preview",
+    heroSubtitle: "KohakuMossTrainer now powers the MOSS-Image workflow with LoRA, LyCORIS, and 24 GB VRAM optimization.",
     startTraining: "Configure Training",
     readGuide: "Read the Guide",
     portalAria: "Feature portals",
@@ -1433,7 +1433,7 @@ export default {
   },
   kohakuMoss: {
     title: "KohakuMossTrainer",
-    intro: "An experimental high-performance MOSS-Image engine using isolated Python 3.12, the official kogine CLI, and LyCORIS. Kohya remains the default.",
+    intro: "An experimental high-performance MOSS-Image engine using isolated Python 3.12, the official kogine CLI, and LyCORIS. This branch makes it the default MOSS-Image engine.",
     credit: "This optional engine integrates Kohaku's (Dragon Girl's) open-source {upstream}. Thanks to the author and LyCORIS community. Follow the upstream KohakuMoss License 1.0; full notices: {notice}.",
     install: "Install experimental engine",
     installWorking: "Installing…",

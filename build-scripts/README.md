@@ -4,6 +4,8 @@ Windows 便携整合包构建脚本。
 
 **协作者发包请先读：** [`docs/portable-build-guide.md`](../docs/portable-build-guide.md)（需求、包型、命令、验收、上传权限）。
 
+**KohakuMoss 独立分支预览包：** [`docs/team/kohaku-moss-portable-build.md`](../docs/team/kohaku-moss-portable-build.md)。
+
 契约细节：[`docs/portable-packaging-git-update.md`](../docs/portable-packaging-git-update.md)。  
 2026 根目录规格：[`docs/design/portable-2026.md`](../docs/design/portable-2026.md)。
 

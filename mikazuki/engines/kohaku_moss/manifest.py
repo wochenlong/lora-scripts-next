@@ -17,6 +17,6 @@ CAPABILITIES = {
     "tasks": ["lora"],
     "variants": ["moss-image"],
 }
-PATCHES = []
+PATCHES = ["windows-triton-called-process-fallback-v1"]
 REQUIRES = {"python": "3.12", "accelerator": "cuda"}
 SLIM_SUPPORTED = False

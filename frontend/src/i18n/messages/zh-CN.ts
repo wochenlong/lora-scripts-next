@@ -1028,8 +1028,8 @@ export default {
     moreChangelog: "查看更多更新日志…",
   },
   home: {
-    heroTitle: "Next 训练器 3.0.0 版本正式发布",
-    heroSubtitle: "四栏训练工作台已就绪：配置、数据集、任务与引擎管理，一处开训。",
+    heroTitle: "Next Trainer 3.3.0 开发预览",
+    heroSubtitle: "KohakuMossTrainer 已接入 MOSS-Image 训练工作流，支持 LoRA、LyCORIS 与 24GB 显存优化。",
     startTraining: "开始配置训练",
     readGuide: "阅读使用指南",
     portalAria: "功能入口",
@@ -1433,7 +1433,7 @@ export default {
   },
   kohakuMoss: {
     title: "KohakuMossTrainer",
-    intro: "实验性高性能 MOSS-Image 训练引擎。使用独立 Python 3.12、官方 kogine CLI 与 LyCORIS；Kohya 仍是默认首选。",
+    intro: "实验性高性能 MOSS-Image 训练引擎。使用独立 Python 3.12、官方 kogine CLI 与 LyCORIS；本分支已将其设为 MOSS-Image 默认引擎。",
     credit: "本可选训练引擎集成自 Kohaku（龙娘）的开源项目 {upstream}，感谢作者及 LyCORIS 社区。请遵守上游 KohakuMoss License 1.0；完整声明见 {notice}。",
     install: "安装实验性引擎",
     installWorking: "安装中…",

@@ -34,11 +34,11 @@ export const TRAINING_SCENARIOS: readonly { id: TrainingScenario; model: Trainin
 /** Model dropdown order: scenario recommendations first, then other families.
  * Lumina is omitted — almost unused; deep links via ?model=lumina still work. */
 export const MODEL_PICKER_ORDER: readonly TrainingModel[] = [
+  "moss-image",
   "anima",
   "krea2",
   "klein",
   "qwen-image-21",
-  "moss-image",
   "ideogram4",
   "flux",
   "sdxl",
@@ -46,8 +46,8 @@ export const MODEL_PICKER_ORDER: readonly TrainingModel[] = [
 ]
 
 export const DEFAULT_SELECTION: { model: TrainingModel; engine: TrainingEngine; target: TrainingTarget } = {
-  model: "anima",
-  engine: "kohya",
+  model: "moss-image",
+  engine: "kohaku-moss",
   target: "lora",
 }
 
@@ -65,9 +65,9 @@ export function modelForScenario(scenario: TrainingScenario): TrainingModel {
 // resolves shared schemas (lora-master, dreambooth) to the sdxl module,
 // matching the previous single-SD default (schema default was sdxl-lora).
 export const TRAINING_MODULES: readonly TrainingModule[] = [
+  { model: "moss-image", engine: "kohaku-moss", target: "lora", schemaName: "kohaku-moss-image-lora" },
   { model: "moss-image", engine: "kohya", target: "lora", schemaName: "moss-image-lora" },
   { model: "moss-image", engine: "moss", target: "lora", schemaName: "moss-image-anima-lora" },
-  { model: "moss-image", engine: "kohaku-moss", target: "lora", schemaName: "kohaku-moss-image-lora" },
   { model: "qwen-image-21", engine: "diffsynth", target: "lora", schemaName: "qwen-image-21-lora" },
   { model: "anima", engine: "kohya", target: "lora", schemaName: "sd3-lora" },
   { model: "anima", engine: "anima-fast", target: "lora", schemaName: "anima-lora-fast" },
@@ -169,7 +169,7 @@ export const ENGINE_PREFERENCE: Readonly<Record<TrainingModel, readonly Training
   ideogram4: ["musubi", "ai-toolkit"],
   klein: ["ai-toolkit"],
   "qwen-image-21": ["diffsynth", "ai-toolkit"],
-  "moss-image": ["kohya", "moss", "kohaku-moss"],
+  "moss-image": ["kohaku-moss", "kohya", "moss"],
 }
 
 /** Ideal (first-choice) engine for a model, ignoring install state. */

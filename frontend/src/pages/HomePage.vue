@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue"
 import { useI18n } from "vue-i18n"
-import qwenPoster from "../assets/qwen-image-21-poster-16-9.png"
+import mossPoster from "../assets/moss-kohaku-poster-16-9.svg"
 
 const { t } = useI18n()
 
@@ -13,11 +13,11 @@ const portals = computed(() => [
 
 const slides = computed(() => [
   {
-    id: "qwen-image-21",
+    id: "kohaku-moss",
     kind: "training-poster" as const,
-    src: qwenPoster,
-    href: "https://github.com/wochenlong/lora-scripts-next/blob/main/docs/diffsynth.md",
-    alt: "Qwen-Image-2.1 训练支持",
+    src: mossPoster,
+    to: "/training?model=moss-image&engine=kohaku-moss&target=lora",
+    alt: "MOSS-Image KohakuMossTrainer 训练支持",
   },
   { id: "intro", kind: "intro" as const },
   {
@@ -110,9 +110,9 @@ onBeforeUnmount(stopAutoplay)
             </a>
           </template>
           <template v-else>
-            <a class="hero-poster" :href="slide.href" target="_blank" rel="noopener noreferrer">
+            <RouterLink class="hero-poster" :to="slide.to">
               <img :src="slide.src" :alt="slide.alt" />
-            </a>
+            </RouterLink>
           </template>
         </article>
       </div>

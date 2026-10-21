@@ -25,6 +25,8 @@ kohaku-moss-preview.1-build-report.md
 - 不预装 MOSS 模型；提供魔搭一键下载 BAT。
 - “完整训练环境”不等于内置训练底模；模型权重、训练集和输出仍与程序包分离。
 - 默认模型和默认引擎固定为 MOSS-Image + KohakuMossTrainer。
+- 根目录 `README.md` / `README-zh.md`、`docs/README.md`、`docs/getting-started*.md` 与
+  `docs/MOSS.md` 必须是专用版内容，不得沿用通用版 Kohya、Musubi、Anima 或 Qwen 教程。
 
 ## 2. 已核实的技术结论
 
@@ -169,6 +171,12 @@ build/Next-Trainer-Portable/
   说明.txt
   python_embeded/
   Next-Trainer/
+    README.md
+    README-zh.md
+    docs/
+      README.md
+      getting-started.md
+      MOSS.md
     extensions/
       kohaku-moss/
         source/
@@ -424,6 +432,8 @@ Get-FileHash `
 - [ ] `tools\Download-MOSS-Model.bat` 存在
 - [ ] BAT 可断点续传、校验 SHA256、生成兼容布局
 - [ ] 首页 MOSS 海报和中英文文案无乱码
+- [ ] 根 README、快速开始与 `docs/MOSS.md` 均为 KohakuMoss 专用内容
+- [ ] `说明.txt` 能正确指向 `Next-Trainer\docs\MOSS.md`
 - [ ] MOSS-Image / KohakuMossTrainer 为默认选择
 - [ ] 两个不同路径均可启动
 - [ ] KohakuMoss 首次启动、重定位、断网重启审计均为 `ready`

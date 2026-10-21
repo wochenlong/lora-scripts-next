@@ -38,7 +38,8 @@ def source_clone_commands(runtime, sources):
 
 def installation_plan(runtime, sources=None):
     sources = sources or DownloadSources()
-    return [*source_clone_commands(runtime, sources), *install_commands(runtime, sources)]
+    patch = [sys.executable, str(Path(__file__).with_name("patch_upstream.py")), str(runtime.source)]
+    return [*source_clone_commands(runtime, sources), patch, *install_commands(runtime, sources)]
 
 
 def start_install(runtime, sources=None, repair=False):

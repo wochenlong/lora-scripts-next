@@ -62,6 +62,11 @@ def audit_environment(runtime, *, runner=None) -> dict:
     missing = [str(path) for path in required if not path.is_file()]
     if missing:
         return {"ok": False, "errors": ["KohakuMossTrainer 环境缺少：" + ", ".join(missing)], "facts": facts}
+    fallback_file = runtime.source / "src" / "kohakumoss_kernels" / "errors.py"
+    fallback_ready = fallback_file.is_file() and "subprocess.CalledProcessError" in fallback_file.read_text(encoding="utf-8")
+    facts["windows_build_fallback"] = fallback_ready
+    if not fallback_ready:
+        errors.append("KohakuMossTrainer 缺少 Windows Triton 编译失败回退补丁。")
     probe = """
 import importlib.metadata as md, json, torch
 import kohakumoss, kohakuengine, lycoris
