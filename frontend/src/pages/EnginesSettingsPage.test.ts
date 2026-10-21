@@ -72,6 +72,25 @@ function addTestEngines() {
   }
 }
 
+it("saves the DiffSynth cache directory from the manage dialog", async () => {
+  vi.spyOn(ElMessage, "success").mockImplementation(() => ({ close: vi.fn() }))
+  const wrapper = await setup()
+  await wrapper.get('[data-engine="diffsynth"] .engine-more-btn').trigger("click")
+  const details = wrapper.findAll('[data-engine="diffsynth"] .engine-more-menu button')
+    .find((button) => button.text() === i18n.global.t("settings.engines.list.details"))
+  await details!.trigger("click")
+  await flushPromises()
+  const panel = document.body.querySelector('[data-testid="diffsynth-cache-dir"]')!
+  expect(panel).toBeTruthy()
+  const input = panel.querySelector("input")!
+  input.value = "/root/autodl-tmp/dscache"
+  input.dispatchEvent(new Event("input"))
+  ;(panel.querySelector("button") as HTMLButtonElement).click()
+  await flushPromises()
+  expect(server.paths?.diffsynth_cache).toBe("/root/autodl-tmp/dscache")
+  document.body.querySelector(".ds-modal-backdrop .ds-close")!.dispatchEvent(new Event("click"))
+})
+
 it("shows the main-env compat badge when kohya falls back to the main environment", async () => {
   vi.mocked(enginesApi.list).mockResolvedValue([
     { id: "kohya", state: "ready", featureEnabled: true, facts: { mode: "main_env", main_env_python: "D:/pack/python_embeded/python.exe" } },
