@@ -8,6 +8,7 @@ from .manifest import FEATURE_FLAG_ENV
 TRAIN_SCRIPT = "examples/qwen_image_21/model_training/train.py"
 PYTHON_VERSION = "3.12"
 PROJECT_ROOT_ENV = "NEXT_TRAINER_PROJECT_ROOT"
+CACHE_DIR_ENV = "NEXT_DIFFSYNTH_CACHE_DIR"
 
 
 def feature_enabled():
@@ -53,3 +54,31 @@ class Runtime:
 
 def runtime(project_root: Path | None = None):
     return Runtime((project_root or default_project_root()).resolve())
+
+
+def remember_cache_dir(override: str) -> None:
+    raw = str(override or "").strip()
+    if not raw:
+        return
+    from mikazuki.user_data import UserDataError, UserDataStore
+    store = UserDataStore()
+    try:
+        settings = store.read_settings()
+        if str(settings.get("paths", {}).get("diffsynth_cache") or "") == raw:
+            return
+        store.patch_settings({"paths": {"diffsynth_cache": raw}}, settings["revision"])
+    except (UserDataError, OSError):
+        return
+
+
+def configured_cache_dir(rt: Runtime, override: str = "") -> Path:
+    for raw in (str(override or "").strip(), os.environ.get(CACHE_DIR_ENV, "").strip()):
+        if raw:
+            path = Path(raw).expanduser()
+            return path.resolve() if path.is_absolute() else (rt.project_root / path).resolve()
+    from mikazuki.user_data import UserDataStore
+    raw = str(UserDataStore().read_settings().get("paths", {}).get("diffsynth_cache") or "").strip()
+    if raw:
+        path = Path(raw).expanduser()
+        return path.resolve() if path.is_absolute() else (rt.project_root / path).resolve()
+    return rt.root / "cache" / "models"

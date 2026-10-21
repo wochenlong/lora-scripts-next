@@ -3,6 +3,7 @@ Schema.intersect([
         training_task: Schema.union(["text-to-image", "image-edit"]).default("text-to-image").role("external-control").hidden(),
         model_train_type: Schema.string().default("qwen-image-21-lora").disabled().description("训练种类"),
         model_input_mode: Schema.union(["model_repository", "comfyui_files"]).default("model_repository").description("模型输入方式：模型仓库 / ComfyUI 模型文件；Qwen-Image-2.1 BF16 文生图 / Edit 共用同一套模型"),
+        diffsynth_cache: Schema.string().role('filepicker', { type: "folder" }).description("模型转换缓存目录（可选）：ComfyUI 模型转换缓存与编码缓存的写入位置，转换副本接近原模型体积。AutoDL 等系统盘较小的环境请指到数据盘；留空 = 引擎设置页的配置或默认 extensions/diffsynth/cache"),
     }).description("训练用模型"),
     Schema.union([
         Schema.object({

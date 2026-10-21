@@ -135,7 +135,7 @@ def validate_settings(value, *, strict=False, require_meta=True):
             raise UserDataError("Duplicate engine order entry")
     if "paths" in value:
         paths = value["paths"]
-        _keys(paths, {"models", "tagger_models", "python", "datasets", "outputs"}, "paths", strict)
+        _keys(paths, {"models", "tagger_models", "python", "datasets", "outputs", "diffsynth_cache"}, "paths", strict)
         for key, item in paths.items():
             if key in {"models", "tagger_models", "python"}:
                 _mapping(item, key)
