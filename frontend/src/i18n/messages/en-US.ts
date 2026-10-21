@@ -988,7 +988,7 @@ export default {
       cacheDir: {
         label: "Model conversion cache directory",
         placeholder: "Empty = default (extensions/diffsynth/cache)",
-        hint: "Where ComfyUI model conversion and encoding caches are written. On AutoDL or other small-system-disk hosts, point this to a data disk; leave empty to restore the default.",
+        hint: "ComfyUI model conversion and encoding caches are written to the models / encodings subdirectories under the selected directory. On AutoDL or other small-system-disk hosts, point this to a data disk; leave empty to restore the default.",
         save: "Save cache directory",
       },
       console: {

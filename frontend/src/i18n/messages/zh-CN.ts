@@ -988,7 +988,7 @@ export default {
       cacheDir: {
         label: "模型转换缓存目录",
         placeholder: "留空使用默认目录（extensions/diffsynth/cache）",
-        hint: "ComfyUI 模型转换缓存与编码缓存的写入位置；AutoDL 等系统盘较小的环境请指到数据盘，留空恢复默认。",
+        hint: "ComfyUI 模型转换缓存与编码缓存写入所选目录下的 models / encodings 子目录；AutoDL 等系统盘较小的环境请指到数据盘，留空恢复默认。",
         save: "保存缓存目录",
       },
       console: {

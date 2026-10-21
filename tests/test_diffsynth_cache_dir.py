@@ -7,7 +7,7 @@ import pytest
 from mikazuki.engines.diffsynth import adapter
 from mikazuki.engines.diffsynth.adapter import ensure_cache_space
 from mikazuki.engines.diffsynth.inputs import cache_key
-from mikazuki.engines.diffsynth.settings import CACHE_DIR_ENV, Runtime, configured_cache_dir, remember_cache_dir
+from mikazuki.engines.diffsynth.settings import CACHE_DIR_ENV, Runtime, configured_cache_root, remember_cache_dir
 
 
 @pytest.fixture(autouse=True)
@@ -17,13 +17,20 @@ def no_env_override(monkeypatch):
 
 def test_default_cache_dir_is_project_extension(tmp_path):
     rt = Runtime(tmp_path)
-    assert configured_cache_dir(rt) == rt.root / "cache" / "models"
+    assert configured_cache_root(rt) == rt.root / "cache"
+
+
+def test_models_and_encodings_stay_under_selected_root(tmp_path):
+    root = configured_cache_root(Runtime(tmp_path), str(tmp_path / "data盘"))
+    models = root / "models"
+    encodings = models.parent / "encodings"
+    assert encodings.parent == models.parent == root
 
 
 def test_env_override_wins(tmp_path, monkeypatch):
     target = tmp_path / "data盘 cache"
     monkeypatch.setenv(CACHE_DIR_ENV, str(target))
-    assert configured_cache_dir(Runtime(tmp_path)) == target.resolve()
+    assert configured_cache_root(Runtime(tmp_path)) == target.resolve()
 
 
 def _settings_store(monkeypatch, paths):
@@ -36,28 +43,28 @@ def _settings_store(monkeypatch, paths):
 def test_settings_absolute_path(tmp_path, monkeypatch):
     target = tmp_path / "shared" / "dscache"
     _settings_store(monkeypatch, {"diffsynth_cache": str(target)})
-    assert configured_cache_dir(Runtime(tmp_path)) == target.resolve()
+    assert configured_cache_root(Runtime(tmp_path)) == target.resolve()
 
 
 def test_settings_relative_path_resolves_against_project_root(tmp_path, monkeypatch):
     _settings_store(monkeypatch, {"diffsynth_cache": "bigdisk/dscache"})
-    assert configured_cache_dir(Runtime(tmp_path)) == (tmp_path / "bigdisk" / "dscache").resolve()
+    assert configured_cache_root(Runtime(tmp_path)) == (tmp_path / "bigdisk" / "dscache").resolve()
 
 
 def test_settings_empty_falls_back_to_default(tmp_path, monkeypatch):
     _settings_store(monkeypatch, {"diffsynth_cache": "  "})
-    assert configured_cache_dir(Runtime(tmp_path)) == Runtime(tmp_path).root / "cache" / "models"
+    assert configured_cache_root(Runtime(tmp_path)) == Runtime(tmp_path).root / "cache"
 
 
 def test_task_config_override_wins_over_env_and_settings(tmp_path, monkeypatch):
     monkeypatch.setenv(CACHE_DIR_ENV, str(tmp_path / "env-cache"))
     _settings_store(monkeypatch, {"diffsynth_cache": str(tmp_path / "settings-cache")})
     target = tmp_path / "task-cache"
-    assert configured_cache_dir(Runtime(tmp_path), str(target)) == target.resolve()
+    assert configured_cache_root(Runtime(tmp_path), str(target)) == target.resolve()
 
 
 def test_task_config_relative_override_resolves_against_project_root(tmp_path, monkeypatch):
-    assert configured_cache_dir(Runtime(tmp_path), "bigdisk/dscache") == (tmp_path / "bigdisk" / "dscache").resolve()
+    assert configured_cache_root(Runtime(tmp_path), "bigdisk/dscache") == (tmp_path / "bigdisk" / "dscache").resolve()
 
 
 def test_remember_cache_dir_persists_form_value(tmp_path, monkeypatch):

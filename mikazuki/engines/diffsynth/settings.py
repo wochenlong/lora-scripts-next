@@ -71,7 +71,7 @@ def remember_cache_dir(override: str) -> None:
         return
 
 
-def configured_cache_dir(rt: Runtime, override: str = "") -> Path:
+def configured_cache_root(rt: Runtime, override: str = "") -> Path:
     for raw in (str(override or "").strip(), os.environ.get(CACHE_DIR_ENV, "").strip()):
         if raw:
             path = Path(raw).expanduser()
@@ -81,4 +81,4 @@ def configured_cache_dir(rt: Runtime, override: str = "") -> Path:
     if raw:
         path = Path(raw).expanduser()
         return path.resolve() if path.is_absolute() else (rt.project_root / path).resolve()
-    return rt.root / "cache" / "models"
+    return rt.root / "cache"

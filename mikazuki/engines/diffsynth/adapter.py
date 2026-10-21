@@ -7,7 +7,7 @@ import math
 import shutil
 from .inputs import absolute, model_inputs, dataset_inputs, is_edit, cache_key
 from .samples import sample_config
-from .settings import configured_cache_dir
+from .settings import configured_cache_root
 
 @dataclass
 class AdaptedConfig:
@@ -123,7 +123,7 @@ def adapt_config(config, runtime):
     schedule = schedule_config(config, total_steps)
     if samples["enabled"] and arguments["enable_model_cpu_offload"] and not cache_embeddings:
         raise ValueError("模型 CPU 卸载与训练预览同时使用时，请开启预编码缓存；否则请关闭预览或关闭模型 CPU 卸载。")
-    cache_dir = configured_cache_dir(runtime, str(config.get("diffsynth_cache") or ""))
+    cache_dir = configured_cache_root(runtime, str(config.get("diffsynth_cache") or "")) / "models"
     ensure_cache_space(models, cache_dir)
     engine = {"training_task": "image-edit" if editing else "text-to-image", "models": models, "cache_dir": str(cache_dir), "samples": samples, "output_name": name,
               "cache_embeddings": cache_embeddings, "lora_alpha": alpha, "lr_schedule": schedule,
