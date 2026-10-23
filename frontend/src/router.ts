@@ -51,6 +51,7 @@ const routes: RouteRecordRaw[] = [
   { path: "/lora/flux.html", redirect: () => trainingQuery("flux", "kohya", "lora") },
   { path: "/lora/sd3.html", redirect: () => trainingQuery("anima", "kohya", "lora") },
   { path: "/lora/anima-fast.html", redirect: () => trainingQuery("anima", "anima-fast", "lora") },
+  { path: "/lora/kohaku-moss", redirect: () => trainingQuery("moss-image", "kohaku-moss", "lora") },
   { path: "/lora/anima-fast", redirect: () => trainingQuery("anima", "anima-fast", "lora") },
   { path: "/lora/anima-finetune.html", redirect: () => trainingQuery("anima", "kohya", "finetune") },
   { path: "/lora/krea2.html", redirect: () => trainingQuery("krea2", "musubi", "lora") },

@@ -43,7 +43,7 @@ it("keeps one model hint visible and hides use-case tips until asked", async () 
   expect(wrapper.get('[data-testid="model-use-hint"]').text()).toContain("二次元")
   expect(wrapper.get('[data-testid="model-guide-toggle"]').text()).toBe("不会选？")
   expect(wrapper.findAll('[data-testid="model-guide-panel"]')).toHaveLength(0)
-  expect(wrapper.get('[data-testid="engine-hint"]').text()).toMatch(/隐藏 3 项/)
+  expect(wrapper.get('[data-testid="engine-hint"]').text()).toMatch(/隐藏 4 项/)
   expect(wrapper.findAll('[data-testid="engine-select"]')).toHaveLength(1)
 
   await wrapper.get('[data-testid="model-guide-toggle"]').trigger("click")
@@ -63,7 +63,7 @@ it("explains when unsupported engines are hidden for the model", async () => {
   const wrapper = mountSelector({ engine: "kohya" })
   await flushPromises()
 
-  expect(wrapper.get('[data-testid="engine-hint"]').text()).toMatch(/不支持当前模型.*隐藏 3 项/)
+  expect(wrapper.get('[data-testid="engine-hint"]').text()).toMatch(/不支持当前模型.*隐藏 4 项/)
   wrapper.unmount()
 })
 
@@ -121,7 +121,7 @@ it("emits engine-picked when the user changes the engine dropdown", async () => 
 })
 
 
-it("offers MOSS-Image only with its native MOSS engine and LoRA target", async () => {
+it("offers MOSS-Image engines while keeping the LoRA target", async () => {
   vi.spyOn(enginesApi, "list").mockResolvedValue([
     { id: "moss", state: "not_installed", featureEnabled: true },
     { id: "anima-fast", state: "ready", featureEnabled: true },
@@ -129,7 +129,7 @@ it("offers MOSS-Image only with its native MOSS engine and LoRA target", async (
   const wrapper = mountSelector({ model: "moss-image", engine: "moss" })
   await flushPromises()
   expect(wrapper.findAll('[data-testid="model-select"] option').some(option => option.attributes("value") === "moss-image")).toBe(true)
-  expect(wrapper.findAll('[data-testid="engine-select"] option').map(option => option.attributes("value"))).toEqual(["moss"])
+  expect(wrapper.findAll('[data-testid="engine-select"] option').map(option => option.attributes("value"))).toEqual(["kohya", "moss", "kohaku-moss"])
   expect(wrapper.get('[data-testid="engine-select"]').text()).toContain("MOSS (anima_lora)")
   expect(wrapper.get('[data-testid="engine-hint"]').text()).toContain("MOSS (anima_lora)")
   expect(wrapper.findAll(".segmented button")[1].attributes("disabled")).toBeDefined()

@@ -145,6 +145,10 @@ extensions/diffsynth/
 /extensions/moss/
 /extensions/.moss.lock
 
+# Isolated KohakuMoss runtime and cross-process lock
+/extensions/kohaku-moss/
+/extensions/.kohaku-moss.lock
+
 # Local project memory
 /MEMORY.md
 

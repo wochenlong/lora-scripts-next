@@ -13,7 +13,7 @@ from pathlib import Path
 
 
 MAX_BYTES = 1024 * 1024
-ENGINES = {"kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"}
+ENGINES = {"kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss", "kohaku-moss"}
 _LOCK = threading.RLock()
 
 
@@ -51,6 +51,21 @@ def _configuration_snapshot(path):
             import yaml
             value = without_credentials(yaml.safe_load(text))
             serialized = yaml.safe_dump(value, allow_unicode=True)
+        elif suffix == ".py":
+            # Kohaku configs contain literal assignments, never executable code.
+            import ast
+            value = {}
+            for index, node in enumerate(ast.parse(text).body):
+                if index == 0 and isinstance(node, ast.Expr) and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                    continue
+                if not isinstance(node, ast.Assign) or len(node.targets) != 1 or not isinstance(node.targets[0], ast.Name):
+                    raise UserDataError("Python configuration must contain literal assignments only")
+                name = node.targets[0].id
+                if name in value:
+                    raise UserDataError("Duplicate configuration assignment")
+                value[name] = ast.literal_eval(node.value)
+            value = without_credentials(value)
+            serialized = "".join(f"{key} = {item!r}\n" for key, item in value.items())
         elif suffix == ".json":
             value = without_credentials(json.loads(text))
             serialized = json.dumps(value, ensure_ascii=False, allow_nan=False)

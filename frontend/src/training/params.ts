@@ -55,11 +55,28 @@ const MODEL_ASSET_DENY_TRAIN_TYPES = new Set([
 ])
 const MODEL_ASSET_DENY_KEYS = ["vae", "turbo_dit", "turbo_dit_cache", "unconditional_dit", "fp8_base", "fp8_scaled"] as const
 
+/**
+ * KohakuMossTrainer has its own defaults (1024x1024, cfg=3, steps=50, dim=32,
+ * lowercase optimizer_type, numeric learning_rate, folder pretrained_model_name_or_path).
+ * Only train_data_dir and output_dir may cross between Kohya and KohakuMossTrainer.
+ */
+const KOHAKU_MOSS_ISOLATED_KEYS = [
+  "pretrained_model_name_or_path", "output_name", "learning_rate", "optimizer_type",
+  "network_dim", "network_alpha", "max_train_epochs", "max_train_steps",
+  "save_every_n_steps", "lr_warmup_steps", "seed",
+  "sample_every_n_steps", "sample_width", "sample_height", "sample_steps",
+  "sample_cfg", "sample_shift", "sample_seed", "sample_prompts", "sample_negative",
+  "train_norm", "lokr_factor", "use_scalar", "rank_dropout_scale", "mixed_precision",
+] as const
+
 /** Deny set for a carry-over / autosave-sanitize boundary, keyed on the target page. */
 export function denyKeysForDefaults(defaults: FormModel): Set<string> {
   const deny = new Set<string>(CROSS_SCHEMA_DENY_KEYS)
   // MOSS resolution is an integer pixel-area cap, unlike Kohya width,height.
   if (defaults.model_train_type === "moss-image-anima-lora") deny.add("resolution")
+  if (defaults.model_train_type === "kohaku-moss-image-lora") {
+    for (const key of KOHAKU_MOSS_ISOLATED_KEYS) deny.add(key)
+  }
   if (MODEL_ASSET_DENY_TRAIN_TYPES.has(String(defaults.model_train_type ?? ""))) {
     for (const key of MODEL_ASSET_DENY_KEYS) deny.add(key)
   }
@@ -71,6 +88,7 @@ export const SCHEMA_TRAIN_TYPES: Record<string, string> = {
   "qwen-image-21-lora": "qwen-image-21-lora",
   "moss-image-lora": "moss-image-lora",
   "moss-image-anima-lora": "moss-image-anima-lora",
+  "kohaku-moss-image-lora": "kohaku-moss-image-lora",
   "anima-lora-fast": "anima-lora-fast",
   "sd3-lora": "anima-lora",
   "anima-finetune": "anima-finetune",
@@ -93,6 +111,9 @@ export function pickCarryOverFields(
 ): FormModel {
   const deny = denyKeysForDefaults(defaults)
   if (carry.model_train_type === "moss-image-anima-lora") deny.add("resolution")
+  if (carry.model_train_type === "kohaku-moss-image-lora") {
+    for (const key of KOHAKU_MOSS_ISOLATED_KEYS) deny.add(key)
+  }
   const carried: FormModel = {}
   for (const [key, value] of Object.entries(carry)) {
     if (deny.has(key)) continue
@@ -133,7 +154,10 @@ export function buildTrainingConfig(source: FormModel, schemaName: string) {
   if (lockedTrainType) config.model_train_type = lockedTrainType
   // MOSS uses its own CacheRequest / TrainRequest keys, never Kohya network or
   // preview conversions. The backend resolves cache/output paths for execution.
-  if (schemaName === "moss-image-anima-lora") {
+  if (schemaName === "moss-image-anima-lora" || schemaName === "kohaku-moss-image-lora") {
+    if (typeof config.learning_rate === "string" && Number.isFinite(Number(config.learning_rate))) {
+      config.learning_rate = Number(config.learning_rate)
+    }
     // GPU selection belongs to the shared launcher, not the native request flags.
     if (Array.isArray(config.gpu_ids)) {
       config.gpu_ids = config.gpu_ids.map((value) => String(value).match(/GPU (\d+):/)?.[1] || String(value)).filter(Boolean)
@@ -297,11 +321,13 @@ function coerceLycorisArgValue(raw: string, asBool: boolean): FormValue {
 
 export function hydrateImportedConfig(source: FormModel) {
   const config = cloneFormModel(source)
-  for (const key of FLOAT_PARAMS) {
-    const value = config[key]
-    if (typeof value !== "number") continue
-    const exponential = value.toExponential()
-    config[key] = exponential.length <= 6 ? exponential : String(value)
+  if (config.model_train_type !== "kohaku-moss-image-lora") {
+    for (const key of FLOAT_PARAMS) {
+      const value = config[key]
+      if (typeof value !== "number") continue
+      const exponential = value.toExponential()
+      config[key] = exponential.length <= 6 ? exponential : String(value)
+    }
   }
   if (Array.isArray(config.network_args)) {
     for (const raw of config.network_args) {
@@ -341,7 +367,12 @@ export function checkTrainingConfig(config: FormModel): ParamDiagnostics {
   }
   const optimizer = String(config.optimizer_type || "")
   if (optimizer.startsWith("DAdapt") && config.lr_scheduler !== "constant") warnings.push(i18n.global.t("training.diagnostics.dadaptScheduler"))
-  if (optimizer.toLowerCase().startsWith("prodigy") && (config.unet_lr !== 1 || config.text_encoder_lr !== 1)) warnings.push(i18n.global.t("training.diagnostics.prodigyLr"))
+  if (optimizer.toLowerCase().startsWith("prodigy")) {
+    const isKohakuMoss = config.model_train_type === "kohaku-moss-image-lora"
+    if (isKohakuMoss ? Number(config.learning_rate) !== 1 : (config.unet_lr !== 1 || config.text_encoder_lr !== 1)) {
+      warnings.push(i18n.global.t("training.diagnostics.prodigyLr"))
+    }
+  }
   if (config.network_module === "networks.oft" && config.model_train_type !== "sdxl-lora") errors.push(i18n.global.t("training.diagnostics.oftSdxl"))
   for (const [left, right] of [["cache_text_encoder_outputs", "shuffle_caption"], ["noise_offset", "multires_noise_iterations"], ["cache_latents", "color_aug"], ["cache_latents", "random_crop"]]) {
     if (config[left] && config[right]) errors.push(i18n.global.t("training.diagnostics.conflict", { left, right }))

@@ -48,13 +48,14 @@ let timer: number | undefined
 let logSource: EventSource | undefined
 let progressSource: EventSource | undefined
 
-const MANAGED_ENGINES = new Set(["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"])
+const MANAGED_ENGINES = new Set(["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss", "kohaku-moss"])
 const INSTALL_STREAM_BASE: Record<string, string> = {
   kohya: "/api/engines/kohya/install",
   "anima-fast": "/api/engines/anima-fast/install",
   musubi: "/api/engines/musubi/install",
   diffsynth: "/api/engines/diffsynth/install",
   moss: "/api/engines/moss/install",
+  "kohaku-moss": "/api/engines/kohaku-moss/install",
   "ai-toolkit": "/api/engines/ai-toolkit/install",
 }
 

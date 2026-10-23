@@ -1,3 +1,4 @@
+import { kohakuMossApi, type KohakuMossStatus } from "./kohakuMoss"
 import { mossApi, type MossStatus } from "./moss"
 import { diffsynthApi, type DiffSynthStatus } from "./diffsynth"
 import { kohyaApi, type KohyaStatus } from "./kohya"
@@ -173,8 +174,15 @@ function fromAiToolkitInstall(result: AiToolkitInstallResult): EngineActionResul
   }
 }
 
+function fromKohakuMoss(status: KohakuMossStatus): EngineStatus {
+  return { id: "kohaku-moss", state: mapAnimaState(status.state), featureEnabled: status.feature_enabled !== false,
+    message: status.message || status.reason, facts: status.facts,
+    runtime: { python: status.runtime?.python, environmentPath: status.runtime?.environment_path } }
+}
+
 export const enginesApi = {
   async status(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "kohaku-moss") return fromKohakuMoss(await kohakuMossApi.status())
     if (id === "moss") return fromMoss(await mossApi.status())
     if (id === "diffsynth") return fromDiffSynth(await diffsynthApi.status())
     if (id === "kohya") {
@@ -193,11 +201,16 @@ export const enginesApi = {
   },
 
   async list(): Promise<EngineStatus[]> {
-    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss"]
+    const ids: TrainingEngine[] = ["kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss", "kohaku-moss"]
     return Promise.all(ids.map((id) => this.status(id)))
   },
 
   async install(id: TrainingEngine): Promise<EngineActionResult> {
+    if (id === "kohaku-moss") {
+      const result = await kohakuMossApi.install()
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromKohakuMoss(result.status) : undefined }
+    }
     // Download sources come from the server-persisted settings (#310); optional
     // body fields still win when a caller passes them explicitly.
     if (id === "moss") {
@@ -222,6 +235,11 @@ export const enginesApi = {
   },
 
   async repair(id: TrainingEngine): Promise<EngineActionResult> {
+    if (id === "kohaku-moss") {
+      const result = await kohakuMossApi.repair()
+      return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
+        progressStream: result.progress_stream, status: result.status ? fromKohakuMoss(result.status) : undefined }
+    }
     if (id === "moss") {
       const result = await mossApi.repair()
       return { alreadyReady: result.already_ready, taskId: result.task_id, logStream: result.log_stream,
@@ -264,6 +282,10 @@ export const enginesApi = {
   },
 
   async uninstall(id: TrainingEngine): Promise<EngineStatus> {
+    if (id === "kohaku-moss") {
+      const result = await kohakuMossApi.uninstall()
+      return result.status ? fromKohakuMoss(result.status) : { id, state: "not_installed", featureEnabled: true }
+    }
     if (id === "moss") {
       const result = await mossApi.uninstall()
       return result.status ? fromMoss(result.status) : { id, state: "not_installed", featureEnabled: true }

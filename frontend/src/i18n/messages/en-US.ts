@@ -93,6 +93,7 @@ export default {
         "ai-toolkit": "AI Toolkit",
         diffsynth: "DiffSynth-Studio",
         moss: "MOSS (anima_lora)",
+        "kohaku-moss": "KohakuMossTrainer",
       },
       targets: {
         lora: "LoRA",
@@ -263,6 +264,7 @@ export default {
     schemas: {
       "moss-image-lora": { title: "MOSS-Image LoRA", area: "Kohya (recommended)" },
       "moss-image-anima-lora": { title: "MOSS-Image LoRA", area: "MOSS (anima_lora)" },
+      "kohaku-moss-image-lora": { title: "MOSS-Image LoRA", area: "KohakuMossTrainer · experimental high-performance" },
       "sd3-lora": { title: "Anima LoRA", area: "Anima DiT · Kohya-ss · LoRA" },
       "anima-lora-fast": { title: "Anima LoRA Fast", area: "Anima DiT · Anima Fast · LoRA" },
       "anima-finetune": { title: "Anima Full Fine-tune", area: "Anima DiT · Kohya-ss · Full Fine-tune" },
@@ -796,6 +798,8 @@ export default {
         klein: "Klein",
         "qwen-image-21": "Qwen-Image-2.1",
         nvidia: "NVIDIA",
+        experimental: "Experimental",
+        "high-performance": "High performance",
       },
       downloadSources: {
         title: "Download source",
@@ -904,6 +908,11 @@ export default {
         },
       },
       catalog: {
+        "kohaku-moss": {
+          name: "KohakuMossTrainer",
+          summary: "Experimental high-performance MOSS-Image / LyCORIS engine by Kohaku (Dragon Girl)",
+          sizeHint: "Several GB for isolated Python 3.12 and CUDA dependencies; model weights are separate",
+        },
         moss: {
           name: "MOSS (anima_lora)",
           summary: "Experimental MOSS-Image Base/SFT LoRA · isolated runtime · native cache then train",
@@ -993,6 +1002,7 @@ export default {
         animaFast: "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
         install: {
           moss: "Download the isolated MOSS (anima_lora) runtime and dependencies? An NVIDIA GPU is required. Model weights are not included.",
+          "kohaku-moss": "Install the experimental high-performance KohakuMossTrainer runtime with isolated Python/CUDA and LyCORIS? Model weights are not included.",
           kohya: "Kohya (sd-scripts) downloads a standalone Python environment and several GB of dependencies (including PyTorch), and requires an NVIDIA GPU. Continue?",
           diffsynth: "Download the isolated DiffSynth Python runtime and several GB of dependencies? An NVIDIA GPU is required.",
           "anima-fast": "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
@@ -1426,6 +1436,16 @@ export default {
     installWorking: "Installing…",
     install: "Install MOSS runtime",
     consoleIdle: "Install log",
+    consoleWaiting: "Waiting for installation…",
+  },
+  kohakuMoss: {
+    auditTitle: "Environment audit",
+    consoleIdle: "Install log",
+    title: "KohakuMossTrainer",
+    intro: "An experimental high-performance MOSS-Image engine using isolated Python 3.12, the official kogine CLI, and LyCORIS.",
+    credit: "This optional engine integrates Kohaku's (Dragon Girl's) open-source {upstream}. Thanks to the author and LyCORIS community. Follow the upstream KohakuMoss License 1.0; full notices: {notice}.",
+    install: "Install experimental engine",
+    installWorking: "Installing…",
     consoleWaiting: "Waiting for installation…",
   },
   diffsynthGate: {

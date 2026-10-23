@@ -19,6 +19,8 @@ const props = withDefaults(defineProps<{
   showManage?: boolean
   manageTo?: string
 }>(), {
+  title: "",
+  hint: "",
   showRefresh: false,
   showRepair: false,
   manageOnly: false,

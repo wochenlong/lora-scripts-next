@@ -153,6 +153,10 @@ PAGE_SPECS: dict[str, dict[str, Any]] = {
         "label": "MOSS-Image LoRA (anima_lora)", "path": "/training?model=moss-image&engine=moss&target=lora",
         "accepted": frozenset({"moss-image-anima-lora"}), "default_train_type": "moss-image-anima-lora",
     },
+    "kohaku-moss-image-lora": {
+        "label": "MOSS-Image LoRA (KohakuMossTrainer)", "path": "/training?model=moss-image&engine=kohaku-moss&target=lora",
+        "accepted": frozenset({"kohaku-moss-image-lora"}), "default_train_type": "kohaku-moss-image-lora",
+    },
     "qwen-image-21-lora": {
         "label": "Qwen-Image-2.1 LoRA", "path": "/training?model=qwen-image-21&engine=diffsynth&target=lora",
         "accepted": frozenset({"qwen-image-21-lora"}), "default_train_type": "qwen-image-21-lora",
@@ -234,6 +238,7 @@ PAGE_SPECS: dict[str, dict[str, Any]] = {
 TRAIN_TYPE_TARGETS: dict[str, dict[str, str]] = {
     "moss-image-lora": {"path": "/training?model=moss-image&engine=kohya&target=lora", "label": "MOSS-Image LoRA (Kohya)"},
     "moss-image-anima-lora": {"path": "/training?model=moss-image&engine=moss&target=lora", "label": "MOSS-Image LoRA (anima_lora)"},
+    "kohaku-moss-image-lora": {"path": "/training?model=moss-image&engine=kohaku-moss&target=lora", "label": "MOSS-Image LoRA (KohakuMossTrainer)"},
     "qwen-image-21-lora": {"path": "/training?model=qwen-image-21&engine=diffsynth&target=lora", "label": "Qwen-Image-2.1 LoRA"},
     "anima-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
     "sd3-lora": {"path": "/lora/sd3.html", "label": "Anima LoRA 训练"},
@@ -360,6 +365,18 @@ def analyze_train_type(config: dict) -> TrainTypeAnalysis:
         marker_weight=6,
     )
     families.append(("moss-image-lora", moss_score, moss_reasons))
+
+    kohaku_moss_score, kohaku_moss_reasons = _score_family(
+        config,
+        marker_keys=frozenset({
+            "memory_profile", "network_algorithm", "network_preset",
+            "batching", "target_area", "latent_cache", "text_cache",
+            "base_precision", "tune_mode", "sample_shift",
+        }),
+        path_rules=(),
+        marker_weight=6,
+    )
+    families.append(("kohaku-moss-image-lora", kohaku_moss_score, kohaku_moss_reasons))
 
     anima_fast_score, anima_fast_reasons = _score_family(
         config,
