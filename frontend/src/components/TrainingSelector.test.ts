@@ -121,7 +121,7 @@ it("emits engine-picked when the user changes the engine dropdown", async () => 
 })
 
 
-it("offers MOSS-Image only with its native MOSS engine and LoRA target", async () => {
+it("offers MOSS-Image with Kohya and its native MOSS engine for LoRA target", async () => {
   vi.spyOn(enginesApi, "list").mockResolvedValue([
     { id: "moss", state: "not_installed", featureEnabled: true },
     { id: "anima-fast", state: "ready", featureEnabled: true },
@@ -129,7 +129,7 @@ it("offers MOSS-Image only with its native MOSS engine and LoRA target", async (
   const wrapper = mountSelector({ model: "moss-image", engine: "moss" })
   await flushPromises()
   expect(wrapper.findAll('[data-testid="model-select"] option').some(option => option.attributes("value") === "moss-image")).toBe(true)
-  expect(wrapper.findAll('[data-testid="engine-select"] option').map(option => option.attributes("value"))).toEqual(["moss"])
+  expect(wrapper.findAll('[data-testid="engine-select"] option').map(option => option.attributes("value"))).toEqual(["kohya", "moss"])
   expect(wrapper.get('[data-testid="engine-select"]').text()).toContain("MOSS (anima_lora)")
   expect(wrapper.get('[data-testid="engine-hint"]').text()).toContain("MOSS (anima_lora)")
   expect(wrapper.findAll(".segmented button")[1].attributes("disabled")).toBeDefined()

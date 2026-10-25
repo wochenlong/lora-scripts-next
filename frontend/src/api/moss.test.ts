@@ -19,11 +19,13 @@ describe("MOSS engine API", () => {
     expect(fetch).toHaveBeenCalledWith("/api/engines/moss/status", expect.anything())
   })
 
-  it("maps install and repair task/stream responses using shared download settings", async () => {
+  it("maps install and repair task/stream responses and forwards optional download overrides", async () => {
     const fetch = vi.spyOn(globalThis, "fetch").mockImplementation(async () => response({ task_id: "moss-install", log_stream: "/api/log", progress_stream: "/api/progress",
       status: { state: "installing", feature_enabled: true } }))
     for (const action of ["install", "repair"] as const) {
       expect(await enginesApi[action]("moss")).toMatchObject({ taskId: "moss-install", logStream: "/api/log", progressStream: "/api/progress", status: { id: "moss", state: "installing" } })
+      expect(fetch).toHaveBeenLastCalledWith(`/api/engines/moss/${action}`, expect.objectContaining({ method: "POST", body: JSON.stringify({ dry_run: false }) }))
+      await mossApi[action]({ pip_index_url: "https://example.invalid/simple" })
       expect(fetch).toHaveBeenLastCalledWith(`/api/engines/moss/${action}`, expect.objectContaining({ method: "POST", body: JSON.stringify({ dry_run: false, pip_index_url: "https://example.invalid/simple" }) }))
     }
   })

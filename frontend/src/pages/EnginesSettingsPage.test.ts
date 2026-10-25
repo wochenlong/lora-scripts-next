@@ -318,7 +318,7 @@ it("does not show success and restores preferences when saving fails", async () 
 it("offers MOSS through the shared managed-engine install action", async () => {
   const wrapper = await setup()
   await wrapper.get('input[type="search"]').setValue("MOSS")
-  expect(order(wrapper)).toEqual(["moss"])
+  expect(order(wrapper)).toEqual(["kohya", "moss"])
   expect(wrapper.get('[data-engine="moss"]').text()).toContain("MOSS (anima_lora)")
   vi.spyOn(ElMessageBox, "confirm").mockResolvedValue("confirm" as MessageBoxData)
   vi.spyOn(ElMessage, "success").mockImplementation(() => ({ close: vi.fn() }))
