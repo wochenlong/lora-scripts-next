@@ -230,7 +230,7 @@ def adapt_config(config, runtime):
         raise ValueError("Missing required fields / 缺少必填项: " + ", ".join(missing))
 
     name = str(config["output_name"]).strip()
-    if name in {".", ".."} or re.search(r'[<>:"/\\|?*\x00-\x1f]', name):
+    if name in {".", ".."} or name.endswith((".", " ")) or re.search(r'[<>:"/\\|?*\x00-\x1f]', name):
         raise ValueError("output_name: 请填写不含路径分隔符的文件名")
 
     steps = _integer(config.get("max_train_steps", 1000), "max_train_steps", 1)

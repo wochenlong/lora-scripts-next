@@ -7,7 +7,7 @@ from pathlib import Path
 from .manifest import FEATURE_FLAG_ENV
 
 PYTHON_VERSION = "3.12"
-INSTALL_REVISION = 2  # Includes the optim extra required by the optimizer selector.
+INSTALL_REVISION = 3  # Includes optim extra, kohakuvault<1.0 pin, and LyCORIS probe fallback.
 TRAIN_SCRIPT = "scripts/train/moss.py"
 PROJECT_ROOT_ENV = "NEXT_TRAINER_PROJECT_ROOT"
 

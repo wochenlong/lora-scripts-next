@@ -26,6 +26,7 @@ def test_install_plan_uses_isolated_python_and_explicit_lycoris(tmp_path):
     flattened = " ".join(part for command in commands for part in command)
     assert "3.12" in flattened
     assert "lycoris-lora>=4.1.2" in flattened
+    assert "kohakuvault<1.0" in flattened
     assert str(runtime.python) in flattened
 
 
@@ -45,11 +46,25 @@ def test_windows_build_fallback_patch_is_idempotent(tmp_path):
         '"""errors"""\n\nimport torch\n\nBUILD_ERRORS = (\n    RuntimeError,\n    UnicodeError,\n)\n',
         encoding="utf-8",
     )
+    lycoris_target = source / "src" / "kohakumoss" / "adapters" / "lycoris" / "backend.py"
+    lycoris_target.parent.mkdir(parents=True)
+    lycoris_target.write_text(
+        "def pick_backend(device, requested='auto'):\n"
+        '    if requested != "auto" and requested not in available_backends(device):\n'
+        "        raise ValueError(\n"
+        '            f"KERNELS[\'lycoris\']={requested!r} is not available on {device}; "\n'
+        '            f"available: {available_backends(device)}"\n'
+        "        )\n"
+        '    return resolve_backend(None if requested == "auto" else requested, device)\n',
+        encoding="utf-8",
+    )
     assert apply_patch(source) is True
     assert apply_patch(source) is False
     text = target.read_text(encoding="utf-8")
     assert text.count("import subprocess") == 1
     assert text.count("subprocess.CalledProcessError") == 1
+    lyco_text = lycoris_target.read_text(encoding="utf-8")
+    assert lyco_text.count("status.probe(name, device)") == 1
 
 
 def test_packaged_runtime_repairs_moved_python_home(tmp_path):

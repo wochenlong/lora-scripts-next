@@ -48,22 +48,23 @@ def start_install(runtime, sources=None, repair=False):
     sources = sources or DownloadSources()
     with request_lock:
         assert_idle()
-        task_id = f"kohaku-moss-install-{uuid.uuid4()}"
-        plan_path = runtime.project_root / "config" / "autosave" / f"{task_id}.json"
-        plan_path.parent.mkdir(parents=True, exist_ok=True)
-        plan_path.write_text(
-            json.dumps({"commands": installation_plan(runtime, sources), "repair": repair, "download_sources": asdict(sources)}),
-            encoding="utf-8",
-        )
-        task = tm.create_task(
-            [sys.executable, str(Path(__file__).with_name("install_worker.py")), str(runtime.project_root), str(plan_path), task_id],
-            process_env(),
-            metadata={"backend": "kohaku-moss", "kind": "kohaku_moss_install", "job_label": "安装 KohakuMossTrainer"},
-            task_id=task_id,
-            cwd=str(runtime.project_root),
-            lane=LANE_MAINTENANCE,
-        )
-        write_state(runtime, "installing", {"task_id": task_id, "source_commit": UPSTREAM["commit"]})
+        with environment_lock(runtime.root):
+            task_id = f"kohaku-moss-install-{uuid.uuid4()}"
+            plan_path = runtime.project_root / "config" / "autosave" / f"{task_id}.json"
+            plan_path.parent.mkdir(parents=True, exist_ok=True)
+            plan_path.write_text(
+                json.dumps({"commands": installation_plan(runtime, sources), "repair": repair, "download_sources": asdict(sources)}),
+                encoding="utf-8",
+            )
+            task = tm.create_task(
+                [sys.executable, str(Path(__file__).with_name("install_worker.py")), str(runtime.project_root), str(plan_path), task_id],
+                process_env(),
+                metadata={"backend": "kohaku-moss", "kind": "kohaku_moss_install", "job_label": "安装 KohakuMossTrainer"},
+                task_id=task_id,
+                cwd=str(runtime.project_root),
+                lane=LANE_MAINTENANCE,
+            )
+            write_state(runtime, "installing", {"task_id": task_id, "source_commit": UPSTREAM["commit"]})
         task.execute()
         threading.Thread(target=task.wait, daemon=True).start()
     return {

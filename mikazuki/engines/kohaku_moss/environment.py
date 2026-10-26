@@ -12,6 +12,7 @@ from .settings import PYTHON_VERSION, TRAIN_SCRIPT
 
 TORCH_REQUIREMENTS = ("torch>=2.13,<2.15", "torchvision")
 LYCORIS_REQUIREMENT = "lycoris-lora>=4.1.2"
+KOHAKUVAULT_REQUIREMENT = "kohakuvault<1.0"
 
 
 def process_env() -> dict[str, str]:
@@ -52,6 +53,7 @@ def install_commands(runtime, sources) -> list[list[str]]:
             "-e",
             f"{runtime.source}[cuda,optim]",
             LYCORIS_REQUIREMENT,
+            KOHAKUVAULT_REQUIREMENT,
             *TORCH_REQUIREMENTS,
         ],
     ]
@@ -66,16 +68,24 @@ def audit_environment(runtime, *, runner=None) -> dict:
     if missing:
         return {"ok": False, "errors": ["KohakuMossTrainer 环境缺少：" + ", ".join(missing)], "facts": facts}
     fallback_file = runtime.source / "src" / "kohakumoss_kernels" / "errors.py"
-    fallback_ready = fallback_file.is_file() and "subprocess.CalledProcessError" in fallback_file.read_text(encoding="utf-8")
+    lycoris_backend_file = runtime.source / "src" / "kohakumoss" / "adapters" / "lycoris" / "backend.py"
+    fallback_ready = (
+        fallback_file.is_file()
+        and "subprocess.CalledProcessError" in fallback_file.read_text(encoding="utf-8")
+        and lycoris_backend_file.is_file()
+        and "status.probe(name, device)" in lycoris_backend_file.read_text(encoding="utf-8")
+    )
     facts["windows_build_fallback"] = fallback_ready
     if not fallback_ready:
         errors.append("KohakuMossTrainer 缺少 Windows Triton 编译失败回退补丁。")
     probe = """
 import importlib.metadata as md, json, torch
-import kohakumoss, kohakuengine, lycoris, prodigyopt, schedulefree
+from packaging.version import Version
+import kohakumoss, kohakuengine, kohakuvault, lycoris, prodigyopt, schedulefree
+assert Version(md.version("kohakuvault")) < Version("1.0"), "kohakuvault>=1.0 is incompatible with pinned KohakuMossTrainer; require kohakuvault<1.0"
 print(json.dumps({"torch": torch.__version__, "cuda": torch.version.cuda,
  "cuda_available": torch.cuda.is_available(), "lycoris": md.version("lycoris-lora"),
- "kohakumoss": md.version("kohakumoss")}))
+ "kohakuvault": md.version("kohakuvault"), "kohakumoss": md.version("kohakumoss")}))
 """
     kwargs = {"cwd": runtime.source, "env": process_env(), "capture_output": True, "text": True, "encoding": "utf-8", "errors": "replace"}
     head = run(["git", "-C", str(runtime.source), "rev-parse", "HEAD"], **kwargs)
