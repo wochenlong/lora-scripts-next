@@ -53,7 +53,11 @@ def execute_plan(runtime, plan, task_id, *, runner=None, audit_fn=None):
                 facts["command_index"] = index
                 write_state(runtime, "installing", facts)
                 _progress(int(index * 88 / max(len(commands), 1)), " ".join(command))
-                run(command, cwd=runtime.project_root, env=install_env(runtime, sources), check=True)
+                resolved_cmd = list(command)
+                if resolved_cmd and resolved_cmd[0] == "uv" and runner is None:
+                    from mikazuki.engines.portable_venv import find_uv_executable
+                    resolved_cmd[0] = find_uv_executable()
+                run(resolved_cmd, cwd=runtime.project_root, env=install_env(runtime, sources), check=True)
             facts["phase"] = "audit"
             write_state(runtime, "auditing", facts)
             _progress(92, "审计 MOSS 请求解析器、训练/缓存入口和 CUDA 环境")

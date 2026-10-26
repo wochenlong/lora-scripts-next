@@ -154,5 +154,28 @@ class RepairVenvBaseTests(unittest.TestCase):
             self.assertEqual(result, REPAIR_OK)
 
 
+class UvResolutionTests(unittest.TestCase):
+    def test_find_uv_falls_back_to_python_scripts_when_path_is_empty(self):
+        from unittest import mock
+        from mikazuki.engines.portable_venv import ensure_uv_on_path, find_uv_executable
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            py_exe = root / "python_embeded" / "python.exe"
+            uv_exe = root / "python_embeded" / "Scripts" / ("uv.exe" if sys.platform == "win32" else "uv")
+            uv_exe.parent.mkdir(parents=True, exist_ok=True)
+            py_exe.write_text("", encoding="utf-8")
+            uv_exe.write_text("", encoding="utf-8")
+
+            with mock.patch("mikazuki.engines.portable_venv.shutil.which", return_value=None), \
+                    mock.patch.dict(sys.modules, {"uv": None}), \
+                    mock.patch("mikazuki.engines.portable_venv.sys.executable", str(py_exe)), \
+                    mock.patch("mikazuki.engines.portable_venv.sysconfig.get_path", return_value=str(uv_exe.parent)):
+                resolved = find_uv_executable()
+                self.assertEqual(Path(resolved), uv_exe.resolve())
+                env = ensure_uv_on_path({"PATH": ""})
+                self.assertIn(str(uv_exe.resolve().parent), env["PATH"])
+
+
 if __name__ == "__main__":
     unittest.main()
