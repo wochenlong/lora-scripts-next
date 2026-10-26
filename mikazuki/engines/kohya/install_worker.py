@@ -27,7 +27,11 @@ def main():
             for index, command in enumerate(commands):
                 print('[mikazuki-progress] ' + json.dumps({"percent": int(index * 90 / len(commands)), "message": " ".join(command)}, ensure_ascii=False), flush=True)
                 print('[install] ' + ' '.join(command), flush=True)
-                subprocess.run(command, env=install_env(rt), check=True)
+                resolved_cmd = list(command)
+                if resolved_cmd and resolved_cmd[0] == 'uv':
+                    from mikazuki.engines.portable_venv import find_uv_executable
+                    resolved_cmd[0] = find_uv_executable()
+                subprocess.run(resolved_cmd, env=install_env(rt), check=True)
             # A main-env upgrade must not write the standalone state file; the
             # GUI-side in-memory marker handles the transition and the next
             # status read re-audits the main env.

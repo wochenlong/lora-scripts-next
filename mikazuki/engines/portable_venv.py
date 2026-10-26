@@ -16,7 +16,9 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable
 import os
+import shutil
 import sys
+import sysconfig
 import tempfile
 
 
@@ -25,6 +27,53 @@ LogFn = Callable[[str], None]
 REPAIR_OK = "ok"
 REPAIR_RELOCATED = "relocated"
 REPAIR_BROKEN = "broken"
+
+
+def find_uv_executable() -> str:
+    """Resolve a usable ``uv`` binary across system PATH and the active Python environment."""
+    resolved = shutil.which("uv")
+    if resolved:
+        return resolved
+    try:
+        import uv as _uv_pkg  # type: ignore[import-not-found]
+        find_bin = getattr(_uv_pkg, "find_uv_bin", None)
+        if callable(find_bin):
+            candidate = Path(find_bin())
+            if candidate.is_file():
+                return str(candidate)
+    except Exception:
+        pass
+    exe_Name = "uv.exe" if sys.platform == "win32" else "uv"
+    exe_dir = Path(sys.executable).resolve().parent
+    candidates = [
+        exe_dir / "Scripts" / exe_Name,
+        exe_dir / "bin" / exe_Name,
+        exe_dir / exe_Name,
+    ]
+    scripts_dir = sysconfig.get_path("scripts")
+    if scripts_dir:
+        candidates.append(Path(scripts_dir) / exe_Name)
+    for candidate in candidates:
+        if candidate.is_file():
+            return str(candidate)
+    raise FileNotFoundError(
+        "uv executable was not found (checked PATH and Python Scripts). "
+        "Run `pip install uv` in the GUI Python environment."
+    )
+
+
+def ensure_uv_on_path(env: dict[str, str]) -> dict[str, str]:
+    """Ensure the directory containing ``uv`` is prepended to ``env['PATH']``."""
+    try:
+        uv_bin = find_uv_executable()
+    except FileNotFoundError:
+        return env
+    uv_dir = str(Path(uv_bin).resolve().parent)
+    current_path = env.get("PATH") or env.get("Path") or ""
+    parts = [p for p in current_path.split(os.pathsep) if p]
+    if uv_dir not in parts:
+        env["PATH"] = uv_dir + (os.pathsep + current_path if current_path else "")
+    return env
 
 
 def venv_cfg_path(venv_python: Path) -> Path:

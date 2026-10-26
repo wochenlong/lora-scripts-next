@@ -166,7 +166,8 @@ def process_env():
 
 
 def install_env(runtime):
-    env = process_env()
+    from mikazuki.engines.portable_venv import ensure_uv_on_path
+    env = ensure_uv_on_path(process_env())
     env["UV_PYTHON_INSTALL_DIR"] = str(runtime.python_install_dir)
     return env
 

@@ -34,6 +34,15 @@ def test_kohya_audit_checks_scipy():
     assert any("scipy" in value for value in source if isinstance(value, str))
 
 
+def test_main_requirements_include_uv_for_managed_engine_installs():
+    root = Path(__file__).resolve().parents[1]
+    reqs = [
+        line.strip().split("#", 1)[0].strip()
+        for line in (root / "requirements.txt").read_text(encoding="utf-8-sig").splitlines()
+    ]
+    assert any(item == "uv" or item.startswith(("uv=", "uv>", "uv<")) for item in reqs if item)
+
+
 def test_kohya_audit_reports_transformers_and_tokenizers_versions():
     from mikazuki.engines.kohya.environment import audit_python
 
