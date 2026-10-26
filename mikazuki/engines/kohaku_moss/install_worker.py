@@ -41,7 +41,11 @@ def execute_plan(runtime, plan, task_id):
             sources = DownloadSources(**(plan.get("download_sources") or {}))
             for index, command in enumerate(commands):
                 progress(int(index * 88 / max(len(commands), 1)), redact(" ".join(command)))
-                subprocess.run(command, cwd=runtime.project_root, env=install_env(runtime, sources), check=True)
+                resolved_cmd = list(command)
+                if resolved_cmd and resolved_cmd[0] == "uv":
+                    from mikazuki.engines.portable_venv import find_uv_executable
+                    resolved_cmd[0] = find_uv_executable()
+                subprocess.run(resolved_cmd, cwd=runtime.project_root, env=install_env(runtime, sources), check=True)
             write_state(runtime, "auditing", facts)
             progress(92, "审计 KohakuMossTrainer、LyCORIS 与 CUDA")
             audit = audit_environment(runtime)

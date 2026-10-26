@@ -378,10 +378,8 @@ def _run_streaming(command: list[str], cwd: Path, log: LogFn, env: dict[str, str
 
 
 def _uv_command() -> str:
-    resolved = shutil.which("uv")
-    if not resolved:
-        raise FileNotFoundError("uv executable was not found in PATH")
-    return resolved
+    from mikazuki.engines.portable_venv import find_uv_executable
+    return find_uv_executable()
 
 
 def _find_base_python(plan: EnvironmentInstallPlan) -> Path:

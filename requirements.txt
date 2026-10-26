@@ -38,3 +38,5 @@ psutil
 # index (mikazuki/plugin_marketplace/trust.py). Security-critical verify path: declared
 # explicitly, never relied on as a transitive dependency.
 cryptography>=41
+# managed engine installers (kohya / diffsynth / moss / musubi / ai-toolkit / anima-fast)
+uv

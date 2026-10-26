@@ -23,9 +23,11 @@ def process_env() -> dict[str, str]:
 
 
 def install_env(runtime, sources=None) -> dict[str, str]:
+    from mikazuki.engines.portable_venv import ensure_uv_on_path
     env = process_env()
     if sources is not None:
         env.update(install_process_env(sources))
+    env = ensure_uv_on_path(env)
     env["UV_PYTHON_INSTALL_DIR"] = str(runtime.python_install_dir)
     return env
 

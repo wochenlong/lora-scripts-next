@@ -51,11 +51,13 @@ def process_env():
 
 
 def install_env(runtime, sources=None):
+    from mikazuki.engines.portable_venv import ensure_uv_on_path
     env = process_env()
     env.update(install_process_env(sources))
     # A host PYTHONPATH/venv must not leak back through a network-policy env.
     for name in ("PYTHONPATH", "PYTHONHOME", "VIRTUAL_ENV", "UV_PROJECT_ENVIRONMENT", "UV_PYTHON", "UV_PYTHON_PREFERENCE"):
         env.pop(name, None)
+    env = ensure_uv_on_path(env)
     env.update(UV_PYTHON_INSTALL_DIR=str(runtime.python_install_dir))
     return env
 
