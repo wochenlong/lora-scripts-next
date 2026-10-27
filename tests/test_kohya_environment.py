@@ -105,15 +105,21 @@ def test_compute_drift_flags_mismatch_and_missing():
 
 
 def test_compute_drift_accepts_torch_local_version():
+    from packaging.requirements import Requirement
+    from packaging.utils import canonicalize_name
     from mikazuki.engines.kohya.environment import compute_drift, _torch_requirements
 
     versions = _satisfying_versions()
-    local = {"torch": "2.13.0+cu130", "torchvision": "0.28.0+cu130"}
+    local = {}
+    for spec in _torch_requirements():
+        requirement = Requirement(spec)
+        exact = next(item.version for item in requirement.specifier if item.operator == "==")
+        local[canonicalize_name(requirement.name)] = f"{exact}+cu130"
     versions.update(local)
 
     drift = compute_drift(versions)
 
-    assert not any(d["name"] in local for d in drift)
+    assert not any(canonicalize_name(d["name"]) in local for d in drift)
 
 
 def test_upgrade_commands_split_torch_index_and_skip_when_empty(tmp_path):
