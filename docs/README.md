@@ -10,9 +10,12 @@
 
 ## Training / 训练
 
+- [MOSS-Image](MOSS.md): Kohya (default), KohakuMossTrainer, and MOSS (`anima_lora`) LoRA training.
+- [Qwen-Image-2.1 (DiffSynth)](diffsynth.md): T2I and Edit LoRA training with DiffSynth-Studio.
 - [Anima training / Anima 训练](anima-training.md): training targets and VRAM guidance.
 - [Anima Fast](anima-fast.md): optional runtime, configuration, and training.
 - [Krea 2 multi-GPU / Krea 2 多卡](krea2-linux-multigpu.md): Linux deployment and multi-GPU usage.
+- [Ideogram 4 (Musubi)](ideogram4-musubi.md): experimental FP8 LoRA training on Musubi.
 - [TOML and CLI / TOML 与命令行](cli-args.md): command-line training entry points.
 - [Tagger models / 打标模型](tagger-models.md): model files and installation paths.
 - [Training monitor / 训练监控](train-monitor.md).

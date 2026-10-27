@@ -48,6 +48,14 @@ When redistributing source or portable builds, please keep [NOTICE.md](../NOTICE
 
 以可选插件形式集成（`extensions/anima_lora/`）。说明见 [docs/anima-fast.md](anima-fast.md)。
 
+## KohakuMossTrainer（可选引擎）
+
+| 项目 | 链接 | 许可 |
+|------|------|------|
+| KohakuBlueleaf / KohakuMossTrainer | https://github.com/KohakuBlueleaf/KohakuMossTrainer | KohakuMoss License 1.0 |
+
+以可选插件形式集成（`extensions/kohaku-moss/`），用于 MOSS-Image 高性能 LoRA / LyCORIS 训练。说明见 [docs/MOSS.md](MOSS.md) 与 [NOTICE.md](../NOTICE.md)。
+
 ## 网络模块与其它组件
 
 | 项目 | 链接 | 说明 |
