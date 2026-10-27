@@ -4,8 +4,10 @@ import os
 from pathlib import Path
 import json
 import math
-from .inputs import absolute, model_inputs, dataset_inputs, is_edit
+import shutil
+from .inputs import absolute, model_inputs, dataset_inputs, is_edit, cache_key
 from .samples import sample_config
+from .settings import configured_cache_root
 
 @dataclass
 class AdaptedConfig:
@@ -22,6 +24,30 @@ def positive_int(config, key, default):
     if number < 1 or float(value) != number:
         raise ValueError(f"{key} 必须为正整数")
     return number
+
+
+def ensure_cache_space(models, cache_dir):
+    cache_dir = Path(cache_dir)
+    required = 0
+    for model in models:
+        plan = model["conversion"]
+        if all(target == source and op == "identity" for target, (source, op) in plan.items()):
+            continue
+        manifest = cache_dir / f"v1-{model['component']}-{cache_key(model['files'])}" / "files.json"
+        if manifest.is_file():
+            continue
+        required += sum(Path(p).stat().st_size for p in model["files"])
+    if not required:
+        return
+    probe = cache_dir
+    while not probe.exists() and probe != probe.parent:
+        probe = probe.parent
+    free = shutil.disk_usage(probe).free
+    if free < required:
+        gib = 1024 ** 3
+        raise ValueError(
+            f"DiffSynth 模型转换缓存空间不足：需要约 {required / gib:.1f}GB，{probe} 可用 {free / gib:.1f}GB；"
+            "请在训练页「训练用模型」的模型转换缓存目录或引擎设置中把缓存指到空间充足的数据盘")
 
 
 def adapt_config(config, runtime):
@@ -97,7 +123,9 @@ def adapt_config(config, runtime):
     schedule = schedule_config(config, total_steps)
     if samples["enabled"] and arguments["enable_model_cpu_offload"] and not cache_embeddings:
         raise ValueError("模型 CPU 卸载与训练预览同时使用时，请开启预编码缓存；否则请关闭预览或关闭模型 CPU 卸载。")
-    engine = {"training_task": "image-edit" if editing else "text-to-image", "models": models, "cache_dir": str(runtime.root / "cache" / "models"), "samples": samples, "output_name": name,
+    cache_dir = configured_cache_root(runtime, str(config.get("diffsynth_cache") or "")) / "models"
+    ensure_cache_space(models, cache_dir)
+    engine = {"training_task": "image-edit" if editing else "text-to-image", "models": models, "cache_dir": str(cache_dir), "samples": samples, "output_name": name,
               "cache_embeddings": cache_embeddings, "lora_alpha": alpha, "lr_schedule": schedule,
               "bucket_settings": buckets, "bucket_sizes": sizes, "bucket_summary": bucket_summary,
               "train_batch_size": batch_size, "batches_per_epoch": batches_per_epoch}

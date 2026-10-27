@@ -11,7 +11,7 @@ import {
 import { readEnginePrefs, writeEnginePrefs } from "../engines/prefs"
 import { readEngineOrder, saveEngineOrder, moveEngine, matchesEngineFilter, type EngineFilter } from "../engines/listPreferences"
 import type { TrainingEngine } from "../training/modules"
-import { engineSettingsState, legacyEngineImport, importLegacyEngineSettings } from "../engines/settings"
+import { engineSettingsState, legacyEngineImport, importLegacyEngineSettings, writeDiffsynthCacheDir } from "../engines/settings"
 
 const { t } = useI18n()
 const loadingId = ref<string | null>(null)
@@ -21,6 +21,7 @@ const progress = ref(0)
 const phase = ref("")
 const activeConsoleId = ref<string | null>(null)
 const manageId = ref<string | null>(null)
+const cacheDir = ref("")
 const menuId = ref<string | null>(null)
 const rememberLast = ref(readEnginePrefs().rememberLast)
 const defaultEngine = ref(readEnginePrefs().defaultEngine ?? "kohya")
@@ -353,6 +354,20 @@ async function importLegacy() {
 function openManage(engineId: string) {
   menuId.value = null
   manageId.value = engineId
+  if (engineId === "diffsynth") cacheDir.value = engineSettingsState.settings?.paths?.diffsynth_cache ?? ""
+}
+
+async function saveCacheDir() {
+  if (settingsDisabled.value) return
+  saving.value = true
+  try {
+    await writeDiffsynthCacheDir(cacheDir.value)
+    ElMessage.success(t("settings.engines.msg.prefsSaved"))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("engineSettings.saveFailed"))
+  } finally {
+    saving.value = false
+  }
 }
 
 function closeManage() {
@@ -621,6 +636,14 @@ type="button" class="engine-more-btn" data-page="next" :disabled="page === pageC
             <span>{{ t("settings.engines.meta.mainEnvPython") }}</span>
             <code>{{ manageCard.status.facts.main_env_python }}</code>
           </p>
+          <div v-if="manageCard.engine.id === 'diffsynth'" class="engine-cache-dir" data-testid="diffsynth-cache-dir">
+            <label>
+              <span>{{ t("settings.engines.cacheDir.label") }}</span>
+              <input v-model="cacheDir" type="text" :disabled="settingsDisabled" :placeholder="t('settings.engines.cacheDir.placeholder')">
+            </label>
+            <small>{{ t("settings.engines.cacheDir.hint") }}</small>
+            <button type="button" class="secondary-action" :disabled="settingsDisabled || saving" @click="saveCacheDir">{{ t("settings.engines.cacheDir.save") }}</button>
+          </div>
           <div v-if="manageCard.status.facts?.update_available" class="engine-drift" data-testid="engine-drift">
             <p>{{ t("settings.engines.meta.drift") }}</p>
             <ul>

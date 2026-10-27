@@ -8,7 +8,7 @@ import toml
 from mikazuki.app.models import APIResponseSuccess, APIResponseFail
 from mikazuki.tasks import tm, TaskStatus
 from . import TRAIN_TYPE
-from .settings import runtime
+from .settings import runtime, remember_cache_dir
 from .adapter import adapt_config, dump_config
 from .preflight import check_runtime
 from .launcher import build_train_spec
@@ -25,6 +25,7 @@ def _handle_run(config, ctx):
         assert_idle(maintenance_only=True)
         check_runtime(rt)
         adapted = adapt_config(config, rt)
+        remember_cache_dir(config.get("diffsynth_cache"))
         run_id = f"{ctx.timestamp}-diffsynth-{uuid.uuid4().hex[:8]}"
         adapted.output_path = adapted.output_path / run_id
         adapted.arguments["output_path"] = str(adapted.output_path)
