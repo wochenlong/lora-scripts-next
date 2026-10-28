@@ -42,8 +42,7 @@
       <td><a href="https://github.com/IryNeko">@IryNeko</a></td>
       <td>
         Vue3 前端重写与持续迭代 · 公开 <code>frontend</code> 源码 · 训练 / 数据集 / 任务 / 设置工作台<br />
-        数据集标签筛选与编辑体验 · 任务排队 / 持久化 / 重试 · 任务页训练监控入口 · 打标↔编辑 KeepAlive 状态保留<br />
-        支撑 <code>dev</code> 内测线并随 <code>main</code> 3.0.0 转正落地
+        数据集标签筛选与编辑体验 · 任务排队 / 持久化 / 重试 · 任务页训练监控入口 · 打标↔编辑 KeepAlive 状态保留
       </td>
       <td><a href="https://github.com/wochenlong/lora-scripts-next/pull/209">#209</a></td>
     </tr>
@@ -85,14 +84,6 @@
     </tr>
   </tbody>
 </table>
-
-## 3.0.0 内测鸣谢
-
-正式版 3.0.0 发布前，感谢参与 dev / beta 内测并反馈问题的用户与贡献者。
-
-名单待补充
-
----
 
 上游项目与完整归属见 [`NOTICE.md`](NOTICE.md)
 
