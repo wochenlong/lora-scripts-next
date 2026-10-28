@@ -148,6 +148,26 @@ function remove(config: FormModel, keys: string[]) {
   keys.forEach((key) => delete config[key])
 }
 
+const FLUX_LORA_TYPES = new Set(["lora", "lokr", "loha", "custom"])
+
+export function hasExplicitFluxLoraType(source: FormModel) {
+  if (Object.prototype.hasOwnProperty.call(source, "lora_type")) return true
+  const nested = (source as unknown as Record<string, unknown>).value
+  return typeof nested === "object" && nested !== null && Object.prototype.hasOwnProperty.call(nested, "lora_type")
+}
+
+export function migrateFluxLoraType(source: FormModel, hasExplicitLoraType = Object.prototype.hasOwnProperty.call(source, "lora_type")) {
+  const config = cloneFormModel(source)
+  const current = String(config.lora_type ?? "").trim().toLowerCase()
+  if (hasExplicitLoraType && current) {
+    config.lora_type = FLUX_LORA_TYPES.has(current) ? current : "custom"
+    return config
+  }
+  const networkModule = String(config.network_module ?? "").trim().toLowerCase()
+  config.lora_type = !networkModule || networkModule === "networks.lora_flux" ? "lora" : "custom"
+  return config
+}
+
 export function buildTrainingConfig(source: FormModel, schemaName: string) {
   const config: FormModel = schemaName === "lora-basic" ? { ...BASIC_DEFAULTS, ...cloneFormModel(source) } : cloneFormModel(source)
   const lockedTrainType = SCHEMA_TRAIN_TYPES[schemaName]
@@ -272,6 +292,10 @@ export function buildTrainingConfig(source: FormModel, schemaName: string) {
 
   if (Array.isArray(config.gpu_ids)) {
     config.gpu_ids = config.gpu_ids.map((value) => String(value).match(/GPU (\d+):/)?.[1] || String(value)).filter(Boolean)
+  }
+  if (schemaName === "flux-lora") {
+    delete config.lora_type
+    if (config.network_module === "lycoris.kohya") config.fp8_base = false
   }
   return config
 }

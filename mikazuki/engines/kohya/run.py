@@ -33,11 +33,17 @@ TRAINER_MAPPING = {
     "sd3-lora": "./scripts/dev/anima_train_network.py",
     "anima-lora": "./scripts/dev/anima_train_network.py",
     "anima-finetune": "./scripts/dev/anima_train.py",
-    "flux-lora": "./scripts/dev/flux_train_network.py",
+    "flux-lora": "./vendor/sd-scripts/flux_train_network.py",
     "flux-finetune": "./scripts/dev/flux_train.py",
     "lumina-lora": "./scripts/dev/lumina_train_network.py",
     "moss-image-lora": "./scripts/dev/moss_image_train_network.py",
 }
+
+
+def _apply_flux_lycoris_compatibility(config: dict, model_train_type: str) -> None:
+    if model_train_type == "flux-lora" and config.get("network_module") == "lycoris.kohya" and config.get("fp8_base"):
+        log.warning("Flux LyCORIS does not support fp8_base; using BF16 base weights instead.")
+        config["fp8_base"] = False
 
 
 def handle_run(config: dict, ctx: RunContext):
@@ -50,6 +56,7 @@ def handle_run(config: dict, ctx: RunContext):
         return APIResponseFail(message="kohya (sd-scripts) 训练环境未就绪，请到训练引擎管理中安装或修复。")
 
     model_train_type = ctx.model_train_type
+    _apply_flux_lycoris_compatibility(config, model_train_type)
     toml_file = os.path.join(ctx.autosave_dir, f"{ctx.timestamp}.toml")
     is_moss_image = model_train_type == "moss-image-lora"
 
