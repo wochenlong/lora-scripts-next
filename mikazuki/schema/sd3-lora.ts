@@ -197,7 +197,7 @@ Schema.intersect([
     Schema.intersect([
         Schema.object(UpdateSchema(SHARED_SCHEMAS.RAW.CAPTION_SETTINGS, {
             caption_extension: Schema.string().default(".txt").description("回退读取的 Tag 文件扩展名"),
-            shuffle_caption: Schema.boolean().default(false).description("训练时随机打乱 tokens；JSON 模式下会对 appearance / tags / environment 分组打乱"),
+            shuffle_caption: Schema.boolean().default(false).description("训练时随机打乱 tokens；JSON 标签解析后使用相同的打乱规则"),
             keep_tokens: Schema.number().min(0).max(255).step(1).default(0).description("随机打乱时保留前 N 个 token 不变"),
             caption_tag_dropout_rate: Schema.number().min(0).step(0.01).description("按标签随机丢弃 tag 的概率"),
             prefer_json_caption: Schema.boolean().default(true).description("优先读取同名 JSON 标签文件；适合 Anima 结构化标签流程"),

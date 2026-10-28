@@ -97,14 +97,30 @@ Anima 不像 SDXL 只选一个 ckpt，页面上有三项**必填**：
 |------|------|
 | `prefer_json_caption` | **建议开启**，优先读同名 `.json` 标签 |
 | `caption_extension` | 没有 JSON 时，回退读 `.txt` |
-| `shuffle_caption` | 训练时打乱标签顺序；JSON 模式下会分组打乱 |
+| `shuffle_caption` | 训练时打乱标签顺序；JSON 标签解析后使用相同规则 |
 | `keep_tokens` | 打乱时保留前几个词不动（触发词建议放前面） |
 
-JSON 标签推荐字段顺序（表单里也有提示）：
+JSON 标签按以下固定字段顺序展开（表单里也有提示）：
 
 ```text
 quality / count / character / series / artist / appearance[] / tags[] / environment[] / nl
 ```
+
+例如 `image1.png` 对应 `image1.json`：
+
+```json
+{
+  "quality": "masterpiece",
+  "count": 1,
+  "character": "character name",
+  "appearance": ["blue eyes", "red dress"],
+  "tags": ["smile"],
+  "environment": ["indoors"],
+  "nl": "a natural language description"
+}
+```
+
+字段可写字符串、数字或对应数组，空值会跳过。JSON 没有可用内容时回退读取文本标签；JSON 语法错误或字段类型不受支持时会明确报错，不会静默按无标签训练。
 
 你以前用「一行逗号 tag」完全可以继续用；如果愿意，把角色名、外观、环境分开写进 JSON，Anima 往往吃得更好。触发词放在 `character` 或 `tags` 前面，并配合 `keep_tokens`，效果更稳。
 
