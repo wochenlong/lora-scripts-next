@@ -15,6 +15,16 @@
   </tr>
 </table>
 
+## 社区
+
+### 卓越贡献者
+
+<table>
+  <tr>
+    <td align="center"><a href="https://github.com/waw1w1"><img src="https://github.com/waw1w1.png" width="80" /><br /><sub><b>waw1w1</b></sub></a><br /><sub>接入 Qwen-Image-2.1 训练，并落地 AI Toolkit、MOSS 与 KohakuMoss 等新引擎。</sub></td>
+  </tr>
+</table>
+
 ## Contributions
 
 <table width="100%">
@@ -60,6 +70,12 @@
       <td><a href="https://github.com/niangao2331">@niangao2331</a></td>
       <td>修复整合包内 Download-Anima-Model.bat 重复创建嵌套目录问题</td>
       <td><a href="https://github.com/wochenlong/lora-scripts-next/pull/23">#23</a></td>
+    </tr>
+    <tr>
+      <td>社区</td>
+      <td><a href="https://github.com/waw1w1">@waw1w1</a></td>
+      <td>卓越贡献者。接入 Qwen-Image-2.1 训练，并落地 AI Toolkit、MOSS 与 KohakuMoss 等新引擎。</td>
+      <td><a href="https://github.com/wochenlong/lora-scripts-next/pull/507">#507</a></td>
     </tr>
     <tr>
       <td>产品</td>
