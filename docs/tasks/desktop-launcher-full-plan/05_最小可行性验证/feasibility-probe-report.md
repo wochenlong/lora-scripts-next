@@ -4,7 +4,13 @@
 
 ## 0.2当前复盘
 
-CR-001已由用户明确批准：资源受限的指定Fast/DiffSynth GPU/完整模型训练子项标skip并列原因，不能称pass；Kohya/Toolkit和DiffSynth普通小张量等可执行验证保留，M0独立P3前置分期到对应引擎配方。Goal已恢复active，当前继续P1干净Windows/未豁免安装预算；M1未解锁。下列0.1原始blocked/超时/无豁免结论是历史事实，不覆盖本修订。新执行证据位于本run的changes/CR-001和M0/resource-feasibility/P1-resume，首次失败不覆盖。
+CR-001指定GPU子项授权skip，其他必测保留，M0仍in progress，M1未解锁。第三次新盘已真实进入桌面；首次自动采集未执行，离线报告发现Read-Probe动态作用域污染命令名，旧命令absence无效且raw保留。最小修复并以PS5.1/7独立Mock验证后，再次同盘离线采得正确基线：四命令名正确且均未发现，WebView2四注册表视图/三个文件根及14常见目录缺席，probe errors为0；只限定列明范围。基线SHA `04e2b5cd759b55cad0276f0b4baee59a9141556ea4558043f45ab758138897bc`，正常关机/check0后盘SHA `13776f90379c2509fc370aa8d55e64396390e60089a1de8cbe41fb3b3d2e0fd9`。实际许可Notification/F009仍未恢复，不算P1通过。
+
+05:27由root启动唯一受限网络验证VM `activation-network-attempt3-20261029-052709-4b1469`；黑屏后实报BSOD `INTERNAL_POWER_ERROR`；未到可操作桌面、无/ato。05:38已QMP quit结束（ACPI180秒未响应，clean_acpi=false/forced=true），check0/timeoutfalse/完整盘SHA `d47fb2c27e034dd96d74737858a5df7a33d1c6f8370be0555f3ba9d3df0eed8e`。proxy始终deny、owner_stop后全回收，无DNS/上游。只读登录Count1足够下一次、准备登录写动作未调用。正常激活未执行，未以此声称激活失败；P1许可资源blocked。本轮已结束诊断，不继续重装/密码重试，WIP保存不能作为M0完成。
+
+证据根`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/desktop-launcher-full-20261028-155831Z-f6c00a/`，正确基线与正常关闭在`M0/P1-resume/activation-offline-probelabel-attempt3-20261029-051612-d6ae76/`，独立回执`attempt3-probelabel-lifecycle-independent-review.json`和`attempt3-network-final-independent-review.json`；旧失败均保留。账本HTTP正文8,270,582,469B、规划计费8,406,062,045B，M0余额2,331,356,195B；wire未知，最终长路径快照complete，F39.957GiB/E0.640GiB、errors0，资源账本已保存，原额度不变。以下0.1记录仅为历史，不覆盖本段。
+
+## 0.1执行记录（历史原文）
 
 - Date：2026-10-29（Asia/Shanghai）；Plan：`desktop-launcher-full-20261028`，v0.1。
 - Result：**blocked**；没有测试豁免，M1不解锁。用户执行授权已生效，实际Goal已blocked。
