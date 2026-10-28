@@ -410,6 +410,82 @@ class AugHelper:
         return self.color_aug if use_color_aug else None
 
 
+_JSON_CAPTION_FIELD_ORDER = (
+    "quality",
+    "count",
+    "character",
+    "series",
+    "artist",
+    "appearance",
+    "tags",
+    "environment",
+    "nl",
+)
+
+
+def _json_caption_tokens(value, cap_path: str, field: str) -> List[str]:
+    values = value if isinstance(value, list) else [value]
+    tokens = []
+    for item in values:
+        if item is None:
+            continue
+        if isinstance(item, bool) or not isinstance(item, (str, int, float)):
+            raise ValueError(f"unsupported value for field '{field}' in JSON caption: {cap_path}")
+        token = str(item).strip()
+        if token:
+            tokens.append(token)
+    return tokens
+
+
+def _read_json_caption(cap_path: str) -> str:
+    with open(cap_path, "rt", encoding="utf-8-sig") as f:
+        try:
+            data = json.load(f)
+        except (json.JSONDecodeError, UnicodeDecodeError) as e:
+            raise ValueError(f"invalid JSON caption: {cap_path}: {e}") from e
+    if not isinstance(data, dict):
+        raise ValueError(f"JSON caption must contain an object: {cap_path}")
+
+    tokens = []
+    for field in _JSON_CAPTION_FIELD_ORDER:
+        if field in data:
+            tokens.extend(_json_caption_tokens(data[field], cap_path, field))
+    return ", ".join(tokens)
+
+
+def read_caption(img_path, caption_extension, enable_wildcard, prefer_json_caption=False):
+    base_name = os.path.splitext(img_path)[0]
+    base_name_face_det = base_name
+    tokens = base_name.split("_")
+    if len(tokens) >= 5:
+        base_name_face_det = "_".join(tokens[:-4])
+    base_names = list(dict.fromkeys([base_name, base_name_face_det]))
+    text_cap_paths = [base + caption_extension for base in base_names]
+    json_cap_paths = [base + ".json" for base in base_names] if prefer_json_caption else []
+    cap_paths = list(dict.fromkeys(json_cap_paths + text_cap_paths))
+    json_cap_path_set = set(json_cap_paths)
+
+    for cap_path in cap_paths:
+        if not os.path.isfile(cap_path):
+            continue
+        if cap_path in json_cap_path_set:
+            caption = _read_json_caption(cap_path)
+            if caption:
+                return caption
+            continue
+        with open(cap_path, "rt", encoding="utf-8") as f:
+            try:
+                lines = f.readlines()
+            except UnicodeDecodeError as e:
+                logger.error(f"illegal char in file (not UTF-8) / ファイルにUTF-8以外の文字があります: {cap_path}")
+                raise e
+            assert len(lines) > 0, f"caption file is empty / キャプションファイルが空です: {cap_path}"
+            if enable_wildcard:
+                return "\n".join([line.strip() for line in lines if line.strip() != ""])
+            return lines[0].strip()
+    return None
+
+
 class BaseSubset:
     def __init__(
         self,
@@ -501,6 +577,7 @@ class DreamBoothSubset(BaseSubset):
         validation_seed: Optional[int] = None,
         validation_split: Optional[float] = 0.0,
         resize_interpolation: Optional[str] = None,
+        prefer_json_caption: bool = False,
     ) -> None:
         assert image_dir is not None, "image_dir must be specified / image_dirは指定が必須です"
 
@@ -536,6 +613,7 @@ class DreamBoothSubset(BaseSubset):
         self.caption_extension = caption_extension
         if self.caption_extension and not self.caption_extension.startswith("."):
             self.caption_extension = "." + self.caption_extension
+        self.prefer_json_caption = prefer_json_caption
         self.cache_info = cache_info
 
     def __eq__(self, other) -> bool:
@@ -1999,32 +2077,6 @@ class DreamBoothDataset(BaseDataset):
             self.bucket_reso_steps = None  # この情報は使われない
             self.bucket_no_upscale = False
 
-        def read_caption(img_path, caption_extension, enable_wildcard):
-            # captionの候補ファイル名を作る
-            base_name = os.path.splitext(img_path)[0]
-            base_name_face_det = base_name
-            tokens = base_name.split("_")
-            if len(tokens) >= 5:
-                base_name_face_det = "_".join(tokens[:-4])
-            cap_paths = [base_name + caption_extension, base_name_face_det + caption_extension]
-
-            caption = None
-            for cap_path in cap_paths:
-                if os.path.isfile(cap_path):
-                    with open(cap_path, "rt", encoding="utf-8") as f:
-                        try:
-                            lines = f.readlines()
-                        except UnicodeDecodeError as e:
-                            logger.error(f"illegal char in file (not UTF-8) / ファイルにUTF-8以外の文字があります: {cap_path}")
-                            raise e
-                        assert len(lines) > 0, f"caption file is empty / キャプションファイルが空です: {cap_path}"
-                        if enable_wildcard:
-                            caption = "\n".join([line.strip() for line in lines if line.strip() != ""])  # 空行を除く、改行で連結
-                        else:
-                            caption = lines[0].strip()
-                    break
-            return caption
-
         def load_dreambooth_dir(subset: DreamBoothSubset):
             if not os.path.isdir(subset.image_dir):
                 logger.warning(f"not directory: {subset.image_dir}")
@@ -2140,7 +2192,9 @@ class DreamBoothDataset(BaseDataset):
                 captions = []
                 missing_captions = []
                 for img_path in tqdm(img_paths, desc="read caption"):
-                    cap_for_img = read_caption(img_path, subset.caption_extension, subset.enable_wildcard)
+                    cap_for_img = read_caption(
+                        img_path, subset.caption_extension, subset.enable_wildcard, subset.prefer_json_caption
+                    )
                     if cap_for_img is None and subset.class_tokens is None:
                         logger.warning(
                             f"neither caption file nor class tokens are found. use empty caption for {img_path} / キャプションファイルもclass tokenも見つかりませんでした。空のキャプションを使用します: {img_path}"
@@ -4616,6 +4670,11 @@ def add_dataset_arguments(
     parser.add_argument("--caption_separator", type=str, default=",", help="separator for caption / captionの区切り文字")
     parser.add_argument(
         "--caption_extension", type=str, default=".caption", help="extension of caption files / 読み込むcaptionファイルの拡張子"
+    )
+    parser.add_argument(
+        "--prefer_json_caption",
+        action="store_true",
+        help="prefer structured JSON captions over text captions / テキストcaptionより構造化JSON captionを優先する",
     )
     parser.add_argument(
         "--caption_extention",

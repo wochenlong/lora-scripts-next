@@ -29,6 +29,18 @@ class AnimaBackendAdapterTests(unittest.TestCase):
         self.assertNotIn("enable_preview", adapted)
         self.assertEqual(warnings, [])
 
+    def test_adapter_keeps_json_caption_preference_for_lora_and_finetune(self):
+        for finetune in (False, True):
+            with self.subTest(finetune=finetune):
+                adapted, warnings = adapt_anima_config(
+                    {"prefer_json_caption": True, "caption_extension": ".txt"},
+                    finetune=finetune,
+                )
+
+                self.assertIs(adapted["prefer_json_caption"], True)
+                self.assertEqual(adapted["caption_extension"], ".txt")
+                self.assertEqual(warnings, [])
+
     def test_adapter_warns_for_unsupported_debug_fields(self):
         adapted, warnings = adapt_anima_config(
             {
