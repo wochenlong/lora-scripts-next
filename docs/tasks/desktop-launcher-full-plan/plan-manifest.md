@@ -7,7 +7,7 @@
 - Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0执行已开始，当前资源blocked。
 - Canonical progress file：[00_总控目标索引](00_总控目标索引.md)。Related handoff：none。
 - Current branch：`feat/desktop-launcher`；起始HEAD：`9ca2de963122f34599e34e5ff382199de9188811`；WIP `f8ed00b8c3424777bec5600ef6482838b9e1b2e6`已普通push且远端核对成功，不代表M0完成。
-- Current active phase：M0；Execution readiness：`blocked`（资源）；用户执行授权有效、实际Goal保持active，实时进度见唯一总控，其余阶段pending。
+- Current active phase：M0；Execution readiness：`blocked`（资源）；用户执行授权有效、实际Goal已blocked，实时进度见唯一总控，其余阶段pending。
 - Spec：[后续设计书0.1](../../design/desktop-launcher-next-design.md)，按D1–D6推荐方案与0.1预算执行，授权原文见总控/用户审计单。历史[底座计划](../desktop-launcher-foundation-plan/00_总控目标索引.md)作为完成证据保留，不由本计划重开。
 - Source materials：[预检复盘](00_预检证据/preflight-source-review.md)、issue #516保存快照、用户本轮硬要求、当前Git/硬件只读核对。
 - Evidence roots：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/planning/`；执行run为`desktop-launcher-full-20261028-155831Z-f6c00a`，证据在`<run-id>/M0/`。F同run标记根已创建，保留M0夹具/新Python/Torch partial；没有训练器或VM安装。

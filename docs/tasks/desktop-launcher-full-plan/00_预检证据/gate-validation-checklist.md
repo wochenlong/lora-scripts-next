@@ -18,7 +18,7 @@ Plan `desktop-launcher-full-20261028` / v0.1；2026-10-29执行回填；Executio
 | GATE-09 | 证据与测试状态真实 | testing-and-evidence-governance | pass | 区分pass/fail/not-run/blocked等 |
 | GATE-10 | 清理/预算不破坏现场 | 风险/测试治理、清理模板 | pass（规则） | 额度已随执行指令生效；实际预算路径未关闭，归GATE-11 |
 | GATE-11 | 高风险前提最小实证 | probe-plan/report、资源清单、P1–P7结果 | blocked | P1干净OS/P2固定配方资源受阻；P3下载超时、CUDA not-run；P4/P5仅M0安全基线pass-with-boundary；未来技术门保留 |
-| GATE-12 | Goal无缺项且与主计划一致 | Goal、用户指令、独立审查、静态验证 | pass（执行记录） | 实际Goal已active；不代表阶段或产品通过 |
+| GATE-12 | Goal无缺项且与主计划一致 | Goal、用户指令、独立审查、静态验证 | pass（执行记录） | 实际Goal已建立，当前资源阻塞为blocked；不代表阶段或产品通过 |
 | GATE-13 | 变更/权限/反漂移治理完整 | change-control、risk、用户审计单 | pass | 用户批准与资源差额显式记录 |
 | GATE-14 | 开工前最终复盘与用户批准 | 06复盘、用户审核、M0最小证据 | blocked | 用户批准项关闭；M0资源前提未关闭，不可进入M1 |
 

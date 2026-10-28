@@ -1,7 +1,7 @@
 # M0 最小可行性执行报告
 
 - Date：2026-10-29（Asia/Shanghai）；Plan：`desktop-launcher-full-20261028`，v0.1。
-- Result：**blocked**；没有测试豁免，M1不解锁。用户执行授权已生效，实际Goal保持active。
+- Result：**blocked**；没有测试豁免，M1不解锁。用户执行授权已生效，实际Goal已blocked。
 - Run：`desktop-launcher-full-20261028-155831Z-f6c00a`。
 - 原始证据根：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/desktop-launcher-full-20261028-155831Z-f6c00a/M0/`。
 - 新沙盒根：`F:/NextTrainerLauncherSandbox/desktop-launcher-full-20261028-155831Z-f6c00a/`。
