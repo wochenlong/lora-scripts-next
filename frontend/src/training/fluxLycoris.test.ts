@@ -57,6 +57,7 @@ describe("Flux LyCORIS adapter types", () => {
 
     expect(config.model_train_type).toBe("flux-lora")
     expect(config.network_module).toBe("networks.lora_flux")
+    expect(config.fp8_base).toBe(true)
     expect(config).not.toHaveProperty("lora_type")
     expect(config).not.toHaveProperty("network_args")
   })
@@ -65,6 +66,7 @@ describe("Flux LyCORIS adapter types", () => {
     const config = exportedConfig(formModel({ lora_type: "lokr", lokr_factor: 16, network_dim: 8, network_alpha: 4 }))
 
     expect(config.network_module).toBe("lycoris.kohya")
+    expect(config.fp8_base).toBe(false)
     expect(config.network_args).toEqual(["conv_dim=4", "conv_alpha=1", "dropout=0", "algo=lokr", "factor=16"])
     expect(config).not.toHaveProperty("lora_type")
     expect(config).not.toHaveProperty("lycoris_algo")
@@ -75,6 +77,7 @@ describe("Flux LyCORIS adapter types", () => {
     const config = exportedConfig(formModel({ lora_type: "loha", lokr_factor: 16 }))
 
     expect(config.network_module).toBe("lycoris.kohya")
+    expect(config.fp8_base).toBe(false)
     expect(config.network_args).toEqual(["conv_dim=4", "conv_alpha=1", "dropout=0", "algo=loha"])
     expect(config).not.toHaveProperty("lora_type")
   })
@@ -107,6 +110,7 @@ describe("Flux LyCORIS adapter types", () => {
     }))
 
     expect(config.network_module).toBe("lycoris.kohya")
+    expect(config.fp8_base).toBe(false)
     expect(config.network_args).toEqual(expect.arrayContaining(["algo=locon", "conv_dim=8", "conv_alpha=4", "dropout=0.1", "train_norm=True"]))
   })
 

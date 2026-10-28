@@ -15,6 +15,8 @@ Flux（Kohya）训练页提供 LoRA、LoKr、LoHa 和自定义四种适配器入
 
 ## 起始参数
 
+Flux LyCORIS 不能把 FP8 基底权重直接用于训练计算。选择 LoKr、LoHa 或自定义 LyCORIS 路径时，界面和提交层会自动设置 `fp8_base=false`，将权重加载为 BF16；普通 Flux LoRA 的默认 FP8 设置不变。FP8 格式的主模型文件仍可使用，但加载和训练时需要更多内存。
+
 以下仅作为小数据集的起始尝试，需要根据底模、数据集和训练结果调整：
 
 | 参数 | LoKr | LoHa |

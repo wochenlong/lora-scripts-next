@@ -244,6 +244,14 @@ class DummyCLIPL(torch.nn.Module):
         return {"pooler_output": torch.zeros(batch_size, *self.output_shape, device=self.device, dtype=self.dtype)}
 
 
+def _align_clip_l_state_dict_keys(clip: CLIPTextModel, state_dict: dict) -> dict:
+    expected_keys = set(clip.state_dict())
+    stripped = {key.removeprefix("text_model."): value for key, value in state_dict.items()}
+    if sum(key in expected_keys for key in stripped) > sum(key in expected_keys for key in state_dict):
+        return stripped
+    return state_dict
+
+
 def load_clip_l(
     ckpt_path: Optional[str],
     dtype: torch.dtype,
@@ -349,6 +357,7 @@ def load_clip_l(
     else:
         logger.info(f"Loading state dict from {ckpt_path}")
         sd = load_safetensors(ckpt_path, device=str(device), disable_mmap=disable_mmap, dtype=dtype)
+    sd = _align_clip_l_state_dict_keys(clip, sd)
     info = clip.load_state_dict(sd, strict=False, assign=True)
     logger.info(f"Loaded CLIP-L: {info}")
     return clip

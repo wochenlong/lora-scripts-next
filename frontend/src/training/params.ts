@@ -293,7 +293,10 @@ export function buildTrainingConfig(source: FormModel, schemaName: string) {
   if (Array.isArray(config.gpu_ids)) {
     config.gpu_ids = config.gpu_ids.map((value) => String(value).match(/GPU (\d+):/)?.[1] || String(value)).filter(Boolean)
   }
-  if (schemaName === "flux-lora") delete config.lora_type
+  if (schemaName === "flux-lora") {
+    delete config.lora_type
+    if (config.network_module === "lycoris.kohya") config.fp8_base = false
+  }
   return config
 }
 
