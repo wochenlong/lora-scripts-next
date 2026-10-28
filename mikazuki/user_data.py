@@ -11,6 +11,8 @@ import datetime
 from contextlib import contextmanager
 from pathlib import Path
 
+from mikazuki.paths import data_path
+
 
 MAX_BYTES = 1024 * 1024
 ENGINES = {"kohya", "anima-fast", "musubi", "ai-toolkit", "diffsynth", "moss", "kohaku-moss"}
@@ -201,7 +203,9 @@ def _merge(target, patch):
 
 class UserDataStore:
     def __init__(self, root=None):
-        self.root = Path(root).absolute() if root is not None else Path(__file__).resolve().parents[1] / "user_data"
+        self.root = Path(root).absolute() if root is not None else data_path(
+            "user_data", legacy_base=Path(__file__).resolve().parents[1]
+        )
 
     def _path(self, name):
         path = self.root / name

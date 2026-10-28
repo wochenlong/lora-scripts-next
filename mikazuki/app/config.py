@@ -2,6 +2,7 @@ import os
 import json
 from pathlib import Path
 from mikazuki.log import log
+from mikazuki.paths import data_path
 
 class Config:
 
@@ -45,4 +46,6 @@ class Config:
         self._stored[key] = value
 
 
-app_config = Config(Path(__file__).parents[2].absolute() / "assets" / "config.json")
+app_config = Config(data_path(
+    "assets/config.json", legacy_base=Path(__file__).parents[2].absolute(), state=True
+))

@@ -12,6 +12,8 @@ from pathlib import Path
 import re
 from urllib.parse import urlsplit
 
+from mikazuki.paths import data_path
+
 MODES = {"auto", "system", "manual", "direct"}
 LOOPBACK = "localhost,127.0.0.1,::1"
 _PROXY_KEYS = {"http_proxy", "https_proxy", "all_proxy", "no_proxy"}
@@ -121,7 +123,8 @@ def system_settings() -> dict:
 
 
 def config_path() -> Path:
-    return Path(os.environ.get("NEXT_TRAINER_NETWORK_CONFIG", "config/network.local.json"))
+    configured = os.environ.get("NEXT_TRAINER_NETWORK_CONFIG")
+    return Path(configured) if configured is not None else data_path("config/network.local.json", state=True)
 
 
 def load_settings() -> dict:

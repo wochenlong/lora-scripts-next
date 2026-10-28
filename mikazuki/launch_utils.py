@@ -17,6 +17,7 @@ except ImportError:
     pkg_resources = None
 
 from mikazuki.log import log
+from mikazuki.paths import data_path
 
 python_bin = sys.executable
 
@@ -488,7 +489,7 @@ def prepare_environment(disable_auto_mirror: bool = True, prepare_onnxruntime: b
 
     ensure_frontend_dist()
 
-    check_dirs(["config/autosave", "logs"])
+    check_dirs([data_path("config/autosave", state=True), data_path("logs", state=True)])
 
     # if not check_run("mikazuki/scripts/torch_check.py"):
     #     sys.exit(1)

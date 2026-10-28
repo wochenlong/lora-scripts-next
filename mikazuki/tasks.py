@@ -15,6 +15,7 @@ from subprocess import Popen, PIPE, TimeoutExpired, CalledProcessError, Complete
 import psutil
 
 from mikazuki.log import log
+from mikazuki.paths import data_path
 from mikazuki.train_log_hub import hub
 
 _FAILURE_LOG_TAIL_LINES = 80
@@ -78,6 +79,13 @@ class Task:
         # No ``process`` attribute until execute() spawns it: its absence (or
         # None) is how callers tell "never started" from "running" (#446 run).
         self.log_file = self.metadata.get("log_file")
+        if self.log_file:
+            path = Path(self.log_file)
+            if not path.is_absolute() and path.parts and path.parts[0] == "logs" and ".." not in path.parts:
+                resolved = data_path(path, state=True)
+                if resolved != path:
+                    self.log_file = str(resolved)
+                    self.metadata["log_file"] = self.log_file
         self._stdout_thread = None
 
     def _append_disk_log(self, text: str):
@@ -803,7 +811,8 @@ class TaskManager:
 
 
 def default_queue_path() -> Path:
-    return Path(os.environ.get("MIKAZUKI_TASK_QUEUE_FILE", "").strip() or (Path.cwd() / "logs" / "task_queue.json"))
+    configured = os.environ.get("MIKAZUKI_TASK_QUEUE_FILE", "").strip()
+    return Path(configured) if configured else data_path("logs/task_queue.json", legacy_base=Path.cwd(), state=True)
 
 
 tm = TaskManager()

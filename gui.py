@@ -9,6 +9,7 @@ from mikazuki.launch_utils import (base_dir_path, catch_exception, git_tag,
                                    prepare_environment,
                                    ensure_requirements_installed)
 from mikazuki.log import log
+from mikazuki.paths import data_path
 from mikazuki.portable_utils import sanitize_embedded_deps, train_env_overrides
 from mikazuki.startup_settings import read_startup_settings, resolve_startup
 
@@ -62,7 +63,7 @@ def run_train_monitor():
 @catch_exception
 def run_tensorboard():
     log.info("Starting tensorboard...")
-    return _popen([sys.executable, "-m", "tensorboard.main", "--logdir", "logs",
+    return _popen([sys.executable, "-m", "tensorboard.main", "--logdir", str(data_path("logs", state=True)),
                    "--host", args.tensorboard_host, "--port", str(args.tensorboard_port)])
 
 

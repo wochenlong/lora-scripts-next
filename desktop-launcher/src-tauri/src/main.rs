@@ -1,0 +1,259 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+mod core;
+mod model;
+mod runtime_view;
+use core::{Engine, Logger, Report};
+use std::{
+    path::PathBuf,
+    sync::{Arc, Mutex},
+};
+use tauri::{Emitter, Manager};
+use tauri_plugin_dialog::DialogExt;
+
+struct Runtime(Arc<Mutex<Engine>>);
+
+async fn action(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    op: &'static str,
+) -> Result<Report, String> {
+    let runtime = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut engine = runtime.lock().map_err(|_| "启动器状态锁异常".to_string())?;
+        let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        match op {
+            "inspect" => engine.inspect(&root),
+            "bootstrap" => engine.bootstrap(&root),
+            "restore" => engine.restore(&root),
+            "install" => engine.install_environment(&root),
+            "start" => engine.start(&root),
+            _ => unreachable!(),
+        }
+        .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn inspect(state: tauri::State<'_, Runtime>, root: String) -> Result<Report, String> {
+    action(state, root, "inspect").await
+}
+#[tauri::command]
+async fn bootstrap(state: tauri::State<'_, Runtime>, root: String) -> Result<Report, String> {
+    action(state, root, "bootstrap").await
+}
+#[tauri::command]
+async fn restore_trainer(state: tauri::State<'_, Runtime>, root: String) -> Result<Report, String> {
+    action(state, root, "restore").await
+}
+#[tauri::command]
+async fn install_environment(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+) -> Result<Report, String> {
+    action(state, root, "install").await
+}
+#[tauri::command]
+async fn start_trainer(state: tauri::State<'_, Runtime>, root: String) -> Result<Report, String> {
+    action(state, root, "start").await
+}
+
+async fn version_action(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    id: String,
+    operation: &'static str,
+) -> Result<Report, String> {
+    let runtime = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut engine = runtime.lock().map_err(|_| "启动器状态锁异常".to_string())?;
+        let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        match operation {
+            "install" => engine.install_release(&root, &id),
+            "select" => engine.select_release(&root, &id),
+            "rollback" => engine.rollback_release(&root),
+            "remove" => engine.remove_release(&root, &id),
+            _ => unreachable!(),
+        }
+        .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn install_release(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<Report, String> {
+    version_action(state, root, release_id, "install").await
+}
+#[tauri::command]
+async fn select_release(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<Report, String> {
+    version_action(state, root, release_id, "select").await
+}
+#[tauri::command]
+async fn rollback_release(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+) -> Result<Report, String> {
+    version_action(state, root, String::new(), "rollback").await
+}
+#[tauri::command]
+async fn remove_release(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<Report, String> {
+    version_action(state, root, release_id, "remove").await
+}
+#[tauri::command]
+async fn stop_trainer(state: tauri::State<'_, Runtime>) -> Result<(), String> {
+    let engine = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        engine
+            .lock()
+            .map(|mut e| e.stop())
+            .map_err(|_| "状态锁异常".to_string())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn choose_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        Ok(app
+            .dialog()
+            .file()
+            .set_title("选择空目录或正式启动器已有安装目录")
+            .blocking_pick_folder()
+            .map(|p| p.to_string()))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn open_trainer(state: tauri::State<'_, Runtime>) -> Result<(), String> {
+    let engine = state.0.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let url = engine
+            .lock()
+            .map_err(|_| "状态锁异常".to_string())?
+            .url()
+            .map_err(|e| e.to_string())?;
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            let system = std::env::var_os("SystemRoot").ok_or("缺少 SystemRoot")?;
+            std::process::Command::new(PathBuf::from(system).join("System32/rundll32.exe"))
+                .arg("url.dll,FileProtocolHandler")
+                .arg(url)
+                .creation_flags(0x08000000)
+                .spawn()
+                .map_err(|e| e.to_string())?;
+        }
+        Ok(())
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+
+fn main() {
+    // The same core is callable for reproducible recovery/health diagnostics without a WebView.
+    let args: Vec<String> = std::env::args().collect();
+    if args
+        .get(1)
+        .is_some_and(|a| a == "--probe" || a == "--manage")
+    {
+        let result = (|| -> anyhow::Result<()> {
+            let op = args.get(2).ok_or_else(|| {
+                anyhow::anyhow!("--probe inspect|bootstrap|restore|install|smoke <absolute-root>")
+            })?;
+            let root = PathBuf::from(
+                args.get(3)
+                    .ok_or_else(|| anyhow::anyhow!("需要绝对工作区路径"))?,
+            );
+            let (log, _) = core::logger();
+            let mut engine = Engine::new(root.clone(), log);
+            let root = engine.resolve(&root.to_string_lossy())?;
+            let report = match op.as_str() {
+                "inspect" => engine.inspect(&root)?,
+                "bootstrap" => engine.bootstrap(&root)?,
+                "restore" => engine.restore(&root)?,
+                "install" => engine.install_environment(&root)?,
+                "install-release" => engine.install_release(
+                    &root,
+                    args.get(4)
+                        .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?,
+                )?,
+                "select" => engine.select_release(
+                    &root,
+                    args.get(4)
+                        .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?,
+                )?,
+                "rollback" => engine.rollback_release(&root)?,
+                "remove" => engine.remove_release(
+                    &root,
+                    args.get(4)
+                        .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?,
+                )?,
+                "smoke" => {
+                    let r = engine.start(&root)?;
+                    engine.stop();
+                    r
+                }
+                _ => anyhow::bail!("未知 probe 操作"),
+            };
+            println!("{}", serde_json::to_string_pretty(&report)?);
+            Ok(())
+        })();
+        if let Err(e) = result {
+            eprintln!("{e:#}");
+            std::process::exit(1);
+        }
+        return;
+    }
+    tauri::Builder::default()
+        .plugin(tauri_plugin_dialog::init())
+        .setup(|app| {
+            let handle = app.handle().clone();
+            let log: Logger = Arc::new(move |line| {
+                let _ = handle.emit("launcher:log", line);
+            });
+            let root = app
+                .path()
+                .app_local_data_dir()?
+                .join("installations/default");
+            app.manage(Runtime(Arc::new(Mutex::new(Engine::new(root, log)))));
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            inspect,
+            bootstrap,
+            restore_trainer,
+            install_environment,
+            start_trainer,
+            install_release,
+            select_release,
+            rollback_release,
+            remove_release,
+            stop_trainer,
+            choose_directory,
+            open_trainer
+        ])
+        .build(tauri::generate_context!())
+        .expect("无法初始化桌面启动器")
+        .run(|app, event| {
+            if matches!(event, tauri::RunEvent::Exit) {
+                if let Some(runtime) = app.try_state::<Runtime>() {
+                    if let Ok(mut engine) = runtime.0.try_lock() {
+                        engine.stop();
+                    }
+                }
+            }
+        });
+}

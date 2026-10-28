@@ -17,6 +17,7 @@ from typing import Optional
 
 from mikazuki.networking.http import open_url
 from mikazuki.log import log
+from mikazuki.paths import data_path
 
 GITHUB_REPO = "wochenlong/lora-scripts-next"
 GITHUB_RELEASES_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases?per_page=30"
@@ -26,7 +27,7 @@ CHECK_INTERVAL_SECONDS = 6 * 3600  # at most once every 6 hours
 _STABLE_TAG_RE = re.compile(r"^v?(\d+\.\d+\.\d+)$", re.IGNORECASE)
 _PRE_SUFFIX_RE = re.compile(r"-(alpha|beta|rc|pre|preview)(\.|$)", re.IGNORECASE)
 
-_cache_file = Path(__file__).resolve().parent.parent / "config" / ".update_cache.json"
+_cache_file = data_path("config/.update_cache.json", legacy_base=Path(__file__).resolve().parent.parent, state=True)
 
 _last_result: Optional[dict] = None
 

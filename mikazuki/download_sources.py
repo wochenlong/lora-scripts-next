@@ -15,6 +15,8 @@ from pathlib import Path
 import re
 from typing import Any
 
+from mikazuki.paths import data_path
+
 
 _CU_SUFFIX = re.compile(r"/cu\d+$", re.IGNORECASE)
 
@@ -70,7 +72,8 @@ def _sources_from_mapping(data: dict) -> DownloadSources | None:
 
 
 def config_path() -> Path:
-    return Path(os.environ.get("NEXT_TRAINER_DOWNLOAD_SOURCES_CONFIG", "config/download-sources.local.json"))
+    configured = os.environ.get("NEXT_TRAINER_DOWNLOAD_SOURCES_CONFIG")
+    return Path(configured) if configured is not None else data_path("config/download-sources.local.json", state=True)
 
 
 def load_download_sources() -> DownloadSources | None:

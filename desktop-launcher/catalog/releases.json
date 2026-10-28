@@ -1,0 +1,55 @@
+{
+  "schema_version": 1,
+  "releases": [
+    {
+      "schema_version": 1,
+      "id": "main-0785419e7dc1a3058bd8710a9aa933fec0aabdee",
+      "channel": "main",
+      "version": "3.3.1-dev",
+      "commit": "0785419e7dc1a3058bd8710a9aa933fec0aabdee",
+      "archive": {
+        "url": "https://codeload.github.com/wochenlong/lora-scripts-next/zip/0785419e7dc1a3058bd8710a9aa933fec0aabdee",
+        "sha256": "9af3e14747816d7d1cd9d0e5451beca06626db29e5b50ec8079a883e65548b9a",
+        "bytes": 50267424,
+        "unpacked_bytes": 86852651
+      },
+      "python": "3.10.19",
+      "uv": {
+        "version": "0.11.16",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-pc-windows-msvc.zip",
+        "sha256": "dd9d6d6554bfab265bfa98aa8e8a406c5c3a7b97582f93de1f4d48d9154a0395",
+        "exe_sha256": "c5a583d5f1f6d055fc1c32c87d8eceee90edc69a5b9af5da70811befdfc04880",
+        "bytes": 23236992
+      },
+      "environment_recipe": "gui-requirements-0785419e7dc1a3058bd8710a9aa933fec0aabdee-python-3.10.19-v1",
+      "profile_schema_version": 1,
+      "data_contract": "legacy-view-v1",
+      "required_files": ["gui.py", "requirements.txt", "VERSION", "frontend/dist/index.html"]
+    },
+    {
+      "schema_version": 1,
+      "id": "dev-9ca2de963122f34599e34e5ff382199de9188811",
+      "channel": "dev",
+      "version": "3.3.1-dev",
+      "commit": "9ca2de963122f34599e34e5ff382199de9188811",
+      "archive": {
+        "url": "https://codeload.github.com/wochenlong/lora-scripts-next/zip/9ca2de963122f34599e34e5ff382199de9188811",
+        "sha256": "29a35652f5c3b47c0108cd96dc3647c48ec6d1cc92ab826337a482c54afbfc1b",
+        "bytes": 48824978,
+        "unpacked_bytes": 85513972
+      },
+      "python": "3.10.19",
+      "uv": {
+        "version": "0.11.16",
+        "url": "https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-pc-windows-msvc.zip",
+        "sha256": "dd9d6d6554bfab265bfa98aa8e8a406c5c3a7b97582f93de1f4d48d9154a0395",
+        "exe_sha256": "c5a583d5f1f6d055fc1c32c87d8eceee90edc69a5b9af5da70811befdfc04880",
+        "bytes": 23236992
+      },
+      "environment_recipe": "gui-requirements-9ca2de963122f34599e34e5ff382199de9188811-python-3.10.19-v1",
+      "profile_schema_version": 1,
+      "data_contract": "legacy-view-v1",
+      "required_files": ["gui.py", "requirements.txt", "VERSION", "frontend/dist/index.html"]
+    }
+  ]
+}
