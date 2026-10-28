@@ -1,7 +1,9 @@
 # 测试与证据治理
 
-- Plan ID：`desktop-launcher-full-20261028`；版本：`0.1`；日期：2026-10-28。
-- 状态：`drafting`。本文件是待审规则，没有执行测试；D1–D6、资源预算和真实执行授权均待用户审核。
+> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+
+- Plan ID：`desktop-launcher-full-20261028`；版本：`0.2`；日期：2026-10-28。
+- 状态：已授权执行；0.2按CR-001将指定GPU子项skip，其他验证规则不变；实际结果只见总控与原始报告。
 - 唯一进度：[00_总控目标索引.md](../00_总控目标索引.md)。规格：[后续设计书](../../../design/desktop-launcher-next-design.md)。本文件不建立第二份阶段总进度。
 
 ## 1. 证据根与身份
@@ -35,7 +37,7 @@
 | real（真实资源） | 实际下载、原生按钮、真实子进程、实际API与四引擎短训练 | 不能用mock或GUI 200替代引擎训练 |
 | Zero-Short（干净入口短验） | M0–M5按阶段验证新根；M6必须真实干净Windows OS/VM且独立GPU重装 | 限制PATH、清空目录只算辅助 |
 
-单项状态用 `pass/fail/not-run/blocked/unknown/not-applicable`。`not-applicable` 必须列出不适用原因、审批依据及替代证据；`unknown/not-run/skip` 不得计入完成数。M6 A1–A10的必测单元不允许用这些状态换取完成。阶段执行状态仍由总控的 `pending/in progress/blocked/done` 维护。
+单项状态用 `pass/fail/not-run/blocked/unknown/not-applicable/skip`；skip必须有明确用户授权，本计划仅CR-001指定GPU子项适用。`not-applicable` 必须列出不适用原因、审批依据及替代证据；`unknown/not-run/skip` 不得计为pass。CR-001的skip单列并允许调整后的阶段验收通过，其他M6 A1–A10未豁免必测仍须全部pass。阶段执行状态仍由总控的 `pending/in progress/blocked/done` 维护。
 
 ## 3. 待审真实资源硬预算
 

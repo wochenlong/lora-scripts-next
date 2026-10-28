@@ -1,8 +1,10 @@
 # 最小可行性验证计划
 
-- Plan ID：`desktop-launcher-full-20261028`；版本0.1；2026-10-29执行回填；状态：`blocked`（M0资源）。
+> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+
+- Plan ID：`desktop-launcher-full-20261028`；版本0.2；2026-10-29执行回填；状态：`executing`（CR-001后补齐P1与未豁免预算）。
 - 执行结果：[实际报告](feasibility-probe-report.md)。已创建F沙盒并执行M0资源/安全探针；未下载模型、未安装引擎、未跑GPU。以下矩阵保留执行合同和首次起草时假设，不能替代最新结果。
-- 唯一进度：[总控](../00_总控目标索引.md)；报告使用[探针模板](../00_预检证据/feasibility-probe-report-template.md)。GATE-11和GATE-14当前blocked；用户执行授权已生效。
+- 唯一进度：[总控](../00_总控目标索引.md)；报告使用[探针模板](../00_预检证据/feasibility-probe-report-template.md)。GATE-11/14当前待P1及未豁免资源补齐；CR-001已生效，P2受限GPU项skip，P3独立准备门分期至M2/M3，不重复下载。
 
 ## 1. 探针目的与执行次序
 
@@ -45,4 +47,4 @@ P1/P2确认可用资源、合法资产/最低显存和预算预测，P3只证明
 
 每个探针使用[报告模板](../00_预检证据/feasibility-probe-report-template.md)；失败使用[failure report](../00_预检证据/failure-report-template.md)，清理使用[清理报告](../00_预检证据/evidence-cleanup-report-template.md)。保留首次raw、状态摘要和最小复现；不能跟随junction删除或删除真实资料。未执行/资源unknown明确写not-run/blocked，不填写pass或waived。
 
-唯一下一步：按实际报告补齐M0实测资源、依赖/预算可行路径与CUDA微探针，资源门关闭后复审M0→M1；不重复申请已生效的执行授权。
+唯一下一步：按CR-001补齐M0未豁免的干净Windows与安装预算，完成独立复审后才进入M1；原P3失败保留，CUDA证据进入实际引擎配方。

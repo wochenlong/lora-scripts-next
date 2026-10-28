@@ -1,5 +1,11 @@
 # M0 最小可行性执行报告
 
+> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+
+## 0.2当前复盘
+
+CR-001已由用户明确批准：资源受限的指定Fast/DiffSynth GPU/完整模型训练子项标skip并列原因，不能称pass；Kohya/Toolkit和DiffSynth普通小张量等可执行验证保留，M0独立P3前置分期到对应引擎配方。Goal已恢复active，当前继续P1干净Windows/未豁免安装预算；M1未解锁。下列0.1原始blocked/超时/无豁免结论是历史事实，不覆盖本修订。新执行证据位于本run的changes/CR-001和M0/resource-feasibility/P1-resume，首次失败不覆盖。
+
 - Date：2026-10-29（Asia/Shanghai）；Plan：`desktop-launcher-full-20261028`，v0.1。
 - Result：**blocked**；没有测试豁免，M1不解锁。用户执行授权已生效，实际Goal已blocked。
 - Run：`desktop-launcher-full-20261028-155831Z-f6c00a`。

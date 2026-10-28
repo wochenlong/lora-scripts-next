@@ -1,6 +1,8 @@
 # 风险与授权治理
 
-- Plan ID：`desktop-launcher-full-20261028`；版本：`0.1`；执行状态：`executing`（M0），2026-10-29更新，规格/额度未变。
+> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+
+- Plan ID：`desktop-launcher-full-20261028`；版本：`0.2`；执行状态：`executing`（M0），2026-10-29按CR-001修订GPU验收，额度未增加。
 - 规格：[后续设计书](../../../design/desktop-launcher-next-design.md)；决策：[D1–D6审核单](../../../design/desktop-launcher-next-review.md)；唯一进度：[总控](../00_总控目标索引.md)。
 
 ## 1. 当前授权边界

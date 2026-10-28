@@ -1,5 +1,7 @@
 # 桌面启动器后续设计审核决策单
 
+当前修订：0.2（2026-10-29）。用户已批准CR-001：没有合适GPU测试机，跳过资源受限的Fast/DiffSynth GPU/完整模型训练子项；D6按[当前规格修订](desktop-launcher-next-design.md#0-当前修订cr-0012026-10-29)执行，其他能力/干净Windows不豁免，逐项skip不能称训练pass。实际Goal已恢复active。下文D1–D6表为原始审计历史，后续明确用户指令优先。
+
 状态更新（2026-10-29）：用户在审计材料交付后明确指令“建立goal目标，开始执行任务书的任务”，已按0.1推荐方案启动；D1–D6表格保留设计轮原始建议。实际授权与执行状态见[完整任务总控](../tasks/desktop-launcher-full-plan/00_总控目标索引.md)。正式公共发布和真实资料迁移另属范围。
 
 主文档：[后续设计书](desktop-launcher-next-design.md)。开发分支：`feat/desktop-launcher`；当前已有成果保持为未提交本地改动，未推送。

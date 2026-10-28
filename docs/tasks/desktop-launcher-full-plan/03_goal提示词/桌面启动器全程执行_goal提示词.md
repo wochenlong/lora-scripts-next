@@ -1,6 +1,8 @@
 # 桌面启动器全程执行 Goal 提示词
 
-Plan `desktop-launcher-full-20261028` / v0.1。用户在审计稿交付后已明确指令建立Goal并执行，实际Goal于2026-10-28建立，2026-10-29经连续三轮同一资源阻塞审计后设为blocked，当前停在M0资源门。本文保留完整启动合同，唯一进度为[总控索引](../00_总控目标索引.md)。高风险前提尚待M0探针，不能无条件进入M1。
+> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+
+Plan `desktop-launcher-full-20261028` / v0.2。实际Goal于2026-10-28建立，曾因资源设为blocked；2026-10-29用户回复CR-001后已恢复active。唯一进度为[总控索引](../00_总控目标索引.md)，M0未豁免门仍需通过才能进入M1。
 
 ## 使用与授权
 
@@ -26,7 +28,12 @@ Plan `desktop-launcher-full-20261028` / v0.1。用户在审计稿交付后已明
 5. 01_目标计划书/00_目标计划书索引.md，按索引读取当前阶段目标/任务书/开工清单。不要一次加载全部代码和历史原始日志。
 历史desktop-launcher-foundation-plan已完成，只作事实来源，不重开其阶段。总控索引是唯一canonical progress file，其他报告不能擅自替代。
 
-【完整顺序与阶段输出】
+【CR-001用户修订，优先于下文原0.1验收合同】
+用户已对缺少适合Fast/DiffSynth配方的CUDA机器明确回复“没有合适机器，跳过这个测试”。Fast固定驱动不满足的GPU运算/完整模型加载/反向/短训/权重、DiffSynth完整BF16模型加载/反向/短训/权重，在M2/M3/M6分别记skip+CR-001+资源原因，不计pass、不宣称四引擎全GPU训练通过。
+安装/导入/诊断/精准修复/隔离/回退及硬件限制拒绝行为仍须实现和实测。Kohya/AI Toolkit本机可执行的GPU/短训、DiffSynth普通小张量保留；不能因TE显存大就skip基础运算。M0独立P3准备不再重试，历史超时/partial保留，CUDA基础验证在相应M2/M3实际引擎配方内先验证。M0仍须关闭未豁免的干净Windows/合法安装依赖/预算/安全门，CR不自动解锁M1。
+所有非CR指定的A1–A10子项、最终同包干净OS从零、原生窗口、签名/helper、资料保护、阶段commit/push继续必测。最终完成是获批调整后的工程验收完成并逐项列skip与未验证训练能力；仅允许本CR列明skip，其余not-run/unknown/blocked/skip不能算完成。总预算不增加。工具objective若仍保留v0.1，后续用户指令和本修订优先；不创建重复Goal，不篡改历史证据。
+
+【完整顺序与阶段输出，以上CR指定GPU子项按修订执行】
 M0 审核冻结与开发基线：记录批准，固定范围/预算/allowlist，保护92文件快照所代表的原有成果，核查干净Windows/GPU/模型/签名渠道资源，完成最小可行性探针与开工门；将现有底座和计划按范围提交push。
 M1 可靠安装与精准修复：操作ID/事件/持久状态，独立取消和跨进程lease，真实阶段进度，网络一致语义，Range续传与缓存哈希，重启恢复，GUI锁定配方及最小依赖闭包修复，dirty/generation保护。
 M2 首批引擎真实闭环：RuntimeLayout与稳定Python映射先验证；独立控制worker不依赖坏GUI；Kohya standalone与Anima Fast配方锁定、真实安装/诊断/精准修复、GPU运算和短训练，证明互不干扰。

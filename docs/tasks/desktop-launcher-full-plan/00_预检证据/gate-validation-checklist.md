@@ -1,6 +1,8 @@
 # 编号化门禁审查清单
 
-Plan `desktop-launcher-full-20261028` / v0.1；2026-10-29执行回填；Execution readiness：`blocked`（M0资源）。用户已授权并建立实际Goal；任何文档结构pass均不代表产品或资源实测pass。
+> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+
+Plan `desktop-launcher-full-20261028` / v0.2；2026-10-29执行回填；Execution readiness：`executing`（CR-001后M0资源补齐）。用户已授权并建立实际Goal；任何文档结构pass均不代表产品或资源实测pass。
 
 ## 计划就绪门 GATE-00–GATE-14
 
@@ -17,10 +19,10 @@ Plan `desktop-launcher-full-20261028` / v0.1；2026-10-29执行回填；Executio
 | GATE-08 | 每阶段有硬前置清单 | 7份开工清单 | pass | M0可批准安全准备，M1需M0门通过 |
 | GATE-09 | 证据与测试状态真实 | testing-and-evidence-governance | pass | 区分pass/fail/not-run/blocked等 |
 | GATE-10 | 清理/预算不破坏现场 | 风险/测试治理、清理模板 | pass（规则） | 额度已随执行指令生效；实际预算路径未关闭，归GATE-11 |
-| GATE-11 | 高风险前提最小实证 | probe-plan/report、资源清单、P1–P7结果 | blocked | P1干净OS/P2固定配方资源受阻；P3下载超时、CUDA not-run；P4/P5仅M0安全基线pass-with-boundary；未来技术门保留 |
-| GATE-12 | Goal无缺项且与主计划一致 | Goal、用户指令、独立审查、静态验证 | pass（执行记录） | 实际Goal已建立，当前资源阻塞为blocked；不代表阶段或产品通过 |
+| GATE-11 | 高风险前提最小实证 | probe-plan/report、资源清单、P1–P7结果、CR-001 | pending | P1干净OS/未豁免安装预算补齐中；指定GPU子项skip，P3历史超时保留、CUDA门分期；P4/P5安全基线pass-with-boundary |
+| GATE-12 | Goal无缺项且与主计划一致 | Goal、用户指令、独立审查、静态验证 | pass（执行记录） | 实际Goal已恢复active，按0.2及CR-001执行；不代表阶段或产品通过 |
 | GATE-13 | 变更/权限/反漂移治理完整 | change-control、risk、用户审计单 | pass | 用户批准与资源差额显式记录 |
-| GATE-14 | 开工前最终复盘与用户批准 | 06复盘、用户审核、M0最小证据 | blocked | 用户批准项关闭；M0资源前提未关闭，不可进入M1 |
+| GATE-14 | 开工前最终复盘与用户批准 | 06复盘、用户审核、M0最小证据 | pending | 用户批准及GPU指定子项豁免已记录；P1/未豁免资源门未闭，不可进入M1 |
 
 分期说明：文档审计通过可以批准M0准备与探针，不能绕过GATE-11/14。M0必须把干净OS/合法资产/预算可行性和安全布局/能力清点做出事实；M1的P6取消事务样机、M2的P4/P5真实布局/worker、M5的P7壳恢复样机在对应主实现前各自再过技术门。未来功能尚未实现的验证不倒填M0已过。GATE-14在M0只可对“进入M1且后续技术门继续阻断”的范围给pass-with-boundary，不能一次替所有未来阶段签收。
 
@@ -28,7 +30,7 @@ Plan `desktop-launcher-full-20261028` / v0.1；2026-10-29执行回填；Executio
 
 | Gate ID | 阶段 | 当前状态 | 必需证据/禁止越门 |
 | --- | --- | --- | --- |
-| EXIT-M0 | 审核冻结与开发基线 | blocked | 审核/备份/构建/allowlist/WIP远端保存已完成，资源/CUDA前提未过；WIP与状态S不能替代完成门 |
+| EXIT-M0 | 审核冻结与开发基线 | pending | 审核/备份/构建/WIP已保存；CR-001后继续P1及未豁免资源，独立复审/完成报告后方可解锁M1 |
 | EXIT-M1 | 可靠安装与精准修复 | pending | 实际取消/网络/Range/中断恢复/GUI精准修复/无P0P1/完成清理/C与S回执 |
 | EXIT-M2 | 首批引擎真实闭环 | pending | RuntimeLayout/worker只读与坏GUI独立/两引擎GPU短训练和修复/完成清理/C与S回执 |
 | EXIT-M3 | 四引擎与可信更新 | pending | 另两引擎GPU真实闭环/四引擎身份/签名历史与离线矩阵/完成清理/C与S回执 |
@@ -36,4 +38,4 @@ Plan `desktop-launcher-full-20261028` / v0.1；2026-10-29执行回填；Executio
 | EXIT-M5 | 独立壳与Windows分发 | pending | helper精确状态恢复/安装器WebView2专项/冻结交付集合/生产身份边界/完成清理/C与S回执 |
 | EXIT-M6 | 从零沙盒最终验收 | pending | 同包双轨A1–A10全pass/四引擎重装训练/权重/退出保护/最终材料清理/C与S完整远端回执 |
 
-通用条件：必测真实证据、独立审查、无未解决P0/P1、阶段完成报告/清理报告/资源账本、精确commit/push且远端SHA确认。推送失败即未完成，产品通过不抵扣Git保存门。最终M6不得靠skip、缺资源或历史GUI报告越门。所有执行进度只在总控更新。
+通用条件：必测真实证据、独立审查、无未解决P0/P1、阶段完成报告/清理报告/资源账本、精确commit/push且远端SHA确认。推送失败即未完成，产品通过不抵扣Git保存门。最终M6仅允许CR-001明确授权的GPU子项skip，其他必测不得靠缺资源或历史报告越门。所有执行进度只在总控更新。

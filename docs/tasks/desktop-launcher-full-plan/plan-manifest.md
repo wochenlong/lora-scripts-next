@@ -1,13 +1,15 @@
 # 施工计划产物与门禁清单
 
+> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+
 ## 计划元数据
 
-- Plan ID：`desktop-launcher-full-20261028`；Version：`0.1`；Last updated：2026-10-29（Asia/Shanghai，执行状态更新）。
+- Plan ID：`desktop-launcher-full-20261028`；Version：`0.2`；Last updated：2026-10-29（Asia/Shanghai，执行状态更新）。
 - Scale mode：Full。原因：跨Rust/Python/UI的长期新功能、真实GPU、资料迁移、可信更新和Windows分发；保留全部施工体系产物，无合并删除硬门。
 - Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0执行已开始，当前资源blocked。
 - Canonical progress file：[00_总控目标索引](00_总控目标索引.md)。Related handoff：none。
 - Current branch：`feat/desktop-launcher`；起始HEAD：`9ca2de963122f34599e34e5ff382199de9188811`；WIP `f8ed00b8c3424777bec5600ef6482838b9e1b2e6`已普通push且远端核对成功，不代表M0完成。
-- Current active phase：M0；Execution readiness：`blocked`（资源）；用户执行授权有效、实际Goal已blocked，实时进度见唯一总控，其余阶段pending。
+- Current active phase：M0；Execution readiness：`executing`（M0资源补齐）；用户执行授权有效，实际Goal已active，CR-001后推进未豁免的M0资源门，其余阶段pending。
 - Spec：[后续设计书0.1](../../design/desktop-launcher-next-design.md)，按D1–D6推荐方案与0.1预算执行，授权原文见总控/用户审计单。历史[底座计划](../desktop-launcher-foundation-plan/00_总控目标索引.md)作为完成证据保留，不由本计划重开。
 - Source materials：[预检复盘](00_预检证据/preflight-source-review.md)、issue #516保存快照、用户本轮硬要求、当前Git/硬件只读核对。
 - Evidence roots：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/planning/`；执行run为`desktop-launcher-full-20261028-155831Z-f6c00a`，证据在`<run-id>/M0/`。F同run标记根已创建，保留M0夹具/新Python/Torch partial；没有训练器或VM安装。
@@ -69,8 +71,8 @@
 | 计划静态结构 | 以planning/plan-validation.json为准 | UTF-8、路径、manifest、七阶段/六测试、代码围栏、空白与92文件保护；不验证产品 |
 | 独立文档审查 | 以06复盘引用报告为准 | 架构执行、需求Goal、资源沙盒三路审查 |
 | GATE-00–10、12–13 | 计划/授权记录pass | [编号清单](00_预检证据/gate-validation-checklist.md)；GATE12包含实际Goal记录，不代表产品通过 |
-| GATE-11、14 | blocked | 用户授权已完成；P1/P2资源未满足、P3 CUDA not-run，M1不解锁 |
-| EXIT-M0 | blocked | WIP已push，不替代资源门和阶段完成报告；纯状态S回执外部保存 |
+| GATE-11、14 | pending（补齐中） | CR-001指定GPU子项skip，独立P3前置分期；P1干净Windows/未豁免预算未闭，M1仍未解锁 |
+| EXIT-M0 | pending | WIP已push，CR-001后继续干净Windows与未豁免预算；不是完成报告 |
 | EXIT-M1–M6 | pending | 见唯一总控台账；未执行后续开发/训练/最终验收 |
 
 未来推进先更新总控，再同步本manifest的阶段指针/证据索引，不建立第二份阶段完成台账。用户批准后只先解锁M0安全准备，技术门按阶段续查；最终A1–A10和M6四引擎/干净OS不接受默默降级。
@@ -79,4 +81,4 @@
 
 阶段名、ID和顺序固定M0–M6。规格/预算/验收变化按CR记录同步全部受影响文档，保留首次失败与历史已验证状态。每阶段遵守代码C/状态S两次基线保存与外部最终回执，普通push不改写历史。实际Goal已启动；不能把提示词文件或WIP保存视为阶段通过。
 
-唯一下一步：按总控补齐M0的CUDA实测机、干净Windows与可信预算路径；保留失败现场，资源和微探针通过后才复审M0→M1。
+唯一下一步：按总控补齐M0干净Windows与未豁免预算，保留失败现场，依CR-001复审M0→M1；不再索取已豁免GPU机器。
