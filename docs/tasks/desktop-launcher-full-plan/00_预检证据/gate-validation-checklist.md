@@ -1,13 +1,13 @@
 # 编号化门禁审查清单
 
-Plan `desktop-launcher-full-20261028` / v0.1；日期2026-10-28；Execution readiness：`drafting`。本轮只评估施工文档；任何文档结构pass均不代表产品或资源实测pass。
+Plan `desktop-launcher-full-20261028` / v0.1；2026-10-29执行回填；Execution readiness：`blocked`（M0资源）。用户已授权并建立实际Goal；任何文档结构pass均不代表产品或资源实测pass。
 
 ## 计划就绪门 GATE-00–GATE-14
 
 | Gate ID | 描述 | 必需证据 | 当前状态 | 说明与退回路径 |
 | --- | --- | --- | --- | --- |
 | GATE-00 | 来源与现场事实可信 | preflight-source-review、branch/HEAD/92文件快照 | pass | 规划所需事实已读；issue只用保存快照 |
-| GATE-01 | 计划根/证据根/授权边界明确 | manifest、风险治理 | pass | 当前仅文档，后续预算待审 |
+| GATE-01 | 计划根/证据根/授权边界明确 | manifest、风险治理、M0/audit-freeze | pass | 用户已启动0.1及推荐方案/预算，排除项不变 |
 | GATE-02 | 总目标可验收 | 总控目标、A1–A10追踪 | pass | 最终四引擎/干净OS/远端基线都有硬门 |
 | GATE-03 | 范围、顺序和保护明确 | M0–M6依赖、范围/变更治理 | pass | 无私自放开平台/真实资料 |
 | GATE-04 | 每目标有具体产物 | 7份目标计划及索引 | pass | 文档覆盖，不代表实现完成 |
@@ -16,11 +16,11 @@ Plan `desktop-launcher-full-20261028` / v0.1；日期2026-10-28；Execution read
 | GATE-07 | 完成门、失败和保存闭环 | 任务书、完成模板、Git协议 | pass | C/S提交回执、失败阻断下阶段 |
 | GATE-08 | 每阶段有硬前置清单 | 7份开工清单 | pass | M0可批准安全准备，M1需M0门通过 |
 | GATE-09 | 证据与测试状态真实 | testing-and-evidence-governance | pass | 区分pass/fail/not-run/blocked等 |
-| GATE-10 | 清理/预算不破坏现场 | 风险/测试治理、清理模板 | pass | 预算数值待用户审计，不视作执行授权 |
-| GATE-11 | 高风险前提最小实证 | probe-plan/report、资源清单、P1–P7结果 | pending | 本轮未运行；M0先P1–P5安全准备，后续技术probe按分期门 |
-| GATE-12 | Goal无缺项且与主计划一致 | Goal草稿、独立审查、静态验证 | pass（草稿一致性） | 不是批准，不能本轮调用Goal |
+| GATE-10 | 清理/预算不破坏现场 | 风险/测试治理、清理模板 | pass（规则） | 额度已随执行指令生效；实际预算路径未关闭，归GATE-11 |
+| GATE-11 | 高风险前提最小实证 | probe-plan/report、资源清单、P1–P7结果 | blocked | P1干净OS/P2固定配方资源受阻；P3下载超时、CUDA not-run；P4/P5仅M0安全基线pass-with-boundary；未来技术门保留 |
+| GATE-12 | Goal无缺项且与主计划一致 | Goal、用户指令、独立审查、静态验证 | pass（执行记录） | 实际Goal已active；不代表阶段或产品通过 |
 | GATE-13 | 变更/权限/反漂移治理完整 | change-control、risk、用户审计单 | pass | 用户批准与资源差额显式记录 |
-| GATE-14 | 开工前最终复盘与用户批准 | 06复盘、用户审核、M0最小证据 | pending | 当前不可直接M1；批准后仅先解锁M0准备/probe |
+| GATE-14 | 开工前最终复盘与用户批准 | 06复盘、用户审核、M0最小证据 | blocked | 用户批准项关闭；M0资源前提未关闭，不可进入M1 |
 
 分期说明：文档审计通过可以批准M0准备与探针，不能绕过GATE-11/14。M0必须把干净OS/合法资产/预算可行性和安全布局/能力清点做出事实；M1的P6取消事务样机、M2的P4/P5真实布局/worker、M5的P7壳恢复样机在对应主实现前各自再过技术门。未来功能尚未实现的验证不倒填M0已过。GATE-14在M0只可对“进入M1且后续技术门继续阻断”的范围给pass-with-boundary，不能一次替所有未来阶段签收。
 
@@ -28,7 +28,7 @@ Plan `desktop-launcher-full-20261028` / v0.1；日期2026-10-28；Execution read
 
 | Gate ID | 阶段 | 当前状态 | 必需证据/禁止越门 |
 | --- | --- | --- | --- |
-| EXIT-M0 | 审核冻结与开发基线 | pending | 审核/资源/最小probe/allowlist/工作树保护/完成复盘/C与S远端回执 |
+| EXIT-M0 | 审核冻结与开发基线 | blocked | 审核/备份/构建/allowlist/WIP远端保存已完成，资源/CUDA前提未过；WIP与状态S不能替代完成门 |
 | EXIT-M1 | 可靠安装与精准修复 | pending | 实际取消/网络/Range/中断恢复/GUI精准修复/无P0P1/完成清理/C与S回执 |
 | EXIT-M2 | 首批引擎真实闭环 | pending | RuntimeLayout/worker只读与坏GUI独立/两引擎GPU短训练和修复/完成清理/C与S回执 |
 | EXIT-M3 | 四引擎与可信更新 | pending | 另两引擎GPU真实闭环/四引擎身份/签名历史与离线矩阵/完成清理/C与S回执 |
