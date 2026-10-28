@@ -76,6 +76,48 @@ class ConfigExportTests(unittest.TestCase):
         args = result["config"].get("network_args") or []
         self.assertFalse(any("undefined" in item for item in args))
 
+    def test_flux_lycoris_export_reimports_with_adapter_identity(self):
+        for lora_type in ("lokr", "loha"):
+            with self.subTest(lora_type=lora_type):
+                args = ["conv_dim=4", "conv_alpha=1", "dropout=0", f"algo={lora_type}"]
+                if lora_type == "lokr":
+                    args.append("factor=16")
+                exported, _ = normalize_config_for_export(
+                    {
+                        "model_train_type": "flux-lora",
+                        "network_module": "lycoris.kohya",
+                        "network_args": args,
+                        "pretrained_model_name_or_path": "./sd-models/flux/flux1-dev-fp8.safetensors",
+                        "train_data_dir": "./train/aki",
+                        "output_dir": "./output",
+                        "output_name": "flux-lycoris",
+                    },
+                    page_train_type="flux-lora",
+                )
+                self.assertEqual(exported.get("lora_type"), lora_type)
+                self.assertEqual(exported.get("network_args"), args)
+                result = validate_config_import("flux-lora", exported)
+                self.assertEqual(result["result"], "ok")
+                self.assertEqual(result["config"].get("lora_type"), lora_type)
+                self.assertEqual(result["config"].get("network_args"), args)
+
+    def test_flux_oft_export_remains_importable(self):
+        exported, _ = normalize_config_for_export(
+            {
+                "model_train_type": "flux-lora",
+                "network_module": "networks.oft_flux",
+                "pretrained_model_name_or_path": "./sd-models/flux/flux1-dev-fp8.safetensors",
+                "train_data_dir": "./train/aki",
+                "output_dir": "./output",
+                "output_name": "flux-oft",
+            },
+            page_train_type="flux-lora",
+        )
+        self.assertEqual(exported.get("network_module"), "networks.oft_flux")
+        result = validate_config_import("flux-lora", exported)
+        self.assertEqual(result["result"], "ok")
+        self.assertEqual(result["config"].get("network_module"), "networks.oft_flux")
+
     def test_normalize_for_export_api(self):
         client = TestClient(app)
         response = client.post(

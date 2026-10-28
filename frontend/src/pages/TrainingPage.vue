@@ -11,7 +11,7 @@ import { schemasApi } from "../api/schemas"
 import { trainingApi, type TrainingPreset, type TrainingStart } from "../api/training"
 import { applyReadonlyDefaults, cloneFormModel, cloneFormValue, createDefaultModel, hasFormValue, isFieldActive, normalizeModelForSchema, serializeModel, validateModel, type AdaptedSchema, type FormField, type FormModel } from "../schema/adapter"
 import { loadTrainingSchema } from "../schema/loader"
-import { buildTrainingConfig, checkTrainingConfig, hydrateImportedConfig, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
+import { buildTrainingConfig, checkTrainingConfig, hasExplicitFluxLoraType, hydrateImportedConfig, migrateFluxLoraType, pickCarryOverFields, sanitizePersistedDraft } from "../training/params"
 import { QWEN_VALIDATION_FIELDS, validateQwenConfig } from "../training/qwenValidation"
 import { isAiToolkitSchema, isMusubiSchema, moduleForSchema, moduleForTrainType } from "../training/modules"
 import { collectDatasetCheckTargets } from "../training/datasetCheck"
@@ -126,7 +126,8 @@ async function applyImportedConfig(config: FormModel, successMessage?: string) {
   const validatedConfig = result.config || config
   const explicitKeys = new Set(Object.keys(validatedConfig))
   const importedConfig = hydrateImportedConfig(validatedConfig)
-  model.value = normalizeModelForSchema(schema.value!, { ...cloneFormModel(defaults), ...importedConfig }, { explicitKeys })
+  const migratedConfig = props.schemaName === "flux-lora" ? migrateFluxLoraType(importedConfig, hasExplicitFluxLoraType(config)) : importedConfig
+  model.value = normalizeModelForSchema(schema.value!, { ...cloneFormModel(defaults), ...migratedConfig }, { explicitKeys })
   applyReadonlyDefaults(schema.value!, model.value, defaults)
   if (pending && sessionStorage.getItem("mikazuki-pending-import") === pending) {
     sessionStorage.removeItem("mikazuki-pending-import")
@@ -189,7 +190,9 @@ async function load() {
       saved = result.config || saved
       if (result.notice) ElMessage.info(result.notice)
     }
-    model.value = normalizeModelForSchema(loaded, saved ? { ...base, ...sanitizePersistedDraft(saved, defaults) } : base)
+    const restored = saved ? sanitizePersistedDraft(saved, defaults) : undefined
+    const migrated = props.schemaName === "flux-lora" && restored ? migrateFluxLoraType(restored) : restored
+    model.value = normalizeModelForSchema(loaded, migrated ? { ...base, ...migrated } : base)
     migrateQwenDraft(model.value)
     applyReadonlyDefaults(loaded, model.value, defaults)
     const cards = await schemasApi.graphicCards()

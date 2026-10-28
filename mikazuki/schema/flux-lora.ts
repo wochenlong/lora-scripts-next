@@ -1,6 +1,7 @@
 Schema.intersect([
     Schema.object({
         model_train_type: Schema.string().default("flux-lora").disabled().description("训练种类"),
+        lora_type: Schema.union(["lora", "lokr", "loha", "custom"]).default("lora").description("适配器类型。LoKr / LoHa 使用外置 LyCORIS；custom 保留高级网络模块与算法设置"),
         model_type: Schema.union(["flux", "chroma"]).default("flux").description("FLUX 模型类型 (支持 Chroma)"),
         pretrained_model_name_or_path: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/flux/flux1-dev-fp8.safetensors").description("Flux 模型路径"),
         ae: Schema.string().role('filepicker', { type: "model-file" }).default("./sd-models/flux/ae.safetensors").description("AE 模型文件路径"),
@@ -49,8 +50,7 @@ Schema.intersect([
 
     Schema.intersect([
         Schema.object({
-            network_module: Schema.union(["networks.lora_flux", "networks.oft_flux", "lycoris.kohya"]).default("networks.lora_flux").description("训练网络模块"),
-            network_weights: Schema.string().role('filepicker').description("从已有的 LoRA 模型上继续训练，填写路径"),
+            network_weights: Schema.string().role('filepicker').description("从已有的 LoRA / LoKr / LoHa 模型继续训练，填写路径"),
             network_dim: Schema.number().min(1).default(2).description("网络维度，常用 4~128，不是越大越好, 低dim可以降低显存占用"),
             network_alpha: Schema.number().min(1).default(16).description("常用值：等于 network_dim 或 network_dim*1/2 或 1。使用较小的 alpha 需要提升学习率"),
             network_dropout: Schema.number().step(0.01).default(0).description('dropout 概率 （与 lycoris 不兼容，需要用 lycoris 自带的）'),
@@ -59,9 +59,56 @@ Schema.intersect([
             enable_base_weight: Schema.boolean().default(false).description('启用基础权重（差异炼丹）'),
         }).description("网络设置"),
 
-        // lycoris 参数
-        SHARED_SCHEMAS.LYCORIS_MAIN,
-        SHARED_SCHEMAS.LYCORIS_LOKR,
+        Schema.union([
+            Schema.object({
+                lora_type: Schema.const("lora").default("lora"),
+                network_module: Schema.const("networks.lora_flux").default("networks.lora_flux").hidden(),
+            }),
+            Schema.object({
+                lora_type: Schema.const("lokr").required(),
+                network_module: Schema.const("lycoris.kohya").default("lycoris.kohya").hidden(),
+                lycoris_algo: Schema.const("lokr").default("lokr").hidden(),
+                conv_dim: Schema.number().default(4).hidden(),
+                conv_alpha: Schema.number().default(1).hidden(),
+                dropout: Schema.number().default(0).hidden(),
+                train_norm: Schema.boolean().default(false).hidden(),
+            }),
+            Schema.object({
+                lora_type: Schema.const("loha").required(),
+                network_module: Schema.const("lycoris.kohya").default("lycoris.kohya").hidden(),
+                lycoris_algo: Schema.const("loha").default("loha").hidden(),
+                conv_dim: Schema.number().default(4).hidden(),
+                conv_alpha: Schema.number().default(1).hidden(),
+                dropout: Schema.number().default(0).hidden(),
+                train_norm: Schema.boolean().default(false).hidden(),
+            }),
+            Schema.object({
+                lora_type: Schema.const("custom").required(),
+                network_module: Schema.union(["networks.lora_flux", "networks.oft_flux", "lycoris.kohya"]).default("networks.lora_flux").description("训练网络模块"),
+            }),
+        ]),
+
+        Schema.union([
+            Schema.object({
+                lora_type: Schema.const("custom").required(),
+                network_module: Schema.const('lycoris.kohya').required(),
+                lycoris_algo: Schema.union(["locon", "loha", "lokr", "ia3", "dylora", "glora", "diag-oft", "boft"]).default("locon").description('LyCORIS 网络算法'),
+                conv_dim: Schema.number().default(4),
+                conv_alpha: Schema.number().default(1),
+                dropout: Schema.number().step(0.01).default(0).description('dropout 概率。推荐 0~0.5，LoHa/LoKr/(IA)^3暂不支持'),
+                train_norm: Schema.boolean().default(false).description('训练 Norm 层，不支持 (IA)^3'),
+            }),
+            Schema.object({}),
+        ]),
+
+        Schema.union([
+            Schema.object({
+                network_module: Schema.const('lycoris.kohya').required(),
+                lycoris_algo: Schema.const('lokr').required(),
+                lokr_factor: Schema.number().min(-1).default(-1).description('常用 `4~无穷`（填写 -1 为无穷）'),
+            }),
+            Schema.object({}),
+        ]),
 
         SHARED_SCHEMAS.NETWORK_OPTION_BASEWEIGHT,
     ]),
