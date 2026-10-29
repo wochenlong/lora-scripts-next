@@ -1,4 +1,4 @@
-//! P6 操作控制：取消和读取不依赖 Engine 锁；磁盘变更必须持有工作区 lease。
+//! 操作控制：取消和读取不依赖 Engine 锁；磁盘变更必须持有工作区 lease。
 //! 本模块只记录操作，不管理实例 generation、dirty、快照或恢复成功事实。
 use crate::model::{self, Layout, WorkspaceMutation};
 use anyhow::{bail, Context, Result};
@@ -118,12 +118,14 @@ pub enum CancelReceipt {
     Accepted,
     AlreadyRequested,
     AlreadyFinished,
+    CommitInProgress,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 struct State {
     snapshot: OperationSnapshot,
     events: VecDeque<OperationEvent>,
+    completing: bool,
 }
 
 impl State {
@@ -198,6 +200,7 @@ impl OperationManager {
                 error: None,
             },
             events: VecDeque::new(),
+            completing: false,
         };
         state.record("操作已建立")?;
         let shared = Arc::new(Shared {
@@ -234,6 +237,9 @@ impl OperationManager {
         if state.snapshot.status != OperationStatus::Running {
             return Ok(CancelReceipt::AlreadyFinished);
         }
+        if state.completing {
+            return Ok(CancelReceipt::CommitInProgress);
+        }
         if shared.cancel.is_cancel_requested() {
             return Ok(CancelReceipt::AlreadyRequested);
         }
@@ -241,6 +247,21 @@ impl OperationManager {
         shared.cancel.request();
         state.snapshot.cancel_requested = true;
         Ok(CancelReceipt::Accepted)
+    }
+
+    /// 退出时只请求回收本进程建立的操作，不接管磁盘上其他进程的历史。
+    pub fn cancel_running(&self) -> Result<()> {
+        let ids: Vec<_> = self
+            .entries
+            .lock()
+            .map_err(|_| anyhow::anyhow!("操作索引锁异常"))?
+            .keys()
+            .cloned()
+            .collect();
+        for id in ids {
+            self.cancel(&id)?;
+        }
+        Ok(())
     }
 
     /// 事件仅保留最近 256 项。游标过旧时必须重新读取快照，不能静默漏报。
@@ -324,14 +345,76 @@ impl OperationHandle {
         state.record("工作线程已结束；实例恢复状态须另行核验")
     }
 
+    /// 终态落盘失败时内存必须显式报错，磁盘原始记录仍保留供恢复判断。
+    pub fn finish_and_persist(
+        &self,
+        mutation: &WorkspaceMutation,
+        status: OperationStatus,
+        error: Option<OperationError>,
+    ) -> Result<()> {
+        if status == OperationStatus::Running
+            || (status == OperationStatus::Succeeded && error.is_some())
+            || (status == OperationStatus::Failed && error.is_none())
+        {
+            bail!("无效操作终态");
+        }
+        let terminal = {
+            let mut state = self
+                .shared
+                .state
+                .lock()
+                .map_err(|_| anyhow::anyhow!("操作快照锁异常"))?;
+            if state.snapshot.status != OperationStatus::Running || state.completing {
+                bail!("操作已结束或正在提交");
+            }
+            let mut terminal = state.clone();
+            terminal.snapshot.status = status;
+            terminal.snapshot.error = error;
+            terminal.snapshot.cancel_requested = self.shared.cancel.is_cancel_requested();
+            terminal.record("工作线程已结束；实例恢复状态须另行核验")?;
+            state.completing = true;
+            terminal
+        };
+        // 磁盘写期间快照仍为Running；取消会明确报告提交中，不等待I/O。
+        let result = self.persist_snapshot(mutation, terminal.snapshot.clone());
+        let mut state = self
+            .shared
+            .state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("操作快照锁异常"))?;
+        match result {
+            Ok(()) => {
+                *state = terminal;
+                Ok(())
+            }
+            Err(error) => {
+                state.completing = false;
+                state.snapshot.status = OperationStatus::Failed;
+                state.snapshot.error = Some(OperationError {
+                    code: "operation_state_write_failed".into(),
+                    message: "操作结果未能保存；请重新检查安装目录和磁盘状态。".into(),
+                });
+                state.record("终态记录保存失败；原磁盘现场已保留")?;
+                Err(error)
+            }
+        }
+    }
+
     /// 持工作区 lease 写独立操作记录，绝不覆盖 v1 journal/registry。
     /// 序列化磁盘写锁不与快照锁共用；任何文件 I/O 期间都可读取和取消。
     pub fn persist(&self, mutation: &WorkspaceMutation) -> Result<()> {
+        self.persist_snapshot(mutation, self.shared.snapshot()?)
+    }
+
+    fn persist_snapshot(
+        &self,
+        mutation: &WorkspaceMutation,
+        snapshot: OperationSnapshot,
+    ) -> Result<()> {
         let mut persisted = self
             .persistence
             .lock()
             .map_err(|_| anyhow::anyhow!("操作持久化锁异常"))?;
-        let snapshot = self.shared.snapshot()?;
         if serde_json::to_vec(&snapshot)?.len() as u64 > RECORD_LIMIT {
             bail!("操作记录超过64KiB，拒绝写入无法重新读取的状态");
         }
@@ -374,6 +457,25 @@ fn validate_id(id: &str) -> Result<()> {
         bail!("操作 ID 仅接受不超过96字节的小写字母、数字、连字符和下划线");
     }
     Ok(())
+}
+
+/// 只读加载磁盘历史，不建立工作区、不获取变更租约，也不接管操作。
+/// 旧 Running 仅在返回视图中标为 Interrupted，不能据此认定其他进程已退出；
+/// 实际变更仍须成功获取 WorkspaceMutation。本进程活动快照应由管理器读取。
+/// 事件只存在于原进程内存，历史视图的游标归零，调用方必须重新读取快照。
+/// 原文件、时间戳及取消事实保持不变；未知格式与损坏记录原样拒读。
+pub fn load_snapshots(layout: &Layout) -> Result<Vec<OperationSnapshot>> {
+    let directory = layout.root.join("state/operations");
+    Ok(read_records(layout, &directory)?
+        .into_values()
+        .map(|mut snapshot| {
+            if snapshot.status == OperationStatus::Running {
+                snapshot.status = OperationStatus::Interrupted;
+            }
+            snapshot.event_seq = 0;
+            snapshot
+        })
+        .collect())
 }
 
 /// 先验证整个操作记录命名空间，再创建目录或写入；未知格式不降级为空状态。
@@ -459,6 +561,64 @@ mod tests {
                 let _ = fs::remove_dir_all(&self.0);
             }
         }
+    }
+
+    #[test]
+    fn terminal_state_is_not_visible_until_disk_commit_completes() {
+        let temp = Temp::new();
+        let mutation = temp.mutation();
+        let manager = OperationManager::default();
+        let handle = Arc::new(
+            manager
+                .start("terminal-commit", OperationKind::Download)
+                .unwrap(),
+        );
+        handle.persist(&mutation).unwrap();
+        let held = handle.persistence.lock().unwrap();
+        let worker_handle = handle.clone();
+        let worker = thread::spawn(move || {
+            worker_handle.finish_and_persist(&mutation, OperationStatus::Succeeded, None)
+        });
+        let deadline = std::time::Instant::now() + Duration::from_secs(2);
+        while !handle.shared.state.lock().unwrap().completing
+            && std::time::Instant::now() < deadline
+        {
+            thread::yield_now();
+        }
+        let during = manager.snapshot("terminal-commit").unwrap();
+        let cancel = manager.cancel("terminal-commit").unwrap();
+        drop(held);
+        worker.join().unwrap().unwrap();
+        assert_eq!(during.status, OperationStatus::Running);
+        assert_eq!(cancel, CancelReceipt::CommitInProgress);
+        assert_eq!(
+            manager.snapshot("terminal-commit").unwrap().status,
+            OperationStatus::Succeeded
+        );
+    }
+
+    #[test]
+    fn terminal_disk_failure_reports_failed_and_preserves_foreign_record() {
+        let temp = Temp::new();
+        let mutation = temp.mutation();
+        let manager = OperationManager::default();
+        let handle = manager
+            .start("terminal-disk-fail", OperationKind::Download)
+            .unwrap();
+        handle.persist(&mutation).unwrap();
+        let path = temp.0.join("state/operations/terminal-disk-fail.json");
+        let mut foreign: serde_json::Value =
+            serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        foreign["schema_version"] = 99.into();
+        let bytes = serde_json::to_vec(&foreign).unwrap();
+        fs::write(&path, &bytes).unwrap();
+        assert!(handle
+            .finish_and_persist(&mutation, OperationStatus::Succeeded, None)
+            .is_err());
+        let result = manager.snapshot("terminal-disk-fail").unwrap();
+        assert_eq!(result.status, OperationStatus::Failed);
+        assert_eq!(result.error.unwrap().code, "operation_state_write_failed");
+        assert_eq!(fs::read(&path).unwrap(), bytes);
     }
 
     #[test]
@@ -604,6 +764,67 @@ mod tests {
     }
 
     #[test]
+    fn loading_missing_history_does_not_prepare_or_write_workspace() {
+        let temp = Temp::new();
+        let catalog = model::Catalog::embedded().unwrap();
+        let layout = Layout::new(&temp.0, &catalog.releases[0].id).unwrap();
+        assert!(load_snapshots(&layout).unwrap().is_empty());
+        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn historical_snapshots_reset_cursor_without_overwriting_running_or_finished_records() {
+        let temp = Temp::new();
+        let mutation = temp.mutation();
+        let manager = OperationManager::default();
+        let running = manager
+            .start("prefetch-interrupted", OperationKind::Download)
+            .unwrap();
+        running
+            .publish(OperationPhase::Downloading, "下载中断前检查点")
+            .unwrap();
+        manager.cancel("prefetch-interrupted").unwrap();
+        running.persist(&mutation).unwrap();
+        let finished = manager
+            .start("prefetch-succeeded", OperationKind::Download)
+            .unwrap();
+        finished.finish(OperationStatus::Succeeded, None).unwrap();
+        finished.persist(&mutation).unwrap();
+        let running_path = temp.0.join("state/operations/prefetch-interrupted.json");
+        let finished_path = temp.0.join("state/operations/prefetch-succeeded.json");
+        let running_bytes = fs::read(&running_path).unwrap();
+        let finished_bytes = fs::read(&finished_path).unwrap();
+        let original = manager.snapshot("prefetch-interrupted").unwrap();
+
+        let snapshots = load_snapshots(mutation.layout()).unwrap();
+        assert_eq!(snapshots.len(), 2);
+        let loaded_running = snapshots
+            .iter()
+            .find(|snapshot| snapshot.id == "prefetch-interrupted")
+            .unwrap();
+        let mut expected = original.clone();
+        expected.status = OperationStatus::Interrupted;
+        expected.event_seq = 0;
+        assert_eq!(loaded_running, &expected);
+        let mut expected_finished = manager.snapshot("prefetch-succeeded").unwrap();
+        expected_finished.event_seq = 0;
+        assert_eq!(
+            snapshots
+                .iter()
+                .find(|snapshot| snapshot.id == "prefetch-succeeded")
+                .unwrap(),
+            &expected_finished
+        );
+        assert_eq!(manager.snapshot("prefetch-interrupted").unwrap(), original);
+        assert_eq!(fs::read(&running_path).unwrap(), running_bytes);
+        assert_eq!(fs::read(&finished_path).unwrap(), finished_bytes);
+        let restarted = OperationManager::default();
+        assert!(restarted.snapshot("prefetch-interrupted").is_err());
+        assert!(restarted.events_since("prefetch-interrupted", 0).is_err());
+        assert!(restarted.cancel("prefetch-interrupted").is_err());
+    }
+
+    #[test]
     fn unknown_or_corrupt_schema_preserves_all_bytes_and_v1_journal() {
         let temp = Temp::new();
         let mutation = temp.mutation();
@@ -635,6 +856,7 @@ mod tests {
         ];
         for bytes in cases {
             fs::write(&foreign_path, &bytes).unwrap();
+            assert!(load_snapshots(layout).is_err());
             assert!(handle.persist(&mutation).is_err());
             assert_eq!(fs::read(&foreign_path).unwrap(), bytes);
             assert!(!directory.join("p6-new.json").exists());

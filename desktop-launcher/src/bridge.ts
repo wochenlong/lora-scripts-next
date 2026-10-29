@@ -59,3 +59,27 @@ export const stopTrainer = () => invoke<void>('stop_trainer')
 export const openTrainer = () => invoke<void>('open_trainer')
 export const listenToLogs = (handler: (line: string) => void) =>
   listen<string>('launcher:log', (event) => handler(event.payload))
+
+export interface OperationSnapshot {
+  schema_version: number
+  id: string
+  kind: 'download' | 'execute' | 'repair'
+  phase: 'preparing' | 'downloading' | 'executing' | 'verifying' | 'committing' | 'recovering'
+  status: 'running' | 'succeeded' | 'failed' | 'cancelled' | 'interrupted'
+  cancel_requested: boolean
+  event_seq: number
+  started_at: number
+  updated_at: number
+  error: { code: string; message: string } | null
+}
+export interface OperationEvent {
+  seq: number
+  phase: OperationSnapshot['phase']
+  status: OperationSnapshot['status']
+  message: string
+}
+export const prefetchRelease = (root: string, releaseId: string) => invoke<OperationSnapshot>('prefetch_release', { root, releaseId })
+export const operationSnapshot = (operationId: string) => invoke<OperationSnapshot>('operation_snapshot', { operationId })
+export const operationEvents = (operationId: string, afterSeq: number) => invoke<OperationEvent[]>('operation_events', { operationId, afterSeq })
+export const operationHistory = (root: string) => invoke<OperationSnapshot[]>('operation_history', { root })
+export const cancelOperation = (operationId: string) => invoke<'accepted' | 'already_requested' | 'already_finished' | 'commit_in_progress'>('cancel_operation', { operationId })

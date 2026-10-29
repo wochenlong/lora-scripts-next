@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { chooseDirectory, listenToLogs, openTrainer, rollbackRelease, runCommand, runReleaseCommand, stopTrainer } from './bridge'
-import type { ReleaseCommand, Report, ReportCommand, VersionView } from './bridge'
+import { cancelOperation, chooseDirectory, listenToLogs, openTrainer, operationEvents, operationHistory, operationSnapshot, prefetchRelease, rollbackRelease, runCommand, runReleaseCommand, stopTrainer } from './bridge'
+import type { OperationSnapshot, ReleaseCommand, Report, ReportCommand, VersionView } from './bridge'
 
 type Page = 'launch' | 'versions' | 'environment'
 interface Confirmation {
@@ -22,6 +22,11 @@ const logs = ref<string[]>([])
 const logPanel = ref<HTMLPreElement>()
 const confirmation = ref<Confirmation | null>(null)
 const confirmationCancel = ref<HTMLButtonElement>()
+const operation = ref<OperationSnapshot | null>(null)
+const history = ref<OperationSnapshot[]>([])
+let operationTimer: ReturnType<typeof setTimeout> | undefined
+let disposed = false
+let operationCursor = 0
 let unlisten: (() => void) | undefined
 let previousFocus: HTMLElement | null = null
 
@@ -33,7 +38,9 @@ const defaultRelease = computed(() => versions.value.find((version) => version.c
 const installTarget = computed(() => currentVersion.value ?? defaultRelease.value)
 const rollbackVersion = computed(() => versions.value.find((version) => version.id === report.value?.previous_known_good))
 const ready = computed(() => Boolean(sameRoot.value && report.value?.uv && report.value?.python && report.value?.source && report.value?.environment && report.value?.frontend))
-const busy = computed(() => Boolean(pending.value))
+const busy = computed(() => Boolean(pending.value) || operation.value?.status === 'running')
+const phaseText: Record<OperationSnapshot['phase'], string> = { preparing: '准备中', downloading: '正在下载', executing: '正在执行', verifying: '正在校验', committing: '正在保存', recovering: '正在恢复' }
+const operationStatusText: Record<OperationSnapshot['status'], string> = { running: '进行中', succeeded: '已完成', failed: '失败', cancelled: '已取消', interrupted: '上次操作未完整结束' }
 const running = computed(() => Boolean(report.value?.running))
 const mutationDisabled = computed(() => busy.value || !sameRoot.value || running.value)
 const installed = computed(() => Boolean(currentVersion.value?.installed || report.value?.source))
@@ -95,11 +102,64 @@ function addLog(line: string) {
   void nextTick(() => { if (logPanel.value) logPanel.value.scrollTop = logPanel.value.scrollHeight })
 }
 function acceptReport(value: Report) {
+  const rootChanged = report.value?.root !== value.root
   report.value = { ...value, versions: value.versions ?? [], interrupted: value.interrupted ?? [] }
   path.value = value.root
   localStorage.setItem('next-trainer-launcher-root', value.root)
   if (!logs.value.length && value.logs.length) value.logs.forEach(addLog)
+  if (rootChanged) {
+    if (operationTimer) clearTimeout(operationTimer)
+    operation.value = null
+    operationCursor = 0
+    history.value = []
+    void refreshHistory().catch((reason) => { error.value = errorText(reason) })
+  }
   if (value.error) throw new Error(value.error)
+}
+async function refreshHistory() {
+  const root = path.value.trim()
+  const loaded = await operationHistory(root)
+  if (!disposed && path.value.trim() === root) history.value = loaded.sort((a, b) => b.started_at - a.started_at).slice(0, 5)
+}
+async function pollOperation() {
+  const current = operation.value
+  if (!current || disposed) return
+  try {
+    const next = await operationSnapshot(current.id)
+    // 游标失效时以快照为准；当前会话的事件随后从新游标继续。
+    try {
+      (await operationEvents(current.id, operationCursor)).forEach((event) => { addLog(event.message); operationCursor = Math.max(operationCursor, event.seq) })
+    } catch (reason) {
+      if (!errorText(reason).includes('事件游标已过期')) throw reason
+      operationCursor = Math.max(operationCursor, next.event_seq)
+      addLog('部分较早事件已过期，已重新读取完整状态。')
+    }
+    operation.value = next
+    message.value = `${phaseText[next.phase]} · ${operationStatusText[next.status]}`
+    if (next.error) error.value = next.error.message
+    if (next.status !== 'running') { await refreshHistory(); return }
+  } catch (reason) { error.value = errorText(reason) }
+  if (!disposed) operationTimer = setTimeout(() => { void pollOperation() }, 250)
+}
+async function prefetch(version: VersionView) {
+  if (busy.value) return
+  pending.value = '准备下载'
+  error.value = ''
+  try {
+    operation.value = await prefetchRelease(path.value.trim(), version.id)
+    operationCursor = 0
+    message.value = '正在准备安装文件'
+    void pollOperation()
+  } catch (reason) { error.value = errorText(reason) }
+  finally { pending.value = '' }
+}
+async function cancelDownload() {
+  if (!operation.value || operation.value.status !== 'running') return
+  try {
+    const receipt = await cancelOperation(operation.value.id)
+    message.value = receipt === 'commit_in_progress' ? '正在保存操作结果，请等待本次保存完成。' : '已请求取消，正在保存可恢复的下载进度…'
+    operation.value = await operationSnapshot(operation.value.id)
+  } catch (reason) { error.value = errorText(reason) }
 }
 function errorText(value: unknown): string {
   if (value instanceof Error) return value.message
@@ -196,8 +256,9 @@ onMounted(async () => {
   try { unlisten = await listenToLogs(addLog) }
   catch { addLog('桌面事件接口尚未连接；请通过桌面启动器打开此页面。') }
   await command('inspect', '检查安装状态')
+  try { await refreshHistory() } catch (reason) { error.value = errorText(reason) }
 })
-onBeforeUnmount(() => unlisten?.())
+onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operationTimer); unlisten?.() })
 </script>
 
 <template>
@@ -220,6 +281,8 @@ onBeforeUnmount(() => unlisten?.())
       </section>
 
       <div class="page-content">
+        <section v-if="operation" class="interrupted-note" role="status" aria-live="polite"><strong>{{ phaseText[operation.phase] }} · {{ operationStatusText[operation.status] }}</strong><p>准备安装文件；完整校验通过后可继续安装此版本。</p><button v-if="operation.status === 'running'" :disabled="operation.cancel_requested" @click="cancelDownload">{{ operation.cancel_requested ? '正在取消…' : '取消下载' }}</button><p v-if="operation.error">{{ operation.error.message }}</p></section>
+        <section v-else-if="history.some((item) => item.status === 'interrupted')" class="interrupted-note" role="status"><strong>上次下载未完整结束</strong><p>可在版本管理中重新准备安装文件，继续下载；当前安装状态请重新检查。</p></section>
         <section v-if="report?.interrupted.length && sameRoot" class="interrupted-note" role="status"><strong>检测到未完成的操作</strong><ul><li v-for="(item, index) in report.interrupted" :key="index">{{ item }}</li></ul><span>请重新检查后重试对应安装或修复步骤。</span></section>
         <template v-if="page === 'launch'">
           <section class="summary-grid" aria-label="实际安装状态"><div v-for="item in statusItems" :key="item.label" class="summary-item"><div><span class="status-dot" :class="{ ok: sameRoot && item.ok }" aria-hidden="true"></span><strong>{{ item.label }}</strong><span class="status-word">{{ !report || !sameRoot ? '待检查' : item.ok ? '已就绪' : '待处理' }}</span></div><small>{{ item.detail }}</small></div></section>
@@ -235,6 +298,7 @@ onBeforeUnmount(() => unlisten?.())
           <p v-if="rollbackVersion && !rollbackAvailable" class="inline-note">回退目标尚未安装完整或存在检查问题，请先修复对应版本。</p>
           <section v-for="group in channels" :key="group.channel" class="channel-section" :aria-label="channelName(group.channel)"><h3>{{ channelName(group.channel) }}<span>{{ group.channel === 'dev' ? '包含开发中的改动' : group.channel === 'main' ? '稳定发布线' : '内置版本' }}</span></h3><p v-if="!group.versions.length" class="empty-channel">内置清单尚未提供此发布线的版本。</p><article v-for="version in group.versions" :key="version.id" class="version-card" :aria-label="`${version.channel} ${version.version} ${version.commit.slice(0, 8)}`"><div class="version-top"><div><strong>{{ version.version }}</strong><span v-if="version.current || version.id === report?.current_release" class="current-tag">当前使用</span><span v-else-if="version.id === report?.previous_known_good" class="healthy-tag">回退保留</span><span v-else-if="version.known_good" class="healthy-tag">曾健康启动</span></div><span class="release-state" :class="{ good: version.installed && version.source_ok && version.environment_ok }">{{ releaseState(version) }}</span></div><dl class="version-details"><div><dt>提交</dt><dd><code>{{ version.commit }}</code></dd></div><div><dt>下载</dt><dd><code>{{ formatBytes(version.download_bytes) }}</code><span class="detail-note">源码制品</span></dd></div><div><dt>磁盘</dt><dd><code>{{ formatBytes(version.source_bytes) }}</code><span class="detail-note">{{ version.installed ? '源码展开；运行环境另计' : '预计源码展开；运行环境另计' }}</span></dd></div><div v-if="version.installed"><dt>检查</dt><dd><span :class="{ 'check-warning': !version.source_ok }">源码{{ version.source_ok ? '完整' : '需修复' }}</span><span class="detail-separator">/</span><span :class="{ 'check-warning': !version.environment_ok }">环境{{ version.environment_ok ? '通过' : '需修复' }}</span></dd></div></dl><div class="version-actions"><button :disabled="mutationDisabled" @click="install(version)">{{ version.installed ? '检查并补全安装' : '下载安装' }}</button><button :disabled="mutationDisabled || !version.installed || !version.source_ok || !version.environment_ok || version.current || version.id === report?.current_release" @click="select(version)">切换到此版本</button><button class="delete-button" :disabled="mutationDisabled || !version.installed || protectedRelease(version)" :title="protectedRelease(version) ? '当前版本及上一已健康版本需保留' : '删除受管版本目录'" @click="remove(version)">删除</button></div></article></section>
           <p class="scope-note">已安装表示版本目录存在，不代表可以运行。切换依据每个版本的实际检查；当前版本和上一已健康版本受删除保护。main / dev 使用发布线与提交区分，即使版本号相同也分别管理。</p>
+          <section class="environment-actions" aria-label="准备版本安装文件"><button v-for="version in versions" :key="version.id" :disabled="mutationDisabled" @click="prefetch(version)">准备 {{ channelName(version.channel) }} 安装文件</button></section>
         </template>
 
         <template v-else>

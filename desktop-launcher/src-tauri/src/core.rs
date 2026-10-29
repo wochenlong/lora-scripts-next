@@ -18,6 +18,9 @@ use std::{
 #[path = "managed_child.rs"]
 mod managed_child;
 
+#[path = "controlled_download.rs"]
+mod controlled_download;
+
 #[cfg(all(test, windows))]
 #[path = "p6_tests.rs"]
 mod p6_tests;
@@ -619,6 +622,66 @@ fn execute_controlled(
 }
 
 impl Engine {
+    /// 只预取目录中固定身份的归档；成功仅代表缓存完整，不改变安装绑定或健康状态。
+    pub fn prefetch_release(
+        &mut self,
+        root: &Path,
+        id: &str,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再准备安装文件");
+        }
+        let release = self.catalog.release(id)?.clone();
+        let mutation = model::WorkspaceMutation::acquire(root, id)?;
+        operation.persist(&mutation)?;
+        let cancel = operation.cancel_token();
+        let result = (|| -> Result<()> {
+            cancel.check()?;
+            operation.publish(
+                OperationPhase::Downloading,
+                "正在下载并校验所选版本的安装文件",
+            )?;
+            operation.persist(&mutation)?;
+            let client = reqwest::Client::builder()
+                .timeout(Duration::from_secs(600))
+                .build()?;
+            let name = format!("{}.zip", release.archive.sha256);
+            controlled_download::download(
+                &mutation,
+                client,
+                &release.archive.url,
+                &name,
+                &release.archive.sha256,
+                release.archive.bytes,
+                &cancel,
+            )?;
+            operation.publish(
+                OperationPhase::Verifying,
+                "安装文件完整校验通过，可继续安装",
+            )?;
+            cancel.check()?;
+            Ok(())
+        })();
+        let (status, error) = match &result {
+            Ok(()) => (OperationStatus::Succeeded, None),
+            Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
+                (OperationStatus::Cancelled, None)
+            }
+            Err(error) => (
+                OperationStatus::Failed,
+                Some(OperationError {
+                    code: "download_failed".into(),
+                    message: format!("{error:#}"),
+                }),
+            ),
+        };
+        operation.finish_and_persist(&mutation, status, error)?;
+        result
+    }
+
     pub fn new(default_root: PathBuf, logger: Logger) -> Self {
         Self {
             default_root,

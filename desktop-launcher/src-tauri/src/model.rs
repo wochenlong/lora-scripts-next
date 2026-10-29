@@ -246,12 +246,10 @@ pub struct Layout {
 
 /// 一次变更的完整工作区租约。构造时校验布局并持锁，子步骤只借用它，
 /// 避免安装/修复之间释放锁，也避免内部重复获取同一文件锁。
-#[cfg(test)]
 pub struct WorkspaceMutation {
     layout: Layout,
     _lease: File,
 }
-#[cfg(test)]
 impl WorkspaceMutation {
     pub fn acquire(root: &Path, release_id: &str) -> Result<Self> {
         let layout = Layout::new(root, release_id)?;
