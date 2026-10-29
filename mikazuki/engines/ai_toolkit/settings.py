@@ -188,6 +188,12 @@ def ensure_install_source_ready(
 
 
 def discover_runtime(config: dict | None = None, lora_next_root: Path | None = None) -> RuntimeConfig:
+    from mikazuki.launcher.bindings import active_layout
+    managed = active_layout("ai-toolkit")
+    if managed:
+        return RuntimeConfig(toolkit_root=managed.engine_source_root, python=managed.python, lora_next_root=managed.run_root,
+                             output_dir=managed.profile_root / "output" / "ai-toolkit", logging_dir=managed.profile_root / "logs" / "ai-toolkit",
+                             cache_dir=managed.profile_root / ".cache" / "ai-toolkit", hf_home=managed.profile_root / ".cache" / "huggingface")
     from .extension_state import default_layout
 
     lora_next_root = (lora_next_root or repo_root()).resolve()

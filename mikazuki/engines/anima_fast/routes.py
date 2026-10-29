@@ -29,6 +29,10 @@ from mikazuki.engines.anima_fast.run import (
 
 
 async def status():
+    from mikazuki.launcher.bindings import managed_status
+    managed = managed_status("anima-fast")
+    if managed is not None:
+        return APIResponseSuccess(data=managed)
     layout = default_layout(Path.cwd())
     data = read_extension_status(layout).as_dict()
     runtime = anima_fast_runtime()
@@ -81,6 +85,9 @@ async def dry_run(config: dict):
 
 
 async def install(payload: dict, force_install: bool = False):
+    from mikazuki.launcher.bindings import managed_request
+    if managed_request("anima-fast") is not None:
+        return APIResponseFail(message="请使用桌面启动器或 /api/launcher/engines/anima-fast/plan 检查与精准修复受管实例。")
     if not feature_enabled():
         return anima_fast_disabled_response()
     runtime = anima_fast_runtime()

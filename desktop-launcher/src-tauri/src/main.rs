@@ -1,6 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod budgeted_body;
 mod core;
+mod data_import;
+mod shell_update;
+mod signed_catalog;
+// 协议源码同时编译进独立helper；替换/回滚函数仅由helper调用。
 mod download_budget;
 mod gui_registration_integrity;
 mod instances;
@@ -12,7 +16,10 @@ mod recipe;
 #[cfg(test)]
 mod recovery;
 mod runtime_view;
+#[allow(dead_code)]
+mod shell_update_protocol;
 mod source_integrity;
+mod trial_ui;
 mod wheel_integrity;
 use core::{Engine, Logger, Report};
 use std::{
@@ -39,6 +46,8 @@ impl Drop for WorkerGuard {
 }
 
 // 操作控制与 Engine 分开持有，网络/子进程长操作不会阻塞取消和状态读取。
+// 每次只执行一个后台操作；保留参数值以便审查，不为低频IPC增加间接分配。
+#[allow(clippy::large_enum_variant)]
 enum ManagedAction {
     Prefetch,
     Install,
@@ -57,6 +66,18 @@ enum ManagedAction {
         plan_sha256: String,
     },
     RecoverRegistration,
+    EngineControl {
+        engine: String,
+        action: String,
+        plan: Option<serde_json::Value>,
+    },
+    DataControl {
+        action: String,
+        request: Option<data_import::ImportRequest>,
+        binding: Option<data_import::BindingRequest>,
+        plan: Option<String>,
+        transaction: Option<String>,
+    },
     GuiLifecycle {
         action: String,
         plan: Option<String>,
@@ -81,7 +102,12 @@ async fn begin_release_operation(
     {
         return Err("启动器正在退出，请重新打开后操作".into());
     }
-    let catalog = model::Catalog::embedded().map_err(|e| format!("{e:#}"))?;
+    let root = if root.trim().is_empty() {
+        state.default_root.clone()
+    } else {
+        PathBuf::from(root.trim())
+    };
+    let catalog = model::Catalog::for_workspace(&root).map_err(|e| format!("{e:#}"))?;
     let release = catalog.release(&release_id).map_err(|e| format!("{e:#}"))?;
     if !matches!(
         action,
@@ -92,11 +118,12 @@ async fn begin_release_operation(
     {
         return Err("该历史版本尚未提供固定安装配方，请选择已适配版本".into());
     }
-    let root = if root.trim().is_empty() {
-        state.default_root.clone()
+    let purpose = if matches!(action, ManagedAction::Install | ManagedAction::Prefetch) {
+        "install"
     } else {
-        PathBuf::from(root.trim())
+        "repair"
     };
+    signed_catalog::authorize(&root, &release_id, purpose).map_err(|e| format!("{e:#}"))?;
     model::Layout::new(&root, &release_id).map_err(|e| format!("{e:#}"))?;
     static NEXT_OPERATION: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
     let serial = NEXT_OPERATION.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
@@ -113,6 +140,8 @@ async fn begin_release_operation(
                 | ManagedAction::RepairSource
                 | ManagedAction::RepairBasePython { .. }
                 | ManagedAction::RecoverBasePython => operations::OperationKind::Repair,
+                ManagedAction::EngineControl { .. } => operations::OperationKind::Repair,
+                ManagedAction::DataControl { .. } => operations::OperationKind::Repair,
                 ManagedAction::RestoreRegistration { .. }
                 | ManagedAction::RecoverRegistration
                 | ManagedAction::GuiLifecycle { .. } => operations::OperationKind::Repair,
@@ -171,6 +200,34 @@ async fn begin_release_operation(
                 ManagedAction::RecoverRegistration => {
                     engine.restore_gui_registration_operation(&root, &release_id, None, &handle)
                 }
+                ManagedAction::EngineControl {
+                    engine: target,
+                    action,
+                    plan,
+                } => engine.engine_operation(
+                    &root,
+                    &release_id,
+                    &target,
+                    &action,
+                    plan.as_ref(),
+                    &handle,
+                ),
+                ManagedAction::DataControl {
+                    action,
+                    request,
+                    binding,
+                    plan,
+                    transaction,
+                } => engine.data_operation(
+                    &root,
+                    &release_id,
+                    &action,
+                    request.as_ref(),
+                    binding.as_ref(),
+                    plan.as_deref(),
+                    transaction.as_deref(),
+                    &handle,
+                ),
                 ManagedAction::GuiLifecycle {
                     action,
                     plan,
@@ -218,6 +275,241 @@ async fn prefetch_release(
     release_id: String,
 ) -> Result<operations::OperationSnapshot, String> {
     begin_release_operation(state, root, release_id, ManagedAction::Prefetch).await
+}
+#[tauri::command]
+#[allow(clippy::too_many_arguments)]
+async fn shell_control(
+    app: tauri::AppHandle,
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    action: String,
+    mode: Option<String>,
+    plan_sha256: Option<String>,
+    transaction: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let shared = state.engine.clone();
+    let should_exit = action == "launch";
+    let result =
+        tauri::async_runtime::spawn_blocking(move || -> anyhow::Result<serde_json::Value> {
+            let mut engine = shared
+                .try_lock()
+                .map_err(|_| anyhow::anyhow!("已有操作正在执行"))?;
+            let root = engine.resolve(&root)?;
+            match action.as_str() {
+                "status" => shell_update::status(&root),
+                "preview" => Ok(serde_json::to_value(shell_update::preview(
+                    &root,
+                    mode.as_deref().unwrap_or("normal"),
+                )?)?),
+                "launch" => {
+                    if engine.inspect(&root)?.running {
+                        anyhow::bail!("请先停止训练器");
+                    }
+                    let ctx = model::WorkspaceMutation::acquire(&root, &release_id)?;
+                    shell_update::launch(
+                        &ctx,
+                        mode.as_deref().unwrap_or("normal"),
+                        plan_sha256
+                            .as_deref()
+                            .ok_or_else(|| anyhow::anyhow!("缺少更新计划摘要"))?,
+                    )
+                }
+                "recover" => {
+                    if engine.inspect(&root)?.running {
+                        anyhow::bail!("请先停止训练器");
+                    }
+                    shell_update::launch_recovery(
+                        &root,
+                        transaction
+                            .as_deref()
+                            .ok_or_else(|| anyhow::anyhow!("缺少更新事务"))?,
+                    )
+                }
+                _ => anyhow::bail!("未知壳更新动作"),
+            }
+        })
+        .await
+        .map_err(|e| e.to_string())?
+        .map_err(|e| format!("{e:#}"))?;
+    if should_exit {
+        app.exit(0);
+    }
+    Ok(result)
+}
+#[tauri::command]
+async fn catalog_control(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    action: String,
+    fixture_case: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let shared = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut engine = shared
+            .try_lock()
+            .map_err(|_| "已有操作正在执行".to_string())?;
+        let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        engine
+            .catalog_control(&root, &action, fixture_case.as_deref())
+            .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn preview_data_import(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    request: data_import::ImportRequest,
+) -> Result<serde_json::Value, String> {
+    let shared = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = shared
+            .try_lock()
+            .map_err(|_| "已有操作正在执行".to_string())?;
+        let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        engine
+            .preview_data_import(&root, &request)
+            .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn apply_data_import(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    request: data_import::ImportRequest,
+    plan_sha256: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::DataControl {
+            action: "import".into(),
+            request: Some(request),
+            binding: None,
+            plan: Some(plan_sha256),
+            transaction: None,
+        },
+    )
+    .await
+}
+#[tauri::command]
+async fn preview_profile_binding(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    profile_id: String,
+    rollback: bool,
+) -> Result<data_import::BindingPlan, String> {
+    let shared = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = shared
+            .try_lock()
+            .map_err(|_| "已有操作正在执行".to_string())?;
+        let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        engine
+            .preview_profile_binding(&root, &release_id, &profile_id, rollback)
+            .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn apply_profile_binding(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    request: data_import::BindingRequest,
+    plan_sha256: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::DataControl {
+            action: "binding".into(),
+            request: None,
+            binding: Some(request),
+            plan: Some(plan_sha256),
+            transaction: None,
+        },
+    )
+    .await
+}
+#[tauri::command]
+async fn recover_data_operation(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    kind: String,
+    transaction: Option<String>,
+) -> Result<operations::OperationSnapshot, String> {
+    let action = match kind.as_str() {
+        "import" => "recover_import",
+        "binding" => "recover_binding",
+        _ => return Err("未知资料恢复种类".into()),
+    };
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::DataControl {
+            action: action.into(),
+            request: None,
+            binding: None,
+            plan: None,
+            transaction,
+        },
+    )
+    .await
+}
+#[tauri::command]
+async fn query_engine_control(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    engine_id: String,
+    action: String,
+    rebuild: bool,
+) -> Result<serde_json::Value, String> {
+    let shared = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = shared
+            .try_lock()
+            .map_err(|_| "已有操作正在执行".to_string())?;
+        let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        engine
+            .engine_query(&root, &release_id, &engine_id, &action, rebuild)
+            .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn apply_engine_control(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    engine_id: String,
+    action: String,
+    plan: Option<serde_json::Value>,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::EngineControl {
+            engine: engine_id,
+            action,
+            plan,
+        },
+    )
+    .await
 }
 #[tauri::command]
 async fn preview_gui_lifecycle(
@@ -764,6 +1056,18 @@ async fn open_trainer(state: tauri::State<'_, Runtime>) -> Result<(), String> {
 }
 
 fn main() {
+    if std::env::args().nth(1).as_deref() == Some("--shell-trial") {
+        let result = std::env::args()
+            .nth(2)
+            .map(PathBuf::from)
+            .ok_or_else(|| anyhow::anyhow!("缺少只读试运行事务目录"))
+            .and_then(trial_ui::run);
+        if let Err(error) = result {
+            eprintln!("{error:#}");
+            std::process::exit(1);
+        }
+        return;
+    }
     // The same core is callable for reproducible recovery/health diagnostics without a WebView.
     let args: Vec<String> = std::env::args().collect();
     if args
@@ -781,6 +1085,13 @@ fn main() {
             let (log, _) = core::logger();
             let mut engine = Engine::new(root.clone(), log);
             let root = engine.resolve(&root.to_string_lossy())?;
+            if op == "engine-fixture-smoke" {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&engine.engine_fixture_smoke(&root)?)?
+                );
+                return Ok(());
+            }
             if matches!(
                 op.as_str(),
                 "diagnose-gui" | "plan-gui-repair" | "preview-source-repair"
@@ -999,6 +1310,15 @@ fn main() {
             recover_base_python,
             preview_gui_lifecycle,
             apply_gui_lifecycle,
+            query_engine_control,
+            apply_engine_control,
+            catalog_control,
+            shell_control,
+            preview_data_import,
+            apply_data_import,
+            preview_profile_binding,
+            apply_profile_binding,
+            recover_data_operation,
             preview_gui_registration,
             restore_gui_registration,
             recover_gui_registration,

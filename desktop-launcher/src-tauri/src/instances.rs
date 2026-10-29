@@ -12,6 +12,11 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
     time::{Duration, Instant},
 };
+#[path = "engine_namespaces.rs"]
+mod engine_namespaces;
+pub(crate) fn engine_control_digest(layout: &Layout) -> Result<String> {
+    engine_namespaces::digest(layout)
+}
 
 const MAX_FILE: u64 = 1024 * 1024 * 1024;
 const MAX_TREE: u64 = 4 * MAX_FILE;
@@ -160,6 +165,7 @@ pub(crate) fn rebuild_observe_boundary(
                 );
                 // 旧事务在重建前必须仍能验证其非目标保护合同。
                 protected(
+                    &owner,
                     &state.verified,
                     &observe(&owner, &state, cancel)?,
                     &transaction.files,
@@ -345,6 +351,7 @@ pub(crate) fn rebuild_validate_candidate(
     validator: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<InstanceState> {
     let layout = ctx.layout();
+    let engine_controls = engine_control_digest(layout)?;
     let mut state = load(layout, id)?;
     if state.storage_version != 1
         || state.generation != 1
@@ -356,7 +363,10 @@ pub(crate) fn rebuild_validate_candidate(
     rebuild_check_boundary(ctx, boundary, id, cancel)?;
     let before = observe(layout, &state, cancel)?;
     validator(&path(&state)?)?;
-    if observe(layout, &state, cancel)? != before || load(layout, id)? != state {
+    if observe(layout, &state, cancel)? != before
+        || load(layout, id)? != state
+        || engine_control_digest(layout)? != engine_controls
+    {
         bail!("重建验证改变受保护内容或实例状态");
     }
     rebuild_check_boundary(ctx, boundary, id, cancel)?;
@@ -1149,6 +1159,100 @@ mod rebuild_preservation_tests {
         fs::write(&p, serde_json::to_vec(&value).unwrap()).unwrap();
         assert!(recover(&f.ctx, &f.ticket, |_| Ok(())).is_err());
     }
+    #[test]
+    fn gui_pending_recovery_projects_owned_large_engine_without_rewriting_old_baseline() {
+        let f = Fixture::new(1, false);
+        let root = &f.ctx.layout().root;
+        let engine = "kohya";
+        let id = "t0123456789abcde";
+        let raw = crate::core::embedded_engine_lock(engine).unwrap();
+        let lock: serde_json::Value = serde_json::from_slice(raw).unwrap();
+        let owner = root
+            .join("state/engines")
+            .join(f.state.release_id())
+            .join(engine);
+        let environment = root.join("e").join(id);
+        fs::create_dir(&environment).unwrap();
+        let payload = File::create(environment.join("large-torch.dll")).unwrap();
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            #[link(name = "kernel32")]
+            unsafe extern "system" {
+                fn DeviceIoControl(
+                    handle: *mut std::ffi::c_void,
+                    code: u32,
+                    input: *mut std::ffi::c_void,
+                    input_bytes: u32,
+                    output: *mut std::ffi::c_void,
+                    output_bytes: u32,
+                    returned: *mut u32,
+                    overlapped: *mut std::ffi::c_void,
+                ) -> i32;
+            }
+            let mut returned = 0;
+            assert_ne!(
+                unsafe {
+                    DeviceIoControl(
+                        payload.as_raw_handle(),
+                        0x900c4,
+                        std::ptr::null_mut(),
+                        0,
+                        std::ptr::null_mut(),
+                        0,
+                        &mut returned,
+                        std::ptr::null_mut(),
+                    )
+                },
+                0
+            );
+        }
+        payload.set_len(5 * 1024 * 1024 * 1024).unwrap();
+        drop(payload);
+        let write_engine = |generation| {
+            let receipt = serde_json::json!({"schema_version":1,"release_id":f.state.release_id(),"engine_id":engine,"profile_id":"default","instance_id":id,"generation":generation,"recipe_sha256":lock["recipe_sha256"],"lock_sha256":hash(raw),"files":{"environment":{},"source":lock["source"]["files"]},"base_python_files":lock["python"]["files"]});
+            let receipt_path = owner
+                .join("instances")
+                .join(id)
+                .join(format!("{generation}.json"));
+            model::write_json_atomic(&receipt_path, &receipt).unwrap();
+            let state = serde_json::json!({"schema_version":1,"release_id":f.state.release_id(),"engine_id":engine,"profile_id":"default","instance_id":id,"generation":generation,"validated_generation":generation,"recipe_sha256":lock["recipe_sha256"],"lock_sha256":hash(raw),"python_version":lock["python"]["version"],"environment_root":environment,"source_root":root.join("s").join(id),"python_root":root.join("p").join(id),"status":"ready","dirty":false,"pending":null,"receipt_relative":format!("instances/{id}/{generation}.json"),"receipt_sha256":hash(&fs::read(receipt_path).unwrap())});
+            model::write_json_atomic(&owner.join("state.json"), &state).unwrap();
+        };
+        write_engine(1);
+        let before = engine_control_digest(f.ctx.layout()).unwrap();
+        assert_eq!(
+            fs::read(state_path(f.ctx.layout(), f.state.id()).unwrap()).unwrap(),
+            f.old_bytes
+        );
+        let ticket = reload_ticket(f.ctx.layout(), f.state.id()).unwrap();
+        let recovered = recover(&f.ctx, &ticket, |_| Ok(())).unwrap();
+        assert!(!recovered.dirty());
+        assert_eq!(engine_control_digest(f.ctx.layout()).unwrap(), before);
+        assert_eq!(
+            fs::metadata(environment.join("large-torch.dll"))
+                .unwrap()
+                .len(),
+            5 * 1024 * 1024 * 1024
+        );
+        write_engine(2);
+        // 引擎在两次GUI操作之间合法修复，不使GUI基线绑定旧引擎代次。
+        assert!(plan(
+            &f.ctx,
+            recovered.id(),
+            recovered.generation(),
+            &["target.py".into()]
+        )
+        .is_ok());
+        fs::create_dir(root.join("e/t111111111111111")).unwrap();
+        assert!(plan(
+            &f.ctx,
+            recovered.id(),
+            recovered.generation(),
+            &["target.py".into()]
+        )
+        .is_err());
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
@@ -1599,6 +1703,7 @@ pub(crate) struct RepairPlan {
 }
 pub(crate) struct MutationTicket {
     state: InstanceState,
+    engine_controls: String,
 }
 
 impl InstanceState {
@@ -1709,7 +1814,13 @@ fn windows_key(path: &Path) -> String {
         .to_ascii_lowercase()
 }
 fn scan(layout: &Layout, base: &Path, ignores: &[PathBuf]) -> Result<Tree> {
-    scan_tree(layout, base, ignores, None)
+    if base == layout.root.join("e") {
+        let mut excluded = ignores.to_vec();
+        excluded.extend(engine_namespaces::capture(layout)?.excluded);
+        scan_tree(layout, base, &excluded, None)
+    } else {
+        scan_tree(layout, base, ignores, None)
+    }
 }
 fn python_alias_node(layout: &Layout, alias: &Path, target: &Path) -> Result<Node> {
     layout.guard_path(alias.parent().context("Python别名缺少父目录")?)?;
@@ -1839,6 +1950,16 @@ fn observe(layout: &Layout, state: &InstanceState, cancel: &CancelToken) -> Resu
         let mut tree = scan(layout, &base, &excluded.into_iter().collect::<Vec<_>>())?;
         if container == "e" {
             project_rebuild_extensions(layout, state, &mut tree)?;
+            if state.pending.is_some()
+                && state
+                    .verified
+                    .protected
+                    .get(Path::new("e"))
+                    .is_none_or(BTreeMap::is_empty)
+                && tree == Tree::from([(PathBuf::new(), Node::Directory)])
+            {
+                tree.clear();
+            }
         }
         if container == "e"
             && state.storage_version == 0
@@ -2227,6 +2348,7 @@ pub(crate) fn registration_revalidate(
     verifier: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<()> {
     validate(layout, state.id(), state)?;
+    let engine_controls = engine_control_digest(layout)?;
     if state.dirty
         || state.pending.is_some()
         || state.base_python_pending.is_some()
@@ -2245,7 +2367,9 @@ pub(crate) fn registration_revalidate(
         bail!("补登记候选实体已变化");
     }
     verifier(&path(state)?)?;
-    if observe(layout, state, cancel)? != before {
+    if observe(layout, state, cancel)? != before
+        || engine_control_digest(layout)? != engine_controls
+    {
         bail!("补登记验证改变受保护树或生产profiles");
     }
     if candidate {
@@ -2327,12 +2451,16 @@ fn clean(
     validator: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<InstanceState> {
     let old = state.clone();
+    let engine_controls = engine_control_digest(layout)?;
     let before = observe(layout, &state, cancel)?;
     if !matches!(before.environment.get(Path::new("")), Some(Node::Directory)) {
         bail!("GUI实例目录缺失，保持dirty");
     }
     validator(&path(&state)?)?;
-    if observe(layout, &state, cancel)? != before || load(layout, &state.instance_id)? != state {
+    if observe(layout, &state, cancel)? != before
+        || load(layout, &state.instance_id)? != state
+        || engine_control_digest(layout)? != engine_controls
+    {
         bail!("验证器改变受保护树或持久实例已变化，保持dirty");
     }
     state.verified = before;
@@ -2473,7 +2601,7 @@ pub(crate) fn plan_controlled(
             .clone(),
     );
     let allowed = paths.iter().map(|path| (path.clone(), None)).collect();
-    protected(&trusted, &diagnosed, &allowed)?;
+    protected(ctx.layout(), &trusted, &diagnosed, &allowed)?;
     Ok(RepairPlan {
         state,
         paths: paths.into(),
@@ -2541,6 +2669,7 @@ pub(crate) fn begin_controlled(
 ) -> Result<MutationTicket> {
     cancel.check()?;
     let layout = ctx.layout();
+    let engine_controls = engine_control_digest(layout)?;
     let mut state = load(layout, plan.state.id())?;
     if state != plan.state {
         bail!("诊断后持久实例已变化");
@@ -2607,8 +2736,14 @@ pub(crate) fn begin_controlled(
     state.generation = generation;
     state.dirty = true;
     state.pending = Some(pending);
+    if engine_control_digest(layout)? != engine_controls {
+        bail!("GUI快照期间引擎控制记录变化，未授权修改");
+    }
     save(layout, &state)?;
-    Ok(MutationTicket { state })
+    Ok(MutationTicket {
+        state,
+        engine_controls,
+    })
 }
 fn check_snapshots(layout: &Layout, state: &InstanceState) -> Result<()> {
     let pending = state.pending.as_ref().context("实例没有待恢复事务")?;
@@ -2640,17 +2775,42 @@ pub(crate) fn reload_ticket(layout: &Layout, id: &str) -> Result<MutationTicket>
         bail!("实例没有dirty事务");
     }
     check_snapshots(layout, &state)?;
-    Ok(MutationTicket { state })
+    Ok(MutationTicket {
+        state,
+        engine_controls: engine_control_digest(layout)?,
+    })
 }
 fn checked(ctx: &WorkspaceMutation, ticket: &MutationTicket) -> Result<InstanceState> {
     let state = load(ctx.layout(), ticket.state.id())?;
-    if state != ticket.state || !state.dirty {
+    if state != ticket.state
+        || !state.dirty
+        || engine_control_digest(ctx.layout())? != ticket.engine_controls
+    {
         bail!("事务ticket已经过期或不属于工作区");
     }
     check_snapshots(ctx.layout(), &state)?;
     Ok(state)
 }
+fn protected_trees_equal(
+    layout: &Layout,
+    before: &BTreeMap<PathBuf, Tree>,
+    after: &BTreeMap<PathBuf, Tree>,
+) -> Result<bool> {
+    let approved = engine_namespaces::capture(layout)?.excluded;
+    let project = |values: &BTreeMap<PathBuf, Tree>| {
+        let mut values = values.clone();
+        if let Some(tree) = values.get_mut(Path::new("e")) {
+            tree.retain(|path, _| !approved.iter().any(|id| path.starts_with(id)));
+            if !approved.is_empty() && *tree == Tree::from([(PathBuf::new(), Node::Directory)]) {
+                tree.clear();
+            }
+        }
+        values
+    };
+    Ok(project(before) == project(after))
+}
 fn protected(
+    layout: &Layout,
     before: &Observation,
     after: &Observation,
     files: &BTreeMap<PathBuf, Option<Fingerprint>>,
@@ -2673,7 +2833,9 @@ fn protected(
             parent = directory.parent();
         }
     }
-    if expected != actual || !profiles_equal(before, after)? || before.protected != after.protected
+    if expected != actual
+        || !profiles_equal(before, after)?
+        || !protected_trees_equal(layout, &before.protected, &after.protected)?
     {
         bail!("修复改变了非目标文件、目录或profiles，保持dirty");
     }
@@ -2696,6 +2858,7 @@ pub(crate) fn commit_controlled(
     cancel.check()?;
     let state = checked(ctx, ticket)?;
     protected(
+        ctx.layout(),
         &state.verified,
         &observe(ctx.layout(), &state, cancel)?,
         &state.pending.as_ref().context("缺少事务")?.files,
@@ -2721,6 +2884,7 @@ pub(crate) fn recover_controlled(
     let state = checked(ctx, ticket)?;
     let pending = state.pending.as_ref().context("缺少恢复快照")?;
     protected(
+        layout,
         &state.verified,
         &observe(layout, &state, cancel)?,
         &pending.files,
@@ -2769,7 +2933,11 @@ pub(crate) fn recover_controlled(
             }
         }
     }
-    if observe(layout, &state, cancel)? != state.verified {
+    let restored = observe(layout, &state, cancel)?;
+    if restored.environment != state.verified.environment
+        || !profiles_equal(&restored, &state.verified)?
+        || !protected_trees_equal(layout, &restored.protected, &state.verified.protected)?
+    {
         bail!("同路径恢复未还原原树，保持dirty");
     }
     clean(layout, state, cancel, validator)

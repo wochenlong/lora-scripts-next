@@ -93,6 +93,14 @@ def handle_run(config: dict, ctx: RunContext):
 
     suggest_cpu_threads = 8 if len(train_utils.get_total_images(train_data_dir, limit=200)) >= 200 else 2
     trainer_file = TRAINER_MAPPING[model_train_type]
+    from mikazuki.launcher.bindings import active_layout, training_gate
+    try:
+        managed = active_layout("kohya")
+        if managed:
+            training_gate("kohya")
+            trainer_file = str(managed.engine_source_root / trainer_file.removeprefix("./"))
+    except (ValueError, OSError, RuntimeError) as error:
+        return APIResponseFail(message=str(error))
     apply_sdxl_prediction_type(config, model_train_type)
     apply_anima_training_defaults(config, model_train_type)
 

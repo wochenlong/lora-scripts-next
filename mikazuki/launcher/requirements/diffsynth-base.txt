@@ -1,0 +1,12 @@
+# 来源：modelscope/DiffSynth-Studio 7686e54d41d25c0e8ed5f1318acc23b6bb832654 pyproject.toml
+torch>=2.0.0
+torchvision
+transformers
+imageio[ffmpeg]
+safetensors
+einops
+modelscope
+ftfy
+pandas
+accelerate
+peft

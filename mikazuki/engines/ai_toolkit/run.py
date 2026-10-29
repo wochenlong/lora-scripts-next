@@ -36,6 +36,12 @@ def ai_toolkit_disabled_response():
 
 
 def ai_toolkit_ready_gate():
+    from mikazuki.launcher.bindings import training_gate
+    try:
+        if training_gate("ai-toolkit") is not None:
+            return True, None
+    except (ValueError, OSError, RuntimeError) as error:
+        return False, APIResponseFail(message=str(error))
     layout = ai_toolkit_default_layout(Path.cwd())
     status = read_ai_toolkit_extension_status(layout)
     if status.state != AI_TOOLKIT_STATE_READY:

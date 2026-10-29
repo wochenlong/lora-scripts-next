@@ -16,6 +16,10 @@ import type { GuiRegistrationPreview } from './bridge'
 
 import { previewGuiLifecycle, guiLifecycleHistory, applyGuiLifecycle } from './bridge'
 import type { GuiLifecyclePreview, GuiLifecycleHistory, GuiLifecycleAction } from './bridge'
+import EnginePanel from './EnginePanel.vue'
+import TrustPanel from './TrustPanel.vue'
+import ImportPanel from './ImportPanel.vue'
+import ShellPanel from './ShellPanel.vue'
 
 type Page = 'launch' | 'versions' | 'environment'
 interface Confirmation {
@@ -843,6 +847,10 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <button v-if="lifecyclePreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmLifecycle(lifecycleAction, lifecycleAction === 'rollback' ? lifecycleTransaction : null)">审查并{{ lifecycleAction === 'rebuild' ? '创建新实例' : '回退旧实例' }}</button>
             </template>
           </section>
+          <EnginePanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" />
+          <ImportPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" />
+          <TrustPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" />
+          <ShellPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" />
           <section v-if="sameRoot" class="gui-diagnostics" aria-labelledby="base-python-title">
             <div class="section-caption"><h2 id="base-python-title">基础 Python 组件</h2><button :disabled="mutationDisabled" @click="inspectBasePythonRepair">检查组件与引用环境</button></div>
             <p class="hint">检查只读取文件，Python 缺失或损坏时仍可查看。恢复会替换完整基础组件，并验证所有受管引用环境。</p>

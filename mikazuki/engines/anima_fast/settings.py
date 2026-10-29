@@ -94,6 +94,12 @@ def dev_mode_enabled(env: dict[str, str] | None = None, config: dict | None = No
 
 
 def discover_runtime(config: dict | None = None, lora_next_root: Path | None = None) -> RuntimeConfig:
+    from mikazuki.launcher.bindings import active_layout
+    managed = active_layout("anima-fast")
+    if managed:
+        return RuntimeConfig(anima_root=managed.engine_source_root, python=managed.python, lora_next_root=managed.run_root,
+                             output_dir=managed.profile_root / "output" / "anima_fast", logging_dir=managed.profile_root / "logs" / "anima_fast",
+                             cache_dir=managed.profile_root / ".cache" / "anima_fast", hf_home=managed.profile_root / ".cache" / "huggingface")
     lora_next_root = (lora_next_root or repo_root()).resolve()
     config = config or load_backend_config(lora_next_root)
     backend = config.get("backend", {})

@@ -171,6 +171,10 @@ def _main_env_upgrade_status(runtime):
 
 
 def read_status(runtime):
+    from mikazuki.launcher.bindings import managed_status
+    managed = managed_status("kohya")
+    if managed is not None:
+        return managed
     upgrading = _main_env_upgrade_status(runtime)
     if upgrading is not None:
         return upgrading

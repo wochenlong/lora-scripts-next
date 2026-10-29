@@ -504,7 +504,8 @@ pub(super) fn execute(
     log: &super::Logger,
 ) -> Result<()> {
     operation.persist(ctx)?;
-    let result = execute_inner(ctx, release, package, plan_sha256, operation, log);
+    let result = execute_inner(ctx, release, package, plan_sha256, operation, log)
+        .and_then(|()| crate::data_import::sync_current_environment(ctx, &release.id));
     finish(ctx, operation, &result)?;
     result
 }
@@ -675,7 +676,8 @@ pub(super) fn recover(
     log: &super::Logger,
 ) -> Result<()> {
     operation.persist(ctx)?;
-    let result = recover_inner(ctx, release, operation, log);
+    let result = recover_inner(ctx, release, operation, log)
+        .and_then(|()| crate::data_import::sync_current_environment(ctx, &release.id));
     finish(ctx, operation, &result)?;
     result
 }

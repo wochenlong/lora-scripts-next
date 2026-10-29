@@ -139,7 +139,8 @@ pub(super) fn install(
         512,
     );
     let result = super::gui_recovery::recover_source(&ctx, release)
-        .and_then(|()| install_inner(&ctx, release, &recipe, operation, log, &mut downloads));
+        .and_then(|()| install_inner(&ctx, release, &recipe, operation, log, &mut downloads))
+        .and_then(|()| crate::data_import::sync_current_environment(&ctx, &release.id));
     downloads.finish(&result)?;
     let (status, error) = match &result {
         Ok(()) => (OperationStatus::Succeeded, None),

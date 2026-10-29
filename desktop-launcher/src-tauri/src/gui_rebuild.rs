@@ -498,7 +498,11 @@ pub(crate) fn execute(
         )?;
         intent.status = "building".into();
         store(layout, &intent)?;
+        let engine_controls = instances::engine_control_digest(layout)?;
         builder(&environment)?;
+        if instances::engine_control_digest(layout)? != engine_controls {
+            bail!("GUI重建改变引擎控制记录");
+        }
         intent.status = "validating".into();
         store(layout, &intent)?;
         verify_candidate(

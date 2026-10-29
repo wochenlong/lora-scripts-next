@@ -26,6 +26,8 @@ def installation_plan(runtime, sources):
 
 
 def start_install(runtime, sources=None, repair=False):
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     import sys
     from pathlib import Path
     from .resource import request_lock
@@ -63,6 +65,8 @@ def _prepare_plan(runtime, plan, job_label):
 
 def start_upgrade(runtime, sources, drift):
     """Incremental standalone upgrade: only drifted pins, no venv recreation."""
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     from .environment import upgrade_commands
     from .resource import request_lock
     commands = upgrade_commands(runtime, sources, drift)
@@ -80,6 +84,8 @@ def start_upgrade(runtime, sources, drift):
 def start_main_env_upgrade(runtime, python, sources, drift):
     """Incremental upgrade of a legacy main environment; the standalone state
     file is left untouched, an in-memory marker tracks the task."""
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     from .environment import main_env_upgrade_commands
     from .extension_state import note_main_env_upgrade
     from .resource import request_lock

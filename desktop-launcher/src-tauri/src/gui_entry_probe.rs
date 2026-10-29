@@ -449,6 +449,18 @@ pub(super) fn probe(
     log: &super::Logger,
     cancel: &CancelToken,
 ) -> Result<GuiProbeReceipt> {
+    probe_profile(ctx, release, environment, transaction, None, log, cancel)
+}
+
+pub(super) fn probe_profile(
+    ctx: &WorkspaceMutation,
+    release: &Release,
+    environment: &Path,
+    transaction: &str,
+    profile: Option<&Path>,
+    log: &super::Logger,
+    cancel: &CancelToken,
+) -> Result<GuiProbeReceipt> {
     cancel.check()?;
     if !cfg!(windows) {
         bail!("GUI入口探测需要Windows Job与监听PID归属验证");
@@ -458,6 +470,9 @@ pub(super) fn probe(
     crate::source_integrity::verify(layout, release)?; // 缺release.json时也直接核固定实体。
     let network = OfflineProxy::start()?;
     let view = crate::runtime_view::prepare_probe(layout, transaction)?;
+    if let Some(profile) = profile {
+        crate::runtime_view::seed_probe_profile(layout, &view, profile)?;
+    }
     let mut copied = layout.clone();
     copied.app = view.run.clone();
     crate::source_integrity::verify(&copied, release)?;

@@ -21,14 +21,26 @@ class Runtime:
 
     @property
     def root(self):
+        from mikazuki.launcher.bindings import active_layout
+        managed = active_layout("kohya")
+        if managed:
+            return managed.state_root
         return self.project_root / "extensions" / "kohya"
 
     @property
     def python_install_dir(self):
+        from mikazuki.launcher.bindings import active_layout
+        managed = active_layout("kohya")
+        if managed:
+            return managed.base_python_root
         return self.root / ".python"
 
     @property
     def python(self):
+        from mikazuki.launcher.bindings import active_layout
+        managed = active_layout("kohya")
+        if managed:
+            return managed.python
         return self.root / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
     @property
@@ -42,6 +54,9 @@ def main_env_python_candidates(project_root: Path):
     interpreter running the GUI for source installs. Either may already hold a
     working torch stack and can serve as a fallback runtime.
     """
+    from mikazuki.launcher.bindings import managed_request
+    if managed_request("kohya") is not None:
+        return []
     candidates = []
     portable = project_root.parent / "python_embeded"
     for relative in ("python.exe", "python", "bin/python"):

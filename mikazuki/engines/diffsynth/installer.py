@@ -119,6 +119,8 @@ def build_repair_plan(runtime, sources, actions: list[str], diagnosis: dict | No
 
 
 def _spawn_task(runtime, plan: dict, *, job_label: str) -> dict:
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     import sys
     from .resource import request_lock
 
@@ -171,6 +173,8 @@ def _spawn_task(runtime, plan: dict, *, job_label: str) -> dict:
 
 def start_install(runtime, sources=None, repair=False):
     """Fresh install. ``repair=True`` kept as alias for full_reinstall (legacy)."""
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     sources = sources or DownloadSources()
     if repair:
         return start_full_reinstall(runtime, sources)
@@ -185,6 +189,8 @@ def start_install(runtime, sources=None, repair=False):
 
 
 def start_full_reinstall(runtime, sources=None):
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     sources = sources or DownloadSources()
     plan = build_repair_plan(runtime, sources, ["full_reinstall"])
     plan["repair"] = True  # legacy worker wipe flag
@@ -193,6 +199,8 @@ def start_full_reinstall(runtime, sources=None):
 
 
 def refresh_state_sync(runtime) -> dict:
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     """Audit once and persist ready/broken without a background task."""
     from .environment import audit_environment
 
@@ -250,6 +258,8 @@ def start_surgical_repair(runtime, sources=None, *, action: str | None = None, d
 
 
 def remove_extension(runtime):
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     from .resource import request_lock, environment_lock
 
     with request_lock:

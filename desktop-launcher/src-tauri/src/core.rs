@@ -23,6 +23,8 @@ mod managed_child;
 mod artifact_downloads;
 #[path = "controlled_download.rs"]
 mod controlled_download;
+#[path = "engine_bridge.rs"]
+mod engine_bridge;
 
 #[path = "base_python_repair.rs"]
 mod base_python_repair;
@@ -51,6 +53,9 @@ mod safe_extract;
 mod p6_tests;
 
 pub type Logger = Arc<dyn Fn(String) + Send + Sync>;
+pub(crate) fn embedded_engine_lock(engine: &str) -> Option<&'static [u8]> {
+    engine_bridge::embedded_lock(engine)
+}
 
 fn assert_registration_ready(root: &Path, except_release: Option<&str>) -> Result<()> {
     for release in Catalog::embedded()?.releases() {
@@ -62,6 +67,8 @@ fn assert_registration_ready(root: &Path, except_release: Option<&str>) -> Resul
 }
 
 fn assert_regular_ready(root: &Path) -> Result<()> {
+    crate::data_import::assert_binding_ready(root)?;
+    crate::shell_update_protocol::assert_ready(root)?;
     base_python_repair::assert_ready(root)?;
     assert_registration_ready(root, None)?;
     for release in Catalog::embedded()?.releases() {
@@ -91,7 +98,7 @@ pub struct Report {
     source: bool,
     environment: bool,
     frontend: bool,
-    running: bool,
+    pub(crate) running: bool,
     healthy: bool,
     version: Option<String>,
     port: Option<u16>,
@@ -132,7 +139,7 @@ struct Running {
     port: u16,
     _job: Job,
     // Fields drop in declaration order: close the process group before releasing the workspace lock.
-    _lease: File,
+    _lease: Arc<File>,
 }
 
 impl Drop for Running {
@@ -652,6 +659,291 @@ fn execute_controlled(
 }
 
 impl Engine {
+    pub fn catalog_control(
+        &mut self,
+        root: &Path,
+        action: &str,
+        fixture_case: Option<&str>,
+    ) -> Result<serde_json::Value> {
+        match action {
+            "status" => crate::signed_catalog::status(root),
+            "history" => crate::signed_catalog::history(root),
+            "open_fixture" | "refresh" => {
+                self.reap();
+                if self.running.is_some() {
+                    bail!("请先停止训练器再变更清单信任");
+                }
+                let id = self.default_release().id.clone();
+                let ctx = model::WorkspaceMutation::acquire(root, &id)?;
+                assert_regular_ready(root)?;
+                let result = if action == "open_fixture" {
+                    crate::signed_catalog::open_fixture_session(&ctx, "signed-catalog-v1")?
+                } else {
+                    crate::signed_catalog::refresh(&ctx, fixture_case)?
+                };
+                self.catalog = Catalog::for_workspace(root)?;
+                Ok(result)
+            }
+            _ => bail!("未知清单动作"),
+        }
+    }
+    pub fn preview_data_import(
+        &self,
+        root: &Path,
+        request: &crate::data_import::ImportRequest,
+    ) -> Result<serde_json::Value> {
+        self.catalog.release(&request.release_id)?;
+        let plan = crate::data_import::preview(root, request)?;
+        Ok(serde_json::to_value(plan)?)
+    }
+    pub fn preview_profile_binding(
+        &self,
+        root: &Path,
+        id: &str,
+        profile: &str,
+        rollback: bool,
+    ) -> Result<crate::data_import::BindingPlan> {
+        if rollback {
+            return crate::data_import::rollback_plan(root);
+        }
+        self.catalog.release(id)?;
+        model::validate_component(profile)?;
+        let registry = Registry::load(root)?;
+        let gui = registry
+            .gui_binding(id)
+            .context("目标发布缺少已验证GUI环境")?;
+        let mut ids = BTreeMap::from([("gui".into(), gui.instance_id.clone())]);
+        let mut generations = BTreeMap::from([("gui".into(), gui.generation)]);
+        for engine in ["kohya", "anima-fast", "ai-toolkit", "diffsynth"] {
+            let path = root
+                .join("state/engines")
+                .join(id)
+                .join(engine)
+                .join("state.json");
+            if path.exists() {
+                Layout::new(root, id)?.guard_path(&path)?;
+                let value: serde_json::Value = serde_json::from_slice(&fs::read(&path)?)?;
+                if value["dirty"] == false
+                    && value["status"] == "ready"
+                    && value["generation"] == value["validated_generation"]
+                {
+                    ids.insert(
+                        engine.into(),
+                        value["instance_id"]
+                            .as_str()
+                            .context("引擎实例身份不完整")?
+                            .into(),
+                    );
+                    generations.insert(
+                        engine.into(),
+                        value["generation"].as_u64().context("引擎代次不完整")?,
+                    );
+                }
+            }
+        }
+        let sidecar = root.join("state/profile-bindings.json");
+        Layout::new(root, id)?.guard_path(&sidecar)?;
+        let generation = if sidecar.exists() {
+            let value: serde_json::Value = serde_json::from_slice(&fs::read(sidecar)?)?;
+            value["generation"].as_u64().context("资料组合代次无效")?
+        } else {
+            0
+        };
+        crate::data_import::preview_binding(
+            root,
+            &crate::data_import::BindingRequest {
+                binding: crate::data_import::Binding {
+                    release_id: id.into(),
+                    profile_id: profile.into(),
+                    profile_schema_version: model::PROFILE_SCHEMA_VERSION,
+                    environment_instance_ids: ids,
+                    environment_generations: generations,
+                    healthy_at: None,
+                },
+                expected_generation: generation,
+            },
+        )
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn data_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        action: &str,
+        request: Option<&crate::data_import::ImportRequest>,
+        binding: Option<&crate::data_import::BindingRequest>,
+        sha: Option<&str>,
+        transaction: Option<&str>,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止训练器再变更资料组合");
+        }
+        let release = self.catalog.release(id)?.clone();
+        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        crate::shell_update_protocol::assert_ready(root)?;
+        if action != "recover_binding" {
+            assert_regular_ready(root)?;
+        }
+        operation.persist(&ctx)?;
+        let cancel = operation.cancel_token();
+        let result = (|| -> Result<()> {
+            operation.publish(
+                OperationPhase::Executing,
+                "在独立事务中变更资料，保留原安装与资料",
+            )?;
+            match action {
+                "import" => {
+                    let request = request.context("缺少已审阅导入请求")?;
+                    if request.release_id != id {
+                        bail!("导入目标发布不符");
+                    }
+                    crate::data_import::execute(
+                        &ctx,
+                        request,
+                        sha.context("缺少导入计划摘要")?,
+                        &cancel,
+                    )?;
+                }
+                "recover_import" => {
+                    crate::data_import::recover(
+                        &ctx,
+                        transaction.context("缺少导入事务")?,
+                        &cancel,
+                    )?;
+                }
+                "binding" => {
+                    let request = binding.context("缺少已审阅资料组合")?;
+                    if request.binding.release_id != id {
+                        bail!("资料组合发布与执行目标不符");
+                    }
+                    crate::signed_catalog::authorize(root, id, "activate")?;
+                    crate::data_import::execute_binding(
+                        &ctx,
+                        request,
+                        sha.context("缺少组合计划摘要")?,
+                        |target, profile| {
+                            let mut layout = ctx.layout().clone();
+                            layout.profile = profile.to_path_buf();
+                            let gui = Registry::load(root)?
+                                .gui_binding(id)
+                                .cloned()
+                                .context("缺少GUI绑定")?;
+                            if target.environment_instance_ids.get("gui") != Some(&gui.instance_id)
+                            {
+                                bail!("GUI绑定变化");
+                            }
+                            let recipe = crate::recipe::GuiRecipe::embedded()?;
+                            gui_install::validate_environment(
+                                &layout,
+                                &recipe,
+                                &layout.environment,
+                                &self.logger,
+                                &cancel,
+                            )?;
+                            let transaction = format!("gui-rebuild-profile-{}", model::now());
+                            gui_entry_probe::probe_profile(
+                                &ctx,
+                                &release,
+                                &layout.environment,
+                                &transaction,
+                                Some(profile),
+                                &self.logger,
+                                &cancel,
+                            )?;
+                            Ok(())
+                        },
+                    )?;
+                }
+                "recover_binding" => crate::data_import::recover_binding(&ctx)?,
+                _ => bail!("未知资料操作"),
+            }
+            Ok(())
+        })();
+        let (status, error) = match &result {
+            Ok(()) => (OperationStatus::Succeeded, None),
+            Err(e) if e.downcast_ref::<Cancelled>().is_some() => (OperationStatus::Cancelled, None),
+            Err(e) => (
+                OperationStatus::Failed,
+                Some(OperationError {
+                    code: "data_operation_failed".into(),
+                    message: format!("{e:#}"),
+                }),
+            ),
+        };
+        operation.finish_and_persist(&ctx, status, error)?;
+        result
+    }
+    pub fn engine_query(
+        &self,
+        root: &Path,
+        release: &str,
+        engine: &str,
+        action: &str,
+        rebuild: bool,
+    ) -> Result<serde_json::Value> {
+        engine_bridge::query(
+            root,
+            self.catalog.release(release)?,
+            engine,
+            action,
+            rebuild,
+            &self.logger,
+        )
+    }
+    pub fn engine_fixture_smoke(&mut self, root: &Path) -> Result<serde_json::Value> {
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再执行固定沙盒冒烟");
+        }
+        if crate::signed_catalog::status(root)?["fixture_session"] != true {
+            bail!("引擎冒烟仅允许显式签名沙盒会话");
+        }
+        engine_bridge::fixture_smoke(root, self.default_release(), &self.logger)
+    }
+    pub fn engine_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        engine: &str,
+        action: &str,
+        plan: Option<&serde_json::Value>,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        use crate::operations::{Cancelled, OperationError, OperationStatus};
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再变更独立引擎环境");
+        }
+        let release = self.catalog.release(id)?.clone();
+        let result = engine_bridge::apply(
+            root,
+            &release,
+            engine,
+            action,
+            plan,
+            operation,
+            &self.logger,
+        );
+        let (status, error) = match &result {
+            Ok(()) => (OperationStatus::Succeeded, None),
+            Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
+                (OperationStatus::Cancelled, None)
+            }
+            Err(error) => (
+                OperationStatus::Failed,
+                Some(OperationError {
+                    code: "engine_operation_failed".into(),
+                    message: format!("{error:#}"),
+                }),
+            ),
+        };
+        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        operation.finish_and_persist(&ctx, status, error)?;
+        result
+    }
     pub fn preview_base_python_repair(&self, root: &Path) -> Result<serde_json::Value> {
         base_python_repair::preview(root, &self.catalog)
     }
@@ -669,6 +961,8 @@ impl Engine {
         }
         self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        crate::data_import::assert_binding_ready(root)?;
+        crate::shell_update_protocol::assert_ready(root)?;
         assert_registration_ready(root, None)?;
         let recipe = crate::recipe::GuiRecipe::embedded()?;
         let log = self.logger.clone();
@@ -704,7 +998,8 @@ impl Engine {
                 &self.logger,
                 &mut validator,
             ),
-        }
+        }?;
+        crate::data_import::sync_current_environment(&ctx, id)
     }
     pub fn preview_source_repair(&self, root: &Path, id: &str) -> Result<serde_json::Value> {
         gui_source_repair::preview(root, self.catalog.release(id)?)
@@ -732,6 +1027,8 @@ impl Engine {
         }
         let release = self.catalog.release(id)?.clone();
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        crate::data_import::assert_binding_ready(root)?;
+        crate::shell_update_protocol::assert_ready(root)?;
         base_python_repair::assert_ready(root)?;
         assert_registration_ready(root, Some(id))?;
         operation.persist(&ctx)?;
@@ -779,7 +1076,11 @@ impl Engine {
                 ),
                 None => gui_registration::recover(&ctx, &release, &cancel, validator, entry_probe),
             }
-        })();
+        })()
+        .and_then(|value| {
+            crate::data_import::sync_current_environment(&ctx, id)?;
+            Ok(value)
+        });
         let (status, error) = match &result {
             Ok(_) => (OperationStatus::Succeeded, None),
             Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
@@ -833,6 +1134,8 @@ impl Engine {
         }
         let release = self.catalog.release(id)?.clone();
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        crate::data_import::assert_binding_ready(root)?;
+        crate::shell_update_protocol::assert_ready(root)?;
         base_python_repair::assert_ready(root)?;
         assert_registration_ready(root, None)?;
         for other in self.catalog.releases() {
@@ -943,7 +1246,8 @@ impl Engine {
                 }
                 _ => bail!("未知实例变更动作"),
             }
-        })();
+        })()
+        .and_then(|()| crate::data_import::sync_current_environment(&ctx, id));
         let (status, error) = match &result {
             Ok(()) => (OperationStatus::Succeeded, None),
             Err(e) if e.downcast_ref::<Cancelled>().is_some() => (OperationStatus::Cancelled, None),
@@ -1032,12 +1336,14 @@ impl Engine {
         id: &str,
         operation: &crate::operations::OperationHandle,
     ) -> Result<()> {
+        crate::signed_catalog::authorize(root, id, "install")?;
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
         if self.running.is_some() {
             bail!("请先停止受管训练器，再修改安装目录");
         }
         let release = self.catalog.release(id)?.clone();
+        assert_regular_ready(root)?;
         gui_install::install(root, &release, operation, &self.logger)
     }
     /// 只预取目录中固定身份的归档；成功仅代表缓存完整，不改变安装绑定或健康状态。
@@ -1244,6 +1550,7 @@ impl Engine {
         }
     }
     pub fn inspect(&mut self, root: &Path) -> Result<Report> {
+        self.catalog = Catalog::for_workspace(root)?;
         self.reap();
         let registry = Registry::load(root)?;
         let release = self.active(root)?;
@@ -1592,6 +1899,21 @@ impl Engine {
         self.inspect(root)
     }
     pub fn select_release(&mut self, root: &Path, id: &str) -> Result<Report> {
+        crate::signed_catalog::authorize(root, id, "activate")?;
+        if crate::data_import::has_bindings(root)? {
+            assert_regular_ready(root)?;
+            if Registry::load(root)?.current.as_deref() == Some(id) {
+                crate::data_import::assert_current_environment(root, id)?;
+                return self.inspect(root);
+            }
+            let plan = crate::data_import::rollback_plan(root).context(
+                "已有独立资料组合；请先在资料组合入口预览并显式选择目标发布、profile和环境实例",
+            )?;
+            if plan.request.binding.release_id != id {
+                bail!("目标不属于上一健康完整资料组合，请先在资料组合入口显式预览并选择profile和环境实例");
+            }
+            return self.select_profile_plan(root, plan);
+        }
         let release = self.catalog.release(id)?.clone();
         let (layout, _lease) = self.mutable(root, &release)?;
         verify_source(&layout, &release)?;
@@ -1604,9 +1926,38 @@ impl Engine {
         self.inspect(root)
     }
     pub fn rollback_release(&mut self, root: &Path) -> Result<Report> {
+        if crate::data_import::has_bindings(root)? {
+            let plan = crate::data_import::rollback_plan(root)?;
+            crate::signed_catalog::authorize(root, &plan.request.binding.release_id, "rollback")?;
+            return self.select_profile_plan(root, plan);
+        }
         let mut registry = Registry::load(root)?;
         let id = registry.rollback(&self.catalog)?;
+        crate::signed_catalog::authorize(root, &id, "rollback")?;
         self.select_release(root, &id)
+    }
+    fn select_profile_plan(
+        &mut self,
+        root: &Path,
+        plan: crate::data_import::BindingPlan,
+    ) -> Result<Report> {
+        let id = plan.request.binding.release_id.clone();
+        let manager = crate::operations::OperationManager::default();
+        let operation = manager.start(
+            &format!("binding-select-{}-{}", model::now(), stamp()),
+            crate::operations::OperationKind::Execute,
+        )?;
+        self.data_operation(
+            root,
+            &id,
+            "binding",
+            None,
+            Some(&plan.request),
+            Some(&plan.plan_sha256),
+            None,
+            &operation,
+        )?;
+        self.inspect(root)
     }
     pub fn remove_release(&mut self, root: &Path, id: &str) -> Result<Report> {
         let release = self.catalog.release(id)?.clone();
@@ -1638,7 +1989,9 @@ impl Engine {
     pub fn start(&mut self, root: &Path) -> Result<Report> {
         let _network = crate::network_policy::task_policy(root)?;
         let release = self.active(root)?;
+        crate::signed_catalog::authorize(root, &release.id, "activate")?;
         let (layout, lock) = self.mutable(root, &release)?;
+        crate::data_import::assert_current_environment(root, &release.id)?;
         if Registry::load(root)?.current.is_none() {
             bail!("请先选择已安装版本");
         }
@@ -1677,6 +2030,10 @@ impl Engine {
             .env("PYTHONUNBUFFERED", "1")
             .env("PYTHONDONTWRITEBYTECODE", "1")
             .env("NEXT_TRAINER_DATA_ROOT", &layout.profile)
+            .env(
+                "NEXT_TRAINER_LAUNCHER_CONTEXT",
+                engine_bridge::context(&layout, &release)?,
+            )
             .env(
                 "NEXT_TRAINER_NETWORK_CONFIG",
                 crate::network_policy::settings_path(root)?,
@@ -1723,7 +2080,7 @@ impl Engine {
             child,
             root: root.to_path_buf(),
             port,
-            _lease: lock,
+            _lease: Arc::new(lock),
             _job: job,
         });
         let start = Instant::now();
@@ -1746,9 +2103,15 @@ impl Engine {
                 (self.logger)(format!(
                     "真实训练器就绪，版本 {version}，http://127.0.0.1:{port}"
                 ));
-                let mut registry = Registry::load(root)?;
-                registry.mark_healthy(&release.id)?;
-                registry.store(root)?;
+                let ctx = model::WorkspaceMutation::from_running_lease(
+                    layout.clone(),
+                    self.running
+                        .as_ref()
+                        .context("受管进程已退出")?
+                        ._lease
+                        .clone(),
+                );
+                crate::data_import::mark_healthy(&ctx, &release.id)?;
                 return self.inspect(root);
             }
             thread::sleep(Duration::from_millis(500));

@@ -1,0 +1,44 @@
+{
+  "valid-v1": {
+    "schema_version": 1,
+    "key_id": "public-fixture-root-v1",
+    "payload": "{\"schema_version\":1,\"encoding\":\"nt-catalog-json-v1\",\"channel\":\"fixture\",\"sequence\":1,\"issued_at\":1793145600,\"expires_at\":1893456000,\"platform\":\"windows-x86_64\",\"min_shell\":\"0.2.0\",\"profile_schema_version\":1,\"releases\":[{\"release\":{\"schema_version\":1,\"id\":\"dev-196ff12c16083d59c8be6711476c6fdb70c7112a\",\"channel\":\"dev\",\"version\":\"3.3.1-dev\",\"commit\":\"196ff12c16083d59c8be6711476c6fdb70c7112a\",\"archive\":{\"url\":\"https://codeload.github.com/wochenlong/lora-scripts-next/zip/196ff12c16083d59c8be6711476c6fdb70c7112a\",\"sha256\":\"37c69b284528b21e256ba9c1a4ca90ad4a4ffe8d0122e9ba7416e45f3f3899e9\",\"bytes\":49234359,\"unpacked_bytes\":86405908},\"python\":\"3.10.19\",\"uv\":{\"version\":\"0.11.16\",\"url\":\"https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-pc-windows-msvc.zip\",\"sha256\":\"dd9d6d6554bfab265bfa98aa8e8a406c5c3a7b97582f93de1f4d48d9154a0395\",\"exe_sha256\":\"c5a583d5f1f6d055fc1c32c87d8eceee90edc69a5b9af5da70811befdfc04880\",\"bytes\":23236992},\"environment_recipe\":\"gui-cp310-win-x64-v1\",\"profile_schema_version\":1,\"data_contract\":\"native-v1\",\"required_files\":[\"gui.py\",\"requirements.txt\",\"VERSION\",\"frontend/dist/index.html\"]},\"published_at\":1793145600,\"recipe_sha256\":\"8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090\",\"actions\":[\"download_source\",\"isolated_entry_probe\",\"uv_locked_sync\",\"uv_venv\",\"verify_environment\"]}],\"rotations\":[{\"key_id\":\"public-fixture-rotated-v2\",\"public_key_hex\":\"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c\"}],\"revoked_keys\":[],\"revoked_releases\":[]}",
+    "signature_hex": "7617df89710aa55b0f50eccd9fce298fd9247ece930b5e4bc7d8a95efacc2400138e0843649ca184c3b70668fce37b568cb864910a87d47420c2003b88ef8503"
+  },
+  "rotate-v2": {
+    "schema_version": 1,
+    "key_id": "public-fixture-rotated-v2",
+    "payload": "{\"schema_version\":1,\"encoding\":\"nt-catalog-json-v1\",\"channel\":\"fixture\",\"sequence\":2,\"issued_at\":1793145600,\"expires_at\":1893456000,\"platform\":\"windows-x86_64\",\"min_shell\":\"0.2.0\",\"profile_schema_version\":1,\"releases\":[{\"release\":{\"schema_version\":1,\"id\":\"dev-196ff12c16083d59c8be6711476c6fdb70c7112a\",\"channel\":\"dev\",\"version\":\"3.3.1-dev\",\"commit\":\"196ff12c16083d59c8be6711476c6fdb70c7112a\",\"archive\":{\"url\":\"https://codeload.github.com/wochenlong/lora-scripts-next/zip/196ff12c16083d59c8be6711476c6fdb70c7112a\",\"sha256\":\"37c69b284528b21e256ba9c1a4ca90ad4a4ffe8d0122e9ba7416e45f3f3899e9\",\"bytes\":49234359,\"unpacked_bytes\":86405908},\"python\":\"3.10.19\",\"uv\":{\"version\":\"0.11.16\",\"url\":\"https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-pc-windows-msvc.zip\",\"sha256\":\"dd9d6d6554bfab265bfa98aa8e8a406c5c3a7b97582f93de1f4d48d9154a0395\",\"exe_sha256\":\"c5a583d5f1f6d055fc1c32c87d8eceee90edc69a5b9af5da70811befdfc04880\",\"bytes\":23236992},\"environment_recipe\":\"gui-cp310-win-x64-v1\",\"profile_schema_version\":1,\"data_contract\":\"native-v1\",\"required_files\":[\"gui.py\",\"requirements.txt\",\"VERSION\",\"frontend/dist/index.html\"]},\"published_at\":1793145600,\"recipe_sha256\":\"8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090\",\"actions\":[\"download_source\",\"isolated_entry_probe\",\"uv_locked_sync\",\"uv_venv\",\"verify_environment\"]}],\"rotations\":[],\"revoked_keys\":[],\"revoked_releases\":[]}",
+    "signature_hex": "6d45657f145e7da2167790fadc98a90a71185c0b6b183d3514160a2ee612c151773a07ac1fca998734c4d4506d9db43f5e5ae446a3e9c71d4ccbaca9ac9bb00e"
+  },
+  "revoke-v3": {
+    "schema_version": 1,
+    "key_id": "public-fixture-rotated-v2",
+    "payload": "{\"schema_version\":1,\"encoding\":\"nt-catalog-json-v1\",\"channel\":\"fixture\",\"sequence\":3,\"issued_at\":1793145600,\"expires_at\":1893456000,\"platform\":\"windows-x86_64\",\"min_shell\":\"0.2.0\",\"profile_schema_version\":1,\"releases\":[],\"rotations\":[],\"revoked_keys\":[],\"revoked_releases\":[\"dev-196ff12c16083d59c8be6711476c6fdb70c7112a\"]}",
+    "signature_hex": "f9559c391881723c75adf6b96c3619299b2a81b3df4c79990c3bbf6660850ac418f3c4939e64ffa08de8dadc9936ce1bc3a5c5ae105532fc5fd336e7b245de02"
+  },
+  "expired": {
+    "schema_version": 1,
+    "key_id": "public-fixture-rotated-v2",
+    "payload": "{\"schema_version\":1,\"encoding\":\"nt-catalog-json-v1\",\"channel\":\"fixture\",\"sequence\":4,\"issued_at\":1577836800,\"expires_at\":1609459200,\"platform\":\"windows-x86_64\",\"min_shell\":\"0.2.0\",\"profile_schema_version\":1,\"releases\":[],\"rotations\":[],\"revoked_keys\":[],\"revoked_releases\":[]}",
+    "signature_hex": "f766e301f8cf39cb713a53d743db2a8cd6f527eae4e28dc14abafdf15c1fd9bf159af3996ab00712353a1d728645c4475825c18de5917a7a0ebdd7278d83760c"
+  },
+  "wrong-platform": {
+    "schema_version": 1,
+    "key_id": "public-fixture-rotated-v2",
+    "payload": "{\"schema_version\":1,\"encoding\":\"nt-catalog-json-v1\",\"channel\":\"fixture\",\"sequence\":4,\"issued_at\":1793145600,\"expires_at\":1893456000,\"platform\":\"linux-x86_64\",\"min_shell\":\"0.2.0\",\"profile_schema_version\":1,\"releases\":[],\"rotations\":[],\"revoked_keys\":[],\"revoked_releases\":[]}",
+    "signature_hex": "4a6a819386e2f9993a9083f71aeff039cba0ea8641e195a8c8b49f1ff51e56987e1d7164862d9da11b56f0900750df3b726bd2ccd92b00e57efb01fad126df0c"
+  },
+  "replay": {
+    "schema_version": 1,
+    "key_id": "public-fixture-root-v1",
+    "payload": "{\"schema_version\":1,\"encoding\":\"nt-catalog-json-v1\",\"channel\":\"fixture\",\"sequence\":1,\"issued_at\":1793145600,\"expires_at\":1893456000,\"platform\":\"windows-x86_64\",\"min_shell\":\"0.2.0\",\"profile_schema_version\":1,\"releases\":[{\"release\":{\"schema_version\":1,\"id\":\"dev-196ff12c16083d59c8be6711476c6fdb70c7112a\",\"channel\":\"dev\",\"version\":\"3.3.1-dev\",\"commit\":\"196ff12c16083d59c8be6711476c6fdb70c7112a\",\"archive\":{\"url\":\"https://codeload.github.com/wochenlong/lora-scripts-next/zip/196ff12c16083d59c8be6711476c6fdb70c7112a\",\"sha256\":\"37c69b284528b21e256ba9c1a4ca90ad4a4ffe8d0122e9ba7416e45f3f3899e9\",\"bytes\":49234359,\"unpacked_bytes\":86405908},\"python\":\"3.10.19\",\"uv\":{\"version\":\"0.11.16\",\"url\":\"https://github.com/astral-sh/uv/releases/download/0.11.16/uv-x86_64-pc-windows-msvc.zip\",\"sha256\":\"dd9d6d6554bfab265bfa98aa8e8a406c5c3a7b97582f93de1f4d48d9154a0395\",\"exe_sha256\":\"c5a583d5f1f6d055fc1c32c87d8eceee90edc69a5b9af5da70811befdfc04880\",\"bytes\":23236992},\"environment_recipe\":\"gui-cp310-win-x64-v1\",\"profile_schema_version\":1,\"data_contract\":\"native-v1\",\"required_files\":[\"gui.py\",\"requirements.txt\",\"VERSION\",\"frontend/dist/index.html\"]},\"published_at\":1793145600,\"recipe_sha256\":\"8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090\",\"actions\":[\"download_source\",\"isolated_entry_probe\",\"uv_locked_sync\",\"uv_venv\",\"verify_environment\"]}],\"rotations\":[{\"key_id\":\"public-fixture-rotated-v2\",\"public_key_hex\":\"3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c\"}],\"revoked_keys\":[],\"revoked_releases\":[]}",
+    "signature_hex": "7617df89710aa55b0f50eccd9fce298fd9247ece930b5e4bc7d8a95efacc2400138e0843649ca184c3b70668fce37b568cb864910a87d47420c2003b88ef8503"
+  },
+  "shell-self-copy-policy": {
+    "schema_version": 1,
+    "key_id": "public-fixture-root-v1",
+    "payload": "{\"schema_version\":1,\"policy_id\":\"current-shell-self-copy-v1\",\"channel\":\"fixture\",\"platform\":\"windows-x86_64\",\"action\":\"replace_shell_self_copy\",\"current_relative\":\"shell-fixture/current/NextTrainerLauncher.exe\",\"candidate_relative\":\"shell-fixture/candidate/NextTrainerLauncher.exe\",\"max_bytes\":1073741824,\"issued_at\":1793145600,\"expires_at\":1893456000}",
+    "signature_hex": "39f7618bd5d8d95934c72ab5d48d3b2ce66bc7c9e17f2cda6faa40ead27603eb48474c4827b1efcc6c26c377f40f5383f15d29c7c1f05231966fbec51819e700"
+  }
+}

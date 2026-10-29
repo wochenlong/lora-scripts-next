@@ -50,6 +50,11 @@ def _resolve_variant(payload: dict) -> str:
 
 
 async def status():
+    from mikazuki.launcher.bindings import managed_status
+    managed = managed_status("ai-toolkit")
+    if managed is not None:
+        managed.update(train_types=list(AI_TOOLKIT_TRAIN_TYPE_MAP), models=VARIANTS)
+        return APIResponseSuccess(data=managed)
     layout = ai_toolkit_default_layout(Path.cwd())
     data = read_ai_toolkit_extension_status(layout).as_dict()
     runtime = ai_toolkit_runtime()
@@ -74,7 +79,9 @@ async def preflight(config: dict):
         return ai_toolkit_disabled_response()
     # Heal a venv whose base interpreter moved (e.g. trainer folder relocated,
     # see #406) before the dependency probe runs.
-    repair_ai_toolkit_layout_venv(ai_toolkit_default_layout(Path.cwd()))
+    from mikazuki.launcher.bindings import managed_request
+    if managed_request("ai-toolkit") is None:
+        repair_ai_toolkit_layout_venv(ai_toolkit_default_layout(Path.cwd()))
     runtime = ai_toolkit_runtime()
     run_id = f"{datetime.now().strftime('%Y%m%d-%H%M%S')}-ai-toolkit"
     try:
@@ -116,6 +123,9 @@ async def dry_run(config: dict):
 
 
 async def install(payload: dict, force_install: bool = False):
+    from mikazuki.launcher.bindings import managed_request
+    if managed_request("ai-toolkit") is not None:
+        return APIResponseFail(message="请使用桌面启动器或 /api/launcher/engines/ai-toolkit/plan 检查与精准修复受管实例。")
     if not ai_toolkit_feature_enabled():
         return ai_toolkit_disabled_response()
     source_commit = str(payload.get("source_commit") or "").strip() or UPSTREAM["commit"] or None

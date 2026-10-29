@@ -146,6 +146,10 @@ def _load_or_recover_state(runtime, *, audit_fn=None):
 
 
 def read_status(runtime, *, audit_fn=None):
+    from mikazuki.launcher.bindings import managed_status
+    managed = managed_status("diffsynth")
+    if managed is not None:
+        return managed
     data = _load_or_recover_state(runtime, audit_fn=audit_fn)
     if data["state"] in {"installing", "auditing"}:
         from mikazuki.tasks import tm, TaskStatus

@@ -33,18 +33,34 @@ class Runtime:
 
     @property
     def root(self):
+        from mikazuki.launcher.bindings import active_layout
+        managed = active_layout("diffsynth")
+        if managed:
+            return managed.state_root
         return self.project_root / "extensions" / "diffsynth"
 
     @property
     def source(self):
+        from mikazuki.launcher.bindings import active_layout
+        managed = active_layout("diffsynth")
+        if managed:
+            return managed.engine_source_root
         return self.root / "source"
 
     @property
     def python_install_dir(self):
+        from mikazuki.launcher.bindings import active_layout
+        managed = active_layout("diffsynth")
+        if managed:
+            return managed.base_python_root
         return self.root / ".python"
 
     @property
     def python(self):
+        from mikazuki.launcher.bindings import active_layout
+        managed = active_layout("diffsynth")
+        if managed:
+            return managed.python
         return self.root / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
 
     @property
@@ -81,4 +97,6 @@ def configured_cache_root(rt: Runtime, override: str = "") -> Path:
     if raw:
         path = Path(raw).expanduser()
         return path.resolve() if path.is_absolute() else (rt.project_root / path).resolve()
-    return rt.root / "cache"
+    from mikazuki.launcher.bindings import active_layout
+    managed = active_layout("diffsynth")
+    return managed.profile_root / ".cache" / "diffsynth" if managed else rt.root / "cache"

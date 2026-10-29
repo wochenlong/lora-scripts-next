@@ -76,6 +76,12 @@ def anima_fast_fail_from_preflight(result):
 
 
 def anima_fast_ready_gate():
+    from mikazuki.launcher.bindings import training_gate
+    try:
+        if training_gate("anima-fast") is not None:
+            return True, None
+    except (ValueError, OSError, RuntimeError) as error:
+        return False, APIResponseFail(message=str(error))
     layout = default_layout(Path.cwd())
     status = read_extension_status(layout)
     if status.state != STATE_READY:

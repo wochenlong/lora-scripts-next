@@ -864,6 +864,8 @@ def start_install_task(
     source_commit: str | None = None,
     download_sources: DownloadSources | None = None,
 ) -> tuple[str, dict]:
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     plan = build_environment_install_plan(
         project_root,
         layout,

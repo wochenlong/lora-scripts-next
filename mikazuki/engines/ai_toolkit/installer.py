@@ -172,6 +172,8 @@ def copy_source_snapshot(plan: InstallPlan) -> None:
 
 
 def remove_extension(layout: ExtensionLayout, project_root: Path) -> None:
+    from mikazuki.launcher.bindings import reject_legacy_mutation
+    reject_legacy_mutation()
     target = layout.root.resolve()
     allowed_root = (project_root.resolve() / "extensions").resolve()
     try:

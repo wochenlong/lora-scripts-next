@@ -172,6 +172,17 @@ pub(crate) fn prepare_probe(layout: &Layout, transaction: &str) -> Result<ProbeV
     Ok(view)
 }
 
+/// 私有入口验证只复制配置，不联接生产资料或复制模型/数据集。
+pub(crate) fn seed_probe_profile(layout: &Layout, view: &ProbeView, profile: &Path) -> Result<()> {
+    layout.guard_path(profile)?;
+    for name in ["user_data", "compat"] {
+        let source = profile.join(name);
+        layout.guard_path(&source)?;
+        copy_missing(&source, &view.profile.join(name), layout)?;
+    }
+    Ok(())
+}
+
 #[cfg(windows)]
 fn link_directory(target: &Path, link: &Path) -> Result<()> {
     junction::create(target, link)

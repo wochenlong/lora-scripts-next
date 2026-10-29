@@ -1,0 +1,21 @@
+[package]
+name = "next-trainer-updater"
+version = "0.2.0"
+edition = "2021"
+license = "AGPL-3.0-or-later"
+description = "Next Trainer 独立壳更新辅助程序（无Python或WebView依赖）"
+
+[dependencies]
+anyhow = "1"
+fs2 = "0.4"
+ring = "0.17.14"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sha2 = "0.10"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Threading", "Win32_Security", "Win32_System_JobObjects"] }
+
+[[bin]]
+name = "next-trainer-updater"
+path = "src/main.rs"

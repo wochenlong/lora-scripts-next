@@ -16,7 +16,8 @@ pub const SCHEMA_VERSION: u32 = 1;
 pub const PROFILE_SCHEMA_VERSION: u32 = 1;
 pub const MAX_DOWNLOAD_BYTES: u64 = 200_000_000;
 /// 受固定配方授权的单个大wheel上限；旧源码目录仍沿用200MB限制。
-pub const MAX_MANAGED_ASSET_BYTES: u64 = 512 * 1024 * 1024;
+// CUDA wheel可大于3GiB；下载始终流式、固定长度/摘要，仍受工作区累计额度约束。
+pub const MAX_MANAGED_ASSET_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 pub const MAX_EXTRACT_BYTES: u64 = 2_000_000_000;
 pub const PROFILE_DIRECTORIES: &[&str] = &["user_data", "library", "compat"];
 const RECEIPT: &str = "release.json";
@@ -215,6 +216,20 @@ impl Release {
     }
 }
 impl Catalog {
+    pub fn for_workspace(root: &Path) -> Result<Self> {
+        let mut catalog = Self::embedded()?;
+        for release in crate::signed_catalog::catalog(root)? {
+            if let Some(existing) = catalog.releases.iter().find(|item| item.id == release.id) {
+                if *existing != release {
+                    bail!("可信历史与内置同ID资产身份不同");
+                }
+            } else {
+                catalog.releases.push(release);
+            }
+        }
+        catalog.validate()?;
+        Ok(catalog)
+    }
     pub fn embedded() -> Result<Self> {
         let catalog: Self = serde_json::from_str(include_str!("../../catalog/releases.json"))?;
         catalog.validate()?;
@@ -291,7 +306,7 @@ pub struct Layout {
 /// 避免安装/修复之间释放锁，也避免内部重复获取同一文件锁。
 pub struct WorkspaceMutation {
     layout: Layout,
-    _lease: File,
+    _lease: std::sync::Arc<File>,
 }
 impl WorkspaceMutation {
     pub fn acquire(root: &Path, release_id: &str) -> Result<Self> {
@@ -299,12 +314,18 @@ impl WorkspaceMutation {
         let lease = layout.prepare_workspace()?;
         Ok(Self {
             layout,
-            _lease: lease,
+            _lease: std::sync::Arc::new(lease),
         })
     }
 
     pub fn layout(&self) -> &Layout {
         &self.layout
+    }
+    pub(crate) fn from_running_lease(layout: Layout, lease: std::sync::Arc<File>) -> Self {
+        Self {
+            layout,
+            _lease: lease,
+        }
     }
 }
 
@@ -331,7 +352,10 @@ impl Layout {
             app: release_dir.join("app"),
             release_dir,
             environment,
-            profile: root.join("profiles/default"),
+            profile: root.join("profiles").join(
+                crate::data_import::load_active_profile(root, release_id)?
+                    .unwrap_or_else(|| "default".into()),
+            ),
             staging: root.join("staging").join(release_id),
             run: root.join("run").join(release_id),
         })
@@ -413,7 +437,18 @@ impl Layout {
         if profile_file.exists() {
             Profile::load(&profile_file)?;
         } else {
-            write_json_atomic(&profile_file, &Profile::default())?;
+            write_json_atomic(
+                &profile_file,
+                &Profile {
+                    schema_version: PROFILE_SCHEMA_VERSION,
+                    id: self
+                        .profile
+                        .file_name()
+                        .and_then(|n| n.to_str())
+                        .context("资料路径标识缺失")?
+                        .into(),
+                },
+            )?;
         }
         for name in PROFILE_DIRECTORIES {
             self.ensure_dir(&self.profile.join(name))?;
@@ -441,8 +476,14 @@ impl Profile {
         check_chain(path)?;
         let profile: Self = read_json(path)?;
         schema(profile.schema_version, "profile")?;
-        if profile.id != "default" {
-            bail!("仅支持 default profile");
+        validate_component(&profile.id)?;
+        if path
+            .parent()
+            .and_then(|p| p.file_name())
+            .and_then(|p| p.to_str())
+            != Some(profile.id.as_str())
+        {
+            bail!("资料标识与固定目录不一致");
         }
         Ok(profile)
     }
