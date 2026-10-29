@@ -152,6 +152,21 @@ fn read(layout: &Layout, path: &Path, limit: u64, cancel: &CancelToken) -> Resul
     }
     Ok(data)
 }
+
+/// 固定 uv 在首次 pip 写入时生成的可选空锁；不是可执行文件或任意隐藏文件许可。
+/// 来源为独立固定 uv + 原始 CPython + synthetic wheel 的离线控制复现。
+fn runtime_control(
+    layout: &Layout,
+    environment: &Path,
+    path: &Path,
+    cancel: &CancelToken,
+) -> Result<Option<Vec<u8>>> {
+    if path != environment.join(".lock") {
+        return Ok(None);
+    }
+    // limit=0 同时拒绝非空锁、目录和 reparse，绝不修改或清空现场。
+    Ok(Some(read(layout, path, 0, cancel)?))
+}
 fn decode_hex(value: &str) -> Result<Vec<u8>> {
     if !value.len().is_multiple_of(2) {
         bail!("PE模板编码无效");
@@ -480,6 +495,10 @@ pub(crate) fn verify(
                 bail!("环境含Windows大小写别名");
             }
             let meta = fs::symlink_metadata(&path)?;
+            if let Some(data) = runtime_control(layout, environment, &path, cancel)? {
+                observed.insert(rel, (data.len() as u64, hash(&data)));
+                continue;
+            }
             if meta.is_dir() {
                 stack.push(path);
                 continue;
@@ -543,6 +562,45 @@ mod tests {
     use super::*;
     fn index() -> Index {
         serde_json::from_slice(INDEX).unwrap()
+    }
+    #[test]
+    fn uv_runtime_lock_accepts_only_exact_empty_root_file_and_preserves_other_bytes() {
+        let root = std::env::temp_dir().join(format!(
+            "nt-runtime-lock-{}-{}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        let release = crate::model::Catalog::embedded().unwrap().releases()[0].clone();
+        let layout = Layout::new(&root, &release.id).unwrap();
+        let _lease = layout.prepare_workspace().unwrap();
+        let environment = root.join("e/g3333333333333333");
+        fs::create_dir_all(&environment).unwrap();
+        let lock = environment.join(".lock");
+        let cancel = CancelToken::new();
+        fs::write(&lock, b"").unwrap();
+        assert_eq!(
+            runtime_control(&layout, &environment, &lock, &cancel).unwrap(),
+            Some(vec![])
+        );
+        fs::write(&lock, b"untrusted").unwrap();
+        assert!(runtime_control(&layout, &environment, &lock, &cancel).is_err());
+        assert_eq!(fs::read(&lock).unwrap(), b"untrusted");
+        for path in [
+            environment.join("Lib/.lock"),
+            environment.join(".lock.py"),
+            environment.join(".LOCK"),
+        ] {
+            assert!(runtime_control(&layout, &environment, &path, &cancel)
+                .unwrap()
+                .is_none());
+        }
+        fs::remove_file(&lock).unwrap();
+        fs::create_dir(&lock).unwrap();
+        assert!(runtime_control(&layout, &environment, &lock, &cancel).is_err());
+        // 保留专属测试根；无递归删除或修改生产环境。
     }
     #[test]
     fn index_binds_full_fixed_wheel_closure_and_uv_controls() {
