@@ -806,8 +806,9 @@ fn inspect_payload(root: &Path, intent: &ImportIntent, complete: bool) -> Result
     );
     let mut directories: BTreeSet<PathBuf> = intent.plan.scan.directories.iter().cloned().collect();
     directories.extend(model::PROFILE_DIRECTORIES.iter().map(PathBuf::from));
-    for file in &files {
-        for parent in file
+    // 声明的空目录也由 create_dir_all 建立；它们的必需祖先须与文件祖先同样核对。
+    for path in files.iter().chain(intent.plan.scan.directories.iter()) {
+        for parent in path
             .ancestors()
             .skip(1)
             .filter(|p| !p.as_os_str().is_empty())
@@ -2008,6 +2009,73 @@ mod tests {
         );
         assert!(settings["paths"].get("python").is_none());
         assert!(!plan.target_profile.join("user_data/auth.json").exists());
+    }
+    #[test]
+    fn empty_mapped_directories_import_and_recover_rejects_unlisted_directories() {
+        for interrupted in [false, true] {
+            let f = Fixture::new();
+            // 没有可复制的 compat 文件时，空目录仍须允许其精确祖先。
+            fs::remove_file(f.request.source_root.join("assets/config.json")).unwrap();
+            fs::create_dir_all(f.request.source_root.join("toml/empty/nested")).unwrap();
+            let before = scan(&f.request).unwrap();
+            assert!(!before
+                .files
+                .iter()
+                .any(|file| file.target_relative.starts_with("compat")));
+            let ctx = WorkspaceMutation::acquire(&f.root, &f.request.release_id).unwrap();
+            let original = Registry::load(&f.root).unwrap();
+            let plan = preview(&f.root, &f.request).unwrap();
+            let receipt = if interrupted {
+                assert!(execute(&ctx, &f.request, &plan.plan_sha256, &cancelled()).is_err());
+                let transaction = format!(
+                    "data-import-{}-{}",
+                    f.request.profile_id,
+                    &plan.plan_sha256[..16]
+                );
+                let (_, staged) = import_paths(&f.root, &transaction).unwrap();
+                let payload = staged.join("payload");
+                let mapped = PathBuf::from("compat")
+                    .join(&f.request.release_id)
+                    .join("toml/empty/nested");
+                ctx.layout().ensure_dir(&payload.join(&mapped)).unwrap();
+                ctx.layout().ensure_dir(&staged.join("partial")).unwrap();
+                model::write_json_atomic(
+                    &staged.join("owner.json"),
+                    &serde_json::json!({"schema_version":VERSION,"transaction":transaction,"plan_sha256":plan.plan_sha256}),
+                )
+                .unwrap();
+                let unlisted = payload
+                    .join("compat")
+                    .join(&f.request.release_id)
+                    .join("unlisted-empty");
+                ctx.layout().ensure_dir(&unlisted).unwrap();
+                let error = recover(&ctx, &transaction, &CancelToken::new()).unwrap_err();
+                assert!(error.to_string().contains("资料副本含清单外目录"));
+                assert!(unlisted.is_dir());
+                assert!(!plan.target_profile.exists());
+                // 只移动本测试创建的清单外目录，原拒绝现场不应由恢复入口删除。
+                fs::rename(&unlisted, f.base.join("preserved-unlisted-empty")).unwrap();
+                recover(&ctx, &transaction, &CancelToken::new()).unwrap()
+            } else {
+                execute(&ctx, &f.request, &plan.plan_sha256, &CancelToken::new()).unwrap()
+            };
+            assert_eq!(receipt.status, "committed");
+            assert!(!receipt.activated);
+            assert!(plan
+                .target_profile
+                .join("compat")
+                .join(&f.request.release_id)
+                .join("toml/empty/nested")
+                .is_dir());
+            assert_eq!(scan(&f.request).unwrap(), before);
+            assert_eq!(Registry::load(&f.root).unwrap(), original);
+            assert_eq!(
+                recover(&ctx, &receipt.transaction, &CancelToken::new())
+                    .unwrap()
+                    .status,
+                "committed"
+            );
+        }
     }
     #[test]
     fn stale_plans_conflicts_and_unknown_schema_fail_closed() {
