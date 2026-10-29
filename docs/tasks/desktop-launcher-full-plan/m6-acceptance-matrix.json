@@ -1,0 +1,216 @@
+{
+  "schema_version": 1,
+  "run_id": "desktop-launcher-full-20261028-155831Z-f6c00a",
+  "branch": "feat/desktop-launcher",
+  "status": "complete-with-boundary",
+  "rule": "v0.6 / CR-006; smoke scope CR-004",
+  "trainer_source_commit": "0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e",
+  "launcher_build_commit": "02cd5c4632e91eb719d13a827f7c224aee0a5181",
+  "delivery_manifest_sha256": "ad0bdba32dd28c278b443bff82722033b98262b8e3ccdd85f4311826696f4e29",
+  "final_identity": {
+    "NextTrainerLauncher-0.2.0-windows-x64-portable.zip": {
+      "bytes": 17567887,
+      "sha256": "e8e0dacb54eb3be92a151499c33aa1e6e9c3a06fc03c576de2db94f6cc1b24e8"
+    },
+    "installers/Next Trainer Launcher_0.2.0_x64-setup.exe": {
+      "bytes": 14227866,
+      "sha256": "f7add27d2b5d6ba115edbd404f6f8cb13755ae7623897b5d6719ea0a6e974338"
+    },
+    "NextTrainerLauncher-0.2.0-windows-x64/next-trainer-launcher.exe": {
+      "bytes": 35830784,
+      "sha256": "896051564cc3722d45c4ac927c5a2c8823916961ff19a34e594b29a4cf94abba"
+    },
+    "NextTrainerLauncher-0.2.0-windows-x64/next-trainer-updater.exe": {
+      "bytes": 1016320,
+      "sha256": "d71390cea30cc16e8d17f749aea16241431119bcc5bbf42a5b0c9f5adfa16054"
+    }
+  },
+  "proofs": {
+    "main": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-20261028\\desktop-launcher-full-20261028-155831Z-f6c00a\\M6\\native-final-20261030-8\\receipt.json",
+      "sha256": "6580d4e9a17ed2cea780247acd13adb3b037acec4c5d8868cc4bf29459d47321",
+      "passed": true
+    },
+    "remaining": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-20261028\\desktop-launcher-full-20261028-155831Z-f6c00a\\M6\\remaining-final-20261030-11\\receipt.json",
+      "sha256": "9267ecf9efd53ca2050ce360b6df52e8eace32f2835d774870091fd64b6f3ebd",
+      "passed": true
+    },
+    "engines": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-20261028\\desktop-launcher-full-20261028-155831Z-f6c00a\\M6\\four-engine-final-20261030-5\\receipt.json",
+      "sha256": "ba288e392a706bc8fee4e4787b4bd594f4decb213df20c6e94b08cee24cd71ae",
+      "passed": true
+    },
+    "helper": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-20261028\\desktop-launcher-full-20261028-155831Z-f6c00a\\M6\\shell-final-20261030-14\\receipt.json",
+      "sha256": "cd12de5fe4fb26e9a630151342a6eafdf7f16bb1698056e11d775ccf064b2455",
+      "passed": true
+    },
+    "installer": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-20261028\\desktop-launcher-full-20261028-155831Z-f6c00a\\M6\\nsis-final-20261030-1\\receipt.json",
+      "sha256": "3776f2cffb2279f66494be21e0c534d87f0445b2081f01b1f99dac4b0292adee",
+      "passed": true
+    }
+  },
+  "acceptance": [
+    {
+      "id": "A1",
+      "status": "pass-with-boundary",
+      "covered": [
+        "new Chinese/space workspace",
+        "verified cache installation",
+        "native 900x600 three pages",
+        "real API/HTML/JS/CSS",
+        "non-admin current-user installer"
+      ],
+      "evidence": [
+        "main",
+        "installer"
+      ],
+      "boundary": "Clean Windows / missing WebView2 blocked/not-run; not a cold-network installation"
+    },
+    {
+      "id": "A2",
+      "status": "pass-with-boundary",
+      "covered": [
+        "running close releases owned processes/listener",
+        "old M1 cancel/force-close/recovery evidence retained"
+      ],
+      "evidence": [
+        "remaining",
+        "M1/operations/native-20261029-012036Z/ui-report.json",
+        "M1/operations/native-gui-recovery-20261029-0400Z/completion-summary.json"
+      ],
+      "boundary": "No repeated full final-EXE interruption matrix across all installation stages"
+    },
+    {
+      "id": "A3",
+      "status": "pass-with-boundary",
+      "covered": [
+        "core Range/identity/ZIP/budget/deadline regressions reused",
+        "old native proxy/budget refusal",
+        "old M6 TLS failures/cache continuation retained"
+      ],
+      "evidence": [
+        "M1/operations/verify-20261029-041831Z/tests.stdout.log",
+        "M1/operations/download-budget-20261029-0440Z/test-attempt3.log",
+        "M1/operations/native-download-budget-20261029/completion-summary.md"
+      ],
+      "boundary": "Actual disk exhaustion and full final-EXE network fault matrix not-run"
+    },
+    {
+      "id": "A4",
+      "status": "pass-with-boundary",
+      "covered": [
+        "same-EXE signed accept/tamper/replay/expiry/platform",
+        "rotation/revocation/offline history",
+        "ordinary-root test asset rejection"
+      ],
+      "evidence": [
+        "remaining"
+      ],
+      "boundary": "Fixed explicit sandbox only; production keys/channel unconfigured"
+    },
+    {
+      "id": "A5",
+      "status": "pass-with-boundary",
+      "covered": [
+        "real GUI toml precise repair",
+        "receipt semantic identity and registration restore",
+        "idempotent recovery preserves new receipt bytes",
+        "post-recovery actual healthy start/stop"
+      ],
+      "evidence": [
+        "remaining",
+        "remaining-final-20261030-9/data-and-recovery/report.json"
+      ],
+      "boundary": "Not every GUI source/Python fault injected again in final package"
+    },
+    {
+      "id": "A6",
+      "status": "pass-with-boundary",
+      "covered": [
+        "all four real lock/recipe inspection/plans",
+        "four small-fixture ready/damaged/precise repair/gen2",
+        "non-target byte preservation/shared dirty refusal"
+      ],
+      "evidence": [
+        "remaining",
+        "engines"
+      ],
+      "boundary": "uv simulated; real engine installation/repair, GPU/model/training/weights skip + CR-004; deep fixture CLI has MAX_PATH limitation"
+    },
+    {
+      "id": "A7",
+      "status": "pass-with-boundary",
+      "covered": [
+        "real profile/release/instance binding and last healthy combination rollback",
+        "rebuild/instance rollback/legacy transaction state-machine regressions reused"
+      ],
+      "evidence": [
+        "remaining",
+        "remaining-final-20261030-8/data-and-recovery/report.json",
+        "M1/construction-v06/rebuild/result.txt"
+      ],
+      "boundary": "Final full GUI environment rebuild and same-release environment-instance rollback not separately re-enacted"
+    },
+    {
+      "id": "A8",
+      "status": "pass-with-boundary",
+      "covered": [
+        "helper committed",
+        "real rendered trial rejection restored",
+        "occupied CURRENT recovery_required then formal recover restored",
+        "exact old EXE/controls and process drainage"
+      ],
+      "evidence": [
+        "helper"
+      ],
+      "boundary": "no_migration; no actual profile format migration or production signed upgrade"
+    },
+    {
+      "id": "A9",
+      "status": "pass-with-boundary",
+      "covered": [
+        "synthetic old-data preview/import",
+        "credential exclusions/external references",
+        "independent profile settings",
+        "binding/healthy rollback/source byte protection"
+      ],
+      "evidence": [
+        "remaining",
+        "remaining-final-20261030-8/data-and-recovery/report.json"
+      ],
+      "boundary": "Synthetic input only; unsupported TOML/YAML/Python recorded, not silently converted"
+    },
+    {
+      "id": "A10",
+      "status": "pass-with-boundary",
+      "covered": [
+        "same EXE/helper/package identity",
+        "native installed three pages",
+        "non-admin install/uninstall with profile preservation",
+        "owned exit and external sentinel preservation",
+        "Chinese instructions/notice/license inventory"
+      ],
+      "evidence": [
+        "main",
+        "remaining",
+        "helper",
+        "installer"
+      ],
+      "boundary": "Unsigned non-public developer candidate; dependency license inventory incomplete for production redistribution"
+    }
+  ],
+  "failed_attempts": "Original native1-7, remaining8-10, shell12-13 and engine fixture path/harness failures remain false in retained receipts; use final successful evidence by identity and scope",
+  "system_specialties": {
+    "clean_windows": "blocked/not-run",
+    "missing_webview2_first_install": "blocked/not-run",
+    "non_admin_current_user_install": "pass"
+  },
+  "skipped": "real four-engine install/import/damage repair/GPU/model/backward/training/weights: skip + CR-004",
+  "resource_source_index": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-20261028\\desktop-launcher-full-20261028-155831Z-f6c00a\\M6\\resource-source-index.json",
+  "disk_measurement": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-20261028\\desktop-launcher-full-20261028-155831Z-f6c00a\\M6\\disk-final.json",
+  "cleanup": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-20261028\\desktop-launcher-full-20261028-155831Z-f6c00a\\M6\\cleanup-final.json",
+  "billing_tokens_and_money": "unknown"
+}
