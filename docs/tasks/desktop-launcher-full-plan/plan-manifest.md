@@ -72,7 +72,7 @@
 | 独立文档审查 | 以06复盘引用报告为准 | 架构执行、需求Goal、资源沙盒三路审查 |
 | GATE-00–10、12–13 | 计划/授权记录pass | [编号清单](00_预检证据/gate-validation-checklist.md)；GATE12包含实际Goal记录，不代表产品通过 |
 | GATE-11、14 | pass-with-boundary（M0验证范围） | 外部M0/exit-M0-final-review-CR002.md已核无本阶段未关P0/P1；CR-001指定skip/P3分期，P1实际就绪由M5承接；C/S保存待执行，M1未解锁 |
-| EXIT-M0 | pending | 按调整后M0范围核对实际证据、独审、完成报告及C/S远端回执；批准CR-002和WIP不等于完成 |
+| EXIT-M0 | pass-with-boundary（状态S最终回执见总控） | 调整范围实证/独审/报告通过，完成C已远端确认；M0/baseline-final.json确认S后进入M1，失败不解锁 |
 | EXIT-M1–M6 | pending | 见唯一总控台账；未执行后续开发/训练/最终验收 |
 
 未来推进先更新总控，再同步本manifest的阶段指针/证据索引，不建立第二份阶段完成台账。M1–M4仍用独立新根真实测试，不能冒充干净OS；P1合法可用、可启动且缺WebView2的资源在M5相关系统动作/Phase6专项开始前必须齐备，未齐即停且M5不得完成。M6仍在M0–M5完整退出/push后使用最终同一包从零复验；CR-002不再延期该资源门，CR-001以外必测不降级。
@@ -82,3 +82,5 @@
 阶段名、ID和顺序固定M0–M6。规格/预算/验收变化按CR记录同步全部受影响文档，保留首次失败与历史已验证状态。每阶段遵守代码C/状态S两次基线保存与外部最终回执，普通push不改写历史。实际Goal已启动；不能把提示词文件或WIP保存视为阶段通过。
 
 唯一下一步：按总控完成CR-002同步后的其余M0门、独立复审、完成报告与C/S保存，再评估EXIT-M0→M1；保留P1历史blocked和M5承接条件，不再索取已豁免GPU机器。
+
+当前阶段指针：M0退出证据见外部M0/stage-completion.md、exit-M0-final-review-CR002.md及baseline-code.json/baseline-final.json；状态S确认后下一施工为M1 P6。旧pending段落仅表示其写入时快照，实时状态只以总控及回执为准。

@@ -32,7 +32,7 @@ Plan `desktop-launcher-full-20261028` / v0.3；2026-10-29执行回填；Executio
 
 | Gate ID | 阶段 | 当前状态 | 必需证据/禁止越门 |
 | --- | --- | --- | --- |
-| EXIT-M0 | 审核冻结与开发基线 | pending | 审核/备份/构建/WIP已保存；P1按CR-002承接M5，其余M0最终复审/完成报告/C与S远端回执齐后才解锁M1 |
+| EXIT-M0 | 审核冻结与开发基线 | pass-with-boundary（S最终回执见总控） | 调整范围实证/报告/独审通过，完成C已远端确认；S回执M0/baseline-final.json确认后解锁M1，失败仍不解锁；P1按CR-002承接M5 |
 | EXIT-M1 | 可靠安装与精准修复 | pending | 实际取消/网络/Range/中断恢复/GUI精准修复/无P0P1/完成清理/C与S回执 |
 | EXIT-M2 | 首批引擎真实闭环 | pending | RuntimeLayout/worker只读与坏GUI独立/两引擎GPU短训练和修复/完成清理/C与S回执 |
 | EXIT-M3 | 四引擎与可信更新 | pending | 另两引擎GPU真实闭环/四引擎身份/签名历史与离线矩阵/完成清理/C与S回执 |

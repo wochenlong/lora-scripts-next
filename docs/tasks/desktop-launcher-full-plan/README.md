@@ -1,6 +1,6 @@
 # 桌面启动器完整交付施工计划
 
-> 当前修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](00_预检证据/change-control-governance.md)，并明确“批准调整，继续开发（推荐）”。仅将P1干净Windows实际就绪由M0退出前移至M5相关系统动作/Phase6专项开始前；历史blocked保留，调度另记deferred by CR-002。M1–M4独立新根真实实测、M5资源硬门、M6同一最终包从零、CR-001边界和原预算不变。M0仍待正式退出，M1未开；历史0.1/0.2记录不覆盖本修订。
+> 当前修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](00_预检证据/change-control-governance.md)，并明确“批准调整，继续开发（推荐）”。仅将P1干净Windows实际就绪由M0退出前移至M5相关系统动作/Phase6专项开始前；历史blocked保留，调度另记deferred by CR-002。M1–M4独立新根真实实测、M5资源硬门、M6同一最终包从零、CR-001边界和原预算不变。M0验证及C已确认、S最终状态见总控/外部回执，确认后进入M1；历史0.1/0.2记录不覆盖本修订。
 
 本计划把 [#516](https://github.com/wochenlong/lora-scripts-next/issues/516) 和[后续设计书](../../design/desktop-launcher-next-design.md)转成 M0–M6 的长程任务。用户在审计稿交付后于2026-10-28明确指令“建立goal目标，开始执行任务书的任务”，现已建立实际Goal并进入M0；预算和非发布边界继续生效。下文阶段文档保留0.1起草时的假设和not-run快照，实时授权/阶段状态以总控为准。
 
@@ -14,4 +14,4 @@
 
 所有阶段通过验收后，必须提交并普通 push 到 `origin/feat/desktop-launcher`，远端完整提交核对成功才算保存基线。用户批准计划并启动执行后，这些阶段推送属于已有授权，无需逐阶段重复申请。合并、正式发布和给他人发送消息另属范围。
 
-M0已真实重跑底座构建/检查并保留资源与安全探针结案及WIP；P1许可资源历史blocked，按CR-002由M5承接，不改pass/skip。CR-001指定GPU豁免及P3分期继续有效；其余M0门、独立复审、完成报告、资源账本和C/S远端回执仍须闭合，当前M1未解锁。详见[探针报告](05_最小可行性验证/feasibility-probe-report.md)。`python scripts/validate_plan.py`只复核静态结构，不能替代真实验收。
+M0已真实重跑底座构建/检查并保留资源与安全探针结案及WIP；P1许可资源历史blocked，按CR-002由M5承接，不改pass/skip。CR-001指定GPU豁免及P3分期继续有效；其余M0验证/独立复审/报告已通过，完成C已远端确认；S回执确认后进入M1，当前施工状态以总控为准。详见[探针报告](05_最小可行性验证/feasibility-probe-report.md)。`python scripts/validate_plan.py`只复核静态结构，不能替代真实验收。
