@@ -33,6 +33,8 @@ def main() -> int:
         "README.md",
         "plan-manifest.md",
         "00_总控目标索引.md",
+        "m1-candidate-report.md",
+        "remaining-work-cost-review.md",
         "06_开工前最终复盘报告.md",
         "07_用户审计单.md",
         "01_目标计划书/00_目标计划书索引.md",

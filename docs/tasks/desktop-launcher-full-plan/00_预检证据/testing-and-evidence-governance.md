@@ -1,5 +1,7 @@
 # 测试与证据治理
 
+> **v0.4 / CR-003 当前口径：** 本轮仅对M1-CANDIDATE C1–C5签候选结果；原完整矩阵未测项保留not-run/blocked/pending，另记`deferred by CR-003, review after M1-CANDIDATE`，不等于skip/pass。复用有效原证据，仅新改动/失败/未决风险触发补测；一份候选报告和一份剩余成本表足够。候选不代替EXIT-M1、训练、干净OS或M6，同包身份及资料/进程保护不降低。
+
 > 当前修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](change-control-governance.md)。P1实际结果仍blocked，调度另记deferred by CR-002，由M5相关系统动作/Phase6专项开始前闭合；M1–M4新根真实测试、M5资源硬门、M6同一最终包从零和原预算均保留。M0仍待正式退出，M1未开。
 
 - Plan ID：`desktop-launcher-full-20261028`；版本：`0.3`；日期：2026-10-29。

@@ -1,16 +1,18 @@
 # 施工计划产物与门禁清单
 
-> 当前修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](00_预检证据/change-control-governance.md)。P1实际结果仍blocked，调度另记deferred by CR-002，由M5在相关系统动作/Phase6专项开始前闭合。M1–M4独立新根真实实测、M5资源硬门、M6同一最终包从零及原预算不变；M0仍待正式退出，M1未开，不能把本次批准当作阶段done。
+> **当前执行修订 v0.4 / CR-003：先交付 M1-CANDIDATE，再审核剩余优先级与成本。** 本清单保留完整产物，本轮只执行M1任务书K1–K4；候选不等于EXIT-M1，暂缓项和M2–M6等待用户审核。
+
+> 历史修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](00_预检证据/change-control-governance.md)。P1实际结果仍blocked，调度另记deferred by CR-002，由M5在相关系统动作/Phase6专项开始前闭合。M1–M4独立新根真实实测、M5资源硬门、M6同一最终包从零及原预算不变。该修订时M0尚未退出；当前M0已完成、M1进行中，以总控为准，不重开历史门。
 
 ## 计划元数据
 
-- Plan ID：`desktop-launcher-full-20261028`；Version：`0.3`；Last updated：2026-10-29（Asia/Shanghai，CR-002用户批准后的合同同步）。
+- Plan ID：`desktop-launcher-full-20261028`；Version：`0.4`；Last updated：2026-10-29（Asia/Shanghai，CR-003候选交付与成本审核）。
 - Scale mode：Full。原因：跨Rust/Python/UI的长期新功能、真实GPU、资料迁移、可信更新和Windows分发；保留全部施工体系产物，无合并删除硬门。
-- Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0执行已开始，当前按CR-001/002待正式退出；P1历史blocked由M5承接。
+- Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0已完成；当前按CR-003收敛M1，P1历史blocked由M5承接。
 - Canonical progress file：[00_总控目标索引](00_总控目标索引.md)。Related handoff：none。
 - Current branch：`feat/desktop-launcher`；起始HEAD：`9ca2de963122f34599e34e5ff382199de9188811`；WIP `f8ed00b8c3424777bec5600ef6482838b9e1b2e6`已普通push且远端核对成功，不代表M0完成。
-- Current active phase：M0；Execution readiness：`executing`（按CR-001/002复审其余M0门与阶段保存）；用户继续执行授权有效，工具状态见总控，M0尚未done，其余阶段pending。
-- Spec：[后续设计书0.3](../../design/desktop-launcher-next-design.md)，按D1–D6推荐方案、CR-001/002及原0.1预算执行，授权原文见总控/用户审计单。历史[底座计划](../desktop-launcher-foundation-plan/00_总控目标索引.md)作为完成证据保留，不由本计划重开。
+- Current active phase：M1 / M1-CANDIDATE；Execution readiness：`executing`（按CR-003执行K1–K4，候选交付后审核）；M0已完成，M1进行中，M2–M6 pending，工具状态见总控。
+- Spec：[后续设计书0.3](../../design/desktop-launcher-next-design.md)，按D1–D6推荐方案、CR-001/002、CR-003当前范围及原0.1预算执行，授权原文见总控/变更治理。历史[底座计划](../desktop-launcher-foundation-plan/00_总控目标索引.md)作为完成证据保留，不由本计划重开。
 - Source materials：[预检复盘](00_预检证据/preflight-source-review.md)、issue #516保存快照、用户本轮硬要求、当前Git/硬件只读核对。
 - Evidence roots：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/planning/`；执行run为`desktop-launcher-full-20261028-155831Z-f6c00a`，证据在`<run-id>/M0/`，CR-002授权在`<run-id>/changes/CR-002/authorization.json`。F同run标记根保留M0夹具/新Python/Torch partial及历次VM/失败，具体实测和保留状态见总控，不用历史资产抵扣后续新根验收。
 
@@ -23,6 +25,8 @@
 | [README.md](README.md) | 用户阅读入口 |
 | [plan-manifest.md](plan-manifest.md) | 本清单 |
 | [00_总控目标索引.md](00_总控目标索引.md) | 唯一执行进度 |
+| [m1-candidate-report.md](m1-candidate-report.md) | CR-003 唯一候选包、操作与同包实测报告 |
+| [remaining-work-cost-review.md](remaining-work-cost-review.md) | CR-003 后续优先级、依赖与成本审核表 |
 | [06_开工前最终复盘报告.md](06_开工前最终复盘报告.md) | 开工判定 |
 | [07_用户审计单.md](07_用户审计单.md) | 当前用户审核入口 |
 | [01_目标计划书/00_目标计划书索引.md](01_目标计划书/00_目标计划书索引.md) | 七阶段入口 |
@@ -81,6 +85,6 @@
 
 阶段名、ID和顺序固定M0–M6。规格/预算/验收变化按CR记录同步全部受影响文档，保留首次失败与历史已验证状态。每阶段遵守代码C/状态S两次基线保存与外部最终回执，普通push不改写历史。实际Goal已启动；不能把提示词文件或WIP保存视为阶段通过。
 
-唯一下一步：按总控完成CR-002同步后的其余M0门、独立复审、完成报告与C/S保存，再评估EXIT-M0→M1；保留P1历史blocked和M5承接条件，不再索取已豁免GPU机器。
+唯一下一步：按CR-003及M1任务书K1–K4，集中关闭环境差异、交付同包候选与成本表后暂停审核；不重开M0，不自动进入M2。
 
-当前阶段指针：M0退出证据见外部M0/stage-completion.md、exit-M0-final-review-CR002.md及baseline-code.json/baseline-final.json；状态S确认后下一施工为M1 P6。旧pending段落仅表示其写入时快照，实时状态只以总控及回执为准。
+当前阶段指针：M0完成证据保留；M1已实施，当前推进M1-CANDIDATE。旧pending段落仅表示其写入时快照，实时状态只以总控及回执为准。

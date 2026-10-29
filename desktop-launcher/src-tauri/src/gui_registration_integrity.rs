@@ -16,6 +16,8 @@ use std::{
 
 const INDEX: &[u8] = include_bytes!("../../catalog/gui-cp310-installed-files-v2.json");
 const INDEX_SHA: &str = "6ef8a9b844b1dd7e9294be5ae30b70420e703127fc0d999a7eb8096c114ffd90";
+const MANAGED_VENV: &[u8] = include_bytes!("../../catalog/gui-cp310-managed-venv-v1.json");
+const MANAGED_VENV_SHA: &str = "066edf2fc67450fcb57dfaecf7ca34b379ef610d33a26ad50f20997eb7b7967a";
 const RECIPE_SHA: &str = "8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090";
 const MAX_FILE: u64 = 512 * 1024 * 1024;
 const MAX_TREE: u64 = 2 * 1024 * 1024 * 1024;
@@ -73,6 +75,101 @@ struct Entry {
     path: String,
     kind: u8,
     script_template: String,
+}
+#[derive(Deserialize)]
+struct ManagedVenv {
+    schema_version: u32,
+    recipe_sha256: String,
+    uv_exe_sha256: String,
+    python_archive_sha256: String,
+    template_sha256: String,
+    template_hex: String,
+    trampoline_kind: u8,
+    mode: String,
+    home_directory: String,
+}
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum VenvMode {
+    LegacyPatch,
+    ManagedMinorAlias,
+}
+fn pyvenv_config(home: &Path) -> Vec<u8> {
+    format!("home = {}\nimplementation = CPython\nuv = 0.11.16\nversion_info = 3.10.19\ninclude-system-site-packages = false\n",home.display()).into_bytes()
+}
+fn select_venv_mode(root: &Path, bytes: &[u8]) -> Result<VenvMode> {
+    let managed = root.join("python/3.10.19");
+    if bytes == pyvenv_config(&managed.join("cpython-3.10-windows-x86_64-none")) {
+        Ok(VenvMode::ManagedMinorAlias)
+    } else if bytes == pyvenv_config(&managed.join("cpython-3.10.19-windows-x86_64-none")) {
+        Ok(VenvMode::LegacyPatch)
+    } else {
+        bail!("pyvenv.cfg不是固定uv已验证的完整五键合同");
+    }
+}
+fn managed_template(recipe: &GuiRecipe) -> Result<Vec<u8>> {
+    if hash(MANAGED_VENV) != MANAGED_VENV_SHA {
+        bail!("受管Python启动器模板信任根身份不符");
+    }
+    let fixed: ManagedVenv = serde_json::from_slice(MANAGED_VENV)?;
+    let template = decode_hex(&fixed.template_hex)?;
+    if fixed.schema_version != 1
+        || fixed.recipe_sha256 != RECIPE_SHA
+        || fixed.uv_exe_sha256 != recipe.tool_uv.exe_sha256
+        || fixed.python_archive_sha256 != recipe.python.archive.sha256
+        || fixed.trampoline_kind != 2
+        || fixed.mode != "managed_minor_alias"
+        || fixed.home_directory != "cpython-3.10-windows-x86_64-none"
+        || template.len() != 45568
+        || hash(&template) != fixed.template_sha256
+    {
+        bail!("受管Python启动器模板与固定uv/Python/生成模式不符");
+    }
+    Ok(template)
+}
+/// 固定uv三资源解释器PE：整文件重建，仅同根已验证minor alias路径变化。
+fn managed_interpreter_executable(template: &[u8], base_python: &str) -> Result<Vec<u8>> {
+    if template.len() != 45568 {
+        bail!("受管解释器PE模板长度不符");
+    }
+    let start = 43008usize;
+    let old_raw = get32(template, 640)?;
+    let mut output = template[..start].to_vec();
+    let mut resource = template[start..start + 276].to_vec();
+    let manifest_start = get32(template, start + 192)?
+        .checked_sub(61440)
+        .context("受管解释器manifest RVA无效")?;
+    let manifest_size = get32(template, start + 196)?;
+    let manifest = template
+        .get(start + manifest_start..start + manifest_start + manifest_size)
+        .context("受管解释器manifest越界")?;
+    let kind = [2u8];
+    for (entry, payload) in
+        [160, 176, 192]
+            .into_iter()
+            .zip([base_python.as_bytes(), kind.as_slice(), manifest])
+    {
+        let count = (4 - resource.len() % 4) % 4;
+        padding(&mut resource, count);
+        let offset = resource.len();
+        put32(&mut resource, entry, 61440 + offset)?;
+        put32(&mut resource, entry + 4, payload.len())?;
+        resource.extend(payload);
+    }
+    let count = (4 - resource.len() % 4) % 4;
+    padding(&mut resource, count);
+    if resource.len() > 4096 {
+        bail!("受管解释器资源超出固定PE区间");
+    }
+    let new_raw = resource.len().div_ceil(512) * 512;
+    put32(&mut output, 152, get32(template, 152)? + new_raw - old_raw)?;
+    put32(&mut output, 276, resource.len())?;
+    put32(&mut output, 632, resource.len())?;
+    put32(&mut output, 640, new_raw)?;
+    put32(&mut output, 684, start + new_raw)?;
+    output.extend(&resource);
+    padding(&mut output, new_raw - resource.len());
+    output.extend(&template[start + old_raw..]);
+    Ok(output)
 }
 enum Expected {
     Digest(u64, String),
@@ -391,14 +488,61 @@ pub(crate) fn verify(
     let mut expected = BTreeMap::new();
     let mut optional = BTreeSet::new();
     let mut package_sets = Vec::new();
+    // 先核完整固定patch与受控minor junction，不能从pyvenv自述授信外来base路径。
+    crate::python_integrity::verify(layout)?;
+    let pyvenv_bytes = read(layout, &environment.join("pyvenv.cfg"), 4096, cancel)?;
+    let mode = select_venv_mode(&layout.root, &pyvenv_bytes)?;
+    let managed = layout.root.join("python/3.10.19");
+    let home = match mode {
+        VenvMode::LegacyPatch => managed.join("cpython-3.10.19-windows-x86_64-none"),
+        VenvMode::ManagedMinorAlias => {
+            let alias = managed.join("cpython-3.10-windows-x86_64-none");
+            // python_integrity已逐项检查同根junction；absence不能靠精确字符串补信任。
+            if fs::symlink_metadata(&alias).is_err() || !alias.is_dir() {
+                bail!("受管minor alias缺失，拒绝动态启动器路径");
+            }
+            alias
+        }
+    };
+    let interpreter = if mode == VenvMode::ManagedMinorAlias {
+        let base = home.join("python.exe");
+        let base = base.to_str().context("受管base路径非UTF8")?;
+        Some(managed_interpreter_executable(
+            &managed_template(&recipe)?,
+            base,
+        )?)
+    } else {
+        None
+    };
     for control in &index.controls {
-        let rule=match control.kind.as_str() {
-            "fixed"=>Expected::Digest(control.bytes,control.sha256.clone()),
-            "template"=>Expected::Exact(control.template.as_ref().context("控制模板缺失")?
-                .replace("{{ENVIRONMENT}}",env).replace("{{ENVIRONMENT_SLASH}}",&env.replace('\\',"/"))
-                .replace("{{ENVIRONMENT_NAME}}",environment.file_name().and_then(|s|s.to_str()).context("环境名缺失")?).into_bytes()),
-            "pyvenv_config"=>Expected::Exact(format!("home = {}\nimplementation = CPython\nuv = 0.11.16\nversion_info = 3.10.19\ninclude-system-site-packages = false\n",layout.root.join("python/3.10.19/cpython-3.10.19-windows-x86_64-none").display()).into_bytes()),
-            _=>bail!("未知uv控制规则"),
+        let rule = if matches!(
+            control.path.as_str(),
+            "Scripts/python.exe" | "Scripts/pythonw.exe"
+        ) && mode == VenvMode::ManagedMinorAlias
+        {
+            Expected::Exact(interpreter.as_ref().context("受管Python模板缺失")?.clone())
+        } else {
+            match control.kind.as_str() {
+                "fixed" => Expected::Digest(control.bytes, control.sha256.clone()),
+                "template" => Expected::Exact(
+                    control
+                        .template
+                        .as_ref()
+                        .context("控制模板缺失")?
+                        .replace("{{ENVIRONMENT}}", env)
+                        .replace("{{ENVIRONMENT_SLASH}}", &env.replace('\\', "/"))
+                        .replace(
+                            "{{ENVIRONMENT_NAME}}",
+                            environment
+                                .file_name()
+                                .and_then(|s| s.to_str())
+                                .context("环境名缺失")?,
+                        )
+                        .into_bytes(),
+                ),
+                "pyvenv_config" => Expected::Exact(pyvenv_config(&home)),
+                _ => bail!("未知uv控制规则"),
+            }
         };
         add(&mut expected, &control.path, rule)?;
     }
@@ -562,6 +706,88 @@ mod tests {
     use super::*;
     fn index() -> Index {
         serde_json::from_slice(INDEX).unwrap()
+    }
+    #[test]
+    fn managed_alias_template_reconstructs_fixed_uv_source_byte_for_byte() {
+        let template = managed_template(&GuiRecipe::embedded().unwrap()).unwrap();
+        let base =
+            r"E:\NTRegCtrl\K1 控制\python\3.10.19\cpython-3.10-windows-x86_64-none\python.exe";
+        assert_eq!(
+            managed_interpreter_executable(&template, base).unwrap(),
+            template
+        );
+        assert_eq!(hash(MANAGED_VENV), MANAGED_VENV_SHA);
+        assert_eq!(
+            hash(&template),
+            "9f17b668858f146f5333efef86e8fcc7a93507f69c7234c71a33342f93a26813"
+        );
+    }
+    #[test]
+    fn managed_alias_mode_cannot_authorize_foreign_home_extra_keys_or_patch_shim() {
+        let root = Path::new(r"E:\Next Trainer");
+        let managed = root.join("python/3.10.19");
+        assert_eq!(
+            select_venv_mode(
+                root,
+                &pyvenv_config(&managed.join("cpython-3.10-windows-x86_64-none"))
+            )
+            .unwrap(),
+            VenvMode::ManagedMinorAlias
+        );
+        assert_eq!(
+            select_venv_mode(
+                root,
+                &pyvenv_config(&managed.join("cpython-3.10.19-windows-x86_64-none"))
+            )
+            .unwrap(),
+            VenvMode::LegacyPatch
+        );
+        assert!(
+            select_venv_mode(root, &pyvenv_config(&PathBuf::from(r"D:\foreign\python"))).is_err()
+        );
+        let mut extra = pyvenv_config(&managed.join("cpython-3.10-windows-x86_64-none"));
+        extra.extend(b"extra = yes\n");
+        assert!(select_venv_mode(root, &extra).is_err());
+        let template = managed_template(&GuiRecipe::embedded().unwrap()).unwrap();
+        let alias = managed_interpreter_executable(
+            &template,
+            managed
+                .join("cpython-3.10-windows-x86_64-none/python.exe")
+                .to_str()
+                .unwrap(),
+        )
+        .unwrap();
+        // patch-home模式继续绑定v2原复制EXE，不能因路径合法就接受未复现patch shim组合。
+        let old = index()
+            .controls
+            .into_iter()
+            .find(|c| c.path == "Scripts/python.exe")
+            .unwrap();
+        assert_ne!(hash(&alias), old.sha256);
+        assert_ne!(alias.len() as u64, old.bytes);
+    }
+    #[test]
+    fn managed_interpreter_reconstruction_binds_path_code_kind_and_all_trailing_bytes() {
+        let template = managed_template(&GuiRecipe::embedded().unwrap()).unwrap();
+        let base =
+            r"E:\NTRegCtrl\K1 控制\python\3.10.19\cpython-3.10-windows-x86_64-none\python.exe";
+        let expected = managed_interpreter_executable(&template, base).unwrap();
+        assert_ne!(
+            expected,
+            managed_interpreter_executable(&template, &base.replace("K1 控制", "其它目录"))
+                .unwrap()
+        );
+        let mut code = expected.clone();
+        code[1024] ^= 1;
+        assert_ne!(expected, code);
+        let mut kind = expected.clone();
+        let kind_offset = 43008 + get32(&kind, 43008 + 176).unwrap() - 61440;
+        kind[kind_offset] = 1;
+        assert_ne!(expected, kind);
+        let mut tail = expected.clone();
+        tail.extend(b"unknown");
+        assert_ne!(expected, tail);
+        assert!(managed_interpreter_executable(&template, &"x".repeat(5000)).is_err());
     }
     #[test]
     fn uv_runtime_lock_accepts_only_exact_empty_root_file_and_preserves_other_bytes() {

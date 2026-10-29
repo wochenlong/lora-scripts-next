@@ -6,6 +6,8 @@
 
 当前功能分支正在执行[完整交付任务书](../docs/tasks/desktop-launcher-full-plan/00_总控目标索引.md)的 M1，尚未完成本阶段验收。固定 GUI 候选已接入 81 个 wheel 的 hash 锁、基础 Python 完整文件清单、独立实例与单包修复预览、源码分项修复和持久恢复意图。新环境采用 `e/<短实例ID>`，旧记录继续读取原路径，详见[路径兼容补充](../docs/design/desktop-launcher-m1-instance-storage.md)。这些能力仍在真实安装与故障验证中，下文旧底座能力边界以完整任务书实时进度为准。
 
+本轮按 v0.4 / CR-003 收敛为 GUI 候选包；实际包身份、固定候选源码、中文操作步骤及同包安装/启动/修复/登记恢复结果见[候选报告](../docs/tasks/desktop-launcher-full-plan/m1-candidate-report.md)。该报告中的验收状态优先于下文历史底座说明，候选不代表完整 #516、干净系统或训练引擎验收通过。
+
 ## 安装与使用
 
 运行构建后的 `next-trainer-launcher.exe`。运行时不需要系统 Python、uv、Node 或 Rust；Windows 需要 WebView2。当前没有附带 WebView2 安装器，首次安装到缺少 WebView2 的电脑仍需单独处理。
