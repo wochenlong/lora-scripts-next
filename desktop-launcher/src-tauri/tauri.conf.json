@@ -13,5 +13,23 @@
     "windows": [{ "title": "Next Trainer · 桌面启动器", "width": 900, "height": 600, "minWidth": 760, "minHeight": 520 }],
     "security": { "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data:" }
   },
-  "bundle": { "active": false }
+  "bundle": {
+    "active": true,
+    "targets": ["nsis"],
+    "publisher": "Next Trainer contributors",
+    "shortDescription": "Next Trainer 桌面启动器开发候选",
+    "license": "AGPL-3.0-or-later",
+    "licenseFile": "../../LICENSE",
+    "icon": ["icons/icon.ico"],
+    "windows": {
+      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "allowDowngrades": false,
+      "nsis": {
+        "installMode": "currentUser",
+        "languages": ["SimpChinese", "English"],
+        "displayLanguageSelector": false,
+        "compression": "lzma"
+      }
+    }
+  }
 }

@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "source_commit": "196ff12c16083d59c8be6711476c6fdb70c7112a",
-  "source_archive_sha256": "37c69b284528b21e256ba9c1a4ca90ad4a4ffe8d0122e9ba7416e45f3f3899e9",
-  "source_archive_bytes": 49234359,
-  "frontend_sha256": "3c97a03bc4554248936ee4cbba6bb3f12bc413aecbbac9633400986da6801da1",
-  "frontend_bytes": 2440912,
-  "expected_file_count": 1741,
-  "expected_file_bytes": 86405908,
+  "source_commit": "0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e",
+  "source_archive_sha256": "c845f5dacbe4ba3e6c26fe3b755d7c14479a05c8545505d7b07d75b8a49ac9ed",
+  "source_archive_bytes": 57257800,
+  "frontend_sha256": "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f",
+  "frontend_bytes": 2446848,
+  "expected_file_count": 1833,
+  "expected_file_bytes": 100452856,
   "files": [
     {
       "path": ".cursor/rules/00-project-overview.mdc",
@@ -30,8 +30,8 @@
     },
     {
       "path": ".gitattributes",
-      "bytes": 955,
-      "sha256": "a0e1281073a2d9e493e982cde84f4ca13abe67d9ca95be6b04d1bf86e564b858"
+      "bytes": 1116,
+      "sha256": "08a350a02b6971aa21b59e79646334dfaa9e7f469aa8510c68c6a697132347b0"
     },
     {
       "path": ".github/workflows/kohya-dependency-resolution.yml",
@@ -520,18 +520,98 @@
     },
     {
       "path": "desktop-launcher/README.md",
-      "bytes": 13116,
-      "sha256": "c3d262672e2461498c0d24cb099ad29725e804223cb094a9facd6379d3c17b8c"
+      "bytes": 16429,
+      "sha256": "2e746e7ee7a5ec2533b1519bd532037d1028291f24ba79e98364c6a0dd1b596c"
     },
     {
       "path": "desktop-launcher/catalog/README.md",
-      "bytes": 1354,
-      "sha256": "742c91e6ff8fa7d10811a63580e838100c8716cfb2b5fdd9cf8a048ed5516ccb"
+      "bytes": 6343,
+      "sha256": "1e0d75663a1ca71f072ad5aace2f1e33a4775a86b19c19927d371e96ed3ecc07"
+    },
+    {
+      "path": "desktop-launcher/catalog/engine-wheels/dadaptation-3.1-py3-none-any.whl",
+      "bytes": 22801,
+      "sha256": "15af969e446d3ea96089a23798dbeebda6515b930fe297841add3f88b485d513"
+    },
+    {
+      "path": "desktop-launcher/catalog/engine-wheels/diffusers-0.39.0.dev0-py3-none-any.whl",
+      "bytes": 5481435,
+      "sha256": "523eb86c6f9691eea3283ee39628240d742f0e5221aab91224362c901a3927b2"
+    },
+    {
+      "path": "desktop-launcher/catalog/engine-wheels/iopath-0.1.10-py3-none-any.whl",
+      "bytes": 31554,
+      "sha256": "dcf576d3f150ee607e9ea14f8cff75749fc482326bc7403b66078790afb6a672"
+    },
+    {
+      "path": "desktop-launcher/catalog/engine-wheels/lycoris_lora-1.8.3-py3-none-any.whl",
+      "bytes": 77274,
+      "sha256": "d02eea1a1b711bf9ff1dc5ce3e853064fecee4779da1ecab542a11bf03c87c7d"
+    },
+    {
+      "path": "desktop-launcher/catalog/engine-wheels/schedulefree-1.4-py3-none-any.whl",
+      "bytes": 39068,
+      "sha256": "05ab945112445e758bffd56acb3031ae609ab47c99a26eb3ec64821aca2824f4"
+    },
+    {
+      "path": "desktop-launcher/catalog/engines/ai-toolkit.json",
+      "bytes": 896827,
+      "sha256": "24cdcec61f64b3273e820ba15851a7692028ca22bab0ea509a1fd935b10687c3"
+    },
+    {
+      "path": "desktop-launcher/catalog/engines/anima-fast.json",
+      "bytes": 771946,
+      "sha256": "1cba234567325d03eb1e775efdfe477682baed623c37e8966d34521fb363cb8a"
+    },
+    {
+      "path": "desktop-launcher/catalog/engines/diffsynth.json",
+      "bytes": 867378,
+      "sha256": "b79de863c6d4199896ae4675cbb39f4be263dd127a4b483b79e2af44dd837ff5"
+    },
+    {
+      "path": "desktop-launcher/catalog/engines/kohya.json",
+      "bytes": 870085,
+      "sha256": "d5ffbdaa2a67bb72752b51e9c0b9d559b6a26fa1947873f6ba7458ff957b4123"
+    },
+    {
+      "path": "desktop-launcher/catalog/gui-candidate-source-v1.json",
+      "bytes": 304836,
+      "sha256": "798f67d9b70eb7431fc9af253cb208e3fd03e84457252fd56ae23a9538526e87"
+    },
+    {
+      "path": "desktop-launcher/catalog/gui-cp310-installed-files-v2.json",
+      "bytes": 2218268,
+      "sha256": "6ef8a9b844b1dd7e9294be5ae30b70420e703127fc0d999a7eb8096c114ffd90"
+    },
+    {
+      "path": "desktop-launcher/catalog/gui-cp310-managed-venv-v1.json",
+      "bytes": 92079,
+      "sha256": "066edf2fc67450fcb57dfaecf7ca34b379ef610d33a26ad50f20997eb7b7967a"
+    },
+    {
+      "path": "desktop-launcher/catalog/gui-cp310-python-v1.json",
+      "bytes": 749082,
+      "sha256": "9172037fe65f76c9fe9373bf3240887889d480a569bfd785d6832e086ab96e06"
+    },
+    {
+      "path": "desktop-launcher/catalog/gui-cp310-win-x64-v1.json",
+      "bytes": 115656,
+      "sha256": "8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090"
+    },
+    {
+      "path": "desktop-launcher/catalog/gui-cp310-win-x64-v1.lock",
+      "bytes": 8198,
+      "sha256": "4669b5c8e6b37c9979f233c6974ed266f4de86d6468b04a422fd6f1e83bc2d61"
     },
     {
       "path": "desktop-launcher/catalog/releases.json",
-      "bytes": 2398,
-      "sha256": "200f98eae971e451e9e252f9c922684cbf8db92bb627b9b1c5c12572681bfd52"
+      "bytes": 3513,
+      "sha256": "87d6901dd755d4fdd7b87d318f9d48b4cd1a60fc3f45cd516319036255a1586f"
+    },
+    {
+      "path": "desktop-launcher/catalog/signed-fixtures-v1.json",
+      "bytes": 8040,
+      "sha256": "775d862a1ea21dd99be6318251c876e876cb755bedec644fc55a494671505c96"
     },
     {
       "path": "desktop-launcher/index.html",
@@ -549,19 +629,69 @@
       "sha256": "c7367cc008df52dda5a97e776d4d976fc8cb015d7e909524eb61e473ec38d974"
     },
     {
+      "path": "desktop-launcher/scripts/prepare_trainer_candidate.py",
+      "bytes": 13708,
+      "sha256": "3277fd877885a6a784eb7ebd3fac19cb711a9951d42d86200bafa7a3662fdb80"
+    },
+    {
+      "path": "desktop-launcher/scripts/registration-index/INDEX-PROVENANCE.md",
+      "bytes": 5038,
+      "sha256": "2c6eaac868bd595a88acab9c545256e4d24497b7311e4d0ea2326b5435a33786"
+    },
+    {
+      "path": "desktop-launcher/scripts/registration-index/extract_entrypoint_controls.py",
+      "bytes": 5554,
+      "sha256": "913c0cb0ba7d0e43385a6a8fba9090a40e7ded80ba0acf64dcc8f8b9ee2044da"
+    },
+    {
+      "path": "desktop-launcher/scripts/registration-index/generate_entrypoint_fixture.py",
+      "bytes": 4168,
+      "sha256": "9790ed8769641e32fc9942fc891e0760ec7686dd3f108ff9d27cfe084073c023"
+    },
+    {
+      "path": "desktop-launcher/scripts/registration-index/generate_trusted_index.py",
+      "bytes": 10466,
+      "sha256": "185fff7e916add64978c98bdf4621ba951edcf2801830e97336ff7c39bd22925"
+    },
+    {
+      "path": "desktop-launcher/shell-updater/.gitignore",
+      "bytes": 9,
+      "sha256": "306fd52e74fca6746e12acc750f232de15e71da917756a1270d74c91f5eb7368"
+    },
+    {
+      "path": "desktop-launcher/shell-updater/Cargo.lock",
+      "bytes": 10139,
+      "sha256": "bf2e45d33459c6de757c35033082be55a764d1fe4444985fdc11b2e96ef0a497"
+    },
+    {
+      "path": "desktop-launcher/shell-updater/Cargo.toml",
+      "bytes": 568,
+      "sha256": "028f77e0c7b669bff2dc6644f57372d875f844f0236518fa97be403e5dc4797d"
+    },
+    {
+      "path": "desktop-launcher/shell-updater/README.md",
+      "bytes": 2689,
+      "sha256": "849328349e2b3204423ecc55f1a6607a0cbcf0fda96c58f2a3aad414575b9144"
+    },
+    {
+      "path": "desktop-launcher/shell-updater/src/main.rs",
+      "bytes": 967,
+      "sha256": "66a38aa5f47419d40ac871d02b9cedc5e44c76c93a409fdec254379d242e8d16"
+    },
+    {
       "path": "desktop-launcher/src-tauri/Cargo.lock",
-      "bytes": 116507,
-      "sha256": "6d3a2d7f2f85fd1d3699bbe07f6c8a24ef8688c33b8e6c7a0897fc7505bf4443"
+      "bytes": 116537,
+      "sha256": "5ced489f558df0ec0625d8bad2d2d090e40a6d13ad5a36a1bb2c35636b0c75c4"
     },
     {
       "path": "desktop-launcher/src-tauri/Cargo.toml",
-      "bytes": 934,
-      "sha256": "2f1e4bc9fb5b78271db23c515910996b0cc50c38a012fa02d77fdf0ca7c3164a"
+      "bytes": 1021,
+      "sha256": "c4562366918545ce56f79e35393d9cdbbb81f86d74caed12aeb392d9f322fe31"
     },
     {
       "path": "desktop-launcher/src-tauri/build.rs",
-      "bytes": 39,
-      "sha256": "487059eaf8a947b80f20a9aacac038a5047b2ad69d2401b827376c67d6fe847f"
+      "bytes": 3050,
+      "sha256": "8f7758bd1235198022f01b3c936eec0825f0237195eeea03f42e1375e62b6941"
     },
     {
       "path": "desktop-launcher/src-tauri/capabilities/default.json",
@@ -574,29 +704,159 @@
       "sha256": "9cf20ebb75019fd70d3eb840f3500cf6eb8da250d969e4e79404b45a3300733f"
     },
     {
+      "path": "desktop-launcher/src-tauri/src/artifact_downloads.rs",
+      "bytes": 8449,
+      "sha256": "74b6bc6d13afd85b540f83557c0f90c296d301a764c8e36d06267aaa6b479f4b"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/base_python_repair.rs",
+      "bytes": 79298,
+      "sha256": "edb399090971aea0f27a08ce0e4579dd88133f393b7207cd6b565be6610ded9a"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/budgeted_body.rs",
+      "bytes": 4145,
+      "sha256": "d20b5e05c7bc75bed2a87b4d7fdb865da483e7f1c26bcb3e0c6bf3ba83b28be8"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/controlled_download.rs",
+      "bytes": 55035,
+      "sha256": "67cfa0ee30decc00ef627277bc37333aca3d6e18508bd3f6187a24570caee2f6"
+    },
+    {
       "path": "desktop-launcher/src-tauri/src/core.rs",
-      "bytes": 51508,
-      "sha256": "299270add510c9769a33f2effe305c67e96eed817cf615409f314e8a639ab1ee"
+      "bytes": 94066,
+      "sha256": "21f905397d21c646230d191d711632cd4bc144e7ccae2518d4a9602cca289b7a"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/data_import.rs",
+      "bytes": 83298,
+      "sha256": "b51bbeac61315de0d452d70c1fa421616ce65625f68331029c5ecc9c1fbe00e8"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/download_budget.rs",
+      "bytes": 57428,
+      "sha256": "41ab36eb907e456fbd5c89d74bfc9b590cd4e824cfd9730c50530f0471d7820a"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/download_budget_fault_tests.rs",
+      "bytes": 26238,
+      "sha256": "be197c71bb086377140acf583ba593b3a886dc54e79a06515cdb55a4b5aa75a0"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/engine_bridge.rs",
+      "bytes": 15530,
+      "sha256": "91330d4f7f2d5780445209438a23f95f62b8329f0f6031e3c5556c8fee50e1dd"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/engine_namespaces.rs",
+      "bytes": 11723,
+      "sha256": "bb91b9bfa59bbe2a20b51954653d806ccce28b860bb2d91a6ad247c5ebe44e61"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_binding_switch.rs",
+      "bytes": 21638,
+      "sha256": "15a0c88e876f586b2d77caea129bc2ce8996773f9b2bcd99f9670cbd4000be48"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_entry_probe.rs",
+      "bytes": 25117,
+      "sha256": "c0f37528e94946e086cf11cd8c15a1bf465b5df12b14b4320b3c8b87cc544c53"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_environment_probe.py",
+      "bytes": 1390,
+      "sha256": "9482a8eb6ea65d9721ea2df9c38df0f4074a472aeff2434e7069b1b781018abe"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_install.rs",
+      "bytes": 23016,
+      "sha256": "560c818d743cb8e45d4c39858bb2b94c725a07fb6388cc5222769f0554010f01"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_rebuild.rs",
+      "bytes": 35460,
+      "sha256": "110f50ee69e4af751618ac802744e0866321333d8130c71535ee016bd324333f"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_recovery.rs",
+      "bytes": 19875,
+      "sha256": "5783cc767635be41a5238d702ee0235d9c19624e14891dd9032c7d5eaa895d28"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_registration.rs",
+      "bytes": 23498,
+      "sha256": "4b11c5467b4b7b5b5d5704e6d4e71ac066d5b073fe656d7845c25d9d39ba6b5b"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_registration_integrity.rs",
+      "bytes": 41574,
+      "sha256": "a8a412650bc93ab3f848b945af8bdfb3c964fd6a2b2a4f19b8cf3bee788f0826"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_registration_records.rs",
+      "bytes": 11273,
+      "sha256": "e4d7c0ac5b7b24075649b9359f02fb6c5505a87b3b4835643df962e232908d41"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_registration_records_tests.rs",
+      "bytes": 19621,
+      "sha256": "2b0f50c99b28bc08a1086a9c7a6cf5ab78a8c86bfd0fa82f6786254e1fc84cb2"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_repair.rs",
+      "bytes": 34058,
+      "sha256": "3cde4a3c4a2b4cee67741de430dda017296f50584ea217c173164309e36f0890"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/gui_source_repair.rs",
+      "bytes": 28057,
+      "sha256": "d6c007843f3c970302bf2e6441be457dad8e2c31cbb037f512b1b5e4e2626faf"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/instances.rs",
+      "bytes": 145500,
+      "sha256": "8040bf9a197d2e1eb836163cab7c318838ed00e459d2bd1e0a95794537b365ca"
     },
     {
       "path": "desktop-launcher/src-tauri/src/main.rs",
-      "bytes": 8919,
-      "sha256": "fb50b81541c6c96a2c438d595a19da71fa63410cefcd75fe59440b7bc8b7e15f"
+      "bytes": 48937,
+      "sha256": "64a946be5c4ac305fe88bd26f58f10e50d8cd66cd9bd76387ce8b5c5b23ac4c7"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/managed_child.rs",
+      "bytes": 5284,
+      "sha256": "c16e82be8af324dd8a121a6ace19b3b567ca6be8942c1ce1345fa0f8a23c6da2"
     },
     {
       "path": "desktop-launcher/src-tauri/src/model.rs",
-      "bytes": 34463,
-      "sha256": "aeea1c894dfa1ab4a0bfd372fa692c95d27c18c7495ab388ec4d0b786aac60e4"
+      "bytes": 52516,
+      "sha256": "a08a2356ff09bfac12da2aa943e5a264766fd27092d35602f44263af817a86e3"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/network_policy.rs",
+      "bytes": 39650,
+      "sha256": "563f4452c8acc8db3e74bbe0b66b13490564d6dded77ffee4577eaafe1492cda"
     },
     {
       "path": "desktop-launcher/src-tauri/src/operations.rs",
-      "bytes": 24675,
-      "sha256": "95916dbb89a462be051922f493ee7956c31dab8c90bc09375f93e7235892acf8"
+      "bytes": 35926,
+      "sha256": "6b49783a871be20e19ab284d4957b58f44a2ebe70be51f042debbf26ffb3dbdb"
     },
     {
       "path": "desktop-launcher/src-tauri/src/p6_tests.rs",
-      "bytes": 14875,
-      "sha256": "39436f15b6a6fba3103d768c9aadf2e724764f8ce21b8bccd2218ba9999bbba1"
+      "bytes": 14820,
+      "sha256": "4d5b5337dc063d400338d9e4ad5936540c7aea2ff3cb9951e8f17309dcc4d623"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/python_integrity.rs",
+      "bytes": 17999,
+      "sha256": "2e268eeb525c999c7e2caf44ff17c916877422e1963991487cce5f907176e505"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/recipe.rs",
+      "bytes": 19786,
+      "sha256": "8143c3f2f640afdd2443d70249b84cf10f47ecdce38ccd81422436975e9a7abc"
     },
     {
       "path": "desktop-launcher/src-tauri/src/recovery.rs",
@@ -605,8 +865,48 @@
     },
     {
       "path": "desktop-launcher/src-tauri/src/runtime_view.rs",
-      "bytes": 6090,
-      "sha256": "ab1f9bd36e16b5e42559ef5bc906df6441799b8dff1ad3f67ffbc8e5223e5667"
+      "bytes": 11547,
+      "sha256": "d5b728e2a656d89076cb7a05a3a1a3aacea77efc9428d6a1d88249ad617c7637"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/safe_extract.rs",
+      "bytes": 21581,
+      "sha256": "0a8743958a21702b25a72e18e37800f57d6cad943cc366a9fac1932894b3c922"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/shell_update.rs",
+      "bytes": 5893,
+      "sha256": "65d27006c71d44da9691b2101b5a1e2fd4b5de9eaf93466b85dbeeaf51c7033a"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/shell_update_protocol.rs",
+      "bytes": 46825,
+      "sha256": "6b27cf5596754bbea074f8262bf814a85cf0d091bffbaec615474f8709aa2965"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/shell_update_protocol_tests.rs",
+      "bytes": 8272,
+      "sha256": "13c658f9fb672e605a07cbdf102fb7c88559d5a073f638063669a9e9588716db"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/signed_catalog.rs",
+      "bytes": 31884,
+      "sha256": "ffb429ea44f8d5f47b091eb23846afb0daba3718e5f6dbdd4eb6a7de135ebcaa"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/source_integrity.rs",
+      "bytes": 10917,
+      "sha256": "20d07c0dffd6e10ed0835fa876675e1f943d479692bc20738d1817dfbd9a0910"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/trial_ui.rs",
+      "bytes": 2448,
+      "sha256": "1f4e93f288eb3945a05a716560d89588259008109219dd9803fabd4ab39b7ddc"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/wheel_integrity.rs",
+      "bytes": 34737,
+      "sha256": "f11068783dfcf3e789dbb8615ffeca9cf9d1b71f49b26961e8c2a88ce1c13d12"
     },
     {
       "path": "desktop-launcher/src-tauri/tauri.conf.json",
@@ -615,23 +915,68 @@
     },
     {
       "path": "desktop-launcher/src/App.vue",
-      "bytes": 22095,
-      "sha256": "82bc014896b6b99fb0b6a563f8390688070618f2b231bebbc1c0f2bdf6a9dd24"
+      "bytes": 81484,
+      "sha256": "16c7182e13c0842510e7fda5d1c5bd1b0de3b3de6061a72a451489cb730f192f"
+    },
+    {
+      "path": "desktop-launcher/src/EnginePanel.vue",
+      "bytes": 4763,
+      "sha256": "ff7c6219e50a89c91936caead7613d19df87d21ca4fce7c46ee8c8fbe1446dac"
+    },
+    {
+      "path": "desktop-launcher/src/ImportPanel.vue",
+      "bytes": 13697,
+      "sha256": "13296356067258eb8366ea1e73cd4b4b188e308ea2825db5f7d8fc0eda88e1a7"
+    },
+    {
+      "path": "desktop-launcher/src/ShellPanel.vue",
+      "bytes": 2093,
+      "sha256": "29e0bc08c808f1ce3a40cc46335e4b606f35df914be1413c03b6d18c421f9d9f"
+    },
+    {
+      "path": "desktop-launcher/src/TrialApp.vue",
+      "bytes": 1718,
+      "sha256": "9031e897a1ecc7d277ae86ddec0301b418258e0cb84d3fb251f050aee7c413d3"
+    },
+    {
+      "path": "desktop-launcher/src/TrustPanel.vue",
+      "bytes": 7756,
+      "sha256": "68f05e4dbad5595b3b2485b3a9a2865564899552463362c5939e7fb6f49dece5"
     },
     {
       "path": "desktop-launcher/src/bridge.ts",
-      "bytes": 1736,
-      "sha256": "7f79c0b850b4d835fa2c9d5743ff946e1a91757ebc402181e1e7647a9ba2cb26"
+      "bytes": 11519,
+      "sha256": "c694ea3f8f79b1256ad11d26947d4984e71344ff6f742b93cc5f81864122b106"
+    },
+    {
+      "path": "desktop-launcher/src/download-budget.ts",
+      "bytes": 1767,
+      "sha256": "1c96227cc766a52bc8af3e10e5aab7ad75c4c4f309cbe1c3ef90995bc015f2b1"
     },
     {
       "path": "desktop-launcher/src/main.ts",
-      "bytes": 153,
-      "sha256": "a9e05306fe0fbc7a815ec16616da6fd6662eec66bb059aca3fffc720c9e51c3f"
+      "bytes": 260,
+      "sha256": "1382cf9d1d8d8213811f778be483965ffe717abc55c5f27b0bb16e8b2b2f179e"
+    },
+    {
+      "path": "desktop-launcher/src/network-settings.ts",
+      "bytes": 779,
+      "sha256": "2cc0de809bab00771833e73bd5c897f7c26bbe6ab6679d47988378dbfb75587c"
     },
     {
       "path": "desktop-launcher/src/style.css",
       "bytes": 11655,
       "sha256": "8ed6062585f3dc7f451f60e2c7da323888716881c8c888d73b7c7500df35ce69"
+    },
+    {
+      "path": "desktop-launcher/tests/download-budget.test.mjs",
+      "bytes": 1582,
+      "sha256": "51a4145f97603a50df37e6ad9f3a892f22de7f80dd7fd4c736db78ba6b778ffc"
+    },
+    {
+      "path": "desktop-launcher/tests/network-settings.test.mjs",
+      "bytes": 1415,
+      "sha256": "9d7b80f7ec439b0eb45777971ae551c36bb1797935340925c5d6dafe5d3e1400"
     },
     {
       "path": "desktop-launcher/tsconfig.json",
@@ -729,9 +1074,34 @@
       "sha256": "fd7b7baf593a8ad82a4956c86eec6802b77f2c32cdbb4055e5a1e3c6525c26ad"
     },
     {
+      "path": "docs/design/desktop-launcher-m1-base-python-repair.md",
+      "bytes": 3629,
+      "sha256": "bf0842326014eb0050759a3cf5356828392cea6751ef65658f3dfaf12030da68"
+    },
+    {
+      "path": "docs/design/desktop-launcher-m1-download-budget.md",
+      "bytes": 5923,
+      "sha256": "b48f2ee623d8c787ea1cb9046c962e2e351ae4bbf31a36df4319c02be6c4fc84"
+    },
+    {
+      "path": "docs/design/desktop-launcher-m1-instance-storage.md",
+      "bytes": 3966,
+      "sha256": "74f7300a23ff493055e6aa4421c19746a298cd04344747911e4c1d93fcabe09c"
+    },
+    {
+      "path": "docs/design/desktop-launcher-m1-network-and-profile-protection.md",
+      "bytes": 4530,
+      "sha256": "5b1a3f744430c00056dc0ee1967603ce4303ae16cd80d9a1a7140d3b98a814a4"
+    },
+    {
+      "path": "docs/design/desktop-launcher-m1-registration-recovery.md",
+      "bytes": 3872,
+      "sha256": "034bb972600424a63f28e6b4ffa42ab05f89bf95c50dc35272b0fa4d29897074"
+    },
+    {
       "path": "docs/design/desktop-launcher-next-design.md",
-      "bytes": 40106,
-      "sha256": "027bd07ed4a918476e8c8f91842d4156f636e204bc2981f8dc889b279371edac"
+      "bytes": 41649,
+      "sha256": "dd7054e1611e7de39b01f69849987757ba0fbd246a9af3a3cced6f565aad57a0"
     },
     {
       "path": "docs/design/desktop-launcher-next-review.md",
@@ -1390,18 +1760,18 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_总控目标索引.md",
-      "bytes": 19892,
-      "sha256": "340d22287283b22c4e1d2c81c357af571cd226cc83edf27cd9660cc43226e192"
+      "bytes": 19975,
+      "sha256": "934e2ea6328b37110f9c0622160d60506da527917218b9d7bfa96f39e9e9a989"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/README.md",
-      "bytes": 1553,
-      "sha256": "8ad4ab8f66802db3f3539dbd8cb263cd92f6fdf6661cdf1d588f8efeffc2ada7"
+      "bytes": 1964,
+      "sha256": "2df3f431336f8ae1c743f77620f6c48dd7433c10fb79172e349bcb3bea2199fe"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/change-control-governance.md",
-      "bytes": 9214,
-      "sha256": "71c3f96815ed0ec08758b9f169b289833ed5afdbfb6d4517f15e4c45695bd738"
+      "bytes": 23272,
+      "sha256": "864a9be3ed61c2f86be0c33dea41c41df71c5a5f7fe0fa1ffec29bccd1617fd3"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/evidence-cleanup-report-template.md",
@@ -1420,13 +1790,13 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/gate-validation-checklist.md",
-      "bytes": 5901,
-      "sha256": "4e68b45e96fe3ddafb135f6645de7096d64e878abf88051765fb09eff990251a"
+      "bytes": 4254,
+      "sha256": "84d06e935e9873c05a6f91a1e5d8b34f70d851fffd4c82c7ffefc0c6453d0ced"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/git-baseline-governance.md",
-      "bytes": 6835,
-      "sha256": "60d17586e0e8538b96ec6b40fb29ba83a426a7a54427d09418d1eebab9fb7fa7"
+      "bytes": 4673,
+      "sha256": "c070ae5c7deff0704f1101fc604a7a2019afd6441b703698b43422a1bc0eaa43"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/preflight-source-review.md",
@@ -1435,133 +1805,133 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/risk-and-authorization-governance.md",
-      "bytes": 6759,
-      "sha256": "65b40fe2999692a6673421e1d0084864741e1b48dd22670c8e4715f8a6f9c839"
+      "bytes": 7709,
+      "sha256": "4fd2f1e6398ddf55a09e1dafe6bf4dfaf3dce40f6b34c397d9a8eec79912fa5a"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/stage-completion-gate-template.md",
-      "bytes": 4906,
-      "sha256": "6a438eb149aca9444d3e1f3b56e80a4ce0125c89471541c152028418df0a9f96"
+      "bytes": 3537,
+      "sha256": "e84f395082079fa04b5fae66ee345ed672103c3551945492710dc0efdad0c6d5"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/testing-and-evidence-governance.md",
-      "bytes": 11034,
-      "sha256": "a7f77317f0230df34d749049fbae7842b37966b0b61372fb3504df5ea60cf9c6"
+      "bytes": 6624,
+      "sha256": "104af84427cc15c5df17a702cba0f642e2cf9aa3753ff7916ddfe9cc583be390"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/01_目标计划书/00_目标计划书索引.md",
-      "bytes": 3041,
-      "sha256": "0e4332e19bd12ca8706d2d90cff66bc0411935ac68b2b207cfdfa9c8a36368c4"
+      "bytes": 3483,
+      "sha256": "be4d0ee5fb324cdb9b13ee4bddb71bce78be814f1fe1a6c5062b72833af789d5"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/01_目标计划书/01_目标M0_审核冻结与开发基线_实施验收计划.md",
-      "bytes": 6195,
-      "sha256": "e9ed5ef37d53a54faecdc254cccbd2b8a98115d8527c18aec9392b5e2b8f31cd"
+      "bytes": 6567,
+      "sha256": "71a734afe3435421d328e2d97573c9277956c944c92aa4f56bbc970d30ddb977"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/01_目标计划书/02_目标M1_可靠安装与精准修复_实施验收计划.md",
-      "bytes": 4698,
-      "sha256": "d6a84452c15ea819c3b1ae73c16ec9054bef937fd8315003c94311c933bd8bbb"
+      "bytes": 4669,
+      "sha256": "17b416f483498b220c3d37d63fad09e0dd48e403926d3e0ae7a81998848d7cff"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/01_目标计划书/03_目标M2_首批引擎真实闭环_实施验收计划.md",
-      "bytes": 5048,
-      "sha256": "1b115b87c7209568d26d5a813fd19f819b89dd6d2ba436630da4895c1230a580"
+      "bytes": 5348,
+      "sha256": "6b3fa989625986efd3a23090c5d75e51eb3dceeba311848b5005349685446ae0"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/01_目标计划书/04_目标M3_四引擎与可信更新_实施验收计划.md",
-      "bytes": 6133,
-      "sha256": "77e2e96c48013820a03785cc7aeec3669222520a8b569630de49a73c4d990edc"
+      "bytes": 6527,
+      "sha256": "2dbdc0d1213f64227bcdcfb53a04c27b372ebd566a0ebf5a4b443dc24b14debd"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/01_目标计划书/05_目标M4_资料导入与兼容回退_实施验收计划.md",
-      "bytes": 5382,
-      "sha256": "38bb785906e544d3b17e4faa94b5f5481ec30e21e7c285c6a91f32b3cea47e25"
+      "bytes": 5311,
+      "sha256": "e68243905a2f9587a55e5a46842f764d24e9474b3898b4c59fdbd7062bfb8f31"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/01_目标计划书/06_目标M5_独立壳与Windows分发_实施验收计划.md",
-      "bytes": 7294,
-      "sha256": "fcdfcbb883b341b7a418ceb78fb1c19cc2e3736340c7529e84136470f2d7fa8e"
+      "bytes": 6239,
+      "sha256": "1d8f524b7cce985f56f18ae26997a57fa73c43124231e50b5d6792892eafc0f2"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/01_目标计划书/07_目标M6_从零沙盒最终验收_实施验收计划.md",
-      "bytes": 10815,
-      "sha256": "0f48c6ab360cd5fe48bde464a065760c137fc2f5e2f0a9b9ac30f8287708ccd4"
+      "bytes": 10070,
+      "sha256": "7c9b4824bec3743940d495aa12245db672ac0a7da69d81759c37ce9e5504bb4d"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/02_长程任务书/阶段M0_审核冻结与开发基线_目标M0_长程任务书.md",
-      "bytes": 13539,
-      "sha256": "e1e041153d6255ef9f3c2fd5f633dd2feaf762e42300f19080377b6c5c4b28e9"
+      "bytes": 13911,
+      "sha256": "b53b87fd3eb1c361a8ac27447538b8cf4277af5eeebec6bd17c347ec9cf999e9"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/02_长程任务书/阶段M1_可靠安装与精准修复_目标M1_长程任务书.md",
-      "bytes": 11336,
-      "sha256": "19ef9bc033c24b5e5ed785476b9bd0a106524cd1ce200deb28f4a727a5980341"
+      "bytes": 12204,
+      "sha256": "6a0e43cd3a8ec23cc1c8d02d9f5cc7d4a50b68a6a98650a20402540cf0cb1c0e"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/02_长程任务书/阶段M2_首批引擎真实闭环_目标M2_长程任务书.md",
-      "bytes": 13301,
-      "sha256": "99060b238e3e10a0ff3f4c7b89340d5289dfeceadff8199134977474faff6f5b"
+      "bytes": 14018,
+      "sha256": "5606c9096140ff0806d3201ab78786f44a3da1af95355bfbc3cdc2c75a114c9e"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/02_长程任务书/阶段M3_四引擎与可信更新_目标M3_长程任务书.md",
-      "bytes": 12607,
-      "sha256": "88b604399504df5a1b898cd53be6e788fb7924bd69d2aada212cc446bf7150e8"
+      "bytes": 14310,
+      "sha256": "28d7379861f827caece208ecb0fb2771d09d2c3e4686ac1d30c153e169234e1e"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/02_长程任务书/阶段M4_资料导入与兼容回退_目标M4_长程任务书.md",
-      "bytes": 11643,
-      "sha256": "0d49d451ffdfeddb1dec0a8b2c71190fa8621b4466f1e0d3adaf1aff6ed4fd5d"
+      "bytes": 12653,
+      "sha256": "cba3099b092a27622092df8b88c3db85b792ae37390350dc6d8a5e54a031995c"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/02_长程任务书/阶段M5_独立壳与Windows分发_目标M5_长程任务书.md",
-      "bytes": 14156,
-      "sha256": "c771fa0bdf8fb3c8679d3d5241b6c44694f22387154739b22bc03eca4973c2b4"
+      "bytes": 13843,
+      "sha256": "5ef3b88afae731e5df91535bb4efbba468b912aa2a8a17fa14192116145b7a1c"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/02_长程任务书/阶段M6_从零沙盒最终验收_目标M6_长程任务书.md",
-      "bytes": 13675,
-      "sha256": "446f1a27ec1140ecac094a1f7f04af56d00975579d22a4692701acb7c3886232"
+      "bytes": 13887,
+      "sha256": "9d49708532e35afe5b45ef81ac2b5ff7c0074d6dda8426ab014a3b7043c3fde0"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/03_goal提示词/桌面启动器全程执行_goal提示词.md",
-      "bytes": 15155,
-      "sha256": "a8320d652f0ed2583b52c2e64a4489cd2a7c2e9ce884e05b24f426d4694a9346"
+      "bytes": 7254,
+      "sha256": "4ee9f143a7be11e4ed4634d38ed224665be96f509ae2ecb2b8951a5b8aaed5a5"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/04_阶段开工清单/阶段M0_审核冻结与开发基线_执行前清单.md",
-      "bytes": 5821,
-      "sha256": "03f13a953192cc26a22d788f794bda4b5974f5399799c181e6d2738430478c01"
+      "bytes": 6193,
+      "sha256": "088b2588d964e8f4e30251b0787eebd231fb874041b60b822963e739acfa9bfc"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/04_阶段开工清单/阶段M1_可靠安装与精准修复_执行前清单.md",
-      "bytes": 5491,
-      "sha256": "055f40bc2f6fdf7d2300859f7c34747d0d7b1455db69e85fa7f0c1491b2e2e07"
+      "bytes": 4665,
+      "sha256": "2cacf9e47def225532251865e1c3d7080794eead51681b9b29b20f1413c9e70d"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/04_阶段开工清单/阶段M2_首批引擎真实闭环_执行前清单.md",
-      "bytes": 4940,
-      "sha256": "a14c42a80a204c579133b41501a13d5daf53d3550ad98a0ec957e88b99c94863"
+      "bytes": 5061,
+      "sha256": "6b834173bb22bd83ba3d13e5a4527d262332d0c6777fbcc960031428e0cb3526"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/04_阶段开工清单/阶段M3_四引擎与可信更新_执行前清单.md",
-      "bytes": 5710,
-      "sha256": "d9969d9028de3deb37f974e5d033c18d7557b9620420118ed9d2353e9e761837"
+      "bytes": 5867,
+      "sha256": "e03496ae532f2527fce08b82f0e5a9471938c09bd5f9149a739938db6ae94b22"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/04_阶段开工清单/阶段M4_资料导入与兼容回退_执行前清单.md",
-      "bytes": 5063,
-      "sha256": "fb8db6643fedd3b5ae53b72c198c16fbb73471e93bb3819dcc004a2e73db3398"
+      "bytes": 5086,
+      "sha256": "1e42dc1257471de992e3dd929ab9809ba5d64c37944970e1dec29cffd9dfc296"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/04_阶段开工清单/阶段M5_独立壳与Windows分发_执行前清单.md",
-      "bytes": 6772,
-      "sha256": "efd2f15dd77bb8116784d9d5ef1a218bce63080952eea9406a6fe32c24f30911"
+      "bytes": 5885,
+      "sha256": "f90f74e383ca801adf59900cadeebb3276451a67b3c00e5cdd68a1bf124acee9"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/04_阶段开工清单/阶段M6_从零沙盒最终验收_执行前清单.md",
-      "bytes": 6297,
-      "sha256": "57aeac9617bc3233c8a2eb52ee91ce3a754ade8b69a43becc58ba0520c389e33"
+      "bytes": 6780,
+      "sha256": "bd088abf0965e86fb6bf20b403aab7a447cbd3fba33e9218df9257ae7a308463"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/05_最小可行性验证/feasibility-probe-report.md",
@@ -1570,33 +1940,43 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/05_最小可行性验证/minimal-feasibility-probe-plan.md",
-      "bytes": 10573,
-      "sha256": "fe2a0d8f6e202b19601507c473846a7bdec112b8d515ae7318f08cb66159f0ef"
+      "bytes": 11310,
+      "sha256": "61edbfea73c5043e542368151882b41890161585085d01ac5268ce7ff641df4b"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/06_开工前最终复盘报告.md",
-      "bytes": 14625,
-      "sha256": "e198ee527194440369d1de7c979a01c27a3a7ae5e76b280d2fc1561271af6a85"
+      "bytes": 15051,
+      "sha256": "e2d2b543bb93b4efc35a2136a60c8a3ee0f5a1b4ccd3811120bee3a33890e9f8"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/07_用户审计单.md",
-      "bytes": 7836,
-      "sha256": "ad2901eb0a6fd6eb391ef1ca715439d1c7ec4d63db22ff98293804b4d0822c7d"
+      "bytes": 8262,
+      "sha256": "98afc0672ef684a9ceb966189a20beb09047136c3f9bd30be453b3416389a209"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/README.md",
-      "bytes": 3209,
-      "sha256": "d21ed9329670dddf6c834dab8a191c889141db6faf12e59ffb1f5c5e60089dfa"
+      "bytes": 2168,
+      "sha256": "e316276345535d8e993f1522d59de5a4f8fd4aa77a2603f41a042e98a73f2d35"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/m1-candidate-report.md",
+      "bytes": 16798,
+      "sha256": "c89441bab387f48b065f34854d6b831452ab1deafec8be0feca022892dbeb793"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/plan-manifest.md",
-      "bytes": 11139,
-      "sha256": "d0a9e177001c1d20179b8528eab6845337e58544af77d9a7ef00469eca90fc16"
+      "bytes": 11057,
+      "sha256": "2b872354f78bcd26661bcf387fa9a26ba944e1d04d76b2a5ff587352e57b85c4"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/remaining-work-cost-review.md",
+      "bytes": 7519,
+      "sha256": "20bc5aa4d19fe055eb1dfcb10c96404e110997ba415ca14db3dc2f831d2b4104"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/scripts/validate_plan.py",
-      "bytes": 6485,
-      "sha256": "06867491fefa3d3b56fe763d0d4d57867aeeb52f64d72c89c56e151fb0126d0b"
+      "bytes": 6776,
+      "sha256": "ad4a0c47e094fe449d8dfba5f1c459d2b955a9b9c2e4e6f3ccd7f99747e8da88"
     },
     {
       "path": "docs/tasks/desktop-launcher-prototype.md",
@@ -1744,74 +2124,74 @@
       "sha256": "b7134a890456df4b9b8ef2c4050e52d5ce4152fc4253f3e9a7bbadadc5914fb4"
     },
     {
-      "path": "frontend/dist/assets/DatasetPage-G_tYPFwL.js",
+      "path": "frontend/dist/assets/DatasetPage-LQFhdFo7.js",
       "bytes": 114513,
-      "sha256": "64a55400a5857e3e08025d78e7782a85d623c19ee0e601212051fbe4f7f6c55e"
+      "sha256": "57a588cd709e27507f18adad39b90293a15bcfcf4e73221df1e3232a7e5c422a"
     },
     {
-      "path": "frontend/dist/assets/GenericArtifactDetailPage-D2qvvC4o.js",
+      "path": "frontend/dist/assets/GenericArtifactDetailPage-DYYO7C4m.js",
       "bytes": 1951,
-      "sha256": "4e11e5d32198955ea3d85ebc246920d7ec4972708005fa7d146f3786740c668e"
+      "sha256": "9ce043d6ce6ca496dfd36630f4b785b741b124d19fe5863a0e6b334ba1617000"
     },
     {
-      "path": "frontend/dist/assets/GenericPluginSettingsPage-C05b8nLN.js",
+      "path": "frontend/dist/assets/GenericPluginSettingsPage-BPT5Z61_.js",
       "bytes": 1934,
-      "sha256": "de776a7bbab5699dcbfada4efe8fbd021f4e7c497ffdaa6f5f17f4642c4375c4"
+      "sha256": "29d264b43198cd154eabc47384fd795dc76a0f3d967e920a014f42e82493dede"
     },
     {
-      "path": "frontend/dist/assets/GuidePage-Cyc3sd-k.js",
+      "path": "frontend/dist/assets/GuidePage-C5EbYV_-.js",
       "bytes": 2402,
-      "sha256": "ccab747efa0ee373a187fd4d7d0c14af39f86d62a668cf23ca36048e9c04e249"
+      "sha256": "9a1e1a6e0af9bf8405b16cc7676a58fdfbd5b1e1d8f7681f8e2f2e65f6db576a"
     },
     {
-      "path": "frontend/dist/assets/HomePage-DB5v161O.js",
+      "path": "frontend/dist/assets/HomePage-D8z23dwk.js",
       "bytes": 4946,
-      "sha256": "9bdd92d99f07790ad40d9c0ce56a10adcbc7b02a5de7163b7e4a8584c2d2a053"
+      "sha256": "2ec13185bea51484b25f299e210f2d96cde45316da779901e4d97f5b23d506d7"
     },
     {
-      "path": "frontend/dist/assets/IntegrationPage-DFZQGxce.js",
+      "path": "frontend/dist/assets/IntegrationPage-D0ok14np.js",
       "bytes": 1045,
-      "sha256": "2ca6e749124cbd7dc6aee20557154a9c75e163deb54b5d2f0a69ddc988378dab"
+      "sha256": "ea4e3bbf948bf86bada51202b6a674a3e92f3641860a02afa63823a7d36680ef"
     },
     {
-      "path": "frontend/dist/assets/NotFoundPage-CGWJT0wn.js",
+      "path": "frontend/dist/assets/NotFoundPage-B617_U0v.js",
       "bytes": 504,
-      "sha256": "4ee1d3906bc8d86ff7039adc035edad7e7f6c5f60449ccac4c9719291921c9e2"
+      "sha256": "4c691352f1a7147cecd3da0bb4cd68988ec4f5193fcc7df9d3dd60ea5544f027"
     },
     {
-      "path": "frontend/dist/assets/ParamsPage-Bsf_8Ul-.js",
+      "path": "frontend/dist/assets/ParamsPage-Caen_S9X.js",
       "bytes": 1428,
-      "sha256": "4c212e6b3d7dcaa1135bb88ceb2a2659e37289e0a64bc7c30aaee03e055b0439"
+      "sha256": "f3249c4ba5f3f3a588f9898d899635fd3c4e6e2f0e715aeadd6c3a95f61ded1d"
     },
     {
-      "path": "frontend/dist/assets/SettingsContainerPage-CACr9b-A.css",
+      "path": "frontend/dist/assets/SettingsContainerPage-BWge4nsl.css",
       "bytes": 1894,
-      "sha256": "0f9af3c3cb0ae602f2039b4a48ad7dd47b6307694e015b8841857b9b1a388e75"
+      "sha256": "6eb085c662169cbeb54cb607602c443794cd83af0ae05f159ed4d3fd2f520fba"
     },
     {
-      "path": "frontend/dist/assets/SettingsContainerPage-aV0jtz-3.js",
+      "path": "frontend/dist/assets/SettingsContainerPage-D_SkLnMB.js",
       "bytes": 59232,
-      "sha256": "3032dc18cf248293e0ed189cf62cef813a726b1c6d7d6c95c3caf3dbc4e00065"
+      "sha256": "6562e7c024473c763a4cf270d34693c953b1d471ccfcd513d5d57e03be4909d1"
     },
     {
-      "path": "frontend/dist/assets/TasksPage-CmSR36aA.js",
+      "path": "frontend/dist/assets/TasksPage-CWQ48IdD.js",
       "bytes": 40915,
-      "sha256": "1936e76db63987a6967f6db7513da1554e147065555ae6df33407f36e9a939dc"
+      "sha256": "a5e85191fd29685beab2b2b0fb6928abf3e5f4bc51b7761baf9e61c409e7b582"
     },
     {
-      "path": "frontend/dist/assets/ToolsPage-DahigSHq.js",
+      "path": "frontend/dist/assets/ToolsPage-eYQiJuqm.js",
       "bytes": 2323,
-      "sha256": "f9dba1936f423b0d31889a31b6da89853b7359b8675c9f17a87dc44ff340eefa"
+      "sha256": "17d32e1e76030db61af230ac7e98ed5905b1ea610c891ecbb43cfdd7a959d63f"
     },
     {
-      "path": "frontend/dist/assets/TrainingWorkbenchPage-BTYx_0Ay.js",
+      "path": "frontend/dist/assets/TrainingWorkbenchPage-DIn9PLjg.js",
       "bytes": 148453,
-      "sha256": "4dcc20fc9f785cdd552902b54d057b694a40921150b8f84eb27fe3fd2e9d1ee0"
+      "sha256": "6f6a888c731be2dec12ef0e3b3899c7790d78759a3877ba918c6d6d46a7a2ae8"
     },
     {
-      "path": "frontend/dist/assets/TrainingWorkbenchPage-ChED8RU8.css",
+      "path": "frontend/dist/assets/TrainingWorkbenchPage-z1xCYXRI.css",
       "bytes": 2367,
-      "sha256": "1d192e8fda17efe49ed17f9a4b7662040aa7f3d83ea2498d741d8bbaaa1c3c78"
+      "sha256": "c72136fd10587c3742697c4ff3edca6de51cbf28e6f90b6be62a3cf2c7a76ebe"
     },
     {
       "path": "frontend/dist/assets/changelog-banner.webp",
@@ -1824,9 +2204,9 @@
       "sha256": "f218be6728ce2f42c5eafd518f76e20adb911baaa0c942edbbbaee4237886bc1"
     },
     {
-      "path": "frontend/dist/assets/engines-CQ-cF5WC.js",
+      "path": "frontend/dist/assets/engines-BI-WczRY.js",
       "bytes": 10082,
-      "sha256": "d49db06ec9e1df5e68275f92a59163b136b46befc89541a7cda83f01a797376b"
+      "sha256": "d41134116218cba5eaecc803e3db78b67b8c7fda40610b1ae6f718d82c4c3b1c"
     },
     {
       "path": "frontend/dist/assets/guide-mascot.webp",
@@ -1849,9 +2229,14 @@
       "sha256": "8ddb3407d0c66f3f3de8a4478cec7125beb9876cb811623034530da957b45b72"
     },
     {
-      "path": "frontend/dist/assets/index-B2x47-vK.js",
-      "bytes": 11329,
-      "sha256": "46ec475455dbf13f7fffd7c226dbbafd6980e7070ffbc699958c527715e1c2c8"
+      "path": "frontend/dist/assets/index-Bit8LwNO.js",
+      "bytes": 608037,
+      "sha256": "a548060db28f1bfb8da80e12e932d649e5cfe1432d10dd78c593e53f5f44257c"
+    },
+    {
+      "path": "frontend/dist/assets/index-CqMoiiqa.js",
+      "bytes": 7450,
+      "sha256": "d6595410e3baae9ce6a0f11f850db63c49942399696cb307b1814f7ddafb77b1"
     },
     {
       "path": "frontend/dist/assets/index-D23P_yPs.css",
@@ -1859,19 +2244,14 @@
       "sha256": "449aaff6087d91856ff11c8fbcd2aed36c33e2d4e9fc6b589cc7cdb091112e86"
     },
     {
-      "path": "frontend/dist/assets/index-D9gPApCn.js",
-      "bytes": 7450,
-      "sha256": "28cf1a84b8416267cdebe3854fad343c693243b9926309d88787fe53344bc3d6"
+      "path": "frontend/dist/assets/index-LrHs77C8.js",
+      "bytes": 11329,
+      "sha256": "10ff036c9ec3594c8266157e657453f2d1079864eeab4ba8c8a6b698d35333a0"
     },
     {
-      "path": "frontend/dist/assets/index-_9cF7SkE.js",
-      "bytes": 608037,
-      "sha256": "7e423bee7cc1d839e0c153a7d4d626d0d6ec71573e5966bf02df22423de0bfb1"
-    },
-    {
-      "path": "frontend/dist/assets/pathPickerPreference-DR8srEJw.js",
+      "path": "frontend/dist/assets/pathPickerPreference-BK7xejwA.js",
       "bytes": 462,
-      "sha256": "e36a0aed8b1020eea5cf01c58483407b3d2a4cf428b5d15ba0ffc6fdcd7da7d3"
+      "sha256": "e6884ef106c7f9d48168adace730ad899ef05fdd2e24ace471c408bbadafc232"
     },
     {
       "path": "frontend/dist/assets/qwen-image-21-poster-16-9-Cdng6kcc.png",
@@ -1884,29 +2264,29 @@
       "sha256": "b4650cd100986fb963bfeae05d668df207a3a985e192eb9e4ecbc59021df66f6"
     },
     {
-      "path": "frontend/dist/assets/useServerPathPick-D4Isl4sM.js",
-      "bytes": 7899,
-      "sha256": "aca24e6f2a2c5d4a2832fa449135e174def49e4795906c627e96fd8e9292e682"
-    },
-    {
-      "path": "frontend/dist/assets/useServerPathPick-Dx1NB19y.css",
+      "path": "frontend/dist/assets/useServerPathPick-2t7oNX7H.css",
       "bytes": 2218,
-      "sha256": "18bc3381beeb356fbd2b2d73cff272af2ebaff7444b7a057832379bad87266b4"
+      "sha256": "2e6a7713a7191f8aa098db5ab75db7b8e6bccb126992c915052cc89995598713"
     },
     {
-      "path": "frontend/dist/assets/useTagTranslations-7qcHlzY-.js",
+      "path": "frontend/dist/assets/useServerPathPick-P6nLKs-7.js",
+      "bytes": 7899,
+      "sha256": "4f14a74f46379f7dc637e568b7b1008ecda0724aa37967ddc538ebcaf4c97bea"
+    },
+    {
+      "path": "frontend/dist/assets/useTagTranslations-TedyHzYg.js",
       "bytes": 3787,
-      "sha256": "95395215726ae758a9eec80567fd0cb3cf74d4c768ad973d7a272d4db1c1b201"
+      "sha256": "60027800526669fe76871829fb023b7f762d8744bb5b03d544fdec86962312ce"
     },
     {
-      "path": "frontend/dist/assets/userPresets-B91hPbpW.js",
+      "path": "frontend/dist/assets/userPresets-Cho6qx4u.js",
       "bytes": 432,
-      "sha256": "2d8cc96e37b5da1bd5917052a14749ab85a1a72d274fb903f54f5fc4f7b00ed5"
+      "sha256": "afd0c81e387ccda6f8d73efed2a457f3d4221f302df5a931876446a161f69817"
     },
     {
       "path": "frontend/dist/index.html",
       "bytes": 814,
-      "sha256": "7db126c6e00359479af2fc9599eb6b3d429fd66ae9d50fd9638acb68f6d3d8ce"
+      "sha256": "fd9e5525f434804704d6cd22080acf59efc69f54a7d89e931915f6b253ae7b19"
     },
     {
       "path": "frontend/eslint.config.js",
@@ -3330,8 +3710,8 @@
     },
     {
       "path": "mikazuki/app/application.py",
-      "bytes": 8439,
-      "sha256": "8e4f3ea5056c6c4586d5179b09b4a116620a6cc0e0c5ecfed0d075f31a2f9287"
+      "bytes": 8590,
+      "sha256": "231618757d2bacc4a9adaf751ccd3da3abc4a770bd113e3c1984ea75eb75396c"
     },
     {
       "path": "mikazuki/app/config.py",
@@ -3575,8 +3955,8 @@
     },
     {
       "path": "mikazuki/engines/ai_toolkit/environment.py",
-      "bytes": 24556,
-      "sha256": "ccdf4d00001a48c61226c968ae75ee3b51595a181d88e07f41fed7b36bd8788e"
+      "bytes": 24651,
+      "sha256": "67a95b9d70d5dd64401e8f7ce569e01c5bd1d4685378392320b2b3aeb36405f1"
     },
     {
       "path": "mikazuki/engines/ai_toolkit/extension_state.py",
@@ -3590,8 +3970,8 @@
     },
     {
       "path": "mikazuki/engines/ai_toolkit/installer.py",
-      "bytes": 6336,
-      "sha256": "5d207423dafc903125e5c7611aa60cf8021fcd689a7e21ddb595923fd237fb79"
+      "bytes": 6431,
+      "sha256": "2d60507541ebc3897fe00b39237217029ecb80895f895dde02ab3c6534d2a6dc"
     },
     {
       "path": "mikazuki/engines/ai_toolkit/launcher.py",
@@ -3620,13 +4000,13 @@
     },
     {
       "path": "mikazuki/engines/ai_toolkit/routes.py",
-      "bytes": 7463,
-      "sha256": "c4179707fd5894ccd1d74fba5d036081c0e58cc78d77c5991794740e1c8de49f"
+      "bytes": 8088,
+      "sha256": "c132ad9fa0ae1b7d78eaf89f0e6a231682f3e4585271f2881e6e7ac61266db0a"
     },
     {
       "path": "mikazuki/engines/ai_toolkit/run.py",
-      "bytes": 5340,
-      "sha256": "1096aa7477ef813718ccc1f1592667c84157e5944d7606a0717f6621141afccd"
+      "bytes": 5603,
+      "sha256": "260b28fca369ceffc3d6042c558fa24efc31e55f22e19ff6eda98c979825aa27"
     },
     {
       "path": "mikazuki/engines/ai_toolkit/schema.py",
@@ -3635,8 +4015,8 @@
     },
     {
       "path": "mikazuki/engines/ai_toolkit/settings.py",
-      "bytes": 8099,
-      "sha256": "19c00572b3b1c4957fe39f423bc6ac0a89b31ad98621c37ca4af14595aaee049"
+      "bytes": 8630,
+      "sha256": "dab526f7953a54374259ef78473eba02f4b2d8cf18a0b0fe903f9ad84c8afa3c"
     },
     {
       "path": "mikazuki/engines/anima_fast/__init__.py",
@@ -3650,8 +4030,8 @@
     },
     {
       "path": "mikazuki/engines/anima_fast/environment.py",
-      "bytes": 34344,
-      "sha256": "7be66b6d3306c181d023d793df1f41e0d1acc0d947ca1256ad3c86b58bafecbf"
+      "bytes": 34439,
+      "sha256": "f978b08ea5b4669259a056929f34e0972e329df498686cbd2c5435678429e023"
     },
     {
       "path": "mikazuki/engines/anima_fast/extension_state.py",
@@ -3660,8 +4040,8 @@
     },
     {
       "path": "mikazuki/engines/anima_fast/installer.py",
-      "bytes": 6028,
-      "sha256": "fc16c1d443a66b5d97d9acdc14d8c1234fffaf6e3cf0d6e9956c0ac9103b1379"
+      "bytes": 6123,
+      "sha256": "33f66658d5b772e14105b6d0f4b4993d9c6e95a008d21ad4f0d7a0e03a7b2304"
     },
     {
       "path": "mikazuki/engines/anima_fast/launcher.py",
@@ -3700,13 +4080,13 @@
     },
     {
       "path": "mikazuki/engines/anima_fast/routes.py",
-      "bytes": 5736,
-      "sha256": "725b5b42909310020f210d1866d90eee6ac8d5c4360fbdb5abbfde91f3746b1e"
+      "bytes": 6167,
+      "sha256": "2305b28311049325d0d4cd4ffc12f6d1beff49179a256ddca4d035e6392aa065"
     },
     {
       "path": "mikazuki/engines/anima_fast/run.py",
-      "bytes": 5772,
-      "sha256": "3c3f67a0d0d3cf98743919380944209be9d1b4c3a7c468e8d8d6d64f7daca725"
+      "bytes": 6035,
+      "sha256": "d00fa837ea17a574434ab18265b79796626fe081b76b88f12aa3b92bae9b2cdd"
     },
     {
       "path": "mikazuki/engines/anima_fast/service_resolver.py",
@@ -3715,8 +4095,8 @@
     },
     {
       "path": "mikazuki/engines/anima_fast/settings.py",
-      "bytes": 4953,
-      "sha256": "9d1632b3118fe496249fbe53beb1c201df2dc5ea6702e26f4616b220ca2b96b5"
+      "bytes": 5482,
+      "sha256": "2f841a616ac22527b84811603794adeb4bdf3f1847b717c6186c4cff85529b83"
     },
     {
       "path": "mikazuki/engines/anima_fast/source_root.py",
@@ -3770,8 +4150,8 @@
     },
     {
       "path": "mikazuki/engines/diffsynth/extension_state.py",
-      "bytes": 7273,
-      "sha256": "45546667b0b8c8139650935521118331640832d7939842e9e59283d6d53c0bf1"
+      "bytes": 7424,
+      "sha256": "36cf0f81596585b1f87278c524a6b329947014a5e574cfff8911041132722d86"
     },
     {
       "path": "mikazuki/engines/diffsynth/formats.py",
@@ -3790,8 +4170,8 @@
     },
     {
       "path": "mikazuki/engines/diffsynth/installer.py",
-      "bytes": 10094,
-      "sha256": "d9cac1a618fdcd083298317f382249df89789b22f967313c6edec07bb3fcfc7d"
+      "bytes": 10569,
+      "sha256": "85f9eae48eb7a0f1eb4c0e0755a12d848057f9f82282aa7c538e7e431e709826"
     },
     {
       "path": "mikazuki/engines/diffsynth/launcher.py",
@@ -3850,8 +4230,8 @@
     },
     {
       "path": "mikazuki/engines/diffsynth/settings.py",
-      "bytes": 2647,
-      "sha256": "ddcddc93143bba8daf3c80cbdc58e081bef7822c538b1c06b3284a21d4e8bcdc"
+      "bytes": 3473,
+      "sha256": "196e180c9eb01077e313925099a2c4e72d707270c9e8198a219c9a188297fedf"
     },
     {
       "path": "mikazuki/engines/diffsynth/text_encoder_hooks.py",
@@ -3955,8 +4335,8 @@
     },
     {
       "path": "mikazuki/engines/kohya/extension_state.py",
-      "bytes": 8326,
-      "sha256": "76510e65a7051e78d2791156b2322fa5199deceff1d7b47372a396d79e3269c8"
+      "bytes": 8473,
+      "sha256": "4dfacf76f881076b6bcd325a077c4a28a8c3860e5860dfd872980d9903be9e42"
     },
     {
       "path": "mikazuki/engines/kohya/install_worker.py",
@@ -3965,8 +4345,8 @@
     },
     {
       "path": "mikazuki/engines/kohya/installer.py",
-      "bytes": 5313,
-      "sha256": "107f0456e42b888fc3e8486e544f98a08592377b20191ed51698f7b6ce90468d"
+      "bytes": 5598,
+      "sha256": "07ee95f94d5d30964724744d506c05a78bd48df4270cd506a702b8e326924085"
     },
     {
       "path": "mikazuki/engines/kohya/manifest.py",
@@ -3990,13 +4370,13 @@
     },
     {
       "path": "mikazuki/engines/kohya/run.py",
-      "bytes": 7250,
-      "sha256": "5746308180732361d2d296d2cd1e220e5fd16355771bd2e0a7f66e3eec3c2497"
+      "bytes": 7628,
+      "sha256": "480abfce9468e2018bdceacd6a06c4a0d11c34086cd93dd9ed0d9153b5c1fb06"
     },
     {
       "path": "mikazuki/engines/kohya/settings.py",
-      "bytes": 1930,
-      "sha256": "6109b630a96324bbcf990e02d365626b7c8f5d3629bb0a7bbf39b7eeda73268f"
+      "bytes": 2534,
+      "sha256": "9073578af58fc0f840af644961f9a028ee7634c898b2fdaad562da0b7a1f993d"
     },
     {
       "path": "mikazuki/engines/manifest.py",
@@ -4217,6 +4597,76 @@
       "path": "mikazuki/launch_utils.py",
       "bytes": 19080,
       "sha256": "6bccc04a2f81ed54c97c3194936af5924db7c26f8e15ce09c92c34f94c752e4d"
+    },
+    {
+      "path": "mikazuki/launcher/README.md",
+      "bytes": 5597,
+      "sha256": "6fa734b0e87d6088d9a4c15a742d5fd18fd9e9d33c0340145446c39ebdcb5bb4"
+    },
+    {
+      "path": "mikazuki/launcher/__init__.py",
+      "bytes": 114,
+      "sha256": "380f6d3c5d2033852804b208b4e83ea52dc04a6e989821452655d0d6110be1e5"
+    },
+    {
+      "path": "mikazuki/launcher/bindings.py",
+      "bytes": 3474,
+      "sha256": "70c8ebf74eb461641ecd4104590934be522845d2143b8e2c770f634a17bd8f1e"
+    },
+    {
+      "path": "mikazuki/launcher/catalog.py",
+      "bytes": 14272,
+      "sha256": "bcbb6d6360a094956e78d3698fac57b46d349a4d14cdcd9ddd86817878e6c5ef"
+    },
+    {
+      "path": "mikazuki/launcher/control.py",
+      "bytes": 39039,
+      "sha256": "b592b3611bdfb4c6757b2363cc2246a6c3283ebe23f6f0af68d9dfcd63e45168"
+    },
+    {
+      "path": "mikazuki/launcher/recipes.py",
+      "bytes": 5313,
+      "sha256": "e87b5138f62683d428dbbe3b90aa61ffd327873dbd76f8ed320f6e0d0872a793"
+    },
+    {
+      "path": "mikazuki/launcher/requirements/ai-toolkit-base.txt",
+      "bytes": 801,
+      "sha256": "676b8fbfcb0fc153b4631975e67b1f35735490eb2afe82fa3c410b83effe099e"
+    },
+    {
+      "path": "mikazuki/launcher/requirements/diffsynth-base.txt",
+      "bytes": 207,
+      "sha256": "27f1a0eb67a594ff5a352bbbe4036c88ec885e6bc8728285d05f71015fc793aa"
+    },
+    {
+      "path": "mikazuki/launcher/routes.py",
+      "bytes": 6940,
+      "sha256": "919fd6658a061df4227426f85db7760b430b6fc2f9e5d29f1c97e873c6447393"
+    },
+    {
+      "path": "mikazuki/launcher/runtime.py",
+      "bytes": 6715,
+      "sha256": "accbf0f6b08d6c1bce7a2d2be9b31f15534faa792901173299f00a1dc79e7c60"
+    },
+    {
+      "path": "mikazuki/launcher/smoke.py",
+      "bytes": 9874,
+      "sha256": "ae7744924baf2f41d0a43a6268cbe8df29a145176af2148c2f26a6d211280e8e"
+    },
+    {
+      "path": "mikazuki/launcher/tests/__init__.py",
+      "bytes": 73,
+      "sha256": "7b72c2ecf934a4afb8e6d1478fe083d706a3bf4a7cbf9b452bb29bc08f97a6d4"
+    },
+    {
+      "path": "mikazuki/launcher/tests/test_control_smoke.py",
+      "bytes": 16221,
+      "sha256": "852ec8eff6e70c2391c9339909870967da416623e9b6a6b05876201e6e10ce45"
+    },
+    {
+      "path": "mikazuki/launcher/worker.py",
+      "bytes": 1088,
+      "sha256": "06c7d727e768259b3774c678843487974440db9dae79c62bbf8c161ae9cdf5c3"
     },
     {
       "path": "mikazuki/log.py",
@@ -6284,6 +6734,11 @@
       "sha256": "2aaf76b9900bdcfeed0e852616df129311cdbae23cea3d497b9eee11773efa02"
     },
     {
+      "path": "tests/fixtures/launcher-network-policy-vectors.json",
+      "bytes": 19523,
+      "sha256": "246e5cecea46308965a8c632307fa425f4e5f5d490ec93e41b4cbba2bc9c372b"
+    },
+    {
       "path": "tests/fixtures/moss/form-submission.json",
       "bytes": 1027,
       "sha256": "0dbb53dd5b3f4315d8dd3d4d7bbd91806dc64ed424bf402f7af234aa1bfef664"
@@ -6807,6 +7262,11 @@
       "path": "tests/test_kohya_moss.py",
       "bytes": 3687,
       "sha256": "7ca46b91ca483470b4b7ade110e05af7dace04bb6c5d118b813080547cf80e7e"
+    },
+    {
+      "path": "tests/test_launcher_network_policy_vectors.py",
+      "bytes": 2321,
+      "sha256": "0dcefb5c4cd64f5926cb4254b351981129147fad7f94d1c8e5078c103d57bad9"
     },
     {
       "path": "tests/test_lycoris_patches.py",

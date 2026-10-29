@@ -21,7 +21,7 @@ use std::{
 #[path = "gui_registration_records.rs"]
 mod records;
 static NEXT: AtomicU64 = AtomicU64::new(0);
-const RECIPE_SHA: &str = "8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090";
+const RECIPE_SHA: &str = "612124245bff0c62ab9d2e15aa95f86ff9b9359874f3e28e3fa99ad93007f67a";
 const MAX_RECORD: u64 = 32 * 1024 * 1024;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]

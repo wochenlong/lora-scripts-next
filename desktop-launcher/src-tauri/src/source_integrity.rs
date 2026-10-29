@@ -10,10 +10,10 @@ use std::{
     path::{Component, Path},
 };
 
-const SOURCE_COMMIT: &str = "196ff12c16083d59c8be6711476c6fdb70c7112a";
+const SOURCE_COMMIT: &str = "0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e";
 const RECIPE: &str = "gui-cp310-win-x64-v1";
-const SOURCE_SHA: &str = "37c69b284528b21e256ba9c1a4ca90ad4a4ffe8d0122e9ba7416e45f3f3899e9";
-const FRONTEND_SHA: &str = "3c97a03bc4554248936ee4cbba6bb3f12bc413aecbbac9633400986da6801da1";
+const SOURCE_SHA: &str = "c845f5dacbe4ba3e6c26fe3b755d7c14479a05c8545505d7b07d75b8a49ac9ed";
+const FRONTEND_SHA: &str = "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f";
 const LEGACY_MANIFEST: &str = ".source-integrity.json";
 
 #[derive(Deserialize)]
@@ -155,7 +155,7 @@ pub(crate) fn verify(layout: &Layout, release: &Release) -> Result<()> {
     if release.commit != SOURCE_COMMIT
         || release.environment_recipe != RECIPE
         || release.archive.sha256 != SOURCE_SHA
-        || release.archive.bytes != 49_234_359
+        || release.archive.bytes != 57257800
     {
         bail!("该发布版本没有匹配的可信完整源码清单");
     }
@@ -166,9 +166,9 @@ pub(crate) fn verify(layout: &Layout, release: &Release) -> Result<()> {
         || manifest.source_archive_sha256 != SOURCE_SHA
         || manifest.source_archive_bytes != release.archive.bytes
         || manifest.frontend_sha256 != FRONTEND_SHA
-        || manifest.frontend_bytes != 2_440_912
+        || manifest.frontend_bytes != 2446848
         || manifest.expected_file_count != manifest.files.len()
-        || manifest.files.len() != 1741
+        || manifest.files.len() != 1833
     {
         bail!("可信源码清单身份或schema无效");
     }
@@ -288,7 +288,7 @@ mod tests {
             .unwrap();
         assert!(verify(&layout, &release).is_err());
         let manifest: Manifest = serde_json::from_str(raw).unwrap();
-        assert_eq!(manifest.expected_file_count, 1741);
-        assert_eq!(manifest.expected_file_bytes, 86_405_908);
+        assert_eq!(manifest.expected_file_count, 1833);
+        assert_eq!(manifest.expected_file_bytes, 100452856);
     }
 }

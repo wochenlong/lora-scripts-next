@@ -711,7 +711,7 @@ fn load_rebuild_extension(
                     1,
                 )?
                 || proof.recipe_sha256
-                    != "8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090"
+                    != "612124245bff0c62ab9d2e15aa95f86ff9b9359874f3e28e3fa99ad93007f67a"
                 || proof.trusted_index_sha256
                     != crate::gui_registration_integrity::trusted_index_sha256()
             {

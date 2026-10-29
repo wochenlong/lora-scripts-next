@@ -241,7 +241,7 @@ fn validate_payload(payload: &Payload) -> Result<()> {
         if item.published_at == 0
             || item.published_at > payload.issued_at
             || item.recipe_sha256
-                != "8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090"
+                != "612124245bff0c62ab9d2e15aa95f86ff9b9359874f3e28e3fa99ad93007f67a"
             || !recipe.matches_environment_recipe(&item.release.environment_recipe)
             || item.release.commit != recipe.source_commit
             || item.actions.is_empty()

@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "gui-cp310-win-x64-v1",
   "candidate_only": true,
-  "source_commit": "196ff12c16083d59c8be6711476c6fdb70c7112a",
+  "source_commit": "0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e",
   "closure_scope": "resolved-closure-superset",
   "platform": "windows-x86_64",
   "implementation": "cpython",
@@ -36,8 +36,8 @@
   "frontend": {
     "source": "bundled",
     "filename": "frontend.zip",
-    "sha256": "3c97a03bc4554248936ee4cbba6bb3f12bc413aecbbac9633400986da6801da1",
-    "bytes": 2440912,
+    "sha256": "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f",
+    "bytes": 2446848,
     "unpacked_bytes": 3523820,
     "files": 33
   },
@@ -45,7 +45,7 @@
     "max_asset_bytes": 536870912,
     "max_total_bytes": 1073741824,
     "wheel_bytes": 378332343,
-    "asset_bytes": 426580196
+    "asset_bytes": 426586132
   },
   "wheels": [
     {
