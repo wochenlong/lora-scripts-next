@@ -1,6 +1,11 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod core;
 mod model;
+// P6样机先通过真实故障验证，后续切片再接入正式操作IPC。
+#[cfg(test)]
+mod operations;
+#[cfg(test)]
+mod recovery;
 mod runtime_view;
 use core::{Engine, Logger, Report};
 use std::{

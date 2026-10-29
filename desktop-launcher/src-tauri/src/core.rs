@@ -15,6 +15,10 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(all(test, windows))]
+#[path = "p6_tests.rs"]
+mod p6_tests;
+
 pub type Logger = Arc<dyn Fn(String) + Send + Sync>;
 const REQUIRED: &[&str] = &[
     "gui.py",
@@ -229,6 +233,77 @@ fn download(root: &Path, url: &str, name: &str, expected: &str, log: &Logger) ->
     }
     fs::rename(partial, &target)?;
     log(format!("下载完成并通过 SHA256，{} 字节", bytes));
+    Ok(target)
+}
+
+/// P6 机制入口：异步网络读取运行于独立任务，取消会 abort 并等待任务析构，
+/// 因而响应头或正文永久停滞时也不等待阻塞 read。客户端由调用方配置网络策略。
+/// 仅 worker 在任务结束、取消重核与完整摘要通过后才发布缓存。
+#[cfg(test)] // P6 先验证机制，下一切片接正式操作 IPC。
+fn download_controlled(
+    mutation: &model::WorkspaceMutation,
+    client: reqwest::Client,
+    url: &str,
+    name: &str,
+    expected: &str,
+    limit: u64,
+    cancel: &crate::operations::CancelToken,
+) -> Result<PathBuf> {
+    use std::io::Write;
+    cancel.check()?;
+    model::validate_component(name)?;
+    let layout = mutation.layout();
+    let target = layout.root.join("cache").join(name);
+    layout.guard_path(&target)?;
+    let partial = target.with_extension(format!("{}.part", stamp()));
+    layout.guard_path(&partial)?;
+    let mut output = File::options()
+        .write(true)
+        .create_new(true)
+        .open(&partial)?;
+    let url = url.to_owned();
+    let task = tauri::async_runtime::spawn(async move {
+        let mut response = client.get(url).send().await?.error_for_status()?;
+        if response.content_length().unwrap_or(0) > limit {
+            bail!("资产超出本操作限额");
+        }
+        let mut written = 0u64;
+        while let Some(chunk) = response.chunk().await? {
+            written = written
+                .checked_add(chunk.len() as u64)
+                .context("下载计量溢出")?;
+            if written > limit {
+                bail!("资产超出本操作限额，保留partial");
+            }
+            output.write_all(&chunk)?;
+        }
+        output.sync_all()?;
+        Ok::<_, anyhow::Error>(written)
+    });
+    loop {
+        if cancel.is_cancel_requested() {
+            task.abort();
+            // 等待已停止的任务释放 socket 和文件，不把后台孤儿读线程当作取消。
+            let _ = tauri::async_runtime::block_on(task);
+            cancel.check()?;
+            unreachable!("取消标记只能由false变为true");
+        }
+        if task.inner().is_finished() {
+            tauri::async_runtime::block_on(task)??;
+            break;
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
+    cancel.check()?;
+    if digest(&partial)? != expected {
+        bail!("下载摘要不符；partial保留，目标未发布");
+    }
+    layout.guard_path(&target)?;
+    if target.exists() {
+        bail!("缓存目标已存在；P6机制入口拒绝覆盖");
+    }
+    cancel.check()?;
+    fs::rename(&partial, &target)?;
     Ok(target)
 }
 
@@ -487,6 +562,76 @@ fn execute(mut command: Command, log: &Logger) -> Result<()> {
         bail!("子任务失败（{status}），请检查日志后重试");
     }
     Ok(())
+}
+
+/// 与Engine长锁无关的受管等待。Job只覆盖本次子进程；取消后先关Job，
+/// 回收整棵所属进程，再join输出线程，避免后代仍占pipe造成收尾挂起。
+#[cfg(test)] // P6通过后由正式操作worker调用。
+fn execute_controlled(
+    mut command: Command,
+    log: &Logger,
+    cancel: &crate::operations::CancelToken,
+) -> Result<()> {
+    cancel.check()?;
+    let mut child = hidden(&mut command)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let job = match Job::attach(&child) {
+        Ok(job) => job,
+        Err(error) => {
+            let _ = child.kill();
+            let _ = child.wait();
+            return Err(error);
+        }
+    };
+    log(format!("受管子进程已绑定Job：{}", child.id()));
+    let pipes: Vec<Box<dyn Read + Send>> = [
+        child
+            .stdout
+            .take()
+            .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+        child
+            .stderr
+            .take()
+            .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+    ]
+    .into_iter()
+    .flatten()
+    .collect();
+    let threads: Vec<_> = pipes
+        .into_iter()
+        .map(|pipe| {
+            let logger = log.clone();
+            thread::spawn(move || {
+                for line in BufReader::new(pipe).lines().map_while(Result::ok) {
+                    logger(line);
+                }
+            })
+        })
+        .collect();
+    let result = loop {
+        if cancel.is_cancel_requested() {
+            let _ = child.kill();
+            let _ = child.wait();
+            break cancel.check().map_err(Into::into);
+        }
+        match child.try_wait() {
+            Ok(Some(status)) if status.success() => break Ok(()),
+            Ok(Some(status)) => break Err(anyhow!("子任务失败（{status}）")),
+            Ok(None) => thread::sleep(Duration::from_millis(20)),
+            Err(error) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break Err(error.into());
+            }
+        }
+    };
+    drop(job);
+    for reader in threads {
+        let _ = reader.join();
+    }
+    result
 }
 
 impl Engine {
