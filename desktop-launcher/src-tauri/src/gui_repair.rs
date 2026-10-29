@@ -551,11 +551,12 @@ fn execute_inner(
         bail!("修复计划已经变化，请重新诊断审查");
     }
     // plan 在任何 Python/uv 执行前校验非目标树仍符合已验证实例基线。
-    let transaction = instances::plan(
+    let transaction = instances::plan_controlled(
         ctx,
         &preview.instance_id,
         preview.generation,
         &preview.paths,
+        &operation.cancel_token(),
     )?;
     if preview.before_original_files_verified {
         validate(
@@ -588,7 +589,7 @@ fn execute_inner(
     };
     operation.cancel_token().check()?;
     create_intent(layout, release, &intent)?;
-    let ticket = match instances::begin(ctx, &transaction) {
+    let ticket = match instances::begin_controlled(ctx, &transaction, &operation.cancel_token()) {
         Ok(ticket) => ticket,
         Err(error) => {
             let current = instances::load(layout, &intent.instance_id)?;
@@ -614,7 +615,7 @@ fn execute_inner(
             OperationPhase::Verifying,
             "全量验证原文件、pip check、解释器归属与关键导入",
         )?;
-        instances::commit(ctx, &ticket, |environment| {
+        instances::commit_controlled(ctx, &ticket, &operation.cancel_token(), |environment| {
             validate(
                 layout,
                 release,
@@ -634,16 +635,17 @@ fn execute_inner(
                 OperationPhase::Recovering,
                 "还原独立快照并重新验证，尚不代表环境健康",
             );
-            let recovered = instances::recover(ctx, &ticket, |environment| {
-                validate(
-                    layout,
-                    release,
-                    &recipe,
-                    environment,
-                    log,
-                    &CancelToken::new(),
-                )
-            });
+            let recovered =
+                instances::recover_controlled(ctx, &ticket, &CancelToken::new(), |environment| {
+                    validate(
+                        layout,
+                        release,
+                        &recipe,
+                        environment,
+                        log,
+                        &CancelToken::new(),
+                    )
+                });
             match recovered {
                 Ok(clean) => {
                     bind(ctx, release, &intent, &clean)?;
@@ -724,7 +726,7 @@ fn recover_inner(
     }
     let clean = if state.dirty() {
         let ticket = instances::reload_ticket(layout, state.id())?;
-        instances::recover(ctx, &ticket, |environment| {
+        instances::recover_controlled(ctx, &ticket, &operation.cancel_token(), |environment| {
             validate(
                 layout,
                 release,

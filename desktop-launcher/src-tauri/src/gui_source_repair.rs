@@ -75,6 +75,7 @@ struct Protection {
     release_id: String,
     bytes: u64,
     entries: BTreeMap<PathBuf, Node>,
+    profiles: crate::instances::ProfilesSummary,
 }
 
 struct Scanner<'a> {
@@ -184,7 +185,6 @@ fn capture(layout: &Layout, cancel: Option<&CancelToken>) -> Result<Protection> 
         "e",
         "python",
         "tools",
-        "profiles",
         "releases",
         "state/instances",
         "state/gui-repairs",
@@ -202,6 +202,10 @@ fn capture(layout: &Layout, cancel: Option<&CancelToken>) -> Result<Protection> 
             .into(),
         bytes: scanner.bytes,
         entries: scanner.entries,
+        profiles: crate::instances::summarize_profiles(
+            layout,
+            cancel.unwrap_or(&CancelToken::new()),
+        )?,
     })
 }
 

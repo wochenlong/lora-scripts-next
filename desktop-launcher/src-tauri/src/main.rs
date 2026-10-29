@@ -2,6 +2,7 @@
 mod core;
 mod instances;
 mod model;
+mod network_policy;
 mod operations;
 mod python_integrity;
 mod recipe;
@@ -433,6 +434,45 @@ async fn stop_trainer(state: tauri::State<'_, Runtime>) -> Result<(), String> {
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
+async fn load_network_settings(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+) -> Result<serde_json::Value, String> {
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine
+            .try_lock()
+            .map_err(|_| "已有任务执行中，请稍后读取网络设置".to_string())?;
+        let root = engine
+            .resolve(&root)
+            .map_err(|error| format!("{error:#}"))?;
+        let settings =
+            network_policy::load_settings(&root).map_err(|error| format!("{error:#}"))?;
+        let policy = network_policy::for_root(&root).map_err(|error| format!("{error:#}"))?;
+        Ok(serde_json::json!({ "settings": settings, "diagnostic": policy.diagnostic(None) }))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+async fn save_network_settings(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    settings: network_policy::Settings,
+) -> Result<serde_json::Value, String> {
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine
+            .try_lock()
+            .map_err(|_| "已有任务执行中，请稍后保存网络设置".to_string())?;
+        engine
+            .save_network_settings(&root, &settings)
+            .map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+#[tauri::command]
 async fn choose_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         Ok(app
@@ -577,7 +617,7 @@ fn main() {
             Ok(())
         })();
         if let Err(e) = result {
-            eprintln!("{e:#}");
+            eprintln!("{}", network_policy::redact(&format!("{e:#}")));
             std::process::exit(1);
         }
         return;
@@ -626,6 +666,8 @@ fn main() {
             rollback_release,
             remove_release,
             stop_trainer,
+            load_network_settings,
+            save_network_settings,
             choose_directory,
             open_trainer
         ])

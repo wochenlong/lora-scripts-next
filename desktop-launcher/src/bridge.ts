@@ -61,6 +61,19 @@ export const openTrainer = () => invoke<void>('open_trainer')
 export const listenToLogs = (handler: (line: string) => void) =>
   listen<string>('launcher:log', (event) => handler(event.payload))
 
+export interface NetworkSettings {
+  mode?: 'auto' | 'system' | 'manual' | 'direct'
+  http_proxy?: string | null
+  https_proxy?: string | null
+  no_proxy?: string | null
+}
+export interface NetworkSettingsView {
+  settings: NetworkSettings
+  diagnostic: { network_mode: string; source: string; http_proxy: string; https_proxy: string; no_proxy: string; warning: string; proxy_enabled: boolean }
+}
+export const loadNetworkSettings = (root: string) => invoke<NetworkSettingsView>('load_network_settings', { root })
+export const saveNetworkSettings = (root: string, settings: NetworkSettings) => invoke<NetworkSettingsView>('save_network_settings', { root, settings })
+
 export interface OperationSnapshot {
   schema_version: number
   id: string

@@ -479,8 +479,14 @@ fn wheel_files(
             .context("Python 路径无父目录")?
             .join("__pycache__");
         for suffix in ["", ".opt-1", ".opt-2"] {
+            let derived = parent.join(format!("{stem}.cpython-310{suffix}.pyc"));
+            // Some wheels ship bytecode as original content (e.g. NumPy).
+            // Its trusted ZIP hash remains authoritative; it is not optional generated data.
+            if originals.contains_key(&derived) {
+                continue;
+            }
             generated.insert(
-                parent.join(format!("{stem}.cpython-310{suffix}.pyc")),
+                derived,
                 ("optional_derived_bytecode_unverified".into(), false),
             );
         }
@@ -832,6 +838,30 @@ mod tests {
         assert!(report.packages[0]
             .damaged
             .contains(&PathBuf::from("Lib/site-packages/demo/__init__.py")));
+    }
+
+    #[test]
+    fn wheel_shipped_bytecode_stays_original_and_tampering_is_detected() {
+        let fixture = Fixture::new(&[(
+            "demo/__pycache__/__init__.cpython-310.pyc",
+            b"trusted wheel bytecode",
+        )]);
+        fixture.install();
+        let bytecode = PathBuf::from("Lib/site-packages/demo/__pycache__/__init__.cpython-310.pyc");
+        let report = fixture.inspect().unwrap();
+        assert!(report.original_files_verified());
+        assert!(!report.packages[0]
+            .generated
+            .iter()
+            .any(|file| file.path == bytecode));
+        fs::write(
+            fixture.layout.environment.join(&bytecode),
+            b"altered wheel bytecode",
+        )
+        .unwrap();
+        let report = fixture.inspect().unwrap();
+        assert!(!report.original_files_verified());
+        assert!(report.packages[0].damaged.contains(&bytecode));
     }
 
     #[test]

@@ -2,6 +2,10 @@
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { cancelOperation, chooseDirectory, diagnoseGui, installManagedRelease, listenToLogs, openTrainer, operationEvents, operationHistory, operationSnapshot, planGuiRepair, prefetchRelease, previewSourceRepair, recoverGuiRepair, repairGuiPackage, repairManagedSource, rollbackRelease, runCommand, runReleaseCommand, stopTrainer } from './bridge'
 import type { GuiDiagnosis, GuiRepairPreview, OperationSnapshot, PackageIntegrity, ReleaseCommand, Report, ReportCommand, VersionView } from './bridge'
+import { loadNetworkSettings, saveNetworkSettings } from './bridge'
+import type { NetworkSettings, NetworkSettingsView } from './bridge'
+import { settingsForSave } from './network-settings'
+import type { ProxyField } from './network-settings'
 
 type Page = 'launch' | 'versions' | 'environment'
 interface Confirmation {
@@ -29,6 +33,9 @@ const history = ref<OperationSnapshot[]>([])
 const guiDiagnosis = ref<GuiDiagnosis | null>(null)
 const guiPreview = ref<GuiRepairPreview | null>(null)
 const showAllPackages = ref(false)
+const networkView = ref<NetworkSettingsView | null>(null)
+const networkDraft = ref({ mode: 'auto' as NonNullable<NetworkSettings['mode']>, http_proxy: '', https_proxy: '', no_proxy: '' })
+const networkInherit = ref<ProxyField[]>([])
 let guiEpoch = 0
 let operationTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
@@ -86,6 +93,36 @@ const visiblePackages = computed(() => showAllPackages.value ? guiDiagnosis.valu
 const guiPlanBlocked = computed(() => Boolean(guiRecoveryNeeded.value || guiDiagnosis.value?.source_error || guiDiagnosis.value?.installed_metadata_error))
 
 watch([path, () => currentVersion.value?.id], clearGuiState, { flush: 'sync' })
+watch(path, () => { networkView.value = null; networkInherit.value = []; networkDraft.value = { mode: 'auto', http_proxy: '', https_proxy: '', no_proxy: '' } }, { flush: 'sync' })
+
+function acceptNetworkSettings(view: NetworkSettingsView) {
+  networkView.value = view
+  networkInherit.value = []
+  networkDraft.value = { mode: view.settings.mode ?? 'auto', http_proxy: view.settings.http_proxy ?? '', https_proxy: view.settings.https_proxy ?? '', no_proxy: view.settings.no_proxy ?? '' }
+}
+async function readNetworkSettings() {
+  const root = path.value.trim()
+  await perform('读取网络设置', async () => {
+    const view = await loadNetworkSettings(root)
+    if (path.value.trim() === root) acceptNetworkSettings(view)
+  })
+}
+async function storeNetworkSettings() {
+  const root = path.value.trim()
+  if (!networkView.value) return
+  const settings = settingsForSave(networkView.value.settings, networkDraft.value, networkInherit.value)
+  await perform('保存网络设置', async () => {
+    const view = await saveNetworkSettings(root, settings)
+    if (path.value.trim() === root) acceptNetworkSettings(view)
+  })
+}
+function inheritNetworkField(key: ProxyField) {
+  networkDraft.value[key] = ''
+  if (!networkInherit.value.includes(key)) networkInherit.value.push(key)
+}
+function editNetworkField(key: ProxyField) {
+  networkInherit.value = networkInherit.value.filter((field) => field !== key)
+}
 
 function clearGuiState() {
   guiEpoch += 1
@@ -453,6 +490,23 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
           <p class="environment-scope">当前检查覆盖启动器基础工具、训练器主程序和网页资源。各独立训练引擎的 Python / Torch / GPU 诊断尚未接入。</p>
           <div v-if="report?.checks.length && sameRoot" class="checks" role="list" aria-label="环境检查明细"><div v-for="(check, index) in report.checks" :key="`${index}-${check.name}`" class="check-row" role="listitem"><span class="check-badge" :class="{ ok: check.ok }">{{ check.ok ? '通过' : '待处理' }}</span><div><strong>{{ check.name }}</strong><p>{{ check.detail }}</p></div></div></div>
           <p v-else class="scope-note">请先检查安装目录。训练器目录缺失或环境损坏时，桌面检查与修复入口仍可使用。</p>
+          <details class="network-settings">
+            <summary>网络与代理设置</summary>
+            <p class="hint">自动模式按环境变量与系统代理选择连接方式。手动代理连接失败会报告错误；本机服务始终直接连接。</p>
+            <button class="compact" :disabled="busy || !sameRoot" @click="readNetworkSettings">读取当前设置</button>
+            <template v-if="networkView">
+              <label>连接方式<select v-model="networkDraft.mode" :disabled="busy"><option value="auto">自动</option><option value="system">系统代理</option><option value="manual">手动代理</option><option value="direct">直接连接</option></select></label>
+              <template v-if="networkDraft.mode === 'manual' || networkDraft.mode === 'auto'">
+                <label>HTTP 代理<input v-model="networkDraft.http_proxy" type="password" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:11809" :disabled="busy" @input="editNetworkField('http_proxy')"><button :disabled="busy" @click="inheritNetworkField('http_proxy')">恢复继承</button></label>
+                <label>HTTPS 代理<input v-model="networkDraft.https_proxy" type="password" autocomplete="off" spellcheck="false" placeholder="手动模式可复用 HTTP 代理" :disabled="busy" @input="editNetworkField('https_proxy')"><button :disabled="busy" @click="inheritNetworkField('https_proxy')">恢复继承</button></label>
+              </template>
+              <label v-if="networkDraft.mode !== 'direct'">绕过代理<input v-model="networkDraft.no_proxy" spellcheck="false" placeholder="example.org,10.0.0.0/8" :disabled="busy" @input="editNetworkField('no_proxy')"><button :disabled="busy" @click="inheritNetworkField('no_proxy')">恢复继承</button></label>
+              <p class="hint">自动模式中，清空已填写的代理会禁用对应协议的代理；“恢复继承”会重新采用环境或系统设置。未编辑的空值设置会原样保留。</p>
+              <p class="hint">生效来源：{{ ({ environment: '环境变量', system: '系统设置', manual: '手动设置', direct: '直接连接' } as Record<string, string>)[networkView.diagnostic.source] ?? networkView.diagnostic.source }}。{{ networkView.diagnostic.warning }}</p>
+              <p class="hint">设置仅保存在当前安装目录；修改后用于后续操作。代理凭据会保存在本机，日志中的代理地址会隐藏凭据。</p>
+              <button :disabled="mutationDisabled" @click="storeNetworkSettings">保存网络设置</button>
+            </template>
+          </details>
           <section v-if="managedCurrent" class="gui-diagnostics" aria-labelledby="gui-diagnostics-title">
             <div class="section-caption"><h2 id="gui-diagnostics-title">固定 GUI 依赖诊断与单包修复</h2><button :disabled="mutationDisabled" @click="diagnoseManagedGui">{{ pending === '只读诊断 GUI 依赖' ? '正在诊断…' : '只读诊断依赖' }}</button></div>
             <p class="hint">诊断依据固定 wheel 的真实文件摘要。选择单个包后，先审查文件清单，再确认离线修复。请先停止运行中的训练器。</p>
@@ -500,6 +554,10 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 
 <style scoped>
 .version-actions { flex-wrap: wrap; }
+.network-settings { margin: 15px 0; padding: 10px; border: 1px solid #e5e5e5; font-size: 11px; }
+.network-settings summary { cursor: pointer; }
+.network-settings label { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
+.network-settings input, .network-settings select { flex: 1; min-width: 0; padding: 6px; border: 1px solid #d4d4d4; background: white; font: inherit; }
 .gui-diagnostics { margin-top: 18px; border-top: 1px solid #e5e5e5; padding-top: 15px; }
 .gui-diagnostics > .section-caption { align-items: flex-start; }
 .gui-diagnostics > .section-caption button { font-size: 11px; flex-shrink: 0; }

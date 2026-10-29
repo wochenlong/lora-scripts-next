@@ -68,7 +68,8 @@ pub(super) fn download(
     if bytes > recipe.budget.max_asset_bytes {
         bail!("资产超过固定配方限额");
     }
-    let client = reqwest::Client::builder()
+    let client = crate::network_policy::current_or_root(&ctx.layout().root)?
+        .client_builder()
         .timeout(Duration::from_secs(600))
         .build()?;
     super::controlled_download::download(
@@ -350,7 +351,13 @@ fn install_inner(
         "g{:.16}",
         format!("{:x}", Sha256::digest(material.as_bytes()))
     );
-    let instance = instances::create(ctx, &id, recipe.id(), &recipe_sha)?;
+    let instance = instances::create_controlled(
+        ctx,
+        &id,
+        recipe.id(),
+        &recipe_sha,
+        &operation.cancel_token(),
+    )?;
     let environment = instances::path(&instance)?;
     phase(
         operation,
@@ -394,13 +401,19 @@ fn install_inner(
         OperationPhase::Verifying,
         "验证固定依赖、解释器归属与关键导入",
     )?;
-    let clean = instances::validate_new(ctx, &instance, &[], |environment| {
-        super::verify_source(layout, release)?;
-        if super::digest(&python)? != recipe.python.exe_sha256 {
-            bail!("验证期间基础Python身份改变");
-        }
-        validate_environment(layout, recipe, environment, log, &operation.cancel_token())
-    })?;
+    let clean = instances::validate_new_controlled(
+        ctx,
+        &instance,
+        &[],
+        &operation.cancel_token(),
+        |environment| {
+            super::verify_source(layout, release)?;
+            if super::digest(&python)? != recipe.python.exe_sha256 {
+                bail!("验证期间基础Python身份改变");
+            }
+            validate_environment(layout, recipe, environment, log, &operation.cancel_token())
+        },
+    )?;
     phase(
         operation,
         ctx,
@@ -477,8 +490,16 @@ pub(super) fn validate_environment(
     check.args(["pip", "check", "--python"]).arg(&executable);
     super::execute_controlled(check, log, cancel)?;
     let mut probe = Command::new(&executable);
-    probe.args(["-I", "-B", "-c", "import sys,pathlib,json,re; from importlib.metadata import distributions; base=pathlib.Path(sys.argv[1]).resolve(); env=pathlib.Path(sys.argv[2]).resolve(); assert sys.version.split()[0]=='3.10.19'; assert pathlib.Path(sys.base_prefix).resolve()==base.parent(); assert pathlib.Path(sys._base_executable).resolve()==base; assert pathlib.Path(sys.prefix).resolve()==env; ds=list(distributions()); assert all(pathlib.Path(d.locate_file('')).resolve().is_relative_to(env) for d in ds); normalize=lambda n: re.sub('[-_.]+','-',n).lower(); expected=json.loads(sys.argv[3]); actual={normalize(d.metadata['Name']):d.version for d in ds}; assert len(ds)==len(actual) and actual==expected, (actual,expected); import pip,fastapi,uvicorn,toml,numpy,onnxruntime,psutil,pandas,PIL,cv2,tensorboard,rich,requests,httpx,aiohttp,websockets,multipart,modelscope,cryptography,huggingface_hub,pynvml; print('GUI fixed recipe import/ownership passed')"])
-        .arg(&fixed_python).arg(environment)
-        .arg(serde_json::to_string(&recipe.wheels.iter().map(|wheel| (&wheel.name, &wheel.version)).collect::<std::collections::BTreeMap<_, _>>())?);
+    probe
+        .args(["-I", "-B", "-c", include_str!("gui_environment_probe.py")])
+        .arg(&fixed_python)
+        .arg(environment)
+        .arg(serde_json::to_string(
+            &recipe
+                .wheels
+                .iter()
+                .map(|wheel| (&wheel.name, &wheel.version))
+                .collect::<std::collections::BTreeMap<_, _>>(),
+        )?);
     super::execute_controlled(probe, log, cancel)
 }

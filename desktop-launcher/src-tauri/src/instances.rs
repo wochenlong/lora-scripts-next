@@ -1,5 +1,6 @@
 //! 固定路径 GUI 实例事务；修改必须持有同一 workspace lease，dirty 仅由复验清除。
 use crate::model::{self, Layout, WorkspaceMutation};
+use crate::operations::CancelToken;
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -9,11 +10,17 @@ use std::{
     io::{Read, Write},
     path::{Component, Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
+    time::{Duration, Instant},
 };
 
 const MAX_FILE: u64 = 1024 * 1024 * 1024;
 const MAX_TREE: u64 = 4 * MAX_FILE;
 const MAX_STATE: u64 = 32 * 1024 * 1024;
+const MAX_PROFILE_BYTES: u64 = 8 * 1024 * 1024 * 1024 * 1024;
+const MAX_PROFILE_NODES: u64 = 1_000_000;
+const MAX_PROFILE_DIRECTORY_ENTRIES: usize = 100_000;
+const MAX_PROFILE_DEPTH: usize = 128;
+const MAX_PROFILE_PATH_BYTES: u64 = 256 * 1024 * 1024;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 type Tree = BTreeMap<PathBuf, Node>;
 
@@ -40,7 +47,371 @@ enum Node {
 struct Observation {
     environment: Tree,
     profiles: Tree,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    profiles_summary: Option<ProfilesSummary>,
     protected: BTreeMap<PathBuf, Tree>,
+}
+
+/// 只读资料树的流式内容承诺；不将百万路径复制到每个32MiB实例记录。
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct ProfilesSummary {
+    schema_version: u32,
+    exists: bool,
+    nodes: u64,
+    files: u64,
+    bytes: u64,
+    sha256: String,
+}
+
+struct ProfileBudget<'a> {
+    cancel: &'a CancelToken,
+    deadline: Instant,
+    max_bytes: u64,
+    max_nodes: u64,
+    bytes: u64,
+    nodes: u64,
+    files: u64,
+    discovered: u64,
+    path_bytes: u64,
+}
+impl<'a> ProfileBudget<'a> {
+    fn new(cancel: &'a CancelToken) -> Self {
+        Self {
+            cancel,
+            deadline: Instant::now() + Duration::from_secs(900),
+            max_bytes: MAX_PROFILE_BYTES,
+            max_nodes: MAX_PROFILE_NODES,
+            bytes: 0,
+            nodes: 0,
+            files: 0,
+            discovered: 1,
+            path_bytes: 0,
+        }
+    }
+    fn check(&self) -> Result<()> {
+        self.cancel.check()?;
+        if Instant::now() >= self.deadline {
+            bail!("资料内容扫描超过900秒预算，未授权变更");
+        }
+        Ok(())
+    }
+    fn node(&mut self) -> Result<()> {
+        self.check()?;
+        self.nodes = self.nodes.checked_add(1).context("资料节点数溢出")?;
+        if self.nodes > self.max_nodes {
+            bail!("资料内容扫描超过节点预算");
+        }
+        Ok(())
+    }
+}
+
+fn profile_file_digest(bytes: u64, sha256: &str) -> String {
+    let mut hash = Sha256::new();
+    hash.update(b"next-trainer/profile-file/v1\0");
+    hash.update(bytes.to_le_bytes());
+    hash.update(sha256.as_bytes());
+    format!("{:x}", hash.finalize())
+}
+fn profile_directory_digest(children: &[(String, bool, String)]) -> String {
+    let mut hash = Sha256::new();
+    hash.update(b"next-trainer/profile-directory/v1\0");
+    hash.update((children.len() as u64).to_le_bytes());
+    for (name, directory, digest) in children {
+        hash.update((name.len() as u64).to_le_bytes());
+        hash.update(name.as_bytes());
+        hash.update([u8::from(*directory)]);
+        hash.update(digest.as_bytes());
+    }
+    format!("{:x}", hash.finalize())
+}
+fn absent_profiles() -> ProfilesSummary {
+    ProfilesSummary {
+        schema_version: 1,
+        exists: false,
+        nodes: 0,
+        files: 0,
+        bytes: 0,
+        sha256: hash(b"next-trainer/profile-missing/v1\0"),
+    }
+}
+
+fn profile_stream_file(
+    layout: &Layout,
+    path: &Path,
+    budget: &mut ProfileBudget<'_>,
+) -> Result<Fingerprint> {
+    budget.check()?;
+    layout.guard_path(path)?;
+    let before = fs::symlink_metadata(path)?;
+    if !before.is_file() {
+        bail!("资料内容保护只接受普通文件");
+    }
+    if budget
+        .bytes
+        .checked_add(before.len())
+        .is_none_or(|bytes| bytes > budget.max_bytes)
+    {
+        bail!("资料内容扫描超过独立字节预算");
+    }
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        // 扫描期间禁止新写入/删除句柄；已有写入者会导致打开失败而不是得到混合摘要。
+        options.share_mode(1);
+    }
+    let mut input = options.open(path)?;
+    let opened = input.metadata()?;
+    if !opened.is_file() || opened.len() != before.len() {
+        bail!("资料文件打开期间发生变化");
+    }
+    let mut digest = Sha256::new();
+    let mut bytes = 0u64;
+    let mut buffer = [0; 65_536];
+    loop {
+        budget.check()?;
+        let count = input.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        bytes = bytes
+            .checked_add(count as u64)
+            .context("资料文件长度溢出")?;
+        budget.bytes = budget
+            .bytes
+            .checked_add(count as u64)
+            .context("资料树长度溢出")?;
+        if bytes > opened.len() || budget.bytes > budget.max_bytes {
+            bail!("资料扫描长度变化或超出独立字节预算");
+        }
+        digest.update(&buffer[..count]);
+    }
+    layout.guard_path(path)?;
+    let after = fs::symlink_metadata(path)?;
+    let handle_after = input.metadata()?;
+    if !after.is_file()
+        || bytes != opened.len()
+        || after.len() != bytes
+        || handle_after.len() != bytes
+        || opened.modified().ok() != handle_after.modified().ok()
+        || opened.modified().ok() != after.modified().ok()
+    {
+        bail!("资料文件扫描期间发生变化");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if (opened.dev(), opened.ino()) != (after.dev(), after.ino()) {
+            bail!("资料路径在扫描期间被替换");
+        }
+    }
+    budget.files = budget.files.checked_add(1).context("资料文件数溢出")?;
+    Ok(Fingerprint {
+        bytes,
+        sha256: format!("{:x}", digest.finalize()),
+    })
+}
+
+fn profile_summary(
+    layout: &Layout,
+    base: &Path,
+    budget: &mut ProfileBudget<'_>,
+) -> Result<ProfilesSummary> {
+    profile_scan(layout, base, budget, None)
+}
+
+/// 固定资料根的内容摘要，可供源码修复等只读保护闭包复用；每次调用有独立预算。
+pub(crate) fn summarize_profiles(layout: &Layout, cancel: &CancelToken) -> Result<ProfilesSummary> {
+    profile_summary(
+        layout,
+        &layout.root.join("profiles"),
+        &mut ProfileBudget::new(cancel),
+    )
+}
+
+fn profile_scan(
+    layout: &Layout,
+    base: &Path,
+    budget: &mut ProfileBudget<'_>,
+    mut legacy: Option<&mut Tree>,
+) -> Result<ProfilesSummary> {
+    fn walk(
+        layout: &Layout,
+        base: &Path,
+        path: &Path,
+        depth: usize,
+        budget: &mut ProfileBudget<'_>,
+        legacy: &mut Option<&mut Tree>,
+    ) -> Result<(bool, String)> {
+        budget.node()?;
+        if legacy.is_none() && depth > MAX_PROFILE_DEPTH {
+            bail!("资料目录深度超过128层预算");
+        }
+        layout.guard_path(path)?;
+        let metadata = fs::symlink_metadata(path)?;
+        if !metadata.is_dir() {
+            if legacy.is_some() && metadata.len() > MAX_FILE {
+                bail!("旧事务资料文件超出原快照合同，保留待恢复状态");
+            }
+            let value = profile_stream_file(layout, path, budget)?;
+            let digest = profile_file_digest(value.bytes, &value.sha256);
+            if let Some(tree) = legacy.as_deref_mut() {
+                tree.insert(path.strip_prefix(base)?.to_owned(), Node::File(value));
+            }
+            return Ok((false, digest));
+        }
+        if let Some(tree) = legacy.as_deref_mut() {
+            tree.insert(path.strip_prefix(base)?.to_owned(), Node::Directory);
+        }
+        fn list(
+            path: &Path,
+            budget: &mut ProfileBudget<'_>,
+            discover: bool,
+        ) -> Result<Vec<(String, PathBuf)>> {
+            let mut entries = Vec::new();
+            let mut aliases = BTreeSet::new();
+            for entry in fs::read_dir(path)? {
+                budget.check()?;
+                let entry = entry?;
+                let name = entry
+                    .file_name()
+                    .into_string()
+                    .map_err(|_| anyhow::anyhow!("资料路径不是UTF-8"))?;
+                model::validate_component(&name)?;
+                if !aliases.insert(name.to_lowercase()) {
+                    bail!("资料目录存在大小写别名");
+                }
+                let child = entry.path();
+                if discover {
+                    budget.discovered =
+                        budget.discovered.checked_add(1).context("资料路径数溢出")?;
+                    budget.path_bytes = budget
+                        .path_bytes
+                        .checked_add(
+                            (child.as_os_str().as_encoded_bytes().len() + name.len()) as u64,
+                        )
+                        .context("资料路径长度溢出")?;
+                    if budget.discovered > budget.max_nodes
+                        || budget.path_bytes > MAX_PROFILE_PATH_BYTES
+                    {
+                        bail!("资料扫描超过独立节点或256MiB路径预算");
+                    }
+                }
+                entries.push((name, child));
+                if entries.len() > MAX_PROFILE_DIRECTORY_ENTRIES {
+                    bail!("资料单目录超过10万项预算");
+                }
+            }
+            entries.sort_by(|left, right| left.0.cmp(&right.0));
+            Ok(entries)
+        }
+        let entries = list(path, budget, true)?;
+        let mut children = Vec::with_capacity(entries.len());
+        for (name, child) in &entries {
+            let (directory, digest) = walk(layout, base, child, depth + 1, budget, legacy)?;
+            children.push((name.clone(), directory, digest));
+        }
+        layout.guard_path(path)?;
+        if entries != list(path, budget, false)? {
+            bail!("资料目录在扫描期间增加、删除或重命名");
+        }
+        Ok((true, profile_directory_digest(&children)))
+    }
+    budget.check()?;
+    layout.guard_path(base)?;
+    if !base.try_exists()? {
+        return Ok(absent_profiles());
+    }
+    if !fs::symlink_metadata(base)?.is_dir() {
+        bail!("资料根不是普通目录");
+    }
+    let (_, sha256) = walk(layout, base, base, 0, budget, &mut legacy)?;
+    Ok(ProfilesSummary {
+        schema_version: 1,
+        exists: true,
+        nodes: budget.nodes,
+        files: budget.files,
+        bytes: budget.bytes,
+        sha256,
+    })
+}
+
+fn legacy_profile_tree(layout: &Layout, base: &Path, cancel: &CancelToken) -> Result<Tree> {
+    let mut budget = ProfileBudget::new(cancel);
+    budget.max_bytes = MAX_TREE;
+    budget.max_nodes = 50_000;
+    let mut tree = Tree::new();
+    profile_scan(layout, base, &mut budget, Some(&mut tree))?;
+    Ok(tree)
+}
+
+fn legacy_profiles_summary(tree: &Tree) -> Result<ProfilesSummary> {
+    if tree.is_empty() {
+        return Ok(absent_profiles());
+    }
+    if !matches!(tree.get(Path::new("")), Some(Node::Directory)) {
+        bail!("旧资料树根不是目录");
+    }
+    let mut result = ProfilesSummary {
+        schema_version: 1,
+        exists: true,
+        nodes: tree.len() as u64,
+        files: 0,
+        bytes: 0,
+        sha256: String::new(),
+    };
+    // 按深度倒序聚合，每条路径只参与一次，旧记录不额外引入递归深度合同。
+    let mut paths: Vec<_> = tree.keys().collect();
+    paths.sort_by_key(|path| std::cmp::Reverse(path.components().count()));
+    let mut children: BTreeMap<PathBuf, Vec<(String, bool, String)>> = BTreeMap::new();
+    for path in paths {
+        let (directory, digest) = match &tree[path] {
+            Node::File(value) => {
+                result.files += 1;
+                result.bytes = result
+                    .bytes
+                    .checked_add(value.bytes)
+                    .context("旧资料树长度溢出")?;
+                (false, profile_file_digest(value.bytes, &value.sha256))
+            }
+            Node::Directory => {
+                let mut values = children.remove(path).unwrap_or_default();
+                values.sort_by(|left, right| left.0.cmp(&right.0));
+                (true, profile_directory_digest(&values))
+            }
+            Node::PythonAlias(_) => bail!("资料合同不允许Python联接"),
+        };
+        if path.as_os_str().is_empty() {
+            result.sha256 = digest;
+        } else {
+            let parent = path.parent().context("旧资料树缺少父目录")?;
+            if !matches!(tree.get(parent), Some(Node::Directory)) {
+                bail!("旧资料树父节点不是目录");
+            }
+            let name = path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .context("旧资料路径不是UTF-8")?
+                .to_owned();
+            children
+                .entry(parent.to_owned())
+                .or_default()
+                .push((name, directory, digest));
+        }
+    }
+    Ok(result)
+}
+fn profiles_equal(before: &Observation, after: &Observation) -> Result<bool> {
+    let summarize = |value: &Observation| -> Result<ProfilesSummary> {
+        value
+            .profiles_summary
+            .clone()
+            .map(Ok)
+            .unwrap_or_else(|| legacy_profiles_summary(&value.profiles))
+    };
+    Ok(summarize(before)? == summarize(after)?)
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -292,7 +663,8 @@ fn python_tree(layout: &Layout) -> Result<Tree> {
     let target = python.join("cpython-3.10.19-windows-x86_64-none");
     scan_tree(layout, &python, &[], Some((&alias, &target)))
 }
-fn observe(layout: &Layout, state: &InstanceState) -> Result<Observation> {
+fn observe(layout: &Layout, state: &InstanceState, cancel: &CancelToken) -> Result<Observation> {
+    cancel.check()?;
     let current = path(state)?;
     let mut protected = BTreeMap::new();
     for root in [&layout.release_dir, &layout.root.join("tools/uv.exe")] {
@@ -329,9 +701,22 @@ fn observe(layout: &Layout, state: &InstanceState) -> Result<Observation> {
             protected.insert(PathBuf::from(container), tree);
         }
     }
+    // 旧 dirty 快照仍绑定原序列化树，恢复成功前不能改写它的摘要合同。
+    let (profiles, profiles_summary) =
+        if state.pending.is_some() && state.verified.profiles_summary.is_none() {
+            (
+                legacy_profile_tree(layout, &layout.root.join("profiles"), cancel)?,
+                None,
+            )
+        } else {
+            let summary = summarize_profiles(layout, cancel)?;
+            (Tree::new(), Some(summary))
+        };
+    cancel.check()?;
     Ok(Observation {
         environment: scan(layout, &path(state)?, &state.ignored)?,
-        profiles: scan(layout, &layout.root.join("profiles"), &[])?,
+        profiles,
+        profiles_summary,
         protected,
     })
 }
@@ -401,6 +786,20 @@ fn validate(layout: &Layout, id: &str, state: &InstanceState) -> Result<()> {
     for root in state.verified.protected.keys() {
         relative(root)?;
         layout.guard_path(&layout.root.join(root))?;
+    }
+    if let Some(summary) = &state.verified.profiles_summary {
+        if !state.verified.profiles.is_empty()
+            || summary.schema_version != 1
+            || !valid_hash(&summary.sha256)
+            || summary.nodes > MAX_PROFILE_NODES
+            || summary.bytes > MAX_PROFILE_BYTES
+            || summary.files == 0 && summary.bytes != 0
+            || summary.files >= summary.nodes && summary.exists
+            || summary.exists && summary.nodes == 0
+            || !summary.exists && *summary != absent_profiles()
+        {
+            bail!("资料内容摘要无效或与旧资料树混用");
+        }
     }
     for tree in [&state.verified.environment, &state.verified.profiles]
         .into_iter()
@@ -473,17 +872,29 @@ pub(crate) fn load(layout: &Layout, id: &str) -> Result<InstanceState> {
 }
 fn save(layout: &Layout, state: &InstanceState) -> Result<()> {
     validate(layout, &state.instance_id, state)?;
-    if serde_json::to_vec(state)?.len() as u64 > MAX_STATE {
+    // 实际写出使用pretty JSON并追加换行；按真实编码限额才能保证重启可读。
+    if serde_json::to_vec_pretty(state)?.len() as u64 + 1 > MAX_STATE {
         bail!("实例记录超过可重读上限");
     }
     model::write_json_atomic(&state_path(layout, &state.instance_id)?, state)
 }
+#[cfg(test)]
 pub(crate) fn create(
     ctx: &WorkspaceMutation,
     id: &str,
     recipe_id: &str,
     recipe_sha256: &str,
 ) -> Result<InstanceState> {
+    create_controlled(ctx, id, recipe_id, recipe_sha256, &CancelToken::new())
+}
+pub(crate) fn create_controlled(
+    ctx: &WorkspaceMutation,
+    id: &str,
+    recipe_id: &str,
+    recipe_sha256: &str,
+    cancel: &CancelToken,
+) -> Result<InstanceState> {
+    cancel.check()?;
     let layout = ctx.layout();
     let target = state_path(layout, id)?;
     if target.exists() {
@@ -510,6 +921,7 @@ pub(crate) fn create(
         verified: Observation {
             environment: Tree::new(),
             profiles: Tree::new(),
+            profiles_summary: None,
             protected: BTreeMap::new(),
         },
         pending: None,
@@ -522,7 +934,7 @@ pub(crate) fn create(
     layout.ensure_dir(parent)?;
     // 原子目录创建独占短 ID；state 或物理目录任一重名都拒绝覆盖。
     fs::create_dir(&environment)?;
-    state.verified = observe(layout, &state)?;
+    state.verified = observe(layout, &state, cancel)?;
     save(layout, &state)?;
     Ok(state)
 }
@@ -542,29 +954,45 @@ pub(crate) fn assert_usable(state: &InstanceState) -> Result<()> {
 fn clean(
     layout: &Layout,
     mut state: InstanceState,
+    cancel: &CancelToken,
     validator: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<InstanceState> {
-    let before = observe(layout, &state)?;
+    let before = observe(layout, &state, cancel)?;
     if !matches!(before.environment.get(Path::new("")), Some(Node::Directory)) {
         bail!("GUI实例目录缺失，保持dirty");
     }
     validator(&path(&state)?)?;
-    if observe(layout, &state)? != before || load(layout, &state.instance_id)? != state {
+    if observe(layout, &state, cancel)? != before || load(layout, &state.instance_id)? != state {
         bail!("验证器改变受保护树或持久实例已变化，保持dirty");
     }
     state.verified = before;
+    if state.verified.profiles_summary.is_none() {
+        state.verified.profiles_summary = Some(legacy_profiles_summary(&state.verified.profiles)?);
+        state.verified.profiles.clear();
+    }
     state.validated_generation = state.generation;
     state.dirty = false;
     state.pending = None;
     save(layout, &state)?;
     Ok(state)
 }
+#[cfg(test)]
 pub(crate) fn validate_new(
     ctx: &WorkspaceMutation,
     state: &InstanceState,
     ignores: &[PathBuf],
     validator: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<InstanceState> {
+    validate_new_controlled(ctx, state, ignores, &CancelToken::new(), validator)
+}
+pub(crate) fn validate_new_controlled(
+    ctx: &WorkspaceMutation,
+    state: &InstanceState,
+    ignores: &[PathBuf],
+    cancel: &CancelToken,
+    validator: impl FnOnce(&Path) -> Result<()>,
+) -> Result<InstanceState> {
+    cancel.check()?;
     let layout = ctx.layout();
     let mut current = load(layout, state.id())?;
     if current != *state || !current.dirty || current.generation != 1 || current.pending.is_some() {
@@ -575,15 +1003,15 @@ pub(crate) fn validate_new(
     }
     current.ignored = ignores.into();
     validate(layout, current.id(), &current)?;
-    let observed = observe(layout, &current)?;
-    if observed.profiles != current.verified.profiles
+    let observed = observe(layout, &current, cancel)?;
+    if !profiles_equal(&observed, &current.verified)?
         || observed.protected != current.verified.protected
     {
         bail!("安装改变了profiles或非目标受管组件保护树");
     }
     // 忽略合同先持久化，验证失败或重启仍能恢复同一合同。
     save(layout, &current)?;
-    clean(layout, current, validator)
+    clean(layout, current, cancel, validator)
 }
 fn validate_paths(state: &InstanceState, paths: &[PathBuf]) -> Result<()> {
     if paths.is_empty() || paths.len() > 20_000 {
@@ -627,12 +1055,23 @@ fn validate_paths(state: &InstanceState, paths: &[PathBuf]) -> Result<()> {
     }
     Ok(())
 }
+#[cfg(test)]
 pub(crate) fn plan(
     ctx: &WorkspaceMutation,
     id: &str,
     expected_generation: u64,
     paths: &[PathBuf],
 ) -> Result<RepairPlan> {
+    plan_controlled(ctx, id, expected_generation, paths, &CancelToken::new())
+}
+pub(crate) fn plan_controlled(
+    ctx: &WorkspaceMutation,
+    id: &str,
+    expected_generation: u64,
+    paths: &[PathBuf],
+    cancel: &CancelToken,
+) -> Result<RepairPlan> {
+    cancel.check()?;
     let state = load(ctx.layout(), id)?;
     if state.dirty
         || state.generation != state.validated_generation
@@ -640,7 +1079,7 @@ pub(crate) fn plan(
     {
         bail!("修复计划generation已过期");
     }
-    let diagnosed = observe(ctx.layout(), &state)?;
+    let diagnosed = observe(ctx.layout(), &state, cancel)?;
     let mut facts = state.clone();
     facts.verified = diagnosed.clone();
     validate_paths(&facts, paths)?;
@@ -648,6 +1087,7 @@ pub(crate) fn plan(
     // profiles 与其他组件允许在两个操作之间正常变化，本次事务从诊断时保护它们。
     let mut trusted = state.verified.clone();
     trusted.profiles = diagnosed.profiles.clone();
+    trusted.profiles_summary = diagnosed.profiles_summary.clone();
     trusted.protected = diagnosed.protected.clone();
     // 基础Python由所有引用实例共享；单包修复不能接纳已变更的基础运行时。
     trusted.protected.insert(
@@ -717,13 +1157,22 @@ fn copy(
     }
     Ok(expected)
 }
+#[cfg(test)]
 pub(crate) fn begin(ctx: &WorkspaceMutation, plan: &RepairPlan) -> Result<MutationTicket> {
+    begin_controlled(ctx, plan, &CancelToken::new())
+}
+pub(crate) fn begin_controlled(
+    ctx: &WorkspaceMutation,
+    plan: &RepairPlan,
+    cancel: &CancelToken,
+) -> Result<MutationTicket> {
+    cancel.check()?;
     let layout = ctx.layout();
     let mut state = load(layout, plan.state.id())?;
     if state != plan.state {
         bail!("诊断后持久实例已变化");
     }
-    if state.dirty || observe(layout, &state)? != plan.diagnosed {
+    if state.dirty || observe(layout, &state, cancel)? != plan.diagnosed {
         bail!("修复诊断树已经变化，拒绝使用旧计划");
     }
     state.verified = plan.diagnosed.clone();
@@ -755,6 +1204,7 @@ pub(crate) fn begin(ctx: &WorkspaceMutation, plan: &RepairPlan) -> Result<Mutati
     let environment = path(&state)?;
     let sorted: BTreeSet<_> = plan.paths.iter().cloned().collect();
     for (index, rel) in sorted.into_iter().enumerate() {
+        cancel.check()?;
         let original = match state.verified.environment.get(&rel) {
             Some(Node::File(value)) => Some(value.clone()),
             None => None,
@@ -777,7 +1227,8 @@ pub(crate) fn begin(ctx: &WorkspaceMutation, plan: &RepairPlan) -> Result<Mutati
         pending.files.insert(rel, original);
     }
     model::write_json_atomic(&backup.join("manifest.json"), &pending)?;
-    if observe(layout, &state)? != state.verified || load(layout, state.id())? != plan.state {
+    if observe(layout, &state, cancel)? != state.verified || load(layout, state.id())? != plan.state
+    {
         bail!("快照期间受保护内容变化，未授权修改");
     }
     state.generation = generation;
@@ -849,38 +1300,61 @@ fn protected(
             parent = directory.parent();
         }
     }
-    if expected != actual
-        || before.profiles != after.profiles
-        || before.protected != after.protected
+    if expected != actual || !profiles_equal(before, after)? || before.protected != after.protected
     {
         bail!("修复改变了非目标文件、目录或profiles，保持dirty");
     }
     Ok(())
 }
+#[cfg(test)]
 pub(crate) fn commit(
     ctx: &WorkspaceMutation,
     ticket: &MutationTicket,
     validator: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<InstanceState> {
+    commit_controlled(ctx, ticket, &CancelToken::new(), validator)
+}
+pub(crate) fn commit_controlled(
+    ctx: &WorkspaceMutation,
+    ticket: &MutationTicket,
+    cancel: &CancelToken,
+    validator: impl FnOnce(&Path) -> Result<()>,
+) -> Result<InstanceState> {
+    cancel.check()?;
     let state = checked(ctx, ticket)?;
     protected(
         &state.verified,
-        &observe(ctx.layout(), &state)?,
+        &observe(ctx.layout(), &state, cancel)?,
         &state.pending.as_ref().context("缺少事务")?.files,
     )?;
-    clean(ctx.layout(), state, validator)
+    clean(ctx.layout(), state, cancel, validator)
 }
+#[cfg(test)]
 pub(crate) fn recover(
     ctx: &WorkspaceMutation,
     ticket: &MutationTicket,
     validator: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<InstanceState> {
+    recover_controlled(ctx, ticket, &CancelToken::new(), validator)
+}
+pub(crate) fn recover_controlled(
+    ctx: &WorkspaceMutation,
+    ticket: &MutationTicket,
+    cancel: &CancelToken,
+    validator: impl FnOnce(&Path) -> Result<()>,
+) -> Result<InstanceState> {
+    cancel.check()?;
     let layout = ctx.layout();
     let state = checked(ctx, ticket)?;
     let pending = state.pending.as_ref().context("缺少恢复快照")?;
-    protected(&state.verified, &observe(layout, &state)?, &pending.files)?;
+    protected(
+        &state.verified,
+        &observe(layout, &state, cancel)?,
+        &pending.files,
+    )?;
     let environment = path(&state)?;
     for (index, (rel, original)) in pending.files.iter().enumerate() {
+        cancel.check()?;
         let target = environment.join(rel);
         layout.guard_path(&target)?;
         match original {
@@ -922,10 +1396,10 @@ pub(crate) fn recover(
             }
         }
     }
-    if observe(layout, &state)? != state.verified {
+    if observe(layout, &state, cancel)? != state.verified {
         bail!("同路径恢复未还原原树，保持dirty");
     }
-    clean(layout, state, validator)
+    clean(layout, state, cancel, validator)
 }
 
 #[cfg(test)]
@@ -1141,6 +1615,166 @@ mod tests {
     }
 
     #[test]
+    fn streaming_profiles_detect_same_length_and_timestamp_content_changes() {
+        use std::io::{Seek, SeekFrom};
+        let f = Fixture::new();
+        let model = f.root.join("profiles/default/model.bin");
+        fs::write(&model, vec![b'a'; 3 * 65_536 + 19]).unwrap();
+        let modified = fs::metadata(&model).unwrap().modified().unwrap();
+        let before = profile_summary(
+            f.ctx.layout(),
+            &f.root.join("profiles"),
+            &mut ProfileBudget::new(&CancelToken::new()),
+        )
+        .unwrap();
+        let ticket = f.ticket();
+        let mut output = OpenOptions::new().write(true).open(&model).unwrap();
+        output.seek(SeekFrom::Start(65_537)).unwrap();
+        output.write_all(b"b").unwrap();
+        output
+            .set_times(fs::FileTimes::new().set_modified(modified))
+            .unwrap();
+        drop(output);
+        assert_eq!(fs::metadata(&model).unwrap().modified().unwrap(), modified);
+        let after = profile_summary(
+            f.ctx.layout(),
+            &f.root.join("profiles"),
+            &mut ProfileBudget::new(&CancelToken::new()),
+        )
+        .unwrap();
+        assert_eq!(before.bytes, after.bytes);
+        assert_ne!(before.sha256, after.sha256);
+        assert!(commit(&f.ctx, &ticket, |_| Ok(())).is_err());
+        assert!(recover(&f.ctx, &ticket, |_| Ok(())).is_err());
+        assert!(load(f.ctx.layout(), f.state.id()).unwrap().dirty());
+    }
+
+    #[test]
+    fn profile_limits_are_independent_cancellable_and_fail_before_permission() {
+        let f = Fixture::new();
+        fs::write(
+            f.root.join("profiles/default/model.bin"),
+            vec![0u8; 131_073],
+        )
+        .unwrap();
+        let cancel = CancelToken::new();
+        let mut budget = ProfileBudget::new(&cancel);
+        budget.max_bytes = 131_072;
+        assert!(profile_summary(f.ctx.layout(), &f.root.join("profiles"), &mut budget).is_err());
+        let mut budget = ProfileBudget::new(&cancel);
+        budget.max_nodes = 1;
+        assert!(profile_summary(f.ctx.layout(), &f.root.join("profiles"), &mut budget).is_err());
+        let mut budget = ProfileBudget::new(&cancel);
+        budget.deadline = Instant::now();
+        assert!(profile_summary(f.ctx.layout(), &f.root.join("profiles"), &mut budget).is_err());
+        let manager = crate::operations::OperationManager::default();
+        let operation = manager
+            .start("profiles-cancel", crate::operations::OperationKind::Repair)
+            .unwrap();
+        manager.cancel("profiles-cancel").unwrap();
+        assert!(plan_controlled(
+            &f.ctx,
+            f.state.id(),
+            1,
+            &["package/a.py".into()],
+            &operation.cancel_token()
+        )
+        .is_err());
+        assert!(!load(f.ctx.layout(), f.state.id()).unwrap().dirty());
+        assert_eq!(load(f.ctx.layout(), f.state.id()).unwrap().generation(), 1);
+    }
+
+    #[test]
+    fn profile_summary_matches_legacy_tree_and_rejects_mixed_or_unknown_contracts() {
+        let f = Fixture::new();
+        let nested = f.root.join("profiles/default/models/empty");
+        f.ctx.layout().ensure_dir(&nested).unwrap();
+        fs::write(nested.parent().unwrap().join("two.bin"), b"two").unwrap();
+        let tree = scan(f.ctx.layout(), &f.root.join("profiles"), &[]).unwrap();
+        let summary = profile_summary(
+            f.ctx.layout(),
+            &f.root.join("profiles"),
+            &mut ProfileBudget::new(&CancelToken::new()),
+        )
+        .unwrap();
+        assert_eq!(summary, legacy_profiles_summary(&tree).unwrap());
+        assert_ne!(summary, absent_profiles());
+        let mut invalid = f.state.clone();
+        invalid.verified.profiles = tree;
+        assert!(validate(f.ctx.layout(), invalid.id(), &invalid).is_err());
+        invalid.verified.profiles.clear();
+        invalid
+            .verified
+            .profiles_summary
+            .as_mut()
+            .unwrap()
+            .schema_version = 2;
+        assert!(validate(f.ctx.layout(), invalid.id(), &invalid).is_err());
+    }
+
+    #[test]
+    fn old_pending_profile_tree_preserves_serialized_hash_and_recovers_before_upgrade() {
+        let f = Fixture::new();
+        let mut ticket = f.ticket();
+        ticket.state.verified.profiles =
+            scan(f.ctx.layout(), &f.root.join("profiles"), &[]).unwrap();
+        ticket.state.verified.profiles_summary = None;
+        let old_bytes = serde_json::to_vec(&ticket.state.verified).unwrap();
+        assert!(!String::from_utf8_lossy(&old_bytes).contains("profiles_summary"));
+        let round_trip: Observation = serde_json::from_slice(&old_bytes).unwrap();
+        assert_eq!(serde_json::to_vec(&round_trip).unwrap(), old_bytes);
+        ticket.state.pending.as_mut().unwrap().tree_sha256 = hash(&old_bytes);
+        let pending = ticket.state.pending.as_ref().unwrap();
+        model::write_json_atomic(
+            &f.root.join(&pending.directory).join("manifest.json"),
+            pending,
+        )
+        .unwrap();
+        save(f.ctx.layout(), &ticket.state).unwrap();
+        fs::write(
+            path(&ticket.state).unwrap().join("package/a.py"),
+            b"interrupted",
+        )
+        .unwrap();
+        let loaded = reload_ticket(f.ctx.layout(), f.state.id()).unwrap();
+        assert_eq!(loaded.state.verified.profiles_summary, None);
+        let restored = recover(&f.ctx, &loaded, |_| Ok(())).unwrap();
+        assert!(!restored.dirty());
+        assert!(restored.verified.profiles.is_empty());
+        assert!(restored.verified.profiles_summary.is_some());
+        assert_eq!(
+            fs::read(path(&restored).unwrap().join("package/a.py")).unwrap(),
+            b"original-a"
+        );
+    }
+
+    #[test]
+    #[ignore = "显式大模型验收：真实逐字节读取超过1GiB的资料文件"]
+    fn streaming_profile_accepts_file_larger_than_snapshot_limit_without_state_growth() {
+        let f = Fixture::new();
+        let model = f.root.join("profiles/default/large-model.bin");
+        File::create(&model).unwrap().set_len(MAX_FILE + 1).unwrap();
+        assert!(fingerprint(f.ctx.layout(), &model).is_err());
+        let summary = profile_summary(
+            f.ctx.layout(),
+            &f.root.join("profiles"),
+            &mut ProfileBudget::new(&CancelToken::new()),
+        )
+        .unwrap();
+        assert!(summary.bytes > MAX_FILE);
+        assert!(serde_json::to_vec(&summary).unwrap().len() < 512);
+        let planned = plan(
+            &f.ctx,
+            f.state.id(),
+            f.state.generation(),
+            &["package/a.py".into()],
+        )
+        .unwrap();
+        assert!(planned.diagnosed.profiles.is_empty());
+        assert!(serde_json::to_vec(&planned.diagnosed).unwrap().len() < 32 * 1024);
+    }
+
+    #[test]
     fn compact_storage_is_fixed_and_collisions_or_storage_reinterpretation_are_rejected() {
         let f = Fixture::new();
         assert_eq!(f.state.storage_version(), 1);
@@ -1195,7 +1829,7 @@ mod tests {
         let old = model::environment_path(&f.root, legacy.release_id(), legacy.id(), 0).unwrap();
         f.ctx.layout().ensure_dir(old.parent().unwrap()).unwrap();
         fs::rename(compact, &old).unwrap();
-        legacy.verified = observe(f.ctx.layout(), &legacy).unwrap();
+        legacy.verified = observe(f.ctx.layout(), &legacy, &CancelToken::new()).unwrap();
         legacy.verified.protected.remove(Path::new("e"));
         let record = state_path(f.ctx.layout(), legacy.id()).unwrap();
         let bytes = serde_json::to_vec(&legacy).unwrap();
@@ -1227,7 +1861,7 @@ mod tests {
         let old = model::environment_path(&f.root, legacy.release_id(), legacy.id(), 0).unwrap();
         f.ctx.layout().ensure_dir(old.parent().unwrap()).unwrap();
         fs::rename(compact, &old).unwrap();
-        legacy.verified = observe(f.ctx.layout(), &legacy).unwrap();
+        legacy.verified = observe(f.ctx.layout(), &legacy, &CancelToken::new()).unwrap();
         save(f.ctx.layout(), &legacy).unwrap();
         let mut ticket = begin(
             &f.ctx,
@@ -1303,7 +1937,7 @@ mod tests {
         fs::write(target.join("python.exe"), b"fixed python").unwrap();
         let alias = root.join("cpython-3.10-windows-x86_64-none");
         junction::create(&target, &alias).unwrap();
-        let observed = observe(f.ctx.layout(), &f.state).unwrap();
+        let observed = observe(f.ctx.layout(), &f.state, &CancelToken::new()).unwrap();
         let tree = &observed.protected[Path::new("python/3.10.19")];
         assert!(matches!(
             tree.get(Path::new("cpython-3.10-windows-x86_64-none")),
@@ -1316,7 +1950,7 @@ mod tests {
         let outside = f.root.join("outside");
         f.ctx.layout().ensure_dir(&outside).unwrap();
         junction::create(&outside, &alias).unwrap();
-        assert!(observe(f.ctx.layout(), &f.state).is_err());
+        assert!(observe(f.ctx.layout(), &f.state, &CancelToken::new()).is_err());
         junction::delete(alias).unwrap();
     }
 }

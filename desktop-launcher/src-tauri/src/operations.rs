@@ -141,7 +141,7 @@ impl State {
             seq,
             phase: self.snapshot.phase,
             status: self.snapshot.status,
-            message: message.into(),
+            message: crate::network_policy::redact(message),
         });
         if self.events.len() > EVENT_LIMIT {
             self.events.pop_front();
@@ -341,7 +341,10 @@ impl OperationHandle {
             bail!("操作终态已确定，不能重复完成");
         }
         state.snapshot.status = status;
-        state.snapshot.error = error;
+        state.snapshot.error = error.map(|mut error| {
+            error.message = crate::network_policy::redact(&error.message);
+            error
+        });
         state.record("工作线程已结束；实例恢复状态须另行核验")
     }
 
@@ -369,7 +372,10 @@ impl OperationHandle {
             }
             let mut terminal = state.clone();
             terminal.snapshot.status = status;
-            terminal.snapshot.error = error;
+            terminal.snapshot.error = error.map(|mut error| {
+                error.message = crate::network_policy::redact(&error.message);
+                error
+            });
             terminal.snapshot.cancel_requested = self.shared.cancel.is_cancel_requested();
             terminal.record("工作线程已结束；实例恢复状态须另行核验")?;
             state.completing = true;
@@ -529,6 +535,39 @@ mod tests {
     };
 
     static NEXT_TEST: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn event_and_persisted_errors_redact_url_credentials() {
+        let temporary = Temp::new();
+        let mutation = temporary.mutation();
+        let manager = OperationManager::default();
+        let operation = manager
+            .start("redacted-errors", OperationKind::Download)
+            .unwrap();
+        let secret = "HTTPS://user:fake-secret@proxy.test/path?token=fake-secret";
+        operation
+            .publish(OperationPhase::Downloading, secret)
+            .unwrap();
+        operation
+            .finish_and_persist(
+                &mutation,
+                OperationStatus::Failed,
+                Some(OperationError {
+                    code: "proxy_failure".into(),
+                    message: secret.into(),
+                }),
+            )
+            .unwrap();
+        let snapshot =
+            serde_json::to_string(&manager.snapshot("redacted-errors").unwrap()).unwrap();
+        assert!(!snapshot.contains("fake-secret") && !snapshot.contains("user:"));
+        let persisted = serde_json::to_string(&load_snapshots(mutation.layout()).unwrap()).unwrap();
+        assert!(!persisted.contains("fake-secret"));
+        assert!(persisted.contains("proxy.test/path"));
+        for event in manager.events_since("redacted-errors", 0).unwrap() {
+            assert!(!event.message.contains("fake-secret"));
+        }
+    }
     struct Temp(PathBuf);
 
     impl Temp {

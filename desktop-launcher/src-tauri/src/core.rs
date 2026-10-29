@@ -223,7 +223,8 @@ fn download(root: &Path, url: &str, name: &str, expected: &str, log: &Logger) ->
     }
     log(format!("下载 {url}"));
     let partial = target.with_extension(format!("{}.part", stamp()));
-    let mut response = reqwest::blocking::Client::builder()
+    let mut response = crate::network_policy::current_or_root(root)?
+        .blocking_client_builder()
         .timeout(Duration::from_secs(600))
         .build()?
         .get(url)
@@ -390,8 +391,9 @@ fn verify_source(layout: &Layout, release: &Release) -> Result<()> {
     Ok(())
 }
 
-fn uv_command(root: &Path, release: &Release) -> Command {
+fn uv_command(root: &Path, release: &Release) -> Result<Command> {
     let mut command = Command::new(uv(root));
+    crate::network_policy::current_or_root(root)?.apply_command(&mut command);
     command
         .env(
             "UV_PYTHON_INSTALL_DIR",
@@ -402,7 +404,7 @@ fn uv_command(root: &Path, release: &Release) -> Command {
         .env("UV_PYTHON_BIN_DIR", root.join("tools"))
         .env("UV_NO_PROGRESS", "1");
     hidden(&mut command);
-    command
+    Ok(command)
 }
 fn managed_python(root: &Path, release: &Release) -> Result<PathBuf> {
     let layout = Layout::new(root, &release.id)?;
@@ -414,7 +416,7 @@ fn managed_python(root: &Path, release: &Release) -> Result<PathBuf> {
     if digest(&uv(root)).ok().as_deref() != Some(release.uv.exe_sha256.as_str()) {
         bail!("自管 uv 缺失或校验失败，请重新准备基础工具");
     }
-    let out = uv_command(root, release)
+    let out = uv_command(root, release)?
         .args([
             "python",
             "find",
@@ -634,6 +636,7 @@ impl Engine {
         id: &str,
         operation: &crate::operations::OperationHandle,
     ) -> Result<()> {
+        let _network = crate::network_policy::task_policy(root)?;
         self.reap();
         if self.running.is_some() {
             bail!("请先停止受管训练器，再修复源码");
@@ -668,6 +671,7 @@ impl Engine {
         plan_sha256: &str,
         operation: &crate::operations::OperationHandle,
     ) -> Result<()> {
+        let _network = crate::network_policy::task_policy(root)?;
         self.reap();
         if self.running.is_some() {
             bail!("请先停止受管训练器，再修复环境");
@@ -682,6 +686,7 @@ impl Engine {
         id: &str,
         operation: &crate::operations::OperationHandle,
     ) -> Result<()> {
+        let _network = crate::network_policy::task_policy(root)?;
         self.reap();
         if self.running.is_some() {
             bail!("请先停止受管训练器，再恢复环境");
@@ -696,6 +701,7 @@ impl Engine {
         id: &str,
         operation: &crate::operations::OperationHandle,
     ) -> Result<()> {
+        let _network = crate::network_policy::task_policy(root)?;
         self.reap();
         if self.running.is_some() {
             bail!("请先停止受管训练器，再修改安装目录");
@@ -711,6 +717,7 @@ impl Engine {
         operation: &crate::operations::OperationHandle,
     ) -> Result<()> {
         use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
+        let _network = crate::network_policy::task_policy(root)?;
         self.reap();
         if self.running.is_some() {
             bail!("请先停止受管训练器，再准备安装文件");
@@ -726,7 +733,8 @@ impl Engine {
                 "正在下载并校验所选版本的安装文件",
             )?;
             operation.persist(&mutation)?;
-            let client = reqwest::Client::builder()
+            let client = crate::network_policy::current_or_root(root)?
+                .client_builder()
                 .timeout(Duration::from_secs(600))
                 .build()?;
             let name = format!("{}.zip", release.archive.sha256);
@@ -764,6 +772,8 @@ impl Engine {
     }
 
     pub fn new(default_root: PathBuf, logger: Logger) -> Self {
+        let target = logger;
+        let logger: Logger = Arc::new(move |line| target(crate::network_policy::redact(&line)));
         Self {
             default_root,
             running: None,
@@ -779,6 +789,28 @@ impl Engine {
         };
         Layout::new(&root, &self.default_release().id)?;
         Ok(root)
+    }
+    pub fn save_network_settings(
+        &self,
+        value: &str,
+        settings: &crate::network_policy::Settings,
+    ) -> Result<serde_json::Value> {
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再保存网络设置");
+        }
+        let root = self.resolve(value)?;
+        let policy = crate::network_policy::resolve_current(settings)?;
+        let encoded = serde_json::to_vec_pretty(settings)?;
+        if encoded.len() + 1 > 64 * 1024 {
+            bail!("网络设置超过64KiB，尚未写入");
+        }
+        let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
+        let path = crate::network_policy::settings_path(&root)?;
+        ctx.layout().guard_path(&path)?;
+        ctx.layout()
+            .ensure_dir(path.parent().context("网络设置缺少父目录")?)?;
+        model::write_json_atomic(&path, settings)?;
+        Ok(serde_json::json!({ "settings": settings, "diagnostic": policy.diagnostic(None) }))
     }
     fn default_release(&self) -> &Release {
         self.catalog
@@ -955,6 +987,7 @@ impl Engine {
         })
     }
     pub fn bootstrap(&mut self, root: &Path) -> Result<Report> {
+        let _network = crate::network_policy::task_policy(root)?;
         let release = self.active(root)?;
         self.bootstrap_for(root, &release)?;
         self.inspect(root)
@@ -997,7 +1030,7 @@ impl Engine {
             )?;
             layout.ensure_dir(&python_root)?;
         }
-        let mut command = uv_command(root, release);
+        let mut command = uv_command(root, release)?;
         command.args([
             "python",
             "install",
@@ -1011,6 +1044,7 @@ impl Engine {
         Ok(())
     }
     pub fn restore(&mut self, root: &Path) -> Result<Report> {
+        let _network = crate::network_policy::task_policy(root)?;
         let release = self.active(root)?;
         self.restore_for(root, &release)?;
         self.inspect(root)
@@ -1077,6 +1111,7 @@ impl Engine {
         Ok(())
     }
     pub fn install_environment(&mut self, root: &Path) -> Result<Report> {
+        let _network = crate::network_policy::task_policy(root)?;
         let release = self.active(root)?;
         self.environment_for(root, &release)?;
         self.inspect(root)
@@ -1107,13 +1142,13 @@ impl Engine {
             )?;
         }
         layout.ensure_dir(layout.environment.parent().context("缺少环境父路径")?)?;
-        let mut command = uv_command(root, release);
+        let mut command = uv_command(root, release)?;
         command
             .args(["venv", "--seed", "--python"])
             .arg(python)
             .arg(&layout.environment);
         execute(command, &self.logger)?;
-        let mut command = uv_command(root, release);
+        let mut command = uv_command(root, release)?;
         command
             .args(["pip", "install", "--python"])
             .arg(env_python(&layout))
@@ -1126,6 +1161,7 @@ impl Engine {
         Ok(())
     }
     pub fn install_release(&mut self, root: &Path, id: &str) -> Result<Report> {
+        let _network = crate::network_policy::task_policy(root)?;
         let release = self.catalog.release(id)?.clone();
         if release.environment_recipe == crate::recipe::GuiRecipe::embedded()?.id() {
             self.reap();
@@ -1196,6 +1232,7 @@ impl Engine {
         self.inspect(root)
     }
     pub fn start(&mut self, root: &Path) -> Result<Report> {
+        let _network = crate::network_policy::task_policy(root)?;
         let release = self.active(root)?;
         let (layout, lock) = self.mutable(root, &release)?;
         if Registry::load(root)?.current.is_none() {
@@ -1213,6 +1250,7 @@ impl Engine {
         let port = listener.local_addr()?.port();
         drop(listener); // gui.py --port-conflict error fails safely if another process wins the race.
         let mut command = Command::new(env_python(&layout));
+        crate::network_policy::current_or_root(root)?.apply_command(&mut command);
         command
             .current_dir(&layout.run)
             .arg("-B")
@@ -1235,6 +1273,10 @@ impl Engine {
             .env("PYTHONUNBUFFERED", "1")
             .env("PYTHONDONTWRITEBYTECODE", "1")
             .env("NEXT_TRAINER_DATA_ROOT", &layout.profile)
+            .env(
+                "NEXT_TRAINER_NETWORK_CONFIG",
+                crate::network_policy::settings_path(root)?,
+            )
             .env(
                 "NEXT_TRAINER_STATE_ROOT",
                 layout.profile.join("compat").join(&release.id),
@@ -1424,6 +1466,39 @@ mod tests {
         ));
         fs::create_dir(&root).unwrap();
         root
+    }
+
+    #[test]
+    fn invalid_network_settings_do_not_prepare_or_replace_workspace() {
+        let root = negative_test_root("network-settings");
+        let (logger, _) = logger();
+        let engine = Engine::new(root.clone(), logger);
+        let invalid: crate::network_policy::Settings = serde_json::from_value(
+            serde_json::json!({ "mode": "manual", "http_proxy": "socks5://user:fake-secret@localhost:1" }),
+        ).unwrap();
+        assert!(engine
+            .save_network_settings(root.to_str().unwrap(), &invalid)
+            .is_err());
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        let oversized: crate::network_policy::Settings = serde_json::from_value(
+            serde_json::json!({ "mode": "direct", "no_proxy": "a".repeat(65_536) }),
+        )
+        .unwrap();
+        assert!(engine
+            .save_network_settings(root.to_str().unwrap(), &oversized)
+            .is_err());
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        let direct = serde_json::from_value(serde_json::json!({ "mode": "direct" })).unwrap();
+        engine
+            .save_network_settings(root.to_str().unwrap(), &direct)
+            .unwrap();
+        let file = crate::network_policy::settings_path(&root).unwrap();
+        let before = fs::read(&file).unwrap();
+        assert!(engine
+            .save_network_settings(root.to_str().unwrap(), &invalid)
+            .is_err());
+        assert_eq!(fs::read(&file).unwrap(), before);
+        fs::remove_dir_all(root).unwrap();
     }
 
     /// 只监听回环，一次请求即退出，不访问外部服务，也不分配大响应体。

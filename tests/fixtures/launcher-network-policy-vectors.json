@@ -1,0 +1,783 @@
+{
+  "schema_version": 1,
+  "description": "Rust launcher and mikazuki.networking.policy shared explicit routing contract; credentials are synthetic fixtures.",
+  "cases": [
+    {
+      "id": "auto-no-proxy-alone-keeps-system",
+      "saved": {},
+      "environ": {
+        "NO_PROXY": "example.org"
+      },
+      "system": {
+        "http": "system.test:7891",
+        "https": "system.test:7891"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": "http://system.test:7891",
+        "https_proxy": "http://system.test:7891",
+        "source": "system",
+        "no_proxy": "example.org,localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "https://sub.example.org/path",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "https://notexample.org",
+          "proxy": "http://system.test:7891",
+          "bypass": false
+        }
+      ]
+    },
+    {
+      "id": "auto-per-protocol-and-all",
+      "saved": {},
+      "environ": {
+        "HTTPS_PROXY": "http://env.test:8080",
+        "ALL_PROXY": "http://all.test:8081"
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "https": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": "http://all.test:8081",
+        "https_proxy": "http://env.test:8080",
+        "source": "environment",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "http://remote.test/",
+          "proxy": "http://all.test:8081",
+          "bypass": false
+        },
+        {
+          "url": "https://remote.test/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        }
+      ]
+    },
+    {
+      "id": "empty-http-disables-only-http",
+      "saved": {},
+      "environ": {
+        "HTTP_PROXY": "",
+        "ALL_PROXY": "http://all.test:8081"
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "https": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": null,
+        "https_proxy": "http://all.test:8081",
+        "source": "environment",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "http://remote.test/",
+          "proxy": null,
+          "bypass": false
+        },
+        {
+          "url": "https://remote.test/",
+          "proxy": "http://all.test:8081",
+          "bypass": false
+        }
+      ]
+    },
+    {
+      "id": "empty-all-blocks-system",
+      "saved": {},
+      "environ": {
+        "ALL_PROXY": ""
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "https": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": null,
+        "https_proxy": null,
+        "source": "direct",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "lowercase-env-wins-even-empty",
+      "saved": {},
+      "environ": {
+        "http_proxy": "",
+        "HTTP_PROXY": "http://env.test:8080",
+        "https_proxy": "lower.test:82",
+        "HTTPS_PROXY": "http://env.test:8080"
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "https": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": null,
+        "https_proxy": "http://lower.test:82",
+        "source": "environment",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "manual-single-protocol-fills-both",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "manual.test:7890"
+      },
+      "environ": {
+        "HTTPS_PROXY": "http://env.test:8080"
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "https": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "manual",
+        "http_proxy": "http://manual.test:7890",
+        "https_proxy": "http://manual.test:7890",
+        "source": "manual",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "manual-https-fills-empty-http",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "",
+        "https_proxy": "https://secure.test:8443/"
+      },
+      "environ": {},
+      "system": {},
+      "expected": {
+        "mode": "manual",
+        "http_proxy": "https://secure.test:8443",
+        "https_proxy": "https://secure.test:8443",
+        "source": "manual",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "system-ignores-environment",
+      "saved": {
+        "mode": "system"
+      },
+      "environ": {
+        "HTTP_PROXY": "http://env.test:8080",
+        "HTTPS_PROXY": "http://env.test:8080",
+        "ALL_PROXY": "http://all.test:8081"
+      },
+      "system": {
+        "http": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "system",
+        "http_proxy": "http://system.test:7891",
+        "https_proxy": null,
+        "source": "system",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "direct-scrubs-both",
+      "saved": {
+        "mode": "direct"
+      },
+      "environ": {
+        "HTTPS_PROXY": "http://env.test:8080",
+        "ALL_PROXY": "http://all.test:8081"
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "https": "http://system.test:7891",
+        "pac": true
+      },
+      "expected": {
+        "mode": "direct",
+        "http_proxy": null,
+        "https_proxy": null,
+        "source": "direct",
+        "no_proxy": "*",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "https://remote.test",
+          "proxy": null,
+          "bypass": true
+        }
+      ]
+    },
+    {
+      "id": "auto-empty-settings-protocol-blocks-env",
+      "saved": {
+        "http_proxy": ""
+      },
+      "environ": {
+        "HTTP_PROXY": "http://env.test:8080",
+        "HTTPS_PROXY": "http://env.test:8080"
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "https": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": null,
+        "https_proxy": "http://env.test:8080",
+        "source": "environment",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "auto-null-settings-protocol-falls-to-all",
+      "saved": {
+        "http_proxy": null
+      },
+      "environ": {
+        "HTTP_PROXY": "http://env.test:8080",
+        "ALL_PROXY": "http://all.test:8081"
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "https": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": "http://all.test:8081",
+        "https_proxy": "http://all.test:8081",
+        "source": "environment",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "saved-mode-wins",
+      "saved": {
+        "mode": "system"
+      },
+      "environ": {
+        "NEXT_TRAINER_NETWORK_MODE": "direct"
+      },
+      "system": {
+        "https": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "system",
+        "http_proxy": null,
+        "https_proxy": "http://system.test:7891",
+        "source": "system",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "auto-pac-warning",
+      "saved": {},
+      "environ": {},
+      "system": {
+        "pac": true
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": null,
+        "https_proxy": null,
+        "source": "direct",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": "检测到 PAC，当前不执行 PAC 脚本；请设置手动代理。"
+      },
+      "routes": []
+    },
+    {
+      "id": "system-pac-with-static-proxy",
+      "saved": {
+        "mode": "system"
+      },
+      "environ": {},
+      "system": {
+        "https": "http://system.test:7891",
+        "pac": true
+      },
+      "expected": {
+        "mode": "system",
+        "http_proxy": null,
+        "https_proxy": "http://system.test:7891",
+        "source": "system",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "saved-empty-no-proxy-still-loopback",
+      "saved": {
+        "no_proxy": ""
+      },
+      "environ": {
+        "NO_PROXY": "example.org"
+      },
+      "system": {
+        "http": "http://system.test:7891",
+        "no_proxy": "system.test"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": "http://system.test:7891",
+        "https_proxy": null,
+        "source": "system",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "http://example.org/",
+          "proxy": "http://system.test:7891",
+          "bypass": false
+        },
+        {
+          "url": "http://127.55.2.1/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://LOCALHOST./",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "https://[::1]/",
+          "proxy": null,
+          "bypass": true
+        }
+      ]
+    },
+    {
+      "id": "null-no-proxy-selects-system",
+      "saved": {
+        "no_proxy": null
+      },
+      "environ": {
+        "NO_PROXY": "env.test"
+      },
+      "system": {
+        "https": "http://system.test:7891",
+        "no_proxy": "system.test"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": null,
+        "https_proxy": "http://system.test:7891",
+        "source": "system",
+        "no_proxy": "system.test,localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "semicolon-and-unique-preserve-order",
+      "saved": {},
+      "environ": {
+        "NO_PROXY": "example.org;example.org;localhost"
+      },
+      "system": {
+        "http": "http://system.test:7891"
+      },
+      "expected": {
+        "mode": "auto",
+        "http_proxy": "http://system.test:7891",
+        "https_proxy": null,
+        "source": "system",
+        "no_proxy": "example.org,localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": []
+    },
+    {
+      "id": "cidr-glob-local-and-ports",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://env.test:8080",
+        "no_proxy": ".example.org;10.2.3.4/8;2001:db8::abcd/32;<local>;only.test:8443;*.wild.test;host[0-9].test;bad/cidr"
+      },
+      "environ": {},
+      "system": {},
+      "expected": {
+        "mode": "manual",
+        "http_proxy": "http://env.test:8080",
+        "https_proxy": "http://env.test:8080",
+        "source": "manual",
+        "no_proxy": ".example.org,10.2.3.4/8,2001:db8::abcd/32,<local>,only.test:8443,*.wild.test,host[0-9].test,bad/cidr,localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "https://sub.example.org./",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "https://notexample.org/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        },
+        {
+          "url": "http://10.99.0.1/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://11.0.0.1/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        },
+        {
+          "url": "http://[2001:db8::42]/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://[2001:db9::42]/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        },
+        {
+          "url": "http://intranet/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://intranet.example/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        },
+        {
+          "url": "https://only.test:8443/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "https://only.test/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        },
+        {
+          "url": "https://x.wild.test/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://host2.test/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://hostx.test/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        }
+      ]
+    },
+    {
+      "id": "port-defaults-and-exact-ip",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://env.test:8080",
+        "no_proxy": "https.test:443,http.test:80,192.0.2.2,[2001:db8::1]"
+      },
+      "environ": {},
+      "system": {},
+      "expected": {
+        "mode": "manual",
+        "http_proxy": "http://env.test:8080",
+        "https_proxy": "http://env.test:8080",
+        "source": "manual",
+        "no_proxy": "https.test:443,http.test:80,192.0.2.2,[2001:db8::1],localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "https://https.test/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://https.test/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        },
+        {
+          "url": "http://http.test/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "https://http.test/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        },
+        {
+          "url": "https://192.0.2.2/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://[2001:db8::1]/",
+          "proxy": null,
+          "bypass": true
+        }
+      ]
+    },
+    {
+      "id": "fnmatch-question-negated-class",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://env.test:8080",
+        "no_proxy": "a?.test,host[!a-c].test"
+      },
+      "environ": {},
+      "system": {},
+      "expected": {
+        "mode": "manual",
+        "http_proxy": "http://env.test:8080",
+        "https_proxy": "http://env.test:8080",
+        "source": "manual",
+        "no_proxy": "a?.test,host[!a-c].test,localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "http://ab.test/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://abc.test/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        },
+        {
+          "url": "http://hostz.test/",
+          "proxy": null,
+          "bypass": true
+        },
+        {
+          "url": "http://hostb.test/",
+          "proxy": "http://env.test:8080",
+          "bypass": false
+        }
+      ]
+    },
+    {
+      "id": "credential-proxy-raw-route-safe-diagnostic",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://user:fake-password@auth.test:80/"
+      },
+      "environ": {},
+      "system": {},
+      "expected": {
+        "mode": "manual",
+        "http_proxy": "http://user:fake-password@auth.test:80",
+        "https_proxy": "http://user:fake-password@auth.test:80",
+        "source": "manual",
+        "no_proxy": ",localhost,127.0.0.1,::1",
+        "warning": ""
+      },
+      "routes": [
+        {
+          "url": "https://remote.test/",
+          "proxy": "http://user:fake-password@auth.test:80",
+          "bypass": false
+        }
+      ]
+    }
+  ],
+  "errors": [
+    {
+      "id": "invalid-mode",
+      "saved": {
+        "mode": "wrong"
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "empty-env-mode-is-invalid",
+      "saved": {},
+      "environ": {
+        "NEXT_TRAINER_NETWORK_MODE": ""
+      },
+      "system": {}
+    },
+    {
+      "id": "manual-no-address",
+      "saved": {
+        "mode": "manual"
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "manual-whitespace-address",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "  "
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "invalid-proxy-0",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "socks5://proxy.test:1080"
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "invalid-proxy-1",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://proxy.test:0"
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "invalid-proxy-2",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://proxy.test:65536"
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "invalid-proxy-3",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://proxy.test/path"
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "invalid-proxy-4",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://proxy.test?token=fake"
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "invalid-proxy-5",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://proxy.test#fragment"
+      },
+      "environ": {},
+      "system": {}
+    },
+    {
+      "id": "invalid-proxy-6",
+      "saved": {
+        "mode": "manual",
+        "http_proxy": "http://bad host:81"
+      },
+      "environ": {},
+      "system": {}
+    }
+  ],
+  "original_inputs": [
+    {
+      "id": "restore-original-not-injected-manual",
+      "environ": {
+        "NEXT_TRAINER_ORIGINAL_PROXY_ENV": "{\"NO_PROXY\":\"localhost\"}",
+        "HTTPS_PROXY": "http://injected.test:80"
+      },
+      "expected": {
+        "NO_PROXY": "localhost"
+      }
+    },
+    {
+      "id": "original-empty-object-is-authoritative",
+      "environ": {
+        "NEXT_TRAINER_ORIGINAL_PROXY_ENV": "{}",
+        "HTTPS_PROXY": "http://env.test:8080"
+      },
+      "expected": {}
+    },
+    {
+      "id": "malformed-original-falls-back",
+      "environ": {
+        "NEXT_TRAINER_ORIGINAL_PROXY_ENV": "invalid",
+        "HTTPS_PROXY": "http://env.test:8080",
+        "PATH": "keep"
+      },
+      "expected": {
+        "HTTPS_PROXY": "http://env.test:8080"
+      }
+    },
+    {
+      "id": "original-filters-unknown-and-nonstring",
+      "environ": {
+        "NEXT_TRAINER_ORIGINAL_PROXY_ENV": "{\"HTTPS_PROXY\":\"\",\"all_proxy\":\"all.test:81\",\"PATH\":\"bad\",\"HTTP_PROXY\":123}"
+      },
+      "expected": {
+        "HTTPS_PROXY": "",
+        "all_proxy": "all.test:81"
+      }
+    }
+  ],
+  "redact": [
+    {
+      "input": "https://user:fake-password@host.test:443/pkg?token=fake-token#x",
+      "expected": "https://host.test:443/pkg"
+    },
+    {
+      "input": "http://user:fake-password@[::1]:8080?q=fake",
+      "expected": "http://[::1]:8080"
+    },
+    {
+      "input": "fetch \"https://user:fake-password@host.test/a?x=fake\" then http://plain.test/path#f",
+      "expected": "fetch \"https://host.test/a\" then http://plain.test/path"
+    },
+    {
+      "input": "https://host.test:bad/path?token=fake",
+      "expected": "<redacted-url>"
+    }
+  ]
+}
