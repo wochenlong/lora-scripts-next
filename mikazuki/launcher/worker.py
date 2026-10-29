@@ -11,6 +11,7 @@ from mikazuki.launcher.control import dispatch
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
     try:
         raw = sys.stdin.buffer.readline(4 * 1024 * 1024 + 1)
         if len(raw) > 4 * 1024 * 1024:

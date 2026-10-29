@@ -145,6 +145,7 @@ def run(action, root):
 
 
 def main():
+    sys.stdout.reconfigure(encoding="utf-8", errors="strict", newline="\n")
     try:
         if len(sys.argv) == 1:
             raw = sys.stdin.buffer.readline(65537)
