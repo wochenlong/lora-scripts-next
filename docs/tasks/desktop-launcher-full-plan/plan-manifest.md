@@ -1,17 +1,15 @@
 # 施工计划产物与门禁清单
 
-> **当前执行修订 v0.5 / CR-004 + CR-003：四引擎仅冒烟，其他验证按影响面精简；先交付 M1-CANDIDATE，再审核剩余优先级与成本。** 本轮只执行M1任务书K1–K4；候选不等于EXIT-M1，暂缓项和M2–M6等待审核。引擎实测 skip+CR-004，M6 保留同包从零 GUI/分发与四引擎冒烟及 CR-002 OS 门，不开 GPU 轨。
-
-> 历史修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](00_预检证据/change-control-governance.md)。P1实际结果仍blocked，调度另记deferred by CR-002，由M5在相关系统动作/Phase6专项开始前闭合。M1–M4独立新根真实实测、M5资源硬门、M6同一最终包从零及原预算不变。该修订时M0尚未退出；当前M0已完成、M1进行中，以总控为准，不重开历史门。
+**现行执行 v0.6 / CR-006（2026-10-29，用户已要求）。** M1–M5 连续完成施工，阶段之间只核依赖、编译/类型检查和最小冒烟，保存一次开发基线后自动推进；所有综合原生/安装/故障实测集中到 M6 的统一沙盒验证。四引擎仅小夹具冒烟，真实引擎安装/损坏修复、GPU/模型/训练/权重实测仍 `skip + CR-004`。取消候选/成本后暂停、两轮或单包单案停锁、阶段间再次审批、C/S 双重保存和逐阶段真实矩阵。一般失败先诊断修复并补最短受影响检查，不结束 Goal；仅新增必要授权、硬预算或无法隔离的真实资料风险可中断。旧记录保留，未验证不作 pass。
 
 ## 计划元数据
 
-- Plan ID：`desktop-launcher-full-20261028`；Version：`0.5`；Last updated：2026-10-29（Asia/Shanghai，CR-004精简验证）。
+- Plan ID：`desktop-launcher-full-20261028`；Version：`0.6`；Last updated：2026-10-29（Asia/Shanghai，CR-006 连续施工/最终统一验证）。
 - Scale mode：保留既有 Full 文档结构；实现跨 Rust/Python/UI、资料迁移、可信更新和 Windows 分发。验证按 CR-004 精简，不为保留结构而新增治理或强制每阶段全测试族。
-- Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0已完成；当前按CR-003收敛M1，P1历史blocked由M5承接。
+- Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0已完成；当前按 CR-006 连续施工，最终系统资源仅约束 M6 对应专项。
 - Canonical progress file：[00_总控目标索引](00_总控目标索引.md)。Related handoff：none。
 - Current branch：`feat/desktop-launcher`；起始HEAD：`9ca2de963122f34599e34e5ff382199de9188811`；WIP `f8ed00b8c3424777bec5600ef6482838b9e1b2e6`已普通push且远端核对成功，不代表M0完成。
-- Current active phase：M1 / M1-CANDIDATE；Execution readiness：`executing`（按CR-003执行K1–K4，候选交付后审核）；M0已完成，M1进行中，M2–M6 pending，工具状态见总控。
+- Current active phase：M1 剩余施工；Execution readiness：`approved for execution`（本侧聊仅修订文档，不控制实际 Goal）。M2–M5 可按依赖连续施工，M6 最后统一验证。
 - Spec：[后续设计书0.3](../../design/desktop-launcher-next-design.md)，按D1–D6推荐方案、CR-001/002、CR-003当前范围及原0.1预算执行，授权原文见总控/变更治理。历史[底座计划](../desktop-launcher-foundation-plan/00_总控目标索引.md)作为完成证据保留，不由本计划重开。
 - Source materials：[预检复盘](00_预检证据/preflight-source-review.md)、issue #516保存快照、用户本轮硬要求、当前Git/硬件只读核对。
 - Evidence roots：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/planning/`；执行run为`desktop-launcher-full-20261028-155831Z-f6c00a`，证据在`<run-id>/M0/`，CR-002授权在`<run-id>/changes/CR-002/authorization.json`。F同run标记根保留M0夹具/新Python/Torch partial及历次VM/失败，具体实测和保留状态见总控，不用历史资产抵扣后续新根验收。
@@ -75,16 +73,14 @@
 | 计划静态结构 | 以planning/plan-validation.json为准 | UTF-8、路径、manifest、七阶段/六测试、代码围栏、空白与92文件保护；不验证产品 |
 | 独立文档审查 | 以06复盘引用报告为准 | 架构执行、需求Goal、资源沙盒三路审查 |
 | GATE-00–10、12–13 | 计划/授权记录pass | [编号清单](00_预检证据/gate-validation-checklist.md)；GATE12包含实际Goal记录，不代表产品通过 |
-| GATE-11、14 | pass-with-boundary（M0验证范围） | 外部M0/exit-M0-final-review-CR002.md已核无本阶段未关P0/P1；CR-001指定skip/P3分期，P1实际就绪由M5承接；C/S保存待执行，M1未解锁 |
-| EXIT-M0 | pass-with-boundary（状态S最终回执见总控） | 调整范围实证/独审/报告通过，完成C已远端确认；M0/baseline-final.json确认S后进入M1，失败不解锁 |
+| GATE-11、14 | 历史 M0 pass-with-boundary；现行规则见新版 gate 清单 | 原范围/证据及失败保留；M0 已退出，CR-006 不重开 M0，后续调度不再沿用旧 C/S 或 M5 资源门 |
+| EXIT-M0 | done（原回执见总控） | 原阶段完成事实保留，M1 已进行中，不重新等待状态提交解锁 |
 | EXIT-M1–M6 | pending | 见唯一总控台账；未执行后续开发/训练/最终验收 |
 
-未来推进先更新总控，再同步本manifest的阶段指针/证据索引，不建立第二份阶段完成台账。M1–M4仍用独立新根真实测试，不能冒充干净OS；P1合法可用、可启动且缺WebView2的资源在M5相关系统动作/Phase6专项开始前必须齐备，未齐即停且M5不得完成。M6仍在M0–M5完整退出/push后使用最终同一包从零复验；CR-002不再延期该资源门，CR-001以外必测不降级。
+未来按 CR-006 更新总控并连续施工，阶段快检与最终验收分开。M1–M5 不重复真实安装/故障矩阵，M5 不因缺干净 OS 测试资源停止编码与打包；M6 统一验证对应系统专项，资源不足仅阻断该专项并最终统一说明，不虚报 pass。
 
 ## 防漂移和唯一下一动作
 
-阶段名、ID和顺序固定M0–M6。规格/预算/验收变化按CR记录同步全部受影响文档，保留首次失败与历史已验证状态。每阶段遵守代码C/状态S两次基线保存与外部最终回执，普通push不改写历史。实际Goal已启动；不能把提示词文件或WIP保存视为阶段通过。
+阶段名和 ID 保留 M0–M6。CR-006 取代旧候选暂停、单包/单案次数及 C/S 双重保存调度；历史事实保留。每阶段一次精确 commit/普通 push/远端 SHA 核对后继续，最终统一沙盒与报告。当前仅文档变更，实际执行未由本侧聊启动。
 
-唯一下一步：按CR-003及M1任务书K1–K4，集中关闭环境差异、交付同包候选与成本表后暂停审核；不重开M0，不自动进入M2。
-
-当前阶段指针：M0完成证据保留；M1已实施，当前推进M1-CANDIDATE。旧pending段落仅表示其写入时快照，实时状态只以总控及回执为准。
+唯一下一步：主执行者读取 v0.6 Goal，完成 M1 剩余施工，连续推进 M2–M5，最后统一执行 M6。

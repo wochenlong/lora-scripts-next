@@ -468,6 +468,115 @@ fn install_inner(
     Ok(())
 }
 
+/// 重建事务拥有最终候选目录和绑定提交；这里只构建独立候选，不改旧绑定或资料。
+pub(super) fn build_replacement(
+    ctx: &WorkspaceMutation,
+    release: &Release,
+    environment: &Path,
+    operation: &OperationHandle,
+    log: &super::Logger,
+) -> Result<()> {
+    let layout = ctx.layout();
+    let root = &layout.root;
+    let recipe = GuiRecipe::embedded()?;
+    if release.commit != recipe.source_commit
+        || !recipe.matches_environment_recipe(&release.environment_recipe)
+    {
+        bail!("重建目标没有匹配的固定GUI配方");
+    }
+    preflight_environment_path(root)?;
+    layout.guard_path(environment)?;
+    super::verify_source(layout, release)?;
+    crate::python_integrity::verify(layout)?;
+    if super::digest(&super::uv(root))? != recipe.tool_uv.exe_sha256 {
+        bail!("重建工具身份不符，请先修复基础工具");
+    }
+    if fs::read_dir(environment)?.next().is_some() {
+        bail!("重建候选目录不是空目录，拒绝覆盖已有环境");
+    }
+    if fs2::available_space(root)? < 2 * 1024 * 1024 * 1024 {
+        bail!("重建卷可用空间不足，请至少保留2GiB；旧实例保持原状");
+    }
+    let wheelhouse = root.join("cache").join("wheelhouse");
+    layout.ensure_dir(&wheelhouse)?;
+    let mut downloads = super::artifact_downloads::ArtifactDownloads::new(
+        &operation.id()?,
+        recipe.budget.max_total_bytes,
+        512,
+    );
+    let result = (|| {
+        phase(
+            operation,
+            ctx,
+            OperationPhase::Downloading,
+            "核对重建所需固定依赖缓存",
+        )?;
+        for asset in &recipe.wheels {
+            operation.cancel_token().check()?;
+            let archive = download_in(
+                ctx,
+                &recipe,
+                operation,
+                &mut downloads,
+                &asset.url,
+                &asset.filename,
+                &asset.sha256,
+                asset.bytes,
+            )?;
+            let target = wheelhouse.join(&asset.filename);
+            layout.guard_path(&target)?;
+            if target.exists() {
+                if super::digest(&target)? != asset.sha256 {
+                    bail!("重建wheelhouse文件摘要不符：{}", asset.filename);
+                }
+            } else {
+                write_new(layout, &target, &fs::read(archive)?)?;
+            }
+        }
+        let lock = root.join("cache").join(&recipe.requirements.lock_filename);
+        layout.guard_path(&lock)?;
+        if lock.exists() {
+            if super::digest(&lock)? != recipe.requirements.lock_sha256 {
+                bail!("重建固定依赖锁被修改");
+            }
+        } else {
+            write_new(layout, &lock, recipe.lock().as_bytes())?;
+        }
+        phase(
+            operation,
+            ctx,
+            OperationPhase::Executing,
+            "在新固定路径重建GUI环境，保留旧实例",
+        )?;
+        let python = super::managed_python(root, release)?;
+        if super::digest(&python)? != recipe.python.exe_sha256 {
+            bail!("重建基础Python身份不符");
+        }
+        let mut venv = command(root, &recipe);
+        venv.args(["venv", "--python"])
+            .arg(&python)
+            .arg(environment);
+        super::execute_controlled(venv, log, &operation.cancel_token())?;
+        let mut sync = command(root, &recipe);
+        sync.args(["pip", "sync", "--python"])
+            .arg(environment.join("Scripts").join("python.exe"))
+            .args(["--no-index", "--find-links"])
+            .arg(&wheelhouse)
+            .args([
+                "--only-binary",
+                ":all:",
+                "--require-hashes",
+                "--link-mode",
+                "copy",
+                "--strict",
+            ])
+            .arg(lock);
+        super::execute_controlled(sync, log, &operation.cancel_token())
+    })();
+    downloads.finish(&result)?;
+    result
+}
+
 fn preflight_environment_path(root: &Path) -> Result<()> {
     // 固定81wheel真实映射清单：最长原文件152 UTF-16，安装器元数据73。
     // 可选派生pyc不属于安装输出，生产无新bytecode合同独立核验。

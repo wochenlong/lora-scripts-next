@@ -965,7 +965,10 @@ pub(crate) fn write_gui_transaction_bytes(
     let allowed = parts.as_slice() == ["state", "registry.json"]
         || (parts.len() == 3
             && parts[0] == "state"
-            && matches!(parts[1], "instances" | "gui-registration" | "gui-rebuild")
+            && matches!(
+                parts[1],
+                "instances" | "gui-registration" | "gui-rebuild" | "gui-binding-switch"
+            )
             && parts[2].ends_with(".json"))
         || (parts.len() == 3
             && parts[0] == "releases"

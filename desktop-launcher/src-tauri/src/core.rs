@@ -1,3 +1,4 @@
+use crate::instances;
 use crate::model::{self, Catalog, Journal, Layout, Phase, Registry, Release, ReleaseReceipt};
 use crate::runtime_view;
 use anyhow::{anyhow, bail, Context, Result};
@@ -25,10 +26,14 @@ mod controlled_download;
 
 #[path = "base_python_repair.rs"]
 mod base_python_repair;
+#[path = "gui_binding_switch.rs"]
+mod gui_binding_switch;
 #[path = "gui_entry_probe.rs"]
 mod gui_entry_probe;
 #[path = "gui_install.rs"]
 mod gui_install;
+#[path = "gui_rebuild.rs"]
+mod gui_rebuild;
 #[path = "gui_recovery.rs"]
 mod gui_recovery;
 #[path = "gui_registration.rs"]
@@ -58,7 +63,12 @@ fn assert_registration_ready(root: &Path, except_release: Option<&str>) -> Resul
 
 fn assert_regular_ready(root: &Path) -> Result<()> {
     base_python_repair::assert_ready(root)?;
-    assert_registration_ready(root, None)
+    assert_registration_ready(root, None)?;
+    for release in Catalog::embedded()?.releases() {
+        gui_rebuild::assert_ready(root, release)?;
+        gui_binding_switch::assert_ready(root, release)?;
+    }
+    crate::instances::assert_no_preserved_pending(root)
 }
 const REQUIRED: &[&str] = &[
     "gui.py",
@@ -785,6 +795,168 @@ impl Engine {
         };
         operation.finish_and_persist(&ctx, status, error)?;
         result.map(|_| ())
+    }
+    pub fn preview_gui_lifecycle(
+        &self,
+        root: &Path,
+        id: &str,
+        action: &str,
+        transaction: Option<&str>,
+    ) -> Result<serde_json::Value> {
+        let release = self.catalog.release(id)?;
+        match action {
+            "rebuild" => gui_rebuild::preview(root, release),
+            "rollback" => {
+                gui_rebuild::rollback_preview(root, release, transaction.context("请选择重建历史")?)
+            }
+            "history" => gui_rebuild::history(root, release),
+            "preserved" => gui_rebuild::preserved_pending(root, release),
+            _ => bail!("未知实例操作"),
+        }
+    }
+    #[allow(clippy::too_many_arguments)]
+    pub fn gui_lifecycle_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        action: &str,
+        plan: Option<&str>,
+        transaction: Option<&str>,
+        instance: Option<&str>,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
+        let _network = crate::network_policy::task_policy(root)?;
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止训练器，再变更环境实例");
+        }
+        let release = self.catalog.release(id)?.clone();
+        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        base_python_repair::assert_ready(root)?;
+        assert_registration_ready(root, None)?;
+        for other in self.catalog.releases() {
+            if other.id != id {
+                gui_rebuild::assert_ready(root, other)?;
+                gui_binding_switch::assert_ready(root, other)?;
+            }
+        }
+        if action != "recover_preserved" {
+            instances::assert_no_preserved_pending(root)?;
+        }
+        operation.persist(&ctx)?;
+        let cancel = operation.cancel_token();
+        let recipe = crate::recipe::GuiRecipe::embedded()?;
+        let validator = |environment: &Path| {
+            gui_install::validate_environment_runtime(
+                ctx.layout(),
+                &recipe,
+                environment,
+                &self.logger,
+                &cancel,
+            )
+        };
+        let entry = |environment: &Path, transaction: &str| {
+            gui_entry_probe::probe(
+                &ctx,
+                &release,
+                environment,
+                transaction,
+                &self.logger,
+                &cancel,
+            )
+            .map(|_| ())
+        };
+        let result = (|| -> Result<()> {
+            operation.publish(
+                OperationPhase::Executing,
+                "执行已确认的实例操作，保留旧实例和资料",
+            )?;
+            operation.persist(&ctx)?;
+            match action {
+                "rebuild" => gui_rebuild::execute(
+                    &ctx,
+                    &release,
+                    plan.context("缺少重建预览摘要")?,
+                    &cancel,
+                    |environment| {
+                        gui_install::build_replacement(
+                            &ctx,
+                            &release,
+                            environment,
+                            operation,
+                            &self.logger,
+                        )
+                    },
+                    validator,
+                    entry,
+                )
+                .map(|_| ()),
+                "recover_rebuild" => gui_rebuild::recover(
+                    &ctx,
+                    &release,
+                    transaction.context("缺少重建事务")?,
+                    &cancel,
+                    validator,
+                    entry,
+                )
+                .map(|_| ()),
+                "rollback" => gui_rebuild::rollback(
+                    &ctx,
+                    &release,
+                    transaction.context("缺少重建历史")?,
+                    plan.context("缺少回退预览摘要")?,
+                    &cancel,
+                    validator,
+                    entry,
+                )
+                .map(|_| ()),
+                "recover_rollback" => {
+                    gui_rebuild::recover_rollback(&ctx, &release, &cancel, validator, entry)
+                        .map(|_| ())
+                }
+                "recover_preserved" => {
+                    gui_rebuild::assert_ready(root, &release)?;
+                    gui_binding_switch::assert_ready(root, &release)?;
+                    instances::recover_preserved_controlled(
+                        &ctx,
+                        instance.context("请选择保留实例")?,
+                        &cancel,
+                        |environment| {
+                            gui_install::validate_environment(
+                                ctx.layout(),
+                                &recipe,
+                                environment,
+                                &self.logger,
+                                &cancel,
+                            )?;
+                            entry(
+                                environment,
+                                &format!(
+                                    "gui-rebuild-preserved-{}",
+                                    instance.context("缺少保留实例")?
+                                ),
+                            )
+                        },
+                    )
+                    .map(|_| ())
+                }
+                _ => bail!("未知实例变更动作"),
+            }
+        })();
+        let (status, error) = match &result {
+            Ok(()) => (OperationStatus::Succeeded, None),
+            Err(e) if e.downcast_ref::<Cancelled>().is_some() => (OperationStatus::Cancelled, None),
+            Err(e) => (
+                OperationStatus::Failed,
+                Some(OperationError {
+                    code: "gui_lifecycle_failed".into(),
+                    message: format!("{e:#}"),
+                }),
+            ),
+        };
+        operation.finish_and_persist(&ctx, status, error)?;
+        result
     }
     pub fn repair_source_operation(
         &mut self,

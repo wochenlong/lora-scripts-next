@@ -57,6 +57,12 @@ enum ManagedAction {
         plan_sha256: String,
     },
     RecoverRegistration,
+    GuiLifecycle {
+        action: String,
+        plan: Option<String>,
+        transaction: Option<String>,
+        instance: Option<String>,
+    },
 }
 
 async fn begin_release_operation(
@@ -107,9 +113,9 @@ async fn begin_release_operation(
                 | ManagedAction::RepairSource
                 | ManagedAction::RepairBasePython { .. }
                 | ManagedAction::RecoverBasePython => operations::OperationKind::Repair,
-                ManagedAction::RestoreRegistration { .. } | ManagedAction::RecoverRegistration => {
-                    operations::OperationKind::Repair
-                }
+                ManagedAction::RestoreRegistration { .. }
+                | ManagedAction::RecoverRegistration
+                | ManagedAction::GuiLifecycle { .. } => operations::OperationKind::Repair,
             },
         )
         .map_err(|e| format!("{e:#}"))?;
@@ -165,6 +171,20 @@ async fn begin_release_operation(
                 ManagedAction::RecoverRegistration => {
                     engine.restore_gui_registration_operation(&root, &release_id, None, &handle)
                 }
+                ManagedAction::GuiLifecycle {
+                    action,
+                    plan,
+                    transaction,
+                    instance,
+                } => engine.gui_lifecycle_operation(
+                    &root,
+                    &release_id,
+                    &action,
+                    plan.as_deref(),
+                    transaction.as_deref(),
+                    instance.as_deref(),
+                    &handle,
+                ),
             }
         })();
         // 未能取得 lease 等早期错误只保存在本进程；不能越过 lease 写工作区。
@@ -198,6 +218,50 @@ async fn prefetch_release(
     release_id: String,
 ) -> Result<operations::OperationSnapshot, String> {
     begin_release_operation(state, root, release_id, ManagedAction::Prefetch).await
+}
+#[tauri::command]
+async fn preview_gui_lifecycle(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    action: String,
+    transaction: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine
+            .try_lock()
+            .map_err(|_| "已有操作进行中".to_string())?;
+        let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        engine
+            .preview_gui_lifecycle(&root, &release_id, &action, transaction.as_deref())
+            .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn apply_gui_lifecycle(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    action: String,
+    plan: Option<String>,
+    transaction: Option<String>,
+    instance: Option<String>,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::GuiLifecycle {
+            action,
+            plan,
+            transaction,
+            instance,
+        },
+    )
+    .await
 }
 #[tauri::command]
 async fn preview_gui_registration(
@@ -933,6 +997,8 @@ fn main() {
             preview_base_python_repair,
             repair_base_python,
             recover_base_python,
+            preview_gui_lifecycle,
+            apply_gui_lifecycle,
             preview_gui_registration,
             restore_gui_registration,
             recover_gui_registration,

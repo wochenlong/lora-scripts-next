@@ -260,3 +260,24 @@ export const restoreGuiRegistration = (root: string, releaseId: string, instance
   invoke<OperationSnapshot>('restore_gui_registration', { root, releaseId, instanceId, planSha256 })
 export const recoverGuiRegistration = (root: string, releaseId: string) =>
   invoke<OperationSnapshot>('recover_gui_registration', { root, releaseId })
+
+export type GuiLifecycleAction = 'rebuild' | 'recover_rebuild' | 'rollback' | 'recover_rollback' | 'recover_preserved'
+export interface GuiLifecyclePreview {
+  status: string
+  reason?: string
+  transaction?: string
+  plan_sha256?: string
+  plan?: { root_absolute?: string; old_binding?: { instance_id: string } | null; estimated_network_bytes?: number }
+}
+export interface GuiLifecycleHistory {
+  status: string
+  records: { transaction: string; status: string; candidate_id?: string; old_instance_id?: string; rollback_available: boolean }[]
+  pending_transactions: { kind: 'rebuild' | 'binding_switch'; transaction: string; status: string }[]
+  preserved_pending: { instance_id: string; release_id: string; transaction?: string }[]
+}
+export const previewGuiLifecycle = (root: string, releaseId: string, action: string, transaction: string | null = null) =>
+  invoke<GuiLifecyclePreview>('preview_gui_lifecycle', { root, releaseId, action, transaction })
+export const guiLifecycleHistory = (root: string, releaseId: string) =>
+  invoke<GuiLifecycleHistory>('preview_gui_lifecycle', { root, releaseId, action: 'history', transaction: null })
+export const applyGuiLifecycle = (root: string, releaseId: string, action: GuiLifecycleAction, plan: string | null, transaction: string | null, instance: string | null) =>
+  invoke<OperationSnapshot>('apply_gui_lifecycle', { root, releaseId, action, plan, transaction, instance })

@@ -1,32 +1,30 @@
 # 每阶段开发基线保存协议
 
-适用 `EXIT-M0`–`EXIT-M6`。用户要求每阶段push保存基线，并已于2026-10-28在审计稿交付后指令建立Goal开始执行。当前M0进行中；阶段内常规提交与本功能分支push不再重复询问许可。阶段内WIP提交不代表完成门通过。
+版本 v0.6 / 2026-10-29 / [CR-006](change-control-governance.md#cr-006连续施工完成后统一沙盒验证与汇报)。用户已要求每阶段 push 保存基线并连续施工。一次阶段提交、普通 push 和远端核对即可，不强制代码 C/状态 S 双重推送，不为写入自身 SHA 循环制造提交；原 C/S 历史回执仍有效。
+
+本次侧聊仅修订文档，不实际暂存、commit、push 或修改 Git 配置。
 
 ## 1. 唯一目标与保护
 
-- 工作副本：`E:/OpenSourceTeamWork/workspace/branches/dev`；分支：`feat/desktop-launcher`。
-- 远端应为 `origin=https://github.com/wochenlong/lora-scripts-next.git`。每次写操作前重新核对，不能凭目录名判断分支。
-- 只向 `refs/heads/feat/desktop-launcher` 普通push；不向dev/main写入，不force push，不改写已推送历史，不自动合并/发布/发issue消息。
-- 保留不相关的dirty/untracked文件和用户原有暂存内容。不可`git reset --hard`、`git clean`或为干净状态覆盖工作树；在M0保存范围/哈希快照。旧底座计划保持历史完成状态。
-- M0按精确文件清单接纳`desktop-launcher/`、Python资料接口、9个已接入入口及相关测试/说明/本次计划等。先逐文件检查源码/密钥/许可/大文件，再形成`M0/source-allowlist.txt`；不能用`git add -A`或`git add .`把其他功能设计文档混入。
-- 构建目录、node_modules、venv、真实profile、缓存/权重/数据集、VM磁盘、原始带凭据日志不进Git；普通Git只保存代码、锁文件、脱敏必要报告和证据摘要。合法需要分发的大制品保存在独立制品目录，commit中记录SHA/大小/相对清单，不引入Git LFS外部写入。
+- 工作副本：`E:/OpenSourceTeamWork/workspace/branches/dev`；分支：`feat/desktop-launcher`；远端应为 `origin=https://github.com/wochenlong/lora-scripts-next.git`。写前重新核实实际路径/branch/remote/status/index。
+- 只向 `refs/heads/feat/desktop-launcher` 普通 push，不向 dev/main 写入、不 force、不改写已推送历史、不自动合并/公共发布/向他人发消息。
+- 按精确 allowlist 暂存本功能代码、锁文件和必要脱敏文档；不 `git add -A` 或 `git add .`。保护无关 dirty/untracked 和原有 index，不 reset/clean/覆盖工作树。
+- 构建产物、node_modules、venv、真实 profile、模型/缓存/数据集、VM 磁盘、凭据和大日志不入 Git；制品在独立目录保存，记录哈希/大小/来源。
 
-## 2. 阶段完成到远端确认
+## 2. 一次阶段保存后自动继续
 
-1. 先完成阶段所有规定验证、失败修复、独立复审和完成/清理报告；必测not-run或未关闭P0/P1不能提交成“完成基线”。可保存明确标注WIP的恢复提交，但它不解锁下一阶段。
-2. 核对branch/remote/status/暂存区与上一阶段哈希快照。按阶段allowlist精确暂存，审查`git diff --cached --stat`与完整diff，运行`git diff --cached --check`。检查原有无关内容没有混入或丢失。
-3. 总控表先写“阶段验证已过，远端确认待执行”，状态`in progress`；完成报告区分产品验证与baseline状态。提交阶段代码、必要说明、锁文件、脱敏报告索引，得到完整阶段提交`C`。提交建议`feat(launcher): complete M1 reliable install and repair`，实际信息与阶段匹配。
-4. 通过代理查询远端分支完整SHA。首次分支允许查询为空；已有分支若与上次确认不同，先fetch并判断关系。不能跳过未知远端更新，也不能force覆盖。
-5. 普通push阶段提交`C`；退出码0之后再用`ls-remote`核对远端SHA等于当前本地HEAD。任何一个不满足都不叫push通过。
-6. 保存脱敏回执`<run-id>/M<n>/baseline-code.json`：阶段、repo/branch、UTC及本地时区时间、C、push退出码、前后远端完整SHA、ls-remote退出码、相关报告摘要。回执不含凭据。
-7. 确认`C`在远端后，把本阶段验证与C的远端确认结果写回唯一总控进度、完成报告和manifest索引；以独立小型文档提交`S`保存这些状态，再普通push并核对S。全部确认后阶段才是`done`，下一阶段才能开始。
-8. `S`自己的完整SHA及最后远端原始结果保存在仓库外`baseline-final.json`，避免在同一提交内嵌自身SHA的循环。后续阶段可将前一回执脱敏摘要镜像入库；最终交付报告引用仓库外回执。无需为写入S自身哈希无限生成状态提交。
+1. M1–M5 完成本阶段功能和必要快速检查，更新总控及简短阶段记录：施工完成、`final_validation=pending M6`、baseline 待远端核对。综合实测不作为中间保存前置。
+2. 核分支、远端、工作树及 index 归属，精确暂存并检查 cached diff 与 `git diff --cached --check`；源码/凭据/许可/大文件检查合并到本次审查，不额外多轮停工。
+3. 一次提交保存代码及必要状态，得到完整提交 SHA。只在确有代码/文档变化时提交；已有提交可复用，不生成空提交凑阶段数。
+4. 查询远端分支，普通 push 后再 `ls-remote`，确认远端 SHA 等于待保存 HEAD。存在未知远端更新先 fetch 并判断关系，禁止 force 覆盖。
+5. 外部保存 `M<n>/baseline-final.json`：阶段、分支、完整本地/远端 SHA、时间、push/核验退出码和必要报告位置。仓库内先存提交前可知状态，回执存外部；后续阶段可顺带写回上一阶段摘要，无须再做一次状态提交。
+6. 保存成功自动进入下一阶段，中间只给简短进度；全部施工后统一做 M6 验证和最终报告。最终回执确认可记录于外部报告，不为最后 SHA 反复提交。
 
-S推送失败时立即将本地总控/完成门改回`in progress`或`blocked`，说明“代码C已在远端，状态S未确认”；修复后重试普通push并重新核对。不能在最终报告引用S为已远端保存。任何时点都保留可续接的本地事实。
+WIP/候选源码提交允许按需存在，但不要求每 Phase 保存或冻结独立候选；不能把 WIP 标为施工完成。普通网络/预检失败自主排查，不因自设两次尝试就请求审批。网络暂时不可用时保留本地提交与 baseline 待补状态，继续独立施工；最终交付前补推/核验，仍失败则如实列出未保存项，不声称阶段远端完成。
 
-## 3. 已核对的Git命令形式
+## 3. 网络命令
 
-以下在项目工作副本执行；阶段ID和allowlist由实际阶段提供。网络流量遵循本环境 `git-proxy-push` 技能，每条命令显式代理，不写全局配置。
+GitHub 网络操作逐命令使用本环境代理，不改全局配置。以下为未来执行示例，本次文档修订不执行：
 
 ```text
 git status --short --untracked-files=all
@@ -39,22 +37,10 @@ git -c http.proxy=http://127.0.0.1:11809 -c https.proxy=http://127.0.0.1:11809 p
 git -c http.proxy=http://127.0.0.1:11809 -c https.proxy=http://127.0.0.1:11809 ls-remote origin refs/heads/feat/desktop-launcher
 ```
 
-精确暂存优先使用明确路径列表；需要读取清单时使用Git支持的NUL分隔pathspec文件，避免中文/空格或通配符误匹配。不可将上面命令表当成一次性串联脚本，每步应检查结果再继续。
+每条命令检查实际结果后再继续，不串成忽略失败的脚本。认证不足时只诊断最小缺失权限，不导出 token/换身份；非快进保留本地及他人成果，正常整合并做最少受影响检查；钩子失败修真实原因，不绕过必要检查。无关原有暂存内容不能夹带；必要时隔离本功能保存，不清除他人 index。
 
-## 4. 异常与恢复
+## 4. 源码、构建和最终包身份
 
-| 异常 | 处理 | 阶段状态 |
-| --- | --- | --- |
-| 代理/网络短暂失败 | 最多2次有原因的重试，保存退出码与诊断；确认11809监听，必要时再调查 | in progress；不能直接越阶段 |
-| 认证/权限缺失 | 只诊断，不导出token，不改其他身份；报告需要的最小登录/权限 | blocked；保留本地提交 |
-| 非快进/其他人更新 | 代理fetch，仅按明确归属整合；冲突保留本地C与原有改动，禁止改写已推送历史 | 整合复验前不能退出 |
-| 提交钩子失败 | 排查真实原因，不用`--no-verify`绕过需要的检查 | 修复后重试 |
-| 用户工作树/暂存区不属于本任务 | 只处理本任务allowlist，必要时以隔离分支/副本处理依赖；不得删除用户内容 | 不借此批量提交 |
+worker/引擎/资料逻辑必须进入实际安装的训练器归档。按需先保存源码提交，锁定归档和编译前端摘要，再生成启动器 catalog/recipe；不能安装旧 main/dev 后用开发工作树 overlay 证明新功能。
 
-每个阶段报告必须有`local_commit / remote_commit / remote_verified_at / receipt_path / baseline_status`。M6最终交付必须同时给出最终S完整SHA与对应包SHA，两者不是同一个身份。
-
-## 5. 阶段内候选源码提交
-
-后续Python worker/引擎/资料逻辑必须进入实际安装的训练器源码归档。阶段尚未退出时允许先对已检查的小批代码做明确标WIP的正常commit/push，作为可下载、可复现候选输入；这些提交不代表本阶段已完成，也不解锁下一阶段。记录完整feature提交、归档/编译前端/配方摘要与实际安装receipt，不能用开发工作树overlay冒充发布源码。
-
-候选训练器源码提交与启动器嵌入catalog的构建提交可不同：先固定前者的归档SHA，再构建后者，避免在同一提交内要求写入自身源码归档摘要的循环。最终交付另记录`trainer_source_commit / launcher_build_commit / package_sha256`；S仅更新状态时无需重建产品，最终远端S不冒充产品构建提交。普通用户main推荐仍须经过发布验证，不因候选来自feature分支就静默默认它。
+`trainer_source_commit / launcher_build_commit / package_sha256 / final_remote_commit` 分别记录，可有不同身份；最终文档提交不代表重建了包。只因状态文档变化无需重建产品。M6 修复确实改包时才生成新 SHA，复验受影响链，最终统一交付真实远端回执与包摘要。

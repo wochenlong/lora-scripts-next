@@ -14,6 +14,9 @@ import { budgetDraft, formatBudgetBytes, parseBudgetCap } from './download-budge
 import { previewGuiRegistration, restoreGuiRegistration, recoverGuiRegistration } from './bridge'
 import type { GuiRegistrationPreview } from './bridge'
 
+import { previewGuiLifecycle, guiLifecycleHistory, applyGuiLifecycle } from './bridge'
+import type { GuiLifecyclePreview, GuiLifecycleHistory, GuiLifecycleAction } from './bridge'
+
 type Page = 'launch' | 'versions' | 'environment'
 interface Confirmation {
   title: string
@@ -43,6 +46,10 @@ const basePythonPreview = ref<BasePythonRepairPreview | null>(null)
 const registrationPreview = ref<GuiRegistrationPreview | null>(null)
 const registrationReleaseId = ref('')
 const registrationInstanceId = ref('')
+const lifecyclePreview = ref<GuiLifecyclePreview | null>(null)
+const lifecycleHistory = ref<GuiLifecycleHistory | null>(null)
+const lifecycleTransaction = ref('')
+const lifecycleAction = ref<GuiLifecycleAction>('rebuild')
 const showAllPackages = ref(false)
 const networkView = ref<NetworkSettingsView | null>(null)
 const networkDraft = ref({ mode: 'auto' as NonNullable<NetworkSettings['mode']>, http_proxy: '', https_proxy: '', no_proxy: '' })
@@ -264,6 +271,9 @@ function clearGuiState() {
   basePythonPreview.value = null
   registrationPreview.value = null
   registrationInstanceId.value = ''
+  lifecyclePreview.value = null
+  lifecycleHistory.value = null
+  lifecycleTransaction.value = ''
   showAllPackages.value = false
   if (confirmation.value?.scope === 'gui') dismissConfirmation()
 }
@@ -543,6 +553,49 @@ function confirmGuiRegistration(recovery = false) {
     },
   })
 }
+async function inspectLifecycle(action: 'rebuild' | 'rollback') {
+  const version = registrationRelease.value
+  if (!version || mutationDisabled.value) return
+  const root = path.value.trim(), epoch = guiEpoch
+  lifecyclePreview.value = null
+  await perform('检查实例重建与回退计划', async () => {
+    const history = await guiLifecycleHistory(root, version.id)
+    const value = await previewGuiLifecycle(root, version.id, action, lifecycleTransaction.value || null)
+    if (epoch !== guiEpoch || root !== path.value.trim()) return
+    lifecycleHistory.value = history
+    lifecycleAction.value = action
+    lifecyclePreview.value = value
+  })
+}
+async function inspectLifecycleHistory() {
+  const version = registrationRelease.value
+  if (!version || mutationDisabled.value) return
+  const root = path.value.trim(), epoch = guiEpoch
+  await perform('读取实例操作记录', async () => {
+    const value = await guiLifecycleHistory(root, version.id)
+    if (epoch === guiEpoch && root === path.value.trim()) lifecycleHistory.value = value
+  })
+}
+function confirmLifecycle(action: GuiLifecycleAction, transaction: string | null = null, instance: string | null = null) {
+  const version = registrationRelease.value, preview = lifecyclePreview.value
+  if (!version || mutationDisabled.value) return
+  if ((action === 'rebuild' || action === 'rollback') && (preview?.status !== 'ready' || !preview.plan_sha256)) return
+  const root = path.value.trim(), epoch = guiEpoch
+  const title = action === 'rebuild' ? '在新路径重建环境' : action === 'rollback' ? '回退到同版本旧实例' : '恢复实例事务'
+  return ask({ scope: 'gui', title,
+    detail: action === 'rebuild'
+      ? '在新的固定路径创建环境，原实例和资料保留。只有固定依赖及独立入口验证通过后才切换绑定；未完成的候选保持不可启动。'
+      : '重新验证目标实例和当前绑定，恢复时保留原事务、资料与非目标文件。恢复完成并不代表训练或模型已验证。',
+    paths: [`版本：${version.id}`, `安装目录：${root}`, ...(transaction ? [`操作记录：${transaction}`] : []), ...(instance ? [`实例：${instance}`] : [])],
+    action: action === 'rebuild' ? '确认创建新实例' : action === 'rollback' ? '确认验证并回退' : '确认恢复事务',
+    execute: async () => {
+      if (epoch !== guiEpoch || root !== path.value.trim() || version.id !== registrationRelease.value?.id) { error.value = '目录或版本已变化，请重新检查。'; return }
+      await startGuiOperation(title, () => applyGuiLifecycle(root, version.id, action, preview?.plan_sha256 ?? null, transaction, instance))
+      lifecyclePreview.value = null
+      lifecycleHistory.value = null
+    },
+  })
+}
 function confirmBasePythonRepair(recovery = false) {
   const preview = basePythonPreview.value
   const version = currentVersion.value ?? defaultRelease.value
@@ -770,6 +823,24 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <p v-if="registrationPreview.plan">环境：<code>{{ registrationPreview.plan.proof.environment }}</code> · {{ registrationPreview.plan.proof.files.toLocaleString() }} 个可信文件</p>
               <button v-if="registrationPreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmGuiRegistration()">审查并恢复登记</button>
               <button v-if="registrationPreview.status === 'pending'" :disabled="mutationDisabled" @click="confirmGuiRegistration(true)">继续未完成登记恢复</button>
+            </template>
+          </section>
+          <section v-if="sameRoot && registrationRelease" class="gui-diagnostics" aria-labelledby="lifecycle-title">
+            <div class="section-caption"><h2 id="lifecycle-title">独立环境重建与回退</h2><button :disabled="mutationDisabled" @click="inspectLifecycleHistory">读取实例记录</button></div>
+            <p class="hint">环境无法精准修复时，可在新路径重建。旧实例保留，切换前会验证依赖和独立入口；同版本回退使用已保存的重建记录。</p>
+            <p>目标版本：{{ registrationRelease.version }} · {{ registrationRelease.commit.slice(0, 8) }}</p>
+            <button :disabled="mutationDisabled" @click="inspectLifecycle('rebuild')">预览新实例重建</button>
+            <template v-if="lifecycleHistory">
+              <label>可回退的重建记录<select v-model="lifecycleTransaction" :disabled="mutationDisabled" @change="lifecyclePreview = null"><option value="">请选择记录</option><option v-for="record in lifecycleHistory.records.filter(item => item.rollback_available)" :key="record.transaction" :value="record.transaction">{{ record.transaction }} · {{ record.candidate_id }}</option></select></label>
+              <button :disabled="mutationDisabled || !lifecycleTransaction" @click="inspectLifecycle('rollback')">预览同版本实例回退</button>
+              <div v-for="pending in lifecycleHistory.pending_transactions" :key="pending.transaction" class="gui-recovery"><p>未完成实例事务：{{ pending.transaction }} · {{ pending.status }}</p><button :disabled="mutationDisabled" @click="confirmLifecycle(pending.kind === 'binding_switch' ? 'recover_rollback' : 'recover_rebuild', pending.transaction)">复验并恢复此事务</button></div>
+              <div v-for="instance in lifecycleHistory.preserved_pending" :key="instance.instance_id" class="gui-recovery"><p>已保留的旧事务实例：{{ instance.instance_id }}</p><button :disabled="mutationDisabled" @click="confirmLifecycle('recover_preserved', null, instance.instance_id)">恢复旧实例事务</button></div>
+              <button v-if="lifecycleHistory.status === 'rollback_pending'" :disabled="mutationDisabled" @click="confirmLifecycle('recover_rollback')">继续未完成的实例回退</button>
+            </template>
+            <template v-if="lifecyclePreview">
+              <p v-if="lifecyclePreview.reason" class="gui-issue" role="alert">{{ lifecyclePreview.reason }}</p>
+              <p v-if="lifecyclePreview.plan" class="hint">旧实例：{{ lifecyclePreview.plan.old_binding?.instance_id ?? '尚无绑定' }} · 预计下载 {{ formatBudgetBytes(lifecyclePreview.plan.estimated_network_bytes ?? 0) }}</p>
+              <button v-if="lifecyclePreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmLifecycle(lifecycleAction, lifecycleAction === 'rollback' ? lifecycleTransaction : null)">审查并{{ lifecycleAction === 'rebuild' ? '创建新实例' : '回退旧实例' }}</button>
             </template>
           </section>
           <section v-if="sameRoot" class="gui-diagnostics" aria-labelledby="base-python-title">

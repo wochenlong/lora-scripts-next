@@ -1,12 +1,14 @@
 # Next Trainer 桌面启动器
 
+**执行调度更新 v0.6 / CR-006：** 连续完成全部施工，仅做必要快检；完成后统一沙盒验证与最终汇报。取消下文旧候选/成本后暂停，功能与历史验收事实保留；以[当前总控](../docs/tasks/desktop-launcher-full-plan/00_总控目标索引.md)为准。本次只修订文档。
+
 对应 [需求 #516](https://github.com/wochenlong/lora-scripts-next/issues/516)。当前为 **0.2 开发版**，采用 Tauri 2、Vue 3 和 Rust，提供独立安装、main / dev 版本管理、共享用户资料、环境检查和恢复。启动器可以在训练器未安装或 Python 环境损坏时独立打开。
 
 这是桌面启动器的正式底座，尚未覆盖 #516 的全部功能。功能实现和实际验收状态分别记录；本说明不将构建成功视作新电脑、GPU 训练或全部损坏场景通过。当前进度和证据入口见 [正式化底座施工计划](../docs/tasks/desktop-launcher-foundation-plan/README.md) 与 [总控索引](../docs/tasks/desktop-launcher-foundation-plan/00_总控目标索引.md)。
 
 当前功能分支正在执行[完整交付任务书](../docs/tasks/desktop-launcher-full-plan/00_总控目标索引.md)的 M1，尚未完成本阶段验收。固定 GUI 候选已接入 81 个 wheel 的 hash 锁、基础 Python 完整文件清单、独立实例与单包修复预览、源码分项修复和持久恢复意图。新环境采用 `e/<短实例ID>`，旧记录继续读取原路径，详见[路径兼容补充](../docs/design/desktop-launcher-m1-instance-storage.md)。这些能力仍在真实安装与故障验证中，下文旧底座能力边界以完整任务书实时进度为准。
 
-第二轮旧包的安装、实启停和单包精准修复通过。CR-005 新包已修复命令入口路径校验并通过只读恢复预览，实际恢复仍因探针端口回收检查拒绝提交，**登记恢复未通过**；恢复后的正常启停未运行，C1–C3 复用旧包结果。本轮按 v0.4 / CR-003 收敛为 GUI 候选包；实际包身份、固定候选源码、中文操作步骤及同包安装/启动/修复/登记恢复结果见[候选报告](../docs/tasks/desktop-launcher-full-plan/m1-candidate-report.md)。该报告中的验收状态优先于下文历史底座说明，候选不代表完整 #516、干净系统或训练引擎验收通过。
+第二轮旧包的安装、实启停和单包精准修复通过。CR-005 新包已修复命令入口路径校验并通过只读恢复预览，实际恢复仍因探针端口回收检查拒绝提交，**登记恢复未通过**；恢复后的正常启停未运行，C1–C3 复用旧包结果。此前按 v0.4 / CR-003 收敛为 GUI 候选包（历史范围，当前连续施工见 v0.6 总控）；实际包身份、固定候选源码、中文操作步骤及同包安装/启动/修复/登记恢复结果见[候选报告](../docs/tasks/desktop-launcher-full-plan/m1-candidate-report.md)。该报告中的验收状态优先于下文历史底座说明，候选不代表完整 #516、干净系统或训练引擎验收通过。
 
 后续验证按 v0.5 / CR-004 精简：四引擎检查/修复功能继续实施，验收仅冒烟，不做实际引擎安装、损坏修复、GPU/模型/训练实测；其他验证只补改动影响的关键路径。最终同包从零 GUI/分发验证仍保留，详见[成本审核表](../docs/tasks/desktop-launcher-full-plan/remaining-work-cost-review.md)。
 

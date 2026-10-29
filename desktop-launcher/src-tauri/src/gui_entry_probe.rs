@@ -11,7 +11,7 @@ use std::{
     collections::BTreeMap,
     fs::{self, File},
     io::{Read, Write},
-    net::{SocketAddr, TcpListener, TcpStream},
+    net::TcpListener,
     path::{Path, PathBuf},
     process::{Child, Command, ExitStatus, Stdio},
     sync::{
@@ -253,9 +253,100 @@ fn get_exact(
     Ok(hash(&delivered))
 }
 
-fn listener_disappeared(port: u16) -> bool {
-    let address = SocketAddr::from(([127, 0, 0, 1], port));
-    matches!(TcpStream::connect_timeout(&address, Duration::from_millis(150)), Err(error) if error.kind() == std::io::ErrorKind::ConnectionRefused)
+#[cfg(windows)]
+fn listener_pids(port: u16) -> Result<Vec<u32>> {
+    use windows_sys::Win32::{
+        Foundation::ERROR_INSUFFICIENT_BUFFER,
+        NetworkManagement::IpHelper::{
+            GetExtendedTcpTable, MIB_TCPROW_OWNER_PID, MIB_TCPTABLE_OWNER_PID,
+            TCP_TABLE_OWNER_PID_LISTENER,
+        },
+        Networking::WinSock::AF_INET,
+    };
+
+    // 与启动前 owns_listener 使用同一IPv4监听表；连接超时不能证明监听仍在或已消失。
+    let mut size = 0u32;
+    let first = unsafe {
+        GetExtendedTcpTable(
+            std::ptr::null_mut(),
+            &mut size,
+            0,
+            AF_INET as u32,
+            TCP_TABLE_OWNER_PID_LISTENER,
+            0,
+        )
+    };
+    if first != ERROR_INSUFFICIENT_BUFFER && first != 0 {
+        return Err(std::io::Error::from_raw_os_error(first as i32))
+            .context("读取GUI探测监听表大小失败，不能确认端口回收");
+    }
+    // 系统监听可能并发增加，只重试缓冲区增长；查询失败绝不能视作没有监听。
+    for _ in 0..4 {
+        let offset = std::mem::offset_of!(MIB_TCPTABLE_OWNER_PID, table);
+        if (size as usize) < offset || size > 16 * 1024 * 1024 {
+            bail!("GUI探测监听表长度无效，不能确认端口回收");
+        }
+        let mut storage = vec![0u32; (size as usize).div_ceil(4)];
+        let result = unsafe {
+            GetExtendedTcpTable(
+                storage.as_mut_ptr() as _,
+                &mut size,
+                0,
+                AF_INET as u32,
+                TCP_TABLE_OWNER_PID_LISTENER,
+                0,
+            )
+        };
+        if result == ERROR_INSUFFICIENT_BUFFER {
+            continue;
+        }
+        if result != 0 {
+            return Err(std::io::Error::from_raw_os_error(result as i32))
+                .context("读取GUI探测监听表失败，不能确认端口回收");
+        }
+        let table = storage.as_ptr() as *const MIB_TCPTABLE_OWNER_PID;
+        let count = unsafe { (*table).dwNumEntries as usize };
+        let available = (size as usize).min(storage.len() * std::mem::size_of::<u32>());
+        if available < offset
+            || count > (available - offset) / std::mem::size_of::<MIB_TCPROW_OWNER_PID>()
+        {
+            bail!("GUI探测监听表记录不完整，不能确认端口回收");
+        }
+        let rows = unsafe {
+            std::slice::from_raw_parts(
+                std::ptr::addr_of!((*table).table) as *const MIB_TCPROW_OWNER_PID,
+                count,
+            )
+        };
+        return Ok(rows
+            .iter()
+            .filter(|row| u16::from_be(row.dwLocalPort as u16) == port)
+            .map(|row| row.dwOwningPid)
+            .collect());
+    }
+    bail!("GUI探测监听表持续变化，不能确认端口回收")
+}
+
+#[cfg(not(windows))]
+fn listener_pids(_: u16) -> Result<Vec<u32>> {
+    bail!("GUI探测监听表核验需要Windows")
+}
+
+fn wait_for_listener_release(
+    mut query: impl FnMut() -> Result<Vec<u32>>,
+    timeout: Duration,
+) -> Result<()> {
+    let start = Instant::now();
+    loop {
+        let pids = query().context("GUI探测结束后无法确认监听已回收，拒绝提交验证结果")?;
+        if pids.is_empty() {
+            return Ok(());
+        }
+        if start.elapsed() >= timeout {
+            bail!("GUI探测结束后监听表仍有PID {pids:?}，拒绝提交验证结果；未终止任何其它进程");
+        }
+        thread::sleep(Duration::from_millis(100));
+    }
 }
 
 fn private_command(
@@ -431,17 +522,8 @@ pub(super) fn probe(
         bail!("GUI独立入口探测超时")
     })();
     // 所有成功/失败/取消路径先回收本次Job，再等root child；绝不遗留后台入口。
-    let stopped = process.stop();
-    let stop_start = Instant::now();
-    let mut listener_gone = listener_disappeared(port);
-    while !listener_gone && stop_start.elapsed() < Duration::from_secs(5) {
-        thread::sleep(Duration::from_millis(100));
-        listener_gone = listener_disappeared(port);
-    }
-    let status = stopped.context("GUI入口探测子进程未能确认回收")?;
-    if !listener_gone {
-        bail!("GUI探测结束后端口仍有监听，拒绝提交验证结果；未终止任何其它进程");
-    }
+    let status = process.stop().context("GUI入口探测子进程未能确认回收")?;
+    wait_for_listener_release(|| listener_pids(port), Duration::from_secs(5))?;
     let (homepage_sha256, asset_sha256) = result?;
     cancel.check()?;
     let receipt = GuiProbeReceipt {
@@ -465,7 +547,7 @@ pub(super) fn probe(
         termination_requested: true,
         exit_code: status.code(),
         child_exited: true,
-        listener_gone,
+        listener_gone: true,
     };
     model::write_json_atomic(&view.workspace.join("probe-receipt.json"), &receipt)?;
     log(format!(
@@ -478,6 +560,44 @@ pub(super) fn probe(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn listener_release_requires_successful_empty_snapshot() {
+        assert!(wait_for_listener_release(|| Ok(vec![]), Duration::ZERO).is_ok());
+        let occupied = wait_for_listener_release(|| Ok(vec![12345]), Duration::ZERO)
+            .unwrap_err()
+            .to_string();
+        assert!(occupied.contains("12345"));
+        let unknown = wait_for_listener_release(
+            || Err(std::io::Error::from(std::io::ErrorKind::TimedOut).into()),
+            Duration::ZERO,
+        )
+        .unwrap_err();
+        assert!(format!("{unknown:#}").contains("无法确认监听已回收"));
+        let mut calls = 0;
+        wait_for_listener_release(
+            || {
+                calls += 1;
+                Ok(if calls == 1 { vec![12345] } else { vec![] })
+            },
+            Duration::from_secs(1),
+        )
+        .unwrap();
+        assert_eq!(calls, 2);
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_table_retains_unowned_listener_and_observes_actual_release() {
+        // 本测试进程不在探针Job里：已有外部监听必须阻止提交且保持可用。
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        let port = listener.local_addr().unwrap().port();
+        assert!(listener_pids(port).unwrap().contains(&std::process::id()));
+        assert!(wait_for_listener_release(|| listener_pids(port), Duration::ZERO).is_err());
+        assert!(listener_pids(port).unwrap().contains(&std::process::id()));
+        drop(listener);
+        wait_for_listener_release(|| listener_pids(port), Duration::from_secs(1)).unwrap();
+    }
 
     #[test]
     fn selects_current_local_asset_and_refuses_external_and_traversal_references() {

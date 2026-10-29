@@ -26,6 +26,1133 @@ type Tree = BTreeMap<PathBuf, Node>;
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
+pub(crate) struct RebuildBoundary {
+    schema_version: u32,
+    root_absolute: PathBuf,
+    release_id: String,
+    profiles: ProfilesSummary,
+    components: BTreeMap<PathBuf, Tree>,
+    states: BTreeMap<PathBuf, Fingerprint>,
+    snapshots: BTreeMap<PathBuf, Tree>,
+    pending: Vec<RebuildPendingReference>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct RebuildPendingReference {
+    release_id: String,
+    instance_id: String,
+    generation: u64,
+    state: Fingerprint,
+    pending_sha256: String,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct RebuildExtension {
+    schema_version: u32,
+    transaction: String,
+    root_absolute: PathBuf,
+    release_id: String,
+    boundary_sha256: String,
+    candidate_id: String,
+    candidate_state: Fingerprint,
+    candidate_tree: Tree,
+    pending: Vec<RebuildPendingReference>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredRebuildPlan {
+    schema_version: u32,
+    root_absolute: PathBuf,
+    release_id: String,
+    registry: Fingerprint,
+    boundary_sha256: String,
+    old_binding: Option<model::EnvironmentBinding>,
+    missing_wheels: Vec<String>,
+    estimated_network_bytes: u64,
+}
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct StoredRebuildIntent {
+    schema_version: u32,
+    transaction: String,
+    root_absolute: PathBuf,
+    release_id: String,
+    candidate_id: String,
+    status: String,
+    plan: StoredRebuildPlan,
+    plan_sha256: String,
+    boundary_sha256: String,
+    old_registry: Fingerprint,
+    candidate_state: Option<Fingerprint>,
+    candidate_tree_sha256: Option<String>,
+    proof: Option<crate::gui_registration_integrity::TrustedEnvironment>,
+    new_registry: Option<Fingerprint>,
+    preservation_file: Option<String>,
+    preservation_sha256: Option<String>,
+    terminal_status: Option<String>,
+    failure: Option<String>,
+}
+
+/// 重建前的精确边界；持久化在专属backups中，旧事务原字节保持不动。
+#[cfg(test)]
+pub(crate) fn rebuild_boundary(
+    ctx: &WorkspaceMutation,
+    cancel: &CancelToken,
+) -> Result<RebuildBoundary> {
+    rebuild_observe_boundary(ctx.layout(), cancel)
+}
+pub(crate) fn rebuild_observe_boundary(
+    layout: &Layout,
+    cancel: &CancelToken,
+) -> Result<RebuildBoundary> {
+    cancel.check()?;
+    let mut components = BTreeMap::new();
+    for root in [
+        layout.release_dir.clone(),
+        layout.root.join("tools/uv.exe"),
+        layout.root.join("environments"),
+        layout.root.join("e"),
+        layout.root.join("state/gui-repairs"),
+    ] {
+        components.insert(
+            root.strip_prefix(&layout.root)?.to_path_buf(),
+            scan(layout, &root, &[])?,
+        );
+    }
+    components.insert(PathBuf::from("python/3.10.19"), python_tree(layout)?);
+    let mut states = BTreeMap::new();
+    let mut snapshots = BTreeMap::new();
+    let mut pending = Vec::new();
+    let base = layout.root.join("state/instances");
+    layout.guard_path(&base)?;
+    if base.exists() {
+        for entry in fs::read_dir(&base)? {
+            cancel.check()?;
+            let path = entry?.path();
+            layout.guard_path(&path)?;
+            if path.extension().is_none_or(|e| e != "json") {
+                bail!("实例状态容器含未知文件，拒绝重建");
+            }
+            let id = path
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .context("实例状态非UTF8")?;
+            let bytes = fs::read(&path)?;
+            if bytes.len() as u64 > MAX_STATE {
+                bail!("实例状态超限");
+            }
+            let state: InstanceState = serde_json::from_slice(&bytes)?;
+            let owner = Layout::new(&layout.root, &state.release_id)?;
+            validate(&owner, id, &state)?;
+            let fingerprint = fingerprint(layout, &path)?;
+            states.insert(
+                path.strip_prefix(&layout.root)?.to_path_buf(),
+                fingerprint.clone(),
+            );
+            if state.base_python_pending.is_some() {
+                bail!("基础Python引用事务未完成，不能重建GUI");
+            }
+            if let Some(transaction) = &state.pending {
+                check_snapshots(&owner, &state)?;
+                snapshots.insert(
+                    transaction.directory.clone(),
+                    scan(&owner, &owner.root.join(&transaction.directory), &[])?,
+                );
+                // 旧事务在重建前必须仍能验证其非目标保护合同。
+                protected(
+                    &state.verified,
+                    &observe(&owner, &state, cancel)?,
+                    &transaction.files,
+                )?;
+                pending.push(RebuildPendingReference {
+                    release_id: state.release_id.clone(),
+                    instance_id: id.into(),
+                    generation: state.generation,
+                    state: fingerprint,
+                    pending_sha256: hash(&serde_json::to_vec(transaction)?),
+                });
+            }
+        }
+    }
+    pending.sort_by(|a, b| a.instance_id.cmp(&b.instance_id));
+    Ok(RebuildBoundary {
+        schema_version: 1,
+        root_absolute: layout.root.clone(),
+        release_id: release(layout)?.into(),
+        profiles: summarize_profiles(layout, cancel)?,
+        components,
+        states,
+        snapshots,
+        pending,
+    })
+}
+
+pub(crate) fn rebuild_boundary_sha(boundary: &RebuildBoundary) -> Result<String> {
+    Ok(hash(&serde_json::to_vec(boundary)?))
+}
+pub(crate) fn rebuild_check_boundary(
+    ctx: &WorkspaceMutation,
+    boundary: &RebuildBoundary,
+    candidate_id: &str,
+    cancel: &CancelToken,
+) -> Result<()> {
+    let layout = ctx.layout();
+    model::validate_environment_storage(candidate_id, 1)?;
+    if boundary.schema_version != 1
+        || boundary.root_absolute != layout.root
+        || boundary.release_id != release(layout)?
+    {
+        bail!("重建边界身份不符");
+    }
+    if summarize_profiles(layout, cancel)? != boundary.profiles {
+        bail!("重建改变生产profiles");
+    }
+    for (relative, before) in &boundary.components {
+        let mut current = if relative == Path::new("python/3.10.19") {
+            python_tree(layout)?
+        } else {
+            scan(layout, &layout.root.join(relative), &[])?
+        };
+        if relative == Path::new("e") {
+            let candidate = Path::new(candidate_id);
+            if before.keys().any(|p| p.starts_with(candidate)) {
+                bail!("重建候选原路径非空，禁止追认");
+            }
+            current.retain(|path, _| !path.starts_with(candidate));
+            if before.is_empty() && current == Tree::from([(PathBuf::new(), Node::Directory)]) {
+                current.clear();
+            }
+        }
+        if *before != current {
+            bail!("重建改变非候选保护树：{}", relative.display());
+        }
+    }
+    let base = layout.root.join("state/instances");
+    let mut states = BTreeMap::new();
+    if base.exists() {
+        for entry in fs::read_dir(&base)? {
+            let path = entry?.path();
+            layout.guard_path(&path)?;
+            if path == base.join(format!("{candidate_id}.json")) {
+                continue;
+            }
+            states.insert(
+                path.strip_prefix(&layout.root)?.to_path_buf(),
+                fingerprint(layout, &path)?,
+            );
+        }
+    }
+    if states != boundary.states {
+        bail!("重建改变旧实例state或引入未知状态");
+    }
+    for (relative, before) in &boundary.snapshots {
+        if scan(layout, &layout.root.join(relative), &[])? != *before {
+            bail!("重建改变旧pending独立快照或manifest");
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn rebuild_candidate_tree_sha(layout: &Layout, id: &str) -> Result<String> {
+    let path = model::environment_path(&layout.root, release(layout)?, id, 1)?;
+    Ok(hash(&serde_json::to_vec(&scan(layout, &path, &[])?)?))
+}
+
+pub(crate) fn rebuild_create(
+    ctx: &WorkspaceMutation,
+    id: &str,
+    recipe_id: &str,
+    recipe_sha256: &str,
+    transaction: &str,
+    cancel: &CancelToken,
+) -> Result<InstanceState> {
+    let layout = ctx.layout();
+    model::validate_environment_storage(id, 1)?;
+    model::validate_component(transaction)?;
+    if !transaction.starts_with("gui-rebuild-") || !valid_hash(recipe_sha256) {
+        bail!("重建创建许可身份不符");
+    }
+    let target = state_path(layout, id)?;
+    if target.exists() {
+        let state = load(layout, id)?;
+        if state.storage_version != 1
+            || state.recipe_id != recipe_id
+            || state.recipe_sha256 != recipe_sha256
+            || state.generation != 1
+            || state.validated_generation != u64::from(!state.dirty)
+            || state.pending.is_some()
+            || state.base_python_pending.is_some()
+        {
+            bail!("重建初始state不匹配");
+        }
+        return Ok(state);
+    }
+    let environment = model::environment_path(&layout.root, release(layout)?, id, 1)?;
+    if model::environment_path(&layout.root, release(layout)?, id, 0)?.exists() {
+        bail!("重建候选跨命名空间冲突");
+    }
+    let parent = environment.parent().context("候选缺父目录")?;
+    layout.ensure_dir(parent)?;
+    if environment.exists() {
+        if !fs::symlink_metadata(&environment)?.is_dir()
+            || fs::read_dir(&environment)?.next().is_some()
+        {
+            bail!("缺state重建候选不是空目录，不追认");
+        }
+    } else {
+        fs::create_dir(&environment)?;
+    }
+    let mut state = InstanceState {
+        schema_version: 2,
+        component: "gui".into(),
+        instance_id: id.into(),
+        storage_version: 1,
+        release_id: release(layout)?.into(),
+        root_absolute: layout.root.clone(),
+        recipe_id: recipe_id.into(),
+        recipe_sha256: recipe_sha256.into(),
+        generation: 1,
+        validated_generation: 0,
+        dirty: true,
+        ignored: vec![],
+        verified: Observation {
+            environment: Tree::new(),
+            profiles: Tree::new(),
+            profiles_summary: None,
+            protected: BTreeMap::new(),
+        },
+        pending: None,
+        base_python_pending: None,
+        registration_origin: None,
+    };
+    state.verified = observe(layout, &state, cancel)?;
+    validate(layout, id, &state)?;
+    model::write_gui_transaction_bytes(
+        &layout.root,
+        transaction,
+        &target,
+        &registration_encoded(layout, &state)?,
+    )?;
+    Ok(state)
+}
+
+pub(crate) fn rebuild_validate_candidate(
+    ctx: &WorkspaceMutation,
+    boundary: &RebuildBoundary,
+    id: &str,
+    transaction: &str,
+    cancel: &CancelToken,
+    validator: impl FnOnce(&Path) -> Result<()>,
+) -> Result<InstanceState> {
+    let layout = ctx.layout();
+    let mut state = load(layout, id)?;
+    if state.storage_version != 1
+        || state.generation != 1
+        || state.pending.is_some()
+        || state.base_python_pending.is_some()
+    {
+        bail!("重建候选身份不符");
+    }
+    rebuild_check_boundary(ctx, boundary, id, cancel)?;
+    let before = observe(layout, &state, cancel)?;
+    validator(&path(&state)?)?;
+    if observe(layout, &state, cancel)? != before || load(layout, id)? != state {
+        bail!("重建验证改变受保护内容或实例状态");
+    }
+    rebuild_check_boundary(ctx, boundary, id, cancel)?;
+    state.dirty = false;
+    state.validated_generation = state.generation;
+    state.verified = before;
+    model::write_gui_transaction_bytes(
+        &layout.root,
+        transaction,
+        &state_path(layout, id)?,
+        &registration_encoded(layout, &state)?,
+    )?;
+    Ok(state)
+}
+pub(crate) fn rebuild_mark_orphan(
+    ctx: &WorkspaceMutation,
+    id: &str,
+    transaction: &str,
+) -> Result<()> {
+    let layout = ctx.layout();
+    let mut state = load(layout, id)?;
+    if state.storage_version != 1
+        || state.generation != 1
+        || state.pending.is_some()
+        || state.base_python_pending.is_some()
+    {
+        bail!("非本轮新候选不能封存为orphan");
+    }
+    state.dirty = true;
+    state.validated_generation = 0;
+    model::write_gui_transaction_bytes(
+        &layout.root,
+        transaction,
+        &state_path(layout, id)?,
+        &registration_encoded(layout, &state)?,
+    )
+}
+pub(crate) fn preserved_pending(root: &Path) -> Result<Vec<serde_json::Value>> {
+    let catalog = model::Catalog::embedded()?;
+    let scope = Layout::new(root, &catalog.releases.first().context("发布目录为空")?.id)?;
+    let container = root.join("state/gui-rebuild");
+    scope.guard_path(&container)?;
+    let mut pending = Vec::new();
+    if !container.exists() {
+        return Ok(pending);
+    }
+    for entry in fs::read_dir(&container)? {
+        let path = entry?.path();
+        scope.guard_path(&path)?;
+        let metadata = fs::symlink_metadata(&path)?;
+        if path.extension().is_none_or(|e| e != "json")
+            || !metadata.is_file()
+            || metadata.len() > MAX_STATE
+        {
+            bail!("重建授权容器含未知或超限文件");
+        }
+        let owner_value: StoredRebuildIntent = serde_json::from_slice(&fs::read(&path)?)?;
+        let layout = Layout::new(root, &owner_value.release_id)?;
+        let Some((value, extension, _boundary)) = load_rebuild_extension(&layout, &path)? else {
+            continue;
+        };
+        for reference in extension.pending {
+            let owner = Layout::new(root, &reference.release_id)?;
+            let state = load(&owner, &reference.instance_id)?;
+            let receipt = recovery_receipt(&owner, &value.transaction, &reference)?;
+            if receipt.exists() {
+                let bytes = fs::read(&receipt)?;
+                let recovered = registration_decode(&owner, &bytes)?;
+                if recovered.id() != reference.instance_id
+                    || recovered.release_id() != reference.release_id
+                    || recovered.generation != reference.generation
+                    || recovered.dirty
+                    || recovered.pending.is_some()
+                    || recovered.base_python_pending.is_some()
+                {
+                    bail!("旧pending恢复侧录身份不符");
+                }
+                if state.generation < reference.generation
+                    || state.generation == reference.generation && state != recovered
+                {
+                    // clean提交前崩溃时旧pending仍在，继续显示待恢复；绝不凭侧录跳过它。
+                    if state.pending.is_none() || state.generation != reference.generation {
+                        bail!("旧pending恢复侧录与实例状态断联");
+                    }
+                } else {
+                    continue;
+                }
+            }
+            if let Some(transaction) = &state.pending {
+                if state.generation != reference.generation
+                    || fingerprint(&owner, &state_path(&owner, state.id())?)? != reference.state
+                    || hash(&serde_json::to_vec(transaction)?) != reference.pending_sha256
+                {
+                    bail!("保留旧pending身份变化，禁止正式运行");
+                }
+                pending.push(serde_json::json!({"transaction":value.transaction,"release_id":reference.release_id,"instance_id":reference.instance_id,"generation":reference.generation}));
+            } else {
+                bail!("保留旧pending缺少精确clean恢复侧录，禁止正式运行");
+            }
+        }
+    }
+    pending.sort_by_key(|v| {
+        (
+            v["release_id"].as_str().unwrap_or_default().to_owned(),
+            v["instance_id"].as_str().unwrap_or_default().to_owned(),
+        )
+    });
+    pending.dedup_by(|a, b| {
+        a["release_id"] == b["release_id"] && a["instance_id"] == b["instance_id"]
+    });
+    Ok(pending)
+}
+fn recovery_receipt(
+    layout: &Layout,
+    transaction: &str,
+    reference: &RebuildPendingReference,
+) -> Result<PathBuf> {
+    model::validate_component(transaction)?;
+    model::validate_component(&reference.instance_id)?;
+    let path = layout.root.join("backups").join(transaction).join(format!(
+        "recovered-{}-generation-{}.json",
+        reference.instance_id, reference.generation
+    ));
+    layout.guard_path(&path)?;
+    if path.exists()
+        && (!fs::symlink_metadata(&path)?.is_file() || fs::metadata(&path)?.len() > MAX_STATE)
+    {
+        bail!("旧pending恢复侧录不是限额普通文件");
+    }
+    Ok(path)
+}
+
+/// 恢复原state前写入精确clean侧录；后续合法generation变化不重新激活已完成的旧事务。
+fn record_preserved_recovery(
+    layout: &Layout,
+    old: &InstanceState,
+    recovered: &InstanceState,
+) -> Result<()> {
+    let Some(pending) = &old.pending else {
+        return Ok(());
+    };
+    let container = layout.root.join("state/gui-rebuild");
+    layout.guard_path(&container)?;
+    if !container.exists() {
+        return Ok(());
+    }
+    let previous = fingerprint(layout, &state_path(layout, old.id())?)?;
+    let pending_sha = hash(&serde_json::to_vec(pending)?);
+    let bytes = registration_encoded(layout, recovered)?;
+    for entry in fs::read_dir(container)? {
+        let Some((authority, extension, _)) = load_rebuild_extension(layout, &entry?.path())?
+        else {
+            continue;
+        };
+        for reference in &extension.pending {
+            if reference.instance_id == old.id()
+                && reference.release_id == old.release_id
+                && reference.generation == old.generation
+                && reference.state == previous
+                && reference.pending_sha256 == pending_sha
+            {
+                let path = recovery_receipt(layout, &authority.transaction, reference)?;
+                if path.exists() {
+                    if fs::read(&path)? != bytes {
+                        bail!("恢复侧录重名但内容不同，保留dirty");
+                    }
+                } else {
+                    model::write_gui_transaction_bytes(
+                        &layout.root,
+                        &authority.transaction,
+                        &path,
+                        &bytes,
+                    )?;
+                }
+            }
+        }
+    }
+    Ok(())
+}
+pub(crate) fn assert_no_preserved_pending(root: &Path) -> Result<()> {
+    let pending = preserved_pending(root)?;
+    if !pending.is_empty() {
+        bail!(
+            "重建已保留旧事务，正式启动/变更前须按实例ID恢复且不切当前绑定：{}",
+            serde_json::to_string(&pending)?
+        );
+    }
+    Ok(())
+}
+
+pub(crate) fn recover_preserved_controlled(
+    ctx: &WorkspaceMutation,
+    id: &str,
+    cancel: &CancelToken,
+    validator: impl FnOnce(&Path) -> Result<()>,
+) -> Result<InstanceState> {
+    let layout = ctx.layout();
+    let entries = preserved_pending(&layout.root)?;
+    if !entries.iter().any(|v| {
+        v["instance_id"].as_str() == Some(id) && v["release_id"].as_str() == release(layout).ok()
+    }) {
+        bail!("实例不属于已闭合重建的保留事务");
+    }
+    let ticket = reload_ticket(layout, id)?;
+    recover_controlled(ctx, &ticket, cancel, validator)
+}
+
+pub(crate) fn rebuild_preservation(
+    ctx: &WorkspaceMutation,
+    transaction: &str,
+    boundary: &RebuildBoundary,
+    id: &str,
+    cancel: &CancelToken,
+) -> Result<serde_json::Value> {
+    model::validate_component(transaction)?;
+    if !transaction.starts_with("gui-rebuild-") {
+        bail!("重建事务身份不符");
+    }
+    rebuild_check_boundary(ctx, boundary, id, cancel)?;
+    let layout = ctx.layout();
+    let candidate = load(layout, id)?;
+    if candidate.storage_version != 1 {
+        bail!("重建只创建新短路径实例");
+    }
+    let extension = RebuildExtension {
+        schema_version: 1,
+        transaction: transaction.into(),
+        root_absolute: layout.root.clone(),
+        release_id: release(layout)?.into(),
+        boundary_sha256: rebuild_boundary_sha(boundary)?,
+        candidate_id: id.into(),
+        candidate_state: fingerprint(layout, &state_path(layout, id)?)?,
+        candidate_tree: scan(layout, &path(&candidate)?, &[])?,
+        pending: boundary.pending.clone(),
+    };
+    Ok(serde_json::to_value(extension)?)
+}
+
+fn load_rebuild_extension(
+    layout: &Layout,
+    path: &Path,
+) -> Result<Option<(StoredRebuildIntent, RebuildExtension, RebuildBoundary)>> {
+    layout.guard_path(path)?;
+    if path.extension().is_none_or(|e| e != "json") || fs::metadata(path)?.len() > MAX_STATE {
+        bail!("重建授权文件格式/限额无效");
+    }
+    let authority: StoredRebuildIntent = serde_json::from_slice(&fs::read(path)?)?;
+    if authority.schema_version != 1
+        || authority.plan.schema_version != 1
+        || authority.root_absolute != layout.root
+        || authority.plan.root_absolute != layout.root
+        || authority.plan.release_id != authority.release_id
+        || authority.boundary_sha256 != authority.plan.boundary_sha256
+        || authority.old_registry != authority.plan.registry
+        || hash(&serde_json::to_vec(&authority.plan)?) != authority.plan_sha256
+    {
+        bail!("重建授权完整intent/plan身份不符");
+    }
+    if !matches!(
+        authority.status.as_str(),
+        "creating" | "building" | "validating" | "committing" | "committed" | "orphaned"
+    ) {
+        bail!("重建授权status未知");
+    }
+    if !matches!(authority.status.as_str(), "committed" | "orphaned") {
+        return Ok(None);
+    }
+    if authority.terminal_status.as_deref() != Some(authority.status.as_str()) {
+        bail!("重建授权终态断联");
+    }
+    let transaction = &authority.transaction;
+    model::validate_component(transaction)?;
+    if !transaction.starts_with("gui-rebuild-")
+        || path.file_stem().is_none_or(|p| p != transaction.as_str())
+    {
+        bail!("重建授权身份不符");
+    }
+    let expected_sha = authority
+        .preservation_sha256
+        .as_ref()
+        .context("重建缺少保护SHA")?;
+    let preservation_file = authority
+        .preservation_file
+        .as_ref()
+        .context("重建缺少保护快照名")?;
+    if preservation_file != &format!("preservation-{expected_sha}.json") {
+        bail!("重建保护快照命名不匹配内容身份");
+    }
+    let extension_path = layout
+        .root
+        .join("backups")
+        .join(transaction)
+        .join(preservation_file);
+    layout.guard_path(&extension_path)?;
+    let bytes = fs::read(&extension_path)?;
+    if hash(&bytes) != *expected_sha {
+        bail!("重建精确保护侧录损坏");
+    }
+    let extension: RebuildExtension = serde_json::from_slice(&bytes)?;
+    if extension.schema_version != 1
+        || extension.transaction != *transaction
+        || extension.root_absolute != layout.root
+        || extension.release_id != authority.release_id
+        || extension.candidate_id != authority.candidate_id
+        || extension.boundary_sha256 != authority.boundary_sha256
+        || authority.candidate_state.as_ref() != Some(&extension.candidate_state)
+        || authority.candidate_tree_sha256.as_ref()
+            != Some(&hash(&serde_json::to_vec(&extension.candidate_tree)?))
+    {
+        bail!("重建授权与精确保护闭包断联");
+    }
+    let old_path = layout
+        .root
+        .join("backups")
+        .join(transaction)
+        .join("registry-old.json");
+    layout.guard_path(&old_path)?;
+    if fingerprint(layout, &old_path)? != authority.old_registry {
+        bail!("重建旧registry快照身份变化");
+    }
+    let old: model::Registry = serde_json::from_slice(&fs::read(old_path)?)?;
+    old.validate()?;
+    if old.gui_binding(&extension.release_id) != authority.plan.old_binding.as_ref() {
+        bail!("重建旧binding与计划断联");
+    }
+    match authority.status.as_str() {
+        "orphaned" => {
+            if authority.new_registry.is_some() {
+                bail!("orphan重建不能授权新binding");
+            }
+        }
+        "committed" => {
+            let proof = authority
+                .proof
+                .as_ref()
+                .context("成功重建授权缺少完整可信证明")?;
+            if proof.environment
+                != model::environment_path(
+                    &layout.root,
+                    &extension.release_id,
+                    &extension.candidate_id,
+                    1,
+                )?
+                || proof.recipe_sha256
+                    != "8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090"
+                || proof.trusted_index_sha256
+                    != crate::gui_registration_integrity::trusted_index_sha256()
+            {
+                bail!("成功重建proof信任根断联");
+            }
+            let new_path = layout
+                .root
+                .join("backups")
+                .join(transaction)
+                .join("registry-new.json");
+            layout.guard_path(&new_path)?;
+            if Some(fingerprint(layout, &new_path)?) != authority.new_registry {
+                bail!("重建newregistry快照身份变化");
+            }
+            let new: model::Registry = serde_json::from_slice(&fs::read(new_path)?)?;
+            new.validate()?;
+            let release = model::Catalog::embedded()?
+                .release(&extension.release_id)?
+                .clone();
+            let mut expected = old;
+            expected.schema_version = expected.schema_version.max(2);
+            expected.record_installed(&release)?;
+            expected.bind_gui(
+                &extension.release_id,
+                model::EnvironmentBinding {
+                    instance_id: extension.candidate_id.clone(),
+                    storage_version: 1,
+                    recipe_id: crate::recipe::GuiRecipe::embedded()?.id().into(),
+                    recipe_sha256: proof.recipe_sha256.clone(),
+                    generation: 1,
+                },
+            )?;
+            if new != expected {
+                bail!("重建newregistry语义未授权");
+            }
+        }
+        _ => unreachable!(),
+    }
+    let boundary_path = layout
+        .root
+        .join("backups")
+        .join(transaction)
+        .join("boundary.json");
+    layout.guard_path(&boundary_path)?;
+    let boundary: RebuildBoundary = serde_json::from_slice(&fs::read(&boundary_path)?)?;
+    if rebuild_boundary_sha(&boundary)? != extension.boundary_sha256
+        || boundary.pending != extension.pending
+    {
+        bail!("重建旧保护边界损坏");
+    }
+    Ok(Some((authority, extension, boundary)))
+}
+fn project_rebuild_extensions(
+    layout: &Layout,
+    state: &InstanceState,
+    tree: &mut Tree,
+) -> Result<()> {
+    let Some(pending) = &state.pending else {
+        return Ok(());
+    };
+    let authority_root = layout.root.join("state/gui-rebuild");
+    layout.guard_path(&authority_root)?;
+    if !authority_root.exists() {
+        return Ok(());
+    }
+    let state_fingerprint = fingerprint(layout, &state_path(layout, state.id())?)?;
+    for entry in fs::read_dir(&authority_root)? {
+        let path = entry?.path();
+        layout.guard_path(&path)?;
+        if path.extension().is_none_or(|e| e != "json") {
+            bail!("重建授权目录含未知文件");
+        }
+        if fs::metadata(&path)?.len() > MAX_STATE {
+            bail!("重建授权记录超限");
+        }
+        let Some((_authority, extension, boundary)) = load_rebuild_extension(layout, &path)? else {
+            continue;
+        };
+        let applies = extension.pending.iter().any(|reference| {
+            reference.instance_id == state.id()
+                && reference.release_id == state.release_id
+                && reference.generation == state.generation
+                && reference.state == state_fingerprint
+                && reference.pending_sha256
+                    == hash(&serde_json::to_vec(pending).unwrap_or_default())
+        });
+        if !applies {
+            continue;
+        }
+        model::validate_environment_storage(&extension.candidate_id, 1)?;
+        if fingerprint(layout, &state_path(layout, &extension.candidate_id)?)?
+            != extension.candidate_state
+        {
+            bail!("重建新增state变化，拒绝放宽旧pending");
+        }
+        let candidate_path = model::environment_path(
+            &layout.root,
+            &extension.release_id,
+            &extension.candidate_id,
+            1,
+        )?;
+        if scan(layout, &candidate_path, &[])? != extension.candidate_tree {
+            bail!("重建新增子树变化，拒绝放宽旧pending");
+        }
+        let candidate = Path::new(&extension.candidate_id);
+        if boundary
+            .components
+            .get(Path::new("e"))
+            .context("重建边界缺少e")?
+            .keys()
+            .any(|p| p.starts_with(candidate))
+        {
+            bail!("重建授权原边界已含候选");
+        }
+        tree.retain(|path, _| !path.starts_with(candidate));
+    }
+    if state
+        .verified
+        .protected
+        .get(Path::new("e"))
+        .is_none_or(BTreeMap::is_empty)
+        && tree == &Tree::from([(PathBuf::new(), Node::Directory)])
+    {
+        tree.clear();
+    }
+    Ok(())
+}
+
+#[cfg(test)]
+mod rebuild_preservation_tests {
+    use super::*;
+    struct Fixture {
+        ctx: WorkspaceMutation,
+        state: InstanceState,
+        ticket: MutationTicket,
+        old_bytes: Vec<u8>,
+    }
+    impl Fixture {
+        fn new(storage: u32, no_legacy_e: bool) -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "nt-rebuild-preserve-{}-{}-{}",
+                std::process::id(),
+                model::now(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let ctx =
+                WorkspaceMutation::acquire(&root, &format!("dev-{}", "a".repeat(40))).unwrap();
+            let mut state =
+                create(&ctx, "g1111111111111111", "recipe-one", &"b".repeat(64)).unwrap();
+            if storage == 0 {
+                let old = path(&state).unwrap();
+                state.storage_version = 0;
+                let new = path(&state).unwrap();
+                ctx.layout().ensure_dir(new.parent().unwrap()).unwrap();
+                fs::rename(old, &new).unwrap();
+                fs::remove_dir(root.join("e")).unwrap();
+                state.verified = observe(ctx.layout(), &state, &CancelToken::new()).unwrap();
+                save(ctx.layout(), &state).unwrap();
+            }
+            fs::write(path(&state).unwrap().join("target.py"), b"original").unwrap();
+            let state = validate_new(&ctx, &state, &[], |_| Ok(())).unwrap();
+            let ticket = begin(
+                &ctx,
+                &plan(&ctx, state.id(), state.generation(), &["target.py".into()]).unwrap(),
+            )
+            .unwrap();
+            fs::write(path(&state).unwrap().join("target.py"), b"damaged").unwrap();
+            if no_legacy_e {
+                let mut old = load(ctx.layout(), state.id()).unwrap();
+                old.verified.protected.remove(Path::new("e"));
+                old.pending.as_mut().unwrap().tree_sha256 =
+                    hash(&serde_json::to_vec(&old.verified).unwrap());
+                let pending = old.pending.as_ref().unwrap();
+                model::write_json_atomic(
+                    &root.join(&pending.directory).join("manifest.json"),
+                    pending,
+                )
+                .unwrap();
+                save(ctx.layout(), &old).unwrap();
+            }
+            let ticket = if no_legacy_e {
+                reload_ticket(ctx.layout(), state.id()).unwrap()
+            } else {
+                ticket
+            };
+            let old_bytes = fs::read(state_path(ctx.layout(), state.id()).unwrap()).unwrap();
+            Self {
+                ctx,
+                state,
+                ticket,
+                old_bytes,
+            }
+        }
+        fn seal(&self, status: &str) -> String {
+            let tx = format!(
+                "gui-rebuild-preservation-test-{}",
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            );
+            let cancel = CancelToken::new();
+            let boundary = rebuild_boundary(&self.ctx, &cancel).unwrap();
+            rebuild_create(
+                &self.ctx,
+                "g2222222222222222",
+                "recipe-one",
+                &"b".repeat(64),
+                &tx,
+                &cancel,
+            )
+            .unwrap();
+            fs::write(
+                self.ctx
+                    .layout()
+                    .root
+                    .join("e/g2222222222222222/partial.dll"),
+                b"candidate-original",
+            )
+            .unwrap();
+            let extension =
+                rebuild_preservation(&self.ctx, &tx, &boundary, "g2222222222222222", &cancel)
+                    .unwrap();
+            let mut bytes = serde_json::to_vec_pretty(&extension).unwrap();
+            bytes.push(b'\n');
+            model::write_gui_transaction_bytes(
+                &self.ctx.layout().root,
+                &tx,
+                &self
+                    .ctx
+                    .layout()
+                    .root
+                    .join("backups")
+                    .join(&tx)
+                    .join(format!("preservation-{}.json", hash(&bytes))),
+                &bytes,
+            )
+            .unwrap();
+            model::write_gui_transaction_json(
+                &self.ctx.layout().root,
+                &tx,
+                &self
+                    .ctx
+                    .layout()
+                    .root
+                    .join("backups")
+                    .join(&tx)
+                    .join("boundary.json"),
+                &boundary,
+            )
+            .unwrap();
+            let old = model::Registry::default();
+            let mut old_bytes = serde_json::to_vec_pretty(&old).unwrap();
+            old_bytes.push(b'\n');
+            model::write_gui_transaction_bytes(
+                &self.ctx.layout().root,
+                &tx,
+                &self
+                    .ctx
+                    .layout()
+                    .root
+                    .join("backups")
+                    .join(&tx)
+                    .join("registry-old.json"),
+                &old_bytes,
+            )
+            .unwrap();
+            let plan = StoredRebuildPlan {
+                schema_version: 1,
+                root_absolute: self.ctx.layout().root.clone(),
+                release_id: self.state.release_id.clone(),
+                registry: Fingerprint {
+                    bytes: old_bytes.len() as u64,
+                    sha256: hash(&old_bytes),
+                },
+                boundary_sha256: rebuild_boundary_sha(&boundary).unwrap(),
+                old_binding: None,
+                missing_wheels: vec![],
+                estimated_network_bytes: 0,
+            };
+            let extension: RebuildExtension = serde_json::from_value(extension).unwrap();
+            let authority = StoredRebuildIntent {
+                schema_version: 1,
+                transaction: tx.clone(),
+                root_absolute: self.ctx.layout().root.clone(),
+                release_id: self.state.release_id.clone(),
+                candidate_id: "g2222222222222222".into(),
+                status: status.into(),
+                plan_sha256: hash(&serde_json::to_vec(&plan).unwrap()),
+                boundary_sha256: plan.boundary_sha256.clone(),
+                old_registry: plan.registry.clone(),
+                plan,
+                candidate_state: Some(extension.candidate_state),
+                candidate_tree_sha256: Some(hash(
+                    &serde_json::to_vec(&extension.candidate_tree).unwrap(),
+                )),
+                proof: None,
+                new_registry: None,
+                preservation_file: Some(format!("preservation-{}.json", hash(&bytes))),
+                preservation_sha256: Some(hash(&bytes)),
+                terminal_status: Some(status.into()),
+                failure: Some("controlled partial".into()),
+            };
+            model::write_gui_transaction_json(
+                &self.ctx.layout().root,
+                &tx,
+                &self
+                    .ctx
+                    .layout()
+                    .root
+                    .join("state/gui-rebuild")
+                    .join(format!("{tx}.json")),
+                &authority,
+            )
+            .unwrap();
+            tx
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let root = &self.ctx.layout().root;
+            if root.parent() == Some(std::env::temp_dir().as_path())
+                && root
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("nt-rebuild-preserve-")
+            {
+                let _ = fs::remove_dir_all(root);
+            }
+        }
+    }
+    #[test]
+    fn compact_pending_recovers_after_success_exact_new_instance_extension() {
+        let f = Fixture::new(1, false);
+        f.seal("orphaned");
+        assert_eq!(
+            fs::read(state_path(f.ctx.layout(), f.state.id()).unwrap()).unwrap(),
+            f.old_bytes
+        );
+        let state = recover(&f.ctx, &f.ticket, |_| Ok(())).unwrap();
+        assert!(!state.dirty());
+        assert_eq!(
+            fs::read(path(&state).unwrap().join("target.py")).unwrap(),
+            b"original"
+        );
+        assert!(state
+            .verified
+            .protected
+            .get(Path::new("e"))
+            .unwrap()
+            .contains_key(Path::new("g2222222222222222/partial.dll")));
+        assert_no_preserved_pending(&f.ctx.layout().root).unwrap();
+        // 后续合法修复拥有新generation，不应重新激活已恢复的历史pending。
+        let next = begin(
+            &f.ctx,
+            &plan(
+                &f.ctx,
+                state.id(),
+                state.generation(),
+                &["target.py".into()],
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_no_preserved_pending(&f.ctx.layout().root).unwrap();
+        recover(&f.ctx, &next, |_| Ok(())).unwrap();
+        assert_no_preserved_pending(&f.ctx.layout().root).unwrap();
+    }
+    #[test]
+    fn legacy_pending_with_absent_e_baseline_recovers_after_partial_orphan() {
+        let f = Fixture::new(0, true);
+        f.seal("orphaned");
+        assert_eq!(
+            fs::read(state_path(f.ctx.layout(), f.state.id()).unwrap()).unwrap(),
+            f.old_bytes
+        );
+        let state = recover(&f.ctx, &f.ticket, |_| Ok(())).unwrap();
+        assert!(!state.dirty());
+        assert!(state.verified.protected.contains_key(Path::new("e")));
+        assert!(load(f.ctx.layout(), "g2222222222222222").unwrap().dirty());
+    }
+    #[test]
+    fn legacy_pending_with_empty_e_baseline_recovers_after_orphan() {
+        let f = Fixture::new(0, false);
+        f.seal("orphaned");
+        assert!(recover(&f.ctx, &f.ticket, |_| Ok(())).is_ok());
+    }
+    #[test]
+    fn changed_new_subtree_or_unknown_added_sibling_never_relaxes_old_pending() {
+        let f = Fixture::new(1, false);
+        f.seal("orphaned");
+        fs::write(
+            f.ctx.layout().root.join("e/g2222222222222222/partial.dll"),
+            b"foreign",
+        )
+        .unwrap();
+        assert!(recover(&f.ctx, &f.ticket, |_| Ok(())).is_err());
+        assert_eq!(
+            fs::read(state_path(f.ctx.layout(), f.state.id()).unwrap()).unwrap(),
+            f.old_bytes
+        );
+        fs::write(
+            f.ctx.layout().root.join("e/g2222222222222222/partial.dll"),
+            b"candidate-original",
+        )
+        .unwrap();
+        fs::create_dir(f.ctx.layout().root.join("e/g3333333333333333")).unwrap();
+        assert!(recover(&f.ctx, &f.ticket, |_| Ok(())).is_err());
+        assert_eq!(
+            fs::read(path(&f.state).unwrap().join("target.py")).unwrap(),
+            b"damaged"
+        );
+    }
+    #[test]
+    fn altered_preservation_or_unknown_authority_schema_is_rejected() {
+        let f = Fixture::new(1, false);
+        let tx = f.seal("orphaned");
+        let p =
+            f.ctx
+                .layout()
+                .root
+                .join("backups")
+                .join(&tx)
+                .join(format!("preservation-{}.json", {
+                    let p = f
+                        .ctx
+                        .layout()
+                        .root
+                        .join("state/gui-rebuild")
+                        .join(format!("{tx}.json"));
+                    let a: StoredRebuildIntent =
+                        serde_json::from_slice(&fs::read(p).unwrap()).unwrap();
+                    a.preservation_sha256.unwrap()
+                }));
+        let bytes = fs::read(&p).unwrap();
+        fs::write(&p, b"{}").unwrap();
+        assert!(recover(&f.ctx, &f.ticket, |_| Ok(())).is_err());
+        fs::write(&p, bytes).unwrap();
+        let p = f
+            .ctx
+            .layout()
+            .root
+            .join("state/gui-rebuild")
+            .join(format!("{tx}.json"));
+        let mut value: serde_json::Value = serde_json::from_slice(&fs::read(&p).unwrap()).unwrap();
+        value["schema_version"] = 99.into();
+        fs::write(&p, serde_json::to_vec(&value).unwrap()).unwrap();
+        assert!(recover(&f.ctx, &f.ticket, |_| Ok(())).is_err());
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
 struct Fingerprint {
     bytes: u64,
     sha256: String,
@@ -709,7 +1836,10 @@ fn observe(layout: &Layout, state: &InstanceState, cancel: &CancelToken) -> Resu
             1 if container == "e" => Some(current.strip_prefix(&base)?.to_path_buf()),
             _ => None,
         };
-        let tree = scan(layout, &base, &excluded.into_iter().collect::<Vec<_>>())?;
+        let mut tree = scan(layout, &base, &excluded.into_iter().collect::<Vec<_>>())?;
+        if container == "e" {
+            project_rebuild_extensions(layout, state, &mut tree)?;
+        }
         if container == "e"
             && state.storage_version == 0
             && state.pending.is_some()
@@ -1196,6 +2326,7 @@ fn clean(
     cancel: &CancelToken,
     validator: impl FnOnce(&Path) -> Result<()>,
 ) -> Result<InstanceState> {
+    let old = state.clone();
     let before = observe(layout, &state, cancel)?;
     if !matches!(before.environment.get(Path::new("")), Some(Node::Directory)) {
         bail!("GUI实例目录缺失，保持dirty");
@@ -1212,6 +2343,9 @@ fn clean(
     state.validated_generation = state.generation;
     state.dirty = false;
     state.pending = None;
+    // 旧pending比较时只投影精确重建新增项；恢复完成的新基线必须覆盖实际完整树。
+    state.verified = observe(layout, &state, cancel)?;
+    record_preserved_recovery(layout, &old, &state)?;
     save(layout, &state)?;
     Ok(state)
 }
