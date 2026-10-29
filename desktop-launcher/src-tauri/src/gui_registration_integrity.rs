@@ -100,6 +100,10 @@ fn managed_python_root(root: &Path) -> PathBuf {
     // Windows的PathBuf保留传入片段内的斜杠；按组件拼接才能匹配固定uv原生字节。
     root.join("python").join("3.10.19")
 }
+fn environment_python_path(environment: &Path) -> PathBuf {
+    // 固定uv入口同时在PE资源与脚本中嵌入原生路径，整文件校验不能混用分隔符。
+    environment.join("Scripts").join("python.exe")
+}
 fn select_venv_mode(root: &Path, bytes: &[u8]) -> Result<VenvMode> {
     let managed = managed_python_root(root);
     if bytes == pyvenv_config(&managed.join("cpython-3.10-windows-x86_64-none")) {
@@ -487,7 +491,7 @@ pub(crate) fn verify(
     }
     layout.guard_path(environment)?;
     let env = environment.to_str().context("环境路径非UTF8")?;
-    let python = environment.join("Scripts/python.exe");
+    let python = environment_python_path(environment);
     let python = python.to_str().context("Python路径非UTF8")?;
     let mut expected = BTreeMap::new();
     let mut optional = BTreeSet::new();
@@ -897,6 +901,136 @@ mod tests {
             entry_executable(&template, python, main.as_bytes(), entry.kind).unwrap(),
             template
         );
+    }
+    #[cfg(windows)]
+    #[test]
+    fn entrypoint_paths_match_all_independent_uv_native_bytes() {
+        // 固定uv/81原wheel独立控制案的27个完整PE哈希；不从待恢复环境取期望值。
+        // 来源：k1-final-control-comparison.json c481c274…5a0cb3及其固定E控制输出，
+        // registration-followup-20261029/diagnosis/entrypoint-path-diagnosis.json逐项复核。
+        let environment = Path::new(r"E:\NTRegCtrl\K1 控制\e\g4444444444444444");
+        let expected = [
+            (
+                "Scripts/cffi-gen-src.exe",
+                "8835631bb0537da10ad300f6c8689bdb13c5ebce8977e1ea6549433d92740d6f",
+            ),
+            (
+                "Scripts/coloredlogs.exe",
+                "ca68090c26685cd9ddca3991bcc154481c100c15b52c7673a196d911bd7d41db",
+            ),
+            (
+                "Scripts/f2py.exe",
+                "9863a4387f9cf46a313996adf04a9d52aa603a9928855e8c747e99c1a0e8636b",
+            ),
+            (
+                "Scripts/google-oauthlib-tool.exe",
+                "5edfeae106b98d80b8d66896be61af6c28551e1448dceb79ada78e7f721b35ac",
+            ),
+            (
+                "Scripts/hf.exe",
+                "fa6a79a8eb52c73f54bb8f893a57e726d5a9c01de1737983e6d4054bb17f8aba",
+            ),
+            (
+                "Scripts/httpx.exe",
+                "9244fbd29a4070e1a45303392a45a6690dd800548be88e34f85391b177c73744",
+            ),
+            (
+                "Scripts/huggingface-cli.exe",
+                "f1c88d73127f847b174a78f2fe008005684db6ed0a449971a1dc9109b1d3075e",
+            ),
+            (
+                "Scripts/humanfriendly.exe",
+                "26fce549bc3e44ffcd8925c95913b9074a52784aab3133a5320ea594736a2040",
+            ),
+            (
+                "Scripts/idna.exe",
+                "4ed55a449c7cca877c5a004fa93cdfc342a6f16b4b7d1567942959d6f55dd55e",
+            ),
+            (
+                "Scripts/isympy.exe",
+                "80ead33c20d3bcdbd02ba1ae036f73dcce6b30bc32f7a533843e47dcc21c8c4f",
+            ),
+            (
+                "Scripts/markdown-it.exe",
+                "b1ea07c9734a43ed7eec3e123d8141ebe82d790f0abec0af01f970625c350e17",
+            ),
+            (
+                "Scripts/markdown_py.exe",
+                "6d7631e716862190f6c6a48824c92878338ae50595b030ff0a9a75a3a6ebd80e",
+            ),
+            (
+                "Scripts/modelscope-hub.exe",
+                "d9a529c65b3e34df90d8074a5af38c180d17ffdb9f116d9e5689d4a18f7d7cb6",
+            ),
+            (
+                "Scripts/modelscope.exe",
+                "d9a529c65b3e34df90d8074a5af38c180d17ffdb9f116d9e5689d4a18f7d7cb6",
+            ),
+            (
+                "Scripts/ms-hub.exe",
+                "d9a529c65b3e34df90d8074a5af38c180d17ffdb9f116d9e5689d4a18f7d7cb6",
+            ),
+            (
+                "Scripts/ms.exe",
+                "d9a529c65b3e34df90d8074a5af38c180d17ffdb9f116d9e5689d4a18f7d7cb6",
+            ),
+            (
+                "Scripts/normalizer.exe",
+                "df4af03aed77eada82db1190a5e09fab1c6e58af8ae748285492c29ff9942ddb",
+            ),
+            (
+                "Scripts/onnxruntime_test.exe",
+                "2de6d8d0189c7c534e1bd651c04439a8e5249c6c47e8a2a14948edeae3a3f103",
+            ),
+            (
+                "Scripts/pip.exe",
+                "5fd60e03c70a87351fc54817b781e25d5fdabc6e46f254f35cb03ebe69f8afea",
+            ),
+            (
+                "Scripts/pip3.10.exe",
+                "5fd60e03c70a87351fc54817b781e25d5fdabc6e46f254f35cb03ebe69f8afea",
+            ),
+            (
+                "Scripts/pip3.exe",
+                "5fd60e03c70a87351fc54817b781e25d5fdabc6e46f254f35cb03ebe69f8afea",
+            ),
+            (
+                "Scripts/pygmentize.exe",
+                "e8eb775e210ee09c786b10010624cbb775738b2bce0d971753d5135edc84122e",
+            ),
+            (
+                "Scripts/tensorboard.exe",
+                "31916e07b7550ab0ac49544c1cdd94a2b6d6c800e8a581a206410e7ef925ff1a",
+            ),
+            (
+                "Scripts/tiny-agents.exe",
+                "0364014950b6d6cc7ff927ef69885ed20cd5770457ee85f20024a22964178de1",
+            ),
+            (
+                "Scripts/tqdm.exe",
+                "d183f3a6b1d5be3c90a6394f9bb7adc67127cb9e4090898489a942fa52eca54d",
+            ),
+            (
+                "Scripts/uvicorn.exe",
+                "cac120e39ffa32bc0ed90764790ec71fe7fe3828e29c1adf59b2c045d0e177d0",
+            ),
+            (
+                "Scripts/wheel.exe",
+                "af3fc56cfcf8103ba53d05e5d43927de43e289735fc8ca45f757e6c3201bc9dd",
+            ),
+        ];
+        let index = index();
+        assert_eq!(index.entrypoint_controls.len(), expected.len());
+        let template = decode_hex(&index.entrypoint_pe_template_hex).unwrap();
+        let python = environment_python_path(environment);
+        let python = python.to_str().unwrap();
+        for (entry, (path, digest)) in index.entrypoint_controls.iter().zip(expected) {
+            assert_eq!(entry.path, path);
+            let main = entry.script_template.replace("{{PYTHON}}", python);
+            let bytes = entry_executable(&template, python, main.as_bytes(), entry.kind).unwrap();
+            assert_eq!(bytes.len(), 46080, "{path}");
+            assert_eq!(hash(&bytes), digest, "{path}");
+        }
     }
     #[test]
     fn uv_pe_reconstruction_binds_unicode_space_path_script_and_kind() {
