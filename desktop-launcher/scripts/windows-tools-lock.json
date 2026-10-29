@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "platform": "windows-x86_64",
+  "tauri_cli_version": "2.12.4",
+  "tauri_cli_binary_sha256": "1362ea4e49f3468e2991ecb08b3b2f27491cbeb6f3eec5fa83e5c1589d8c62d7",
+  "source": {
+    "commit": "993038c49185307dfc895ab7657d77ca0d5ed7c7",
+    "url": "https://raw.githubusercontent.com/tauri-apps/tauri/993038c49185307dfc895ab7657d77ca0d5ed7c7/crates/tauri-bundler/src/bundle/windows/nsis/mod.rs",
+    "bytes": 31844,
+    "sha256": "ce129133be31063c51ee3649f69f600b9397f6af1e24075dec3b0d54ae637a2c",
+    "sha1": "89247b1889cc3afcccfc697523b2fc91d4a209a1"
+  },
+  "nsis_version": "3.13",
+  "makensis_version_output": "v3.13",
+  "constants": {
+    "NSIS_URL": "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip",
+    "NSIS_SHA1": "DB14F8AF2EA346B786C6AE19343F61AAF5E09B8E",
+    "NSIS_EXE_SHA1": "6D45D4E8CCF18FE1FDAC9164058F356102A2ECF2",
+    "NSIS_TAURI_UTILS_URL": "https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll",
+    "NSIS_TAURI_UTILS_SHA1": "75197FEE3C6A814FE035788D1C34EAD39349B860"
+  },
+  "archives": {
+    "nsis-3.13.zip": {
+      "url": "https://github.com/tauri-apps/binary-releases/releases/download/nsis-3.13/nsis-3.13.zip",
+      "bytes": 2363925,
+      "sha256": "ba63dffc4410ee89193e1cb5a41989991bd77c61068da17e3156d136b7b0b3d8",
+      "sha1": "db14f8af2ea346b786c6ae19343f61aaf5e09b8e"
+    },
+    "nsis_tauri_utils.dll": {
+      "url": "https://github.com/tauri-apps/nsis-tauri-utils/releases/download/nsis_tauri_utils-v0.5.3/nsis_tauri_utils.dll",
+      "bytes": 34304,
+      "sha256": "5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709",
+      "sha1": "75197fee3c6a814fe035788d1c34ead39349b860"
+    }
+  },
+  "required_files": {
+    "NSIS.exe": {
+      "bytes": 91352,
+      "sha256": "78e17de55fa013be7620487e85b6676c204c6c51d7ebabb74ee8a9cfce6252a0",
+      "sha1": "6d45d4e8ccf18fe1fdac9164058f356102a2ecf2"
+    },
+    "makensis.exe": {
+      "bytes": 2560,
+      "sha256": "4ec390d0f96f9728507fbc2f4e91311dd90bfc6c8ddfe2159357b3651ae151c0",
+      "sha1": "ff1ff6a37556bca3eb23acea98b2603c250b5fdd"
+    },
+    "Bin/makensis.exe": {
+      "bytes": 468992,
+      "sha256": "65343c225ec88393cc4453b0963caf63f763f42f48cb55736d51893ff2e29d4a",
+      "sha1": "df848fbc996456d3f4638490f5fcd3fb79ec6ccb"
+    },
+    "Stubs/lzma-x86-unicode": {
+      "bytes": 38400,
+      "sha256": "7a37a19706b44313499402a80e1e973be5e64cdf1413b5ed81b3547956a983e0",
+      "sha1": "e65bc8df8249b07a710e670d0ef5e3aaa4fa8b24"
+    },
+    "Stubs/lzma_solid-x86-unicode": {
+      "bytes": 38912,
+      "sha256": "8c9b997c456a4e0fef32baf78bb3557e48403efec129d56a311b079a081bc699",
+      "sha1": "3e05db7aca53570d1e6d4ec7bdd10915fdee46e0"
+    },
+    "Plugins/x86-unicode/additional/nsis_tauri_utils.dll": {
+      "bytes": 34304,
+      "sha256": "5ba143b5db4a87d32d6e7802e033330aae56cbceabe0d1e3ba41948385ad4709",
+      "sha1": "75197fee3c6a814fe035788d1c34ead39349b860"
+    },
+    "Include/MUI2.nsh": {
+      "bytes": 50,
+      "sha256": "2c847d2009b55ff46f8bc1591ffda00f0194fb08ffebc0876cda669b7957b396",
+      "sha1": "f511168ba3d1feca585f143c0ff6554b7511c61e"
+    },
+    "Include/FileFunc.nsh": {
+      "bytes": 40522,
+      "sha256": "c144d49f6a5f657aee8366abcdc5798c587a43b9273820797aece1ebc50cefcd",
+      "sha1": "2c9b3efe542674a65ffabc1d77a3a29dccab9f56"
+    },
+    "Include/x64.nsh": {
+      "bytes": 3962,
+      "sha256": "aea6ab8bae28e987d4ceac5385b29d781aab5c3a1879f66a4639be1ee7a5d269",
+      "sha1": "c3a6e5fd2c608784272c2e0252d4173a5b57bd27"
+    },
+    "Include/nsDialogs.nsh": {
+      "bytes": 45506,
+      "sha256": "c7d9e29cae063eef051866692699d225e1d33a1919f3d20c39fb4a937de76422",
+      "sha1": "0adb235e34ceb009c57be9825635d2e1f2ed1a37"
+    },
+    "Include/WinMessages.nsh": {
+      "bytes": 36757,
+      "sha256": "97c154539b1761df7ce9b9df922be266697bbb28234d381dfa611529ccb50aec",
+      "sha1": "86a82533525213a03514ad120b92addba2f396d5"
+    },
+    "Include/Win/COM.nsh": {
+      "bytes": 17248,
+      "sha256": "ece68ea2e0c50db3a241e133cb278126be9cfe779a6f70afabefd827b354a541",
+      "sha1": "1dcf0204ea4d08d34fadc9371e5a3210bac59723"
+    },
+    "Include/Win/Propkey.nsh": {
+      "bytes": 8509,
+      "sha256": "b97960d2f114e39bf3600c08656c235ea762cec3845c821c1d8d8b1a85b33468",
+      "sha1": "f5ecaea158fc6212dad00b0adead105b216def2d"
+    },
+    "Include/Win/RestartManager.nsh": {
+      "bytes": 3578,
+      "sha256": "3f1ca29b7ec6a5a604063792391d9b811d57484b002e6b87d50aaf584ff012cf",
+      "sha1": "17941ba5e0e469c7593e3fb11184f846a275c2d5"
+    }
+  }
+}

@@ -2,7 +2,7 @@
 
 `build_windows_candidate.py` 负责生成 Windows x64 的 NSIS 安装器、便携 ZIP 和身份清单。它不上传制品，不使用维护者私钥，也不把构建通过写成系统或训练验收完成。普通用户运行包内 EXE/helper 不需要系统 Python/uv；构建机需要 Python 3.11+、Rust MSVC、Node 以及已准备的依赖缓存。
 
-先协调当前 Cargo 施工，冻结源文件，准备与 `catalog/gui-cp310-win-x64-v1.json` 完全吻合的训练器前端 ZIP。脚本使用已安装的 `node_modules`、Cargo 锁定离线缓存、Tauri 官方 NSIS 与 `nsis_tauri_utils.dll` 缓存。工具缓存缺失时预检拒绝构建，应由单独有来源和下载计量的依赖准备流程补齐。构建子进程使用离线选项和拒绝出站的代理，不临时下载依赖；工具缓存前后记录哈希与字节数，出现新字节则拒绝冻结候选。NSIS 的 `downloadBootstrapper` 在用户安装时按官方渠道获取 WebView2，构建本身不执行安装器或下载运行时。
+先协调当前 Cargo 施工，冻结源文件，准备与 `catalog/gui-cp310-win-x64-v1.json` 完全吻合的训练器前端 ZIP。脚本使用已安装的 `node_modules`、Cargo 锁定离线缓存、Tauri 官方 NSIS 与 `nsis_tauri_utils.dll` 缓存。工具缓存必须匹配 `windows-tools-lock.json`：核对CLI版本和平台二进制SHA256、当前官方源码固定的14个必要文件摘要，并实际读取makensis版本。当前锁对应Tauri CLI 2.12.4、NSIS 3.13和插件0.5.3；CLI或工具变化需从对应官方源码更新锁，不能只检查文件存在。工具缓存缺失或旧版本时预检在任何Cargo构建前拒绝，应由单独有来源和下载计量的依赖准备流程补齐。构建子进程使用离线选项和拒绝出站的代理，不临时下载依赖；工具缓存前后记录哈希与字节数，出现新字节则拒绝冻结候选。NSIS 的 `downloadBootstrapper` 在用户安装时按官方渠道获取 WebView2，构建本身不执行安装器或下载运行时。
 
 在仓库根执行预检；路径替换为本次固定输入与仓库之外的新输出目录：
 

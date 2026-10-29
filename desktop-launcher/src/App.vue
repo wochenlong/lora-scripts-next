@@ -752,7 +752,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 
         <template v-else>
           <div class="section-caption"><h2>主程序与基础工具</h2><button class="compact" :disabled="busy" @click="command('inspect', '检查安装状态')">重新检查</button></div>
-          <p class="environment-scope">当前检查覆盖启动器基础工具、训练器主程序和网页资源。各独立训练引擎的 Python / Torch / GPU 诊断尚未接入。</p>
+          <p class="environment-scope">当前检查覆盖基础工具、训练器主程序和网页资源。四个训练引擎可在下方分别检查独立环境、预览安装或精准修复；GPU 与具体训练任务的就绪条件由训练器检查。</p>
           <div v-if="report?.checks.length && sameRoot" class="checks" role="list" aria-label="环境检查明细"><div v-for="(check, index) in report.checks" :key="`${index}-${check.name}`" class="check-row" role="listitem"><span class="check-badge" :class="{ ok: check.ok }">{{ check.ok ? '通过' : '待处理' }}</span><div><strong>{{ check.name }}</strong><p>{{ check.detail }}</p></div></div></div>
           <p v-else class="scope-note">请先检查安装目录。训练器目录缺失或环境损坏时，桌面检查与修复入口仍可使用。</p>
           <details class="network-settings">

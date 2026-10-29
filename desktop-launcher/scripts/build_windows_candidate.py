@@ -64,6 +64,32 @@ def worker_paths() -> list[str]:
     return re.findall(r'worker_file!\("([^"]+)"\)', source)
 
 
+def verify_windows_tools(cache: Path) -> dict:
+    """与当前CLI官方源码同一身份；存在旧文件不等于能离线使用。"""
+    lock_path = LAUNCHER / "scripts/windows-tools-lock.json"
+    lock = json.loads(lock_path.read_text(encoding="utf-8"))
+    if lock["schema_version"] != 1 or lock["platform"] != "windows-x86_64":
+        raise ValueError("未知Windows构建工具锁")
+    package = json.loads((LAUNCHER / "node_modules/@tauri-apps/cli/package.json").read_text(encoding="utf-8"))
+    binary = LAUNCHER / "node_modules/@tauri-apps/cli-win32-x64-msvc/cli.win32-x64-msvc.node"
+    if package["version"] != lock["tauri_cli_version"] or digest(binary)["sha256"] != lock["tauri_cli_binary_sha256"]:
+        raise ValueError("当前Tauri CLI版本或平台二进制已改变，须按该版本官方源码重新准备工具锁")
+    nsis = cache / "NSIS"
+    for relative, expected in lock["required_files"].items():
+        name = Path(relative)
+        if name.is_absolute() or ".." in name.parts:
+            raise ValueError("工具锁路径无效")
+        path = nsis / name
+        if digest(path) != {key: expected[key] for key in ("bytes", "sha256")}:
+            raise ValueError(f"NSIS缓存版本/固定摘要不符：{relative}；构建尚未开始，保留现状并准备准确工具")
+    version = capture([str(nsis / "Bin/makensis.exe"), "/VERSION"], LAUNCHER)
+    if version != lock["makensis_version_output"]:
+        raise ValueError("NSIS实际版本与固定工具锁不符")
+    return {"lock_sha256": digest(lock_path)["sha256"], "tauri_cli_version": package["version"],
+            "tauri_cli_binary_sha256": lock["tauri_cli_binary_sha256"], "nsis_version": version,
+            "verified_required_files": len(lock["required_files"]), "source_commit": lock["source"]["commit"]}
+
+
 @contextmanager
 def build_lock():
     # 与手工 Cargo 施工仍需事先协调；此锁防止本脚本的两次打包互相覆盖 target。
@@ -123,9 +149,10 @@ def main() -> None:
         parser.error("启动器相关编译/打包输入有改动；保存基线后再构建，或显式 --allow-dirty 生成施工候选")
     cli = LAUNCHER / "node_modules/@tauri-apps/cli/tauri.js"
     cache = Path(os.environ["LOCALAPPDATA"]) / "tauri"
-    for relative in ("NSIS/makensis.exe", "NSIS/Plugins/x86-unicode/additional/nsis_tauri_utils.dll"):
-        if not (cache / relative).is_file():
-            parser.error(f"缺少官方 Tauri 工具缓存 {relative}；请按已计量的依赖准备流程补齐")
+    try:
+        tool_identity = verify_windows_tools(cache)
+    except (OSError, ValueError, KeyError, subprocess.CalledProcessError) as error:
+        parser.error(f"Windows构建工具未通过版本/固定哈希预检：{error}")
     for path in (cli, REPO / "LICENSE", REPO / "NOTICE.md", REPO / "docs/launcher/windows-delivery.md"):
         if not path.is_file():
             parser.error(f"缺少输入 {path}")
@@ -134,7 +161,7 @@ def main() -> None:
         parser.error("候选打包必须使用 currentUser 与官方 downloadBootstrapper 配置")
     preflight = {"trainer_source_commit": recipe["source_commit"], "launcher_build_commit": capture(["git", "rev-parse", "HEAD"]),
                  "frontend": frontend, "nsis_install_mode": config["bundle"]["windows"]["nsis"]["installMode"],
-                 "webview_install_mode": config["bundle"]["windows"]["webviewInstallMode"],
+                 "webview_install_mode": config["bundle"]["windows"]["webviewInstallMode"], "windows_build_tools": tool_identity,
                  "network_policy": "offline-cache-only; cargo --offline; npm uses installed node_modules; bundler outbound proxy fails closed",
                  "new_network_payload_bytes": 0, "network_budget_bytes": 5 * 1024**3}
     if args.preflight_only:
