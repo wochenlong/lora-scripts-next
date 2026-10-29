@@ -1,6 +1,8 @@
 # 阶段 M5：独立壳与 Windows 分发执行前清单
 
-> 当前修订：0.3，2026-10-29，适用[CR-001用户GPU测试豁免](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)。Fast固定驱动不满足的GPU层、DiffSynth完整BF16模型/训练/权重子项授权`skip`，不作pass；Kohya/AI Toolkit及DiffSynth普通小张量等本机可执行验证保留。M0独立P3不再单独重试，CUDA验证进入对应引擎真实配方。干净Windows/安全/安装修复/同制品/阶段push均未豁免。CR-001边界继续有效；CR-002仅调整P1时点，其他合同继续有效；实时状态只见总控。
+> **现行验证 v0.5 / CR-004：** 四引擎只做冒烟，其他测试按改动影响面精简并复用有效证据；下文旧验证强度在冲突处服从[CR-004](../00_预检证据/change-control-governance.md#cr-004四引擎仅冒烟及精简验证)。CR-003 候选审核停止点、CR-002 OS 门及最终同包从零 GUI/分发保留，不开四引擎/GPU实测轨。
+
+> 历史修订：0.3，2026-10-29，适用[CR-001用户GPU测试豁免](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)。Fast固定驱动不满足的GPU层、DiffSynth完整BF16模型/训练/权重子项授权`skip`，不作pass；Kohya/AI Toolkit及DiffSynth普通小张量等本机可执行验证保留。M0独立P3不再单独重试，CUDA验证进入对应引擎真实配方。干净Windows/安全/安装修复/同制品/阶段push均未豁免。CR-001边界继续有效；CR-002仅调整P1时点，其他合同继续有效；实时状态只见总控。
 
 > 0.3时点修订：[CR-002](../00_预检证据/change-control-governance.md)已由用户明确批准，原文“批准调整，继续开发（推荐）”。仅将P1合法可用干净Windows/缺WebView2资源实际就绪移至M5相应系统动作及Phase6分发专项验证开始前。原结果`blocked`及失败证据保留，`deferred by CR-002`仅是延期调度，不计pass/skip。其余M0真实证据、独审、完成报告及代码C/状态S普通推送和远端核验齐备，真实退出M0后才可开M1；M6最终同包双轨/A1–A10未豁免硬门、CR-001与原预算均不变。下文起草语境与旧时点按本段及直接更新条款解释，实时状态只见总控。
 
@@ -31,7 +33,7 @@
 - [ ] catalog签名与Windows代码签名分别记录；测试密钥不可冒充生产身份，维护者生产资源缺失单列且不公共发布。
 - [ ] 同SHA二进制签名/helper/恢复测试通路就绪：显式沙盒会话+只读受限配置，后端固定fixture根/端点/公钥/动作，普通根拒测试资产；另SHA构建不抵A4/A8，无通路且无生产资源blocked。
 - [ ] 相应系统动作及Phase6分发专项验证开始前，CR-002承接的P1已实际就绪：合法可用、可启动的干净Windows，真实无Python/uv/训练器/缓存且缺WebView2基线、非管理员/中文空格路径、恢复条件和真实EXE占用专项资源具备。原blocked及失败留证，不把延期记pass/skip；清空目录/限制PATH不能替代OS条件。
-- [ ] M6同一候选制品manifest/SHA可冻结；M5只做专项预验收，所有开发之后的M6完整从零安装与四引擎GPU重验不删减。
+- [ ] M6同一候选制品manifest/SHA可冻结；所有开发之后仍以最终同包从零验证GUI/分发关键链，四引擎按CR-004仅冒烟，不做GPU重验。
 - [ ] 已冻结trainer_source_commit/launcher_build_commit/catalog_digest/recipe_digest/package SHA；含feature源码与编译前端，不用原main/dev加开发overlay；S文档可后提交但包不变，M6核run文件与receipt来源。
 
 ## 证据、禁止事项与失败处理

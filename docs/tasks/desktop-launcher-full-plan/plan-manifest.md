@@ -1,13 +1,13 @@
 # 施工计划产物与门禁清单
 
-> **当前执行修订 v0.4 / CR-003：先交付 M1-CANDIDATE，再审核剩余优先级与成本。** 本清单保留完整产物，本轮只执行M1任务书K1–K4；候选不等于EXIT-M1，暂缓项和M2–M6等待用户审核。
+> **当前执行修订 v0.5 / CR-004 + CR-003：四引擎仅冒烟，其他验证按影响面精简；先交付 M1-CANDIDATE，再审核剩余优先级与成本。** 本轮只执行M1任务书K1–K4；候选不等于EXIT-M1，暂缓项和M2–M6等待审核。引擎实测 skip+CR-004，M6 保留同包从零 GUI/分发与四引擎冒烟及 CR-002 OS 门，不开 GPU 轨。
 
 > 历史修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](00_预检证据/change-control-governance.md)。P1实际结果仍blocked，调度另记deferred by CR-002，由M5在相关系统动作/Phase6专项开始前闭合。M1–M4独立新根真实实测、M5资源硬门、M6同一最终包从零及原预算不变。该修订时M0尚未退出；当前M0已完成、M1进行中，以总控为准，不重开历史门。
 
 ## 计划元数据
 
-- Plan ID：`desktop-launcher-full-20261028`；Version：`0.4`；Last updated：2026-10-29（Asia/Shanghai，CR-003候选交付与成本审核）。
-- Scale mode：Full。原因：跨Rust/Python/UI的长期新功能、真实GPU、资料迁移、可信更新和Windows分发；保留全部施工体系产物，无合并删除硬门。
+- Plan ID：`desktop-launcher-full-20261028`；Version：`0.5`；Last updated：2026-10-29（Asia/Shanghai，CR-004精简验证）。
+- Scale mode：保留既有 Full 文档结构；实现跨 Rust/Python/UI、资料迁移、可信更新和 Windows 分发。验证按 CR-004 精简，不为保留结构而新增治理或强制每阶段全测试族。
 - Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0已完成；当前按CR-003收敛M1，P1历史blocked由M5承接。
 - Canonical progress file：[00_总控目标索引](00_总控目标索引.md)。Related handoff：none。
 - Current branch：`feat/desktop-launcher`；起始HEAD：`9ca2de963122f34599e34e5ff382199de9188811`；WIP `f8ed00b8c3424777bec5600ef6482838b9e1b2e6`已普通push且远端核对成功，不代表M0完成。
@@ -18,7 +18,7 @@
 
 ## 必需产物清单
 
-42个产物：41份Markdown与1份静态验证器；每个路径都由验证器核对，产物存在不等于执行门通过。
+44个产物：43份Markdown与1份静态验证器；每个路径都由验证器核对，产物存在不等于执行门通过。
 
 | 路径 | 作用 |
 | --- | --- |

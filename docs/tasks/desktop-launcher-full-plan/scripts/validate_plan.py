@@ -106,7 +106,11 @@ def main() -> int:
     for doc in task_paths:
         if doc.exists():
             content = doc.read_text(encoding="utf-8").lower()
-            for family in ["unit", "contract", "integration", "gray", "real", "zero-short"]:
+            # CR-004按影响面选择检查；四引擎只冒烟，不强制六类齐跑。
+            families = ["unit", "contract", "integration", "gray", "real", "zero-short"]
+            if "cr-004" in content:
+                families = ["contract", "integration"]
+            for family in families:
                 if family not in content:
                     issues.append(f"test family absent: {doc.name}: {family}")
     gates = plan / "00_预检证据/gate-validation-checklist.md"

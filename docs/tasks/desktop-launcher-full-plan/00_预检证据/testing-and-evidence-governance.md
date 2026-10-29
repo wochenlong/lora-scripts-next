@@ -1,11 +1,13 @@
 # 测试与证据治理
 
+> **当前 v0.5 / CR-004：** 四引擎只做入口、合成状态/RepairPlan、隔离与失败安全冒烟；实际安装/损坏修复、GPU/模型/训练/权重实测 `skip + CR-004`，不作为资源或完成前置。其他测试按改动影响面选关键成功/拒绝/恢复案例，不默认重复全量矩阵。当前已开 C1–C4 单轮继续，CR-003 审核停止点及 CR-002 干净 OS 门保留。下文旧深度验证条款在冲突处属于历史基线，以[CR-004](change-control-governance.md#cr-004四引擎仅冒烟及精简验证)为准。
+
 > **v0.4 / CR-003 当前口径：** 本轮仅对M1-CANDIDATE C1–C5签候选结果；原完整矩阵未测项保留not-run/blocked/pending，另记`deferred by CR-003, review after M1-CANDIDATE`，不等于skip/pass。复用有效原证据，仅新改动/失败/未决风险触发补测；一份候选报告和一份剩余成本表足够。候选不代替EXIT-M1、训练、干净OS或M6，同包身份及资料/进程保护不降低。
 
 > 当前修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](change-control-governance.md)。P1实际结果仍blocked，调度另记deferred by CR-002，由M5相关系统动作/Phase6专项开始前闭合；M1–M4新根真实测试、M5资源硬门、M6同一最终包从零和原预算均保留。M0仍待正式退出，M1未开。
 
-- Plan ID：`desktop-launcher-full-20261028`；版本：`0.3`；日期：2026-10-29。
-- 状态：已授权继续执行；CR-001指定GPU子项skip，CR-002只调整P1资源实际就绪时点，其他验证规则不变；实际结果只见总控与原始报告。
+- Plan ID：`desktop-launcher-full-20261028`；版本：`0.5`；日期：2026-10-29。
+- 状态：CR-004 精简验证，CR-003 当前候选交付后暂停；CR-001 事实和 CR-002 OS 资源时点保留；实际结果只见总控与原始报告。
 - 唯一进度：[00_总控目标索引.md](../00_总控目标索引.md)。规格：[后续设计书](../../../design/desktop-launcher-next-design.md)。本文件不建立第二份阶段总进度。
 
 ## 1. 证据根与身份
@@ -36,10 +38,10 @@
 | contract（合同） | Rust/Python网络向量、worker协议、能力声明、receipt/registry/操作版本兼容 | 不能证明真实入口可运行 |
 | integration（集成） | 实际文件/子进程/解释器/HTTP/更新helper及故障注入 | 不能冒充干净系统 |
 | gray（新旧对照） | 旧CLI/网页与受管桌面路径、旧receipt、迁移前后和失败回退差异 | 不能仅比较两个状态JSON |
-| real（真实资源） | 实际下载、原生按钮、真实子进程、实际API与四引擎短训练 | 不能用mock或GUI 200替代引擎训练 |
-| Zero-Short（干净入口短验） | M1–M4独立新根真实验证；M5相关系统动作/Phase6前闭合P1并验证干净系统专项；M6真实干净Windows OS/VM且独立GPU重装 | 新根、限制PATH、清空目录不能冒充干净OS或抵扣M6 |
+| real（真实资源） | GUI/分发关键入口、原生按钮、子进程与语义 API；四引擎按 CR-004 只冒烟 | 冒烟不能证明真实引擎或训练兼容性 |
+| Zero-Short（干净入口短验） | M6 同最终包从零 GUI/分发核心链，四引擎只冒烟，不开 GPU 实测轨；CR-002 的 M5 OS 门保留 | 新根、限制PATH、清空目录不能冒充干净OS |
 
-单项状态用 `pass/fail/not-run/blocked/unknown/not-applicable/skip`；skip必须有明确用户授权，本计划仅CR-001指定GPU子项适用。`not-applicable` 必须列出不适用原因、审批依据及替代证据；`unknown/not-run/skip` 不得计为pass。CR-001的skip单列并允许调整后的阶段验收通过，其他M6 A1–A10未豁免必测仍须全部pass。CR-002的`deferred by CR-002`只属于调度字段，须同时保留P1实际blocked、原证据、承接M5及必须关闭时点和未证明能力，不能变成新的测试pass或skip。阶段执行状态仍由总控的 `pending/in progress/blocked/done` 维护。
+单项状态用 `pass/fail/not-run/blocked/unknown/not-applicable/skip`；本次引擎实测依据 CR-004 记 skip，CR-001 原记录保留；冒烟通过单列，不能将未执行实测写 pass。CR-004 下其余 A 项选定的关键案例须有结果，不再要求每阶段覆盖六测试族及全组合。CR-002 的延期不改变 P1 实际 blocked，也不算 pass/skip。阶段状态由总控维护，报告只记录实际执行或明确跳过的边界。
 
 ## 3. 待审真实资源硬预算
 

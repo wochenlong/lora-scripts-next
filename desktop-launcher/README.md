@@ -8,6 +8,8 @@
 
 本轮按 v0.4 / CR-003 收敛为 GUI 候选包；实际包身份、固定候选源码、中文操作步骤及同包安装/启动/修复/登记恢复结果见[候选报告](../docs/tasks/desktop-launcher-full-plan/m1-candidate-report.md)。该报告中的验收状态优先于下文历史底座说明，候选不代表完整 #516、干净系统或训练引擎验收通过。
 
+后续验证按 v0.5 / CR-004 精简：四引擎检查/修复功能继续实施，验收仅冒烟，不做实际引擎安装、损坏修复、GPU/模型/训练实测；其他验证只补改动影响的关键路径。最终同包从零 GUI/分发验证仍保留，详见[成本审核表](../docs/tasks/desktop-launcher-full-plan/remaining-work-cost-review.md)。
+
 ## 安装与使用
 
 运行构建后的 `next-trainer-launcher.exe`。运行时不需要系统 Python、uv、Node 或 Rust；Windows 需要 WebView2。当前没有附带 WebView2 安装器，首次安装到缺少 WebView2 的电脑仍需单独处理。

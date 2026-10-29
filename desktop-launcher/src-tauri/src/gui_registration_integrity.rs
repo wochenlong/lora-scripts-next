@@ -96,8 +96,12 @@ enum VenvMode {
 fn pyvenv_config(home: &Path) -> Vec<u8> {
     format!("home = {}\nimplementation = CPython\nuv = 0.11.16\nversion_info = 3.10.19\ninclude-system-site-packages = false\n",home.display()).into_bytes()
 }
+fn managed_python_root(root: &Path) -> PathBuf {
+    // Windows的PathBuf保留传入片段内的斜杠；按组件拼接才能匹配固定uv原生字节。
+    root.join("python").join("3.10.19")
+}
 fn select_venv_mode(root: &Path, bytes: &[u8]) -> Result<VenvMode> {
-    let managed = root.join("python/3.10.19");
+    let managed = managed_python_root(root);
     if bytes == pyvenv_config(&managed.join("cpython-3.10-windows-x86_64-none")) {
         Ok(VenvMode::ManagedMinorAlias)
     } else if bytes == pyvenv_config(&managed.join("cpython-3.10.19-windows-x86_64-none")) {
@@ -492,7 +496,7 @@ pub(crate) fn verify(
     crate::python_integrity::verify(layout)?;
     let pyvenv_bytes = read(layout, &environment.join("pyvenv.cfg"), 4096, cancel)?;
     let mode = select_venv_mode(&layout.root, &pyvenv_bytes)?;
-    let managed = layout.root.join("python/3.10.19");
+    let managed = managed_python_root(&layout.root);
     let home = match mode {
         VenvMode::LegacyPatch => managed.join("cpython-3.10.19-windows-x86_64-none"),
         VenvMode::ManagedMinorAlias => {
@@ -722,10 +726,38 @@ mod tests {
             "9f17b668858f146f5333efef86e8fcc7a93507f69c7234c71a33342f93a26813"
         );
     }
+    #[cfg(windows)]
+    #[test]
+    fn managed_paths_match_independent_uv_native_configuration_and_interpreter_bytes() {
+        let root = Path::new(r"E:\NTRegCtrl\K1 控制");
+        // 独立固定uv控制案的原始输出；不可用被测路径拼接器生成期望值。
+        let config = concat!(
+            "home = E:\\NTRegCtrl\\K1 控制\\python\\3.10.19\\cpython-3.10-windows-x86_64-none\n",
+            "implementation = CPython\nuv = 0.11.16\nversion_info = 3.10.19\n",
+            "include-system-site-packages = false\n"
+        );
+        assert_eq!(config.len(), 176);
+        assert_eq!(
+            hash(config.as_bytes()),
+            "26cba6ba77ffa2571ab4980316c433d8436442083bfe0da33f61cff980f457b0"
+        );
+        assert_eq!(
+            select_venv_mode(root, config.as_bytes()).unwrap(),
+            VenvMode::ManagedMinorAlias
+        );
+        let base = managed_python_root(root)
+            .join("cpython-3.10-windows-x86_64-none")
+            .join("python.exe");
+        let template = managed_template(&GuiRecipe::embedded().unwrap()).unwrap();
+        assert_eq!(
+            managed_interpreter_executable(&template, base.to_str().unwrap()).unwrap(),
+            template
+        );
+    }
     #[test]
     fn managed_alias_mode_cannot_authorize_foreign_home_extra_keys_or_patch_shim() {
         let root = Path::new(r"E:\Next Trainer");
-        let managed = root.join("python/3.10.19");
+        let managed = managed_python_root(root);
         assert_eq!(
             select_venv_mode(
                 root,
