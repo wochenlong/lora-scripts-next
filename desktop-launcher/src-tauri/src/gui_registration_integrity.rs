@@ -1,0 +1,643 @@
+//! 补登记的独立信任根：固定归档索引、固定uv生成控制；不依赖缓存或本地RECORD授信。
+use crate::{
+    model::{self, Layout, Release},
+    operations::CancelToken,
+    recipe::GuiRecipe,
+};
+use anyhow::{bail, Context, Result};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    fs::{self, OpenOptions},
+    io::Read,
+    path::{Path, PathBuf},
+};
+
+const INDEX: &[u8] = include_bytes!("../../catalog/gui-cp310-installed-files-v2.json");
+const INDEX_SHA: &str = "6ef8a9b844b1dd7e9294be5ae30b70420e703127fc0d999a7eb8096c114ffd90";
+const RECIPE_SHA: &str = "8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090";
+const MAX_FILE: u64 = 512 * 1024 * 1024;
+const MAX_TREE: u64 = 2 * 1024 * 1024 * 1024;
+pub(crate) fn trusted_index_sha256() -> &'static str {
+    INDEX_SHA
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub(crate) struct TrustedEnvironment {
+    pub environment: PathBuf,
+    pub recipe_sha256: String,
+    pub trusted_index_sha256: String,
+    pub files: u64,
+    pub bytes: u64,
+    pub closure_sha256: String,
+}
+#[derive(Deserialize)]
+struct Index {
+    schema_version: u32,
+    recipe_id: String,
+    recipe_sha256: String,
+    uv_exe_sha256: String,
+    python_archive_sha256: String,
+    controls: Vec<Control>,
+    packages: Vec<Package>,
+    entrypoint_controls: Vec<Entry>,
+    entrypoint_pe_template_hex: String,
+}
+#[derive(Deserialize)]
+struct Original {
+    path: String,
+    bytes: u64,
+    sha256: String,
+}
+#[derive(Deserialize)]
+struct Control {
+    path: String,
+    bytes: u64,
+    sha256: String,
+    kind: String,
+    template: Option<String>,
+}
+#[derive(Deserialize)]
+struct Package {
+    name: String,
+    version: String,
+    archive_sha256: String,
+    dist_info: String,
+    originals: Vec<Original>,
+}
+#[derive(Deserialize)]
+struct Entry {
+    package: String,
+    path: String,
+    kind: u8,
+    script_template: String,
+}
+enum Expected {
+    Digest(u64, String),
+    Exact(Vec<u8>),
+    Metadata,
+    Record,
+}
+fn hash(bytes: &[u8]) -> String {
+    format!("{:x}", Sha256::digest(bytes))
+}
+fn relative(value: &str) -> Result<PathBuf> {
+    if value.len() > 4096 || value.contains('\\') {
+        bail!("可信索引路径格式不支持");
+    }
+    let mut path = PathBuf::new();
+    for part in value.split('/') {
+        model::validate_component(part)?;
+        path.push(part);
+    }
+    Ok(path)
+}
+fn add(map: &mut BTreeMap<PathBuf, Expected>, path: &str, expected: Expected) -> Result<()> {
+    if map.insert(relative(path)?, expected).is_some() {
+        bail!("可信索引路径冲突");
+    }
+    Ok(())
+}
+fn read(layout: &Layout, path: &Path, limit: u64, cancel: &CancelToken) -> Result<Vec<u8>> {
+    cancel.check()?;
+    layout.guard_path(path)?;
+    let before = fs::symlink_metadata(path)?;
+    if !before.is_file() || before.len() > limit {
+        bail!("补登记验证只接受受限普通文件：{}", path.display());
+    }
+    let mut options = OpenOptions::new();
+    options.read(true);
+    #[cfg(windows)]
+    {
+        use std::os::windows::fs::OpenOptionsExt;
+        options.share_mode(1);
+    }
+    let mut input = options.open(path)?;
+    let opened = input.metadata()?;
+    if opened.len() != before.len() {
+        bail!("补登记验证文件已变化");
+    }
+    let mut data = Vec::with_capacity(opened.len() as usize);
+    let mut buffer = [0; 65536];
+    loop {
+        cancel.check()?;
+        let count = input.read(&mut buffer)?;
+        if count == 0 {
+            break;
+        }
+        if data.len() as u64 + count as u64 > limit {
+            bail!("补登记文件读取超限");
+        }
+        data.extend_from_slice(&buffer[..count]);
+    }
+    layout.guard_path(path)?;
+    let after = fs::symlink_metadata(path)?;
+    let handle_after = input.metadata()?;
+    if !after.is_file()
+        || after.len() != data.len() as u64
+        || opened.len() != after.len()
+        || opened.modified().ok() != after.modified().ok()
+        || opened.modified().ok() != handle_after.modified().ok()
+    {
+        bail!("补登记验证期间文件变化");
+    }
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if (opened.dev(), opened.ino()) != (after.dev(), after.ino()) {
+            bail!("验证文件被替换");
+        }
+    }
+    Ok(data)
+}
+fn decode_hex(value: &str) -> Result<Vec<u8>> {
+    if !value.len().is_multiple_of(2) {
+        bail!("PE模板编码无效");
+    }
+    value
+        .as_bytes()
+        .chunks_exact(2)
+        .map(|pair| {
+            let text = std::str::from_utf8(pair)?;
+            Ok(u8::from_str_radix(text, 16)?)
+        })
+        .collect()
+}
+fn get32(bytes: &[u8], at: usize) -> Result<usize> {
+    Ok(u32::from_le_bytes(bytes.get(at..at + 4).context("PE模板越界")?.try_into()?) as usize)
+}
+fn put32(bytes: &mut [u8], at: usize, value: usize) -> Result<()> {
+    bytes
+        .get_mut(at..at + 4)
+        .context("PE模板写越界")?
+        .copy_from_slice(&u32::try_from(value)?.to_le_bytes());
+    Ok(())
+}
+fn padding(output: &mut Vec<u8>, count: usize) {
+    output.extend(b"PADDINGXXPADDING".iter().copied().cycle().take(count));
+}
+fn crc32(bytes: &[u8]) -> u32 {
+    let mut crc = !0u32;
+    for byte in bytes {
+        crc ^= u32::from(*byte);
+        for _ in 0..8 {
+            crc = (crc >> 1) ^ (0xedb88320 & (0u32.wrapping_sub(crc & 1)));
+        }
+    }
+    !crc
+}
+fn u16s(output: &mut Vec<u8>, values: &[u16]) {
+    for value in values {
+        output.extend(value.to_le_bytes());
+    }
+}
+fn u32s(output: &mut Vec<u8>, values: &[u32]) {
+    for value in values {
+        output.extend(value.to_le_bytes());
+    }
+}
+fn zip_script(main: &[u8]) -> Result<Vec<u8>> {
+    let name = b"__main__.py";
+    let length = u32::try_from(main.len())?;
+    let crc = crc32(main);
+    let mut output = Vec::new();
+    u32s(&mut output, &[0x04034b50]);
+    u16s(&mut output, &[10, 2048, 0, 0, 33]);
+    u32s(&mut output, &[crc, length, length]);
+    u16s(&mut output, &[11, 0]);
+    output.extend(name);
+    output.extend(main);
+    let central = u32::try_from(output.len())?;
+    u32s(&mut output, &[0x02014b50]);
+    u16s(&mut output, &[831, 10, 2048, 0, 0, 33]);
+    u32s(&mut output, &[crc, length, length]);
+    u16s(&mut output, &[11, 0, 0, 0, 0]);
+    u32s(&mut output, &[0, 0]);
+    output.extend(name);
+    let central_length = u32::try_from(output.len())? - central;
+    u32s(&mut output, &[0x06054b50]);
+    u16s(&mut output, &[0, 0, 1, 1]);
+    u32s(&mut output, &[central_length, central]);
+    u16s(&mut output, &[0]);
+    Ok(output)
+}
+/// 重建固定uv PE的全部字节，未知header/资源/尾部内容均不能通过。
+fn entry_executable(template: &[u8], python: &str, main: &[u8], kind: u8) -> Result<Vec<u8>> {
+    if template.len() != 46080 || !matches!(kind, 1 | 2) {
+        bail!("入口模板身份不支持");
+    }
+    let start = 43008usize;
+    let old_raw = get32(template, 640)?;
+    let mut output = template[..start].to_vec();
+    let mut resource = template[start..start + 356].to_vec();
+    let manifest_start = get32(template, start + 240)?
+        .checked_sub(61440)
+        .context("资源RVA无效")?;
+    let manifest_size = get32(template, start + 244)?;
+    let manifest = template
+        .get(start + manifest_start..start + manifest_start + manifest_size)
+        .context("manifest越界")?;
+    let archive = zip_script(main)?;
+    let kind_byte = [kind];
+    for (entry, payload) in [192, 208, 224, 240].into_iter().zip([
+        python.as_bytes(),
+        archive.as_slice(),
+        kind_byte.as_slice(),
+        manifest,
+    ]) {
+        let count = (4 - resource.len() % 4) % 4;
+        padding(&mut resource, count);
+        let offset = resource.len();
+        put32(&mut resource, entry, 61440 + offset)?;
+        put32(&mut resource, entry + 4, payload.len())?;
+        resource.extend(payload);
+    }
+    let count = (4 - resource.len() % 4) % 4;
+    padding(&mut resource, count);
+    if resource.len() > 4096 {
+        bail!("入口资源超出固定PE区间");
+    }
+    let new_raw = resource.len().div_ceil(512) * 512;
+    put32(&mut output, 152, get32(template, 152)? + new_raw - old_raw)?;
+    put32(&mut output, 276, resource.len())?;
+    put32(&mut output, 632, resource.len())?;
+    put32(&mut output, 640, new_raw)?;
+    put32(&mut output, 684, start + new_raw)?;
+    output.extend(&resource);
+    padding(&mut output, new_raw - resource.len());
+    output.extend(&template[start + old_raw..]);
+    Ok(output)
+}
+fn record_relative(text: &str) -> Result<PathBuf> {
+    if text.contains(['\\', ':']) || text.len() > 4096 {
+        bail!("RECORD路径不支持");
+    }
+    let mut parts = vec!["Lib", "site-packages"];
+    for part in text.split('/') {
+        if part == ".." {
+            parts.pop().context("RECORD越出环境")?;
+        } else {
+            model::validate_component(part)?;
+            parts.push(part);
+        }
+    }
+    if parts.is_empty() {
+        bail!("RECORD指向环境根");
+    }
+    Ok(parts.iter().collect())
+}
+fn validate_record(
+    data: &[u8],
+    allowed: &BTreeSet<PathBuf>,
+    required: &BTreeSet<PathBuf>,
+) -> Result<()> {
+    let text = std::str::from_utf8(data)?;
+    let mut seen = BTreeSet::new();
+    for line in text.lines() {
+        let fields: Vec<_> = line.split(',').collect();
+        if fields.len() != 3 || fields.iter().any(|x| x.contains('"')) {
+            bail!("固定uv RECORD格式无效");
+        }
+        let path = record_relative(fields[0])?;
+        if !allowed.contains(&path) || !seen.insert(path) {
+            bail!("RECORD包含未知或重复路径");
+        }
+    }
+    if !required.is_subset(&seen) {
+        bail!("RECORD遗漏必要原文件或生成项");
+    }
+    Ok(())
+}
+fn check_metadata(path: &Path, data: &[u8]) -> Result<()> {
+    match path.file_name().and_then(|s| s.to_str()) {
+        Some("INSTALLER") if data == b"uv" => Ok(()),
+        Some("REQUESTED") if data.is_empty() => Ok(()),
+        Some("direct_url.json" | "uv_cache.json") => {
+            if data.len() > 16384 || !serde_json::from_slice::<serde_json::Value>(data)?.is_object()
+            {
+                bail!("安装器元数据不支持");
+            }
+            Ok(())
+        }
+        _ => bail!("安装器控制内容无效：{}", path.display()),
+    }
+}
+
+pub(crate) fn verify(
+    layout: &Layout,
+    release: &Release,
+    environment: &Path,
+    cancel: &CancelToken,
+) -> Result<TrustedEnvironment> {
+    cancel.check()?;
+    release.validate()?;
+    let recipe = GuiRecipe::embedded()?;
+    if hash(INDEX) != INDEX_SHA
+        || hash(include_bytes!("../../catalog/gui-cp310-win-x64-v1.json")) != RECIPE_SHA
+    {
+        bail!("内置信任根身份不符");
+    }
+    let index: Index = serde_json::from_slice(INDEX)?;
+    if index.schema_version != 1
+        || index.recipe_id != recipe.id()
+        || index.recipe_sha256 != RECIPE_SHA
+        || index.uv_exe_sha256 != recipe.tool_uv.exe_sha256
+        || index.python_archive_sha256 != recipe.python.archive.sha256
+        || release.commit != recipe.source_commit
+        || !recipe.matches_environment_recipe(&release.environment_recipe)
+        || index.packages.len() != recipe.wheels.len()
+    {
+        bail!("可信索引与固定配方不符");
+    }
+    // 只接受两个既有实例命名空间；旧legacy裸gui目录无实例身份，不能重新解释。
+    let compact = environment
+        .strip_prefix(layout.root.join("e"))
+        .ok()
+        .and_then(|p| p.to_str());
+    let compact_ok = compact.is_some_and(|id| model::validate_environment_storage(id, 1).is_ok());
+    let legacy = layout
+        .root
+        .join("environments")
+        .join(&release.id)
+        .join("instances");
+    let legacy_ok = environment
+        .strip_prefix(&legacy)
+        .ok()
+        .is_some_and(|p| p.components().count() == 2 && p.file_name().is_some_and(|n| n == "gui"));
+    if !compact_ok && !legacy_ok {
+        bail!("登记目标不在固定实例命名空间");
+    }
+    layout.guard_path(environment)?;
+    let env = environment.to_str().context("环境路径非UTF8")?;
+    let python = environment.join("Scripts/python.exe");
+    let python = python.to_str().context("Python路径非UTF8")?;
+    let mut expected = BTreeMap::new();
+    let mut optional = BTreeSet::new();
+    let mut package_sets = Vec::new();
+    for control in &index.controls {
+        let rule=match control.kind.as_str() {
+            "fixed"=>Expected::Digest(control.bytes,control.sha256.clone()),
+            "template"=>Expected::Exact(control.template.as_ref().context("控制模板缺失")?
+                .replace("{{ENVIRONMENT}}",env).replace("{{ENVIRONMENT_SLASH}}",&env.replace('\\',"/"))
+                .replace("{{ENVIRONMENT_NAME}}",environment.file_name().and_then(|s|s.to_str()).context("环境名缺失")?).into_bytes()),
+            "pyvenv_config"=>Expected::Exact(format!("home = {}\nimplementation = CPython\nuv = 0.11.16\nversion_info = 3.10.19\ninclude-system-site-packages = false\n",layout.root.join("python/3.10.19/cpython-3.10.19-windows-x86_64-none").display()).into_bytes()),
+            _=>bail!("未知uv控制规则"),
+        };
+        add(&mut expected, &control.path, rule)?;
+    }
+    let template = decode_hex(&index.entrypoint_pe_template_hex)?;
+    for package in &index.packages {
+        let wheel = recipe
+            .wheels
+            .iter()
+            .find(|w| w.name == package.name)
+            .context("索引包身份未知")?;
+        if package.version != wheel.version || package.archive_sha256 != wheel.sha256 {
+            bail!("索引wheel身份不符");
+        }
+        let mut required = BTreeSet::new();
+        let mut allowed = BTreeSet::new();
+        for file in &package.originals {
+            let path = relative(&file.path)?;
+            required.insert(path.clone());
+            allowed.insert(path);
+            add(
+                &mut expected,
+                &file.path,
+                Expected::Digest(file.bytes, file.sha256.clone()),
+            )?;
+        }
+        for name in [
+            "RECORD",
+            "INSTALLER",
+            "REQUESTED",
+            "direct_url.json",
+            "uv_cache.json",
+        ] {
+            let path = format!("Lib/site-packages/{}/{name}", package.dist_info);
+            let rel = relative(&path)?;
+            allowed.insert(rel.clone());
+            if matches!(name, "RECORD" | "INSTALLER") {
+                required.insert(rel.clone());
+            } else {
+                optional.insert(rel.clone());
+            }
+            add(
+                &mut expected,
+                &path,
+                if name == "RECORD" {
+                    Expected::Record
+                } else {
+                    Expected::Metadata
+                },
+            )?;
+        }
+        for entry in index
+            .entrypoint_controls
+            .iter()
+            .filter(|entry| entry.package == package.name)
+        {
+            let main = entry
+                .script_template
+                .replace("{{PYTHON}}", python)
+                .into_bytes();
+            let data = entry_executable(&template, python, &main, entry.kind)?;
+            let path = relative(&entry.path)?;
+            required.insert(path.clone());
+            allowed.insert(path);
+            add(&mut expected, &entry.path, Expected::Exact(data))?;
+        }
+        package_sets.push((
+            relative(&format!("Lib/site-packages/{}/RECORD", package.dist_info))?,
+            allowed,
+            required,
+        ));
+    }
+    let mut observed = BTreeMap::new();
+    let mut aliases = BTreeSet::new();
+    let mut total = 0u64;
+    let mut stack = vec![environment.to_path_buf()];
+    let mut nodes = 0usize;
+    while let Some(directory) = stack.pop() {
+        cancel.check()?;
+        layout.guard_path(&directory)?;
+        if !fs::symlink_metadata(&directory)?.is_dir() {
+            bail!("环境根不是普通目录");
+        }
+        for item in fs::read_dir(&directory)? {
+            cancel.check()?;
+            nodes += 1;
+            if nodes > 100_000 {
+                bail!("环境节点超限");
+            }
+            let path = item?.path();
+            layout.guard_path(&path)?;
+            let rel = path.strip_prefix(environment)?.to_path_buf();
+            let key = rel.to_string_lossy().replace('\\', "/").to_lowercase();
+            if !aliases.insert(key) {
+                bail!("环境含Windows大小写别名");
+            }
+            let meta = fs::symlink_metadata(&path)?;
+            if meta.is_dir() {
+                stack.push(path);
+                continue;
+            }
+            if !meta.is_file() {
+                bail!("环境含特殊文件");
+            }
+            let rule = expected
+                .get(&rel)
+                .with_context(|| format!("环境含未授权文件，保持原文件：{}", rel.display()))?;
+            total = total.checked_add(meta.len()).context("验证字节数溢出")?;
+            if total > MAX_TREE {
+                bail!("GUI验证合计字节数超限");
+            }
+            let limit = if matches!(rule, Expected::Metadata | Expected::Record) {
+                2 * 1024 * 1024
+            } else {
+                MAX_FILE
+            };
+            let data = read(layout, &path, limit, cancel)?;
+            match rule {
+                Expected::Digest(bytes, sha)
+                    if *bytes != data.len() as u64 || hash(&data) != *sha =>
+                {
+                    bail!("固定原文件内容不符：{}", rel.display())
+                }
+                Expected::Exact(bytes) if *bytes != data => {
+                    bail!("uv控制或入口内容不符：{}", rel.display())
+                }
+                Expected::Metadata => check_metadata(&rel, &data)?,
+                _ => {}
+            }
+            observed.insert(rel, (data.len() as u64, hash(&data)));
+        }
+    }
+    for path in expected.keys() {
+        if !optional.contains(path) && !observed.contains_key(path) {
+            bail!("可信闭包缺少必要文件：{}", path.display());
+        }
+    }
+    for (path, allowed, required) in package_sets {
+        validate_record(
+            &read(layout, &environment.join(path), 2 * 1024 * 1024, cancel)?,
+            &allowed,
+            &required,
+        )?;
+    }
+    let closure_sha256 = hash(&serde_json::to_vec(&observed)?);
+    Ok(TrustedEnvironment {
+        environment: environment.to_path_buf(),
+        recipe_sha256: RECIPE_SHA.into(),
+        trusted_index_sha256: INDEX_SHA.into(),
+        files: observed.len() as u64,
+        bytes: total,
+        closure_sha256,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn index() -> Index {
+        serde_json::from_slice(INDEX).unwrap()
+    }
+    #[test]
+    fn index_binds_full_fixed_wheel_closure_and_uv_controls() {
+        assert_eq!(hash(INDEX), INDEX_SHA);
+        let index = index();
+        let recipe = GuiRecipe::embedded().unwrap();
+        assert_eq!(index.packages.len(), 81);
+        assert_eq!(
+            index
+                .packages
+                .iter()
+                .map(|p| p.originals.len())
+                .sum::<usize>(),
+            12738
+        );
+        assert_eq!(index.controls.len(), 16);
+        assert_eq!(index.entrypoint_controls.len(), 27);
+        for p in &index.packages {
+            let w = recipe.wheel(&p.name).unwrap();
+            assert_eq!(p.version, w.version);
+            assert_eq!(p.archive_sha256, w.sha256);
+        }
+    }
+    #[test]
+    fn uv_pe_reconstruction_matches_fixed_isolated_generation_byte_for_byte() {
+        let index = index();
+        let template = decode_hex(&index.entrypoint_pe_template_hex).unwrap();
+        let entry = index
+            .entrypoint_controls
+            .iter()
+            .find(|e| e.path == "Scripts/cffi-gen-src.exe")
+            .unwrap();
+        let python = r"E:\NTRegCtrl\a5-20261029-ctrl1\g0000000000000000\Scripts\python.exe";
+        let main = entry.script_template.replace("{{PYTHON}}", python);
+        assert_eq!(
+            entry_executable(&template, python, main.as_bytes(), entry.kind).unwrap(),
+            template
+        );
+    }
+    #[test]
+    fn uv_pe_reconstruction_binds_unicode_space_path_script_and_kind() {
+        let index = index();
+        let template = decode_hex(&index.entrypoint_pe_template_hex).unwrap();
+        let entry = &index.entrypoint_controls[0];
+        let python = r"C:\测试 空格\e\g0000000000000000\Scripts\python.exe";
+        let main = entry.script_template.replace("{{PYTHON}}", python);
+        let expected = entry_executable(&template, python, main.as_bytes(), 1).unwrap();
+        assert_ne!(
+            expected,
+            entry_executable(
+                &template,
+                &python.replace("测试", "改变"),
+                main.as_bytes(),
+                1
+            )
+            .unwrap()
+        );
+        assert_ne!(
+            expected,
+            entry_executable(&template, python, b"import os\n", 1).unwrap()
+        );
+        assert_ne!(
+            expected,
+            entry_executable(&template, python, main.as_bytes(), 2).unwrap()
+        );
+        assert!(entry_executable(&template, python, main.as_bytes(), 0).is_err());
+        assert!(entry_executable(&template, &"x".repeat(5000), main.as_bytes(), 1).is_err());
+    }
+    #[test]
+    fn zip_envelope_has_one_exact_stored_main_and_known_crc() {
+        assert_eq!(crc32(b"123456789"), 0xcbf43926);
+        let bytes = zip_script(b"# coding: utf-8\npass\n").unwrap();
+        let mut archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+        assert_eq!(archive.len(), 1);
+        let mut entry = archive.by_index(0).unwrap();
+        assert_eq!(entry.name(), "__main__.py");
+        assert_eq!(entry.compression(), zip::CompressionMethod::Stored);
+        let mut text = String::new();
+        entry.read_to_string(&mut text).unwrap();
+        assert_eq!(text, "# coding: utf-8\npass\n");
+    }
+    #[test]
+    fn record_cannot_expand_trust_to_pth_or_escape_or_omit_original() {
+        let original = PathBuf::from("Lib/site-packages/pkg/a.py");
+        let allowed = BTreeSet::from([original.clone()]);
+        assert!(validate_record(b"pkg/a.py,arbitrary,999\n", &allowed, &allowed).is_ok());
+        assert!(validate_record(
+            b"pkg/a.py,,\n../../Scripts/injected.exe,,\n",
+            &allowed,
+            &allowed
+        )
+        .is_err());
+        assert!(validate_record(b"pkg/a.py,,\nuser.pth,,\n", &allowed, &allowed).is_err());
+        assert!(validate_record(b"../../../outside,,\n", &allowed, &allowed).is_err());
+        assert!(validate_record(b"", &allowed, &allowed).is_err());
+        assert!(validate_record(b"pkg/a.py,,\npkg/a.py,,\n", &allowed, &allowed).is_err());
+    }
+}

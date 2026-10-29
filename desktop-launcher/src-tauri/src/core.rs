@@ -25,10 +25,14 @@ mod controlled_download;
 
 #[path = "base_python_repair.rs"]
 mod base_python_repair;
+#[path = "gui_entry_probe.rs"]
+mod gui_entry_probe;
 #[path = "gui_install.rs"]
 mod gui_install;
 #[path = "gui_recovery.rs"]
 mod gui_recovery;
+#[path = "gui_registration.rs"]
+mod gui_registration;
 #[path = "gui_repair.rs"]
 mod gui_repair;
 #[path = "gui_source_repair.rs"]
@@ -42,6 +46,20 @@ mod safe_extract;
 mod p6_tests;
 
 pub type Logger = Arc<dyn Fn(String) + Send + Sync>;
+
+fn assert_registration_ready(root: &Path, except_release: Option<&str>) -> Result<()> {
+    for release in Catalog::embedded()?.releases() {
+        if Some(release.id.as_str()) != except_release {
+            gui_registration::assert_ready(root, release)?;
+        }
+    }
+    Ok(())
+}
+
+fn assert_regular_ready(root: &Path) -> Result<()> {
+    base_python_repair::assert_ready(root)?;
+    assert_registration_ready(root, None)
+}
 const REQUIRED: &[&str] = &[
     "gui.py",
     "requirements.txt",
@@ -474,7 +492,7 @@ fn managed_base_path(layout: &Layout, release: &Release, path: &Path) -> Result<
     Ok(resolved)
 }
 fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
-    base_python_repair::assert_ready(&layout.root)?;
+    assert_regular_ready(&layout.root)?;
     if release.environment_recipe == "gui-cp310-win-x64-v1" {
         crate::python_integrity::verify(layout)?;
     }
@@ -641,6 +659,7 @@ impl Engine {
         }
         self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        assert_registration_ready(root, None)?;
         let recipe = crate::recipe::GuiRecipe::embedded()?;
         let log = self.logger.clone();
         let mut validator = |layout: &Layout,
@@ -680,6 +699,93 @@ impl Engine {
     pub fn preview_source_repair(&self, root: &Path, id: &str) -> Result<serde_json::Value> {
         gui_source_repair::preview(root, self.catalog.release(id)?)
     }
+    pub fn preview_gui_registration(
+        &self,
+        root: &Path,
+        id: &str,
+        instance_id: Option<&str>,
+    ) -> Result<serde_json::Value> {
+        gui_registration::preview(root, self.catalog.release(id)?, instance_id)
+    }
+    pub fn restore_gui_registration_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        reviewed: Option<(&str, &str)>,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
+        let _network = crate::network_policy::task_policy(root)?;
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再恢复安装登记");
+        }
+        let release = self.catalog.release(id)?.clone();
+        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        base_python_repair::assert_ready(root)?;
+        assert_registration_ready(root, Some(id))?;
+        operation.persist(&ctx)?;
+        let cancel = operation.cancel_token();
+        let recipe = crate::recipe::GuiRecipe::embedded()?;
+        let validator = |environment: &Path| {
+            gui_install::validate_environment_runtime(
+                ctx.layout(),
+                &recipe,
+                environment,
+                &self.logger,
+                &cancel,
+            )
+        };
+        let entry_probe = |environment: &Path, transaction: &str| {
+            let receipt = gui_entry_probe::probe(
+                &ctx,
+                &release,
+                environment,
+                transaction,
+                &self.logger,
+                &cancel,
+            )?;
+            (self.logger)(format!(
+                "独立资料入口验证完成：{}",
+                serde_json::to_string(&receipt)?
+            ));
+            Ok(())
+        };
+        let result = (|| {
+            operation.publish(
+                OperationPhase::Verifying,
+                "离线核验已有环境与独立资料入口，恢复缺失登记",
+            )?;
+            operation.persist(&ctx)?;
+            match reviewed {
+                Some((instance, plan)) => gui_registration::execute(
+                    &ctx,
+                    &release,
+                    plan,
+                    Some(instance),
+                    &cancel,
+                    validator,
+                    entry_probe,
+                ),
+                None => gui_registration::recover(&ctx, &release, &cancel, validator, entry_probe),
+            }
+        })();
+        let (status, error) = match &result {
+            Ok(_) => (OperationStatus::Succeeded, None),
+            Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
+                (OperationStatus::Cancelled, None)
+            }
+            Err(error) => (
+                OperationStatus::Failed,
+                Some(OperationError {
+                    code: "gui_registration_failed".into(),
+                    message: format!("{error:#}"),
+                }),
+            ),
+        };
+        operation.finish_and_persist(&ctx, status, error)?;
+        result.map(|_| ())
+    }
     pub fn repair_source_operation(
         &mut self,
         root: &Path,
@@ -693,7 +799,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
-        base_python_repair::assert_ready(root)?;
+        assert_regular_ready(root)?;
         gui_source_repair::execute(&ctx, release, operation, &self.logger)
     }
     pub fn diagnose_gui(&self, root: &Path, id: &str) -> Result<serde_json::Value> {
@@ -729,7 +835,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
-        base_python_repair::assert_ready(root)?;
+        assert_regular_ready(root)?;
         gui_repair::execute(&ctx, release, package, plan_sha256, operation, &self.logger)
     }
     pub fn recover_gui_operation(
@@ -745,7 +851,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
-        base_python_repair::assert_ready(root)?;
+        assert_regular_ready(root)?;
         gui_repair::recover(&ctx, release, operation, &self.logger)
     }
     pub fn install_release_operation(
@@ -777,7 +883,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?.clone();
         let mutation = model::WorkspaceMutation::acquire(root, id)?;
-        base_python_repair::assert_ready(root)?;
+        assert_regular_ready(root)?;
         operation.persist(&mutation)?;
         let cancel = operation.cancel_token();
         let mut downloads = artifact_downloads::ArtifactDownloads::new(
@@ -864,7 +970,7 @@ impl Engine {
             bail!("网络设置超过64KiB，尚未写入");
         }
         let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
-        base_python_repair::assert_ready(&root)?;
+        assert_regular_ready(&root)?;
         let path = crate::network_policy::settings_path(&root)?;
         ctx.layout().guard_path(&path)?;
         ctx.layout()
@@ -886,7 +992,7 @@ impl Engine {
         }
         let root = self.resolve(value)?;
         let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
-        base_python_repair::assert_ready(&root)?;
+        assert_regular_ready(&root)?;
         let policy = crate::download_budget::DownloadPolicy {
             root_cap_body_bytes: root_body_cap_bytes,
         };
@@ -907,7 +1013,7 @@ impl Engine {
         }
         let root = self.resolve(value)?;
         let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
-        base_python_repair::assert_ready(&root)?;
+        assert_regular_ready(&root)?;
         crate::download_budget::reconcile(&ctx)?;
         crate::download_budget::snapshot_with_receipt(ctx.layout())
     }
@@ -937,7 +1043,7 @@ impl Engine {
         let layout = Layout::new(root, &release.id)?;
         let lease = layout.prepare_workspace()?;
         let mut registry = Registry::load(root)?;
-        base_python_repair::assert_ready(root)?;
+        assert_regular_ready(root)?;
         if !registry.reconcile(root, &self.catalog)?.is_empty() {
             registry.store(root)?;
         }
@@ -949,7 +1055,7 @@ impl Engine {
             bail!("请先停止受管训练器，再修改安装目录");
         }
         let ctx = model::WorkspaceMutation::acquire(root, &release.id)?;
-        base_python_repair::assert_ready(root)?;
+        assert_regular_ready(root)?;
         let mut registry = Registry::load(root)?;
         if !registry.reconcile(root, &self.catalog)?.is_empty() {
             registry.store(root)?;
@@ -1052,6 +1158,9 @@ impl Engine {
             interrupted.push(format!(
                 "基础Python组件恢复尚未完成，暂停变更与启动：{error:#}"
             ));
+        }
+        if let Err(error) = assert_registration_ready(root, None) {
+            interrupted.push(format!("安装登记恢复尚未完成，暂停变更与启动：{error:#}"));
         }
         if owned {
             for release in self.catalog.releases() {
@@ -1591,6 +1700,40 @@ mod tests {
         root
     }
 
+    #[test]
+    fn unknown_registration_intent_blocks_normal_mutations_across_release_and_keeps_budget() {
+        let root = negative_test_root("registration-gate");
+        let (log, _) = logger();
+        let mut engine = Engine::new(root.clone(), log);
+        engine
+            .save_download_budget(root.to_str().unwrap(), None, 1_048_576)
+            .unwrap();
+        let ledger = root.join("state/download-budget.json");
+        let before = fs::read(&ledger).unwrap();
+        let catalog = Catalog::embedded().unwrap();
+        let release = &catalog.releases()[0];
+        let intent = root
+            .join("state/gui-registration")
+            .join(format!("{}.json", release.id));
+        fs::create_dir_all(intent.parent().unwrap()).unwrap();
+        let foreign = b"{\"schema_version\":99,\"status\":\"committing\"}";
+        fs::write(&intent, foreign).unwrap();
+        assert!(assert_regular_ready(&root).is_err());
+        assert!(engine
+            .save_download_budget(root.to_str().unwrap(), Some(1), 2_097_152)
+            .is_err());
+        assert!(engine
+            .reconcile_download_budget(root.to_str().unwrap())
+            .is_err());
+        let other = catalog
+            .releases()
+            .iter()
+            .find(|item| item.id != release.id)
+            .unwrap();
+        assert!(engine.select_release(&root, &other.id).is_err());
+        assert_eq!(fs::read(ledger).unwrap(), before);
+        assert_eq!(fs::read(intent).unwrap(), foreign);
+    }
     #[test]
     fn invalid_network_settings_do_not_prepare_or_replace_workspace() {
         let root = negative_test_root("network-settings");

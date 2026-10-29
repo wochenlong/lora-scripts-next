@@ -232,3 +232,31 @@ export const getDownloadBudget = (root: string) => invoke<BudgetSnapshot>('get_d
 export const saveDownloadBudget = (root: string, expectedRevision: number | null, rootBodyCapBytes: number) =>
   invoke<BudgetSnapshot>('save_download_budget', { root, expectedRevision, rootBodyCapBytes })
 export const reconcileDownloadBudget = (root: string) => invoke<BudgetSnapshot>('reconcile_download_budget', { root })
+
+export interface GuiRegistrationCandidate {
+  id: string
+  storage_version: number
+  state: { bytes: number; sha256: string } | null
+  generation: number
+  status: string
+}
+export interface GuiRegistrationPreview {
+  status: 'ready' | 'pending' | 'blocked'
+  plan_sha256?: string
+  transaction?: string
+  reason?: string
+  network_bytes: number
+  candidates?: GuiRegistrationCandidate[] | null
+  plan?: {
+    release_id: string
+    root_absolute: string
+    candidate: GuiRegistrationCandidate
+    proof: { environment: string; files: number; bytes: number; trusted_index_sha256: string; closure_sha256: string }
+  }
+}
+export const previewGuiRegistration = (root: string, releaseId: string, instanceId: string | null) =>
+  invoke<GuiRegistrationPreview>('preview_gui_registration', { root, releaseId, instanceId })
+export const restoreGuiRegistration = (root: string, releaseId: string, instanceId: string, planSha256: string) =>
+  invoke<OperationSnapshot>('restore_gui_registration', { root, releaseId, instanceId, planSha256 })
+export const recoverGuiRegistration = (root: string, releaseId: string) =>
+  invoke<OperationSnapshot>('recover_gui_registration', { root, releaseId })

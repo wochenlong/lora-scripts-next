@@ -937,6 +937,78 @@ pub(crate) fn write_base_json_atomic<T: Serialize>(
     // interrupted temporaries: they are evidence owned by this exact transaction.
     replace_atomic(&temporary, path)
 }
+
+/// GUI补登记/重建只在精确事务备份目录暂存，避免临时文件污染受保护state树。
+pub(crate) fn write_gui_transaction_bytes(
+    root: &Path,
+    transaction: &str,
+    path: &Path,
+    bytes: &[u8],
+) -> Result<()> {
+    validate_component(transaction)?;
+    if !root.is_absolute()
+        || transaction.len() > 96
+        || !(transaction.starts_with("gui-registration-")
+            || transaction.starts_with("gui-rebuild-"))
+        || bytes.len() > 32 * 1024 * 1024
+    {
+        bail!("GUI事务写身份或字节限额无效");
+    }
+    let relative = path.strip_prefix(root).context("GUI事务目标越出工作区")?;
+    let parts: Vec<_> = relative
+        .components()
+        .map(|part| match part {
+            Component::Normal(name) => name.to_str().context("事务路径不是UTF8"),
+            _ => bail!("GUI事务路径包含跳转"),
+        })
+        .collect::<Result<_>>()?;
+    let allowed = parts.as_slice() == ["state", "registry.json"]
+        || (parts.len() == 3
+            && parts[0] == "state"
+            && matches!(parts[1], "instances" | "gui-registration" | "gui-rebuild")
+            && parts[2].ends_with(".json"))
+        || (parts.len() == 3
+            && parts[0] == "releases"
+            && parts[2] == "release.json"
+            && validate_release_id(parts[1]).is_ok())
+        || (parts.len() == 3 && parts[0] == "backups" && parts[1] == transaction);
+    if !allowed {
+        bail!("GUI事务写目标不在限定state/receipt/备份命名空间");
+    }
+    check_chain(path)?;
+    let parent = path.parent().context("事务目标缺少父目录")?;
+    fs::create_dir_all(parent)?;
+    check_chain(parent)?;
+    let temporary_root = root.join("backups").join(transaction).join("atomic-writes");
+    check_chain(&temporary_root)?;
+    fs::create_dir_all(&temporary_root)?;
+    check_chain(&temporary_root)?;
+    let temporary = temporary_root.join(format!(
+        ".state-{}-{}-{}.tmp",
+        std::process::id(),
+        now(),
+        NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    drop(file);
+    replace_atomic(&temporary, path)
+}
+
+pub(crate) fn write_gui_transaction_json<T: Serialize>(
+    root: &Path,
+    transaction: &str,
+    path: &Path,
+    value: &T,
+) -> Result<()> {
+    let mut bytes = serde_json::to_vec_pretty(value)?;
+    bytes.push(b'\n');
+    write_gui_transaction_bytes(root, transaction, path, &bytes)
+}
 #[cfg(windows)]
 fn replace_atomic(temp: &Path, target: &Path) -> Result<()> {
     use std::os::windows::ffi::OsStrExt;

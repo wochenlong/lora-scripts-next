@@ -2,6 +2,7 @@
 mod budgeted_body;
 mod core;
 mod download_budget;
+mod gui_registration_integrity;
 mod instances;
 mod model;
 mod network_policy;
@@ -51,6 +52,11 @@ enum ManagedAction {
         plan_sha256: String,
     },
     RecoverBasePython,
+    RestoreRegistration {
+        instance_id: String,
+        plan_sha256: String,
+    },
+    RecoverRegistration,
 }
 
 async fn begin_release_operation(
@@ -101,6 +107,9 @@ async fn begin_release_operation(
                 | ManagedAction::RepairSource
                 | ManagedAction::RepairBasePython { .. }
                 | ManagedAction::RecoverBasePython => operations::OperationKind::Repair,
+                ManagedAction::RestoreRegistration { .. } | ManagedAction::RecoverRegistration => {
+                    operations::OperationKind::Repair
+                }
             },
         )
         .map_err(|e| format!("{e:#}"))?;
@@ -144,6 +153,18 @@ async fn begin_release_operation(
                 ManagedAction::RecoverBasePython => {
                     engine.repair_base_python_operation(&root, &release_id, None, &handle)
                 }
+                ManagedAction::RestoreRegistration {
+                    instance_id,
+                    plan_sha256,
+                } => engine.restore_gui_registration_operation(
+                    &root,
+                    &release_id,
+                    Some((&instance_id, &plan_sha256)),
+                    &handle,
+                ),
+                ManagedAction::RecoverRegistration => {
+                    engine.restore_gui_registration_operation(&root, &release_id, None, &handle)
+                }
             }
         })();
         // 未能取得 lease 等早期错误只保存在本进程；不能越过 lease 写工作区。
@@ -177,6 +198,55 @@ async fn prefetch_release(
     release_id: String,
 ) -> Result<operations::OperationSnapshot, String> {
     begin_release_operation(state, root, release_id, ManagedAction::Prefetch).await
+}
+#[tauri::command]
+async fn preview_gui_registration(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    instance_id: Option<String>,
+) -> Result<serde_json::Value, String> {
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine
+            .try_lock()
+            .map_err(|_| "已有任务执行中，请稍后检查登记".to_string())?;
+        let root = engine
+            .resolve(&root)
+            .map_err(|error| format!("{error:#}"))?;
+        engine
+            .preview_gui_registration(&root, &release_id, instance_id.as_deref())
+            .map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+async fn restore_gui_registration(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    instance_id: String,
+    plan_sha256: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::RestoreRegistration {
+            instance_id,
+            plan_sha256,
+        },
+    )
+    .await
+}
+#[tauri::command]
+async fn recover_gui_registration(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(state, root, release_id, ManagedAction::RecoverRegistration).await
 }
 #[tauri::command]
 async fn install_managed_release(
@@ -675,6 +745,18 @@ fn main() {
                 );
                 return Ok(());
             }
+            if op == "preview-gui-registration" {
+                let release = args
+                    .get(4)
+                    .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?;
+                let value = engine.preview_gui_registration(
+                    &root,
+                    release,
+                    args.get(5).map(String::as_str),
+                )?;
+                println!("{}", serde_json::to_string_pretty(&value)?);
+                return Ok(());
+            }
             if matches!(
                 op.as_str(),
                 "download-budget" | "set-download-budget" | "reconcile-download-budget"
@@ -739,14 +821,32 @@ fn main() {
                 | "recover-gui-repair"
                 | "repair-managed-source"
                 | "repair-base-python"
-                | "recover-base-python" => {
+                | "recover-base-python"
+                | "restore-gui-registration"
+                | "recover-gui-registration" => {
                     let manager = operations::OperationManager::default();
                     let id = format!("cli-repair-{}-{}", model::now(), std::process::id());
                     let operation = manager.start(&id, operations::OperationKind::Repair)?;
                     let release = args
                         .get(4)
                         .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?;
-                    if op == "repair-base-python" || op == "recover-base-python" {
+                    if op == "restore-gui-registration" || op == "recover-gui-registration" {
+                        let reviewed = if op == "restore-gui-registration" {
+                            Some((
+                                args.get(5)
+                                    .ok_or_else(|| anyhow::anyhow!("缺少明确实例ID"))?
+                                    .as_str(),
+                                args.get(6)
+                                    .ok_or_else(|| anyhow::anyhow!("缺少已审核plan SHA256"))?
+                                    .as_str(),
+                            ))
+                        } else {
+                            None
+                        };
+                        engine.restore_gui_registration_operation(
+                            &root, release, reviewed, &operation,
+                        )?;
+                    } else if op == "repair-base-python" || op == "recover-base-python" {
                         let plan = if op == "repair-base-python" {
                             Some(
                                 args.get(5)
@@ -833,6 +933,9 @@ fn main() {
             preview_base_python_repair,
             repair_base_python,
             recover_base_python,
+            preview_gui_registration,
+            restore_gui_registration,
+            recover_gui_registration,
             operation_snapshot,
             operation_events,
             cancel_operation,

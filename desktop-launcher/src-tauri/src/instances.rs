@@ -444,6 +444,17 @@ pub(crate) struct InstanceState {
     pending: Option<Pending>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     base_python_pending: Option<BasePythonPending>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    registration_origin: Option<RegistrationOrigin>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct RegistrationOrigin {
+    transaction: String,
+    trusted_index_sha256: String,
+    independently_verified_closure_sha256: String,
+    observed_at: u64,
+    previous_known_generation: u64,
 }
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -743,6 +754,18 @@ fn validate(layout: &Layout, id: &str, state: &InstanceState) -> Result<()> {
         bail!("实例schema或持久身份不支持，保留原记录");
     }
     model::validate_component(&state.recipe_id)?;
+    if let Some(origin) = &state.registration_origin {
+        model::validate_component(&origin.transaction)?;
+        if state.schema_version != 3
+            || !origin.transaction.starts_with("gui-registration-")
+            || !valid_hash(&origin.trusted_index_sha256)
+            || !valid_hash(&origin.independently_verified_closure_sha256)
+            || origin.observed_at == 0
+            || origin.previous_known_generation >= state.generation
+        {
+            bail!("登记恢复的独立验证epoch身份无效");
+        }
+    }
     let environment = path(state)?;
     if let Some(binding) = model::Registry::load(&layout.root)?.gui_binding(&state.release_id) {
         if binding.instance_id == state.instance_id
@@ -970,6 +993,7 @@ pub(crate) fn create_controlled(
         },
         pending: None,
         base_python_pending: None,
+        registration_origin: None,
     };
     let environment = path(&state)?;
     if model::environment_path(&layout.root, release(layout)?, id, 0)?.exists() {
@@ -994,6 +1018,175 @@ pub(crate) fn assert_usable(state: &InstanceState) -> Result<()> {
         || scan(&layout, &path(state)?, &state.ignored)? != state.verified.environment
     {
         bail!("实例dirty、过期或不匹配已验证generation，禁止使用");
+    }
+    Ok(())
+}
+
+/// 只从独立可信闭包证明创建新的验证epoch；不把未知当前hash当历史validated。
+/// 仅返回内存候选，由GUI登记多记录事务统一持久化。
+#[allow(clippy::too_many_arguments)] // 精确实例身份和独立信任根须显式绑定。
+pub(crate) fn registration_candidate(
+    ctx: &WorkspaceMutation,
+    id: &str,
+    storage_version: u32,
+    transaction: &str,
+    recipe_id: &str,
+    recipe_sha256: &str,
+    previous_known_generation: u64,
+    proof: &crate::gui_registration_integrity::TrustedEnvironment,
+    cancel: &CancelToken,
+) -> Result<InstanceState> {
+    let layout = ctx.layout();
+    model::validate_environment_storage(id, storage_version)?;
+    model::validate_component(transaction)?;
+    model::validate_component(recipe_id)?;
+    if !transaction.starts_with("gui-registration-")
+        || !valid_hash(recipe_sha256)
+        || proof.recipe_sha256 != recipe_sha256
+        || !valid_hash(&proof.trusted_index_sha256)
+        || !valid_hash(&proof.closure_sha256)
+        || state_path(layout, id)?.exists()
+        || model::environment_path(&layout.root, release(layout)?, id, storage_version)?
+            != proof.environment
+    {
+        bail!("补登记候选身份不符，禁止覆盖既有实例状态");
+    }
+    let generation = previous_known_generation
+        .checked_add(1)
+        .context("验证epoch溢出")?;
+    let mut state = InstanceState {
+        schema_version: 3,
+        component: "gui".into(),
+        instance_id: id.into(),
+        storage_version,
+        release_id: release(layout)?.into(),
+        root_absolute: layout.root.clone(),
+        recipe_id: recipe_id.into(),
+        recipe_sha256: recipe_sha256.into(),
+        generation,
+        validated_generation: generation,
+        dirty: false,
+        ignored: vec![],
+        verified: Observation {
+            environment: Tree::new(),
+            profiles: Tree::new(),
+            profiles_summary: None,
+            protected: BTreeMap::new(),
+        },
+        pending: None,
+        base_python_pending: None,
+        registration_origin: Some(RegistrationOrigin {
+            transaction: transaction.into(),
+            trusted_index_sha256: proof.trusted_index_sha256.clone(),
+            independently_verified_closure_sha256: proof.closure_sha256.clone(),
+            observed_at: model::now(),
+            previous_known_generation,
+        }),
+    };
+    state.verified = observe(layout, &state, cancel)?;
+    validate(layout, id, &state)?;
+    Ok(state)
+}
+
+/// 复验前后整个只读保护闭包，供补登记事务使用；不会保存或清除dirty。
+pub(crate) fn registration_revalidate(
+    layout: &Layout,
+    state: &InstanceState,
+    candidate: bool,
+    cancel: &CancelToken,
+    verifier: impl FnOnce(&Path) -> Result<()>,
+) -> Result<()> {
+    validate(layout, state.id(), state)?;
+    if state.dirty
+        || state.pending.is_some()
+        || state.base_python_pending.is_some()
+        || state.generation != state.validated_generation
+    {
+        bail!("dirty/pending实例不能走补登记");
+    }
+    if !candidate {
+        assert_usable(state)?;
+    }
+    let before = observe(layout, state, cancel)?;
+    if before.environment != state.verified.environment
+        || before.protected.get(Path::new("python/3.10.19"))
+            != state.verified.protected.get(Path::new("python/3.10.19"))
+    {
+        bail!("补登记候选实体已变化");
+    }
+    verifier(&path(state)?)?;
+    if observe(layout, state, cancel)? != before {
+        bail!("补登记验证改变受保护树或生产profiles");
+    }
+    if candidate {
+        if state_path(layout, state.id())?.exists() {
+            bail!("补登记期间出现了新的实例状态");
+        }
+    } else if load(layout, state.id())? != *state {
+        bail!("补登记期间原实例状态变化");
+    }
+    Ok(())
+}
+
+pub(crate) fn registration_encoded(layout: &Layout, state: &InstanceState) -> Result<Vec<u8>> {
+    validate(layout, state.id(), state)?;
+    let mut bytes = serde_json::to_vec_pretty(state)?;
+    bytes.push(b'\n');
+    if bytes.len() as u64 > MAX_STATE {
+        bail!("补登记实例状态超出可重读上限");
+    }
+    Ok(bytes)
+}
+pub(crate) fn registration_decode(layout: &Layout, bytes: &[u8]) -> Result<InstanceState> {
+    if bytes.len() as u64 > MAX_STATE {
+        bail!("补登记实例状态超限");
+    }
+    let state: InstanceState = serde_json::from_slice(bytes)?;
+    validate(layout, state.id(), &state)?;
+    Ok(state)
+}
+pub(crate) fn registration_project_receipt(
+    layout: &Layout,
+    state: &mut InstanceState,
+    bytes: &[u8],
+) -> Result<()> {
+    if state.registration_origin.is_none() {
+        bail!("只能投影独立补登记的新epoch状态");
+    }
+    let root = layout.release_dir.strip_prefix(&layout.root)?;
+    let tree = state
+        .verified
+        .protected
+        .get_mut(root)
+        .context("缺少源码保护树")?;
+    tree.insert(
+        PathBuf::from("release.json"),
+        Node::File(Fingerprint {
+            bytes: bytes.len() as u64,
+            sha256: hash(bytes),
+        }),
+    );
+    validate(layout, state.id(), state)
+}
+pub(crate) fn registration_assert_origin(
+    state: &InstanceState,
+    transaction: &str,
+    previous_generation: u64,
+    proof: &crate::gui_registration_integrity::TrustedEnvironment,
+) -> Result<()> {
+    let origin = state
+        .registration_origin
+        .as_ref()
+        .context("缺少独立补登记验证epoch来源")?;
+    if origin.transaction != transaction
+        || origin.previous_known_generation != previous_generation
+        || origin.trusted_index_sha256 != proof.trusted_index_sha256
+        || origin.independently_verified_closure_sha256 != proof.closure_sha256
+        || state.recipe_sha256 != proof.recipe_sha256
+        || path(state)? != proof.environment
+        || state.generation != previous_generation.checked_add(1).context("epoch溢出")?
+    {
+        bail!("补登记状态与固定独立证明来源不符");
     }
     Ok(())
 }

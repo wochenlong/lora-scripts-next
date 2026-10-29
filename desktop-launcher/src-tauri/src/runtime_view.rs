@@ -2,7 +2,14 @@
 use crate::model::{self, Layout, Release};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Path, PathBuf},
+    sync::atomic::{AtomicU64, Ordering},
+};
+
+static NEXT_PROBE: AtomicU64 = AtomicU64::new(0);
 
 const SHARED: &[(&str, &str)] = &[
     ("user_data", "user_data"),
@@ -120,6 +127,51 @@ pub fn prepare(layout: &Layout, release: &Release) -> Result<()> {
     Ok(())
 }
 
+/// 登记/重建入口探测使用完全私有的普通目录副本；不建立任何资料目录联接。
+pub(crate) struct ProbeView {
+    pub workspace: PathBuf,
+    pub run: PathBuf,
+    pub profile: PathBuf,
+    pub state: PathBuf,
+}
+
+/// 调用者先验证固定源码，复制后还须以固定清单核验副本再执行。
+/// 唯一目录保留为事务证据；不得复用既有run/profile或清理其上层目录。
+pub(crate) fn prepare_probe(layout: &Layout, transaction: &str) -> Result<ProbeView> {
+    model::validate_component(transaction)?;
+    if transaction.len() > 96
+        || !(transaction.starts_with("gui-registration-")
+            || transaction.starts_with("gui-rebuild-"))
+    {
+        bail!("GUI入口探测事务身份无效");
+    }
+    layout.guard_path(&layout.app)?;
+    let parent = layout.root.join("backups").join(transaction);
+    layout.ensure_dir(&parent)?;
+    let unique = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)?
+        .as_nanos();
+    let serial = NEXT_PROBE.fetch_add(1, Ordering::Relaxed);
+    let workspace = parent.join(format!(
+        "entry-probe-{}-{unique}-{serial}",
+        std::process::id()
+    ));
+    layout.guard_path(&workspace)?;
+    fs::create_dir(&workspace).context("入口探测目录已存在或无法独占创建")?;
+    let view = ProbeView {
+        run: workspace.join("run"),
+        profile: workspace.join("profile"),
+        state: workspace.join("state"),
+        workspace,
+    };
+    copy_missing(&layout.app, &view.run, layout)?;
+    layout.ensure_dir(&view.profile)?;
+    layout.ensure_dir(&view.state)?;
+    // 历史源码若忽略DATA_ROOT/STATE_ROOT，也只会写自己的run副本。
+    // 不先创建额外代码内目录：调用者要按可信清单核验完整副本。
+    Ok(view)
+}
+
 #[cfg(windows)]
 fn link_directory(target: &Path, link: &Path) -> Result<()> {
     junction::create(target, link)
@@ -139,7 +191,7 @@ mod tests {
     fn rebuilding_code_keeps_user_data_and_version_state() {
         let root =
             std::env::temp_dir().join(format!("nt-view-{}-{}", std::process::id(), model::now()));
-        let release = Catalog::embedded().unwrap().releases[0].clone();
+        let release = Catalog::embedded().unwrap().releases()[0].clone();
         let layout = Layout::new(&root, &release.id).unwrap();
         let _lease = layout.prepare_workspace().unwrap();
         layout.ensure_dir(&layout.app).unwrap();
@@ -168,5 +220,79 @@ mod tests {
         );
         assert!(!layout.app.join("user_data").exists());
         // 含真实目录联接，交由测试现场保留；不递归删除到联接目标。
+    }
+
+    #[test]
+    fn probe_views_are_independent_plain_copies_and_preserve_production_profiles_and_run() {
+        let root = std::env::var_os("NEXT_TRAINER_P6_TEST_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join(format!(
+                "nt-probe-view-{}-{}",
+                std::process::id(),
+                std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos()
+            ));
+        let release = Catalog::embedded().unwrap().releases()[0].clone();
+        let layout = Layout::new(&root, &release.id).unwrap();
+        let _lease = layout.prepare_workspace().unwrap();
+        layout.ensure_dir(&layout.app.join("config")).unwrap();
+        fs::write(layout.app.join("gui.py"), b"# trusted copy fixture").unwrap();
+        fs::write(layout.app.join("config/default.json"), b"source default").unwrap();
+        layout
+            .ensure_dir(&layout.profile.join("user_data"))
+            .unwrap();
+        fs::write(
+            layout.profile.join("user_data/settings.json"),
+            b"production-user",
+        )
+        .unwrap();
+        layout.ensure_dir(&layout.run).unwrap();
+        fs::write(layout.run.join("production-sentinel"), b"production-view").unwrap();
+        let first = prepare_probe(&layout, "gui-registration-repeated").unwrap();
+        fs::write(first.profile.join("sentinel"), b"first-attempt").unwrap();
+        fs::write(first.run.join("config/default.json"), b"first-view-write").unwrap();
+        let second = prepare_probe(&layout, "gui-registration-repeated").unwrap();
+        assert_ne!(first.workspace, second.workspace);
+        assert!(!second.profile.join("sentinel").exists());
+        assert_eq!(
+            fs::read(second.run.join("config/default.json")).unwrap(),
+            b"source default"
+        );
+        assert_eq!(
+            fs::read(layout.app.join("config/default.json")).unwrap(),
+            b"source default"
+        );
+        assert_eq!(
+            fs::read(layout.profile.join("user_data/settings.json")).unwrap(),
+            b"production-user"
+        );
+        assert_eq!(
+            fs::read(layout.run.join("production-sentinel")).unwrap(),
+            b"production-view"
+        );
+        for path in [
+            &first.workspace,
+            &first.run,
+            &first.profile,
+            &first.state,
+            &second.workspace,
+        ] {
+            layout.guard_path(path).unwrap();
+            assert!(fs::symlink_metadata(path).unwrap().is_dir());
+            #[cfg(windows)]
+            {
+                use std::os::windows::fs::MetadataExt;
+                assert_eq!(
+                    fs::symlink_metadata(path).unwrap().file_attributes() & 0x400,
+                    0
+                );
+            }
+        }
+        assert!(prepare_probe(&layout, "unrelated").is_err());
+        assert!(prepare_probe(&layout, "gui-registration-../escape").is_err());
+        // 保留独立测试证据，无递归清理。
     }
 }

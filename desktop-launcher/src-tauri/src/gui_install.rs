@@ -131,7 +131,7 @@ pub(super) fn install(
     }
     preflight_environment_path(root)?;
     let ctx = WorkspaceMutation::acquire(root, &release.id)?;
-    super::base_python_repair::assert_ready(root)?;
+    super::assert_regular_ready(root)?;
     operation.persist(&ctx)?;
     let mut downloads = super::artifact_downloads::ArtifactDownloads::new(
         &operation.id()?,
@@ -492,7 +492,7 @@ pub(super) fn validate_environment(
 ) -> Result<()> {
     cancel.check()?;
     let root = &layout.root;
-    let fixed_python = crate::python_integrity::verify(layout)?;
+    crate::python_integrity::verify(layout)?;
     let integrity = crate::wheel_integrity::inspect(
         layout,
         environment,
@@ -513,10 +513,33 @@ pub(super) fn validate_environment(
     {
         bail!("环境含未验证的派生字节码，拒绝执行；原始wheel自带文件仍按固定摘要验证");
     }
+    validate_environment_runtime(layout, recipe, environment, log, cancel)
+}
+
+/// 调用前必须由登记/重建事务完成整个venv的固定可信索引静态核验。
+/// 本函数只补实际运行验证，不能独立证明未知解释器/控制文件值得执行。
+pub(super) fn validate_environment_runtime(
+    layout: &Layout,
+    recipe: &GuiRecipe,
+    environment: &Path,
+    log: &super::Logger,
+    cancel: &crate::operations::CancelToken,
+) -> Result<()> {
     cancel.check()?;
+    let root = &layout.root;
+    let fixed_python = crate::python_integrity::verify(layout)?;
+    layout.guard_path(&super::uv(root))?;
+    if super::digest(&super::uv(root))? != recipe.tool_uv.exe_sha256 {
+        bail!("GUI实际运行验证所需uv缺失或摘要不符，拒绝执行");
+    }
+    layout.guard_path(environment)?;
+    let offline = super::gui_entry_probe::OfflineProxy::start()?;
     let executable = environment.join("Scripts/python.exe");
     let mut check = command(root, recipe);
-    check.args(["pip", "check", "--python"]).arg(&executable);
+    check
+        .args(["--no-cache", "pip", "check", "--python"])
+        .arg(&executable);
+    offline.apply_command(&mut check)?;
     super::execute_controlled(check, log, cancel)?;
     let mut probe = Command::new(&executable);
     probe
@@ -530,5 +553,6 @@ pub(super) fn validate_environment(
                 .map(|wheel| (&wheel.name, &wheel.version))
                 .collect::<std::collections::BTreeMap<_, _>>(),
         )?);
+    offline.apply_command(&mut probe)?;
     super::execute_controlled(probe, log, cancel)
 }

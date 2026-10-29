@@ -11,6 +11,8 @@ import type { BasePythonRepairPreview } from './bridge'
 import { getDownloadBudget, reconcileDownloadBudget, saveDownloadBudget } from './bridge'
 import type { BudgetSnapshot, OperationDownloadReceipt } from './bridge'
 import { budgetDraft, formatBudgetBytes, parseBudgetCap } from './download-budget'
+import { previewGuiRegistration, restoreGuiRegistration, recoverGuiRegistration } from './bridge'
+import type { GuiRegistrationPreview } from './bridge'
 
 type Page = 'launch' | 'versions' | 'environment'
 interface Confirmation {
@@ -38,6 +40,9 @@ const history = ref<OperationSnapshot[]>([])
 const guiDiagnosis = ref<GuiDiagnosis | null>(null)
 const guiPreview = ref<GuiRepairPreview | null>(null)
 const basePythonPreview = ref<BasePythonRepairPreview | null>(null)
+const registrationPreview = ref<GuiRegistrationPreview | null>(null)
+const registrationReleaseId = ref('')
+const registrationInstanceId = ref('')
 const showAllPackages = ref(false)
 const networkView = ref<NetworkSettingsView | null>(null)
 const networkDraft = ref({ mode: 'auto' as NonNullable<NetworkSettings['mode']>, http_proxy: '', https_proxy: '', no_proxy: '' })
@@ -103,6 +108,9 @@ const primaryLabel = computed(() => {
 const primaryDisabled = computed(() => busy.value || running.value || (Boolean(report.value) && sameRoot.value && !installed.value && !installTarget.value))
 const installDownloadBytes = computed(() => installTarget.value?.download_bytes ?? 0)
 const managedCurrent = computed(() => Boolean(sameRoot.value && currentVersion.value?.managed_recipe))
+const registrationVersions = computed(() => versions.value.filter((version) => version.managed_recipe))
+const registrationRelease = computed(() => registrationVersions.value.find((version) => version.id === registrationReleaseId.value)
+  ?? (currentVersion.value?.managed_recipe ? currentVersion.value : registrationVersions.value[0]))
 const guiRecoveryNeeded = computed(() => Boolean(guiDiagnosis.value?.dirty || guiDiagnosis.value?.recovery_pending || (guiDiagnosis.value && guiDiagnosis.value.generation !== guiDiagnosis.value.binding_generation)))
 const affectedPackages = computed(() => guiDiagnosis.value?.integrity.packages.filter(packageNeedsAttention) ?? [])
 const visiblePackages = computed(() => showAllPackages.value ? guiDiagnosis.value?.integrity.packages ?? [] : affectedPackages.value)
@@ -254,6 +262,8 @@ function clearGuiState() {
   guiDiagnosis.value = null
   guiPreview.value = null
   basePythonPreview.value = null
+  registrationPreview.value = null
+  registrationInstanceId.value = ''
   showAllPackages.value = false
   if (confirmation.value?.scope === 'gui') dismissConfirmation()
 }
@@ -495,6 +505,44 @@ async function inspectBasePythonRepair() {
     basePythonPreview.value = preview
   })
 }
+async function inspectGuiRegistration() {
+  const version = registrationRelease.value
+  if (!version || mutationDisabled.value) return
+  const root = path.value.trim()
+  const epoch = guiEpoch
+  const selectedInstance = registrationInstanceId.value || null
+  registrationPreview.value = null
+  await perform('只读检查安装登记', async () => {
+    const value = await previewGuiRegistration(root, version.id, selectedInstance)
+    if (epoch !== guiEpoch || root !== path.value.trim() || version.id !== registrationRelease.value?.id) return
+    registrationPreview.value = value
+  })
+}
+function changeRegistrationRelease() {
+  guiEpoch += 1
+  registrationPreview.value = null
+  registrationInstanceId.value = ''
+  if (confirmation.value?.scope === 'gui') dismissConfirmation()
+}
+function confirmGuiRegistration(recovery = false) {
+  const preview = registrationPreview.value
+  const version = registrationRelease.value
+  if (!preview || !version || mutationDisabled.value || (recovery ? preview.status !== 'pending' : preview.status !== 'ready' || !preview.plan || !preview.plan_sha256)) return
+  const root = path.value.trim()
+  const epoch = guiEpoch
+  const candidate = preview.plan?.candidate
+  return ask({
+    scope: 'gui', title: recovery ? '继续恢复安装登记' : '恢复安装登记',
+    detail: '将离线核验固定文件、解释器和全部依赖，并在独立临时资料目录验证真实入口，再补齐缺失的安装记录。已有环境与用户资料须保持不变；登记恢复完成后，仍需选择版本并正常启动才能建立本次启动健康记录。',
+    paths: preview.plan ? [`版本：${version.id}`, `环境：${preview.plan.proof.environment}`, `实例：${candidate?.id} · 路径格式 ${candidate?.storage_version} · 已知代次 ${candidate?.generation}`, `可信文件：${preview.plan.proof.files.toLocaleString()} 个`, `固定文件索引：${preview.plan.proof.trusted_index_sha256}`] : [`事务：${preview.transaction}`],
+    action: recovery ? '继续核验与补齐登记' : '确认核验并恢复登记',
+    execute: async () => {
+      if (epoch !== guiEpoch || root !== path.value.trim() || version.id !== registrationRelease.value?.id) { error.value = '目录或版本已改变，请重新检查安装登记。'; return }
+      await startGuiOperation('正在验证并恢复安装登记', () => recovery ? recoverGuiRegistration(root, version.id)
+        : restoreGuiRegistration(root, version.id, candidate!.id, preview.plan_sha256!))
+    },
+  })
+}
 function confirmBasePythonRepair(recovery = false) {
   const preview = basePythonPreview.value
   const version = currentVersion.value ?? defaultRelease.value
@@ -710,6 +758,19 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <p v-else class="hint">尚无已结束的下载计账记录。</p>
             </template>
             <p v-else-if="!downloadBudgetError" class="hint">正在读取此目录的下载额度与计账…</p>
+          </section>
+          <section v-if="sameRoot && registrationVersions.length" class="gui-diagnostics" aria-labelledby="registration-title">
+            <div class="section-caption"><h2 id="registration-title">恢复安装登记</h2><button :disabled="mutationDisabled" @click="inspectGuiRegistration">只读检查登记</button></div>
+            <p class="hint">源码和环境仍在、安装记录丢失时，可离线验证并补齐登记。检查不会执行解释器；确认后会使用独立临时资料验证真实入口。</p>
+            <label>需要恢复的版本<select :value="registrationRelease?.id" :disabled="mutationDisabled" @change="registrationReleaseId = ($event.target as HTMLSelectElement).value; changeRegistrationRelease()"><option v-for="version in registrationVersions" :key="version.id" :value="version.id">{{ channelName(version.channel) }} · {{ version.version }} · {{ version.commit.slice(0, 8) }}</option></select></label>
+            <template v-if="registrationPreview">
+              <p v-if="registrationPreview.reason" class="gui-issue" role="alert">{{ registrationPreview.reason }}</p>
+              <p v-if="registrationPreview.status === 'pending'" class="hint">存在待恢复登记事务：{{ registrationPreview.transaction }}</p>
+              <label v-if="registrationPreview.candidates?.length">指定已有实例<select v-model="registrationInstanceId" :disabled="mutationDisabled" @change="guiEpoch += 1; registrationPreview = null"><option value="">按已有绑定检查</option><option v-for="candidate in registrationPreview.candidates" :key="`${candidate.id}:${candidate.storage_version}`" :value="candidate.id">{{ candidate.id }} · 路径格式 {{ candidate.storage_version }} · 代次 {{ candidate.generation }} · {{ candidate.status === 'clean' ? '已有验证记录' : candidate.status === 'missing_state' ? '实例记录缺失' : '需要先恢复原事务' }}</option></select><span class="hint">选择后请重新执行只读检查，确认环境与影响。</span></label>
+              <p v-if="registrationPreview.plan">环境：<code>{{ registrationPreview.plan.proof.environment }}</code> · {{ registrationPreview.plan.proof.files.toLocaleString() }} 个可信文件</p>
+              <button v-if="registrationPreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmGuiRegistration()">审查并恢复登记</button>
+              <button v-if="registrationPreview.status === 'pending'" :disabled="mutationDisabled" @click="confirmGuiRegistration(true)">继续未完成登记恢复</button>
+            </template>
           </section>
           <section v-if="sameRoot" class="gui-diagnostics" aria-labelledby="base-python-title">
             <div class="section-caption"><h2 id="base-python-title">基础 Python 组件</h2><button :disabled="mutationDisabled" @click="inspectBasePythonRepair">检查组件与引用环境</button></div>
