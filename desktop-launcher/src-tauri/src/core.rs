@@ -15,6 +15,9 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+#[path = "managed_child.rs"]
+mod managed_child;
+
 #[cfg(all(test, windows))]
 #[path = "p6_tests.rs"]
 mod p6_tests;
@@ -521,18 +524,8 @@ fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
 }
 fn execute(mut command: Command, log: &Logger) -> Result<()> {
     log(format!("执行 {:?}", command.get_program()));
-    let mut child = command
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let _job = match Job::attach(&child) {
-        Ok(job) => job,
-        Err(e) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(e);
-        }
-    };
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let (mut child, job) = managed_child::spawn(&mut command)?;
     let threads: Vec<_> = [
         child
             .stdout
@@ -555,6 +548,7 @@ fn execute(mut command: Command, log: &Logger) -> Result<()> {
     })
     .collect();
     let status = child.wait()?;
+    drop(job);
     for t in threads {
         let _ = t.join();
     }
@@ -573,18 +567,8 @@ fn execute_controlled(
     cancel: &crate::operations::CancelToken,
 ) -> Result<()> {
     cancel.check()?;
-    let mut child = hidden(&mut command)
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-    let job = match Job::attach(&child) {
-        Ok(job) => job,
-        Err(error) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(error);
-        }
-    };
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let (mut child, job) = managed_child::spawn(&mut command)?;
     log(format!("受管子进程已绑定Job：{}", child.id()));
     let pipes: Vec<Box<dyn Read + Send>> = [
         child
@@ -1085,18 +1069,8 @@ impl Engine {
             paths.extend(std::env::split_paths(&path));
         }
         command.env("PATH", std::env::join_paths(paths)?);
-        let mut child = hidden(&mut command)
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .spawn()?;
-        let job = match Job::attach(&child) {
-            Ok(job) => job,
-            Err(e) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(e);
-            }
-        };
+        command.stdout(Stdio::piped()).stderr(Stdio::piped());
+        let (mut child, job) = managed_child::spawn(&mut command)?;
         for pipe in [
             child
                 .stdout

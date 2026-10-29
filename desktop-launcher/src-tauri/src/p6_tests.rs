@@ -340,7 +340,6 @@ fn process_helper() {
         layout.guard_path(&root.join("run").join(name)).unwrap();
         fs::write(root.join("run").join(name), std::process::id().to_string()).unwrap();
         let mut descendant = if role == "slow" {
-            wait_file(&root.join("run/job-attached"));
             Some(
                 command(&root, "descendant")
                     .stdout(Stdio::null())
