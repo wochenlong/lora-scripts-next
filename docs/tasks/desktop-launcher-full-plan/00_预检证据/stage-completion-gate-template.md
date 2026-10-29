@@ -2,7 +2,7 @@
 
 > 复制到外部证据根 `M<阶段>/stage-completion.md`；本模板不是已通过记录。唯一阶段进度写回[总控](../00_总控目标索引.md)，Git操作统一[Git基线治理](git-baseline-governance.md)。
 
-当前修订0.2：[CR-001](change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)列明的资源受限GPU子项由用户授权skip，不计pass；其他未豁免必测仍完整执行。复制本模板时保留逐case豁免及未验证能力，不能只写总结果pass。
+当前修订0.3：[CR-001/002](change-control-governance.md)已由用户批准。CR-001仅将列明的资源受限GPU子项记skip、不计pass；CR-002仅将P1实际就绪移至M5相关系统动作/Phase6专项开始前，历史blocked与原证据保留，调度另记deferred by CR-002。其他未豁免必测仍完整执行。复制本模板时保留逐case豁免、范围调整和未验证能力，不能只写总结果pass；本模板不表示M0已退出或M1已开工。
 
 ## 1. 身份与结论
 
@@ -13,6 +13,7 @@
 - 开始/结束UTC时间：待填。
 - 结论：`pending | pass | pass-with-boundary | fail | blocked`，默认pending。
 - 本结论适用范围及明确未证明内容：待填。
+- 阶段范围调整记录：列CR-001逐case skip；CR-002列P1原blocked证据、deferred调度、承接M5、相关系统动作/Phase6前必须齐备的资源及未证明能力。没有调整则写不适用及依据。
 
 ## 2. 开工与测试核对
 
@@ -33,7 +34,7 @@
 | 清理预览、实际清理和保留材料 | 待填 | pending |
 | 阶段提交/push和ls-remote身份校验 | 待填 | pending |
 
-测试逐项链接到 `result.json` 和原始输出，写出命令、参数、机器/制品身份和实际结果。不适用项需原因和替代证据，不能空白。CR-001指定skip逐项列`case_id/waiver_id/user_source/resource_reason/未证明能力`，允许完成调整后的阶段并给pass-with-boundary。其他P0/P1未解决或未豁免必测未过不得pass。
+测试逐项链接到 `result.json` 和原始输出，写出命令、参数、机器/制品身份和实际结果。不适用项需原因和替代证据，不能空白。CR-001指定skip逐项列`case_id/waiver_id/user_source/resource_reason/未证明能力`，允许完成调整后的阶段并给pass-with-boundary。CR-002延期调度不作为测试pass/skip：M0其余门、独审、完成报告及C/S远端保存齐备后才可退出；M1–M4独立新根实测不能冒充干净OS，M5相关系统动作/Phase6专项前必须闭合P1，资源未齐即停且M5不得完成。其他未获明确调整的P0/P1未解决或未豁免必测未过不得pass。
 
 ## 3. 资源账本与风险
 
@@ -45,7 +46,7 @@
 
 A4/A8须最终同一二进制实测；允许只读受限测试配置仅在新标记沙盒显式启用，配置摘要/默认生产根未变/默认模式拒绝测试信任的证据齐备。另SHA测试构建不抵扣；无可审核同二进制测试通路且无生产资源即blocked，D5内置清单+手动升级不构成豁免。
 
-M6允许仅含CR-001明确批准的GPU skip后声明“完成（含GPU验收边界）”，不得宣称四引擎GPU全通过。其余必测unknown/not-run/skip、缺干净OS/未豁免GPU或合法资产/预算时仍blocked/fail；M2/M3旧证据不能抵扣M6重新从零。
+M6允许仅含CR-001明确批准的GPU skip后声明“完成（含GPU验收边界）”，不得宣称四引擎GPU全通过。CR-002不豁免M5/M6，P1已闭合与M0–M5退出/push是前提，同一最终包从零合同不变。其余必测unknown/not-run/skip、缺干净OS/未豁免GPU或合法资产/预算时仍blocked/fail；M1–M4新根及M2/M3旧证据不能抵扣M6重新从零。
 
 ## 5. 解锁与写回
 

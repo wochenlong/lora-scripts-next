@@ -1,18 +1,18 @@
 # 施工计划产物与门禁清单
 
-> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+> 当前修订0.3（2026-10-29）：用户已批准[CR-001指定GPU验收skip及CR-002资源时点调整](00_预检证据/change-control-governance.md)。P1实际结果仍blocked，调度另记deferred by CR-002，由M5在相关系统动作/Phase6专项开始前闭合。M1–M4独立新根真实实测、M5资源硬门、M6同一最终包从零及原预算不变；M0仍待正式退出，M1未开，不能把本次批准当作阶段done。
 
 ## 计划元数据
 
-- Plan ID：`desktop-launcher-full-20261028`；Version：`0.2`；Last updated：2026-10-29（Asia/Shanghai，执行状态更新）。
+- Plan ID：`desktop-launcher-full-20261028`；Version：`0.3`；Last updated：2026-10-29（Asia/Shanghai，CR-002用户批准后的合同同步）。
 - Scale mode：Full。原因：跨Rust/Python/UI的长期新功能、真实GPU、资料迁移、可信更新和Windows分发；保留全部施工体系产物，无合并删除硬门。
-- Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0执行已开始，当前资源blocked。
+- Route / method：新功能＋迁移＋发布准备＋测试；SDD（规格驱动）＋架构/合同＋验收场景；不涉及LLM评测，EDD不适用。M0执行已开始，当前按CR-001/002待正式退出；P1历史blocked由M5承接。
 - Canonical progress file：[00_总控目标索引](00_总控目标索引.md)。Related handoff：none。
 - Current branch：`feat/desktop-launcher`；起始HEAD：`9ca2de963122f34599e34e5ff382199de9188811`；WIP `f8ed00b8c3424777bec5600ef6482838b9e1b2e6`已普通push且远端核对成功，不代表M0完成。
-- Current active phase：M0；Execution readiness：`executing`（M0资源补齐）；用户执行授权有效，实际Goal已active，CR-001后推进未豁免的M0资源门，其余阶段pending。
-- Spec：[后续设计书0.1](../../design/desktop-launcher-next-design.md)，按D1–D6推荐方案与0.1预算执行，授权原文见总控/用户审计单。历史[底座计划](../desktop-launcher-foundation-plan/00_总控目标索引.md)作为完成证据保留，不由本计划重开。
+- Current active phase：M0；Execution readiness：`executing`（按CR-001/002复审其余M0门与阶段保存）；用户继续执行授权有效，工具状态见总控，M0尚未done，其余阶段pending。
+- Spec：[后续设计书0.3](../../design/desktop-launcher-next-design.md)，按D1–D6推荐方案、CR-001/002及原0.1预算执行，授权原文见总控/用户审计单。历史[底座计划](../desktop-launcher-foundation-plan/00_总控目标索引.md)作为完成证据保留，不由本计划重开。
 - Source materials：[预检复盘](00_预检证据/preflight-source-review.md)、issue #516保存快照、用户本轮硬要求、当前Git/硬件只读核对。
-- Evidence roots：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/planning/`；执行run为`desktop-launcher-full-20261028-155831Z-f6c00a`，证据在`<run-id>/M0/`。F同run标记根已创建，保留M0夹具/新Python/Torch partial；没有训练器或VM安装。
+- Evidence roots：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/planning/`；执行run为`desktop-launcher-full-20261028-155831Z-f6c00a`，证据在`<run-id>/M0/`，CR-002授权在`<run-id>/changes/CR-002/authorization.json`。F同run标记根保留M0夹具/新Python/Torch partial及历次VM/失败，具体实测和保留状态见总控，不用历史资产抵扣后续新根验收。
 
 ## 必需产物清单
 
@@ -71,14 +71,14 @@
 | 计划静态结构 | 以planning/plan-validation.json为准 | UTF-8、路径、manifest、七阶段/六测试、代码围栏、空白与92文件保护；不验证产品 |
 | 独立文档审查 | 以06复盘引用报告为准 | 架构执行、需求Goal、资源沙盒三路审查 |
 | GATE-00–10、12–13 | 计划/授权记录pass | [编号清单](00_预检证据/gate-validation-checklist.md)；GATE12包含实际Goal记录，不代表产品通过 |
-| GATE-11、14 | pending（补齐中） | CR-001指定GPU子项skip，独立P3前置分期；P1干净Windows/未豁免预算未闭，M1仍未解锁 |
-| EXIT-M0 | pending | WIP已push，CR-001后继续干净Windows与未豁免预算；不是完成报告 |
+| GATE-11、14 | pass-with-boundary（M0验证范围） | 外部M0/exit-M0-final-review-CR002.md已核无本阶段未关P0/P1；CR-001指定skip/P3分期，P1实际就绪由M5承接；C/S保存待执行，M1未解锁 |
+| EXIT-M0 | pending | 按调整后M0范围核对实际证据、独审、完成报告及C/S远端回执；批准CR-002和WIP不等于完成 |
 | EXIT-M1–M6 | pending | 见唯一总控台账；未执行后续开发/训练/最终验收 |
 
-未来推进先更新总控，再同步本manifest的阶段指针/证据索引，不建立第二份阶段完成台账。用户批准后只先解锁M0安全准备，技术门按阶段续查；最终A1–A10和M6四引擎/干净OS不接受默默降级。
+未来推进先更新总控，再同步本manifest的阶段指针/证据索引，不建立第二份阶段完成台账。M1–M4仍用独立新根真实测试，不能冒充干净OS；P1合法可用、可启动且缺WebView2的资源在M5相关系统动作/Phase6专项开始前必须齐备，未齐即停且M5不得完成。M6仍在M0–M5完整退出/push后使用最终同一包从零复验；CR-002不再延期该资源门，CR-001以外必测不降级。
 
 ## 防漂移和唯一下一动作
 
 阶段名、ID和顺序固定M0–M6。规格/预算/验收变化按CR记录同步全部受影响文档，保留首次失败与历史已验证状态。每阶段遵守代码C/状态S两次基线保存与外部最终回执，普通push不改写历史。实际Goal已启动；不能把提示词文件或WIP保存视为阶段通过。
 
-唯一下一步：按总控补齐M0干净Windows与未豁免预算，保留失败现场，依CR-001复审M0→M1；不再索取已豁免GPU机器。
+唯一下一步：按总控完成CR-002同步后的其余M0门、独立复审、完成报告与C/S保存，再评估EXIT-M0→M1；保留P1历史blocked和M5承接条件，不再索取已豁免GPU机器。

@@ -1,10 +1,12 @@
 # 阶段 M5：独立壳与 Windows 分发长程任务书
 
-> 当前修订：0.2，2026-10-29，适用[CR-001用户GPU测试豁免](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)。Fast固定驱动不满足的GPU层、DiffSynth完整BF16模型/训练/权重子项授权`skip`，不作pass；Kohya/AI Toolkit及DiffSynth普通小张量等本机可执行验证保留。M0独立P3不再单独重试，CUDA验证进入对应引擎真实配方。干净Windows/安全/安装修复/同制品/阶段push均未豁免。下文0.1完成门在此明确范围内由本CR修订，其他合同继续有效；实时状态只见总控。
+> 当前修订：0.3，2026-10-29，适用[CR-001用户GPU测试豁免](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)。Fast固定驱动不满足的GPU层、DiffSynth完整BF16模型/训练/权重子项授权`skip`，不作pass；Kohya/AI Toolkit及DiffSynth普通小张量等本机可执行验证保留。M0独立P3不再单独重试，CUDA验证进入对应引擎真实配方。干净Windows/安全/安装修复/同制品/阶段push均未豁免。CR-001边界继续有效；CR-002仅调整P1时点，其他合同继续有效；实时状态只见总控。
+
+> 0.3时点修订：[CR-002](../00_预检证据/change-control-governance.md)已由用户明确批准，原文“批准调整，继续开发（推荐）”。仅将P1合法可用干净Windows/缺WebView2资源实际就绪移至M5相应系统动作及Phase6分发专项验证开始前。原结果`blocked`及失败证据保留，`deferred by CR-002`仅是延期调度，不计pass/skip。其余M0真实证据、独审、完成报告及代码C/状态S普通推送和远端核验齐备，真实退出M0后才可开M1；M6最终同包双轨/A1–A10未豁免硬门、CR-001与原预算均不变。下文起草语境与旧时点按本段及直接更新条款解释，实时状态只见总控。
 
 ## 计划元数据
 
-- Plan ID：`desktop-launcher-full-20261028`；Version：`v0.1`；Last updated：2026-10-28 Asia/Shanghai。
+- Plan ID：`desktop-launcher-full-20261028`；Version：`0.3`；Last updated：2026-10-29 Asia/Shanghai。
 - Canonical progress file：`E:/OpenSourceTeamWork/workspace/branches/dev/docs/tasks/desktop-launcher-full-plan/00_总控目标索引.md`。
 - Related handoff file：`none`；Current branch：`feat/desktop-launcher`。
 - Current active phase：`none`；本阶段及各 Phase：`pending`；Execution readiness：`drafting`。
@@ -75,14 +77,15 @@
 
 ### Phase 6：分发专项预验收、独立复审与推送
 
+- 前置：承接CR-002的P1必须在相应系统动作及本Phase专项开始前实证就绪：合法可用、可启动的干净Windows，真实无Python/uv/训练器/缓存且缺WebView2基线、普通用户与恢复条件。M0原许可/启动blocked及失败保留；延期调度不计pass/skip，未齐不得开始对应专项或退出M5。
 - Purpose：验证分发特有故障，固定 M6 将使用的候选包；不提前挪用最终从零验收结论。
 - Outputs：干净 Windows 普通用户/缺 WebView2/中文空格路径、安装器和 portable 专项结果，壳更新故障矩阵，候选包身份与阶段报告。
 - M6输入：核验实际run模块文件来自receipt锁定候选源码，禁止原main/dev加开发repo overlay；后续S状态文档提交可晚于build commit，只要源码/依赖/包字节未变，不因此重标包身份。
-- Completion criteria：M5-A1–A8 专项门有证据，无 P0/P1；普通 commit/push 并核对远端；M6 保持 pending，等全部开发结束后完整复验。
+- Completion criteria：CR-002承接的P1已真实闭合，M5-A1–A8专项门有证据，无本阶段未关闭P0/P1；按Git治理完成代码C/状态S普通push并核对远端完整SHA。M6保持pending，全部开发结束后以最终同一包重建两轨基线并完整复验，CR-001边界不变。
 - 身份门：签名/helper替换/恢复使用同SHA交付二进制共用路径；另SHA测试构建只补协议，不抵M6最终包A4/A8；无同包可审通路且无生产资源则对应格blocked。
 - Validation：真实 OS/VM 配置与前置缺失留证；真实原生窗口/恢复；复审者核对 trial 写集和原字节；`ls-remote` 验证功能分支完整 SHA。
 - Evidence：`<run-id>/M5/phase6/` 保存 OS/VM 身份、专项报告/review、候选包 SHA、提交/推送回执和 M6 输入 manifest。
-- Failure handling：OS资源/必要资产缺失阻止对应完成门；M6发现问题回修后生成新包、重跑受影响专项及最终链路，不沿用旧包通过结论。
+- Failure handling：P1的OS/许可/缺组件基线或必要资产仍缺，停止相应系统动作和本Phase专项，保留blocked，不得把资源再次推迟到M6或签收M5。M6发现问题回修后生成新包、重跑受影响专项及最终链路，不沿用旧包通过结论。
 
 代码提交 C 与状态提交 S 必须按 Git 治理分别普通推送和核对；保存仓库外 `baseline-final.json` 后才准阶段 done。任一回执缺失维持 in progress/blocked。
 
@@ -95,7 +98,7 @@
 | integration | 真实 EXE 替换、GUI 自检、控制状态精确恢复、安装器/迁移互斥 |
 | gray | 旧/新壳与 schema、installer/portable、WebView2有/无、失败前后字节对照 |
 | real | Windows 原生文件占用、非管理员安装/卸载保留资料、helper/原生恢复界面 |
-| Zero-Short | 干净 OS 缺 WebView2 的分发专项；不是清空目录模拟 OS，不代替 M6 最终从零全链路 |
+| Zero-Short | 先关闭CR-002承接的P1，再做真实干净OS缺WebView2分发专项；清空目录不能模拟OS，不代替M6最终同包从零全链路 |
 
 - 机器/OS镜像许可、VM快照、WebView2来源、下载/磁盘峰值、最长自检/系统试验时长与回收策略按授权治理登记；数值未定不执行。
 - 阶段新增网络提案≤5GiB，无额外GPU训练额度；OS/安装器/WebView2及重试均计量，资产不适合阶段或总预算先停并报告差额。

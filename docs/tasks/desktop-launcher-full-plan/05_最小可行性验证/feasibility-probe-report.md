@@ -1,8 +1,10 @@
 # M0 最小可行性执行报告
 
-> 当前修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+> 当前修订0.3（2026-10-29）：用户明确“批准调整，继续开发（推荐）”，[CR-002](../00_预检证据/change-control-governance.md)已批准。P1历史实际结果仍为`blocked`，调度另记`deferred by CR-002`、承接M5；仅将合法可用、可启动且缺WebView2的干净Windows实际就绪由M0退出前移至M5相关系统动作/Phase6专项开始前。M1–M4继续独立新根真实安装/修复/恢复/导入，不能冒充干净OS；M5资源未齐即停且不得完成，M6同一最终包从零完整保留。CR-001和原阶段/总预算不变，支出仍按实际发生阶段和总账计量。当前M0待其余门、独审、完成报告与C/S远端保存后正式退出，M1未开工；下列F009、BSOD、未发/ato、有效有限absence、旧无效清单和失败raw均保留，不改pass/skip。
 
-## 0.2当前复盘
+> 历史修订0.2（2026-10-29）：用户已批准[CR-001资源受限GPU验收skip](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)，实际Goal已恢复active。仅豁免列明的Fast/DiffSynth GPU/完整模型训练子项，其他必测和干净Windows保留；旧0.1阻塞/无豁免文字是历史，不覆盖本修订。阶段完成必须明确授权skip边界，不能报GPU全通过。
+
+## 0.2历史复盘（CR-002调整前的实际结果）
 
 CR-001指定GPU子项授权skip，其他必测保留，M0仍in progress，M1未解锁。第三次新盘已真实进入桌面；首次自动采集未执行，离线报告发现Read-Probe动态作用域污染命令名，旧命令absence无效且raw保留。最小修复并以PS5.1/7独立Mock验证后，再次同盘离线采得正确基线：四命令名正确且均未发现，WebView2四注册表视图/三个文件根及14常见目录缺席，probe errors为0；只限定列明范围。基线SHA `04e2b5cd759b55cad0276f0b4baee59a9141556ea4558043f45ab758138897bc`，正常关机/check0后盘SHA `13776f90379c2509fc370aa8d55e64396390e60089a1de8cbe41fb3b3d2e0fd9`。实际许可Notification/F009仍未恢复，不算P1通过。
 

@@ -1,8 +1,10 @@
 # 目标 M5：独立壳与 Windows 分发实施验收计划
 
-> 当前修订：0.2，2026-10-29，适用[CR-001用户GPU测试豁免](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)。Fast固定驱动不满足的GPU层、DiffSynth完整BF16模型/训练/权重子项授权`skip`，不作pass；Kohya/AI Toolkit及DiffSynth普通小张量等本机可执行验证保留。M0独立P3不再单独重试，CUDA验证进入对应引擎真实配方。干净Windows/安全/安装修复/同制品/阶段push均未豁免。下文0.1完成门在此明确范围内由本CR修订，其他合同继续有效；实时状态只见总控。
+> 当前修订：0.3，2026-10-29，适用[CR-001用户GPU测试豁免](../00_预检证据/change-control-governance.md#cr-001用户批准跳过受资源限制的gpu验收)。Fast固定驱动不满足的GPU层、DiffSynth完整BF16模型/训练/权重子项授权`skip`，不作pass；Kohya/AI Toolkit及DiffSynth普通小张量等本机可执行验证保留。M0独立P3不再单独重试，CUDA验证进入对应引擎真实配方。干净Windows/安全/安装修复/同制品/阶段push均未豁免。CR-001边界继续有效；CR-002仅调整P1时点，其他合同继续有效；实时状态只见总控。
 
-- Plan ID：`desktop-launcher-full-20261028`；Version：`v0.1`；更新：2026-10-28。
+> 0.3时点修订：[CR-002](../00_预检证据/change-control-governance.md)已由用户明确批准，原文“批准调整，继续开发（推荐）”。仅将P1合法可用干净Windows/缺WebView2资源实际就绪移至M5相应系统动作及Phase6分发专项验证开始前。原结果`blocked`及失败证据保留，`deferred by CR-002`仅是延期调度，不计pass/skip。其余M0真实证据、独审、完成报告及代码C/状态S普通推送和远端核验齐备，真实退出M0后才可开M1；M6最终同包双轨/A1–A10未豁免硬门、CR-001与原预算均不变。下文起草语境与旧时点按本段及直接更新条款解释，实时状态只见总控。
+
+- Plan ID：`desktop-launcher-full-20261028`；Version：`0.3`；更新：2026-10-29。
 - 阶段：M5 独立壳与Windows分发；状态：`pending`；Execution readiness：`drafting`。
 - 唯一进度：[总控目标索引](../00_总控目标索引.md)；唯一规格：[后续设计书](../../../design/desktop-launcher-next-design.md) §8–12。
 - D1–D6 推荐方案仅为待审核假设；本阶段规划不授权创建生产密钥、发布资产或本轮实现。
@@ -12,7 +14,7 @@
 回答：独立壳能否在 Windows 文件占用/首启失败/格式不兼容时精确恢复，并提供普通用户可用的安装包和便携包？
 纳入：独立 helper（更新辅助程序）、只读 recovery trial（恢复试运行）、原字节快照、独立格式迁移、WebView2、安装器/便携包和分发专项预验收。
 不纳入：以包生成代替上线、以测试签名代替维护者身份、自动迁移训练资料，以及替代 M6 所有开发结束后同一制品从零完整复验。
-前置：M4 完成门通过；壳/资料状态兼容合同稳定；干净 Windows、普通用户、真实 EXE 占用与发布资源按[授权治理](../00_预检证据/risk-and-authorization-governance.md)确认。
+前置：M4完成门通过，壳/资料状态兼容合同稳定。承接CR-002的P1：合法可用、可启动且缺WebView2的干净Windows、普通用户、恢复条件与真实EXE占用资源，必须在M5相应系统动作及Phase6分发专项验证开始前按[授权治理](../00_预检证据/risk-and-authorization-governance.md)实证确认；资源未齐即停在该门，不得退出M5。原P1许可/启动blocked与失败证据保留，延期不计pass/skip。
 M5 退出只解锁 M6；最终完成与发布结论须满足 M6 和维护者生产准备门。
 
 ## 验收标准
@@ -26,7 +28,7 @@ M5 退出只解锁 M6；最终完成与发布结论须满足 M6 和维护者生�
 | M5-A5 | 壳确认后格式升级是单独事务，同锁保护；失败精确恢复，不能恢复则留新壳恢复模式 | 把壳替换和资料迁移合并、不经备份不可逆升级 |
 | M5-A6 | 普通用户安装器与 portable 均可启动；缺 WebView2 有可信在线/离线路径、失败日志 | 依赖系统 Python/uv、隐式全局设置、只有开发机运行 |
 | M5-A7 | 包身份/哈希/许可/依赖/构建信息齐全；catalog 签名和 Windows 代码签名分别报告 | 无维护者生产身份却称正式签名发布完成 |
-| M5-A8 | 干净机/非管理员/中文空格路径与真实占用故障专项通过；冻结 M6 待验同一制品 | 将本阶段专项 smoke 或旧构建证据写成 M6 最终通过 |
+| M5-A8 | CR-002承接的P1先实证就绪，再完成干净机/非管理员/中文空格路径与真实占用故障专项；冻结M6待验同一制品 | 将延期资源记pass/skip、在缺资源时签收M5，或将本阶段专项/旧构建证据写成M6最终通过 |
 
 同包前置：helper/签名/恢复须由同一交付二进制在显式隔离会话实际走共用执行路径；测试配置只读且后端固定根/端点/公钥/动作白名单，普通根拒测试资产，不收任意URL/命令。另SHA构建只补协议证据，不抵M6最终包A4/A8；无可审通路且无生产资源则必要格blocked。
 源码身份门：冻结 `trainer_source_commit + launcher_build_commit + catalog_digest + recipe_digest + package SHA`；训练器归档含已推送feature实现及编译前端，不以原main/dev加开发overlay验收。S状态文档可后于build commit，不能改变包身份；M6实际run模块须匹配receipt锁定源码。
@@ -40,7 +42,7 @@ M5 退出只解锁 M6；最终完成与发布结论须满足 M6 和维护者生�
 | integration（集成） | 真实 EXE 等待/替换/新壳确认/失败还原；与操作/迁移互斥 |
 | gray（新旧对照） | 旧壳/新壳、旧/新状态、portable/installer、WebView2 有/无 |
 | real（真实） | Windows 原生文件占用、普通用户安装/卸载保留资料、真实 helper 和 GUI 恢复 |
-| Zero-Short（从新机短验） | 干净 Windows 缺 WebView2 的分发专项预验收；M6 后续另做完整从零全链路 |
+| Zero-Short（从新机短验） | CR-002的P1实际就绪闭合后，在真实干净Windows缺WebView2条件下完成分发专项预验收；M6后续仍以最终同一包另做完整从零全链路，新根/PATH测试不能代替OS条件 |
 
 证据根：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/<run-id>/M5/`；保留包/EXE 身份、原字节前后比较、helper/trial 日志、机器快照、原生截图、许可和签名状态。
 重型根拟 `F:/NextTrainerLauncherSandbox/<run-id>/`，本轮不创建；VM 快照、系统安装动作、下载/磁盘/最长试验时长及生产签名条件均以授权治理为准。
