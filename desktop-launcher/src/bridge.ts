@@ -155,3 +155,23 @@ export interface SourceRepairPreview {
 }
 export const previewSourceRepair = (root: string, releaseId: string) => invoke<SourceRepairPreview>('preview_source_repair', { root, releaseId })
 export const repairManagedSource = (root: string, releaseId: string) => invoke<OperationSnapshot>('repair_managed_source', { root, releaseId })
+
+export interface BasePythonRepairPreview {
+  schema_version: number
+  component_id: string
+  root: string
+  target: string
+  replacement_scope: string
+  expected_files: string[]
+  integrity_error: string | null
+  references: { release_id: string; instance_id: string; storage_version: number; environment: string; generation: number; initial_dirty: boolean }[]
+  blockers: string[]
+  pending_transaction: string | null
+  plan_sha256: string
+  repair_available: boolean
+  recovery_available: boolean
+  recovery_error: string | null
+}
+export const previewBasePythonRepair = (root: string) => invoke<BasePythonRepairPreview>('preview_base_python_repair', { root })
+export const repairBasePython = (root: string, releaseId: string, planSha256: string) => invoke<OperationSnapshot>('repair_base_python', { root, releaseId, planSha256 })
+export const recoverBasePython = (root: string, releaseId: string) => invoke<OperationSnapshot>('recover_base_python', { root, releaseId })

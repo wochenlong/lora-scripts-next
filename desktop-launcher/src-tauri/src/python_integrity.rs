@@ -315,9 +315,14 @@ fn verify_root(layout: &Layout, root: &Path, manifest: &Manifest) -> Result<()> 
 /// 校验完整基础解释器闭包；调用方必须在运行 Python/uv 环境探测前调用。
 /// 原归档自带的 920 个 pyc 必须逐字节一致，任何后生字节码均作为额外文件拒绝。
 pub(crate) fn verify(layout: &Layout) -> Result<PathBuf> {
-    let manifest = manifest()?;
     let root = layout.root.join("python").join(VERSION);
-    verify_root(layout, &root, &manifest)?;
+    verify_at(layout, &root)
+}
+
+/// The candidate remains under the same guarded workspace; no interpreter runs.
+pub(crate) fn verify_at(layout: &Layout, root: &Path) -> Result<PathBuf> {
+    let manifest = manifest()?;
+    verify_root(layout, root, &manifest)?;
     let target = root.join(TARGET);
     let expected = spec(
         manifest
@@ -327,6 +332,16 @@ pub(crate) fn verify(layout: &Layout) -> Result<PathBuf> {
     )?;
     verify_tree(layout, &target, &expected)?;
     Ok(target.join("python.exe"))
+}
+
+pub(crate) fn trusted_paths() -> Result<Vec<String>> {
+    let manifest = manifest()?;
+    Ok(manifest
+        .files
+        .into_iter()
+        .chain(manifest.uv_generated_files)
+        .map(|entry| format!("{TARGET}/{}", entry.path))
+        .collect())
 }
 
 #[cfg(test)]

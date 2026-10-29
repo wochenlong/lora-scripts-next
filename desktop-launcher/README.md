@@ -147,4 +147,6 @@ CLI 每次调用拥有自己的受管进程状态；图形界面启动的服务�
 
 M1 的网络与资料隔离合同见[网络策略与用户资料保护补充](../docs/design/desktop-launcher-m1-network-and-profile-protection.md)。当前开发结果不代表安装器、全部故障恢复或最终干净机器验收已完成。
 
+基础 Python 的完整组件、共享引用停用和同路径恢复合同见[基础 Python 组件修复](../docs/design/desktop-launcher-m1-base-python-repair.md)。环境页可先读取组件清单与引用环境，审查后再确认恢复；不能把组件完整等同于所有引用环境已经健康。
+
 代码许可遵循本仓库。恢复核心和资料管理为本项目实现，参考了调研项目的结构思路，没有引入绘心项目尚未明确授权的源码。参考依据见 [桌面启动器调研](../docs/design/desktop-launcher-reference-research-2026-10-28.md)。

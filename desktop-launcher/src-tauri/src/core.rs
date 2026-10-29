@@ -21,6 +21,8 @@ mod managed_child;
 #[path = "controlled_download.rs"]
 mod controlled_download;
 
+#[path = "base_python_repair.rs"]
+mod base_python_repair;
 #[path = "gui_install.rs"]
 mod gui_install;
 #[path = "gui_recovery.rs"]
@@ -478,6 +480,7 @@ fn managed_base_path(layout: &Layout, release: &Release, path: &Path) -> Result<
     Ok(resolved)
 }
 fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
+    base_python_repair::assert_ready(&layout.root)?;
     if release.environment_recipe == "gui-cp310-win-x64-v1" {
         crate::python_integrity::verify(layout)?;
     }
@@ -627,6 +630,59 @@ fn execute_controlled(
 }
 
 impl Engine {
+    pub fn preview_base_python_repair(&self, root: &Path) -> Result<serde_json::Value> {
+        base_python_repair::preview(root, &self.catalog)
+    }
+    pub fn repair_base_python_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        plan_sha256: Option<&str>,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        let _network = crate::network_policy::task_policy(root)?;
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再恢复基础Python组件");
+        }
+        self.catalog.release(id)?;
+        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        let recipe = crate::recipe::GuiRecipe::embedded()?;
+        let log = self.logger.clone();
+        let mut validator = |layout: &Layout,
+                             release: &Release,
+                             environment: &Path,
+                             cancel: &crate::operations::CancelToken|
+         -> Result<()> {
+            if !recipe.matches_environment_recipe(&release.environment_recipe)
+                || release.commit != recipe.source_commit
+            {
+                bail!("受影响环境没有匹配的固定验证器，保留组件恢复门");
+            }
+            verify_source(layout, release)?;
+            if digest(&uv(&layout.root))? != recipe.tool_uv.exe_sha256 {
+                bail!("基础组件复验前uv身份检查未通过");
+            }
+            gui_install::validate_environment(layout, &recipe, environment, &log, cancel)
+        };
+        match plan_sha256 {
+            Some(plan) => base_python_repair::execute(
+                &ctx,
+                &self.catalog,
+                plan,
+                operation,
+                &self.logger,
+                &mut validator,
+            ),
+            None => base_python_repair::recover(
+                &ctx,
+                &self.catalog,
+                operation,
+                &self.logger,
+                &mut validator,
+            ),
+        }
+    }
     pub fn preview_source_repair(&self, root: &Path, id: &str) -> Result<serde_json::Value> {
         gui_source_repair::preview(root, self.catalog.release(id)?)
     }
@@ -643,6 +699,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        base_python_repair::assert_ready(root)?;
         gui_source_repair::execute(&ctx, release, operation, &self.logger)
     }
     pub fn diagnose_gui(&self, root: &Path, id: &str) -> Result<serde_json::Value> {
@@ -678,6 +735,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        base_python_repair::assert_ready(root)?;
         gui_repair::execute(&ctx, release, package, plan_sha256, operation, &self.logger)
     }
     pub fn recover_gui_operation(
@@ -693,6 +751,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        base_python_repair::assert_ready(root)?;
         gui_repair::recover(&ctx, release, operation, &self.logger)
     }
     pub fn install_release_operation(
@@ -724,6 +783,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?.clone();
         let mutation = model::WorkspaceMutation::acquire(root, id)?;
+        base_python_repair::assert_ready(root)?;
         operation.persist(&mutation)?;
         let cancel = operation.cancel_token();
         let result = (|| -> Result<()> {
@@ -805,6 +865,7 @@ impl Engine {
             bail!("网络设置超过64KiB，尚未写入");
         }
         let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
+        base_python_repair::assert_ready(&root)?;
         let path = crate::network_policy::settings_path(&root)?;
         ctx.layout().guard_path(&path)?;
         ctx.layout()
@@ -838,6 +899,7 @@ impl Engine {
         let layout = Layout::new(root, &release.id)?;
         let lease = layout.prepare_workspace()?;
         let mut registry = Registry::load(root)?;
+        base_python_repair::assert_ready(root)?;
         if !registry.reconcile(root, &self.catalog)?.is_empty() {
             registry.store(root)?;
         }
@@ -935,6 +997,11 @@ impl Engine {
                 )
             })
             .collect();
+        if let Err(error) = base_python_repair::assert_ready(root) {
+            interrupted.push(format!(
+                "基础Python组件恢复尚未完成，暂停变更与启动：{error:#}"
+            ));
+        }
         if owned {
             for release in self.catalog.releases() {
                 if release.environment_recipe == "gui-cp310-win-x64-v1" {

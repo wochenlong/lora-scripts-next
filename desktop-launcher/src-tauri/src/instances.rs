@@ -442,6 +442,17 @@ pub(crate) struct InstanceState {
     ignored: Vec<PathBuf>,
     verified: Observation,
     pending: Option<Pending>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    base_python_pending: Option<BasePythonPending>,
+}
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+struct BasePythonPending {
+    transaction: String,
+    previous_generation: u64,
+    initial_dirty: bool,
+    previous_state_sha256: String,
+    previous_schema_version: u32,
 }
 pub(crate) struct RepairPlan {
     state: InstanceState,
@@ -721,7 +732,7 @@ fn observe(layout: &Layout, state: &InstanceState, cancel: &CancelToken) -> Resu
     })
 }
 fn validate(layout: &Layout, id: &str, state: &InstanceState) -> Result<()> {
-    if state.schema_version != 2
+    if !matches!(state.schema_version, 2 | 3)
         || state.component != "gui"
         || state.instance_id != id
         || state.root_absolute != layout.root
@@ -819,6 +830,27 @@ fn validate(layout: &Layout, id: &str, state: &InstanceState) -> Result<()> {
             }
         }
     }
+    if let Some(pending) = &state.base_python_pending {
+        model::validate_component(&pending.transaction)?;
+        if state.schema_version != 3
+            || !state.dirty
+            || state.pending.is_some()
+            || !pending.transaction.starts_with("base-python-")
+            || !valid_hash(&pending.previous_state_sha256)
+            || !matches!(pending.previous_schema_version, 2 | 3)
+            || if pending.initial_dirty {
+                state.generation != 1
+                    || state.validated_generation != 0
+                    || pending.previous_generation != 1
+            } else {
+                pending.previous_generation != state.validated_generation
+                    || pending.previous_generation.checked_add(1) != Some(state.generation)
+            }
+        {
+            bail!("基础Python引用事务状态无效，保持停用");
+        }
+        return Ok(());
+    }
     match (&state.pending, state.dirty) {
         (None, true) if state.generation == 1 && state.validated_generation == 0 => {}
         (None, false) if state.generation == state.validated_generation => {}
@@ -878,6 +910,18 @@ fn save(layout: &Layout, state: &InstanceState) -> Result<()> {
     }
     model::write_json_atomic(&state_path(layout, &state.instance_id)?, state)
 }
+fn save_for_base(layout: &Layout, state: &InstanceState, transaction: &str) -> Result<()> {
+    validate(layout, &state.instance_id, state)?;
+    if serde_json::to_vec_pretty(state)?.len() as u64 + 1 > MAX_STATE {
+        bail!("实例记录超过可重读上限");
+    }
+    model::write_base_json_atomic(
+        &layout.root,
+        transaction,
+        &state_path(layout, &state.instance_id)?,
+        state,
+    )
+}
 #[cfg(test)]
 pub(crate) fn create(
     ctx: &WorkspaceMutation,
@@ -925,6 +969,7 @@ pub(crate) fn create_controlled(
             protected: BTreeMap::new(),
         },
         pending: None,
+        base_python_pending: None,
     };
     let environment = path(&state)?;
     if model::environment_path(&layout.root, release(layout)?, id, 0)?.exists() {
@@ -940,6 +985,7 @@ pub(crate) fn create_controlled(
 }
 pub(crate) fn assert_usable(state: &InstanceState) -> Result<()> {
     let layout = Layout::new(&state.root_absolute, &state.release_id)?;
+    model::Registry::load(&layout.root)?.assert_base_python_ready()?;
     let current = load(&layout, &state.instance_id)?;
     if current != *state
         || state.dirty
@@ -1400,6 +1446,175 @@ pub(crate) fn recover_controlled(
         bail!("同路径恢复未还原原树，保持dirty");
     }
     clean(layout, state, cancel, validator)
+}
+
+/// True for the unvalidated first-install orphan. A package transaction must finish first.
+pub(crate) fn base_reference_initial_dirty(state: &InstanceState) -> Result<bool> {
+    if state.pending.is_some() || state.base_python_pending.is_some() {
+        bail!("引用实例已有待恢复事务，请先恢复原事务");
+    }
+    if state.dirty && !(state.generation == 1 && state.validated_generation == 0) {
+        bail!("引用实例dirty来源未知");
+    }
+    Ok(state.dirty)
+}
+pub(crate) fn base_reference_sha(state: &InstanceState) -> Result<String> {
+    Ok(hash(&serde_json::to_vec(state)?))
+}
+/// Rust-only integrity check: the damaged base is the sole admitted prior difference.
+pub(crate) fn base_reference_validate_before(layout: &Layout, state: &InstanceState) -> Result<()> {
+    if base_reference_initial_dirty(state)? {
+        return Ok(());
+    }
+    if scan(layout, &path(state)?, &state.ignored)? != state.verified.environment {
+        bail!("基础Python修复不能追认引用环境已有的非目标变化");
+    }
+    // Other managed instances can have been added since this instance's last
+    // validation. Their current bytes belong to the reviewed cohort protection;
+    // each clean member checks its own venv baseline. Source and uv identities
+    // are independently checked by the real validator before any candidate.
+    Ok(())
+}
+pub(crate) fn quarantine_for_base(
+    layout: &Layout,
+    id: &str,
+    expected_sha: &str,
+    transaction: &str,
+) -> Result<()> {
+    let mut current = load(layout, id)?;
+    if current.base_python_pending.as_ref().is_some_and(|pending| {
+        pending.transaction == transaction && pending.previous_state_sha256 == expected_sha
+    }) {
+        assert_quarantined_original(&current)?;
+        return Ok(());
+    }
+    if base_reference_sha(&current)? != expected_sha {
+        bail!("基础Python修复前实例状态已变化");
+    }
+    let initial_dirty = base_reference_initial_dirty(&current)?;
+    let old_generation = current.generation;
+    let old_schema = current.schema_version;
+    current.schema_version = 3;
+    if !initial_dirty {
+        current.generation = old_generation
+            .checked_add(1)
+            .context("引用generation溢出")?;
+    }
+    current.dirty = true;
+    current.base_python_pending = Some(BasePythonPending {
+        transaction: transaction.into(),
+        previous_generation: old_generation,
+        initial_dirty,
+        previous_state_sha256: expected_sha.into(),
+        previous_schema_version: old_schema,
+    });
+    save_for_base(layout, &current, transaction)
+}
+fn assert_quarantined_original(state: &InstanceState) -> Result<()> {
+    let pending = state
+        .base_python_pending
+        .as_ref()
+        .context("引用缺少基础Python事务")?;
+    let mut original = state.clone();
+    original.schema_version = pending.previous_schema_version;
+    original.generation = pending.previous_generation;
+    original.dirty = pending.initial_dirty;
+    original.base_python_pending = None;
+    if base_reference_sha(&original)? != pending.previous_state_sha256 {
+        bail!("停用引用记录与原始实例身份不符");
+    }
+    Ok(())
+}
+/// Builds a clean candidate without publishing it. The component gate remains active.
+pub(crate) fn candidate_after_base(
+    layout: &Layout,
+    id: &str,
+    transaction: &str,
+    cancel: &CancelToken,
+    validator: impl FnOnce(&Path) -> Result<()>,
+) -> Result<Vec<u8>> {
+    let mut state = load(layout, id)?;
+    let pending = state
+        .base_python_pending
+        .as_ref()
+        .context("引用没有基础Python事务")?
+        .clone();
+    assert_quarantined_original(&state)?;
+    if pending.transaction != transaction {
+        bail!("引用基础Python事务不匹配");
+    }
+    let before = observe(layout, &state, cancel)?;
+    if !pending.initial_dirty {
+        validator(&path(&state)?)?;
+        state.validated_generation = state.generation;
+        state.dirty = false;
+    }
+    let original = load(layout, id)?;
+    if observe(layout, &original, cancel)? != before {
+        bail!("基础Python复验期间引用环境或受保护组件变化");
+    }
+    let mut expected_state = original.clone();
+    if !pending.initial_dirty {
+        expected_state.validated_generation = expected_state.generation;
+        expected_state.dirty = false;
+    }
+    if expected_state != state {
+        bail!("基础Python复验期间引用持久记录变化");
+    }
+    // A first-install dirty orphan is only rebaselined and remains explicitly unusable.
+    state.verified = before;
+    state.base_python_pending = None;
+    validate(layout, id, &state)?;
+    let bytes = serde_json::to_vec_pretty(&state)?;
+    if bytes.len() as u64 > MAX_STATE {
+        bail!("引用候选记录过大");
+    }
+    Ok(bytes)
+}
+pub(crate) fn commit_after_base(
+    layout: &Layout,
+    id: &str,
+    transaction: &str,
+    bytes: &[u8],
+) -> Result<()> {
+    if bytes.len() as u64 > MAX_STATE {
+        bail!("引用候选记录过大");
+    }
+    let candidate: InstanceState = serde_json::from_slice(bytes)?;
+    validate(layout, id, &candidate)?;
+    let current = load(layout, id)?;
+    if current == candidate {
+        return Ok(());
+    }
+    let pending = current
+        .base_python_pending
+        .as_ref()
+        .context("引用事务已消失，拒绝覆盖")?;
+    assert_quarantined_original(&current)?;
+    if pending.transaction != transaction
+        || candidate.id() != current.id()
+        || candidate.storage_version != current.storage_version
+        || candidate.release_id != current.release_id
+        || candidate.recipe_id != current.recipe_id
+        || candidate.recipe_sha256 != current.recipe_sha256
+        || candidate.generation != current.generation
+        || candidate.base_python_pending.is_some()
+        || candidate.pending.is_some()
+        || candidate.dirty != pending.initial_dirty
+    {
+        bail!("引用候选与停用事务身份不匹配");
+    }
+    let mut expected = current.clone();
+    expected.base_python_pending = None;
+    if !pending.initial_dirty {
+        expected.dirty = false;
+        expected.validated_generation = expected.generation;
+    }
+    expected.verified = candidate.verified.clone();
+    if expected != candidate {
+        bail!("引用候选试图改写基础Python之外的实例身份");
+    }
+    save_for_base(layout, &candidate, transaction)
 }
 
 #[cfg(test)]
@@ -1952,5 +2167,193 @@ mod tests {
         junction::create(&outside, &alias).unwrap();
         assert!(observe(f.ctx.layout(), &f.state, &CancelToken::new()).is_err());
         junction::delete(alias).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod base_repair_tests {
+    use super::*;
+    struct Fixture {
+        ctx: WorkspaceMutation,
+        state: InstanceState,
+    }
+    impl Fixture {
+        fn new(clean: bool) -> Self {
+            let root = std::env::temp_dir().join(format!(
+                "nt-base-instance-{}-{}-{}",
+                std::process::id(),
+                model::now(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let ctx =
+                WorkspaceMutation::acquire(&root, &format!("dev-{}", "a".repeat(40))).unwrap();
+            let base = root.join("python/3.10.19/base.dll");
+            ctx.layout().ensure_dir(base.parent().unwrap()).unwrap();
+            fs::write(base, b"old base").unwrap();
+            let state = create(&ctx, "g0000000000000001", "recipe-one", &"b".repeat(64)).unwrap();
+            fs::write(path(&state).unwrap().join("protected.py"), b"env unchanged").unwrap();
+            let state = if clean {
+                validate_new(&ctx, &state, &[], |_| Ok(())).unwrap()
+            } else {
+                state
+            };
+            Self { ctx, state }
+        }
+    }
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let root = &self.ctx.layout().root;
+            if root.parent() == Some(std::env::temp_dir().as_path())
+                && root
+                    .file_name()
+                    .unwrap()
+                    .to_string_lossy()
+                    .starts_with("nt-base-instance-")
+            {
+                let _ = fs::remove_dir_all(root);
+            }
+        }
+    }
+    #[test]
+    fn base_candidate_commit_stays_unusable_until_global_gate_is_removed() {
+        let f = Fixture::new(true);
+        let layout = f.ctx.layout();
+        let txn = "base-python-cohort-test";
+        let original = base_reference_sha(&f.state).unwrap();
+        let mut registry = model::Registry::load(&layout.root).unwrap();
+        registry.schema_version = 3;
+        registry.base_python_pending = Some(txn.into());
+        registry.store(&layout.root).unwrap();
+        quarantine_for_base(layout, f.state.id(), &original, txn).unwrap();
+        let pending = load(layout, f.state.id()).unwrap();
+        assert!(pending.dirty());
+        assert_eq!(pending.generation(), 2);
+        assert!(assert_usable(&pending).is_err());
+        fs::write(layout.root.join("python/3.10.19/base.dll"), b"new base").unwrap();
+        let bytes =
+            candidate_after_base(layout, f.state.id(), txn, &CancelToken::new(), |_| Ok(()))
+                .unwrap();
+        commit_after_base(layout, f.state.id(), txn, &bytes).unwrap();
+        let committed = load(layout, f.state.id()).unwrap();
+        assert!(!committed.dirty());
+        assert!(assert_usable(&committed).is_err());
+        commit_after_base(layout, f.state.id(), txn, &bytes).unwrap();
+        registry.base_python_pending = None;
+        registry.store(&layout.root).unwrap();
+        assert_usable(&committed).unwrap();
+    }
+    #[test]
+    fn first_install_orphan_remains_dirty_and_does_not_invoke_validator() {
+        let f = Fixture::new(false);
+        let layout = f.ctx.layout();
+        let txn = "base-python-orphan-test";
+        quarantine_for_base(
+            layout,
+            f.state.id(),
+            &base_reference_sha(&f.state).unwrap(),
+            txn,
+        )
+        .unwrap();
+        fs::write(layout.root.join("python/3.10.19/base.dll"), b"new base").unwrap();
+        let bytes = candidate_after_base(layout, f.state.id(), txn, &CancelToken::new(), |_| {
+            panic!("unvalidated orphan must remain dirty")
+        })
+        .unwrap();
+        commit_after_base(layout, f.state.id(), txn, &bytes).unwrap();
+        let result = load(layout, f.state.id()).unwrap();
+        assert!(result.dirty());
+        assert_eq!(result.generation(), 1);
+        assert_eq!(result.validated_generation, 0);
+        assert!(assert_usable(&result).is_err());
+    }
+    #[test]
+    fn base_transaction_rejects_prior_environment_damage_and_state_reinterpretation() {
+        let f = Fixture::new(true);
+        let layout = f.ctx.layout();
+        let txn = "base-python-tamper-test";
+        fs::write(layout.root.join("python/3.10.19/base.dll"), b"damaged base").unwrap();
+        base_reference_validate_before(layout, &f.state).unwrap();
+        fs::write(
+            path(&f.state).unwrap().join("protected.py"),
+            b"prior wheel change",
+        )
+        .unwrap();
+        assert!(base_reference_validate_before(layout, &f.state).is_err());
+        let original = base_reference_sha(&f.state).unwrap();
+        quarantine_for_base(layout, f.state.id(), &original, txn).unwrap();
+        assert!(quarantine_for_base(layout, f.state.id(), &"d".repeat(64), txn).is_err());
+        let mut tampered = load(layout, f.state.id()).unwrap();
+        tampered.recipe_id = "foreign-recipe".into();
+        save(layout, &tampered).unwrap();
+        assert!(
+            candidate_after_base(layout, f.state.id(), txn, &CancelToken::new(), |_| Ok(()))
+                .is_err()
+        );
+        assert!(load(layout, f.state.id()).unwrap().dirty());
+    }
+    #[test]
+    fn storage_zero_and_one_cohort_keeps_both_absolute_paths_and_blocks_partial_commit() {
+        let f = Fixture::new(true);
+        let layout = f.ctx.layout();
+        let txn = "base-python-two-storage";
+        let compact = path(&f.state).unwrap();
+        let mut legacy = f.state.clone();
+        legacy.instance_id = "legacy-orphan".into();
+        legacy.storage_version = 0;
+        let legacy_path = path(&legacy).unwrap();
+        layout.ensure_dir(&legacy_path).unwrap();
+        fs::write(legacy_path.join("protected.py"), b"legacy unchanged").unwrap();
+        legacy.verified = observe(layout, &legacy, &CancelToken::new()).unwrap();
+        save(layout, &legacy).unwrap();
+        base_reference_validate_before(layout, &f.state).unwrap();
+        base_reference_validate_before(layout, &legacy).unwrap();
+        let before_compact = fs::read(compact.join("protected.py")).unwrap();
+        let before_legacy = fs::read(legacy_path.join("protected.py")).unwrap();
+        let mut registry = model::Registry::load(&layout.root).unwrap();
+        registry.schema_version = 3;
+        registry.base_python_pending = Some(txn.into());
+        registry.store(&layout.root).unwrap();
+        for state in [&f.state, &legacy] {
+            quarantine_for_base(layout, state.id(), &base_reference_sha(state).unwrap(), txn)
+                .unwrap();
+        }
+        fs::write(
+            layout.root.join("python/3.10.19/base.dll"),
+            b"new shared component",
+        )
+        .unwrap();
+        let compact_candidate =
+            candidate_after_base(layout, f.state.id(), txn, &CancelToken::new(), |at| {
+                assert_eq!(at, compact);
+                Ok(())
+            })
+            .unwrap();
+        let legacy_candidate =
+            candidate_after_base(layout, legacy.id(), txn, &CancelToken::new(), |at| {
+                assert_eq!(at, legacy_path);
+                Ok(())
+            })
+            .unwrap();
+        commit_after_base(layout, f.state.id(), txn, &compact_candidate).unwrap();
+        assert!(assert_usable(&load(layout, f.state.id()).unwrap()).is_err());
+        assert!(load(layout, legacy.id()).unwrap().dirty());
+        commit_after_base(layout, legacy.id(), txn, &legacy_candidate).unwrap();
+        assert!(assert_usable(&load(layout, legacy.id()).unwrap()).is_err());
+        registry.base_python_pending = None;
+        registry.store(&layout.root).unwrap();
+        let compact_state = load(layout, f.state.id()).unwrap();
+        let legacy_state = load(layout, legacy.id()).unwrap();
+        assert_usable(&compact_state).unwrap();
+        assert_usable(&legacy_state).unwrap();
+        assert_eq!(path(&compact_state).unwrap(), compact);
+        assert_eq!(path(&legacy_state).unwrap(), legacy_path);
+        assert_eq!(
+            fs::read(compact.join("protected.py")).unwrap(),
+            before_compact
+        );
+        assert_eq!(
+            fs::read(legacy_path.join("protected.py")).unwrap(),
+            before_legacy
+        );
     }
 }

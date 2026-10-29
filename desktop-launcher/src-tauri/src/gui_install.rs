@@ -114,6 +114,7 @@ pub(super) fn install(
     }
     preflight_environment_path(root)?;
     let ctx = WorkspaceMutation::acquire(root, &release.id)?;
+    super::base_python_repair::assert_ready(root)?;
     operation.persist(&ctx)?;
     let result = super::gui_recovery::recover_source(&ctx, release)
         .and_then(|()| install_inner(&ctx, release, &recipe, operation, log));

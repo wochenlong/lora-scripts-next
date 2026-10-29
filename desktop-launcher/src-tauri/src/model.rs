@@ -485,6 +485,8 @@ pub struct Registry {
     pub current: Option<String>,
     pub previous_known_good: Option<String>,
     pub installed: Vec<Installed>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub base_python_pending: Option<String>,
 }
 impl Default for Registry {
     fn default() -> Self {
@@ -494,10 +496,17 @@ impl Default for Registry {
             current: None,
             previous_known_good: None,
             installed: Vec::new(),
+            base_python_pending: None,
         }
     }
 }
 impl Registry {
+    pub fn assert_base_python_ready(&self) -> Result<()> {
+        if let Some(transaction) = &self.base_python_pending {
+            bail!("基础Python引用闭包待恢复（{transaction}），禁止启动或修改相关组件");
+        }
+        Ok(())
+    }
     pub fn load(root: &Path) -> Result<Self> {
         let path = root.join("state/registry.json");
         check_chain(&path)?;
@@ -510,13 +519,19 @@ impl Registry {
         Ok(registry)
     }
     pub fn validate(&self) -> Result<()> {
-        if !matches!(self.schema_version, 1 | 2) {
+        if !matches!(self.schema_version, 1..=3) {
             bail!(
                 "registry schema {} 不受支持；保留原文件并拒绝变更",
                 self.schema_version
             );
         }
         schema(self.profile_schema_version, "profile")?;
+        if let Some(transaction) = &self.base_python_pending {
+            validate_component(transaction)?;
+            if self.schema_version != 3 || !transaction.starts_with("base-python-") {
+                bail!("基础Python事务gate身份无效");
+            }
+        }
         let mut ids = BTreeSet::new();
         let mut environment_ids = BTreeSet::new();
         for installed in &self.installed {
@@ -525,7 +540,7 @@ impl Registry {
                 bail!("重复 installed 记录");
             }
             if let Some(binding) = &installed.gui {
-                if self.schema_version != 2 {
+                if self.schema_version < 2 {
                     bail!("schema 1 不接受环境实例绑定");
                 }
                 binding.validate()?;
@@ -563,6 +578,16 @@ impl Registry {
         }
         write_json_atomic(&root.join("state/registry.json"), self)
     }
+    /// Base-Python state writes keep unpublished temporary files inside the exact
+    /// durable transaction namespace, outside the reviewed state protection tree.
+    pub(crate) fn store_for_base(&self, root: &Path, transaction: &str) -> Result<()> {
+        self.validate()?;
+        let current = Self::load(root)?;
+        if self.schema_version < current.schema_version {
+            bail!("拒绝降级覆盖版本登记协议");
+        }
+        write_base_json_atomic(root, transaction, &root.join("state/registry.json"), self)
+    }
     pub fn record_installed(&mut self, release: &Release) -> Result<()> {
         release.validate()?;
         if release.profile_schema_version != self.profile_schema_version {
@@ -591,7 +616,7 @@ impl Registry {
         if Self::load(&layout.root)? != *self {
             bail!("版本登记已变化，请重新读取后规划");
         }
-        if self.schema_version == 2 {
+        if self.schema_version >= 2 {
             return Ok(());
         }
         let path = layout.root.join("state/registry.json");
@@ -619,7 +644,7 @@ impl Registry {
 
     /// 调用方须先按同generation验证实例；绑定切换不继承旧环境的健康结论。
     pub fn bind_gui(&mut self, id: &str, binding: EnvironmentBinding) -> Result<()> {
-        if self.schema_version != 2 {
+        if self.schema_version < 2 {
             bail!("需先显式升级版本登记协议");
         }
         binding.validate()?;
@@ -636,6 +661,7 @@ impl Registry {
         Ok(())
     }
     pub fn activate(&mut self, id: &str) -> Result<()> {
+        self.assert_base_python_ready()?;
         self.validate()?;
         if !self.installed.iter().any(|i| i.release_id == id) {
             bail!("只能激活已提交的版本");
@@ -656,6 +682,7 @@ impl Registry {
         Ok(())
     }
     pub fn mark_healthy(&mut self, id: &str) -> Result<()> {
+        self.assert_base_python_ready()?;
         if self.current.as_deref() != Some(id) {
             bail!("仅可标记本次激活并实际启动的版本");
         }
@@ -871,6 +898,44 @@ pub fn write_json_atomic<T: Serialize>(path: &Path, value: &T) -> Result<()> {
         let _ = fs::remove_file(&temp);
     }
     result
+}
+pub(crate) fn write_base_json_atomic<T: Serialize>(
+    root: &Path,
+    transaction: &str,
+    path: &Path,
+    value: &T,
+) -> Result<()> {
+    validate_component(transaction)?;
+    if !transaction.starts_with("base-python-")
+        || transaction.len() > 96
+        || !root.is_absolute()
+        || !path.starts_with(root.join("state"))
+    {
+        bail!("基础Python原子写路径或事务身份不受支持");
+    }
+    check_chain(path)?;
+    let temporary_root = root.join("backups").join(transaction).join("atomic-writes");
+    check_chain(&temporary_root)?;
+    fs::create_dir_all(&temporary_root)?;
+    check_chain(&temporary_root)?;
+    let temporary = temporary_root.join(format!(
+        ".state-{}-{}-{}.tmp",
+        std::process::id(),
+        now(),
+        NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+    ));
+    let mut file = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary)?;
+    let bytes = serde_json::to_vec_pretty(value)?;
+    file.write_all(&bytes)?;
+    file.write_all(b"\n")?;
+    file.sync_all()?;
+    drop(file);
+    // Both locations are under one workspace volume. Do not remove failed or
+    // interrupted temporaries: they are evidence owned by this exact transaction.
+    replace_atomic(&temporary, path)
 }
 #[cfg(windows)]
 fn replace_atomic(temp: &Path, target: &Path) -> Result<()> {

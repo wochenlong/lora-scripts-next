@@ -6,6 +6,8 @@ import { loadNetworkSettings, saveNetworkSettings } from './bridge'
 import type { NetworkSettings, NetworkSettingsView } from './bridge'
 import { settingsForSave } from './network-settings'
 import type { ProxyField } from './network-settings'
+import { previewBasePythonRepair, repairBasePython, recoverBasePython } from './bridge'
+import type { BasePythonRepairPreview } from './bridge'
 
 type Page = 'launch' | 'versions' | 'environment'
 interface Confirmation {
@@ -32,6 +34,7 @@ const operation = ref<OperationSnapshot | null>(null)
 const history = ref<OperationSnapshot[]>([])
 const guiDiagnosis = ref<GuiDiagnosis | null>(null)
 const guiPreview = ref<GuiRepairPreview | null>(null)
+const basePythonPreview = ref<BasePythonRepairPreview | null>(null)
 const showAllPackages = ref(false)
 const networkView = ref<NetworkSettingsView | null>(null)
 const networkDraft = ref({ mode: 'auto' as NonNullable<NetworkSettings['mode']>, http_proxy: '', https_proxy: '', no_proxy: '' })
@@ -128,6 +131,7 @@ function clearGuiState() {
   guiEpoch += 1
   guiDiagnosis.value = null
   guiPreview.value = null
+  basePythonPreview.value = null
   showAllPackages.value = false
   if (confirmation.value?.scope === 'gui') dismissConfirmation()
 }
@@ -356,6 +360,34 @@ async function diagnoseManagedGui() {
     addLog(`只读诊断完成：${value.integrity.packages.length} 个包，实例代次 ${value.generation}。生成脚本的内容验证范围见诊断说明。`)
   })
 }
+async function inspectBasePythonRepair() {
+  if (mutationDisabled.value) return
+  const root = path.value.trim()
+  const epoch = guiEpoch
+  basePythonPreview.value = null
+  await perform('只读检查基础 Python 与引用环境', async () => {
+    const preview = await previewBasePythonRepair(root)
+    if (epoch !== guiEpoch || root !== path.value.trim()) return
+    basePythonPreview.value = preview
+  })
+}
+function confirmBasePythonRepair(recovery = false) {
+  const preview = basePythonPreview.value
+  const version = currentVersion.value ?? defaultRelease.value
+  if (!preview || !version || mutationDisabled.value || (recovery ? !preview.recovery_available : !preview.repair_available)) return
+  const root = path.value.trim()
+  const epoch = guiEpoch
+  return ask({
+    scope: 'gui', title: recovery ? '继续基础 Python 组件恢复' : '恢复基础 Python 组件',
+    detail: `将恢复 ${preview.target} 的完整固定组件，共 ${preview.expected_files.length.toLocaleString()} 个文件。${preview.references.length} 个引用环境会统一暂停使用，逐个验证通过后再保存新代次；环境安装文件、源码与用户资料须保持不变。本来待恢复的实例不会因此变成可用。`,
+    paths: [...preview.references.map((reference) => `引用：${reference.release_id} / ${reference.instance_id} · 代次 ${reference.generation} · ${reference.environment}${reference.initial_dirty ? ' · 原本待恢复' : ''}`), ...preview.expected_files],
+    action: recovery ? '继续恢复与逐环境校验' : '确认恢复完整组件',
+    execute: async () => {
+      if (epoch !== guiEpoch || root !== path.value.trim()) { error.value = '目录或版本已改变，请重新检查基础 Python。'; return }
+      await startGuiOperation('正在恢复基础 Python 与引用环境', () => recovery ? recoverBasePython(root, version.id) : repairBasePython(root, version.id, preview.plan_sha256))
+    },
+  })
+}
 async function previewPackage(item: PackageIntegrity) {
   if (!currentVersion.value || !guiDiagnosis.value || packagePlanDisabled(item)) return
   guiPreview.value = null
@@ -507,6 +539,22 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <button :disabled="mutationDisabled" @click="storeNetworkSettings">保存网络设置</button>
             </template>
           </details>
+          <section v-if="sameRoot" class="gui-diagnostics" aria-labelledby="base-python-title">
+            <div class="section-caption"><h2 id="base-python-title">基础 Python 组件</h2><button :disabled="mutationDisabled" @click="inspectBasePythonRepair">检查组件与引用环境</button></div>
+            <p class="hint">检查只读取文件，Python 缺失或损坏时仍可查看。恢复会替换完整基础组件，并验证所有受管引用环境。</p>
+            <template v-if="basePythonPreview">
+              <p v-if="basePythonPreview.integrity_error" class="gui-issue" role="alert">{{ basePythonPreview.integrity_error }}</p>
+              <p v-else class="hint">基础组件固定文件完整。</p>
+              <p>{{ basePythonPreview.references.length }} 个引用环境 · {{ basePythonPreview.expected_files.length.toLocaleString() }} 个固定组件文件</p>
+              <ul v-if="basePythonPreview.references.length"><li v-for="reference in basePythonPreview.references" :key="`${reference.release_id}:${reference.instance_id}`"><code>{{ reference.release_id }} / {{ reference.instance_id }}</code> · 代次 {{ reference.generation }} · {{ reference.initial_dirty ? '原本待恢复' : '需逐环境复验' }}<p class="hint">{{ reference.environment }}</p></li></ul>
+              <p v-for="(blocker, index) in basePythonPreview.blockers" :key="index" class="gui-issue">{{ blocker }}</p>
+              <p v-if="basePythonPreview.recovery_error" class="gui-issue">{{ basePythonPreview.recovery_error }}</p>
+              <p v-if="basePythonPreview.pending_transaction" class="hint">存在未完成的基础组件事务：{{ basePythonPreview.pending_transaction }}</p>
+              <details class="gui-file-details"><summary>完整组件文件清单（{{ basePythonPreview.expected_files.length.toLocaleString() }}）</summary><pre tabindex="0" aria-label="基础 Python 组件完整文件清单">{{ basePythonPreview.expected_files.join('\n') }}</pre></details>
+              <button v-if="basePythonPreview.repair_available" :disabled="mutationDisabled" @click="confirmBasePythonRepair()">审查并恢复基础组件</button>
+              <button v-if="basePythonPreview.recovery_available" :disabled="mutationDisabled" @click="confirmBasePythonRepair(true)">继续未完成组件恢复</button>
+            </template>
+          </section>
           <section v-if="managedCurrent" class="gui-diagnostics" aria-labelledby="gui-diagnostics-title">
             <div class="section-caption"><h2 id="gui-diagnostics-title">固定 GUI 依赖诊断与单包修复</h2><button :disabled="mutationDisabled" @click="diagnoseManagedGui">{{ pending === '只读诊断 GUI 依赖' ? '正在诊断…' : '只读诊断依赖' }}</button></div>
             <p class="hint">诊断依据固定 wheel 的真实文件摘要。选择单个包后，先审查文件清单，再确认离线修复。请先停止运行中的训练器。</p>

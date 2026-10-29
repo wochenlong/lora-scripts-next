@@ -45,6 +45,10 @@ enum ManagedAction {
     },
     Recover,
     RepairSource,
+    RepairBasePython {
+        plan_sha256: String,
+    },
+    RecoverBasePython,
 }
 
 async fn begin_release_operation(
@@ -65,8 +69,12 @@ async fn begin_release_operation(
     }
     let catalog = model::Catalog::embedded().map_err(|e| format!("{e:#}"))?;
     let release = catalog.release(&release_id).map_err(|e| format!("{e:#}"))?;
-    if !matches!(action, ManagedAction::Prefetch)
-        && release.environment_recipe != "gui-cp310-win-x64-v1"
+    if !matches!(
+        action,
+        ManagedAction::Prefetch
+            | ManagedAction::RepairBasePython { .. }
+            | ManagedAction::RecoverBasePython
+    ) && release.environment_recipe != "gui-cp310-win-x64-v1"
     {
         return Err("该历史版本尚未提供固定安装配方，请选择已适配版本".into());
     }
@@ -88,7 +96,9 @@ async fn begin_release_operation(
                 ManagedAction::Install => operations::OperationKind::Execute,
                 ManagedAction::Repair { .. }
                 | ManagedAction::Recover
-                | ManagedAction::RepairSource => operations::OperationKind::Repair,
+                | ManagedAction::RepairSource
+                | ManagedAction::RepairBasePython { .. }
+                | ManagedAction::RecoverBasePython => operations::OperationKind::Repair,
             },
         )
         .map_err(|e| format!("{e:#}"))?;
@@ -126,6 +136,11 @@ async fn begin_release_operation(
                 ManagedAction::Recover => engine.recover_gui_operation(&root, &release_id, &handle),
                 ManagedAction::RepairSource => {
                     engine.repair_source_operation(&root, &release_id, &handle)
+                }
+                ManagedAction::RepairBasePython { plan_sha256 } => engine
+                    .repair_base_python_operation(&root, &release_id, Some(&plan_sha256), &handle),
+                ManagedAction::RecoverBasePython => {
+                    engine.repair_base_python_operation(&root, &release_id, None, &handle)
                 }
             }
         })();
@@ -267,6 +282,52 @@ async fn repair_managed_source(
     release_id: String,
 ) -> Result<operations::OperationSnapshot, String> {
     begin_release_operation(state, root, release_id, ManagedAction::RepairSource).await
+}
+
+#[tauri::command]
+async fn preview_base_python_repair(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+) -> Result<serde_json::Value, String> {
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine
+            .try_lock()
+            .map_err(|_| "已有安装或检查正在执行，请稍后重试".to_string())?;
+        let root = engine
+            .resolve(&root)
+            .map_err(|error| format!("{error:#}"))?;
+        engine
+            .preview_base_python_repair(&root)
+            .map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn repair_base_python(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    plan_sha256: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::RepairBasePython { plan_sha256 },
+    )
+    .await
+}
+
+#[tauri::command]
+async fn recover_base_python(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(state, root, release_id, ManagedAction::RecoverBasePython).await
 }
 
 #[tauri::command]
@@ -550,6 +611,13 @@ fn main() {
                 println!("{}", serde_json::to_string_pretty(&value)?);
                 return Ok(());
             }
+            if op == "preview-base-python" {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&engine.preview_base_python_repair(&root)?)?
+                );
+                return Ok(());
+            }
             let report = match op.as_str() {
                 "inspect" => engine.inspect(&root)?,
                 "bootstrap" => engine.bootstrap(&root)?,
@@ -572,14 +640,29 @@ fn main() {
                     args.get(4)
                         .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?,
                 )?,
-                "repair-gui-package" | "recover-gui-repair" | "repair-managed-source" => {
+                "repair-gui-package"
+                | "recover-gui-repair"
+                | "repair-managed-source"
+                | "repair-base-python"
+                | "recover-base-python" => {
                     let manager = operations::OperationManager::default();
                     let id = format!("cli-repair-{}-{}", model::now(), std::process::id());
                     let operation = manager.start(&id, operations::OperationKind::Repair)?;
                     let release = args
                         .get(4)
                         .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?;
-                    if op == "repair-managed-source" {
+                    if op == "repair-base-python" || op == "recover-base-python" {
+                        let plan = if op == "repair-base-python" {
+                            Some(
+                                args.get(5)
+                                    .ok_or_else(|| anyhow::anyhow!("缺少已审核 plan SHA256"))?
+                                    .as_str(),
+                            )
+                        } else {
+                            None
+                        };
+                        engine.repair_base_python_operation(&root, release, plan, &operation)?;
+                    } else if op == "repair-managed-source" {
                         engine.repair_source_operation(&root, release, &operation)?;
                     } else if op == "recover-gui-repair" {
                         engine.recover_gui_operation(&root, release, &operation)?;
@@ -652,6 +735,9 @@ fn main() {
             recover_gui_repair,
             preview_source_repair,
             repair_managed_source,
+            preview_base_python_repair,
+            repair_base_python,
+            recover_base_python,
             operation_snapshot,
             operation_events,
             cancel_operation,
