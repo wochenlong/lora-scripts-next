@@ -175,3 +175,60 @@ export interface BasePythonRepairPreview {
 export const previewBasePythonRepair = (root: string) => invoke<BasePythonRepairPreview>('preview_base_python_repair', { root })
 export const repairBasePython = (root: string, releaseId: string, planSha256: string) => invoke<OperationSnapshot>('repair_base_python', { root, releaseId, planSha256 })
 export const recoverBasePython = (root: string, releaseId: string) => invoke<OperationSnapshot>('recover_base_python', { root, releaseId })
+
+export interface DownloadCounters {
+  observed_body_bytes: number
+  uncertain_charge_bytes: number
+  requests: number
+  retries: number
+  redirects: number
+  cache_hits: number
+}
+export interface DownloadOperationLimits {
+  max_charged_body_bytes: number
+  max_requests: number
+  max_retries: number
+  max_redirects: number
+  max_elapsed_ms: number
+}
+export interface OperationDownloadReceipt {
+  schema_version: number
+  measurement: string
+  workspace_id: string
+  operation_id: string
+  retry_of: string | null
+  outcome: 'succeeded' | 'failed' | 'cancelled' | 'interrupted'
+  accounting_complete: boolean
+  started_at_ms: number
+  finished_at_ms: number
+  policy_revision: number
+  limits: DownloadOperationLimits
+  counters: DownloadCounters
+  start_generation: number
+  end_generation: number
+  root_start_counters: DownloadCounters
+  root_end_counters: DownloadCounters
+}
+export interface DownloadBudgetView {
+  measurement: string
+  enabled: boolean
+  coverage_prior_history: 'no_prior_artifact_evidence' | 'not_measured' | null
+  policy_revision: number | null
+  root_cap_body_bytes: number | null
+  counters: DownloadCounters
+  reserved_body_bytes: number
+  remaining_body_bytes: number | null
+  generation: number | null
+  active_operation: string | null
+  active_counters: DownloadCounters | null
+  operation_remaining_body_bytes: number | null
+  pending_reconciliation: boolean
+}
+export interface BudgetSnapshot {
+  budget: DownloadBudgetView
+  latest_receipt: OperationDownloadReceipt | null
+}
+export const getDownloadBudget = (root: string) => invoke<BudgetSnapshot>('get_download_budget', { root })
+export const saveDownloadBudget = (root: string, expectedRevision: number | null, rootBodyCapBytes: number) =>
+  invoke<BudgetSnapshot>('save_download_budget', { root, expectedRevision, rootBodyCapBytes })
+export const reconcileDownloadBudget = (root: string) => invoke<BudgetSnapshot>('reconcile_download_budget', { root })

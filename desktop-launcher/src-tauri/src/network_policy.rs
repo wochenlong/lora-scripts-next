@@ -510,6 +510,7 @@ impl Policy {
                 policy.proxy_for(url.as_str())
             }))
     }
+    #[cfg(test)]
     pub fn blocking_client_builder(&self) -> reqwest::blocking::ClientBuilder {
         let policy = self.clone();
         reqwest::blocking::Client::builder()

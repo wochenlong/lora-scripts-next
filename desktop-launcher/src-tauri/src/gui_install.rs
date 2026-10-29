@@ -12,7 +12,6 @@ use std::{
     io::Write,
     path::{Path, PathBuf},
     process::Command,
-    time::Duration,
 };
 
 mod bundled {
@@ -65,22 +64,40 @@ pub(super) fn download(
     sha: &str,
     bytes: u64,
 ) -> Result<PathBuf> {
-    if bytes > recipe.budget.max_asset_bytes {
-        bail!("资产超过固定配方限额");
-    }
-    let client = crate::network_policy::current_or_root(&ctx.layout().root)?
-        .client_builder()
-        .timeout(Duration::from_secs(600))
-        .build()?;
-    super::controlled_download::download(
+    let mut downloads = super::artifact_downloads::ArtifactDownloads::new(
+        &operation.id()?,
+        recipe.budget.max_total_bytes,
+        512,
+    );
+    let result = download_in(
         ctx,
-        client,
+        recipe,
+        operation,
+        &mut downloads,
         url,
         name,
         sha,
         bytes,
-        &operation.cancel_token(),
-    )
+    );
+    downloads.finish(&result)?;
+    result
+}
+
+#[allow(clippy::too_many_arguments)] // 固定资产身份与同操作预算显式传递。
+fn download_in(
+    ctx: &WorkspaceMutation,
+    recipe: &GuiRecipe,
+    operation: &OperationHandle,
+    downloads: &mut super::artifact_downloads::ArtifactDownloads,
+    url: &str,
+    name: &str,
+    sha: &str,
+    bytes: u64,
+) -> Result<PathBuf> {
+    if bytes > recipe.budget.max_asset_bytes {
+        bail!("资产超过固定配方限额");
+    }
+    downloads.download(ctx, url, name, sha, bytes, &operation.cancel_token())
 }
 
 fn write_new(layout: &Layout, path: &Path, bytes: &[u8]) -> Result<()> {
@@ -116,8 +133,14 @@ pub(super) fn install(
     let ctx = WorkspaceMutation::acquire(root, &release.id)?;
     super::base_python_repair::assert_ready(root)?;
     operation.persist(&ctx)?;
+    let mut downloads = super::artifact_downloads::ArtifactDownloads::new(
+        &operation.id()?,
+        recipe.budget.max_total_bytes,
+        512,
+    );
     let result = super::gui_recovery::recover_source(&ctx, release)
-        .and_then(|()| install_inner(&ctx, release, &recipe, operation, log));
+        .and_then(|()| install_inner(&ctx, release, &recipe, operation, log, &mut downloads));
+    downloads.finish(&result)?;
     let (status, error) = match &result {
         Ok(()) => (OperationStatus::Succeeded, None),
         Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
@@ -141,6 +164,7 @@ fn install_inner(
     recipe: &GuiRecipe,
     operation: &OperationHandle,
     log: &super::Logger,
+    downloads: &mut super::artifact_downloads::ArtifactDownloads,
 ) -> Result<()> {
     let layout = ctx.layout();
     let root = &layout.root;
@@ -171,28 +195,31 @@ fn install_inner(
         OperationPhase::Downloading,
         "获取固定源码、Python、工具与GUI依赖",
     )?;
-    let source = download(
+    let source = download_in(
         ctx,
         recipe,
         operation,
+        downloads,
         &release.archive.url,
         &format!("{}.zip", release.archive.sha256),
         &release.archive.sha256,
         release.archive.bytes,
     )?;
-    let uv_archive = download(
+    let uv_archive = download_in(
         ctx,
         recipe,
         operation,
+        downloads,
         &recipe.tool_uv.url,
         &format!("{}.zip", recipe.tool_uv.sha256),
         &recipe.tool_uv.sha256,
         recipe.tool_uv.bytes,
     )?;
-    let python_archive = download(
+    let python_archive = download_in(
         ctx,
         recipe,
         operation,
+        downloads,
         &recipe.python.archive.url,
         &recipe.python.archive.filename,
         &recipe.python.archive.sha256,
@@ -212,10 +239,11 @@ fn install_inner(
                 asset.name
             ),
         )?;
-        let archive = download(
+        let archive = download_in(
             ctx,
             recipe,
             operation,
+            downloads,
             &asset.url,
             &asset.filename,
             &asset.sha256,

@@ -18,6 +18,8 @@ use std::{
 #[path = "managed_child.rs"]
 mod managed_child;
 
+#[path = "artifact_downloads.rs"]
+mod artifact_downloads;
 #[path = "controlled_download.rs"]
 mod controlled_download;
 
@@ -217,45 +219,34 @@ fn digest(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hash.finalize()))
 }
 
-fn download(root: &Path, url: &str, name: &str, expected: &str, log: &Logger) -> Result<PathBuf> {
-    let target = root.join("cache").join(name);
-    if target.is_file() && digest(&target)? == expected {
-        log(format!("已校验缓存：{name}"));
-        return Ok(target);
-    }
-    log(format!("下载 {url}"));
-    let partial = target.with_extension(format!("{}.part", stamp()));
-    let mut response = crate::network_policy::current_or_root(root)?
-        .blocking_client_builder()
-        .timeout(Duration::from_secs(600))
-        .build()?
-        .get(url)
-        .send()?
-        .error_for_status()?;
-    if response.content_length().unwrap_or(0) > model::MAX_DOWNLOAD_BYTES {
+fn download(
+    ctx: &model::WorkspaceMutation,
+    url: &str,
+    name: &str,
+    expected: &str,
+    exact_bytes: u64,
+    log: &Logger,
+) -> Result<PathBuf> {
+    if exact_bytes > model::MAX_DOWNLOAD_BYTES {
         bail!("资产超出启动器下载上限");
     }
-    let mut output = File::create(&partial)?;
-    let bytes = std::io::copy(
-        &mut response.by_ref().take(model::MAX_DOWNLOAD_BYTES + 1),
-        &mut output,
-    )?;
-    output.sync_all()?;
-    if bytes > model::MAX_DOWNLOAD_BYTES || digest(&partial)? != expected {
-        bail!(
-            "下载文件校验失败，未执行或替换任何现有程序；可重试。临时文件: {}",
-            partial.display()
-        );
-    }
-    if target.exists() {
-        fs::rename(
-            &target,
-            target.with_extension(format!("{}.invalid", stamp())),
-        )?;
-    }
-    fs::rename(partial, &target)?;
-    log(format!("下载完成并通过 SHA256，{} 字节", bytes));
-    Ok(target)
+    let id = format!("legacy-artifact-{}-{}", std::process::id(), stamp());
+    let mut downloads = artifact_downloads::ArtifactDownloads::new(
+        &id,
+        exact_bytes.saturating_mul(2).saturating_add(65_536),
+        16,
+    );
+    log(format!("获取并校验固定资产：{name}"));
+    let result = downloads.download(
+        ctx,
+        url,
+        name,
+        expected,
+        exact_bytes,
+        &crate::operations::CancelToken::new(),
+    );
+    downloads.finish(&result)?;
+    result
 }
 
 /// P6 机制入口：异步网络读取运行于独立任务，取消会 abort 并等待任务析构，
@@ -403,6 +394,9 @@ fn uv_command(root: &Path, release: &Release) -> Result<Command> {
         )
         .env("UV_CACHE_DIR", root.join("cache/uv"))
         .env("UV_NO_CONFIG", "1")
+        // 历史未锁配方只能使用既有本地缓存；所有在线制品必须先经受控下载器。
+        .env("UV_OFFLINE", "1")
+        .env("UV_PYTHON_DOWNLOADS", "never")
         .env("UV_PYTHON_BIN_DIR", root.join("tools"))
         .env("UV_NO_PROGRESS", "1");
     hidden(&mut command);
@@ -786,6 +780,15 @@ impl Engine {
         base_python_repair::assert_ready(root)?;
         operation.persist(&mutation)?;
         let cancel = operation.cancel_token();
+        let mut downloads = artifact_downloads::ArtifactDownloads::new(
+            &operation.id()?,
+            release
+                .archive
+                .bytes
+                .saturating_mul(2)
+                .saturating_add(65536),
+            16,
+        );
         let result = (|| -> Result<()> {
             cancel.check()?;
             operation.publish(
@@ -793,14 +796,9 @@ impl Engine {
                 "正在下载并校验所选版本的安装文件",
             )?;
             operation.persist(&mutation)?;
-            let client = crate::network_policy::current_or_root(root)?
-                .client_builder()
-                .timeout(Duration::from_secs(600))
-                .build()?;
             let name = format!("{}.zip", release.archive.sha256);
-            controlled_download::download(
+            downloads.download(
                 &mutation,
-                client,
                 &release.archive.url,
                 &name,
                 &release.archive.sha256,
@@ -814,6 +812,7 @@ impl Engine {
             cancel.check()?;
             Ok(())
         })();
+        downloads.finish(&result)?;
         let (status, error) = match &result {
             Ok(()) => (OperationStatus::Succeeded, None),
             Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
@@ -873,6 +872,45 @@ impl Engine {
         model::write_json_atomic(&path, settings)?;
         Ok(serde_json::json!({ "settings": settings, "diagnostic": policy.diagnostic(None) }))
     }
+    pub fn save_download_budget(
+        &self,
+        value: &str,
+        expected_revision: Option<u64>,
+        root_body_cap_bytes: u64,
+    ) -> Result<crate::download_budget::BudgetSnapshot> {
+        if root_body_cap_bytes == 0 {
+            bail!("需要明确非零累计下载正文额度");
+        }
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再保存下载额度");
+        }
+        let root = self.resolve(value)?;
+        let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
+        base_python_repair::assert_ready(&root)?;
+        let policy = crate::download_budget::DownloadPolicy {
+            root_cap_body_bytes: root_body_cap_bytes,
+        };
+        match expected_revision {
+            None => {
+                crate::download_budget::initialize_policy(&ctx, policy)?;
+            }
+            Some(revision) => crate::download_budget::set_policy(&ctx, revision, policy)?,
+        }
+        crate::download_budget::snapshot_with_receipt(ctx.layout())
+    }
+    pub fn reconcile_download_budget(
+        &self,
+        value: &str,
+    ) -> Result<crate::download_budget::BudgetSnapshot> {
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再结清中断下载计账");
+        }
+        let root = self.resolve(value)?;
+        let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
+        base_python_repair::assert_ready(&root)?;
+        crate::download_budget::reconcile(&ctx)?;
+        crate::download_budget::snapshot_with_receipt(ctx.layout())
+    }
     fn default_release(&self) -> &Release {
         self.catalog
             .releases()
@@ -904,6 +942,19 @@ impl Engine {
             registry.store(root)?;
         }
         Ok((layout, lease))
+    }
+    fn mutation(&mut self, root: &Path, release: &Release) -> Result<model::WorkspaceMutation> {
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再修改安装目录");
+        }
+        let ctx = model::WorkspaceMutation::acquire(root, &release.id)?;
+        base_python_repair::assert_ready(root)?;
+        let mut registry = Registry::load(root)?;
+        if !registry.reconcile(root, &self.catalog)?.is_empty() {
+            registry.store(root)?;
+        }
+        Ok(ctx)
     }
     fn reap(&mut self) {
         if self
@@ -1063,16 +1114,18 @@ impl Engine {
         if release.environment_recipe == "gui-cp310-win-x64-v1" {
             bail!("该版本使用完整固定配方，请执行对应版本的受管安装");
         }
-        let (layout, _lease) = self.mutable(root, release)?;
+        let ctx = self.mutation(root, release)?;
+        let layout = ctx.layout();
         let asset = &release.uv;
         if managed_python(root, release).is_ok() {
             return Ok(());
         }
         let archive = download(
-            root,
+            &ctx,
             &asset.url,
             &format!("{}.zip", asset.sha256),
             &asset.sha256,
+            asset.bytes,
             &self.logger,
         )?;
         let staging = root.join(format!("staging/uv-{}", stamp()));
@@ -1105,6 +1158,7 @@ impl Engine {
             "--no-bin",
             "--no-registry",
         ]);
+        (self.logger)("历史未锁配方仅使用uv离线缓存；缺少缓存时请选择固定配方版本安装".into());
         execute(command, &self.logger)?;
         managed_python(root, release)?;
         (self.logger)("基础工具实际检查通过".into());
@@ -1120,8 +1174,9 @@ impl Engine {
         if release.environment_recipe == "gui-cp310-win-x64-v1" {
             bail!("该版本源码与捆绑前端须共同验证，请执行对应版本的受管安装或定点修复");
         }
-        let (layout, _lease) = self.mutable(root, release)?;
-        if verify_source(&layout, release).is_ok() {
+        let ctx = self.mutation(root, release)?;
+        let layout = ctx.layout();
+        if verify_source(layout, release).is_ok() {
             let mut registry = Registry::load(root)?;
             registry.record_installed(release)?;
             registry.store(root)?;
@@ -1131,10 +1186,11 @@ impl Engine {
         let mut journal = Journal::new(&release.id)?;
         journal.store(root)?;
         let archive = download(
-            root,
+            &ctx,
             &release.archive.url,
             &format!("{}.zip", release.archive.sha256),
             &release.archive.sha256,
+            release.archive.bytes,
             &self.logger,
         )?;
         let staging = root.join(format!("staging/{}-{}", release.id, stamp()));
@@ -1168,7 +1224,7 @@ impl Engine {
             }
             return Err(error).context("发布版本失败，已尝试保留原版本");
         }
-        verify_source(&layout, release)?;
+        verify_source(layout, release)?;
         let mut registry = Registry::load(root)?;
         registry.record_installed(release)?;
         registry.store(root)?;
@@ -1606,8 +1662,16 @@ mod tests {
     #[test]
     fn wrong_sha_download_keeps_partial_and_never_publishes_target() {
         let root = negative_test_root("wrong-sha");
+        let catalog = Catalog::embedded().unwrap();
+        let ctx = model::WorkspaceMutation::acquire(&root, &catalog.releases()[0].id).unwrap();
+        crate::download_budget::initialize_policy(
+            &ctx,
+            crate::download_budget::DownloadPolicy {
+                root_cap_body_bytes: 1_048_576,
+            },
+        )
+        .unwrap();
         let cache = root.join("cache");
-        fs::create_dir(&cache).unwrap();
         let target = cache.join("asset.zip");
         fs::write(&target, b"previous asset").unwrap();
         let (url, server) = serve_once(
@@ -1615,14 +1679,19 @@ mod tests {
             b"tiny",
         );
         let (log, _) = logger();
-        let result = download(&root, &url, "asset.zip", &"0".repeat(64), &log);
+        let result = download(&ctx, &url, "asset.zip", &"0".repeat(64), 4, &log);
         server.join().unwrap();
         let error = result.unwrap_err().to_string();
         assert!(
             error.contains("校验失败"),
             "未到达 SHA256 拒绝路径：{error}"
         );
-        assert_eq!(fs::read(&target).unwrap(), b"previous asset");
+        assert!(!target.exists());
+        // 原无效缓存被隔离，不能被失败下载覆盖或删除。
+        assert!(fs::read_dir(&cache).unwrap().any(|entry| {
+            let path = entry.unwrap().path();
+            path.is_file() && fs::read(path).unwrap() == b"previous asset"
+        }));
         let partials: Vec<_> = fs::read_dir(&cache)
             .unwrap()
             .map(|e| e.unwrap().path())
@@ -1630,33 +1699,44 @@ mod tests {
             .collect();
         assert_eq!(partials.len(), 1);
         assert_eq!(fs::read(&partials[0]).unwrap(), b"tiny");
-        // 只删除明确创建的单文件和空目录，不递归删除计算路径。
-        fs::remove_file(&partials[0]).unwrap();
-        fs::remove_file(target).unwrap();
-        fs::remove_dir(cache).unwrap();
-        fs::remove_dir(root).unwrap();
+        let snapshot = crate::download_budget::snapshot_with_receipt(ctx.layout()).unwrap();
+        assert_eq!(snapshot.budget.counters.observed_body_bytes, 4);
+        assert_eq!(
+            snapshot.latest_receipt.unwrap().outcome,
+            crate::download_budget::DownloadOutcome::Failed
+        );
     }
 
     #[test]
     fn excessive_content_length_is_rejected_before_creating_partial() {
         let root = negative_test_root("content-length");
+        let catalog = Catalog::embedded().unwrap();
+        let ctx = model::WorkspaceMutation::acquire(&root, &catalog.releases()[0].id).unwrap();
+        crate::download_budget::initialize_policy(
+            &ctx,
+            crate::download_budget::DownloadPolicy {
+                root_cap_body_bytes: 1_048_576,
+            },
+        )
+        .unwrap();
         let cache = root.join("cache");
-        fs::create_dir(&cache).unwrap();
         let (url, server) = serve_once(
             "HTTP/1.1 200 OK\r\nContent-Length: 200000001\r\nConnection: close\r\n\r\n",
             b"",
         );
         let (log, _) = logger();
-        let result = download(&root, &url, "oversized.zip", &"0".repeat(64), &log);
+        let result = download(&ctx, &url, "oversized.zip", &"0".repeat(64), 4, &log);
         server.join().unwrap();
-        let error = result.unwrap_err().to_string();
+        let error = format!("{:#}", result.unwrap_err());
         assert!(
-            error.contains("下载上限"),
+            error.contains("响应长度"),
             "未到达长度上限拒绝路径：{error}"
         );
         assert!(fs::read_dir(&cache).unwrap().next().is_none());
-        fs::remove_dir(cache).unwrap();
-        fs::remove_dir(root).unwrap();
+        let budget = crate::download_budget::snapshot(ctx.layout()).unwrap();
+        assert_eq!(budget.counters.requests, 1);
+        assert_eq!(budget.counters.observed_body_bytes, 0);
+        assert_eq!(budget.reserved_body_bytes, 0);
     }
 
     #[test]

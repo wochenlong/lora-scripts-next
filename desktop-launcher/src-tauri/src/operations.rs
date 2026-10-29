@@ -304,6 +304,16 @@ pub struct OperationHandle {
 }
 
 impl OperationHandle {
+    pub fn id(&self) -> Result<String> {
+        Ok(self
+            .shared
+            .state
+            .lock()
+            .map_err(|_| anyhow::anyhow!("操作快照锁异常"))?
+            .snapshot
+            .id
+            .clone())
+    }
     pub fn cancel_token(&self) -> CancelToken {
         self.shared.cancel.clone()
     }

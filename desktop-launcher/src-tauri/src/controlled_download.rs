@@ -1,6 +1,8 @@
 //! 持工作区租约的归档下载。部分文件只按绑定的长度与强 ETag 续传，
 //! 全量长度和 SHA256 通过后才发布 cache；网络任务可被独立取消并等待析构。
 use crate::{
+    budgeted_body::Body,
+    download_budget::{AssetIdentity, AttemptId, AttemptKind, AttemptOutcome, DownloadBudget},
     model::{self, Layout, WorkspaceMutation},
     operations::CancelToken,
 };
@@ -8,16 +10,20 @@ use anyhow::{bail, Context, Result};
 use reqwest::{
     header::{
         HeaderMap, ACCEPT_ENCODING, CONTENT_ENCODING, CONTENT_LENGTH, CONTENT_RANGE, ETAG,
-        IF_RANGE, LAST_MODIFIED, RANGE,
+        IF_RANGE, LAST_MODIFIED, LOCATION, RANGE,
     },
-    Client, StatusCode,
+    Client, StatusCode, Url,
 };
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     fs::{self, File, OpenOptions},
     io::Write,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        atomic::{AtomicU64, Ordering},
+        Arc, Mutex,
+    },
     thread,
     time::Duration,
 };
@@ -244,124 +250,340 @@ fn verify_range(headers: &HeaderMap, start: u64, exact_bytes: u64) -> Result<()>
     Ok(())
 }
 
+type ActiveAttempt = Arc<Mutex<Option<AttemptId>>>;
+
+enum ResponseAction {
+    Complete,
+    Retry416,
+    Redirect(Url),
+}
+
+fn request_url(raw: &str) -> Result<Url> {
+    let value = Url::parse(raw).context("制品下载URL无效")?;
+    if !matches!(value.scheme(), "http" | "https")
+        || value.host_str().is_none()
+        || !value.username().is_empty()
+        || value.password().is_some()
+        || value.fragment().is_some()
+    {
+        bail!("制品下载仅接受无内嵌凭据/fragment的HTTP或HTTPS URL");
+    }
+    Ok(value)
+}
+
+fn asset_identity(url: &Url, sha256: &str) -> Result<AssetIdentity> {
+    let host = url.host_str().context("下载URL缺少host")?;
+    let port = url.port_or_known_default().context("下载URL缺少端口")?;
+    Ok(AssetIdentity {
+        sha256: sha256.into(),
+        url_sha256: format!("{:x}", Sha256::digest(url.as_str().as_bytes())),
+        authority: format!("{host}:{port}"),
+    })
+}
+
+fn active_attempt(active: &ActiveAttempt, value: Option<AttemptId>) -> Result<()> {
+    *active
+        .lock()
+        .map_err(|_| anyhow::anyhow!("下载attempt状态锁异常"))? = value;
+    Ok(())
+}
+
+fn finish_active_attempt(
+    active: &ActiveAttempt,
+    budget: &DownloadBudget,
+    outcome: AttemptOutcome,
+) -> Result<()> {
+    let attempt = active
+        .lock()
+        .map_err(|_| anyhow::anyhow!("下载attempt锁异常"))?
+        .take();
+    if let Some(attempt) = attempt {
+        budget.finish_attempt(attempt, outcome)?;
+    }
+    Ok(())
+}
+
+async fn response_action(
+    paths: &Paths,
+    body: &mut Body,
+    previous: Option<&Partial>,
+    record: &mut Partial,
+    current_url: &Url,
+    cancel: &CancelToken,
+) -> Result<ResponseAction> {
+    cancel.check()?;
+    let status = body.status();
+    if matches!(status.as_u16(), 301 | 302 | 303 | 307 | 308) {
+        let location = header(body.headers(), LOCATION)?.context("重定向缺少Location")?;
+        let next = current_url.join(&location).context("制品重定向URL无效")?;
+        let next = request_url(next.as_str())?;
+        if current_url.scheme() == "https" && next.scheme() != "https" {
+            bail!("制品重定向拒绝HTTPS降级");
+        }
+        body.discard_diagnostic(cancel).await?;
+        return Ok(ResponseAction::Redirect(next));
+    }
+    if header(body.headers(), CONTENT_ENCODING)?
+        .is_some_and(|value| !value.eq_ignore_ascii_case("identity"))
+    {
+        bail!("归档响应使用了非 identity 编码，拒绝按压缩后偏移续传");
+    }
+    match status {
+        StatusCode::RANGE_NOT_SATISFIABLE => {
+            let resume = previous.context("无 Range 请求却收到416")?;
+            let expected = format!("bytes */{}", record.exact_bytes);
+            let range_matches =
+                header(body.headers(), CONTENT_RANGE)?.as_deref() == Some(expected.as_str());
+            body.discard_diagnostic(cancel).await?;
+            if range_matches
+                && resume.written == record.exact_bytes
+                && super::digest(&paths.partial)? == record.sha256
+            {
+                return Ok(ResponseAction::Complete);
+            }
+            return Ok(ResponseAction::Retry416);
+        }
+        StatusCode::PARTIAL_CONTENT => {
+            let resume = previous.context("无 Range 请求却收到206")?;
+            verify_range(body.headers(), resume.written, record.exact_bytes)?;
+            if !resume
+                .validator
+                .as_ref()
+                .context("续传缺少验证器")?
+                .matches(body.headers())?
+            {
+                bail!("206 的验证器与 If-Range 不匹配，保留原 partial");
+            }
+            *record = resume.clone();
+        }
+        StatusCode::OK => {
+            if header(body.headers(), CONTENT_RANGE)?.is_some()
+                || content_length(body.headers())?
+                    .is_some_and(|length| length != record.exact_bytes)
+            {
+                bail!("200 响应长度或范围不匹配，保留原 partial");
+            }
+            record.written = 0;
+            record.validator = validator(body.headers())?;
+        }
+        status => bail!("下载响应状态不受支持：{status}"),
+    }
+    cancel.check()?;
+    paths.layout.guard_path(&paths.partial)?;
+    let mut output = if record.written == 0 {
+        OpenOptions::new()
+            .write(true)
+            .create(true)
+            .truncate(true)
+            .open(&paths.partial)?
+    } else {
+        let output = OpenOptions::new().append(true).open(&paths.partial)?;
+        if output.metadata()?.len() != record.written {
+            bail!("partial 长度已变化，保留现场并拒绝追加");
+        }
+        output
+    };
+    paths.checkpoint(&mut output, record)?;
+    let mut buffer = [0; crate::download_budget::READ_QUANTUM];
+    loop {
+        cancel.check()?;
+        let remaining = record
+            .exact_bytes
+            .checked_sub(record.written)
+            .context("partial长度超过资产长度")?;
+        // 读满后还需1字节EOF/溢出探测；绝不在额度耗尽后额外多读。
+        let limit = remaining.saturating_add(1).min(buffer.len() as u64) as usize;
+        let count = body.read(&mut buffer[..limit], cancel).await?;
+        if count == 0 {
+            break;
+        }
+        let written = record
+            .written
+            .checked_add(count as u64)
+            .context("下载长度溢出")?;
+        if written > record.exact_bytes {
+            bail!("实际响应超出资产预期长度，partial 未发布");
+        }
+        output.write_all(&buffer[..count])?;
+        record.written = written;
+        paths.checkpoint(&mut output, record)?;
+    }
+    if record.written != record.exact_bytes {
+        bail!("响应提前结束，保留已提交长度的 partial");
+    }
+    cancel.check()?;
+    Ok(ResponseAction::Complete)
+}
+
 async fn transfer(
     paths: Paths,
     client: Client,
+    budget: DownloadBudget,
+    active: ActiveAttempt,
     mut previous: Option<Partial>,
     mut record: Partial,
     cancel: CancelToken,
 ) -> Result<()> {
-    // 416 不匹配时最多隔离重试一次，避免服务端异常导致无限重下。
-    for attempt in 0..2 {
+    // 416不匹配仍最多隔离重试一次；每请求/跳转共享同操作预算。
+    for retry in 0..2 {
         cancel.check()?;
         let resume = previous.as_ref().filter(|record| {
             record.written > 0 && matches!(record.validator, Some(Validator::Etag(_)))
         });
-        let mut request = client.get(&record.url).header(ACCEPT_ENCODING, "identity");
-        if let Some(resume) = resume {
-            request = request
-                .header(RANGE, format!("bytes={}-", resume.written))
-                .header(
-                    IF_RANGE,
-                    resume.validator.as_ref().context("续传缺少验证器")?.value(),
-                );
-        }
-        let mut response = request.send().await?;
-        cancel.check()?;
-        if header(response.headers(), CONTENT_ENCODING)?
-            .is_some_and(|value| !value.eq_ignore_ascii_case("identity"))
-        {
-            bail!("归档响应使用了非 identity 编码，拒绝按压缩后偏移续传");
-        }
-        match response.status() {
-            StatusCode::RANGE_NOT_SATISFIABLE => {
-                let resume = resume.context("无 Range 请求却收到416")?;
-                let expected = format!("bytes */{}", record.exact_bytes);
-                let range_matches = header(response.headers(), CONTENT_RANGE)?.as_deref()
-                    == Some(expected.as_str());
-                if range_matches
-                    && resume.written == record.exact_bytes
-                    && super::digest(&paths.partial)? == record.sha256
-                {
-                    return Ok(());
-                }
-                drop(response);
-                paths.quarantine_partial()?;
-                previous = None;
-                if attempt == 0 {
-                    continue;
-                }
-                bail!("416 无法确认完整资产，原 partial 已隔离");
-            }
-            StatusCode::PARTIAL_CONTENT => {
-                let resume = resume.context("无 Range 请求却收到206")?;
-                verify_range(response.headers(), resume.written, record.exact_bytes)?;
-                if !resume
-                    .validator
-                    .as_ref()
-                    .context("续传缺少验证器")?
-                    .matches(response.headers())?
-                {
-                    bail!("206 的验证器与 If-Range 不匹配，保留原 partial");
-                }
-                record = resume.clone();
-            }
-            StatusCode::OK => {
-                if header(response.headers(), CONTENT_RANGE)?.is_some()
-                    || content_length(response.headers())?
-                        .is_some_and(|length| length != record.exact_bytes)
-                {
-                    bail!("200 响应长度或范围不匹配，保留原 partial");
-                }
-                record.written = 0;
-                record.validator = validator(response.headers())?;
-            }
-            status => bail!("下载响应状态不受支持：{status}"),
-        }
-        cancel.check()?;
-        paths.layout.guard_path(&paths.partial)?;
-        let mut output = if record.written == 0 {
-            OpenOptions::new()
-                .write(true)
-                .create(true)
-                .truncate(true)
-                .open(&paths.partial)?
-        } else {
-            let output = OpenOptions::new().append(true).open(&paths.partial)?;
-            if output.metadata()?.len() != record.written {
-                bail!("partial 长度已变化，保留现场并拒绝追加");
-            }
-            output
-        };
-        paths.checkpoint(&mut output, &record)?;
+        let resume = resume.cloned();
+        let mut url = request_url(&record.url)?;
+        let mut redirects = 0u32;
         loop {
             cancel.check()?;
-            let Some(chunk) = response.chunk().await? else {
-                break;
+            let kind = if redirects > 0 {
+                AttemptKind::Redirect
+            } else if retry > 0 {
+                AttemptKind::Retry
+            } else {
+                AttemptKind::Initial
             };
-            let written = record
-                .written
-                .checked_add(chunk.len() as u64)
-                .context("下载长度溢出")?;
-            if written > record.exact_bytes {
-                bail!("实际响应超出资产预期长度，partial 未发布");
+            let first_read_limit = record
+                .exact_bytes
+                .saturating_add(1)
+                .min(crate::download_budget::READ_QUANTUM as u64)
+                as usize;
+            let (attempt, first_credit) = budget.begin_attempt(
+                &asset_identity(&url, &record.sha256)?,
+                kind,
+                first_read_limit,
+            )?;
+            active_attempt(&active, Some(attempt))?;
+            let mut request = client.get(url.clone()).header(ACCEPT_ENCODING, "identity");
+            if let Some(resume) = &resume {
+                request = request
+                    .header(RANGE, format!("bytes={}-", resume.written))
+                    .header(
+                        IF_RANGE,
+                        resume.validator.as_ref().context("续传缺少验证器")?.value(),
+                    );
             }
-            output.write_all(&chunk)?;
-            record.written = written;
-            paths.checkpoint(&mut output, &record)?;
+            let response = match request.send().await {
+                Ok(response) => response,
+                Err(error) => {
+                    // send已明确失败且未向正文reader交付任何字节，首credit结算0。
+                    budget.settle_read(first_credit, 0)?;
+                    budget.finish_attempt(attempt, AttemptOutcome::Failed)?;
+                    active_attempt(&active, None)?;
+                    return Err(error.into());
+                }
+            };
+            if response.url() != &url {
+                bail!("制品client启用了自动重定向，拒绝未计量请求链");
+            }
+            let mut body = Body::new(response, &budget, attempt, first_credit);
+            let result = response_action(
+                &paths,
+                &mut body,
+                resume.as_ref(),
+                &mut record,
+                &url,
+                &cancel,
+            )
+            .await;
+            let result = match result {
+                Ok(action) => Ok(action),
+                Err(error) => {
+                    // 错误响应只限读一次诊断正文；不存正文，失败/取消不绕过预算。
+                    let diagnostic = if cancel.is_cancel_requested() || body.read_started() {
+                        Ok(())
+                    } else {
+                        body.discard_diagnostic(&cancel).await
+                    };
+                    match diagnostic {
+                        Ok(()) => Err(error),
+                        Err(diagnostic) => {
+                            Err(error.context(format!("错误响应计量结束：{diagnostic:#}")))
+                        }
+                    }
+                }
+            };
+            let outcome = match &result {
+                Ok(ResponseAction::Redirect(_)) => AttemptOutcome::Redirected,
+                Ok(ResponseAction::Retry416) => AttemptOutcome::Failed,
+                Ok(_) => AttemptOutcome::Completed,
+                Err(_) => AttemptOutcome::Failed,
+            };
+            body.finish(outcome)?;
+            active_attempt(&active, None)?;
+            match result? {
+                ResponseAction::Complete => return Ok(()),
+                ResponseAction::Redirect(next) => {
+                    redirects = redirects.checked_add(1).context("跳转计数溢出")?;
+                    if redirects > 5 {
+                        bail!("制品重定向超过5跳限制");
+                    }
+                    url = next;
+                }
+                ResponseAction::Retry416 => {
+                    paths.quarantine_partial()?;
+                    previous = None;
+                    if retry > 0 {
+                        bail!("416 无法确认完整资产，原 partial 已隔离");
+                    }
+                    break;
+                }
+            }
         }
-        if record.written != record.exact_bytes {
-            bail!("响应提前结束，保留已提交长度的 partial");
-        }
-        cancel.check()?;
-        return Ok(());
     }
     unreachable!("416 最多重试一次")
 }
 
-pub(super) fn download(
+/// 只校验cache与sidecar合同，不隔离/创建/写入，也不要求网络cap。
+pub(super) fn cached_asset(
+    mutation: &WorkspaceMutation,
+    name: &str,
+    expected: &str,
+    exact_bytes: u64,
+) -> Result<Option<PathBuf>> {
+    validate_asset(expected, exact_bytes)?;
+    let paths = Paths::new(mutation.layout(), name)?;
+    let _ = paths.read_metadata()?;
+    if paths.target.exists()
+        && fs::metadata(&paths.target)?.len() == exact_bytes
+        && super::digest(&paths.target)? == expected
+    {
+        return Ok(Some(paths.target));
+    }
+    Ok(None)
+}
+
+/// 生产入口自行建立禁自动跳转client；应用正文计量不声称socket/TLS额度。
+pub(super) fn download_with_budget(
+    mutation: &WorkspaceMutation,
+    budget: &DownloadBudget,
+    url: &str,
+    name: &str,
+    expected: &str,
+    exact_bytes: u64,
+    cancel: &CancelToken,
+) -> Result<PathBuf> {
+    let client = crate::network_policy::current_or_root(&mutation.layout().root)?
+        .client_builder()
+        .redirect(reqwest::redirect::Policy::none())
+        .timeout(Duration::from_secs(600))
+        .build()?;
+    download_inner(
+        mutation,
+        client,
+        budget,
+        url,
+        name,
+        expected,
+        exact_bytes,
+        cancel,
+    )
+}
+
+#[allow(clippy::too_many_arguments)] // 租约、固定资产身份、预算和取消能力显式传递。
+fn download_inner(
     mutation: &WorkspaceMutation,
     client: Client,
+    budget: &DownloadBudget,
     url: &str,
     name: &str,
     expected: &str,
@@ -373,6 +595,7 @@ pub(super) fn download(
     if url.is_empty() || url.len() > 8192 {
         bail!("资产 URL 无效");
     }
+    request_url(url)?;
     let paths = Paths::new(mutation.layout(), name)?;
     // 先读取已知格式，未知/损坏 sidecar 绝不因缓存命中或准备新请求被覆盖。
     let mut previous = paths.read_metadata()?;
@@ -381,6 +604,7 @@ pub(super) fn download(
             && super::digest(&paths.target)? == expected
         {
             cancel.check()?;
+            budget.record_cache_hit()?;
             return Ok(paths.target);
         }
         quarantine(&paths.layout, &paths.target)?;
@@ -408,9 +632,12 @@ pub(super) fn download(
         written: 0,
         validator: None,
     };
+    let active = Arc::new(Mutex::new(None));
     let task = tauri::async_runtime::spawn(transfer(
         paths.clone(),
         client,
+        budget.clone(),
+        active.clone(),
         previous,
         record,
         cancel.clone(),
@@ -420,11 +647,22 @@ pub(super) fn download(
             task.abort();
             // 必须等待响应 socket 和 partial 文件释放，不能遗留后台网络任务。
             let _ = tauri::async_runtime::block_on(task);
+            finish_active_attempt(&active, budget, AttemptOutcome::Cancelled)?;
             cancel.check()?;
             unreachable!("取消标记不会清除");
         }
+        if let Err(error) = budget.check_deadline() {
+            task.abort();
+            let _ = tauri::async_runtime::block_on(task);
+            return match finish_active_attempt(&active, budget, AttemptOutcome::Failed) {
+                Ok(()) => Err(error),
+                Err(cleanup) => Err(error.context(format!("终止超时下载后结算失败：{cleanup:#}"))),
+            };
+        }
         if task.inner().is_finished() {
-            tauri::async_runtime::block_on(task)??;
+            let result = tauri::async_runtime::block_on(task);
+            finish_active_attempt(&active, budget, AttemptOutcome::Failed)?;
+            result??;
             break;
         }
         thread::sleep(Duration::from_millis(20));
@@ -445,6 +683,65 @@ pub(super) fn download(
     paths.layout.guard_path(&paths.metadata)?;
     fs::remove_file(&paths.metadata).context("缓存已发布，但 partial 元数据清理失败")?;
     Ok(paths.target)
+}
+
+/// 历史机制测试保持原签名；生产必须使用显式同操作预算入口。
+#[cfg(test)]
+pub(super) fn download(
+    mutation: &WorkspaceMutation,
+    _client: Client,
+    url: &str,
+    name: &str,
+    expected: &str,
+    exact_bytes: u64,
+    cancel: &CancelToken,
+) -> Result<PathBuf> {
+    use crate::download_budget::{DownloadOutcome, DownloadPolicy, OperationLimits};
+    static NEXT_TEST_OPERATION: AtomicU64 = AtomicU64::new(0);
+    let id = format!(
+        "download-test-{}",
+        NEXT_TEST_OPERATION.fetch_add(1, Ordering::Relaxed)
+    );
+    let cap = exact_bytes.saturating_mul(16).saturating_add(1_048_576);
+    let budget = DownloadBudget::begin(
+        mutation,
+        &id,
+        None,
+        DownloadPolicy {
+            root_cap_body_bytes: cap,
+        },
+        OperationLimits {
+            max_charged_body_bytes: cap,
+            max_requests: 16,
+            max_retries: 1,
+            max_redirects: 5,
+            max_elapsed_ms: 15_000,
+        },
+    )?;
+    let client = Client::builder()
+        .no_proxy()
+        .redirect(reqwest::redirect::Policy::none())
+        .connect_timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(10))
+        .build()?;
+    let result = download_inner(
+        mutation,
+        client,
+        &budget,
+        url,
+        name,
+        expected,
+        exact_bytes,
+        cancel,
+    );
+    budget.finish(if result.is_ok() {
+        DownloadOutcome::Succeeded
+    } else if cancel.is_cancel_requested() {
+        DownloadOutcome::Cancelled
+    } else {
+        DownloadOutcome::Failed
+    })?;
+    result
 }
 
 #[cfg(test)]
@@ -527,6 +824,7 @@ mod tests {
     fn client() -> Client {
         Client::builder()
             .no_proxy()
+            .redirect(reqwest::redirect::Policy::none())
             .connect_timeout(Duration::from_secs(2))
             .timeout(Duration::from_secs(10))
             .build()
@@ -607,6 +905,296 @@ mod tests {
             BODY.len() as u64,
             &CancelToken::new(),
         )
+    }
+
+    fn explicit_budget(
+        mutation: &WorkspaceMutation,
+        operation: &str,
+        root_cap: u64,
+        operation_cap: u64,
+        max_elapsed_ms: u64,
+    ) -> DownloadBudget {
+        DownloadBudget::begin(
+            mutation,
+            operation,
+            None,
+            crate::download_budget::DownloadPolicy {
+                root_cap_body_bytes: root_cap,
+            },
+            crate::download_budget::OperationLimits {
+                max_charged_body_bytes: operation_cap,
+                max_requests: 8,
+                max_retries: 1,
+                max_redirects: 5,
+                max_elapsed_ms,
+            },
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn manual_redirect_charges_both_bodies_in_one_operation() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let (url, server) = serve(vec![
+            response(
+                "302 Found",
+                "Content-Length: 4\r\nLocation: /final.zip\r\n",
+                b"move",
+            ),
+            response("200 OK", "Content-Length: 10\r\n", BODY),
+        ]);
+        let budget = explicit_budget(&mutation, "manual-redirect", 128, 128, 15_000);
+        let target = download_inner(
+            &mutation,
+            client(),
+            &budget,
+            &url,
+            NAME,
+            &hash(BODY),
+            BODY.len() as u64,
+            &CancelToken::new(),
+        )
+        .unwrap();
+        let requests = server.join().unwrap();
+        assert!(requests[0].starts_with("get /asset.zip "));
+        assert!(requests[1].starts_with("get /final.zip "));
+        assert_eq!(fs::read(target).unwrap(), BODY);
+        let receipt = budget
+            .finish(crate::download_budget::DownloadOutcome::Succeeded)
+            .unwrap();
+        assert_eq!(receipt.counters.requests, 2);
+        assert_eq!(receipt.counters.redirects, 1);
+        assert_eq!(receipt.counters.observed_body_bytes, 14);
+        assert_eq!(receipt.counters.uncertain_charge_bytes, 0);
+        assert_eq!(receipt.root_end_counters, receipt.counters);
+    }
+
+    #[test]
+    fn rejected_status_consumes_only_bounded_diagnostic_body() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let expected = vec![b'a'; 5000];
+        let diagnostic = vec![b'e'; 8192];
+        let (url, server) = serve(vec![response(
+            "403 Forbidden",
+            "Content-Length: 8192\r\n",
+            &diagnostic,
+        )]);
+        let budget = explicit_budget(&mutation, "bounded-diagnostic", 20_000, 20_000, 15_000);
+        let error = download_inner(
+            &mutation,
+            client(),
+            &budget,
+            &url,
+            NAME,
+            &hash(&expected),
+            expected.len() as u64,
+            &CancelToken::new(),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("403"));
+        server.join().unwrap();
+        let paths = fixture.paths(&mutation);
+        assert!(!paths.target.exists());
+        assert!(!paths.partial.exists());
+        assert!(!paths.metadata.exists());
+        let receipt = budget
+            .finish(crate::download_budget::DownloadOutcome::Failed)
+            .unwrap();
+        assert_eq!(receipt.counters.requests, 1);
+        assert_eq!(receipt.counters.observed_body_bytes, 4096);
+        assert_eq!(receipt.counters.uncertain_charge_bytes, 0);
+    }
+
+    #[test]
+    fn root_and_operation_caps_stop_before_next_application_read() {
+        for (root_cap, operation_cap) in [(7, 100), (100, 7)] {
+            let fixture = Fixture::new();
+            let mutation = fixture.mutation();
+            let (url, server) = serve(vec![response("200 OK", "Content-Length: 10\r\n", BODY)]);
+            let budget =
+                explicit_budget(&mutation, "cap-boundary", root_cap, operation_cap, 15_000);
+            let error = download_inner(
+                &mutation,
+                client(),
+                &budget,
+                &url,
+                NAME,
+                &hash(BODY),
+                BODY.len() as u64,
+                &CancelToken::new(),
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("download_budget_exhausted"));
+            server.join().unwrap();
+            let paths = fixture.paths(&mutation);
+            assert!(!paths.target.exists());
+            assert_eq!(fs::read(&paths.partial).unwrap(), &BODY[..7]);
+            assert_eq!(paths.read_metadata().unwrap().unwrap().written, 7);
+            let receipt = budget
+                .finish(crate::download_budget::DownloadOutcome::Failed)
+                .unwrap();
+            assert_eq!(receipt.counters.observed_body_bytes, 7);
+            assert_eq!(receipt.counters.uncertain_charge_bytes, 0);
+            assert_eq!(receipt.counters.requests, 1);
+        }
+    }
+
+    #[test]
+    fn exhausted_redirect_cap_prevents_a_second_request() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let (url, server) = serve(vec![response(
+            "302 Found",
+            "Content-Length: 4\r\nLocation: /must-not-request\r\n",
+            b"move",
+        )]);
+        let budget = explicit_budget(&mutation, "redirect-cap-boundary", 4, 4, 15_000);
+        let error = download_inner(
+            &mutation,
+            client(),
+            &budget,
+            &url,
+            NAME,
+            &hash(BODY),
+            BODY.len() as u64,
+            &CancelToken::new(),
+        )
+        .unwrap_err();
+        assert!(error.to_string().contains("download_budget_exhausted"));
+        assert_eq!(server.join().unwrap().len(), 1);
+        let receipt = budget
+            .finish(crate::download_budget::DownloadOutcome::Failed)
+            .unwrap();
+        assert_eq!(receipt.counters.requests, 1);
+        assert_eq!(receipt.counters.redirects, 0);
+        assert_eq!(receipt.counters.observed_body_bytes, 4);
+        assert_eq!(receipt.counters.uncertain_charge_bytes, 0);
+    }
+
+    #[test]
+    fn verified_cache_is_reusable_without_enrolling_a_budget() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let paths = fixture.paths(&mutation);
+        mutation
+            .layout()
+            .ensure_dir(&fixture.0.join("cache"))
+            .unwrap();
+        fs::write(&paths.target, BODY).unwrap();
+        assert_eq!(
+            cached_asset(&mutation, NAME, &hash(BODY), BODY.len() as u64).unwrap(),
+            Some(paths.target)
+        );
+        assert!(!fixture
+            .0
+            .join("state/download-budget-enrollment.json")
+            .exists());
+        assert!(!fixture.0.join("state/download-budget.json").exists());
+    }
+
+    #[test]
+    fn one_deadline_aborts_stalled_headers_or_body_and_settles_the_live_credit() {
+        for headers_sent in [false, true] {
+            let fixture = Fixture::new();
+            let mutation = fixture.mutation();
+            let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+            listener.set_nonblocking(true).unwrap();
+            let url = format!("http://{}/asset.zip", listener.local_addr().unwrap());
+            let server = thread::spawn(move || {
+                let mut socket = accept(&listener);
+                let _ = read_request(&mut socket);
+                if headers_sent {
+                    socket
+                        .write_all(&response(
+                            "200 OK",
+                            "Content-Length: 10\r\nETag: \"asset-v1\"\r\n",
+                            &BODY[..4],
+                        ))
+                        .unwrap();
+                    socket.flush().unwrap();
+                }
+                let mut byte = [0];
+                match socket.read(&mut byte) {
+                    Ok(0) => {}
+                    Err(error)
+                        if matches!(
+                            error.kind(),
+                            std::io::ErrorKind::ConnectionReset
+                                | std::io::ErrorKind::ConnectionAborted
+                        ) => {}
+                    other => panic!("总时限未关闭回环socket：{other:?}"),
+                }
+            });
+            let budget = explicit_budget(&mutation, "deadline", 100, 100, 1000);
+            let start = Instant::now();
+            let error = download_inner(
+                &mutation,
+                client(),
+                &budget,
+                &url,
+                NAME,
+                &hash(BODY),
+                BODY.len() as u64,
+                &CancelToken::new(),
+            )
+            .unwrap_err();
+            assert!(error.to_string().contains("总时长预算已用尽"));
+            assert!(start.elapsed() < Duration::from_secs(3));
+            server.join().unwrap();
+            let receipt = budget
+                .finish(crate::download_budget::DownloadOutcome::Failed)
+                .unwrap();
+            assert_eq!(receipt.counters.requests, 1);
+            assert_eq!(
+                receipt.counters.observed_body_bytes,
+                if headers_sent { 4 } else { 0 }
+            );
+            assert_eq!(
+                receipt.counters.uncertain_charge_bytes,
+                if headers_sent { 7 } else { 11 }
+            );
+            assert!(!fixture.paths(&mutation).target.exists());
+        }
+    }
+
+    #[test]
+    fn retry_416_keeps_both_attempts_in_the_same_receipt() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let (url, server) = serve(vec![
+            response(
+                "416 Range Not Satisfiable",
+                "Content-Length: 3\r\nContent-Range: bytes */10\r\n",
+                b"old",
+            ),
+            response("200 OK", "Content-Length: 10\r\n", BODY),
+        ]);
+        fixture.seed(&mutation, &url, &BODY[..4]);
+        let budget = explicit_budget(&mutation, "same-operation-416", 128, 128, 15_000);
+        let target = download_inner(
+            &mutation,
+            client(),
+            &budget,
+            &url,
+            NAME,
+            &hash(BODY),
+            BODY.len() as u64,
+            &CancelToken::new(),
+        )
+        .unwrap();
+        let requests = server.join().unwrap();
+        assert!(requests[0].contains("\r\nrange: bytes=4-\r\n"));
+        assert!(!requests[1].contains("\r\nrange:"));
+        assert_eq!(fs::read(target).unwrap(), BODY);
+        let receipt = budget
+            .finish(crate::download_budget::DownloadOutcome::Succeeded)
+            .unwrap();
+        assert_eq!(receipt.counters.requests, 2);
+        assert_eq!(receipt.counters.retries, 1);
+        assert_eq!(receipt.counters.observed_body_bytes, 13);
+        assert_eq!(receipt.counters.uncertain_charge_bytes, 0);
     }
 
     #[test]
@@ -805,6 +1393,7 @@ mod tests {
             b"{broken metadata".to_vec(),
         ] {
             fs::write(&paths.metadata, &bytes).unwrap();
+            assert!(cached_asset(&mutation, NAME, &hash(BODY), BODY.len() as u64).is_err());
             assert!(fetch(&mutation, url).is_err());
             assert_eq!(fs::read(&paths.metadata).unwrap(), bytes);
             assert_eq!(fs::read(&paths.partial).unwrap(), &BODY[..4]);

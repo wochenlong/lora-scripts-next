@@ -432,6 +432,9 @@ fn tree_with_aliases(
     })
 }
 fn capture(layout: &Layout, references: &[Reference], cancel: &CancelToken) -> Result<Protection> {
+    // 预算元数据有独立的持租约/CAS合同，本事务下载时允许合法计账。
+    // 先验证完整身份、schema及receipt，不能吞错并当作未启用。
+    crate::download_budget::snapshot_with_receipt(layout)?;
     let mut roots = BTreeMap::new();
     for name in ["environments", "e", "releases", "tools", "config"] {
         roots.insert(
@@ -478,7 +481,15 @@ fn capture(layout: &Layout, references: &[Reference], cancel: &CancelToken) -> R
             let entry = entry?;
             if !matches!(
                 entry.file_name().to_str(),
-                Some("instances" | "operations" | "registry.json" | "base-python-repair.json")
+                Some(
+                    "instances"
+                        | "operations"
+                        | "registry.json"
+                        | "base-python-repair.json"
+                        | "download-budget.json"
+                        | "download-budget-enrollment.json"
+                        | "download-receipts"
+                )
             ) {
                 roots.insert(
                     entry.path().strip_prefix(&layout.root)?.into(),
@@ -1960,6 +1971,73 @@ mod tests {
             capture(&f.layout, &[], &CancelToken::new()).unwrap(),
             before
         );
+    }
+    #[test]
+    fn legal_download_accounting_keeps_reviewed_protection_but_corrupt_budget_blocks() {
+        use crate::download_budget::{
+            AssetIdentity, AttemptKind, AttemptOutcome, DownloadBudget, DownloadOutcome,
+            DownloadPolicy, OperationLimits,
+        };
+        let f = Fixture::new();
+        let ctx = WorkspaceMutation::acquire(&f.root, &format!("dev-{}", "a".repeat(40))).unwrap();
+        let cancel = CancelToken::new();
+        let before = capture(ctx.layout(), &[], &cancel).unwrap();
+        let reviewed = plan(&f.root, &Catalog::embedded().unwrap(), &cancel)
+            .unwrap()
+            .plan_sha256;
+        let budget = DownloadBudget::begin(
+            &ctx,
+            "base-candidate-asset",
+            None,
+            DownloadPolicy {
+                root_cap_body_bytes: 1024,
+            },
+            OperationLimits {
+                max_charged_body_bytes: 1024,
+                max_requests: 8,
+                max_retries: 1,
+                max_redirects: 2,
+                max_elapsed_ms: 10_000,
+            },
+        )
+        .unwrap();
+        let (attempt, credit) = budget
+            .begin_attempt(
+                &AssetIdentity {
+                    sha256: "a".repeat(64),
+                    url_sha256: "b".repeat(64),
+                    authority: "example.test:443".into(),
+                },
+                AttemptKind::Initial,
+                64,
+            )
+            .unwrap();
+        budget.settle_read(credit, 7).unwrap();
+        budget
+            .finish_attempt(attempt, AttemptOutcome::Completed)
+            .unwrap();
+        budget.finish(DownloadOutcome::Succeeded).unwrap();
+        drop(budget);
+        assert_eq!(capture(ctx.layout(), &[], &cancel).unwrap(), before);
+        assert_eq!(
+            plan(&f.root, &Catalog::embedded().unwrap(), &cancel)
+                .unwrap()
+                .plan_sha256,
+            reviewed
+        );
+        let ledger = f.root.join("state/download-budget.json");
+        let original = fs::read(&ledger).unwrap();
+        let mut unknown: serde_json::Value = serde_json::from_slice(&original).unwrap();
+        unknown["schema_version"] = serde_json::json!(99);
+        let corrupt = serde_json::to_vec(&unknown).unwrap();
+        fs::write(&ledger, &corrupt).unwrap();
+        assert!(capture(ctx.layout(), &[], &cancel).is_err());
+        assert_eq!(fs::read(&ledger).unwrap(), corrupt);
+        fs::write(&ledger, original).unwrap();
+        let receipt = f.root.join("state/download-receipts/foreign.json");
+        fs::write(&receipt, b"{\"schema_version\":99}").unwrap();
+        assert!(capture(ctx.layout(), &[], &cancel).is_err());
+        assert_eq!(fs::read(receipt).unwrap(), b"{\"schema_version\":99}");
     }
     #[test]
     fn profiles_content_change_and_new_unrelated_state_change_protection() {
