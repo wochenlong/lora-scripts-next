@@ -1,10 +1,35 @@
 # M1-CANDIDATE：GUI 候选包与实测报告
 
+## 当前补丁结果：入口校验修复，实际登记恢复仍未通过（CR-005）
+
+2026-10-29 用户回复“继续”后，本批执行成本表第 0 项。已确认并修复 Windows 入口解释器路径拼接：两组独立控制共 54 入口，原写法整文件 0/54 匹配，逐组件拼接后 54/54；固定 27 个 PE 摘要的 Windows 回归实际先红后绿，登记模块 11/11、fmt、严格 Clippy 和 locked/offline release 通过，定向独审无阻断。产品未放宽固定信任根或未知文件规则。
+
+**新包实际登记恢复未通过。** 它已通过固定完整环境的只读预览（`ready`），实际确认后在 GUI 探针回收检查拒绝提交，错误为“GUI探测结束后端口仍有监听，拒绝提交验证结果；未终止任何其它进程”。后续版本选择和正常服务启停未运行。该错误来自产品判定；现时只读查表已无该端口监听，不能据此证明失败当时有外部监听，也尚未归因到具体竞态或错误类型。M1 保持 `in progress`，不签 EXIT-M1，M2–M6 `pending`。
+
+| 本批项目 | 结果与边界 |
+| --- | --- |
+| 新包身份 | 构建源码 `cc57e23b9220482b624b859fa6b0e1d4814fd943`，已普通 push/核远端完整 SHA；EXE SHA256 `5a84834885d80b80b6d9f5741462dfdffb7164b0152d6183532fdb6b49db58af`，23,153,152 B |
+| C1–C3 安装、启停、单包修复 | 复用下面第二轮旧包的有效结果；本批未重装，不声称新包已同包重跑 C1–C3 |
+| C4 纯读预览及确认前保护 | pass：显式实例 `g2bda43203d5cba83` 返回 ready，固定索引证明完整闭包，登记/cache/probe absence、非目标 state 和预览观察窗检查通过 |
+| C4 实际恢复 | fail：唯一操作 `download-1793286613-161468-0`，`gui_registration_failed`，端口 11850 回收判定未过；未将预览通过冒充恢复完成 |
+| 恢复后正常服务启停 | not-run：前一步失败后停止 |
+| 四引擎 | 未实施；后续仅冒烟，实际环境/GPU/模型/训练/权重测试 `skip + CR-004` |
+
+新包路径：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/desktop-launcher-full-20261028-155831Z-f6c00a/M1/operations/registration-followup-20261029/frozen/next-trainer-launcher.exe`。Catalog、GUI recipe、固定索引、受管 Python 模板和内嵌训练器前端均未变；身份见同目录 `freeze.json`、`freeze-push-receipt.json`。源码改变仅限登记完整性模块的路径函数及回归，前端/全量旧检查复用。
+
+本批先有一次 319.091 秒的只读预检中断：资源统计误拒已有 runtime view 的目录链接，产品、计量器和运行目录尚未创建，17 项完整现场核对已通过，原 false 保留。随后一次核全 29 个已知链接，按固定源码的 14 类视图映射核类型/直接目标并跳过重复计量，未知链接仍拒；产品与 UI 无改动。续段复用已验证基线，减少重复历史扫描，实际 UI 案 166.234 秒，合计 485.325 秒，上游 0 请求/0 B；新增 F 97,029,255 B、E 两段约 30,775,759 B，均在预算内。故障后 22 项核验通过：9 组活动树和资料保持原字节，旧隐藏登记 pin/缓存路径大小清单保持，非目标 state 仅新增本次精确失败操作。登记、release receipt、目标实例 state 与登记意图均仍不存在，未提交 epoch/current/healthy；所属进程/监听/计量器均已回收，WM_CLOSE exit0，无手动回收子进程。旧隐藏缓存复用此前完整摘要并快核，未声称本次再次全量读取。
+
+证据统一在本 run 的 `M1/operations/registration-followup-20261029/`：`diagnosis/` 保留原始红绿与来源；`acceptance/receipt.json`（SHA256 `1bb57cc388db96ea5d1f4887a172d055720088c40a29f55a9055c92e393b9ed8`）保留预检 false；`acceptance-resume/receipt.json`（`2d29666c3a1387142945dab1e69a5ed5c6296256386c0ea18550a79a3a3c267c`）及 `ui-report.json`（`a2bafd220df4ba39a129a1fef917c47814381924914b71e97a581d8d4360d57a`）保留实际恢复失败。最终保护/登记现状见 `acceptance-resume/final-verification.json`（SHA256 `ae28852b43f09b5834cd70c98df25848df409d546cfa80b97b448f247b1f4c86`）；账本先备份去重追加 0 B，累计 1,013,413,437 B，SHA256 `364129d45746698f063f2ce07ccb820d194c8a8ecd9dd391b2275d3c8abd7f32`，见 `ledger-append-receipt.json`；最终文档提交/远端 SHA 见本批 `delivery-save-receipt.json`。
+
+新的最小待办是查明探针端口消失检查为何拒绝，而不是继续修改入口 PE。静态线索：`gui_entry_probe.rs` 的 `listener_disappeared` 仅将 150ms 连接尝试返回 `ConnectionRefused` 视为已消失，其他连接错误也会返回 false；该线索未作动态归因，不能直接认定误判。当前不追加新包/恢复案，剩余成本见[成本审核表](remaining-work-cost-review.md)。
+
+## 上一批两轮候选结果（历史保留）
+
 **候选未通过。** 按 v0.5 / CR-004 + CR-003 已用完两轮候选：当前同包 C1 安装、C2 启停、C3 精准修复通过，C4 登记恢复在只读预览被产品拒绝。未确认恢复、未执行登记探针。保留失败与原件，停止修包和续验，提交成本审核后暂停。M1 `in progress`、M2–M6 `pending`，不签 EXIT-M1，不代表完整 #516 完成。唯一进度见[总控目标索引](00_总控目标索引.md)。
 
 四引擎功能仍待后续实现；用户已要求独立检查/修复仅轻量冒烟，实际引擎安装/损坏修复、GPU/模型/训练/权重项 `skip + CR-004`。本包只验 GUI 核心链，其他验证按影响面精简，不扩展完整故障矩阵。
 
-## 当前冻结包
+## 第二轮历史冻结包
 
 - EXE：`E:/OpenSourceTeamWork/workspace/tools/launcher-full-20261028/desktop-launcher-full-20261028-155831Z-f6c00a/M1/operations/candidate-round2-20261029/next-trainer-launcher.exe`。
 - SHA256：`663faa6f690418ae5faeda8327e6419cab7831049a4e7d333ddefb129cc7f895`；23,153,152 B。
@@ -30,7 +55,7 @@
 
 来源摘要入口 `M1/recipe/gui-registration-working/k1-final-control-comparison.json`（SHA256 `c481c27478c2cc0683dcb1e87930b25da147f16b200f939554c35116af5a0cb3`）；K1 与路径最小修复均已定向独审，无许可范围扩大。
 
-## K3：当前同包结果
+## K3：第二轮历史同包结果
 
 | ID | 场景 | 第二轮结果 | 证据与边界 |
 | --- | --- | --- | --- |
@@ -72,4 +97,4 @@
 - 第一冻结轮 `ac862fe5…671d6b`：C1/C2/C3 通过、C4 只读因分隔符阻断；1165.333 秒/0 B。初段 UI 等待失败及续段回执均保留。集中诊断全部 43 项在原生分隔符规则下匹配，原保护树及隐藏原件未变。
 - 第二轮初段 `receipt.json` SHA256 `ca41bba319a67658128cf8c5d9292252ed2de81a78037eba1fdb2279972ac199`：49.825 秒，预算监控 lstat 遇 uv 正常移走的临时文件，正式 WM_CLOSE 取消安装，未作产品失败结论。两延迟 WebView 子进程按身份回收，最终无残留；该回执仍 false。只读 helper 的 266 UTF-16 路径单项检查也保留 false，以完整 long-path 树及原件摘要另行补证，不篡改历史。
 
-当前结论固定为“候选未通过”，可供审核的包已保存，验证通过的能力限定为 C1–C3；登记恢复尚不可交付。按 CR-003 提交[剩余工作与成本审核表](remaining-work-cost-review.md)后暂停；M1 不退出，不进入 M2，不把整体 Goal 标 complete。最终文档保存回执将写入 `M1/operations/candidate-round2-resume-20261029/delivery-save-receipt.json`，以其中的普通 push/远端完整 SHA 为准。
+CR-003 第二轮历史结论固定为“候选未通过”，可供审核的包已保存，验证通过的能力限定为 C1–C3；登记恢复尚不可交付。按 CR-003 提交[剩余工作与成本审核表](remaining-work-cost-review.md)后暂停；M1 不退出，不进入 M2，不把整体 Goal 标 complete。最终文档保存回执将写入 `M1/operations/candidate-round2-resume-20261029/delivery-save-receipt.json`，以其中的普通 push/远端完整 SHA 为准。
