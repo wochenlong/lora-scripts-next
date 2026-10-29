@@ -14,6 +14,8 @@ python desktop-launcher/scripts/build_windows_candidate.py --frontend 'F:\固定
 
 构建按固定顺序进行：helper 的 locked/offline release → SHA256 与长度注入主壳 → 提取本机依赖许可 → 主壳与桌面前端 → 同包 `build-manifest.json` → NSIS → 便携 ZIP。NSIS `currentUser` 使用当前用户可写位置与 HKCU，提供简体中文及英文；WebView2 为官方在线引导。打包禁用二进制补丁，安装器和便携包包含相同的主 EXE/helper。
 
+Tauri `ResourcePaths`会规范化来源路径并丢弃Windows盘符，因此不能把异盘绝对路径直接作为资源键，也不能仅改成正斜杠。脚本将资源复制到`src-tauri/target/candidate-resources/<唯一ID>/`，向bundler传纯相对正斜杠来源路径，目标保持EXE同级固定名字。暂存目录在源码冻结范围之外；`resource-staging.json`记录归属和逐文件摘要。结束时核对绝对路径、owner、完整文件集合及摘要后只删除本次已知文件和空目录；未知变化或reparse一律保留现场，不清理历史构建或失败输出。
+
 包中包含主壳、独立 helper、根 `LICENSE`/`NOTICE.md`、`LICENSES/**`、中文安装恢复说明和构建 manifest。外层 `delivery-manifest.json`/`SHA256SUMS.txt` 保存安装器与便携 ZIP 的 SHA256；`source-inputs.json` 保存构建输入的逐文件身份，`logs/` 保存各命令原始输出。包内清单不记录自身或外层 ZIP 的递归摘要。
 
 清单分别记录 trainer source commit、launcher build commit 与当前源码摘要、catalog/recipe/公开签名夹具摘要、工具版本、helper/EXE 身份、生产 catalog 签名和 Windows 代码签名状态。源码施工候选不得冒充最终已提交基线；最终验收前还须把训练器固定源更新到已推送的完整 feature commit，并重建对应配方/前端/索引。四引擎实际安装与 GPU/训练仍为 `skip + CR-004`，干净 Windows 和缺 WebView2 为 `not-run`，实际同包结果由 M6 写入证据。

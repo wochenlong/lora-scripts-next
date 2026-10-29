@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 import time
+import uuid
 import zipfile
 
 
@@ -88,6 +89,69 @@ def verify_windows_tools(cache: Path) -> dict:
     return {"lock_sha256": digest(lock_path)["sha256"], "tauri_cli_version": package["version"],
             "tauri_cli_binary_sha256": lock["tauri_cli_binary_sha256"], "nsis_version": version,
             "verified_required_files": len(lock["required_files"]), "source_commit": lock["source"]["commit"]}
+
+
+@contextmanager
+def staged_bundle_resources(portable: Path, output: Path):
+    """Tauri的normalize会去Windows盘符；只向bundler传src-tauri内相对路径。"""
+    stage_parent = LAUNCHER / "src-tauri/target/candidate-resources"
+    stage_parent.mkdir(parents=True, exist_ok=True)
+    stage = stage_parent / uuid.uuid4().hex
+    stage.mkdir()
+    identity = {"schema_version": 1, "output": str(output.resolve()), "stage_id": stage.name}
+    owner = stage / ".stage-owner.json"
+    write_json(owner, identity)
+    expected = {".stage-owner.json": digest(owner)}
+    resources = {}
+    stage_receipt = {"stage": str(stage.resolve()), "output": str(output.resolve()), "resources": {}, "cleanup": "pending"}
+    try:
+        for path in sorted(portable.rglob("*")):
+            if not path.is_file() or path.name == "next-trainer-launcher.exe":
+                continue
+            relative = path.relative_to(portable)
+            target = stage / relative
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(path, target)
+            expected[relative.as_posix()] = digest(path)
+            if digest(target) != expected[relative.as_posix()]:
+                raise RuntimeError("分发资源暂存副本摘要不符")
+            resources[target.relative_to(LAUNCHER / "src-tauri").as_posix()] = relative.as_posix()
+        stage_receipt["resources"] = expected
+        write_json(output / "resource-staging.json", stage_receipt)
+        yield resources
+    finally:
+        # 仅删除本次唯一目录中身份未变的已知文件；不递归删除未知文件或跟随reparse。
+        try:
+            resolved_stage = stage.resolve()
+            if resolved_stage.parent != stage_parent.resolve() or resolved_stage == stage_parent.resolve():
+                raise RuntimeError("资源暂存绝对路径越界，保留现场")
+            if json.loads(owner.read_text(encoding="utf-8")) != identity:
+                raise RuntimeError("资源暂存归属标记变化，保留现场")
+            if stage.lstat().st_file_attributes & 0x400:
+                raise RuntimeError("资源暂存含reparse point，保留现场")
+            paths, directories = [], [stage]
+            while directories:
+                for path in directories.pop().iterdir():
+                    if path.lstat().st_file_attributes & 0x400:
+                        raise RuntimeError("资源暂存含reparse point，保留现场")
+                    paths.append(path)
+                    if path.is_dir():
+                        directories.append(path)
+            actual = {path.relative_to(stage).as_posix(): digest(path) for path in paths if path.is_file()}
+            if actual != expected:
+                raise RuntimeError("资源暂存含未知文件或摘要变化，保留现场")
+            for path in sorted((path for path in paths if path.is_file()), key=lambda path: len(path.parts), reverse=True):
+                path.unlink()
+            for path in sorted((path for path in paths if path.is_dir()), key=lambda path: len(path.parts), reverse=True):
+                path.rmdir()
+            stage.rmdir()
+            stage_receipt["cleanup"] = "removed_exact_owned_files"
+        except Exception as error:
+            stage_receipt["cleanup"] = "preserved_for_review"
+            stage_receipt["cleanup_error"] = str(error)
+            raise
+        finally:
+            write_json(output / "resource-staging.json", stage_receipt)
 
 
 @contextmanager
@@ -223,14 +287,13 @@ def main() -> None:
         write_json(output / "source-inputs.json", inputs)
         (output / "git-status-scoped.txt").write_text(status + "\n", encoding="utf-8")
         (output / "git-status-all.txt").write_text(full_status + "\n", encoding="utf-8")
-        # 每个资源映射到 EXE 同级固定名字，helper 无需依赖训练器目录。
-        resources = {str(path): path.relative_to(portable).as_posix() for path in portable.rglob("*")
-                     if path.is_file() and path.name != "next-trainer-launcher.exe"}
         bundle_config = output / "bundle.config.json"
-        write_json(bundle_config, {"bundle": {"resources": resources}})
-        # 禁止 bundler 修改已锁定 EXE；NSIS 与便携包使用完全相同的二进制。
-        bundle_started = time.time()
-        run("nsis-bundle", ["node", str(cli), "bundle", "--ci", "--bundles", "nsis", "--no-sign", "--no-binary-patching", "--config", str(bundle_config)])
+        with staged_bundle_resources(portable, output) as resources:
+            # 来源为Rust构建目录内相对路径；目标仍为EXE同级固定名字。
+            write_json(bundle_config, {"bundle": {"resources": resources}})
+            # 禁止 bundler 修改已锁定 EXE；NSIS 与便携包使用完全相同的二进制。
+            bundle_started = time.time()
+            run("nsis-bundle", ["node", str(cli), "bundle", "--ci", "--bundles", "nsis", "--no-sign", "--no-binary-patching", "--config", str(bundle_config)])
         if digest(executable) != executable_identity or source_inventory() != inputs:
             raise RuntimeError("构建期间 EXE 或源输入发生变化，保留候选但拒绝冻结")
         nsis_root = LAUNCHER / "src-tauri/target/release/bundle/nsis"
