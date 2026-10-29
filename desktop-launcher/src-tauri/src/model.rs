@@ -15,6 +15,8 @@ pub const WORKSPACE_MARKER: &str = "next-trainer-desktop-v1";
 pub const SCHEMA_VERSION: u32 = 1;
 pub const PROFILE_SCHEMA_VERSION: u32 = 1;
 pub const MAX_DOWNLOAD_BYTES: u64 = 200_000_000;
+/// 受固定配方授权的单个大wheel上限；旧源码目录仍沿用200MB限制。
+pub const MAX_MANAGED_ASSET_BYTES: u64 = 512 * 1024 * 1024;
 pub const MAX_EXTRACT_BYTES: u64 = 2_000_000_000;
 pub const PROFILE_DIRECTORIES: &[&str] = &["user_data", "library", "compat"];
 const RECEIPT: &str = "release.json";
@@ -124,6 +126,47 @@ pub fn validate_release_id(value: &str) -> Result<()> {
         bail!("版本 ID 必须为 main/dev 加完整提交");
     }
     Ok(())
+}
+
+pub(crate) fn legacy_storage_version(value: &u32) -> bool {
+    *value == 0
+}
+
+pub(crate) fn validate_environment_storage(instance_id: &str, storage_version: u32) -> Result<()> {
+    validate_component(instance_id)?;
+    match storage_version {
+        0 if instance_id.len() <= 96 => Ok(()),
+        1 if instance_id
+            .strip_prefix('g')
+            .is_some_and(|suffix| hex(suffix, 16)) =>
+        {
+            Ok(())
+        }
+        _ => bail!("环境存储版本或实例 ID 不受支持，拒绝重新解释原路径"),
+    }
+}
+
+/// 存储版本只选择固定命名空间，不接受记录中指定任意相对路径。
+pub(crate) fn environment_path(
+    root: &Path,
+    release_id: &str,
+    instance_id: &str,
+    storage_version: u32,
+) -> Result<PathBuf> {
+    validate_release_id(release_id)?;
+    validate_environment_storage(instance_id, storage_version)?;
+    let path = match storage_version {
+        0 => root
+            .join("environments")
+            .join(release_id)
+            .join("instances")
+            .join(instance_id)
+            .join("gui"),
+        1 => root.join("e").join(instance_id),
+        _ => unreachable!("存储版本已经校验"),
+    };
+    check_chain(&path)?;
+    Ok(path)
 }
 
 impl Release {
@@ -273,11 +316,21 @@ impl Layout {
         }
         check_chain(root)?;
         let release_dir = root.join("releases").join(release_id);
+        let registry = Registry::load(root)?;
+        let environment = match registry.gui_binding(release_id) {
+            Some(binding) => environment_path(
+                root,
+                release_id,
+                &binding.instance_id,
+                binding.storage_version,
+            )?,
+            None => root.join("environments").join(release_id).join("gui"),
+        };
         Ok(Self {
             root: root.to_path_buf(),
             app: release_dir.join("app"),
             release_dir,
-            environment: root.join("environments").join(release_id).join("gui"),
+            environment,
             profile: root.join("profiles/default"),
             staging: root.join("staging").join(release_id),
             run: root.join("run").join(release_id),
@@ -345,6 +398,7 @@ impl Layout {
             "state",
             "releases",
             "environments",
+            "e",
             "profiles",
             "tools",
             "python",
@@ -394,13 +448,36 @@ impl Profile {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(deny_unknown_fields)]
+pub struct EnvironmentBinding {
+    pub instance_id: String,
+    #[serde(default, skip_serializing_if = "legacy_storage_version")]
+    pub storage_version: u32,
+    pub recipe_id: String,
+    pub recipe_sha256: String,
+    pub generation: u64,
+}
+impl EnvironmentBinding {
+    pub fn validate(&self) -> Result<()> {
+        validate_environment_storage(&self.instance_id, self.storage_version)?;
+        validate_component(&self.recipe_id)?;
+        if self.instance_id.len() > 96 || !hex(&self.recipe_sha256, 64) || self.generation == 0 {
+            bail!("环境绑定身份、配方或generation无效");
+        }
+        Ok(())
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Installed {
     pub release_id: String,
     pub healthy_at: Option<u64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gui: Option<EnvironmentBinding>,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct Registry {
     pub schema_version: u32,
@@ -433,13 +510,28 @@ impl Registry {
         Ok(registry)
     }
     pub fn validate(&self) -> Result<()> {
-        schema(self.schema_version, "registry")?;
+        if !matches!(self.schema_version, 1 | 2) {
+            bail!(
+                "registry schema {} 不受支持；保留原文件并拒绝变更",
+                self.schema_version
+            );
+        }
         schema(self.profile_schema_version, "profile")?;
         let mut ids = BTreeSet::new();
+        let mut environment_ids = BTreeSet::new();
         for installed in &self.installed {
             validate_release_id(&installed.release_id)?;
             if !ids.insert(&installed.release_id) {
                 bail!("重复 installed 记录");
+            }
+            if let Some(binding) = &installed.gui {
+                if self.schema_version != 2 {
+                    bail!("schema 1 不接受环境实例绑定");
+                }
+                binding.validate()?;
+                if binding.storage_version == 1 && !environment_ids.insert(&binding.instance_id) {
+                    bail!("同一环境实例不可绑定到多个发布，拒绝跨版本复用");
+                }
             }
         }
         for pointer in [&self.current, &self.previous_known_good]
@@ -465,7 +557,10 @@ impl Registry {
     pub fn store(&self, root: &Path) -> Result<()> {
         self.validate()?;
         // 未知/损坏的磁盘状态禁止用当前内存对象覆盖。
-        let _ = Self::load(root)?;
+        let current = Self::load(root)?;
+        if self.schema_version < current.schema_version {
+            bail!("拒绝降级覆盖版本登记协议；原文件保留");
+        }
         write_json_atomic(&root.join("state/registry.json"), self)
     }
     pub fn record_installed(&mut self, release: &Release) -> Result<()> {
@@ -477,7 +572,66 @@ impl Registry {
             self.installed.push(Installed {
                 release_id: release.id.clone(),
                 healthy_at: None,
+                gui: None,
             });
+        }
+        Ok(())
+    }
+    pub fn gui_binding(&self, id: &str) -> Option<&EnvironmentBinding> {
+        self.installed
+            .iter()
+            .find(|record| record.release_id == id)
+            .and_then(|record| record.gui.as_ref())
+    }
+
+    /// 显式升级写协议；原v1字节先独立备份，旧启动器会因schema2拒绝写入。
+    pub fn upgrade_for_instances(&mut self, mutation: &WorkspaceMutation) -> Result<()> {
+        self.validate()?;
+        let layout = mutation.layout();
+        if Self::load(&layout.root)? != *self {
+            bail!("版本登记已变化，请重新读取后规划");
+        }
+        if self.schema_version == 2 {
+            return Ok(());
+        }
+        let path = layout.root.join("state/registry.json");
+        layout.guard_path(&path)?;
+        if path.exists() {
+            let backup = layout.root.join("backups").join(format!(
+                "registry-v1-{}-{}.json",
+                now(),
+                NEXT_TEMP.fetch_add(1, Ordering::Relaxed)
+            ));
+            layout.guard_path(&backup)?;
+            let mut file = OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .open(&backup)?;
+            file.write_all(&fs::read(&path)?)?;
+            file.sync_all()?;
+        }
+        let mut upgraded = self.clone();
+        upgraded.schema_version = 2;
+        upgraded.store(&layout.root)?;
+        *self = upgraded;
+        Ok(())
+    }
+
+    /// 调用方须先按同generation验证实例；绑定切换不继承旧环境的健康结论。
+    pub fn bind_gui(&mut self, id: &str, binding: EnvironmentBinding) -> Result<()> {
+        if self.schema_version != 2 {
+            bail!("需先显式升级版本登记协议");
+        }
+        binding.validate()?;
+        let record = self
+            .installed
+            .iter_mut()
+            .find(|record| record.release_id == id)
+            .context("只能绑定已登记版本")?;
+        record.gui = Some(binding);
+        record.healthy_at = None;
+        if self.previous_known_good.as_deref() == Some(id) {
+            self.previous_known_good = None;
         }
         Ok(())
     }
@@ -772,9 +926,139 @@ mod tests {
         }
     }
     #[test]
+    fn explicit_instance_upgrade_preserves_v1_bytes_and_legacy_environment_path() {
+        let temp = Temp::new();
+        let release = Catalog::embedded().unwrap().releases[0].clone();
+        let mutation = WorkspaceMutation::acquire(&temp.0, &release.id).unwrap();
+        let legacy_path = mutation.layout().environment.clone();
+        let mut registry = Registry::default();
+        registry.record_installed(&release).unwrap();
+        registry.store(&temp.0).unwrap();
+        let original = fs::read(temp.0.join("state/registry.json")).unwrap();
+        assert!(!String::from_utf8_lossy(&original).contains("\"gui\""));
+        registry.upgrade_for_instances(&mutation).unwrap();
+        assert_eq!(Registry::load(&temp.0).unwrap().schema_version, 2);
+        assert_eq!(
+            Layout::new(&temp.0, &release.id).unwrap().environment,
+            legacy_path
+        );
+        let backup = fs::read_dir(temp.0.join("backups"))
+            .unwrap()
+            .next()
+            .unwrap()
+            .unwrap()
+            .path();
+        assert_eq!(fs::read(backup).unwrap(), original);
+        let binding = EnvironmentBinding {
+            instance_id: "gui-verified-1".into(),
+            storage_version: 0,
+            recipe_id: "gui-cp310-win-x64-v1".into(),
+            recipe_sha256: "a".repeat(64),
+            generation: 1,
+        };
+        registry.bind_gui(&release.id, binding).unwrap();
+        registry.store(&temp.0).unwrap();
+        assert_eq!(
+            Layout::new(&temp.0, &release.id).unwrap().environment,
+            temp.0
+                .join("environments")
+                .join(&release.id)
+                .join("instances/gui-verified-1/gui")
+        );
+        assert!(Registry::load(&temp.0).unwrap().installed[0]
+            .healthy_at
+            .is_none());
+        let newer = fs::read(temp.0.join("state/registry.json")).unwrap();
+        assert!(Registry::default().store(&temp.0).is_err());
+        assert_eq!(fs::read(temp.0.join("state/registry.json")).unwrap(), newer);
+    }
+
+    #[test]
+    fn readonly_registry_load_does_not_upgrade_or_accept_v1_instance_fields() {
+        let temp = Temp::new();
+        let release = Catalog::embedded().unwrap().releases[0].clone();
+        let mutation = WorkspaceMutation::acquire(&temp.0, &release.id).unwrap();
+        let mut registry = Registry::default();
+        registry.record_installed(&release).unwrap();
+        registry.store(&temp.0).unwrap();
+        let path = temp.0.join("state/registry.json");
+        let original = fs::read(&path).unwrap();
+        assert_eq!(Registry::load(&temp.0).unwrap().schema_version, 1);
+        assert_eq!(fs::read(&path).unwrap(), original);
+        registry.installed[0].gui = Some(EnvironmentBinding {
+            instance_id: "gui-invalid".into(),
+            storage_version: 0,
+            recipe_id: "gui-cp310-win-x64-v1".into(),
+            recipe_sha256: "b".repeat(64),
+            generation: 1,
+        });
+        assert!(registry.store(&temp.0).is_err());
+        assert!(registry.upgrade_for_instances(&mutation).is_err());
+        assert_eq!(fs::read(&path).unwrap(), original);
+    }
+
+    #[test]
+    fn storage_version_preserves_legacy_binding_bytes_and_uses_explicit_short_paths() {
+        let temp = Temp::new();
+        let release = Catalog::embedded().unwrap().releases[0].clone();
+        let _mutation = WorkspaceMutation::acquire(&temp.0, &release.id).unwrap();
+        let legacy = serde_json::json!({
+            "instance_id": "gui-old-one", "recipe_id": "gui-cp310-win-x64-v1",
+            "recipe_sha256": "a".repeat(64), "generation": 1
+        });
+        let legacy_binding: EnvironmentBinding = serde_json::from_value(legacy.clone()).unwrap();
+        assert_eq!(legacy_binding.storage_version, 0);
+        assert_eq!(serde_json::to_value(&legacy_binding).unwrap(), legacy);
+        let mut registry = Registry {
+            schema_version: 2,
+            ..Registry::default()
+        };
+        registry.record_installed(&release).unwrap();
+        registry.bind_gui(&release.id, legacy_binding).unwrap();
+        registry.store(&temp.0).unwrap();
+        assert_eq!(
+            Layout::new(&temp.0, &release.id).unwrap().environment,
+            temp.0
+                .join("environments")
+                .join(&release.id)
+                .join("instances/gui-old-one/gui")
+        );
+        let binding = EnvironmentBinding {
+            instance_id: "g0123456789abcdef".into(),
+            storage_version: 1,
+            recipe_id: "gui-cp310-win-x64-v1".into(),
+            recipe_sha256: "a".repeat(64),
+            generation: 1,
+        };
+        registry.bind_gui(&release.id, binding.clone()).unwrap();
+        registry.store(&temp.0).unwrap();
+        assert_eq!(
+            Layout::new(&temp.0, &release.id).unwrap().environment,
+            temp.0.join("e/g0123456789abcdef")
+        );
+        let mut invalid = binding.clone();
+        invalid.storage_version = 2;
+        assert!(invalid.validate().is_err());
+        invalid.storage_version = 1;
+        invalid.instance_id = "gui-old-one".into();
+        assert!(invalid.validate().is_err());
+        invalid.instance_id = "g0123456789abcdeF".into();
+        assert!(invalid.validate().is_err());
+        let other = Catalog::embedded().unwrap().releases[1].clone();
+        registry.record_installed(&other).unwrap();
+        registry
+            .installed
+            .iter_mut()
+            .find(|record| record.release_id == other.id)
+            .unwrap()
+            .gui = Some(binding);
+        assert!(registry.validate().is_err());
+    }
+
+    #[test]
     fn embedded_catalog_has_real_distinct_main_and_dev() {
         let catalog = Catalog::embedded().unwrap();
-        assert_eq!(catalog.releases.len(), 2);
+        assert!(catalog.releases.len() >= 2);
         assert_ne!(catalog.releases[0].commit, catalog.releases[1].commit);
         assert!(catalog.release("../../outside").is_err());
     }

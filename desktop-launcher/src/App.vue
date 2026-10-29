@@ -1,7 +1,7 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
-import { cancelOperation, chooseDirectory, listenToLogs, openTrainer, operationEvents, operationHistory, operationSnapshot, prefetchRelease, rollbackRelease, runCommand, runReleaseCommand, stopTrainer } from './bridge'
-import type { OperationSnapshot, ReleaseCommand, Report, ReportCommand, VersionView } from './bridge'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { cancelOperation, chooseDirectory, diagnoseGui, installManagedRelease, listenToLogs, openTrainer, operationEvents, operationHistory, operationSnapshot, planGuiRepair, prefetchRelease, previewSourceRepair, recoverGuiRepair, repairGuiPackage, repairManagedSource, rollbackRelease, runCommand, runReleaseCommand, stopTrainer } from './bridge'
+import type { GuiDiagnosis, GuiRepairPreview, OperationSnapshot, PackageIntegrity, ReleaseCommand, Report, ReportCommand, VersionView } from './bridge'
 
 type Page = 'launch' | 'versions' | 'environment'
 interface Confirmation {
@@ -9,6 +9,8 @@ interface Confirmation {
   detail: string
   action: string
   destructive?: boolean
+  scope?: 'gui'
+  paths?: string[]
   execute: () => Promise<void>
 }
 
@@ -24,6 +26,10 @@ const confirmation = ref<Confirmation | null>(null)
 const confirmationCancel = ref<HTMLButtonElement>()
 const operation = ref<OperationSnapshot | null>(null)
 const history = ref<OperationSnapshot[]>([])
+const guiDiagnosis = ref<GuiDiagnosis | null>(null)
+const guiPreview = ref<GuiRepairPreview | null>(null)
+const showAllPackages = ref(false)
+let guiEpoch = 0
 let operationTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 let operationCursor = 0
@@ -73,6 +79,33 @@ const primaryLabel = computed(() => {
 })
 const primaryDisabled = computed(() => busy.value || running.value || (Boolean(report.value) && sameRoot.value && !installed.value && !installTarget.value))
 const installDownloadBytes = computed(() => installTarget.value?.download_bytes ?? 0)
+const managedCurrent = computed(() => Boolean(sameRoot.value && currentVersion.value?.managed_recipe))
+const guiRecoveryNeeded = computed(() => Boolean(guiDiagnosis.value?.dirty || guiDiagnosis.value?.recovery_pending || (guiDiagnosis.value && guiDiagnosis.value.generation !== guiDiagnosis.value.binding_generation)))
+const affectedPackages = computed(() => guiDiagnosis.value?.integrity.packages.filter(packageNeedsAttention) ?? [])
+const visiblePackages = computed(() => showAllPackages.value ? guiDiagnosis.value?.integrity.packages ?? [] : affectedPackages.value)
+const guiPlanBlocked = computed(() => Boolean(guiRecoveryNeeded.value || guiDiagnosis.value?.source_error || guiDiagnosis.value?.installed_metadata_error))
+
+watch([path, () => currentVersion.value?.id], clearGuiState, { flush: 'sync' })
+
+function clearGuiState() {
+  guiEpoch += 1
+  guiDiagnosis.value = null
+  guiPreview.value = null
+  showAllPackages.value = false
+  if (confirmation.value?.scope === 'gui') dismissConfirmation()
+}
+function packageNeedsAttention(item: PackageIntegrity) {
+  return item.status !== 'verified_original_files' || item.issues.length > 0 || item.generated.some((file) => file.kind === 'optional_derived_bytecode_unverified' && file.present)
+}
+function packageStatus(item: PackageIntegrity) {
+  if (item.generated.some((file) => file.kind === 'optional_derived_bytecode_unverified' && file.present)) return '存在未验证字节码'
+  return ({ verified_original_files: '原文件通过', missing: '文件缺失', damaged: '内容改变', unsupported: '需要进一步诊断' })[item.status] ?? '待检查'
+}
+function packagePlanDisabled(item: PackageIntegrity) {
+  return mutationDisabled.value || guiPlanBlocked.value || item.unsupported.length > 0 || item.issues.length > 0
+    || item.generated.some((file) => file.kind === 'optional_derived_bytecode_unverified' && file.present)
+    || item.generated.some((file) => file.kind === 'rewritten_record' && (!file.present || item.damaged.includes(file.path)))
+}
 
 function formatBytes(bytes: number) {
   if (!Number.isFinite(bytes) || bytes <= 0) return '未提供'
@@ -124,42 +157,61 @@ async function refreshHistory() {
 async function pollOperation() {
   const current = operation.value
   if (!current || disposed) return
+  const root = path.value.trim()
+  const stillCurrent = () => !disposed && operation.value?.id === current.id && path.value.trim() === root
   try {
     const next = await operationSnapshot(current.id)
+    if (!stillCurrent()) return
     // 游标失效时以快照为准；当前会话的事件随后从新游标继续。
     try {
-      (await operationEvents(current.id, operationCursor)).forEach((event) => { addLog(event.message); operationCursor = Math.max(operationCursor, event.seq) })
+      const events = await operationEvents(current.id, operationCursor)
+      if (!stillCurrent()) return
+      events.forEach((event) => { addLog(event.message); operationCursor = Math.max(operationCursor, event.seq) })
     } catch (reason) {
       if (!errorText(reason).includes('事件游标已过期')) throw reason
       operationCursor = Math.max(operationCursor, next.event_seq)
       addLog('部分较早事件已过期，已重新读取完整状态。')
     }
+    if (!stillCurrent()) return
     operation.value = next
     message.value = `${phaseText[next.phase]} · ${operationStatusText[next.status]}`
     if (next.error) error.value = next.error.message
-    if (next.status !== 'running') { await refreshHistory(); return }
-  } catch (reason) { error.value = errorText(reason) }
-  if (!disposed) operationTimer = setTimeout(() => { void pollOperation() }, 250)
+    if (next.status !== 'running') {
+      clearGuiState()
+      await refreshHistory()
+      if (next.kind !== 'download' && stillCurrent()) {
+        const value = await runCommand('inspect', root)
+        if (stillCurrent()) acceptReport(value)
+      }
+      return
+    }
+  } catch (reason) { if (stillCurrent()) error.value = errorText(reason) }
+  if (stillCurrent() && operation.value?.status === 'running') operationTimer = setTimeout(() => { void pollOperation() }, 250)
 }
-async function prefetch(version: VersionView) {
+async function prefetch(version: VersionView, install = false) {
   if (busy.value) return
   pending.value = '准备下载'
   error.value = ''
   try {
-    operation.value = await prefetchRelease(path.value.trim(), version.id)
+    operation.value = await (install ? installManagedRelease(path.value.trim(), version.id) : prefetchRelease(path.value.trim(), version.id))
     operationCursor = 0
-    message.value = '正在准备安装文件'
+    message.value = install ? '正在安装主程序' : '正在准备安装文件'
     void pollOperation()
   } catch (reason) { error.value = errorText(reason) }
   finally { pending.value = '' }
 }
-async function cancelDownload() {
-  if (!operation.value || operation.value.status !== 'running') return
+async function cancelCurrentOperation() {
+  const current = operation.value
+  if (!current || current.status !== 'running') return
+  const root = path.value.trim()
+  const stillCurrent = () => !disposed && operation.value?.id === current.id && path.value.trim() === root
   try {
-    const receipt = await cancelOperation(operation.value.id)
-    message.value = receipt === 'commit_in_progress' ? '正在保存操作结果，请等待本次保存完成。' : '已请求取消，正在保存可恢复的下载进度…'
-    operation.value = await operationSnapshot(operation.value.id)
-  } catch (reason) { error.value = errorText(reason) }
+    const receipt = await cancelOperation(current.id)
+    if (!stillCurrent()) return
+    message.value = receipt === 'commit_in_progress' ? '正在保存操作结果，请等待本次保存完成。' : receipt === 'already_finished' ? '本次操作已经结束，正在刷新状态。' : '已请求取消，正在等待任务结束与必要的恢复校验…'
+    const next = await operationSnapshot(current.id)
+    if (stillCurrent()) operation.value = next
+  } catch (reason) { if (stillCurrent()) error.value = errorText(reason) }
 }
 function errorText(value: unknown): string {
   if (value instanceof Error) return value.message
@@ -202,13 +254,14 @@ async function confirmAction() {
 }
 function trapDialogFocus(event: KeyboardEvent) {
   if (event.key !== 'Tab') return
-  const buttons = [...(event.currentTarget as HTMLElement).querySelectorAll<HTMLButtonElement>('button:not(:disabled)')]
+  const buttons = [...(event.currentTarget as HTMLElement).querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]')]
   const first = buttons[0]
   const last = buttons[buttons.length - 1]
   if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last?.focus() }
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
 }
 function install(version: VersionView) {
+  if (version.managed_recipe) return prefetch(version, true)
   return releaseCommand('install_release', version, `安装 ${channelName(version.channel)} ${version.version}`)
 }
 function select(version: VersionView) {
@@ -252,6 +305,100 @@ function stop() {
   })
 }
 function open() { return perform('打开训练器', openTrainer) }
+
+async function diagnoseManagedGui() {
+  if (!managedCurrent.value || mutationDisabled.value || !currentVersion.value) return
+  clearGuiState()
+  const root = path.value.trim()
+  const releaseId = currentVersion.value.id
+  const epoch = guiEpoch
+  await perform('只读诊断 GUI 依赖', async () => {
+    const value = await diagnoseGui(root, releaseId)
+    if (epoch !== guiEpoch || root !== path.value.trim() || releaseId !== currentVersion.value?.id) return
+    guiDiagnosis.value = value
+    addLog(`只读诊断完成：${value.integrity.packages.length} 个包，实例代次 ${value.generation}。生成脚本的内容验证范围见诊断说明。`)
+  })
+}
+async function previewPackage(item: PackageIntegrity) {
+  if (!currentVersion.value || !guiDiagnosis.value || packagePlanDisabled(item)) return
+  guiPreview.value = null
+  const root = path.value.trim()
+  const releaseId = currentVersion.value.id
+  const epoch = guiEpoch
+  await perform(`生成 ${item.name} 修复清单`, async () => {
+    const value = await planGuiRepair(root, releaseId, item.name)
+    if (epoch !== guiEpoch || root !== path.value.trim() || releaseId !== currentVersion.value?.id) return
+    guiPreview.value = value
+    await nextTick()
+    document.getElementById('gui-repair-preview')?.scrollIntoView({ block: 'nearest' })
+  })
+}
+function confirmGuiRepair() {
+  const preview = guiPreview.value
+  const version = currentVersion.value
+  if (!preview || !version || mutationDisabled.value || guiPlanBlocked.value) return
+  const root = path.value.trim()
+  const epoch = guiEpoch
+  return ask({
+    scope: 'gui', title: `确认修复 ${preview.package}`,
+    detail: `将按以下 ${preview.paths.length.toLocaleString()} 个文件路径修复 ${preview.package} ${preview.version}。仅离线重装此包，先保存独立快照，再验证完整依赖与关键导入。快照恢复后若仍不通过验证，实例会保持待恢复状态。安装器生成脚本只检查路径与存在性。`,
+    paths: preview.paths, action: '确认修复此包',
+    execute: async () => {
+      if (epoch !== guiEpoch || root !== path.value.trim() || version.id !== currentVersion.value?.id) { error.value = '目录或版本已改变，请重新诊断生成清单。'; return }
+      await startGuiOperation('正在修复指定包', () => repairGuiPackage(root, version.id, preview.package, preview.plan_sha256))
+    },
+  })
+}
+function confirmGuiRecovery() {
+  const version = currentVersion.value
+  const diagnosis = guiDiagnosis.value
+  if (!version || !diagnosis || mutationDisabled.value || !guiRecoveryNeeded.value) return
+  const root = path.value.trim()
+  const epoch = guiEpoch
+  return ask({
+    scope: 'gui', title: '恢复未完成的单包修复',
+    detail: `将读取实例 ${diagnosis.instance_id} 的持久修复记录，恢复独立快照或完成已验证代次的登记，并重新检查依赖与关键导入。原快照已损坏时会继续保留待恢复状态，恢复操作不保证环境通过验证。`,
+    action: '开始恢复与校验',
+    execute: async () => {
+      if (epoch !== guiEpoch || root !== path.value.trim() || version.id !== currentVersion.value?.id) { error.value = '目录或版本已改变，请重新诊断。'; return }
+      await startGuiOperation('正在恢复未完成修复', () => recoverGuiRepair(root, version.id))
+    },
+  })
+}
+async function inspectSourceRepair(version: VersionView) {
+  if (mutationDisabled.value) return
+  const root = path.value.trim()
+  await perform('查看源码修复清单', async () => {
+    const preview = await previewSourceRepair(root, version.id)
+    if (root !== path.value.trim()) return
+    await ask({
+      scope: 'gui', title: '确认修复固定版本源码',
+      detail: `将替换 ${preview.replacement_root} 中的 ${preview.expected_source_files.length} 个固定源码和前端文件，原目录移至备份。环境实例和用户资料须保持不变。${preview.source_integrity_error ? '当前源码检查未通过。' : '当前源码完整，执行时将再次检查。'}`,
+      paths: [...preview.expected_source_files, ...preview.generated_files],
+      action: '确认修复源码',
+      execute: async () => {
+        if (root !== path.value.trim()) { error.value = '目录已改变，请重新查看清单。'; return }
+        await startGuiOperation('正在修复固定源码', () => repairManagedSource(root, version.id))
+      },
+    })
+  })
+}
+async function startGuiOperation(label: string, action: () => Promise<OperationSnapshot>) {
+  if (busy.value) return
+  pending.value = label
+  error.value = ''
+  try {
+    operation.value = await action()
+    operationCursor = 0
+    clearGuiState()
+    message.value = label
+    void pollOperation()
+  } catch (reason) {
+    error.value = errorText(reason)
+    clearGuiState()
+    message.value = '操作未能开始，请重新诊断后重试。'
+  } finally { pending.value = '' }
+}
 onMounted(async () => {
   try { unlisten = await listenToLogs(addLog) }
   catch { addLog('桌面事件接口尚未连接；请通过桌面启动器打开此页面。') }
@@ -281,8 +428,8 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
       </section>
 
       <div class="page-content">
-        <section v-if="operation" class="interrupted-note" role="status" aria-live="polite"><strong>{{ phaseText[operation.phase] }} · {{ operationStatusText[operation.status] }}</strong><p>准备安装文件；完整校验通过后可继续安装此版本。</p><button v-if="operation.status === 'running'" :disabled="operation.cancel_requested" @click="cancelDownload">{{ operation.cancel_requested ? '正在取消…' : '取消下载' }}</button><p v-if="operation.error">{{ operation.error.message }}</p></section>
-        <section v-else-if="history.some((item) => item.status === 'interrupted')" class="interrupted-note" role="status"><strong>上次下载未完整结束</strong><p>可在版本管理中重新准备安装文件，继续下载；当前安装状态请重新检查。</p></section>
+        <section v-if="operation" class="interrupted-note" role="status" aria-live="polite"><strong>{{ phaseText[operation.phase] }} · {{ operationStatusText[operation.status] }}</strong><p>{{ operation.kind === 'download' ? '准备安装文件；完整校验通过后可继续安装此版本。' : operation.kind === 'repair' ? '按独立事务修复或恢复指定包，完成后重新诊断确认实例状态。' : '安装并验证主程序与独立运行环境。' }}</p><button v-if="operation.status === 'running'" :disabled="operation.cancel_requested" @click="cancelCurrentOperation">{{ operation.cancel_requested ? '正在取消与收尾…' : '取消操作' }}</button><p v-if="operation.error">{{ operation.error.message }}</p></section>
+        <section v-else-if="history.some((item) => item.status === 'interrupted')" class="interrupted-note" role="status"><strong>上次操作未完整结束</strong><p>下载可在版本管理中继续；安装与修复请重新检查，固定 GUI 实例可在环境管理中诊断并恢复。</p></section>
         <section v-if="report?.interrupted.length && sameRoot" class="interrupted-note" role="status"><strong>检测到未完成的操作</strong><ul><li v-for="(item, index) in report.interrupted" :key="index">{{ item }}</li></ul><span>请重新检查后重试对应安装或修复步骤。</span></section>
         <template v-if="page === 'launch'">
           <section class="summary-grid" aria-label="实际安装状态"><div v-for="item in statusItems" :key="item.label" class="summary-item"><div><span class="status-dot" :class="{ ok: sameRoot && item.ok }" aria-hidden="true"></span><strong>{{ item.label }}</strong><span class="status-word">{{ !report || !sameRoot ? '待检查' : item.ok ? '已就绪' : '待处理' }}</span></div><small>{{ item.detail }}</small></div></section>
@@ -296,7 +443,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
           <div class="section-caption"><h2>内置发布清单</h2><span>固定制品，尚未查询远端更新</span></div>
           <section class="rollback-panel"><div><strong>上一已健康版本</strong><p v-if="rollbackVersion"><span>{{ channelName(rollbackVersion.channel) }} · {{ rollbackVersion.version }}</span><code>{{ rollbackVersion.commit.slice(0, 8) }}</code></p><p v-else>尚无可回退记录。版本成功启动并通过健康检查后会记录。</p></div><button :disabled="mutationDisabled || !rollbackAvailable" @click="rollback">回退到此版本</button></section>
           <p v-if="rollbackVersion && !rollbackAvailable" class="inline-note">回退目标尚未安装完整或存在检查问题，请先修复对应版本。</p>
-          <section v-for="group in channels" :key="group.channel" class="channel-section" :aria-label="channelName(group.channel)"><h3>{{ channelName(group.channel) }}<span>{{ group.channel === 'dev' ? '包含开发中的改动' : group.channel === 'main' ? '稳定发布线' : '内置版本' }}</span></h3><p v-if="!group.versions.length" class="empty-channel">内置清单尚未提供此发布线的版本。</p><article v-for="version in group.versions" :key="version.id" class="version-card" :aria-label="`${version.channel} ${version.version} ${version.commit.slice(0, 8)}`"><div class="version-top"><div><strong>{{ version.version }}</strong><span v-if="version.current || version.id === report?.current_release" class="current-tag">当前使用</span><span v-else-if="version.id === report?.previous_known_good" class="healthy-tag">回退保留</span><span v-else-if="version.known_good" class="healthy-tag">曾健康启动</span></div><span class="release-state" :class="{ good: version.installed && version.source_ok && version.environment_ok }">{{ releaseState(version) }}</span></div><dl class="version-details"><div><dt>提交</dt><dd><code>{{ version.commit }}</code></dd></div><div><dt>下载</dt><dd><code>{{ formatBytes(version.download_bytes) }}</code><span class="detail-note">源码制品</span></dd></div><div><dt>磁盘</dt><dd><code>{{ formatBytes(version.source_bytes) }}</code><span class="detail-note">{{ version.installed ? '源码展开；运行环境另计' : '预计源码展开；运行环境另计' }}</span></dd></div><div v-if="version.installed"><dt>检查</dt><dd><span :class="{ 'check-warning': !version.source_ok }">源码{{ version.source_ok ? '完整' : '需修复' }}</span><span class="detail-separator">/</span><span :class="{ 'check-warning': !version.environment_ok }">环境{{ version.environment_ok ? '通过' : '需修复' }}</span></dd></div></dl><div class="version-actions"><button :disabled="mutationDisabled" @click="install(version)">{{ version.installed ? '检查并补全安装' : '下载安装' }}</button><button :disabled="mutationDisabled || !version.installed || !version.source_ok || !version.environment_ok || version.current || version.id === report?.current_release" @click="select(version)">切换到此版本</button><button class="delete-button" :disabled="mutationDisabled || !version.installed || protectedRelease(version)" :title="protectedRelease(version) ? '当前版本及上一已健康版本需保留' : '删除受管版本目录'" @click="remove(version)">删除</button></div></article></section>
+          <section v-for="group in channels" :key="group.channel" class="channel-section" :aria-label="channelName(group.channel)"><h3>{{ channelName(group.channel) }}<span>{{ group.channel === 'dev' ? '包含开发中的改动' : group.channel === 'main' ? '稳定发布线' : '内置版本' }}</span></h3><p v-if="!group.versions.length" class="empty-channel">内置清单尚未提供此发布线的版本。</p><article v-for="version in group.versions" :key="version.id" class="version-card" :aria-label="`${version.channel} ${version.version} ${version.commit.slice(0, 8)}`"><div class="version-top"><div><strong>{{ version.version }}</strong><span v-if="version.current || version.id === report?.current_release" class="current-tag">当前使用</span><span v-else-if="version.id === report?.previous_known_good" class="healthy-tag">回退保留</span><span v-else-if="version.known_good" class="healthy-tag">曾健康启动</span></div><span class="release-state" :class="{ good: version.installed && version.source_ok && version.environment_ok }">{{ releaseState(version) }}</span></div><dl class="version-details"><div><dt>提交</dt><dd><code>{{ version.commit }}</code></dd></div><div><dt>下载</dt><dd><code>{{ formatBytes(version.download_bytes) }}</code><span class="detail-note">源码制品</span></dd></div><div><dt>磁盘</dt><dd><code>{{ formatBytes(version.source_bytes) }}</code><span class="detail-note">{{ version.installed ? '源码展开；运行环境另计' : '预计源码展开；运行环境另计' }}</span></dd></div><div v-if="version.installed"><dt>检查</dt><dd><span :class="{ 'check-warning': !version.source_ok }">源码{{ version.source_ok ? '完整' : '需修复' }}</span><span class="detail-separator">/</span><span :class="{ 'check-warning': !version.environment_ok }">环境{{ version.environment_ok ? '通过' : '需修复' }}</span></dd></div></dl><div class="version-actions"><button v-if="version.managed_recipe && version.installed" :disabled="mutationDisabled" @click="inspectSourceRepair(version)">源码修复清单</button><button :disabled="mutationDisabled" @click="install(version)">{{ version.installed ? '检查并补全安装' : '下载安装' }}</button><button :disabled="mutationDisabled || !version.installed || !version.source_ok || !version.environment_ok || version.current || version.id === report?.current_release" @click="select(version)">切换到此版本</button><button class="delete-button" :disabled="mutationDisabled || !version.installed || protectedRelease(version)" :title="protectedRelease(version) ? '当前版本及上一已健康版本需保留' : '删除受管版本目录'" @click="remove(version)">删除</button></div></article></section>
           <p class="scope-note">已安装表示版本目录存在，不代表可以运行。切换依据每个版本的实际检查；当前版本和上一已健康版本受删除保护。main / dev 使用发布线与提交区分，即使版本号相同也分别管理。</p>
           <section class="environment-actions" aria-label="准备版本安装文件"><button v-for="version in versions" :key="version.id" :disabled="mutationDisabled" @click="prefetch(version)">准备 {{ channelName(version.channel) }} 安装文件</button></section>
         </template>
@@ -306,8 +453,40 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
           <p class="environment-scope">当前检查覆盖启动器基础工具、训练器主程序和网页资源。各独立训练引擎的 Python / Torch / GPU 诊断尚未接入。</p>
           <div v-if="report?.checks.length && sameRoot" class="checks" role="list" aria-label="环境检查明细"><div v-for="(check, index) in report.checks" :key="`${index}-${check.name}`" class="check-row" role="listitem"><span class="check-badge" :class="{ ok: check.ok }">{{ check.ok ? '通过' : '待处理' }}</span><div><strong>{{ check.name }}</strong><p>{{ check.detail }}</p></div></div></div>
           <p v-else class="scope-note">请先检查安装目录。训练器目录缺失或环境损坏时，桌面检查与修复入口仍可使用。</p>
-          <div class="environment-actions"><button :disabled="mutationDisabled" @click="command('bootstrap', '准备基础工具')">准备基础工具</button><button :disabled="mutationDisabled" @click="command('restore_trainer', '恢复当前版本源码')">恢复当前版本源码</button><button :disabled="mutationDisabled" @click="command('install_environment', '安装或修复运行环境')">安装 / 修复运行环境</button></div>
-          <p class="hint">源码恢复会将原目录移至备份；请留意日志中的路径和数据处理结果。运行中的训练器需先停止，才能安装或修复。</p>
+          <section v-if="managedCurrent" class="gui-diagnostics" aria-labelledby="gui-diagnostics-title">
+            <div class="section-caption"><h2 id="gui-diagnostics-title">固定 GUI 依赖诊断与单包修复</h2><button :disabled="mutationDisabled" @click="diagnoseManagedGui">{{ pending === '只读诊断 GUI 依赖' ? '正在诊断…' : '只读诊断依赖' }}</button></div>
+            <p class="hint">诊断依据固定 wheel 的真实文件摘要。选择单个包后，先审查文件清单，再确认离线修复。请先停止运行中的训练器。</p>
+            <template v-if="guiDiagnosis">
+              <dl class="gui-instance"><div><dt>实例</dt><dd><code>{{ guiDiagnosis.instance_id }}</code></dd></div><div><dt>实例代次 / 登记代次</dt><dd>{{ guiDiagnosis.generation }} / {{ guiDiagnosis.binding_generation }}</dd></div><div><dt>状态</dt><dd>{{ guiDiagnosis.dirty ? '待恢复，禁止启动' : guiDiagnosis.recovery_pending ? '存在待收尾修复记录' : guiDiagnosis.generation !== guiDiagnosis.binding_generation ? '登记代次不一致' : '可继续诊断' }}</dd></div></dl>
+              <p v-if="guiDiagnosis.source_error" class="gui-issue" role="alert"><strong>源码检查未通过</strong>{{ guiDiagnosis.source_error }}</p>
+              <p v-if="guiDiagnosis.installed_metadata_error" class="gui-issue" role="alert"><strong>安装元数据检查未通过</strong>{{ guiDiagnosis.installed_metadata_error }}</p>
+              <div v-if="guiRecoveryNeeded" class="gui-recovery"><p>存在未完成的修复或实例代次不一致。恢复会读取持久记录并重新验证；原快照已损坏时会保留待恢复状态。</p><button :disabled="mutationDisabled" @click="confirmGuiRecovery">恢复未完成修复</button></div>
+              <div class="gui-package-filter"><span>{{ guiDiagnosis.integrity.packages.length }} 个固定包 · {{ affectedPackages.length }} 个待处理</span><label><input v-model="showAllPackages" type="checkbox" />显示全部包</label></div>
+              <p v-if="!visiblePackages.length" class="scope-note">固定包原文件和记录集合未发现缺坏。生成入口脚本只检查路径与存在性；解释器归属、pip check 与关键导入会在安装或修复验证时执行。</p>
+              <article v-for="item in visiblePackages" :key="item.name" class="gui-package" :aria-label="`${item.name} ${packageStatus(item)}`">
+                <div class="gui-package-heading"><div><strong>{{ item.name }}</strong><code>{{ item.version }}</code><span>{{ packageStatus(item) }}</span></div><button :disabled="packagePlanDisabled(item)" @click="previewPackage(item)">查看修复清单</button></div>
+                <p v-if="item.missing.length || item.damaged.length" class="hint">缺失 {{ item.missing.length }} 项 · 内容或记录异常 {{ item.damaged.length }} 项</p>
+                <details v-if="item.missing.length" class="gui-file-details"><summary>缺失文件（{{ item.missing.length }}）</summary><pre tabindex="0" :aria-label="`${item.name} 缺失文件完整路径`">{{ item.missing.join('\n') }}</pre></details>
+                <details v-if="item.damaged.length" class="gui-file-details"><summary>内容或记录异常（{{ item.damaged.length }}）</summary><pre tabindex="0" :aria-label="`${item.name} 异常文件完整路径`">{{ item.damaged.join('\n') }}</pre></details>
+                <p v-for="(issue, index) in [...item.issues, ...item.unsupported]" :key="index" class="gui-issue">{{ issue }}</p>
+                <p v-if="item.generated.some((file) => file.kind === 'optional_derived_bytecode_unverified' && file.present)" class="gui-issue">发现未验证字节码。需要进一步诊断，固定无字节码运行合同禁止直接执行此环境。</p>
+                <p v-if="packagePlanDisabled(item) && !mutationDisabled" class="hint">请先处理源码、元数据、文件记录异常或未完成的实例事务；单包修复清单由启动器重新验证后生成。</p>
+              </article>
+              <section v-if="guiPreview" id="gui-repair-preview" class="gui-preview" aria-labelledby="gui-preview-title">
+                <div class="section-caption"><h2 id="gui-preview-title">待审修复清单：{{ guiPreview.package }}</h2><button class="compact" :disabled="busy" @click="guiPreview = null">关闭清单</button></div>
+                <p>{{ guiPreview.version }} · 实例代次 {{ guiPreview.generation }} · {{ guiPreview.paths.length.toLocaleString() }} 个允许文件路径</p>
+                <p class="hint">包含包原文件、安装器生成项、入口脚本及由原文件推导的可选缓存路径。生成路径进入清单不代表其内容已经验证。</p>
+                <p class="hint">{{ guiPreview.before_original_files_verified ? '修复前原文件已通过静态检查，执行前会继续验证运行状态。' : '修复前发现原文件缺坏，已阻止执行受影响环境；修复后再验证完整依赖与关键导入。' }}</p>
+                <pre class="gui-paths" tabindex="0" aria-label="单包修复完整允许路径清单">{{ guiPreview.paths.join('\n') }}</pre>
+                <button class="primary" :disabled="mutationDisabled || guiPlanBlocked" @click="confirmGuiRepair">审查并确认修复此包</button>
+              </section>
+              <p class="scope-note">本次诊断只读取文件。固定包的原文件摘要与记录集合、安装器生成项的验证范围分别展示；诊断结果不代表训练器已健康启动。</p>
+            </template>
+          </section>
+          <template v-else>
+            <div class="environment-actions"><button :disabled="mutationDisabled" @click="command('bootstrap', '准备基础工具')">准备基础工具</button><button :disabled="mutationDisabled" @click="command('restore_trainer', '恢复当前版本源码')">恢复当前版本源码</button><button :disabled="mutationDisabled" @click="command('install_environment', '安装或修复运行环境')">安装 / 修复运行环境</button></div>
+            <p class="hint">源码恢复会将原目录移至备份；请留意日志中的路径和数据处理结果。运行中的训练器需先停止，才能安装或修复。</p>
+          </template>
           <section v-if="report?.profile_path && sameRoot" class="profile-info"><span>共享用户资料</span><code>{{ report.profile_path }}</code></section>
         </template>
       </div>
@@ -315,6 +494,40 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
       <section class="runtime-panel" aria-label="操作日志"><div class="runtime-status" role="status" aria-live="polite"><span class="working-dot" :class="{ active: pending }" aria-hidden="true"></span><span>{{ message }}</span><span class="log-count">{{ logs.length }} 行日志</span></div><p v-if="error" class="error" role="alert">{{ error }}</p><pre ref="logPanel" tabindex="0" aria-label="日志内容">{{ logs.length ? logs.join('\n') : '等待操作。检查结果以实际文件和运行探测为准。' }}</pre></section>
     </main>
 
-    <div v-if="confirmation" class="dialog-backdrop" @keydown.esc.prevent="dismissConfirmation" @keydown="trapDialogFocus"><section class="confirmation-dialog" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-detail"><h2 id="confirmation-title">{{ confirmation.title }}</h2><p id="confirmation-detail">{{ confirmation.detail }}</p><div><button ref="confirmationCancel" @click="dismissConfirmation">取消</button><button :class="confirmation.destructive ? 'danger' : 'primary'" @click="confirmAction">{{ confirmation.action }}</button></div></section></div>
+    <div v-if="confirmation" class="dialog-backdrop" @keydown.esc.prevent="dismissConfirmation" @keydown="trapDialogFocus"><section class="confirmation-dialog" :class="{ 'gui-confirmation': confirmation.paths }" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-detail"><h2 id="confirmation-title">{{ confirmation.title }}</h2><p id="confirmation-detail">{{ confirmation.detail }}</p><pre v-if="confirmation.paths" class="gui-paths" tabindex="0" aria-label="确认修复的完整文件清单">{{ confirmation.paths.join('\n') }}</pre><div><button ref="confirmationCancel" @click="dismissConfirmation">取消</button><button :class="confirmation.destructive ? 'danger' : 'primary'" @click="confirmAction">{{ confirmation.action }}</button></div></section></div>
   </div>
 </template>
+
+<style scoped>
+.version-actions { flex-wrap: wrap; }
+.gui-diagnostics { margin-top: 18px; border-top: 1px solid #e5e5e5; padding-top: 15px; }
+.gui-diagnostics > .section-caption { align-items: flex-start; }
+.gui-diagnostics > .section-caption button { font-size: 11px; flex-shrink: 0; }
+.gui-instance { font-size: 10px; color: #525252; margin: 12px 0; }
+.gui-instance > div { display: flex; gap: 12px; margin-top: 6px; }
+.gui-instance dt { flex: 0 0 118px; color: #737373; }
+.gui-instance dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
+.gui-issue { font-size: 10px; line-height: 1.8; color: #404040; background: #f5f5f5; border: 1px solid #d4d4d4; padding: 8px 9px; margin: 8px 0; overflow-wrap: anywhere; }
+.gui-issue strong { display: block; margin-bottom: 3px; }
+.gui-recovery { border: 1px solid #d4d4d4; padding: 10px; margin: 10px 0; background: #fafafa; }
+.gui-recovery p { font-size: 11px; color: #525252; line-height: 1.8; margin: 0 0 8px; }
+.gui-recovery button { font-size: 11px; }
+.gui-package-filter { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10px; color: #737373; margin: 15px 0 8px; }
+.gui-package-filter label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.gui-package-filter input { margin: 0; accent-color: #525252; }
+.gui-package { border: 1px solid #e5e5e5; border-radius: 3px; padding: 10px; margin: 8px 0; }
+.gui-package-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+.gui-package-heading > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; min-width: 0; }
+.gui-package-heading strong { font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
+.gui-package-heading span { color: #737373; font-size: 10px; }
+.gui-package-heading button { font-size: 10px; padding: 5px 8px; }
+.gui-file-details { margin-top: 8px; font-size: 10px; color: #525252; }
+.gui-file-details summary { cursor: pointer; }
+.gui-file-details pre, .gui-paths { font: 10px/1.75 Consolas, "Microsoft YaHei", monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 145px; overflow: auto; background: #fafafa; border: 1px solid #e5e5e5; padding: 8px; scrollbar-width: thin; }
+.gui-preview { border: 1px solid #b5b5b5; padding: 12px; margin: 15px 0 10px; border-radius: 3px; }
+.gui-preview > p { color: #525252; font-size: 11px; line-height: 1.8; }
+.gui-preview > button { margin-top: 5px; font-size: 11px; }
+.gui-confirmation { width: 560px; max-height: calc(100vh - 48px); overflow: auto; }
+.gui-confirmation > p { margin-bottom: 10px; font-size: 11px; }
+.gui-confirmation .gui-paths { max-height: min(180px, 30vh); margin-bottom: 16px; }
+</style>

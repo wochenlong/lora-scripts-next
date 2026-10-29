@@ -1,10 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 mod core;
+mod instances;
 mod model;
 mod operations;
+mod python_integrity;
+mod recipe;
 #[cfg(test)]
 mod recovery;
 mod runtime_view;
+mod source_integrity;
+mod wheel_integrity;
 use core::{Engine, Logger, Report};
 use std::{
     path::PathBuf,
@@ -30,11 +35,22 @@ impl Drop for WorkerGuard {
 }
 
 // 操作控制与 Engine 分开持有，网络/子进程长操作不会阻塞取消和状态读取。
-#[tauri::command]
-async fn prefetch_release(
+enum ManagedAction {
+    Prefetch,
+    Install,
+    Repair {
+        package: String,
+        plan_sha256: String,
+    },
+    Recover,
+    RepairSource,
+}
+
+async fn begin_release_operation(
     state: tauri::State<'_, Runtime>,
     root: String,
     release_id: String,
+    action: ManagedAction,
 ) -> Result<operations::OperationSnapshot, String> {
     state
         .workers
@@ -47,7 +63,12 @@ async fn prefetch_release(
         return Err("启动器正在退出，请重新打开后操作".into());
     }
     let catalog = model::Catalog::embedded().map_err(|e| format!("{e:#}"))?;
-    catalog.release(&release_id).map_err(|e| format!("{e:#}"))?;
+    let release = catalog.release(&release_id).map_err(|e| format!("{e:#}"))?;
+    if !matches!(action, ManagedAction::Prefetch)
+        && release.environment_recipe != "gui-cp310-win-x64-v1"
+    {
+        return Err("该历史版本尚未提供固定安装配方，请选择已适配版本".into());
+    }
     let root = if root.trim().is_empty() {
         state.default_root.clone()
     } else {
@@ -59,7 +80,16 @@ async fn prefetch_release(
     let id = format!("download-{}-{}-{serial}", model::now(), std::process::id());
     let handle = state
         .operations
-        .start(&id, operations::OperationKind::Download)
+        .start(
+            &id,
+            match &action {
+                ManagedAction::Prefetch => operations::OperationKind::Download,
+                ManagedAction::Install => operations::OperationKind::Execute,
+                ManagedAction::Repair { .. }
+                | ManagedAction::Recover
+                | ManagedAction::RepairSource => operations::OperationKind::Repair,
+            },
+        )
         .map_err(|e| format!("{e:#}"))?;
     if state
         .shutting_down
@@ -81,7 +111,22 @@ async fn prefetch_release(
             let mut engine = engine
                 .try_lock()
                 .map_err(|_| anyhow::anyhow!("已有安装或运行检查正在执行，请稍后重试"))?;
-            engine.prefetch_release(&root, &release_id, &handle)
+            match action {
+                ManagedAction::Install => {
+                    engine.install_release_operation(&root, &release_id, &handle)
+                }
+                ManagedAction::Prefetch => engine.prefetch_release(&root, &release_id, &handle),
+                ManagedAction::Repair {
+                    package,
+                    plan_sha256,
+                } => {
+                    engine.repair_gui_operation(&root, &release_id, &package, &plan_sha256, &handle)
+                }
+                ManagedAction::Recover => engine.recover_gui_operation(&root, &release_id, &handle),
+                ManagedAction::RepairSource => {
+                    engine.repair_source_operation(&root, &release_id, &handle)
+                }
+            }
         })();
         // 未能取得 lease 等早期错误只保存在本进程；不能越过 lease 写工作区。
         if manager
@@ -105,6 +150,122 @@ async fn prefetch_release(
         }
     });
     Ok(initial)
+}
+
+#[tauri::command]
+async fn prefetch_release(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(state, root, release_id, ManagedAction::Prefetch).await
+}
+#[tauri::command]
+async fn install_managed_release(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(state, root, release_id, ManagedAction::Install).await
+}
+
+#[tauri::command]
+async fn diagnose_gui(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<serde_json::Value, String> {
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine.lock().map_err(|_| "启动器状态锁异常".to_string())?;
+        let root = engine
+            .resolve(&root)
+            .map_err(|error| format!("{error:#}"))?;
+        engine
+            .diagnose_gui(&root, &release_id)
+            .map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn plan_gui_repair(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    package: String,
+) -> Result<serde_json::Value, String> {
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine.lock().map_err(|_| "启动器状态锁异常".to_string())?;
+        let root = engine
+            .resolve(&root)
+            .map_err(|error| format!("{error:#}"))?;
+        engine
+            .plan_gui_repair(&root, &release_id, &package)
+            .map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn repair_gui_package(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    package: String,
+    plan_sha256: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::Repair {
+            package,
+            plan_sha256,
+        },
+    )
+    .await
+}
+
+#[tauri::command]
+async fn recover_gui_repair(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(state, root, release_id, ManagedAction::Recover).await
+}
+
+#[tauri::command]
+async fn preview_source_repair(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<serde_json::Value, String> {
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let engine = engine.lock().map_err(|_| "启动器状态锁异常".to_string())?;
+        let root = engine
+            .resolve(&root)
+            .map_err(|error| format!("{error:#}"))?;
+        engine
+            .preview_source_repair(&root, &release_id)
+            .map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+
+#[tauri::command]
+async fn repair_managed_source(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(state, root, release_id, ManagedAction::RepairSource).await
 }
 
 #[tauri::command]
@@ -328,6 +489,27 @@ fn main() {
             let (log, _) = core::logger();
             let mut engine = Engine::new(root.clone(), log);
             let root = engine.resolve(&root.to_string_lossy())?;
+            if matches!(
+                op.as_str(),
+                "diagnose-gui" | "plan-gui-repair" | "preview-source-repair"
+            ) {
+                let id = args
+                    .get(4)
+                    .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?;
+                let value = if op == "preview-source-repair" {
+                    engine.preview_source_repair(&root, id)?
+                } else if op == "diagnose-gui" {
+                    engine.diagnose_gui(&root, id)?
+                } else {
+                    engine.plan_gui_repair(
+                        &root,
+                        id,
+                        args.get(5).ok_or_else(|| anyhow::anyhow!("缺少包名称"))?,
+                    )?
+                };
+                println!("{}", serde_json::to_string_pretty(&value)?);
+                return Ok(());
+            }
             let report = match op.as_str() {
                 "inspect" => engine.inspect(&root)?,
                 "bootstrap" => engine.bootstrap(&root)?,
@@ -350,6 +532,29 @@ fn main() {
                     args.get(4)
                         .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?,
                 )?,
+                "repair-gui-package" | "recover-gui-repair" | "repair-managed-source" => {
+                    let manager = operations::OperationManager::default();
+                    let id = format!("cli-repair-{}-{}", model::now(), std::process::id());
+                    let operation = manager.start(&id, operations::OperationKind::Repair)?;
+                    let release = args
+                        .get(4)
+                        .ok_or_else(|| anyhow::anyhow!("缺少 release ID"))?;
+                    if op == "repair-managed-source" {
+                        engine.repair_source_operation(&root, release, &operation)?;
+                    } else if op == "recover-gui-repair" {
+                        engine.recover_gui_operation(&root, release, &operation)?;
+                    } else {
+                        engine.repair_gui_operation(
+                            &root,
+                            release,
+                            args.get(5).ok_or_else(|| anyhow::anyhow!("缺少包名称"))?,
+                            args.get(6)
+                                .ok_or_else(|| anyhow::anyhow!("缺少已审核 plan SHA256"))?,
+                            &operation,
+                        )?;
+                    }
+                    engine.inspect(&root)?
+                }
                 "select" => engine.select_release(
                     &root,
                     args.get(4)
@@ -400,6 +605,13 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             prefetch_release,
+            install_managed_release,
+            diagnose_gui,
+            plan_gui_repair,
+            repair_gui_package,
+            recover_gui_repair,
+            preview_source_repair,
+            repair_managed_source,
             operation_snapshot,
             operation_events,
             cancel_operation,

@@ -4,6 +4,8 @@
 
 这是桌面启动器的正式底座，尚未覆盖 #516 的全部功能。功能实现和实际验收状态分别记录；本说明不将构建成功视作新电脑、GPU 训练或全部损坏场景通过。当前进度和证据入口见 [正式化底座施工计划](../docs/tasks/desktop-launcher-foundation-plan/README.md) 与 [总控索引](../docs/tasks/desktop-launcher-foundation-plan/00_总控目标索引.md)。
 
+当前功能分支正在执行[完整交付任务书](../docs/tasks/desktop-launcher-full-plan/00_总控目标索引.md)的 M1，尚未完成本阶段验收。固定 GUI 候选已接入 81 个 wheel 的 hash 锁、基础 Python 完整文件清单、独立实例与单包修复预览、源码分项修复和持久恢复意图。新环境采用 `e/<短实例ID>`，旧记录继续读取原路径，详见[路径兼容补充](../docs/design/desktop-launcher-m1-instance-storage.md)。这些能力仍在真实安装与故障验证中，下文旧底座能力边界以完整任务书实时进度为准。
+
 ## 安装与使用
 
 运行构建后的 `next-trainer-launcher.exe`。运行时不需要系统 Python、uv、Node 或 Rust；Windows 需要 WebView2。当前没有附带 WebView2 安装器，首次安装到缺少 WebView2 的电脑仍需单独处理。
@@ -86,6 +88,8 @@ main 和 dev 的实际 `VERSION` 都写为 `3.3.1-dev`。main 在界面中标作
 ## 开发与构建
 
 Windows 构建需要 Node、Rust MSVC 工具链、VS2022 C++ Build Tools、Windows SDK 和 WebView2。已使用的工具链为 Node `24.13.0`、Rust `1.94.1`。JS 和 Rust 依赖由 `package-lock.json` 与 `src-tauri/Cargo.lock` 固定。
+
+固定 GUI 候选构建还需将 `NEXT_TRAINER_BUNDLED_FRONTEND` 指向配方中声明的训练器前端 ZIP 的绝对路径。运行时会再次校验其长度和 SHA256；没有捆绑资源的普通构建仍可独立打开，但在下载前拒绝安装该候选。外部 ZIP 不提交到 Git，制品身份与构建证据位于完整任务书的 `M1/recipe/`。
 
 ```powershell
 Set-Location desktop-launcher

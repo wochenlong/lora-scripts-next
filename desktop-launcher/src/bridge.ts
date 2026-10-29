@@ -40,6 +40,7 @@ export interface VersionView {
   environment_ok: boolean
   current: boolean
   known_good: boolean
+  managed_recipe?: boolean
 }
 
 export type ReportCommand = 'inspect' | 'bootstrap' | 'restore_trainer' | 'install_environment' | 'start_trainer'
@@ -79,7 +80,65 @@ export interface OperationEvent {
   message: string
 }
 export const prefetchRelease = (root: string, releaseId: string) => invoke<OperationSnapshot>('prefetch_release', { root, releaseId })
+export const installManagedRelease = (root: string, releaseId: string) => invoke<OperationSnapshot>('install_managed_release', { root, releaseId })
 export const operationSnapshot = (operationId: string) => invoke<OperationSnapshot>('operation_snapshot', { operationId })
 export const operationEvents = (operationId: string, afterSeq: number) => invoke<OperationEvent[]>('operation_events', { operationId, afterSeq })
 export const operationHistory = (root: string) => invoke<OperationSnapshot[]>('operation_history', { root })
 export const cancelOperation = (operationId: string) => invoke<'accepted' | 'already_requested' | 'already_finished' | 'commit_in_progress'>('cancel_operation', { operationId })
+
+export interface GeneratedFile {
+  path: string
+  kind: string
+  required: boolean
+  present: boolean
+  content_verified: boolean
+}
+export interface PackageIntegrity {
+  name: string
+  version: string
+  status: 'verified_original_files' | 'missing' | 'damaged' | 'unsupported'
+  missing: string[]
+  damaged: string[]
+  unsupported: string[]
+  issues: string[]
+  generated: GeneratedFile[]
+  paths: string[]
+}
+export interface GuiDiagnosis {
+  root: string
+  release_id: string
+  instance_id: string
+  generation: number
+  binding_generation: number
+  dirty: boolean
+  recipe_sha256: string
+  source_error: string | null
+  installed_metadata_error: string | null
+  recovery_pending: boolean
+  integrity: { environment: string; packages: PackageIntegrity[] }
+}
+export interface GuiRepairPreview {
+  instance_id: string
+  generation: number
+  package: string
+  version: string
+  paths: string[]
+  plan_sha256: string
+  before_original_files_verified: boolean
+  before_runtime_check: string
+  boundary: string
+}
+export const diagnoseGui = (root: string, releaseId: string) => invoke<GuiDiagnosis>('diagnose_gui', { root, releaseId })
+export const planGuiRepair = (root: string, releaseId: string, packageName: string) => invoke<GuiRepairPreview>('plan_gui_repair', { root, releaseId, package: packageName })
+export const repairGuiPackage = (root: string, releaseId: string, packageName: string, planSha256: string) => invoke<OperationSnapshot>('repair_gui_package', { root, releaseId, package: packageName, planSha256 })
+export const recoverGuiRepair = (root: string, releaseId: string) => invoke<OperationSnapshot>('recover_gui_repair', { root, releaseId })
+export interface SourceRepairPreview {
+  release_id: string
+  replacement_root: string
+  expected_source_files: string[]
+  generated_files: string[]
+  source_integrity_error: string | null
+  boundary: string
+}
+export const previewSourceRepair = (root: string, releaseId: string) => invoke<SourceRepairPreview>('preview_source_repair', { root, releaseId })
+export const repairManagedSource = (root: string, releaseId: string) => invoke<OperationSnapshot>('repair_managed_source', { root, releaseId })

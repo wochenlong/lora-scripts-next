@@ -165,7 +165,7 @@ impl Paths {
 }
 
 fn validate_asset(expected: &str, exact_bytes: u64) -> Result<()> {
-    if exact_bytes == 0 || exact_bytes > model::MAX_DOWNLOAD_BYTES {
+    if exact_bytes == 0 || exact_bytes > model::MAX_MANAGED_ASSET_BYTES {
         bail!("资产预期长度超出下载上限");
     }
     if expected.len() != 64

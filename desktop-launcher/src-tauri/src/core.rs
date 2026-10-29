@@ -21,6 +21,18 @@ mod managed_child;
 #[path = "controlled_download.rs"]
 mod controlled_download;
 
+#[path = "gui_install.rs"]
+mod gui_install;
+#[path = "gui_recovery.rs"]
+mod gui_recovery;
+#[path = "gui_repair.rs"]
+mod gui_repair;
+#[path = "gui_source_repair.rs"]
+mod gui_source_repair;
+
+#[path = "safe_extract.rs"]
+mod safe_extract;
+
 #[cfg(all(test, windows))]
 #[path = "p6_tests.rs"]
 mod p6_tests;
@@ -72,6 +84,7 @@ pub struct VersionView {
     environment_ok: bool,
     current: bool,
     known_good: bool,
+    managed_recipe: bool,
 }
 
 pub struct Engine {
@@ -314,38 +327,7 @@ fn download_controlled(
 }
 
 fn extract(zip_path: &Path, destination: &Path, strip_root: bool) -> Result<()> {
-    let mut archive = zip::ZipArchive::new(File::open(zip_path)?)?;
-    let mut total = 0u64;
-    for i in 0..archive.len() {
-        let mut entry = archive.by_index(i)?;
-        total = total.checked_add(entry.size()).context("归档体积溢出")?;
-        if total > model::MAX_EXTRACT_BYTES {
-            bail!("归档解压体积超过启动器上限");
-        }
-        let relative = entry.enclosed_name().context("归档包含非法路径")?;
-        if entry
-            .unix_mode()
-            .is_some_and(|mode| mode & 0o170000 == 0o120000)
-        {
-            bail!("启动器不接受归档符号链接");
-        }
-        let relative = if strip_root {
-            relative.components().skip(1).collect::<PathBuf>()
-        } else {
-            relative
-        };
-        if relative.as_os_str().is_empty() {
-            continue;
-        }
-        let target = destination.join(relative);
-        if entry.is_dir() {
-            fs::create_dir_all(target)?;
-        } else {
-            fs::create_dir_all(target.parent().context("缺少目标父目录")?)?;
-            std::io::copy(&mut entry, &mut File::create(target)?)?;
-        }
-    }
-    Ok(())
+    safe_extract::extract(zip_path, destination, strip_root, None)
 }
 
 fn manifest(directory: &Path) -> Result<BTreeMap<String, String>> {
@@ -377,6 +359,9 @@ fn verify_source(layout: &Layout, release: &Release) -> Result<()> {
     let receipt = ReleaseReceipt::load(&layout.release_dir)?;
     if receipt.release != *release {
         bail!("本地发布清单不匹配");
+    }
+    if release.environment_recipe == "gui-cp310-win-x64-v1" {
+        return crate::source_integrity::verify(layout, release);
     }
     let dir = source(layout);
     let entries: BTreeMap<String, String> =
@@ -421,6 +406,9 @@ fn uv_command(root: &Path, release: &Release) -> Command {
 }
 fn managed_python(root: &Path, release: &Release) -> Result<PathBuf> {
     let layout = Layout::new(root, &release.id)?;
+    if release.environment_recipe == "gui-cp310-win-x64-v1" {
+        return crate::python_integrity::verify(&layout);
+    }
     layout.guard_path(&uv(root))?;
     layout.guard_path(&root.join("python").join(&release.python))?;
     if digest(&uv(root)).ok().as_deref() != Some(release.uv.exe_sha256.as_str()) {
@@ -451,6 +439,7 @@ fn managed_python(root: &Path, release: &Release) -> Result<PathBuf> {
         Command::new(&path)
             .args([
                 "-I",
+                "-B",
                 "-c",
                 "import sys; assert sys.version.split()[0] == sys.argv[1]",
             ])
@@ -487,6 +476,20 @@ fn managed_base_path(layout: &Layout, release: &Release, path: &Path) -> Result<
     Ok(resolved)
 }
 fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
+    if release.environment_recipe == "gui-cp310-win-x64-v1" {
+        crate::python_integrity::verify(layout)?;
+    }
+    if let Some(binding) = Registry::load(&layout.root)?.gui_binding(&release.id) {
+        let instance = crate::instances::load(layout, &binding.instance_id)?;
+        if instance.recipe_id() != binding.recipe_id
+            || instance.storage_version() != binding.storage_version
+            || instance.generation() != binding.generation
+            || instance.recipe_sha256() != binding.recipe_sha256
+        {
+            bail!("环境绑定generation或配方与实例不一致，请重新诊断");
+        }
+        crate::instances::assert_usable(&instance)?;
+    }
     layout.guard_path(&layout.environment)?;
     layout.guard_path(&env_python(layout))?;
     let config = layout.environment.join("pyvenv.cfg");
@@ -515,7 +518,7 @@ fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
     let script = "import sys,pathlib,os; expected=pathlib.Path(sys.argv[1]).resolve(); assert sys.version.split()[0] == sys.argv[2]; assert pathlib.Path(sys.base_prefix).resolve().is_relative_to(expected); assert pathlib.Path(sys._base_executable).resolve().is_relative_to(expected); import pip,fastapi,uvicorn,toml,numpy,onnxruntime,psutil,pandas,PIL,cv2,tensorboard,rich,requests,httpx,aiohttp,websockets,multipart,modelscope,cryptography,huggingface_hub,pynvml; from importlib.metadata import version; assert version('numpy') == '1.26.4'";
     let result = hidden(
         Command::new(env_python(layout))
-            .args(["-I", "-c", script])
+            .args(["-I", "-B", "-c", script])
             .arg(managed)
             .arg(&release.python),
     )
@@ -563,7 +566,7 @@ fn execute(mut command: Command, log: &Logger) -> Result<()> {
 
 /// 与Engine长锁无关的受管等待。Job只覆盖本次子进程；取消后先关Job，
 /// 回收整棵所属进程，再join输出线程，避免后代仍占pipe造成收尾挂起。
-#[cfg(test)] // P6通过后由正式操作worker调用。
+// 固定配方安装与P6测试共用同一受管可取消执行入口。
 fn execute_controlled(
     mut command: Command,
     log: &Logger,
@@ -622,6 +625,84 @@ fn execute_controlled(
 }
 
 impl Engine {
+    pub fn preview_source_repair(&self, root: &Path, id: &str) -> Result<serde_json::Value> {
+        gui_source_repair::preview(root, self.catalog.release(id)?)
+    }
+    pub fn repair_source_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再修复源码");
+        }
+        let release = self.catalog.release(id)?;
+        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        gui_source_repair::execute(&ctx, release, operation, &self.logger)
+    }
+    pub fn diagnose_gui(&self, root: &Path, id: &str) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(gui_repair::diagnose(
+            root,
+            self.catalog.release(id)?,
+        )?)?)
+    }
+    pub fn plan_gui_repair(
+        &self,
+        root: &Path,
+        id: &str,
+        package: &str,
+    ) -> Result<serde_json::Value> {
+        Ok(serde_json::to_value(gui_repair::plan(
+            root,
+            self.catalog.release(id)?,
+            package,
+        )?)?)
+    }
+    pub fn repair_gui_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        package: &str,
+        plan_sha256: &str,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再修复环境");
+        }
+        let release = self.catalog.release(id)?;
+        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        gui_repair::execute(&ctx, release, package, plan_sha256, operation, &self.logger)
+    }
+    pub fn recover_gui_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再恢复环境");
+        }
+        let release = self.catalog.release(id)?;
+        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        gui_repair::recover(&ctx, release, operation, &self.logger)
+    }
+    pub fn install_release_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        self.reap();
+        if self.running.is_some() {
+            bail!("请先停止受管训练器，再修改安装目录");
+        }
+        let release = self.catalog.release(id)?.clone();
+        gui_install::install(root, &release, operation, &self.logger)
+    }
     /// 只预取目录中固定身份的归档；成功仅代表缓存完整，不改变安装绑定或健康状态。
     pub fn prefetch_release(
         &mut self,
@@ -793,6 +874,7 @@ impl Engine {
             let source_ok = owned && verify_source(&l, release).is_ok();
             let environment_ok = owned && check_environment(&l, release).is_ok();
             versions.push(VersionView {
+                managed_recipe: release.environment_recipe == "gui-cp310-win-x64-v1",
                 id: release.id.clone(),
                 channel: release.channel.clone(),
                 version: release.version.clone(),
@@ -811,7 +893,7 @@ impl Engine {
                     .any(|i| i.release_id == release.id && i.healthy_at.is_some()),
             });
         }
-        let interrupted = Journal::load_all(root)?
+        let mut interrupted: Vec<String> = Journal::load_all(root)?
             .into_iter()
             .filter(|j| j.phase != Phase::Committed)
             .map(|j| {
@@ -821,6 +903,13 @@ impl Engine {
                 )
             })
             .collect();
+        if owned {
+            for release in self.catalog.releases() {
+                if release.environment_recipe == "gui-cp310-win-x64-v1" {
+                    interrupted.extend(gui_recovery::list_unbound(root, release)?);
+                }
+            }
+        }
         Ok(Report {
             root: root.to_string_lossy().into(),
             uv: uv_ok,
@@ -871,6 +960,9 @@ impl Engine {
         self.inspect(root)
     }
     fn bootstrap_for(&mut self, root: &Path, release: &Release) -> Result<()> {
+        if release.environment_recipe == "gui-cp310-win-x64-v1" {
+            bail!("该版本使用完整固定配方，请执行对应版本的受管安装");
+        }
         let (layout, _lease) = self.mutable(root, release)?;
         let asset = &release.uv;
         if managed_python(root, release).is_ok() {
@@ -924,6 +1016,9 @@ impl Engine {
         self.inspect(root)
     }
     fn restore_for(&mut self, root: &Path, release: &Release) -> Result<()> {
+        if release.environment_recipe == "gui-cp310-win-x64-v1" {
+            bail!("该版本源码与捆绑前端须共同验证，请执行对应版本的受管安装或定点修复");
+        }
         let (layout, _lease) = self.mutable(root, release)?;
         if verify_source(&layout, release).is_ok() {
             let mut registry = Registry::load(root)?;
@@ -987,6 +1082,11 @@ impl Engine {
         self.inspect(root)
     }
     fn environment_for(&mut self, root: &Path, release: &Release) -> Result<()> {
+        if release.environment_recipe == "gui-cp310-win-x64-v1"
+            || Registry::load(root)?.gui_binding(&release.id).is_some()
+        {
+            bail!("该环境使用固定配方与实例事务；请在对应版本执行受管安装或诊断修复");
+        }
         let (layout, _lease) = self.mutable(root, release)?;
         verify_source(&layout, release)?;
         let python = managed_python(root, release)?;
@@ -1027,6 +1127,19 @@ impl Engine {
     }
     pub fn install_release(&mut self, root: &Path, id: &str) -> Result<Report> {
         let release = self.catalog.release(id)?.clone();
+        if release.environment_recipe == crate::recipe::GuiRecipe::embedded()?.id() {
+            self.reap();
+            if self.running.is_some() {
+                bail!("请先停止受管训练器");
+            }
+            let manager = crate::operations::OperationManager::default();
+            let operation = manager.start(
+                &format!("install-{}-{}", model::now(), stamp()),
+                crate::operations::OperationKind::Execute,
+            )?;
+            gui_install::install(root, &release, &operation, &self.logger)?;
+            return self.inspect(root);
+        }
         self.bootstrap_for(root, &release)?;
         self.restore_for(root, &release)?;
         self.environment_for(root, &release)?;
@@ -1102,6 +1215,8 @@ impl Engine {
         let mut command = Command::new(env_python(&layout));
         command
             .current_dir(&layout.run)
+            .arg("-B")
+            .env("PYTHONDONTWRITEBYTECODE", "1")
             .arg("gui.py")
             .args([
                 "--host",
@@ -1429,7 +1544,7 @@ mod tests {
         let destination = root.join("unpacked");
         let error = extract(&path, &destination, false).unwrap_err().to_string();
         assert!(
-            error.contains("解压体积超过"),
+            error.contains("解压体积超过") || error.contains("ZIP 单文件大小或压缩比超过限额"),
             "未到达展开预算拒绝路径：{error}"
         );
         assert!(!destination.exists());
