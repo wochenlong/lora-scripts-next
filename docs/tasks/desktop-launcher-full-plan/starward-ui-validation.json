@@ -1,0 +1,134 @@
+{
+  "status": "complete-with-boundary",
+  "date": "2026-10-30",
+  "scope": "CR-009 U1-U4 launcher responsiveness, approved visual layout, project branding, independent logs and settings; no retraining",
+  "identity": {
+    "status": "package-identity-and-native-validation-pass",
+    "build_commit": "019a7a386055baff45f6f2c72e5164b6be3e3e5d",
+    "trainer_commit": "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
+    "catalog_digest": "98cc9df537272f1d7d4d79be97b5e7c9d062ab77dc6a7098140feb89069961f7",
+    "recipe_digest": "4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca",
+    "exe": {
+      "bytes": 35757568,
+      "sha256": "d5f1da3d834efd2b30efe3a599f6076261800eebec6da9bea269e07d774dc906"
+    },
+    "artifacts": [
+      {
+        "name": "NextTrainerLauncher-0.2.0-windows-x64-portable.zip",
+        "bytes": 17831072,
+        "sha256": "63c49f4406b3bc3cef6a686550018b302a3e675e70c8fafd464e2f99fad45df0"
+      },
+      {
+        "name": "installers/Next Trainer Launcher_0.2.0_x64-setup.exe",
+        "bytes": 14619621,
+        "sha256": "52b5414fdda3ff546bb04b859a75ca5a16327b542fe2aa70e93ab676cd32da89"
+      }
+    ],
+    "entry": "F:/NextTrainerLauncherSandbox/user-20261030/启动新版启动器.cmd",
+    "native_validation": "u4-07 and u4-history-07 pass"
+  },
+  "main": {
+    "checks_passed": 77,
+    "not_run": [
+      {
+        "name": "原生系统剪贴板复制附加验证",
+        "passed": null,
+        "status": "not-run-preserve-user-clipboard",
+        "detail": "非纯文本格式，未点击任何复制按钮；保留独立浏览器复制合同验证结果"
+      }
+    ],
+    "cycles": 3,
+    "start_stop_measurements": 7,
+    "layouts": 15,
+    "click_to_transition_ms": [
+      3,
+      3.900146484375,
+      5.5,
+      4,
+      3.800048828125,
+      4.2001953125,
+      4.199951171875
+    ],
+    "backend_to_button_ms": [
+      8.800048828125,
+      21.900146484375,
+      7.800048828125,
+      23.7001953125,
+      5.2001953125,
+      5.7001953125,
+      24.2001953125
+    ],
+    "unexpected_exit_to_button_ms": 177.27490234375,
+    "navigation_ms": [
+      32.39990234375,
+      22.400146484375,
+      3.699951171875,
+      4.5,
+      4.10009765625,
+      9.60009765625,
+      3.5,
+      4.39990234375,
+      2.800048828125,
+      3.800048828125,
+      4,
+      3.60009765625,
+      4.2998046875,
+      3.10009765625,
+      3.39990234375,
+      3.199951171875,
+      4.60009765625,
+      4.300048828125
+    ],
+    "log_export_sha256": "ed0722b995078b4e4fda068242c6dee8c7fd52afe9a99efb641415c06217a628",
+    "brand_resource_response_sha_verified": true
+  },
+  "history": {
+    "checks_passed": 9,
+    "real_records_preserved": 20,
+    "limit_2_disk_pagination": "pass",
+    "native_default_500_history": "pass; actual session fit one page; earlier disabled at retention start",
+    "service_started": false
+  },
+  "cleanup": {
+    "main_graceful": true,
+    "main_job_drained": true,
+    "main_cdp_reclaimed": true,
+    "history_graceful": true,
+    "history_job_drained": true,
+    "history_cdp_reclaimed": true,
+    "sentinels_unchanged": true
+  },
+  "receipts": [
+    {
+      "case": "u4-07",
+      "host_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-07\\host-status.json",
+      "host_sha256": "0d5315c32e5df5eb42dc316e0ea6e2fd2df5c5f26166aeccf92e56730e2c0e80",
+      "ui_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-07\\ui-report.json",
+      "ui_sha256": "63ec722991697e25848bcb46fdedec5208a7cd337292a20568dbd78ed67b9a40",
+      "passed": true
+    },
+    {
+      "case": "u4-history-07",
+      "host_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-history-07\\host-status.json",
+      "host_sha256": "ee7b3c6e90110a1a633ab0bc26dfcdb6bc17bae4aca6cc78452d23fc63265805",
+      "ui_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-history-07\\ui-report.json",
+      "ui_sha256": "bce16fcb1abdde5afde70910c27e4ae5ab49ddd046e236b17bdeb87a932e82fc",
+      "passed": true
+    }
+  ],
+  "failed_attempts_retained": {
+    "u4-01": "Playwright saveAs stale temporary path; real export present; fixed CDP download GUID verification",
+    "u4-02": "test fetch blocked by unchanged product CSP; fixed actual Image and CDP resource reads",
+    "u4-03": "test resize included Tao internal event HWND; fixed exact owned main-window class",
+    "u4-04": "initial test root/reload race and slash-only path comparison; fixed actual settings UI selection and normalized path checks",
+    "u4-05": "test outer size compared with client size; fixed measured native frame compensation",
+    "u4-06": "concurrent desktop clicks navigated to settings during start-button measurement; final test window parked offscreen"
+  },
+  "boundaries": [
+    "native clipboard extra verification not-run to preserve current non-text clipboard; independent browser copy contract passed",
+    "clean Windows and missing WebView2 first install not-run",
+    "unsigned development candidate; public_release false; production channel/key and license audit unchanged",
+    "existing r12 reused; no cold install, engine reinstall, GPU training or model download repeated in CR-009",
+    "test window parked offscreen; actual native HWND client area and WebView rendering measured; normal user entry stays on-screen"
+  ]
+}
