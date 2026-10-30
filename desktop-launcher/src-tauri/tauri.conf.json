@@ -10,7 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [{ "title": "Next Trainer · 桌面启动器", "width": 1184, "height": 667, "minWidth": 1024, "minHeight": 640, "decorations": false, "theme": "Dark" }],
+    "windows": [{ "title": "Next Trainer · 桌面启动器", "width": 1184, "height": 667, "minWidth": 1024, "minHeight": 640, "decorations": false, "theme": "Light" }],
     "security": { "csp": "default-src 'self'; connect-src ipc: http://ipc.localhost; style-src 'self' 'unsafe-inline'; img-src 'self' data:" }
   },
   "bundle": {

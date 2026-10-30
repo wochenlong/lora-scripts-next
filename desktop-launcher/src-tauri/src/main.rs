@@ -1072,6 +1072,10 @@ fn open_project_link(target: String) -> Result<(), String> {
     // 只接受固定目标名，前端不能传入任意 URL 或本地可执行文件。
     let url = match target.as_str() {
         "project" => "https://github.com/wochenlong/lora-scripts-next",
+        "releases" => "https://github.com/wochenlong/lora-scripts-next/releases",
+        "blog" => "http://blog.displace-ai.top/",
+        "bilibili" => "https://space.bilibili.com/351205898",
+        "modelscope" => "https://www.modelscope.cn/home",
         "issues" => "https://github.com/wochenlong/lora-scripts-next/issues",
         "license" => "https://github.com/wochenlong/lora-scripts-next/blob/main/LICENSE",
         _ => return Err("未知项目链接".into()),
