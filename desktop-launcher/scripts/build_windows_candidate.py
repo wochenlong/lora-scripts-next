@@ -227,7 +227,7 @@ def main() -> None:
                  "frontend": frontend, "nsis_install_mode": config["bundle"]["windows"]["nsis"]["installMode"],
                  "webview_install_mode": config["bundle"]["windows"]["webviewInstallMode"], "windows_build_tools": tool_identity,
                  "network_policy": "offline-cache-only; cargo --offline; npm uses installed node_modules; bundler outbound proxy fails closed",
-                 "new_network_payload_bytes": 0, "network_budget_bytes": 5 * 1024**3}
+                 "new_network_payload_bytes": 0}
     if args.preflight_only:
         print(json.dumps(preflight, ensure_ascii=False, indent=2))
         return
@@ -279,7 +279,7 @@ def main() -> None:
                     "catalog_signature": "embedded catalog plus public test fixtures; production key/channel not configured",
                     "windows_code_signature": "unsigned-development-candidate",
                     "validation": {"construction": "build-only", "final_validation": "pending M6", "clean_windows": "not-run",
-                                   "missing_webview2": "not-run", "engine_real_install": "skip + CR-004", "gpu_training": "skip + CR-004"},
+                                   "missing_webview2": "not-run", "engine_real_install": "not-run-at-build", "gpu_training": "not-run-at-build"},
                     "tool_versions": {tool: capture(command, LAUNCHER) for tool, command in {
                         "rustc": ["rustc", "--version"], "cargo": ["cargo", "--version"], "node": ["node", "--version"],
                         "tauri": ["node", str(cli), "--version"]}.items()}}
