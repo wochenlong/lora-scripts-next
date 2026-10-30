@@ -1060,12 +1060,46 @@ fn replace_atomic(temp: &Path, target: &Path) -> Result<()> {
     extern "system" {
         fn MoveFileExW(existing: *const u16, new: *const u16, flags: u32) -> i32;
     }
-    let temp: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
-    let target: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
-    if unsafe { MoveFileExW(temp.as_ptr(), target.as_ptr(), 0x1 | 0x8) } == 0 {
-        return Err(std::io::Error::last_os_error()).context("状态原子替换失败，原状态已保留");
+    let snapshot = |path: &Path| -> Result<Option<Vec<u8>>> {
+        match fs::read(path) {
+            Ok(bytes) => Ok(Some(bytes)),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+            Err(error) => {
+                Err(error).with_context(|| format!("读取原子替换守护快照 {}", path.display()))
+            }
+        }
+    };
+    check_chain(temp)?;
+    check_chain(target)?;
+    let original = snapshot(target)?;
+    let staged = fs::read(temp)?;
+    let temp_wide: Vec<u16> = temp.as_os_str().encode_wide().chain(Some(0)).collect();
+    let target_wide: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
+    const RETRY_MS: [u64; 7] = [10, 20, 40, 80, 160, 240, 300];
+    for (attempt, delay) in std::iter::once(0).chain(RETRY_MS).enumerate() {
+        if attempt > 0 {
+            // 读者或文件过滤器可短暂拒绝 DELETE 共享。只重试同一已 sync 的临时文件，
+            // 总退避850ms；不删除旧目标，不接受等待期间由其他写入者改变的状态。
+            std::thread::sleep(std::time::Duration::from_millis(delay));
+            check_chain(temp)?;
+            check_chain(target)?;
+            if snapshot(target)? != original || fs::read(temp)? != staged {
+                bail!(
+                    "原子替换等待期间目标或临时文件已变化，拒绝覆盖：{}",
+                    target.display()
+                );
+            }
+        }
+        if unsafe { MoveFileExW(temp_wide.as_ptr(), target_wide.as_ptr(), 0x1 | 0x8) } != 0 {
+            return Ok(());
+        }
+        let error = std::io::Error::last_os_error();
+        if !matches!(error.raw_os_error(), Some(5 | 32 | 33)) || attempt == RETRY_MS.len() {
+            return Err(error)
+                .with_context(|| format!("状态原子替换失败，原状态已保留：{}", target.display()));
+        }
     }
-    Ok(())
+    unreachable!("有界原子替换必定返回")
 }
 #[cfg(not(windows))]
 fn replace_atomic(temp: &Path, target: &Path) -> Result<()> {
@@ -1106,6 +1140,76 @@ mod tests {
             }
         }
     }
+    #[cfg(windows)]
+    fn hold_without_delete_sharing(path: &Path) -> File {
+        use std::os::windows::fs::OpenOptionsExt;
+        OpenOptions::new()
+            .read(true)
+            .share_mode(0x1 | 0x2)
+            .open(path)
+            .unwrap()
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn atomic_replace_retries_a_real_temporary_windows_sharing_conflict() {
+        let temp = Temp::new();
+        let target = temp.0.join("state.json");
+        write_json_atomic(&target, &serde_json::json!({"generation":1})).unwrap();
+        let held = hold_without_delete_sharing(&target);
+        let reader = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            drop(held);
+        });
+        write_json_atomic(&target, &serde_json::json!({"generation":2})).unwrap();
+        reader.join().unwrap();
+        assert_eq!(
+            read_json::<serde_json::Value>(&target).unwrap()["generation"],
+            2
+        );
+        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 1);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn atomic_replace_permanent_sharing_failure_preserves_old_bytes() {
+        let temp = Temp::new();
+        let target = temp.0.join("state.json");
+        write_json_atomic(&target, &serde_json::json!({"generation":1})).unwrap();
+        let original = fs::read(&target).unwrap();
+        let held = hold_without_delete_sharing(&target);
+        let started = std::time::Instant::now();
+        let error = write_json_atomic(&target, &serde_json::json!({"generation":2})).unwrap_err();
+        assert!(error.to_string().contains("原状态已保留"), "{error:#}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(2));
+        assert_eq!(fs::read(&target).unwrap(), original);
+        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 1);
+        drop(held);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn atomic_replace_rejects_target_changes_while_waiting_for_sharing() {
+        let temp = Temp::new();
+        let target = temp.0.join("state.json");
+        write_json_atomic(&target, &serde_json::json!({"generation":1})).unwrap();
+        let held = hold_without_delete_sharing(&target);
+        let other_target = target.clone();
+        let foreign = b"{\"generation\":99}\n";
+        let writer = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            // 旧读者允许 WRITE、拒绝 DELETE：可模拟另一个写入者在重试间隔改状态。
+            fs::write(&other_target, foreign).unwrap();
+            std::thread::sleep(std::time::Duration::from_millis(100));
+            drop(held);
+        });
+        let error = write_json_atomic(&target, &serde_json::json!({"generation":2})).unwrap_err();
+        writer.join().unwrap();
+        assert!(error.to_string().contains("已变化，拒绝覆盖"), "{error:#}");
+        assert_eq!(fs::read(&target).unwrap(), foreign);
+        assert_eq!(fs::read_dir(&temp.0).unwrap().count(), 1);
+    }
+
     #[test]
     fn explicit_instance_upgrade_preserves_v1_bytes_and_legacy_environment_path() {
         let temp = Temp::new();

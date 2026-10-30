@@ -28,6 +28,8 @@ const PARTIAL_SCHEMA: u32 = 1;
 const MAX_METADATA_BYTES: u64 = 16 * 1024;
 const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
 const MAX_NETWORK_ATTEMPTS: usize = 3;
+const CHECKPOINT_BYTES: usize = 4 * 1024 * 1024;
+const CHECKPOINT_INTERVAL: Duration = Duration::from_secs(1);
 static NEXT_QUARANTINE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug)]
@@ -228,6 +230,26 @@ impl Paths {
         output.sync_all()?;
         // 先同步数据再提交长度。崩溃留下长度不符时，下次隔离，不猜测已提交范围。
         model::write_json_atomic(&self.metadata, record)
+    }
+
+    fn commit_pending(
+        &self,
+        output: &mut File,
+        record: &mut Partial,
+        pending: &mut Vec<u8>,
+    ) -> Result<()> {
+        if pending.is_empty() {
+            return Ok(());
+        }
+        self.layout.guard_path(&self.partial)?;
+        output.write_all(pending)?;
+        record.written = record
+            .written
+            .checked_add(pending.len() as u64)
+            .context("下载长度溢出")?;
+        self.checkpoint(output, record)?;
+        pending.clear();
+        Ok(())
     }
 
     fn quarantine_partial(&self) -> Result<()> {
@@ -440,29 +462,50 @@ async fn response_action(
     };
     paths.checkpoint(&mut output, record)?;
     let mut buffer = [0; READ_QUANTUM];
+    let mut pending = Vec::with_capacity(CHECKPOINT_BYTES);
+    let mut checkpoint_at = Instant::now();
     loop {
         cancel.check()?;
+        let received = record
+            .written
+            .checked_add(pending.len() as u64)
+            .context("下载长度溢出")?;
         let remaining = record
             .exact_bytes
-            .checked_sub(record.written)
+            .checked_sub(received)
             .context("partial长度超过资产长度")?;
         // 读满后再探测1字节，确认EOF并拒绝超出固定资产长度的响应。
         let limit = remaining.saturating_add(1).min(buffer.len() as u64) as usize;
-        let count = body.read(&mut buffer[..limit], cancel).await?;
+        let count = match body.read(&mut buffer[..limit], cancel).await {
+            Ok(count) => count,
+            Err(error) => {
+                // 网络断流时提交已收到的有效字节，重试重新读取该检查点。
+                // 取消/abort 在 await 处丢弃未落盘的缓冲，磁盘长度仍与 sidecar 一致。
+                if !cancel.is_cancel_requested() {
+                    paths.commit_pending(&mut output, record, &mut pending)?;
+                }
+                return Err(error);
+            }
+        };
         if count == 0 {
             break;
         }
-        let written = record
-            .written
-            .checked_add(count as u64)
-            .context("下载长度溢出")?;
+        let written = received.checked_add(count as u64).context("下载长度溢出")?;
         if written > record.exact_bytes {
             bail!("实际响应超出资产预期长度，partial 未发布");
         }
-        output.write_all(&buffer[..count])?;
-        record.written = written;
-        paths.checkpoint(&mut output, record)?;
+        pending.extend_from_slice(&buffer[..count]);
+        if record.written == 0
+            || pending.len() >= CHECKPOINT_BYTES
+            || checkpoint_at.elapsed() >= CHECKPOINT_INTERVAL
+        {
+            // 未提交块先留在内存中；一次同步写盘和原子sidecar提交之间不 await。
+            // 首块立即提交便于早期取消/续传；大文件不再每64KiB替换一次状态。
+            paths.commit_pending(&mut output, record, &mut pending)?;
+            checkpoint_at = Instant::now();
+        }
     }
+    paths.commit_pending(&mut output, record, &mut pending)?;
     if record.written != record.exact_bytes {
         return Err(TransientDownloadFailure::EarlyEof.into());
     }
@@ -1025,6 +1068,47 @@ mod tests {
         assert_eq!(requests.len(), 2);
         assert!(requests[1].contains("\r\nrange: bytes=4-\r\n"));
         assert!(requests[1].contains("\r\nif-range: \"asset-v1\"\r\n"));
+    }
+
+    #[test]
+    fn buffered_large_body_commits_before_automatic_strict_range_resume() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let bytes: Vec<u8> = (0..9 * 1024 * 1024)
+            .map(|index| (index % 251) as u8)
+            .collect();
+        let interrupted = 6 * 1024 * 1024 + 17;
+        let (url, server) = serve(vec![
+            response(
+                "200 OK",
+                &format!("Content-Length: {}\r\nETag: \"asset-v1\"\r\n", bytes.len()),
+                &bytes[..interrupted],
+            ),
+            response(
+                "206 Partial Content",
+                &format!(
+                    "Content-Length: {}\r\nContent-Range: bytes {interrupted}-{}/{}\r\nETag: \"asset-v1\"\r\n",
+                    bytes.len() - interrupted,
+                    bytes.len() - 1,
+                    bytes.len()
+                ),
+                &bytes[interrupted..],
+            ),
+        ]);
+        let target = download(
+            &mutation,
+            client(),
+            &url,
+            NAME,
+            &hash(&bytes),
+            bytes.len() as u64,
+            &CancelToken::new(),
+        )
+        .unwrap();
+        let requests = server.join().unwrap();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[1].contains(&format!("\r\nrange: bytes={interrupted}-\r\n")));
+        assert_eq!(fs::read(target).unwrap(), bytes);
     }
 
     #[test]
