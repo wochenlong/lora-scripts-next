@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AcrylicSelect from './AcrylicSelect.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 
@@ -66,15 +67,15 @@ onBeforeUnmount(() => { epoch++ })
       <div v-if="history.revoked_releases?.length" class="issue"><strong>已收到安全撤销</strong><ul><li v-for="id in history.revoked_releases" :key="id">{{ id }}</li></ul><p>相关安装和资料仍保留，请选择未受影响的版本。</p></div>
     </div>
     <details v-if="!view?.fixture_session" class="fixture"><summary>开发验证：打开隔离测试会话</summary><p>此操作只适用于专门新建的空沙盒目录。测试会话将使用公开测试签名，固定绑定本启动器；请选择独立目录，确认其中没有日常安装、模型或用户资料。</p><label class="consent"><input v-model="fixtureConsent" type="checkbox" :disabled="locked" />我确认当前目录是新建的隔离空沙盒，仅用于更新流程验证</label><button :disabled="locked || !fixtureConsent" @click="control('open_fixture')">在当前空沙盒打开测试会话</button></details>
-    <div v-else class="fixture"><p><strong>当前目录正在使用公开测试签名。</strong>测试场景按固定清单执行，数据与正式安装分开。</p><label>验证场景<select v-model="selectedCase" :disabled="locked"><option v-for="id in cases" :key="id" :value="id">{{ caseNames[id] }}</option></select></label><button :disabled="locked || !cases.includes(selectedCase)" @click="control('refresh', selectedCase)">运行所选验证</button></div>
+    <div v-else class="fixture"><p><strong>当前目录正在使用公开测试签名。</strong>测试场景按固定清单执行，数据与正式安装分开。</p><label>验证场景<AcrylicSelect v-model="selectedCase" :disabled="locked" :options="cases.map(id => ({ value: id, label: caseNames[id] ?? id }))" aria-label="验证场景" /></label><button :disabled="locked || !cases.includes(selectedCase)" @click="control('refresh', selectedCase)">运行所选验证</button></div>
   </section>
 </template>
 
 <style scoped>
-.trust-panel { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 15px; font-size: 12px; line-height: 1.7; }
+.trust-panel { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 15px; font-size: 14px; line-height: 1.7; }
 .section-caption,.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .section-caption { justify-content: space-between; }.actions { margin-top: 10px; }.mode,.hint,dt { color: var(--text-muted); }
 .issue { color: var(--error); overflow-wrap: anywhere; }.history article { padding: 9px 0; border-bottom: 1px solid var(--line); }.history ul { margin: 4px 0; }
 dl { display: flex; gap: 24px; margin: 10px 0; }dd { margin: 2px 0 0; }.fixture { margin-top: 13px; padding: 10px; border: 1px solid var(--warning-line); border-radius: 3px; background: var(--warning-bg); }
-summary { cursor: pointer; }.consent { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0; }.consent input { margin-top: 4px; }.fixture select { margin: 0 8px; max-width: 100%; }button,select { font: inherit; }
+summary { cursor: pointer; }.consent { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0; }.consent input { margin-top: 4px; }.fixture .acrylic-select { margin: 0 8px; max-width: 100%; }button,select { font: inherit; }
 </style>

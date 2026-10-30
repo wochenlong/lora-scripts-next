@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AcrylicSelect from './AcrylicSelect.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { getVersion } from '@tauri-apps/api/app'
@@ -67,6 +68,11 @@ const advanced = ref(false)
 const appVersion = ref('0.2.0')
 const toast = ref('')
 const appearance = ref(loadAppearance())
+const acrylicOpacity = computed(() => {
+  const alpha = Math.round(179 * appearance.value.mask / 100)
+  return { luminosity: .15 + .88 * alpha / 255, tint: Math.round(alpha * .861) / 255 }
+})
+const homeInk = ref({ titleDark: true, headingDark: true, controlsDark: true })
 const backgroundInput = ref<HTMLInputElement>()
 const confirmation = ref<Confirmation | null>(null)
 const confirmationCancel = ref<HTMLButtonElement>()
@@ -464,20 +470,67 @@ watch(error, value => { if (value && page.value !== 'launch') notify(value) })
 function openSetting(value: Setting) { setting.value = value; page.value = 'settings'; if (value === 'network' && sameRoot.value && !networkView.value) void readNetworkSettings() }
 function loadAppearance() {
   const number = (value: unknown, fallback: number, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
-  const defaults = { theme: 'light' as 'light' | 'dark', background: '', mask: 28, blur: 24, reduceMotion: false, logFontSize: 12 }
+  const defaults = { materialVersion: 1, background: '', mask: 60, blur: 30, reduceMotion: false, logFontSize: 12 }
   try {
     const saved = JSON.parse(localStorage.getItem('next-trainer-launcher-appearance') ?? '{}')
-    return { theme: saved.theme === 'dark' ? 'dark' as const : 'light' as const, background: typeof saved.background === 'string' && /^data:image\/(?:png|jpeg|webp);base64,/.test(saved.background) ? saved.background : '', mask: number(saved.mask, 28, 0, 75), blur: number(saved.blur, 24, 0, 40), reduceMotion: Boolean(saved.reduceMotion), logFontSize: number(saved.logFontSize, 12, 12, 18) }
+    // 旧主题被统一材质替代；仅更新旧版默认强度，保留用户自定义图片与其他设置。
+    return { materialVersion: 1, background: typeof saved.background === 'string' && /^data:image\/(?:png|jpeg|webp);base64,/.test(saved.background) ? saved.background : '', mask: number(saved.materialVersion !== 1 && saved.mask === 28 ? 60 : saved.mask, 60, 0, 80), blur: number(saved.materialVersion !== 1 && saved.blur === 24 ? 30 : saved.blur, 30, 0, 60), reduceMotion: Boolean(saved.reduceMotion), logFontSize: number(saved.logFontSize, 12, 12, 18) }
   } catch { return defaults }
 }
 watch(appearance, value => {
   try { localStorage.setItem('next-trainer-launcher-appearance', JSON.stringify(value)) }
   catch { notify('外观设置未保存：本地存储空间不足，请换用较小的背景图片。') }
 }, { deep: true })
-watch(() => appearance.value.theme, theme => {
-  document.documentElement.style.colorScheme = theme
-  try { void getCurrentWindow().setTheme(theme).catch(() => undefined) } catch { /* 浏览器预览仍使用页面主题。 */ }
+// 白色海报上的品牌文字按局部亮度取深字，保留首页原图，不增加整屏遮罩。
+let wallpaperImage: HTMLImageElement | undefined
+let wallpaperEpoch = 0
+function sampleHomeInk() {
+  const image = wallpaperImage
+  if (!image?.naturalWidth) return
+  const width = innerWidth, height = innerHeight, scale = Math.max(width / image.naturalWidth, height / image.naturalHeight)
+  const canvas = document.createElement('canvas'); canvas.width = 128; canvas.height = 72
+  const context = canvas.getContext('2d', { willReadFrequently: true })
+  if (!context) return
+  context.drawImage(image, (width - image.naturalWidth * scale) / 2 * 128 / width, (height - image.naturalHeight * scale) / 2 * 72 / height, image.naturalWidth * scale * 128 / width, image.naturalHeight * scale * 72 / height)
+  const needsDarkInk = (selector: string, fallback: { left: number; top: number; width: number; height: number }) => {
+    const bounds = document.querySelector<HTMLElement>(selector)?.getBoundingClientRect()
+    const rect = bounds?.width ? bounds : fallback
+    const x = Math.max(0, Math.min(127, Math.floor(rect.left * 128 / width))), y = Math.max(0, Math.min(71, Math.floor(rect.top * 72 / height)))
+    const pixels = context.getImageData(x, y, Math.max(1, Math.min(128 - x, Math.ceil(rect.width * 128 / width))), Math.max(1, Math.min(72 - y, Math.ceil(rect.height * 72 / height)))).data
+    const linear = (value: number) => { const channel = value / 255; return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4 }
+    let luminance = 0
+    for (let i = 0; i < pixels.length; i += 4) luminance += .2126 * linear(pixels[i]!) + .7152 * linear(pixels[i + 1]!) + .0722 * linear(pixels[i + 2]!)
+    return luminance / (pixels.length / 4) > .179
+  }
+  homeInk.value = { titleDark: needsDarkInk('.titlebar-name', { left: 120, top: 8, width: 180, height: 32 }), headingDark: needsDarkInk('.home-heading>div', { left: 220, top: 80, width: 240, height: 110 }), controlsDark: needsDarkInk('.titlebar-state', { left: width - 240, top: 8, width: 220, height: 32 }) }
+}
+watch(() => appearance.value.background, source => {
+  const epoch = ++wallpaperEpoch, image = new Image()
+  image.onload = () => { if (epoch === wallpaperEpoch) { wallpaperImage = image; sampleHomeInk() } }
+  image.src = source || '/assets/launcher-wallpaper.png'
 }, { immediate: true })
+onMounted(() => window.addEventListener('resize', sampleHomeInk))
+onBeforeUnmount(() => { wallpaperEpoch += 1; window.removeEventListener('resize', sampleHomeInk) })
+watch(page, value => { if (value === 'launch') void nextTick(sampleHomeInk) })
+// 原生菜单与窗口也固定采用同一材质色系，不再暴露两套主题。
+try { void getCurrentWindow().setTheme('dark').catch(() => undefined) } catch { /* 浏览器预览。 */ }
+watch(() => appearance.value.reduceMotion, value => {
+  document.documentElement.classList.toggle('reduce-motion', value)
+}, { immediate: true })
+let navigationAnimation: Animation | undefined
+watch([page, setting], async () => {
+  navigationAnimation?.cancel()
+  await nextTick()
+  if (appearance.value.reduceMotion || matchMedia('(prefers-reduced-motion: reduce)').matches) return
+  const target = page.value === 'settings'
+    ? document.querySelector<HTMLElement>('.settings-content > section:not([style*="display: none"])')
+    : document.querySelector<HTMLElement>('.launcher-main > :not([style*="display: none"])')
+  navigationAnimation = target?.animate([
+    { opacity: 0, transform: 'translateY(12px)' },
+    { opacity: 1, transform: 'translateY(0)' },
+  ], { duration: 220, easing: 'cubic-bezier(.1,.9,.2,1)' })
+}, { flush: 'post' })
+onBeforeUnmount(() => navigationAnimation?.cancel())
 async function chooseBackground(event: Event) {
   const input = event.target as HTMLInputElement, file = input.files?.[0]
   if (!file) return
@@ -719,14 +772,15 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 </script>
 
 <template>
-  <div class="app-shell" :class="{ 'home-view': page === 'launch', 'reduce-motion': appearance.reduceMotion }" :data-theme="appearance.theme" :data-page="page" :data-runtime-phase="runtimePhase" :data-runtime-run-id="runtime?.run_id ?? ''" :data-runtime-seq="runtime?.seq ?? 0" :style="{ '--wallpaper': 'url(' + (appearance.background || '/assets/launcher-wallpaper.png') + ')', '--content-blur': `${appearance.blur}px`, '--mask-opacity': String(appearance.mask / 100) }">
-    <div class="wallpaper" aria-hidden="true"></div><div class="wallpaper-shade" aria-hidden="true"></div>
+  <div class="app-shell" :class="{ 'home-view': page === 'launch', 'reduce-motion': appearance.reduceMotion, 'home-title-dark': homeInk.titleDark, 'home-heading-dark': homeInk.headingDark, 'home-controls-dark': homeInk.controlsDark }" data-material="acrylic" :data-page="page" :data-runtime-phase="runtimePhase" :data-runtime-run-id="runtime?.run_id ?? ''" :data-runtime-seq="runtime?.seq ?? 0" :style="{ '--wallpaper': 'url(' + (appearance.background || '/assets/launcher-wallpaper.png') + ')', '--content-blur': `${appearance.blur}px`, '--mask-opacity': String(appearance.mask / 100) }">
+    <svg class="material-definitions" aria-hidden="true" focusable="false"><defs><filter id="fluent-acrylic" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" :stdDeviation="appearance.blur" edgeMode="duplicate" result="blur" /><feFlood flood-color="#202020" :flood-opacity="acrylicOpacity.luminosity" result="luminosity" /><feBlend in="luminosity" in2="blur" mode="luminosity" result="lit" /><feFlood flood-color="#1c1c1c" :flood-opacity="acrylicOpacity.tint" result="tint" /><feBlend in="tint" in2="lit" mode="color" /></filter></defs></svg>
+    <Transition name="wallpaper" appear><div :key="appearance.background" class="wallpaper" :style="{ backgroundImage: 'url(' + (appearance.background || '/assets/launcher-wallpaper.png') + ')' }" aria-hidden="true"></div></Transition><div class="wallpaper-shade" aria-hidden="true"></div><div class="acrylic-layer" aria-hidden="true"></div>
     <aside class="sidebar" aria-label="启动器导航">
-      <button class="brand" aria-label="Next Trainer 首页" title="Next Trainer 首页" @click="page = 'launch'"><img src="/assets/home-logo.webp" alt="Next Trainer" /></button>
+      <button class="brand" aria-label="Next Trainer 首页" title="Next Trainer 首页" @click="page = 'launch'"><Icon name="apps" /></button>
       <nav aria-label="主导航"><button v-for="item in ([{ id: 'launch', icon: 'home', label: '首页' }, { id: 'versions', icon: 'versions', label: '版本管理' }, { id: 'environment', icon: 'environment', label: '环境管理' }, { id: 'logs', icon: 'logs', label: '日志' }] as const)" :key="item.id" :class="{ selected: page === item.id }" :aria-current="page === item.id ? 'page' : undefined" :aria-label="item.label" :title="item.label" @click="page = item.id"><Icon :name="item.icon" /><span class="sr-only">{{ item.label }}</span></button></nav>
       <div class="sidebar-foot"><button :class="{ selected: page === 'settings' }" aria-label="启动器设置" title="启动器设置" @click="page = 'settings'"><Icon name="settings" /></button></div>
     </aside>
-    <header class="titlebar" @mousedown="dragTitlebar" @dblclick="windowControl('maximize')"><span class="titlebar-name">{{ titlebarVersion }}</span><span class="titlebar-state" :class="{ good: stateGood, working: transitioning }" role="status" aria-live="polite"><i></i>{{ stateText }}</span><div class="window-controls"><button aria-label="最小化" title="最小化" @dblclick.stop @click="windowControl('minimize')"><Icon name="minimize" /></button><button aria-label="最大化或还原" title="最大化 / 还原" @dblclick.stop @click="windowControl('maximize')"><Icon name="maximize" /></button><button class="window-close" aria-label="关闭启动器" title="关闭" @dblclick.stop @click="windowControl('close')"><Icon name="close" /></button></div></header>
+    <header class="titlebar" @mousedown="dragTitlebar" @dblclick="windowControl('maximize')"><img class="titlebar-logo" src="/assets/home-logo.webp" alt="Next Trainer" /><span class="titlebar-name">{{ titlebarVersion }}</span><span class="titlebar-state" :class="{ good: stateGood, working: transitioning }" role="status" aria-live="polite"><i></i>{{ stateText }}</span><div class="window-controls"><button aria-label="最小化" title="最小化" @dblclick.stop @click="windowControl('minimize')"><Icon name="minimize" /></button><button aria-label="最大化或还原" title="最大化 / 还原" @dblclick.stop @click="windowControl('maximize')"><Icon name="maximize" /></button><button class="window-close" aria-label="关闭启动器" title="关闭" @dblclick.stop @click="windowControl('close')"><Icon name="close" /></button></div></header>
     <main class="launcher-main">
       <section v-show="page === 'launch'" class="home-page" aria-label="首页">
         <div class="home-heading"><img src="/assets/home-logo.webp" alt="Next Trainer 项目标志" /><div><h1>Next<span>Trainer</span></h1><p>让灵感，成为你的模型。</p></div></div>
@@ -764,11 +818,11 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
       <section v-if="sameRoot && registrationVersions.length" class="gui-diagnostics" aria-labelledby="registration-title">
             <div class="section-caption"><h2 id="registration-title">恢复安装登记</h2><button :disabled="mutationDisabled" @click="inspectGuiRegistration">只读检查登记</button></div>
             <p class="hint">源码和环境仍在、安装记录丢失时，可离线验证并补齐登记。检查不会执行解释器；确认后会使用独立临时资料验证真实入口。</p>
-            <label>需要恢复的版本<select :value="registrationRelease?.id" :disabled="mutationDisabled" @change="registrationReleaseId = ($event.target as HTMLSelectElement).value; changeRegistrationRelease()"><option v-for="version in registrationVersions" :key="version.id" :value="version.id">{{ channelName(version.channel) }} · {{ version.version }} · {{ version.commit.slice(0, 8) }}</option></select></label>
+            <label>需要恢复的版本<AcrylicSelect :model-value="registrationRelease?.id" :disabled="mutationDisabled" :options="registrationVersions.map(version => ({ value: version.id, label: `${channelName(version.channel)} · ${version.version} · ${version.commit.slice(0, 8)}` }))" @change="registrationReleaseId = $event.target.value; changeRegistrationRelease()" /></label>
             <template v-if="registrationPreview">
               <p v-if="registrationPreview.reason" class="gui-issue" role="alert">{{ registrationPreview.reason }}</p>
               <p v-if="registrationPreview.status === 'pending'" class="hint">存在待恢复登记事务：{{ registrationPreview.transaction }}</p>
-              <label v-if="registrationPreview.candidates?.length">指定已有实例<select v-model="registrationInstanceId" :disabled="mutationDisabled" @change="guiEpoch += 1; registrationPreview = null"><option value="">按已有绑定检查</option><option v-for="candidate in registrationPreview.candidates" :key="`${candidate.id}:${candidate.storage_version}`" :value="candidate.id">{{ candidate.id }} · 路径格式 {{ candidate.storage_version }} · 代次 {{ candidate.generation }} · {{ candidate.status === 'clean' ? '已有验证记录' : candidate.status === 'missing_state' ? '实例记录缺失' : '需要先恢复原事务' }}</option></select><span class="hint">选择后请重新执行只读检查，确认环境与影响。</span></label>
+              <label v-if="registrationPreview.candidates?.length">指定已有实例<AcrylicSelect v-model="registrationInstanceId" :disabled="mutationDisabled" :options="[{ value: '', label: '按已有绑定检查' }, ...registrationPreview.candidates.map(candidate => ({ value: candidate.id, label: `${candidate.id} · 路径格式 ${candidate.storage_version} · 代次 ${candidate.generation} · ${candidate.status === 'clean' ? '已有验证记录' : candidate.status === 'missing_state' ? '实例记录缺失' : '需要先恢复原事务'}` }))]" @change="guiEpoch += 1; registrationPreview = null" /><span class="hint">选择后请重新执行只读检查，确认环境与影响。</span></label>
               <p v-if="registrationPreview.plan">环境：<code>{{ registrationPreview.plan.proof.environment }}</code> · {{ registrationPreview.plan.proof.files.toLocaleString() }} 个可信文件</p>
               <button v-if="registrationPreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmGuiRegistration()">审查并恢复登记</button>
               <button v-if="registrationPreview.status === 'pending'" :disabled="mutationDisabled" @click="confirmGuiRegistration(true)">继续未完成登记恢复</button>
@@ -780,7 +834,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
             <p>目标版本：{{ registrationRelease.version }} · {{ registrationRelease.commit.slice(0, 8) }}</p>
             <button :disabled="mutationDisabled" @click="inspectLifecycle('rebuild')">预览新实例重建</button>
             <template v-if="lifecycleHistory">
-              <label>可回退的重建记录<select v-model="lifecycleTransaction" :disabled="mutationDisabled" @change="lifecyclePreview = null"><option value="">请选择记录</option><option v-for="record in lifecycleHistory.records.filter(item => item.rollback_available)" :key="record.transaction" :value="record.transaction">{{ record.transaction }} · {{ record.candidate_id }}</option></select></label>
+              <label>可回退的重建记录<AcrylicSelect v-model="lifecycleTransaction" :disabled="mutationDisabled" :options="[{ value: '', label: '请选择记录' }, ...lifecycleHistory.records.filter(item => item.rollback_available).map(record => ({ value: record.transaction, label: `${record.transaction} · ${record.candidate_id}` }))]" @change="lifecyclePreview = null" /></label>
               <button :disabled="mutationDisabled || !lifecycleTransaction" @click="inspectLifecycle('rollback')">预览同版本实例回退</button>
               <div v-for="pending in lifecycleHistory.pending_transactions" :key="pending.transaction" class="gui-recovery"><p>未完成实例事务：{{ pending.transaction }} · {{ pending.status }}</p><button :disabled="mutationDisabled" @click="confirmLifecycle(pending.kind === 'binding_switch' ? 'recover_rollback' : 'recover_rebuild', pending.transaction)">复验并恢复此事务</button></div>
               <div v-for="instance in lifecycleHistory.preserved_pending" :key="instance.instance_id" class="gui-recovery"><p>已保留的旧事务实例：{{ instance.instance_id }}</p><button :disabled="mutationDisabled" @click="confirmLifecycle('recover_preserved', null, instance.instance_id)">恢复旧实例事务</button></div>
@@ -853,13 +907,13 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
         </template>
       </LogPanel>
       <section v-show="page === 'settings'" class="settings-page" aria-label="设置"><nav class="settings-nav" aria-label="设置分类"><h1>启动器设置</h1><button v-for="item in ([{ id: 'appearance', icon: 'image', label: '外观' }, { id: 'network', icon: 'network', label: '网络' }, { id: 'profiles', icon: 'folder', label: '用户资料' }, { id: 'security', icon: 'shield', label: '安全与更新' }, { id: 'about', icon: 'info', label: '关于' }] as const)" :key="item.id" :class="{ selected: setting === item.id }" :aria-current="setting === item.id ? 'page' : undefined" @click="openSetting(item.id)"><Icon :name="item.icon" />{{ item.label }}</button></nav><div class="settings-content">
-        <section v-show="setting === 'appearance'" class="appearance-settings"><h2>外观</h2><div class="setting-row"><h3>主题</h3><div class="theme-options"><button class="theme-choice light-theme" :class="{ selected: appearance.theme === 'light' }" aria-label="浅色主题" :aria-pressed="appearance.theme === 'light'" @click="appearance.theme = 'light'"><span class="mini-app"></span></button><button class="theme-choice dark-theme" :class="{ selected: appearance.theme === 'dark' }" aria-label="深色主题" :aria-pressed="appearance.theme === 'dark'" @click="appearance.theme = 'dark'"><span class="mini-app"></span></button></div><div class="theme-labels"><span>浅色</span><span>深色</span></div></div><div class="setting-row"><h3>背景图片</h3><p class="setting-description">默认使用项目 Qwen-Image-2.1 海报。可以选择本地图片，保存在这台设备上。</p><input ref="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="chooseBackground" /><div class="actions"><button @click="backgroundInput?.click()"><Icon name="image" />选择本地背景</button><button :disabled="!appearance.background" @click="appearance.background = ''">恢复默认</button></div></div><div class="setting-row"><label for="background-mask">背景遮罩 <span>{{ appearance.mask }}%</span></label><input id="background-mask" v-model.number="appearance.mask" type="range" min="0" max="75" /></div><div class="setting-row"><label for="background-blur">管理页面背景模糊 <span>{{ appearance.blur }}px</span></label><input id="background-blur" v-model.number="appearance.blur" type="range" min="0" max="40" /></div><label class="switch-line"><input v-model="appearance.reduceMotion" type="checkbox" />减少动态效果</label><div class="setting-row"><label for="log-font-size">日志字号</label><select id="log-font-size" v-model.number="appearance.logFontSize"><option v-for="size in [12, 13, 14, 16, 18]" :key="size" :value="size">{{ size }} px</option></select></div><p class="setting-description">外观更改会自动保存。首页保持清晰背景，管理页面使用遮罩与模糊。</p></section>
+        <section v-show="setting === 'appearance'" class="appearance-settings"><h2>外观</h2><div class="setting-row"><h3>背景图片</h3><p class="setting-description">默认使用项目 Qwen-Image-2.1 海报。可以选择本地图片，保存在这台设备上。</p><input ref="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="chooseBackground" /><div class="actions"><button @click="backgroundInput?.click()"><Icon name="image" />选择本地背景</button><button :disabled="!appearance.background" @click="appearance.background = ''">恢复默认</button></div></div><div class="setting-row"><label for="background-mask">亚克力着色强度 <span>{{ appearance.mask }}%</span></label><input id="background-mask" v-model.number="appearance.mask" type="range" min="0" max="80" /></div><div class="setting-row"><label for="background-blur">亚克力模糊 <span>{{ appearance.blur }}px</span></label><input id="background-blur" v-model.number="appearance.blur" type="range" min="0" max="60" /></div><label class="switch-line"><input v-model="appearance.reduceMotion" type="checkbox" />减少动态效果</label><div class="setting-row"><label for="log-font-size">日志字号</label><AcrylicSelect id="log-font-size" v-model="appearance.logFontSize" :options="[12, 13, 14, 16, 18].map(size => ({ value: size, label: `${size} px` }))" /></div><p class="setting-description">外观更改会自动保存。首页保留清晰海报，其他页面与侧栏使用连续的亚克力材质。</p></section>
         <section v-show="setting === 'network'"><h2>网络</h2><section class="network-settings">
 
             <p class="hint">自动模式按环境变量与系统代理选择连接方式。手动代理连接失败会报告错误；本机服务始终直接连接。</p>
             <button class="compact" :disabled="busy || !sameRoot" @click="readNetworkSettings">读取当前设置</button>
             <template v-if="networkView">
-              <label>连接方式<select v-model="networkDraft.mode" :disabled="busy"><option value="auto">自动</option><option value="system">系统代理</option><option value="manual">手动代理</option><option value="direct">直接连接</option></select></label>
+              <label>连接方式<AcrylicSelect v-model="networkDraft.mode" :disabled="busy" :options="[{ value: 'auto', label: '自动' }, { value: 'system', label: '系统代理' }, { value: 'manual', label: '手动代理' }, { value: 'direct', label: '直接连接' }]" /></label>
               <template v-if="networkDraft.mode === 'manual' || networkDraft.mode === 'auto'">
                 <label>HTTP 代理<input v-model="networkDraft.http_proxy" type="password" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:11809" :disabled="busy" @input="editNetworkField('http_proxy')"><button :disabled="busy" @click="inheritNetworkField('http_proxy')">恢复继承</button></label>
                 <label>HTTPS 代理<input v-model="networkDraft.https_proxy" type="password" autocomplete="off" spellcheck="false" placeholder="手动模式可复用 HTTP 代理" :disabled="busy" @input="editNetworkField('https_proxy')"><button :disabled="busy" @click="inheritNetworkField('https_proxy')">恢复继承</button></label>
