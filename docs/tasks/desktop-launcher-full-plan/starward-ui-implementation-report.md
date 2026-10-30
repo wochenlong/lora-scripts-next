@@ -49,7 +49,7 @@ U3 外置证据：`launcher-ui-implementation-20261030/u3-checks.json`、`launch
 
 ## 最终同包原生结果与交付
 
-状态为 **complete-with-boundary（本轮实施与约定原生验收完成，保留测试边界）**。最终 candidate-2 由 `019a7a386055baff45f6f2c72e5164b6be3e3e5d` 构建，训练器源码仍为 `89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d`。构建输入 clean；之后的文档提交不代表重新构建产品。
+candidate-2 的自动化原生主案和历史重开已通过；最终截图人工复核发现用户资料页恢复区域沿用旧白底、浅字不可读，当前状态回到 **in progress（视觉修复和最终包复验）**。candidate-2 由 `019a7a386055baff45f6f2c72e5164b6be3e3e5d` 构建，训练器源码仍为 `89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d`。需修复ImportPanel主题后构建candidate-3并复验，不能用自动化通过掩盖视觉问题。
 
 | 实测项 | 最终结果 |
 | --- | --- |
