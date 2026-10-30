@@ -1,6 +1,6 @@
 # CR-012：Starward 亚克力界面还原
 
-- 状态：in-progress；起点 `c7f7baa89415641938fd4aade2461ea0c78cfeb7`，分支 `feat/desktop-launcher`。
+- 状态：complete-with-boundary，约定UI维护与交付完成；起点 `c7f7baa89415641938fd4aade2461ea0c78cfeb7`，分支 `feat/desktop-launcher`。
 - 授权：2026-10-31 用户要求重新研究 Starward 源码并尽可能复刻全部美术效果，移除深浅色选择；追加明确首页清晰背景与侧栏分区，其余页面与侧栏连续使用同一亚克力材质。
 - 路径：既有启动器的 UI 维护，Standard（常规）规模；采用源码调研与行为验收，不修改安装、训练及服务生命周期。继续使用唯一总控，不新建另一套任务书。
 - 变更：本条授权替代 CR-011 双主题设计及“主题相同遮罩”验收。历史结果只归属历史包；新包重新做 UI 验证。
@@ -8,12 +8,12 @@
 
 | 验收项 | 输出 | 验证 | 当前状态 |
 | --- | --- | --- | --- |
-| A1 首页清晰背景、侧栏亚克力分区；其余页全窗连续同材质 | 共享背景层及导航布局 | 浏览器/原生截图、背景层检查 | implemented；待最终包验证 |
-| A2 字体、渐变、细噪点、容器、按钮、输入控件 | 统一材质与控件色板 | 三种尺寸布局与独立视觉复核 | implemented；待最终包验证 |
-| A3 下拉框展开与键盘操作 | 亚克力组合框及弹层 | 打开/选取/关闭/键盘/边界 | implemented；待最终包验证 |
-| A4 导航、选中、弹层动画及减少动态 | 转场与交互状态 | 常规/减少动态检查 | implemented；待最终包验证 |
-| A5 移除主题选择，保存并迁移旧外观资料 | 统一外观配置 | 旧配置载入、同 WebView 重开 | implemented；待最终包验证 |
-| A6 新包可供用户运行并保存远端基线 | EXE/ZIP/安装包及更新入口 | 最终包原生只读、摘要/入口回执、远端核对 | implemented；待最终包验证 |
+| A1 首页清晰背景、侧栏亚克力分区；其余页全窗连续同材质 | 共享背景层及导航布局 | 浏览器/原生截图、背景层检查 | pass |
+| A2 字体、渐变、细噪点、容器、按钮、输入控件 | 统一材质与控件色板 | 三种尺寸布局与独立视觉复核 | pass |
+| A3 下拉框展开与键盘操作 | 亚克力组合框及弹层 | 打开/选取/关闭/键盘/边界 | pass |
+| A4 导航、选中、弹层动画及减少动态 | 转场与交互状态 | 常规/减少动态检查 | pass |
+| A5 移除主题选择，保存并迁移旧外观资料 | 统一外观配置 | 旧配置载入、同 WebView 重开 | pass |
+| A6 新包可供用户运行并保存远端基线 | EXE/ZIP/安装包及更新入口 | 最终包原生只读、摘要/入口回执、远端核对 | pass |
 
 验证范围沿用用户“测试简略”指示：受影响页面与控件、三尺寸、隔离原生只读；不重复下载安装、模型下载或 GPU 训练。原生验证使用独立 WebView 与精确归属进程，不操作用户现有窗口或服务。
 
@@ -35,6 +35,34 @@
 - `browser-preferences-01`：4项旧偏好迁移通过；`ink-02`：6项实际白/黑本地图片选择、文字对比、恢复默认与300ms真实交接通过。
 - `fonts-01` 和独立字体探针：正文与普通按钮实际使用 MicrosoftYaHeiUI Regular（400），英文数字使用 Segoe UI Variable Text；标题600映射Bold，无伪加粗或字体模拟参数。
 - `source-research/pixel-probe`：以实际截图像素确认 SVG 合成与纯黑遮罩的差异。`browser-01`虽合同通过但视觉未通过，保留原件；`ink-01`因采样在Vue双帧之前未取得动画而失败，`ink-02`调整观察时点后通过，无产品绕过。
-- 证据根：`E:/OpenSourceTeamWork/workspace/tools/launcher-ui-acrylic-20261031`。Root已看最终浏览器首页、环境、设置、日志及下拉图；最终EXE尚待构建和隔离原生验证，不能以浏览器代替最终包验收。
+- 证据根：`E:/OpenSourceTeamWork/workspace/tools/launcher-ui-acrylic-20261031`。Root已看最终浏览器首页、环境、设置、日志及下拉图；最终EXE随后完成如下隔离原生验证；浏览器结果没有冒充原生结果。
 
-下一步：保存并push产品源码基线，再离线构建最终候选包。
+## 产品基线与候选包
+
+- 产品源码 `fe8cbb6450a9e9ed3d2f62c482d59c9138937793` 已普通push，`ls-remote`核对一致；无关未跟踪资料保留。
+- 离线候选 `F:/NextTrainerLauncherSandbox/build-ui-acrylic-20261031/candidate-1` 构建通过；构建输入14个锁项匹配，`cache_changes={}`，精确资源暂存清理完成。训练器前端固定归档和训练器源码保持原身份。
+- 已检验ZIP/NSIS摘要、ZIP CRC及所有成员路径，再安全解压到全新 `F:/NextTrainerLauncherSandbox/ui-acrylic-20261031-1/NextTrainerLauncher-0.2.0-windows-x64`，并核对解压后的EXE/helper/清单。
+
+| 制品 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| 启动器EXE | 38,866,944 | `b53d3b220f20d409b6d75a2151be727531d3cbefcb216731253d9897b6e20c72` |
+| 便携ZIP | 20,942,077 | `f5ad8a2b9974a53853dcce83b566ae4d4a9971edc1e8403e6a1eb310ff9f8035` |
+| NSIS安装包 | 17,416,918 | `048e68da785763821e03636b679792b55554b9fae586d45b03ea6b124afed127` |
+
+## 最终包原生与视觉验收
+
+- `native-01/host-status.json` 总结果 `passed=true`，实际EXE摘要与候选一致。主案32项/15布局、同一独立WebView正常重开3项通过；实际PNG响应字节/SHA匹配，普通字号最小12，真实SVG各层、组合框、页面动画及减少动态通过。
+- 两阶段UI退出0、原生退出0，正常关窗、Job排空及CDP回收完成，外部只读哨兵前后一致。本次测试窗口全部回收。
+- 本轮使用既有 `r12` 安装根并保持runtime stopped、无PID/port；没有启停服务、执行安装、下载模型或训练。未重复的真实业务及干净Windows/WebView2首装验收不作本包新通过。
+- Root已实际查看最终原生首页/设置/下拉/环境/日志；独立代理另查首页、环境、设置、日志、用户资料、安全更新6页，无视觉阻断。资料页下部为正常滚动。先前白底白字与错误混合两项问题均未在最终包复现。
+- 原生代表图：[首页](../../design/desktop-launcher-ui-review/acrylic-20261031/home.png)、[设置](../../design/desktop-launcher-ui-review/acrylic-20261031/settings.png)、[环境](../../design/desktop-launcher-ui-review/acrylic-20261031/environment.png)、[日志](../../design/desktop-launcher-ui-review/acrylic-20261031/logs.png)、[版本](../../design/desktop-launcher-ui-review/acrylic-20261031/versions.png)、[展开下拉](../../design/desktop-launcher-ui-review/acrylic-20261031/font-popup.png)。
+
+## 普通入口与交付
+
+- 已备份并只更新 `F:/NextTrainerLauncherSandbox/user-20261030/启动新版启动器.cmd`、`新版启动器使用说明.md`、`new-launcher-ready-report.json`；目标为上述新候选目录，复用原用户WebView。部署后10项校验全true，包括目标EXE身份、备份一致、清空CDP参数、安装根保持、ready报告一致。
+- 回执：工具根 `user-entry-deployment.json`、`user-entry-verification.json`；备份：`user-entry-backup`。未代用户打开最终窗口，用户可正常关闭旧窗口后双击原“启动新版启动器”入口。
+- 用户自选背景、非默认材质数值和字号保留；查看默认海报可在“设置→外观→恢复默认”切换图片。`u13`、模型、样例配置、训练输出和旧入口保留。
+- 回退：正常退出新版，恢复备份的上述三个新增入口文件即可回到旧程序；不清理安装根或WebView。
+- 结构化验收：[ui-acrylic-20261031-validation.json](ui-acrylic-20261031-validation.json)。产品基线普通push已核对一致；本报告、验收JSON和6张最终原生代表图随交付文档提交保存，最终文档HEAD由现场`ls-remote`回执核实，不做提交SHA自引用。
+
+约定施工、验证与入口交付已完成。剩余边界为本节已明确的非逐像素WinUI渲染及本轮不重复的真实业务/干净系统验证，没有待实施的UI验收项。
