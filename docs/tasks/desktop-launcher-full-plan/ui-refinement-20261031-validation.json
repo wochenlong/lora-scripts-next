@@ -1,0 +1,362 @@
+{
+  "schema_version": 1,
+  "status": "complete-with-boundary",
+  "date": "2026-10-31",
+  "scope": "CR-010 original six UI revisions plus user-requested removal of lower-right duplicate status and commit/caption footer; one native service start/stop; no reinstall/download/training",
+  "identity": {
+    "build_commit": "74076ef51cce2d31ecf21b2eebb5c3a8e6559ad7",
+    "trainer_commit": "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
+    "launcher_source_digest": "468865a74d9c7a312ea5f7e5eb63819241b3885c93a70862bb546ba8a15f09db",
+    "catalog_digest": "98cc9df537272f1d7d4d79be97b5e7c9d062ab77dc6a7098140feb89069961f7",
+    "recipe_digest": "4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca",
+    "exe": {
+      "bytes": 37273600,
+      "sha256": "2d2063e8f2ae2ad52e022c4cc2383995b6b1220b45b5db8bc95500b0d26a2be6"
+    },
+    "artifacts": {
+      "NextTrainerLauncher-0.2.0-windows-x64-portable.zip": {
+        "bytes": 19348401,
+        "sha256": "e31714fca82e07860c545efeb9b3815053e1b465c2610782100acf9b6586e08e"
+      },
+      "installers/Next Trainer Launcher_0.2.0_x64-setup.exe": {
+        "bytes": 16160593,
+        "sha256": "02cea12fd903d39245db41120f8bbcce733c3cd5e4a535e5938335ad6a915db5"
+      }
+    },
+    "build_directory": "F:/NextTrainerLauncherSandbox/build-ui-refinement-20261031/candidate-2",
+    "candidate": "F:/NextTrainerLauncherSandbox/ui-refinement-20261031-2/NextTrainerLauncher-0.2.0-windows-x64",
+    "public_release": false,
+    "windows_code_signature": "unsigned-development-candidate",
+    "remote_baseline": {
+      "ordinary_push": true,
+      "ls_remote_matches_build_commit": true
+    },
+    "offline_build": {
+      "new_network_payload_bytes": 0,
+      "cache_changes": {},
+      "resource_staging_cleanup": "removed_exact_owned_files"
+    },
+    "delivery": {
+      "status": "ready-for-user-test-and-use",
+      "entry": "F:/NextTrainerLauncherSandbox/user-20261030/启动新版启动器.cmd",
+      "entry_updated": true,
+      "user_app_launched": false,
+      "read_back_verified": true,
+      "reuse_original_user_webview": true,
+      "cdp_parameters_cleared": true,
+      "installation_root": "F:/NextTrainerLauncherSandbox/u13",
+      "backup": "E:/OpenSourceTeamWork/workspace/tools/launcher-ui-refinement-20261030/user-entry-backup-20261031",
+      "only_updated_new_entry_guide_and_ready_report": true,
+      "existing_old_entry_models_samples_preserved": true,
+      "entry_sha256": "566794ee23197e4353cb626a72c45df7945fcd5fb833a4a4757c24f16d3e5f42"
+    }
+  },
+  "native": {
+    "case": "refinement-04",
+    "passed": true,
+    "fixture_session": false,
+    "cold_start": false,
+    "root": "F:/NextTrainerLauncherSandbox/r12",
+    "same_exe_all_phases": true,
+    "checks": {
+      "main_passed": 50,
+      "reopen_passed": 3,
+      "main_errors": [],
+      "reopen_errors": []
+    },
+    "phase_cleanup": [
+      {
+        "mode": "main",
+        "passed": true,
+        "ui_exit_code": 0,
+        "process_exit_code": 0,
+        "graceful": true,
+        "job_drained": true,
+        "cdp_reclaimed": true,
+        "sentinels_unchanged": true
+      },
+      {
+        "mode": "reopen",
+        "passed": true,
+        "ui_exit_code": 0,
+        "process_exit_code": 0,
+        "graceful": true,
+        "job_drained": true,
+        "cdp_reclaimed": true,
+        "sentinels_unchanged": true
+      }
+    ],
+    "timings": [
+      {
+        "action": "start",
+        "click_to_transition_ms": 1.5,
+        "backend_to_button_ms": 4,
+        "feedback_kind": "transition-DOM-observed",
+        "backend_phase": "ready"
+      },
+      {
+        "action": "stop",
+        "click_to_transition_ms": 3.2001953125,
+        "backend_to_button_ms": 14.599853515625,
+        "feedback_kind": "transition-DOM-observed",
+        "backend_phase": "stopped"
+      }
+    ],
+    "limits_ms": {
+      "click_to_transition": 250,
+      "backend_to_button": 1000
+    },
+    "timing_boundary": "Completion feedback only; initial full integrity check and required prelaunch checks remain outside these timing limits.",
+    "home_layouts": [
+      {
+        "theme": "light",
+        "width": 1024,
+        "height": 640,
+        "card_width": 360,
+        "card_height": 330,
+        "bottom_difference_px": 0,
+        "horizontal_overflow": false,
+        "small_friend_links_all_visible": true
+      },
+      {
+        "theme": "light",
+        "width": 1184,
+        "height": 667,
+        "card_width": 420,
+        "card_height": 360,
+        "bottom_difference_px": 0,
+        "horizontal_overflow": false,
+        "small_friend_links_all_visible": true
+      },
+      {
+        "theme": "light",
+        "width": 1440,
+        "height": 900,
+        "card_width": 420,
+        "card_height": 360,
+        "bottom_difference_px": 0,
+        "horizontal_overflow": false,
+        "small_friend_links_all_visible": true
+      },
+      {
+        "theme": "dark",
+        "width": 1024,
+        "height": 640,
+        "card_width": 360,
+        "card_height": 330,
+        "bottom_difference_px": 0,
+        "horizontal_overflow": false,
+        "small_friend_links_all_visible": true
+      },
+      {
+        "theme": "dark",
+        "width": 1184,
+        "height": 667,
+        "card_width": 420,
+        "card_height": 360,
+        "bottom_difference_px": 0,
+        "horizontal_overflow": false,
+        "small_friend_links_all_visible": true
+      },
+      {
+        "theme": "dark",
+        "width": 1440,
+        "height": 900,
+        "card_width": 420,
+        "card_height": 360,
+        "bottom_difference_px": 0,
+        "horizontal_overflow": false,
+        "small_friend_links_all_visible": true
+      }
+    ],
+    "management_layout_count": 8,
+    "real_http": {
+      "api_version_success": true,
+      "version": "3.3.1-dev",
+      "same_origin_js_css_readable": true
+    },
+    "theme": {
+      "fresh_default_light": true,
+      "native_switch_both_directions": true,
+      "same_webview_reopen_dark_preserved": true,
+      "root_preserved_on_reopen": true,
+      "restored_light_before_close": true
+    },
+    "external_links": {
+      "native_clicks": 0,
+      "verified": "DOM target labels and visible friend tab only; IPC invocation belongs to isolated browser fixture"
+    },
+    "assets": {
+      "/assets/home-logo.webp": {
+        "source": "E:\\OpenSourceTeamWork\\workspace\\branches\\dev\\desktop-launcher\\public\\assets\\home-logo.webp",
+        "bytes": 60072,
+        "sha256": "eda3cca9043ee16a3af5f7f6104466c525d628bc2870a7985d02311d3c07f4d5"
+      },
+      "/assets/next-trainer-cover.png": {
+        "source": "E:\\OpenSourceTeamWork\\workspace\\branches\\dev\\desktop-launcher\\public\\assets\\next-trainer-cover.png",
+        "bytes": 1682225,
+        "sha256": "0aece9b3ce1b10697d3eb02e49795a9c3db7dddc7e82c26ba4f73e11cf895ceb"
+      }
+    }
+  },
+  "browser_contract": {
+    "case": "browser-05",
+    "passed": true,
+    "fixture_session": true,
+    "checks_passed": 28,
+    "count_note": "27 UI/theme/link contract checks plus one zero-external-request check",
+    "contexts": [
+      "fresh-default",
+      "legacy-no-theme",
+      "explicit-dark",
+      "invalid-theme"
+    ],
+    "external_requests": 0,
+    "errors": [],
+    "native_external_launches": 0,
+    "owned_browser_closed": true,
+    "owned_server_closed": true,
+    "limitations": "No native launcher/service/external browser, no installation or training; mock IPC only."
+  },
+  "visual_review": {
+    "root_home_light_dark_and_light_environment": "pass",
+    "remaining_management_pages": "pass-independent-review",
+    "screenshots": [
+      {
+        "path": "E:/OpenSourceTeamWork/workspace/branches/dev/docs/design/desktop-launcher-ui-review/refinement-20261031/light-home.png",
+        "bytes": 693433,
+        "sha256": "3a071929ac79b2ef85a5df2d192d44f1a08ebc02953265f1947f00fc90825ca0"
+      },
+      {
+        "path": "E:/OpenSourceTeamWork/workspace/branches/dev/docs/design/desktop-launcher-ui-review/refinement-20261031/dark-home.png",
+        "bytes": 665671,
+        "sha256": "a6d656f42f1967646156d4e1d6c0ad370a55cf2e57ba40ffd343df4723524e13"
+      },
+      {
+        "path": "E:/OpenSourceTeamWork/workspace/branches/dev/docs/design/desktop-launcher-ui-review/refinement-20261031/light-friends-1024.png",
+        "bytes": 582357,
+        "sha256": "2571366f4d57f9b09a3b7822f66a631ddc6cec2508c9015131687e10b77d2af9"
+      },
+      {
+        "path": "E:/OpenSourceTeamWork/workspace/branches/dev/docs/design/desktop-launcher-ui-review/refinement-20261031/dark-friends-1024.png",
+        "bytes": 566867,
+        "sha256": "f25885cdf50b5915b4a292c639aa9e6221ff1c91de53838d979cd2d1d7ecab3b"
+      },
+      {
+        "path": "E:/OpenSourceTeamWork/workspace/branches/dev/docs/design/desktop-launcher-ui-review/refinement-20261031/light-logs.png",
+        "bytes": 235834,
+        "sha256": "b7858577be4f31fa7691c195b95ea3dd1ca6bd4f0b685acdd1659b3fa548ef1d"
+      },
+      {
+        "path": "E:/OpenSourceTeamWork/workspace/branches/dev/docs/design/desktop-launcher-ui-review/refinement-20261031/dark-logs.png",
+        "bytes": 310711,
+        "sha256": "fdd7edfc56bbb37d6a2e9be8a356c67cb2a614e166517248f82e21d79dea0883"
+      }
+    ],
+    "management_review": {
+      "count": 8,
+      "pages": [
+        "environment",
+        "logs",
+        "appearance",
+        "profiles"
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "blocking_issues": 0
+    }
+  },
+  "preserved_attempts": [
+    {
+      "case": "refinement-01",
+      "status": "harness-failure",
+      "reason": "same-value light selection incorrectly awaited a storage write; not a product theme-save failure"
+    },
+    {
+      "case": "refinement-02",
+      "status": "cancelled-by-owner-after-user-scope-change",
+      "reason": "additional lower-right UI removal requirements arrived"
+    },
+    {
+      "case": "refinement-03",
+      "status": "sampling-failure",
+      "reason": "requestAnimationFrame missed roughly 7ms stopping transition; actual stopped-to-button was 23.8999ms; immediate DOM sampling fixed for case04"
+    },
+    {
+      "case": "candidate-1",
+      "status": "superseded",
+      "reason": "additional user UI requirements; retained original files and hashes"
+    },
+    {
+      "case": "browser-03",
+      "status": "contract-pass-screenshot-not-settled",
+      "reason": "browser04 added settled screenshot wait; browser05 is final after additional requirements"
+    }
+  ],
+  "evidence": [
+    {
+      "path": "E:/OpenSourceTeamWork/workspace/tools/launcher-ui-refinement-20261030/refinement-04/host-status.json",
+      "bytes": 11296,
+      "sha256": "40dbb466ccb500a49d5208a75932f5b21755ae9d576de26efe87613603f1d084"
+    },
+    {
+      "path": "E:/OpenSourceTeamWork/workspace/tools/launcher-ui-refinement-20261030/refinement-04/main/host-status.json",
+      "bytes": 4292,
+      "sha256": "696fca07d61482ff85364b585718d4e7a5da8864868bb5dc70e786214510524a"
+    },
+    {
+      "path": "E:/OpenSourceTeamWork/workspace/tools/launcher-ui-refinement-20261030/refinement-04/main/ui-report.json",
+      "bytes": 90812,
+      "sha256": "3df5637064e7424b347ff003a4846e171664bd3e77832fb74eb8cb7510d4b6c8"
+    },
+    {
+      "path": "E:/OpenSourceTeamWork/workspace/tools/launcher-ui-refinement-20261030/refinement-04/reopen/host-status.json",
+      "bytes": 4296,
+      "sha256": "6bb68048159f89f26199d42f5f0b31aa038fafc09bc9ac5174e52adacaf0c8b8"
+    },
+    {
+      "path": "E:/OpenSourceTeamWork/workspace/tools/launcher-ui-refinement-20261030/refinement-04/reopen/ui-report.json",
+      "bytes": 1227,
+      "sha256": "cdd9c98a1beafebf2b0d3551f053c0bcae3ef4db96e90935d92de6076e06fd3a"
+    },
+    {
+      "path": "E:/OpenSourceTeamWork/workspace/tools/launcher-ui-refinement-20261030/browser-05/browser-report.json",
+      "bytes": 24334,
+      "sha256": "d5894c75ba3882107dbcc227d2a71d87bd637179eaee8a64684e7e0ae7904d85"
+    },
+    {
+      "path": "F:/NextTrainerLauncherSandbox/build-ui-refinement-20261031/candidate-2/delivery-manifest.json",
+      "bytes": 3250,
+      "sha256": "eeea44b1e2ae401110a1ef7f4478894fece9d0ffde6b2837d6da9bd0190810f6"
+    },
+    {
+      "path": "F:/NextTrainerLauncherSandbox/build-ui-refinement-20261031/candidate-2/resource-staging.json",
+      "bytes": 1625,
+      "sha256": "ab7a7048f416ba9c586c1ecfcc40d4d4aaf655d8d016e668768acbe968d17ea1"
+    },
+    {
+      "path": "E:/OpenSourceTeamWork/workspace/tools/launcher-ui-refinement-20261030/user-entry-deployment.json",
+      "bytes": 1398,
+      "sha256": "2e03761bfacd6b1f71918004a064ed751461fde0e0902af8df33c9af1f4454c8"
+    },
+    {
+      "path": "F:/NextTrainerLauncherSandbox/user-20261030/new-launcher-ready-report.json",
+      "bytes": 2046,
+      "sha256": "c19bd0ff907f7cbaf5e4688ee1d55401b9debe3a45a50687b5461d19f142f7a3"
+    }
+  ],
+  "boundaries": {
+    "install_or_reinstall": "not-run-this-UI-revision",
+    "model_download": "not-run",
+    "gpu_training": "not-run-this-UI-revision",
+    "clean_windows": "not-run",
+    "missing_webview2_first_install": "not-run",
+    "native_system_external_browser_open": "not-run",
+    "native_clipboard_copy": "not-run-preserve-user-clipboard",
+    "public_release": false,
+    "production_signing_or_channel": "not-configured",
+    "existing_user_webview_models_samples_and_old_entry": "preserved"
+  }
+}

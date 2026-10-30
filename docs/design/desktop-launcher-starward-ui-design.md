@@ -223,3 +223,5 @@ Starward 当前使用 WinUI 3；我们的页面磨砂由 CSS 分层与模糊模�
 | U2 视觉壳与导航 | 本地 Logo、窗口与页面；构建、尺寸和键盘检查 | 三尺寸15页原生检查通过 | [原生首页](desktop-launcher-ui-review/implementation/home-ready.png)、[环境1024](desktop-launcher-ui-review/implementation/environment-1024.png) |
 | U3 日志与设置 | 独立日志、筛选/跟随/定位/脱敏，原业务映射 | 当前/历史、真实导出与重开通过 | [原生日志](desktop-launcher-ui-review/implementation/logs.png)、[设置](desktop-launcher-ui-review/implementation/settings.png)；原生额外剪贴板检查not-run以保护非文本内容 |
 | U4 同包交付 | 独立窗口启停三轮、异常退出、包身份与回执 | u4-08和history-08通过 | 不重下模型或重复四引擎训练；干净系统/生产签名保留原边界 |
+
+2026-10-31，用户在实测基础上直接批准CR-010六项界面修订：去除首页左下重复状态与主按钮旁重复设置、修复齿轮、放大并上移信息卡且更换项目封面与固定外链、补齐默认浅色主题、真实版本和渠道迁至标题栏。其后又明确要求删除右下重复状态及按钮下提交号/说明整行，已随补丁74076ef5实施；仅服务健康且有URL时保留地址/复制，卡片与主按钮继续共底边。最终candidate-2已构建并通过refinement-04主案50项和重开3项，双主题三尺寸底边差均0px；browser-05为28项通过。首页与8张管理页独立视觉复核无阻断，普通用户入口已更新至最终包，CR-010为complete-with-boundary；实际结果见[CR-010实施记录](../tasks/desktop-launcher-full-plan/ui-refinement-20261031-report.md)及[结构化验收](../tasks/desktop-launcher-full-plan/ui-refinement-20261031-validation.json)。上文深色审稿及CR-009历史结论保留其原时间和制品边界。
