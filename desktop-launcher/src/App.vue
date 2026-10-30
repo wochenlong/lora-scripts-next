@@ -50,7 +50,8 @@ const message = ref('正在检查安装状态…')
 const logs = ref<LogEntry[]>([])
 let logSequence = 0
 const visibleLogIds = new Set<string>()
-const logFocus = ref<string | null>(null)
+const logFocus = ref<{ id: string; request: number } | null>(null)
+let logFocusRequest = 0
 const logSessionId = ref('')
 const runtime = ref<RuntimeSnapshot | null>(null)
 const optimisticPhase = ref<RuntimePhase | null>(null)
@@ -232,7 +233,8 @@ function acceptLogEntry(record: LogRecord) {
   appendLog(fromLogRecord(record))
 }
 function showLogs(focusError = false) {
-  logFocus.value = focusError ? [...logs.value].reverse().find(entry => entry.level === 'ERROR' && samePath(entry.root, path.value))?.id ?? logs.value.at(-1)?.id ?? null : null
+  const id = focusError ? [...logs.value].reverse().find(entry => entry.level === 'ERROR' && samePath(entry.root, path.value))?.id ?? logs.value.at(-1)?.id ?? null : null
+  logFocus.value = id ? { id, request: ++logFocusRequest } : null
   page.value = 'logs'
 }
 function samePath(left: string, right: string) { return left.trim().replace(/\\/g, '/').replace(/\/$/, '').toLowerCase() === right.trim().replace(/\\/g, '/').replace(/\/$/, '').toLowerCase() }
@@ -822,7 +824,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 
         </div><p class="page-note"><Icon name="info" />模型与训练任务在训练网页中管理。<button class="text-button" @click="showLogs()">查看环境日志<Icon name="arrow" /></button></p>
       </section>
-      <LogPanel v-show="page === 'logs'" :active="page === 'logs'" :entries="logs" :current-session-id="logSessionId" :root="path.trim()" :focus-id="logFocus" :font-size="appearance.logFontSize" />
+      <LogPanel v-show="page === 'logs'" :active="page === 'logs'" :entries="logs" :current-session-id="logSessionId" :root="path.trim()" :focus-request="logFocus" :font-size="appearance.logFontSize" />
       <section v-show="page === 'settings'" class="settings-page" aria-label="设置"><nav class="settings-nav" aria-label="设置分类"><h1>启动器设置</h1><button v-for="item in ([{ id: 'appearance', icon: 'image', label: '外观' }, { id: 'network', icon: 'network', label: '网络' }, { id: 'profiles', icon: 'folder', label: '用户资料' }, { id: 'security', icon: 'shield', label: '安全与更新' }, { id: 'about', icon: 'info', label: '关于' }] as const)" :key="item.id" :class="{ selected: setting === item.id }" :aria-current="setting === item.id ? 'page' : undefined" @click="openSetting(item.id)"><Icon :name="item.icon" />{{ item.label }}</button></nav><div class="settings-content">
         <section v-show="setting === 'appearance'" class="appearance-settings"><h2>外观</h2><div class="setting-row"><h3>主题</h3><div class="theme-options"><button class="theme-choice selected" aria-label="深色主题，已选择"><span class="mini-app"></span></button><button class="theme-choice light-theme" disabled aria-label="浅色主题尚未提供"><span class="mini-app"></span></button></div><div class="theme-labels"><span>深色</span><span>浅色 · 暂未提供</span></div></div><div class="setting-row"><h3>背景图片</h3><p class="setting-description">默认使用项目自有角色背景。可以选择本地图片，保存在这台设备上。</p><input ref="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="chooseBackground" /><div class="actions"><button @click="backgroundInput?.click()"><Icon name="image" />选择本地背景</button><button :disabled="!appearance.background" @click="appearance.background = ''">恢复默认</button></div></div><div class="setting-row"><label for="background-mask">背景遮罩 <span>{{ appearance.mask }}%</span></label><input id="background-mask" v-model.number="appearance.mask" type="range" min="0" max="75" /></div><div class="setting-row"><label for="background-blur">管理页面背景模糊 <span>{{ appearance.blur }}px</span></label><input id="background-blur" v-model.number="appearance.blur" type="range" min="0" max="40" /></div><label class="switch-line"><input v-model="appearance.reduceMotion" type="checkbox" />减少动态效果</label><div class="setting-row"><label for="log-font-size">日志字号</label><select id="log-font-size" v-model.number="appearance.logFontSize"><option v-for="size in [10, 11, 12, 13, 14, 16, 18]" :key="size" :value="size">{{ size }} px</option></select></div><p class="setting-description">外观更改会自动保存。首页保持清晰背景，管理页面使用遮罩与模糊。</p></section>
         <section v-show="setting === 'network'"><h2>网络</h2><section class="network-settings">

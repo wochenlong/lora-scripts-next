@@ -492,30 +492,31 @@ pub fn redact(value: &str) -> String {
     while index < value.len() {
         let boundary =
             index == 0 || !(bytes[index - 1].is_ascii_alphanumeric() || bytes[index - 1] == b'_');
-        let identifier_end = lower[index..]
-            .find(|ch: char| !ch.is_ascii_alphanumeric() && !matches!(ch, '_' | '-'))
-            .map(|end| index + end)
-            .unwrap_or(lower.len());
-        let identifier = &lower[index..identifier_end];
-        let extended = boundary
-            && (identifier.ends_with("_token")
+        // A long unbroken ASCII line has one identifier. Scan its suffix only
+        // at a boundary, rather than rescanning it for every following byte.
+        let key = if boundary {
+            let identifier_end = lower[index..]
+                .find(|ch: char| !ch.is_ascii_alphanumeric() && !matches!(ch, '_' | '-'))
+                .map(|end| index + end)
+                .unwrap_or(lower.len());
+            let identifier = &lower[index..identifier_end];
+            let extended = identifier.ends_with("_token")
                 || identifier.ends_with("_password")
                 || identifier.ends_with("_secret")
                 || identifier.ends_with("_api_key")
                 || matches!(
                     identifier,
                     "apitoken" | "accesstoken" | "refreshtoken" | "authtoken"
-                ));
-        let key = if extended {
-            Some(identifier)
+                );
+            if extended {
+                Some(identifier)
+            } else {
+                keys.iter()
+                    .find(|key| lower[index..].starts_with(**key))
+                    .copied()
+            }
         } else {
-            boundary
-                .then(|| {
-                    keys.iter()
-                        .find(|key| lower[index..].starts_with(**key))
-                        .copied()
-                })
-                .flatten()
+            None
         };
         if let Some(key) = key {
             let mut separator = index + key.len();
@@ -730,6 +731,9 @@ mod tests {
         let long = store.record(&"中文x".repeat(20000), &Context::default());
         assert!(long.line.len() <= LINE_BYTES);
         assert!(long.line.contains("截断"));
+        let ascii = store.record(&"a".repeat(64 * 1024), &Context::default());
+        assert!(ascii.line.len() <= LINE_BYTES);
+        assert!(ascii.line.contains("截断"));
         let mut all = String::new();
         for index in 0..FILES {
             if let Ok(text) = fs::read_to_string(store.file(index)) {

@@ -309,28 +309,30 @@ impl Lifecycle {
         self.stop_for(None)
     }
     pub fn stop_for(&self, target: Option<&str>) -> Result<RuntimeSnapshot> {
-        if !self.request_stop_for(target) {
+        // Fix this request's identity before callbacks can yield. Another stop
+        // may finish this run and a successor may begin while we emit stopping.
+        let Some(run) = target.map(str::to_owned).or_else(|| self.current().run_id) else {
+            // Absence is not a wildcard: a first run may begin immediately
+            // after this snapshot, and this old request must not cancel it.
+            return Ok(self.current());
+        };
+        if !self.request_stop_for(Some(&run)) {
             return Ok(self.current());
         }
-        let run = self.current().run_id;
         let mut owner = self.process.lock().map_err(|_| anyhow!("受管进程锁异常"))?;
-        if self.current().run_id != run {
+        if self.current().run_id.as_deref() != Some(run.as_str()) {
             return Ok(self.current());
         }
         if let Some(process) = owner.as_mut() {
             if let Err(error) = process.terminate() {
-                if let Some(run) = &run {
-                    self.update(run, |state| {
-                        state.snapshot.phase = "stop_failed".into();
-                        state.snapshot.error = Some(format!("{error:#}"));
-                    });
-                }
+                self.update(&run, |state| {
+                    state.snapshot.phase = "stop_failed".into();
+                    state.snapshot.error = Some(format!("{error:#}"));
+                });
                 return Err(error);
             }
             owner.take(); // Drop Job first, then the workspace lease, before stopped.
-            if let Some(run) = &run {
-                self.publish_ended(run, "stopped", None, None);
-            }
+            self.publish_ended(&run, "stopped", None, None);
         }
         // Without a process, the start worker still owns preparation's lease.
         // It alone finalizes cancellation after the current check returns.
@@ -531,6 +533,19 @@ mod tests {
         owner.check_cancel(successor).unwrap();
     }
 
+    #[test]
+    fn stop_without_a_run_does_not_issue_wildcard_cancellation() {
+        let owner = Lifecycle::new();
+        assert_eq!(owner.stop_for(None).unwrap().phase, "stopped");
+        assert!(!owner.state.lock().unwrap().cancelled);
+        let root = std::env::temp_dir().join("nt-runtime-first-after-stop");
+        let run = owner
+            .begin_requested(&root, Some("first-after-empty-stop"))
+            .unwrap();
+        owner.check_cancel(&run).unwrap();
+        assert_eq!(owner.current().phase, "checking");
+    }
+
     #[cfg(windows)]
     fn fixture(role: &str) -> (Arc<Lifecycle>, String, std::path::PathBuf) {
         use fs2::FileExt;
@@ -675,5 +690,78 @@ mod tests {
         drop(listener);
         std::fs::remove_file(root.join("lease")).unwrap();
         std::fs::remove_dir(root).unwrap();
+    }
+    #[cfg(windows)]
+    #[test]
+    fn stop_request_remains_bound_when_duplicate_stop_finishes_and_successor_starts() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        let (owner, run, root) = fixture("wait");
+        let blocked_run = run.clone();
+        let block_once = AtomicBool::new(true);
+        let (paused_tx, paused_rx) = mpsc::channel();
+        let (resume_tx, resume_rx) = mpsc::channel();
+        let resume_rx = Mutex::new(resume_rx);
+        owner.set_listener(Arc::new(move |snapshot| {
+            if snapshot.phase == "stopping"
+                && snapshot.run_id.as_deref() == Some(blocked_run.as_str())
+                && block_once.swap(false, Ordering::AcqRel)
+            {
+                paused_tx.send(()).unwrap();
+                resume_rx
+                    .lock()
+                    .unwrap()
+                    .recv_timeout(Duration::from_secs(5))
+                    .unwrap();
+            }
+        }));
+        let delayed_owner = owner.clone();
+        let delayed_run = run.clone();
+        let (finished_tx, finished_rx) = mpsc::channel();
+        let delayed_stop = thread::spawn(move || {
+            finished_tx
+                .send(delayed_owner.stop_for(Some(&delayed_run)))
+                .unwrap();
+        });
+        paused_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        // A duplicate stop completes A while the old request is paused in its
+        // event callback. Put a real, live B under the same process owner.
+        assert_eq!(owner.stop_for(Some(&run)).unwrap().phase, "stopped");
+        let (temporary_owner, _, successor_root) = fixture("wait");
+        let process = temporary_owner.process.lock().unwrap().take().unwrap();
+        let successor = "requested-after-duplicate-stop";
+        owner
+            .begin_requested(&successor_root, Some(successor))
+            .unwrap();
+        let catalog = crate::model::Catalog::embedded().unwrap();
+        owner
+            .attach(successor, process, &catalog.releases()[0], None)
+            .unwrap();
+        resume_tx.send(()).unwrap();
+        finished_rx
+            .recv_timeout(Duration::from_secs(2))
+            .unwrap()
+            .unwrap();
+        delayed_stop.join().unwrap();
+        assert_eq!(owner.current().run_id.as_deref(), Some(successor));
+        assert_eq!(owner.current().phase, "starting");
+        assert!(
+            owner
+                .process
+                .lock()
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .child
+                .try_wait()
+                .unwrap()
+                .is_none(),
+            "old stop killed its successor"
+        );
+        owner.stop_for(Some(successor)).unwrap();
+        drop(temporary_owner);
+        for directory in [root, successor_root] {
+            std::fs::remove_file(directory.join("lease")).unwrap();
+            std::fs::remove_dir(directory).unwrap();
+        }
     }
 }

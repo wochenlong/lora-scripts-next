@@ -5,13 +5,14 @@ import type { LogEntry, LogLevel, LogSource } from './log-model'
 import { sourceLabels, normalizeLogRoot, fromLogRecord, mergeLogEntries } from './log-model'
 import { readLogs } from './bridge'
 import type { LogPage } from './bridge'
-const props = defineProps<{ entries: LogEntry[]; active: boolean; root: string; focusId: string | null; fontSize: number; currentSessionId: string }>()
+const props = defineProps<{ entries: LogEntry[]; active: boolean; root: string; focusRequest: { id: string; request: number } | null; fontSize: number; currentSessionId: string }>()
 const source = ref<LogSource | 'all'>('all'), level = ref<LogLevel | 'all'>('all'), search = ref(''), follow = ref(true)
 const mode = ref<'current' | 'history'>('current'), sessionFilter = ref(''), contextFilter = ref('')
 const selected = ref<string | null>(null), notice = ref(''), scrollTop = ref(0), viewport = ref<HTMLElement>(), viewportHeight = ref(400)
 const diskEntries = ref<LogEntry[]>([]), currentRecovered = ref<LogEntry[]>([]), diskSessionId = ref('')
 const sessions = ref<LogPage['sessions']>([]), loading = ref(false), readError = ref(''), partial = ref(false), hasMore = ref(false), nextCursor = ref<number | null>(null), frozenHistory = ref(false)
 let initialized = false, readEpoch = 0
+let consumedFocusRequest = 0, locating = false
 const rowHeight = 29, overscan = 8
 let observer: ResizeObserver | undefined
 const sameWorkspace = (entry: LogEntry) => normalizeLogRoot(entry.root) === normalizeLogRoot(props.root) || !entry.root
@@ -72,6 +73,14 @@ async function locate(id: string) {
   const index = filtered.value.findIndex(entry => entry.id === id)
   if (viewport.value && index >= 0) viewport.value.scrollTop = Math.max(0, index * rowHeight - viewport.value.clientHeight / 2)
 }
+function consumeFocusRequest() {
+  const request = props.focusRequest
+  if (!props.active || !request || request.request === consumedFocusRequest) return false
+  consumedFocusRequest = request.request
+  locating = true
+  void locate(request.id).finally(() => { locating = false })
+  return true
+}
 async function copy(selection = false) {
   try { await navigator.clipboard.writeText(selection && selectedEntry.value ? asText(selectedEntry.value) : filtered.value.map(asText).join('\n')); notice.value = '已复制脱敏日志' }
   catch { notice.value = '未能访问剪贴板，请在日志详情中选择文字复制。' }
@@ -86,14 +95,13 @@ watch(() => props.entries.at(-1)?.id, () => { if (follow.value && props.active &
 watch([source, level, search, contextFilter], () => { scrollTop.value = 0; if (viewport.value) viewport.value.scrollTop = 0 })
 watch([mode, sessionFilter], () => { selected.value = null; contextFilter.value = ''; follow.value = mode.value === 'current'; frozenHistory.value = false; if (props.active) void loadArchive(); else initialized = false })
 watch(() => props.root, () => { readEpoch++; loading.value = false; initialized = false; diskEntries.value = []; currentRecovered.value = []; sessions.value = []; selected.value = null; contextFilter.value = ''; sessionFilter.value = ''; readError.value = ''; partial.value = false; hasMore.value = false; nextCursor.value = null; if (props.active) void loadArchive() })
-watch(() => props.focusId, value => { if (value !== null) void locate(value) })
+watch(() => props.focusRequest?.request, () => { consumeFocusRequest() })
 watch(() => props.active, async value => {
   if (!value) return
   await nextTick()
   if (viewport.value) { observer?.disconnect(); observer = new ResizeObserver(([entry]) => { if (entry) viewportHeight.value = entry.contentRect.height }); observer.observe(viewport.value) }
   if (!initialized) void loadArchive()
-  if (props.focusId !== null) void locate(props.focusId)
-  else if (follow.value) await scrollBottom()
+  if (!consumeFocusRequest() && !locating && follow.value) await scrollBottom()
 }, { immediate: true })
 onBeforeUnmount(() => { readEpoch++; observer?.disconnect() })
 </script>
