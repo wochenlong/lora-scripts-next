@@ -1990,7 +1990,7 @@ mod tests {
             "base-candidate-asset",
             None,
             DownloadPolicy {
-                root_cap_body_bytes: 1024,
+                root_cap_body_bytes: Some(1024),
             },
             OperationLimits {
                 max_charged_body_bytes: 1024,

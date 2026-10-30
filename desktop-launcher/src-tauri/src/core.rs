@@ -1460,10 +1460,10 @@ impl Engine {
         &self,
         value: &str,
         expected_revision: Option<u64>,
-        root_body_cap_bytes: u64,
+        root_body_cap_bytes: Option<u64>,
     ) -> Result<crate::download_budget::BudgetSnapshot> {
-        if root_body_cap_bytes == 0 {
-            bail!("需要明确非零累计下载正文额度");
+        if root_body_cap_bytes == Some(0) {
+            bail!("累计下载正文上限必须大于0，或关闭上限");
         }
         if self.running.is_some() {
             bail!("请先停止受管训练器，再保存下载额度");
@@ -2241,7 +2241,7 @@ mod tests {
         let (log, _) = logger();
         let mut engine = Engine::new(root.clone(), log);
         engine
-            .save_download_budget(root.to_str().unwrap(), None, 1_048_576)
+            .save_download_budget(root.to_str().unwrap(), None, Some(1_048_576))
             .unwrap();
         let ledger = root.join("state/download-budget.json");
         let before = fs::read(&ledger).unwrap();
@@ -2255,7 +2255,7 @@ mod tests {
         fs::write(&intent, foreign).unwrap();
         assert!(assert_regular_ready(&root).is_err());
         assert!(engine
-            .save_download_budget(root.to_str().unwrap(), Some(1), 2_097_152)
+            .save_download_budget(root.to_str().unwrap(), Some(1), Some(2_097_152))
             .is_err());
         assert!(engine
             .reconcile_download_budget(root.to_str().unwrap())
@@ -2345,7 +2345,7 @@ mod tests {
         crate::download_budget::initialize_policy(
             &ctx,
             crate::download_budget::DownloadPolicy {
-                root_cap_body_bytes: 1_048_576,
+                root_cap_body_bytes: Some(1_048_576),
             },
         )
         .unwrap();
@@ -2393,7 +2393,7 @@ mod tests {
         crate::download_budget::initialize_policy(
             &ctx,
             crate::download_budget::DownloadPolicy {
-                root_cap_body_bytes: 1_048_576,
+                root_cap_body_bytes: Some(1_048_576),
             },
         )
         .unwrap();

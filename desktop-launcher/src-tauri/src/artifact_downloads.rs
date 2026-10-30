@@ -4,7 +4,7 @@ use crate::{
     model::WorkspaceMutation,
     operations::{CancelToken, Cancelled},
 };
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result};
 use std::path::PathBuf;
 
 pub(crate) struct ArtifactDownloads {
@@ -49,15 +49,12 @@ impl ArtifactDownloads {
         }
         if self.session.is_none() {
             let view = download_budget::snapshot(ctx.layout())?;
-            let Some(cap) = view.root_cap_body_bytes else {
-                bail!("尚未设置累计下载正文额度。请在环境页保存有限额度后重试；已验证缓存和离线修复仍可使用");
-            };
             let session = DownloadBudget::begin(
                 ctx,
                 &self.operation,
                 None,
                 DownloadPolicy {
-                    root_cap_body_bytes: cap,
+                    root_cap_body_bytes: view.root_cap_body_bytes,
                 },
                 self.limits.clone(),
             )?;
@@ -121,23 +118,12 @@ mod tests {
     fn hash(bytes: &[u8]) -> String {
         format!("{:x}", Sha256::digest(bytes))
     }
-
-    #[test]
-    fn one_product_operation_aggregates_multiple_assets_and_earlier_cache_hits() {
-        let ctx = fixture("multiple");
-        download_budget::initialize_policy(
-            &ctx,
-            DownloadPolicy {
-                root_cap_body_bytes: 1024,
-            },
-        )
-        .unwrap();
-        fs::write(ctx.layout().root.join("cache/local.zip"), b"local").unwrap();
+    fn serve(bodies: &'static [&'static [u8]]) -> (String, thread::JoinHandle<()>) {
         let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
         listener.set_nonblocking(true).unwrap();
         let url = format!("http://{}/asset.zip", listener.local_addr().unwrap());
         let server = thread::spawn(move || {
-            for body in [b"alpha".as_slice(), b"beta".as_slice()] {
+            for body in bodies {
                 let start = Instant::now();
                 let mut socket = loop {
                     match listener.accept() {
@@ -166,6 +152,21 @@ mod tests {
                 socket.write_all(body).unwrap();
             }
         });
+        (url, server)
+    }
+
+    #[test]
+    fn one_product_operation_aggregates_multiple_assets_and_earlier_cache_hits() {
+        let ctx = fixture("multiple");
+        download_budget::initialize_policy(
+            &ctx,
+            DownloadPolicy {
+                root_cap_body_bytes: Some(1024),
+            },
+        )
+        .unwrap();
+        fs::write(ctx.layout().root.join("cache/local.zip"), b"local").unwrap();
+        let (url, server) = serve(&[b"alpha", b"beta"]);
         let mut downloads = ArtifactDownloads::new("multi-product-install", 1024, 8);
         let cancel = CancelToken::new();
         downloads
@@ -200,30 +201,35 @@ mod tests {
     }
 
     #[test]
-    fn unconfigured_budget_allows_verified_cache_but_refuses_remote_before_mutating_it() {
+    fn unconfigured_budget_allows_download_and_preserves_cache_without_a_root_cap() {
         let ctx = fixture("no-cap");
         let target = ctx.layout().root.join("cache/local.zip");
         fs::write(&target, b"local").unwrap();
         let mut downloads = ArtifactDownloads::new("no-cap-product", 1024, 8);
         let cancel = CancelToken::new();
-        let url = "http://127.0.0.1:1/unreachable";
+        let (url, server) = serve(&[b"other"]);
         assert_eq!(
             downloads
-                .download(&ctx, url, "local.zip", &hash(b"local"), 5, &cancel)
+                .download(&ctx, &url, "local.zip", &hash(b"local"), 5, &cancel)
                 .unwrap(),
             target
         );
-        let error = downloads
-            .download(&ctx, url, "local.zip", &hash(b"other"), 5, &cancel)
-            .unwrap_err();
-        assert!(error.to_string().contains("尚未设置"));
-        downloads.finish::<()>(&Err(error)).unwrap();
-        assert_eq!(fs::read(target).unwrap(), b"local");
         assert!(!download_budget::snapshot(ctx.layout()).unwrap().enabled);
-        assert!(!ctx
-            .layout()
-            .root
-            .join("state/download-budget.json")
-            .exists());
+        let downloaded = downloads
+            .download(&ctx, &url, "other.zip", &hash(b"other"), 5, &cancel)
+            .unwrap();
+        downloads.finish(&Ok(())).unwrap();
+        server.join().unwrap();
+        assert_eq!(fs::read(target).unwrap(), b"local");
+        assert_eq!(fs::read(downloaded).unwrap(), b"other");
+        let snapshot = download_budget::snapshot_with_receipt(ctx.layout()).unwrap();
+        assert!(snapshot.budget.enabled);
+        assert_eq!(snapshot.budget.root_cap_body_bytes, None);
+        assert_eq!(snapshot.budget.remaining_body_bytes, None);
+        assert_eq!(snapshot.budget.counters.observed_body_bytes, 5);
+        let receipt = snapshot.latest_receipt.unwrap();
+        assert_eq!(receipt.counters.requests, 1);
+        assert_eq!(receipt.counters.cache_hits, 1);
+        assert_eq!(receipt.counters, snapshot.budget.counters);
     }
 }

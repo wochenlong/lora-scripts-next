@@ -708,7 +708,7 @@ pub(super) fn download(
         &id,
         None,
         DownloadPolicy {
-            root_cap_body_bytes: cap,
+            root_cap_body_bytes: Some(cap),
         },
         OperationLimits {
             max_charged_body_bytes: cap,
@@ -919,7 +919,7 @@ mod tests {
             operation,
             None,
             crate::download_budget::DownloadPolicy {
-                root_cap_body_bytes: root_cap,
+                root_cap_body_bytes: Some(root_cap),
             },
             crate::download_budget::OperationLimits {
                 max_charged_body_bytes: operation_cap,

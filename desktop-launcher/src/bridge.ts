@@ -229,7 +229,7 @@ export interface BudgetSnapshot {
   latest_receipt: OperationDownloadReceipt | null
 }
 export const getDownloadBudget = (root: string) => invoke<BudgetSnapshot>('get_download_budget', { root })
-export const saveDownloadBudget = (root: string, expectedRevision: number | null, rootBodyCapBytes: number) =>
+export const saveDownloadBudget = (root: string, expectedRevision: number | null, rootBodyCapBytes: number | null) =>
   invoke<BudgetSnapshot>('save_download_budget', { root, expectedRevision, rootBodyCapBytes })
 export const reconcileDownloadBudget = (root: string) => invoke<BudgetSnapshot>('reconcile_download_budget', { root })
 

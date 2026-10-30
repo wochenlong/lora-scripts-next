@@ -33,7 +33,9 @@ static NEXT: AtomicU64 = AtomicU64::new(0);
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub struct DownloadPolicy {
-    pub root_cap_body_bytes: u64,
+    // 字段必须存在：null表示关闭累计上限；旧版数字上限按原值读取。
+    #[serde(deserialize_with = "Deserialize::deserialize")]
+    pub root_cap_body_bytes: Option<u64>,
 }
 
 #[cfg(test)]
@@ -307,8 +309,8 @@ fn operation_id(value: &str) -> Result<()> {
     Ok(())
 }
 fn validate_policy(policy: &DownloadPolicy) -> Result<()> {
-    if policy.root_cap_body_bytes == 0 {
-        bail!("需要明确非零累计下载正文额度");
+    if policy.root_cap_body_bytes == Some(0) {
+        bail!("累计下载正文上限必须大于0，或关闭上限");
     }
     Ok(())
 }
@@ -397,6 +399,14 @@ fn remaining(cap: u64, counters: &Counters, reserved: u64) -> Result<u64> {
     )
     .context("下载计账超过持久额度")
 }
+fn root_remaining(cap: Option<u64>, counters: &Counters, reserved: u64) -> Result<Option<u64>> {
+    let charged = counters
+        .charged()?
+        .checked_add(reserved)
+        .context("额度加法溢出")?;
+    cap.map(|limit| limit.checked_sub(charged).context("下载计账超过持久额度"))
+        .transpose()
+}
 fn validate_asset(asset: &AssetIdentity) -> Result<()> {
     if !valid_hash(&asset.sha256)
         || !valid_hash(&asset.url_sha256)
@@ -480,7 +490,7 @@ fn validate_ledger(layout: &Layout, value: &Ledger) -> Result<()> {
     }
     validate_policy(&value.policy)?;
     validate_counters(&value.counters)?;
-    remaining(
+    root_remaining(
         value.policy.root_cap_body_bytes,
         &value.counters,
         reserve(value),
@@ -834,14 +844,14 @@ fn view(ledger: &Ledger) -> Result<DownloadBudgetView> {
         enabled: true,
         coverage_prior_history: Some(ledger.coverage_prior_history.clone()),
         policy_revision: Some(ledger.policy_revision),
-        root_cap_body_bytes: Some(ledger.policy.root_cap_body_bytes),
+        root_cap_body_bytes: ledger.policy.root_cap_body_bytes,
         counters: ledger.counters.clone(),
         reserved_body_bytes: reserved,
-        remaining_body_bytes: Some(remaining(
+        remaining_body_bytes: root_remaining(
             ledger.policy.root_cap_body_bytes,
             &ledger.counters,
             reserved,
-        )?),
+        )?,
         generation: Some(ledger.generation),
         active_operation: active.map(|a| a.operation_id.clone()),
         active_counters: active.map(|a| a.counters.clone()),
@@ -953,17 +963,16 @@ impl DownloadBudget {
         if reserve(ledger) != 0 {
             bail!("已有未结正文预留，禁止同时读取");
         }
-        let amount = (requested.min(READ_QUANTUM) as u64)
-            .min(remaining(
-                ledger.policy.root_cap_body_bytes,
-                &ledger.counters,
-                0,
-            )?)
-            .min(remaining(
-                active.limits.max_charged_body_bytes,
-                &active.counters,
-                0,
-            )?);
+        let mut amount = (requested.min(READ_QUANTUM) as u64).min(remaining(
+            active.limits.max_charged_body_bytes,
+            &active.counters,
+            0,
+        )?);
+        if let Some(root_available) =
+            root_remaining(ledger.policy.root_cap_body_bytes, &ledger.counters, 0)?
+        {
+            amount = amount.min(root_available);
+        }
         if amount == 0 {
             bail!("download_budget_exhausted: 下载正文额度已用尽");
         }
@@ -1250,7 +1259,7 @@ pub fn snapshot(layout: &Layout) -> Result<DownloadBudgetView> {
     }
 }
 
-/// 首次保存有限cap，不建立operation、不发网络。0B缓存使用者不必调用。
+/// 首次保存可选累计上限，不建立operation、不发网络。正常下载会自动初始化计账。
 /// 旧根无启用痕迹可安全启用；已active根须用set_policy+expected revision。
 pub fn initialize_policy(
     ctx: &WorkspaceMutation,
@@ -1299,7 +1308,7 @@ pub fn set_policy(
     if ledger.policy_revision != expected_revision {
         bail!("下载policy revision已变化");
     }
-    remaining(policy.root_cap_body_bytes, &ledger.counters, 0)?;
+    root_remaining(policy.root_cap_body_bytes, &ledger.counters, 0)?;
     let mut state = State {
         ledger,
         committed_bytes: committed,
@@ -1318,11 +1327,11 @@ pub fn reconcile(ctx: &WorkspaceMutation) -> Result<()> {
     let layout = ctx.layout();
     let _live = LiveSession::acquire(&layout.root)?;
     let current = snapshot_with_receipt(layout)?.budget;
-    let cap = current.root_cap_body_bytes.context("下载计量尚未启用")?;
+    current.policy_revision.context("下载计量尚未启用")?;
     let (ledger, committed_bytes, enrollment_bytes) = enroll(
         layout,
         &DownloadPolicy {
-            root_cap_body_bytes: cap,
+            root_cap_body_bytes: current.root_cap_body_bytes,
         },
         "",
     )?;
@@ -1436,7 +1445,7 @@ mod tests {
             coverage_prior_history: PriorCoverage::NotMeasured,
             policy_revision: 1,
             policy: DownloadPolicy {
-                root_cap_body_bytes: 200_000,
+                root_cap_body_bytes: Some(200_000),
             },
             counters: Counters::default(),
             active: Some(Active {
@@ -1481,12 +1490,30 @@ mod tests {
             DownloadBudget::credit_size(&value, usize::MAX).unwrap(),
             READ_QUANTUM as u64
         );
-        value.policy.root_cap_body_bytes = 17;
+        value.policy.root_cap_body_bytes = Some(17);
         assert_eq!(DownloadBudget::credit_size(&value, 30).unwrap(), 17);
         value.active.as_mut().unwrap().limits.max_charged_body_bytes = 9;
         assert_eq!(DownloadBudget::credit_size(&value, 30).unwrap(), 9);
         value.counters.observed_body_bytes = 17;
         assert!(DownloadBudget::credit_size(&value, 1).is_err());
+        value.policy.root_cap_body_bytes = None;
+        assert_eq!(DownloadBudget::credit_size(&value, 30).unwrap(), 9);
+        value.active.as_mut().unwrap().counters.observed_body_bytes = 9;
+        assert!(DownloadBudget::credit_size(&value, 1).is_err());
+    }
+
+    #[test]
+    fn optional_root_cap_reads_legacy_numbers_and_requires_an_explicit_field() {
+        let old: DownloadPolicy = serde_json::from_str(r#"{"root_cap_body_bytes":10}"#).unwrap();
+        assert_eq!(old.root_cap_body_bytes, Some(10));
+        let unlimited: DownloadPolicy =
+            serde_json::from_str(r#"{"root_cap_body_bytes":null}"#).unwrap();
+        assert_eq!(unlimited.root_cap_body_bytes, None);
+        assert!(serde_json::from_str::<DownloadPolicy>("{}").is_err());
+        assert!(validate_policy(&DownloadPolicy {
+            root_cap_body_bytes: Some(0)
+        })
+        .is_err());
     }
 
     #[test]

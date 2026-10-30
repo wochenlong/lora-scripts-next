@@ -985,7 +985,7 @@ async fn save_download_budget(
     state: tauri::State<'_, Runtime>,
     root: String,
     expected_revision: Option<u64>,
-    root_body_cap_bytes: u64,
+    root_body_cap_bytes: Option<u64>,
 ) -> Result<download_budget::BudgetSnapshot, String> {
     let engine = state.engine.clone();
     tauri::async_runtime::spawn_blocking(move || {
@@ -1143,10 +1143,14 @@ fn main() {
                         download_budget::snapshot_with_receipt(&layout)?
                     }
                     "set-download-budget" => {
-                        let cap = args
-                            .get(4)
-                            .ok_or_else(|| anyhow::anyhow!("缺少非零累计正文额度（字节整数）"))?
-                            .parse::<u64>()?;
+                        let cap = args.get(4).ok_or_else(|| {
+                            anyhow::anyhow!("缺少累计正文上限（非零字节整数，或off关闭）")
+                        })?;
+                        let cap = if cap == "off" {
+                            None
+                        } else {
+                            Some(cap.parse::<u64>()?)
+                        };
                         let revision = args.get(5).ok_or_else(|| {
                             anyhow::anyhow!("缺少expected revision；首次启用请明确填new")
                         })?;

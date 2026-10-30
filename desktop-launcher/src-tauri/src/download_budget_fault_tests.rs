@@ -31,7 +31,7 @@ impl Fixture {
 // 失败现场保留，不自动递归删除。
 fn policy() -> DownloadPolicy {
     DownloadPolicy {
-        root_cap_body_bytes: 1_000_000,
+        root_cap_body_bytes: Some(1_000_000),
     }
 }
 fn limits() -> OperationLimits {
@@ -331,10 +331,7 @@ fn initialization_kill_window(role: &str, expect_phase: EnrollmentPhase, ledger_
     assert!(after.enabled);
     assert!(!after.pending_reconciliation);
     assert!(after.active_operation.is_none());
-    assert_eq!(
-        after.root_cap_body_bytes,
-        Some(policy().root_cap_body_bytes)
-    );
+    assert_eq!(after.root_cap_body_bytes, policy().root_cap_body_bytes);
     assert_eq!(after.counters, Counters::default());
     reconcile(&ctx).unwrap();
     assert_eq!(
@@ -568,7 +565,7 @@ fn terminal_outbox_survives_receipt_failure_and_redelivers_idempotently() {
 }
 
 #[test]
-fn cumulative_root_cap_survives_new_operation_and_ignores_new_initial_policy() {
+fn cumulative_root_cap_survives_until_explicitly_disabled_without_erasing_history() {
     let f = Fixture::new("cross-operation-cap");
     let ctx = f.mutation();
     let budget = DownloadBudget::begin(
@@ -576,7 +573,7 @@ fn cumulative_root_cap_survives_new_operation_and_ignores_new_initial_policy() {
         "first-cap-operation",
         None,
         DownloadPolicy {
-            root_cap_body_bytes: 10,
+            root_cap_body_bytes: Some(10),
         },
         limits(),
     )
@@ -617,6 +614,52 @@ fn cumulative_root_cap_survives_new_operation_and_ignores_new_initial_policy() {
         snapshot(ctx.layout()).unwrap().root_cap_body_bytes,
         Some(10)
     );
+    drop(second);
+    let previous = snapshot(ctx.layout()).unwrap();
+    let receipt_path = receipt_directory(ctx.layout())
+        .unwrap()
+        .join("second-cap-operation.json");
+    let receipt_before = fs::read(&receipt_path).unwrap();
+    set_policy(
+        &ctx,
+        1,
+        DownloadPolicy {
+            root_cap_body_bytes: None,
+        },
+    )
+    .unwrap();
+    let unlimited = snapshot(ctx.layout()).unwrap();
+    assert_eq!(unlimited.policy_revision, Some(2));
+    assert_eq!(unlimited.root_cap_body_bytes, None);
+    assert_eq!(unlimited.remaining_body_bytes, None);
+    assert_eq!(unlimited.counters, previous.counters);
+    assert_eq!(fs::read(receipt_path).unwrap(), receipt_before);
+    reconcile(&ctx).unwrap(); // 无累计上限的既有账本也必须能正常结账。
+    let mut operation_limits = limits();
+    operation_limits.max_charged_body_bytes = 3;
+    let third = DownloadBudget::begin(
+        &ctx,
+        "third-unlimited-operation",
+        None,
+        policy(), // 仍不得将已有None改成有限上限。
+        operation_limits,
+    )
+    .unwrap();
+    let (attempt, credit) = third
+        .begin_attempt(&asset(), AttemptKind::Initial, 10)
+        .unwrap();
+    assert_eq!(credit.bytes(), 3);
+    third.settle_read(credit, 3).unwrap();
+    third
+        .finish_attempt(attempt, AttemptOutcome::Completed)
+        .unwrap();
+    assert!(third
+        .begin_attempt(&asset(), AttemptKind::Initial, 1)
+        .is_err());
+    third.finish(DownloadOutcome::Succeeded).unwrap();
+    let final_view = snapshot(ctx.layout()).unwrap();
+    assert_eq!(final_view.root_cap_body_bytes, None);
+    assert_eq!(final_view.counters.observed_body_bytes, 13);
 }
 
 #[test]
@@ -682,7 +725,7 @@ fn malformed_receipt_blocks_policy_begin_and_reconciliation_before_any_ledger_wr
             &ctx,
             1,
             DownloadPolicy {
-                root_cap_body_bytes: policy().root_cap_body_bytes + 1
+                root_cap_body_bytes: policy().root_cap_body_bytes.map(|cap| cap + 1)
             }
         )
         .is_err());
