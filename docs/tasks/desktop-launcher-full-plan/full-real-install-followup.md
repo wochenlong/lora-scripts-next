@@ -18,6 +18,18 @@
 
 方法采用实际故障回归与用户流程验收，沿用既有任务书，不创建重复规划体系；结果逐项区分pass/fail/not-run/资源限制，不以静态构建或夹具代替真实训练。
 
+## 追加：新用户沙盒准备（2026-10-30）
+
+用户要求另建新沙盒供实测和日常试用。交付目录为 `F:/NextTrainerLauncherSandbox/user-20261030`，独立受管安装根为 `F:/NextTrainerLauncherSandbox/u13`；原 manual/r12 不修改。本轮复用同一最终第5包和按固定摘要校验的不可变安装归档，正式在新路径创建主程序及 Kohya 环境，不复制 venv、旧用户配置或任务状态，因此不另称一次网络冷下载。证据位于本轮根下 `user-ready-20261030/`。
+
+当前为 ready：新根主程序安装、版本接口与网页资源通过；Kohya 正式安装、收据提交和实际 imports/CUDA 通过，独立 Python 为 `u13/e/t4d70c934b39a4eb/Scripts/python.exe`。Kohya 本轮计划/安装/自身校验约 11 分 22 秒。已本地复制并核验 SD1.5 底模、分词器、两张合成图片与 caption、原始许可，共 11 文件、4,266,774,393 B；两步/二十步 TOML 均已通过真实页面导入和最终序列化预览核对。
+
+新页面经“开始训练”及确认弹窗实际单次提交，任务 `7e2e99e4-eb38-4603-9ce8-a209ca65cc24` 已 FINISHED / returncode 0，19:48:04–19:48:52（北京时间）；命令使用上述 u13 受管 Python。权重 `user-20261030/output/user-sd15-smoke-2steps.safetensors` 为 3,476,992 B，SHA256 `8a70ed40a78102c3641d05ca36860a23b285d6feb20bd1be4dd180e1da2218f1`；实际重新读取验证 rank4、576 张量全部有限、192 个 LoRA up 非零。`training/ui-real-training/` 内 ui-training-report / train-result / artifact-verification 均 passed=true，浏览器错误为空。二十步配置只验证导入，未运行二十步训练；自有测试浏览器已关闭。
+
+本次确认训练后同步校验约 232 秒，实际训练约 48 秒；首次页面状态与安装检查也有等待，使用说明据实注明。原自动化漏点二次确认时未创建任务，发现后仅在同一页面补确认，没有重发 API 或创建重复任务。
+
+原测试控制器已正常关闭，exit0 / graceful / Job排空 / CDP回收均通过。新普通窗口 PID170640 无 CDP，预选 u13，启动时检查已通过并通过真实按钮启动服务；普通服务 `http://127.0.0.1:7584` 的版本接口返回 status=success、version=3.3.1-dev，见 `normal-api-health.json`。已通过本窗“在浏览器打开”按钮打开系统浏览器，见 `normal-session.json` 的 service-ready / browser_open_invoked=true。用户入口为交付目录 `启动训练器.cmd`；`开始使用.md` 和 `训练示例使用说明.md` 给出页面导入、确认、等待、查看产物与停止的操作。程序环境和 venv 保留新安装时的 u13 原路径，旧沙盒保留。
+
 ## 最终第5包实际结果
 
 训练器源码固定为 `89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d`，壳/清单保存基线 `dfc70369` 已普通push。包目录为 `F:/NextTrainerLauncherSandbox/build-r8/windows-candidate-5/`，EXE SHA256 `9fbac881f0de9678bb8dbf2a8865a13fe7fabcb968d51c84d407c995934b88fc`，便携ZIP `6929057695b2f3666ec3f9595beff5d9d1f589de0c0bf9cbcbf7f62b78bfa1f4`，NSIS安装器 `e03add1d83c9450da8aaa325373e18fbb85f14f6ba8036eab4076f2138a0fdaf`。同版回执位于 `native-install-5/`，不能用先前包或外置diagnostic_only结果代替。
