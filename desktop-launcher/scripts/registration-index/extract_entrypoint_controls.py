@@ -39,7 +39,7 @@ def reconstruct(template, python_path, main, kind):
 
 def main():
     raw = INDEX.read_bytes()
-    if hashlib.sha256(raw).hexdigest()!='3e0c861b6b4c7e2b9a1a5615193cca976a194e72100aaa1afc54a39065d8bea8':
+    if hashlib.sha256(raw).hexdigest()!='740a3a7d93cc04a5323f4805c0ca62963e2f66cb8d5a313464ffb0392bb2ea41':
         raise ValueError('input identity differs')
     index=json.loads(raw); entries=[]; seen=set()
     template=(CONTROL/'Scripts/cffi-gen-src.exe').read_bytes()

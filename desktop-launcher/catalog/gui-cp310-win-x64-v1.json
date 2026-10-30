@@ -2,7 +2,7 @@
   "schema_version": 1,
   "id": "gui-cp310-win-x64-v1",
   "candidate_only": true,
-  "source_commit": "0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e",
+  "source_commit": "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
   "closure_scope": "resolved-closure-superset",
   "platform": "windows-x86_64",
   "implementation": "cpython",

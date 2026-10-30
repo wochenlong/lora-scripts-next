@@ -10,9 +10,9 @@ use std::{
     path::{Component, Path},
 };
 
-const SOURCE_COMMIT: &str = "0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e";
+const SOURCE_COMMIT: &str = "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d";
 const RECIPE: &str = "gui-cp310-win-x64-v1";
-const SOURCE_SHA: &str = "c845f5dacbe4ba3e6c26fe3b755d7c14479a05c8545505d7b07d75b8a49ac9ed";
+const SOURCE_SHA: &str = "e53af2a77aa39c1f5e876c5cc73e78329c2cd5c616d0d5af7ac3eea637577022";
 const FRONTEND_SHA: &str = "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f";
 const LEGACY_MANIFEST: &str = ".source-integrity.json";
 
@@ -155,7 +155,7 @@ pub(crate) fn verify(layout: &Layout, release: &Release) -> Result<()> {
     if release.commit != SOURCE_COMMIT
         || release.environment_recipe != RECIPE
         || release.archive.sha256 != SOURCE_SHA
-        || release.archive.bytes != 57257800
+        || release.archive.bytes != 57465913
     {
         bail!("该发布版本没有匹配的可信完整源码清单");
     }
@@ -168,7 +168,7 @@ pub(crate) fn verify(layout: &Layout, release: &Release) -> Result<()> {
         || manifest.frontend_sha256 != FRONTEND_SHA
         || manifest.frontend_bytes != 2446848
         || manifest.expected_file_count != manifest.files.len()
-        || manifest.files.len() != 1833
+        || manifest.files.len() != 1844
     {
         bail!("可信源码清单身份或schema无效");
     }
@@ -288,7 +288,7 @@ mod tests {
             .unwrap();
         assert!(verify(&layout, &release).is_err());
         let manifest: Manifest = serde_json::from_str(raw).unwrap();
-        assert_eq!(manifest.expected_file_count, 1833);
-        assert_eq!(manifest.expected_file_bytes, 100452856);
+        assert_eq!(manifest.expected_file_count, 1844);
+        assert_eq!(manifest.expected_file_bytes, 103757791);
     }
 }

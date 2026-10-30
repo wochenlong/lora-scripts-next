@@ -4,8 +4,12 @@
   "provenance": {
     "flash_metadata_sha256": null,
     "prebuilt_wheels": "bundled fixed sdist builds",
-    "pylock_sha256": "c0ae9d6e52b5288a14f5b45cafffcccf90d5f16e1c2d4bbd6d6a85171fdf58fa",
-    "source": "fixed platform metadata and full pinned archive manifests"
+    "pylock_sha256": "6f41b38098f6209a0c7161723cfd48cdf57b48b8ca1bff1d42b384e7d30b6f31",
+    "source": "fixed platform metadata and full pinned archive manifests",
+    "base_pylock_sha256": "c0ae9d6e52b5288a14f5b45cafffcccf90d5f16e1c2d4bbd6d6a85171fdf58fa",
+    "wheel_closure_sha256": "bb63e52373a418af8c2b7016bdc68bd5a004758d76c3d2ae25a4b56e23b8689d",
+    "metadata_closure_sha256": "a733b10283c90a3dd18082e1b9cdc8c04ff294a6ffb94be79fea78667e505f6a",
+    "compatibility_update": "two fixed archives only; all other 120 wheel descriptors and Python/uv retained; 214 active metadata requirements passed; final launcher acceptance pending"
   },
   "python": {
     "archive": {
@@ -16750,14 +16754,14 @@
     "strip_prefix": "python/",
     "version": "3.10.19"
   },
-  "recipe_sha256": "c4ac9747b722eea0a841cd501f016655d58470a94c3f45dc2b54455800f6e2f2",
+  "recipe_sha256": "95621a5c5efa2cb18088f5339960f6d5e470015cd7fcee13e5ddbf5b855e3ec2",
   "schema_version": 1,
   "source": {
     "archive": {
-      "bytes": 50561761,
-      "filename": "trainer-source-776cf4f2a03fe2766db1647d1ddf4cb7de6062c9.zip",
-      "sha256": "c731a669149038e685c03cfcacdacff52a61e970990defe2140e9d66a33fc3d6",
-      "url": "https://codeload.github.com/wochenlong/lora-scripts-next/zip/776cf4f2a03fe2766db1647d1ddf4cb7de6062c9"
+      "filename": "trainer-source-89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d.zip",
+      "url": "https://codeload.github.com/wochenlong/lora-scripts-next/zip/89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
+      "sha256": "e53af2a77aa39c1f5e876c5cc73e78329c2cd5c616d0d5af7ac3eea637577022",
+      "bytes": 57465913
     },
     "entry": "scripts/stable/train_network.py",
     "files": {
@@ -17742,8 +17746,8 @@
         "sha256": "e81f2f5396d52dabbdf881825c053960424a028653eabf523dbb8505d7ba6a5d"
       },
       "scripts/stable/library/lpw_stable_diffusion.py": {
-        "bytes": 60898,
-        "sha256": "aed273543e9c8f369d33604980d519f82a33dd9746653311fe2a79973a81726b"
+        "bytes": 60920,
+        "sha256": "c1e2c61c504cd43fd9efc11412dbbaf34cf64c48b0b4e60ccd60aa848dbc947e"
       },
       "scripts/stable/library/model_util.py": {
         "bytes": 55974,
@@ -17758,8 +17762,8 @@
         "sha256": "bcff364ac2ba0205dea8cec8538cf34ad36d08ade7060c2bc400d830ae9d63c1"
       },
       "scripts/stable/library/sdxl_lpw_stable_diffusion.py": {
-        "bytes": 66026,
-        "sha256": "8979ae1e5a1eb1be9b278ee9f7e84116dbfb420e2840c3fd362815b1adfae96e"
+        "bytes": 66048,
+        "sha256": "301773f45a30de782a74975b456d860b8cedad5234a181e6d07175fbeccbecbe"
       },
       "scripts/stable/library/sdxl_model_util.py": {
         "bytes": 23029,
@@ -19066,9 +19070,9 @@
         "sha256": "e5a0ceec5f1bbc0fd47c1c31a1bc36e2163fdb21e22f3bb36d3be8a780f5c5d1"
       }
     },
-    "strip_prefix": "lora-scripts-next-776cf4f2a03fe2766db1647d1ddf4cb7de6062c9/",
+    "strip_prefix": "lora-scripts-next-89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d/",
     "trainer_relative": ".",
-    "trainer_source_commit": "776cf4f2a03fe2766db1647d1ddf4cb7de6062c9",
+    "trainer_source_commit": "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
     "upstream_commit": "trainer-source"
   },
   "uv": {
@@ -19818,12 +19822,12 @@
       "version": "1.0.30"
     },
     {
-      "bytes": 2798223,
-      "filename": "tokenizers-0.23.1-cp310-abi3-win_amd64.whl",
       "name": "tokenizers",
-      "sha256": "e7bfaf995c1bdbbd21d13539decb6650967013759318627d85daeb7881af16b7",
-      "url": "https://files.pythonhosted.org/packages/97/c9/2553f72aaf65a2797d4229e37fa7fbe38ffbf3e32912d31bdd78b3323e59/tokenizers-0.23.1-cp310-abi3-win_amd64.whl",
-      "version": "0.23.1"
+      "version": "0.22.2",
+      "filename": "tokenizers-0.22.2-cp39-abi3-win_amd64.whl",
+      "url": "https://files.pythonhosted.org/packages/65/71/0670843133a43d43070abeb1949abfdef12a86d490bea9cd9e18e37c5ff7/tokenizers-0.22.2-cp39-abi3-win_amd64.whl",
+      "bytes": 2747786,
+      "sha256": "c9ea31edff2968b44a88f97d784c2f16dc0729b8b143ed004699ebca91f05c48"
     },
     {
       "bytes": 16588,
@@ -19866,12 +19870,12 @@
       "version": "4.70.1"
     },
     {
-      "bytes": 12295140,
-      "filename": "transformers-5.17.0-py3-none-any.whl",
       "name": "transformers",
-      "sha256": "78ec1ce21579b38dfb83950a0658cd119f87212a2fcfdff478096ce9d6c03801",
-      "url": "https://files.pythonhosted.org/packages/e8/d0/c502b60d684adbd98a8dc7d5bb866842772b816ac4354e4608be240041ae/transformers-5.17.0-py3-none-any.whl",
-      "version": "5.17.0"
+      "version": "5.5.3",
+      "filename": "transformers-5.5.3-py3-none-any.whl",
+      "url": "https://files.pythonhosted.org/packages/a1/0b/f8524551ab2d896dfaca74ddb70a4453d515bbf4ab5451c100c7788ae155/transformers-5.5.3-py3-none-any.whl",
+      "bytes": 10236257,
+      "sha256": "e48f3ec31dd96505e96e66b63a1e43e1ad7a65749e108d9227caaf51051cdb02"
     },
     {
       "bytes": 41506387,

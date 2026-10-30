@@ -2,9 +2,9 @@
 
 本索引用于 wheel 缓存丢失时的只读文件证明，不授权下载、重新安装、任意目录收养或历史健康恢复。它从固定原始归档生成，从未从待恢复的安装树追认文件身份。
 
-- `gui-cp310-installed-files-v2.json`：2,218,268 字节，SHA256 `478283063a592186c7561a866e00673589c9cb4d56e343bc884b070b6a4ae953`。
-- 固定配方 `gui-cp310-win-x64-v1.json`：SHA256 `612124245bff0c62ab9d2e15aa95f86ff9b9359874f3e28e3fa99ad93007f67a`。
-- 受管 venv 模板 `gui-cp310-managed-venv-v1.json`：92,079 字节，SHA256 `a1d95294436b82d4f63c0cffe3458525b19b73d351a323524109bd4aa1979c2b`。
+- `gui-cp310-installed-files-v2.json`：2,218,268 字节，SHA256 `92e6e98081506d5022ded8bf5ab7d6f30e80d2d20b7bcfe76d248fffadd94bcb`。
+- 固定配方 `gui-cp310-win-x64-v1.json`：SHA256 `4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca`。
+- 受管 venv 模板 `gui-cp310-managed-venv-v1.json`：92,079 字节，SHA256 `eac53df7da3d94c78d39501bd4e3e19713567b54762b67ee4921b1419184dfdb`。
 - Python 原文件清单 `gui-cp310-python-v1.json`：SHA256 `9172037fe65f76c9fe9373bf3240887889d480a569bfd785d6832e086ab96e06`。
 - CPython 原始 tar.gz：22,569,949 字节，SHA256 `b892f2c7eb0a04611688d6df7567a2745a204aac694d6d1c56c75b0717dab2d6`。
 - uv 0.11.16 Windows x64 EXE：SHA256 `c5a583d5f1f6d055fc1c32c87d8eceee90edc69a5b9af5da70811befdfc04880`。
@@ -15,11 +15,11 @@
 
 ## 2026-10-30 候选源码身份更新
 
-训练器源码来自已推送提交 `0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e` 的真实 GitHub codeload ZIP：57,257,800 字节，SHA256 `c845f5dacbe4ba3e6c26fe3b755d7c14479a05c8545505d7b07d75b8a49ac9ed`。在新的构建目录内使用 Node 22.17.1，以已有 npm 缓存离线安装 297 包后编译前端；`frontend.zip` 为 2,446,848 字节，SHA256 `ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f`。完整源码与前端合并清单为 1,833 个文件、100,452,856 字节。
+训练器源码来自已推送提交 `89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d` 的真实 GitHub codeload ZIP：57,465,913 字节，SHA256 `e53af2a77aa39c1f5e876c5cc73e78329c2cd5c616d0d5af7ac3eea637577022`。在新的构建目录内使用 Node 22.17.1，先尝试已有 npm 缓存离线安装，缺项后通过代理补齐固定 lockfile 对应依赖并编译前端；`frontend.zip` 为 2,446,848 字节，SHA256 `ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f`。完整源码与前端合并清单为 1,844 个文件、103,757,791 字节。
 
 本次逐字节核对 `requirements.txt` 与原配方输入指纹一致，并证明配方中的 Python、uv、wheel、许可和依赖闭包全部保持一致。安装文件索引及受管 venv 模板仅将 `recipe_sha256` 更新为新的父配方摘要；文件列表、每文件长度/摘要、控制文件与模板内容均逐对象比较相同，没有重新生成索引或从安装树追认身份。生成脚本的固定父配方常量同步到本文所列新值。
 
-候选回执、网络回执、原身份备份与前端构建日志位于本轮独立沙盒 `M5/trainer-candidate-20261030/`。已知实际下载载荷为上述源码 ZIP 的 57,257,800 字节；npm 包下载为 0（离线缓存），其他进程网络、TLS/HTTP 开销及实际计费未计量。
+候选回执、源码复用回执、原身份备份与前端构建日志位于本轮独立沙盒 `full-real-20261030/source-final-5/`。首次 npm 网络中断和离线缓存缺项均保留，首次源码归档逐字节复用，没有再次下载源码。已知源码 ZIP 下载载荷为 57,465,913 字节；npm 补齐包下载量、其他进程网络、TLS/HTTP 开销及实际计费未计量。
 
 生产验证对 wheel 原文件逐摘要、uv 固定控制逐摘要、activation 逐模板、pyvenv.cfg 逐归属、入口 EXE 逐字节重建；本地 RECORD 只能记账，不可扩写信任闭包。未知执行文件、`.pth`、派生 `.pyc`、链接和大小写别名均被拒绝，原文件保留。INSTALLER 必须等于 `uv`，REQUESTED 必须为空；可选 direct_url/uv_cache 只允许限额 JSON 对象，不作为代码或身份依据。
 
@@ -40,3 +40,9 @@
 登记恢复的首个原生案例因环境根 `.lock` 未列入空 venv 的控制索引而安全拒绝，原失败回执保留。随后使用相同固定 uv EXE、经 4,184 个原文件验证的 CPython，以及上述固定 synthetic wheel，在新的隔离 E 目录离线复现：`uv venv` 后锁不存在；首次离线 `uv pip install` 后生成普通、无 reparse、0 字节的环境根 `.lock`，SHA256 为 `e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855`；离线 `pip check` 后原字节保持。
 
 固定 v2 原索引不改。Rust 验证器单独接受**可选、精确环境根路径的空 `.lock` 普通文件**，将其纳入本次完整闭包摘要；非空、目录、链接、嵌套锁、其他隐藏文件和大小写别名均不扩展授信。独立复现证据 `uv-lock-reproduction-evidence.json` SHA256 为 `825dae0fc878b9e6b1c478f8fdb97c1b89b18444a56bb75a43557e02c9b4100e`，保存在当前运行的外部 `M1/recipe/gui-registration-working/`；生产安装树只作失败诊断，没有被用作控制文件的信任来源。
+
+## 2026-10-30 最终修复源码重新冻结
+
+本轮训练器源码固定到已推送提交 `89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d`，前端由独立新目录 `F:/NextTrainerLauncherSandbox/tb5` 的同一归档使用 Node 22.17.1 / npm 10.9.2 编译。GUI requirements、Python、uv、81 个 wheel 描述符、安装可信文件索引及受管 venv 模板 payload 均逐对象比较相同；仅更新 GUI 父配方与源码/前端身份。独立 Kohya 锁使用同一真实 codeload ZIP，576 个受管训练源码中只改变两个 CLIPImageProcessor 兼容导入文件；两枚固定 wheel 更新为 transformers 5.5.3 与 tokenizers 0.22.2，其余 120 枚 wheel、CPython 和 uv 均保留。外置兼容候选已完成真实 2 步 CUDA LoRA 训练和权重内容核验；本次冻结不是最终启动器安装训练验收，最终包仍须在新空根执行实际下载安装与训练。详细身份、依赖闭包与其他三引擎逐字节不变证明见 `full-real-20261030/source-final-5/freeze-verification.json`。
+
+生成器的父配方常量和入口提取器的 v1 输入固定身份同步更新。原始受信 v1 索引先核对历史 SHA256 `3e0c861b6b4c7e2b9a1a5615193cca976a194e72100aaa1afc54a39065d8bea8`，只替换父配方摘要后得到 SHA256 `740a3a7d93cc04a5323f4805c0ca62963e2f66cb8d5a313464ffb0392bb2ea41`；将该索引与原固定入口控制和 PE 模板组合，按既定序列化逐字节重建当前 v2 索引成功。完整 payload 不变，未执行安装树或入口。

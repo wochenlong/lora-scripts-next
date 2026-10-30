@@ -476,7 +476,7 @@ mod tests {
         assert_eq!(recipe.id(), RECIPE_ID);
         assert_eq!(recipe.wheels.len(), 81);
         assert_eq!(recipe.budget.wheel_bytes, 378_332_343);
-        assert_eq!(recipe.budget.asset_bytes, 426_580_196);
+        assert_eq!(recipe.budget.asset_bytes, 426_586_132);
         assert_eq!(recipe.wheel("ONNXRuntime_GPU").unwrap().bytes, 244_505_340);
         assert!(recipe.matches_environment_recipe(&format!(
             "gui-requirements-{}-python-3.10.19-v1",

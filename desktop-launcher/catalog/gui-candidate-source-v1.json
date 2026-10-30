@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "source_commit": "0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e",
-  "source_archive_sha256": "c845f5dacbe4ba3e6c26fe3b755d7c14479a05c8545505d7b07d75b8a49ac9ed",
-  "source_archive_bytes": 57257800,
+  "source_commit": "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
+  "source_archive_sha256": "e53af2a77aa39c1f5e876c5cc73e78329c2cd5c616d0d5af7ac3eea637577022",
+  "source_archive_bytes": 57465913,
   "frontend_sha256": "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f",
   "frontend_bytes": 2446848,
-  "expected_file_count": 1833,
-  "expected_file_bytes": 100452856,
+  "expected_file_count": 1844,
+  "expected_file_bytes": 103757791,
   "files": [
     {
       "path": ".cursor/rules/00-project-overview.mdc",
@@ -519,9 +519,24 @@
       "sha256": "3cb188f13e56b8611718ba6f2fef6c593de23ee0bdb07f2df1fdd36d7ad86d46"
     },
     {
+      "path": "desktop-launcher/LICENSES/README.md",
+      "bytes": 2672,
+      "sha256": "03f3a70fb3f2fdb4838baf1fd78b5b4ebfbce0622fb0513df8e6c9540e1afd5b"
+    },
+    {
+      "path": "desktop-launcher/LICENSES/THIRD-PARTY-NOTICES.md",
+      "bytes": 2961477,
+      "sha256": "98a55d00df0c4bab53b285cb472472d4fdc623dc11d22ee03ed6c12568916a41"
+    },
+    {
+      "path": "desktop-launcher/LICENSES/dependencies.json",
+      "bytes": 321545,
+      "sha256": "9af3652a674d9cc9b3950a8795a44b86092fbb947525ab1a426f7642cec611d5"
+    },
+    {
       "path": "desktop-launcher/README.md",
-      "bytes": 16429,
-      "sha256": "2e746e7ee7a5ec2533b1519bd532037d1028291f24ba79e98364c6a0dd1b596c"
+      "bytes": 16957,
+      "sha256": "f5527caa1f28bf2caa2a0e7849a0e01350101b76c6491b0ecec637ba3c153b8e"
     },
     {
       "path": "desktop-launcher/catalog/README.md",
@@ -575,18 +590,18 @@
     },
     {
       "path": "desktop-launcher/catalog/gui-candidate-source-v1.json",
-      "bytes": 304836,
-      "sha256": "798f67d9b70eb7431fc9af253cb208e3fd03e84457252fd56ae23a9538526e87"
+      "bytes": 321768,
+      "sha256": "c12af5fe4735bfe8180f4614f03a148b765cdb4fb8dce3823f59daf66af36b19"
     },
     {
       "path": "desktop-launcher/catalog/gui-cp310-installed-files-v2.json",
       "bytes": 2218268,
-      "sha256": "6ef8a9b844b1dd7e9294be5ae30b70420e703127fc0d999a7eb8096c114ffd90"
+      "sha256": "478283063a592186c7561a866e00673589c9cb4d56e343bc884b070b6a4ae953"
     },
     {
       "path": "desktop-launcher/catalog/gui-cp310-managed-venv-v1.json",
       "bytes": 92079,
-      "sha256": "066edf2fc67450fcb57dfaecf7ca34b379ef610d33a26ad50f20997eb7b7967a"
+      "sha256": "a1d95294436b82d4f63c0cffe3458525b19b73d351a323524109bd4aa1979c2b"
     },
     {
       "path": "desktop-launcher/catalog/gui-cp310-python-v1.json",
@@ -596,7 +611,7 @@
     {
       "path": "desktop-launcher/catalog/gui-cp310-win-x64-v1.json",
       "bytes": 115656,
-      "sha256": "8be2a44b43a8caee1df2c80212897e2edb382ce5dcc78c49fbc34b1cc416d090"
+      "sha256": "612124245bff0c62ab9d2e15aa95f86ff9b9359874f3e28e3fa99ad93007f67a"
     },
     {
       "path": "desktop-launcher/catalog/gui-cp310-win-x64-v1.lock",
@@ -605,13 +620,13 @@
     },
     {
       "path": "desktop-launcher/catalog/releases.json",
-      "bytes": 3513,
-      "sha256": "87d6901dd755d4fdd7b87d318f9d48b4cd1a60fc3f45cd516319036255a1586f"
+      "bytes": 4789,
+      "sha256": "659d0237a7e41aa950b7db04e3a1101187fbd3cf236dfceeb8441e62a88a1bb1"
     },
     {
       "path": "desktop-launcher/catalog/signed-fixtures-v1.json",
-      "bytes": 8040,
-      "sha256": "775d862a1ea21dd99be6318251c876e876cb755bedec644fc55a494671505c96"
+      "bytes": 8043,
+      "sha256": "655256e3d4ec1e275d3707e69db43f6a14d9b1001087172ea49a6831982e4991"
     },
     {
       "path": "desktop-launcher/index.html",
@@ -629,14 +644,34 @@
       "sha256": "c7367cc008df52dda5a97e776d4d976fc8cb015d7e909524eb61e473ec38d974"
     },
     {
+      "path": "desktop-launcher/scripts/WINDOWS-BUILD.md",
+      "bytes": 4258,
+      "sha256": "4541983e2e644f3a1369ebff37a5663ad464712a57586f1d8600a3d4b9926bff"
+    },
+    {
+      "path": "desktop-launcher/scripts/build_windows_candidate.py",
+      "bytes": 19660,
+      "sha256": "78aed88c74e91077f7419e0d295400ae4d9dc0a78695ecf62f5f33707e64b8c4"
+    },
+    {
+      "path": "desktop-launcher/scripts/generate_license_inventory.py",
+      "bytes": 8186,
+      "sha256": "793a5988731167769045e37b3b363977cdc77be20401243250a7a0e736f339fb"
+    },
+    {
+      "path": "desktop-launcher/scripts/generate_signed_fixtures.py",
+      "bytes": 10372,
+      "sha256": "d3ac36e9eee0fd9729a10b1166d775a72b870245ccfe86551cd68d75a7ce501e"
+    },
+    {
       "path": "desktop-launcher/scripts/prepare_trainer_candidate.py",
       "bytes": 13708,
       "sha256": "3277fd877885a6a784eb7ebd3fac19cb711a9951d42d86200bafa7a3662fdb80"
     },
     {
       "path": "desktop-launcher/scripts/registration-index/INDEX-PROVENANCE.md",
-      "bytes": 5038,
-      "sha256": "2c6eaac868bd595a88acab9c545256e4d24497b7311e4d0ea2326b5435a33786"
+      "bytes": 6500,
+      "sha256": "17916b9b9cae06ccc3c25f83f3d83af1eb44dab4b977c65d6a9beb5c84f9987e"
     },
     {
       "path": "desktop-launcher/scripts/registration-index/extract_entrypoint_controls.py",
@@ -651,7 +686,12 @@
     {
       "path": "desktop-launcher/scripts/registration-index/generate_trusted_index.py",
       "bytes": 10466,
-      "sha256": "185fff7e916add64978c98bdf4621ba951edcf2801830e97336ff7c39bd22925"
+      "sha256": "3f622364bedeb0bea275d59211a4c5b540e5a5783de3a3f30c444d7be4190201"
+    },
+    {
+      "path": "desktop-launcher/scripts/windows-tools-lock.json",
+      "bytes": 4601,
+      "sha256": "fb9d58fef1e18a59a4ccc964a43eb38124c7880ac8f7d010cdb35db027bdc7f2"
     },
     {
       "path": "desktop-launcher/shell-updater/.gitignore",
@@ -680,13 +720,13 @@
     },
     {
       "path": "desktop-launcher/src-tauri/Cargo.lock",
-      "bytes": 116537,
-      "sha256": "5ced489f558df0ec0625d8bad2d2d090e40a6d13ad5a36a1bb2c35636b0c75c4"
+      "bytes": 116547,
+      "sha256": "abb9eb6c9c551fd1920e9271bae407e673449ff0892bdc1d9a4ba60582853ef9"
     },
     {
       "path": "desktop-launcher/src-tauri/Cargo.toml",
-      "bytes": 1021,
-      "sha256": "c4562366918545ce56f79e35393d9cdbbb81f86d74caed12aeb392d9f322fe31"
+      "bytes": 1073,
+      "sha256": "f3d4fbcb0c6614c9408b4f4f77aafc12a749a4afd66c4cac88f984ebdb5263e5"
     },
     {
       "path": "desktop-launcher/src-tauri/build.rs",
@@ -705,48 +745,38 @@
     },
     {
       "path": "desktop-launcher/src-tauri/src/artifact_downloads.rs",
-      "bytes": 8449,
-      "sha256": "74b6bc6d13afd85b540f83557c0f90c296d301a764c8e36d06267aaa6b479f4b"
+      "bytes": 4612,
+      "sha256": "43e2f51a22b736af32d59c80f9d4d5e9c8466839a28ba35fcb842c137d76ba6b"
     },
     {
       "path": "desktop-launcher/src-tauri/src/base_python_repair.rs",
-      "bytes": 79298,
-      "sha256": "edb399090971aea0f27a08ce0e4579dd88133f393b7207cd6b565be6610ded9a"
-    },
-    {
-      "path": "desktop-launcher/src-tauri/src/budgeted_body.rs",
-      "bytes": 4145,
-      "sha256": "d20b5e05c7bc75bed2a87b4d7fdb865da483e7f1c26bcb3e0c6bf3ba83b28be8"
+      "bytes": 77242,
+      "sha256": "a853f6d666a4547f91610f02820ab000d15cc2da902be079fc5c0a6c6cc8db5c"
     },
     {
       "path": "desktop-launcher/src-tauri/src/controlled_download.rs",
-      "bytes": 55035,
-      "sha256": "67cfa0ee30decc00ef627277bc37333aca3d6e18508bd3f6187a24570caee2f6"
+      "bytes": 55950,
+      "sha256": "7e445462b774f87b6c9bc3be30936ea55cb549a69dcb6cc4775e1c486e3ef659"
     },
     {
       "path": "desktop-launcher/src-tauri/src/core.rs",
-      "bytes": 94066,
-      "sha256": "21f905397d21c646230d191d711632cd4bc144e7ccae2518d4a9602cca289b7a"
+      "bytes": 92464,
+      "sha256": "a7c995cd8b678ea19ac60b62eb27f37f832353bca52171bf4e5f002c43f881d2"
     },
     {
       "path": "desktop-launcher/src-tauri/src/data_import.rs",
-      "bytes": 83298,
-      "sha256": "b51bbeac61315de0d452d70c1fa421616ce65625f68331029c5ecc9c1fbe00e8"
+      "bytes": 86887,
+      "sha256": "393c6d1a4df83c19a146f8b50b91a7bede9db9ba247e5ee33f1c3923bd16bd63"
     },
     {
-      "path": "desktop-launcher/src-tauri/src/download_budget.rs",
-      "bytes": 57428,
-      "sha256": "41ab36eb907e456fbd5c89d74bfc9b590cd4e824cfd9730c50530f0471d7820a"
-    },
-    {
-      "path": "desktop-launcher/src-tauri/src/download_budget_fault_tests.rs",
-      "bytes": 26238,
-      "sha256": "be197c71bb086377140acf583ba593b3a886dc54e79a06515cdb55a4b5aa75a0"
+      "path": "desktop-launcher/src-tauri/src/download_body.rs",
+      "bytes": 2438,
+      "sha256": "7071b4b7b5e247670d090ebe8ff7c0c5da0cca35d62188d0adcbaa04554d3a5b"
     },
     {
       "path": "desktop-launcher/src-tauri/src/engine_bridge.rs",
-      "bytes": 15530,
-      "sha256": "91330d4f7f2d5780445209438a23f95f62b8329f0f6031e3c5556c8fee50e1dd"
+      "bytes": 15461,
+      "sha256": "5d9b67c33b5b1051c6dfe9608aac004eb6bcafa6b263f01f27c4e80cf9b511a9"
     },
     {
       "path": "desktop-launcher/src-tauri/src/engine_namespaces.rs",
@@ -756,7 +786,7 @@
     {
       "path": "desktop-launcher/src-tauri/src/gui_binding_switch.rs",
       "bytes": 21638,
-      "sha256": "15a0c88e876f586b2d77caea129bc2ce8996773f9b2bcd99f9670cbd4000be48"
+      "sha256": "ce1574545c34e5338d0e626a5b9e891841b28b88c7a2ab38b362c56e860d5de8"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_entry_probe.rs",
@@ -770,13 +800,13 @@
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_install.rs",
-      "bytes": 23016,
-      "sha256": "560c818d743cb8e45d4c39858bb2b94c725a07fb6388cc5222769f0554010f01"
+      "bytes": 22654,
+      "sha256": "057a1485e9d0847217ecddcf210108afced14edd47f133a41954849878225216"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_rebuild.rs",
       "bytes": 35460,
-      "sha256": "110f50ee69e4af751618ac802744e0866321333d8130c71535ee016bd324333f"
+      "sha256": "9a992908640e7632a26bbe1e9e0086b9b144043d22090f6f84bbd508c5734378"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_recovery.rs",
@@ -786,12 +816,12 @@
     {
       "path": "desktop-launcher/src-tauri/src/gui_registration.rs",
       "bytes": 23498,
-      "sha256": "4b11c5467b4b7b5b5d5704e6d4e71ac066d5b073fe656d7845c25d9d39ba6b5b"
+      "sha256": "b76784386d9218ae17b384ef86410a2f217f6c0cd73c0f920484a5f78174ad72"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_registration_integrity.rs",
       "bytes": 41574,
-      "sha256": "a8a412650bc93ab3f848b945af8bdfb3c964fd6a2b2a4f19b8cf3bee788f0826"
+      "sha256": "ff0cb4260ca24be11779a3ecb958d9e149594a01fd00d05de6945ebe6402655d"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_registration_records.rs",
@@ -816,12 +846,12 @@
     {
       "path": "desktop-launcher/src-tauri/src/instances.rs",
       "bytes": 145500,
-      "sha256": "8040bf9a197d2e1eb836163cab7c318838ed00e459d2bd1e0a95794537b365ca"
+      "sha256": "a3e327efbde0a8a5c89e1e95e363e244e5cbaa442520af85c8b7780749cf7152"
     },
     {
       "path": "desktop-launcher/src-tauri/src/main.rs",
-      "bytes": 48937,
-      "sha256": "64a946be5c4ac305fe88bd26f58f10e50d8cd66cd9bd76387ce8b5c5b23ac4c7"
+      "bytes": 45010,
+      "sha256": "93c7b9392c4547cc86630113000a728ccb3d60288c40990620ea5e655994f2c2"
     },
     {
       "path": "desktop-launcher/src-tauri/src/managed_child.rs",
@@ -830,8 +860,8 @@
     },
     {
       "path": "desktop-launcher/src-tauri/src/model.rs",
-      "bytes": 52516,
-      "sha256": "a08a2356ff09bfac12da2aa943e5a264766fd27092d35602f44263af817a86e3"
+      "bytes": 57131,
+      "sha256": "95ead73ea5202642a925190ad2fcc8420c647c51383a3b36a36093d3d06c885c"
     },
     {
       "path": "desktop-launcher/src-tauri/src/network_policy.rs",
@@ -840,8 +870,8 @@
     },
     {
       "path": "desktop-launcher/src-tauri/src/operations.rs",
-      "bytes": 35926,
-      "sha256": "6b49783a871be20e19ab284d4957b58f44a2ebe70be51f042debbf26ffb3dbdb"
+      "bytes": 35676,
+      "sha256": "877b41e593b789f87d1a9f032a6a170a301caf7b4d5f3fbd356eb46c57c2c495"
     },
     {
       "path": "desktop-launcher/src-tauri/src/p6_tests.rs",
@@ -891,12 +921,12 @@
     {
       "path": "desktop-launcher/src-tauri/src/signed_catalog.rs",
       "bytes": 31884,
-      "sha256": "ffb429ea44f8d5f47b091eb23846afb0daba3718e5f6dbdd4eb6a7de135ebcaa"
+      "sha256": "58a2990c1377a613c977b5236164dc2607957f11451c3f853836ca134e4143c8"
     },
     {
       "path": "desktop-launcher/src-tauri/src/source_integrity.rs",
-      "bytes": 10917,
-      "sha256": "20d07c0dffd6e10ed0835fa876675e1f943d479692bc20738d1817dfbd9a0910"
+      "bytes": 10912,
+      "sha256": "8cf670fc8220a8f8d9c5b9b79b416bc69cd27d9ef69ac241b38fccbfa49c527d"
     },
     {
       "path": "desktop-launcher/src-tauri/src/trial_ui.rs",
@@ -910,23 +940,23 @@
     },
     {
       "path": "desktop-launcher/src-tauri/tauri.conf.json",
-      "bytes": 661,
-      "sha256": "5e225143fd88658749e0403aebda540527e02bdbafdd5d422e0847aa3a8a8f7d"
+      "bytes": 1228,
+      "sha256": "0f35edca1958b192bb7afe2b4183dd5e09eb7a6e61a3a54c82abdef241e5f551"
     },
     {
       "path": "desktop-launcher/src/App.vue",
-      "bytes": 81484,
-      "sha256": "16c7182e13c0842510e7fda5d1c5bd1b0de3b3de6061a72a451489cb730f192f"
+      "bytes": 66551,
+      "sha256": "3df8ad5081eed2fa8cfd6bfb97b91dc69924b1e72ec3fb00dea4f75c6ae9aa8e"
     },
     {
       "path": "desktop-launcher/src/EnginePanel.vue",
-      "bytes": 4763,
-      "sha256": "ff7c6219e50a89c91936caead7613d19df87d21ca4fce7c46ee8c8fbe1446dac"
+      "bytes": 4741,
+      "sha256": "293871d0d59f494865fa3bded4866a21de1b7dc4a6d165a962a103d5e66b89bc"
     },
     {
       "path": "desktop-launcher/src/ImportPanel.vue",
-      "bytes": 13697,
-      "sha256": "13296356067258eb8366ea1e73cd4b4b188e308ea2825db5f7d8fc0eda88e1a7"
+      "bytes": 13669,
+      "sha256": "266b8aed56028c479f98d50797a508e581e4a119b919c7b50943a0d95e3486f1"
     },
     {
       "path": "desktop-launcher/src/ShellPanel.vue",
@@ -945,13 +975,13 @@
     },
     {
       "path": "desktop-launcher/src/bridge.ts",
-      "bytes": 11519,
-      "sha256": "c694ea3f8f79b1256ad11d26947d4984e71344ff6f742b93cc5f81864122b106"
+      "bytes": 9578,
+      "sha256": "100671e26d4e450e7cbda48015d8d5596a6081f74a23cd7135d5c3e00e265231"
     },
     {
-      "path": "desktop-launcher/src/download-budget.ts",
-      "bytes": 1767,
-      "sha256": "1c96227cc766a52bc8af3e10e5aab7ad75c4c4f309cbe1c3ef90995bc015f2b1"
+      "path": "desktop-launcher/src/bytes.ts",
+      "bytes": 479,
+      "sha256": "39b14eba6faca084b83970ea4d4e190e568b48a01638c3025d76c245b88ade5f"
     },
     {
       "path": "desktop-launcher/src/main.ts",
@@ -969,9 +999,9 @@
       "sha256": "8ed6062585f3dc7f451f60e2c7da323888716881c8c888d73b7c7500df35ce69"
     },
     {
-      "path": "desktop-launcher/tests/download-budget.test.mjs",
-      "bytes": 1582,
-      "sha256": "51a4145f97603a50df37e6ad9f3a892f22de7f80dd7fd4c736db78ba6b778ffc"
+      "path": "desktop-launcher/tests/bytes.test.mjs",
+      "bytes": 432,
+      "sha256": "adccf2376534f108c307629c5115993d97750137640e053e865e5bfea0a1d588"
     },
     {
       "path": "desktop-launcher/tests/network-settings.test.mjs",
@@ -1080,8 +1110,8 @@
     },
     {
       "path": "docs/design/desktop-launcher-m1-download-budget.md",
-      "bytes": 5923,
-      "sha256": "b48f2ee623d8c787ea1cb9046c962e2e351ae4bbf31a36df4319c02be6c4fc84"
+      "bytes": 6971,
+      "sha256": "25bbdfbc6f77e5647550b10fd881b2fc5fbeb7a9e36e2dc1abfa39ad36c26876"
     },
     {
       "path": "docs/design/desktop-launcher-m1-instance-storage.md",
@@ -1524,6 +1554,11 @@
       "sha256": "a2a942f454104ed622919a53fd64ab7689345ad9413b5ea795573b612216fce4"
     },
     {
+      "path": "docs/launcher/windows-delivery.md",
+      "bytes": 6239,
+      "sha256": "357d5f918de9741ccaec0a11e008e0e6438c528eda6acd8f0ae0ceae539c8711"
+    },
+    {
       "path": "docs/musubi-tuner-engine-plan.md",
       "bytes": 12070,
       "sha256": "3c906e7a78ba2888452e3b3f147606af6ec6845661cdb4221bcae8fdc843c71f"
@@ -1760,8 +1795,8 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_总控目标索引.md",
-      "bytes": 19975,
-      "sha256": "934e2ea6328b37110f9c0622160d60506da527917218b9d7bfa96f39e9e9a989"
+      "bytes": 27269,
+      "sha256": "2e2772f5eaa6edfc145b752243511bedb8ccbbca3fcf67220aafe08b3d0c5c68"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/README.md",
@@ -1770,8 +1805,8 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/change-control-governance.md",
-      "bytes": 23272,
-      "sha256": "864a9be3ed61c2f86be0c33dea41c41df71c5a5f7fe0fa1ffec29bccd1617fd3"
+      "bytes": 27015,
+      "sha256": "6ac02d0c70de948e56d7547fb701bb1e3b3e116ed11ebb2327b6de79c979ef2a"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/evidence-cleanup-report-template.md",
@@ -1895,8 +1930,8 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/03_goal提示词/桌面启动器全程执行_goal提示词.md",
-      "bytes": 7254,
-      "sha256": "4ee9f143a7be11e4ed4634d38ed224665be96f509ae2ecb2b8951a5b8aaed5a5"
+      "bytes": 8527,
+      "sha256": "48120e8cf7675256d16b25652fd9ca8723884bcb75a9a22aacb34af09d7b9a87"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/04_阶段开工清单/阶段M0_审核冻结与开发基线_执行前清单.md",
@@ -1959,14 +1994,34 @@
       "sha256": "e316276345535d8e993f1522d59de5a4f8fd4aa77a2603f41a042e98a73f2d35"
     },
     {
+      "path": "docs/tasks/desktop-launcher-full-plan/download-policy-followup.md",
+      "bytes": 4594,
+      "sha256": "c6265080555364e8440f9fa13fd24d406622fc5823e7ec712da2fc421ecbe763"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/full-real-install-followup.md",
+      "bytes": 2018,
+      "sha256": "15a1beb0d780a35b412a933a1c5fcf04237caa4a7cdbba661962e2f8cfbe246f"
+    },
+    {
       "path": "docs/tasks/desktop-launcher-full-plan/m1-candidate-report.md",
       "bytes": 16798,
       "sha256": "c89441bab387f48b065f34854d6b831452ab1deafec8be0feca022892dbeb793"
     },
     {
+      "path": "docs/tasks/desktop-launcher-full-plan/m6-acceptance-matrix.json",
+      "bytes": 8853,
+      "sha256": "b89e40d0041f246dc8acbf3c0e63343b9fda9a0401996be00f22f0efa0e46ee2"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/m6-final-report.md",
+      "bytes": 23303,
+      "sha256": "c4bcad8a6200f11400e1525d23fd71d13703c6a54965c0dc1567734f01f9fc29"
+    },
+    {
       "path": "docs/tasks/desktop-launcher-full-plan/plan-manifest.md",
-      "bytes": 11057,
-      "sha256": "2b872354f78bcd26661bcf387fa9a26ba944e1d04d76b2a5ff587352e57b85c4"
+      "bytes": 11636,
+      "sha256": "740f3d87fd6d6c20fa5322e21f2b7a1ce42586ac8b770d162ca12d245bfd8ca6"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/remaining-work-cost-review.md",
@@ -4330,8 +4385,8 @@
     },
     {
       "path": "mikazuki/engines/kohya/environment.py",
-      "bytes": 8960,
-      "sha256": "6b942f95df276d2ab7601d6eba3c983d75e3de53e04ad4a3cb2fcddfd1bc88cb"
+      "bytes": 9033,
+      "sha256": "12d2ae5feece443e4880d0ec9bb2ee4591ec2428982a8d365bc42f4e303b009a"
     },
     {
       "path": "mikazuki/engines/kohya/extension_state.py",
@@ -6430,8 +6485,8 @@
     },
     {
       "path": "scripts/stable/library/lpw_stable_diffusion.py",
-      "bytes": 60898,
-      "sha256": "aed273543e9c8f369d33604980d519f82a33dd9746653311fe2a79973a81726b"
+      "bytes": 60920,
+      "sha256": "c1e2c61c504cd43fd9efc11412dbbaf34cf64c48b0b4e60ccd60aa848dbc947e"
     },
     {
       "path": "scripts/stable/library/model_util.py",
@@ -6450,8 +6505,8 @@
     },
     {
       "path": "scripts/stable/library/sdxl_lpw_stable_diffusion.py",
-      "bytes": 66026,
-      "sha256": "8979ae1e5a1eb1be9b278ee9f7e84116dbfb420e2840c3fd362815b1adfae96e"
+      "bytes": 66048,
+      "sha256": "301773f45a30de782a74975b456d860b8cedad5234a181e6d07175fbeccbecbe"
     },
     {
       "path": "scripts/stable/library/sdxl_model_util.py",
@@ -7250,13 +7305,13 @@
     },
     {
       "path": "tests/test_kohya_environment.py",
-      "bytes": 6905,
-      "sha256": "e16c45f0bd1037f2f0230c5b3bab752b91d8ab611c4a70a5787940caaab5a771"
+      "bytes": 6903,
+      "sha256": "cf53067931c09bff24c3da808dfdd1fef2df1f1f2cfba3d9df065d03d856d2fe"
     },
     {
       "path": "tests/test_kohya_main_env_fallback.py",
-      "bytes": 12050,
-      "sha256": "96dfd0e52475991dd0d10d17a4ccd2a08a509f42b276cdaacad3aab1a775331d"
+      "bytes": 12049,
+      "sha256": "57040161b7a8a5bbb846e9f0a5910005d81d434e4efcac99af03e89709c6de36"
     },
     {
       "path": "tests/test_kohya_moss.py",
