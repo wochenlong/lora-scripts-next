@@ -11,7 +11,7 @@
 | U1 服务状态同步 | 独立快照/事件、生命周期串行归属、启动取消、异常退出；移除完成后冗余检查 | Rust 定向回归、格式和 Clippy；最终包实际启停 | 定向及最终包三轮启停、异常恢复和计时通过 |
 | U2 视觉壳与导航 | 项目 Logo、标题栏、背景、首页/版本/环境；保留原操作能力 | 前端类型与打包、窗口尺寸/键盘和截图 | 最终包三尺寸15页、Tab、实际品牌响应与视觉检查通过 |
 | U3 日志与设置 | 独立日志、搜索筛选/跟随/复制导出/脱敏；网络/资料/安全/壳更新迁入设置 | 专用磁盘历史定向回归、前端合同；原生留 U4 | 已保存并 push：`b9d9c9bb6052e6c448d13a283d48ead3aa4c6f70` |
-| U4 同包交付 | 新候选包与独立 WebView、三轮启停和异常退出 | 包身份、真实 HTTP、状态事件与 UI 渲染时序、归属回收 | `u4-07` 77项通过/1项原生剪贴板附加检查未运行；`u4-history-07` 9项通过 |
+| U4 同包交付 | 新候选包与独立 WebView、三轮启停和异常退出 | 包身份、真实 HTTP、状态事件与 UI 渲染时序、归属回收 | `u4-08` 77项通过/1项原生剪贴板附加检查未运行；`u4-history-08` 9项通过 |
 
 ## 已确认的实施边界
 
@@ -49,14 +49,14 @@ U3 外置证据：`launcher-ui-implementation-20261030/u3-checks.json`、`launch
 
 ## 最终同包原生结果与交付
 
-candidate-2 的自动化原生主案和历史重开已通过；最终截图人工复核发现用户资料页恢复区域沿用旧白底、浅字不可读，当前状态回到 **in progress（视觉修复和最终包复验）**。candidate-2 由 `019a7a386055baff45f6f2c72e5164b6be3e3e5d` 构建，训练器源码仍为 `89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d`。需修复ImportPanel主题后构建candidate-3并复验，不能用自动化通过掩盖视觉问题。
+状态为 **complete-with-boundary（本轮实施、原生验收和视觉复核完成，保留测试边界）**。candidate-2 自动化通过后，人工复核发现用户资料恢复区域白底浅字P2；已仅修正ImportPanel局部主题样式，并对最终candidate-3完整重跑原生主案、历史重开和定向视觉复核，全部约定项目通过。最终包构建提交 `4c006f6c460cca55b55213a899c2b31cf03afa2f`，训练器源码仍为 `89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d`；后续文档提交不代表重建产品。
 
 | 实测项 | 最终结果 |
 | --- | --- |
-| 点击启动/停止到过渡状态 | 7次测量 **3.0–5.5ms**，上限250ms |
-| 后端 ready/stopped 已成立到对应按钮可用 | **5.2–24.2ms**，上限1s |
-| 精确自有进程异常退出到撤销ready并恢复启动 | **177.3ms**，上限2s；随后实际恢复启动并停止 |
-| 页面导航 | **2.8–32.4ms**，上限250ms |
+| 点击启动/停止到过渡状态 | 7次测量 **3.1–5.2ms**，上限250ms |
+| 后端 ready/stopped 已成立到对应按钮可用 | **7.5–25.6ms**，上限1s |
+| 精确自有进程异常退出到撤销ready并恢复启动 | **37.0ms**，上限2s；随后实际恢复启动并停止 |
+| 页面导航 | **2.3–34.2ms**，上限250ms |
 | 原生布局 | 1024×640、1184×667、1440×900客户区各5页，共15页；无横向溢出，品牌图已加载，Tab可用，无脚本错误 |
 | 集中日志 | 来源/搜索/级别/跟随和跨页保留、敏感字段脱敏、真实按钮导出692B文件通过；合成UI记录不写历史 |
 | 历史重开 | 同EXE新进程恢复20条真实服务记录，原ID/root/session/run/接收时间/正文保持；真实磁盘limit2翻页通过，原生默认500页确认保留起点 |
@@ -65,16 +65,16 @@ candidate-2 的自动化原生主案和历史重开已通过；最终截图人�
 
 上述计时测量已完成后的反馈，不包含首次完整性检查和启动前必要校验的等待。测试为真实原生窗口与WebView，最终将仅本测试窗口移至屏幕外，避免并发桌面点击干扰；客户区、按钮点击、HTTP、事件与截图仍实际执行。普通用户入口保持正常屏幕位置。
 
-最终主案：`E:/OpenSourceTeamWork/workspace/tools/launcher-ui-implementation-20261030/u4-07/`；重开案：同根`u4-history-07/`。两案host/ui回执及SHA见 [结构化验收结果](starward-ui-validation.json)。原生系统剪贴板附加检查因当前包含非文本内容而完全未点击复制，明确为not-run；独立浏览器复制合同已通过，真实日志导出也已通过。不得将该项写成原生复制通过。
+最终主案：`E:/OpenSourceTeamWork/workspace/tools/launcher-ui-implementation-20261030/u4-08/`；重开案：同根`u4-history-08/`。两案host/ui回执及SHA见 [结构化验收结果](starward-ui-validation.json)。原生系统剪贴板附加检查因当前包含非文本内容而完全未点击复制，明确为not-run；独立浏览器复制合同已通过，真实日志导出也已通过。不得将该项写成原生复制通过。
 
-首轮到第六轮的失败原件全部保留：下载临时路径、CSP不允许测试fetch、Tao内部窗口选择、测试根初始化/分隔符、外框与客户区尺寸，以及额外桌面点击干扰。均已在外置harness定向修正；最终成功案没有替换产品IPC或模拟健康响应。仅两项产品收尾修复重新构建，其余测试脚本调整继续使用同一最终EXE。
+首轮到第六轮的失败原件全部保留：下载临时路径、CSP不允许测试fetch、Tao内部窗口选择、测试根初始化/分隔符、外框与客户区尺寸，以及额外桌面点击干扰。均已在外置harness定向修正；最终成功案没有替换产品IPC或模拟健康响应。产品收尾修复重新构建candidate-2；视觉P2局部样式修复再构建candidate-3。最终两案使用同一candidate-3 EXE，测试脚本修正没有冒充产品变更。
 
 | 制品 | SHA256 |
 | --- | --- |
-| 最终 EXE | `d5f1da3d834efd2b30efe3a599f6076261800eebec6da9bea269e07d774dc906` |
-| 便携 ZIP | `63c49f4406b3bc3cef6a686550018b302a3e675e70c8fafd464e2f99fad45df0` |
-| NSIS 安装包 | `52b5414fdda3ff546bb04b859a75ca5a16327b542fe2aa70e93ab676cd32da89` |
+| 最终 EXE | `877b52de8b47f12ebfc0d82de944fe46e47ecb35b926f59937859001f07a86ce` |
+| 便携 ZIP | `bbf8cd325d1796bada02e3535db553a0d94ef19a5eda5067f0750f9351bf92c3` |
+| NSIS 安装包 | `1814b168607fb94194bf824aa7fa96e845aa6cc03ba02c22c42c666769ba3845` |
 
-构建目录：`F:/NextTrainerLauncherSandbox/build-ui-20261030/candidate-2/`。解压程序：`F:/NextTrainerLauncherSandbox/ui-20261030-2/NextTrainerLauncher-0.2.0-windows-x64/`。用户双击 `F:/NextTrainerLauncherSandbox/user-20261030/启动新版启动器.cmd` 即可，复用原WebView偏好与u13环境、模型、训练样例；未替换旧app或旧入口。新入口不启用CDP，已准备而未代用户启动。若需要返回旧版，可用原`启动训练器.cmd`；切换前先停止当前服务并关闭当前窗口。
+构建目录：`F:/NextTrainerLauncherSandbox/build-ui-20261030/candidate-3/`。解压程序：`F:/NextTrainerLauncherSandbox/ui-20261030-3/NextTrainerLauncher-0.2.0-windows-x64/`。用户双击 `F:/NextTrainerLauncherSandbox/user-20261030/启动新版启动器.cmd` 即可，复用原WebView偏好与u13环境、模型、训练样例；未替换旧app或旧入口。新入口不启用CDP，已准备而未代用户启动。若需要返回旧版，可用原`启动训练器.cmd`；切换前先停止当前服务并关闭当前窗口。
 
 本轮未重复冷安装、引擎真实安装/GPU训练或模型下载；干净Windows、缺WebView2首装、生产签名/渠道与许可审结仍沿用原边界。当前为unsigned、public_release:false的开发候选。后续动作是用户从新版入口进行体验验收。

@@ -219,7 +219,7 @@ Starward 当前使用 WinUI 3；我们的页面磨砂由 CSS 分层与模糊模�
 
 | 计划项 | 实施输出与验证器 | 当前状态 | 证据 |
 | --- | --- | --- | --- |
-| U1 状态同步 | Rust 快照/事件、启停生命周期定向回归 | 定向和原生三轮/异常恢复通过 | 完成后按钮5.2–24.2ms，异常退出177.3ms；启动前完整校验保留 |
+| U1 状态同步 | Rust 快照/事件、启停生命周期定向回归 | 定向和原生三轮/异常恢复通过 | 完成后按钮7.5–25.6ms，异常退出37.0ms；启动前完整校验保留 |
 | U2 视觉壳与导航 | 本地 Logo、窗口与页面；构建、尺寸和键盘检查 | 三尺寸15页原生检查通过 | [原生首页](desktop-launcher-ui-review/implementation/home-ready.png)、[环境1024](desktop-launcher-ui-review/implementation/environment-1024.png) |
 | U3 日志与设置 | 独立日志、筛选/跟随/定位/脱敏，原业务映射 | 当前/历史、真实导出与重开通过 | [原生日志](desktop-launcher-ui-review/implementation/logs.png)、[设置](desktop-launcher-ui-review/implementation/settings.png)；原生额外剪贴板检查not-run以保护非文本内容 |
-| U4 同包交付 | 独立窗口启停三轮、异常退出、包身份与回执 | u4-07和history-07通过 | 不重下模型或重复四引擎训练；干净系统/生产签名保留原边界 |
+| U4 同包交付 | 独立窗口启停三轮、异常退出、包身份与回执 | u4-08和history-08通过 | 不重下模型或重复四引擎训练；干净系统/生产签名保留原边界 |

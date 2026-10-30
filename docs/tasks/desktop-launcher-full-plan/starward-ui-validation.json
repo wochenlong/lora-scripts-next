@@ -4,28 +4,27 @@
   "scope": "CR-009 U1-U4 launcher responsiveness, approved visual layout, project branding, independent logs and settings; no retraining",
   "identity": {
     "status": "package-identity-and-native-validation-pass",
-    "build_commit": "019a7a386055baff45f6f2c72e5164b6be3e3e5d",
+    "build_commit": "4c006f6c460cca55b55213a899c2b31cf03afa2f",
     "trainer_commit": "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
     "catalog_digest": "98cc9df537272f1d7d4d79be97b5e7c9d062ab77dc6a7098140feb89069961f7",
     "recipe_digest": "4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca",
     "exe": {
       "bytes": 35757568,
-      "sha256": "d5f1da3d834efd2b30efe3a599f6076261800eebec6da9bea269e07d774dc906"
+      "sha256": "877b52de8b47f12ebfc0d82de944fe46e47ecb35b926f59937859001f07a86ce"
     },
-    "artifacts": [
-      {
-        "name": "NextTrainerLauncher-0.2.0-windows-x64-portable.zip",
-        "bytes": 17831072,
-        "sha256": "63c49f4406b3bc3cef6a686550018b302a3e675e70c8fafd464e2f99fad45df0"
+    "artifacts": {
+      "NextTrainerLauncher-0.2.0-windows-x64-portable.zip": {
+        "bytes": 17831138,
+        "sha256": "bbf8cd325d1796bada02e3535db553a0d94ef19a5eda5067f0750f9351bf92c3"
       },
-      {
-        "name": "installers/Next Trainer Launcher_0.2.0_x64-setup.exe",
-        "bytes": 14619621,
-        "sha256": "52b5414fdda3ff546bb04b859a75ca5a16327b542fe2aa70e93ab676cd32da89"
+      "installers/Next Trainer Launcher_0.2.0_x64-setup.exe": {
+        "bytes": 14617969,
+        "sha256": "1814b168607fb94194bf824aa7fa96e845aa6cc03ba02c22c42c666769ba3845"
       }
-    ],
+    },
     "entry": "F:/NextTrainerLauncherSandbox/user-20261030/启动新版启动器.cmd",
-    "native_validation": "u4-07 and u4-history-07 pass"
+    "candidate": "F:/NextTrainerLauncherSandbox/ui-20261030-3/NextTrainerLauncher-0.2.0-windows-x64",
+    "native_validation": "u4-08 and u4-history-08 pass"
   },
   "main": {
     "checks_passed": 77,
@@ -41,45 +40,45 @@
     "start_stop_measurements": 7,
     "layouts": 15,
     "click_to_transition_ms": [
-      3,
+      3.10009765625,
+      5.199951171875,
+      4.300048828125,
+      4.10009765625,
       3.900146484375,
-      5.5,
-      4,
-      3.800048828125,
-      4.2001953125,
-      4.199951171875
+      4.300048828125,
+      4.10009765625
     ],
     "backend_to_button_ms": [
-      8.800048828125,
-      21.900146484375,
-      7.800048828125,
-      23.7001953125,
-      5.2001953125,
-      5.7001953125,
-      24.2001953125
+      8.199951171875,
+      25.599853515625,
+      7.699951171875,
+      21.599853515625,
+      9.2998046875,
+      7.5,
+      23.89990234375
     ],
-    "unexpected_exit_to_button_ms": 177.27490234375,
+    "unexpected_exit_to_button_ms": 37.006591796875,
     "navigation_ms": [
-      32.39990234375,
-      22.400146484375,
-      3.699951171875,
-      4.5,
-      4.10009765625,
-      9.60009765625,
-      3.5,
-      4.39990234375,
-      2.800048828125,
-      3.800048828125,
+      34.2001953125,
+      22.300048828125,
+      2.2998046875,
+      4.099853515625,
       4,
-      3.60009765625,
-      4.2998046875,
-      3.10009765625,
+      9.5,
+      5.5,
+      3.89990234375,
+      3.7998046875,
+      3.300048828125,
+      5.300048828125,
+      3.7998046875,
+      4.5,
+      4.300048828125,
+      4.39990234375,
       3.39990234375,
-      3.199951171875,
-      4.60009765625,
+      4.5,
       4.300048828125
     ],
-    "log_export_sha256": "ed0722b995078b4e4fda068242c6dee8c7fd52afe9a99efb641415c06217a628",
+    "log_export_sha256": "27ebd14263c534ec844efc054e5736bda701da64111527380ff2fd4dc63acd74",
     "brand_resource_response_sha_verified": true
   },
   "history": {
@@ -100,19 +99,19 @@
   },
   "receipts": [
     {
-      "case": "u4-07",
-      "host_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-07\\host-status.json",
-      "host_sha256": "0d5315c32e5df5eb42dc316e0ea6e2fd2df5c5f26166aeccf92e56730e2c0e80",
-      "ui_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-07\\ui-report.json",
-      "ui_sha256": "63ec722991697e25848bcb46fdedec5208a7cd337292a20568dbd78ed67b9a40",
+      "case": "u4-08",
+      "host_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-08\\host-status.json",
+      "host_sha256": "f78dcf4dc099ed1e667cb583d470a4ed407fbd6090b8ef19d78c4bccbb47b967",
+      "ui_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-08\\ui-report.json",
+      "ui_sha256": "5c0f93ca19e0ff5a7582ec2f355cc80934f80ad30115ee3ee936b758620017e2",
       "passed": true
     },
     {
-      "case": "u4-history-07",
-      "host_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-history-07\\host-status.json",
-      "host_sha256": "ee7b3c6e90110a1a633ab0bc26dfcdb6bc17bae4aca6cc78452d23fc63265805",
-      "ui_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-history-07\\ui-report.json",
-      "ui_sha256": "bce16fcb1abdde5afde70910c27e4ae5ab49ddd046e236b17bdeb87a932e82fc",
+      "case": "u4-history-08",
+      "host_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-history-08\\host-status.json",
+      "host_sha256": "1671d381e3f6e57f6fb48204aa248eb2effbcf840617b5ab90183a346ebd90e8",
+      "ui_report": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-history-08\\ui-report.json",
+      "ui_sha256": "c9483cfd64c58e55457b249bdcaa8779a21076397d3aa139961aebb0868a20bd",
       "passed": true
     }
   ],
@@ -130,5 +129,15 @@
     "unsigned development candidate; public_release false; production channel/key and license audit unchanged",
     "existing r12 reused; no cold install, engine reinstall, GPU training or model download repeated in CR-009",
     "test window parked offscreen; actual native HWND client area and WebView rendering measured; normal user entry stays on-screen"
-  ]
+  ],
+  "visual_review": {
+    "previous_candidate": "candidate-2/u4-07 automated checks passed; independent screenshot review found P2 VIS-001 profile recovery used white background and light text",
+    "fix_commit": "4c006f6c460cca55b55213a899c2b31cf03afa2f",
+    "changed": "ImportPanel scoped colors only; no business logic changes",
+    "final_screenshot": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-08\\1440x900-settings.png",
+    "status": "fixed; dark background and readable light text confirmed in actual candidate-3 screenshot; final full native checks rerun",
+    "independent_review": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-implementation-20261030\\u4-final-visual-review.json",
+    "independent_review_sha256": "15c901fa597a90711888293a1ce3dd068bed2e5485ddfce63c356b412f524962",
+    "independent_review_passed": true
+  }
 }
