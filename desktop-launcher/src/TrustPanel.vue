@@ -71,9 +71,9 @@ onBeforeUnmount(() => { epoch++ })
 </template>
 
 <style scoped>
-.trust-panel { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 15px; font-size: 11px; line-height: 1.7; }
+.trust-panel { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 15px; font-size: 12px; line-height: 1.7; }
 .section-caption,.actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.section-caption { justify-content: space-between; }.actions { margin-top: 10px; }.mode,.hint,dt { color: var(--fg-muted); }
+.section-caption { justify-content: space-between; }.actions { margin-top: 10px; }.mode,.hint,dt { color: var(--text-muted); }
 .issue { color: var(--error); overflow-wrap: anywhere; }.history article { padding: 9px 0; border-bottom: 1px solid var(--line); }.history ul { margin: 4px 0; }
 dl { display: flex; gap: 24px; margin: 10px 0; }dd { margin: 2px 0 0; }.fixture { margin-top: 13px; padding: 10px; border: 1px solid var(--warning-line); border-radius: 3px; background: var(--warning-bg); }
 summary { cursor: pointer; }.consent { display: flex; align-items: flex-start; gap: 6px; margin: 10px 0; }.consent input { margin-top: 4px; }.fixture select { margin: 0 8px; max-width: 100%; }button,select { font: inherit; }
