@@ -48,12 +48,12 @@ def cache_inventory(root: Path) -> dict:
 
 def source_inventory() -> dict:
     paths = []
-    for name in ("src", "catalog", "scripts", "LICENSES", "src-tauri", "shell-updater"):
+    for name in ("src", "public", "catalog", "scripts", "LICENSES", "src-tauri", "shell-updater"):
         for path in (LAUNCHER / name).rglob("*"):
             parts = path.relative_to(LAUNCHER).parts
             if path.is_file() and not any(p in ("target", "gen", "__pycache__") for p in parts):
                 paths.append(path)
-    paths.extend(LAUNCHER / name for name in ("package.json", "package-lock.json", "README.md"))
+    paths.extend(LAUNCHER / name for name in ("package.json", "package-lock.json", "README.md", "index.html", "vite.config.ts", "tsconfig.json"))
     paths.extend(REPO / name for name in ("LICENSE", "NOTICE.md", "docs/launcher/windows-delivery.md"))
     # worker 的真实编译输入位于训练器源码树，必须和主壳一样纳入冻结证明。
     paths.extend(REPO / name for name in worker_paths())

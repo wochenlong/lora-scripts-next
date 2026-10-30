@@ -43,7 +43,7 @@ export interface VersionView {
   managed_recipe?: boolean
 }
 
-export type ReportCommand = 'inspect' | 'bootstrap' | 'restore_trainer' | 'install_environment' | 'start_trainer'
+export type ReportCommand = 'inspect' | 'bootstrap' | 'restore_trainer' | 'install_environment'
 export type ReleaseCommand = 'install_release' | 'select_release' | 'remove_release'
 
 export function runCommand(command: ReportCommand, root: string) {
@@ -56,7 +56,8 @@ export function runReleaseCommand(command: ReleaseCommand, root: string, release
 
 export const rollbackRelease = (root: string) => invoke<Report>('rollback_release', { root })
 export const chooseDirectory = () => invoke<string | null>('choose_directory')
-export const stopTrainer = () => invoke<void>('stop_trainer')
+export const startTrainer = (root: string, runId: string) => invoke<Report>('start_trainer', { root, runId })
+export const stopTrainer = (runId: string | null) => invoke<RuntimeSnapshot>('stop_trainer', { runId })
 export const openTrainer = () => invoke<void>('open_trainer')
 export const listenToLogs = (handler: (line: string) => void) =>
   listen<string>('launcher:log', (event) => handler(event.payload))
@@ -224,3 +225,24 @@ export const guiLifecycleHistory = (root: string, releaseId: string) =>
   invoke<GuiLifecycleHistory>('preview_gui_lifecycle', { root, releaseId, action: 'history', transaction: null })
 export const applyGuiLifecycle = (root: string, releaseId: string, action: GuiLifecycleAction, plan: string | null, transaction: string | null, instance: string | null) =>
   invoke<OperationSnapshot>('apply_gui_lifecycle', { root, releaseId, action, plan, transaction, instance })
+
+export type RuntimePhase = 'stopped' | 'checking' | 'starting' | 'ready' | 'degraded' | 'stopping' | 'exited' | 'start_failed' | 'stop_failed'
+export interface RuntimeSnapshot {
+  root: string
+  release_id: string | null
+  instance_id: string | null
+  binding_generation: number | null
+  run_id: string | null
+  seq: number
+  phase: RuntimePhase
+  pid: number | null
+  port: number | null
+  url: string | null
+  version: string | null
+  exit_code: number | null
+  error: string | null
+  observed_at: number
+}
+export const runtimeStatus = (root: string) => invoke<RuntimeSnapshot>('runtime_status', { root })
+export const listenToRuntime = (handler: (snapshot: RuntimeSnapshot) => void) =>
+  listen<RuntimeSnapshot>('launcher:runtime', event => handler(event.payload))

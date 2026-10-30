@@ -1,5 +1,14 @@
 <script setup lang="ts">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { getCurrentWindow } from '@tauri-apps/api/window'
+import { getVersion } from '@tauri-apps/api/app'
+import { invoke } from '@tauri-apps/api/core'
+import { runtimeStatus, listenToRuntime, startTrainer } from './bridge'
+import type { RuntimePhase, RuntimeSnapshot } from './bridge'
+import LogPanel from './LogPanel.vue'
+import Icon from './LauncherIcon.vue'
+import { createLogEntry } from './log-model'
+import type { LogEntry, LogSource } from './log-model'
 import { cancelOperation, chooseDirectory, diagnoseGui, installManagedRelease, listenToLogs, openTrainer, operationEvents, operationHistory, operationSnapshot, planGuiRepair, prefetchRelease, previewSourceRepair, recoverGuiRepair, repairGuiPackage, repairManagedSource, rollbackRelease, runCommand, runReleaseCommand, stopTrainer } from './bridge'
 import type { GuiDiagnosis, GuiRepairPreview, OperationSnapshot, PackageIntegrity, ReleaseCommand, Report, ReportCommand, VersionView } from './bridge'
 import { loadNetworkSettings, saveNetworkSettings } from './bridge'
@@ -19,7 +28,8 @@ import TrustPanel from './TrustPanel.vue'
 import ImportPanel from './ImportPanel.vue'
 import ShellPanel from './ShellPanel.vue'
 
-type Page = 'launch' | 'versions' | 'environment'
+type Page = 'launch' | 'versions' | 'environment' | 'logs' | 'settings'
+type Setting = 'appearance' | 'network' | 'profiles' | 'security' | 'about'
 interface Confirmation {
   title: string
   detail: string
@@ -36,8 +46,23 @@ const report = ref<Report | null>(null)
 const pending = ref('')
 const error = ref('')
 const message = ref('正在检查安装状态…')
-const logs = ref<string[]>([])
-const logPanel = ref<HTMLPreElement>()
+const logs = ref<LogEntry[]>([])
+let logSequence = 0
+const logFocus = ref<number | null>(null)
+const runtime = ref<RuntimeSnapshot | null>(null)
+const optimisticPhase = ref<RuntimePhase | null>(null)
+const serviceAction = ref('')
+const requestedRunId = ref<string | null>(null)
+let serviceEpoch = 0
+let runtimeTimer: ReturnType<typeof setInterval> | undefined
+let runtimeQueryPending = false
+let runtimeUnlisten: (() => void) | undefined
+const setting = ref<Setting>('appearance')
+const advanced = ref(false)
+const appVersion = ref('0.2.0')
+const toast = ref('')
+const appearance = ref(loadAppearance())
+const backgroundInput = ref<HTMLInputElement>()
 const confirmation = ref<Confirmation | null>(null)
 const confirmationCancel = ref<HTMLButtonElement>()
 const operation = ref<OperationSnapshot | null>(null)
@@ -63,8 +88,7 @@ let operationCursor = 0
 let unlisten: (() => void) | undefined
 let previousFocus: HTMLElement | null = null
 
-const pageTitle = computed(() => ({ launch: '启动', versions: '版本管理', environment: '环境管理' })[page.value])
-const sameRoot = computed(() => path.value.trim() === report.value?.root)
+const sameRoot = computed(() => samePath(path.value, report.value?.root ?? ''))
 const versions = computed(() => report.value?.versions ?? [])
 const currentVersion = computed(() => versions.value.find((version) => version.id === report.value?.current_release) ?? versions.value.find((version) => version.current))
 const defaultRelease = computed(() => versions.value.find((version) => version.channel === 'dev') ?? versions.value[0])
@@ -74,37 +98,34 @@ const ready = computed(() => Boolean(sameRoot.value && report.value?.uv && repor
 const busy = computed(() => Boolean(pending.value) || operation.value?.status === 'running')
 const phaseText: Record<OperationSnapshot['phase'], string> = { preparing: '准备中', downloading: '正在下载', executing: '正在执行', verifying: '正在校验', committing: '正在保存', recovering: '正在恢复' }
 const operationStatusText: Record<OperationSnapshot['status'], string> = { running: '进行中', succeeded: '已完成', failed: '失败', cancelled: '已取消', interrupted: '上次操作未完整结束' }
-const running = computed(() => Boolean(report.value?.running))
-const mutationDisabled = computed(() => busy.value || !sameRoot.value || running.value)
+const runtimePhase = computed<RuntimePhase>(() => optimisticPhase.value ?? (samePath(runtime.value?.root ?? '', path.value) ? runtime.value?.phase : null) ?? (sameRoot.value && report.value?.healthy ? 'ready' : sameRoot.value && report.value?.running ? 'degraded' : 'stopped'))
+const healthy = computed(() => runtimePhase.value === 'ready')
+const transitioning = computed(() => ['checking', 'starting', 'stopping'].includes(runtimePhase.value))
+const running = computed(() => ['starting', 'ready', 'degraded', 'stopping', 'stop_failed'].includes(runtimePhase.value))
+const serviceUrl = computed(() => healthy.value ? runtime.value?.url ?? (report.value?.port ? `http://127.0.0.1:${report.value.port}` : '') : '')
+const mutationDisabled = computed(() => busy.value || !sameRoot.value || running.value || transitioning.value || Boolean(serviceAction.value))
 const installed = computed(() => Boolean(currentVersion.value?.installed || report.value?.source))
 const rollbackAvailable = computed(() => Boolean(rollbackVersion.value?.installed && rollbackVersion.value.source_ok && rollbackVersion.value.environment_ok && rollbackVersion.value.id !== currentVersion.value?.id))
 const channels = computed(() => {
   const listed = ['main', 'dev', ...versions.value.map((version) => version.channel)]
   return [...new Set(listed)].map((channel) => ({ channel, versions: versions.value.filter((version) => version.channel === channel) }))
 })
+const runtimeLabels: Record<RuntimePhase, string> = { stopped: '服务已停止', checking: '正在检查启动条件', starting: '正在启动，等待服务', ready: '服务已就绪', degraded: '进程运行，服务暂不可达', stopping: '正在停止服务', exited: '服务已退出', start_failed: '启动失败', stop_failed: '停止失败，请查看日志' }
 const stateText = computed(() => {
+  if (transitioning.value || running.value || ['exited', 'start_failed', 'stop_failed'].includes(runtimePhase.value)) return runtimeLabels[runtimePhase.value]
   if (!report.value) return '等待检查'
   if (!sameRoot.value) return '目录待检查'
-  if (report.value.healthy) return '服务已就绪'
-  if (running.value) return '进程运行中'
   if (ready.value) return '可以启动'
-  if (installed.value) return '需要修复'
-  return '尚未安装'
+  return installed.value ? '需要修复' : '尚未安装'
 })
-const stateGood = computed(() => sameRoot.value && (report.value?.healthy || ready.value))
-const statusItems = computed(() => [
-  { label: '基础工具', ok: report.value?.uv && report.value?.python, detail: 'uv / 自管 Python' },
-  { label: '训练器源码', ok: report.value?.source, detail: currentVersion.value ? `${currentVersion.value.channel} · ${currentVersion.value.commit.slice(0, 8)}` : '尚未选择版本' },
-  { label: '运行环境', ok: report.value?.environment, detail: '主程序独立环境' },
-  { label: '网页资源', ok: report.value?.frontend, detail: '训练器前端' },
-])
+const stateGood = computed(() => sameRoot.value && (healthy.value || (ready.value && !transitioning.value)))
 const primaryLabel = computed(() => {
   if (!report.value || !sameRoot.value) return '检查安装状态'
   if (!installed.value) return '安装训练器'
   if (!ready.value) return '检查并修复'
   return '启动训练器'
 })
-const primaryDisabled = computed(() => busy.value || running.value || (Boolean(report.value) && sameRoot.value && !installed.value && !installTarget.value))
+const primaryDisabled = computed(() => busy.value || running.value || transitioning.value || Boolean(serviceAction.value) || (Boolean(report.value) && sameRoot.value && !installed.value && !installTarget.value))
 const installDownloadBytes = computed(() => installTarget.value?.download_bytes ?? 0)
 const managedCurrent = computed(() => Boolean(sameRoot.value && currentVersion.value?.managed_recipe))
 const registrationVersions = computed(() => versions.value.filter((version) => version.managed_recipe))
@@ -116,7 +137,7 @@ const visiblePackages = computed(() => showAllPackages.value ? guiDiagnosis.valu
 const guiPlanBlocked = computed(() => Boolean(guiRecoveryNeeded.value || guiDiagnosis.value?.source_error || guiDiagnosis.value?.installed_metadata_error))
 
 watch([path, () => currentVersion.value?.id], clearGuiState, { flush: 'sync' })
-watch(path, () => { networkView.value = null; networkInherit.value = []; networkDraft.value = { mode: 'auto', http_proxy: '', https_proxy: '', no_proxy: '' } }, { flush: 'sync' })
+watch(path, () => { runtime.value = null; optimisticPhase.value = null; serviceEpoch += 1; serviceAction.value = ''; requestedRunId.value = null; void syncRuntime(); networkView.value = null; networkInherit.value = []; networkDraft.value = { mode: 'auto', http_proxy: '', https_proxy: '', no_proxy: '' } }, { flush: 'sync' })
 function acceptNetworkSettings(view: NetworkSettingsView) {
   networkView.value = view
   networkInherit.value = []
@@ -194,17 +215,49 @@ function releaseState(version: VersionView) {
 function protectedRelease(version: VersionView) {
   return version.current || version.id === report.value?.current_release || version.id === report.value?.previous_known_good
 }
-function addLog(line: string) {
-  logs.value.push(line)
-  if (logs.value.length > 1000) logs.value.splice(0, logs.value.length - 1000)
-  void nextTick(() => { if (logPanel.value) logPanel.value.scrollTop = logPanel.value.scrollHeight })
+function addLog(line: string, source: LogSource = 'unknown') {
+  logs.value.push(createLogEntry(++logSequence, line, path.value.trim(), operation.value?.status === 'running' ? operation.value.id : runtime.value?.run_id ?? null, source))
+  if (logs.value.length > 2000) logs.value.splice(0, logs.value.length - 2000)
+}
+function showLogs(focusError = false) {
+  logFocus.value = focusError ? [...logs.value].reverse().find(entry => entry.level === 'ERROR' && samePath(entry.root, path.value))?.id ?? logs.value.at(-1)?.id ?? null : null
+  page.value = 'logs'
+}
+function samePath(left: string, right: string) { return left.trim().replace(/\\/g, '/').replace(/\/$/, '').toLowerCase() === right.trim().replace(/\\/g, '/').replace(/\/$/, '').toLowerCase() }
+function acceptRuntime(value: RuntimeSnapshot) {
+  if (disposed || !samePath(value.root, path.value)) return
+  if (runtime.value && value.seq <= runtime.value.seq) return
+  const acceptedAt = performance.now()
+  const previousPhase = runtime.value?.phase
+  runtime.value = value
+  if (previousPhase !== value.phase) {
+    addLog(`[信息] ${runtimeLabels[value.phase]}${value.url ? ` · ${value.url}` : ''}`, 'launcher')
+    if (!busy.value) message.value = runtimeLabels[value.phase]
+  }
+  optimisticPhase.value = null
+  void nextTick(() => {
+    // 原生验收读取此标记测量事件接受到渲染；不写进用户日志。
+    document.documentElement.dataset.runtimeRenderedSeq = String(value.seq)
+    document.documentElement.dataset.runtimeRenderMs = (performance.now() - acceptedAt).toFixed(2)
+    document.documentElement.dataset.runtimeObservedAt = String(value.observed_at)
+    document.documentElement.dataset.runtimeRenderedAt = String(Date.now())
+  })
+}
+async function syncRuntime() {
+  if (disposed || runtimeQueryPending) return
+  const root = path.value.trim()
+  if (!root) return
+  runtimeQueryPending = true
+  try { const value = await runtimeStatus(root); if (samePath(root, path.value)) acceptRuntime(value) }
+  catch { /* 普通浏览器预览没有桌面接口；实际操作错误会明确显示。 */ }
+  finally { runtimeQueryPending = false }
 }
 function acceptReport(value: Report) {
   const rootChanged = report.value?.root !== value.root
   report.value = { ...value, versions: value.versions ?? [], interrupted: value.interrupted ?? [] }
   path.value = value.root
   localStorage.setItem('next-trainer-launcher-root', value.root)
-  if (!logs.value.length && value.logs.length) value.logs.forEach(addLog)
+  if (!logs.value.length && value.logs.length) value.logs.forEach(line => addLog(line))
   if (rootChanged) {
     if (operationTimer) clearTimeout(operationTimer)
     operation.value = null
@@ -231,7 +284,7 @@ async function pollOperation() {
     try {
       const events = await operationEvents(current.id, operationCursor)
       if (!stillCurrent()) return
-      events.forEach((event) => { addLog(event.message); operationCursor = Math.max(operationCursor, event.seq) })
+      events.forEach((event) => { addLog(event.message, 'environment'); operationCursor = Math.max(operationCursor, event.seq) })
     } catch (reason) {
       if (!errorText(reason).includes('事件游标已过期')) throw reason
       operationCursor = Math.max(operationCursor, next.event_seq)
@@ -292,7 +345,7 @@ async function perform(label: string, action: () => Promise<void>) {
   catch (reason) {
     error.value = errorText(reason)
     message.value = `${label}失败，可查看日志后重试`
-    addLog(`[失败] ${error.value}`)
+    addLog(`[失败] ${error.value}`, 'launcher')
   } finally { pending.value = '' }
 }
 function command(command: ReportCommand, label: string) {
@@ -355,7 +408,7 @@ function primary() {
   if (!report.value || !sameRoot.value) return command('inspect', '检查安装状态')
   if (!installed.value && installTarget.value) return install(installTarget.value)
   if (!ready.value) { page.value = 'environment'; return }
-  return command('start_trainer', '启动训练器')
+  return start()
 }
 function browse() {
   return perform('选择目录', async () => {
@@ -363,13 +416,69 @@ function browse() {
     if (selected) acceptReport(await runCommand('inspect', selected))
   })
 }
-function stop() {
-  return perform('停止训练器', async () => {
-    await stopTrainer()
-    acceptReport(await runCommand('inspect', path.value.trim()))
-  })
+async function start() {
+  if (primaryDisabled.value) return
+  const epoch = ++serviceEpoch, root = path.value.trim(), runId = `start-${crypto.randomUUID()}`
+  requestedRunId.value = runId
+  serviceAction.value = 'start'; optimisticPhase.value = 'checking'; error.value = ''; message.value = '正在检查启动条件…'
+  try {
+    const value = await startTrainer(root, runId)
+    if (epoch === serviceEpoch && samePath(root, path.value)) { acceptReport(value); await syncRuntime() }
+  } catch (reason) {
+    if (epoch === serviceEpoch && samePath(root, path.value)) { error.value = errorText(reason); optimisticPhase.value = 'start_failed'; addLog(`[失败] ${error.value}`, 'launcher'); await syncRuntime() }
+  } finally { if (epoch === serviceEpoch) serviceAction.value = '' }
 }
-function open() { return perform('打开训练器', openTrainer) }
+async function stop() {
+  if (runtimePhase.value === 'stopping' || serviceAction.value === 'stop') return
+  const epoch = ++serviceEpoch, root = path.value.trim()
+  serviceAction.value = 'stop'; optimisticPhase.value = 'stopping'; error.value = ''; message.value = '正在停止服务并回收进程…'
+  try { const value = await stopTrainer(requestedRunId.value ?? runtime.value?.run_id ?? null); if (epoch === serviceEpoch && samePath(root, path.value)) acceptRuntime(value) }
+  catch (reason) { if (epoch === serviceEpoch) { error.value = errorText(reason); optimisticPhase.value = 'stop_failed'; addLog(`[失败] ${error.value}`, 'launcher'); await syncRuntime() } }
+  finally { if (epoch === serviceEpoch) { serviceAction.value = ''; requestedRunId.value = null } }
+}
+async function open() {
+  try { await openTrainer() } catch (reason) { error.value = errorText(reason); addLog(`[失败] ${error.value}`, 'launcher'); await syncRuntime() }
+}
+async function openProjectLink(target: 'project' | 'issues' | 'license') { try { await invoke('open_project_link', { target }) } catch (reason) { notify(errorText(reason)) } }
+async function copyAddress() { try { await navigator.clipboard.writeText(serviceUrl.value); notify('已复制服务地址') } catch { notify('复制失败，请在日志中选择地址复制') } }
+function notify(value: string) { toast.value = value; setTimeout(() => { if (toast.value === value) toast.value = '' }, 3500) }
+function openSetting(value: Setting) { setting.value = value; page.value = 'settings'; if (value === 'network' && sameRoot.value && !networkView.value) void readNetworkSettings() }
+function loadAppearance() {
+  const number = (value: unknown, fallback: number, min: number, max: number) => typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback
+  const defaults = { background: '', mask: 28, blur: 24, reduceMotion: false, logFontSize: 11 }
+  try {
+    const saved = JSON.parse(localStorage.getItem('next-trainer-launcher-appearance') ?? '{}')
+    return { background: typeof saved.background === 'string' && /^data:image\/(?:png|jpeg|webp);base64,/.test(saved.background) ? saved.background : '', mask: number(saved.mask, 28, 0, 75), blur: number(saved.blur, 24, 0, 40), reduceMotion: Boolean(saved.reduceMotion), logFontSize: number(saved.logFontSize, 11, 10, 18) }
+  } catch { return defaults }
+}
+watch(appearance, value => {
+  try { localStorage.setItem('next-trainer-launcher-appearance', JSON.stringify(value)) }
+  catch { notify('外观设置未保存：本地存储空间不足，请换用较小的背景图片。') }
+}, { deep: true })
+async function chooseBackground(event: Event) {
+  const input = event.target as HTMLInputElement, file = input.files?.[0]
+  if (!file) return
+  if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) || file.size > 8 * 1024 * 1024) { notify('请选择 8 MiB 以内的 PNG、JPEG 或 WebP 图片'); input.value = ''; return }
+  try {
+    const bitmap = await createImageBitmap(file)
+    const ratio = Math.min(1, 1920 / bitmap.width, 1080 / bitmap.height)
+    const canvas = document.createElement('canvas'); canvas.width = Math.round(bitmap.width * ratio); canvas.height = Math.round(bitmap.height * ratio)
+    canvas.getContext('2d')?.drawImage(bitmap, 0, 0, canvas.width, canvas.height); bitmap.close()
+    const background = canvas.toDataURL('image/webp', .86)
+    // 先确保存储成功，再应用；重启后不会突然丢失背景。
+    localStorage.setItem('next-trainer-launcher-appearance', JSON.stringify({ ...appearance.value, background }))
+    appearance.value.background = background; notify('已应用本地背景')
+  } catch { notify('无法读取或保存这张图片，请选择较小的有效图片。') }
+  finally { input.value = '' }
+}
+async function windowControl(action: 'minimize' | 'maximize' | 'close') {
+  try { const window = getCurrentWindow(); if (action === 'minimize') await window.minimize(); else if (action === 'maximize') await window.toggleMaximize(); else await window.close() }
+  catch (reason) { notify(errorText(reason)) }
+}
+async function dragTitlebar(event: MouseEvent) {
+  if (event.button !== 0 || (event.target as HTMLElement).closest('button')) return
+  try { await getCurrentWindow().startDragging() } catch { /* 浏览器预览不支持原生拖动。 */ }
+}
 
 async function diagnoseManagedGui() {
   if (!managedCurrent.value || mutationDisabled.value || !currentVersion.value) return
@@ -574,77 +683,50 @@ async function startGuiOperation(label: string, action: () => Promise<OperationS
   } finally { pending.value = '' }
 }
 onMounted(async () => {
-  try { unlisten = await listenToLogs(addLog) }
+  try { unlisten = await listenToLogs(line => addLog(line)); runtimeUnlisten = await listenToRuntime(acceptRuntime) }
   catch { addLog('桌面事件接口尚未连接；请通过桌面启动器打开此页面。') }
+  await syncRuntime()
+  runtimeTimer = setInterval(() => { void syncRuntime() }, 1500)
+  void getVersion().then(value => { appVersion.value = value }).catch(() => undefined)
   await command('inspect', '检查安装状态')
+  await syncRuntime()
   try { await refreshHistory() } catch (reason) { error.value = errorText(reason) }
 })
-onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operationTimer); unlisten?.() })
+onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operationTimer); if (runtimeTimer) clearInterval(runtimeTimer); unlisten?.(); runtimeUnlisten?.() })
 </script>
 
 <template>
-  <div class="app-shell" :aria-busy="busy">
-    <aside class="sidebar">
-      <div class="brand"><span class="brand-mark" aria-hidden="true">N</span><div>Next Trainer<small>桌面启动器</small></div></div>
-      <nav aria-label="主导航">
-        <button :class="{ selected: page === 'launch' }" :aria-current="page === 'launch' ? 'page' : undefined" @click="page = 'launch'"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="m6 3 10 7-10 7Z" /></svg>启动</button>
-        <button :class="{ selected: page === 'versions' }" :aria-current="page === 'versions' ? 'page' : undefined" @click="page = 'versions'"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 4h14v12H3zM3 8h14M7 8v8" /></svg>版本管理</button>
-        <button :class="{ selected: page === 'environment' }" :aria-current="page === 'environment' ? 'page' : undefined" @click="page = 'environment'"><svg viewBox="0 0 20 20" aria-hidden="true"><path d="M3 5h14M3 10h14M3 15h14M7 3v4M13 8v4M8 13v4" /></svg>环境管理</button>
-      </nav>
-      <div class="sidebar-foot"><span class="development-tag">0.2 开发版</span><p>Next Trainer Launcher<br>独立启动与环境恢复</p></div>
+  <div class="app-shell" :class="{ 'home-view': page === 'launch', 'reduce-motion': appearance.reduceMotion }" :data-page="page" :data-runtime-phase="runtimePhase" :data-runtime-run-id="runtime?.run_id ?? ''" :data-runtime-seq="runtime?.seq ?? 0" :style="{ '--wallpaper': 'url(' + (appearance.background || '/assets/launcher-wallpaper.webp') + ')', '--content-blur': `${appearance.blur}px`, '--mask-opacity': String(appearance.mask / 100) }">
+    <div class="wallpaper" aria-hidden="true"></div><div class="wallpaper-shade" aria-hidden="true"></div>
+    <aside class="sidebar" aria-label="启动器导航">
+      <button class="brand" aria-label="Next Trainer 首页" title="Next Trainer 首页" @click="page = 'launch'"><img src="/assets/home-logo.webp" alt="Next Trainer" /></button>
+      <nav aria-label="主导航"><button v-for="item in ([{ id: 'launch', icon: 'home', label: '首页' }, { id: 'versions', icon: 'versions', label: '版本管理' }, { id: 'environment', icon: 'environment', label: '环境管理' }, { id: 'logs', icon: 'logs', label: '日志' }] as const)" :key="item.id" :class="{ selected: page === item.id }" :aria-current="page === item.id ? 'page' : undefined" :aria-label="item.label" :title="item.label" @click="page = item.id"><Icon :name="item.icon" /><span class="sr-only">{{ item.label }}</span></button></nav>
+      <div class="sidebar-foot"><button :class="{ selected: page === 'settings' }" aria-label="启动器设置" title="启动器设置" @click="page = 'settings'"><Icon name="settings" /></button></div>
     </aside>
-
-    <main>
-      <header class="page-heading"><h1>{{ pageTitle }}</h1><span class="state-pill" :class="{ good: stateGood }"><i aria-hidden="true"></i>{{ stateText }}</span></header>
-      <section class="directory-panel" aria-labelledby="directory-label">
-        <label id="directory-label" for="install-root">安装目录</label>
-        <div class="directory-input"><input id="install-root" v-model="path" :disabled="busy || running" placeholder="首次检查将使用默认目录" spellcheck="false" @keydown.enter="command('inspect', '检查安装状态')" /><button :disabled="busy || running" @click="browse">选择…</button><button :disabled="busy" @click="command('inspect', '检查安装状态')">检查</button></div>
+    <header class="titlebar" @mousedown="dragTitlebar" @dblclick="windowControl('maximize')"><span class="titlebar-name">Next Trainer <span>启动器</span></span><span class="titlebar-state" :class="{ good: stateGood, working: transitioning }" role="status" aria-live="polite"><i></i>{{ stateText }}</span><div class="window-controls"><button aria-label="最小化" title="最小化" @dblclick.stop @click="windowControl('minimize')"><Icon name="minimize" /></button><button aria-label="最大化或还原" title="最大化 / 还原" @dblclick.stop @click="windowControl('maximize')"><Icon name="maximize" /></button><button class="window-close" aria-label="关闭启动器" title="关闭" @dblclick.stop @click="windowControl('close')"><Icon name="close" /></button></div></header>
+    <main class="launcher-main">
+      <section v-show="page === 'launch'" class="home-page" aria-label="首页">
+        <div class="home-heading"><img src="/assets/home-logo.webp" alt="Next Trainer 项目标志" /><div><h1>Next<span>Trainer</span></h1><p>让灵感，成为你的模型。</p></div></div>
+        <div class="home-meta"><span>{{ currentVersion?.version ?? report?.version ?? '桌面启动器' }}</span><i></i><span>{{ currentVersion ? channelName(currentVersion.channel) : '独立环境 · 自由创作' }}</span></div>
+        <article class="release-float"><div class="release-art"><span class="release-kicker">NEXT TRAINER</span><strong>{{ installed ? '准备下一次创作' : '从这里开始创作' }}</strong><span class="release-art-tag">{{ currentVersion?.version ?? '独立安装 · 按需配置' }}</span></div><div class="release-body"><div class="release-tabs"><button class="selected" @click="page = 'versions'">{{ installed ? '当前版本' : '安装指引' }}</button><button @click="page = 'environment'">环境管理</button><button class="release-more" aria-label="打开版本管理" @click="page = 'versions'"><Icon name="arrow" /></button></div><div v-if="installed" class="release-copy"><div><span>主程序与网页资源</span><span :class="{ good: ready }">{{ ready ? '已就绪' : '待检查或修复' }}</span></div><button class="text-row" @click="openSetting('profiles')"><span>管理安装位置与用户资料</span><Icon name="arrow" /></button></div><div v-else class="release-copy"><p>一次安装基础工具、训练器与主程序环境。{{ installDownloadBytes ? `源码制品 ${formatBytes(installDownloadBytes)}；` : '' }}GPU 训练引擎可按需安装。</p><button class="text-row" @click="openSetting('profiles')">选择安装目录<Icon name="arrow" /></button></div></div></article>
+        <div v-if="error || runtime?.error" class="home-error" role="alert"><Icon name="info" /><span>{{ error || runtime?.error }}</span><button @click="showLogs(true)">查看日志<Icon name="arrow" /></button></div>
+        <div class="home-bottom"><div class="service-caption"><span>{{ healthy ? serviceUrl : stateText }}</span><button v-if="healthy && serviceUrl" class="icon-button" aria-label="复制服务地址" title="复制服务地址" @click="copyAddress"><Icon name="copy" /></button></div><div class="launch-row"><button v-if="['checking', 'starting', 'ready', 'degraded', 'stop_failed'].includes(runtimePhase)" class="secondary-pill" :disabled="serviceAction === 'stop'" @click="stop"><Icon :name="transitioning ? 'close' : 'stop'" />{{ ['checking', 'starting'].includes(runtimePhase) ? '取消启动' : '停止服务' }}</button><button v-else class="secondary-pill" @click="openSetting('profiles')"><Icon name="folder" />安装位置</button><button v-if="healthy" class="launch-button" data-action="open-trainer" @click="open"><Icon name="external" />打开训练器</button><button v-else class="launch-button" data-action="start-trainer" :disabled="primaryDisabled" @click="primary"><Icon :name="transitioning || pending ? 'refresh' : 'home'" :class="{ spin: transitioning || pending }" />{{ transitioning ? runtimeLabels[runtimePhase] : pending || primaryLabel }}</button><button class="launch-settings" aria-label="启动器设置" title="启动器设置" @click="page = 'settings'"><Icon name="settings" /></button></div><div class="launch-footnote">{{ currentVersion?.commit.slice(0, 8) ?? 'Next Trainer' }}<span>·</span>{{ healthy ? '本机服务' : '模型与训练任务在网页中管理' }}</div></div>
+        <div v-if="busy || operation?.status === 'running'" class="home-progress" role="status"><span class="working-dot active"></span>{{ operation?.status === 'running' ? phaseText[operation.phase] : message }}<button @click="showLogs()">查看日志</button><button v-if="operation?.status === 'running'" :disabled="operation.cancel_requested" @click="cancelCurrentOperation">{{ operation.cancel_requested ? '正在收尾' : '取消操作' }}</button></div>
       </section>
+      <section v-show="page === 'versions'" class="content-page" aria-label="版本管理"><header class="page-title"><h1>版本管理</h1><p>在本机版本之间切换，资料始终保留。</p></header><div class="section-toolbar"><span class="context-label">{{ versions.filter(version => version.installed).length }} 个已安装版本</span><button :disabled="busy" @click="command('inspect', '检查安装状态')"><Icon name="refresh" />刷新本机版本</button></div><div v-if="currentVersion" class="version-installed"><img src="/assets/home-logo.webp" alt="Next Trainer" /><div><h2>Next Trainer <span>{{ currentVersion.version }}</span></h2><div class="inline-tags"><span class="tag active-tag">当前使用</span><span class="tag">{{ channelName(currentVersion.channel) }}</span><code>{{ currentVersion.commit.slice(0, 8) }}</code></div><p>{{ ready ? '源码、主程序环境与网页资源均已就绪' : '请根据检查结果安装或修复' }}</p></div><button @click="page = 'environment'">检查与修复<Icon name="arrow" /></button></div>
 
-      <div class="page-content">
-        <section v-if="operation" class="interrupted-note" role="status" aria-live="polite"><strong>{{ phaseText[operation.phase] }} · {{ operationStatusText[operation.status] }}</strong><p>{{ operation.kind === 'download' ? '准备安装文件；完整校验通过后可继续安装此版本。' : operation.kind === 'repair' ? '按独立事务修复或恢复指定包，完成后重新诊断确认实例状态。' : '安装并验证主程序与独立运行环境。' }}</p><button v-if="operation.status === 'running'" :disabled="operation.cancel_requested" @click="cancelCurrentOperation">{{ operation.cancel_requested ? '正在取消与收尾…' : '取消操作' }}</button><p v-if="operation.error">{{ operation.error.message }}</p></section>
-        <section v-else-if="history.some((item) => item.status === 'interrupted')" class="interrupted-note" role="status"><strong>上次操作未完整结束</strong><p>下载可在版本管理中继续；安装与修复请重新检查，固定 GUI 实例可在环境管理中诊断并恢复。</p></section>
-        <section v-if="report?.interrupted.length && sameRoot" class="interrupted-note" role="status"><strong>检测到未完成的操作</strong><ul><li v-for="(item, index) in report.interrupted" :key="index">{{ item }}</li></ul><span>请重新检查后重试对应安装或修复步骤。</span></section>
-        <template v-if="page === 'launch'">
-          <section class="summary-grid" aria-label="实际安装状态"><div v-for="item in statusItems" :key="item.label" class="summary-item"><div><span class="status-dot" :class="{ ok: sameRoot && item.ok }" aria-hidden="true"></span><strong>{{ item.label }}</strong><span class="status-word">{{ !report || !sameRoot ? '待检查' : item.ok ? '已就绪' : '待处理' }}</span></div><small>{{ item.detail }}</small></div></section>
-          <section v-if="!installed" class="welcome-panel" aria-labelledby="welcome-title"><h2 id="welcome-title">安装 Next Trainer</h2><p>选择安装目录后，一次完成基础工具、训练器和主程序运行环境的安装。</p><div class="first-release"><span>{{ currentVersion ? '当前选择' : '默认安装' }}</span><strong>{{ installTarget ? channelName(installTarget.channel) : '等待发布清单' }}</strong><code v-if="installTarget">{{ installTarget.version }} · {{ installTarget.commit.slice(0, 8) }}</code></div><p v-if="installTarget?.channel === 'dev'" class="hint">当前安装包默认使用 dev 开发线；版本来自内置发布清单。可在版本管理中查看和安装 main 稳定线。</p><p class="hint">需要联网，建议预留至少 3 GiB。{{ installDownloadBytes ? `源码制品下载 ${formatBytes(installDownloadBytes)}，` : '' }}另外还需下载基础工具与主程序依赖；GPU 训练环境按引擎另行安装。</p></section>
-          <section v-else class="current-panel" aria-labelledby="current-title"><div class="section-caption"><h2 id="current-title">当前训练器</h2><button class="text-button" :disabled="busy" @click="page = 'versions'">管理版本</button></div><div class="current-version"><strong>{{ currentVersion?.version ?? report?.version ?? '版本信息待检查' }}</strong><span v-if="currentVersion" class="line-tag">{{ channelName(currentVersion.channel) }}</span><code v-if="currentVersion">{{ currentVersion.commit.slice(0, 12) }}</code></div><p class="hint">{{ report?.healthy ? `训练器网页已就绪：http://127.0.0.1:${report.port}` : ready ? '主程序检查通过，可以启动训练器。' : '当前安装有缺失或检查未通过，请在环境管理中检查并修复。' }}</p></section>
-          <section class="launch-bar" aria-label="训练器运行控制"><div><strong>{{ pending || (report?.healthy ? '服务已就绪' : ready ? '准备就绪' : installed ? '需要处理检查项' : '开始安装') }}</strong><small>{{ busy ? '请等待当前步骤完成，详细进度见下方日志。' : '启动状态以实际检查与服务响应为准。' }}</small></div><div class="launch-buttons"><button v-if="running" :disabled="busy" @click="stop">停止</button><button v-if="report?.healthy" :disabled="busy" @click="open">在浏览器打开</button><button v-if="!running" class="primary" :disabled="primaryDisabled" @click="primary">{{ primaryLabel }}</button></div></section>
-          <section v-if="report?.profile_path && sameRoot" class="profile-info"><span>共享用户资料</span><code>{{ report.profile_path }}</code></section>
-        </template>
-
-        <template v-else-if="page === 'versions'">
           <div class="section-caption"><h2>内置发布清单</h2><span>固定制品，尚未查询远端更新</span></div>
           <section class="rollback-panel"><div><strong>上一已健康版本</strong><p v-if="rollbackVersion"><span>{{ channelName(rollbackVersion.channel) }} · {{ rollbackVersion.version }}</span><code>{{ rollbackVersion.commit.slice(0, 8) }}</code></p><p v-else>尚无可回退记录。版本成功启动并通过健康检查后会记录。</p></div><button :disabled="mutationDisabled || !rollbackAvailable" @click="rollback">回退到此版本</button></section>
           <p v-if="rollbackVersion && !rollbackAvailable" class="inline-note">回退目标尚未安装完整或存在检查问题，请先修复对应版本。</p>
           <section v-for="group in channels" :key="group.channel" class="channel-section" :aria-label="channelName(group.channel)"><h3>{{ channelName(group.channel) }}<span>{{ group.channel === 'dev' ? '包含开发中的改动' : group.channel === 'main' ? '稳定发布线' : '内置版本' }}</span></h3><p v-if="!group.versions.length" class="empty-channel">内置清单尚未提供此发布线的版本。</p><article v-for="version in group.versions" :key="version.id" class="version-card" :aria-label="`${version.channel} ${version.version} ${version.commit.slice(0, 8)}`"><div class="version-top"><div><strong>{{ version.version }}</strong><span v-if="version.current || version.id === report?.current_release" class="current-tag">当前使用</span><span v-else-if="version.id === report?.previous_known_good" class="healthy-tag">回退保留</span><span v-else-if="version.known_good" class="healthy-tag">曾健康启动</span></div><span class="release-state" :class="{ good: version.installed && version.source_ok && version.environment_ok }">{{ releaseState(version) }}</span></div><dl class="version-details"><div><dt>提交</dt><dd><code>{{ version.commit }}</code></dd></div><div><dt>下载</dt><dd><code>{{ formatBytes(version.download_bytes) }}</code><span class="detail-note">源码制品</span></dd></div><div><dt>磁盘</dt><dd><code>{{ formatBytes(version.source_bytes) }}</code><span class="detail-note">{{ version.installed ? '源码展开；运行环境另计' : '预计源码展开；运行环境另计' }}</span></dd></div><div v-if="version.installed"><dt>检查</dt><dd><span :class="{ 'check-warning': !version.source_ok }">源码{{ version.source_ok ? '完整' : '需修复' }}</span><span class="detail-separator">/</span><span :class="{ 'check-warning': !version.environment_ok }">环境{{ version.environment_ok ? '通过' : '需修复' }}</span></dd></div></dl><div class="version-actions"><button v-if="version.managed_recipe && version.installed" :disabled="mutationDisabled" @click="inspectSourceRepair(version)">源码修复清单</button><button :disabled="mutationDisabled" @click="install(version)">{{ version.installed ? '检查并补全安装' : '下载安装' }}</button><button :disabled="mutationDisabled || !version.installed || !version.source_ok || !version.environment_ok || version.current || version.id === report?.current_release" @click="select(version)">切换到此版本</button><button class="delete-button" :disabled="mutationDisabled || !version.installed || protectedRelease(version)" :title="protectedRelease(version) ? '当前版本及上一已健康版本需保留' : '删除受管版本目录'" @click="remove(version)">删除</button></div></article></section>
           <p class="scope-note">已安装表示版本目录存在，不代表可以运行。切换依据每个版本的实际检查；当前版本和上一已健康版本受删除保护。main / dev 使用发布线与提交区分，即使版本号相同也分别管理。</p>
           <section class="environment-actions" aria-label="准备版本安装文件"><button v-for="version in versions" :key="version.id" :disabled="mutationDisabled" @click="prefetch(version)">准备 {{ channelName(version.channel) }} 安装文件</button></section>
-        </template>
 
-        <template v-else>
-          <div class="section-caption"><h2>主程序与基础工具</h2><button class="compact" :disabled="busy" @click="command('inspect', '检查安装状态')">重新检查</button></div>
-          <p class="environment-scope">当前检查覆盖基础工具、训练器主程序和网页资源。四个训练引擎可在下方分别检查独立环境、预览安装或精准修复；GPU 与具体训练任务的就绪条件由训练器检查。</p>
-          <div v-if="report?.checks.length && sameRoot" class="checks" role="list" aria-label="环境检查明细"><div v-for="(check, index) in report.checks" :key="`${index}-${check.name}`" class="check-row" role="listitem"><span class="check-badge" :class="{ ok: check.ok }">{{ check.ok ? '通过' : '待处理' }}</span><div><strong>{{ check.name }}</strong><p>{{ check.detail }}</p></div></div></div>
-          <p v-else class="scope-note">请先检查安装目录。训练器目录缺失或环境损坏时，桌面检查与修复入口仍可使用。</p>
-          <details class="network-settings">
-            <summary>网络与代理设置</summary>
-            <p class="hint">自动模式按环境变量与系统代理选择连接方式。手动代理连接失败会报告错误；本机服务始终直接连接。</p>
-            <button class="compact" :disabled="busy || !sameRoot" @click="readNetworkSettings">读取当前设置</button>
-            <template v-if="networkView">
-              <label>连接方式<select v-model="networkDraft.mode" :disabled="busy"><option value="auto">自动</option><option value="system">系统代理</option><option value="manual">手动代理</option><option value="direct">直接连接</option></select></label>
-              <template v-if="networkDraft.mode === 'manual' || networkDraft.mode === 'auto'">
-                <label>HTTP 代理<input v-model="networkDraft.http_proxy" type="password" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:11809" :disabled="busy" @input="editNetworkField('http_proxy')"><button :disabled="busy" @click="inheritNetworkField('http_proxy')">恢复继承</button></label>
-                <label>HTTPS 代理<input v-model="networkDraft.https_proxy" type="password" autocomplete="off" spellcheck="false" placeholder="手动模式可复用 HTTP 代理" :disabled="busy" @input="editNetworkField('https_proxy')"><button :disabled="busy" @click="inheritNetworkField('https_proxy')">恢复继承</button></label>
-              </template>
-              <label v-if="networkDraft.mode !== 'direct'">绕过代理<input v-model="networkDraft.no_proxy" spellcheck="false" placeholder="example.org,10.0.0.0/8" :disabled="busy" @input="editNetworkField('no_proxy')"><button :disabled="busy" @click="inheritNetworkField('no_proxy')">恢复继承</button></label>
-              <p class="hint">自动模式中，清空已填写的代理会禁用对应协议的代理；“恢复继承”会重新采用环境或系统设置。未编辑的空值设置会原样保留。</p>
-              <p class="hint">生效来源：{{ ({ environment: '环境变量', system: '系统设置', manual: '手动设置', direct: '直接连接' } as Record<string, string>)[networkView.diagnostic.source] ?? networkView.diagnostic.source }}。{{ networkView.diagnostic.warning }}</p>
-              <p class="hint">设置仅保存在当前安装目录；修改后用于后续操作。代理凭据会保存在本机，日志中的代理地址会隐藏凭据。</p>
-              <button :disabled="mutationDisabled" @click="storeNetworkSettings">保存网络设置</button>
-            </template>
-          </details>
-          <section v-if="sameRoot && registrationVersions.length" class="gui-diagnostics" aria-labelledby="registration-title">
+      </section>
+      <section v-show="page === 'environment'" class="content-page environment-page" aria-label="环境管理"><header class="page-title"><h1>环境管理</h1><p>每个训练引擎独立安装，按需检查与修复。</p></header><div class="section-toolbar"><div class="context-label">Next Trainer <b>{{ currentVersion?.version ?? '尚未选择版本' }}</b><span v-if="currentVersion" class="tag">当前版本</span></div><button :disabled="busy || transitioning" @click="command('inspect', '检查安装状态')"><Icon name="refresh" />检查环境</button></div><article class="main-environment"><div class="main-env-icon"><Icon name="environment" /></div><div class="main-env-copy"><h2>主程序环境 <span class="engine-state" :class="{ good: ready }"><i></i>{{ !sameRoot || !report ? '待检查' : ready ? '已就绪' : '需处理' }}</span></h2><p>基础 Python · 主程序依赖 · 网页资源</p></div><div class="main-env-actions"><button class="quiet-button" :disabled="mutationDisabled || !managedCurrent" @click="advanced = true; diagnoseManagedGui()">主程序修复</button><button @click="advanced = !advanced">{{ advanced ? '收起高级恢复' : '高级恢复' }}<Icon name="arrow" /></button></div></article>
+        <EnginePanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" /><p v-else class="empty-note">检查安装目录并选择训练器版本后，可分别管理四个训练引擎。</p>
+        <div v-show="advanced" class="advanced-recovery"><h2>主程序检查与高级恢复</h2><p class="hint">完整性检查与恢复按实际文件验证。执行修改前请先停止训练器。</p><div v-if="report?.checks.length && sameRoot" class="checks" role="list" aria-label="环境检查明细"><div v-for="(check, index) in report.checks" :key="`${index}-${check.name}`" class="check-row" role="listitem"><span class="check-badge" :class="{ ok: check.ok }">{{ check.ok ? '通过' : '待处理' }}</span><div><strong>{{ check.name }}</strong><p>{{ check.detail }}</p></div></div></div>
+      <section v-if="sameRoot && registrationVersions.length" class="gui-diagnostics" aria-labelledby="registration-title">
             <div class="section-caption"><h2 id="registration-title">恢复安装登记</h2><button :disabled="mutationDisabled" @click="inspectGuiRegistration">只读检查登记</button></div>
             <p class="hint">源码和环境仍在、安装记录丢失时，可离线验证并补齐登记。检查不会执行解释器；确认后会使用独立临时资料验证真实入口。</p>
             <label>需要恢复的版本<select :value="registrationRelease?.id" :disabled="mutationDisabled" @change="registrationReleaseId = ($event.target as HTMLSelectElement).value; changeRegistrationRelease()"><option v-for="version in registrationVersions" :key="version.id" :value="version.id">{{ channelName(version.channel) }} · {{ version.version }} · {{ version.commit.slice(0, 8) }}</option></select></label>
@@ -675,10 +757,6 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <button v-if="lifecyclePreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmLifecycle(lifecycleAction, lifecycleAction === 'rollback' ? lifecycleTransaction : null)">审查并{{ lifecycleAction === 'rebuild' ? '创建新实例' : '回退旧实例' }}</button>
             </template>
           </section>
-          <EnginePanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" />
-          <ImportPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" />
-          <TrustPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" />
-          <ShellPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" />
           <section v-if="sameRoot" class="gui-diagnostics" aria-labelledby="base-python-title">
             <div class="section-caption"><h2 id="base-python-title">基础 Python 组件</h2><button :disabled="mutationDisabled" @click="inspectBasePythonRepair">检查组件与引用环境</button></div>
             <p class="hint">检查只读取文件，Python 缺失或损坏时仍可查看。恢复会替换完整基础组件，并验证所有受管引用环境。</p>
@@ -729,51 +807,37 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
             <div class="environment-actions"><button :disabled="mutationDisabled" @click="command('bootstrap', '准备基础工具')">准备基础工具</button><button :disabled="mutationDisabled" @click="command('restore_trainer', '恢复当前版本源码')">恢复当前版本源码</button><button :disabled="mutationDisabled" @click="command('install_environment', '安装或修复运行环境')">安装 / 修复运行环境</button></div>
             <p class="hint">源码恢复会将原目录移至备份；请留意日志中的路径和数据处理结果。运行中的训练器需先停止，才能安装或修复。</p>
           </template>
-          <section v-if="report?.profile_path && sameRoot" class="profile-info"><span>共享用户资料</span><code>{{ report.profile_path }}</code></section>
-        </template>
-      </div>
 
-      <section class="runtime-panel" aria-label="操作日志"><div class="runtime-status" role="status" aria-live="polite"><span class="working-dot" :class="{ active: pending }" aria-hidden="true"></span><span>{{ message }}</span><span class="log-count">{{ logs.length }} 行日志</span></div><p v-if="error" class="error" role="alert">{{ error }}</p><pre ref="logPanel" tabindex="0" aria-label="日志内容">{{ logs.length ? logs.join('\n') : '等待操作。检查结果以实际文件和运行探测为准。' }}</pre></section>
+        </div><p class="page-note"><Icon name="info" />模型与训练任务在训练网页中管理。<button class="text-button" @click="showLogs()">查看环境日志<Icon name="arrow" /></button></p>
+      </section>
+      <LogPanel v-show="page === 'logs'" :active="page === 'logs'" :entries="logs" :root="path.trim()" :focus-id="logFocus" :font-size="appearance.logFontSize" />
+      <section v-show="page === 'settings'" class="settings-page" aria-label="设置"><nav class="settings-nav" aria-label="设置分类"><h1>启动器设置</h1><button v-for="item in ([{ id: 'appearance', icon: 'image', label: '外观' }, { id: 'network', icon: 'network', label: '网络' }, { id: 'profiles', icon: 'folder', label: '用户资料' }, { id: 'security', icon: 'shield', label: '安全与更新' }, { id: 'about', icon: 'info', label: '关于' }] as const)" :key="item.id" :class="{ selected: setting === item.id }" :aria-current="setting === item.id ? 'page' : undefined" @click="openSetting(item.id)"><Icon :name="item.icon" />{{ item.label }}</button></nav><div class="settings-content">
+        <section v-show="setting === 'appearance'" class="appearance-settings"><h2>外观</h2><div class="setting-row"><h3>主题</h3><div class="theme-options"><button class="theme-choice selected" aria-label="深色主题，已选择"><span class="mini-app"></span></button><button class="theme-choice light-theme" disabled aria-label="浅色主题尚未提供"><span class="mini-app"></span></button></div><div class="theme-labels"><span>深色</span><span>浅色 · 暂未提供</span></div></div><div class="setting-row"><h3>背景图片</h3><p class="setting-description">默认使用项目自有角色背景。可以选择本地图片，保存在这台设备上。</p><input ref="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="chooseBackground" /><div class="actions"><button @click="backgroundInput?.click()"><Icon name="image" />选择本地背景</button><button :disabled="!appearance.background" @click="appearance.background = ''">恢复默认</button></div></div><div class="setting-row"><label for="background-mask">背景遮罩 <span>{{ appearance.mask }}%</span></label><input id="background-mask" v-model.number="appearance.mask" type="range" min="0" max="75" /></div><div class="setting-row"><label for="background-blur">管理页面背景模糊 <span>{{ appearance.blur }}px</span></label><input id="background-blur" v-model.number="appearance.blur" type="range" min="0" max="40" /></div><label class="switch-line"><input v-model="appearance.reduceMotion" type="checkbox" />减少动态效果</label><div class="setting-row"><label for="log-font-size">日志字号</label><select id="log-font-size" v-model.number="appearance.logFontSize"><option v-for="size in [10, 11, 12, 13, 14, 16, 18]" :key="size" :value="size">{{ size }} px</option></select></div><p class="setting-description">外观更改会自动保存。首页保持清晰背景，管理页面使用遮罩与模糊。</p></section>
+        <section v-show="setting === 'network'"><h2>网络</h2><section class="network-settings">
+
+            <p class="hint">自动模式按环境变量与系统代理选择连接方式。手动代理连接失败会报告错误；本机服务始终直接连接。</p>
+            <button class="compact" :disabled="busy || !sameRoot" @click="readNetworkSettings">读取当前设置</button>
+            <template v-if="networkView">
+              <label>连接方式<select v-model="networkDraft.mode" :disabled="busy"><option value="auto">自动</option><option value="system">系统代理</option><option value="manual">手动代理</option><option value="direct">直接连接</option></select></label>
+              <template v-if="networkDraft.mode === 'manual' || networkDraft.mode === 'auto'">
+                <label>HTTP 代理<input v-model="networkDraft.http_proxy" type="password" autocomplete="off" spellcheck="false" placeholder="http://127.0.0.1:11809" :disabled="busy" @input="editNetworkField('http_proxy')"><button :disabled="busy" @click="inheritNetworkField('http_proxy')">恢复继承</button></label>
+                <label>HTTPS 代理<input v-model="networkDraft.https_proxy" type="password" autocomplete="off" spellcheck="false" placeholder="手动模式可复用 HTTP 代理" :disabled="busy" @input="editNetworkField('https_proxy')"><button :disabled="busy" @click="inheritNetworkField('https_proxy')">恢复继承</button></label>
+              </template>
+              <label v-if="networkDraft.mode !== 'direct'">绕过代理<input v-model="networkDraft.no_proxy" spellcheck="false" placeholder="example.org,10.0.0.0/8" :disabled="busy" @input="editNetworkField('no_proxy')"><button :disabled="busy" @click="inheritNetworkField('no_proxy')">恢复继承</button></label>
+              <p class="hint">自动模式中，清空已填写的代理会禁用对应协议的代理；“恢复继承”会重新采用环境或系统设置。未编辑的空值设置会原样保留。</p>
+              <p class="hint">生效来源：{{ ({ environment: '环境变量', system: '系统设置', manual: '手动设置', direct: '直接连接' } as Record<string, string>)[networkView.diagnostic.source] ?? networkView.diagnostic.source }}。{{ networkView.diagnostic.warning }}</p>
+              <p class="hint">设置仅保存在当前安装目录；修改后用于后续操作。代理凭据会保存在本机，日志中的代理地址会隐藏凭据。</p>
+              <button :disabled="mutationDisabled" @click="storeNetworkSettings">保存网络设置</button>
+            </template>
+          </section></section>
+        <section v-show="setting === 'profiles'"><h2>用户资料</h2><p class="setting-description">训练器版本与用户资料独立保存。更换安装目录前请先停止当前服务。</p><section class="directory-panel" aria-labelledby="directory-label"><label id="directory-label" for="install-root">安装目录</label><div class="directory-input"><input id="install-root" v-model="path" :disabled="busy || running || transitioning" placeholder="首次检查将使用默认目录" spellcheck="false" @keydown.enter="command('inspect', '检查安装状态')" /><button :disabled="busy || running || transitioning" @click="browse">选择…</button><button :disabled="busy || transitioning" @click="command('inspect', '检查安装状态')">检查</button></div></section><section v-if="report?.profile_path && sameRoot" class="profile-info"><span>当前共享用户资料</span><code>{{ report.profile_path }}</code></section><ImportPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" /></section>
+        <section v-show="setting === 'security'"><h2>安全与更新</h2><TrustPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @changed="command('inspect', '刷新发布清单')" /><ShellPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" /><p v-else class="setting-description">检查安装目录并选择训练器版本后，可管理更新来源与启动器恢复。</p></section>
+        <section v-show="setting === 'about'" class="about-page"><img class="about-symbol" src="/assets/home-logo.webp" alt="Next Trainer 项目标志" /><h2>Next Trainer</h2><p class="setting-description">桌面启动器</p><p class="about-version">启动器 {{ appVersion }}<br />训练器 {{ currentVersion?.version ?? report?.version ?? '尚未选择' }}<span v-if="currentVersion"> · {{ currentVersion.commit.slice(0, 8) }}</span></p><p class="setting-description">独立环境、集中日志，让创作从容开始。</p><div class="setting-links"><button class="text-button" @click="openProjectLink('project')">项目主页 ↗</button><button class="text-button" @click="openProjectLink('issues')">问题反馈 ↗</button><button class="text-button" @click="openProjectLink('license')">开源许可 ↗</button></div><p class="setting-description">界面布局参考 Starward（星穹启动器）。默认背景与品牌使用本项目资源。</p></section>
+      </div></section>
+      <div v-if="page !== 'launch' && page !== 'logs'" class="status-summary" role="status" aria-live="polite"><span class="working-dot" :class="{ active: busy || transitioning }"></span><span>{{ error || runtime?.error || (operation?.status === 'running' ? `${phaseText[operation.phase]} · ${operationStatusText[operation.status]}` : serviceAction ? stateText : message) }}</span><button v-if="operation?.status === 'running'" :disabled="operation.cancel_requested" @click="cancelCurrentOperation">{{ operation.cancel_requested ? '正在取消…' : '取消操作' }}</button><button @click="showLogs(Boolean(error || runtime?.error))">查看日志<Icon name="arrow" /></button></div>
+      <div v-if="page !== 'launch' && page !== 'logs' && (report?.interrupted.length || history.some(item => item.status === 'interrupted'))" class="interrupted-banner"><Icon name="info" /><span>存在未完成操作，请在环境管理中检查并恢复。</span><button @click="page = 'environment'; advanced = true">查看</button></div>
     </main>
-
-    <div v-if="confirmation" class="dialog-backdrop" @keydown.esc.prevent="dismissConfirmation" @keydown="trapDialogFocus"><section class="confirmation-dialog" :class="{ 'gui-confirmation': confirmation.paths }" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-detail"><h2 id="confirmation-title">{{ confirmation.title }}</h2><p id="confirmation-detail">{{ confirmation.detail }}</p><pre v-if="confirmation.paths" class="gui-paths" tabindex="0" aria-label="确认修复的完整文件清单">{{ confirmation.paths.join('\n') }}</pre><div><button ref="confirmationCancel" @click="dismissConfirmation">取消</button><button :class="confirmation.destructive ? 'danger' : 'primary'" @click="confirmAction">{{ confirmation.action }}</button></div></section></div>
+    <div v-if="toast" class="toast" role="status">{{ toast }}</div>
+        <div v-if="confirmation" class="dialog-backdrop" @keydown.esc.prevent="dismissConfirmation" @keydown="trapDialogFocus"><section class="confirmation-dialog" :class="{ 'gui-confirmation': confirmation.paths }" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-detail"><h2 id="confirmation-title">{{ confirmation.title }}</h2><p id="confirmation-detail">{{ confirmation.detail }}</p><pre v-if="confirmation.paths" class="gui-paths" tabindex="0" aria-label="确认修复的完整文件清单">{{ confirmation.paths.join('\n') }}</pre><div><button ref="confirmationCancel" @click="dismissConfirmation">取消</button><button :class="confirmation.destructive ? 'danger' : 'primary'" @click="confirmAction">{{ confirmation.action }}</button></div></section></div>
   </div>
 </template>
-
-<style scoped>
-.version-actions { flex-wrap: wrap; }
-.network-settings { margin: 15px 0; padding: 10px; border: 1px solid #e5e5e5; font-size: 11px; }
-.network-settings summary { cursor: pointer; }
-.network-settings label { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
-.network-settings input, .network-settings select { flex: 1; min-width: 0; padding: 6px; border: 1px solid #d4d4d4; background: white; font: inherit; }
-.gui-diagnostics { margin-top: 18px; border-top: 1px solid #e5e5e5; padding-top: 15px; }
-.gui-diagnostics > .section-caption { align-items: flex-start; }
-.gui-diagnostics > .section-caption button { font-size: 11px; flex-shrink: 0; }
-.gui-instance { font-size: 10px; color: #525252; margin: 12px 0; }
-.gui-instance > div { display: flex; gap: 12px; margin-top: 6px; }
-.gui-instance dt { flex: 0 0 118px; color: #737373; }
-.gui-instance dd { margin: 0; min-width: 0; overflow-wrap: anywhere; }
-.gui-issue { font-size: 10px; line-height: 1.8; color: #404040; background: #f5f5f5; border: 1px solid #d4d4d4; padding: 8px 9px; margin: 8px 0; overflow-wrap: anywhere; }
-.gui-issue strong { display: block; margin-bottom: 3px; }
-.gui-recovery { border: 1px solid #d4d4d4; padding: 10px; margin: 10px 0; background: #fafafa; }
-.gui-recovery p { font-size: 11px; color: #525252; line-height: 1.8; margin: 0 0 8px; }
-.gui-recovery button { font-size: 11px; }
-.gui-package-filter { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; font-size: 10px; color: #737373; margin: 15px 0 8px; }
-.gui-package-filter label { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
-.gui-package-filter input { margin: 0; accent-color: #525252; }
-.gui-package { border: 1px solid #e5e5e5; border-radius: 3px; padding: 10px; margin: 8px 0; }
-.gui-package-heading { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
-.gui-package-heading > div { display: flex; align-items: baseline; flex-wrap: wrap; gap: 7px; min-width: 0; }
-.gui-package-heading strong { font-size: 11px; font-weight: 500; overflow-wrap: anywhere; }
-.gui-package-heading span { color: #737373; font-size: 10px; }
-.gui-package-heading button { font-size: 10px; padding: 5px 8px; }
-.gui-file-details { margin-top: 8px; font-size: 10px; color: #525252; }
-.gui-file-details summary { cursor: pointer; }
-.gui-file-details pre, .gui-paths { font: 10px/1.75 Consolas, "Microsoft YaHei", monospace; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 145px; overflow: auto; background: #fafafa; border: 1px solid #e5e5e5; padding: 8px; scrollbar-width: thin; }
-.gui-preview { border: 1px solid #b5b5b5; padding: 12px; margin: 15px 0 10px; border-radius: 3px; }
-.gui-preview > p { color: #525252; font-size: 11px; line-height: 1.8; }
-.gui-preview > button { margin-top: 5px; font-size: 11px; }
-.gui-confirmation { width: 560px; max-height: calc(100vh - 48px); overflow: auto; }
-.gui-confirmation > p { margin-bottom: 10px; font-size: 11px; }
-.gui-confirmation .gui-paths { max-height: min(180px, 30vh); margin-bottom: 16px; }
-</style>

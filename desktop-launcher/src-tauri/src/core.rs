@@ -2066,6 +2066,8 @@ impl Engine {
         }
         command.env("PATH", std::env::join_paths(paths)?);
         command.stdout(Stdio::piped()).stderr(Stdio::piped());
+        // Resolve fallible metadata before a live Job/lease must be transferred.
+        let binding = Registry::load(root)?.gui_binding(&release.id).cloned();
         let (mut child, job) = managed_child::spawn(&mut command)?;
         for pipe in [
             child
@@ -2091,7 +2093,6 @@ impl Engine {
             "已创建受管进程 PID={}，等待 /api/version，端口 {port}",
             child.id()
         ));
-        let binding = Registry::load(root)?.gui_binding(&release.id).cloned();
         self.lifecycle.attach(
             run_id,
             Running {

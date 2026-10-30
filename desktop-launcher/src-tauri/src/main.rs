@@ -1027,23 +1027,44 @@ async fn choose_directory(app: tauri::AppHandle) -> Result<Option<String>, Strin
     .await
     .map_err(|e| e.to_string())?
 }
+fn open_browser(url: &str) -> Result<(), String> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        let system = std::env::var_os("SystemRoot").ok_or("缺少 SystemRoot")?;
+        std::process::Command::new(PathBuf::from(system).join("System32/rundll32.exe"))
+            .arg("url.dll,FileProtocolHandler")
+            .arg(url)
+            .creation_flags(0x08000000)
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        Ok(())
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = url;
+        Err("当前开发包仅支持 Windows 打开浏览器".into())
+    }
+}
+
+#[tauri::command]
+fn open_project_link(target: String) -> Result<(), String> {
+    // 只接受固定目标名，前端不能传入任意 URL 或本地可执行文件。
+    let url = match target.as_str() {
+        "project" => "https://github.com/wochenlong/lora-scripts-next",
+        "issues" => "https://github.com/wochenlong/lora-scripts-next/issues",
+        "license" => "https://github.com/wochenlong/lora-scripts-next/blob/main/LICENSE",
+        _ => return Err("未知项目链接".into()),
+    };
+    open_browser(url)
+}
+
 #[tauri::command]
 async fn open_trainer(state: tauri::State<'_, Runtime>) -> Result<(), String> {
     let lifecycle = state.lifecycle.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let url = lifecycle.url().map_err(|e| e.to_string())?;
-        #[cfg(windows)]
-        {
-            use std::os::windows::process::CommandExt;
-            let system = std::env::var_os("SystemRoot").ok_or("缺少 SystemRoot")?;
-            std::process::Command::new(PathBuf::from(system).join("System32/rundll32.exe"))
-                .arg("url.dll,FileProtocolHandler")
-                .arg(url)
-                .creation_flags(0x08000000)
-                .spawn()
-                .map_err(|e| e.to_string())?;
-        }
-        Ok(())
+        open_browser(&url)
     })
     .await
     .map_err(|e| e.to_string())?
@@ -1303,7 +1324,8 @@ fn main() {
             load_network_settings,
             save_network_settings,
             choose_directory,
-            open_trainer
+            open_trainer,
+            open_project_link
         ])
         .build(tauri::generate_context!())
         .expect("无法初始化桌面启动器")
