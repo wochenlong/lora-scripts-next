@@ -2,7 +2,7 @@
   "schema_version": 1,
   "scope": "launcher+helper+frontend locked dependencies including build/optional platforms; excludes downloaded trainer environments",
   "lock_sha256": {
-    "src-tauri/Cargo.lock": "5ced489f558df0ec0625d8bad2d2d090e40a6d13ad5a36a1bb2c35636b0c75c4",
+    "src-tauri/Cargo.lock": "abb9eb6c9c551fd1920e9271bae407e673449ff0892bdc1d9a4ba60582853ef9",
     "shell-updater/Cargo.lock": "bf2e45d33459c6de757c35033082be55a764d1fe4444985fdc11b2e96ef0a497",
     "package-lock.json": "6a1e791055605b9c8ada8d70039a0c5f61cb6a7aaa12ddb782d3f2817eaf91ec"
   },
