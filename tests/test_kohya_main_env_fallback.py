@@ -213,7 +213,7 @@ def test_standalone_ready_with_drift_reports_update_available(tmp_path):
     assert status["facts"]["update_available"] is True
     drift = {d["name"]: d for d in status["facts"]["drift"]}
     assert drift["transformers"]["installed"] == "4.51.3"
-    assert drift["transformers"]["spec"] == "==5.17.0"
+    assert drift["transformers"]["spec"] == "==5.5.3"
 
 
 def test_standalone_ready_without_drift_is_clean(tmp_path, monkeypatch):

@@ -23,10 +23,11 @@ TORCH_REQUIREMENTS_AARCH64 = TORCH_PINS_AARCH64
 XFORMERS_PIN = "xformers==0.0.30"
 
 TRAINING_DEPS = [
-    # MOSS-Image requires Qwen3.5 support from the current Kohya stack.
-    # Existing installations must use "repair" after this upgrade.
+    # Qwen3.5 needs Transformers 5.x, while the existing SD trainers require
+    # CLIPTextModel's text_model wrapper removed by later 5.x releases.
+    # Keep this verified pair together for both model families.
     "accelerate==1.15.0",
-    "transformers==5.17.0",
+    "transformers==5.5.3",
     "diffusers[torch]==0.40.0",
     "ftfy==6.1.1",
     "opencv-python==4.8.1.78",
@@ -49,7 +50,7 @@ TRAINING_DEPS = [
     "toml==0.10.2",
     "voluptuous==0.13.1",
     "huggingface-hub==1.32.0",
-    "tokenizers==0.23.1",
+    "tokenizers==0.22.2",
     "imagesize==1.4.1",
     "sentencepiece==0.2.0",
     "protobuf==3.20.3",
