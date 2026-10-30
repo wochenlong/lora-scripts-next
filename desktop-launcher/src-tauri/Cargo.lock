@@ -1956,6 +1956,7 @@ version = "0.2.0"
 dependencies = [
  "anyhow",
  "fs2",
+ "hyper",
  "ipnet",
  "junction",
  "reqwest 0.12.28",

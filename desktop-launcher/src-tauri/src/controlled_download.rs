@@ -15,8 +15,9 @@ use reqwest::{
 };
 use serde::{Deserialize, Serialize};
 use std::{
+    fmt,
     fs::{self, File, OpenOptions},
-    io::Write,
+    io::{self, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
     thread,
@@ -25,7 +26,77 @@ use std::{
 
 const PARTIAL_SCHEMA: u32 = 1;
 const MAX_METADATA_BYTES: u64 = 16 * 1024;
+const DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(600);
+const MAX_NETWORK_ATTEMPTS: usize = 3;
 static NEXT_QUARANTINE: AtomicU64 = AtomicU64::new(0);
+
+#[derive(Debug)]
+enum TransientDownloadFailure {
+    EarlyEof,
+    Status(StatusCode),
+}
+
+impl fmt::Display for TransientDownloadFailure {
+    fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::EarlyEof => formatter.write_str("响应提前结束，保留已提交长度的 partial"),
+            Self::Status(status) => write!(formatter, "下载服务暂时不可用：{status}"),
+        }
+    }
+}
+
+impl std::error::Error for TransientDownloadFailure {}
+
+fn retryable_io_error(error: &io::Error) -> bool {
+    matches!(
+        error.kind(),
+        io::ErrorKind::UnexpectedEof
+            | io::ErrorKind::ConnectionReset
+            | io::ErrorKind::ConnectionAborted
+            | io::ErrorKind::ConnectionRefused
+            | io::ErrorKind::TimedOut
+            | io::ErrorKind::BrokenPipe
+            | io::ErrorKind::NotConnected
+            | io::ErrorKind::Interrupted
+    ) || error
+        .get_ref()
+        .and_then(|inner| inner.downcast_ref::<io::Error>())
+        .is_some_and(retryable_io_error)
+}
+
+fn retryable_network_error(error: &anyhow::Error) -> bool {
+    if error.is::<crate::operations::Cancelled>() {
+        return false;
+    }
+    if error.is::<TransientDownloadFailure>() {
+        return true;
+    }
+    let Some(request) = error.downcast_ref::<reqwest::Error>() else {
+        // 文件、sidecar、长度、范围和摘要错误从不参与网络重试。
+        return false;
+    };
+    if request.is_timeout() {
+        return true;
+    }
+    if !(request.is_request() || request.is_body() || request.is_decode()) {
+        return false;
+    }
+    let mut transient = false;
+    for source in error.chain() {
+        if let Some(http) = source.downcast_ref::<hyper::Error>() {
+            if http.is_parse() || http.is_user() {
+                return false;
+            }
+            transient |= http.is_incomplete_message() || http.is_closed();
+        }
+        if let Some(io) = source.downcast_ref::<io::Error>() {
+            // Hyper-rustls 会用 Other 再包一层 I/O，std::Error::source 会跳过内层。
+            transient |= retryable_io_error(io);
+        }
+    }
+    // TLS 证书/协议错误不符合上述 I/O 类别；TLS handshake EOF 符合 UnexpectedEof。
+    transient
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(
@@ -163,6 +234,26 @@ impl Paths {
         quarantine(&self.layout, &self.partial)?;
         quarantine(&self.layout, &self.metadata)
     }
+
+    fn prepare_partial(&self, asset: &Partial) -> Result<Option<Partial>> {
+        // 每次网络尝试重新读取已落盘检查点，绝不沿用失败任务中的内存长度。
+        let previous = self.read_metadata()?;
+        self.layout.guard_path(&self.partial)?;
+        let trusted = match &previous {
+            Some(record) if self.partial.exists() => {
+                record.binds(&asset.url, &asset.sha256, asset.exact_bytes)
+                    && fs::metadata(&self.partial)?.len() == record.written
+                    && (record.written == 0 || matches!(record.validator, Some(Validator::Etag(_))))
+            }
+            _ => false,
+        };
+        if trusted {
+            Ok(previous)
+        } else {
+            self.quarantine_partial()?;
+            Ok(None)
+        }
+    }
 }
 
 fn validate_asset(expected: &str, exact_bytes: u64) -> Result<()> {
@@ -284,6 +375,9 @@ async fn response_action(
         body.discard_diagnostic(cancel).await?;
         return Ok(ResponseAction::Redirect(next));
     }
+    if matches!(status.as_u16(), 429 | 500 | 502 | 503 | 504) {
+        return Err(TransientDownloadFailure::Status(status).into());
+    }
     if header(body.headers(), CONTENT_ENCODING)?
         .is_some_and(|value| !value.eq_ignore_ascii_case("identity"))
     {
@@ -370,7 +464,7 @@ async fn response_action(
         paths.checkpoint(&mut output, record)?;
     }
     if record.written != record.exact_bytes {
-        bail!("响应提前结束，保留已提交长度的 partial");
+        return Err(TransientDownloadFailure::EarlyEof.into());
     }
     cancel.check()?;
     Ok(ResponseAction::Complete)
@@ -483,7 +577,7 @@ pub(super) fn download_artifact(
     let client = crate::network_policy::current_or_root(&mutation.layout().root)?
         .client_builder()
         .redirect(reqwest::redirect::Policy::none())
-        .timeout(Duration::from_secs(600))
+        .timeout(DOWNLOAD_TIMEOUT)
         .build()?;
     download_inner(mutation, client, url, name, expected, exact_bytes, cancel)
 }
@@ -506,7 +600,7 @@ fn download_inner(
     request_url(url)?;
     let paths = Paths::new(mutation.layout(), name)?;
     // 先读取已知格式，未知/损坏 sidecar 绝不因缓存命中或准备新请求被覆盖。
-    let mut previous = paths.read_metadata()?;
+    let _ = paths.read_metadata()?;
     if paths.target.exists() {
         if fs::metadata(&paths.target)?.len() == exact_bytes
             && super::digest(&paths.target)? == expected
@@ -519,18 +613,6 @@ fn download_inner(
     paths
         .layout
         .ensure_dir(paths.target.parent().context("缓存缺少父目录")?)?;
-    let trusted = match &previous {
-        Some(record) if paths.partial.exists() => {
-            record.binds(url, expected, exact_bytes)
-                && fs::metadata(&paths.partial)?.len() == record.written
-                && (record.written == 0 || matches!(record.validator, Some(Validator::Etag(_))))
-        }
-        _ => false,
-    };
-    if !trusted {
-        paths.quarantine_partial()?;
-        previous = None;
-    }
     let record = Partial {
         schema_version: PARTIAL_SCHEMA,
         url: url.into(),
@@ -540,32 +622,56 @@ fn download_inner(
         validator: None,
     };
     let started = Instant::now();
-    let task = tauri::async_runtime::spawn(transfer(
-        paths.clone(),
-        client,
-        previous,
-        record,
-        cancel.clone(),
-    ));
-    loop {
-        if cancel.is_cancel_requested() {
-            task.abort();
-            // 必须等待响应 socket 和 partial 文件释放，不能遗留后台网络任务。
-            let _ = tauri::async_runtime::block_on(task);
+    for attempt in 0..MAX_NETWORK_ATTEMPTS {
+        cancel.check()?;
+        let previous = paths.prepare_partial(&record)?;
+        let task = tauri::async_runtime::spawn(transfer(
+            paths.clone(),
+            client.clone(),
+            previous,
+            record.clone(),
+            cancel.clone(),
+        ));
+        let result = loop {
+            if cancel.is_cancel_requested() {
+                task.abort();
+                // 必须等待响应 socket 和 partial 文件释放，不能遗留后台网络任务。
+                let _ = tauri::async_runtime::block_on(task);
+                cancel.check()?;
+                unreachable!("取消标记不会清除");
+            }
+            if started.elapsed() >= DOWNLOAD_TIMEOUT {
+                task.abort();
+                let _ = tauri::async_runtime::block_on(task);
+                bail!("下载超时，请重试；已验证的partial保留");
+            }
+            if task.inner().is_finished() {
+                break tauri::async_runtime::block_on(task)?;
+            }
+            thread::sleep(Duration::from_millis(20));
+        };
+        match result {
+            Ok(()) => break,
+            Err(error) => {
+                cancel.check()?;
+                if !retryable_network_error(&error) {
+                    return Err(error);
+                }
+                if attempt + 1 == MAX_NETWORK_ATTEMPTS {
+                    return Err(error).context("短暂网络故障经3次尝试后仍失败，请重试");
+                }
+            }
+        }
+        // 250ms、500ms短退避；沿用全部尝试共享的总时限并及时响应取消。
+        let pause = Instant::now();
+        let delay = Duration::from_millis(250 * (attempt as u64 + 1));
+        while pause.elapsed() < delay {
             cancel.check()?;
-            unreachable!("取消标记不会清除");
+            if started.elapsed() >= DOWNLOAD_TIMEOUT {
+                bail!("下载超时，请重试；已验证的partial保留");
+            }
+            thread::sleep(Duration::from_millis(20));
         }
-        if started.elapsed() >= Duration::from_secs(600) {
-            task.abort();
-            let _ = tauri::async_runtime::block_on(task);
-            bail!("下载超时，请重试；已验证的partial保留");
-        }
-        if task.inner().is_finished() {
-            let result = tauri::async_runtime::block_on(task);
-            result??;
-            break;
-        }
-        thread::sleep(Duration::from_millis(20));
     }
     cancel.check()?;
     paths.layout.guard_path(&paths.partial)?;
@@ -750,6 +856,41 @@ mod tests {
         (url, worker)
     }
 
+    fn serve_until_finished(
+        response: Vec<u8>,
+    ) -> (String, mpsc::Sender<()>, thread::JoinHandle<Vec<String>>) {
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}/asset.zip", listener.local_addr().unwrap());
+        let (done_tx, done_rx) = mpsc::channel();
+        let worker = thread::spawn(move || {
+            let mut requests = Vec::new();
+            let start = Instant::now();
+            loop {
+                match listener.accept() {
+                    Ok((mut stream, _)) => {
+                        stream.set_nonblocking(false).unwrap();
+                        stream
+                            .set_read_timeout(Some(Duration::from_secs(4)))
+                            .unwrap();
+                        requests.push(read_request(&mut stream));
+                        stream.write_all(&response).unwrap();
+                        stream.flush().unwrap();
+                    }
+                    Err(error) if error.kind() == io::ErrorKind::WouldBlock => {
+                        if done_rx.try_recv().is_ok() {
+                            return requests;
+                        }
+                        assert!(start.elapsed() < Duration::from_secs(10));
+                        thread::sleep(Duration::from_millis(5));
+                    }
+                    Err(error) => panic!("回环 HTTP accept 失败：{error}"),
+                }
+            }
+        });
+        (url, done_tx, worker)
+    }
+
     fn fetch(mutation: &WorkspaceMutation, url: &str) -> Result<PathBuf> {
         download(
             mutation,
@@ -785,14 +926,15 @@ mod tests {
     fn rejected_status_never_creates_a_partial() {
         let fixture = Fixture::new();
         let mutation = fixture.mutation();
-        let (url, server) = serve(vec![response(
+        let (url, done, server) = serve_until_finished(response(
             "403 Forbidden",
             "Content-Length: 8192\r\n",
             &vec![b'e'; 8192],
-        )]);
+        ));
         let error = fetch(&mutation, &url).unwrap_err();
         assert!(error.to_string().contains("403"));
-        server.join().unwrap();
+        done.send(()).unwrap();
+        assert_eq!(server.join().unwrap().len(), 1, "普通4xx不可重试");
         let paths = fixture.paths(&mutation);
         assert!(!paths.target.exists() && !paths.partial.exists() && !paths.metadata.exists());
     }
@@ -850,11 +992,7 @@ mod tests {
                 &BODY[4..],
             ),
         ]);
-        assert!(fetch(&mutation, &url).is_err());
         let paths = fixture.paths(&mutation);
-        assert!(!paths.target.exists());
-        assert_eq!(fs::read(&paths.partial).unwrap(), &BODY[..4]);
-        assert_eq!(paths.read_metadata().unwrap().unwrap().written, 4);
         let target = fetch(&mutation, &url).unwrap();
         let requests = server.join().unwrap();
         assert!(!requests[0].contains("range:"));
@@ -868,6 +1006,135 @@ mod tests {
         assert!(!paths.metadata.exists());
         // 已验证缓存不需要联网；关闭服务后仍能直接复用。
         assert_eq!(fetch(&mutation, &url).unwrap(), target);
+    }
+
+    #[test]
+    fn early_eof_without_content_length_resumes_from_the_committed_checkpoint() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let (url, server) = serve(vec![
+            response("200 OK", "ETag: \"asset-v1\"\r\n", &BODY[..4]),
+            response(
+                "206 Partial Content",
+                "Content-Length: 6\r\nContent-Range: bytes 4-9/10\r\nETag: \"asset-v1\"\r\n",
+                &BODY[4..],
+            ),
+        ]);
+        assert_eq!(fs::read(fetch(&mutation, &url).unwrap()).unwrap(), BODY);
+        let requests = server.join().unwrap();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[1].contains("\r\nrange: bytes=4-\r\n"));
+        assert!(requests[1].contains("\r\nif-range: \"asset-v1\"\r\n"));
+    }
+
+    #[test]
+    fn temporary_http_errors_retry_twice_then_complete() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let (url, server) = serve(vec![
+            response("429 Too Many Requests", "Content-Length: 0\r\n", b""),
+            response("503 Service Unavailable", "Content-Length: 0\r\n", b""),
+            response("200 OK", "Content-Length: 10\r\n", BODY),
+        ]);
+        assert_eq!(fs::read(fetch(&mutation, &url).unwrap()).unwrap(), BODY);
+        assert_eq!(server.join().unwrap().len(), 3);
+    }
+
+    #[test]
+    fn temporary_http_failure_is_bounded_to_three_attempts() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let (url, done, server) =
+            serve_until_finished(response("502 Bad Gateway", "Content-Length: 0\r\n", b""));
+        let error = fetch(&mutation, &url).unwrap_err();
+        assert!(error.to_string().contains("3次尝试"));
+        done.send(()).unwrap();
+        assert_eq!(server.join().unwrap().len(), 3);
+        let paths = fixture.paths(&mutation);
+        assert!(!paths.target.exists() && !paths.partial.exists());
+    }
+
+    #[test]
+    fn tls_handshake_eof_is_retried_twice_before_failing() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("https://{}/asset.zip", listener.local_addr().unwrap());
+        let server = thread::spawn(move || {
+            for _ in 0..3 {
+                let mut stream = accept(&listener);
+                // 读取完整 ClientHello 后关闭连接，真实产生 TLS handshake EOF。
+                let mut header = [0; 5];
+                stream.read_exact(&mut header).unwrap();
+                let mut hello = vec![0; u16::from_be_bytes([header[3], header[4]]) as usize];
+                stream.read_exact(&mut hello).unwrap();
+            }
+        });
+        let error = fetch(&mutation, &url).unwrap_err();
+        assert!(error.to_string().contains("3次尝试"), "{error:#}");
+        assert!(error.chain().any(|source| source
+            .downcast_ref::<io::Error>()
+            .is_some_and(retryable_io_error)));
+        server.join().unwrap();
+    }
+
+    #[test]
+    fn cancellation_during_retry_backoff_does_not_send_another_request() {
+        let fixture = Fixture::new();
+        let mutation = fixture.mutation();
+        let listener = TcpListener::bind(("127.0.0.1", 0)).unwrap();
+        listener.set_nonblocking(true).unwrap();
+        let url = format!("http://{}/asset.zip", listener.local_addr().unwrap());
+        let (ready_tx, ready_rx) = mpsc::channel();
+        let (done_tx, done_rx) = mpsc::channel();
+        let server = thread::spawn(move || {
+            let mut stream = accept(&listener);
+            let _ = read_request(&mut stream);
+            stream
+                .write_all(&response(
+                    "503 Service Unavailable",
+                    "Content-Length: 0\r\n",
+                    b"",
+                ))
+                .unwrap();
+            stream.flush().unwrap();
+            drop(stream);
+            ready_tx.send(()).unwrap();
+            done_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+            assert_eq!(
+                listener.accept().unwrap_err().kind(),
+                io::ErrorKind::WouldBlock
+            );
+        });
+        let manager = OperationManager::default();
+        let handle = manager
+            .start("retry-backoff-cancel", OperationKind::Download)
+            .unwrap();
+        let token = handle.cancel_token();
+        let worker = thread::spawn(move || {
+            download(
+                &mutation,
+                client(),
+                &url,
+                NAME,
+                &hash(BODY),
+                BODY.len() as u64,
+                &token,
+            )
+        });
+        ready_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+        thread::sleep(Duration::from_millis(50));
+        let start = Instant::now();
+        assert_eq!(
+            manager.cancel("retry-backoff-cancel").unwrap(),
+            CancelReceipt::Accepted
+        );
+        let error = worker.join().unwrap().unwrap_err();
+        assert!(error.is::<crate::operations::Cancelled>());
+        assert!(start.elapsed() < Duration::from_millis(200));
+        done_tx.send(()).unwrap();
+        server.join().unwrap();
     }
 
     #[test]
@@ -926,12 +1193,6 @@ mod tests {
                 BODY,
             ),
         ]);
-        assert!(fetch(&mutation, &url).is_err());
-        let paths = fixture.paths(&mutation);
-        assert_eq!(
-            paths.read_metadata().unwrap().unwrap().validator,
-            Some(Validator::LastModified(date.into()))
-        );
         assert_eq!(fs::read(fetch(&mutation, &url).unwrap()).unwrap(), BODY);
         let requests = server.join().unwrap();
         assert!(!requests[1].contains("\r\nif-range:"));
@@ -996,16 +1257,17 @@ mod tests {
     fn bad_hash_keeps_consistent_partial_and_never_publishes_cache() {
         let fixture = Fixture::new();
         let mutation = fixture.mutation();
-        let (url, server) = serve(vec![response(
+        let (url, done, server) = serve_until_finished(response(
             "200 OK",
             "Content-Length: 10\r\nETag: \"wrong-content\"\r\n",
             b"abcdefghij",
-        )]);
+        ));
         assert!(fetch(&mutation, &url)
             .unwrap_err()
             .to_string()
             .contains("SHA256"));
-        server.join().unwrap();
+        done.send(()).unwrap();
+        assert_eq!(server.join().unwrap().len(), 1, "摘要不匹配不可重试");
         let paths = fixture.paths(&mutation);
         assert!(!paths.target.exists());
         assert_eq!(fs::read(&paths.partial).unwrap(), b"abcdefghij");
