@@ -39,7 +39,7 @@ h2{font-size:16px;font-weight:550}
 h3{font-size:15px;font-weight:550}
 code{font:11px/1.7 "Cascadia Code",Consolas,monospace;overflow-wrap:anywhere}
 .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap}
-.app-shell{--home-action-bottom:34px;--home-footnote-height:20px;color:var(--fg);position:relative;width:100%;height:100%;overflow:hidden;background:var(--shell-bg);isolation:isolate}
+.app-shell{--home-action-bottom:54px;color:var(--fg);position:relative;width:100%;height:100%;overflow:hidden;background:var(--shell-bg);isolation:isolate}
 .wallpaper{position:absolute;inset:-18px -18px -18px 38px;background:var(--wallpaper) center/cover no-repeat;z-index:-3;filter:blur(var(--content-blur,24px)) brightness(var(--wallpaper-brightness,.9));transform:scale(1.04);transition:filter .25s}
 .home-view .wallpaper{filter:none}
 .wallpaper-shade{position:absolute;inset:0;z-index:-2;background:linear-gradient(90deg,var(--wallpaper-start),var(--wallpaper-middle) 65%,var(--wallpaper-end))}
@@ -75,7 +75,7 @@ code{font:11px/1.7 "Cascadia Code",Consolas,monospace;overflow-wrap:anywhere}
 .home-heading h1{font-size:34px;font-weight:650;letter-spacing:-.8px;line-height:1.02;margin:0}
 .home-heading h1 span{display:block;font-weight:350;font-size:41px;letter-spacing:1px}
 .home-heading p{font-size:11px;letter-spacing:2px;margin:12px 0 0;color:var(--fg-secondary)}
-.release-float{position:absolute;left:58px;bottom:calc(var(--home-action-bottom) + var(--home-footnote-height));width:420px;height:360px;border-radius:8px;overflow:hidden;background:var(--panel-bg);backdrop-filter:blur(18px);box-shadow:0 8px 24px var(--panel-shadow)}
+.release-float{position:absolute;left:58px;bottom:var(--home-action-bottom);width:420px;height:360px;border-radius:8px;overflow:hidden;background:var(--panel-bg);backdrop-filter:blur(18px);box-shadow:0 8px 24px var(--panel-shadow)}
 .release-art{display:block;width:100%;height:auto;aspect-ratio:1672/941;padding:0;border:0;border-radius:0;overflow:hidden;background:#f7f5f6}
 .release-cover{display:block;width:100%;height:100%;object-fit:cover}
 .release-art:hover:not(:disabled){background:#f7f5f6;filter:brightness(.97)}
@@ -111,8 +111,6 @@ code{font:11px/1.7 "Cascadia Code",Consolas,monospace;overflow-wrap:anywhere}
 .home-operation-actions{display:flex;justify-content:flex-end;align-items:center;gap:8px;margin-bottom:9px;min-height:24px;max-width:430px;color:var(--fg-secondary);font-size:10px}
 .home-operation-actions>span{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
 .home-operation-actions button{font-size:10px;padding:3px 6px;background:var(--panel-bg)}
-.launch-footnote{height:11px;line-height:11px;font-size:10px;color:var(--fg-secondary);margin:9px 14px 0 0;text-shadow:0 1px 8px var(--home-shadow)}
-.launch-footnote>span{margin:0 6px}
 .home-error{position:absolute;right:39px;bottom:124px;max-width:min(520px,65%);display:flex;gap:7px;align-items:center;background:var(--error-bg);border:1px solid var(--error-line);padding:9px 12px;border-radius:6px;font-size:11px}
 .home-error>span{max-width:370px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere}
 .home-error>svg{width:17px}
@@ -350,7 +348,7 @@ code{font:11px/1.7 "Cascadia Code",Consolas,monospace;overflow-wrap:anywhere}
 }
 
 @media(min-height:800px){.home-heading{top:52px}
-.app-shell{--home-action-bottom:48px}
+.app-shell{--home-action-bottom:68px}
 .home-error{bottom:139px}
 .content-page,.logs-page{padding-top:26px}
 .section-toolbar{margin-top:38px}
