@@ -7,9 +7,10 @@ import { runtimeStatus, listenToRuntime, startTrainer } from './bridge'
 import type { RuntimePhase, RuntimeSnapshot } from './bridge'
 import LogPanel from './LogPanel.vue'
 import Icon from './LauncherIcon.vue'
-import { createLogEntry } from './log-model'
+import { createLogEntry, fromLogRecord } from './log-model'
+import type { LogRecord } from './bridge'
 import type { LogEntry, LogSource } from './log-model'
-import { cancelOperation, chooseDirectory, diagnoseGui, installManagedRelease, listenToLogs, openTrainer, operationEvents, operationHistory, operationSnapshot, planGuiRepair, prefetchRelease, previewSourceRepair, recoverGuiRepair, repairGuiPackage, repairManagedSource, rollbackRelease, runCommand, runReleaseCommand, stopTrainer } from './bridge'
+import { cancelOperation, chooseDirectory, diagnoseGui, installManagedRelease, listenToLogEntries, openTrainer, operationEvents, operationHistory, operationSnapshot, planGuiRepair, prefetchRelease, previewSourceRepair, recoverGuiRepair, repairGuiPackage, repairManagedSource, rollbackRelease, runCommand, runReleaseCommand, stopTrainer } from './bridge'
 import type { GuiDiagnosis, GuiRepairPreview, OperationSnapshot, PackageIntegrity, ReleaseCommand, Report, ReportCommand, VersionView } from './bridge'
 import { loadNetworkSettings, saveNetworkSettings } from './bridge'
 import type { NetworkSettings, NetworkSettingsView } from './bridge'
@@ -48,7 +49,9 @@ const error = ref('')
 const message = ref('正在检查安装状态…')
 const logs = ref<LogEntry[]>([])
 let logSequence = 0
-const logFocus = ref<number | null>(null)
+const visibleLogIds = new Set<string>()
+const logFocus = ref<string | null>(null)
+const logSessionId = ref('')
 const runtime = ref<RuntimeSnapshot | null>(null)
 const optimisticPhase = ref<RuntimePhase | null>(null)
 const serviceAction = ref('')
@@ -215,9 +218,18 @@ function releaseState(version: VersionView) {
 function protectedRelease(version: VersionView) {
   return version.current || version.id === report.value?.current_release || version.id === report.value?.previous_known_good
 }
+function appendLog(entry: LogEntry) {
+  if (visibleLogIds.has(entry.id)) return
+  visibleLogIds.add(entry.id)
+  logs.value.push(entry)
+  if (logs.value.length > 2000) logs.value.splice(0, logs.value.length - 2000).forEach(removed => visibleLogIds.delete(removed.id))
+}
 function addLog(line: string, source: LogSource = 'unknown') {
-  logs.value.push(createLogEntry(++logSequence, line, path.value.trim(), operation.value?.status === 'running' ? operation.value.id : runtime.value?.run_id ?? null, source))
-  if (logs.value.length > 2000) logs.value.splice(0, logs.value.length - 2000)
+  appendLog(createLogEntry(++logSequence, line, path.value.trim(), operation.value?.status === 'running' ? operation.value.id : runtime.value?.run_id ?? null, source))
+}
+function acceptLogEntry(record: LogRecord) {
+  logSessionId.value = record.session_id
+  appendLog(fromLogRecord(record))
 }
 function showLogs(focusError = false) {
   logFocus.value = focusError ? [...logs.value].reverse().find(entry => entry.level === 'ERROR' && samePath(entry.root, path.value))?.id ?? logs.value.at(-1)?.id ?? null : null
@@ -683,7 +695,7 @@ async function startGuiOperation(label: string, action: () => Promise<OperationS
   } finally { pending.value = '' }
 }
 onMounted(async () => {
-  try { unlisten = await listenToLogs(line => addLog(line)); runtimeUnlisten = await listenToRuntime(acceptRuntime) }
+  try { unlisten = await listenToLogEntries(acceptLogEntry); runtimeUnlisten = await listenToRuntime(acceptRuntime) }
   catch { addLog('桌面事件接口尚未连接；请通过桌面启动器打开此页面。') }
   await syncRuntime()
   runtimeTimer = setInterval(() => { void syncRuntime() }, 1500)
@@ -810,7 +822,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 
         </div><p class="page-note"><Icon name="info" />模型与训练任务在训练网页中管理。<button class="text-button" @click="showLogs()">查看环境日志<Icon name="arrow" /></button></p>
       </section>
-      <LogPanel v-show="page === 'logs'" :active="page === 'logs'" :entries="logs" :root="path.trim()" :focus-id="logFocus" :font-size="appearance.logFontSize" />
+      <LogPanel v-show="page === 'logs'" :active="page === 'logs'" :entries="logs" :current-session-id="logSessionId" :root="path.trim()" :focus-id="logFocus" :font-size="appearance.logFontSize" />
       <section v-show="page === 'settings'" class="settings-page" aria-label="设置"><nav class="settings-nav" aria-label="设置分类"><h1>启动器设置</h1><button v-for="item in ([{ id: 'appearance', icon: 'image', label: '外观' }, { id: 'network', icon: 'network', label: '网络' }, { id: 'profiles', icon: 'folder', label: '用户资料' }, { id: 'security', icon: 'shield', label: '安全与更新' }, { id: 'about', icon: 'info', label: '关于' }] as const)" :key="item.id" :class="{ selected: setting === item.id }" :aria-current="setting === item.id ? 'page' : undefined" @click="openSetting(item.id)"><Icon :name="item.icon" />{{ item.label }}</button></nav><div class="settings-content">
         <section v-show="setting === 'appearance'" class="appearance-settings"><h2>外观</h2><div class="setting-row"><h3>主题</h3><div class="theme-options"><button class="theme-choice selected" aria-label="深色主题，已选择"><span class="mini-app"></span></button><button class="theme-choice light-theme" disabled aria-label="浅色主题尚未提供"><span class="mini-app"></span></button></div><div class="theme-labels"><span>深色</span><span>浅色 · 暂未提供</span></div></div><div class="setting-row"><h3>背景图片</h3><p class="setting-description">默认使用项目自有角色背景。可以选择本地图片，保存在这台设备上。</p><input ref="backgroundInput" type="file" accept="image/png,image/jpeg,image/webp" hidden @change="chooseBackground" /><div class="actions"><button @click="backgroundInput?.click()"><Icon name="image" />选择本地背景</button><button :disabled="!appearance.background" @click="appearance.background = ''">恢复默认</button></div></div><div class="setting-row"><label for="background-mask">背景遮罩 <span>{{ appearance.mask }}%</span></label><input id="background-mask" v-model.number="appearance.mask" type="range" min="0" max="75" /></div><div class="setting-row"><label for="background-blur">管理页面背景模糊 <span>{{ appearance.blur }}px</span></label><input id="background-blur" v-model.number="appearance.blur" type="range" min="0" max="40" /></div><label class="switch-line"><input v-model="appearance.reduceMotion" type="checkbox" />减少动态效果</label><div class="setting-row"><label for="log-font-size">日志字号</label><select id="log-font-size" v-model.number="appearance.logFontSize"><option v-for="size in [10, 11, 12, 13, 14, 16, 18]" :key="size" :value="size">{{ size }} px</option></select></div><p class="setting-description">外观更改会自动保存。首页保持清晰背景，管理页面使用遮罩与模糊。</p></section>
         <section v-show="setting === 'network'"><h2>网络</h2><section class="network-settings">

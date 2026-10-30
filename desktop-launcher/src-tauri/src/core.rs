@@ -56,6 +56,7 @@ mod safe_extract;
 mod p6_tests;
 
 pub type Logger = Arc<dyn Fn(String) + Send + Sync>;
+type ServiceLoggerFactory = Arc<dyn Fn(&Path, &str) -> Logger + Send + Sync>;
 pub(crate) fn embedded_engine_lock(engine: &str) -> Option<&'static [u8]> {
     engine_bridge::embedded_lock(engine)
 }
@@ -134,6 +135,7 @@ pub struct Engine {
     pub lifecycle: Arc<Lifecycle>,
     assessment: Option<Report>,
     logger: Logger,
+    service_logger: Option<ServiceLoggerFactory>,
     catalog: Catalog,
 }
 
@@ -1452,8 +1454,12 @@ impl Engine {
             lifecycle: Lifecycle::new(),
             assessment: None,
             logger,
+            service_logger: None,
             catalog: Catalog::embedded().expect("内置发布清单必须有效"),
         }
+    }
+    pub fn set_service_logger(&mut self, factory: ServiceLoggerFactory) {
+        self.service_logger = Some(factory);
     }
     pub fn resolve(&self, value: &str) -> Result<PathBuf> {
         let root = if value.trim().is_empty() {
@@ -2082,7 +2088,11 @@ impl Engine {
         .into_iter()
         .flatten()
         {
-            let log = self.logger.clone();
+            let log = self
+                .service_logger
+                .as_ref()
+                .map(|factory| factory(root, run_id))
+                .unwrap_or_else(|| self.logger.clone());
             thread::spawn(move || {
                 for line in BufReader::new(pipe).lines().map_while(Result::ok) {
                     log(format!("[训练器服务] {line}"));

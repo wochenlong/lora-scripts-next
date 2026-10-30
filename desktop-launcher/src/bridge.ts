@@ -246,3 +246,30 @@ export interface RuntimeSnapshot {
 export const runtimeStatus = (root: string) => invoke<RuntimeSnapshot>('runtime_status', { root })
 export const listenToRuntime = (handler: (snapshot: RuntimeSnapshot) => void) =>
   listen<RuntimeSnapshot>('launcher:runtime', event => handler(event.payload))
+
+export interface LogRecord {
+  id: string
+  persisted: boolean
+  seq: number
+  session_id: string
+  received_at: number
+  line: string
+  root: string | null
+  run_id: string | null
+  operation_id: string | null
+  source: 'launcher' | 'service' | 'environment' | 'unknown'
+  level: 'INFO' | 'WARN' | 'ERROR' | 'UNKNOWN'
+}
+export interface LogPage {
+  records: LogRecord[]
+  has_more: boolean
+  next_before_seq: number | null
+  current_session_id: string
+  sessions: { session_id: string; started_at: number; retained_records: number }[]
+  partial: boolean
+  io_error: string | null
+}
+export const listenToLogEntries = (handler: (entry: LogRecord) => void) =>
+  listen<LogRecord>('launcher:log-entry', event => handler(event.payload))
+export const readLogs = (root: string, beforeSeq: number | null = null, sessionId: string | null = null) =>
+  invoke<LogPage>('logs_read', { root, beforeSeq, sessionId, limit: 500 })

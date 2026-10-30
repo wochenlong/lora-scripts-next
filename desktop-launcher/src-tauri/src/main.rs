@@ -7,6 +7,7 @@ mod signed_catalog;
 // 协议源码同时编译进独立helper；替换/回滚函数仅由helper调用。
 mod gui_registration_integrity;
 mod instances;
+mod log_store;
 mod model;
 mod network_policy;
 mod operations;
@@ -31,6 +32,7 @@ use tauri_plugin_dialog::DialogExt;
 struct Runtime {
     engine: Arc<Mutex<Engine>>,
     lifecycle: Arc<Lifecycle>,
+    logs: Arc<log_store::LogStore>,
     operations: Arc<operations::OperationManager>,
     default_root: PathBuf,
     workers: Arc<std::sync::atomic::AtomicUsize>,
@@ -161,8 +163,13 @@ async fn begin_release_operation(
         .map_err(|e| format!("{e:#}"))?;
     let engine = state.engine.clone();
     let manager = state.operations.clone();
+    let log_operation_id = id.clone();
     tauri::async_runtime::spawn_blocking(move || {
         let _worker_guard = worker_guard;
+        let _log_context = log_store::bind(log_store::Context {
+            operation_id: Some(log_operation_id),
+            ..log_store::Context::workspace(&root, "environment")
+        });
         let result = (|| -> anyhow::Result<()> {
             handle.cancel_token().check()?;
             let mut engine = engine
@@ -822,6 +829,14 @@ async fn action(
             .try_lock()
             .map_err(|_| "已有安装、检查或启停操作正在执行".to_string())?;
         let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        let _log_context = log_store::bind(log_store::Context::workspace(
+            &root,
+            if op == "inspect" {
+                "launcher"
+            } else {
+                "environment"
+            },
+        ));
         match op {
             "inspect" => engine.inspect(&root),
             "bootstrap" => engine.bootstrap(&root),
@@ -876,6 +891,10 @@ async fn start_trainer(
         .map_err(|e| format!("{e:#}"))?;
     let engine = state.engine.clone();
     tauri::async_runtime::spawn_blocking(move || {
+        let _log_context = log_store::bind(log_store::Context {
+            run_id: Some(run.clone()),
+            ..log_store::Context::workspace(&root, "launcher")
+        });
         let mut engine = match engine.try_lock() {
             Ok(engine) => engine,
             Err(_) => {
@@ -901,6 +920,7 @@ async fn version_action(
     tauri::async_runtime::spawn_blocking(move || {
         let mut engine = runtime.lock().map_err(|_| "启动器状态锁异常".to_string())?;
         let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
+        let _log_context = log_store::bind(log_store::Context::workspace(&root, "environment"));
         match operation {
             "install" => engine.install_release(&root, &id),
             "select" => engine.select_release(&root, &id),
@@ -1068,6 +1088,40 @@ async fn open_trainer(state: tauri::State<'_, Runtime>) -> Result<(), String> {
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+fn publish_log(
+    app: &tauri::AppHandle,
+    logs: &log_store::LogStore,
+    line: &str,
+    context: Option<&log_store::Context>,
+) {
+    let entry = match context {
+        Some(context) => logs.record(line, context),
+        None => logs.record_current(line),
+    };
+    let _ = app.emit("launcher:log", &entry.line);
+    let _ = app.emit("launcher:log-entry", entry);
+}
+#[tauri::command]
+async fn logs_read(
+    state: tauri::State<'_, Runtime>,
+    root: Option<String>,
+    before_seq: Option<u64>,
+    limit: Option<usize>,
+    session_id: Option<String>,
+) -> Result<log_store::LogPage, String> {
+    let logs = state.logs.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        logs.read(
+            root.as_deref().filter(|value| !value.trim().is_empty()),
+            before_seq,
+            limit.unwrap_or(500),
+            session_id.as_deref(),
+        )
+    })
+    .await
+    .map_err(|e| e.to_string())
 }
 
 fn main() {
@@ -1255,23 +1309,57 @@ fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .setup(|app| {
+            let data = app.path().app_local_data_dir()?;
+            let logs = log_store::LogStore::open(data.join("logs"));
             let handle = app.handle().clone();
-            let log: Logger = Arc::new(move |line| {
-                let _ = handle.emit("launcher:log", line);
-            });
-            let root = app
-                .path()
-                .app_local_data_dir()?
-                .join("installations/default");
-            let engine = Engine::new(root.clone(), log);
+            let target = logs.clone();
+            let log: Logger = Arc::new(move |line| publish_log(&handle, &target, &line, None));
+            let root = data.join("installations/default");
+            let mut engine = Engine::new(root.clone(), log);
+            let target = logs.clone();
+            let handle = app.handle().clone();
+            engine.set_service_logger(Arc::new(move |root, run| {
+                // Capture this pipe's actual context once; a late old pipe must
+                // never be attributed to the launcher's newer current run.
+                let context = log_store::Context {
+                    run_id: Some(run.into()),
+                    ..log_store::Context::workspace(root, "service")
+                };
+                let target = target.clone();
+                let handle = handle.clone();
+                Arc::new(move |line| publish_log(&handle, &target, &line, Some(&context)))
+            }));
             let lifecycle = engine.lifecycle.clone();
             let handle = app.handle().clone();
+            let target = logs.clone();
             lifecycle.set_listener(Arc::new(move |snapshot| {
-                let _ = handle.emit("launcher:runtime", snapshot);
+                // State feedback is emitted before bounded log IO.
+                let _ = handle.emit("launcher:runtime", &snapshot);
+                let context = log_store::Context {
+                    root: Some(snapshot.root.clone()),
+                    run_id: snapshot.run_id.clone(),
+                    source: "launcher",
+                    ..Default::default()
+                };
+                publish_log(
+                    &handle,
+                    &target,
+                    &format!(
+                        "[INFO] 服务状态 {}{}",
+                        snapshot.phase,
+                        snapshot
+                            .error
+                            .as_ref()
+                            .map(|error| format!("：{error}"))
+                            .unwrap_or_default()
+                    ),
+                    Some(&context),
+                );
             }));
             app.manage(Runtime {
                 engine: Arc::new(Mutex::new(engine)),
                 lifecycle,
+                logs,
                 operations: Arc::new(operations::OperationManager::default()),
                 default_root: root,
                 workers: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
@@ -1321,6 +1409,7 @@ fn main() {
             remove_release,
             stop_trainer,
             runtime_status,
+            logs_read,
             load_network_settings,
             save_network_settings,
             choose_directory,
