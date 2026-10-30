@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="zh-CN">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Next Trainer · 启动器设计稿</title><link rel="stylesheet" href="style.css"></head>
+<body>
+<svg class="symbols" xmlns="http://www.w3.org/2000/svg"><defs>
+<symbol id="grid" viewBox="0 0 24 24"><rect x="3" y="3" width="6" height="6" rx="1"/><rect x="15" y="3" width="6" height="6" rx="1"/><rect x="3" y="15" width="6" height="6" rx="1"/><rect x="15" y="15" width="6" height="6" rx="1"/></symbol>
+<symbol id="home" viewBox="0 0 24 24"><path d="m4 10 8-7 8 7v10H14v-6h-4v6H4Z"/></symbol>
+<symbol id="versions" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="5" rx="1.5"/><rect x="3" y="15" width="18" height="5" rx="1.5"/><path d="M7 6.5h.1M7 17.5h.1M12 6.5h5M12 17.5h5"/></symbol>
+<symbol id="engine" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M10 3v3m4-3v3m-4 12v3m4-3v3M3 10h3m-3 4h3m12-4h3m-3 4h3M10 10h4v4h-4Z"/></symbol>
+<symbol id="logs" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3m6 0h4"/></symbol>
+<symbol id="settings" viewBox="0 0 24 24"><path d="m10 3-.8 3-2 .9-2.7-.8-2 3.5 2.3 2.1v2.4L2.5 16l2 3.5 2.8-.8 2 .9L10 22h4l.8-2.5 2-.9 2.7.8 2-3.5-2.3-2.1v-2.4l2.3-2.1-2-3.5-2.8.8-2-.9L14 3Z" transform="translate(0 -1) scale(1 .96)"/><circle cx="12" cy="12" r="3"/></symbol>
+<symbol id="play" viewBox="0 0 24 24"><path d="m9 5 11 7-11 7Z"/></symbol>
+<symbol id="stop" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="1"/></symbol>
+<symbol id="external" viewBox="0 0 24 24"><path d="M14 3h7v7m0-7L10 14M10 4H4v16h16v-6"/></symbol>
+<symbol id="chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+<symbol id="check" viewBox="0 0 24 24"><path d="m5 12 5 5L20 7"/></symbol>
+<symbol id="refresh" viewBox="0 0 24 24"><path d="M20 8A8 8 0 1 0 20 16m0-13v5h-5"/></symbol>
+<symbol id="download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+<symbol id="folder" viewBox="0 0 24 24"><path d="M3 7V4h7l3 3h8v13H3Z"/></symbol>
+<symbol id="search" viewBox="0 0 24 24"><circle cx="10" cy="10" r="6"/><path d="m15 15 6 6"/></symbol>
+<symbol id="copy" viewBox="0 0 24 24"><path d="M8 8V3h13v13h-5"/><rect x="3" y="8" width="13" height="13" rx="1"/></symbol>
+<symbol id="info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v1"/></symbol>
+<symbol id="image" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1.5"/><path d="m3 18 6-6 4 4 3-3 5 5"/></symbol>
+<symbol id="network" viewBox="0 0 24 24"><path d="M4 16a9 9 0 0 1 2-12m14 12a9 9 0 0 0-2-12M8 13a5 5 0 0 1 0-6m8 6a5 5 0 0 0 0-6M12 10v12m-4 0h8"/></symbol>
+<symbol id="shield" viewBox="0 0 24 24"><path d="m12 2 9 4v6c0 5-9 10-9 10S3 17 3 12V6Z"/><path d="m7 11 4 4 6-7"/></symbol>
+</defs></svg>
+<div class="app" id="app">
+  <div class="wallpaper" aria-hidden="true"></div><div class="wallpaper-shade" aria-hidden="true"></div>
+  <aside class="rail" aria-label="主导航">
+    <button class="rail-brand" aria-label="Next Trainer" title="Next Trainer"><img src="assets/home-logo.webp" alt="Next Trainer"></button>
+    <div class="rail-rule"></div>
+    <button class="rail-link active" data-page="home" title="启动" aria-label="启动"><svg><use href="#home"/></svg></button>
+    <button class="rail-link" data-page="versions" title="版本管理" aria-label="版本管理"><svg><use href="#versions"/></svg></button>
+    <button class="rail-link" data-page="engines" title="环境管理" aria-label="环境管理"><svg><use href="#engine"/></svg></button>
+    <button class="rail-link" data-page="logs" title="日志" aria-label="日志"><svg><use href="#logs"/></svg><i class="log-dot" hidden></i></button>
+    <div class="rail-spacer"></div>
+    <button class="rail-link" data-page="settings" title="设置" aria-label="设置"><svg><use href="#settings"/></svg></button>
+  </aside>
+  <header class="titlebar"><div class="app-mark" title="Next Trainer"><img src="assets/home-logo.webp" alt=""></div><span class="titlebar-name">Next Trainer</span><div class="titlebar-state" id="titleState"></div><div class="window-controls"><button title="最小化（设计稿）" aria-label="最小化">−</button><button title="最大化（设计稿）" aria-label="最大化">□</button><button class="window-close" title="关闭（设计稿）" aria-label="关闭">×</button></div></header>
+  <main>
+  <section class="page home-page active" id="page-home" aria-label="启动">
+    <div class="home-heading"><div class="wordmark"><img src="assets/home-logo.webp" alt="Next Trainer"><span>NEXT TRAINER</span></div><p>让每一次训练，顺利开始。</p></div>
+    <div class="home-meta"><span class="status-dot"></span><span id="homeStatus">环境已准备就绪</span><span class="meta-divider"></span><span>本机安装 · dev</span></div>
+    <article class="release-float"><div class="release-art"><div class="release-art-shade"></div><span class="release-kicker">NEXT TRAINER</span><strong>训练，从这里开始</strong><span class="release-art-tag">3.3.1-dev</span></div><div class="release-body"><div class="release-tabs"><button class="selected" data-release-tab="current">当前版本</button><button data-release-tab="updates">更新说明</button><button data-release-tab="help">使用指引</button><button class="release-more" title="查看版本" data-goto="versions"><svg><use href="#chevron"/></svg></button></div><div class="release-copy" id="releaseCopy"><div><span>主程序与网页资源已就绪</span><span class="quiet">本机</span></div><div><span>Kohya 训练环境可用</span><span class="quiet">已验证</span></div><button class="text-row" data-goto="versions">管理版本与安装位置<svg><use href="#chevron"/></svg></button></div></div></article>
+    <div class="home-bottom"><div class="service-caption"><span id="serviceCaption">所有准备就绪</span><button class="icon-button" id="copyAddress" aria-label="复制服务地址" title="复制服务地址" hidden><svg><use href="#copy"/></svg></button></div><div class="launch-row"><button class="secondary-pill" id="homeSecondary" title="安装位置"><svg><use href="#folder"/></svg><span>安装位置</span></button><button class="launch-button" id="launchButton"><svg><use href="#play"/></svg><span>启动训练器</span></button><button class="launch-settings" data-goto="settings" title="启动器设置" aria-label="启动器设置"><svg><use href="#settings"/></svg></button></div><div class="launch-footnote" id="launchFootnote">3.3.1-dev <span>·</span> Kohya 已就绪</div></div>
+    <div class="home-error" id="homeError" hidden><svg><use href="#info"/></svg><span>服务未能启动，请查看详细日志。</span><button data-error-log>查看日志<svg><use href="#chevron"/></svg></button></div>
+  </section>
+  <section class="page content-page" id="page-versions" aria-label="版本管理">
+    <div class="page-title"><h1>版本管理</h1><p>在本机版本之间切换，资料始终保留。</p></div><div class="section-toolbar"><div class="pill-tabs"><button class="selected">已安装 <span>1</span></button><button id="availableVersions">可安装版本</button></div><button class="soft-button" id="checkVersions"><svg><use href="#refresh"/></svg>检查更新</button></div>
+    <div class="version-installed glass"><div class="version-icon">N<span>✦</span></div><div class="version-primary"><h2>Next Trainer <span>3.3.1-dev</span></h2><div class="inline-tags"><span class="tag active-tag">当前使用</span><span class="tag">dev 开发线</span><span class="quiet">89a3b6ca</span></div><p>源码、主程序环境、网页资源均已就绪</p></div><button class="soft-button" id="versionMore">管理<svg><use href="#chevron"/></svg></button></div>
+    <div class="version-detail"><div class="detail-line"><span>安装目录</span><code>F:\NextTrainerLauncherSandbox\u13</code><button class="icon-button" data-toast="已在设计稿中定位安装目录" aria-label="打开安装目录"><svg><use href="#folder"/></svg></button></div><div class="detail-line"><span>共享资料</span><code>u13\profiles\default</code><button class="icon-button" data-toast="已在设计稿中定位用户资料" aria-label="打开用户资料"><svg><use href="#folder"/></svg></button></div><div class="detail-line"><span>安装状态</span><span class="good"><i></i>已完成验证</span><button class="inline-action" data-goto="engines">检查与修复<svg><use href="#chevron"/></svg></button></div></div>
+    <div class="page-bottom-note"><svg><use href="#info"/></svg>开发线可能包含尚未发布的修改；切换版本前会展示变更计划。</div>
+  </section>
+  <section class="page content-page" id="page-engines" aria-label="环境管理">
+    <div class="page-title"><h1>环境管理</h1><p>每个训练引擎独立安装，按需检查与修复。</p></div><div class="section-toolbar"><div class="context-label">Next Trainer <b>3.3.1-dev</b><span class="tag">当前版本</span></div><button class="soft-button" data-toast="设计稿：实际检查将在实现后执行"><svg><use href="#refresh"/></svg>检查环境</button></div>
+    <article class="main-environment"><div class="main-env-icon"><svg><use href="#grid"/></svg></div><div class="main-env-copy"><h2>主程序环境 <span class="engine-state good"><i></i>已就绪</span></h2><p>基础 Python · 主程序依赖 · 网页资源</p></div><div class="main-env-actions"><button class="quiet-button" id="guiRepair">主程序修复</button><button class="soft-button" id="advancedRecovery">高级恢复<svg><use href="#chevron"/></svg></button></div></article>
+    <div class="engine-list">
+      <article class="engine-row"><div class="engine-emblem kohya">K</div><div class="engine-copy"><h2>Kohya <span class="engine-state good"><i></i>可用</span></h2><p>SD · SDXL · LoRA 与全量微调</p><div class="engine-meta">Python 3.10 <span>·</span> Torch 2.7.0 + CUDA 12.8</div></div><div class="engine-actions"><button class="quiet-button" data-toast="设计稿：独立检查完成后更新本行状态">独立检查</button><button class="soft-button" data-toast="设计稿：展示最小修复计划后确认执行">修复<svg><use href="#chevron"/></svg></button></div></article>
+      <article class="engine-row"><div class="engine-emblem anima">A</div><div class="engine-copy"><h2>Anima Fast <span class="engine-state muted">未安装 · 示意</span></h2><p>Anima 模型训练环境</p><div class="engine-meta">独立环境，按需下载安装</div></div><div class="engine-actions"><button class="soft-button" data-toast="设计稿：将显示 Anima Fast 安装计划"><svg><use href="#download"/></svg>安装</button></div></article>
+      <article class="engine-row"><div class="engine-emblem toolkit">AI</div><div class="engine-copy"><h2>AI Toolkit <span class="engine-state muted">未安装 · 示意</span></h2><p>多模型训练工作流</p><div class="engine-meta">独立环境，按需下载安装</div></div><div class="engine-actions"><button class="soft-button" data-toast="设计稿：将显示 AI Toolkit 安装计划"><svg><use href="#download"/></svg>安装</button></div></article>
+      <article class="engine-row"><div class="engine-emblem diffsynth">D</div><div class="engine-copy"><h2>DiffSynth <span class="engine-state muted">未安装 · 示意</span></h2><p>DiffSynth 训练环境</p><div class="engine-meta">独立环境，按需下载安装</div></div><div class="engine-actions"><button class="soft-button" data-toast="设计稿：将显示 DiffSynth 安装计划"><svg><use href="#download"/></svg>安装</button></div></article>
+    </div><div class="page-bottom-note"><svg><use href="#info"/></svg>模型与训练任务在训练网页中管理。<button class="inline-action" data-goto="logs">查看环境日志<svg><use href="#chevron"/></svg></button></div>
+  </section>
+  <section class="page logs-page" id="page-logs" aria-label="日志">
+    <div class="page-title"><h1>日志</h1><p>集中查看启动器、服务和环境操作的记录。</p></div><div class="logs-toolbar"><div class="source-filters" role="group" aria-label="日志来源"><button data-source="all" class="selected">全部</button><button data-source="launcher">启动器</button><button data-source="service">训练器服务</button><button data-source="environment">环境操作</button></div><div class="logs-tools"><button class="icon-button" id="copyLogs" title="复制可见日志" aria-label="复制日志"><svg><use href="#copy"/></svg></button><button class="soft-button" id="exportLogs"><svg><use href="#download"/></svg>导出</button></div></div>
+    <div class="log-controls"><label class="search-box"><svg><use href="#search"/></svg><input id="logSearch" placeholder="搜索日志…" aria-label="搜索日志"></label><select id="logLevel" aria-label="日志级别"><option value="all">全部级别</option><option value="INFO">信息</option><option value="WARN">警告</option><option value="ERROR">错误</option></select><button id="followLogs" class="follow-button"><span class="check-square">✓</span>自动跟随</button></div>
+    <div class="terminal" id="terminal" role="log" aria-label="运行日志"><div class="terminal-columns"><span>时间</span><span>级别</span><span>来源</span><span>消息</span></div><div id="logRows"></div><div class="terminal-empty" id="logEmpty" hidden>没有匹配的日志</div></div><div class="log-footer"><span><i class="good-dot"></i>实时记录<span class="muted"> · 本次会话</span></span><span id="logCount"></span><span class="log-demo-label">设计稿示例日志</span></div>
+  </section>
+  <section class="page settings-page" id="page-settings" aria-label="设置"><nav class="settings-nav" aria-label="设置分类"><h1>启动器设置</h1><button class="selected" data-setting="appearance"><svg><use href="#image"/></svg>外观</button><button data-setting="network"><svg><use href="#network"/></svg>网络</button><button data-setting="profiles"><svg><use href="#folder"/></svg>用户资料</button><button data-setting="security"><svg><use href="#shield"/></svg>安全与更新</button><div class="settings-rule"></div><button data-setting="about"><svg><use href="#info"/></svg>关于</button></nav><div class="settings-content" id="settingsContent"></div></section>
+  </main>
+  <div class="toast" id="toast" role="status" hidden></div>
+  <dialog id="mockDialog"><button class="dialog-close" aria-label="关闭">×</button><h2 id="dialogTitle"></h2><p id="dialogText"></p><button class="soft-button dialog-confirm">知道了</button></dialog>
+</div><script src="app.js"></script>
+</body></html>

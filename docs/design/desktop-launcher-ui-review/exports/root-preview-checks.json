@@ -1,0 +1,87 @@
+{
+  "passed": true,
+  "scope": "Independent browser-only design verification; not native service performance",
+  "states": [
+    {
+      "query": "view=home&state=stopped",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 205
+    },
+    {
+      "query": "view=home&state=running",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 212
+    },
+    {
+      "query": "view=home&state=starting",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 202
+    },
+    {
+      "query": "view=home&state=stopping",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 199
+    },
+    {
+      "query": "view=home&state=error",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 222
+    },
+    {
+      "query": "view=versions",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 252
+    },
+    {
+      "query": "view=engines",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 395
+    },
+    {
+      "query": "view=logs",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 643
+    },
+    {
+      "query": "view=settings&setting=appearance",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 173
+    },
+    {
+      "query": "view=settings&setting=network",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 224
+    },
+    {
+      "query": "view=settings&setting=profiles",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 189
+    },
+    {
+      "query": "view=settings&setting=security",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 195
+    },
+    {
+      "query": "view=settings&setting=about",
+      "title": "Next Trainer · 启动器设计稿",
+      "overflow": false,
+      "visible": 159
+    }
+  ],
+  "review_navigation": true,
+  "external_requests": [],
+  "page_errors": []
+}

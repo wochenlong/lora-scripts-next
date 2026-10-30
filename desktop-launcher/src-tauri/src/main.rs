@@ -20,7 +20,7 @@ mod shell_update_protocol;
 mod source_integrity;
 mod trial_ui;
 mod wheel_integrity;
-use core::{Engine, Logger, Report};
+use core::{Engine, Lifecycle, Logger, Report, RuntimeSnapshot};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -30,6 +30,7 @@ use tauri_plugin_dialog::DialogExt;
 
 struct Runtime {
     engine: Arc<Mutex<Engine>>,
+    lifecycle: Arc<Lifecycle>,
     operations: Arc<operations::OperationManager>,
     default_root: PathBuf,
     workers: Arc<std::sync::atomic::AtomicUsize>,
@@ -817,7 +818,9 @@ async fn action(
 ) -> Result<Report, String> {
     let runtime = state.engine.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let mut engine = runtime.lock().map_err(|_| "启动器状态锁异常".to_string())?;
+        let mut engine = runtime
+            .try_lock()
+            .map_err(|_| "已有安装、检查或启停操作正在执行".to_string())?;
         let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
         match op {
             "inspect" => engine.inspect(&root),
@@ -852,8 +855,40 @@ async fn install_environment(
     action(state, root, "install").await
 }
 #[tauri::command]
-async fn start_trainer(state: tauri::State<'_, Runtime>, root: String) -> Result<Report, String> {
-    action(state, root, "start").await
+async fn start_trainer(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    run_id: Option<String>,
+) -> Result<Report, String> {
+    let root = if root.trim().is_empty() {
+        state.default_root.clone()
+    } else {
+        PathBuf::from(root.trim())
+    };
+    if !root.is_absolute() || root.parent().is_none() {
+        return Err("工作区必须为独立绝对目录".into());
+    }
+    let lifecycle = state.lifecycle.clone();
+    // Reserve before scheduling slow work. A targeted stop arriving even before
+    // this IPC is processed is remembered by begin_requested's tombstone.
+    let run = lifecycle
+        .begin_requested(&root, run_id.as_deref())
+        .map_err(|e| format!("{e:#}"))?;
+    let engine = state.engine.clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let mut engine = match engine.try_lock() {
+            Ok(engine) => engine,
+            Err(_) => {
+                lifecycle.fail_start(&run, "已有安装或完整检查正在执行，请完成后重试");
+                return Err("已有安装或完整检查正在执行，请完成后重试".into());
+            }
+        };
+        engine
+            .start_reserved(&root, &run)
+            .map_err(|e| format!("{e:#}"))
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 async fn version_action(
@@ -910,13 +945,32 @@ async fn remove_release(
     version_action(state, root, release_id, "remove").await
 }
 #[tauri::command]
-async fn stop_trainer(state: tauri::State<'_, Runtime>) -> Result<(), String> {
-    let engine = state.engine.clone();
+fn runtime_status(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+) -> Result<RuntimeSnapshot, String> {
+    let root = if root.trim().is_empty() {
+        state.default_root.clone()
+    } else {
+        PathBuf::from(root.trim())
+    };
+    if !root.is_absolute() || root.parent().is_none() {
+        return Err("工作区必须为独立绝对目录".into());
+    }
+    Ok(state.lifecycle.snapshot(&root))
+}
+#[tauri::command]
+async fn stop_trainer(
+    state: tauri::State<'_, Runtime>,
+    run_id: Option<String>,
+) -> Result<RuntimeSnapshot, String> {
+    let lifecycle = state.lifecycle.clone();
+    // Publish cancellation/stopping before waiting for the sole process owner.
+    lifecycle.request_stop_for(run_id.as_deref());
     tauri::async_runtime::spawn_blocking(move || {
-        engine
-            .lock()
-            .map(|mut e| e.stop())
-            .map_err(|_| "状态锁异常".to_string())
+        lifecycle
+            .stop_for(run_id.as_deref())
+            .map_err(|e| format!("{e:#}"))
     })
     .await
     .map_err(|e| e.to_string())?
@@ -975,13 +1029,9 @@ async fn choose_directory(app: tauri::AppHandle) -> Result<Option<String>, Strin
 }
 #[tauri::command]
 async fn open_trainer(state: tauri::State<'_, Runtime>) -> Result<(), String> {
-    let engine = state.engine.clone();
+    let lifecycle = state.lifecycle.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let url = engine
-            .lock()
-            .map_err(|_| "状态锁异常".to_string())?
-            .url()
-            .map_err(|e| e.to_string())?;
+        let url = lifecycle.url().map_err(|e| e.to_string())?;
         #[cfg(windows)]
         {
             use std::os::windows::process::CommandExt;
@@ -1192,8 +1242,15 @@ fn main() {
                 .path()
                 .app_local_data_dir()?
                 .join("installations/default");
+            let engine = Engine::new(root.clone(), log);
+            let lifecycle = engine.lifecycle.clone();
+            let handle = app.handle().clone();
+            lifecycle.set_listener(Arc::new(move |snapshot| {
+                let _ = handle.emit("launcher:runtime", snapshot);
+            }));
             app.manage(Runtime {
-                engine: Arc::new(Mutex::new(Engine::new(root.clone(), log))),
+                engine: Arc::new(Mutex::new(engine)),
+                lifecycle,
                 operations: Arc::new(operations::OperationManager::default()),
                 default_root: root,
                 workers: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
@@ -1242,6 +1299,7 @@ fn main() {
             rollback_release,
             remove_release,
             stop_trainer,
+            runtime_status,
             load_network_settings,
             save_network_settings,
             choose_directory,
@@ -1252,6 +1310,7 @@ fn main() {
         .run(|app, event| {
             if let tauri::RunEvent::ExitRequested { api, .. } = &event {
                 if let Some(runtime) = app.try_state::<Runtime>() {
+                    runtime.lifecycle.request_stop();
                     let first = !runtime
                         .shutting_down
                         .swap(true, std::sync::atomic::Ordering::AcqRel);
@@ -1284,9 +1343,7 @@ fn main() {
             if matches!(event, tauri::RunEvent::Exit) {
                 if let Some(runtime) = app.try_state::<Runtime>() {
                     let _ = runtime.operations.cancel_running();
-                    if let Ok(mut engine) = runtime.engine.try_lock() {
-                        engine.stop();
-                    }
+                    let _ = runtime.lifecycle.stop();
                 }
             }
         });

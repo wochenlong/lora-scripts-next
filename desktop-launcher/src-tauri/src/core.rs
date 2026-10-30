@@ -16,8 +16,11 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+#[path = "lifecycle.rs"]
+mod lifecycle;
 #[path = "managed_child.rs"]
 mod managed_child;
+pub use lifecycle::{Lifecycle, RuntimeSnapshot};
 
 #[path = "artifact_downloads.rs"]
 mod artifact_downloads;
@@ -84,13 +87,13 @@ const REQUIRED: &[&str] = &[
     "frontend/dist/index.html",
 ];
 
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Check {
     name: String,
     ok: bool,
     detail: String,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct Report {
     root: String,
     uv: bool,
@@ -110,7 +113,7 @@ pub struct Report {
     versions: Vec<VersionView>,
     interrupted: Vec<String>,
 }
-#[derive(Serialize)]
+#[derive(Clone, Serialize)]
 pub struct VersionView {
     id: String,
     channel: String,
@@ -128,18 +131,27 @@ pub struct VersionView {
 
 pub struct Engine {
     pub default_root: PathBuf,
-    running: Option<Running>,
+    pub lifecycle: Arc<Lifecycle>,
+    assessment: Option<Report>,
     logger: Logger,
     catalog: Catalog,
 }
 
 struct Running {
     child: Child,
-    root: PathBuf,
     port: u16,
     _job: Job,
     // Fields drop in declaration order: close the process group before releasing the workspace lock.
     _lease: Arc<File>,
+}
+
+impl Running {
+    fn terminate(&mut self) -> Result<()> {
+        self._job.terminate_and_wait()?;
+        let _ = self.child.kill();
+        self.child.wait().context("等待受管训练器退出失败")?;
+        Ok(())
+    }
 }
 
 impl Drop for Running {
@@ -156,6 +168,36 @@ struct Job(windows_sys::Win32::Foundation::HANDLE);
 unsafe impl Send for Job {}
 #[cfg(windows)]
 impl Job {
+    fn terminate_and_wait(&self) -> Result<()> {
+        use windows_sys::Win32::System::JobObjects::*;
+        unsafe {
+            if TerminateJobObject(self.0, 1) == 0 {
+                return Err(std::io::Error::last_os_error()).context("终止本次受管 Job 失败");
+            }
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = std::mem::zeroed();
+                if QueryInformationJobObject(
+                    self.0,
+                    JobObjectBasicAccountingInformation,
+                    &mut info as *mut _ as _,
+                    std::mem::size_of_val(&info) as u32,
+                    std::ptr::null_mut(),
+                ) == 0
+                {
+                    return Err(std::io::Error::last_os_error())
+                        .context("读取受管 Job 活动进程失败");
+                }
+                if info.ActiveProcesses == 0 {
+                    return Ok(());
+                }
+                if Instant::now() >= deadline {
+                    bail!("受管进程组尚未排空，保留运行归属和工作区租约");
+                }
+                thread::sleep(Duration::from_millis(10));
+            }
+        }
+    }
     fn contains(&self, pid: u32) -> bool {
         use windows_sys::Win32::{
             Foundation::CloseHandle,
@@ -212,6 +254,9 @@ impl Drop for Job {
 struct Job;
 #[cfg(not(windows))]
 impl Job {
+    fn terminate_and_wait(&self) -> Result<()> {
+        Ok(())
+    }
     fn attach(_: &Child) -> Result<Self> {
         Ok(Self)
     }
@@ -663,7 +708,7 @@ impl Engine {
             "history" => crate::signed_catalog::history(root),
             "open_fixture" | "refresh" => {
                 self.reap();
-                if self.running.is_some() {
+                if self.lifecycle.has_process() {
                     bail!("请先停止训练器再变更清单信任");
                 }
                 let id = self.default_release().id.clone();
@@ -771,7 +816,7 @@ impl Engine {
     ) -> Result<()> {
         use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止训练器再变更资料组合");
         }
         let release = self.catalog.release(id)?.clone();
@@ -888,7 +933,7 @@ impl Engine {
     }
     pub fn engine_fixture_smoke(&mut self, root: &Path) -> Result<serde_json::Value> {
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再执行固定沙盒冒烟");
         }
         if crate::signed_catalog::status(root)?["fixture_session"] != true {
@@ -907,7 +952,7 @@ impl Engine {
     ) -> Result<()> {
         use crate::operations::{Cancelled, OperationError, OperationStatus};
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再变更独立引擎环境");
         }
         let release = self.catalog.release(id)?.clone();
@@ -949,7 +994,7 @@ impl Engine {
     ) -> Result<()> {
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再恢复基础Python组件");
         }
         self.catalog.release(id)?;
@@ -1015,7 +1060,7 @@ impl Engine {
         use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再恢复安装登记");
         }
         let release = self.catalog.release(id)?.clone();
@@ -1122,7 +1167,7 @@ impl Engine {
         use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止训练器，再变更环境实例");
         }
         let release = self.catalog.release(id)?.clone();
@@ -1263,7 +1308,7 @@ impl Engine {
     ) -> Result<()> {
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再修复源码");
         }
         let release = self.catalog.release(id)?;
@@ -1299,7 +1344,7 @@ impl Engine {
     ) -> Result<()> {
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再修复环境");
         }
         let release = self.catalog.release(id)?;
@@ -1315,7 +1360,7 @@ impl Engine {
     ) -> Result<()> {
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再恢复环境");
         }
         let release = self.catalog.release(id)?;
@@ -1332,7 +1377,7 @@ impl Engine {
         crate::signed_catalog::authorize(root, id, "install")?;
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再修改安装目录");
         }
         let release = self.catalog.release(id)?.clone();
@@ -1349,7 +1394,7 @@ impl Engine {
         use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再准备安装文件");
         }
         let release = self.catalog.release(id)?.clone();
@@ -1404,7 +1449,8 @@ impl Engine {
         let logger: Logger = Arc::new(move |line| target(crate::network_policy::redact(&line)));
         Self {
             default_root,
-            running: None,
+            lifecycle: Lifecycle::new(),
+            assessment: None,
             logger,
             catalog: Catalog::embedded().expect("内置发布清单必须有效"),
         }
@@ -1423,7 +1469,7 @@ impl Engine {
         value: &str,
         settings: &crate::network_policy::Settings,
     ) -> Result<serde_json::Value> {
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再保存网络设置");
         }
         let root = self.resolve(value)?;
@@ -1461,7 +1507,7 @@ impl Engine {
     }
     fn mutable(&mut self, root: &Path, release: &Release) -> Result<(Layout, File)> {
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再修改安装目录");
         }
         let layout = Layout::new(root, &release.id)?;
@@ -1475,7 +1521,7 @@ impl Engine {
     }
     fn mutation(&mut self, root: &Path, release: &Release) -> Result<model::WorkspaceMutation> {
         self.reap();
-        if self.running.is_some() {
+        if self.lifecycle.has_process() {
             bail!("请先停止受管训练器，再修改安装目录");
         }
         let ctx = model::WorkspaceMutation::acquire(root, &release.id)?;
@@ -1487,13 +1533,7 @@ impl Engine {
         Ok(ctx)
     }
     fn reap(&mut self) {
-        if self
-            .running
-            .as_mut()
-            .is_some_and(|r| !matches!(r.child.try_wait(), Ok(None)))
-        {
-            self.running.take();
-        }
+        self.lifecycle.reap();
     }
     pub fn inspect(&mut self, root: &Path) -> Result<Report> {
         self.catalog = Catalog::for_workspace(root)?;
@@ -1526,15 +1566,12 @@ impl Engine {
             Err(anyhow!("尚未安装主程序环境"))
         };
         let frontend = src.is_ok() && layout.app.join("frontend/dist/index.html").is_file();
-        let r = self.running.as_ref().filter(|r| r.root == root);
-        let port = r.map(|r| r.port);
-        let served_version = r.and_then(|r| {
-            if owns_listener(r.port, &r._job) {
-                health(r.port).ok()
-            } else {
-                None
-            }
-        });
+        let runtime = self.lifecycle.snapshot(root);
+        let running = runtime.pid.is_some();
+        let port = runtime.port;
+        let served_version = (runtime.phase == "ready")
+            .then(|| runtime.version.clone())
+            .flatten();
         let check = |name: &str, result: &Result<()>| Check {
             name: name.into(),
             ok: result.is_ok(),
@@ -1545,10 +1582,24 @@ impl Engine {
                 .unwrap_or_else(|| "实际文件及运行检查通过".into()),
         };
         let mut versions = Vec::new();
+        let active_release_id = release.id.clone();
         for release in self.catalog.releases() {
             let l = Layout::new(root, &release.id)?;
-            let source_ok = owned && verify_source(&l, release).is_ok();
-            let environment_ok = owned && check_environment(&l, release).is_ok();
+            // Reuse the current release's checks only within this inspection.
+            // No cross-call integrity cache is trusted by start or mutation.
+            let current = release.id == active_release_id;
+            let source_ok = owned
+                && if current {
+                    src.is_ok()
+                } else {
+                    verify_source(&l, release).is_ok()
+                };
+            let environment_ok = owned
+                && if current {
+                    environment.is_ok()
+                } else {
+                    check_environment(&l, release).is_ok()
+                };
             versions.push(VersionView {
                 managed_recipe: release.environment_recipe == "gui-cp310-win-x64-v1",
                 id: release.id.clone(),
@@ -1594,14 +1645,14 @@ impl Engine {
                 }
             }
         }
-        Ok(Report {
+        let report = Report {
             root: root.to_string_lossy().into(),
             uv: uv_ok,
             python: python.is_ok(),
             source: src.is_ok(),
             environment: environment.is_ok(),
             frontend,
-            running: r.is_some(),
+            running,
             healthy: served_version.is_some(),
             version: served_version.or_else(|| {
                 if src.is_ok() {
@@ -1636,7 +1687,9 @@ impl Engine {
                         .to_string(),
                 },
             ],
-        })
+        };
+        self.assessment = Some(report.clone());
+        Ok(report)
     }
     pub fn bootstrap(&mut self, root: &Path) -> Result<Report> {
         let _network = crate::network_policy::task_policy(root)?;
@@ -1822,7 +1875,7 @@ impl Engine {
         let release = self.catalog.release(id)?.clone();
         if release.environment_recipe == crate::recipe::GuiRecipe::embedded()?.id() {
             self.reap();
-            if self.running.is_some() {
+            if self.lifecycle.has_process() {
                 bail!("请先停止受管训练器");
             }
             let manager = crate::operations::OperationManager::default();
@@ -1933,6 +1986,18 @@ impl Engine {
         self.inspect(root)
     }
     pub fn start(&mut self, root: &Path) -> Result<Report> {
+        let run_id = self.lifecycle.begin(root)?;
+        self.start_reserved(root, &run_id)
+    }
+    pub fn start_reserved(&mut self, root: &Path, run_id: &str) -> Result<Report> {
+        let result = self.start_run(root, run_id);
+        if let Err(error) = &result {
+            self.lifecycle.fail_start(run_id, &format!("{error:#}"));
+        }
+        result
+    }
+    fn start_run(&mut self, root: &Path, run_id: &str) -> Result<Report> {
+        self.catalog = Catalog::for_workspace(root)?;
         let _network = crate::network_policy::task_policy(root)?;
         let release = self.active(root)?;
         crate::signed_catalog::authorize(root, &release.id, "activate")?;
@@ -1941,14 +2006,18 @@ impl Engine {
         if Registry::load(root)?.current.is_none() {
             bail!("请先选择已安装版本");
         }
+        self.lifecycle.check_cancel(run_id)?;
         verify_source(&layout, &release)?;
+        self.lifecycle.check_cancel(run_id)?;
         check_environment(&layout, &release)?;
+        self.lifecycle.check_cancel(run_id)?;
         runtime_view::prepare(&layout, &release)?;
         (self.logger)(format!(
             "启动 {}；用户资料 {}",
             release.id,
             layout.profile.display()
         ));
+        self.lifecycle.check_cancel(run_id)?;
         let listener = TcpListener::bind(("127.0.0.1", 0))?;
         let port = listener.local_addr()?.port();
         drop(listener); // gui.py --port-conflict error fails safely if another process wins the race.
@@ -2014,7 +2083,7 @@ impl Engine {
             let log = self.logger.clone();
             thread::spawn(move || {
                 for line in BufReader::new(pipe).lines().map_while(Result::ok) {
-                    log(line);
+                    log(format!("[训练器服务] {line}"));
                 }
             });
         }
@@ -2022,61 +2091,139 @@ impl Engine {
             "已创建受管进程 PID={}，等待 /api/version，端口 {port}",
             child.id()
         ));
-        self.running = Some(Running {
-            child,
-            root: root.to_path_buf(),
-            port,
-            _lease: Arc::new(lock),
-            _job: job,
-        });
+        let binding = Registry::load(root)?.gui_binding(&release.id).cloned();
+        self.lifecycle.attach(
+            run_id,
+            Running {
+                child,
+                port,
+                _lease: Arc::new(lock),
+                _job: job,
+            },
+            &release,
+            binding.as_ref(),
+        )?;
         let start = Instant::now();
         while start.elapsed() < Duration::from_secs(180) {
-            if self.running.as_mut().unwrap().child.try_wait()?.is_some() {
-                self.running.take();
-                bail!("训练器在健康检查前退出，请检查日志后修复环境");
-            }
-            if let Ok(version) = health(port).and_then(|v| {
-                if owns_listener(port, &self.running.as_ref().unwrap()._job) {
-                    Ok(v)
-                } else {
-                    bail!("监听进程与受管训练器不符")
-                }
-            }) {
+            self.lifecycle.check_cancel(run_id)?;
+            self.lifecycle.check_alive(run_id)?;
+            if let Ok(version) = health(port) {
+                self.lifecycle.check_owned(run_id, port)?;
                 if version != release.version {
-                    self.stop();
                     bail!("健康接口版本不符：{version}");
                 }
+                let health_observed = stamp();
+                // Keep process/lease ownership fixed across the health transaction.
+                // stop requests remain responsive through the separate snapshot lock.
+                let committed = self.lifecycle.commit_ready(run_id, &version, |lease| {
+                    let ctx = model::WorkspaceMutation::from_running_lease(layout.clone(), lease);
+                    crate::data_import::mark_healthy(&ctx, &release.id)
+                })?;
                 (self.logger)(format!(
-                    "真实训练器就绪，版本 {version}，http://127.0.0.1:{port}"
+                    "真实训练器就绪，版本 {version}，http://127.0.0.1:{port}；health={health_observed}ms commit={committed}ms"
                 ));
-                let ctx = model::WorkspaceMutation::from_running_lease(
-                    layout.clone(),
-                    self.running
-                        .as_ref()
-                        .context("受管进程已退出")?
-                        ._lease
-                        .clone(),
-                );
-                crate::data_import::mark_healthy(&ctx, &release.id)?;
-                return self.inspect(root);
+                return self.start_report(root, &layout, &release);
             }
-            thread::sleep(Duration::from_millis(500));
+            thread::sleep(Duration::from_millis(200));
         }
-        self.stop();
         bail!("训练器健康检查超时，已停止本次受管进程，可修复后重试")
     }
-    pub fn stop(&mut self) {
-        self.running.take();
-        (self.logger)("已停止本启动器管理的进程".into());
-    }
-    pub fn url(&mut self) -> Result<String> {
-        self.reap();
-        let running = self.running.as_ref().context("尚未启动训练器")?;
-        if !owns_listener(running.port, &running._job) {
-            bail!("监听端口不属于受管训练器");
+    fn start_report(&self, root: &Path, layout: &Layout, release: &Release) -> Result<Report> {
+        // This report describes checks already performed by this start. Inactive
+        // versions keep the last explicit assessment; none are scanned here.
+        let registry = Registry::load(root)?;
+        let runtime = self.lifecycle.snapshot(root);
+        let mut report = self
+            .assessment
+            .clone()
+            .filter(|r| r.root == root.to_string_lossy());
+        if report.is_none() {
+            let versions = self
+                .catalog
+                .releases()
+                .iter()
+                .map(|r| {
+                    let current = r.id == release.id;
+                    VersionView {
+                        id: r.id.clone(),
+                        channel: r.channel.clone(),
+                        version: r.version.clone(),
+                        commit: r.commit.clone(),
+                        download_bytes: r.archive.bytes,
+                        source_bytes: r.archive.unpacked_bytes,
+                        installed: registry.installed.iter().any(|i| i.release_id == r.id),
+                        source_ok: current,
+                        environment_ok: current,
+                        current,
+                        known_good: registry
+                            .installed
+                            .iter()
+                            .any(|i| i.release_id == r.id && i.healthy_at.is_some()),
+                        managed_recipe: r.environment_recipe == "gui-cp310-win-x64-v1",
+                    }
+                })
+                .collect();
+            report = Some(Report {
+                root: root.to_string_lossy().into(),
+                uv: false,
+                python: true,
+                source: true,
+                environment: true,
+                frontend: true,
+                running: false,
+                healthy: false,
+                version: Some(release.version.clone()),
+                port: None,
+                checks: vec![],
+                logs: vec![],
+                current_release: registry.current.clone(),
+                previous_known_good: registry.previous_known_good.clone(),
+                profile_path: layout.profile.to_string_lossy().into(),
+                versions,
+                interrupted: vec![],
+            });
         }
-        health(running.port)?;
-        Ok(format!("http://127.0.0.1:{}", running.port))
+        let mut report = report.unwrap();
+        report.uv = digest(&uv(root)).ok().as_deref() == Some(release.uv.exe_sha256.as_str());
+        report.python = true;
+        report.source = true;
+        report.environment = true;
+        report.frontend = true;
+        report.running = runtime.pid.is_some();
+        report.healthy = runtime.phase == "ready";
+        report.version = Some(release.version.clone());
+        report.port = runtime.port;
+        report.current_release = registry.current;
+        report.previous_known_good = registry.previous_known_good;
+        report.profile_path = layout.profile.to_string_lossy().into();
+        for version in &mut report.versions {
+            version.current = version.id == release.id;
+            if version.current {
+                version.installed = true;
+                version.source_ok = true;
+                version.environment_ok = true;
+                version.known_good = true;
+            }
+        }
+        report.checks = [
+            "自管 Python",
+            "当前版本源码",
+            "主程序依赖与解释器",
+            "训练器前端",
+        ]
+        .iter()
+        .map(|name| Check {
+            name: (*name).into(),
+            ok: true,
+            detail: "本次启动前完整性及运行检查通过".into(),
+        })
+        .collect();
+        Ok(report)
+    }
+    pub fn stop(&mut self) {
+        if let Err(error) = self.lifecycle.stop() {
+            (self.logger)(format!("停止受管进程失败：{error:#}"));
+        }
     }
 }
 

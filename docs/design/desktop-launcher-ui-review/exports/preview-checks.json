@@ -1,0 +1,33 @@
+{
+  "passed": true,
+  "errors": [],
+  "checks": [
+    "review-navigation-file",
+    "review-navigation-http",
+    "immediate-start-feedback-and-cancel",
+    "ready-with-copy-address",
+    "stop-returns-start",
+    "independent-log-search",
+    "gui-and-base-python-recovery-entries",
+    "appearance-css-effects-and-disabled-light"
+  ],
+  "sizes": [
+    {
+      "width": 1024,
+      "height": 640,
+      "scrollWidth": 1024,
+      "scrollHeight": 640,
+      "lastRowBottom": 561,
+      "noteTop": 585
+    },
+    {
+      "width": 1440,
+      "height": 900,
+      "scrollWidth": 1440,
+      "scrollHeight": 900,
+      "lastRowBottom": 738,
+      "noteTop": 845
+    }
+  ],
+  "scope": "Static design only; no real service request or mutation"
+}
