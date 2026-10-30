@@ -265,23 +265,16 @@ fn download(
     if exact_bytes > model::MAX_DOWNLOAD_BYTES {
         bail!("资产超出启动器下载上限");
     }
-    let id = format!("legacy-artifact-{}-{}", std::process::id(), stamp());
-    let mut downloads = artifact_downloads::ArtifactDownloads::new(
-        &id,
-        exact_bytes.saturating_mul(2).saturating_add(65_536),
-        16,
-    );
+    let mut downloads = artifact_downloads::ArtifactDownloads::new();
     log(format!("获取并校验固定资产：{name}"));
-    let result = downloads.download(
+    downloads.download(
         ctx,
         url,
         name,
         expected,
         exact_bytes,
         &crate::operations::CancelToken::new(),
-    );
-    downloads.finish(&result)?;
-    result
+    )
 }
 
 /// P6 机制入口：异步网络读取运行于独立任务，取消会 abort 并等待任务析构，
@@ -1364,15 +1357,7 @@ impl Engine {
         assert_regular_ready(root)?;
         operation.persist(&mutation)?;
         let cancel = operation.cancel_token();
-        let mut downloads = artifact_downloads::ArtifactDownloads::new(
-            &operation.id()?,
-            release
-                .archive
-                .bytes
-                .saturating_mul(2)
-                .saturating_add(65536),
-            16,
-        );
+        let mut downloads = artifact_downloads::ArtifactDownloads::new();
         let result = (|| -> Result<()> {
             cancel.check()?;
             operation.publish(
@@ -1396,7 +1381,7 @@ impl Engine {
             cancel.check()?;
             Ok(())
         })();
-        downloads.finish(&result)?;
+
         let (status, error) = match &result {
             Ok(()) => (OperationStatus::Succeeded, None),
             Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
@@ -1455,45 +1440,6 @@ impl Engine {
             .ensure_dir(path.parent().context("网络设置缺少父目录")?)?;
         model::write_json_atomic(&path, settings)?;
         Ok(serde_json::json!({ "settings": settings, "diagnostic": policy.diagnostic(None) }))
-    }
-    pub fn save_download_budget(
-        &self,
-        value: &str,
-        expected_revision: Option<u64>,
-        root_body_cap_bytes: Option<u64>,
-    ) -> Result<crate::download_budget::BudgetSnapshot> {
-        if root_body_cap_bytes == Some(0) {
-            bail!("累计下载正文上限必须大于0，或关闭上限");
-        }
-        if self.running.is_some() {
-            bail!("请先停止受管训练器，再保存下载额度");
-        }
-        let root = self.resolve(value)?;
-        let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
-        assert_regular_ready(&root)?;
-        let policy = crate::download_budget::DownloadPolicy {
-            root_cap_body_bytes: root_body_cap_bytes,
-        };
-        match expected_revision {
-            None => {
-                crate::download_budget::initialize_policy(&ctx, policy)?;
-            }
-            Some(revision) => crate::download_budget::set_policy(&ctx, revision, policy)?,
-        }
-        crate::download_budget::snapshot_with_receipt(ctx.layout())
-    }
-    pub fn reconcile_download_budget(
-        &self,
-        value: &str,
-    ) -> Result<crate::download_budget::BudgetSnapshot> {
-        if self.running.is_some() {
-            bail!("请先停止受管训练器，再结清中断下载计账");
-        }
-        let root = self.resolve(value)?;
-        let ctx = model::WorkspaceMutation::acquire(&root, &self.default_release().id)?;
-        assert_regular_ready(&root)?;
-        crate::download_budget::reconcile(&ctx)?;
-        crate::download_budget::snapshot_with_receipt(ctx.layout())
     }
     fn default_release(&self) -> &Release {
         self.catalog
@@ -2236,15 +2182,10 @@ mod tests {
     }
 
     #[test]
-    fn unknown_registration_intent_blocks_normal_mutations_across_release_and_keeps_budget() {
+    fn unknown_registration_intent_blocks_normal_mutations_across_release() {
         let root = negative_test_root("registration-gate");
         let (log, _) = logger();
         let mut engine = Engine::new(root.clone(), log);
-        engine
-            .save_download_budget(root.to_str().unwrap(), None, Some(1_048_576))
-            .unwrap();
-        let ledger = root.join("state/download-budget.json");
-        let before = fs::read(&ledger).unwrap();
         let catalog = Catalog::embedded().unwrap();
         let release = &catalog.releases()[0];
         let intent = root
@@ -2254,19 +2195,12 @@ mod tests {
         let foreign = b"{\"schema_version\":99,\"status\":\"committing\"}";
         fs::write(&intent, foreign).unwrap();
         assert!(assert_regular_ready(&root).is_err());
-        assert!(engine
-            .save_download_budget(root.to_str().unwrap(), Some(1), Some(2_097_152))
-            .is_err());
-        assert!(engine
-            .reconcile_download_budget(root.to_str().unwrap())
-            .is_err());
         let other = catalog
             .releases()
             .iter()
             .find(|item| item.id != release.id)
             .unwrap();
         assert!(engine.select_release(&root, &other.id).is_err());
-        assert_eq!(fs::read(ledger).unwrap(), before);
         assert_eq!(fs::read(intent).unwrap(), foreign);
     }
     #[test]
@@ -2338,17 +2272,54 @@ mod tests {
     }
 
     #[test]
+    fn failed_prefetch_persists_terminal_state_despite_broken_legacy_accounting() {
+        let root = negative_test_root("prefetch-terminal");
+        let (log, _) = logger();
+        let mut engine = Engine::new(root.clone(), log);
+        let settings: crate::network_policy::Settings =
+            serde_json::from_value(serde_json::json!({"mode":"direct"})).unwrap();
+        engine
+            .save_network_settings(root.to_str().unwrap(), &settings)
+            .unwrap();
+        let legacy = root.join("state/download-budget.json");
+        fs::write(&legacy, b"broken legacy ledger").unwrap();
+        let (url, server) = serve_once(
+            "HTTP/1.1 200 OK\r\nContent-Length: 4\r\nConnection: close\r\n\r\n",
+            b"tiny",
+        );
+        let release = &mut engine.catalog.releases[0];
+        release.archive.url = url;
+        release.archive.bytes = 4;
+        release.archive.sha256 = "0".repeat(64);
+        let release_id = release.id.clone();
+        let manager = crate::operations::OperationManager::default();
+        let operation = manager
+            .start(
+                "prefetch-terminal",
+                crate::operations::OperationKind::Download,
+            )
+            .unwrap();
+        let error = engine
+            .prefetch_release(&root, &release_id, &operation)
+            .unwrap_err();
+        server.join().unwrap();
+        assert!(error.to_string().contains("校验失败"));
+        let layout = Layout::new(&root, &release_id).unwrap();
+        let records = crate::operations::load_snapshots(&layout).unwrap();
+        let saved = records
+            .iter()
+            .find(|item| item.id == "prefetch-terminal")
+            .unwrap();
+        assert_eq!(saved.status, crate::operations::OperationStatus::Failed);
+        assert!(saved.error.as_ref().unwrap().message.contains("校验失败"));
+        assert_eq!(fs::read(legacy).unwrap(), b"broken legacy ledger");
+    }
+
+    #[test]
     fn wrong_sha_download_keeps_partial_and_never_publishes_target() {
         let root = negative_test_root("wrong-sha");
         let catalog = Catalog::embedded().unwrap();
         let ctx = model::WorkspaceMutation::acquire(&root, &catalog.releases()[0].id).unwrap();
-        crate::download_budget::initialize_policy(
-            &ctx,
-            crate::download_budget::DownloadPolicy {
-                root_cap_body_bytes: Some(1_048_576),
-            },
-        )
-        .unwrap();
         let cache = root.join("cache");
         let target = cache.join("asset.zip");
         fs::write(&target, b"previous asset").unwrap();
@@ -2377,12 +2348,6 @@ mod tests {
             .collect();
         assert_eq!(partials.len(), 1);
         assert_eq!(fs::read(&partials[0]).unwrap(), b"tiny");
-        let snapshot = crate::download_budget::snapshot_with_receipt(ctx.layout()).unwrap();
-        assert_eq!(snapshot.budget.counters.observed_body_bytes, 4);
-        assert_eq!(
-            snapshot.latest_receipt.unwrap().outcome,
-            crate::download_budget::DownloadOutcome::Failed
-        );
     }
 
     #[test]
@@ -2390,13 +2355,6 @@ mod tests {
         let root = negative_test_root("content-length");
         let catalog = Catalog::embedded().unwrap();
         let ctx = model::WorkspaceMutation::acquire(&root, &catalog.releases()[0].id).unwrap();
-        crate::download_budget::initialize_policy(
-            &ctx,
-            crate::download_budget::DownloadPolicy {
-                root_cap_body_bytes: Some(1_048_576),
-            },
-        )
-        .unwrap();
         let cache = root.join("cache");
         let (url, server) = serve_once(
             "HTTP/1.1 200 OK\r\nContent-Length: 200000001\r\nConnection: close\r\n\r\n",
@@ -2411,10 +2369,6 @@ mod tests {
             "未到达长度上限拒绝路径：{error}"
         );
         assert!(fs::read_dir(&cache).unwrap().next().is_none());
-        let budget = crate::download_budget::snapshot(ctx.layout()).unwrap();
-        assert_eq!(budget.counters.requests, 1);
-        assert_eq!(budget.counters.observed_body_bytes, 0);
-        assert_eq!(budget.reserved_body_bytes, 0);
     }
 
     #[test]

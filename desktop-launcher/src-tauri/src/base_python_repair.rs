@@ -432,9 +432,6 @@ fn tree_with_aliases(
     })
 }
 fn capture(layout: &Layout, references: &[Reference], cancel: &CancelToken) -> Result<Protection> {
-    // 预算元数据有独立的持租约/CAS合同，本事务下载时允许合法计账。
-    // 先验证完整身份、schema及receipt，不能吞错并当作未启用。
-    crate::download_budget::snapshot_with_receipt(layout)?;
     let mut roots = BTreeMap::new();
     for name in ["environments", "e", "releases", "tools", "config"] {
         roots.insert(
@@ -1973,71 +1970,25 @@ mod tests {
         );
     }
     #[test]
-    fn legal_download_accounting_keeps_reviewed_protection_but_corrupt_budget_blocks() {
-        use crate::download_budget::{
-            AssetIdentity, AttemptKind, AttemptOutcome, DownloadBudget, DownloadOutcome,
-            DownloadPolicy, OperationLimits,
-        };
+    fn obsolete_download_accounting_is_ignored_and_preserved() {
         let f = Fixture::new();
         let ctx = WorkspaceMutation::acquire(&f.root, &format!("dev-{}", "a".repeat(40))).unwrap();
-        let cancel = CancelToken::new();
-        let before = capture(ctx.layout(), &[], &cancel).unwrap();
-        let reviewed = plan(&f.root, &Catalog::embedded().unwrap(), &cancel)
-            .unwrap()
-            .plan_sha256;
-        let budget = DownloadBudget::begin(
-            &ctx,
-            "base-candidate-asset",
-            None,
-            DownloadPolicy {
-                root_cap_body_bytes: Some(1024),
-            },
-            OperationLimits {
-                max_charged_body_bytes: 1024,
-                max_requests: 8,
-                max_retries: 1,
-                max_redirects: 2,
-                max_elapsed_ms: 10_000,
-            },
-        )
-        .unwrap();
-        let (attempt, credit) = budget
-            .begin_attempt(
-                &AssetIdentity {
-                    sha256: "a".repeat(64),
-                    url_sha256: "b".repeat(64),
-                    authority: "example.test:443".into(),
-                },
-                AttemptKind::Initial,
-                64,
-            )
-            .unwrap();
-        budget.settle_read(credit, 7).unwrap();
-        budget
-            .finish_attempt(attempt, AttemptOutcome::Completed)
-            .unwrap();
-        budget.finish(DownloadOutcome::Succeeded).unwrap();
-        drop(budget);
-        assert_eq!(capture(ctx.layout(), &[], &cancel).unwrap(), before);
+        let before = capture(ctx.layout(), &[], &CancelToken::new()).unwrap();
+        for name in ["download-budget.json", "download-budget-enrollment.json"] {
+            let path = f.root.join("state").join(name);
+            fs::write(&path, b"old unreadable accounting state").unwrap();
+        }
+        let receipt = f.root.join("state/download-receipts");
+        fs::create_dir_all(&receipt).unwrap();
+        fs::write(receipt.join("foreign.json"), b"{broken legacy receipt}").unwrap();
         assert_eq!(
-            plan(&f.root, &Catalog::embedded().unwrap(), &cancel)
-                .unwrap()
-                .plan_sha256,
-            reviewed
+            capture(ctx.layout(), &[], &CancelToken::new()).unwrap(),
+            before
         );
-        let ledger = f.root.join("state/download-budget.json");
-        let original = fs::read(&ledger).unwrap();
-        let mut unknown: serde_json::Value = serde_json::from_slice(&original).unwrap();
-        unknown["schema_version"] = serde_json::json!(99);
-        let corrupt = serde_json::to_vec(&unknown).unwrap();
-        fs::write(&ledger, &corrupt).unwrap();
-        assert!(capture(ctx.layout(), &[], &cancel).is_err());
-        assert_eq!(fs::read(&ledger).unwrap(), corrupt);
-        fs::write(&ledger, original).unwrap();
-        let receipt = f.root.join("state/download-receipts/foreign.json");
-        fs::write(&receipt, b"{\"schema_version\":99}").unwrap();
-        assert!(capture(ctx.layout(), &[], &cancel).is_err());
-        assert_eq!(fs::read(receipt).unwrap(), b"{\"schema_version\":99}");
+        assert_eq!(
+            fs::read(receipt.join("foreign.json")).unwrap(),
+            b"{broken legacy receipt}"
+        );
     }
     #[test]
     fn profiles_content_change_and_new_unrelated_state_change_protection() {

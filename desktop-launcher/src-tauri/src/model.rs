@@ -16,7 +16,7 @@ pub const SCHEMA_VERSION: u32 = 1;
 pub const PROFILE_SCHEMA_VERSION: u32 = 1;
 pub const MAX_DOWNLOAD_BYTES: u64 = 200_000_000;
 /// 受固定配方授权的单个大wheel上限；旧源码目录仍沿用200MB限制。
-// CUDA wheel可大于3GiB；下载始终流式、固定长度/摘要，仍受工作区累计额度约束。
+// CUDA wheel可大于3GiB；下载始终流式，并校验固定长度与摘要。
 pub const MAX_MANAGED_ASSET_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 pub const MAX_EXTRACT_BYTES: u64 = 2_000_000_000;
 pub const PROFILE_DIRECTORIES: &[&str] = &["user_data", "library", "compat"];

@@ -310,7 +310,7 @@ pub(super) fn apply(
         if cap > 64 * 1024 * 1024 * 1024 {
             bail!("单引擎资产超过64GiB上限");
         }
-        let mut downloads = ArtifactDownloads::new(&operation.id()?, cap.max(1), 512);
+        let mut downloads = ArtifactDownloads::new();
         let fetched = (|| -> Result<()> {
             operation.publish(OperationPhase::Downloading, "准备已锁定的独立引擎资产")?;
             for asset in assets {
@@ -358,7 +358,7 @@ pub(super) fn apply(
             }
             Ok(())
         })();
-        downloads.finish(&fetched)?;
+
         fetched?;
     }
     operation.publish(

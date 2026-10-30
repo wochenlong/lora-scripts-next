@@ -2,7 +2,7 @@
 import { ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import type { OperationSnapshot } from './bridge'
-import { formatBudgetBytes } from './download-budget'
+import { formatBytes } from './bytes'
 const props=defineProps<{root:string;releaseId:string;disabled:boolean}>()
 const emit=defineEmits<{operate:[label:string,action:()=>Promise<OperationSnapshot>]}>()
 type Plan={plan_sha256:string;engine_id:string;release_id:string;kind:string;instance_id:string;download_bytes:number;packages:string[];source_paths:string[];write_roots:string[];issues:{message?:string;path?:string;kind?:string}[];status:string}
@@ -43,7 +43,7 @@ const stateName=(value:string)=>({ready:'文件校验通过',missing:'尚未安�
       <div class="actions"><button :disabled="disabled||busy||inspection.installation!=='ready'" @click="apply('probe_execute')">独立解释器探测</button><button :disabled="disabled||busy" @click="apply('recover')">恢复未完成变更</button></div>
     </template>
     <div v-if="plan" class="gui-recovery">
-      <p>{{plan.kind==='install'?'安装到新实例':'精准修复当前实例'}} · 下载 {{formatBudgetBytes(plan.download_bytes)}} · 实例 {{plan.instance_id}}</p>
+      <p>{{plan.kind==='install'?'安装到新实例':'精准修复当前实例'}} · 下载 {{formatBytes(plan.download_bytes)}} · 实例 {{plan.instance_id}}</p>
       <p v-if="plan.packages.length">依赖：{{plan.packages.join('、')}}</p><p v-if="plan.source_paths.length">训练源码：{{plan.source_paths.length}} 个文件</p>
       <ul><li v-for="directory in plan.write_roots" :key="directory">{{directory}}</li></ul>
       <p class="hint">确认后将下载清单中的固定资产并执行操作。失败或取消会保留恢复信息。</p>

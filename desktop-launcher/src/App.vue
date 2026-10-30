@@ -8,9 +8,7 @@ import { settingsForSave } from './network-settings'
 import type { ProxyField } from './network-settings'
 import { previewBasePythonRepair, repairBasePython, recoverBasePython } from './bridge'
 import type { BasePythonRepairPreview } from './bridge'
-import { getDownloadBudget, reconcileDownloadBudget, saveDownloadBudget } from './bridge'
-import type { BudgetSnapshot, OperationDownloadReceipt } from './bridge'
-import { budgetDraft, formatBudgetBytes, parseBudgetCap } from './download-budget'
+import { formatBytes as formatFileSize } from './bytes'
 import { previewGuiRegistration, restoreGuiRegistration, recoverGuiRegistration } from './bridge'
 import type { GuiRegistrationPreview } from './bridge'
 
@@ -58,17 +56,6 @@ const showAllPackages = ref(false)
 const networkView = ref<NetworkSettingsView | null>(null)
 const networkDraft = ref({ mode: 'auto' as NonNullable<NetworkSettings['mode']>, http_proxy: '', https_proxy: '', no_proxy: '' })
 const networkInherit = ref<ProxyField[]>([])
-const downloadBudget = ref<BudgetSnapshot | null>(null)
-const downloadBudgetDraft = ref(budgetDraft(null, null))
-const downloadCapEnabled = ref(false)
-const downloadBudgetEdited = ref(false)
-const downloadBudgetError = ref('')
-const downloadBudgetSaveError = ref('')
-const downloadBudgetNotice = ref('')
-const downloadBudgetRefreshing = ref(false)
-const downloadBudgetSaving = ref(false)
-let budgetEpoch = 0
-let budgetTimer: ReturnType<typeof setInterval> | undefined
 let guiEpoch = 0
 let operationTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
@@ -127,118 +114,9 @@ const guiRecoveryNeeded = computed(() => Boolean(guiDiagnosis.value?.dirty || gu
 const affectedPackages = computed(() => guiDiagnosis.value?.integrity.packages.filter(packageNeedsAttention) ?? [])
 const visiblePackages = computed(() => showAllPackages.value ? guiDiagnosis.value?.integrity.packages ?? [] : affectedPackages.value)
 const guiPlanBlocked = computed(() => Boolean(guiRecoveryNeeded.value || guiDiagnosis.value?.source_error || guiDiagnosis.value?.installed_metadata_error))
-const budget = computed(() => downloadBudget.value?.budget)
-const latestDownloadReceipt = computed(() => downloadBudget.value?.latest_receipt)
-const budgetEditDisabled = computed(() => mutationDisabled.value || downloadBudgetRefreshing.value || downloadBudgetSaving.value || !downloadBudget.value || Boolean(budget.value?.active_operation || budget.value?.pending_reconciliation))
-const budgetSaveDisabled = computed(() => budgetEditDisabled.value || !downloadBudgetEdited.value)
 
 watch([path, () => currentVersion.value?.id], clearGuiState, { flush: 'sync' })
 watch(path, () => { networkView.value = null; networkInherit.value = []; networkDraft.value = { mode: 'auto', http_proxy: '', https_proxy: '', no_proxy: '' } }, { flush: 'sync' })
-watch(path, () => {
-  budgetEpoch += 1
-  downloadBudget.value = null
-  downloadBudgetDraft.value = budgetDraft(null, null)
-  downloadCapEnabled.value = false
-  downloadBudgetEdited.value = false
-  downloadBudgetError.value = ''
-  downloadBudgetSaveError.value = ''
-  downloadBudgetNotice.value = ''
-  downloadBudgetRefreshing.value = false
-  downloadBudgetSaving.value = false
-}, { flush: 'sync' })
-
-function acceptDownloadBudget(value: BudgetSnapshot, replaceDraft = false) {
-  downloadBudget.value = value
-  if (replaceDraft || !downloadBudgetEdited.value) {
-    downloadBudgetDraft.value = budgetDraft(value.budget.root_cap_body_bytes, value.budget.policy_revision)
-    downloadCapEnabled.value = value.budget.root_cap_body_bytes !== null
-    downloadBudgetEdited.value = false
-  }
-}
-async function refreshDownloadBudget(replaceDraft = false) {
-  if (!sameRoot.value || downloadBudgetRefreshing.value || downloadBudgetSaving.value) return
-  const root = path.value.trim()
-  const epoch = budgetEpoch
-  downloadBudgetRefreshing.value = true
-  try {
-    const value = await getDownloadBudget(root)
-    if (disposed || epoch !== budgetEpoch || root !== path.value.trim()) return
-    acceptDownloadBudget(value, replaceDraft)
-    downloadBudgetError.value = ''
-    if (replaceDraft) {
-      downloadBudgetSaveError.value = ''
-      downloadBudgetNotice.value = '已重新读取下载用量与限制。'
-    }
-  } catch (reason) {
-    if (!disposed && epoch === budgetEpoch && root === path.value.trim()) downloadBudgetError.value = errorText(reason)
-  } finally {
-    if (epoch === budgetEpoch) downloadBudgetRefreshing.value = false
-  }
-}
-function editDownloadBudget() {
-  downloadBudgetEdited.value = true
-  downloadBudgetNotice.value = ''
-  downloadBudgetSaveError.value = ''
-}
-async function storeDownloadBudget() {
-  if (budgetSaveDisabled.value) return
-  let bytes: number | null
-  try { bytes = downloadCapEnabled.value ? parseBudgetCap(downloadBudgetDraft.value.value, downloadBudgetDraft.value.unit) : null }
-  catch (reason) { downloadBudgetSaveError.value = errorText(reason); return }
-  const root = path.value.trim()
-  const epoch = budgetEpoch
-  const revision = downloadBudgetDraft.value.expectedRevision
-  downloadBudgetSaving.value = true
-  downloadBudgetError.value = ''
-  downloadBudgetSaveError.value = ''
-  await perform('保存下载限制', async () => {
-    try {
-      const value = await saveDownloadBudget(root, revision, bytes)
-      if (disposed || epoch !== budgetEpoch || root !== path.value.trim()) return
-      acceptDownloadBudget(value, true)
-      downloadBudgetNotice.value = bytes === null ? '已关闭累计下载上限，已有用量记录继续保留。' : '累计下载上限已保存，已有用量记录继续保留。'
-    } catch (reason) {
-      if (epoch === budgetEpoch && root === path.value.trim()) downloadBudgetSaveError.value = `${errorText(reason)}。可重新读取下载限制后再编辑。`
-      throw reason
-    }
-  })
-  if (epoch === budgetEpoch) downloadBudgetSaving.value = false
-}
-function confirmBudgetReconciliation() {
-  if (mutationDisabled.value || !budget.value || !(budget.value.pending_reconciliation || budget.value.active_operation)) return
-  const root = path.value.trim()
-  const epoch = budgetEpoch
-  return ask({
-    scope: 'gui', title: '结清中断下载预留',
-    detail: `启动器会先确认此目录没有正在执行的操作，再结束遗留的下载计账。当前显示的未结预留为 ${formatBudgetBytes(budget.value.reserved_body_bytes)}；未能确认的预留将计入保守扣账，已有用量与当前限制设置会继续保留。`,
-    action: '确认结清预留',
-    execute: async () => {
-      if (epoch !== budgetEpoch || root !== path.value.trim() || mutationDisabled.value) return
-      downloadBudgetSaving.value = true
-      downloadBudgetSaveError.value = ''
-      await perform('结清中断下载预留', async () => {
-        try {
-          const value = await reconcileDownloadBudget(root)
-          if (disposed || epoch !== budgetEpoch || root !== path.value.trim()) return
-          acceptDownloadBudget(value, true)
-          downloadBudgetError.value = ''
-          downloadBudgetNotice.value = '中断预留已结清，已有用量与当前限制设置继续保留。'
-        } catch (reason) {
-          if (epoch === budgetEpoch && root === path.value.trim()) downloadBudgetSaveError.value = errorText(reason)
-          throw reason
-        }
-      })
-      if (epoch === budgetEpoch) downloadBudgetSaving.value = false
-    },
-  })
-}
-function receiptOutcome(value: OperationDownloadReceipt['outcome']) {
-  return ({ succeeded: '已完成', failed: '失败', cancelled: '已取消', interrupted: '中断后已补记' })[value]
-}
-function receiptTime(value: number) {
-  return new Date(value).toLocaleString('zh-CN', { hour12: false })
-}
-
 function acceptNetworkSettings(view: NetworkSettingsView) {
   networkView.value = view
   networkInherit.value = []
@@ -335,7 +213,6 @@ function acceptReport(value: Report) {
     void refreshHistory().catch((reason) => { error.value = errorText(reason) })
   }
   if (value.error) throw new Error(value.error)
-  void refreshDownloadBudget()
 }
 async function refreshHistory() {
   const root = path.value.trim()
@@ -367,7 +244,6 @@ async function pollOperation() {
     if (next.status !== 'running') {
       clearGuiState()
       await refreshHistory()
-      await refreshDownloadBudget()
       if (next.kind !== 'download' && stillCurrent()) {
         const value = await runCommand('inspect', root)
         if (stillCurrent()) acceptReport(value)
@@ -698,15 +574,12 @@ async function startGuiOperation(label: string, action: () => Promise<OperationS
   } finally { pending.value = '' }
 }
 onMounted(async () => {
-  budgetTimer = setInterval(() => {
-    if (busy.value || page.value === 'environment') void refreshDownloadBudget()
-  }, 1000)
   try { unlisten = await listenToLogs(addLog) }
   catch { addLog('桌面事件接口尚未连接；请通过桌面启动器打开此页面。') }
   await command('inspect', '检查安装状态')
   try { await refreshHistory() } catch (reason) { error.value = errorText(reason) }
 })
-onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operationTimer); if (budgetTimer) clearInterval(budgetTimer); unlisten?.() })
+onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operationTimer); unlisten?.() })
 </script>
 
 <template>
@@ -771,52 +644,6 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <button :disabled="mutationDisabled" @click="storeNetworkSettings">保存网络设置</button>
             </template>
           </details>
-          <details v-if="sameRoot" class="download-budget">
-            <summary>高级：下载用量与限制</summary>
-            <p class="hint">默认不限制累计下载量，可直接下载安装。需要控制此工作区的下载用量时，可在这里启用累计上限。</p>
-            <button class="compact" :disabled="downloadBudgetRefreshing || downloadBudgetSaving" @click="refreshDownloadBudget(true)">{{ downloadBudgetRefreshing ? '正在读取…' : '重新读取用量与限制' }}</button>
-            <p class="budget-measurement">用量仅统计启动器下载的文件正文。</p>
-            <p class="hint">累计用量包含已交付正文与无法确认交付数时的保守扣账，未结预留暂计入限制。系统及其他程序的网络流量另计。</p>
-            <p v-if="downloadBudgetError" class="gui-issue" role="alert">{{ downloadBudgetError }}{{ downloadBudget ? '。以下为上次成功读取的统计。' : '' }}</p>
-            <template v-if="budget">
-              <p v-if="!budget.enabled" class="hint">{{ budget.pending_reconciliation ? '用量记录初始化尚未完成，请先结清中断预留以恢复已保存的设置。' : '当前累计下载量不设上限，首次下载后将自动记录用量。' }}</p>
-              <template v-else>
-                <dl class="budget-statistics">
-                  <div><dt>累计上限</dt><dd :title="budget.root_cap_body_bytes === null ? undefined : `${budget.root_cap_body_bytes.toLocaleString()} 字节`">{{ budget.root_cap_body_bytes === null ? '不限制' : formatBudgetBytes(budget.root_cap_body_bytes) }}</dd></div>
-                  <div><dt>累计用量</dt><dd>{{ formatBudgetBytes(budget.counters.observed_body_bytes + budget.counters.uncertain_charge_bytes) }}</dd></div>
-                  <div><dt>已交付正文</dt><dd>{{ formatBudgetBytes(budget.counters.observed_body_bytes) }}</dd></div>
-                  <div><dt>保守扣账</dt><dd>{{ formatBudgetBytes(budget.counters.uncertain_charge_bytes) }}</dd></div>
-                  <div><dt>未结预留</dt><dd>{{ formatBudgetBytes(budget.reserved_body_bytes) }}</dd></div>
-                  <div><dt>剩余可用量</dt><dd>{{ budget.remaining_body_bytes === null ? '不限制' : formatBudgetBytes(budget.remaining_body_bytes) }}</dd></div>
-                </dl>
-                <p class="hint">{{ budget.coverage_prior_history === 'not_measured' ? '开始记录前的历史用量未计量；以上为已记录的累计用量。' : '以上为已记录的累计用量，此前的历史用量无法据此还原。' }} · {{ budget.counters.requests.toLocaleString() }} 次请求 · {{ budget.counters.cache_hits.toLocaleString() }} 次已计入的缓存命中</p>
-                <p v-if="budget.active_operation" class="budget-state" role="status">当前下载操作 <code>{{ budget.active_operation }}</code> · 本次剩余可用量 {{ formatBudgetBytes(budget.operation_remaining_body_bytes) }}。操作结束前暂不能修改限制。</p>
-                <p v-else-if="budget.pending_reconciliation" class="budget-state" role="status">存在尚未核对完成的用量记录，请先结清中断预留后再修改限制。</p>
-                <p v-else-if="budget.root_cap_body_bytes !== null && budget.remaining_body_bytes === 0" class="budget-state" role="status">已达到累计下载上限。已验证缓存仍可使用；继续联网下载前需增加或关闭上限。</p>
-              </template>
-              <button v-if="budget.pending_reconciliation || budget.active_operation" class="compact" :disabled="mutationDisabled || downloadBudgetSaving || downloadBudgetRefreshing" @click="confirmBudgetReconciliation">结清中断预留</button>
-              <div class="budget-cap-form">
-                <label class="budget-cap-toggle"><input v-model="downloadCapEnabled" type="checkbox" :disabled="budgetEditDisabled" @change="editDownloadBudget" />限制此工作区的累计下载量</label>
-                <div class="budget-cap-input">
-                  <input v-if="downloadCapEnabled" id="download-cap" v-model="downloadBudgetDraft.value" aria-label="累计下载上限" inputmode="numeric" maxlength="32" autocomplete="off" placeholder="填写正整数" :disabled="budgetEditDisabled" aria-describedby="download-cap-hint" @input="editDownloadBudget" @keydown.enter="storeDownloadBudget" />
-                  <select v-if="downloadCapEnabled" v-model="downloadBudgetDraft.unit" aria-label="下载上限单位" :disabled="budgetEditDisabled" @change="editDownloadBudget"><option value="GiB">GiB</option><option value="MiB">MiB</option><option value="B">字节</option></select>
-                  <button :disabled="budgetSaveDisabled" @click="storeDownloadBudget">保存下载限制</button>
-                </div>
-                <p id="download-cap-hint" class="hint">{{ downloadCapEnabled ? '上限包含已有累计用量，请填写正整数。' : '累计下载量不设上限。' }}修改或关闭上限均保留已有用量记录。{{ downloadBudgetEdited ? '存在尚未保存的修改。' : '' }}</p>
-                <p v-if="downloadBudgetSaveError" class="gui-issue" role="alert">{{ downloadBudgetSaveError }}</p>
-                <p v-if="downloadBudgetNotice" class="hint" role="status">{{ downloadBudgetNotice }}</p>
-              </div>
-              <section v-if="latestDownloadReceipt" class="budget-receipt" aria-labelledby="download-receipt-title">
-                <h3 id="download-receipt-title">最近下载计账<span>{{ receiptOutcome(latestDownloadReceipt.outcome) }} · {{ receiptTime(latestDownloadReceipt.finished_at_ms) }}</span></h3>
-                <p><code>{{ latestDownloadReceipt.operation_id }}</code><span v-if="latestDownloadReceipt.retry_of"> · 重试自 <code>{{ latestDownloadReceipt.retry_of }}</code></span></p>
-                <p>已交付正文 {{ formatBudgetBytes(latestDownloadReceipt.counters.observed_body_bytes) }} · 保守扣账 {{ formatBudgetBytes(latestDownloadReceipt.counters.uncertain_charge_bytes) }} · {{ latestDownloadReceipt.accounting_complete ? '本次计账已结清' : '本次计账尚未结清' }}</p>
-                <p>{{ latestDownloadReceipt.counters.requests }} 次请求 · {{ latestDownloadReceipt.counters.retries }} 次重试 · {{ latestDownloadReceipt.counters.redirects }} 次跳转 · {{ latestDownloadReceipt.counters.cache_hits }} 次缓存命中</p>
-                <details><summary>查看本次下载限制</summary><p>正文与保守扣账 {{ formatBudgetBytes(latestDownloadReceipt.limits.max_charged_body_bytes) }}；最多 {{ latestDownloadReceipt.limits.max_requests }} 次请求、{{ latestDownloadReceipt.limits.max_retries }} 次重试、{{ latestDownloadReceipt.limits.max_redirects }} 次跳转，总时限 {{ latestDownloadReceipt.limits.max_elapsed_ms / 1000 }} 秒。</p></details>
-              </section>
-              <p v-else class="hint">尚无已结束的下载计账记录。</p>
-            </template>
-            <p v-else-if="!downloadBudgetError" class="hint">正在读取此目录的下载用量与限制…</p>
-          </details>
           <section v-if="sameRoot && registrationVersions.length" class="gui-diagnostics" aria-labelledby="registration-title">
             <div class="section-caption"><h2 id="registration-title">恢复安装登记</h2><button :disabled="mutationDisabled" @click="inspectGuiRegistration">只读检查登记</button></div>
             <p class="hint">源码和环境仍在、安装记录丢失时，可离线验证并补齐登记。检查不会执行解释器；确认后会使用独立临时资料验证真实入口。</p>
@@ -844,7 +671,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
             </template>
             <template v-if="lifecyclePreview">
               <p v-if="lifecyclePreview.reason" class="gui-issue" role="alert">{{ lifecyclePreview.reason }}</p>
-              <p v-if="lifecyclePreview.plan" class="hint">旧实例：{{ lifecyclePreview.plan.old_binding?.instance_id ?? '尚无绑定' }} · 预计下载 {{ formatBudgetBytes(lifecyclePreview.plan.estimated_network_bytes ?? 0) }}</p>
+              <p v-if="lifecyclePreview.plan" class="hint">旧实例：{{ lifecyclePreview.plan.old_binding?.instance_id ?? '尚无绑定' }} · 预计下载 {{ formatFileSize(lifecyclePreview.plan.estimated_network_bytes ?? 0) }}</p>
               <button v-if="lifecyclePreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmLifecycle(lifecycleAction, lifecycleAction === 'rollback' ? lifecycleTransaction : null)">审查并{{ lifecycleAction === 'rebuild' ? '创建新实例' : '回退旧实例' }}</button>
             </template>
           </section>
@@ -919,25 +746,6 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 .network-settings summary { cursor: pointer; }
 .network-settings label { display: flex; align-items: center; gap: 12px; margin: 10px 0; }
 .network-settings input, .network-settings select { flex: 1; min-width: 0; padding: 6px; border: 1px solid #d4d4d4; background: white; font: inherit; }
-.download-budget { border: 1px solid #e5e5e5; padding: 12px; margin: 15px 0; }
-.download-budget > summary { cursor: pointer; font-size: 11px; }
-.budget-measurement { font-size: 11px; color: #525252; margin: 8px 0; }
-.budget-statistics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 15px 0 8px; }
-.budget-statistics dt { color: #737373; font-size: 10px; margin-bottom: 4px; }
-.budget-statistics dd { font-size: 12px; margin: 0; overflow-wrap: anywhere; }
-.budget-state { font-size: 10px; line-height: 1.8; color: #8c7050; padding: 8px; background: #fdfbf7; border: 1px solid #e4d6c4; overflow-wrap: anywhere; }
-.budget-cap-form { border-top: 1px solid #e5e5e5; margin-top: 12px; padding-top: 12px; }
-.budget-cap-form > label { display: block; color: #525252; font-size: 11px; margin-bottom: 7px; }
-.budget-cap-form > .budget-cap-toggle { display: flex; align-items: center; gap: 7px; }
-.budget-cap-input { display: flex; gap: 7px; }
-.budget-cap-input input, .budget-cap-input select { min-width: 0; padding: 6px 8px; border: 1px solid #d4d4d4; border-radius: 3px; background: white; font: inherit; }
-.budget-cap-input input { width: 0; flex: 1; }
-.budget-cap-input input:disabled, .budget-cap-input select:disabled { background: #fafafa; color: #737373; }
-.budget-cap-input button { font-size: 11px; }
-.budget-receipt { border-top: 1px solid #e5e5e5; margin-top: 15px; padding-top: 12px; color: #525252; font-size: 10px; line-height: 1.8; }
-.budget-receipt h3 { flex-wrap: wrap; font-size: 11px; margin-bottom: 5px; }
-.budget-receipt p { margin: 5px 0; overflow-wrap: anywhere; }
-.budget-receipt summary { cursor: pointer; }
 .gui-diagnostics { margin-top: 18px; border-top: 1px solid #e5e5e5; padding-top: 15px; }
 .gui-diagnostics > .section-caption { align-items: flex-start; }
 .gui-diagnostics > .section-caption button { font-size: 11px; flex-shrink: 0; }

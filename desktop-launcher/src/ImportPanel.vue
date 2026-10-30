@@ -2,7 +2,7 @@
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import type { OperationSnapshot } from './bridge'
-import { formatBudgetBytes } from './download-budget'
+import { formatBytes } from './bytes'
 
 const props = defineProps<{ root: string; releaseId: string; disabled: boolean }>()
 const emit = defineEmits<{ operate: [label: string, action: () => Promise<OperationSnapshot>]; changed: [] }>()
@@ -81,7 +81,7 @@ function recover() {
     <div class="actions"><button :disabled="locked || !source.trim() || !profile.trim()" @click="previewImport">扫描并预览导入</button></div>
     <p v-if="busy" role="status">正在读取并核对资料…</p><p v-if="error" class="issue" role="alert">{{ error }}</p>
     <div v-if="importPlan" class="review">
-      <h3>待复制资料</h3><dl><div><dt>复制文件</dt><dd>{{ importPlan.scan.files.length }} 个 · {{ formatBudgetBytes(importPlan.scan.copy_bytes) }}</dd></div><div><dt>预计峰值占用</dt><dd>{{ formatBudgetBytes(importPlan.peak_copy_bytes) }}</dd></div><div class="wide"><dt>新资料集位置</dt><dd><code>{{ importPlan.target_profile }}</code></dd></div></dl>
+      <h3>待复制资料</h3><dl><div><dt>复制文件</dt><dd>{{ importPlan.scan.files.length }} 个 · {{ formatBytes(importPlan.scan.copy_bytes) }}</dd></div><div><dt>预计峰值占用</dt><dd>{{ formatBytes(importPlan.peak_copy_bytes) }}</dd></div><div class="wide"><dt>新资料集位置</dt><dd><code>{{ importPlan.target_profile }}</code></dd></div></dl>
       <p class="hint">峰值包含暂存副本。后端会检查剩余空间，执行前再次核对扫描结果；源资料有变化时需重新预览。</p>
       <details><summary>查看 {{ importPlan.scan.files.length }} 个文件的复制位置</summary><div class="table-scroll"><table><thead><tr><th>源文件</th><th>新资料中的位置</th><th>处理方式</th></tr></thead><tbody><tr v-for="file in importPlan.scan.files" :key="file.source_relative"><td>{{ file.source_relative }}</td><td>{{ file.target_relative }}</td><td>{{ file.transformation === 'copy' ? '原样复制' : '转换配置中的绝对路径' }}</td></tr></tbody></table></div></details>
       <p v-if="transformed.length" class="hint">{{ transformed.length }} 份配置会转换其中的绝对路径，原配置保留在旧目录。</p>

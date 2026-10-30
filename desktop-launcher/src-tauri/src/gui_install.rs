@@ -64,12 +64,8 @@ pub(super) fn download(
     sha: &str,
     bytes: u64,
 ) -> Result<PathBuf> {
-    let mut downloads = super::artifact_downloads::ArtifactDownloads::new(
-        &operation.id()?,
-        recipe.budget.max_total_bytes,
-        512,
-    );
-    let result = download_in(
+    let mut downloads = super::artifact_downloads::ArtifactDownloads::new();
+    download_in(
         ctx,
         recipe,
         operation,
@@ -78,12 +74,10 @@ pub(super) fn download(
         name,
         sha,
         bytes,
-    );
-    downloads.finish(&result)?;
-    result
+    )
 }
 
-#[allow(clippy::too_many_arguments)] // 固定资产身份与同操作预算显式传递。
+#[allow(clippy::too_many_arguments)] // 固定资产身份与同操作下载入口显式传递。
 fn download_in(
     ctx: &WorkspaceMutation,
     recipe: &GuiRecipe,
@@ -133,15 +127,11 @@ pub(super) fn install(
     let ctx = WorkspaceMutation::acquire(root, &release.id)?;
     super::assert_regular_ready(root)?;
     operation.persist(&ctx)?;
-    let mut downloads = super::artifact_downloads::ArtifactDownloads::new(
-        &operation.id()?,
-        recipe.budget.max_total_bytes,
-        512,
-    );
+    let mut downloads = super::artifact_downloads::ArtifactDownloads::new();
     let result = super::gui_recovery::recover_source(&ctx, release)
         .and_then(|()| install_inner(&ctx, release, &recipe, operation, log, &mut downloads))
         .and_then(|()| crate::data_import::sync_current_environment(&ctx, &release.id));
-    downloads.finish(&result)?;
+
     let (status, error) = match &result {
         Ok(()) => (OperationStatus::Succeeded, None),
         Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
@@ -500,11 +490,7 @@ pub(super) fn build_replacement(
     }
     let wheelhouse = root.join("cache").join("wheelhouse");
     layout.ensure_dir(&wheelhouse)?;
-    let mut downloads = super::artifact_downloads::ArtifactDownloads::new(
-        &operation.id()?,
-        recipe.budget.max_total_bytes,
-        512,
-    );
+    let mut downloads = super::artifact_downloads::ArtifactDownloads::new();
     let result = (|| {
         phase(
             operation,
@@ -574,7 +560,7 @@ pub(super) fn build_replacement(
             .arg(lock);
         super::execute_controlled(sync, log, &operation.cancel_token())
     })();
-    downloads.finish(&result)?;
+
     result
 }
 

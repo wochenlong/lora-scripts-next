@@ -1,11 +1,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-mod budgeted_body;
 mod core;
 mod data_import;
+mod download_body;
 mod shell_update;
 mod signed_catalog;
 // 协议源码同时编译进独立helper；替换/回滚函数仅由helper调用。
-mod download_budget;
 mod gui_registration_integrity;
 mod instances;
 mod model;
@@ -962,61 +961,6 @@ async fn save_network_settings(
     .map_err(|error| error.to_string())?
 }
 #[tauri::command]
-async fn get_download_budget(
-    state: tauri::State<'_, Runtime>,
-    root: String,
-) -> Result<download_budget::BudgetSnapshot, String> {
-    let root = if root.trim().is_empty() {
-        state.default_root.clone()
-    } else {
-        PathBuf::from(root.trim())
-    };
-    tauri::async_runtime::spawn_blocking(move || {
-        let catalog = model::Catalog::embedded().map_err(|error| format!("{error:#}"))?;
-        let layout = model::Layout::new(&root, &catalog.releases()[0].id)
-            .map_err(|error| format!("{error:#}"))?;
-        download_budget::snapshot_with_receipt(&layout).map_err(|error| format!("{error:#}"))
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-#[tauri::command]
-async fn save_download_budget(
-    state: tauri::State<'_, Runtime>,
-    root: String,
-    expected_revision: Option<u64>,
-    root_body_cap_bytes: Option<u64>,
-) -> Result<download_budget::BudgetSnapshot, String> {
-    let engine = state.engine.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let engine = engine
-            .try_lock()
-            .map_err(|_| "已有任务执行中，请稍后保存下载额度".to_string())?;
-        engine
-            .save_download_budget(&root, expected_revision, root_body_cap_bytes)
-            .map_err(|error| format!("{error:#}"))
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-#[tauri::command]
-async fn reconcile_download_budget(
-    state: tauri::State<'_, Runtime>,
-    root: String,
-) -> Result<download_budget::BudgetSnapshot, String> {
-    let engine = state.engine.clone();
-    tauri::async_runtime::spawn_blocking(move || {
-        let engine = engine
-            .try_lock()
-            .map_err(|_| "已有任务执行中，请稍后结清中断计账".to_string())?;
-        engine
-            .reconcile_download_budget(&root)
-            .map_err(|error| format!("{error:#}"))
-    })
-    .await
-    .map_err(|error| error.to_string())?
-}
-#[tauri::command]
 async fn choose_directory(app: tauri::AppHandle) -> Result<Option<String>, String> {
     tauri::async_runtime::spawn_blocking(move || {
         Ok(app
@@ -1129,48 +1073,6 @@ fn main() {
                     release,
                     args.get(5).map(String::as_str),
                 )?;
-                println!("{}", serde_json::to_string_pretty(&value)?);
-                return Ok(());
-            }
-            if matches!(
-                op.as_str(),
-                "download-budget" | "set-download-budget" | "reconcile-download-budget"
-            ) {
-                let value = match op.as_str() {
-                    "download-budget" => {
-                        let catalog = model::Catalog::embedded()?;
-                        let layout = model::Layout::new(&root, &catalog.releases()[0].id)?;
-                        download_budget::snapshot_with_receipt(&layout)?
-                    }
-                    "set-download-budget" => {
-                        let cap = args.get(4).ok_or_else(|| {
-                            anyhow::anyhow!("缺少累计正文上限（非零字节整数，或off关闭）")
-                        })?;
-                        let cap = if cap == "off" {
-                            None
-                        } else {
-                            Some(cap.parse::<u64>()?)
-                        };
-                        let revision = args.get(5).ok_or_else(|| {
-                            anyhow::anyhow!("缺少expected revision；首次启用请明确填new")
-                        })?;
-                        let revision = if revision == "new" {
-                            None
-                        } else {
-                            Some(revision.parse::<u64>()?)
-                        };
-                        engine.save_download_budget(
-                            root.to_str()
-                                .ok_or_else(|| anyhow::anyhow!("根目录不是UTF-8"))?,
-                            revision,
-                            cap,
-                        )?
-                    }
-                    _ => engine.reconcile_download_budget(
-                        root.to_str()
-                            .ok_or_else(|| anyhow::anyhow!("根目录不是UTF-8"))?,
-                    )?,
-                };
                 println!("{}", serde_json::to_string_pretty(&value)?);
                 return Ok(());
             }
@@ -1342,9 +1244,6 @@ fn main() {
             stop_trainer,
             load_network_settings,
             save_network_settings,
-            get_download_budget,
-            save_download_budget,
-            reconcile_download_budget,
             choose_directory,
             open_trainer
         ])
