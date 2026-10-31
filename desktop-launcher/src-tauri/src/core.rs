@@ -16,8 +16,11 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
+#[path = "installation_snapshot.rs"]
+mod installation_snapshot;
 #[path = "lifecycle.rs"]
 mod lifecycle;
+pub use installation_snapshot::{read as installation_snapshot, InstallationSnapshot};
 #[path = "managed_child.rs"]
 mod managed_child;
 pub use lifecycle::{Lifecycle, RuntimeSnapshot};

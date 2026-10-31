@@ -22,7 +22,7 @@ mod shell_update_protocol;
 mod source_integrity;
 mod trial_ui;
 mod wheel_integrity;
-use core::{Engine, Lifecycle, Logger, Report, RuntimeSnapshot};
+use core::{Engine, InstallationSnapshot, Lifecycle, Logger, Report, RuntimeSnapshot};
 use std::{
     path::PathBuf,
     sync::{Arc, Mutex},
@@ -856,6 +856,23 @@ async fn action(
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
+async fn installation_snapshot(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+) -> Result<InstallationSnapshot, String> {
+    // 安装概况与运行状态独立读取，不等Engine完整检查/安装/启动的耗时锁。
+    let root = if root.trim().is_empty() {
+        state.default_root.clone()
+    } else {
+        PathBuf::from(root.trim())
+    };
+    tauri::async_runtime::spawn_blocking(move || {
+        core::installation_snapshot(&root).map_err(|error| format!("{error:#}"))
+    })
+    .await
+    .map_err(|error| error.to_string())?
+}
+#[tauri::command]
 async fn inspect(state: tauri::State<'_, Runtime>, root: String) -> Result<Report, String> {
     action(state, root, "inspect").await
 }
@@ -1160,6 +1177,13 @@ fn main() {
                 args.get(3)
                     .ok_or_else(|| anyhow::anyhow!("需要绝对工作区路径"))?,
             );
+            if op == "installation-snapshot" {
+                println!(
+                    "{}",
+                    serde_json::to_string_pretty(&core::installation_snapshot(&root)?)?
+                );
+                return Ok(());
+            }
             let (log, _) = core::logger();
             let mut engine = Engine::new(root.clone(), log);
             let root = engine.resolve(&root.to_string_lossy())?;
@@ -1449,6 +1473,7 @@ fn main() {
             operation_events,
             cancel_operation,
             operation_history,
+            installation_snapshot,
             inspect,
             bootstrap,
             restore_trainer,

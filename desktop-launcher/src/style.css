@@ -4,7 +4,7 @@
 --control-bg:#ffffff0f;--control-hover:#ffffff15;--control-selected:#ffffff10;--control-pressed:#ffffff08;--focus:#c7d4e9;--primary-bg:#91a3bf;--primary-fg:#101820;--primary-hover:#a0b0c8;--primary-disabled:#8493aa;--primary-disabled-fg:#26313f;--danger-bg:#973e50;
 --input-bg:#ffffff0f;--input-border:#ffffff0c;--input-bottom:#ffffff80;--input-option:#303438;--shell-bg:#182127;--sidebar-line:#ffffff0e;--neutral-dot:#c3cad4;--home-shadow:#09131ecc;
 --panel-bg:#101a2099;--panel-soft:#ffffff08;--panel-faint:#ffffff08;--panel-shadow:#00000033;--positive-bg:#3ea46722;--warning:#fce09c;--warning-bg:#705d263b;--warning-line:#e2c69b29;--error:#ffbac7;--error-bg:#562631b8;--error-line:#e2a1ae25;--scrollbar:#ffffff66;
---terminal-bg:#101a2038;--terminal-heading:#ffffff06;--terminal-detail:#101a2055;--log-info:#b6c7e8;--check-border:#ffffff8c;--toast-bg:#303b28e8;--dialog-backdrop:#00000066;--dialog-bg:#262d32ed;
+--terminal-bg:#101a2038;--terminal-heading:#ffffff06;--terminal-detail:#101a2055;--log-info:#b6c7e8;--check-border:#ffffff8c;--toast-bg:#303b28e8;--dialog-backdrop:#0000004d;--dialog-bg:var(--flyout-bg);--dialog-line:#ffffff1f;--dialog-shadow:0 15px 60px var(--panel-shadow);
 --engine-kohya-bg:#a0add41a;--engine-kohya-fg:#d8e2fd;--engine-anima-bg:#78b5b31a;--engine-anima-fg:#caece7;--engine-toolkit-bg:#caa1d21a;--engine-toolkit-fg:#dfd0e7;--engine-diffsynth-bg:#d6b47d1a;--engine-diffsynth-fg:#ecd4b5;
 --on-wall:#fff;--on-wall-secondary:#ffffffd9;--on-wall-muted:#ffffffb8;--on-wall-faint:#ffffffa3;--on-wall-positive:#6fce97;--on-wall-warning:#fce09c;--on-wall-shadow:#07131db3;--text:var(--fg);--text-strong:var(--fg-strong);--text-secondary:var(--fg-secondary);--text-muted:var(--fg-muted);--text-faint:var(--fg-faint);--text-good:var(--green);--text-warning:var(--warning);--text-hover-bg:var(--control-hover);
 --ease-fluent:cubic-bezier(.1,.9,.2,1);--duration-fast:167ms;--duration-faster:83ms;--flyout-bg:#252c32d9;
@@ -346,11 +346,18 @@ button.text-button:hover:not(:disabled),button.quiet-button:hover:not(:disabled)
 .log-caption{margin-left:auto;font-size:12px}
 .log-footer .text-button{margin-left:auto;padding:1px 0;font-size:12px}
 .toast{backdrop-filter:blur(30px);animation:toast-enter 250ms var(--ease-fluent);position:absolute;z-index:50;bottom:24px;left:50%;transform:translateX(-50%);max-width:78%;border:1px solid var(--line);background:var(--toast-bg);border-radius:6px;padding:11px 17px;color:var(--text);font-size:12px;box-shadow:0 8px 25px var(--panel-shadow);line-height:1.6}
-.dialog-backdrop{position:fixed;inset:0;z-index:100;background:var(--dialog-backdrop);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:24px}
-.confirmation-dialog{backdrop-filter:blur(30px);animation:dialog-enter 167ms var(--ease-fluent);width:440px;max-width:100%;max-height:calc(100vh - 48px);overflow:auto;background:var(--dialog-bg);color:var(--text);border:1px solid var(--line);border-radius:8px;padding:24px;box-shadow:0 15px 60px var(--panel-shadow)}
-.confirmation-dialog h2{font-size:18px;font-weight:600;margin:0}
-.confirmation-dialog p{font-size:14px;line-height:1.9;color:var(--text-secondary);overflow-wrap:anywhere;margin:14px 0 20px}
-.confirmation-dialog>div{display:flex;justify-content:flex-end;gap:8px}
+/* 主程序、引擎及高级操作共用同一亚克力确认材质，尺寸由各弹窗保留。 */
+.dialog-backdrop,.engine-confirm-backdrop{position:fixed;inset:0;z-index:100;background:var(--dialog-backdrop);backdrop-filter:blur(5px);display:flex;align-items:center;justify-content:center;padding:24px}
+.confirmation-dialog,.engine-confirm{--text:var(--fg);--text-strong:var(--fg-strong);--text-secondary:var(--fg-secondary);--text-muted:var(--fg-muted);--text-faint:var(--fg-faint);--text-hover-bg:var(--control-hover);backdrop-filter:blur(30px) saturate(125%);animation:dialog-enter var(--duration-fast) var(--ease-fluent);max-width:100%;max-height:calc(100vh - 48px);overflow:auto;background:var(--dialog-bg);color:var(--text);border:1px solid var(--dialog-line);border-radius:8px;padding:24px;box-shadow:var(--dialog-shadow);font-size:14px;line-height:1.75}
+.confirmation-dialog{width:440px}
+.engine-confirm{width:530px}
+.confirmation-dialog h2,.engine-confirm h2{font-size:18px;font-weight:600;line-height:1.45;color:var(--text-strong);margin:0}
+.confirmation-dialog p,.engine-confirm p{font-size:14px;line-height:1.75;color:var(--text-secondary);overflow-wrap:anywhere;margin:12px 0 18px}
+.confirmation-dialog>div,.engine-confirm-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:20px}
+.confirmation-dialog button,.engine-confirm button{font-size:14px;min-height:34px;border-color:var(--line)}
+.confirmation-dialog button:focus-visible,.engine-confirm button:focus-visible,.confirmation-dialog summary:focus-visible,.engine-confirm summary:focus-visible{outline:2px solid var(--focus);outline-offset:2px}
+.engine-confirm .engine-download{color:var(--text-strong)}
+.engine-confirm summary{cursor:pointer;color:var(--text-secondary);font-size:12px;padding:7px 0}
 .gui-confirmation{width:570px}
 .gui-confirmation .gui-paths{max-height:min(180px,30vh)}
 .spin{animation:spin 1.2s linear infinite}

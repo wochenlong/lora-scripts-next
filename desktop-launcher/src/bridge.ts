@@ -46,6 +46,33 @@ export interface VersionView {
   install_supported?: boolean
 }
 
+/** A fast inventory only. No integrity checks or Python execution have run. */
+export interface SnapshotIssue {
+  code: string
+  message: string
+  release_id?: string
+  path?: string
+}
+export interface InstallationVersionView extends Omit<VersionView, 'source_ok' | 'environment_ok'> {
+  source_present: boolean
+  environment_present: boolean
+  environment_bound: boolean
+  structure: 'missing' | 'present' | 'attention'
+  issues: SnapshotIssue[]
+}
+export interface InstallationSnapshot {
+  root: string
+  workspace: 'missing' | 'managed' | 'invalid'
+  verification: 'not_run'
+  current_release: string | null
+  previous_known_good: string | null
+  profile_path: string | null
+  start_available: boolean
+  versions: InstallationVersionView[]
+  issues: SnapshotIssue[]
+}
+export const installationSnapshot = (root: string) => invoke<InstallationSnapshot>('installation_snapshot', { root })
+
 export type ReportCommand = 'inspect' | 'bootstrap' | 'restore_trainer' | 'install_environment'
 export type ReleaseCommand = 'install_release' | 'select_release' | 'remove_release'
 
