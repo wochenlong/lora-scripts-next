@@ -1,0 +1,220 @@
+{
+  "change_request": "CR-018",
+  "status": "complete-with-boundary",
+  "passed": true,
+  "updated_at": "2026-10-31T18:57:52.678123+00:00",
+  "branch": "feat/desktop-launcher",
+  "implementation_commit": "c5050221015947d746428f412705d54b7e002461",
+  "final_build_commit": "65387fd294e0469d0ab18de3b7b4c1de9294f668",
+  "trainer_commit": "4e68df240c63ab7cf2156ea7fafabf18df4671e8",
+  "exe_sha256": "953d8bd76f97f96cd9d13e1d79f056c900ed53d333958418a5ba889cb5a55c92",
+  "checks": {
+    "backend_snapshot_tests": 7,
+    "cargo_check": true,
+    "strict_clippy": true,
+    "frontend_build": true,
+    "app_mock_checks": 61,
+    "engine_mock_checks": 27,
+    "dialog_style_checks": 14,
+    "native_checks": 9
+  },
+  "performance": {
+    "installed_root_page_reload_to_actionable_ms": 122,
+    "native_snapshot_ipc_ms": 24,
+    "old_user_root_snapshot_cli_ms": 668.3040999341756,
+    "process_cold_start_total_measured": false
+  },
+  "actual_native_acceptance": {
+    "ordinary_ui_source_repair": true,
+    "source_environment_frontend_checked": true,
+    "web_and_version_api_http_200": true,
+    "service_stopped_and_start_available": true,
+    "owned_processes_and_ports_reclaimed": true,
+    "bound_instances_and_user_profiles_unchanged": true,
+    "full_environment_tree_unchanged_claimed": false,
+    "release_receipt_installed_at_expected_to_change": true
+  },
+  "old_user_installation": {
+    "release": "dev-89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
+    "snapshot_start_available": true,
+    "verification": "not_run",
+    "issues": [],
+    "bounded_metadata_unchanged": true,
+    "user_python_started": false,
+    "window_or_service_operations": false,
+    "full_tree_unchanged_claimed": false
+  },
+  "delivery": {
+    "entry": "F:\\NextTrainerLauncherSandbox\\user-20261031\\启动启动器.cmd",
+    "target": "F:\\NextTrainerLauncherSandbox\\user-20261031\\launcher-simple-flow",
+    "checks": {
+      "package_matches": true,
+      "entry_other_bytes_preserved": true,
+      "original_note_preserved": true,
+      "old_programs_preserved": true,
+      "backup_matches": true
+    },
+    "application_started": false,
+    "user_service_stopped": false,
+    "user_installation_touched": false,
+    "rollback_backup": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\user-entry-backup"
+  },
+  "ui_baseline_tag": {
+    "name": "launcher-ui-baseline-20261031",
+    "preserved_commit": "7aa9d6c591990d2d0432f9df2b9eb82fa158beb3"
+  },
+  "preserved_failures": {
+    "candidate-1": "snapshot mixed slash path false rejection; fixed in candidate-2",
+    "native-simple-01": "source repair succeeded; protection verifier failed on expected receipt installed_at change; byte-exact reconstruction proves sole semantic change",
+    "final-user-snapshot-attempt-01.json": "same-root committed transaction incorrectly rejected; no user metadata write",
+    "app-flow-01_to_05": "fixture server path, missing mocked IPC, and selectors; final07 passes",
+    "engine-browser-01_to_03": "preserved earlier fixture attempts; final06 passes",
+    "dialog-style-before-01": "before screenshots retained; keyboard fixture initial focus fixed in after01"
+  },
+  "not_run_this_change": [
+    "full_new_install",
+    "four_engine_real_install",
+    "gpu_training",
+    "clean_windows",
+    "missing_webview2",
+    "native_tray_and_language_retest"
+  ],
+  "authorized_boundaries": "User requested brief acceptance and four engines smoke only; historic install/GPU evidence not claimed for this package. Real main-source repair and service run tested on owned ec18. Actual start keeps full validation.",
+  "evidence": [
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\backend-final-evidence.json",
+      "bytes": 10967,
+      "sha256": "1b4e14776d747367c1de4bae5fb0dc006d24cd8aec5f0d4af47a82e0c1c6be8e"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\backend-path-gate-tests.log",
+      "bytes": 1220,
+      "sha256": "af1117625e6e1151276d43d9c9955ad436860220baee61ce1accbde7a4d852f2"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\backend-path-gate-check.log",
+      "bytes": 190,
+      "sha256": "78612e2d2836643c876d04de21e313461e287303b2d5be8e1d58b73123901e86"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\backend-path-gate-clippy.log",
+      "bytes": 190,
+      "sha256": "dfccf60a5fffea3f10e4f6001f0bb85fa79520cdf0b507403e91aeb4e528ca8f"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\app-flow-07\\browser-report.json",
+      "bytes": 36980,
+      "sha256": "635747ffdd497bf2bdca16d095c38ff43c59304b36578aa3accc801414c2054b"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\engine-browser-06\\report.json",
+      "bytes": 3460,
+      "sha256": "d90ddf85161b8ea8ce3393a4b597b7ff58a185fc86bc4c3ee882c8fd2e8d92a6"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\dialog-style-summary.json",
+      "bytes": 1069,
+      "sha256": "7f73b769d2d03494a717e82dbadaa8aeaf097567a9104811a16db570c1648e49"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\dialog-style-after-01\\browser-report.json",
+      "bytes": 9553,
+      "sha256": "61f6367f82b757e16946c52dd139f31fe38288b719b231f50c23f939be125922"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-02\\config.json",
+      "bytes": 700,
+      "sha256": "31d294ef3ffc56f9a8cddbcc392fef850323d0f95d807f01bbe9ee239d72caef"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-02\\native-report.json",
+      "bytes": 18309,
+      "sha256": "ce6d1e81ad49cc08eacbd9b293521a02f71a7058b2eb0882b38e27624735ac5a"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-02\\host-status.json",
+      "bytes": 1095,
+      "sha256": "1aff21f3d131123a827ccaef436bf9d8691bfa71dd824665eacce9820fb60496"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-02\\protection-result.json",
+      "bytes": 109,
+      "sha256": "b0afae103c9f82fbaea8505f03b73a77ba2bc8d3c2cc6781e127b3f9714f2f1f"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-02\\protection-before.json",
+      "bytes": 16032,
+      "sha256": "20d6f43d31e23d800a04761df9537c3489b66def5dadd2066c6607b29cf26b21"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-02\\protection-after.json",
+      "bytes": 16032,
+      "sha256": "20d6f43d31e23d800a04761df9537c3489b66def5dadd2066c6607b29cf26b21"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-02\\release-receipt-before.json",
+      "bytes": 1197,
+      "sha256": "ab72c939490995b9e645f2179320763fb3175bdf083121d11379728546537d61"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-02\\release-receipt-after.json",
+      "bytes": 1197,
+      "sha256": "e3c379fff329052a8d5255a0d8623299a61ab5e9bdbbad91ccc81f9e0684797c"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\final-user-snapshot.json",
+      "bytes": 7304,
+      "sha256": "4e955b360c21436529905d761722b5ad70b4fab7a779eb824ed5d1e20d3c1331"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\user-entry-update.json",
+      "bytes": 2560,
+      "sha256": "4f2e890c7aa5cbfcade6b469f371379979bd67b7862e75fdfab42c9c9d46ccf6"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native-simple-01\\receipt-timestamp-independent-review.json",
+      "bytes": 1839,
+      "sha256": "8dceab75e00c11b809abdccac39946b8a85df25d62e4ad5f3238ff156c212096"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\run_native_simple_flow.py",
+      "bytes": 7577,
+      "sha256": "3501c1e40d3f6af6c18a4b32a96d0d102ec29f92637afc23e7d4a1c163ff952c"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\native_simple_flow.mjs",
+      "bytes": 6800,
+      "sha256": "808c0b55a72436fd34ff2e3722d46a823fb46b12a268a3b73df609aeae5130b5"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\audit_user_snapshot.py",
+      "bytes": 2522,
+      "sha256": "364d726dd8b2a3bf5940d24283f5e57ae15f50c821e7290d9088db9d04121dd3"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\deploy_simple_flow.py",
+      "bytes": 7024,
+      "sha256": "1d1f0235e24cdbceefa28ab41b7e23a15ded8e6ac1aa515245398b3cf9853034"
+    },
+    {
+      "path": "F:\\NextTrainerLauncherSandbox\\build-simple-flow-20261101\\candidate-2\\delivery-manifest.json",
+      "bytes": 3250,
+      "sha256": "55eb1bc62efa6c2da9b15b79fd519f13fdfa22d54617fd5fa941a5b20aa506f7"
+    },
+    {
+      "path": "F:\\NextTrainerLauncherSandbox\\simple-flow-20261101-2\\extraction-receipt.json",
+      "bytes": 813,
+      "sha256": "407465793270bd9ad9f6d98d794971b6926f87fec62eb9bb241010efb55f25bc"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-simple-flow-20261101\\delivery-independent-review.json",
+      "bytes": 5796,
+      "sha256": "95a2dc09501673e32b0c5cae6e0682a3047292ab049b536f6f0abbea067acb21"
+    }
+  ],
+  "independent_delivery_review": {
+    "passed": true,
+    "checks": 18,
+    "findings": []
+  }
+}
