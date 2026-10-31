@@ -577,6 +577,13 @@ fn managed_base_path(layout: &Layout, release: &Release, path: &Path) -> Result<
 }
 fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
     assert_regular_ready(&layout.root)?;
+    // 版本列表也检查未安装的历史发布，先拒绝缺失环境，避免反复扫描整套基础 Python。
+    // 已安装环境仍执行下面全部可信闭包、绑定、配置及运行检查。
+    layout.guard_path(&layout.environment)?;
+    layout.guard_path(&env_python(layout))?;
+    if !layout.environment.is_dir() || !env_python(layout).is_file() {
+        bail!("主程序环境尚未安装或解释器缺失，请安装或修复此版本");
+    }
     if release.environment_recipe == "gui-cp310-win-x64-v1" {
         crate::python_integrity::verify(layout)?;
     }
