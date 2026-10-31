@@ -53,30 +53,38 @@ code{font:12px/1.7 "Cascadia Code",Consolas,monospace;overflow-wrap:anywhere}
 .wallpaper-enter-from,.wallpaper-leave-to{opacity:0}
 .wallpaper-shade{position:absolute;inset:0;z-index:-3;pointer-events:none;background:linear-gradient(to right,transparent,#00000030) right/200px 100% no-repeat,linear-gradient(45deg,transparent 50%,#00000050) right top/400px 400px no-repeat,linear-gradient(135deg,transparent 50%,#00000050) right bottom/400px 400px no-repeat}
 .acrylic-layer{position:absolute;inset:0;z-index:-2;pointer-events:none;background:rgb(28 28 28 / var(--mask-opacity,.6));backdrop-filter:blur(var(--content-blur,30px)) saturate(125%);transition:opacity 250ms var(--ease-fluent)}
-.acrylic-layer:after,.home-view .sidebar:after{content:"";position:absolute;inset:0;background:url('/assets/acrylic-noise.png') repeat;opacity:.02;pointer-events:none}
+.acrylic-layer:after,.sidebar:after{content:"";position:absolute;inset:0;background:url('/assets/acrylic-noise.png') repeat;opacity:.02;pointer-events:none}
 .material-definitions{position:absolute;width:0;height:0;pointer-events:none}
 /* feBlend 在同一次滤镜中完成亮度与颜色混合；两层 CSS mix-blend 会重复混合 backdrop。 */
 @supports(backdrop-filter:url("#fluent-acrylic")){
   .acrylic-layer{background:transparent;backdrop-filter:url("#fluent-acrylic")}
 }
 .home-view .acrylic-layer{opacity:0}
-.sidebar{position:absolute;z-index:5;left:0;top:0;bottom:0;width:56px;padding:8px 3px 5px;background:transparent;border-right:0;display:flex;align-items:center;flex-direction:column;isolation:isolate}
-.home-view .sidebar:before{content:"";position:absolute;inset:0;z-index:-1;background:rgb(28 28 28 / var(--mask-opacity,.6));backdrop-filter:blur(var(--content-blur,30px)) saturate(125%);border-right:1px solid var(--sidebar-line)}
-.home-view .sidebar:after{z-index:-1}
+.sidebar{position:absolute;z-index:5;left:0;top:0;bottom:0;width:56px;padding:8px 3px 5px;background:transparent;border-right:0;display:flex;align-items:stretch;flex-direction:column;isolation:isolate;overflow:hidden;transition:width 250ms var(--ease-fluent),box-shadow 250ms}
+/* 叠加展开，只改变导航宽度；主内容与标题栏始终以56px为左边界。 */
+.sidebar.expanded{width:208px;box-shadow:8px 0 24px #00000026}
+.sidebar:before{content:"";position:absolute;inset:0;z-index:-1;background:rgb(28 28 28 / var(--mask-opacity,.6));backdrop-filter:blur(var(--content-blur,30px)) saturate(125%);border-right:1px solid var(--sidebar-line)}
+.sidebar:after{z-index:-1}
+/* 管理页收起时保留材质至宽度动画结束，避免文字与下方内容短暂重叠。 */
+.sidebar:before,.sidebar:after{visibility:hidden;transition:visibility 0s linear 250ms}
+.home-view .sidebar:before,.home-view .sidebar:after,.sidebar.expanded:before,.sidebar.expanded:after{visibility:visible;transition-delay:0s}
+.reduce-motion .sidebar:before,.reduce-motion .sidebar:after{transition:none}
 @supports(backdrop-filter:url("#fluent-acrylic")){
-  .home-view .sidebar:before{background:transparent;backdrop-filter:url("#fluent-acrylic")}
+  .sidebar:before{background:transparent;backdrop-filter:url("#fluent-acrylic")}
 }
-.sidebar button{position:relative;display:flex;align-items:center;justify-content:center;border:0;background:none;border-radius:4px;width:48px;height:44px;padding:0}
-.sidebar .brand{width:48px;height:40px;margin-bottom:13px;padding:0;background:none;border-radius:4px}
-.brand img{width:100%;height:100%;object-fit:cover}
+.sidebar button{position:relative;display:flex;align-items:center;justify-content:flex-start;gap:16px;border:0;background:none;border-radius:4px;width:100%;height:44px;padding:0 15px;overflow:hidden;flex-shrink:0}
+.sidebar button:active:not(:disabled){transform:none}
+.sidebar .sidebar-toggle{height:40px;margin-bottom:13px}
+.sidebar .nav-label{flex:0 0 auto;font-size:14px;opacity:0;transform:translateX(-8px);transition:opacity 167ms var(--ease-fluent),transform 250ms var(--ease-fluent);pointer-events:none}
+.sidebar.expanded .nav-label{opacity:1;transform:translateX(0)}
 .sidebar nav{display:grid;gap:2px;width:100%}
 .sidebar button:hover{background:var(--control-hover)}
 .sidebar button.selected{background:var(--control-selected)}
 .sidebar button.selected:before{content:"";position:absolute;left:0;top:14px;width:3px;height:16px;border-radius:3px;background:var(--accent)}
-.sidebar-foot{margin-top:auto}
+.sidebar-foot{margin-top:auto;width:100%}
 .sidebar svg{width:20px;height:20px;stroke-width:1.4}
 .titlebar{position:absolute;z-index:4;left:56px;right:0;top:0;height:48px;display:flex;align-items:center;gap:12px;padding-left:12px;user-select:none}
-.titlebar-logo{width:40px;height:40px;object-fit:cover;border-radius:8px;pointer-events:none}.titlebar-name{font-size:12px;letter-spacing:.2px;color:var(--text-strong)}
+.titlebar-name{font-size:12px;letter-spacing:.2px;color:var(--text-strong)}
 .titlebar-name span{margin-left:5px;color:var(--text-muted)}
 .titlebar-state{margin-left:auto;display:flex;align-items:center;gap:7px;font-size:12px;color:var(--text-muted);padding-right:9px;pointer-events:none}
 .titlebar-state i,.working-dot{width:5px;height:5px;border-radius:50%;background:var(--neutral-dot);display:inline-block;flex-shrink:0}
@@ -393,7 +401,7 @@ button.text-button:hover:not(:disabled),button.quiet-button:hover:not(:disabled)
 .delete-button{margin-left:0}
 }
 
-@media(prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}
+@media(prefers-reduced-motion:reduce){*,.sidebar:before,.sidebar:after{animation:none!important;transition:none!important}
 }
 
 

@@ -63,6 +63,8 @@ let runtimeTimer: ReturnType<typeof setInterval> | undefined
 let runtimeQueryPending = false
 let runtimeUnlisten: (() => void) | undefined
 const setting = ref<Setting>('appearance')
+const sidebarExpanded = ref(false)
+const sidebarToggle = ref<HTMLButtonElement>()
 const informationTab = ref<'releases' | 'friends'>('releases')
 const advanced = ref(false)
 const appVersion = ref('0.2.0')
@@ -502,7 +504,7 @@ function sampleHomeInk() {
     for (let i = 0; i < pixels.length; i += 4) luminance += .2126 * linear(pixels[i]!) + .7152 * linear(pixels[i + 1]!) + .0722 * linear(pixels[i + 2]!)
     return luminance / (pixels.length / 4) > .179
   }
-  homeInk.value = { titleDark: needsDarkInk('.titlebar-name', { left: 120, top: 8, width: 180, height: 32 }), headingDark: needsDarkInk('.home-heading>div', { left: 220, top: 80, width: 240, height: 110 }), controlsDark: needsDarkInk('.titlebar-state', { left: width - 240, top: 8, width: 220, height: 32 }) }
+  homeInk.value = { titleDark: needsDarkInk('.titlebar-name', { left: 68, top: 8, width: 180, height: 32 }), headingDark: needsDarkInk('.home-heading>div', { left: 220, top: 80, width: 240, height: 110 }), controlsDark: needsDarkInk('.titlebar-state', { left: width - 240, top: 8, width: 220, height: 32 }) }
 }
 watch(() => appearance.value.background, source => {
   const epoch = ++wallpaperEpoch, image = new Image()
@@ -775,12 +777,12 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
   <div class="app-shell" :class="{ 'home-view': page === 'launch', 'reduce-motion': appearance.reduceMotion, 'home-title-dark': homeInk.titleDark, 'home-heading-dark': homeInk.headingDark, 'home-controls-dark': homeInk.controlsDark }" data-material="acrylic" :data-page="page" :data-runtime-phase="runtimePhase" :data-runtime-run-id="runtime?.run_id ?? ''" :data-runtime-seq="runtime?.seq ?? 0" :style="{ '--wallpaper': 'url(' + (appearance.background || '/assets/launcher-wallpaper.png') + ')', '--content-blur': `${appearance.blur}px`, '--mask-opacity': String(appearance.mask / 100) }">
     <svg class="material-definitions" aria-hidden="true" focusable="false"><defs><filter id="fluent-acrylic" x="0" y="0" width="100%" height="100%" color-interpolation-filters="sRGB"><feGaussianBlur in="SourceGraphic" :stdDeviation="appearance.blur" edgeMode="duplicate" result="blur" /><feFlood flood-color="#202020" :flood-opacity="acrylicOpacity.luminosity" result="luminosity" /><feBlend in="luminosity" in2="blur" mode="luminosity" result="lit" /><feFlood flood-color="#1c1c1c" :flood-opacity="acrylicOpacity.tint" result="tint" /><feBlend in="tint" in2="lit" mode="color" /></filter></defs></svg>
     <Transition name="wallpaper" appear><div :key="appearance.background" class="wallpaper" :style="{ backgroundImage: 'url(' + (appearance.background || '/assets/launcher-wallpaper.png') + ')' }" aria-hidden="true"></div></Transition><div class="wallpaper-shade" aria-hidden="true"></div><div class="acrylic-layer" aria-hidden="true"></div>
-    <aside class="sidebar" aria-label="启动器导航">
-      <button class="brand" aria-label="Next Trainer 首页" title="Next Trainer 首页" @click="page = 'launch'"><Icon name="apps" /></button>
-      <nav aria-label="主导航"><button v-for="item in ([{ id: 'launch', icon: 'home', label: '首页' }, { id: 'versions', icon: 'versions', label: '版本管理' }, { id: 'environment', icon: 'environment', label: '环境管理' }, { id: 'logs', icon: 'logs', label: '日志' }] as const)" :key="item.id" :class="{ selected: page === item.id }" :aria-current="page === item.id ? 'page' : undefined" :aria-label="item.label" :title="item.label" @click="page = item.id"><Icon :name="item.icon" /><span class="sr-only">{{ item.label }}</span></button></nav>
-      <div class="sidebar-foot"><button :class="{ selected: page === 'settings' }" aria-label="启动器设置" title="启动器设置" @click="page = 'settings'"><Icon name="settings" /></button></div>
+    <aside id="launcher-sidebar" class="sidebar" :class="{ expanded: sidebarExpanded }" aria-label="启动器导航" @keydown.esc="sidebarExpanded && (sidebarExpanded = false, sidebarToggle?.focus())">
+      <button ref="sidebarToggle" class="sidebar-toggle" :aria-label="sidebarExpanded ? '收起侧边栏' : '展开侧边栏'" :title="sidebarExpanded ? '收起侧边栏' : '展开侧边栏'" :aria-expanded="sidebarExpanded" aria-controls="launcher-sidebar" @click="sidebarExpanded = !sidebarExpanded"><Icon name="menu" /><span class="nav-label" aria-hidden="true">收起导航</span></button>
+      <nav aria-label="主导航"><button v-for="item in ([{ id: 'launch', icon: 'home', label: '首页' }, { id: 'versions', icon: 'versions', label: '版本管理' }, { id: 'environment', icon: 'environment', label: '环境管理' }, { id: 'logs', icon: 'logs', label: '日志' }] as const)" :key="item.id" :class="{ selected: page === item.id }" :aria-current="page === item.id ? 'page' : undefined" :aria-label="item.label" :title="item.label" @click="page = item.id"><Icon :name="item.icon" /><span class="nav-label" aria-hidden="true">{{ item.label }}</span></button></nav>
+      <div class="sidebar-foot"><button :class="{ selected: page === 'settings' }" :aria-current="page === 'settings' ? 'page' : undefined" aria-label="启动器设置" title="启动器设置" @click="page = 'settings'"><Icon name="settings" /><span class="nav-label" aria-hidden="true">设置</span></button></div>
     </aside>
-    <header class="titlebar" @mousedown="dragTitlebar" @dblclick="windowControl('maximize')"><img class="titlebar-logo" src="/assets/home-logo.webp" alt="Next Trainer" /><span class="titlebar-name">{{ titlebarVersion }}</span><span class="titlebar-state" :class="{ good: stateGood, working: transitioning }" role="status" aria-live="polite"><i></i>{{ stateText }}</span><div class="window-controls"><button aria-label="最小化" title="最小化" @dblclick.stop @click="windowControl('minimize')"><Icon name="minimize" /></button><button aria-label="最大化或还原" title="最大化 / 还原" @dblclick.stop @click="windowControl('maximize')"><Icon name="maximize" /></button><button class="window-close" aria-label="关闭启动器" title="关闭" @dblclick.stop @click="windowControl('close')"><Icon name="close" /></button></div></header>
+    <header class="titlebar" @mousedown="dragTitlebar" @dblclick="windowControl('maximize')"><span class="titlebar-name">{{ titlebarVersion }}</span><span class="titlebar-state" :class="{ good: stateGood, working: transitioning }" role="status" aria-live="polite"><i></i>{{ stateText }}</span><div class="window-controls"><button aria-label="最小化" title="最小化" @dblclick.stop @click="windowControl('minimize')"><Icon name="minimize" /></button><button aria-label="最大化或还原" title="最大化 / 还原" @dblclick.stop @click="windowControl('maximize')"><Icon name="maximize" /></button><button class="window-close" aria-label="关闭启动器" title="关闭" @dblclick.stop @click="windowControl('close')"><Icon name="close" /></button></div></header>
     <main class="launcher-main">
       <section v-show="page === 'launch'" class="home-page" aria-label="首页">
         <div class="home-heading"><img src="/assets/home-logo.webp" alt="Next Trainer 项目标志" /><div><h1>Next<span>Trainer</span></h1><p>让灵感，成为你的模型。</p></div></div>

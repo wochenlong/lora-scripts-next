@@ -1,7 +1,7 @@
 <script setup lang="ts">
 defineProps<{ name: string }>()
 const shapes: Record<string, string> = {
-  apps: 'M4 3h5v6H3V4a1 1 0 0 1 1-1ZM16 3h4a1 1 0 0 1 1 1v5h-6V4a1 1 0 0 1 1-1ZM3 15h6v6H4a1 1 0 0 1-1-1ZM15 15h6v5a1 1 0 0 1-1 1h-5Z',
+  menu: 'M4 6h16M4 12h16M4 18h16',
   home: 'M3 11 12 3l9 8M5 10v10h5v-6h4v6h5V10', versions: 'M4 5h16v14H4zM4 9h16M9 9v10',
   environment: 'M4 6h16M4 12h16M4 18h16M9 3v6M16 9v6M10 15v6',
   logs: 'M6 3h9l4 4v14H6zM14 3v5h5M9 12h7M9 16h7',
