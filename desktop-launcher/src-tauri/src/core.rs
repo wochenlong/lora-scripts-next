@@ -128,6 +128,32 @@ pub struct VersionView {
     current: bool,
     known_good: bool,
     managed_recipe: bool,
+    #[serde(flatten)]
+    support: ReleaseSupport,
+}
+
+#[derive(Clone, Copy, Serialize)]
+struct ReleaseSupport {
+    source_supported: bool,
+    maintenance_supported: bool,
+    install_supported: bool,
+}
+
+// 配方的通用名称只说明安装类型，不能证明本包提供了该提交的修复材料。
+fn release_support(release: &Release, recipe: &crate::recipe::GuiRecipe) -> ReleaseSupport {
+    let managed = release.environment_recipe == "gui-cp310-win-x64-v1";
+    let source_supported = !managed || crate::source_integrity::supports(release);
+    let maintenance_supported = managed
+        && source_supported
+        && release.commit == recipe.source_commit
+        && release.python == recipe.python.version
+        && release.uv == recipe.tool_uv
+        && recipe.matches_environment_recipe(&release.environment_recipe);
+    ReleaseSupport {
+        source_supported,
+        maintenance_supported,
+        install_supported: !managed || maintenance_supported,
+    }
 }
 
 pub struct Engine {
@@ -1588,6 +1614,7 @@ impl Engine {
                 .unwrap_or_else(|| "实际文件及运行检查通过".into()),
         };
         let mut versions = Vec::new();
+        let recipe = crate::recipe::GuiRecipe::embedded()?;
         let active_release_id = release.id.clone();
         for release in self.catalog.releases() {
             let l = Layout::new(root, &release.id)?;
@@ -1607,6 +1634,7 @@ impl Engine {
                     check_environment(&l, release).is_ok()
                 };
             versions.push(VersionView {
+                support: release_support(release, &recipe),
                 managed_recipe: release.environment_recipe == "gui-cp310-win-x64-v1",
                 id: release.id.clone(),
                 channel: release.channel.clone(),
@@ -2186,6 +2214,7 @@ impl Engine {
             .clone()
             .filter(|r| r.root == root.to_string_lossy());
         if report.is_none() {
+            let recipe = crate::recipe::GuiRecipe::embedded()?;
             let versions = self
                 .catalog
                 .releases()
@@ -2193,6 +2222,7 @@ impl Engine {
                 .map(|r| {
                     let current = r.id == release.id;
                     VersionView {
+                        support: release_support(r, &recipe),
                         id: r.id.clone(),
                         channel: r.channel.clone(),
                         version: r.version.clone(),
@@ -2361,6 +2391,43 @@ pub fn logger() -> (Logger, Arc<Mutex<Vec<String>>>) {
 #[cfg(all(test, windows))]
 mod tests {
     use super::*;
+
+    #[test]
+    fn version_support_distinguishes_trusted_history_from_current_maintenance() {
+        let catalog = Catalog::embedded().unwrap();
+        let recipe = crate::recipe::GuiRecipe::embedded().unwrap();
+        let current = catalog
+            .release(&format!("dev-{}", recipe.source_commit))
+            .unwrap();
+        let support = release_support(current, &recipe);
+        assert!(
+            support.source_supported && support.maintenance_supported && support.install_supported
+        );
+
+        let previous = catalog
+            .release("dev-89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d")
+            .unwrap();
+        let support = release_support(previous, &recipe);
+        assert!(support.source_supported);
+        assert!(!support.maintenance_supported && !support.install_supported);
+        let encoded = serde_json::to_value(support).unwrap();
+        assert_eq!(encoded["source_supported"], true);
+        assert_eq!(encoded["maintenance_supported"], false);
+
+        let unsupported = catalog
+            .release("dev-0d095dc8cb185b4c9e4d6f4971eba26ea3a1b47e")
+            .unwrap();
+        let support = release_support(unsupported, &recipe);
+        assert!(
+            !support.source_supported
+                && !support.maintenance_supported
+                && !support.install_supported
+        );
+
+        let mut changed = previous.clone();
+        changed.archive.sha256 = "0".repeat(64);
+        assert!(!release_support(&changed, &recipe).source_supported);
+    }
     use std::io::Write;
 
     fn negative_test_root(label: &str) -> PathBuf {

@@ -10,29 +10,59 @@ use std::{
     path::{Component, Path},
 };
 
-const SOURCE_COMMIT: &str = "4e68df240c63ab7cf2156ea7fafabf18df4671e8";
 const RECIPE: &str = "gui-cp310-win-x64-v1";
-const SOURCE_SHA: &str = "60490c2eceaccb4d59b22f17867b12e68c2a5041b995a3692a38adc6691c0cfd";
-const FRONTEND_SHA: &str = "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f";
 const LEGACY_MANIFEST: &str = ".source-integrity.json";
+const CURRENT_COMMIT: &str = "4e68df240c63ab7cf2156ea7fafabf18df4671e8";
+const PREVIOUS_COMMIT: &str = "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d";
+const FRONTEND_SHA: &str = "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f";
+
+/// 每个支持的源码发布保留自己的可信清单；绝不从安装目录读取校验依据。
+/// 历史清单原字节来自已保存提交 b2436b4a，使用独立摘要固定其身份。
+struct EmbeddedManifest {
+    commit: &'static str,
+    archive_sha256: &'static str,
+    archive_bytes: u64,
+    file_count: usize,
+    file_bytes: u64,
+    manifest_sha256: &'static str,
+    json: &'static str,
+}
+const CURRENT: EmbeddedManifest = EmbeddedManifest {
+    commit: CURRENT_COMMIT,
+    archive_sha256: "60490c2eceaccb4d59b22f17867b12e68c2a5041b995a3692a38adc6691c0cfd",
+    archive_bytes: 92_918_164,
+    file_count: 1942,
+    file_bytes: 139_738_581,
+    manifest_sha256: "faaa2671e84614b4905b352b26adedd62f0ba3e2cc8d5edee430b646cb9989a0",
+    json: include_str!("../../catalog/gui-candidate-source-v1.json"),
+};
+const PREVIOUS: EmbeddedManifest = EmbeddedManifest {
+    commit: PREVIOUS_COMMIT,
+    archive_sha256: "e53af2a77aa39c1f5e876c5cc73e78329c2cd5c616d0d5af7ac3eea637577022",
+    archive_bytes: 57_465_913,
+    file_count: 1844,
+    file_bytes: 103_757_791,
+    manifest_sha256: "bce3945607a7ec7925e843cd236e93c8fcd0e7f013291b24d4d84abb3117eccd",
+    json: include_str!("../../catalog/gui-source-89a3b6ca-v1.json"),
+};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Manifest {
+pub(crate) struct Manifest {
     schema_version: u32,
-    source_commit: String,
+    pub(crate) source_commit: String,
     source_archive_sha256: String,
     source_archive_bytes: u64,
-    frontend_sha256: String,
-    frontend_bytes: u64,
+    pub(crate) frontend_sha256: String,
+    pub(crate) frontend_bytes: u64,
     expected_file_count: usize,
     expected_file_bytes: u64,
-    files: Vec<Entry>,
+    pub(crate) files: Vec<Entry>,
 }
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields)]
-struct Entry {
-    path: String,
+pub(crate) struct Entry {
+    pub(crate) path: String,
     bytes: u64,
     sha256: String,
 }
@@ -84,24 +114,47 @@ fn fingerprint(layout: &Layout, path: &Path) -> Result<(u64, String)> {
     }
     Ok((bytes, format!("{:x}", digest.finalize())))
 }
-fn verify_entries(layout: &Layout, entries: &[Entry]) -> Result<()> {
+type EntrySpec<'a> = (BTreeMap<&'a str, &'a Entry>, BTreeSet<String>);
+
+/// 静态清单和实际树使用同一套路径、摘要、计量及 Windows 名称校验。
+fn entry_spec(entries: &[Entry]) -> Result<EntrySpec<'_>> {
     let mut expected = BTreeMap::new();
     let mut aliases = BTreeSet::new();
     let mut directories = BTreeSet::from([String::new()]);
+    let mut total = 0u64;
     for entry in entries {
         relative(&entry.path)?;
         if entry.path == LEGACY_MANIFEST
             || !valid_sha(&entry.sha256)
+            || entry.bytes > model::MAX_EXTRACT_BYTES
             || !aliases.insert(entry.path.to_ascii_lowercase())
             || expected.insert(entry.path.as_str(), entry).is_some()
         {
-            bail!("可信源码清单摘要无效或路径重复");
+            bail!("可信源码清单摘要、长度无效或路径重复");
         }
+        total = total.checked_add(entry.bytes).context("可信源码合计溢出")?;
         let mut parent = Path::new(&entry.path).parent();
         while let Some(path) = parent {
             directories.insert(path.to_string_lossy().replace('\\', "/"));
             parent = path.parent();
         }
+    }
+    if entries.is_empty() || total > model::MAX_EXTRACT_BYTES {
+        bail!("可信源码清单为空或总长度超限");
+    }
+    let mut directory_aliases = BTreeSet::new();
+    for directory in &directories {
+        let alias = directory.to_ascii_lowercase();
+        if aliases.contains(&alias) || !directory_aliases.insert(alias) {
+            bail!("可信源码清单含文件目录冲突或 Windows 大小写目录别名");
+        }
+    }
+    Ok((expected, directories))
+}
+
+fn verify_entries(layout: &Layout, entries: &[Entry]) -> Result<()> {
+    let (expected, directories) = entry_spec(entries)?;
+    for entry in entries {
         if fingerprint(layout, &layout.app.join(&entry.path))?
             != (entry.bytes, entry.sha256.clone())
         {
@@ -151,26 +204,22 @@ fn verify_entries(layout: &Layout, entries: &[Entry]) -> Result<()> {
     )
 }
 
-pub(crate) fn verify(layout: &Layout, release: &Release) -> Result<()> {
-    if release.commit != SOURCE_COMMIT
-        || release.environment_recipe != RECIPE
-        || release.archive.sha256 != SOURCE_SHA
-        || release.archive.bytes != 92918164
-    {
-        bail!("该发布版本没有匹配的可信完整源码清单");
+fn decode_manifest(raw: &str, fixed: &EmbeddedManifest) -> Result<Manifest> {
+    if format!("{:x}", Sha256::digest(raw.as_bytes())) != fixed.manifest_sha256 {
+        bail!("可信源码清单原始摘要不匹配");
     }
-    let manifest: Manifest =
-        serde_json::from_str(include_str!("../../catalog/gui-candidate-source-v1.json"))?;
+    let manifest: Manifest = serde_json::from_str(raw)?;
     if manifest.schema_version != 1
-        || manifest.source_commit != SOURCE_COMMIT
-        || manifest.source_archive_sha256 != SOURCE_SHA
-        || manifest.source_archive_bytes != release.archive.bytes
+        || manifest.source_commit != fixed.commit
+        || manifest.source_archive_sha256 != fixed.archive_sha256
+        || manifest.source_archive_bytes != fixed.archive_bytes
         || manifest.frontend_sha256 != FRONTEND_SHA
-        || manifest.frontend_bytes != 2446848
+        || manifest.frontend_bytes != 2_446_848
         || manifest.expected_file_count != manifest.files.len()
-        || manifest.files.len() != 1942
+        || manifest.expected_file_count != fixed.file_count
+        || manifest.expected_file_bytes != fixed.file_bytes
     {
-        bail!("可信源码清单身份或schema无效");
+        bail!("可信源码清单身份或 schema 无效");
     }
     let bytes = manifest.files.iter().try_fold(0u64, |total, entry| {
         total.checked_add(entry.bytes).context("可信源码合计溢出")
@@ -178,6 +227,35 @@ pub(crate) fn verify(layout: &Layout, release: &Release) -> Result<()> {
     if bytes != manifest.expected_file_bytes || bytes > model::MAX_EXTRACT_BYTES {
         bail!("可信源码清单合计长度无效");
     }
+    entry_spec(&manifest.files)?;
+    Ok(manifest)
+}
+
+/// 完整性检查和源码修复计划都从此入口取得已验证的可信闭包。
+/// 这里只读取内嵌数据，不访问源码树，也不修改受管状态。
+pub(crate) fn trusted_manifest(release: &Release) -> Result<Manifest> {
+    release.validate()?;
+    let fixed = match release.commit.as_str() {
+        CURRENT_COMMIT => &CURRENT,
+        PREVIOUS_COMMIT => &PREVIOUS,
+        _ => bail!("该发布版本没有匹配的可信完整源码清单"),
+    };
+    if release.environment_recipe != RECIPE
+        || release.archive.sha256 != fixed.archive_sha256
+        || release.archive.bytes != fixed.archive_bytes
+        || release.archive.unpacked_bytes != fixed.file_bytes
+    {
+        bail!("该发布版本与可信完整源码清单身份不符");
+    }
+    decode_manifest(fixed.json, fixed)
+}
+
+pub(crate) fn supports(release: &Release) -> bool {
+    trusted_manifest(release).is_ok()
+}
+
+pub(crate) fn verify(layout: &Layout, release: &Release) -> Result<()> {
+    let manifest = trusted_manifest(release)?;
     verify_entries(layout, &manifest.files)
 }
 
@@ -284,11 +362,79 @@ mod tests {
             .unwrap()
             .releases
             .into_iter()
-            .find(|release| release.commit != SOURCE_COMMIT)
+            .find(|release| !matches!(release.commit.as_str(), CURRENT_COMMIT | PREVIOUS_COMMIT))
             .unwrap();
         assert!(verify(&layout, &release).is_err());
         let manifest: Manifest = serde_json::from_str(raw).unwrap();
         assert_eq!(manifest.expected_file_count, 1942);
         assert_eq!(manifest.expected_file_bytes, 139738581);
+    }
+
+    #[test]
+    fn embedded_current_and_previous_manifests_match_exact_release_identities() {
+        let catalog = model::Catalog::embedded().unwrap();
+        for fixed in [&CURRENT, &PREVIOUS] {
+            let release = catalog
+                .releases
+                .iter()
+                .find(|release| release.commit == fixed.commit)
+                .unwrap();
+            let manifest = trusted_manifest(release).unwrap();
+            assert!(supports(release));
+            assert_eq!(manifest.files.len(), fixed.file_count);
+            assert_eq!(manifest.expected_file_bytes, fixed.file_bytes);
+            assert_eq!(
+                manifest.files.iter().map(|entry| entry.bytes).sum::<u64>(),
+                fixed.file_bytes
+            );
+            assert!(manifest
+                .files
+                .iter()
+                .any(|entry| entry.path == "frontend/dist/index.html"));
+            assert!(manifest.files.iter().any(|entry| entry.path == "gui.py"));
+            let mut wrong_archive = release.clone();
+            wrong_archive.archive.sha256 = "a".repeat(64);
+            assert!(!supports(&wrong_archive));
+            let mut wrong_length = release.clone();
+            wrong_length.archive.bytes += 1;
+            assert!(!supports(&wrong_length));
+            let mut wrong_expanded_length = release.clone();
+            wrong_expanded_length.archive.unpacked_bytes += 1;
+            assert!(!supports(&wrong_expanded_length));
+        }
+        for release in catalog
+            .releases
+            .iter()
+            .filter(|release| !matches!(release.commit.as_str(), CURRENT_COMMIT | PREVIOUS_COMMIT))
+        {
+            assert!(!supports(release));
+        }
+        assert_eq!(
+            PREVIOUS.manifest_sha256,
+            "bce3945607a7ec7925e843cd236e93c8fcd0e7f013291b24d4d84abb3117eccd"
+        );
+    }
+
+    #[test]
+    fn modified_embedded_manifest_bytes_cannot_replace_trusted_history() {
+        for fixed in [&CURRENT, &PREVIOUS] {
+            let changed = fixed.json.replacen("gui.py", "gui.pz", 1);
+            assert_ne!(changed, fixed.json);
+            assert!(decode_manifest(&changed, fixed).is_err());
+        }
+    }
+
+    #[test]
+    fn trusted_manifest_metadata_rejects_unsafe_paths_sizes_and_aliases() {
+        assert!(entry_spec(&[entry("../gui.py", b"unsafe")]).is_err());
+        assert!(entry_spec(&[entry("dir\\gui.py", b"unsafe")]).is_err());
+        assert!(entry_spec(&[entry("dir", b"file"), entry("dir/gui.py", b"file")]).is_err());
+        assert!(entry_spec(&[entry("Dir/a.py", b"a"), entry("dir/b.py", b"b")]).is_err());
+        let mut invalid_digest = entry("gui.py", b"x");
+        invalid_digest.sha256 = "g".repeat(64);
+        assert!(entry_spec(&[invalid_digest]).is_err());
+        let mut excessive = entry("gui.py", b"x");
+        excessive.bytes = model::MAX_EXTRACT_BYTES + 1;
+        assert!(entry_spec(&[excessive]).is_err());
     }
 }

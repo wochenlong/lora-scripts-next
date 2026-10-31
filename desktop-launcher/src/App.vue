@@ -144,6 +144,12 @@ const versions = computed(() => report.value?.versions ?? [])
 const currentVersion = computed(() => versions.value.find((version) => version.id === report.value?.current_release) ?? versions.value.find((version) => version.current))
 const defaultRelease = computed(() => versions.value.find((version) => version.channel === 'dev') ?? versions.value[0])
 const installTarget = computed(() => currentVersion.value ?? defaultRelease.value)
+function sourceSupported(version: VersionView) { return version.source_supported !== false }
+function maintenanceSupported(version: VersionView) { return Boolean(version.managed_recipe && version.maintenance_supported !== false) }
+function installSupported(version: VersionView) { return version.install_supported !== false }
+const currentSourceUnsupported = computed(() => Boolean(sameRoot.value && currentVersion.value && !sourceSupported(currentVersion.value)))
+const currentMaintenanceUnsupported = computed(() => Boolean(sameRoot.value && currentVersion.value?.managed_recipe && !maintenanceSupported(currentVersion.value)))
+const needsVersionManagement = computed(() => currentSourceUnsupported.value || currentMaintenanceUnsupported.value)
 const titlebarVersion = computed(() => {
   const version = currentVersion.value ?? installTarget.value
   return version ? `${version.version} · ${channelName(version.channel)}` : t('启动器 {value0}', { value0: appVersion.value })
@@ -173,20 +179,24 @@ const stateText = computed(() => {
   if (!report.value) return t('等待检查')
   if (!sameRoot.value) return t('目录待检查')
   if (ready.value) return t('可以启动')
+  if (currentSourceUnsupported.value) return t('本包未提供校验清单')
+  if (currentMaintenanceUnsupported.value) return t('请管理版本')
   return installed.value ? t('需要修复') : t('尚未安装')
 })
 const stateGood = computed(() => sameRoot.value && (healthy.value || (ready.value && !transitioning.value)))
 const primaryLabel = computed(() => {
   if (!report.value || !sameRoot.value) return t('检查安装状态')
+  if ((!ready.value && needsVersionManagement.value) || (!installed.value && installTarget.value && !installSupported(installTarget.value))) return t('管理版本')
   if (!installed.value) return t('安装训练器')
   if (!ready.value) return t('检查并修复')
   return t('启动训练器')
 })
 const primaryDisabled = computed(() => busy.value || running.value || transitioning.value || Boolean(serviceAction.value) || (Boolean(report.value) && sameRoot.value && !installed.value && !installTarget.value))
-const managedCurrent = computed(() => Boolean(sameRoot.value && currentVersion.value?.managed_recipe))
-const registrationVersions = computed(() => versions.value.filter((version) => version.managed_recipe))
+const managedCurrent = computed(() => Boolean(sameRoot.value && currentVersion.value && maintenanceSupported(currentVersion.value)))
+const registrationVersions = computed(() => versions.value.filter(maintenanceSupported))
 const registrationRelease = computed(() => registrationVersions.value.find((version) => version.id === registrationReleaseId.value)
-  ?? (currentVersion.value?.managed_recipe ? currentVersion.value : registrationVersions.value[0]))
+  ?? (currentVersion.value && maintenanceSupported(currentVersion.value) ? currentVersion.value : registrationVersions.value[0]))
+const activeManagedRelease = computed(() => currentVersion.value?.managed_recipe ? currentVersion.value : registrationRelease.value)
 const guiRecoveryNeeded = computed(() => Boolean(guiDiagnosis.value?.dirty || guiDiagnosis.value?.recovery_pending || (guiDiagnosis.value && guiDiagnosis.value.generation !== guiDiagnosis.value.binding_generation)))
 const affectedPackages = computed(() => guiDiagnosis.value?.integrity.packages.filter(packageNeedsAttention) ?? [])
 const visiblePackages = computed(() => showAllPackages.value ? guiDiagnosis.value?.integrity.packages ?? [] : affectedPackages.value)
@@ -264,6 +274,7 @@ function channelName(channel: string) {
 }
 function releaseState(version: VersionView) {
   if (!version.installed) return t('未安装')
+  if (!sourceSupported(version)) return t('本包未提供校验清单')
   if (!version.source_ok) return t('源码需修复')
   if (!version.environment_ok) return t('环境需修复')
   return t('检查通过')
@@ -373,6 +384,7 @@ async function pollOperation() {
   if (stillCurrent() && operation.value?.status === 'running') operationTimer = setTimeout(() => { void pollOperation() }, 250)
 }
 async function prefetch(version: VersionView, install = false) {
+  if (!installSupported(version)) { notify(t('本启动器未提供此版本的安装配方，请安装受支持的新版本。')); page.value = 'versions'; return }
   if (busy.value) return
   pending.value = t('准备下载')
   error.value = ''
@@ -414,10 +426,12 @@ async function perform(label: string, action: () => Promise<void>) {
     addLog(t('[失败] {value0}', { value0: error.value }), 'launcher')
   } finally { pending.value = '' }
 }
-function command(command: ReportCommand, label: string) {
+async function command(command: ReportCommand, label: string) {
+  if (command !== 'inspect' && needsVersionManagement.value) { page.value = 'versions'; notify(t('本启动器未提供此版本的精准修复配方。')); return }
   return perform(label, async () => acceptReport(await runCommand(command, path.value.trim())))
 }
-function releaseCommand(command: ReleaseCommand, version: VersionView, label: string) {
+async function releaseCommand(command: ReleaseCommand, version: VersionView, label: string) {
+  if (command === 'install_release' && !installSupported(version)) { page.value = 'versions'; notify(t('本启动器未提供此版本的安装配方，请安装受支持的新版本。')); return }
   return perform(label, async () => acceptReport(await runReleaseCommand(command, path.value.trim(), version.id)))
 }
 async function ask(value: Confirmation) {
@@ -445,6 +459,7 @@ function trapDialogFocus(event: KeyboardEvent) {
   else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first?.focus() }
 }
 function install(version: VersionView) {
+  if (!installSupported(version)) { page.value = 'versions'; notify(t('本启动器未提供此版本的安装配方，请安装受支持的新版本。')); return }
   if (version.managed_recipe) return prefetch(version, true)
   return releaseCommand('install_release', version, t('安装 {value0} {value1}', { value0: channelName(version.channel), value1: version.version }))
 }
@@ -472,6 +487,7 @@ function rollback() {
 }
 function primary() {
   if (!report.value || !sameRoot.value) return command('inspect', t('检查安装状态'))
+  if ((!ready.value && needsVersionManagement.value) || (!installed.value && installTarget.value && !installSupported(installTarget.value))) { page.value = 'versions'; return }
   if (!installed.value && installTarget.value) return install(installTarget.value)
   if (!ready.value) { page.value = 'environment'; return }
   return start()
@@ -612,7 +628,7 @@ async function diagnoseManagedGui() {
   })
 }
 async function inspectBasePythonRepair() {
-  if (mutationDisabled.value) return
+  if (!managedCurrent.value || mutationDisabled.value) return
   const root = path.value.trim()
   const epoch = guiEpoch
   basePythonPreview.value = null
@@ -624,7 +640,7 @@ async function inspectBasePythonRepair() {
 }
 async function inspectGuiRegistration() {
   const version = registrationRelease.value
-  if (!version || mutationDisabled.value) return
+  if (!version || !maintenanceSupported(version) || mutationDisabled.value) return
   const root = path.value.trim()
   const epoch = guiEpoch
   const selectedInstance = registrationInstanceId.value || null
@@ -644,7 +660,7 @@ function changeRegistrationRelease() {
 function confirmGuiRegistration(recovery = false) {
   const preview = registrationPreview.value
   const version = registrationRelease.value
-  if (!preview || !version || mutationDisabled.value || (recovery ? preview.status !== 'pending' : preview.status !== 'ready' || !preview.plan || !preview.plan_sha256)) return
+  if (!preview || !version || !maintenanceSupported(version) || mutationDisabled.value || (recovery ? preview.status !== 'pending' : preview.status !== 'ready' || !preview.plan || !preview.plan_sha256)) return
   const root = path.value.trim()
   const epoch = guiEpoch
   const candidate = preview.plan?.candidate
@@ -662,7 +678,7 @@ function confirmGuiRegistration(recovery = false) {
 }
 async function inspectLifecycle(action: 'rebuild' | 'rollback') {
   const version = registrationRelease.value
-  if (!version || mutationDisabled.value) return
+  if (!version || !maintenanceSupported(version) || mutationDisabled.value) return
   const root = path.value.trim(), epoch = guiEpoch
   lifecyclePreview.value = null
   await perform(t('检查实例重建与回退计划'), async () => {
@@ -676,7 +692,7 @@ async function inspectLifecycle(action: 'rebuild' | 'rollback') {
 }
 async function inspectLifecycleHistory() {
   const version = registrationRelease.value
-  if (!version || mutationDisabled.value) return
+  if (!version || !maintenanceSupported(version) || mutationDisabled.value) return
   const root = path.value.trim(), epoch = guiEpoch
   await perform(t('读取实例操作记录'), async () => {
     const value = await guiLifecycleHistory(root, version.id)
@@ -685,7 +701,7 @@ async function inspectLifecycleHistory() {
 }
 function confirmLifecycle(action: GuiLifecycleAction, transaction: string | null = null, instance: string | null = null) {
   const version = registrationRelease.value, preview = lifecyclePreview.value
-  if (!version || mutationDisabled.value) return
+  if (!version || !maintenanceSupported(version) || mutationDisabled.value) return
   if ((action === 'rebuild' || action === 'rollback') && (preview?.status !== 'ready' || !preview.plan_sha256)) return
   const root = path.value.trim(), epoch = guiEpoch
   const title = action === 'rebuild' ? t('在新路径重建环境') : action === 'rollback' ? t('回退到同版本旧实例') : t('恢复实例事务')
@@ -706,7 +722,7 @@ function confirmLifecycle(action: GuiLifecycleAction, transaction: string | null
 function confirmBasePythonRepair(recovery = false) {
   const preview = basePythonPreview.value
   const version = currentVersion.value ?? defaultRelease.value
-  if (!preview || !version || mutationDisabled.value || (recovery ? !preview.recovery_available : !preview.repair_available)) return
+  if (!managedCurrent.value || !preview || !version || !maintenanceSupported(version) || mutationDisabled.value || (recovery ? !preview.recovery_available : !preview.repair_available)) return
   const root = path.value.trim()
   const epoch = guiEpoch
   return ask({
@@ -721,7 +737,7 @@ function confirmBasePythonRepair(recovery = false) {
   })
 }
 async function previewPackage(item: PackageIntegrity) {
-  if (!currentVersion.value || !guiDiagnosis.value || packagePlanDisabled(item)) return
+  if (!managedCurrent.value || !currentVersion.value || !guiDiagnosis.value || packagePlanDisabled(item)) return
   guiPreview.value = null
   const root = path.value.trim()
   const releaseId = currentVersion.value.id
@@ -737,7 +753,7 @@ async function previewPackage(item: PackageIntegrity) {
 function confirmGuiRepair() {
   const preview = guiPreview.value
   const version = currentVersion.value
-  if (!preview || !version || mutationDisabled.value || guiPlanBlocked.value) return
+  if (!managedCurrent.value || !preview || !version || mutationDisabled.value || guiPlanBlocked.value) return
   const root = path.value.trim()
   const epoch = guiEpoch
   return ask({
@@ -753,7 +769,7 @@ function confirmGuiRepair() {
 function confirmGuiRecovery() {
   const version = currentVersion.value
   const diagnosis = guiDiagnosis.value
-  if (!version || !diagnosis || mutationDisabled.value || !guiRecoveryNeeded.value) return
+  if (!managedCurrent.value || !version || !diagnosis || mutationDisabled.value || !guiRecoveryNeeded.value) return
   const root = path.value.trim()
   const epoch = guiEpoch
   return ask({
@@ -767,7 +783,7 @@ function confirmGuiRecovery() {
   })
 }
 async function inspectSourceRepair(version: VersionView) {
-  if (mutationDisabled.value) return
+  if (!maintenanceSupported(version) || mutationDisabled.value) return
   const root = path.value.trim()
   await perform(t('查看源码修复清单'), async () => {
     const preview = await previewSourceRepair(root, version.id)
@@ -856,21 +872,23 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
         <div v-if="error || runtime?.error" class="home-error" role="alert"><Icon name="info" /><span>{{ error || runtime?.error }}</span><button @click="showLogs(true)">{{ t('查看日志') }}<Icon name="arrow" /></button></div>
         <div class="home-bottom"><div v-if="operation?.status === 'running'" class="home-operation-actions"><span>{{ phaseText[operation.phase] }}</span><button @click="showLogs()">{{ t('查看日志') }}</button><button :disabled="operation.cancel_requested" @click="cancelCurrentOperation">{{ operation.cancel_requested ? t('正在收尾') : t('取消操作') }}</button></div><div v-if="healthy && serviceUrl" class="service-caption"><span>{{ serviceUrl }}</span><button class="icon-button" :aria-label="t('复制服务地址')" :title="t('复制服务地址')" @click="copyAddress"><Icon name="copy" /></button></div><div class="launch-row"><button v-if="['checking', 'starting', 'ready', 'degraded', 'stop_failed'].includes(runtimePhase)" class="secondary-pill" :disabled="serviceAction === 'stop'" @click="stop"><Icon :name="transitioning ? 'close' : 'stop'" />{{ ['checking', 'starting'].includes(runtimePhase) ? t('取消启动') : t('停止服务') }}</button><button v-else class="secondary-pill" @click="openSetting('profiles')"><Icon name="folder" />{{ t('安装位置') }}</button><button v-if="healthy" class="launch-button" data-action="open-trainer" @click="open"><Icon name="external" />{{ t('打开训练器') }}</button><button v-else class="launch-button" data-action="start-trainer" :disabled="primaryDisabled" @click="primary"><Icon :name="transitioning || pending ? 'refresh' : 'home'" :class="{ spin: transitioning || pending }" />{{ transitioning ? runtimeLabels[runtimePhase] : pending || primaryLabel }}</button></div></div>
       </section>
-      <section v-show="page === 'versions'" class="content-page" :aria-label="t('版本管理')"><header class="page-title"><h1>{{ t('版本管理') }}</h1><p>{{ t('在本机版本之间切换，资料始终保留。') }}</p></header><div class="section-toolbar"><span class="context-label">{{ versions.filter(version => version.installed).length }} {{ t('个已安装版本') }}</span><button :disabled="busy" @click="command('inspect', t('检查安装状态'))"><Icon name="refresh" />{{ t('刷新本机版本') }}</button></div><div v-if="currentVersion" class="version-installed"><img src="/assets/home-logo.webp" alt="Next Trainer" /><div><h2>Next Trainer <span>{{ currentVersion.version }}</span></h2><div class="inline-tags"><span class="tag active-tag">{{ t('当前使用') }}</span><span class="tag">{{ channelName(currentVersion.channel) }}</span><code>{{ currentVersion.commit.slice(0, 8) }}</code></div><p>{{ ready ? t('源码、主程序环境与网页资源均已就绪') : t('请根据检查结果安装或修复') }}</p></div><button @click="page = 'environment'">{{ t('检查与修复') }}<Icon name="arrow" /></button></div>
+      <section v-show="page === 'versions'" class="content-page" :aria-label="t('版本管理')"><header class="page-title"><h1>{{ t('版本管理') }}</h1><p>{{ t('在本机版本之间切换，资料始终保留。') }}</p></header><div class="section-toolbar"><span class="context-label">{{ versions.filter(version => version.installed).length }} {{ t('个已安装版本') }}</span><button :disabled="busy" @click="command('inspect', t('检查安装状态'))"><Icon name="refresh" />{{ t('刷新本机版本') }}</button></div><div v-if="currentVersion" class="version-installed"><img src="/assets/home-logo.webp" alt="Next Trainer" /><div><h2>Next Trainer <span>{{ currentVersion.version }}</span></h2><div class="inline-tags"><span class="tag active-tag">{{ t('当前使用') }}</span><span class="tag">{{ channelName(currentVersion.channel) }}</span><code>{{ currentVersion.commit.slice(0, 8) }}</code></div><p>{{ currentSourceUnsupported ? t('本包未提供校验清单') : ready ? t('源码、主程序环境与网页资源均已就绪') : t('请根据检查结果安装或修复') }}</p></div><button @click="page = 'environment'">{{ t('检查与修复') }}<Icon name="arrow" /></button></div>
 
           <div class="section-caption"><h2>{{ t('内置发布清单') }}</h2><span>{{ t('固定制品，尚未查询远端更新') }}</span></div>
           <section class="rollback-panel"><div><strong>{{ t('上一已健康版本') }}</strong><p v-if="rollbackVersion"><span>{{ channelName(rollbackVersion.channel) }} · {{ rollbackVersion.version }}</span><code>{{ rollbackVersion.commit.slice(0, 8) }}</code></p><p v-else>{{ t('尚无可回退记录。版本成功启动并通过健康检查后会记录。') }}</p></div><button :disabled="mutationDisabled || !rollbackAvailable" @click="rollback">{{ t('回退到此版本') }}</button></section>
           <p v-if="rollbackVersion && !rollbackAvailable" class="inline-note">{{ t('回退目标尚未安装完整或存在检查问题，请先修复对应版本。') }}</p>
-          <section v-for="group in channels" :key="group.channel" class="channel-section" :aria-label="channelName(group.channel)"><h3>{{ channelName(group.channel) }}<span>{{ group.channel === 'dev' ? t('包含开发中的改动') : group.channel === 'main' ? t('稳定发布线') : t('内置版本') }}</span></h3><p v-if="!group.versions.length" class="empty-channel">{{ t('内置清单尚未提供此发布线的版本。') }}</p><article v-for="version in group.versions" :key="version.id" class="version-card" :aria-label="`${version.channel} ${version.version} ${version.commit.slice(0, 8)}`"><div class="version-top"><div><strong>{{ version.version }}</strong><span v-if="version.current || version.id === report?.current_release" class="current-tag">{{ t('当前使用') }}</span><span v-else-if="version.id === report?.previous_known_good" class="healthy-tag">{{ t('回退保留') }}</span><span v-else-if="version.known_good" class="healthy-tag">{{ t('曾健康启动') }}</span></div><span class="release-state" :class="{ good: version.installed && version.source_ok && version.environment_ok }">{{ releaseState(version) }}</span></div><dl class="version-details"><div><dt>{{ t('提交') }}</dt><dd><code>{{ version.commit }}</code></dd></div><div><dt>{{ t('下载') }}</dt><dd><code>{{ formatBytes(version.download_bytes) }}</code><span class="detail-note">{{ t('源码制品') }}</span></dd></div><div><dt>{{ t('磁盘') }}</dt><dd><code>{{ formatBytes(version.source_bytes) }}</code><span class="detail-note">{{ version.installed ? t('源码展开；运行环境另计') : t('预计源码展开；运行环境另计') }}</span></dd></div><div v-if="version.installed"><dt>{{ t('检查') }}</dt><dd><span :class="{ 'check-warning': !version.source_ok }">{{ version.source_ok ? t('源码完整') : t('源码需修复') }}</span><span class="detail-separator">/</span><span :class="{ 'check-warning': !version.environment_ok }">{{ version.environment_ok ? t('环境通过') : t('环境需修复') }}</span></dd></div></dl><div class="version-actions"><button v-if="version.managed_recipe && version.installed" :disabled="mutationDisabled" @click="inspectSourceRepair(version)">{{ t('源码修复清单') }}</button><button :disabled="mutationDisabled" @click="install(version)">{{ version.installed ? t('检查并补全安装') : t('下载安装') }}</button><button :disabled="mutationDisabled || !version.installed || !version.source_ok || !version.environment_ok || version.current || version.id === report?.current_release" @click="select(version)">{{ t('切换到此版本') }}</button><button class="delete-button" :disabled="mutationDisabled || !version.installed || protectedRelease(version)" :title="protectedRelease(version) ? t('当前版本及上一已健康版本需保留') : t('删除受管版本目录')" @click="remove(version)">{{ t('删除') }}</button></div></article></section>
+          <section v-for="group in channels" :key="group.channel" class="channel-section" :aria-label="channelName(group.channel)"><h3>{{ channelName(group.channel) }}<span>{{ group.channel === 'dev' ? t('包含开发中的改动') : group.channel === 'main' ? t('稳定发布线') : t('内置版本') }}</span></h3><p v-if="!group.versions.length" class="empty-channel">{{ t('内置清单尚未提供此发布线的版本。') }}</p><article v-for="version in group.versions" :key="version.id" class="version-card" :aria-label="`${version.channel} ${version.version} ${version.commit.slice(0, 8)}`"><div class="version-top"><div><strong>{{ version.version }}</strong><span v-if="version.current || version.id === report?.current_release" class="current-tag">{{ t('当前使用') }}</span><span v-else-if="version.id === report?.previous_known_good" class="healthy-tag">{{ t('回退保留') }}</span><span v-else-if="version.known_good" class="healthy-tag">{{ t('曾健康启动') }}</span></div><span class="release-state" :class="{ good: version.installed && version.source_ok && version.environment_ok }">{{ releaseState(version) }}</span></div><dl class="version-details"><div><dt>{{ t('提交') }}</dt><dd><code>{{ version.commit }}</code></dd></div><div><dt>{{ t('下载') }}</dt><dd><code>{{ formatBytes(version.download_bytes) }}</code><span class="detail-note">{{ t('源码制品') }}</span></dd></div><div><dt>{{ t('磁盘') }}</dt><dd><code>{{ formatBytes(version.source_bytes) }}</code><span class="detail-note">{{ version.installed ? t('源码展开；运行环境另计') : t('预计源码展开；运行环境另计') }}</span></dd></div><div v-if="version.installed"><dt>{{ t('检查') }}</dt><dd><span :class="{ 'check-warning': sourceSupported(version) && !version.source_ok }">{{ !sourceSupported(version) ? t('本包未提供校验清单') : version.source_ok ? t('源码完整') : t('源码需修复') }}</span><span class="detail-separator">/</span><span :class="{ 'check-warning': !version.environment_ok }">{{ version.environment_ok ? t('环境通过') : t('环境需修复') }}</span></dd></div></dl><div class="version-actions"><button v-if="maintenanceSupported(version) && version.installed" :disabled="mutationDisabled" @click="inspectSourceRepair(version)">{{ t('源码修复清单') }}</button><button :disabled="mutationDisabled || !installSupported(version)" :title="!installSupported(version) ? t('本启动器未提供此版本的安装配方，请安装受支持的新版本。') : undefined" @click="install(version)">{{ version.installed ? t('检查并补全安装') : t('下载安装') }}</button><button :disabled="mutationDisabled || !version.installed || !version.source_ok || !version.environment_ok || version.current || version.id === report?.current_release" @click="select(version)">{{ t('切换到此版本') }}</button><button class="delete-button" :disabled="mutationDisabled || !version.installed || protectedRelease(version)" :title="protectedRelease(version) ? t('当前版本及上一已健康版本需保留') : t('删除受管版本目录')" @click="remove(version)">{{ t('删除') }}</button></div></article></section>
           <p class="scope-note">{{ t('已安装表示版本目录存在，不代表可以运行。切换依据每个版本的实际检查；当前版本和上一已健康版本受删除保护。main / dev 使用发布线与提交区分，即使版本号相同也分别管理。') }}</p>
-          <section class="environment-actions" :aria-label="t('准备版本安装文件')"><button v-for="version in versions" :key="version.id" :disabled="mutationDisabled" @click="prefetch(version)">{{ t('准备') }} {{ channelName(version.channel) }} {{ t('安装文件') }}</button></section>
+          <section class="environment-actions" :aria-label="t('准备版本安装文件')"><button v-for="version in versions" :key="version.id" :disabled="mutationDisabled || !installSupported(version)" :title="!installSupported(version) ? t('本启动器未提供此版本的安装配方，请安装受支持的新版本。') : undefined" @click="prefetch(version)">{{ t('准备') }} {{ channelName(version.channel) }} {{ t('安装文件') }}</button></section>
 
       </section>
       <section v-show="page === 'environment'" class="content-page environment-page" :aria-label="t('环境管理')"><header class="page-title"><h1>{{ t('环境管理') }}</h1><p>{{ t('每个训练引擎独立安装，按需检查与修复。') }}</p></header><div class="section-toolbar"><div class="context-label">Next Trainer <b>{{ currentVersion?.version ?? t('尚未选择版本') }}</b><span v-if="currentVersion" class="tag">{{ t('当前版本') }}</span></div><button :disabled="busy || transitioning" @click="command('inspect', t('检查安装状态'))"><Icon name="refresh" />{{ t('检查环境') }}</button></div>
         <p v-if="error" class="gui-issue" role="alert">{{ error }}</p>
-        <article class="main-environment"><div class="main-env-icon"><Icon name="environment" /></div><div class="main-env-copy"><h2>{{ t('主程序环境') }} <span class="engine-state" :class="{ good: ready }"><i></i>{{ !sameRoot || !report ? t('待检查') : ready ? t('已就绪') : t('需处理') }}</span></h2><p>{{ t('基础 Python · 主程序依赖 · 网页资源') }}</p></div><div class="main-env-actions"><button class="quiet-button" :disabled="mutationDisabled || !managedCurrent" @click="advanced = true; diagnoseManagedGui()">{{ t('主程序修复') }}</button><button @click="advanced = !advanced">{{ advanced ? t('收起高级恢复') : t('高级恢复') }}<Icon name="arrow" /></button></div></article>
-        <EnginePanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="engineReadDisabled" :apply-disabled="engineMutationDisabled" @operate="startEngineOperation" /><p v-else class="empty-note">{{ t('检查安装目录并选择训练器版本后，可分别管理四个训练引擎。') }}</p>
-        <div v-show="advanced" class="advanced-recovery"><h2>{{ t('主程序检查与高级恢复') }}</h2><p class="hint">{{ t('完整性检查与恢复按实际文件验证。执行修改前请先停止训练器。') }}</p><div v-if="report?.checks.length && sameRoot" class="checks" role="list" :aria-label="t('环境检查明细')"><div v-for="(check, index) in report.checks" :key="`${index}-${check.name}`" class="check-row" role="listitem"><span class="check-badge" :class="{ ok: check.ok }">{{ check.ok ? t('通过') : t('待处理') }}</span><div><strong>{{ check.name }}</strong><p>{{ check.detail }}</p></div></div></div>
+        <article class="main-environment"><div class="main-env-icon"><Icon name="environment" /></div><div class="main-env-copy"><h2>{{ t('主程序环境') }} <span class="engine-state" :class="{ good: ready }"><i></i>{{ !sameRoot || !report ? t('待检查') : currentSourceUnsupported ? t('本包未提供校验清单') : ready ? t('已就绪') : t('需处理') }}</span></h2><p>{{ t('基础 Python · 主程序依赖 · 网页资源') }}</p></div><div class="main-env-actions"><button v-if="managedCurrent" class="quiet-button" :disabled="mutationDisabled" @click="advanced = true; diagnoseManagedGui()">{{ t('主程序修复') }}</button><button v-if="!needsVersionManagement" @click="advanced = !advanced">{{ advanced ? t('收起高级恢复') : t('高级恢复') }}<Icon name="arrow" /></button></div></article>
+        <p v-if="currentMaintenanceUnsupported" class="inline-note" role="note">{{ t('本启动器未提供此版本的精准修复配方。需要修复时，请在版本管理安装受支持的新版本，确认后切换。当前版本和资料会保留。') }}<button class="text-button" @click="page = 'versions'">{{ t('前往版本管理') }}<Icon name="arrow" /></button></p>
+        <p v-if="currentSourceUnsupported" class="inline-note" role="note">{{ t('本包未提供校验清单，无法判断此版本源码是否完整。请在版本管理选择受支持的版本。') }}<button class="text-button" @click="page = 'versions'">{{ t('前往版本管理') }}<Icon name="arrow" /></button></p>
+        <EnginePanel v-if="sameRoot && activeManagedRelease" :root="path.trim()" :release-id="activeManagedRelease.id" :disabled="engineReadDisabled" :apply-disabled="engineMutationDisabled" @operate="startEngineOperation" /><p v-else class="empty-note">{{ t('检查安装目录并选择训练器版本后，可分别管理四个训练引擎。') }}</p>
+        <div v-show="advanced && !needsVersionManagement" class="advanced-recovery"><h2>{{ t('主程序检查与高级恢复') }}</h2><p class="hint">{{ t('完整性检查与恢复按实际文件验证。执行修改前请先停止训练器。') }}</p><div v-if="report?.checks.length && sameRoot" class="checks" role="list" :aria-label="t('环境检查明细')"><div v-for="(check, index) in report.checks" :key="`${index}-${check.name}`" class="check-row" role="listitem"><span class="check-badge" :class="{ ok: check.ok }">{{ check.ok ? t('通过') : t('待处理') }}</span><div><strong>{{ check.name }}</strong><p>{{ check.detail }}</p></div></div></div>
       <section v-if="sameRoot && registrationVersions.length" class="gui-diagnostics" aria-labelledby="registration-title">
             <div class="section-caption"><h2 id="registration-title">{{ t('恢复安装登记') }}</h2><button :disabled="mutationDisabled" @click="inspectGuiRegistration">{{ t('只读检查登记') }}</button></div>
             <p class="hint">{{ t('源码和环境仍在、安装记录丢失时，可离线验证并补齐登记。检查不会执行解释器；确认后会使用独立临时资料验证真实入口。') }}</p>
@@ -902,7 +920,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <button v-if="lifecyclePreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmLifecycle(lifecycleAction, lifecycleAction === 'rollback' ? lifecycleTransaction : null)">{{ lifecycleAction === 'rebuild' ? t('审查并创建新实例') : t('审查并回退旧实例') }}</button>
             </template>
           </section>
-          <section v-if="sameRoot" class="gui-diagnostics" aria-labelledby="base-python-title">
+          <section v-if="managedCurrent" class="gui-diagnostics" aria-labelledby="base-python-title">
             <div class="section-caption"><h2 id="base-python-title">{{ t('基础 Python 组件') }}</h2><button :disabled="mutationDisabled" @click="inspectBasePythonRepair">{{ t('检查组件与引用环境') }}</button></div>
             <p class="hint">{{ t('检查只读取文件，Python 缺失或损坏时仍可查看。恢复会替换完整基础组件，并验证所有受管引用环境。') }}</p>
             <template v-if="basePythonPreview">
@@ -948,7 +966,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <p class="scope-note">{{ t('本次诊断只读取文件。固定包的原文件摘要与记录集合、安装器生成项的验证范围分别展示；诊断结果不代表训练器已健康启动。') }}</p>
             </template>
           </section>
-          <template v-else>
+          <template v-else-if="!currentVersion?.managed_recipe">
             <div class="environment-actions"><button :disabled="mutationDisabled" @click="command('bootstrap', t('准备基础工具'))">{{ t('准备基础工具') }}</button><button :disabled="mutationDisabled" @click="command('restore_trainer', t('恢复当前版本源码'))">{{ t('恢复当前版本源码') }}</button><button :disabled="mutationDisabled" @click="command('install_environment', t('安装或修复运行环境'))">{{ t('安装 / 修复运行环境') }}</button></div>
             <p class="hint">{{ t('源码恢复会将原目录移至备份；请留意日志中的路径和数据处理结果。运行中的训练器需先停止，才能安装或修复。') }}</p>
           </template>
@@ -987,8 +1005,8 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <button :disabled="mutationDisabled" @click="storeNetworkSettings">{{ t('保存网络设置') }}</button>
             </template>
           </section></section>
-        <section v-show="setting === 'profiles'"><h2>{{ t('用户资料') }}</h2><p class="setting-description">{{ t('训练器版本与用户资料独立保存。更换安装目录前请先停止当前服务。') }}</p><section class="directory-panel" aria-labelledby="directory-label"><label id="directory-label" for="install-root">{{ t('安装目录') }}</label><div class="directory-input"><input id="install-root" v-model="path" :disabled="busy || running || transitioning" :placeholder="t('首次检查将使用默认目录')" spellcheck="false" @keydown.enter="command('inspect', t('检查安装状态'))" /><button :disabled="busy || running || transitioning" @click="browse">{{ t('选择…') }}</button><button :disabled="busy || transitioning" @click="command('inspect', t('检查安装状态'))">{{ t('检查') }}</button></div></section><section v-if="report?.profile_path && sameRoot" class="profile-info"><span>{{ t('当前共享用户资料') }}</span><code>{{ report.profile_path }}</code></section><ImportPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" /></section>
-        <section v-show="setting === 'security'"><h2>{{ t('安全与更新') }}</h2><TrustPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @changed="command('inspect', t('刷新发布清单'))" /><ShellPanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" /><p v-else class="setting-description">{{ t('检查安装目录并选择训练器版本后，可管理更新来源与启动器恢复。') }}</p></section>
+        <section v-show="setting === 'profiles'"><h2>{{ t('用户资料') }}</h2><p class="setting-description">{{ t('训练器版本与用户资料独立保存。更换安装目录前请先停止当前服务。') }}</p><section class="directory-panel" aria-labelledby="directory-label"><label id="directory-label" for="install-root">{{ t('安装目录') }}</label><div class="directory-input"><input id="install-root" v-model="path" :disabled="busy || running || transitioning" :placeholder="t('首次检查将使用默认目录')" spellcheck="false" @keydown.enter="command('inspect', t('检查安装状态'))" /><button :disabled="busy || running || transitioning" @click="browse">{{ t('选择…') }}</button><button :disabled="busy || transitioning" @click="command('inspect', t('检查安装状态'))">{{ t('检查') }}</button></div></section><section v-if="report?.profile_path && sameRoot" class="profile-info"><span>{{ t('当前共享用户资料') }}</span><code>{{ report.profile_path }}</code></section><ImportPanel v-if="sameRoot && activeManagedRelease" :root="path.trim()" :release-id="activeManagedRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" /></section>
+        <section v-show="setting === 'security'"><h2>{{ t('安全与更新') }}</h2><TrustPanel v-if="sameRoot && activeManagedRelease" :root="path.trim()" :release-id="activeManagedRelease.id" :disabled="mutationDisabled" @changed="command('inspect', t('刷新发布清单'))" /><ShellPanel v-if="sameRoot && activeManagedRelease" :root="path.trim()" :release-id="activeManagedRelease.id" :disabled="mutationDisabled" /><p v-else class="setting-description">{{ t('检查安装目录并选择训练器版本后，可管理更新来源与启动器恢复。') }}</p></section>
         <section v-show="setting === 'about'" class="about-page"><img class="about-symbol" src="/assets/home-logo.webp" :alt="t('Next Trainer 项目标志')" /><h2>Next Trainer</h2><p class="setting-description">{{ t('桌面启动器') }}</p><p class="about-version">{{ t('启动器') }} {{ appVersion }}<br />{{ t('训练器') }} {{ currentVersion?.version ?? report?.version ?? t('尚未选择') }}<span v-if="currentVersion"> · {{ currentVersion.commit.slice(0, 8) }}</span></p><p class="setting-description">{{ t('独立环境、集中日志，让创作从容开始。') }}</p><div class="setting-links"><button class="text-button" @click="openProjectLink('project')">{{ t('项目主页 ↗') }}</button><button class="text-button" @click="openProjectLink('issues')">{{ t('问题反馈 ↗') }}</button><button class="text-button" @click="openProjectLink('license')">{{ t('开源许可 ↗') }}</button></div><p class="setting-description">{{ t('界面布局参考 Starward（星穹启动器）。默认背景与品牌使用本项目资源。') }}</p></section>
       </div></section>
 

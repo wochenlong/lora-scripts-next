@@ -405,4 +405,12 @@ export const appTranslations: Record<string, string> = {
   '完整组件文件清单（{count}）': 'Complete component file list ({count})',
   '缺失文件（{count}）': 'Missing files ({count})',
   '内容或记录异常（{count}）': 'Content or record issues ({count})',
+  '本包未提供校验清单': 'No verification manifest bundled',
+  '请管理版本': 'Manage versions to continue',
+  '管理版本': 'Manage versions',
+  '本启动器未提供此版本的安装配方，请安装受支持的新版本。': 'This launcher has no installation recipe for this version. Install a newer supported version.',
+  '本启动器未提供此版本的精准修复配方。': 'This launcher has no precise repair recipe for this version.',
+  '本启动器未提供此版本的精准修复配方。需要修复时，请在版本管理安装受支持的新版本，确认后切换。当前版本和资料会保留。': 'This launcher has no precise repair recipe for this version. If repairs are needed, install a supported newer version in Versions, then confirm before switching. Your current version and data will be kept.',
+  '前往版本管理': 'Go to Versions',
+  '本包未提供校验清单，无法判断此版本源码是否完整。请在版本管理选择受支持的版本。': 'No verification manifest is bundled for this version, so source integrity cannot be determined. Choose a supported version in Versions.',
 }

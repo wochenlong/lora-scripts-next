@@ -41,6 +41,9 @@ export interface VersionView {
   current: boolean
   known_good: boolean
   managed_recipe?: boolean
+  source_supported?: boolean
+  maintenance_supported?: boolean
+  install_supported?: boolean
 }
 
 export type ReportCommand = 'inspect' | 'bootstrap' | 'restore_trainer' | 'install_environment'

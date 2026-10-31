@@ -9,7 +9,7 @@ use crate::{
     recipe::GuiRecipe,
 };
 use anyhow::{bail, Context, Result};
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -23,27 +23,6 @@ const MAX_FILE: u64 = 1024 * 1024 * 1024;
 const MAX_TREE: u64 = 4 * MAX_FILE;
 const MAX_NODES: usize = 50_000;
 static NEXT: AtomicU64 = AtomicU64::new(0);
-
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SourceCatalog {
-    schema_version: u32,
-    source_commit: String,
-    source_archive_sha256: String,
-    source_archive_bytes: u64,
-    frontend_sha256: String,
-    frontend_bytes: u64,
-    expected_file_count: usize,
-    expected_file_bytes: u64,
-    files: Vec<SourceFile>,
-}
-#[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
-struct SourceFile {
-    path: String,
-    bytes: u64,
-    sha256: String,
-}
 
 #[derive(Debug, Serialize)]
 struct Diagnosis {
@@ -236,31 +215,16 @@ fn diagnose(
 ) -> Result<(GuiRecipe, Diagnosis)> {
     release.validate()?;
     let recipe = GuiRecipe::embedded()?;
-    let catalog: SourceCatalog =
-        serde_json::from_str(include_str!("../../catalog/gui-candidate-source-v1.json"))?;
-    if catalog.schema_version != 1
-        || catalog.source_commit != recipe.source_commit
+    let catalog = crate::source_integrity::trusted_manifest(release)?;
+    if catalog.source_commit != recipe.source_commit
         || release.commit != recipe.source_commit
         || release.python != recipe.python.version
         || release.uv != recipe.tool_uv
         || !recipe.matches_environment_recipe(&release.environment_recipe)
-        || release.archive.sha256 != catalog.source_archive_sha256
-        || release.archive.bytes != catalog.source_archive_bytes
         || recipe.frontend.sha256 != catalog.frontend_sha256
         || recipe.frontend.bytes != catalog.frontend_bytes
-        || catalog.expected_file_count != 1741
-        || catalog.files.len() != catalog.expected_file_count
     {
         bail!("该发布版没有匹配的可信源码及捆绑前端修复配方");
-    }
-    let total = catalog.files.iter().try_fold(0u64, |total, file| {
-        if file.path.is_empty() || file.sha256.len() != 64 {
-            bail!("可信源码闭包条目无效");
-        }
-        total.checked_add(file.bytes).context("源码闭包长度溢出")
-    })?;
-    if total != catalog.expected_file_bytes {
-        bail!("可信源码闭包计量不符");
     }
     let replacement_root = layout.release_dir.strip_prefix(&layout.root)?.to_path_buf();
     let diagnosis = Diagnosis {
@@ -615,7 +579,13 @@ mod tests {
         )
         .unwrap();
         assert!(diagnosis.source_integrity_error.is_some());
-        assert_eq!(diagnosis.expected_source_files.len(), 1741);
+        assert_eq!(
+            diagnosis.expected_source_files.len(),
+            crate::source_integrity::trusted_manifest(&f.release)
+                .unwrap()
+                .files
+                .len()
+        );
         assert!(diagnosis
             .expected_source_files
             .iter()
@@ -640,7 +610,10 @@ mod tests {
         let value = preview(&f.root, &f.release).unwrap();
         assert_eq!(
             value["expected_source_files"].as_array().unwrap().len(),
-            1741
+            crate::source_integrity::trusted_manifest(&f.release)
+                .unwrap()
+                .files
+                .len()
         );
         assert!(value["source_integrity_error"].is_string());
         assert_eq!(
@@ -656,6 +629,22 @@ mod tests {
             fs::read_dir(f.root.join("staging")).unwrap().count(),
             staging
         );
+    }
+
+    #[test]
+    fn previous_source_manifest_never_uses_the_current_repair_recipe() {
+        let f = Fixture::new();
+        let previous = Catalog::embedded()
+            .unwrap()
+            .releases
+            .into_iter()
+            .find(|release| release.commit == "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d")
+            .unwrap();
+        assert!(crate::source_integrity::supports(&previous));
+        let before = capture(f.ctx().layout(), None).unwrap();
+        let error = preview(&f.root, &previous).unwrap_err();
+        assert!(format!("{error:#}").contains("没有匹配的可信源码及捆绑前端修复配方"));
+        assert_eq!(capture(f.ctx().layout(), None).unwrap(), before);
     }
 
     #[test]
