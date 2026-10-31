@@ -1,6 +1,7 @@
 //! 独立只读壳试运行入口；不创建Runtime，不注册产品变更命令。
 use crate::shell_update_protocol as protocol;
 use std::{path::PathBuf, sync::Mutex};
+use tauri::Manager;
 struct Trial {
     directory: PathBuf,
     request: protocol::TrialRequest,
@@ -54,6 +55,15 @@ pub fn run(directory: PathBuf) -> anyhow::Result<()> {
         window.url = tauri::WebviewUrl::App("index.html?shell-trial=1".into());
     }
     tauri::Builder::default()
+        .setup(|app| {
+            // 恢复检查是独立只读入口，只读取同一壳偏好，不创建托盘或注册保存命令。
+            let data = match std::env::var_os("NEXT_TRAINER_LAUNCHER_DATA_DIR") {
+                Some(path) => PathBuf::from(path),
+                None => app.path().app_local_data_dir()?,
+            };
+            app.manage(crate::launcher_preferences::PreferencesState::open(&data)?);
+            Ok(())
+        })
         .manage(Trial {
             directory,
             request,
@@ -61,6 +71,7 @@ pub fn run(directory: PathBuf) -> anyhow::Result<()> {
             recovery: Mutex::new(false),
         })
         .invoke_handler(tauri::generate_handler![
+            crate::launcher_preferences::load_launcher_preferences,
             trial_context,
             trial_rendered,
             trial_recovery_available,
