@@ -49,7 +49,7 @@
 
 本轮约定施工与交付已完成，没有剩余UI实施事项。没有重测真实业务或干净Windows/WebView首装，历史真实训练结果不算本包新验收。
 
-## CR-014追加：点击内容区收起（施工中）
+## CR-014追加：点击内容区收起与首页品牌
 
 用户明确追加要求：展开后点击主页面自动收起。主内容容器在pointerdown捕获阶段收起侧栏，适用于首页和其余内容页；保留原控件的点击、输入、滚动事件，不加遮挡层、不阻断点击。侧栏导航和展开开关不属于主内容，不误触收起。仅增加一行Vue事件绑定，展开宽度/动画/正文位置继续沿用CR-013。
 
@@ -57,4 +57,16 @@
 
 用户同轮追加：删除首页“让灵感，成为你的模型。”标语；NextTrainer标题改为单行，与Logo水平并排、垂直居中。保留Logo、信息卡及启动区位置，增加DOM/水平对齐小检查，不重跑旧矩阵。
 
-浏览器定向已完成：最终资源 `index-CYZRtk0d.js` / `index-BeuXJSj6.css`，`launcher-ui-sidebar-dismiss-20261031/browser-01` 7项全部通过。标题与Logo中心Y均124px，标语段落和拆行span均为0；首页空白、同次友情链接tab、侧栏内部导航、再次展开、管理页空白、减少动态下点击收起均通过，主内容/信息卡/启动区几何保持。零页面异常、外部请求、未建模或业务变更IPC；自有浏览器和服务器正常关闭。Root已实际看首页最终图，独立只读代码复核无阻断。CR-013中“点击正文不自动收起”仅属旧版行为，以本追加为准。下一步：干净源码基线离线打包、最终EXE仅3项原生只读定向验证，通过后更新既有入口。
+浏览器定向已完成：最终资源 `index-CYZRtk0d.js` / `index-BeuXJSj6.css`，`launcher-ui-sidebar-dismiss-20261031/browser-01` 7项全部通过。标题与Logo中心Y均124px，标语段落和拆行span均为0；首页空白、同次友情链接tab、侧栏内部导航、再次展开、管理页空白、减少动态下点击收起均通过，主内容/信息卡/启动区几何保持。零页面异常、外部请求、未建模或业务变更IPC；自有浏览器和服务器正常关闭。Root已实际看首页最终图，独立只读代码复核无阻断。CR-013中“点击正文不自动收起”仅属旧版行为，以本追加为准。
+
+源码基线 `bc911b79e4b9dcd05eef24927cfdc7b5e0b7e3c7` 已普通push并实核远端。固定输入预检、离线构建通过，cache_changes={}；构建后的index/JS/CSS逐字节与browser-01一致，未重复浏览器矩阵。输出 `F:/NextTrainerLauncherSandbox/build-ui-sidebar-dismiss-20261031/candidate-1`，ZIP摘要、CRC、安全成员及解压EXE/helper/manifest全部核对，最终目录 `F:/NextTrainerLauncherSandbox/ui-sidebar-dismiss-20261031-1/NextTrainerLauncher-0.2.0-windows-x64`。
+
+| 制品 | 字节数 | SHA256 |
+| --- | ---: | --- |
+| EXE | 38,866,944 | `c927c550a0851e7a8418633e3e436970eada67ad0740b390cbd6dd5bddf3bcbc` |
+| 便携ZIP | 20,942,199 | `1fe3fc67d4ad0111b49fadd1f11db6fab6115f6dc61bc60347c16c5df560f886` |
+| NSIS安装包 | 17,419,460 | `b2cf3e10876890bb8569afb839db589631a6eb02198f7201357ebaa8c4f82662` |
+
+最终 `native-01` 主案仅3项，均通过：品牌单行/水平对齐/无标语、首页正文空白点击收起、管理页正文空白点击收起及几何不变。只使用独立WebView和既有r12；没有重开、旧尺寸矩阵、启停、安装、下载或训练。本次UI与原生退出0，正常关窗、Job排空、CDP回收、外部哨兵一致，末状态stopped且无PID/port。Root实际看最终首页及环境页截图，无阻断。归档见[最终首页](../../design/desktop-launcher-ui-review/sidebar-dismiss-20261031/dismissed-home.png)、[环境页](../../design/desktop-launcher-ui-review/sidebar-dismiss-20261031/dismissed-environment.png)及[本轮结构化验收](ui-sidebar-dismiss-20261031-validation.json)。
+
+交付已完成：既有 `F:/NextTrainerLauncherSandbox/user-20261030/启动新版启动器.cmd`、使用说明及ready报告已先备份再更新至最终包；10项静态核对全过，包含EXE摘要、目标、原WebView、清CDP参数、u13、备份及构建SHA一致。原用户背景、profile、模型样例、旧入口均保留，未代用户启动。备份和部署回执位于工具目录 `launcher-ui-sidebar-dismiss-20261031/user-entry-backup`、`user-entry-deployment.json`、`user-entry-verification.json`。用户正常关闭旧窗口，再使用原新版入口即可看到本轮结果。CR-014为complete-with-boundary，没有剩余实施或验证；最终文档与两张代表图随收尾提交保存，远端完整SHA记录于工具`final-git-baseline.json`。

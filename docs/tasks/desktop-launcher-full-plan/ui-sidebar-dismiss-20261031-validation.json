@@ -1,0 +1,122 @@
+{
+  "change": "CR-014",
+  "status": "complete-with-boundary",
+  "updated_at": "2026-10-31T04:20:30.153337+00:00",
+  "source_commit": "bc911b79e4b9dcd05eef24927cfdc7b5e0b7e3c7",
+  "scope": [
+    "点击主内容收起侧栏，同次控件点击继续执行",
+    "首页标语删除，NextTrainer与Logo水平并排且垂直居中"
+  ],
+  "browser": {
+    "passed": true,
+    "checks": 7,
+    "build": {
+      "index_sha256": "dc5a15ce9cf332c354958ae5728f42627dabce86555ca0ded9bd70c77a068f68",
+      "assets": [
+        {
+          "route": "/assets/index-CYZRtk0d.js",
+          "bytes": 204943,
+          "sha256": "1cd545459d39959abef3ec4279b523d511ee1b3e6cdf50d981ca5e1afc8733d7"
+        },
+        {
+          "route": "/assets/index-BeuXJSj6.css",
+          "bytes": 48695,
+          "sha256": "71fef2e07cf97aa8918972cb3582f054a5ac23cc4f390ef77a65fdae38f5a898"
+        }
+      ]
+    },
+    "errors": [],
+    "external_requests": []
+  },
+  "native": {
+    "passed": true,
+    "checks": 3,
+    "errors": [],
+    "runtime": {
+      "root": "F:\\NextTrainerLauncherSandbox\\r12",
+      "release_id": null,
+      "instance_id": null,
+      "binding_generation": null,
+      "run_id": null,
+      "seq": 0,
+      "phase": "stopped",
+      "pid": null,
+      "port": null,
+      "url": null,
+      "version": null,
+      "exit_code": null,
+      "error": null,
+      "observed_at": 1793420278782
+    },
+    "normal_close": true,
+    "exit_code": 0,
+    "job_drained": true,
+    "cdp_reclaimed": true,
+    "sentinels_unchanged": true
+  },
+  "build_dist_matches_browser": true,
+  "candidate": "F:\\NextTrainerLauncherSandbox\\ui-sidebar-dismiss-20261031-1\\NextTrainerLauncher-0.2.0-windows-x64",
+  "exe_sha256": "c927c550a0851e7a8418633e3e436970eada67ad0740b390cbd6dd5bddf3bcbc",
+  "entry": "F:\\NextTrainerLauncherSandbox\\user-20261030\\启动新版启动器.cmd",
+  "backup": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-dismiss-20261031\\user-entry-backup",
+  "entry_checks": {
+    "passed": true,
+    "checks": {
+      "entry_target_matches": true,
+      "target_exe_sha_matches": true,
+      "original_webview_reused": true,
+      "debug_args_cleared": true,
+      "no_cdp_or_control_params": true,
+      "u13_root_unchanged": true,
+      "no_user_launch": true,
+      "backup_files_match": true,
+      "entry_report_matches": true,
+      "build_commit_matches": true
+    },
+    "entry": "F:\\NextTrainerLauncherSandbox\\user-20261030\\启动新版启动器.cmd",
+    "exe_sha256": "c927c550a0851e7a8418633e3e436970eada67ad0740b390cbd6dd5bddf3bcbc"
+  },
+  "visual_review": {
+    "root_reviewed": [
+      "browser-home",
+      "native-home",
+      "native-environment"
+    ],
+    "result": "no-blocker",
+    "independent_source_review": "no-blocker"
+  },
+  "boundaries": [
+    "UI定向验证；没有重复下载安装训练与服务启停",
+    "未代用户启动；原WebView、自选背景、u13、模型及样例保留"
+  ],
+  "evidence": {
+    "browser": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-dismiss-20261031\\browser-01\\browser-report.json",
+      "sha256": "bdec53eee0fa2e67c336733cea7cda4aa21f891e91fdb5809972e5a23bfe09f5"
+    },
+    "build_dist": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-dismiss-20261031\\build-dist-verification.json",
+      "sha256": "e8db0073798f181d911405de83a746bb59836ca466ce0fb2f5be9542f73f1ce9"
+    },
+    "native": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-dismiss-20261031\\native-01\\main\\ui-report.json",
+      "sha256": "9de9f1b7ec8cb29b7b925da5ae1c78af289702b73406eef7475a53296a72b6b6"
+    },
+    "host": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-dismiss-20261031\\native-01\\host-status.json",
+      "sha256": "41bbb6aceda3624c6b27d3fe6af834ff03829288da272f7b7cba1833fa824147"
+    },
+    "host_phase": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-dismiss-20261031\\native-01\\main\\host-status.json",
+      "sha256": "eead36f5239ea911dfcd81c2cd35e0184fdf38b99a25bd99dea60b82a945c2cc"
+    },
+    "deployment": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-dismiss-20261031\\user-entry-deployment.json",
+      "sha256": "15b55d2d5b896bfa548753d5d0d8f19293e7c12231a998329cf39c4105edc02f"
+    },
+    "entry_verification": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-dismiss-20261031\\user-entry-verification.json",
+      "sha256": "e78da5c52a873c0413e8c266954a2cb4e4c1ace7e7248e0d5161a9f9a25dc382"
+    }
+  }
+}
