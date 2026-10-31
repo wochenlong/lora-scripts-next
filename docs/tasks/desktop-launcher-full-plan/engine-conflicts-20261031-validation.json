@@ -1,0 +1,138 @@
+{
+  "status": "complete-with-boundary",
+  "updated_at": "2026-10-31T11:09:40.314522+00:00",
+  "scope": [
+    "CR-015 target-engine conflict rules",
+    "CR-016 close-to-tray and Chinese-English UI"
+  ],
+  "launcher_build_commit": "11fa55586741a99c216da2e5ceaad3404ea7887d",
+  "trainer_source_commit": "4e68df240c63ab7cf2156ea7fafabf18df4671e8",
+  "launcher": {
+    "bytes": 39504896,
+    "sha256": "91ea561da5a5cb332bc751d4eea796440151e06de789f9e13d23aa696de9d3e5"
+  },
+  "helper": {
+    "bytes": 1016320,
+    "sha256": "22271bf2fdcd87b3f66aa99ee6c2f41d0a4435878807325d77b1202b5f1ae14b"
+  },
+  "candidate": "F:\\NextTrainerLauncherSandbox\\engine-conflicts-20261031-3\\NextTrainerLauncher-0.2.0-windows-x64",
+  "unchanged_visual_baseline": "7aa9d6c591990d2d0432f9df2b9eb82fa158beb3",
+  "checks": {
+    "python_development_suite": {
+      "status": "pass",
+      "tests": 50,
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\python-tests-final.log",
+        "sha256": "798b7abc5b176386b7096e11e3986e78df0487cbd67dab0a92fe66d92bfa8c31"
+      },
+      "reuse_reason": "Python source unchanged after source commit"
+    },
+    "python_registry": {
+      "status": "pass",
+      "tests": 8,
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\python-registry-tests.log",
+        "sha256": "c65ab24ffd8d96429a9c5a918df56f6f6c32877f9a128482d19604db0b4acc0d"
+      }
+    },
+    "rust_conflict_and_recipe_checks": {
+      "status": "pass",
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\rust-final-checks.json",
+        "sha256": "d11724b32c5b9948565234d3d966e8ba0e17e16460f167a8dc5ad3d608d2ad7b"
+      }
+    },
+    "rust_preferences_fmt_clippy": {
+      "status": "pass",
+      "preference_tests": 2,
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\tray-static-checks.json",
+        "sha256": "2f1fba3af6d270efab221be5ec1d9cba09363fc486d12692174f4d051dbe6998"
+      },
+      "trial_fix_fmt_clippy": "passed after 11fa5558"
+    },
+    "frontend_build_and_i18n": {
+      "status": "pass",
+      "tests": 18,
+      "fixture_session": true,
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\i18n-ui-05\\browser-report.json",
+        "sha256": "bc394fb4b1010b671067d8a5d30ac5fbb22178698fc82e188775456b1bd5fcd2"
+      }
+    },
+    "final_native_install_service_tray_i18n": {
+      "status": "pass",
+      "tests": 30,
+      "fixture_session": false,
+      "cold_download": false,
+      "cached_install": true,
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\native-05\\native-report.json",
+        "sha256": "69431c66393fee6f4ecd85c15c247bf14c8ba7f10f189124dbb7cae3e1a68b29"
+      },
+      "host": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\native-05\\host-status.json",
+        "sha256": "43b091ecec48962d05029a1cdbf9b4f2a7728cfab60423efc39d7ae985e299c2"
+      }
+    },
+    "native_preferences_reopen": {
+      "status": "pass",
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\native-05\\native-reopen-report.json",
+        "sha256": "f14f9bd02e5bace5c86880e47beaff902077b30da731df71d1dc904e48b15883"
+      }
+    },
+    "native_readonly_trial_english": {
+      "status": "pass",
+      "fixture_session": true,
+      "updater_executed": false,
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\trial-i18n-native-02\\host-status.json",
+        "sha256": "7eece0dd3b7fa1063890856d6a12c389b8c4b15e60becfe0c4ff65f9de5056ae"
+      }
+    },
+    "packaged_python_conflicts": {
+      "status": "pass",
+      "tests": 13,
+      "python": "3.10.19",
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\packaged-python-01\\result.json",
+        "sha256": "8a615b91f7c2fc98af6429e32384c5e061d640f6cd1a67fbe14b632c14ae1b70"
+      }
+    },
+    "user_entry_delivery": {
+      "status": "pass",
+      "evidence": {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\user-entry-update.json",
+        "sha256": "1ba825a5f73a04cec20131ed2bdaf445502d958c2838d18b50069ad5a4d62db7"
+      },
+      "application_started": false
+    }
+  },
+  "installation_evidence": {
+    "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-engine-conflicts-20261031\\native-04\\native-report.json",
+    "sha256": "6beeea87b06bef3bd31e33d96a9f494114920560debac88380093bfdc798c24a"
+  },
+  "failures_preserved": [
+    {
+      "case": "native-01/native-02",
+      "classification": "pre-install test-root inspect collision; owned processes reclaimed"
+    },
+    {
+      "case": "native-04",
+      "classification": "installation/service/engines/tray restore pass; test selector strict-mode collision during popup leave animation; final native-05 reruns affected flow using same installed root"
+    },
+    {
+      "case": "native-03",
+      "classification": "25 checks pass, tray UIA target recognition refused action; fixed helper; final native-04 supersedes"
+    }
+  ],
+  "boundaries": {
+    "four_real_engine_installs_repairs_training": "skip per user; micro assets and real process locking only",
+    "gpu_model_training": "not-run this round",
+    "clean_windows_webview_first_install": "not-run inherited resource boundary",
+    "production_release": "not requested; unsigned developer candidate"
+  },
+  "user_entry": "F:/NextTrainerLauncherSandbox/user-20261031/启动启动器.cmd",
+  "user_existing_services_installations_models": "preserved"
+}
