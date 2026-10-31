@@ -5,10 +5,11 @@ use crate::{
     operations::{CancelToken, OperationHandle, OperationPhase},
 };
 use anyhow::{bail, Context, Result};
+use fs2::FileExt;
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::{
-    fs::{self, OpenOptions},
+    fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     process::{Command, Stdio},
@@ -63,6 +64,12 @@ fn hash(bytes: &[u8]) -> String {
 }
 fn fixed_file(layout: &Layout, path: &Path, bytes: &[u8]) -> Result<()> {
     layout.guard_path(path)?;
+    // 查询可与安装同时释放同一固定工具；只串行不可变缓存发布，不锁引擎状态。
+    let _publish = cache_lease(
+        layout,
+        &layout.root.join(".launcher-tool-cache-lock"),
+        &CancelToken::new(),
+    )?;
     if path.exists() {
         if !fs::metadata(path)?.is_file() || fs::read(path)? != bytes {
             bail!("壳内控制文件已变化，拒绝执行：{}", path.display());
@@ -75,25 +82,44 @@ fn fixed_file(layout: &Layout, path: &Path, bytes: &[u8]) -> Result<()> {
     }
     Ok(())
 }
+fn cache_lease(layout: &Layout, path: &Path, cancel: &CancelToken) -> Result<File> {
+    layout.guard_path(path)?;
+    layout.ensure_dir(path.parent().context("缓存锁缺少父目录")?)?;
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .truncate(false)
+        .open(path)?;
+    loop {
+        cancel.check()?;
+        match FileExt::try_lock_exclusive(&file) {
+            Ok(()) => return Ok(file),
+            Err(error) if error.kind() == fs2::lock_contended_error().kind() => {
+                thread::sleep(Duration::from_millis(20));
+            }
+            Err(error) => return Err(error).context("无法锁定固定资产缓存"),
+        }
+    }
+}
 fn engine_id(id: &str) -> Result<()> {
     if !matches!(id, "kohya" | "anima-fast" | "ai-toolkit" | "diffsynth") {
         bail!("未知训练引擎");
     }
     Ok(())
 }
-fn prepare_worker(ctx: &WorkspaceMutation) -> Result<PathBuf> {
+fn prepare_worker(layout: &Layout) -> Result<PathBuf> {
     let mut identity = Sha256::new();
     for (name, bytes) in FILES {
         identity.update(name.as_bytes());
         identity.update(Sha256::digest(bytes));
     }
-    let directory = ctx
-        .layout()
+    let directory = layout
         .root
         .join("tools/launcher-worker")
         .join(format!("{:x}", identity.finalize()));
     for (name, bytes) in FILES {
-        fixed_file(ctx.layout(), &directory.join(name), bytes)?;
+        fixed_file(layout, &directory.join(name), bytes)?;
     }
     Ok(directory.join("mikazuki/launcher/worker.py"))
 }
@@ -111,19 +137,19 @@ fn lock(layout: &Layout, engine: &str) -> Result<(PathBuf, String)> {
     fixed_file(layout, &path, bytes)?;
     Ok((path, sha))
 }
-fn request(
-    ctx: &WorkspaceMutation,
-    release: &Release,
-    engine: &str,
-    action: &str,
-) -> Result<Value> {
+fn request(layout: &Layout, release: &Release, engine: &str, action: &str) -> Result<Value> {
     engine_id(engine)?;
-    let mut value = json!({"schema_version":1,"root":ctx.layout().root,"release_id":release.id,"engine_id":engine,"profile_id":ctx.layout().profile.file_name().and_then(|s|s.to_str()).context("缺少资料标识")?,"action":action});
+    let mut value = json!({"schema_version":1,"root":layout.root,"release_id":release.id,"engine_id":engine,"profile_id":layout.profile.file_name().and_then(|s|s.to_str()).context("缺少资料标识")?,"action":action});
     if !matches!(
         action,
-        "inspect_readonly" | "capabilities" | "recipe" | "recover" | "probe_execute"
+        "inspect_readonly"
+            | "capabilities"
+            | "recipe"
+            | "recover"
+            | "probe_execute"
+            | "availability"
     ) {
-        let (path, sha) = lock(ctx.layout(), engine)?;
+        let (path, sha) = lock(layout, engine)?;
         value["lock_path"] = json!(path);
         value["lock_sha256"] = json!(sha);
     }
@@ -225,13 +251,18 @@ pub(super) fn query(
     ) {
         bail!("此接口只接受诊断和计划动作");
     }
-    let ctx = WorkspaceMutation::acquire(root, &release.id)?;
+    let layout = Layout::new(root, &release.id)?;
+    let marker = layout.root.join(".launcher-workspace");
+    layout.guard_path(&marker)?;
+    if fs::read_to_string(marker)? != model::WORKSPACE_MARKER {
+        bail!("只可检查正式启动器工作区");
+    }
     super::assert_regular_ready(root)?;
-    let python = crate::python_integrity::verify(ctx.layout())?;
-    let worker = prepare_worker(&ctx)?;
-    let mut input = request(&ctx, release, engine, action)?;
+    let python = crate::python_integrity::verify(&layout)?;
+    // 只释放内容寻址的固定工具缓存，不取得引擎或工作区变更租约。
+    let worker = prepare_worker(&layout)?;
+    let mut input = request(&layout, release, engine, action)?;
     input["rebuild"] = json!(rebuild);
-    drop(ctx);
     execute(&python, &worker, root, &input, &CancelToken::new(), log)
 }
 /// 同一交付二进制内的固定微型夹具，必须先在空沙盒显式打开绑定本EXE的测试会话。
@@ -242,7 +273,7 @@ pub(super) fn fixture_smoke(root: &Path, release: &Release, log: &Logger) -> Res
         bail!("普通工作区不允许运行测试夹具，请先在全新隔离根打开固定测试会话");
     }
     let python = crate::python_integrity::verify(ctx.layout())?;
-    let worker = prepare_worker(&ctx)?.with_file_name("smoke.py");
+    let worker = prepare_worker(ctx.layout())?.with_file_name("smoke.py");
     let unique = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)?
         .as_nanos();
@@ -269,11 +300,28 @@ pub(super) fn apply(
     if !matches!(action, "repair_apply" | "probe_execute" | "recover") {
         bail!("未知引擎变更动作");
     }
-    let ctx = WorkspaceMutation::acquire(root, &release.id)?;
+    let ctx = WorkspaceMutation::acquire_shared(root, &release.id)?;
     super::assert_regular_ready(root)?;
     let python = crate::python_integrity::verify(ctx.layout())?;
-    let worker = prepare_worker(&ctx)?;
-    let mut input = request(&ctx, release, engine, action)?;
+    let worker = prepare_worker(ctx.layout())?;
+    let mut input = request(ctx.layout(), release, engine, action)?;
+    let availability = request(ctx.layout(), release, engine, "availability")?;
+    let activity = execute(
+        &python,
+        &worker,
+        root,
+        &availability,
+        &operation.cancel_token(),
+        log,
+    )?;
+    if activity["busy"] == true {
+        bail!(
+            "{}",
+            activity["message"]
+                .as_str()
+                .unwrap_or("目标引擎正在训练或执行安装/修复，请稍后重试")
+        );
+    }
     operation.persist(&ctx)?;
     if action == "repair_apply" {
         let plan = reviewed.context("请先审查引擎安装/修复计划")?;
@@ -317,6 +365,15 @@ pub(super) fn apply(
                 let name = asset["filename"].as_str().context("缺少资产文件名")?;
                 model::validate_component(name)?;
                 let sha = asset["sha256"].as_str().context("缺少资产摘要")?;
+                model::validate_component(sha)?;
+                // 不同引擎可共用依赖；同哈希的续传文件和发布动作只允许一个写者。
+                let _asset = cache_lease(
+                    ctx.layout(),
+                    &root
+                        .join("cache/engine-asset-locks")
+                        .join(format!("{sha}.lock")),
+                    &operation.cancel_token(),
+                )?;
                 let target = ctx
                     .layout()
                     .root
@@ -366,8 +423,7 @@ pub(super) fn apply(
         "在独立解释器和事务中执行引擎操作",
     )?;
     operation.persist(&ctx)?;
-    // Python共享核心负责变更lease并重新核验计划，避免两个进程重复持有同一锁。
-    drop(ctx);
+    // 生命周期共享门贯穿下载和worker；Python另取目标引擎锁并重新核验计划。
     let result = execute(
         &python,
         &worker,
@@ -376,9 +432,9 @@ pub(super) fn apply(
         &operation.cancel_token(),
         log,
     )?;
-    // worker 已释放独立变更租约；现在同步已选组合的权威代次。
+    // worker 已释放独立引擎租约；短事务内重读并同步已选组合的权威代次。
     // 新安装的引擎不会被隐式选入资料组合，旧健康组合仍保留原身份。
-    let ctx = WorkspaceMutation::acquire(root, &release.id)?;
+    let _state = ctx.state_lease()?;
     crate::data_import::sync_current_engine(&ctx, &release.id, engine)?;
     log(serde_json::to_string(&result)?);
     Ok(())

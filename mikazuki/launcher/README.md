@@ -48,7 +48,11 @@ worker 从 stdin 接收一行 JSON，从 stdout 返回一行 JSON。协议版本
 }
 ```
 
-GUI 运行期间 Rust 持有工作区 lease，因此网页允许只读检查和预览计划；执行、主动探测和恢复立即返回 `desktop_action_required`，要求停止 GUI 后在桌面执行。网页与桌面仍共享同一个检查和计划核心。已有训练入口通过 `bindings.py` 选择登记的独立解释器、源码和当前资料档案；托管 Kohya 禁用 GUI Python fallback，旧安装/升级/删除入口拒绝修改正式实例。
+网页与桌面共享检查和计划核心。网页执行、主动探测和恢复返回 `desktop_action_required`，由桌面受控下载器与独立 worker 执行；不要求停止支持 `engine-leases-v1` 的网页服务。已有训练入口通过 `bindings.py` 选择登记的独立解释器、源码和当前资料档案；托管 Kohya 禁用 GUI Python fallback，旧安装/升级/删除入口拒绝修改正式实例。
+
+生命周期门 `.launcher-lock` 由服务、训练和独立引擎操作共享，主程序更新、修复和切版本仍独占。`state/engine-locks/<engine>.lock` 跨发布按引擎保护：训练/主动训练预检共享使用，安装/修复/恢复/执行探测独占；`inspect_readonly` 和计划不取得目标锁。检查结果的 `activity` 是即时提示，实际执行必须重新原子取得锁。`availability` 提供下载前轻量占用检查。共享 registry/组合绑定使用 `.launcher-state-lock` 短事务重读后提交。
+
+训练任务排队时不占锁，实际启动前重新核对提交时的实例和代次；环境已变更则要求重新提交任务。受管训练通过标准库监督进程持有本次进程树，在 Windows 使用嵌套 Job，直到训练子树退出后才释放引擎租约；取消及监督进程异常退出回收自有子树。旧训练器缺少该协议时不能靠更新桌面壳取得并行修改能力，应安装本包固定的新训练器发布；不覆盖原安装源码。
 
 ## 发布资产锁
 

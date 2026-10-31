@@ -87,6 +87,23 @@ class Task:
                     self.log_file = str(resolved)
                     self.metadata["log_file"] = self.log_file
         self._stdout_thread = None
+        self._managed_training_lease = None
+        self._lease_guard = threading.Lock()
+        self._cancel_requested = False
+
+    def _release_training_lease(self):
+        with self._lease_guard:
+            lease, self._managed_training_lease = self._managed_training_lease, None
+            if lease is not None:
+                lease.__exit__(None, None, None)
+
+    def _watch_training_process(self):
+        # 即使调用方没有调用 wait/communicate，也只在真实子进程退出后释放。
+        try:
+            self.process.wait()
+        finally:
+            if self.process.poll() is not None:
+                self._release_training_lease()
 
     def _append_disk_log(self, text: str):
         if not self.log_file:
@@ -152,6 +169,7 @@ class Task:
             self.process.kill()
             raise
         retcode = self.process.poll()
+        self._release_training_lease()
         self.returncode = retcode
         self.status = TaskStatus.FINISHED if retcode == 0 else TaskStatus.FAILED
         self._append_disk_log(f"[task communicate finished] returncode={retcode}")
@@ -160,6 +178,7 @@ class Task:
 
     def wait(self):
         retcode = self.process.wait()
+        self._release_training_lease()
         self._join_stdout_pump()
         self.returncode = retcode
         if self.status != TaskStatus.TERMINATED:
@@ -192,7 +211,10 @@ class Task:
             hub.mark_done(self.task_id)
 
     def execute(self):
-        self.status = TaskStatus.RUNNING
+        with self.lock:
+            if self.status == TaskStatus.TERMINATED:
+                self._cancel_requested = True
+            self.status = TaskStatus.TERMINATED if self._cancel_requested else TaskStatus.RUNNING
         self.returncode = None
         self.metadata.pop("returncode", None)
         # Insights use started_at (not created_at) as the lower bound so queued
@@ -207,26 +229,44 @@ class Task:
             f"command={' '.join(map(str, self.command))}\n"
         )
         try:
-            self.process = subprocess.Popen(
-                self.command,
-                env=self.environ,
-                cwd=self.cwd,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                universal_newlines=True,
-                bufsize=1,
-                encoding="utf-8",
-                errors="replace",
-            )
+            with self.lock:
+                if self._cancel_requested or self.status == TaskStatus.TERMINATED:
+                    raise RuntimeError("任务已取消，未启动训练进程")
+                if self.lane == LANE_COMPUTE:
+                    from mikazuki.launcher.bindings import managed_training_lease
+                    lease = managed_training_lease(self.metadata)
+                    if lease.__enter__() is not None:
+                        self._managed_training_lease = lease
+                    else:
+                        lease.__exit__(None, None, None)
+                command = self.command
+                if self._managed_training_lease is not None:
+                    supervisor = Path(__file__).with_name("launcher") / "training_supervisor.py"
+                    command = [sys.executable, "-I", "-B", "-S", str(supervisor), "--", *map(str, self.command)]
+                self.process = subprocess.Popen(
+                    command,
+                    env=self.environ,
+                    cwd=self.cwd,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    universal_newlines=True,
+                    bufsize=1,
+                    encoding="utf-8",
+                    errors="replace",
+                )
         except Exception as e:
+            self._release_training_lease()
             hub.append_line(self.task_id, f"[error] Failed to start training process: {e}")
             self._append_disk_log(f"[error] Failed to start training process: {e}")
             hub.mark_done(self.task_id)
-            self.status = TaskStatus.FAILED
+            self.status = TaskStatus.TERMINATED if self._cancel_requested else TaskStatus.FAILED
             self.returncode = -1
             self.metadata["returncode"] = -1
             self.metadata["error"] = str(e)
             raise
+        if self._managed_training_lease is not None:
+            threading.Thread(target=self._watch_training_process, daemon=True,
+                             name=f"training-lease-{self.task_id}").start()
         self._stdout_thread = threading.Thread(target=self._stdout_pump, daemon=True)
         self._stdout_thread.start()
 
@@ -234,12 +274,17 @@ class Task:
         # Mark TERMINATED before killing: the worker's wait() returns as soon
         # as the process dies and must already see the final status, otherwise
         # _record_completion() races and logs the -9 exit as a failure.
-        self.status = TaskStatus.TERMINATED
+        with self.lock:
+            self._cancel_requested = True
+            self.status = TaskStatus.TERMINATED
+            process = getattr(self, "process", None)
+        if process is None:
+            return
         try:
             # Kill the whole tree, launcher included: accelerate's elastic
             # agent respawns killed workers, so killing only children leaves
             # a zombie that blocks the worker's task.wait() forever (#286).
-            kill_proc_tree(self.process.pid, True)
+            kill_proc_tree(process.pid, True)
         except Exception as e:
             log.error(f"Error when killing process: {e}")
         finally:
@@ -457,6 +502,9 @@ class TaskManager:
         with self._cond:
             task_id = task_id or str(uuid.uuid4())
             metadata = dict(metadata or {})
+            if lane == LANE_COMPUTE:
+                from mikazuki.launcher.bindings import bind_training_task
+                bind_training_task(metadata)
             if lane == LANE_COMPUTE and metadata.get("config_path"):
                 from mikazuki.user_data import UserDataStore
                 archive = UserDataStore().archive_task(

@@ -79,6 +79,8 @@ const backgroundInput = ref<HTMLInputElement>()
 const confirmation = ref<Confirmation | null>(null)
 const confirmationCancel = ref<HTMLButtonElement>()
 const operation = ref<OperationSnapshot | null>(null)
+const engineOperationId = ref<string | null>(null)
+const startingEngineOperation = ref(false)
 const history = ref<OperationSnapshot[]>([])
 const guiDiagnosis = ref<GuiDiagnosis | null>(null)
 const guiPreview = ref<GuiRepairPreview | null>(null)
@@ -121,7 +123,8 @@ const transitioning = computed(() => ['checking', 'starting', 'stopping'].includ
 const running = computed(() => ['starting', 'ready', 'degraded', 'stopping', 'stop_failed'].includes(runtimePhase.value))
 const serviceUrl = computed(() => healthy.value ? runtime.value?.url ?? (report.value?.port ? `http://127.0.0.1:${report.value.port}` : '') : '')
 const mutationDisabled = computed(() => busy.value || !sameRoot.value || running.value || transitioning.value || Boolean(serviceAction.value))
-const environmentServiceBlocked = computed(() => running.value || transitioning.value || Boolean(serviceAction.value))
+const engineMutationDisabled = computed(() => busy.value || !sameRoot.value)
+const engineReadDisabled = computed(() => !sameRoot.value || (busy.value && !startingEngineOperation.value && !(operation.value?.status === 'running' && operation.value.id === engineOperationId.value)))
 const installed = computed(() => Boolean(currentVersion.value?.installed || report.value?.source))
 const rollbackAvailable = computed(() => Boolean(rollbackVersion.value?.installed && rollbackVersion.value.source_ok && rollbackVersion.value.environment_ok && rollbackVersion.value.id !== currentVersion.value?.id))
 const channels = computed(() => {
@@ -761,6 +764,17 @@ async function startGuiOperation(label: string, action: () => Promise<OperationS
     message.value = '操作未能开始，请重新诊断后重试。'
   } finally { pending.value = '' }
 }
+async function startEngineOperation(label: string, action: () => Promise<OperationSnapshot>) {
+  if (busy.value) return
+  startingEngineOperation.value = true
+  try {
+    await startGuiOperation(label, async () => {
+      const next = await action()
+      engineOperationId.value = next.id
+      return next
+    })
+  } finally { startingEngineOperation.value = false }
+}
 onMounted(async () => {
   try { unlisten = await listenToLogEntries(acceptLogEntry); runtimeUnlisten = await listenToRuntime(acceptRuntime) }
   catch { addLog('桌面事件接口尚未连接；请通过桌面启动器打开此页面。') }
@@ -816,9 +830,9 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 
       </section>
       <section v-show="page === 'environment'" class="content-page environment-page" aria-label="环境管理"><header class="page-title"><h1>环境管理</h1><p>每个训练引擎独立安装，按需检查与修复。</p></header><div class="section-toolbar"><div class="context-label">Next Trainer <b>{{ currentVersion?.version ?? '尚未选择版本' }}</b><span v-if="currentVersion" class="tag">当前版本</span></div><button :disabled="busy || transitioning" @click="command('inspect', '检查安装状态')"><Icon name="refresh" />检查环境</button></div>
-        <div v-if="environmentServiceBlocked" class="environment-service-notice" role="status" aria-live="polite"><Icon name="info" /><div><strong>安装或修复环境前，请先停止训练器服务。</strong><p>网页中的受管引擎请在桌面启动器安装。停止服务会中断正在进行的训练，服务停止后可继续检查、安装或修复环境。</p></div><button data-action="stop-for-environment" :disabled="runtimePhase === 'stopping' || serviceAction === 'stop'" @click="stop"><Icon name="stop" />{{ runtimePhase === 'stopping' || serviceAction === 'stop' ? '正在停止服务…' : '停止服务以管理环境' }}</button></div>
+        <p v-if="error" class="gui-issue" role="alert">{{ error }}</p>
         <article class="main-environment"><div class="main-env-icon"><Icon name="environment" /></div><div class="main-env-copy"><h2>主程序环境 <span class="engine-state" :class="{ good: ready }"><i></i>{{ !sameRoot || !report ? '待检查' : ready ? '已就绪' : '需处理' }}</span></h2><p>基础 Python · 主程序依赖 · 网页资源</p></div><div class="main-env-actions"><button class="quiet-button" :disabled="mutationDisabled || !managedCurrent" @click="advanced = true; diagnoseManagedGui()">主程序修复</button><button @click="advanced = !advanced">{{ advanced ? '收起高级恢复' : '高级恢复' }}<Icon name="arrow" /></button></div></article>
-        <EnginePanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="mutationDisabled" @operate="startGuiOperation" /><p v-else class="empty-note">检查安装目录并选择训练器版本后，可分别管理四个训练引擎。</p>
+        <EnginePanel v-if="sameRoot && registrationRelease" :root="path.trim()" :release-id="registrationRelease.id" :disabled="engineReadDisabled" :apply-disabled="engineMutationDisabled" @operate="startEngineOperation" /><p v-else class="empty-note">检查安装目录并选择训练器版本后，可分别管理四个训练引擎。</p>
         <div v-show="advanced" class="advanced-recovery"><h2>主程序检查与高级恢复</h2><p class="hint">完整性检查与恢复按实际文件验证。执行修改前请先停止训练器。</p><div v-if="report?.checks.length && sameRoot" class="checks" role="list" aria-label="环境检查明细"><div v-for="(check, index) in report.checks" :key="`${index}-${check.name}`" class="check-row" role="listitem"><span class="check-badge" :class="{ ok: check.ok }">{{ check.ok ? '通过' : '待处理' }}</span><div><strong>{{ check.name }}</strong><p>{{ check.detail }}</p></div></div></div>
       <section v-if="sameRoot && registrationVersions.length" class="gui-diagnostics" aria-labelledby="registration-title">
             <div class="section-caption"><h2 id="registration-title">恢复安装登记</h2><button :disabled="mutationDisabled" @click="inspectGuiRegistration">只读检查登记</button></div>

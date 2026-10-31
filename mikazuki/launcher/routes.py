@@ -95,7 +95,7 @@ class EngineAdapter:
 
     def require_desktop_action(self):
         if not self.allow_mutations:
-            raise ControlError("desktop_action_required", "GUI 运行期间持有受管工作区 lease；请停止 GUI 后在桌面启动器执行探测、修复或恢复")
+            raise ControlError("desktop_action_required", "请在桌面启动器执行受管引擎的安装、修复、探测或恢复；网页服务可继续运行")
 
 
 def create_router(context_provider=environment_context, *, allow_mutations=False):

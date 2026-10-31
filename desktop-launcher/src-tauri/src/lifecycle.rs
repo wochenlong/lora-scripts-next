@@ -580,6 +580,7 @@ mod tests {
                     port: 1,
                     _job: job,
                     _lease: Arc::new(lease),
+                    _service_lease: None,
                 },
                 &catalog.releases()[0],
                 None,

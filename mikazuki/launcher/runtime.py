@@ -1,4 +1,4 @@
-"""启动器运行目录和跨进程写 lease（仅标准库）。"""
+"""启动器运行目录和跨进程工作区/目标引擎 lease（仅标准库）。"""
 from __future__ import annotations
 
 from contextlib import contextmanager
@@ -9,6 +9,9 @@ import os
 from pathlib import Path
 import re
 import stat
+
+
+ENGINE_LEASE_PROTOCOL = "engine-leases-v1"
 
 
 class ControlError(RuntimeError):
@@ -159,28 +162,111 @@ class RuntimeLayout:
         return result
 
 
-@contextmanager
-def workspace_lease(layout: RuntimeLayout):
+def _owned_workspace(layout: RuntimeLayout):
     marker = layout.checked(layout.root / ".launcher-workspace")
     if not marker.is_file() or marker.read_text(encoding="utf-8") != "next-trainer-desktop-v1":
         raise ControlError("unowned_workspace", "只可修改正式启动器工作区")
-    lock_path = layout.checked(layout.root / ".launcher-lock")
-    with lock_path.open("a+b") as lock:
+
+
+def _lock_file(stream, *, shared=False):
+    """与 Rust fs2 兼容：Windows 首字节，Unix flock；所有获取均不等待。"""
+    if os.name == "nt":
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+        # CRT 的 LK_NBRLCK 在 Windows 仍是独占锁；必须直接使用共享 LockFileEx。
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        call = kernel.LockFileEx
+        call.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD,
+                         wintypes.DWORD, wintypes.DWORD, ctypes.c_void_p]
+        call.restype = wintypes.BOOL
+        overlap = ctypes.create_string_buffer(32)
+        if not call(msvcrt.get_osfhandle(stream.fileno()), 1 if shared else 3, 0, 1, 0, overlap):
+            raise ctypes.WinError(ctypes.get_last_error())
+    else:
+        import fcntl
+        fcntl.flock(stream, (fcntl.LOCK_SH if shared else fcntl.LOCK_EX) | fcntl.LOCK_NB)
+
+
+def _unlock_file(stream):
+    if os.name == "nt":
+        import ctypes
+        import msvcrt
+        from ctypes import wintypes
+        kernel = ctypes.WinDLL("kernel32", use_last_error=True)
+        call = kernel.UnlockFileEx
+        call.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.DWORD,
+                         wintypes.DWORD, ctypes.c_void_p]
+        call.restype = wintypes.BOOL
+        overlap = ctypes.create_string_buffer(32)
+        if not call(msvcrt.get_osfhandle(stream.fileno()), 0, 1, 0, overlap):
+            raise ctypes.WinError(ctypes.get_last_error())
+    else:
+        import fcntl
+        fcntl.flock(stream, fcntl.LOCK_UN)
+
+
+@contextmanager
+def _file_lease(path: Path, *, shared=False, code, message):
+    with path.open("a+b") as stream:
         try:
-            if os.name == "nt":
-                import msvcrt
-                lock.seek(0)
-                msvcrt.locking(lock.fileno(), msvcrt.LK_NBLCK, 1)
-            else:
-                import fcntl
-                fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            _lock_file(stream, shared=shared)
         except OSError as error:
-            raise ControlError("workspace_busy", "工作区由另一个变更或训练进程使用") from error
+            raise ControlError(code, message) from error
         try:
             yield
         finally:
-            if os.name == "nt":
-                lock.seek(0)
-                msvcrt.locking(lock.fileno(), msvcrt.LK_UNLCK, 1)
+            _unlock_file(stream)
+
+
+@contextmanager
+def workspace_lease(layout: RuntimeLayout, *, shared=False):
+    """本体变更独占；服务、训练和独立引擎操作共享生命周期门。"""
+    _owned_workspace(layout)
+    path = layout.checked(layout.root / ".launcher-lock")
+    with _file_lease(path, shared=shared, code="workspace_busy", message="工作区正在更新主程序或切换版本，请稍后重试"):
+        yield
+
+
+def _engine_lock_path(layout: RuntimeLayout):
+    # 引擎实例可能跨发布版本复用，因此锁不能按 release 分割。
+    return layout.checked(layout.root / "state" / "engine-locks" / (layout.engine_id + ".lock"))
+
+
+@contextmanager
+def engine_lease(layout: RuntimeLayout, *, mode="mutation"):
+    """训练和预检共享使用目标；安装、修复、恢复及主动探测独占目标。"""
+    if mode not in {"mutation", "training"}:
+        raise ValueError("unknown engine lease mode")
+    with workspace_lease(layout, shared=True):
+        path = _engine_lock_path(layout)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        layout.checked(path)
+        with _file_lease(path, shared=mode == "training", code="engine_busy",
+                         message=f"{layout.engine_id} 正在训练、被占用或已有安装修复任务；请等待该引擎空闲后重试"):
+            yield
+
+
+def engine_activity(layout: RuntimeLayout):
+    """只读观察现有锁；不创建锁文件，也不代替执行时的原子冲突检查。"""
+    path = _engine_lock_path(layout)
+    idle = {"busy": False, "kind": "idle", "message": ""}
+    if not path.exists():
+        return idle
+    try:
+        with path.open("r+b") as stream:
+            try:
+                _lock_file(stream)
+            except OSError:
+                try:
+                    _lock_file(stream, shared=True)
+                except OSError:
+                    return {"busy": True, "kind": "operation", "message": f"{layout.engine_id} 已有安装、修复或探测任务"}
+                else:
+                    _unlock_file(stream)
+                    return {"busy": True, "kind": "training", "message": f"{layout.engine_id} 正在训练或执行训练预检"}
             else:
-                fcntl.flock(lock, fcntl.LOCK_UN)
+                _unlock_file(stream)
+                return idle
+    except FileNotFoundError:
+        return idle

@@ -145,6 +145,7 @@ struct Running {
     _job: Job,
     // Fields drop in declaration order: close the process group before releasing the workspace lock.
     _lease: Arc<File>,
+    _service_lease: Option<File>,
 }
 
 impl Running {
@@ -916,21 +917,23 @@ impl Engine {
         operation.finish_and_persist(&ctx, status, error)?;
         result
     }
-    pub fn engine_query(
-        &self,
+    /// 诊断与计划不依赖长操作持有的 Engine mutex。
+    pub fn query_engine_readonly(
         root: &Path,
-        release: &str,
+        release_id: &str,
         engine: &str,
         action: &str,
         rebuild: bool,
+        log: &Logger,
     ) -> Result<serde_json::Value> {
+        let catalog = Catalog::for_workspace(root)?;
         engine_bridge::query(
             root,
-            self.catalog.release(release)?,
+            catalog.release(release_id)?,
             engine,
             action,
             rebuild,
-            &self.logger,
+            log,
         )
     }
     pub fn engine_fixture_smoke(&mut self, root: &Path) -> Result<serde_json::Value> {
@@ -954,9 +957,6 @@ impl Engine {
     ) -> Result<()> {
         use crate::operations::{Cancelled, OperationError, OperationStatus};
         self.reap();
-        if self.lifecycle.has_process() {
-            bail!("请先停止受管训练器，再变更独立引擎环境");
-        }
         let release = self.catalog.release(id)?.clone();
         let result = engine_bridge::apply(
             root,
@@ -980,7 +980,7 @@ impl Engine {
                 }),
             ),
         };
-        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        let ctx = model::WorkspaceMutation::acquire_shared(root, id)?;
         operation.finish_and_persist(&ctx, status, error)?;
         result
     }
@@ -2007,13 +2007,48 @@ impl Engine {
         let _network = crate::network_policy::task_policy(root)?;
         let release = self.active(root)?;
         crate::signed_catalog::authorize(root, &release.id, "activate")?;
-        let (layout, lock) = self.mutable(root, &release)?;
+        let candidate = Layout::new(root, &release.id)?;
+        // 选择租约后仍须完整认证源码，标识本身不授予执行权限。
+        // 旧训练器没有目标锁，保留其独占保护，不能只靠新壳放开旧训练进程。
+        let target_leases = fs::read_to_string(candidate.app.join("mikazuki/launcher/runtime.py"))
+            .is_ok_and(|text| text.contains("ENGINE_LEASE_PROTOCOL = \"engine-leases-v1\""))
+            && fs::read_to_string(candidate.app.join("mikazuki/tasks.py"))
+                .is_ok_and(|text| text.contains("managed_training_lease"));
+        let ctx = if target_leases {
+            model::WorkspaceMutation::acquire_shared(root, &release.id)?
+        } else {
+            model::WorkspaceMutation::acquire(root, &release.id)?
+        };
+        let layout = ctx.layout().clone();
+        let service_path = root.join(".launcher-service-lock");
+        layout.guard_path(&service_path)?;
+        let service_lease = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(service_path)?;
+        fs2::FileExt::try_lock_exclusive(&service_lease)
+            .context("此工作区已有训练器网页服务正在运行")?;
+        {
+            let _state = ctx.state_lease()?;
+            let mut registry = Registry::load(root)?;
+            assert_regular_ready(root)?;
+            if !registry.reconcile(root, &self.catalog)?.is_empty() {
+                registry.store(root)?;
+            }
+        }
         crate::data_import::assert_current_environment(root, &release.id)?;
         if Registry::load(root)?.current.is_none() {
             bail!("请先选择已安装版本");
         }
         self.lifecycle.check_cancel(run_id)?;
         verify_source(&layout, &release)?;
+        if !target_leases {
+            (self.logger)(
+                "当前训练器使用旧运行协议；升级主程序后即可在服务运行时管理独立引擎".into(),
+            );
+        }
         self.lifecycle.check_cancel(run_id)?;
         check_environment(&layout, &release)?;
         self.lifecycle.check_cancel(run_id)?;
@@ -2108,7 +2143,8 @@ impl Engine {
             Running {
                 child,
                 port,
-                _lease: Arc::new(lock),
+                _lease: ctx.lease(),
+                _service_lease: Some(service_lease),
                 _job: job,
             },
             &release,
@@ -2128,6 +2164,7 @@ impl Engine {
                 // stop requests remain responsive through the separate snapshot lock.
                 let committed = self.lifecycle.commit_ready(run_id, &version, |lease| {
                     let ctx = model::WorkspaceMutation::from_running_lease(layout.clone(), lease);
+                    let _state = ctx.state_lease()?;
                     crate::data_import::mark_healthy(&ctx, &release.id)
                 })?;
                 (self.logger)(format!(

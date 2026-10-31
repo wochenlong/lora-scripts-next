@@ -41,5 +41,12 @@ def dispatch_run(model_train_type: str, config: dict, ctx: RunContext):
             model_train_type=ctx.model_train_type,
             variant=variant,
         )
-    handler = pack.import_module("run").handle_run
-    return handler(config, ctx)
+    from mikazuki.launcher.bindings import managed_preflight_lease
+    from mikazuki.launcher.runtime import ControlError
+    try:
+        with managed_preflight_lease(pack.engine_id):
+            handler = pack.import_module("run").handle_run
+            return handler(config, ctx)
+    except ControlError as error:
+        from mikazuki.app.models import APIResponseFail
+        return APIResponseFail(message=str(error))

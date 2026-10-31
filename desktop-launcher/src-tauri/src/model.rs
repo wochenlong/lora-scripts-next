@@ -321,6 +321,56 @@ impl WorkspaceMutation {
     pub fn layout(&self) -> &Layout {
         &self.layout
     }
+    /// 服务和独立引擎共用生命周期门；主程序变更仍必须使用 acquire 的独占门。
+    /// 不初始化未知目录，也不借此取得共享 registry 的写权限。
+    pub(crate) fn acquire_shared(root: &Path, release_id: &str) -> Result<Self> {
+        let layout = Layout::new(root, release_id)?;
+        let marker = layout.root.join(MARKER_FILE);
+        layout.guard_path(&marker)?;
+        if !marker.is_file() || fs::read_to_string(&marker)? != WORKSPACE_MARKER {
+            bail!("只可操作正式启动器工作区");
+        }
+        let lock_path = layout.root.join(".launcher-lock");
+        layout.guard_path(&lock_path)?;
+        let lease = OpenOptions::new().read(true).write(true).open(lock_path)?;
+        FileExt::try_lock_shared(&lease).context(
+            "主程序安装、修复或版本切换正在占用工作区；旧版训练器需升级后才能并行管理引擎",
+        )?;
+        if fs::read_to_string(marker)? != WORKSPACE_MARKER {
+            bail!("工作区标记发生改变");
+        }
+        Ok(Self {
+            layout,
+            _lease: std::sync::Arc::new(lease),
+        })
+    }
+    pub(crate) fn lease(&self) -> std::sync::Arc<File> {
+        self._lease.clone()
+    }
+    /// 只包共享 registry/资料绑定的读改写事务，不包下载、训练或环境安装。
+    pub(crate) fn state_lease(&self) -> Result<File> {
+        let path = self.layout.root.join(".launcher-state-lock");
+        self.layout.guard_path(&path)?;
+        let lock = OpenOptions::new()
+            .read(true)
+            .write(true)
+            .create(true)
+            .truncate(false)
+            .open(path)?;
+        let started = std::time::Instant::now();
+        loop {
+            match FileExt::try_lock_exclusive(&lock) {
+                Ok(()) => return Ok(lock),
+                Err(error)
+                    if started.elapsed() < std::time::Duration::from_secs(10)
+                        && error.kind() == fs2::lock_contended_error().kind() =>
+                {
+                    std::thread::sleep(std::time::Duration::from_millis(20));
+                }
+                Err(error) => return Err(error).context("共享状态正在提交，请稍后重试"),
+            }
+        }
+    }
     pub(crate) fn from_running_lease(layout: Layout, lease: std::sync::Arc<File>) -> Self {
         Self {
             layout,
@@ -1547,5 +1597,134 @@ mod tests {
         )
         .unwrap();
         assert!(layout.prepare_workspace().is_err());
+    }
+    #[test]
+    fn shared_engine_and_service_leases_preserve_global_mutation_exclusion() {
+        let temp = Temp::new();
+        let release = Catalog::embedded().unwrap().releases()[0].id.clone();
+        drop(WorkspaceMutation::acquire(&temp.0, &release).unwrap());
+        let service = WorkspaceMutation::acquire_shared(&temp.0, &release).unwrap();
+        let engine = WorkspaceMutation::acquire_shared(&temp.0, &release).unwrap();
+        assert!(WorkspaceMutation::acquire(&temp.0, &release).is_err());
+        drop(service);
+        assert!(WorkspaceMutation::acquire(&temp.0, &release).is_err());
+        drop(engine);
+        let global = WorkspaceMutation::acquire(&temp.0, &release).unwrap();
+        assert!(WorkspaceMutation::acquire_shared(&temp.0, &release).is_err());
+        drop(global);
+        assert!(WorkspaceMutation::acquire_shared(&temp.0, &release).is_ok());
+    }
+    #[test]
+    fn shared_state_transactions_reread_under_lock_without_lost_updates() {
+        let temp = Temp::new();
+        let release = Catalog::embedded().unwrap().releases()[0].id.clone();
+        drop(WorkspaceMutation::acquire(&temp.0, &release).unwrap());
+        let path = temp.0.join("state/concurrent-state.json");
+        write_json_atomic(&path, &0u64).unwrap();
+        let mut workers = Vec::new();
+        for _ in 0..2 {
+            let root = temp.0.clone();
+            let release = release.clone();
+            let path = path.clone();
+            workers.push(std::thread::spawn(move || {
+                let ctx = WorkspaceMutation::acquire_shared(&root, &release).unwrap();
+                let _state = ctx.state_lease().unwrap();
+                let value: u64 = read_json(&path).unwrap();
+                std::thread::sleep(std::time::Duration::from_millis(40));
+                write_json_atomic(&path, &(value + 1)).unwrap();
+            }));
+        }
+        for worker in workers {
+            worker.join().unwrap();
+        }
+        assert_eq!(read_json::<u64>(&path).unwrap(), 2);
+    }
+    #[test]
+    fn rust_and_python_workspace_leases_share_the_same_os_lock_protocol() {
+        let temp = Temp::new();
+        let release = Catalog::embedded().unwrap().releases()[0].id.clone();
+        drop(WorkspaceMutation::acquire(&temp.0, &release).unwrap());
+        let script = r#"
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from mikazuki.launcher.runtime import RuntimeLayout, ControlError, workspace_lease
+layout = RuntimeLayout(Path(sys.argv[2]), sys.argv[3], 'kohya')
+expected_shared = sys.argv[4] == 'shared'
+try:
+    with workspace_lease(layout, shared=True):
+        assert expected_shared, 'Python shared bypassed Rust exclusive'
+except ControlError as error:
+    assert not expected_shared and error.code == 'workspace_busy', error
+try:
+    with workspace_lease(layout):
+        raise AssertionError('Python exclusive bypassed a Rust runtime lease')
+except ControlError as error:
+    assert error.code == 'workspace_busy', error
+"#;
+        let repo = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+        for shared in [true, false] {
+            let ctx = if shared {
+                WorkspaceMutation::acquire_shared(&temp.0, &release).unwrap()
+            } else {
+                WorkspaceMutation::acquire(&temp.0, &release).unwrap()
+            };
+            let output = std::process::Command::new("python")
+                .args(["-I", "-B", "-S", "-c", script])
+                .arg(&repo)
+                .arg(&temp.0)
+                .arg(&release)
+                .arg(if shared { "shared" } else { "exclusive" })
+                .output()
+                .expect("跨语言锁验收需要测试机的 Python");
+            assert!(
+                output.status.success(),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            drop(ctx);
+        }
+        // 反向由 Python 持锁，Rust 竞争；直接终止子进程验证 OS 自动回收租约。
+        let holder = r#"
+import sys
+from pathlib import Path
+sys.path.insert(0, sys.argv[1])
+from mikazuki.launcher.runtime import RuntimeLayout, workspace_lease
+layout = RuntimeLayout(Path(sys.argv[2]), sys.argv[3], 'kohya')
+with workspace_lease(layout, shared=sys.argv[4] == 'shared'):
+    print('locked', flush=True)
+    sys.stdin.readline()
+"#;
+        for shared in [true, false] {
+            use std::io::{BufRead, BufReader};
+            let mut child = std::process::Command::new("python")
+                .args(["-I", "-B", "-S", "-c", holder])
+                .arg(&repo)
+                .arg(&temp.0)
+                .arg(&release)
+                .arg(if shared { "shared" } else { "exclusive" })
+                .stdin(std::process::Stdio::piped())
+                .stdout(std::process::Stdio::piped())
+                .stderr(std::process::Stdio::piped())
+                .spawn()
+                .unwrap();
+            let mut ready = String::new();
+            BufReader::new(child.stdout.take().unwrap())
+                .read_line(&mut ready)
+                .unwrap();
+            let shared_allowed = WorkspaceMutation::acquire_shared(&temp.0, &release).is_ok();
+            let global_blocked = WorkspaceMutation::acquire(&temp.0, &release).is_err();
+            let _ = child.kill();
+            let output = child.wait_with_output().unwrap();
+            assert_eq!(
+                ready.trim(),
+                "locked",
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(shared_allowed, shared);
+            assert!(global_blocked);
+            assert!(WorkspaceMutation::acquire(&temp.0, &release).is_ok());
+        }
     }
 }

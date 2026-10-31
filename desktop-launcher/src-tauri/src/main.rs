@@ -484,15 +484,19 @@ async fn query_engine_control(
     action: String,
     rebuild: bool,
 ) -> Result<serde_json::Value, String> {
-    let shared = state.engine.clone();
+    let root = if root.trim().is_empty() {
+        state.default_root.clone()
+    } else {
+        PathBuf::from(root.trim())
+    };
+    let logs = state.logs.clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let engine = shared
-            .try_lock()
-            .map_err(|_| "已有操作正在执行".to_string())?;
-        let root = engine.resolve(&root).map_err(|e| format!("{e:#}"))?;
-        engine
-            .engine_query(&root, &release_id, &engine_id, &action, rebuild)
-            .map_err(|e| format!("{e:#}"))
+        let _context = log_store::bind(log_store::Context::workspace(&root, "environment"));
+        let log: Logger = Arc::new(move |line| {
+            logs.record_current(&line);
+        });
+        Engine::query_engine_readonly(&root, &release_id, &engine_id, &action, rebuild, &log)
+            .map_err(|error| format!("{error:#}"))
     })
     .await
     .map_err(|e| e.to_string())?

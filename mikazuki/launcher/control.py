@@ -19,7 +19,7 @@ import uuid
 import zipfile
 
 from .recipes import capabilities, recipe
-from .runtime import ControlError, RuntimeLayout, atomic_json, canonical, digest_json, guard, is_reparse, read_json, relative, sha_file, workspace_lease
+from .runtime import ControlError, RuntimeLayout, atomic_json, canonical, digest_json, engine_activity, engine_lease, guard, is_reparse, read_json, relative, sha_file
 
 
 MAX_FILE = 8 * 1024 * 1024 * 1024
@@ -119,7 +119,7 @@ def inspect_readonly(request):
     layout = _layout(request)
     fixed = recipe(layout.engine_id)
     report = {"schema_version": 1, "engine_id": layout.engine_id, "layout": layout.as_dict(), "recipe": fixed,
-              "installation": "missing", "import": "not_checked", "gpu": "not_checked", "training": "not_checked", "actions": [], "issues": [], "network_bytes": 0}
+              "installation": "missing", "import": "not_checked", "gpu": "not_checked", "training": "not_checked", "actions": [], "issues": [], "network_bytes": 0, "activity": engine_activity(layout)}
     try:
         state = _state(layout)
         if state is None:
@@ -402,7 +402,8 @@ def _prepare_uv(layout, lock):
     fixed = lock["uv"]
     if not fixed.get("archive"):
         return _asset(layout, fixed)
-    root = layout.checked(layout.root / "cache" / "engine-tools" / fixed["sha256"])
+    # 不同引擎可并行安装；工具解压也落在各自锁保护的命名空间。
+    root = layout.checked(layout.root / "cache" / "engine-tools" / layout.engine_id / fixed["sha256"])
     target = layout.checked(root / "uv.exe")
     expected = {"bytes": fixed["bytes"], "sha256": fixed["sha256"]}
     if not target.is_file() or _file(target, layout.root) != expected:
@@ -459,7 +460,7 @@ def repair_apply(request):
     if claimed != digest_json(unsigned) or claimed != request.get("plan_sha256"):
         raise ControlError("plan_digest", "修复计划摘要不符")
     layout = _layout(request)
-    with workspace_lease(layout):
+    with engine_lease(layout):
         lock = _lock(layout, request)
         current = plan({**request, "candidate_instance_id": initial["instance_id"], "rebuild": initial.get("rebuild", False)}, installing=initial["kind"] == "install")
         # 缓存下载是计划执行的一部分；只容许缺失列表减少到零。
@@ -526,7 +527,7 @@ def repair_apply(request):
 
 def recover(request):
     layout = _layout(request)
-    with workspace_lease(layout):
+    with engine_lease(layout):
         state = _state(layout)
         if not state or not state.get("pending"):
             raise ControlError("no_pending_operation", "没有可恢复的引擎事务")
@@ -571,7 +572,7 @@ def recover(request):
 
 def probe_execute(request):
     layout = _layout(request)
-    with workspace_lease(layout):
+    with engine_lease(layout):
         report = inspect_readonly(request)
         if report["installation"] != "ready":
             raise ControlError("engine_not_ready", "引擎未验证或 dirty，不能执行探测")
@@ -622,6 +623,8 @@ def dispatch(request):
         return recipe(request["engine_id"])
     if action == "inspect_readonly":
         return inspect_readonly(request)
+    if action == "availability":
+        return engine_activity(_layout(request))
     if action in {"plan_install", "plan_repair"}:
         return plan(request, installing=action == "plan_install")
     if action == "repair_apply":
