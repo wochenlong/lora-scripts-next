@@ -13,15 +13,12 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
-    fs::{self, File},
+    fs::{self, File, OpenOptions},
     io::{Read, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
 
-const MAX_FILE: u64 = 1024 * 1024 * 1024;
-const MAX_TREE: u64 = 4 * MAX_FILE;
-const MAX_NODES: usize = 50_000;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, Serialize)]
@@ -36,7 +33,7 @@ struct Diagnosis {
     generated_files: Vec<PathBuf>,
     source_integrity_error: Option<String>,
     environment_binding: Option<EnvironmentBinding>,
-    protected_sha256: String,
+    protected_sha256: Option<String>,
     boundary: &'static str,
 }
 
@@ -64,14 +61,91 @@ struct Scanner<'a> {
     bytes: u64,
 }
 impl Scanner<'_> {
-    fn walk(&mut self, path: &Path) -> Result<()> {
-        if path == self.layout.release_dir {
-            return Ok(());
-        }
+    fn check_cancel(&self) -> Result<()> {
         if let Some(cancel) = self.cancel {
             cancel.check()?;
         }
-        let relative = path.strip_prefix(&self.layout.root)?.to_path_buf();
+        Ok(())
+    }
+
+    fn file(&mut self, path: &Path, before: &fs::Metadata) -> Result<Node> {
+        self.check_cancel()?;
+        let mut options = OpenOptions::new();
+        options.read(true);
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            // 内容摘要期间禁止写入/删除；已有写入者使打开失败，避免混合内容摘要。
+            options.share_mode(1);
+        }
+        let mut input = options.open(path)?;
+        let opened = input.metadata()?;
+        if !opened.is_file()
+            || opened.len() != before.len()
+            || opened.modified().ok() != before.modified().ok()
+        {
+            bail!("源码修复保护文件在打开期间发生变化：{}", path.display());
+        }
+        let mut hash = Sha256::new();
+        let mut bytes = 0u64;
+        let mut buffer = [0; 65_536];
+        loop {
+            self.check_cancel()?;
+            let count = input.read(&mut buffer)?;
+            if count == 0 {
+                break;
+            }
+            bytes = bytes
+                .checked_add(count as u64)
+                .context("保护文件长度溢出")?;
+            if bytes > opened.len() {
+                bail!("源码修复保护文件读取期间增长：{}", path.display());
+            }
+            hash.update(&buffer[..count]);
+        }
+        self.layout.guard_path(path)?;
+        let after = fs::symlink_metadata(path)?;
+        let handle_after = input.metadata()?;
+        if !after.is_file()
+            || bytes != opened.len()
+            || after.len() != bytes
+            || handle_after.len() != bytes
+            || opened.modified().ok() != after.modified().ok()
+            || opened.modified().ok() != handle_after.modified().ok()
+        {
+            bail!("源码修复保护文件读取期间发生变化：{}", path.display());
+        }
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::MetadataExt;
+            if (opened.dev(), opened.ino()) != (after.dev(), after.ino()) {
+                bail!("源码修复保护文件路径在读取期间被替换");
+            }
+        }
+        self.bytes = self.bytes.checked_add(bytes).context("保护树长度溢出")?;
+        Ok(Node::File {
+            bytes,
+            sha256: format!("{:x}", hash.finalize()),
+        })
+    }
+
+    fn children(&self, path: &Path) -> Result<Vec<PathBuf>> {
+        self.check_cancel()?;
+        self.layout.guard_path(path)?;
+        let mut children = Vec::new();
+        for child in fs::read_dir(path)? {
+            self.check_cancel()?;
+            children.push(child?.path());
+        }
+        children.sort();
+        Ok(children)
+    }
+
+    fn node(&mut self, path: &Path) -> Result<Option<Node>> {
+        if path == self.layout.release_dir {
+            return Ok(None);
+        }
+        self.check_cancel()?;
         let alias = self
             .layout
             .root
@@ -104,48 +178,44 @@ impl Scanner<'_> {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => Node::Missing,
                 Err(error) => return Err(error.into()),
                 Ok(metadata) if metadata.is_dir() => Node::Directory,
-                Ok(metadata) if metadata.is_file() && metadata.len() <= MAX_FILE => {
-                    let mut input = File::open(path)?.take(MAX_FILE + 1);
-                    let mut hash = Sha256::new();
-                    let mut bytes = 0u64;
-                    let mut buffer = [0; 65_536];
-                    loop {
-                        if let Some(cancel) = self.cancel {
-                            cancel.check()?;
-                        }
-                        let count = input.read(&mut buffer)?;
-                        if count == 0 {
-                            break;
-                        }
-                        bytes += count as u64;
-                        if bytes > MAX_FILE {
-                            bail!("源码修复保护文件超过 1GiB，保留现场");
-                        }
-                        hash.update(&buffer[..count]);
-                    }
-                    self.bytes = self.bytes.checked_add(bytes).context("保护树长度溢出")?;
-                    if bytes != metadata.len() || self.bytes > MAX_TREE {
-                        bail!("源码修复保护树读取期间变化或总量超过 4GiB，保留现场");
-                    }
-                    self.layout.guard_path(path)?;
-                    Node::File {
-                        bytes,
-                        sha256: format!("{:x}", hash.finalize()),
-                    }
-                }
-                Ok(_) => bail!(
-                    "源码修复保护树含非普通或超过 1GiB 的文件：{}",
-                    path.display()
-                ),
+                Ok(metadata) if metadata.is_file() => self.file(path, &metadata)?,
+                Ok(_) => bail!("源码修复保护树含非普通文件：{}", path.display()),
             }
         };
-        let is_directory = node == Node::Directory;
-        if self.entries.insert(relative, node).is_some() || self.entries.len() > MAX_NODES {
-            bail!("源码修复保护树路径重复或超过 50000 项，保留现场");
+        Ok(Some(node))
+    }
+
+    fn walk(&mut self, path: &Path) -> Result<()> {
+        enum Visit {
+            Node(PathBuf),
+            DirectoryEnd(PathBuf, Vec<PathBuf>),
         }
-        if is_directory {
-            for item in fs::read_dir(path)? {
-                self.walk(&item?.path())?;
+        // 普通训练环境常有数万文件和大于 1GiB 的 DLL。按内容流式保护全部文件，
+        // 不以源码包容量限制环境树；显式栈避免合法深目录耗尽调用栈。
+        let mut pending = vec![Visit::Node(path.into())];
+        while let Some(visit) = pending.pop() {
+            self.check_cancel()?;
+            match visit {
+                Visit::DirectoryEnd(path, before) => {
+                    if self.children(&path)? != before {
+                        bail!("源码修复保护目录读取期间发生变化：{}", path.display());
+                    }
+                }
+                Visit::Node(path) => {
+                    let Some(node) = self.node(&path)? else {
+                        continue;
+                    };
+                    let is_directory = node == Node::Directory;
+                    let relative = path.strip_prefix(&self.layout.root)?.to_path_buf();
+                    if self.entries.insert(relative, node).is_some() {
+                        bail!("源码修复保护树路径重复，保留现场");
+                    }
+                    if is_directory {
+                        let children = self.children(&path)?;
+                        pending.push(Visit::DirectoryEnd(path, children.clone()));
+                        pending.extend(children.into_iter().rev().map(Visit::Node));
+                    }
+                }
             }
         }
         Ok(())
@@ -211,7 +281,7 @@ fn diagnose(
     layout: &Layout,
     release: &Release,
     registry: &Registry,
-    protected: &Protection,
+    protected: Option<&Protection>,
 ) -> Result<(GuiRecipe, Diagnosis)> {
     release.validate()?;
     let recipe = GuiRecipe::embedded()?;
@@ -238,8 +308,8 @@ fn diagnose(
         replacement_mode: "整体替换指定 release 目录；原目录按精确树摘要保存在独立 backup；旧额外文件仅在 backup 保留",
         source_integrity_error: super::verify_source(layout, release).err().map(|error| format!("{error:#}")),
         environment_binding: registry.gui_binding(&release.id).cloned(),
-        protected_sha256: format!("{:x}", Sha256::digest(serde_json::to_vec(protected)?)),
-        boundary: "仅恢复固定源码与捆绑前端，不证明 GUI 环境或训练引擎健康；环境绑定及 generation 保持原值，源码发布前清除目标旧健康标记",
+        protected_sha256: protected.map(|value| serde_json::to_vec(value).map(|bytes| format!("{:x}", Sha256::digest(bytes)))).transpose()?,
+        boundary: "仅恢复固定源码与捆绑前端，不证明 GUI 环境或训练引擎健康；只读预览仅诊断源码，非目标内容完整摘要在实际执行持锁后建立并逐字节复核；环境绑定及 generation 保持原值，源码发布前清除目标旧健康标记",
     };
     Ok((recipe, diagnosis))
 }
@@ -248,8 +318,7 @@ fn diagnose(
 pub(super) fn preview(root: &Path, release: &Release) -> Result<serde_json::Value> {
     let layout = Layout::new(root, &release.id)?;
     let registry = Registry::load(root)?;
-    let protected = capture(&layout, None)?;
-    let (_, diagnosis) = diagnose(&layout, release, &registry, &protected)?;
+    let (_, diagnosis) = diagnose(&layout, release, &registry, None)?;
     Ok(serde_json::to_value(diagnosis)?)
 }
 
@@ -324,7 +393,7 @@ fn execute_inner(
         OperationPhase::Preparing,
         "静态诊断源码与捆绑前端替换闭包，保留现有环境实例",
     )?;
-    let (recipe, diagnosis) = diagnose(layout, release, registry, protected)?;
+    let (recipe, diagnosis) = diagnose(layout, release, registry, Some(protected))?;
     let suffix = format!(
         "{}-{}-{}",
         super::stamp(),
@@ -513,12 +582,16 @@ mod tests {
 
     struct Fixture {
         root: PathBuf,
+        parent: PathBuf,
         ctx: Option<WorkspaceMutation>,
         release: Release,
     }
     impl Fixture {
         fn new() -> Self {
-            let root = std::env::temp_dir().join(format!(
+            Self::new_in(&std::env::temp_dir())
+        }
+        fn new_in(parent: &Path) -> Self {
+            let root = parent.join(format!(
                 "nt-source-repair-{}-{}-{}",
                 std::process::id(),
                 super::super::stamp(),
@@ -542,6 +615,7 @@ mod tests {
             .unwrap();
             Self {
                 root,
+                parent: parent.into(),
                 ctx: Some(ctx),
                 release,
             }
@@ -553,7 +627,14 @@ mod tests {
     impl Drop for Fixture {
         fn drop(&mut self) {
             self.ctx.take();
-            if self.root.parent() == Some(std::env::temp_dir().as_path())
+            let resolved_in_parent = self
+                .root
+                .canonicalize()
+                .ok()
+                .zip(self.parent.canonicalize().ok())
+                .is_some_and(|(root, parent)| root.parent() == Some(parent.as_path()));
+            if resolved_in_parent
+                && self.root.parent() == Some(self.parent.as_path())
                 && self
                     .root
                     .file_name()
@@ -575,10 +656,11 @@ mod tests {
             layout,
             &f.release,
             &Registry::load(&f.root).unwrap(),
-            &protected,
+            Some(&protected),
         )
         .unwrap();
         assert!(diagnosis.source_integrity_error.is_some());
+        assert_eq!(diagnosis.protected_sha256.as_ref().unwrap().len(), 64);
         assert_eq!(
             diagnosis.expected_source_files.len(),
             crate::source_integrity::trusted_manifest(&f.release)
@@ -616,6 +698,7 @@ mod tests {
                 .len()
         );
         assert!(value["source_integrity_error"].is_string());
+        assert!(value["protected_sha256"].is_null());
         assert_eq!(
             fs::read(f.root.join("state/registry.json")).unwrap(),
             registry_bytes
@@ -628,6 +711,125 @@ mod tests {
         assert_eq!(
             fs::read_dir(f.root.join("staging")).unwrap().count(),
             staging
+        );
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn readonly_preview_does_not_read_locked_unrelated_environment_content() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let f = Fixture::new();
+        let path = f.ctx().layout().environment.join("broken.dll");
+        let locked = OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(&path)
+            .unwrap();
+        let value = preview(&f.root, &f.release).unwrap();
+        assert!(value["source_integrity_error"].is_string());
+        assert!(value["protected_sha256"].is_null());
+        // 正式内容保护仍必须读取该文件；被占用时拒绝而不是省略。
+        assert!(capture(f.ctx().layout(), None).is_err());
+        drop(locked);
+        assert!(capture(f.ctx().layout(), None).is_ok());
+    }
+
+    #[test]
+    fn protection_detects_same_length_same_timestamp_content_changes() {
+        let f = Fixture::new();
+        let layout = f.ctx().layout();
+        let path = layout.environment.join("broken.dll");
+        let modified = fs::metadata(&path).unwrap().modified().unwrap();
+        let mut bytes = fs::read(&path).unwrap();
+        let before = capture(layout, None).unwrap();
+        bytes[0] ^= 1;
+        fs::write(&path, &bytes).unwrap();
+        File::options()
+            .write(true)
+            .open(&path)
+            .unwrap()
+            .set_times(fs::FileTimes::new().set_modified(modified))
+            .unwrap();
+        assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), modified);
+        assert_ne!(capture(layout, None).unwrap(), before);
+    }
+
+    #[test]
+    #[ignore = "一次性真实资源回归；需要 NT_SOURCE_REPAIR_LARGE_FILE 和同卷 NT_SOURCE_REPAIR_TEST_PARENT，不复制或改写原文件"]
+    fn protection_streams_existing_gib_file_and_tree_over_four_gib() {
+        let source = PathBuf::from(std::env::var_os("NT_SOURCE_REPAIR_LARGE_FILE").unwrap());
+        let parent = PathBuf::from(std::env::var_os("NT_SOURCE_REPAIR_TEST_PARENT").unwrap());
+        let metadata = fs::symlink_metadata(&source).unwrap();
+        assert!(metadata.is_file() && metadata.len() > 1024 * 1024 * 1024);
+        let f = Fixture::new_in(&parent);
+        let layout = f.ctx().layout();
+        let engine = f.root.join("e/targeted-real-engine");
+        layout.ensure_dir(&engine).unwrap();
+        for index in 0..4 {
+            // 同卷硬链接只增加目录项；绝不生成/复制数 GiB 假数据，也不写入原文件。
+            fs::hard_link(&source, engine.join(format!("torch_cuda-{index}.dll"))).unwrap();
+        }
+        let started = std::time::Instant::now();
+        let captured = capture(layout, None).unwrap();
+        assert!(captured.bytes > 4 * 1024 * 1024 * 1024);
+        let mut hashes = Vec::new();
+        for index in 0..4 {
+            match captured
+                .entries
+                .get(&PathBuf::from(format!(
+                    "e/targeted-real-engine/torch_cuda-{index}.dll"
+                )))
+                .unwrap()
+            {
+                Node::File { bytes, sha256 } => {
+                    assert_eq!(*bytes, metadata.len());
+                    hashes.push(sha256);
+                }
+                other => panic!("真实大文件未被完整内容保护：{other:?}"),
+            }
+        }
+        assert!(hashes.windows(2).all(|pair| pair[0] == pair[1]));
+        println!(
+            "source={} file_bytes={} tree_bytes={} entries={} sha256={} elapsed_ms={} fixture={}",
+            source.display(),
+            metadata.len(),
+            captured.bytes,
+            captured.entries.len(),
+            hashes[0],
+            started.elapsed().as_millis(),
+            f.root.display()
+        );
+        let after = fs::symlink_metadata(&source).unwrap();
+        assert_eq!(metadata.len(), after.len());
+        assert_eq!(metadata.modified().unwrap(), after.modified().unwrap());
+    }
+
+    #[test]
+    #[ignore = "一次性 50001 小文件资源回归，不在每次快检创建大量目录项"]
+    fn protection_accepts_more_than_fifty_thousand_files() {
+        let f = Fixture::new();
+        let layout = f.ctx().layout();
+        let engine = f.root.join("e/targeted-many-files");
+        layout.ensure_dir(&engine).unwrap();
+        for index in 0..50_001 {
+            fs::write(engine.join(format!("file-{index:05}")), b"x").unwrap();
+        }
+        let started = std::time::Instant::now();
+        let captured = capture(layout, None).unwrap();
+        let files = captured
+            .entries
+            .iter()
+            .filter(|(path, node)| {
+                path.starts_with("e/targeted-many-files") && matches!(node, Node::File { .. })
+            })
+            .count();
+        assert_eq!(files, 50_001);
+        println!(
+            "files={files} entries={} bytes={} elapsed_ms={} fixture={}",
+            captured.entries.len(),
+            captured.bytes,
+            started.elapsed().as_millis(),
+            f.root.display()
         );
     }
 

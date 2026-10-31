@@ -1209,8 +1209,13 @@ mod rebuild_preservation_tests {
         }
         payload.set_len(5 * 1024 * 1024 * 1024).unwrap();
         drop(payload);
+        // 实际 worker 的运行收据排除会被解释器重建的派生字节码。
+        let mut runtime_python_files = lock["python"]["files"].as_object().unwrap().clone();
+        runtime_python_files.retain(|name, _| {
+            !name.ends_with(".pyc") && !name.split('/').any(|part| part == "__pycache__")
+        });
         let write_engine = |generation| {
-            let receipt = serde_json::json!({"schema_version":1,"release_id":f.state.release_id(),"engine_id":engine,"profile_id":"default","instance_id":id,"generation":generation,"recipe_sha256":lock["recipe_sha256"],"lock_sha256":hash(raw),"files":{"environment":{},"source":lock["source"]["files"]},"base_python_files":lock["python"]["files"]});
+            let receipt = serde_json::json!({"schema_version":1,"release_id":f.state.release_id(),"engine_id":engine,"profile_id":"default","instance_id":id,"generation":generation,"recipe_sha256":lock["recipe_sha256"],"lock_sha256":hash(raw),"files":{"environment":{},"source":lock["source"]["files"]},"base_python_files":runtime_python_files});
             let receipt_path = owner
                 .join("instances")
                 .join(id)

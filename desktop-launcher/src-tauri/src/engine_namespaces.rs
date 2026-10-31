@@ -113,6 +113,17 @@ fn receipt_identity(
     lock: &Value,
     lock_sha: &str,
 ) -> Result<()> {
+    // 与 Python control._prepare_python 的收据合同一致：官方归档仍逐文件
+    // 验真，但解释器会重建派生字节码，运行收据只承诺原始解释器/库文件。
+    let python_files = lock["python"]["files"]
+        .as_object()
+        .context("编译锁缺少基础 Python 文件清单")?
+        .iter()
+        .filter(|(name, _)| {
+            !name.ends_with(".pyc") && !name.split(['/', '\\']).any(|part| part == "__pycache__")
+        })
+        .map(|(name, entry)| (name.clone(), entry.clone()))
+        .collect::<serde_json::Map<String, Value>>();
     if value["schema_version"] != 1
         || value["release_id"] != release
         || value["engine_id"] != engine
@@ -121,7 +132,7 @@ fn receipt_identity(
         || value["recipe_sha256"] != lock["recipe_sha256"]
         || value["lock_sha256"] != lock_sha
         || value["files"]["source"] != lock["source"]["files"]
-        || value["base_python_files"] != lock["python"]["files"]
+        || value["base_python_files"] != Value::Object(python_files)
         || !value["files"]["environment"].is_object()
     {
         bail!("引擎receipt未绑定编译锁/源码/Python及独立generation");
@@ -310,4 +321,79 @@ pub(super) fn capture(layout: &Layout) -> Result<Snapshot> {
 }
 pub(super) fn digest(layout: &Layout) -> Result<String> {
     Ok(hash(&serde_json::to_vec(&capture(layout)?)?))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn compiled_locks_accept_runtime_receipts_without_derived_python_bytecode() {
+        for engine in ENGINES {
+            let raw = crate::core::embedded_engine_lock(engine).unwrap();
+            let lock: Value = serde_json::from_slice(raw).unwrap();
+            let lock_sha = hash(raw);
+            let mut files = lock["python"]["files"].as_object().unwrap().clone();
+            // Mirror the Python worker contract independently from receipt_identity.
+            files.retain(|path, _| {
+                !path.ends_with(".pyc") && !path.split('/').any(|p| p == "__pycache__")
+            });
+            assert!(!files.is_empty());
+            assert!(files.len() < lock["python"]["files"].as_object().unwrap().len());
+            let receipt = json!({
+                "schema_version": 1,
+                "release_id": "dev-test",
+                "engine_id": engine,
+                "instance_id": "t0123456789abcde",
+                "generation": 1,
+                "recipe_sha256": lock["recipe_sha256"],
+                "lock_sha256": lock_sha,
+                "files": { "source": lock["source"]["files"], "environment": {} },
+                "base_python_files": files,
+            });
+            let verify = |value: &Value| {
+                receipt_identity(
+                    value,
+                    "dev-test",
+                    engine,
+                    "t0123456789abcde",
+                    1,
+                    &lock,
+                    &lock_sha,
+                )
+            };
+            verify(&receipt).unwrap();
+            let original_path = files.keys().next().unwrap().clone();
+
+            let mut missing = receipt.clone();
+            missing["base_python_files"]
+                .as_object_mut()
+                .unwrap()
+                .remove(&original_path);
+            assert!(
+                verify(&missing).is_err(),
+                "{engine}: missing original accepted"
+            );
+
+            let mut changed = receipt.clone();
+            changed["base_python_files"][&original_path]["sha256"] = json!("0".repeat(64));
+            assert!(
+                verify(&changed).is_err(),
+                "{engine}: changed original accepted"
+            );
+
+            let mut extra = receipt.clone();
+            extra["base_python_files"]["unexpected.py"] =
+                json!({"bytes": 0, "sha256": "0".repeat(64)});
+            assert!(verify(&extra).is_err(), "{engine}: extra original accepted");
+
+            let mut wrong_generation = receipt.clone();
+            wrong_generation["generation"] = json!(2);
+            assert!(
+                verify(&wrong_generation).is_err(),
+                "{engine}: wrong generation accepted"
+            );
+        }
+    }
 }
