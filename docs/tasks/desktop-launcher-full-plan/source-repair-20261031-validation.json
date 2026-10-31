@@ -1,0 +1,129 @@
+{
+  "change_request": "CR-017",
+  "status": "complete-with-boundary",
+  "passed": true,
+  "branch": "feat/desktop-launcher",
+  "implementation_commit": "b13d0d731f9e86517b6bb8208f643baf4319eefb",
+  "final_build_commit": "5dc68bea672787e896b936e198094124115c837b",
+  "trainer_commit": "4e68df240c63ab7cf2156ea7fafabf18df4671e8",
+  "exe_sha256": "8560e16af584cf56459e45cb498b2149fc4b7e01593eefa7e8c47b96dec7c1b8",
+  "native_checks_passed": 16,
+  "compat_fixture_checks_passed": 18,
+  "backend": {
+    "source_repair": 7,
+    "source_integrity": 6,
+    "release_support": 1,
+    "strict_clippy": true,
+    "vue_build": true
+  },
+  "source_preview_files": 1942,
+  "source_probe_repaired_by_formal_ui": true,
+  "protected_changes": [],
+  "service_http_200": true,
+  "owned_processes_reclaimed": true,
+  "old_user_installation": {
+    "release": "dev-89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
+    "ready": true,
+    "read_only": true,
+    "changes": [],
+    "source_supported": true,
+    "maintenance_supported": false,
+    "install_supported": false
+  },
+  "delivery": {
+    "entry": "F:/NextTrainerLauncherSandbox/user-20261031/启动启动器.cmd",
+    "target": "F:\\NextTrainerLauncherSandbox\\user-20261031\\launcher-source-repair",
+    "application_started": false,
+    "user_service_stopped": false
+  },
+  "not_run_this_change": [
+    "full_new_install",
+    "four_engine_real_install",
+    "gpu_training",
+    "clean_windows",
+    "missing_webview2",
+    "tray_and_language_native_retest"
+  ],
+  "preserved_attempts": {
+    "native_source": [
+      "01",
+      "02",
+      "03",
+      "04"
+    ],
+    "old_root_readonly": [
+      "01",
+      "02"
+    ],
+    "candidate": [
+      "1"
+    ]
+  },
+  "evidence": [
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\native-source-05\\config.json",
+      "bytes": 2234,
+      "sha256": "c0a7fbd4c466f3ec89d3e7f0e512a133918c91d1f052fc03f3f645ab1a624b45"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\native-source-05\\host-status.json",
+      "bytes": 3476,
+      "sha256": "9adcab8caf50630b093d5a2d14ba86f091160cc7c250a86ec9bf0b9b0ff57410"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\native-source-05\\native-source-report.json",
+      "bytes": 485989,
+      "sha256": "cf97ce3d18557dfcd4309cbce4d5fb4d1439f0db9501d44c6047230ea077d95f"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\native-source-05\\preview-readonly.json",
+      "bytes": 38,
+      "sha256": "64c9b8f01e379aa0c632011c66c27fd62f9660925464d85d9a66a7cb7e9f63c0"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\native-source-05\\repair-protection.json",
+      "bytes": 203,
+      "sha256": "a7561d790a376511497cb3c3baad5c13e8702f60407cc5e14eed8168c178fa66"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\final-default89-readonly-03\\summary.json",
+      "bytes": 1782,
+      "sha256": "4bb086a64e49768b0acf035ed7aca4599824ed28bffb5053bb8fd1a1f6016a4e"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\final-default89-readonly-03\\inspect.report.json",
+      "bytes": 4516,
+      "sha256": "b58c15772a1e194d00113fa3e56375679d537c905770d9e4e355c38850bc0b95"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\final-default89-readonly-03\\snapshot-diff.json",
+      "bytes": 249,
+      "sha256": "a89a5dd07c4795df76cda100b63ca580e87045a1d0ad191826d611a84e7856b0"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\final-default89-readonly-03\\trusted-source-before.json",
+      "bytes": 310,
+      "sha256": "c16d4762c5e7aae8f660c6618d7a84a33bfe3d54c8f78da0a3e8d01b59f6b671"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\final-default89-readonly-03\\trusted-source-after.json",
+      "bytes": 310,
+      "sha256": "c16d4762c5e7aae8f660c6618d7a84a33bfe3d54c8f78da0a3e8d01b59f6b671"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\user-entry-update.json",
+      "bytes": 5568,
+      "sha256": "a6f5b7f9aee5980884cd481490b6cbe76dd50e851c3ea04f30e41f5a9893eba8"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\compat-ui-03\\browser-report.json",
+      "bytes": 2836,
+      "sha256": "f21e5a5c6e7994df0a429ec8f3e95959182042aa3a4732004a3ff169260ef606"
+    },
+    {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-source-repair-20261031\\backend-source-after.json",
+      "bytes": 1561,
+      "sha256": "94542a57639011160d39232d072bb629df4b7b73b97609b7a9728a5a53e66b83"
+    }
+  ]
+}
