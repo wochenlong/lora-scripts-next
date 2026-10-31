@@ -261,6 +261,14 @@ impl Catalog {
     }
 }
 
+/// 壳数据和测试隔离目录沿用工作区的绝对路径、重解析点检查。
+pub(crate) fn validate_storage_directory(path: &Path) -> Result<()> {
+    if !path.is_absolute() || path.parent().is_none() {
+        bail!("启动器数据必须使用独立绝对目录");
+    }
+    check_chain(path)
+}
+
 fn check_chain(path: &Path) -> Result<()> {
     let mut current = PathBuf::new();
     for component in path.components() {

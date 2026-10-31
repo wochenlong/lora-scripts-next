@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { t, locale } from './i18n'
 import AcrylicSelect from './AcrylicSelect.vue'
 import { computed, nextTick, onBeforeUnmount, ref, watch } from 'vue'
 import Icon from './LauncherIcon.vue'
@@ -29,14 +30,14 @@ const filtered = computed(() => entries.value.filter(entry => (!contextFilter.va
 const first = computed(() => Math.max(0, Math.floor(scrollTop.value / rowHeight) - overscan))
 const visible = computed(() => filtered.value.slice(first.value, first.value + Math.ceil(viewportHeight.value / rowHeight) + overscan * 2))
 const selectedEntry = computed(() => entries.value.find(entry => entry.id === selected.value))
-const time = (value: number) => new Date(value).toLocaleTimeString('zh-CN', { hour12: false })
-const date = (value: number) => new Date(value).toLocaleString('zh-CN', { hour12: false })
-const historyTime = (value: number) => new Date(value).toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+const time = (value: number) => new Date(value).toLocaleTimeString(locale.value, { hour12: false })
+const date = (value: number) => new Date(value).toLocaleString(locale.value, { hour12: false })
+const historyTime = (value: number) => new Date(value).toLocaleString(locale.value, { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 const sessionLabel = (id: string) => { const session = sessions.value.find(item => item.session_id === id); return session ? `${date(session.started_at)} · ${id.slice(-8)}` : id }
-const asText = (entry: LogEntry) => `${date(entry.receivedAt)}\t${entry.level === 'UNKNOWN' ? '未分类' : entry.level}\t${sourceLabels[entry.source]}\t${entry.root || '未提供工作区'}\t${entry.sessionId ?? '界面记录，未写入历史'}\t${entry.context ?? '未关联运行'}\t${entry.message}`
+const asText = (entry: LogEntry) => `${date(entry.receivedAt)}\t${entry.level === 'UNKNOWN' ? t("未分类") : entry.level}\t${t(sourceLabels[entry.source])}\t${entry.root || t("未提供工作区")}\t${entry.sessionId ?? t("界面记录，未写入历史")}\t${entry.context ?? t("未关联运行")}\t${entry.message}`
 async function loadArchive(earlier = false) {
   const root = props.root.trim()
-  if (!root) { readError.value = '请先检查安装目录，再读取此工作区的历史记录。'; return }
+  if (!root) { readError.value = t("请先检查安装目录，再读取此工作区的历史记录。"); return }
   if (earlier && (!hasMore.value || nextCursor.value === null || loading.value)) return
   const epoch = ++readEpoch, selectedMode = mode.value, selectedSession = sessionFilter.value
   loading.value = true; readError.value = ''; notice.value = ''
@@ -55,7 +56,7 @@ async function loadArchive(earlier = false) {
     hasMore.value = page.has_more; nextCursor.value = page.next_before_seq
     partial.value = page.partial; readError.value = page.io_error ?? ''; initialized = true
     if (!earlier && follow.value) await scrollBottom()
-  } catch (reason) { if (epoch === readEpoch) readError.value = `历史读取失败，已保留当前显示：${String(reason)}` }
+  } catch (reason) { if (epoch === readEpoch) readError.value = t('历史读取失败，已保留当前显示：{reason}', { reason: String(reason) }) }
   finally { if (epoch === readEpoch) loading.value = false }
 }
 async function scrollBottom() { await nextTick(); if (viewport.value) viewport.value.scrollTop = viewport.value.scrollHeight }
@@ -87,7 +88,7 @@ async function copy(selection = false) {
   catch { notice.value = '未能访问剪贴板，请在日志详情中选择文字复制。' }
 }
 function exportLogs() {
-  const header = `Next Trainer 启动器日志\n导出时间：${date(Date.now())}\n工作区：${props.root}\n范围：${mode.value === 'current' ? '本次会话' : '已加载的历史记录'}\n时间列为当时启动器接收时间；未提供来源或级别的原始日志保留为未分类。\n\n`
+  const header = `${t('Next Trainer 启动器日志')}\n${t('导出时间：{time}', { time: date(Date.now()) })}\n${t('工作区：{root}', { root: props.root })}\n${t('范围：{scope}', { scope: mode.value === 'current' ? t('本次会话') : t('已加载的历史记录') })}\n${t('时间列为当时启动器接收时间；未提供来源或级别的原始日志保留为未分类。')}\n\n`
   const url = URL.createObjectURL(new Blob([header, filtered.value.map(asText).join('\n')], { type: 'text/plain;charset=utf-8' }))
   const link = document.createElement('a'); link.href = url; link.download = `next-trainer-logs-${new Date().toISOString().replace(/[:.]/g, '-')}.txt`; link.click()
   setTimeout(() => URL.revokeObjectURL(url), 1000); notice.value = '已导出当前已加载并筛选后的脱敏日志'
@@ -107,20 +108,20 @@ watch(() => props.active, async value => {
 onBeforeUnmount(() => { readEpoch++; observer?.disconnect() })
 </script>
 <template>
-  <section class="logs-page" :data-log-scope="mode" :data-loaded-count="entries.length" :data-current-session="currentSession" :class="{ 'history-mode': mode === 'history' }" :style="{ '--log-font-size': `${fontSize}px` }" aria-label="集中日志">
-    <header class="page-title"><h1>日志</h1><p>集中查看启动器、服务和环境操作的记录。</p></header>
+  <section class="logs-page" :data-log-scope="mode" :data-loaded-count="entries.length" :data-current-session="currentSession" :class="{ 'history-mode': mode === 'history' }" :style="{ '--log-font-size': `${fontSize}px` }" :aria-label="t('集中日志')">
+    <header class="page-title"><h1>{{ t("日志") }}</h1><p>{{ t("集中查看启动器、服务和环境操作的记录。") }}</p></header>
     <slot name="operation"></slot>
-    <div class="log-scope-controls"><div class="scope-tabs" role="group" aria-label="日志范围"><button :class="{ selected: mode === 'current' }" @click="mode = 'current'">本次会话</button><button :class="{ selected: mode === 'history' }" @click="mode = 'history'">历史记录</button></div><AcrylicSelect v-if="mode === 'history'" v-model="sessionFilter" aria-label="历史会话" :options="[{ value: '', label: '全部已保存会话' }, ...sessions.map(session => ({ value: session.session_id, label: `${sessionLabel(session.session_id)}${session.session_id === currentSession ? ' · 本次' : ''} · ${session.retained_records} 行` }))]" /><AcrylicSelect v-model="contextFilter" aria-label="运行或操作分组" :options="[{ value: '', label: '所有运行与操作' }, { value: '__none', label: '未关联运行' }, ...contexts.map(context => ({ value: context, label: context }))]" /><button :disabled="loading" title="重新读取最近保存的日志" @click="frozenHistory = false; loadArchive()"><Icon name="refresh" />{{ loading ? '读取中…' : '刷新最新' }}</button></div>
-    <div v-if="readError || partial" class="log-read-warning" role="status"><Icon name="info" /><span>{{ readError || '部分日志无法读取，当前只显示已成功读取的记录。' }}</span><button :disabled="loading" @click="loadArchive()">重试读取</button></div>
-    <div class="logs-toolbar"><div class="source-filters" role="group" aria-label="日志来源"><button v-for="item in (['all', 'launcher', 'service', 'environment', 'unknown'] as const)" :key="item" :class="{ selected: source === item }" @click="source = item">{{ item === 'all' ? '全部' : sourceLabels[item] }}</button></div><div class="logs-tools"><button class="icon-button" title="复制可见日志" aria-label="复制可见日志" @click="copy()"><Icon name="copy" /></button><button @click="exportLogs"><Icon name="down" />导出</button></div></div>
-    <div class="log-controls"><label class="search-box"><Icon name="search" /><input v-model="search" aria-label="搜索日志" placeholder="搜索当前已加载的日志…" /></label><AcrylicSelect v-model="level" aria-label="日志级别" :options="[{ value: 'all', label: '全部级别' }, { value: 'INFO', label: '信息' }, { value: 'WARN', label: '警告' }, { value: 'ERROR', label: '错误' }, { value: 'UNKNOWN', label: '未分类' }]" /><button v-if="mode === 'history'" class="load-earlier" :disabled="loading || !hasMore" @click="loadArchive(true)">{{ loading ? '读取中…' : hasMore ? '加载较早（最多 500 行）' : '已到保留记录起点' }}</button><button v-else class="follow-button" :class="{ paused: !follow }" @click="toggleFollow"><span class="check-square">{{ follow ? '✓' : '' }}</span>自动跟随</button></div>
-    <div class="terminal-columns" aria-hidden="true"><span>接收时间</span><span>级别</span><span>来源</span><span>消息</span></div>
-    <div ref="viewport" class="terminal" role="region" tabindex="0" aria-label="运行日志；上下滚动查看，选择一行查看完整内容" @scroll="onScroll">
-      <div v-if="!filtered.length" class="terminal-empty">{{ entries.length ? '没有匹配的日志' : loading ? '正在读取日志…' : mode === 'history' ? '没有可显示的已保存记录。旧版未保存或已轮转移出的日志无法补回。' : '等待操作，日志将在这里实时显示。' }}</div>
-      <div v-else class="log-virtual-space" :style="{ height: `${filtered.length * rowHeight}px` }"><div class="log-visible-rows" :style="{ transform: `translateY(${first * rowHeight}px)` }"><button v-for="entry in visible" :key="entry.id" class="log-line" :class="{ highlight: entry.id === selected }" :data-level="entry.level" :data-log-id="entry.id" :data-log-persisted="entry.persisted" :title="`${date(entry.receivedAt)} · ${entry.context ?? '未关联运行'}\n${entry.message}`" @click="selected = entry.id"><span class="log-time">{{ mode === 'history' ? historyTime(entry.receivedAt) : time(entry.receivedAt) }}</span><span class="log-level">{{ entry.level === 'UNKNOWN' ? '—' : entry.level }}</span><span class="log-source">{{ sourceLabels[entry.source] }}</span><span class="log-message">{{ entry.message }}</span></button></div></div>
+    <div class="log-scope-controls"><div class="scope-tabs" role="group" :aria-label="t('日志范围')"><button :class="{ selected: mode === 'current' }" @click="mode = 'current'">{{ t("本次会话") }}</button><button :class="{ selected: mode === 'history' }" @click="mode = 'history'">{{ t("历史记录") }}</button></div><AcrylicSelect v-if="mode === 'history'" v-model="sessionFilter" :aria-label="t('历史会话')" :options="[{ value: '', label: t('全部已保存会话') }, ...sessions.map(session => ({ value: session.session_id, label: `${sessionLabel(session.session_id)}${session.session_id === currentSession ? t(' · 本次') : ''} · ${t('{count} 行', { count: session.retained_records })}` }))]" /><AcrylicSelect v-model="contextFilter" :aria-label="t('运行或操作分组')" :options="[{ value: '', label: t('所有运行与操作') }, { value: '__none', label: t('未关联运行') }, ...contexts.map(context => ({ value: context, label: context }))]" /><button :disabled="loading" :title="t('重新读取最近保存的日志')" @click="frozenHistory = false; loadArchive()"><Icon name="refresh" />{{ loading ? t('读取中…') : t('刷新最新') }}</button></div>
+    <div v-if="readError || partial" class="log-read-warning" role="status"><Icon name="info" /><span>{{ readError || t('部分日志无法读取，当前只显示已成功读取的记录。') }}</span><button :disabled="loading" @click="loadArchive()">{{ t("重试读取") }}</button></div>
+    <div class="logs-toolbar"><div class="source-filters" role="group" :aria-label="t('日志来源')"><button v-for="item in (['all', 'launcher', 'service', 'environment', 'unknown'] as const)" :key="item" :class="{ selected: source === item }" @click="source = item">{{ item === 'all' ? t('全部') : t(sourceLabels[item]) }}</button></div><div class="logs-tools"><button class="icon-button" :title="t('复制可见日志')" :aria-label="t('复制可见日志')" @click="copy()"><Icon name="copy" /></button><button @click="exportLogs"><Icon name="down" />{{ t("导出") }}</button></div></div>
+    <div class="log-controls"><label class="search-box"><Icon name="search" /><input v-model="search" :aria-label="t('搜索日志')" :placeholder="t('搜索当前已加载的日志…')" /></label><AcrylicSelect v-model="level" :aria-label="t('日志级别')" :options="[{ value: 'all', label: t('全部级别') }, { value: 'INFO', label: t('信息') }, { value: 'WARN', label: t('警告') }, { value: 'ERROR', label: t('错误') }, { value: 'UNKNOWN', label: t('未分类') }]" /><button v-if="mode === 'history'" class="load-earlier" :disabled="loading || !hasMore" @click="loadArchive(true)">{{ loading ? t('读取中…') : hasMore ? t('加载较早（最多 500 行）') : t('已到保留记录起点') }}</button><button v-else class="follow-button" :class="{ paused: !follow }" @click="toggleFollow"><span class="check-square">{{ follow ? '✓' : '' }}</span>{{ t("自动跟随") }}</button></div>
+    <div class="terminal-columns" aria-hidden="true"><span>{{ t("接收时间") }}</span><span>{{ t("级别") }}</span><span>{{ t("来源") }}</span><span>{{ t("消息") }}</span></div>
+    <div ref="viewport" class="terminal" role="region" tabindex="0" :aria-label="t('运行日志；上下滚动查看，选择一行查看完整内容')" @scroll="onScroll">
+      <div v-if="!filtered.length" class="terminal-empty">{{ entries.length ? t('没有匹配的日志') : loading ? t('正在读取日志…') : mode === 'history' ? t('没有可显示的已保存记录。旧版未保存或已轮转移出的日志无法补回。') : t('等待操作，日志将在这里实时显示。') }}</div>
+      <div v-else class="log-virtual-space" :style="{ height: `${filtered.length * rowHeight}px` }"><div class="log-visible-rows" :style="{ transform: `translateY(${first * rowHeight}px)` }"><button v-for="entry in visible" :key="entry.id" class="log-line" :class="{ highlight: entry.id === selected }" :data-level="entry.level" :data-log-id="entry.id" :data-log-persisted="entry.persisted" :title="`${date(entry.receivedAt)} · ${entry.context ?? t('未关联运行')}\n${entry.message}`" @click="selected = entry.id"><span class="log-time">{{ mode === 'history' ? historyTime(entry.receivedAt) : time(entry.receivedAt) }}</span><span class="log-level">{{ entry.level === 'UNKNOWN' ? '—' : entry.level }}</span><span class="log-source">{{ t(sourceLabels[entry.source]) }}</span><span class="log-message">{{ entry.message }}</span></button></div></div>
     </div>
-    <div v-if="selectedEntry" class="log-detail"><div><span>{{ sourceLabels[selectedEntry.source] }} · {{ date(selectedEntry.receivedAt) }} · {{ selectedEntry.persisted ? `已保存 #${selectedEntry.seq}` : '界面记录，未写入历史' }}</span><button class="text-button" @click="copy(true)">复制此行</button><button class="icon-button" aria-label="关闭日志详情" @click="selected = null"><Icon name="close" /></button></div><span class="log-entry-context">{{ selectedEntry.root || '未提供工作区' }} · {{ selectedEntry.context ?? '未关联运行' }}</span><pre tabindex="0">{{ selectedEntry.message }}</pre></div>
-    <footer class="log-footer"><span><i class="good-dot"></i>{{ mode === 'history' ? frozenHistory ? '历史分页，保留较早显示窗口' : '已保存记录' : follow ? '实时跟随' : '已暂停跟随，继续接收记录' }}</span><span>{{ filtered.length }} / {{ entries.length }} 行</span><span v-if="notice" role="status">{{ notice }}</span><span v-else class="log-caption">显示最多 2,000 行 · 时间为当时接收时间</span><button v-if="mode === 'current' && !follow" class="text-button" @click="follow = true; scrollBottom()">回到最新</button></footer>
+    <div v-if="selectedEntry" class="log-detail"><div><span>{{ t(sourceLabels[selectedEntry.source]) }} · {{ date(selectedEntry.receivedAt) }} · {{ selectedEntry.persisted ? t('已保存 #{seq}', { seq: selectedEntry.seq ?? '' }) : t('界面记录，未写入历史') }}</span><button class="text-button" @click="copy(true)">{{ t("复制此行") }}</button><button class="icon-button" :aria-label="t('关闭日志详情')" @click="selected = null"><Icon name="close" /></button></div><span class="log-entry-context">{{ selectedEntry.root || t('未提供工作区') }} · {{ selectedEntry.context ?? t('未关联运行') }}</span><pre tabindex="0">{{ selectedEntry.message }}</pre></div>
+    <footer class="log-footer"><span><i class="good-dot"></i>{{ mode === 'history' ? frozenHistory ? t('历史分页，保留较早显示窗口') : t('已保存记录') : follow ? t('实时跟随') : t('已暂停跟随，继续接收记录') }}</span><span>{{ t('{visible} / {total} 行', { visible: filtered.length, total: entries.length }) }}</span><span v-if="notice" role="status">{{ t(notice) }}</span><span v-else class="log-caption">{{ t("显示最多 2,000 行 · 时间为当时接收时间") }}</span><button v-if="mode === 'current' && !follow" class="text-button" @click="follow = true; scrollBottom()">{{ t("回到最新") }}</button></footer>
   </section>
 </template>
 <style scoped>

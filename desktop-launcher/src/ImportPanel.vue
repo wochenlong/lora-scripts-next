@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import { t } from './i18n'
 import AcrylicSelect from './AcrylicSelect.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import type { OperationSnapshot } from './bridge'
-import { formatBytes } from './bytes'
+import { formatBytes } from './localized-bytes'
 
 const props = defineProps<{ root: string; releaseId: string; disabled: boolean }>()
 const emit = defineEmits<{ operate: [label: string, action: () => Promise<OperationSnapshot>]; changed: [] }>()
@@ -47,7 +48,7 @@ function applyImport() {
   if (locked.value || !plan || !confirmed.value || plan.conflicts.length) return
   importPlan.value = null; confirmed.value = false
   selectedProfile.value = plan.request.profile_id
-  operate('复制旧资料到新资料集', () => invoke<OperationSnapshot>('apply_data_import', { root, releaseId, request: plan.request, planSha256: plan.plan_sha256 }))
+  operate(t("复制旧资料到新资料集"), () => invoke<OperationSnapshot>('apply_data_import', { root, releaseId, request: plan.request, planSha256: plan.plan_sha256 }))
 }
 async function previewBinding(rollback = false) {
   if (locked.value || (!rollback && !selectedProfile.value.trim())) return
@@ -63,39 +64,39 @@ function applyBinding() {
   const plan = bindingPlan.value, root = props.root, releaseId = props.releaseId
   if (locked.value || !plan || !bindingConfirmed.value) return
   bindingPlan.value = null; bindingConfirmed.value = false
-  operate(isRollback.value ? '恢复上一完整资料组合' : '选用资料与环境组合', () => invoke<OperationSnapshot>('apply_profile_binding', { root, releaseId, request: plan.request, planSha256: plan.plan_sha256 }))
+  operate(isRollback.value ? t("恢复上一完整资料组合") : t("选用资料与环境组合"), () => invoke<OperationSnapshot>('apply_profile_binding', { root, releaseId, request: plan.request, planSha256: plan.plan_sha256 }))
 }
 function recover() {
   if (locked.value || !recoveryTransaction.value.trim() || !recoveryConfirmed.value) return
   const root = props.root, releaseId = props.releaseId, kind = recoveryKind.value, transaction = recoveryTransaction.value.trim()
   recoveryConfirmed.value = false
-  operate('恢复未完成的资料操作', () => invoke<OperationSnapshot>('recover_data_operation', { root, releaseId, kind, transaction }))
+  operate(t("恢复未完成的资料操作"), () => invoke<OperationSnapshot>('recover_data_operation', { root, releaseId, kind, transaction }))
 }
 </script>
 
 <template>
   <section class="import-panel" aria-labelledby="import-panel-title">
-    <h2 id="import-panel-title">导入旧资料与切换资料集</h2>
-    <p class="hint">选择旧安装目录，先查看可复制的设置、预设和资料。模型、数据集及输出目录保留为原位置的引用；账号凭据默认排除。导入完成后可单独选择新资料集。</p>
-    <div class="form-row"><label for="import-source">旧安装目录</label><div class="input-row"><input id="import-source" v-model="source" :disabled="locked" placeholder="选择需要读取的旧安装根目录" /><button :disabled="locked" @click="chooseSource">选择目录</button></div></div>
-    <div class="form-row"><label for="import-profile">新资料集名称</label><input id="import-profile" v-model="profile" :disabled="locked" placeholder="例如 imported，不覆盖已有名称" /></div>
-    <div class="actions"><button :disabled="locked || !source.trim() || !profile.trim()" @click="previewImport">扫描并预览导入</button></div>
-    <p v-if="busy" role="status">正在读取并核对资料…</p><p v-if="error" class="issue" role="alert">{{ error }}</p>
+    <h2 id="import-panel-title">{{ t("导入旧资料与切换资料集") }}</h2>
+    <p class="hint">{{ t("选择旧安装目录，先查看可复制的设置、预设和资料。模型、数据集及输出目录保留为原位置的引用；账号凭据默认排除。导入完成后可单独选择新资料集。") }}</p>
+    <div class="form-row"><label for="import-source">{{ t("旧安装目录") }}</label><div class="input-row"><input id="import-source" v-model="source" :disabled="locked" :placeholder="t('选择需要读取的旧安装根目录')" /><button :disabled="locked" @click="chooseSource">{{ t("选择目录") }}</button></div></div>
+    <div class="form-row"><label for="import-profile">{{ t("新资料集名称") }}</label><input id="import-profile" v-model="profile" :disabled="locked" :placeholder="t('例如 imported，不覆盖已有名称')" /></div>
+    <div class="actions"><button :disabled="locked || !source.trim() || !profile.trim()" @click="previewImport">{{ t("扫描并预览导入") }}</button></div>
+    <p v-if="busy" role="status">{{ t("正在读取并核对资料…") }}</p><p v-if="error" class="issue" role="alert">{{ error }}</p>
     <div v-if="importPlan" class="review">
-      <h3>待复制资料</h3><dl><div><dt>复制文件</dt><dd>{{ importPlan.scan.files.length }} 个 · {{ formatBytes(importPlan.scan.copy_bytes) }}</dd></div><div><dt>预计峰值占用</dt><dd>{{ formatBytes(importPlan.peak_copy_bytes) }}</dd></div><div class="wide"><dt>新资料集位置</dt><dd><code>{{ importPlan.target_profile }}</code></dd></div></dl>
-      <p class="hint">峰值包含暂存副本。后端会检查剩余空间，执行前再次核对扫描结果；源资料有变化时需重新预览。</p>
-      <details><summary>查看 {{ importPlan.scan.files.length }} 个文件的复制位置</summary><div class="table-scroll"><table><thead><tr><th>源文件</th><th>新资料中的位置</th><th>处理方式</th></tr></thead><tbody><tr v-for="file in importPlan.scan.files" :key="file.source_relative"><td>{{ file.source_relative }}</td><td>{{ file.target_relative }}</td><td>{{ file.transformation === 'copy' ? '原样复制' : '转换配置中的绝对路径' }}</td></tr></tbody></table></div></details>
-      <p v-if="transformed.length" class="hint">{{ transformed.length }} 份配置会转换其中的绝对路径，原配置保留在旧目录。</p>
-      <details v-if="importPlan.scan.references.length"><summary>保留在原位置的外部资料（{{ importPlan.scan.references.length }} 项）</summary><ul><li v-for="reference in importPlan.scan.references" :key="reference.absolute_path"><code>{{ reference.absolute_path }}</code> · {{ reference.exists ? reference.is_directory ? '目录可访问' : '文件可访问' : '路径不存在，需处理' }}</li></ul></details>
-      <details v-if="importPlan.scan.excluded.length"><summary>排除的内容（{{ importPlan.scan.excluded.length }} 项）</summary><ul><li v-for="item in importPlan.scan.excluded" :key="item">{{ item }}</li></ul></details>
-      <details v-if="importPlan.scan.unsupported.length" open><summary>需手动处理的内容（{{ importPlan.scan.unsupported.length }} 项）</summary><p class="hint">这些项目未列入自动复制清单，请保留旧安装供后续核对。</p><ul><li v-for="item in importPlan.scan.unsupported" :key="item">{{ item }}</li></ul></details>
-      <div v-if="importPlan.conflicts.length" class="issue" role="alert"><strong>请先处理以下冲突，再重新扫描</strong><ul><li v-for="item in importPlan.conflicts" :key="item">{{ item }}</li></ul></div>
-      <label class="consent"><input v-model="confirmed" type="checkbox" :disabled="locked || Boolean(importPlan.conflicts.length)" />我已审查复制清单、排除项和外部引用，确认复制到这个新资料集</label><button class="primary" :disabled="locked || !confirmed || Boolean(importPlan.conflicts.length)" @click="applyImport">确认复制资料</button>
+      <h3>{{ t("待复制资料") }}</h3><dl><div><dt>{{ t("复制文件") }}</dt><dd>{{ t('{count} 个', { count: importPlan.scan.files.length }) }} · {{ formatBytes(importPlan.scan.copy_bytes) }}</dd></div><div><dt>{{ t("预计峰值占用") }}</dt><dd>{{ formatBytes(importPlan.peak_copy_bytes) }}</dd></div><div class="wide"><dt>{{ t("新资料集位置") }}</dt><dd><code>{{ importPlan.target_profile }}</code></dd></div></dl>
+      <p class="hint">{{ t("峰值包含暂存副本。后端会检查剩余空间，执行前再次核对扫描结果；源资料有变化时需重新预览。") }}</p>
+      <details><summary>{{ t('查看 {count} 个文件的复制位置', { count: importPlan.scan.files.length }) }}</summary><div class="table-scroll"><table><thead><tr><th>{{ t("源文件") }}</th><th>{{ t("新资料中的位置") }}</th><th>{{ t("处理方式") }}</th></tr></thead><tbody><tr v-for="file in importPlan.scan.files" :key="file.source_relative"><td>{{ file.source_relative }}</td><td>{{ file.target_relative }}</td><td>{{ file.transformation === 'copy' ? t('原样复制') : t('转换配置中的绝对路径') }}</td></tr></tbody></table></div></details>
+      <p v-if="transformed.length" class="hint">{{ t('{count} 份配置会转换其中的绝对路径，原配置保留在旧目录。', { count: transformed.length }) }}</p>
+      <details v-if="importPlan.scan.references.length"><summary>{{ t('保留在原位置的外部资料（{count} 项）', { count: importPlan.scan.references.length }) }}</summary><ul><li v-for="reference in importPlan.scan.references" :key="reference.absolute_path"><code>{{ reference.absolute_path }}</code> · {{ reference.exists ? reference.is_directory ? t('目录可访问') : t('文件可访问') : t('路径不存在，需处理') }}</li></ul></details>
+      <details v-if="importPlan.scan.excluded.length"><summary>{{ t('排除的内容（{count} 项）', { count: importPlan.scan.excluded.length }) }}</summary><ul><li v-for="item in importPlan.scan.excluded" :key="item">{{ item }}</li></ul></details>
+      <details v-if="importPlan.scan.unsupported.length" open><summary>{{ t('需手动处理的内容（{count} 项）', { count: importPlan.scan.unsupported.length }) }}</summary><p class="hint">{{ t("这些项目未列入自动复制清单，请保留旧安装供后续核对。") }}</p><ul><li v-for="item in importPlan.scan.unsupported" :key="item">{{ item }}</li></ul></details>
+      <div v-if="importPlan.conflicts.length" class="issue" role="alert"><strong>{{ t("请先处理以下冲突，再重新扫描") }}</strong><ul><li v-for="item in importPlan.conflicts" :key="item">{{ item }}</li></ul></div>
+      <label class="consent"><input v-model="confirmed" type="checkbox" :disabled="locked || Boolean(importPlan.conflicts.length)" />{{ t("我已审查复制清单、排除项和外部引用，确认复制到这个新资料集") }}</label><button class="primary" :disabled="locked || !confirmed || Boolean(importPlan.conflicts.length)" @click="applyImport">{{ t("确认复制资料") }}</button>
     </div>
-    <div class="binding-section"><h3>选用资料集</h3><p class="hint">切换会同时核对版本、独立环境和资料集的组合。请先停止训练器；通过启动检查后才会保存新的健康组合。</p><div class="input-row"><input v-model="selectedProfile" :disabled="locked" aria-label="要选用的资料集名称" placeholder="输入已导入的资料集名称" /><button :disabled="locked || !selectedProfile.trim()" @click="previewBinding()">预览切换</button><button :disabled="locked" @click="previewBinding(true)">预览恢复上一健康组合</button></div>
-      <div v-if="bindingPlan" class="review"><h3>{{ isRollback ? '待恢复的完整组合' : '待选用的完整组合' }}</h3><dl><div><dt>资料集</dt><dd>{{ bindingPlan.request.binding.profile_id }}</dd></div><div class="wide"><dt>训练器版本</dt><dd><code>{{ bindingPlan.request.binding.release_id }}</code></dd></div></dl><p class="hint">将一起核对 {{ Object.keys(bindingPlan.request.binding.environment_instance_ids).length }} 个环境，避免资料与环境组合错配。</p><label class="consent"><input v-model="bindingConfirmed" type="checkbox" :disabled="locked" />我确认选用上面的版本、环境与资料集组合</label><button class="primary" :disabled="locked || !bindingConfirmed" @click="applyBinding">确认切换完整组合</button></div>
+    <div class="binding-section"><h3>{{ t("选用资料集") }}</h3><p class="hint">{{ t("切换会同时核对版本、独立环境和资料集的组合。请先停止训练器；通过启动检查后才会保存新的健康组合。") }}</p><div class="input-row"><input v-model="selectedProfile" :disabled="locked" :aria-label="t('要选用的资料集名称')" :placeholder="t('输入已导入的资料集名称')" /><button :disabled="locked || !selectedProfile.trim()" @click="previewBinding()">{{ t("预览切换") }}</button><button :disabled="locked" @click="previewBinding(true)">{{ t("预览恢复上一健康组合") }}</button></div>
+      <div v-if="bindingPlan" class="review"><h3>{{ isRollback ? t('待恢复的完整组合') : t('待选用的完整组合') }}</h3><dl><div><dt>{{ t("资料集") }}</dt><dd>{{ bindingPlan.request.binding.profile_id }}</dd></div><div class="wide"><dt>{{ t("训练器版本") }}</dt><dd><code>{{ bindingPlan.request.binding.release_id }}</code></dd></div></dl><p class="hint">{{ t('将一起核对 {count} 个环境，避免资料与环境组合错配。', { count: Object.keys(bindingPlan.request.binding.environment_instance_ids).length }) }}</p><label class="consent"><input v-model="bindingConfirmed" type="checkbox" :disabled="locked" />{{ t("我确认选用上面的版本、环境与资料集组合") }}</label><button class="primary" :disabled="locked || !bindingConfirmed" @click="applyBinding">{{ t("确认切换完整组合") }}</button></div>
     </div>
-    <details class="recovery"><summary>恢复未完成的资料操作</summary><p class="hint">复制或切换中断后，可使用操作日志中的事务编号继续恢复。恢复会校验原有记录，遇到未知变化时保留现场。</p><div class="input-row"><AcrylicSelect v-model="recoveryKind" :disabled="locked" aria-label="恢复操作类型" :options="[{ value: 'import', label: '资料复制' }, { value: 'binding', label: '组合切换' }]" /><input v-model="recoveryTransaction" :disabled="locked" placeholder="粘贴日志中的事务编号" aria-label="待恢复的事务编号" /></div><label class="consent"><input v-model="recoveryConfirmed" type="checkbox" :disabled="locked" />我确认恢复此编号对应的未完成操作</label><button :disabled="locked || !recoveryConfirmed || !recoveryTransaction.trim()" @click="recover">确认恢复</button></details>
+    <details class="recovery"><summary>{{ t("恢复未完成的资料操作") }}</summary><p class="hint">{{ t("复制或切换中断后，可使用操作日志中的事务编号继续恢复。恢复会校验原有记录，遇到未知变化时保留现场。") }}</p><div class="input-row"><AcrylicSelect v-model="recoveryKind" :disabled="locked" :aria-label="t('恢复操作类型')" :options="[{ value: 'import', label: t('资料复制') }, { value: 'binding', label: t('组合切换') }]" /><input v-model="recoveryTransaction" :disabled="locked" :placeholder="t('粘贴日志中的事务编号')" :aria-label="t('待恢复的事务编号')" /></div><label class="consent"><input v-model="recoveryConfirmed" type="checkbox" :disabled="locked" />{{ t("我确认恢复此编号对应的未完成操作") }}</label><button :disabled="locked || !recoveryConfirmed || !recoveryTransaction.trim()" @click="recover">{{ t("确认恢复") }}</button></details>
   </section>
 </template>
 

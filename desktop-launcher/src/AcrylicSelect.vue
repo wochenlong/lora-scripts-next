@@ -1,5 +1,6 @@
 <script setup lang="ts" generic="T extends string | number = string | number">
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, useAttrs, useId, watch } from 'vue'
+import { t } from './i18n'
 
 defineOptions({ inheritAttrs: false })
 interface Option { value: string | number; label: string; disabled?: boolean }
@@ -10,7 +11,7 @@ const opened = ref(false), active = ref(-1), reducedMotion = ref(false)
 const associatedLabel = ref('')
 const accessibleLabel = computed(() => typeof attrs['aria-label'] === 'string' ? attrs['aria-label'] : associatedLabel.value || undefined)
 const position = ref<Record<string, string>>({}), selected = computed(() => props.options.findIndex(option => option.value === props.modelValue))
-const label = computed(() => props.options[selected.value]?.label ?? props.placeholder ?? '请选择')
+const label = computed(() => props.options[selected.value]?.label ?? props.placeholder ?? t('请选择'))
 const activeId = computed(() => opened.value && active.value >= 0 ? `${id}-option-${active.value}` : undefined)
 let typeAhead = '', typedAt = 0
 let visibility: IntersectionObserver | undefined
@@ -120,7 +121,7 @@ onBeforeUnmount(() => { close(); visibility?.disconnect() })
   </button>
   <Teleport to="body">
     <Transition :name="reducedMotion ? undefined : 'acrylic-flyout'">
-      <div v-if="opened" :id="`${id}-listbox`" ref="popup" class="acrylic-select-popup" :class="{ 'reduce-motion': reducedMotion }" :style="position" role="listbox" :aria-label="accessibleLabel || '选择选项'" @pointerdown.prevent>
+      <div v-if="opened" :id="`${id}-listbox`" ref="popup" class="acrylic-select-popup" :class="{ 'reduce-motion': reducedMotion }" :style="position" role="listbox" :aria-label="accessibleLabel || t('选择选项')" @pointerdown.prevent>
         <div v-for="(option, index) in options" :id="`${id}-option-${index}`" :key="`${typeof option.value}:${option.value}`" :data-index="index" class="acrylic-select-option" :class="{ selected: option.value === modelValue, active: index === active, disabled: option.disabled }" role="option" :aria-selected="option.value === modelValue" :aria-disabled="Boolean(option.disabled)" @pointermove="!option.disabled && (active = index)" @click="choose(index)">{{ option.label }}</div>
       </div>
     </Transition>

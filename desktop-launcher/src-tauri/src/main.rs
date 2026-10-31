@@ -7,6 +7,7 @@ mod signed_catalog;
 // 协议源码同时编译进独立helper；替换/回滚函数仅由helper调用。
 mod gui_registration_integrity;
 mod instances;
+mod launcher_preferences;
 mod log_store;
 mod model;
 mod network_policy;
@@ -1316,9 +1317,47 @@ fn main() {
     }
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .on_window_event(|window, event| {
+            if window.label() != "main" {
+                return;
+            }
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                let shutting_down = window.try_state::<Runtime>().is_some_and(|runtime| {
+                    runtime
+                        .shutting_down
+                        .load(std::sync::atomic::Ordering::Acquire)
+                });
+                let close_to_tray = window
+                    .try_state::<launcher_preferences::PreferencesState>()
+                    .is_some_and(|preferences| preferences.close_to_tray());
+                let tray_ready = window
+                    .app_handle()
+                    .tray_by_id(launcher_preferences::TRAY_ID)
+                    .is_some();
+                if close_to_tray && tray_ready && !shutting_down && window.hide().is_ok() {
+                    api.prevent_close();
+                }
+            }
+        })
         .setup(|app| {
-            let data = app.path().app_local_data_dir()?;
+            // 显式开发验证入口：隔离偏好、日志及默认安装根，正常启动不设置此变量。
+            let data = match std::env::var_os("NEXT_TRAINER_LAUNCHER_DATA_DIR") {
+                Some(path) => {
+                    let path = PathBuf::from(path);
+                    model::validate_storage_directory(&path)?;
+                    path
+                }
+                None => app.path().app_local_data_dir()?,
+            };
             let logs = log_store::LogStore::open(data.join("logs"));
+            if let Some(error) = launcher_preferences::setup(app.handle(), &data)? {
+                publish_log(
+                    app.handle(),
+                    &logs,
+                    &format!("[WARN] 系统托盘初始化失败，关闭窗口将完全退出：{error}"),
+                    None,
+                );
+            }
             let handle = app.handle().clone();
             let target = logs.clone();
             let log: Logger = Arc::new(move |line| publish_log(&handle, &target, &line, None));
@@ -1377,6 +1416,10 @@ fn main() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            launcher_preferences::load_launcher_preferences,
+            launcher_preferences::save_launcher_preferences,
+            launcher_preferences::request_launcher_exit,
+            launcher_preferences::launcher_window_status,
             prefetch_release,
             install_managed_release,
             diagnose_gui,
