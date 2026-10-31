@@ -1,0 +1,313 @@
+{
+  "status": "complete-with-boundary",
+  "scope": "Environment service stop path only; backend lease and web guard unchanged",
+  "source_commit": "a4242cea165454248041ef35c98be72634971862",
+  "expected_failure": {
+    "fixture_session": true,
+    "expected_regression_failure": true,
+    "started_at": "2026-10-31T08:13:24.338Z",
+    "passed": false,
+    "checks": [
+      {
+        "name": "服务运行时环境页有明确原因和停止服务入口",
+        "passed": false,
+        "detail": {
+          "notice": false,
+          "stop": false,
+          "buttons": [
+            {
+              "text": "独立检查",
+              "disabled": true
+            },
+            {
+              "text": "管理",
+              "disabled": true
+            },
+            {
+              "text": "独立检查",
+              "disabled": true
+            },
+            {
+              "text": "管理",
+              "disabled": true
+            },
+            {
+              "text": "独立检查",
+              "disabled": true
+            },
+            {
+              "text": "管理",
+              "disabled": true
+            },
+            {
+              "text": "独立检查",
+              "disabled": true
+            },
+            {
+              "text": "管理",
+              "disabled": true
+            }
+          ]
+        }
+      }
+    ],
+    "errors": [],
+    "external_requests": [],
+    "dist": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-environment-flow-20261031\\baseline-dist",
+    "scope": "mock runtime UI flow only; no actual service, engine install/apply, training, root access, clipboard or external launch",
+    "build": {
+      "index_sha256": "dc5a15ce9cf332c354958ae5728f42627dabce86555ca0ded9bd70c77a068f68",
+      "assets": [
+        {
+          "route": "/assets/index-CYZRtk0d.js",
+          "bytes": 204943,
+          "sha256": "1cd545459d39959abef3ec4279b523d511ee1b3e6cdf50d981ca5e1afc8733d7"
+        },
+        {
+          "route": "/assets/index-BeuXJSj6.css",
+          "bytes": 48695,
+          "sha256": "71fef2e07cf97aa8918972cb3582f054a5ac23cc4f390ef77a65fdae38f5a898"
+        }
+      ]
+    },
+    "origin": "http://127.0.0.1:2859",
+    "failure": "Error: 服务运行时环境页有明确原因和停止服务入口\n    at check (file:///E:/OpenSourceTeamWork/workspace/tools/launcher-environment-flow-20261031/browser_flow.mjs:21:182)\n    at async file:///E:/OpenSourceTeamWork/workspace/tools/launcher-environment-flow-20261031/browser_flow.mjs:110:7",
+    "owned_browser_closed": true,
+    "owned_server_closed": true,
+    "finished_at": "2026-10-31T08:13:25.848Z"
+  },
+  "browser": {
+    "fixture_session": true,
+    "expected_regression_failure": false,
+    "started_at": "2026-10-31T08:13:37.164Z",
+    "passed": true,
+    "checks": [
+      {
+        "name": "服务运行时解释安装前需停止且提供环境页停止入口",
+        "passed": true,
+        "detail": {
+          "text": "安装或修复环境前，请先停止训练器服务。网页中的受管引擎请在桌面启动器安装。停止服务会中断正在进行的训练，服务停止后可继续检查、安装或修复环境。停止服务以管理环境"
+        }
+      },
+      {
+        "name": "运行时可打开本地管理信息但仍禁止引擎IPC",
+        "passed": true,
+        "detail": {
+          "calls": [],
+          "checks": [
+            true,
+            true,
+            true,
+            true
+          ]
+        }
+      },
+      {
+        "name": "停止期间等待回收且检查与执行保持禁用",
+        "passed": true,
+        "detail": {
+          "phase": "stopping"
+        }
+      },
+      {
+        "name": "服务停止后留在环境页且四引擎检查即时恢复",
+        "passed": true,
+        "detail": {
+          "page": "environment",
+          "phase": "stopped",
+          "elapsed_ms": 6
+        }
+      },
+      {
+        "name": "停止后可独立检查并生成安装计划至确认前",
+        "passed": true,
+        "detail": [
+          {
+            "command": "query_engine_control",
+            "args": {
+              "root": "F:\\NextTrainerLauncherSandbox\\mock-environment-only",
+              "releaseId": "fixture-dev",
+              "engineId": "kohya",
+              "action": "inspect_readonly",
+              "rebuild": false
+            }
+          },
+          {
+            "command": "query_engine_control",
+            "args": {
+              "root": "F:\\NextTrainerLauncherSandbox\\mock-environment-only",
+              "releaseId": "fixture-dev",
+              "engineId": "kohya",
+              "action": "plan_install",
+              "rebuild": false
+            }
+          }
+        ]
+      },
+      {
+        "name": "停止失败保留操作原因且可重试不解锁引擎",
+        "passed": true,
+        "detail": {
+          "status": "停止失败，请查看日志"
+        }
+      },
+      {
+        "name": "重试成功后恢复原安装计划确认入口",
+        "passed": true,
+        "detail": {
+          "stop_calls": 3
+        }
+      },
+      {
+        "name": "只有受控mock停止与只读计划无安装训练外部操作",
+        "passed": true,
+        "detail": {
+          "unexpected": [],
+          "apply": [],
+          "stop_args": [
+            {
+              "runId": "mock-user-service"
+            },
+            {
+              "runId": "mock-user-service"
+            },
+            {
+              "runId": "mock-user-service"
+            }
+          ]
+        }
+      }
+    ],
+    "errors": [],
+    "external_requests": [],
+    "dist": "E:\\OpenSourceTeamWork\\workspace\\branches\\dev\\desktop-launcher\\dist",
+    "scope": "mock runtime UI flow only; no actual service, engine install/apply, training, root access, clipboard or external launch",
+    "build": {
+      "index_sha256": "87cbb9970d909dc79845461c9b0a1e555caecfff88db1edb7ba478e475c7e930",
+      "assets": [
+        {
+          "route": "/assets/index-BEg_LnP0.js",
+          "bytes": 205762,
+          "sha256": "0486ccc03a855aa25a51af5ed2ea681df5c93abc72cb9a626380bd4e2f01cc7f"
+        },
+        {
+          "route": "/assets/index-BUkWVCHN.css",
+          "bytes": 49181,
+          "sha256": "1f785a2fd92a1a7e49d300d08432167a093ca439fc1b96b0a111e29d51d52bfa"
+        }
+      ]
+    },
+    "origin": "http://127.0.0.1:14272",
+    "owned_browser_closed": true,
+    "owned_server_closed": true,
+    "finished_at": "2026-10-31T08:13:39.130Z"
+  },
+  "browser_report_sha256": "b09414347f3b285714953a25fb777e90a4db1f52c9f5e583b1b9ab635bb4cd1b",
+  "independent_code_review": "pass; explicit click only, management local-only, IPC still guarded, stop failure retry available",
+  "root_visual_review": [
+    "running-environment.png",
+    "stopped-install-plan.png"
+  ],
+  "runtime_tests": {
+    "native": "not-run",
+    "real_service_stop": "not-run",
+    "engine_install": "not-run",
+    "training": "not-run"
+  },
+  "boundaries": [
+    "User service, WebView and installed environment untouched; no product application launched",
+    "Current frozen visual baseline tag preserved; focused functionality fix only"
+  ],
+  "completed_at": "2026-10-31T08:20:20.974767+00:00",
+  "build": {
+    "source_commit": "a4242cea165454248041ef35c98be72634971862",
+    "candidate": "F:/NextTrainerLauncherSandbox/build-environment-flow-20261031/candidate-1",
+    "extraction": {
+      "passed": true,
+      "created_at": "2026-10-31T08:19:08.129668+00:00",
+      "build": "F:\\NextTrainerLauncherSandbox\\build-environment-flow-20261031\\candidate-1",
+      "destination": "F:\\NextTrainerLauncherSandbox\\ui-environment-flow-20261031-1",
+      "candidate": "F:\\NextTrainerLauncherSandbox\\ui-environment-flow-20261031-1\\NextTrainerLauncher-0.2.0-windows-x64",
+      "delivery_manifest": {
+        "bytes": 3250,
+        "sha256": "bb38bac70beb2f879781b5bbcb508e1e0e0fd02204dca9108e394a17611b80cd"
+      },
+      "package": {
+        "bytes": 20942165,
+        "sha256": "72f37f0a62b24cfe18586cbe14d173b39aad0eb6fca8ca15c6fc55e6353e5f0f"
+      },
+      "exe": {
+        "bytes": 38866944,
+        "sha256": "4ce867fd7dfd1ef469f63a57dfaaa7787886a3825b8e9617bbf0c10385888a6e"
+      },
+      "all_artifacts_verified": true,
+      "members": 9,
+      "launched": false
+    },
+    "dist_verification": {
+      "passed": true,
+      "checked_files": 3,
+      "build": {
+        "index_sha256": "87cbb9970d909dc79845461c9b0a1e555caecfff88db1edb7ba478e475c7e930",
+        "assets": [
+          {
+            "route": "/assets/index-BEg_LnP0.js",
+            "bytes": 205762,
+            "sha256": "0486ccc03a855aa25a51af5ed2ea681df5c93abc72cb9a626380bd4e2f01cc7f"
+          },
+          {
+            "route": "/assets/index-BUkWVCHN.css",
+            "bytes": 49181,
+            "sha256": "1f785a2fd92a1a7e49d300d08432167a093ca439fc1b96b0a111e29d51d52bfa"
+          }
+        ]
+      }
+    }
+  },
+  "entry_update": {
+    "passed": true,
+    "updated_at": "2026-10-31T08:19:22.957692+00:00",
+    "entry": "F:\\NextTrainerLauncherSandbox\\user-20261031\\启动启动器.cmd",
+    "candidate": "F:\\NextTrainerLauncherSandbox\\user-20261031\\launcher-environment-fix",
+    "build_commit": "a4242cea165454248041ef35c98be72634971862",
+    "exe": {
+      "bytes": 38866944,
+      "sha256": "4ce867fd7dfd1ef469f63a57dfaaa7787886a3825b8e9617bbf0c10385888a6e"
+    },
+    "copied_files": 9,
+    "backup": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-environment-flow-20261031\\user-entry-backup",
+    "checks": {
+      "target_exe_matches": true,
+      "helper_matches": true,
+      "entry_uses_side_by_side_program": true,
+      "webview_configuration_preserved": true,
+      "debug_arguments_cleared": true,
+      "old_program_preserved": true,
+      "backups_match": true
+    },
+    "before": {
+      "启动启动器.cmd": {
+        "bytes": 511,
+        "sha256": "ecbac894083da17cb8116a913577a84f5fcd49e372c417d33fc1e68d268dd9dc"
+      },
+      "从0实测说明.txt": {
+        "bytes": 450,
+        "sha256": "70ab0e051c32e15f70767d5b8956a91f6fc7fc7f53e18a090dc1052c5a2cd9ee"
+      }
+    },
+    "after": {
+      "启动启动器.cmd": {
+        "bytes": 543,
+        "sha256": "db9595e53530add04eae586c70ddcea6b4834356a77d7b79f64537e119be0d3e"
+      },
+      "从0实测说明.txt": {
+        "bytes": 794,
+        "sha256": "63574df04104f34ee2a712c2df2b88a2678ef34283b656b2a77972268103b53f"
+      }
+    },
+    "application_started": false,
+    "user_service_stopped": false,
+    "user_webview_or_installation_touched": false,
+    "engine_installation_or_training_run": false
+  }
+}

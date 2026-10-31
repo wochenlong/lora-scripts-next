@@ -1,6 +1,6 @@
 # 环境管理运行态无法继续：功能返修
 
-- 日期：2026-10-31（Asia/Shanghai）。状态：源码修正及浏览器定向回归完成，待打包交付。
+- 日期：2026-10-31（Asia/Shanghai）。状态：complete-with-boundary，功能路径修正、mock回归、打包与既有入口更新完成；实际引擎安装由用户继续实测。
 - 触发：用户从零安装主程序后，网页安装引擎提示“桌面受管环境请使用启动器安装/精准修复接口”，桌面环境页的检查/管理按钮又全部禁用。
 - 基线：`launcher-ui-baseline-20261031`仍固定在`7aa9d6c5`；当前开发分支`feat/desktop-launcher`。本次修正功能操作流程，不重新设计已冻结的美术。
 
@@ -18,10 +18,20 @@
 | 同页可继续 | 环境页提供“停止服务以管理环境”，只由用户点击触发，沿用原stop事件和进程回收 | mock stopped/stopping/失败重试通过；未操纵用户服务 |
 | 管理信息可查看 | “管理”只展开本地信息，服务运行时也可查看；查询/预览/安装/修复仍保持互斥限制 | mock运行态展开且无引擎IPC通过 |
 | 停止后恢复入口 | 提示随runtime消失，留在环境页，独立检查/预览独立安装恢复可用 | mock inspect及安装计划到确认前通过；未执行引擎安装 |
-| 交付 | 新包旁置，更新本轮用户入口并保留原WebView/安装根和原包 | 构建、制品身份与静态入口核对待执行 |
+| 交付 | 新包旁置，更新本轮用户入口并保留原WebView/安装根和原包 | 离线构建/ZIP成员与制品摘要核对通过；旁置复制9文件、入口静态7项通过 |
 
 不更改网页、后台工作区保护、训练器固定配方或数据目录；不自动停服务、不装引擎、不运行训练，不修改旧固定标签。本轮不执行用户正在使用的程序或业务实测，浏览器回归使用隔离mock，真实安装/训练继续由用户操作。
 
 验证记录：旧dist `baseline-01`按预期复现“无环境页停止入口、管理全部禁用”，保留为失败证据。新dist `browser-01` 8项全部通过，页面异常/外部请求/未建模IPC均为0；停止事件后留在环境页，四引擎检查恢复，可查询检查和安装计划但没有apply。停止失败仍保留限制并可重试。`npm run build`类型检查及构建通过，最终JS `index-BEg_LnP0.js` /CSS `index-BUkWVCHN.css`；Root实际看两张受影响截图无阻断。工具和原始报告位于 `E:/OpenSourceTeamWork/workspace/tools/launcher-environment-flow-20261031`。本记录里的停止/检查/计划结果均为mock，不声称新包真实服务或引擎安装已经通过。
 
-下一步：保存源码基线，离线打包后旁置部署到现有新沙盒入口，保留用户安装和WebView。
+源码基线`a4242cea165454248041ef35c98be72634971862`已push并实核远端。固定工具/输入预检和离线NSIS/便携包构建通过，构建前后index/JS/CSS与浏览器回归逐字节一致，未重复旧矩阵。制品ZIP/CRC/安全成员、解压EXE/helper/build-manifest核对通过，未启动程序。
+
+- EXE：38,866,944 B，SHA256 `4ce867fd7dfd1ef469f63a57dfaaa7787886a3825b8e9617bbf0c10385888a6e`。
+- 便携ZIP：20,942,165 B，SHA256 `72f37f0a62b24cfe18586cbe14d173b39aad0eb6fca8ca15c6fc55e6353e5f0f`。
+- NSIS：17,423,373 B，SHA256 `a3fc399b7525fc11358a08e0115a533033538892c68ab31900451f1af42f5c70`。
+
+已在`F:/NextTrainerLauncherSandbox/user-20261031/launcher-environment-fix`旁置新程序，只备份并更新`启动启动器.cmd`及`从0实测说明.txt`，附加部署回执。原`launcher`与初始部署记录保留，入口仍复用原`webview`，不改已选安装根、主程序/引擎/模型/配置，不对用户窗口进行启停。静态入口核对7项全过，详工具`user-entry-update.json`及[结构化验收](environment-service-flow-20261031-validation.json)。
+
+Root已实际看[运行态提示](../../design/desktop-launcher-ui-review/environment-flow-20261031/running-environment.png)和[停止后安装计划](../../design/desktop-launcher-ui-review/environment-flow-20261031/stopped-install-plan.png)，独立代码复核无阻断。两图来自mock，不当作真实服务或引擎安装证明。
+
+用户继续操作：正常关闭旧窗口，用原入口重开；到环境页，服务运行时按“停止服务以管理环境”，再选择所需引擎“管理→预览独立安装→确认执行此计划”。安装完成后回首页启动训练器并打开网页，无需重装主程序。当前修复没有剩余实施或打包工作，等待用户继续实测结果。
