@@ -39,4 +39,10 @@
 
 外部证据根：`E:/OpenSourceTeamWork/workspace/tools/launcher-engine-conflicts-20261031/`。当前原生脚本已准备但尚未启动；仍未操作用户实例。
 
-Next action：保存并推送实现源码，将该提交冻结为训练器发布输入，再生成一致配方与实际候选包。
+## 固定制品身份
+
+实现提交 `4e68df240c63ab7cf2156ea7fafabf18df4671e8` 已普通 push 并核远端，原美术 tag 指向不变。训练器真实源码归档为 92,918,164 字节、SHA256 `60490c2eceaccb4d59b22f17867b12e68c2a5041b995a3692a38adc6691c0cfd`；新构建网页前端与原归档逐字节相同。GUI requirements/Python/uv/81 枚 wheel 与完整可信索引、venv 模板 payload 不变，四引擎锁逐字节不变；GUI 父配方 SHA 更新为 `00ce9d78bc779f72405c84145ded75e63deca34d5b21afc51f1a78b76a0773ba`，公开测试签名 7 份全部核验。
+
+首次离线 npm 缺缓存现场 `source-v1/tb15` 保留；`source-v2/tb16` 复用首次源码归档，通过代理补齐固定 npm lock 缓存，无重复源码下载。受影响源码/配方/完整索引/签名的 Rust 定向 22 项、fmt 和严格 all-targets Clippy 均通过；证据为 `source-v2/freeze-verification.json`、`rust-final-checks.json`。
+
+Next action：保存配方冻结基线并构建最终候选，随后执行独立新根的原生安装/服务/引擎只读计划验收。

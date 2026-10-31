@@ -13,7 +13,7 @@ import subprocess
 import tarfile
 import zipfile
 
-RECIPE_SHA = "4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca"
+RECIPE_SHA = "00ce9d78bc779f72405c84145ded75e63deca34d5b21afc51f1a78b76a0773ba"
 def digest(path):
     h = hashlib.sha256()
     with path.open("rb") as f:

@@ -15,10 +15,10 @@ use std::{
 };
 
 const INDEX: &[u8] = include_bytes!("../../catalog/gui-cp310-installed-files-v2.json");
-const INDEX_SHA: &str = "92e6e98081506d5022ded8bf5ab7d6f30e80d2d20b7bcfe76d248fffadd94bcb";
+const INDEX_SHA: &str = "c5272ed826983913749ff37c00624ec19ccff1d66bda56b0580ddb054879fc82";
 const MANAGED_VENV: &[u8] = include_bytes!("../../catalog/gui-cp310-managed-venv-v1.json");
-const MANAGED_VENV_SHA: &str = "eac53df7da3d94c78d39501bd4e3e19713567b54762b67ee4921b1419184dfdb";
-const RECIPE_SHA: &str = "4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca";
+const MANAGED_VENV_SHA: &str = "094072aab658eca999b31784050837afd8804620c776851f857bf2747b208f85";
+const RECIPE_SHA: &str = "00ce9d78bc779f72405c84145ded75e63deca34d5b21afc51f1a78b76a0773ba";
 const MAX_FILE: u64 = 512 * 1024 * 1024;
 const MAX_TREE: u64 = 2 * 1024 * 1024 * 1024;
 pub(crate) fn trusted_index_sha256() -> &'static str {

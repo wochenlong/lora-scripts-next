@@ -1,12 +1,12 @@
 {
   "schema_version": 1,
-  "source_commit": "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
-  "source_archive_sha256": "e53af2a77aa39c1f5e876c5cc73e78329c2cd5c616d0d5af7ac3eea637577022",
-  "source_archive_bytes": 57465913,
+  "source_commit": "4e68df240c63ab7cf2156ea7fafabf18df4671e8",
+  "source_archive_sha256": "60490c2eceaccb4d59b22f17867b12e68c2a5041b995a3692a38adc6691c0cfd",
+  "source_archive_bytes": 92918164,
   "frontend_sha256": "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f",
   "frontend_bytes": 2446848,
-  "expected_file_count": 1844,
-  "expected_file_bytes": 103757791,
+  "expected_file_count": 1942,
+  "expected_file_bytes": 139738581,
   "files": [
     {
       "path": ".cursor/rules/00-project-overview.mdc",
@@ -535,8 +535,8 @@
     },
     {
       "path": "desktop-launcher/README.md",
-      "bytes": 16957,
-      "sha256": "f5527caa1f28bf2caa2a0e7849a0e01350101b76c6491b0ecec637ba3c153b8e"
+      "bytes": 17017,
+      "sha256": "ba3f51f4daad0eeac517400e02e0baa2460b154bfca2ec62552cf2713ccab95f"
     },
     {
       "path": "desktop-launcher/catalog/README.md",
@@ -585,23 +585,23 @@
     },
     {
       "path": "desktop-launcher/catalog/engines/kohya.json",
-      "bytes": 870085,
-      "sha256": "d5ffbdaa2a67bb72752b51e9c0b9d559b6a26fa1947873f6ba7458ff957b4123"
+      "bytes": 870556,
+      "sha256": "c0a7310d44e61a03f6b6a33b2f634edb68776012fec7845baa346af143c594b1"
     },
     {
       "path": "desktop-launcher/catalog/gui-candidate-source-v1.json",
-      "bytes": 321768,
-      "sha256": "c12af5fe4735bfe8180f4614f03a148b765cdb4fb8dce3823f59daf66af36b19"
+      "bytes": 323783,
+      "sha256": "bce3945607a7ec7925e843cd236e93c8fcd0e7f013291b24d4d84abb3117eccd"
     },
     {
       "path": "desktop-launcher/catalog/gui-cp310-installed-files-v2.json",
       "bytes": 2218268,
-      "sha256": "478283063a592186c7561a866e00673589c9cb4d56e343bc884b070b6a4ae953"
+      "sha256": "92e6e98081506d5022ded8bf5ab7d6f30e80d2d20b7bcfe76d248fffadd94bcb"
     },
     {
       "path": "desktop-launcher/catalog/gui-cp310-managed-venv-v1.json",
       "bytes": 92079,
-      "sha256": "a1d95294436b82d4f63c0cffe3458525b19b73d351a323524109bd4aa1979c2b"
+      "sha256": "eac53df7da3d94c78d39501bd4e3e19713567b54762b67ee4921b1419184dfdb"
     },
     {
       "path": "desktop-launcher/catalog/gui-cp310-python-v1.json",
@@ -611,7 +611,7 @@
     {
       "path": "desktop-launcher/catalog/gui-cp310-win-x64-v1.json",
       "bytes": 115656,
-      "sha256": "612124245bff0c62ab9d2e15aa95f86ff9b9359874f3e28e3fa99ad93007f67a"
+      "sha256": "4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca"
     },
     {
       "path": "desktop-launcher/catalog/gui-cp310-win-x64-v1.lock",
@@ -620,18 +620,18 @@
     },
     {
       "path": "desktop-launcher/catalog/releases.json",
-      "bytes": 4789,
-      "sha256": "659d0237a7e41aa950b7db04e3a1101187fbd3cf236dfceeb8441e62a88a1bb1"
+      "bytes": 5945,
+      "sha256": "98cc9df537272f1d7d4d79be97b5e7c9d062ab77dc6a7098140feb89069961f7"
     },
     {
       "path": "desktop-launcher/catalog/signed-fixtures-v1.json",
       "bytes": 8043,
-      "sha256": "655256e3d4ec1e275d3707e69db43f6a14d9b1001087172ea49a6831982e4991"
+      "sha256": "0763a725102e908f86ce106f0dbb7f33cb49c66667cce623e68cfbf62ee89051"
     },
     {
       "path": "desktop-launcher/index.html",
-      "bytes": 368,
-      "sha256": "1979e3b82bf06560ebb84e3227ce5f9e27af6f9073917b57a0ca78cbdef668cc"
+      "bytes": 445,
+      "sha256": "326366a467f6ee1000e6b315a4f3cba18836fe0bc2364a2d75e7f32ba9ce50c5"
     },
     {
       "path": "desktop-launcher/package-lock.json",
@@ -644,14 +644,49 @@
       "sha256": "c7367cc008df52dda5a97e776d4d976fc8cb015d7e909524eb61e473ec38d974"
     },
     {
+      "path": "desktop-launcher/public/assets/README.md",
+      "bytes": 925,
+      "sha256": "dbfe92e10d791b30f6dc34595490ce0eaa7c05ad946190b06418d0fccc3e900b"
+    },
+    {
+      "path": "desktop-launcher/public/assets/acrylic-noise.png",
+      "bytes": 16585,
+      "sha256": "b692b9f10e19d557c7146f17c999ab2e219aa3faea4290b659682dc522c36e91"
+    },
+    {
+      "path": "desktop-launcher/public/assets/guide-mascot.webp",
+      "bytes": 95902,
+      "sha256": "66c04063dee7a9f03de8c01ea2ef24383dd898f34b3c829db45c61c89f7eb1a3"
+    },
+    {
+      "path": "desktop-launcher/public/assets/home-logo.webp",
+      "bytes": 60072,
+      "sha256": "eda3cca9043ee16a3af5f7f6104466c525d628bc2870a7985d02311d3c07f4d5"
+    },
+    {
+      "path": "desktop-launcher/public/assets/launcher-wallpaper.png",
+      "bytes": 1680487,
+      "sha256": "cf6f9f00dc25f3a94637604ff8d5a46329df91fe8077b17ca1826ea1c3017473"
+    },
+    {
+      "path": "desktop-launcher/public/assets/next-trainer-cover.png",
+      "bytes": 1682225,
+      "sha256": "0aece9b3ce1b10697d3eb02e49795a9c3db7dddc7e82c26ba4f73e11cf895ceb"
+    },
+    {
       "path": "desktop-launcher/scripts/WINDOWS-BUILD.md",
       "bytes": 4258,
       "sha256": "4541983e2e644f3a1369ebff37a5663ad464712a57586f1d8600a3d4b9926bff"
     },
     {
       "path": "desktop-launcher/scripts/build_windows_candidate.py",
-      "bytes": 19660,
-      "sha256": "78aed88c74e91077f7419e0d295400ae4d9dc0a78695ecf62f5f33707e64b8c4"
+      "bytes": 19719,
+      "sha256": "eed7dd398abc31f1bc742ef70e7cadadb089ca2adac73046b8f14222cddeeca8"
+    },
+    {
+      "path": "desktop-launcher/scripts/generate_brand_assets.py",
+      "bytes": 1353,
+      "sha256": "d1f6c11c9c5c8e8a31f1d2bf66c5ff36073e48c28cf8e04516430e7f666d37eb"
     },
     {
       "path": "desktop-launcher/scripts/generate_license_inventory.py",
@@ -670,13 +705,13 @@
     },
     {
       "path": "desktop-launcher/scripts/registration-index/INDEX-PROVENANCE.md",
-      "bytes": 6500,
-      "sha256": "17916b9b9cae06ccc3c25f83f3d83af1eb44dab4b977c65d6a9beb5c84f9987e"
+      "bytes": 8167,
+      "sha256": "c931da16ab070e751c73e49a83600aff2882330e43c849d43f96d3f94a7edcae"
     },
     {
       "path": "desktop-launcher/scripts/registration-index/extract_entrypoint_controls.py",
       "bytes": 5554,
-      "sha256": "913c0cb0ba7d0e43385a6a8fba9090a40e7ded80ba0acf64dcc8f8b9ee2044da"
+      "sha256": "1ca88a31d234492d332ed6073b96b87902866a90407b873b2b1d4286161a0ecf"
     },
     {
       "path": "desktop-launcher/scripts/registration-index/generate_entrypoint_fixture.py",
@@ -686,7 +721,7 @@
     {
       "path": "desktop-launcher/scripts/registration-index/generate_trusted_index.py",
       "bytes": 10466,
-      "sha256": "3f622364bedeb0bea275d59211a4c5b540e5a5783de3a3f30c444d7be4190201"
+      "sha256": "122237aaaf20eac05335efb3af0c912fe82d07657b21ef2fb3383f4bb3b9ffe6"
     },
     {
       "path": "desktop-launcher/scripts/windows-tools-lock.json",
@@ -735,13 +770,38 @@
     },
     {
       "path": "desktop-launcher/src-tauri/capabilities/default.json",
-      "bytes": 136,
-      "sha256": "972e4b78c29612586a825c78339886b6b8f24e628600861a67733d7a40e211aa"
+      "bytes": 325,
+      "sha256": "35c68e3ecceb09c2c5bd098aa4a97d4a66ceeab8d7a3c8f6ee9796cbb07845c7"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/icons/128x128.png",
+      "bytes": 36993,
+      "sha256": "db53b5af3f5416661e49b6a7435deec19dcbe189ad465c19a94890bda9e43b1e"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/icons/128x128@2x.png",
+      "bytes": 117660,
+      "sha256": "689b623d69ecaefb84edeb6273ec3f8ec4206e2f3aa30d06c37bb28f35693f50"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/icons/32x32.png",
+      "bytes": 3043,
+      "sha256": "80601a4ecb580df4de047dacb9e5bd8ecf5de71b2f4187d018f24dec69f839f1"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/icons/icon.icns",
+      "bytes": 2023163,
+      "sha256": "26188f62f4934a3d8c4a1e79a826a76ea19d1c7209749f1c9ededb7a6c72e92b"
     },
     {
       "path": "desktop-launcher/src-tauri/icons/icon.ico",
-      "bytes": 2686,
-      "sha256": "9cf20ebb75019fd70d3eb840f3500cf6eb8da250d969e4e79404b45a3300733f"
+      "bytes": 177726,
+      "sha256": "a5b9f1ff586ee49dc8d8bc9a697ebb84d9eca343015a79851d7fdfb25201acf7"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/icons/icon.png",
+      "bytes": 354605,
+      "sha256": "144804215f74d112cbf750b1621cfbf6931cd25ced2d7b14b635a3d675d6691a"
     },
     {
       "path": "desktop-launcher/src-tauri/src/artifact_downloads.rs",
@@ -760,8 +820,8 @@
     },
     {
       "path": "desktop-launcher/src-tauri/src/core.rs",
-      "bytes": 92464,
-      "sha256": "a7c995cd8b678ea19ac60b62eb27f37f832353bca52171bf4e5f002c43f881d2"
+      "bytes": 101225,
+      "sha256": "10c1b9aac2b75fad4da8f129aeca0889d8fd521851c44b12270dd9890da9053c"
     },
     {
       "path": "desktop-launcher/src-tauri/src/data_import.rs",
@@ -775,8 +835,8 @@
     },
     {
       "path": "desktop-launcher/src-tauri/src/engine_bridge.rs",
-      "bytes": 15461,
-      "sha256": "5d9b67c33b5b1051c6dfe9608aac004eb6bcafa6b263f01f27c4e80cf9b511a9"
+      "bytes": 17663,
+      "sha256": "2db6a46aef494d5bd1436eafff1f2db4be7caaedaa7f3aeddcc608c35e80640a"
     },
     {
       "path": "desktop-launcher/src-tauri/src/engine_namespaces.rs",
@@ -786,7 +846,7 @@
     {
       "path": "desktop-launcher/src-tauri/src/gui_binding_switch.rs",
       "bytes": 21638,
-      "sha256": "ce1574545c34e5338d0e626a5b9e891841b28b88c7a2ab38b362c56e860d5de8"
+      "sha256": "8b09fc1bc9991e0993244aca7341d61c05bf31a9143f406777c0cbacb45d71c5"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_entry_probe.rs",
@@ -806,7 +866,7 @@
     {
       "path": "desktop-launcher/src-tauri/src/gui_rebuild.rs",
       "bytes": 35460,
-      "sha256": "9a992908640e7632a26bbe1e9e0086b9b144043d22090f6f84bbd508c5734378"
+      "sha256": "070d4cf3a5028a93c1cd103f83438ef67c6aed363cdf7b1e676f801a66617b35"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_recovery.rs",
@@ -816,12 +876,12 @@
     {
       "path": "desktop-launcher/src-tauri/src/gui_registration.rs",
       "bytes": 23498,
-      "sha256": "b76784386d9218ae17b384ef86410a2f217f6c0cd73c0f920484a5f78174ad72"
+      "sha256": "948c459356f7518c05b706a45b75378457e45ed46541f8581db47c60b7a26c70"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_registration_integrity.rs",
       "bytes": 41574,
-      "sha256": "ff0cb4260ca24be11779a3ecb958d9e149594a01fd00d05de6945ebe6402655d"
+      "sha256": "738ba0a5744a38958932fbe2f653d340cffb224ae82e0a8655b60b6f1295564a"
     },
     {
       "path": "desktop-launcher/src-tauri/src/gui_registration_records.rs",
@@ -846,12 +906,22 @@
     {
       "path": "desktop-launcher/src-tauri/src/instances.rs",
       "bytes": 145500,
-      "sha256": "a3e327efbde0a8a5c89e1e95e363e244e5cbaa442520af85c8b7780749cf7152"
+      "sha256": "961fddc7a8f54acda8e484a174de609a394c38d9757f35c05c285617a4a28dc3"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/lifecycle.rs",
+      "bytes": 29754,
+      "sha256": "3b04b552e9bf0ad88427845d98ee5c51816b3dc80208594feec4a4d6e6ef39c0"
+    },
+    {
+      "path": "desktop-launcher/src-tauri/src/log_store.rs",
+      "bytes": 31132,
+      "sha256": "d4b0df76fccd403b995b523db4aeb0e050320ece5733a02801309cdd49db28cc"
     },
     {
       "path": "desktop-launcher/src-tauri/src/main.rs",
-      "bytes": 45010,
-      "sha256": "93c7b9392c4547cc86630113000a728ccb3d60288c40990620ea5e655994f2c2"
+      "bytes": 51616,
+      "sha256": "15a1867b591f5b9e257c80bb141e07325ea07371a92d8a37186e0748ed00fd99"
     },
     {
       "path": "desktop-launcher/src-tauri/src/managed_child.rs",
@@ -860,8 +930,8 @@
     },
     {
       "path": "desktop-launcher/src-tauri/src/model.rs",
-      "bytes": 57131,
-      "sha256": "95ead73ea5202642a925190ad2fcc8420c647c51383a3b36a36093d3d06c885c"
+      "bytes": 65120,
+      "sha256": "476c367f38ae32423979f7a60a2c93823db584a18ba23221521dca06ad8b2c19"
     },
     {
       "path": "desktop-launcher/src-tauri/src/network_policy.rs",
@@ -886,7 +956,7 @@
     {
       "path": "desktop-launcher/src-tauri/src/recipe.rs",
       "bytes": 19786,
-      "sha256": "8143c3f2f640afdd2443d70249b84cf10f47ecdce38ccd81422436975e9a7abc"
+      "sha256": "1be0c7c75a7aa8780b39945457d5dc4721afa4d1791d86508b8062df9ea123a4"
     },
     {
       "path": "desktop-launcher/src-tauri/src/recovery.rs",
@@ -921,12 +991,12 @@
     {
       "path": "desktop-launcher/src-tauri/src/signed_catalog.rs",
       "bytes": 31884,
-      "sha256": "58a2990c1377a613c977b5236164dc2607957f11451c3f853836ca134e4143c8"
+      "sha256": "88df7cd4f7851ca1150ba9d9d8d2fc2ec44cb0b856bbf4ff00c8cf26316d3dbb"
     },
     {
       "path": "desktop-launcher/src-tauri/src/source_integrity.rs",
       "bytes": 10912,
-      "sha256": "8cf670fc8220a8f8d9c5b9b79b416bc69cd27d9ef69ac241b38fccbfa49c527d"
+      "sha256": "a2db3a00b7cf5dc08dfb54c3a8a979243a6a96e0eb0dc041cf8c1eba7bb01bb8"
     },
     {
       "path": "desktop-launcher/src-tauri/src/trial_ui.rs",
@@ -940,23 +1010,38 @@
     },
     {
       "path": "desktop-launcher/src-tauri/tauri.conf.json",
-      "bytes": 1228,
-      "sha256": "0f35edca1958b192bb7afe2b4183dd5e09eb7a6e61a3a54c82abdef241e5f551"
+      "bytes": 1352,
+      "sha256": "e7922a331680f6d1952f34aa50cbff648dffec7e19d21c54cce5a003fbc14f9d"
+    },
+    {
+      "path": "desktop-launcher/src/AcrylicSelect.vue",
+      "bytes": 11091,
+      "sha256": "c1fadefddeeec532e0f0f5c0ff1a528198e36b44258a1d06b69338bdc8cb67b6"
     },
     {
       "path": "desktop-launcher/src/App.vue",
-      "bytes": 66551,
-      "sha256": "3df8ad5081eed2fa8cfd6bfb97b91dc69924b1e72ec3fb00dea4f75c6ae9aa8e"
+      "bytes": 87069,
+      "sha256": "0e95cada3857e40d1beddc4515b77e8d67f047d607ddbeac3b5cf495d87e11ff"
     },
     {
       "path": "desktop-launcher/src/EnginePanel.vue",
-      "bytes": 4741,
-      "sha256": "293871d0d59f494865fa3bded4866a21de1b7dc4a6d165a962a103d5e66b89bc"
+      "bytes": 9247,
+      "sha256": "5d072cd26e605223002950ddf66bda29ea58baf46a84303d0416295cdbdd1f43"
     },
     {
       "path": "desktop-launcher/src/ImportPanel.vue",
-      "bytes": 13669,
-      "sha256": "266b8aed56028c479f98d50797a508e581e4a119b919c7b50943a0d95e3486f1"
+      "bytes": 14027,
+      "sha256": "e96faf2cd5ea9d5c291adc21e46f9393f363108e13facdd9f736eaaf691470d6"
+    },
+    {
+      "path": "desktop-launcher/src/LauncherIcon.vue",
+      "bytes": 1678,
+      "sha256": "49db3d477538e5579237ee41639d9d93a756cfd5a92908f9491a3fd0c38e183e"
+    },
+    {
+      "path": "desktop-launcher/src/LogPanel.vue",
+      "bytes": 17577,
+      "sha256": "fa4536c77dbb7013352516c7898fb2a3e707242d7b68525126ed00916bffd540"
     },
     {
       "path": "desktop-launcher/src/ShellPanel.vue",
@@ -965,23 +1050,28 @@
     },
     {
       "path": "desktop-launcher/src/TrialApp.vue",
-      "bytes": 1718,
-      "sha256": "9031e897a1ecc7d277ae86ddec0301b418258e0cb84d3fb251f050aee7c413d3"
+      "bytes": 2976,
+      "sha256": "bd55644d7b2dd5125baf6467b61c1d7a4b00ef0825fac3779489f316aafdede5"
     },
     {
       "path": "desktop-launcher/src/TrustPanel.vue",
-      "bytes": 7756,
-      "sha256": "68f05e4dbad5595b3b2485b3a9a2865564899552463362c5939e7fb6f49dece5"
+      "bytes": 7878,
+      "sha256": "8658fbd925802737bd1b39610f500319ac1a0ef09da3539d4590aa91b935fbb0"
     },
     {
       "path": "desktop-launcher/src/bridge.ts",
-      "bytes": 9578,
-      "sha256": "100671e26d4e450e7cbda48015d8d5596a6081f74a23cd7135d5c3e00e265231"
+      "bytes": 11398,
+      "sha256": "87f871f9eace360e243d4c3e11a8e548c24123c1076deb2446267fa10987aea9"
     },
     {
       "path": "desktop-launcher/src/bytes.ts",
       "bytes": 479,
       "sha256": "39b14eba6faca084b83970ea4d4e190e568b48a01638c3025d76c245b88ade5f"
+    },
+    {
+      "path": "desktop-launcher/src/log-model.ts",
+      "bytes": 3106,
+      "sha256": "3fc213558400a53edf3e3ebb8746792c8b790ea85cfc6f50ea077ead2fdb97bb"
     },
     {
       "path": "desktop-launcher/src/main.ts",
@@ -995,8 +1085,8 @@
     },
     {
       "path": "desktop-launcher/src/style.css",
-      "bytes": 11655,
-      "sha256": "8ed6062585f3dc7f451f60e2c7da323888716881c8c888d73b7c7500df35ce69"
+      "bytes": 37512,
+      "sha256": "3c9494f25983d6daba1647726d6893df8f1b86f6babd4bee3d1cb288d6693bdb"
     },
     {
       "path": "desktop-launcher/tests/bytes.test.mjs",
@@ -1142,6 +1232,306 @@
       "path": "docs/design/desktop-launcher-reference-research-2026-10-28.md",
       "bytes": 26522,
       "sha256": "122c311deefb1dd0a1ae54fa86b50f740e1f5bd10971e57369f5c2b1a8db5997"
+    },
+    {
+      "path": "docs/design/desktop-launcher-starward-ui-design.md",
+      "bytes": 20883,
+      "sha256": "b7beacaebac7f86d60667734c3318558a3dfa97cc1fe42be9439ecde034c48b5"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/acrylic-20261031/environment.png",
+      "bytes": 598315,
+      "sha256": "39d4c9e0a9d5249aadbe894554f3a40671a01fafb528e923b4479504d92ab0e9"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/acrylic-20261031/font-popup.png",
+      "bytes": 563200,
+      "sha256": "83077d9629178ad9952346ebeb5d88fa4acabf9bc9f342b6a0879feee161c96f"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/acrylic-20261031/home.png",
+      "bytes": 927471,
+      "sha256": "b10bcb0849c09978da16ef378f4527d1c33ae2c52376351e5ece44149154ad68"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/acrylic-20261031/logs.png",
+      "bytes": 646091,
+      "sha256": "8b3514b6e37fedb1db8e8d442570d32929bc2f5c3b15cd3a85cae0c59e670bca"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/acrylic-20261031/settings.png",
+      "bytes": 564832,
+      "sha256": "7d3deb13b464aa360afe0bd9b9bb1b55ce2dd206abebc9af55aecbff036298b5"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/acrylic-20261031/versions.png",
+      "bytes": 616505,
+      "sha256": "5ec250291015167ab294dade93e5779ea30f85407ce6afa134152be464fef821"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/app.js",
+      "bytes": 20969,
+      "sha256": "511cc5976e3fab01184fdedb03bb1a43908c8fffa9da56d90ca03b84b1fb8e02"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/asset-notes.md",
+      "bytes": 4261,
+      "sha256": "7f9ea22268690cd0c9b201fca4c1acd39d578d8f969df697552f6d120e4c7197"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/assets/ambient-reference.jpg",
+      "bytes": 41625,
+      "sha256": "6dbc40de1584fce7219db5d5ffc84152c29a44334291972122e30dd4ae2fb356"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/assets/hero-reference.jpg",
+      "bytes": 173559,
+      "sha256": "614a88e9f43ebb5c25a84f37d3785f3b55a2e4bd13dbcb412571e21f51862bb5"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/assets/home-logo.webp",
+      "bytes": 60072,
+      "sha256": "eda3cca9043ee16a3af5f7f6104466c525d628bc2870a7985d02311d3c07f4d5"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/assets/release-reference.jpg",
+      "bytes": 92750,
+      "sha256": "366eb6007ba28a45c150d49d968c164bd4a98a9666e740f9a93c264dfc107f16"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/environment-flow-20261031/running-environment.png",
+      "bytes": 646057,
+      "sha256": "a46ca0a68ec6ddc3a381ddf355628ef5d6a20eca3ade427f78646b74c9fec4e4"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/environment-flow-20261031/stopped-install-plan.png",
+      "bytes": 646926,
+      "sha256": "1621259a6686bdabc07b2b248eee41adfa066a9ae8ea8cab77588f328a54108d"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/01-home-stopped.png",
+      "bytes": 994319,
+      "sha256": "ae0efd36df139e0cc627415aa7535f5f51d7dfdb3a182d3a95e91ca010758b0f"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/02-home-running.png",
+      "bytes": 1023380,
+      "sha256": "2afca049dd32d1dc94ad267bb35059d8b826d125751c607a35da5326c49188d3"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/03-logs.png",
+      "bytes": 393407,
+      "sha256": "59a7600e62c78c8ff96afa043bbb829e36c6a19390d80f5f9b52729db94d197f"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/04-engines.png",
+      "bytes": 478556,
+      "sha256": "437bcdf07bcfca6f1724f50feced4a2a0b556c4c490510ef2ce1bb1f8e99afad"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/05-settings.png",
+      "bytes": 440503,
+      "sha256": "141c26a616a586c878dbd1cf354ce61814ad4d124ea9a1da1aeefc0e0ffd5c07"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/06-versions.png",
+      "bytes": 397331,
+      "sha256": "1d8a6af82d119b091c1c75148e621bc98e5de09e1758098cec9a9b42209caef2"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/07-about.png",
+      "bytes": 451079,
+      "sha256": "913cc2d6b58f146b46bae3967a81bc5f5ec516afa31c6ca28b69cce601f29acd"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/08-home-starting.png",
+      "bytes": 1026350,
+      "sha256": "097c9b140de443a979ad559cec1429ed3a3134fb79861229ef5749d5cb18ab42"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/09-home-error.png",
+      "bytes": 994395,
+      "sha256": "cd29b74377a9ec819fe0dcb26594c49b4e258864da6f162b9d5d8764e13dd9bd"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/design-board.png",
+      "bytes": 884612,
+      "sha256": "e1b9a30124c4de5918026b233ffca7328dae434e578ddd3c4623d15c2afbf2d5"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/engines-1024.png",
+      "bytes": 414110,
+      "sha256": "11946cc1a0c2fa7b5b2688eaa22b4cfe6e364af2db6c45113ebf62ce9c4074b0"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/engines-1440.png",
+      "bytes": 683687,
+      "sha256": "9b9480a5c360b6807567d6a515968bdcb1c1a23bd0cff0eab2b491fded342998"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/preview-checks.json",
+      "bytes": 740,
+      "sha256": "0fa8441cb78137b95c0e73fadbb08c715c5d54e3b16c20ea774e56e5df975ff8"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/exports/root-preview-checks.json",
+      "bytes": 2206,
+      "sha256": "ef684d587764eef24affa88680efe0f9db9f7183d45bb236fd7d49eb25c6ff6b"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/implementation/environment-1024.png",
+      "bytes": 327684,
+      "sha256": "bcf569fb31e1e62cf85227285e71a0badeaf69176cf8820f19d41998150e80d1"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/implementation/home-ready.png",
+      "bytes": 625137,
+      "sha256": "3813880c14e69f363b8de220befa25ce19b844d78f7c992dd38dd8316e0761e1"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/implementation/logs.png",
+      "bytes": 321059,
+      "sha256": "61f74b5b65b07e3f67a168ea0b005e46db6c72037b644465f70895c95d809f1a"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/implementation/settings.png",
+      "bytes": 539254,
+      "sha256": "3dbe524e3b51679db57fdeb847db5300fc48ca59d1343b0914457f008a4a1a10"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/index.html",
+      "bytes": 14789,
+      "sha256": "97ed24f418412b2649c8b4659bb1114941496115e5847eff032bf5061f8d9a20"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/readability-20261031/dark-home.png",
+      "bytes": 867535,
+      "sha256": "457fb6b939360c6497ffbc495011756682d314d1ca4fbadbe6ca2501d9d35493"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/readability-20261031/dark-logs.png",
+      "bytes": 280939,
+      "sha256": "7dceb4b78c1bdfd8b701043918c6c6131f5374211e5344cee6f23e4abe2f931c"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/readability-20261031/light-environment.png",
+      "bytes": 408505,
+      "sha256": "1cd4e252600657c48325a0b18c810e3934d94049cb90121a43eec6fbbf2af247"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/readability-20261031/light-home.png",
+      "bytes": 867421,
+      "sha256": "a6709eb37485a0eb16d0caa785ddbad69193136f7d81e7a4136150d532e2d8d5"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/readability-20261031/light-logs.png",
+      "bytes": 244469,
+      "sha256": "95ef0d3be25f90f2f1bac787caed24cc9e6c0b43ad59ea18f6a3bf7a80382d3c"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/readability-20261031/light-profiles.png",
+      "bytes": 414178,
+      "sha256": "0433bed578ce70570016448a524251b54c947b76a805abb21071c38852562af7"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/reference-board.png",
+      "bytes": 1604612,
+      "sha256": "62e1a08cf92c72ab10d44bd9130ca5647ebe95dabded293f77f8baa37d4d24b2"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/refinement-20261031/dark-friends-1024.png",
+      "bytes": 566867,
+      "sha256": "f25885cdf50b5915b4a292c639aa9e6221ff1c91de53838d979cd2d1d7ecab3b"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/refinement-20261031/dark-home.png",
+      "bytes": 665671,
+      "sha256": "a6d656f42f1967646156d4e1d6c0ad370a55cf2e57ba40ffd343df4723524e13"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/refinement-20261031/dark-logs.png",
+      "bytes": 310711,
+      "sha256": "fdd7edfc56bbb37d6a2e9be8a356c67cb2a614e166517248f82e21d79dea0883"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/refinement-20261031/light-friends-1024.png",
+      "bytes": 582357,
+      "sha256": "2571366f4d57f9b09a3b7822f66a631ddc6cec2508c9015131687e10b77d2af9"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/refinement-20261031/light-home.png",
+      "bytes": 693433,
+      "sha256": "3a071929ac79b2ef85a5df2d192d44f1a08ebc02953265f1947f00fc90825ca0"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/refinement-20261031/light-logs.png",
+      "bytes": 235834,
+      "sha256": "b7858577be4f31fa7691c195b95ea3dd1ca6bd4f0b685acdd1659b3fa548ef1d"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/research.md",
+      "bytes": 10374,
+      "sha256": "d9bc3e0166521c08f311d0ef36bb65b97384eb1a25c79c4aea8e4d39578126c1"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/review.html",
+      "bytes": 4018,
+      "sha256": "9bb110e2c42dd685e45d41f6002334918dca473e259491f175dac157abc5e8e6"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/runtime-research.md",
+      "bytes": 13493,
+      "sha256": "1e33d3b4f16a9ad040a68b557ff06eecb878e61437cbb72e5c4542489327963a"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/sidebar-20261031/collapsed-home.png",
+      "bytes": 923646,
+      "sha256": "e1051d54d4498859758da82425fce718057bfa46f3ec684004f579ae49f34c46"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/sidebar-20261031/expanded-environment.png",
+      "bytes": 558983,
+      "sha256": "a93fb802abcccea2947a6f624a8d7d96ce2913474ea9f52a54d4ae9e9d88fd24"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/sidebar-20261031/expanded-home.png",
+      "bytes": 920445,
+      "sha256": "2d571b83d783e4485cdba7173057804eeb97cdd7ecd4b36ff095e0fe30057792"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/sidebar-20261031/expanded-settings.png",
+      "bytes": 583975,
+      "sha256": "cae4f6450001b06696dbc35664e6e79f91d7d6236ce126cd929b78c4efc55038"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/sidebar-dismiss-20261031/dismissed-environment.png",
+      "bytes": 593268,
+      "sha256": "3e4cd681fdd557339684442620db811be7aeed2f8b069088f45cff244298ebc6"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/sidebar-dismiss-20261031/dismissed-home.png",
+      "bytes": 921144,
+      "sha256": "64580ad402a3d392d5f18ca1f270ef5155911af0f7c1eecc5fb6eba4f918723c"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/style.css",
+      "bytes": 23134,
+      "sha256": "7e14a4c3d1ce8c2de4e778531efb5b0f2b618dfe0618a6b6ca7a04cf9678ebe6"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/thumb-01-home.png",
+      "bytes": 642397,
+      "sha256": "4a44f0fdb017853378acac0ca777c114b262de2c952ed1ea99075e9019212401"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/thumb-02-settings.png",
+      "bytes": 384728,
+      "sha256": "c019d3e2b71bf53132cb1829fa0afc26322d5adb1b181406ee5dc676053417ea"
+    },
+    {
+      "path": "docs/design/desktop-launcher-ui-review/thumb-03-options.png",
+      "bytes": 372263,
+      "sha256": "c3909306a48bf0bd09a9455191c9790989bee15055e4a84375620f2f2142c03e"
     },
     {
       "path": "docs/design/diffsynth-surgical-repair.md",
@@ -1555,8 +1945,8 @@
     },
     {
       "path": "docs/launcher/windows-delivery.md",
-      "bytes": 6239,
-      "sha256": "357d5f918de9741ccaec0a11e008e0e6438c528eda6acd8f0ae0ceae539c8711"
+      "bytes": 6739,
+      "sha256": "1397f1237e897bd663bfaa867ff218b9fb32946bd31ca5d835b19f5756b5f5bc"
     },
     {
       "path": "docs/musubi-tuner-engine-plan.md",
@@ -1795,8 +2185,8 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_总控目标索引.md",
-      "bytes": 27269,
-      "sha256": "2e2772f5eaa6edfc145b752243511bedb8ccbbca3fcf67220aafe08b3d0c5c68"
+      "bytes": 35555,
+      "sha256": "34fc34441502085a4132a3ebf7805c572b478be22124029d7c561777123baf5c"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/README.md",
@@ -1805,8 +2195,8 @@
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/change-control-governance.md",
-      "bytes": 27015,
-      "sha256": "6ac02d0c70de948e56d7547fb701bb1e3b3e116ed11ebb2327b6de79c979ef2a"
+      "bytes": 29649,
+      "sha256": "15a85dd6784eae0eb347a88de0551adc592c6749472775783c6f256740742c59"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/00_预检证据/evidence-cleanup-report-template.md",
@@ -1999,9 +2389,39 @@
       "sha256": "c6265080555364e8440f9fa13fd24d406622fc5823e7ec712da2fc421ecbe763"
     },
     {
+      "path": "docs/tasks/desktop-launcher-full-plan/engine-conflicts-20261031-report.md",
+      "bytes": 5223,
+      "sha256": "d95cfad375532a50614ee0d71049e7e83535da78eb7ee1a8836cdc871a96250d"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/environment-service-flow-20261031-report.md",
+      "bytes": 5524,
+      "sha256": "b0b56135f7e06d30480782b97ef380a89ff80856c4fd64448e4ace6fa99df4c5"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/environment-service-flow-20261031-validation.json",
+      "bytes": 10627,
+      "sha256": "8996b66f495b7be0e46073504a6ec2e7caf9bb58e92ac86243f404151726a5ae"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/frontend-baseline-20261031.json",
+      "bytes": 1996,
+      "sha256": "a7ca276664674162d2c0793c3f44f67cb0ab4a267cb224f5ff90f1b3f9c0e8ce"
+    },
+    {
       "path": "docs/tasks/desktop-launcher-full-plan/full-real-install-followup.md",
-      "bytes": 2018,
-      "sha256": "15a1beb0d780a35b412a933a1c5fcf04237caa4a7cdbba661962e2f8cfbe246f"
+      "bytes": 17233,
+      "sha256": "071de23f3deaaad9b7635ab55d67ceb3ee67a53764dac14e18b69ec861c21999"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/issue-516-20261031-snapshot.md",
+      "bytes": 5661,
+      "sha256": "c0b40e03560fa92e92be87d84bbea49068b34359d712c0d3d850f13588f9b4a5"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/issue-516-functional-acceptance.md",
+      "bytes": 13036,
+      "sha256": "7fb89b47d12675225f381a2d9ee987a0ae035f131c3a3cae8934cebaf1cd538d"
     },
     {
       "path": "docs/tasks/desktop-launcher-full-plan/m1-candidate-report.md",
@@ -2032,6 +2452,66 @@
       "path": "docs/tasks/desktop-launcher-full-plan/scripts/validate_plan.py",
       "bytes": 6776,
       "sha256": "ad4a0c47e094fe449d8dfba5f1c459d2b955a9b9c2e4e6f3ccd7f99747e8da88"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/starward-ui-implementation-report.md",
+      "bytes": 11589,
+      "sha256": "09eaaba7288719cf1e1d0c2647294cf4648b7414b014d415cd5ef5f8787f7a8b"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/starward-ui-validation.json",
+      "bytes": 6376,
+      "sha256": "cc42181a98397f9faf22278f00b5e6806b4a028bf1a7da12beb39c9a32063455"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-acrylic-20261031-report.md",
+      "bytes": 9187,
+      "sha256": "706bb26873ae0513a98bb70c623c5e3f135e8479cff82c091bd3a226d51cf72f"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-acrylic-20261031-source-research.md",
+      "bytes": 15533,
+      "sha256": "df72e6f1a8ecaf59f4599ad4b1eebe01425225ee8d89aa10bbbdf50505e0be44"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-acrylic-20261031-validation.json",
+      "bytes": 11399,
+      "sha256": "e2adcb716ea75485b57749b57d29c1ee2807e2c0b391301d9ea729e2183d99e6"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-readability-20261031-report.md",
+      "bytes": 6828,
+      "sha256": "e808273c76f65cec93cbfceb58dc4af663b00889ac2790b80e3cc4a2a464523f"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-readability-20261031-validation.json",
+      "bytes": 10205,
+      "sha256": "8f9e009dbcc78f0bc02092e7b9645a3f680fd95c679a99005230a1af631b9802"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-refinement-20261031-report.md",
+      "bytes": 11006,
+      "sha256": "b8801d4126397eb64ba49d007b556999b64131c2de13060a2845c60e23fede85"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-refinement-20261031-validation.json",
+      "bytes": 13319,
+      "sha256": "11b38bb7ab8afd2263e07b4537eb3e6352d14153ef0a55818aff0560cb1369f4"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-sidebar-20261031-report.md",
+      "bytes": 10344,
+      "sha256": "cc553e5d1d55dab5e2071dd84c093b1fe3be6f696bd46207aadbd88c435d9614"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-sidebar-20261031-validation.json",
+      "bytes": 11053,
+      "sha256": "a3b33e05a746eeed88b04a3e504634ff3619e1812e3db08d401ddaae968c66c2"
+    },
+    {
+      "path": "docs/tasks/desktop-launcher-full-plan/ui-sidebar-dismiss-20261031-validation.json",
+      "bytes": 4627,
+      "sha256": "84aca99c56a57676049fae87de4405f2779a08b2f02e15cef90257eca689d5c0"
     },
     {
       "path": "docs/tasks/desktop-launcher-prototype.md",
@@ -4620,8 +5100,8 @@
     },
     {
       "path": "mikazuki/engines/runner.py",
-      "bytes": 1511,
-      "sha256": "23de266291b5cc230afe5c8537e54583d64aa7d59e53e883ceeb4cf32777a934"
+      "bytes": 1853,
+      "sha256": "ffdcf36f27d771df7ab2bf49b5a86b4c66458a527e4802cfe05c2255d0e1121e"
     },
     {
       "path": "mikazuki/engines/vendor_bundle.py",
@@ -4655,8 +5135,8 @@
     },
     {
       "path": "mikazuki/launcher/README.md",
-      "bytes": 5597,
-      "sha256": "6fa734b0e87d6088d9a4c15a742d5fd18fd9e9d33c0340145446c39ebdcb5bb4"
+      "bytes": 6598,
+      "sha256": "6ed24ff7cb6013936d799f628da47ae923e8625c243f60f766d713fe93d07d70"
     },
     {
       "path": "mikazuki/launcher/__init__.py",
@@ -4665,8 +5145,8 @@
     },
     {
       "path": "mikazuki/launcher/bindings.py",
-      "bytes": 3474,
-      "sha256": "70c8ebf74eb461641ecd4104590934be522845d2143b8e2c770f634a17bd8f1e"
+      "bytes": 5924,
+      "sha256": "a1c11725aea693e84a285800c472ccd8e635d1ac941b84648dc3562b1ab125fd"
     },
     {
       "path": "mikazuki/launcher/catalog.py",
@@ -4675,8 +5155,8 @@
     },
     {
       "path": "mikazuki/launcher/control.py",
-      "bytes": 39039,
-      "sha256": "b592b3611bdfb4c6757b2363cc2246a6c3283ebe23f6f0af68d9dfcd63e45168"
+      "bytes": 39273,
+      "sha256": "3bf0a7ccb8d39f3d616750d41f9dc94638ed07e3c0c36cd52e96b4f60a1e6384"
     },
     {
       "path": "mikazuki/launcher/recipes.py",
@@ -4695,13 +5175,13 @@
     },
     {
       "path": "mikazuki/launcher/routes.py",
-      "bytes": 6940,
-      "sha256": "919fd6658a061df4227426f85db7760b430b6fc2f9e5d29f1c97e873c6447393"
+      "bytes": 6934,
+      "sha256": "2ce9a5f4703d3c124b00a0e9ac4fd67dd3d1ed1582fc46def285d2104e2cbde7"
     },
     {
       "path": "mikazuki/launcher/runtime.py",
-      "bytes": 6715,
-      "sha256": "accbf0f6b08d6c1bce7a2d2be9b31f15534faa792901173299f00a1dc79e7c60"
+      "bytes": 10264,
+      "sha256": "94a5d3a37a967eb14795029fb981f2e51969b325a27522635ee59705e2d57c69"
     },
     {
       "path": "mikazuki/launcher/smoke.py",
@@ -4717,6 +5197,16 @@
       "path": "mikazuki/launcher/tests/test_control_smoke.py",
       "bytes": 16221,
       "sha256": "852ec8eff6e70c2391c9339909870967da416623e9b6a6b05876201e6e10ce45"
+    },
+    {
+      "path": "mikazuki/launcher/tests/test_engine_conflicts.py",
+      "bytes": 16421,
+      "sha256": "1b92d4a22e599011829ad9754c700616c39faf65d2c938492e2d04ee88b1da98"
+    },
+    {
+      "path": "mikazuki/launcher/training_supervisor.py",
+      "bytes": 5429,
+      "sha256": "01f1a4b024600f84c0601a0add04324a1ffebc017e6f6f56d7ebb5f79f9dba51"
     },
     {
       "path": "mikazuki/launcher/worker.py",
@@ -5145,8 +5635,8 @@
     },
     {
       "path": "mikazuki/tasks.py",
-      "bytes": 35099,
-      "sha256": "99988c0816ce65eb76d7ba889f29bf9ecb45a0dd1fd738d746139790a87b0019"
+      "bytes": 37581,
+      "sha256": "9a9b7abf555cebc222ccd513110db21fc012321b4af596c7be2065622e59b783"
     },
     {
       "path": "mikazuki/tokenizer_cache.py",

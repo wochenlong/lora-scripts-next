@@ -2,9 +2,9 @@
 
 本索引用于 wheel 缓存丢失时的只读文件证明，不授权下载、重新安装、任意目录收养或历史健康恢复。它从固定原始归档生成，从未从待恢复的安装树追认文件身份。
 
-- `gui-cp310-installed-files-v2.json`：2,218,268 字节，SHA256 `92e6e98081506d5022ded8bf5ab7d6f30e80d2d20b7bcfe76d248fffadd94bcb`。
-- 固定配方 `gui-cp310-win-x64-v1.json`：SHA256 `4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca`。
-- 受管 venv 模板 `gui-cp310-managed-venv-v1.json`：92,079 字节，SHA256 `eac53df7da3d94c78d39501bd4e3e19713567b54762b67ee4921b1419184dfdb`。
+- `gui-cp310-installed-files-v2.json`：2,218,268 字节，SHA256 `c5272ed826983913749ff37c00624ec19ccff1d66bda56b0580ddb054879fc82`。
+- 固定配方 `gui-cp310-win-x64-v1.json`：SHA256 `00ce9d78bc779f72405c84145ded75e63deca34d5b21afc51f1a78b76a0773ba`。
+- 受管 venv 模板 `gui-cp310-managed-venv-v1.json`：92,079 字节，SHA256 `094072aab658eca999b31784050837afd8804620c776851f857bf2747b208f85`。
 - Python 原文件清单 `gui-cp310-python-v1.json`：SHA256 `9172037fe65f76c9fe9373bf3240887889d480a569bfd785d6832e086ab96e06`。
 - CPython 原始 tar.gz：22,569,949 字节，SHA256 `b892f2c7eb0a04611688d6df7567a2745a204aac694d6d1c56c75b0717dab2d6`。
 - uv 0.11.16 Windows x64 EXE：SHA256 `c5a583d5f1f6d055fc1c32c87d8eceee90edc69a5b9af5da70811befdfc04880`。
@@ -46,3 +46,7 @@
 本轮训练器源码固定到已推送提交 `89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d`，前端由独立新目录 `F:/NextTrainerLauncherSandbox/tb5` 的同一归档使用 Node 22.17.1 / npm 10.9.2 编译。GUI requirements、Python、uv、81 个 wheel 描述符、安装可信文件索引及受管 venv 模板 payload 均逐对象比较相同；仅更新 GUI 父配方与源码/前端身份。独立 Kohya 锁使用同一真实 codeload ZIP，576 个受管训练源码中只改变两个 CLIPImageProcessor 兼容导入文件；两枚固定 wheel 更新为 transformers 5.5.3 与 tokenizers 0.22.2，其余 120 枚 wheel、CPython 和 uv 均保留。外置兼容候选已完成真实 2 步 CUDA LoRA 训练和权重内容核验；本次冻结不是最终启动器安装训练验收，最终包仍须在新空根执行实际下载安装与训练。详细身份、依赖闭包与其他三引擎逐字节不变证明见 `full-real-20261030/source-final-5/freeze-verification.json`。
 
 生成器的父配方常量和入口提取器的 v1 输入固定身份同步更新。原始受信 v1 索引先核对历史 SHA256 `3e0c861b6b4c7e2b9a1a5615193cca976a194e72100aaa1afc54a39065d8bea8`，只替换父配方摘要后得到 SHA256 `740a3a7d93cc04a5323f4805c0ca62963e2f66cb8d5a313464ffb0392bb2ea41`；将该索引与原固定入口控制和 PE 模板组合，按既定序列化逐字节重建当前 v2 索引成功。完整 payload 不变，未执行安装树或入口。
+
+## 2026-10-31 CR-015 引擎冲突协议源码冻结
+
+训练器固定到已推送提交 `4e68df240c63ab7cf2156ea7fafabf18df4671e8`；真实 codeload 源码 ZIP SHA256 `60490c2eceaccb4d59b22f17867b12e68c2a5041b995a3692a38adc6691c0cfd`，92918164 字节。Node 22.17.1 编译得到的前端 ZIP 与原固定前端逐字节相同；requirements、Python、uv、81 枚 wheel、完整安装索引与 venv 模板 payload 不变，仅更新源码及父配方身份。四个独立引擎锁逐字节不变，不从现有安装反向授权。原始 v1 控制索引仅替换父配方后摘要为 `65f615f66dc48da47fdd4a40ab785e4f37ac030d2ea3b63ab4ef4f67ecc18a7f`，生成器/入口提取器同步此身份。首次离线 npm 缺缓存的失败目录 source-v1/tb15 保留；source-v2/tb16 逐字节复用首次源码归档，通过代理补齐固定 npm lock 对应缓存。已知源码实际下载 92918164 字节；npm 补齐下载量与协议开销未计量。证据位于 workspace/tools/launcher-engine-conflicts-20261031/source-v2。本记录只证明构建身份，最终 EXE 安装及服务运行结果另列。

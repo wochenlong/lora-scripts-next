@@ -112,7 +112,7 @@ pub(crate) fn preserved_pending(root: &Path, release: &Release) -> Result<Value>
         json!({"status":if pending.is_empty(){"ready"}else{"preserved_pending"},"instances":pending}),
     )
 }
-const RECIPE_SHA: &str = "4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca";
+const RECIPE_SHA: &str = "00ce9d78bc779f72405c84145ded75e63deca34d5b21afc51f1a78b76a0773ba";
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 struct Identity {
