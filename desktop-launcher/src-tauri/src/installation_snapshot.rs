@@ -254,7 +254,7 @@ fn gate(reader: &mut Reader<'_>, path: &Path, terminals: &[&str]) -> Result<()> 
     }
     for field in ["root", "root_absolute"] {
         if let Some(root) = value.get(field) {
-            if root.as_str() != Some(reader.root.to_string_lossy().as_ref()) {
+            if root.as_str().map(Path::new) != Some(reader.root) {
                 bail!("事务安装目录身份不一致");
             }
         }
@@ -288,7 +288,7 @@ fn gates(reader: &mut Reader<'_>, issues: &mut Vec<SnapshotIssue>) {
                 .context("壳活动事务缺少身份")?;
             model::validate_component(transaction)?;
             if value["schema_version"] != 1
-                || value["root_absolute"] != reader.root.to_string_lossy().as_ref()
+                || value["root_absolute"].as_str().map(Path::new) != Some(reader.root)
             {
                 bail!("壳活动事务身份不一致");
             }
@@ -813,6 +813,100 @@ mod tests {
             &serde_json::json!({"schema_version":99,"status":"committed"}),
         );
         assert!(!read(&fixture.root).unwrap().start_available);
+    }
+
+    #[test]
+    fn equivalent_windows_gate_paths_allow_committed_but_not_foreign_or_pending() {
+        let fixture = Fixture::installed();
+        // 旧89生产记录的root最后一级使用正斜杠；保持与正式gate的PathBuf比较一致。
+        let mixed_root = format!(
+            "{}/{}",
+            fixture.root.parent().unwrap().display(),
+            fixture.root.file_name().unwrap().to_string_lossy()
+        );
+        let foreign_root = fixture.root.with_extension("foreign");
+        let source_gate = format!("state/gui-source-{}.json", fixture.release.id);
+        let check_read_only = |expected| {
+            let before = tree(&fixture.root);
+            let result = read(&fixture.root).unwrap();
+            assert_eq!(
+                result.start_available,
+                expected,
+                "{}",
+                serde_json::to_string(&result).unwrap()
+            );
+            assert_eq!(tree(&fixture.root), before);
+        };
+        fixture.json(
+            &source_gate,
+            &serde_json::json!({
+                "schema_version":1,"root":mixed_root,"phase":"committed"
+            }),
+        );
+        check_read_only(true);
+        fixture.json(
+            &source_gate,
+            &serde_json::json!({
+                "schema_version":1,"root":foreign_root,"phase":"committed"
+            }),
+        );
+        check_read_only(false);
+        fixture.json(
+            &source_gate,
+            &serde_json::json!({
+                "schema_version":1,"root":mixed_root,"phase":"pending"
+            }),
+        );
+        check_read_only(false);
+        fixture.json(
+            &source_gate,
+            &serde_json::json!({
+                "schema_version":1,"root":mixed_root,"phase":"committed"
+            }),
+        );
+
+        let transaction = "shell-path-test";
+        let shell_intent = format!("updates/shell/{transaction}/intent.json");
+        fixture.json(
+            "updates/shell/active.json",
+            &serde_json::json!({
+                "schema_version":1,"root_absolute":mixed_root,"transaction":transaction
+            }),
+        );
+        fixture.json(
+            &shell_intent,
+            &serde_json::json!({
+                "schema_version":1,"root_absolute":mixed_root,"status":"committed"
+            }),
+        );
+        check_read_only(true);
+        fixture.json(
+            "updates/shell/active.json",
+            &serde_json::json!({
+                "schema_version":1,"root_absolute":foreign_root,"transaction":transaction
+            }),
+        );
+        check_read_only(false);
+        fixture.json(
+            "updates/shell/active.json",
+            &serde_json::json!({
+                "schema_version":1,"root_absolute":mixed_root,"transaction":transaction
+            }),
+        );
+        fixture.json(
+            &shell_intent,
+            &serde_json::json!({
+                "schema_version":1,"root_absolute":foreign_root,"status":"committed"
+            }),
+        );
+        check_read_only(false);
+        fixture.json(
+            &shell_intent,
+            &serde_json::json!({
+                "schema_version":1,"root_absolute":mixed_root,"status":"pending"
+            }),
+        );
+        check_read_only(false);
     }
 
     #[test]
