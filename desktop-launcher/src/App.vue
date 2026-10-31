@@ -502,16 +502,19 @@ async function releaseCommand(command: ReleaseCommand, version: DisplayVersion, 
   if (command === 'install_release' && !installSupported(version)) { page.value = 'versions'; notify(t('本启动器未提供此版本的安装配方，请安装受支持的新版本。')); return }
   return perform(label, async () => acceptReport(await runReleaseCommand(command, path.value.trim(), version.id)))
 }
-async function ask(value: Confirmation) {
-  previousFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+async function ask(value: Confirmation, returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null) {
+  previousFocus = returnFocus
   confirmation.value = value
   await nextTick()
   confirmationCancel.value?.focus()
 }
 function dismissConfirmation() {
+  const returnFocus = previousFocus
   confirmation.value = null
-  previousFocus?.focus()
   previousFocus = null
+  void nextTick(() => {
+    if (!confirmation.value && returnFocus?.isConnected && !returnFocus.matches(':disabled')) returnFocus.focus({ preventScroll: true })
+  })
 }
 async function confirmAction() {
   const action = confirmation.value?.execute
@@ -689,6 +692,7 @@ function needsAdvancedMainRepair(summary = t('这次无法只修复损坏部分�
 }
 async function checkAndRepairMain() {
   if (busy.value || transitioning.value || serviceAction.value || !sameRoot.value) return
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   if (mainInstallationMissing.value) {
     const target = installTarget.value
     if (target) await install(target)
@@ -757,12 +761,12 @@ async function checkAndRepairMain() {
     mainCheckResult.value = 'repair'
     mainCheckSummary.value = t('发现需要修复的项目：{items}', { items: mainRepairLabels(plan).join(locale.value === 'en-US' ? ', ' : '、') })
   })
-  if (mainRepairPlan.value && !running.value) await confirmMainRepair()
+  if (mainRepairPlan.value && !running.value) await confirmMainRepair(returnFocus)
 }
 function mainRepairLabels(plan: MainRepairPlan) {
   return [...(plan.source ? [t('主程序文件')] : []), ...(plan.base ? [t('基础 Python')] : []), ...(plan.package ? [t('依赖包 {name}', { name: plan.package.name })] : [])]
 }
-function confirmMainRepair() {
+function confirmMainRepair(returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null) {
   const plan = mainRepairPlan.value
   if (!plan || mutationDisabled.value) return
   return ask({
@@ -773,7 +777,7 @@ function confirmMainRepair() {
       ...(plan.base ? [t('基础 Python：{count} 个固定文件，按需下载；{references} 个引用环境需复验', { count: plan.base.expected_files.length, references: plan.base.references.length })] : []),
       ...(plan.package ? [t('依赖：{name} {version}，使用已校验的本地安装文件', { name: plan.package.name, version: plan.package.version })] : []),
     ], action: t('确认修复'), execute: () => executeMainRepair(plan),
-  })
+  }, returnFocus)
 }
 async function runRepairStep(label: string, action: () => Promise<OperationSnapshot>) {
   pending.value = label
@@ -854,6 +858,8 @@ function openVersionMaintenance(version: DisplayVersion) {
 }
 async function reinstallMainEnvironment(version = currentVersion.value) {
   if (!version || !maintenanceSupported(version) || mutationDisabled.value) return
+  // The preview disables its initiating button; capture focus before that happens.
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   registrationReleaseId.value = version.id
   changeRegistrationRelease()
   await inspectLifecycle('rebuild')
@@ -868,7 +874,7 @@ async function reinstallMainEnvironment(version = currentVersion.value) {
       if (epoch !== guiEpoch || !samePath(root, path.value) || registrationRelease.value?.id !== version.id) { error.value = t('目录或版本已变化，请重新检查。'); return }
       await startGuiOperation(t('正在重新安装主程序环境'), () => applyGuiLifecycle(root, version.id, 'rebuild', preview.plan_sha256!, null, null))
     },
-  })
+  }, returnFocus)
 }
 
 async function diagnoseManagedGui() {
@@ -1041,6 +1047,7 @@ function confirmGuiRecovery() {
 }
 async function inspectSourceRepair(version: DisplayVersion) {
   if (!maintenanceSupported(version) || mutationDisabled.value) return
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const root = path.value.trim()
   await perform(t('查看源码修复清单'), async () => {
     const preview = await previewSourceRepair(root, version.id)
@@ -1054,7 +1061,7 @@ async function inspectSourceRepair(version: DisplayVersion) {
         if (root !== path.value.trim()) { error.value = t('目录已改变，请重新查看清单。'); return }
         await startGuiOperation(t('正在修复固定源码'), () => repairManagedSource(root, version.id))
       },
-    })
+    }, returnFocus)
   })
 }
 async function startGuiOperation(label: string, action: () => Promise<OperationSnapshot>) {
@@ -1148,7 +1155,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
         <div class="section-toolbar"><div class="context-label">Next Trainer <b>{{ currentVersion?.version ?? t('尚未选择版本') }}</b><span v-if="currentVersion" class="tag">{{ t('当前版本') }}</span></div></div>
         <p v-if="error" class="gui-issue" role="alert">{{ error }}</p>
         <article class="main-environment"><div class="main-env-icon"><Icon name="environment" /></div><div class="main-env-copy"><h2>{{ t('主程序环境') }} <span class="engine-state" :class="{ good: ready }"><i v-if="ready"></i>{{ ready ? t('检查正常') : mainCheckResult === 'repair' ? t('需要修复') : mainCheckResult === 'advanced' ? t('需要进一步处理') : t('未检查') }}</span></h2><p>{{ t('基础 Python · 主程序依赖 · 网页资源') }}</p></div><div class="main-env-actions"><button data-action="check-repair-main" :disabled="busy || !sameRoot || transitioning || !!serviceAction" @click="checkAndRepairMain"><Icon v-if="pending" name="refresh" class="spin" />{{ pending || (mainInstallationMissing ? t('安装') : t('检查并修复')) }}</button><button @click="advanced = !advanced">{{ advanced ? t('收起高级选项') : t('高级选项') }}<Icon name="arrow" /></button></div></article>
-        <div v-if="mainCheckSummary" class="scope-note" role="status" data-main-check-result="true"><p>{{ mainCheckSummary }}</p><template v-if="mainRepairPlan && !repairSequenceRunning"><p v-if="running">{{ t('需要修改主程序。请先停止服务，再确认修复。') }}</p><button v-if="running" @click="stop">{{ t('停止服务') }}</button><button data-action="review-main-repair" :disabled="mutationDisabled" @click="confirmMainRepair">{{ t('确认修复') }}</button></template><button v-if="mainCheckResult === 'advanced' && managedCurrent" data-action="reinstall-main-environment" :disabled="mutationDisabled" @click="reinstallMainEnvironment()">{{ t('重新安装环境') }}</button><button v-if="mainCheckResult === 'advanced'" class="text-button" @click="openMainAdvanced">{{ t('查看高级选项') }}</button></div>
+        <div v-if="mainCheckSummary" class="scope-note" role="status" data-main-check-result="true"><p>{{ mainCheckSummary }}</p><template v-if="mainRepairPlan && !repairSequenceRunning"><p v-if="running">{{ t('需要修改主程序。请先停止服务，再确认修复。') }}</p><button v-if="running" @click="stop">{{ t('停止服务') }}</button><button data-action="review-main-repair" :disabled="mutationDisabled" @click="confirmMainRepair()">{{ t('确认修复') }}</button></template><button v-if="mainCheckResult === 'advanced' && managedCurrent" data-action="reinstall-main-environment" :disabled="mutationDisabled" @click="reinstallMainEnvironment()">{{ t('重新安装环境') }}</button><button v-if="mainCheckResult === 'advanced'" class="text-button" @click="openMainAdvanced">{{ t('查看高级选项') }}</button></div>
         <p v-if="currentMaintenanceUnsupported" class="inline-note" role="note">{{ t('本启动器未提供此版本的精准修复配方。需要修复时，请在版本管理安装受支持的新版本，确认后切换。当前版本和资料会保留。') }}<button class="text-button" @click="page = 'versions'">{{ t('前往版本管理') }}<Icon name="arrow" /></button></p>
         <p v-if="currentSourceUnsupported" class="inline-note" role="note">{{ t('本包未提供校验清单，无法判断此版本源码是否完整。请在版本管理选择受支持的版本。') }}<button class="text-button" @click="page = 'versions'">{{ t('前往版本管理') }}<Icon name="arrow" /></button></p>
         <EnginePanel v-if="sameRoot && activeManagedRelease" :root="path.trim()" :release-id="activeManagedRelease.id" :disabled="engineReadDisabled" :apply-disabled="engineMutationDisabled" :refresh-token="`${operation?.id ?? ''}:${operation?.status ?? ''}`" @operate="startEngineOperation" /><p v-else class="empty-note">{{ t('检查安装目录并选择训练器版本后，可分别管理四个训练引擎。') }}</p>

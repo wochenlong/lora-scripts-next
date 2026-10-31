@@ -32,7 +32,8 @@ const confirmTitle = computed(() => t({ install: '安装 {name}', repair: '修�
 const confirmAction = computed(() => t({ install: '确认安装', repair: '确认修复', rebuild: '确认重新安装', recover: '确认处理', probe: '确认运行检查' }[confirmation.value ?? 'install']))
 const operationTargets = new Map<string, { root: string; release: string; engine: string }>()
 let epoch = 0
-function resetSelection() { epoch++; querying.value = ''; plan.value = null; confirmation.value = null; error.value = ''; notice.value = '' }
+let previousFocus: HTMLElement | null = null
+function resetSelection() { epoch++; querying.value = ''; plan.value = null; confirmation.value = null; previousFocus = null; error.value = ''; notice.value = '' }
 watch(() => [props.root, props.releaseId], () => { resetSelection(); inspections.value = {}; expanded.value = false; advanced.value = false; operationTargets.clear() }, { flush: 'sync' })
 watch(selected, resetSelection, { flush: 'sync' })
 watch(() => props.refreshToken, (token) => {
@@ -52,10 +53,23 @@ async function readInspection(ctx: ReturnType<typeof context>) {
   if (ctx.current()) inspections.value[ctx.engineId] = value
   return value
 }
-async function showConfirmation(value: Confirmation) { confirmation.value = value; await nextTick(); cancelButton.value?.focus() }
-function dismiss() { if (querying.value) return; confirmation.value = null; plan.value = null }
+function showConfirmation(value: Confirmation, returnFocus: HTMLElement | null) { previousFocus = returnFocus; confirmation.value = value }
+// The dialog is rendered while inspection still disables its buttons. Wait for
+// the query to finish and Vue to enable Cancel before assigning initial focus.
+watch([confirmation, querying], ([value, pending]) => {
+  if (value && !pending) cancelButton.value?.focus({ preventScroll: true })
+}, { flush: 'post' })
+function dismiss() {
+  if (querying.value) return
+  const returnFocus = previousFocus
+  confirmation.value = null; plan.value = null; previousFocus = null
+  void nextTick(() => {
+    if (!confirmation.value && returnFocus?.isConnected && !returnFocus.matches(':disabled')) returnFocus.focus({ preventScroll: true })
+  })
+}
 async function checkEngine(id: string, readonly = false, rebuild = false) {
   if (props.disabled || querying.value === id) return
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   selected.value = id
   const ctx = context(); querying.value = id; error.value = ''; notice.value = ''; plan.value = null; confirmation.value = null; expanded.value = true
   try {
@@ -64,11 +78,11 @@ async function checkEngine(id: string, readonly = false, rebuild = false) {
     if (readonly) { notice.value = value.installation === 'ready' && !hasAnomaly(value) ? t('检查通过') : ''; return }
     if (rebuild) {
       const reviewed = await invoke<Plan>('query_engine_control', { root: ctx.root, releaseId: ctx.releaseId, engineId: id, action: 'plan_install', rebuild: true })
-      if (ctx.current()) { plan.value = reviewed; await showConfirmation('rebuild') }
+      if (ctx.current()) { plan.value = reviewed; showConfirmation('rebuild', returnFocus) }
       return
     }
     if (hasAnomaly(value)) {
-      if (canRecover(value)) await showConfirmation('recover')
+      if (canRecover(value)) showConfirmation('recover', returnFocus)
       else notice.value = t('安装记录异常，请查看问题详情；无法回滚时可在高级选项中重新安装环境。')
       return
     }
@@ -79,14 +93,15 @@ async function checkEngine(id: string, readonly = false, rebuild = false) {
     if (!ctx.current()) return
     if (reviewed.engine_id !== id || reviewed.release_id !== ctx.releaseId || !reviewed.plan_sha256) throw Error(t('检查结果已变化，请重新检查。'))
     plan.value = reviewed
-    await showConfirmation(action === 'plan_install' ? 'install' : 'repair')
+    showConfirmation(action === 'plan_install' ? 'install' : 'repair', returnFocus)
   } catch (reason) { if (ctx.current()) error.value = String(reason) }
   finally { if (ctx.current()) querying.value = '' }
 }
 async function requestProbe() {
   if (props.disabled || querying.value) return
+  const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   const ctx = context(); querying.value = ctx.engineId; error.value = ''
-  try { const value = await readInspection(ctx); if (ctx.current() && value.installation === 'ready' && !hasAnomaly(value)) await showConfirmation('probe'); else if (ctx.current()) notice.value = t('请先安装或修复环境，再运行检查。') }
+  try { const value = await readInspection(ctx); if (ctx.current() && value.installation === 'ready' && !hasAnomaly(value)) showConfirmation('probe', returnFocus); else if (ctx.current()) notice.value = t('请先安装或修复环境，再运行检查。') }
   catch (reason) { if (ctx.current()) error.value = String(reason) }
   finally { if (ctx.current()) querying.value = '' }
 }

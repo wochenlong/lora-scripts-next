@@ -47,17 +47,34 @@ impl PreferencesState {
     pub fn open(data: &Path) -> Result<Self> {
         crate::model::validate_storage_directory(data)?;
         let path = data.join("launcher-preferences.json");
-        let preferences = match std::fs::read(&path) {
-            Ok(bytes) => serde_json::from_slice(&bytes).context("无法读取启动器偏好")?,
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                LauncherPreferences::default()
-            }
-            Err(error) => return Err(error.into()),
-        };
+        // 偏好是可恢复的用户设置；损坏或暂时不可读不能阻断主窗和托盘。
+        // 原件保持不动，界面 load 命令仍会返回具体读取错误供用户重试。
+        let preferences = Self::read_file(&path).unwrap_or_default();
         Ok(Self {
             path,
             value: Arc::new(Mutex::new(preferences)),
         })
+    }
+
+    fn read_file(path: &Path) -> Result<LauncherPreferences> {
+        match std::fs::read(path) {
+            Ok(bytes) => serde_json::from_slice(&bytes).context("无法读取启动器偏好"),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                Ok(LauncherPreferences::default())
+            }
+            Err(error) => Err(error).context("无法读取启动器偏好"),
+        }
+    }
+
+    fn reload(&self) -> Result<LauncherPreferences> {
+        let mut current = self
+            .value
+            .lock()
+            .map_err(|_| anyhow::anyhow!("启动器偏好锁异常"))?;
+        // 与保存使用相同锁，读取失败保留当前有效值；再次点击重读可恢复。
+        let preferences = Self::read_file(&self.path)?;
+        *current = preferences.clone();
+        Ok(preferences)
     }
 
     pub fn snapshot(&self) -> Result<LauncherPreferences> {
@@ -76,9 +93,14 @@ impl PreferencesState {
 
 #[tauri::command]
 pub fn load_launcher_preferences(
+    app: tauri::AppHandle,
     state: tauri::State<'_, PreferencesState>,
 ) -> Result<LauncherPreferences, String> {
-    state.snapshot().map_err(|error| format!("{error:#}"))
+    let preferences = state.reload().map_err(|error| format!("{error:#}"))?;
+    if let Err(error) = refresh_tray(&app, preferences.language) {
+        eprintln!("无法刷新托盘菜单：{error:#}");
+    }
+    Ok(preferences)
 }
 
 #[tauri::command]
@@ -244,6 +266,50 @@ mod tests {
         // 此目录由本测试新建，删除前再次证明它位于系统临时目录下。
         assert_eq!(data.parent(), Some(std::env::temp_dir().as_path()));
         std::fs::remove_file(&store.path).unwrap();
+        std::fs::remove_dir(data).unwrap();
+    }
+
+    #[test]
+    fn invalid_preferences_preserve_original_and_reload_after_recovery() {
+        let data = std::env::temp_dir().join(format!(
+            "next-trainer-preferences-invalid-{}-{}",
+            std::process::id(),
+            crate::model::now()
+        ));
+        assert!(!data.exists());
+        std::fs::create_dir(&data).unwrap();
+        let path = data.join("launcher-preferences.json");
+        let original = b"{broken JSON\n";
+        std::fs::write(&path, original).unwrap();
+
+        let state = PreferencesState::open(&data).unwrap();
+        assert_eq!(state.snapshot().unwrap(), LauncherPreferences::default());
+        assert!(state
+            .reload()
+            .unwrap_err()
+            .to_string()
+            .contains("无法读取启动器偏好"));
+        assert_eq!(std::fs::read(&path).unwrap(), original);
+        let recovered = LauncherPreferences {
+            close_to_tray: false,
+            language: Language::English,
+        };
+        crate::model::write_json_atomic(&path, &recovered).unwrap();
+        assert_eq!(state.reload().unwrap(), recovered);
+        assert!(!state.close_to_tray());
+
+        // 后续读取失败也不能丢掉上一次有效语言和退出选项。
+        std::fs::remove_file(&path).unwrap();
+        std::fs::create_dir(&path).unwrap();
+        assert!(state.reload().is_err());
+        assert_eq!(state.snapshot().unwrap(), recovered);
+        let blocked = PreferencesState::open(&data).unwrap();
+        assert_eq!(blocked.snapshot().unwrap(), LauncherPreferences::default());
+        assert!(blocked.reload().is_err());
+        assert!(path.is_dir());
+
+        assert_eq!(data.parent(), Some(std::env::temp_dir().as_path()));
+        std::fs::remove_dir(path).unwrap();
         std::fs::remove_dir(data).unwrap();
     }
 }
