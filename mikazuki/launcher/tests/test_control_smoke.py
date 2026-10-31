@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import asyncio
+from collections import Counter
 import importlib
 import json
 import os
@@ -121,6 +122,109 @@ class ControlSmoke(unittest.TestCase):
                 self.assertEqual(repaired["state"]["generation"], 2)
                 self.assertTrue((target.state_root / first["receipt_relative"]).is_file())
                 self.assertEqual(control.inspect_readonly(fixture.request)["installation"], "ready")
+
+    def test_readonly_hashes_each_actual_environment_and_source_file_once(self):
+        fixture = EngineFixture(self.root / "single-scan")
+        state = fixture.install()["state"]
+        target = RuntimeLayout(fixture.root, "fixture-v1", "kohya", state["instance_id"])
+        receipt_path = target.state_root / state["receipt_relative"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        expected_paths = {receipt_path}
+        for area, files in receipt["files"].items():
+            root = target.environment_root if area == "environment" else target.engine_source_root
+            expected_paths.update(root / name for name in files)
+        expected_paths.update(target.base_python_root / name for name in receipt["base_python_files"])
+        # Spy 只计数，所有 SHA 仍由真正打开文件并逐字节读取的原函数计算。
+        with patch.object(control, "sha_file", wraps=sha_file) as hashes:
+            report = control.inspect_readonly(fixture.request)
+        self.assertEqual(report["installation"], "ready")
+        self.assertEqual(report["issues"], [])
+        self.assertEqual(report["actions"], ["probe_execute", "plan_repair"])
+        counts = Counter(Path(call.args[0]) for call in hashes.call_args_list)
+        self.assertEqual(counts, Counter({path: 1 for path in expected_paths}))
+
+    def test_readonly_preserves_reports_for_missing_extra_and_same_metadata_damage(self):
+        for area in ("environment", "source", "base_python"):
+            fixture = EngineFixture(self.root / ("report-" + area))
+            state = fixture.install()["state"]
+            target = RuntimeLayout(fixture.root, "fixture-v1", "kohya", state["instance_id"])
+            roots = {"environment": target.environment_root, "source": target.engine_source_root, "base_python": target.base_python_root}
+            root = roots[area]
+            path = control._site_root(root) / "fixture_alpha.py" if area == "environment" else root / ("train.py" if area == "source" else "python.exe")
+            name = path.relative_to(root).as_posix()
+            original = path.read_bytes()
+            metadata = path.stat()
+            healthy = control.inspect_readonly(fixture.request)
+            self.assertEqual(healthy["installation"], "ready")
+            cases = ("missing", "same_metadata", "extra") if area != "base_python" else ("missing", "same_metadata")
+            for case in cases:
+                with self.subTest(area=area, case=case):
+                    extra = root / "unexpected.py"
+                    if case == "missing":
+                        path.unlink()
+                    elif case == "same_metadata":
+                        path.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+                        os.utime(path, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+                        self.assertEqual(path.stat().st_size, len(original))
+                        self.assertEqual(path.stat().st_mtime_ns, metadata.st_mtime_ns)
+                    else:
+                        extra.write_bytes(b"unexpected content")
+                    try:
+                        issue = {"area": area, "path": name, "package": "fixture_alpha" if area == "environment" else None}
+                        if case == "extra":
+                            issue = {"area": area, "path": "unexpected.py", "package": None, "unexpected": True}
+                        expected = {**healthy, "installation": "damaged", "actions": ["plan_repair"], "issues": [issue], "layers": {**healthy["layers"], "installed": "damaged"}}
+                        self.assertEqual(control.inspect_readonly(fixture.request), expected)
+                    finally:
+                        path.write_bytes(original)
+                        os.utime(path, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+                        extra.unlink(missing_ok=True)
+
+    def test_readonly_preserves_explicit_bytecode_receipt_contract(self):
+        fixture = EngineFixture(self.root / "explicit-bytecode")
+        state = fixture.install()["state"]
+        target = RuntimeLayout(fixture.root, "fixture-v1", "kohya", state["instance_id"])
+        receipt_path = target.state_root / state["receipt_relative"]
+        receipt = json.loads(receipt_path.read_text(encoding="utf-8"))
+        paths = [target.engine_source_root / "recorded.pyc", target.engine_source_root / "__pycache__/recorded.bin"]
+        for path in paths:
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"explicitly receipted bytes")
+            receipt["files"]["source"][path.relative_to(target.engine_source_root).as_posix()] = control._file(path, target.root)
+        atomic_json(receipt_path, receipt)
+        state["receipt_sha256"] = sha_file(receipt_path)
+        atomic_json(target.state_file, state)
+        with patch.object(control, "sha_file", wraps=sha_file) as hashes:
+            ready = control.inspect_readonly(fixture.request)
+        self.assertEqual(ready["installation"], "ready")
+        counts = Counter(Path(call.args[0]) for call in hashes.call_args_list)
+        for path in paths:
+            self.assertEqual(counts[path], 1)
+        paths[0].unlink()
+        paths[1].write_bytes(b"explicitly receipted byte!")
+        damaged = control.inspect_readonly(fixture.request)
+        self.assertEqual(damaged["installation"], "damaged")
+        self.assertEqual({issue["path"] for issue in damaged["issues"]}, {"recorded.pyc", "__pycache__/recorded.bin"})
+
+    def test_readonly_rejects_invalid_receipt_path_and_missing_null_entry(self):
+        fixture = EngineFixture(self.root / "receipt-path")
+        state = fixture.install()["state"]
+        target = RuntimeLayout(fixture.root, "fixture-v1", "kohya", state["instance_id"])
+        receipt_path = target.state_root / state["receipt_relative"]
+        original = json.loads(receipt_path.read_text(encoding="utf-8"))
+        for name, value in (("../escape.py", {}), ("missing.py", None)):
+            with self.subTest(path=name):
+                receipt = {**original, "files": {**original["files"], "source": {**original["files"]["source"], name: value}}}
+                atomic_json(receipt_path, receipt)
+                state["receipt_sha256"] = sha_file(receipt_path)
+                atomic_json(target.state_file, state)
+                report = control.inspect_readonly(fixture.request)
+                if name.startswith(".."):
+                    self.assertEqual(report["installation"], "unknown")
+                    self.assertEqual(report["issues"][0]["code"], "invalid_relative_path")
+                else:
+                    self.assertEqual(report["installation"], "damaged")
+                    self.assertIn({"area": "source", "path": name, "package": None}, report["issues"])
 
     def test_rebuild_keeps_old_source_and_receipt(self):
         fixture = EngineFixture(self.root / "rebuild")

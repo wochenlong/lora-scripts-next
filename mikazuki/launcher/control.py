@@ -140,13 +140,22 @@ def inspect_readonly(request):
             raise ControlError("unvalidated_generation", "引擎代次未验证")
         receipt = _receipt(current, state)
         broken = []
+        missing = object()
         for area, files in receipt["files"].items():
             root = current.environment_root if area == "environment" else current.engine_source_root
+            # 一次完整现场扫描同时提供原件核对及额外文件检测，避免每个大文件读两遍。
+            observed = _tree(current.checked(root), current.root)
             for name, expected in files.items():
-                path = current.checked(root / relative(name))
-                if not path.is_file() or _file(path, current.root) != expected:
+                path = root / relative(name)
+                actual = observed.get(name, missing)
+                if actual is missing and _derived_bytecode(path.as_posix()):
+                    # 保留旧收据显式登记派生字节码的合同；_tree 只忽略未登记字节码。
+                    path = current.checked(path)
+                    if path.is_file():
+                        actual = _file(path, current.root)
+                if actual is missing or actual != expected:
                     broken.append({"area": area, "path": name, "package": receipt.get("package_files", {}).get(name) if area == "environment" else None})
-            extras = set(_tree(root, current.root)) - set(files)
+            extras = set(observed) - set(files)
             broken.extend({"area": area, "path": name, "package": None, "unexpected": True} for name in sorted(extras))
         for name, expected in receipt.get("base_python_files", {}).items():
             path = current.checked(current.base_python_root / relative(name))
