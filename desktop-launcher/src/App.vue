@@ -783,9 +783,9 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
       <div class="sidebar-foot"><button :class="{ selected: page === 'settings' }" :aria-current="page === 'settings' ? 'page' : undefined" aria-label="启动器设置" title="启动器设置" @click="page = 'settings'"><Icon name="settings" /><span class="nav-label" aria-hidden="true">设置</span></button></div>
     </aside>
     <header class="titlebar" @mousedown="dragTitlebar" @dblclick="windowControl('maximize')"><span class="titlebar-name">{{ titlebarVersion }}</span><span class="titlebar-state" :class="{ good: stateGood, working: transitioning }" role="status" aria-live="polite"><i></i>{{ stateText }}</span><div class="window-controls"><button aria-label="最小化" title="最小化" @dblclick.stop @click="windowControl('minimize')"><Icon name="minimize" /></button><button aria-label="最大化或还原" title="最大化 / 还原" @dblclick.stop @click="windowControl('maximize')"><Icon name="maximize" /></button><button class="window-close" aria-label="关闭启动器" title="关闭" @dblclick.stop @click="windowControl('close')"><Icon name="close" /></button></div></header>
-    <main class="launcher-main">
+    <main class="launcher-main" @pointerdown.capture="sidebarExpanded = false">
       <section v-show="page === 'launch'" class="home-page" aria-label="首页">
-        <div class="home-heading"><img src="/assets/home-logo.webp" alt="Next Trainer 项目标志" /><div><h1>Next<span>Trainer</span></h1><p>让灵感，成为你的模型。</p></div></div>
+        <div class="home-heading"><img src="/assets/home-logo.webp" alt="Next Trainer 项目标志" /><div><h1>NextTrainer</h1></div></div>
         <article class="release-float" aria-label="项目信息">
           <button class="release-art" data-link-target="releases" aria-label="打开 Next Trainer 项目发布页" @click="openProjectLink('releases')"><img class="release-cover" src="/assets/next-trainer-cover.png" alt="Next Trainer 项目封面" /></button>
           <div class="release-body">

@@ -100,12 +100,9 @@ code{font:12px/1.7 "Cascadia Code",Consolas,monospace;overflow-wrap:anywhere}
 .home-page{height:100%;position:relative}
 .home-heading{position:absolute;left:58px;top:33px;display:flex;gap:20px;align-items:center;text-shadow:0 2px 15px var(--on-wall-shadow)}
 .home-heading>img{width:86px;height:86px;border-radius:19px;object-fit:cover;box-shadow:0 8px 30px var(--panel-shadow)}
-.home-heading h1{font-size:34px;font-weight:650;letter-spacing:-.8px;line-height:1.02;margin:0}
-.home-heading h1 span{display:block;font-weight:350;font-size:41px;letter-spacing:1px}
-.home-heading p{font-size:12px;letter-spacing:2px;margin:12px 0 0;color:var(--text-secondary)}
+.home-heading h1{font-size:34px;font-weight:600;letter-spacing:-.8px;line-height:1.15;white-space:nowrap;margin:0}
 .home-view.home-title-dark .titlebar-name{color:#17212b;text-shadow:0 1px 3px #ffffff70}
 .home-view.home-heading-dark .home-heading{color:#20283b;text-shadow:0 1px 12px #ffffff70}
-.home-view.home-heading-dark .home-heading p{color:#39465b}
 .home-view.home-controls-dark .titlebar-state,.home-view.home-controls-dark .window-controls button{color:#233242}
 .home-view.home-controls-dark .titlebar-state.good{color:#286b49}
 .home-view.home-controls-dark .titlebar-state.good i{background:#286b49}
