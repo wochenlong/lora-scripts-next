@@ -1,0 +1,263 @@
+{
+  "change": "CR-013",
+  "status": "complete-with-boundary",
+  "updated_at": "2026-10-31T03:44:51.983965+00:00",
+  "product_commit": "7f2d02df31b71f8f19e4ffe80af7a04ae809937f",
+  "branch": "feat/desktop-launcher",
+  "acceptance": {
+    "title_logo_removed_version_left": true,
+    "sidebar_56_to_208_overlay_labels": true,
+    "main_titlebar_home_geometry_constant": true,
+    "animated_keyboard_reduced_motion": true,
+    "package_native_entry": true
+  },
+  "build": {
+    "candidate": "F:/NextTrainerLauncherSandbox/build-ui-sidebar-20261031/candidate-1",
+    "identity": {
+      "schema_version": 1,
+      "kind": "development-candidate",
+      "public_release": false,
+      "created_at": "2026-10-31T03:27:03.210800+00:00",
+      "version": "0.2.0",
+      "trainer_source_commit": "89a3b6ca63964b3bc4549b8bda67b38c4baa1a3d",
+      "launcher_build_commit": "7f2d02df31b71f8f19e4ffe80af7a04ae809937f",
+      "frontend": {
+        "bytes": 2446848,
+        "sha256": "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f"
+      },
+      "nsis_install_mode": "currentUser",
+      "webview_install_mode": {
+        "type": "downloadBootstrapper",
+        "silent": true
+      },
+      "windows_build_tools": {
+        "lock_sha256": "da9832806cc3bdc6936ecae7e43a9452e9c46a18a9da7a7ce0161cf636d98b99",
+        "tauri_cli_version": "2.12.4",
+        "tauri_cli_binary_sha256": "1362ea4e49f3468e2991ecb08b3b2f27491cbeb6f3eec5fa83e5c1589d8c62d7",
+        "nsis_version": "v3.13",
+        "verified_required_files": 14,
+        "source_commit": "993038c49185307dfc895ab7657d77ca0d5ed7c7"
+      },
+      "network_policy": "offline-cache-only; cargo --offline; npm uses installed node_modules; bundler outbound proxy fails closed",
+      "new_network_payload_bytes": 0,
+      "launcher_worktree_dirty": false,
+      "worktree_has_other_changes": true,
+      "launcher_source_digest": "f5d01c5c45a400b51d48dd13429c6cbf80008b47a53890a78bc5a1de50d731d9",
+      "catalog_digest": "98cc9df537272f1d7d4d79be97b5e7c9d062ab77dc6a7098140feb89069961f7",
+      "recipe_digest": "4a513405052a63b34ef854bde95506693a03db716b64856bc33e0b925f6574ca",
+      "trainer_frontend": {
+        "bytes": 2446848,
+        "sha256": "ae77496b39c5b59bb0d4f4ca5b4a3bd3043499818828c0eeeb7227c653996b9f"
+      },
+      "signed_fixture_digest": "0763a725102e908f86ce106f0dbb7f33cb49c66667cce623e68cfbf62ee89051",
+      "launcher": {
+        "bytes": 38866944,
+        "sha256": "3bd89c35b84b01cb80e81fb1c7ca5bdfc041a05544513385d683ef2fa8079478"
+      },
+      "helper": {
+        "bytes": 1016320,
+        "sha256": "30e59dba9d01b8f9e844b068fe8144a3c7760ef159ad147d36c19a05fd016eb0"
+      },
+      "catalog_signature": "embedded catalog plus public test fixtures; production key/channel not configured",
+      "windows_code_signature": "unsigned-development-candidate",
+      "validation": {
+        "construction": "build-only",
+        "final_validation": "pending M6",
+        "clean_windows": "not-run",
+        "missing_webview2": "not-run",
+        "engine_real_install": "not-run-at-build",
+        "gpu_training": "not-run-at-build"
+      },
+      "tool_versions": {
+        "rustc": "rustc 1.94.1 (e408947bf 2026-03-25)",
+        "cargo": "cargo 1.94.1 (29ea6fb6a 2026-03-24)",
+        "node": "v24.13.0",
+        "tauri": "tauri-cli 2.12.4"
+      }
+    },
+    "artifacts": {
+      "NextTrainerLauncher-0.2.0-windows-x64-portable.zip": {
+        "bytes": 20942099,
+        "sha256": "b8f9d9094926be18e1a7ed1707fc8c5c36599a6d66b55cd98e550a859b976197"
+      },
+      "installers/Next Trainer Launcher_0.2.0_x64-setup.exe": {
+        "bytes": 17412094,
+        "sha256": "d91a4a89b44f4b6507601a50e1ce36a4f5a293e850b15bfb69fabbd47b84f86c"
+      }
+    },
+    "cache_changes": {},
+    "extraction": {
+      "path": "F:\\NextTrainerLauncherSandbox\\ui-sidebar-20261031-1\\extraction-receipt.json",
+      "bytes": 810,
+      "sha256": "7d124e8ed01c70332cf0b25dcc3e4556022bc91b3c80d9ac83db25cc84a48261"
+    },
+    "manifest_validation_note": "Build manifest retains original build-only snapshot; final native verification is recorded separately below."
+  },
+  "verification": {
+    "browser": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-20261031\\browser-02\\browser-report.json",
+      "bytes": 158306,
+      "sha256": "15a553818eddcf9269479b2a4a8fdb59b44dc9a0d16a3b31b264f27861515a21",
+      "passed": true,
+      "check_count": 31,
+      "layout_pairs": 7,
+      "scope": "CR-013 sidebar/title UI only; no lifecycle/install/download/training/clipboard/external launch"
+    },
+    "closing_material": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-20261031\\browser-03\\browser-report.json",
+      "bytes": 39604,
+      "sha256": "2e774269c920e2c4746b51a65a5b055e69bfb167ab5b0c17873e2a37021518ed",
+      "passed": true,
+      "check_count": 6,
+      "layout_pairs": 0,
+      "scope": "CR-013 sidebar/title UI only; no lifecycle/install/download/training/clipboard/external launch"
+    },
+    "native_main": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-20261031\\native-01\\main\\ui-report.json",
+      "bytes": 130613,
+      "sha256": "ba2377337f2b34080461aeb7619c89d45cf155a49f2dbb2e030a6e050c205400",
+      "passed": true,
+      "check_count": 22,
+      "layout_pairs": 5,
+      "scope": "existing r12; UI read-only only; no start/stop/install/download/training/clipboard/external links"
+    },
+    "native_reopen": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-20261031\\native-01\\reopen\\ui-report.json",
+      "bytes": 1214,
+      "sha256": "94976ed837e7688838c18b2c668827b8ac65c454bf7a65745c41b2238149cf63",
+      "passed": true,
+      "check_count": 3,
+      "layout_pairs": 0,
+      "scope": "existing r12; UI read-only only; no start/stop/install/download/training/clipboard/external links"
+    },
+    "entry": {
+      "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-20261031\\user-entry-verification.json",
+      "bytes": 564,
+      "sha256": "ce33869a6e40bb7dfb74bdee6249c66bd9524b5cf9d7e080bc484811c4abfda9",
+      "passed": true,
+      "check_count": 10,
+      "layout_pairs": 0,
+      "scope": null
+    }
+  },
+  "native_host": {
+    "path": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-20261031\\native-01\\host-status.json",
+    "bytes": 10447,
+    "sha256": "fc2b7b290012a2969044ac6a64194a3681c3cd6d5d3e27446e4afbd318153179"
+  },
+  "native_cleanup": [
+    {
+      "mode": "main",
+      "ui_exit_code": 0,
+      "native_exit_code": 0,
+      "graceful": true,
+      "job_drained": true,
+      "cdp_reclaimed": true,
+      "external_sentinels_unchanged": true
+    },
+    {
+      "mode": "reopen",
+      "ui_exit_code": 0,
+      "native_exit_code": 0,
+      "graceful": true,
+      "job_drained": true,
+      "cdp_reclaimed": true,
+      "external_sentinels_unchanged": true
+    }
+  ],
+  "verification_boundary": "Browser-02 covers five pages and home in three sizes on Dqwu6vum/D7AaIdgm. Browser-03 covers final visibility CSS change on46waeMRs/DVmfQTLm only. Final native verifies five layout pairs and affected navigation on the final EXE.",
+  "visual_review": {
+    "root": [
+      "collapsed-home",
+      "expanded-home",
+      "expanded-environment"
+    ],
+    "independent": [
+      "collapsed-home",
+      "expanded-home",
+      "expanded-environment",
+      "expanded-settings"
+    ],
+    "passed": true,
+    "evidence": [
+      {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\branches\\dev\\docs\\design\\desktop-launcher-ui-review\\sidebar-20261031\\collapsed-home.png",
+        "bytes": 923646,
+        "sha256": "e1051d54d4498859758da82425fce718057bfa46f3ec684004f579ae49f34c46"
+      },
+      {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\branches\\dev\\docs\\design\\desktop-launcher-ui-review\\sidebar-20261031\\expanded-home.png",
+        "bytes": 920445,
+        "sha256": "2d571b83d783e4485cdba7173057804eeb97cdd7ecd4b36ff095e0fe30057792"
+      },
+      {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\branches\\dev\\docs\\design\\desktop-launcher-ui-review\\sidebar-20261031\\expanded-environment.png",
+        "bytes": 558983,
+        "sha256": "a93fb802abcccea2947a6f624a8d7d96ce2913474ea9f52a54d4ae9e9d88fd24"
+      },
+      {
+        "path": "E:\\OpenSourceTeamWork\\workspace\\branches\\dev\\docs\\design\\desktop-launcher-ui-review\\sidebar-20261031\\expanded-settings.png",
+        "bytes": 583975,
+        "sha256": "cae4f6450001b06696dbc35664e6e79f91d7d6236ce126cd929b78c4efc55038"
+      }
+    ]
+  },
+  "deployment": {
+    "entry": "F:\\NextTrainerLauncherSandbox\\user-20261030\\启动新版启动器.cmd",
+    "candidate": "F:\\NextTrainerLauncherSandbox\\ui-sidebar-20261031-1\\NextTrainerLauncher-0.2.0-windows-x64",
+    "exe_sha256": "3bd89c35b84b01cb80e81fb1c7ca5bdfc041a05544513385d683ef2fa8079478",
+    "backup": "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-ui-sidebar-20261031\\user-entry-backup",
+    "before": {
+      "启动新版启动器.cmd": {
+        "bytes": 663,
+        "sha256": "3979fe264298c0f725088792b4382fffa62cf515704a99ebdbf2e5b9e0f9d3e0"
+      },
+      "新版启动器使用说明.md": {
+        "bytes": 1956,
+        "sha256": "5f746c01084b83ef83a524d51028233ed7fe5a79268a5e58909089291f3eadb1"
+      },
+      "new-launcher-ready-report.json": {
+        "bytes": 2257,
+        "sha256": "ef208ec347f7fa738a7a35b07d149d851b31e0ab7a732ec5cc825b76a9d518cd"
+      }
+    },
+    "after": {
+      "启动新版启动器.cmd": {
+        "bytes": 663,
+        "sha256": "2a748eb2b5d323357fbab1c7db279ffff734f63fe5e331d17f3abc4b7534780c"
+      },
+      "新版启动器使用说明.md": {
+        "bytes": 1295,
+        "sha256": "e9da357743e12d7ee0b4c93b394063454cc52b607e87eb51d5c0f095fe1f995c"
+      },
+      "new-launcher-ready-report.json": {
+        "bytes": 2265,
+        "sha256": "c2e10ebc0f98cab01b0734ea6564a596432f8185bca29db100248fc563a09cc2"
+      }
+    },
+    "started_for_user": false,
+    "updated_at": "2026-10-31T03:40:22.690999+00:00"
+  },
+  "resolved_findings": [
+    {
+      "case": "browser-01",
+      "status": "fail",
+      "reason": "settings navigation missing aria-current",
+      "resolution": "settings current-page semantics aligned with other navigation; browser-02 passed"
+    },
+    {
+      "case": "implementation-review",
+      "reason": "management sidebar material removed before width closing transition finished",
+      "resolution": "pseudo visibility retained through 250ms; final browser-03 and native passed"
+    }
+  ],
+  "boundaries": {
+    "scope": "UI only",
+    "real_service_start_stop": "not-run",
+    "installation_download_training": "not-run",
+    "clean_windows_webview_first_install": "not-run",
+    "user_window_started": false,
+    "user_data": "original profile/custom background/u13/models/samples/old entry preserved",
+    "interaction": "Escape collapses within sidebar; expanded state is session-only; clicking content does not auto-collapse"
+  }
+}
