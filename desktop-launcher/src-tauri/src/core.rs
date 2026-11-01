@@ -934,7 +934,10 @@ impl Engine {
                         },
                     )?;
                 }
-                "recover_binding" => crate::data_import::recover_binding(&ctx)?,
+                "recover_binding" => crate::data_import::recover_binding(
+                    &ctx,
+                    transaction.context("缺少资料组合事务编号")?,
+                )?,
                 _ => bail!("未知资料操作"),
             }
             Ok(())

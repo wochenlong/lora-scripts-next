@@ -1755,11 +1755,15 @@ fn sync_current_component(
     commit_bindings(ctx, registry, bindings)
 }
 /// 中断恢复总是精确还原旧控制字节；保留新profile和备份，不静默合并资料。
-pub fn recover_binding(ctx: &WorkspaceMutation) -> Result<()> {
+pub fn recover_binding(ctx: &WorkspaceMutation, transaction: &str) -> Result<()> {
+    model::validate_component(transaction)?;
     let root = &ctx.layout().root;
     let path = binding_intent(root);
     let mut intent: BindingIntent = serde_json::from_slice(&fs::read(&path)?)?;
     validate_binding_intent(root, &intent)?;
+    if intent.transaction != transaction {
+        bail!("资料组合事务编号不符，保留当前记录并拒绝恢复");
+    }
     if intent.status == "committed" || intent.status == "rolled_back" {
         return Ok(());
     }
@@ -2272,6 +2276,30 @@ mod tests {
         );
         let path = binding_intent(&f.root);
         let mut intent: BindingIntent = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let recovery_transaction = intent.transaction.clone();
+        let recovery_artifacts = || {
+            [
+                f.root.join("state/registry.json"),
+                f.root.join("state/profile-bindings.json"),
+                path.clone(),
+                f.root
+                    .join("backups")
+                    .join(&recovery_transaction)
+                    .join("registry.original.json"),
+                f.root
+                    .join("backups")
+                    .join(&recovery_transaction)
+                    .join("profile-bindings.original.json"),
+            ]
+            .map(|path| optional_bytes(&path).unwrap())
+        };
+        let committed = recovery_artifacts();
+        for transaction in ["", "../invalid", "profile-binding-unknown"] {
+            assert!(recover_binding(&ctx, transaction).is_err());
+            assert_eq!(recovery_artifacts(), committed);
+        }
+        recover_binding(&ctx, &intent.transaction).unwrap();
+        assert_eq!(recovery_artifacts(), committed);
         intent.status = "committing".into();
         seal_intent(&mut intent).unwrap();
         model::write_json_atomic(&path, &intent).unwrap();
@@ -2280,9 +2308,70 @@ mod tests {
             load_active_profile(&f.root, &f.request.release_id).unwrap(),
             None
         );
-        recover_binding(&ctx).unwrap();
+        let pending = recovery_artifacts();
+        assert!(recover_binding(&ctx, "profile-binding-unknown").is_err());
+        assert_eq!(recovery_artifacts(), pending);
+        drop(ctx);
+        let mut engine = crate::core::Engine::new(f.root.clone(), std::sync::Arc::new(|_| {}));
+        let manager = OperationManager::default();
+        for (index, transaction) in [None, Some("profile-binding-unknown")]
+            .into_iter()
+            .enumerate()
+        {
+            let id = format!("binding-recovery-refused-{index}");
+            let operation = manager.start(&id, OperationKind::Repair).unwrap();
+            let error = engine
+                .data_operation(
+                    &f.root,
+                    &f.request.release_id,
+                    "recover_binding",
+                    None,
+                    None,
+                    None,
+                    transaction,
+                    &operation,
+                )
+                .unwrap_err()
+                .to_string();
+            assert!(error.contains(if transaction.is_none() {
+                "缺少资料组合事务编号"
+            } else {
+                "资料组合事务编号不符"
+            }));
+            assert_eq!(
+                manager.snapshot(&id).unwrap().status,
+                crate::operations::OperationStatus::Failed
+            );
+            assert_eq!(recovery_artifacts(), pending);
+        }
+        for index in 0..2 {
+            let id = format!("binding-recovery-correct-{index}");
+            let operation = manager.start(&id, OperationKind::Repair).unwrap();
+            engine
+                .data_operation(
+                    &f.root,
+                    &f.request.release_id,
+                    "recover_binding",
+                    None,
+                    None,
+                    None,
+                    Some(&intent.transaction),
+                    &operation,
+                )
+                .unwrap();
+            assert_eq!(
+                manager.snapshot(&id).unwrap().status,
+                crate::operations::OperationStatus::Succeeded
+            );
+        }
         assert_eq!(fs::read(f.root.join("state/registry.json")).unwrap(), old);
         assert!(!f.root.join("state/profile-bindings.json").exists());
+        let recovered = recovery_artifacts();
+        let ctx = WorkspaceMutation::acquire(&f.root, &f.request.release_id).unwrap();
+        assert!(recover_binding(&ctx, "profile-binding-unknown").is_err());
+        assert_eq!(recovery_artifacts(), recovered);
+        recover_binding(&ctx, &intent.transaction).unwrap();
+        assert_eq!(recovery_artifacts(), recovered);
         assert_binding_ready(&f.root).unwrap();
     }
 }
