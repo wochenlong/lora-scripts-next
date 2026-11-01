@@ -53,7 +53,7 @@ A0完成：227条审计记录、重复/状态展开和52个引擎单元已冻结
 
 2026-11-01 03:50增量：已创建独占总父标记、新空main/smoke/trust根，复制正式分发文件并逐项hash核对，84个主程序缓存全部固定SHA通过。`smoke-01`与`install-01`均真实EXE、正常exit0/Job0/CDP及服务监听回收。main正式按钮先在零缓存开始安装并取消，再复用固定原始压缩资产执行配方安装成功（未复制已安装环境）；启动取消、真实服务网页/API、剪贴板、运行时只读检查、停止及当前版删除保护通过。启动22.379秒，后端ready到按钮可见约43ms（含采样/网页验证的观测上界）；停止到UI恢复约295ms。`trust-03`七签名场景真实通过；trust-01/02使用Windows保留名aux的脚本前置失败保留，改aux-valid后通过，不算产品验签缺陷。原生空根窗口最小化/最大化/双击/拖动/退出已通过；目录helper与PS编码缺陷修正后用新case复测。App组正在独占main运行全套设置/日志；环境组独立跑Trust/壳更新，不并发重型安装。
 
-Next action：在FINAL03上逐个完成四引擎正式安装及高级维护/资料流程；主控在无重型I/O冲突时补独立根版本页安装与失败删除，随后逐227条/52引擎单元审计。
+Next action：等待唯一活跃 DiffSynth FINAL06 新实例重建的真实终态；此后严格单窗口串行执行 AI Toolkit、双健康版本、设置及轻根剩余按钮，不再并行启动多个 GUI，并据实际227条/52单元证据生成验收交付。
 
 2026-11-01 05:15增量：已复现并修复三类真实缺陷（App异步确认窗归焦、引擎确认窗初始/返回焦点、损坏偏好冷启动panic）。三文件精准提交并push至`f23ca86cf3baeb15cbd185a17ab291a0d6bcda5b`，远端SHA核同；235 Rust通过、3忽略（不作为UI通过）、fmt/严格Clippy通过。最终候选FINAL03 SHA`09c7d9729306300100bea96acbbdb3670734e57e203233af1d59578c966fa526`已构建NSIS/portable同EXE，冷启动损坏偏好四条原生复验通过。App66项当前同最终包60通过、部分harness适配/晚到弹窗遮挡失败正定向重测并恢复夹具。原生目录/背景/窗口/托盘/双语/外链/日志真实复制导出已完成多数实测，服务alive托盘与服务网页入口待短租约补齐。可信七场景/default/noempty、双语trial真拖动、壳helper真实提交及拒绝链在上一候选通过，最终包按EXE绑定独立根快速复验中。四引擎尚无完整实装通过：Kohya原始大文件真实下载超时并保留约1GB断点；ENV已逐SHA实核126旧raw资产含完整Kohya torch，待主main释放后正式安装重试，其他三引擎仍须逐个实测。旧main未锁配方安装因UV_OFFLINE缺pip种子包失败，目录存在不能算安装成功，`evidence-audit.json`保留误判纠正；版本成功切换/回退链缺第二健康版本仍未验证。完整台账与截图索引执行中，绝未声明全量通过。
 
@@ -66,3 +66,41 @@ Next action：在FINAL03上逐个完成四引擎正式安装及高级维护/资�
 纠正先前同包Trial拖动宣称：独立审计发现trial-final03-zh/en-01配置漏os_helper，原报告TRIAL03实际not-run；host passed不能证明该分支。ENV已确认误读，外部evidence-audit.json和native-final03-reconciliation.json保留纠正，正在准备同包02案。另AI/Diff并行host的任务归属harness缺陷已定位（AI引用Diff失败并主动退出、实际自身cancelled），保留原案且不归为AI产品失败；脚本改按owned_pid匹配，后续严格逐个续传。Kohya和Anima真实安装已成功并核receipt，AI/Diff尚未成功。
 
 源码交叉审计：8个Vue文件181交互节点映射现有227库存，未发现完整漏盘控件；GUI-LIFE07后端不产生rollback_pending、单项disabled option当前无生产调用，列不可达边界，不伪造IPC通过。APP-ENV006两条件同名入口、DATA02自身picker、普通与高级重装目标分别审计。A2–A4继续，A5待最终逐项审计。
+
+2026-11-01 07:55增量：FINAL04已正式构建、全部portable复制文件逐hash核，EXE SHA`f8f8b6649ff1a81646fbe669cb2d0e677a87fe44ed5ed2ee8d0b69007c58ac8e`，产品基线`aeae12483d4a7999c43ee55b161b50d2d8aecf5f`已push并核远端；Rust修复提交`a9c28e39`、治理保存`c8836cd0`。修复两真实缺陷：源码预览全非目标环境扫描触发1GiB/4GiB/50000项容量限制；已安装引擎receipt与编译锁派生Python字节码不一致，阻塞主GUI修复。正式源码修复仍对全部原保护根/资料现场内容SHA校验，预览明确未采保护摘要；真实5.67GB及50001文件两资源回归通过。统一Rust238通过/0失败/5忽略、严格Clippy/fmt通过。另引擎只读检查改为每area一次完整内容扫描同时比对原件和extras，保路径/字节码/空值拒绝与完整SHA；27现有launcher测试、52真实新旧函数差分通过。只声称减少重复hash，不声称未经同环境实测的倍速。扩大pytest时宿主cv2/NumPy等既有依赖边界保留，不更改环境。
+
+Kohya在FINAL03服务运行状态下正式单文件精准修复成功：原字节恢复、同instance generation1→2、ready/validated_generation/receipt有效；前中后137个HTTP200样本覆盖07:29–07:47，无训练，服务10932与CDP/Job均回收。后续probe因测试脚本stop后过早点disabled按钮而未执行，保留harness fail，04继续。Kohya只读主按钮精确耗时7分20秒、暖缓存再次打开1分59秒，属于已记录性能事实；不采用先前14分钟口头估计。最终包04主源码/单包与剩余引擎维护由ENV继续，资料DATA01–20转APP在独立versions-final根验收，可信/壳更新/双语Trial转NATIVE在新04根复验；三方共享OS输入需明确短租约。
+
+2026-11-01 08:27增量：FINAL04同包可信/壳更新/双语Trial及运行降级共11组真实复验，56分支passed，stop_failed重试单列not-run；原生服务24.414秒ready/API200，精确唯一listener归属后限8秒暂停，2.833秒正式degraded且网页入口撤回，恢复进程后真实停止71毫秒回到stopped，exit0/Job0/CDP/服务端口回收通过。补FINAL04独立tiny导航根5项通过，分别点击源码不支持与维护不支持两条同名入口；合成不可用登记只作只读导航前置，不宣称旧环境安装成功。原生目录锁仍在前置探针验证，不预认具备故障条件。
+
+资料DATA01–20首轮真实20控件/18步骤通过，含正式服务健康、组合切换/上一健康回退、registry Win32文件占用产生committing失败后真实恢复rolled_back；首轮host因report_name配置遗漏失败原件保留，node0/exit0/Job0/CDP事实不改写成hostpass。补测真实资料复制取消及恢复时发现新产品P2：recover_binding忽略输入transaction，未知事务编号仍succeeded（旧终态实际零变更，pending时存在恢复非目标事务风险）。已委托APP仅修core/data_import及相关回归，计划新FINAL05；不伪改当前FINAL04原报告，ENV既有长期维护不打断。原始截图959张是08:18附近观察量，随实测继续增长；聚合观察162pass/58not-run/1blocked/6fail含未映射别名，不能作为最终通过率。
+
+2026-11-01 09:15增量：P2组合恢复编号已精准修复并push，产品基线`de9c2cd1b55eb72ce6cb4dea6a872efa20b5f270`远端一致。FINAL05正式构建EXE SHA`15d9204f696868acbd558562ff436eba5c96554087a7a76179c8b3eb6ce4d3a8`，portable九文件逐字节核对；238 Rust通过/0失败/5忽略、严格Clippy/fmt通过。DATA05主案18步骤实际通过，含pending非法/未知ID零字节拒绝、正确恢复/幂等、terminal错误ID拒绝；旧host因report_name漏配的记录错误保留false，另reconciliation精确核原PID/FILETIME及八个CDP/服务端口全部关闭。05补案五步含真实取消复制、源清单文件变化拒绝、恢复原源后正式续传committed与目标SHA全部通过，hostpass。
+
+FINAL05新增有服务完全退出：真实API200→设置exit→再次API200→标题栏关闭，未先点停止，原生exit0/Job0/CDP和11832服务端口全部回收。05日志输出专项真实五重过滤、八条合成干扰只剩两行，系统剪贴板/单行复制/导出UTF8文件逐行一致且假敏感值脱敏，原剪贴板格式恢复；首案CRLF/LF误差工具失败保留。独立壳05内部reject-trial通过既有正式测试接口触发（明确不是UI按钮），真实Trial/ack/rejected→helper restored，EXE与控制字节保持，hostpass；普通按钮启动链仍采用04真实UI证据。
+
+环境04两个真实缺陷已全量执行复验成功：源码修复29m02前中后完整引擎保护树SHA，单包absl缺损修复原637字节恢复且真实engine receipts不再拒绝。轻根04基础组件、05登记/同版本新实例重建已真实通过，回退/故障恢复序列继续。Kohya imports probe实际ready并核result.json，GPU/training为not_checked，重建等维护继续。因主根单次保护树耗时，调度调整为三个独占根并行：ENV main负责Kohya/Anima、runtime-final04负责主维护；NATIVE versions-final负责AI/Diff。每根单活host且引擎本根串行；完整raw逐SHA/未验证partial仅续传后产品最终SHA，不复制已装环境。此项仅调度变化，验收标准不减弱。
+
+ROOT尝试05合成不可用登记下版本切换取消，但合法结构守护将目标dev按钮禁用，无法进入确认。原harness失败保留且另裁定前置不足，不冒称取消通过；不伪造第二健康环境，版本成功切换/回退及相应取消仍blocked。全部117 App行与88环境行/22原生及52引擎单元最终对账继续，A5未通过。
+
+2026-11-01 09:55增量：FINAL05 AI Toolkit正式安装真实失败，锁同时含opencv-python5.0.0.93与headless5.0.0.93，cv2.pyd原件分别不同，完整性验证正确拒绝。metadata实核invisible-watermark0.2.0要求full、albumentations/albucore/controlnet_aux要求headless，直接删除任一provider会依赖不满足。正在正式发布期固定源码patch构建invisible-watermark0.2.0+nexttrainer.1（只改源setup依赖为headless、本地版本，模块原码不变），重新离线全依赖解析并固定新wheel/配方摘要；不改安装后metadata、不弱化文件校验。AI失败dirty/pending现场保留，DiffSynth仍独立真实安装。
+
+出现多窗口几秒内正常退出及随后全主机小命令延迟/renderer短等待超时；退出原因unknown，原案保留，未推定产品/键盘/操作系统原因。BASE故障第三案尚未进入真实事务，host forced exit1且当时CDP未回收，随后精确PID/FILETIME与端口只读核无残留，另reconciliation保持原失败。为控制干扰暂停新增重型并发，现仅MAIN真实Kohya中断恢复与versions-final Diff安装继续，之后再开轻根。无用户进程被结束。
+
+2026-11-01 10:13增量：AI Toolkit发行方固定源wheel已在两个新构建根产出相同1,632,289字节/SHA5f376371aa1d93a4d699ab5b2e5b495a6a658d21cb2aef8625a3ad636872a8f2，7个运行源码/模型及MIT许可与固定官方源字节相同。离线正式解析141包成功，273条活跃依赖逐项满足，除删除full OpenCV及水印local版本外全部原资产未漂移；按RECORD审计35,237文件，新闭包零不同内容冲突，旧双provider实际复现3处冲突。v1外部解析脚本误把setuptools vendored METADATA算顶层导致失败，原work保留；v2顶层元数据审计与解析成功。上述不冒充新包原生安装或pip check成功，待FINAL06。
+
+MAIN05真实Kohya恢复整任务1805秒触发产品30分钟超时：写旧绑定约40秒后开始完整只读复验，未完成即失败；host自然exit0/CDP回收但Job3秒内未排空，关闭自有Job执行补清理，原host false保留。发现提交顺序缺陷：正式恢复在完整复验前已清pending，返修将先校验候选old，再发布绑定；快照恢复精确还原修前损坏baseline的既有语义保留，超时/取消/unknown仍保pending。该项真实新恢复必须在新包重测。机器即时E/F物理盘idle、CPU约56.5%、可用内存约4GiB，不足以单独归因；不停止用户进程、不调宽结果守护。
+
+DiffSynth独立安装仍在完整性验证，不能签收。小命令恢复正常后只解禁runtime-final04一条轻根顺序链BASE04→PKG07→REG05→LIFE05/06→main-variants（exec37798），任一host失败即停；MAIN不新开，versions-final仍NATIVE独占。A2–A4 in progress、A5 pending，不称全量通过。
+
+2026-11-01 10:25增量：产品修复13文件已精准commit/push，远端与本地同e7eb6775aa8360a663da8d9cb891288997b5b8da；新源码Rust238通过/0失败/5忽略、strictClippy/fmt通过（首个误用--lib的外部命令保留，改用bin全套后真实通过）。DiffSynth54包已由uv实际安装，但完整内容复验1800秒超时，正式任务failed、state仍pending/dirty/validated0，原案host正常exit0/Job0/CDP及服务均回收；不能算安装通过。当前先做60秒有界真实样本剖析，定位重复路径检查/多次指纹开销后再冻结FINAL06，不盲目放宽完整性校验。
+
+第二健康legacy main所需81个固定原始GUI wheel已逐SHA再核并建立独占find-links硬链接（378MB），没有复制已装环境或创建venv。仅准备独立子进程UV_FIND_LINKS，不改系统配置。新versions-dual-final06空根尚未创建；双版本及设置父刷新两套外部native脚本语法核通过且状态not-run，候选06摘要占位不得冒充已执行。已有DATA根有完整组合绑定，不能拿它伪代普通版本切换前置，故采用新独立根实装两个不同源码版本。
+
+2026-11-01 10:40增量：已通过有界性能诊断与独立差分审查，发现原完整观测会对同一安装文件重复读取2–3遍；仅将同轮完整SHA树结果供wheel/RECORD/整树共同使用，不跨操作缓存、不改限额/1800秒、不以mtime替代内容。最终39项control/conflict回归通过，独立36案包含33案原合同等价与3案损坏ZIP CRC更严格拒绝，真实__pycache__祖先兼容回归已修复。产品精准提交4e1b4cc78939e8b906252b27dcc20692ad347a08已push并核远端一致；FINAL06新目录离线构建进行中，尚无新包原生通过结论。ROOT在versions-final另案进行设置集成保护及父刷新复测，保留实际FINAL05身份；ENV独占MAIN待06恢复及runtime轻链，NATIVE收束22条原生裁定，APP实现独立证据打包器。旧失败及包身份均保留；A2–A4继续，A5未签收。
+
+2026-11-01 11:12增量：FINAL06已完成离线NSIS/portable构建，分发9文件逐ZIP字节核同；EXE SHA11804c053d8667b1c9b91512d72055481aeb27d58be2ac32d181ede42413cbca，产品提交4e1b4cc78939e8b906252b27dcc20692ad347a08。新托盘四项真实操作通过、NAT22项已有完整行为证据；tiny原host自然3秒Job排空失败仍保false，独立精确PID/FILETIME退出0、唯一Job不存在及端口关闭另记清理终态。
+
+ROOT设置05-02只读主检查通过，但启动条件检查6分钟无ready/port/API且取消3分钟未收尾，原失败保留，不把脚本发请求时的service_started意图字段当服务成功。双版本06首案缓存准备与下载竞态触发产品正确拒绝覆盖，已修外部脚本仅在任务停止后准备raw。第二案与ENV主恢复/轻BASE三窗于02:55:59–02:56:04UTC近同时正常退出，均预finally exit0、Job/CDP/服务回收，原因unknown；Windows仅同期EdgeInstaller WER记录，未证明因果，未提权或修改系统。改为严格单GUI；当前仅NATIVE Diff06正式新实例重建，uv54依赖安装成功、完整内容校验中，未签可用。MAIN06未真正进入pending，不能算恢复通过；BASE夹具原件已逐SHA恢复，未启动后续故障链。
+
+APP/ENV/NAT严格裁定与三份逐proof实际source-inputs影响复核已对齐。只读交付校验第04轮282proof、引用errors/warnings均空、候选identity真实相符；227时点180pass/20partial/5fail/11blocked/8not-run/3pending，52时点15pending/4fail/11not-run/22blocked，明确acceptance_complete=false，非最终计数。打包器仅流式读PNG，未执行交付大复制。后续Diff→维护含真实中断恢复→AI→版本/设置/轻链/其余引擎按唯一GUI串行继续，任何失败保留，不要求用户手工验收。
