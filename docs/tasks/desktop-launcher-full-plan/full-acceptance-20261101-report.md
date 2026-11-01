@@ -47,13 +47,13 @@
 
 | App 行的交互事实 | 行数 | 含义 |
 | --- | ---: | --- |
-| 已有真实 UI 触发 | 111 | 包含触发后业务成功、正确拒绝和业务失败；后两者不能据此签成功 |
+| 已有真实 UI 触发 | 112 | 包含触发后业务成功、正确拒绝和业务失败；后两者不能据此签成功 |
 | 真实启动或偏好回退行为 | 2 | 此两行属于启动/状态行为，不是额外独立按钮 |
 | 明确预期的 disabled 保护已核 | 2 | 不支持版本安装及当前／上一健康版本删除保护；此类保护不要求派发 enabled 点击 |
-| 未找到真实交互记录 | 2 | `APP-ENV-005` 与 `APP-LOG-022`，见下文 |
-| 合计 | 117 | 115 行有 UI 或 disabled 事实；本表为 dual03／SET06 完成后的新交互快照，不覆盖开头 validate04 历史计数 |
+| 未找到真实交互记录 | 1 | `APP-ENV-005`，见下文 |
+| 合计 | 117 | 116 行有 UI 或 disabled 事实；本表已含后续真实日志恢复入口，不覆盖开头 validate04 历史计数 |
 
-真正尚未找到交互证据的是两个专用入口：主程序失败摘要中的“查看高级选项”`APP-ENV-005`，以及日志页“查看恢复”`APP-LOG-022`。前者需要形成真实检查失败摘要后点击，核展开、滚动与错误保留；后者需要真实恢复日志后点击，核进入环境管理并展开高级。已有普通高级展开、环境恢复按钮不能替代这两个入口。
+真正尚未找到交互证据的是主程序失败摘要中的“查看高级选项”`APP-ENV-005`，需要形成真实检查失败摘要后点击，核展开、滚动与错误保留；普通高级展开按钮不能替代它。日志页“查看恢复”`APP-LOG-022` 后来已在真实持久故障和正式完整检查后点击，进入环境管理并展开高级；其同案恢复失败与整体宿主失败单列如下，导航成功不代表恢复成功。
 
 后来的 `versions-dual-final06-03` 已通过正式 main 安装、健康 main 切换、dev 警告窗取消／确认与真实版本回退，关闭了这四条成功链的缺口；原 main 安装失败及旧 dev disabled-only 前置仍保留历史身份。`APP-VER-008` 的 dev 专属结构损坏／占用拒绝尚未实测，不能由成功切换或损坏 main 拒绝推导通过。
 
@@ -83,7 +83,7 @@
 | AI Toolkit 配方同时安装两个 OpenCV provider，原件不同导致完整性拒绝 | 对固定官方水印源码作正式发行期依赖补丁，构建 `0.2.0+nexttrainer.1`；两个独立构建所得 wheel 字节相同；141 包、273 条活跃依赖及原件冲突离线审查完成。后来 FINAL06 正式首次安装任务 succeeded，写入 generation1=validated1 的 ready 状态 | 后台安装成功与 UI 整案失败分列：原确认分支因 AI 按钮 locator 不在而失败，原图显示版本管理，页面变化来源 unknown；不据后台 ready 签完整 UI、`pip check` 或健康探针通过 |
 | 引擎完整观测重复读取同一文件，增加检查与安装耗时 | FINAL06 同轮完整树内容摘要供 wheel、RECORD 和全树核对复用；保留完整 SHA、路径、CRC 及派生文件合同，未调宽原超时条件 | 差分与源码回归已完成；不宣称未在同环境测得的加速倍数，最终安装/维护仍需真实终态 |
 
-本轮已保留 App 的严格 117 行裁定，以及逐具体 proof 的旧包→FINAL06 适用性审查。dual03／SET06 完成后，App 严格结果为 **107 通过、8 部分通过、2 未测**，共154条精确 proof；其中原133条旧包适用审查及8条不继承记录内容保持不变，新增13条为 FINAL06 直接实测。未继承项包括缺实际构建清单的早期包证据、涉及新 worker 的只读引擎证据、原始安装失败与未匹配的早期原生分支。该增量不把旧 EXE 或截图改名为 FINAL06 实测，也不覆盖 validate04／interim02 的冻结计数。
+本轮已保留 App 的严格 117 行裁定，以及逐具体 proof 的旧包→FINAL06 适用性审查。dual03／SET06及后续日志专用入口纳入后，App 严格结果为 **108 通过、8 部分通过、1 未测**，共155条精确 proof；其中原133条旧包适用审查及8条不继承记录内容保持不变，新增14条为 FINAL06 直接实测。未继承项包括缺实际构建清单的早期包证据、涉及新 worker 的只读引擎证据、原始安装失败与未匹配的早期原生分支。该增量不把旧 EXE 或截图改名为 FINAL06 实测，也不覆盖 validate04／interim02 的冻结计数。
 
 对应原件：[App 严格裁定](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/app-full-adjudication.json)、[App 影响审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/final06-delivery-impact-review-app.json)、[环境影响审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/final06-delivery-impact-review-environment.json)、[原生功能影响审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/final06-delivery-impact-review-native.json)。这些工作文件可以继续增量更新；validate04 自身的输入 SHA 保存在其独立运行记录中。
 
@@ -126,6 +126,39 @@ DiffSynth 单窗维护新案的[原报告](E:/OpenSourceTeamWork/workspace/tools
 [SET06 host 原件](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/settings-integration-final06-dual01/host-status.json)于 `2026-11-01T05:41:39.267686+00:00` 终态 passed；node0、启动器0、自有 Job 排空为0，CDP8796及真实服务9978全部回收。[ROOT 独立核对](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/settings06-terminal-root-check.json)保留三分支与端口状态。[另一代理只读窄审](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/app-dual03-set06-independent-review-01.json)重新核13条 direct proof、精确 Pointer、全部图像摘要和回收记录，并实际查看dev初窗／确认、导入前后4张图片，结论为指定范围通过。以上两案没有开启训练，不代表全部117行已通过；它们及前述 DiffSynth 新案尚未进入旧 interim02 冻结包。
 
 [ROOT 两图像素复核](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/root-dual03-set06-visual-review-01.json)另实际查看dev键盘循环截图与导入完成后截图：前者显示取消按钮焦点轮廓，整段按键序列依原 JSON；后者显示用户资料页、新未激活资料集名称及“完整性未检查”，receipt 的复制归属依原 JSON。像素复核不增加任何业务 pass。
+
+## 后续 FINAL06 基础Python专用恢复终态
+
+[基础组件恢复新案](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/recovery-final06-base-existing-01/environment-report.json)的 `/checks/0` 于 `2026-11-01T05:57:22.464Z` passed，原报告 SHA 为 `58c0c839b500ef91b113187d16e803314c4c291ff139d0ca7e6d704cd9277f11`。这是针对既有真实 `publishing` 事务 `base-python-30f5c68bcedae069786f7b5c`，实际点击“继续未完成组件恢复”及“继续恢复与逐环境校验”；[独立按钮事件](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/recovery-final06-base-existing-01/environment-button-events.json)记录两次 DOM 点击与对应前后截图。任务 `download-1793512467-228420-0` succeeded，intent 成为 committed，原 `_bz2` 文件 SHA `23fd67eadaf93e1786bca36ac03a26277b32957e43b15d148ff043d019846083` 由产品恢复，两引用实例分别 generation4=validated4、generation3=validated3，均 dirty=false、pending=null；原事务保持，没有由 harness 改写产品状态。
+
+[该案 host](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/recovery-final06-base-existing-01/host-status.json) SHA 为 `8eb7ea63ad33b13a7c0903df76e948332683d1e244d261609853e6199f1ac94b`，于 `2026-11-01T05:57:23.735126+00:00` passed：node0、启动器0、自有 Job 排空为0、CDP7588关闭；本案未启动网页服务或真实训练。该新终态只覆盖 `GUI-BASE-04` 专用恢复，不能替代 `APP-ENV-001` 简化主按钮基础Python分类，也不能替代 `APP-LOG-022` 日志页“查看恢复”的点击；原基础组件故障案的导航失败与该日志入口未测继续保留。第07轮汇总早于此案，尚未包含这一新恢复 proof。
+
+另两项同包故障恢复后来取得终态，按具体入口分别记录。
+
+| 原件与精确位置 | 实际恢复与回收 |
+| --- | --- |
+| [依赖包提交故障与恢复](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/recovery-fault-final06-package-01/environment-report.json)，`/checks/0` 与 `/checks/2`；原 SHA `d47da13ae106ff54848f0925749ae1936c18a4d0bb2c040c80e4e44b9884d4b9` | 正式 absl-py 2.5.1 修复遇受控登记原子替换失败，原 failed 任务和 committing intent 保留；随后真实专用恢复按钮及确认触发任务 `download-1793512989-234940-1` succeeded，generation5 恢复。故障检验与恢复各自 passed，不把原预期失败任务改成功。[host](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/recovery-fault-final06-package-01/host-status.json) 于 `2026-11-01T06:04:08.486216+00:00` passed，node0/native0/Job0、CDP6278关闭，无服务启动 |
+| [登记提交故障与恢复](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/recovery-fault-final06-registration-01/environment-report.json)，`/checks/0` 与 `/checks/2`；原 SHA `7098f01c814912e5fdc6a5bde52dbb44b40f9dd02a6dec9d62979493795668c0` | 登记正式提交遇受控拒绝访问后保留原 committing 事务；真实“继续未完成登记恢复”及“继续核验与补齐登记”完成任务 `download-1793513543-231372-1` succeeded，intent committed、current 未变、GUI 绑定由产品恢复。[host](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/recovery-fault-final06-registration-01/host-status.json) 于 `2026-11-01T06:13:51.313042+00:00` passed，node0/native0/Job0、CDP1820关闭，无服务启动 |
+
+两案 `/checks/1` 的日志“查看恢复”均因未显示专用入口保持 not-run，没有用普通环境页导航替代。它们只证明 `GUI-PKG-07` 和 `GUI-REG-05` 专用故障恢复合同，不自动签 `APP-ENV-001`／`APP-ENV-003` 简化按钮的分类与统一确认，也不签 `APP-LOG-022`。这些晚于第07轮冻结，最终汇总需等全部输入稳定后重算。
+
+## 后续日志恢复入口通过与主程序实例恢复缺陷
+
+[实例重建提交故障案](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-rebuild-fault-01/environment-report.json)为4/4分支 passed，其中 `/checks/3` 的真实 registry 只读锁导致正式任务 `download-1793513717-236684-0` failed、错误码 `gui_lifecycle_failed`；旧 registry 摘要保持，留下真实 `committing` 事务 `gui-rebuild-1793513736-236684-0`。这是预期故障检验通过，不能解释为新实例已经成功发布或恢复。原报告 SHA为 `8eb8fa093b1c89b3c3d8798915432536237c29cae5debca8c7a2ddbf3111c826`；[host](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-rebuild-fault-01/host-status.json)于 `2026-11-01T06:23:06.426059+00:00` passed，node0/native0/Job0、CDP5179关闭。
+
+[恢复首次案](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-recovery-01/environment-report.json)在不相关的普通重新安装预览步骤等待对话框30秒后失败。该步骤被现有 pending 保护正确拒绝，没有实际点击恢复；这是外部套件前置路径问题，不能归为产品恢复失败。原报告 SHA为 `7de196b5bc6eaff56c261b54633b14ddc70192f5cb4e084d6c309993aef219d0`；原 host 于 `2026-11-01T06:24:17.559491+00:00` 失败，node1/native0/Job0、CDP3428关闭。该案原件保持，外部新案跳过这一步，直接读取真实实例记录并执行正式检查、日志入口及恢复。
+
+[恢复第二案](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-recovery-02/environment-report.json)的 `/checks/1` 于 `2026-11-01T06:25:58.632Z` passed：真实持久故障经主程序完整检查建立 interrupted 报告，日志页出现专用 warning，实际点击“查看恢复”后进入环境管理且高级区可见。`/button_events/0` 记录真实点击返回；[警告原图](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-recovery-02/screenshots/003-LOG022-real-pending-after-complete-inspect.png)与[导航后原图](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-recovery-02/screenshots/005-APP-LOG-022-real-lifecycle-failure-after-formal-inspect-recovery-entry.png)保留可见状态。APP已实际查看导航后图片，其环境页及“收起高级选项”可见；图片本身不证明恢复完成。该精确分支作为 `APP-LOG-022` 通过采纳，原 BASE／PACKAGE／REG 三案未显示入口的 `/checks/1` not-run 各保留独立历史身份。
+
+同案 `/checks/2` 恢复实际失败，当前有 **P1 产品缺陷**。真实内存任务 `download-1793514359-235144-0` 在 preparing 阶段以 `operation_start_failed` 结束，消息为“GUI重建事务gui-rebuild-1793513736-236684-0待恢复”；正式日志在14:25:59已显示线程结束。故障发生在任务持久化之前，因此没有新磁盘 task。外部 harness 只等待新磁盘文件，原行停在 `running`，不是后台仍在执行。[只读内存与正式日志](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-recovery-02/readonly-log-and-memory-0640.json)的 `/memory_snapshots/0/snapshot` 保存确切早失败终态，原报告无 `finished_at` 的未完成状态保持不变。
+
+[另一代理独立源码核对](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/gui-rebuild-recovery-self-block-independent-review-01.json)确认根因：实例变更入口按“其他版本”调用重建就绪检查，而该检查扫描整个根目录的事务，没有筛选所属版本，因此把本次目标自身的 pending 误当其他版本冲突，在持久化和真正恢复之前拒绝。当前源码、FINAL06实际构建输入和产品提交对象摘要一致。原事务和 registry 保留；当前证据不支持数据丢失结论，也未以重复重试、伪造状态或修改操作系统绕过此保护。恢复功能仍失败，缺陷尚未修复。
+
+恢复第二案原 raw SHA为 `665bb36dd4a96f4bd7881d4a343e63047ed6049c5e4963772b8ac97316b47f22`；[原 host](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-recovery-02/host-status.json) SHA为 `6e35f4ffd20bdc20e5261f108e6e9b334dce55b1f4884cf8d45783759f86edef`，于 `2026-11-01T06:47:10.185831+00:00` 失败，node1/native1、Job已排空，原 CDP 检查为 false。[独立回收复核](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/advanced-light-final06-recovery-02/terminal-readonly-check.json)于 `2026-11-01T06:56:47.295674+00:00` 重新核精确PID/代次已消失、自有唯一 Job 不存在，旧方法记录 `ports_closed[9689]=true`、`reclaimed=true`；该端口布尔值不等同于明确的 TCP 连接拒绝，单独不足以通过新合同的资源资格判断；`clean_for_independent_next_case=false` 只因原真实 pending 事务仍保留。后来的实际回收不改写原 host 失败或瞬时 CDPfalse，日志导航分支的通过也不将整案升级为通过。
+
+独立审查发现，旧方法的端口布尔值不足以区分明确拒连与超时。随后另一代理在 `2026-11-01T07:19:52.059070+00:00` 完成[权威操作系统监听快照](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/recovery02-cleanup-os-listener-snapshot-01.json)，原 SHA 为 `e5e757423b3e3d766541f8a9a21a89d24713d54996ad79c6a1625587f010efa4`。该原件绑定同一 host、config、raw report SHA，再核同一 PID/创建代次不存在和精确 UUID Job 不存在；`/port_observations/0` 明确本案 CDP9689 的 `Get-NetTCPConnection` 全表查询成功、unknown=false、listeners=[]，服务端口清单为空。socket 的原值10035表示 Windows 超时/暂不可用，原件明确 explicit refusal=false，因此不称 TCP 连接拒绝；资源回收依据是成功的操作系统监听枚举与精确资源缺席。
+
+[外部清理合同增量](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/acceptance-delivery-cleanup-contract-delta-01.md)将 UI 子步骤行为与资源是否仍存活分开。仅当 proof 显式绑定原始 terminal 与额外 OS 快照 SHA/精确 Pointer，同时逐端口覆盖与身份、时间、PID/Job 缺席全部成立，才解除该子步骤的清理资格阻塞；原 native1/node1、整套失败与 GUI-LIFE-05 的业务失败仍原样保留。生成器与独立验包器共用纯谓词，并新增 forced/abnormal 警告。[19项合同自检](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/cleanup-contract-selfcheck-02/result.json)已实际通过，其中1项为真实原件组合，18项为内存构造的负例，覆盖错SHA、缺PID创建代次、Job存在、端口仍开、OS端口遗漏、查询未知或失败、监听仍存在。负例仅测证据合同，不是业务验收；原件摘要未变化。[NATIVE 最终独立只读审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/cleanup-reclamation-native-independent-review-01.json)已按最终代码和快照实际重放19项自检，另做9项谓词负例及4项 builder 绑定负例，结论为 `pass-with-resource-only-boundary`；同源离线验包器模板字节也已核对。该审查只批准资源资格合同，不授 GUI-LIFE-05、整套 host 或全量验收通过。
 
 ## 必须保留的失败与中断
 
@@ -173,3 +206,11 @@ DiffSynth 单窗维护新案的[原报告](E:/OpenSourceTeamWork/workspace/tools
 第07轮新快照的227行是187通过、26部分通过、3失败、5受阻、5未测、1待复核；52引擎单元是3通过、8部分通过、5失败、3受阻、20未测、13待复核。该快照仅对应当次三份影响审查和严格裁定，未宣称后来 ENV 或引擎原案已经纳入，`acceptance_complete=false`。它不覆盖 validate04／05 或 interim02 的历史数字，也不等同于新的真实导出／离线验包。
 
 后续继续 ENV 剩余专用入口和引擎维护实测，将新终态与已取得的双版本、设置集成及 DiffSynth／AI Toolkit 原件一起更新严格裁定及当前候选适用性，再冻结汇总、导出新目录并执行独立离线验包。只有全部必要项真实通过才能将 `acceptance_complete` 改为真；资源不足、前置受阻、不可达或未知原因的项目继续分别记录。
+
+## 第08轮独立回收资格的中途验证
+
+在 NATIVE 独立审查后，主控授权执行一次[第08轮只读验证](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/acceptance-delivery-validate-final06-08.json)，汇总生成于 `2026-11-01T07:27:05.562253+00:00`，运行始末详见[对应运行记录](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/acceptance-delivery-validate-final06-08-run.json)。实际耗时2.2392秒，exit0、输入前后SHA稳定、errors=[]；310条精确proof中304条有效观察。原规划参考漂移 warning 保留，另有 `app:7614fd41b3c2cbc3` 的 forced/abnormal 资源回收限定警告。LOG022只签真实日志导航子步骤，原 native1/node1/hostfalse/CDPfalse和恢复业务失败不变。
+
+该新快照的固定227行为191通过、26部分通过、3失败、2受阻、4未测、1待复核；52引擎单元为3通过、8部分通过、5失败、3受阻、20未测、13待复核。`acceptance_complete=false`，`final_input_freeze=false`。仍在执行、没有完整host终态的ENV用例未隐式计入。它是新的显式输入验证时点，不覆盖 validate04／05／07 或旧 interim02 的历史数字，未创建新导出目录、未执行大复制，也未改写旧冻结证据包。
+
+第08轮后仅对证据工具补了一处导入副作用修复：离线验包器在导入共享纯谓词之前设置 `sys.dont_write_bytecode=True`，避免其新生成的 `tools/__pycache__` 被全目录清单判断为额外文件。该变更不改任何验收谓词、业务裁定或原证据；[NATIVE 增量独立审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/cleanup-verifier-import-native-independent-review-01.json)确认删去唯一新增行后，builder/verifier SHA 精确回到第08轮所用字节；新模板与独立工具同源。最小外部导入夹具实际证实没有 pyc 副作用，并按预期拒绝故意设置的 incomplete 标记；它不是实际交付包。旧08结果与原审计不改，最终冻结时再按新工具身份导出和真实离线验包。
