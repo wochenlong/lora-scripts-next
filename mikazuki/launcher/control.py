@@ -46,7 +46,10 @@ def _state(layout):
     path = layout.checked(layout.state_file)
     if not path.exists():
         return None
-    state = read_json(path)
+    return _validate_state(layout, read_json(path))
+
+
+def _validate_state(layout, state):
     if state.get("schema_version") != 1 or state.get("engine_id") != layout.engine_id or state.get("release_id") != layout.release_id:
         raise ControlError("incompatible_state", "引擎状态身份或 schema 不支持")
     RuntimeLayout(layout.root, layout.release_id, layout.engine_id, state["instance_id"], state.get("profile_id", "default"))
@@ -116,12 +119,17 @@ def _receipt(layout, state):
 
 
 def inspect_readonly(request):
+    return _inspect_readonly(request)
+
+
+def _inspect_readonly(request, candidate_state=None):
+    """内部候选绑定复验；公共请求不能替换持久状态或绕过完整内容检查。"""
     layout = _layout(request)
     fixed = recipe(layout.engine_id)
     report = {"schema_version": 1, "engine_id": layout.engine_id, "layout": layout.as_dict(), "recipe": fixed,
               "installation": "missing", "import": "not_checked", "gpu": "not_checked", "training": "not_checked", "actions": [], "issues": [], "network_bytes": 0, "activity": engine_activity(layout)}
     try:
-        state = _state(layout)
+        state = _state(layout) if candidate_state is None else _validate_state(layout, candidate_state)
         if state is None:
             report["actions"] = ["plan_install"]
             # 无登记但存在命名空间里的实体不能声称未安装。
@@ -547,12 +555,18 @@ def recover(request):
         if not old_path.exists():
             # 首次安装中断只保留不可启用候选，不反向授信为已安装。
             return {"status": "requires_rebuild", "dirty": True, "operation": str(operation), "reason": "新安装未有已验证旧绑定；保留现场并显式重建"}
-        old = read_json(old_path)
+        old = _validate_state(layout, read_json(old_path))
         if not snapshot.exists():
             # 重建写入的是新实例，旧实例从未参与写操作。
-            atomic_json(target.state_file, old)
+            report = _inspect_readonly(request, candidate_state=old)
+            if report["installation"] != "ready":
+                raise ControlError("restore_not_validated", "旧引擎绑定尚未完整验证，保留原事务供再次恢复")
+            _recovery_commit_ready(layout, state)
+            # 辅助记录不是提交凭据；ready 绑定必须最后发布，重试仍重新完整校验。
             atomic_json(operation / "recovery.json", {"status": "restored_binding", "generation": old["generation"]})
-            return {"status": "restored_binding", "state": old, "installation": inspect_readonly(request)["installation"]}
+            _recovery_commit_ready(layout, state)
+            atomic_json(target.state_file, old)
+            return {"status": "restored_binding", "state": old, "installation": report["installation"]}
         for item in read_json(snapshot):
             root = target.environment_root if item["area"] == "environment" else target.engine_source_root
             path = target.checked(root / relative(item["path"]))
@@ -573,10 +587,23 @@ def recover(request):
                 target.checked(tree_root / relative(extra)).unlink()
             if _tree(tree_root, target.root) != expected_files:
                 raise ControlError("restore_not_validated", "快照未完整恢复事务前字节，保持 dirty")
-        atomic_json(target.state_file, old)
-        report = inspect_readonly(request)
+        report = _inspect_readonly(request, candidate_state=old)
+        # 精确还原的是修复前基线，基线可以本来就损坏；清除事务后仍允许精准修复。
+        if report["installation"] not in {"ready", "damaged"}:
+            raise ControlError("restore_not_validated", "还原基线未通过完整检查，保留原事务供再次恢复")
+        _recovery_commit_ready(layout, state)
         atomic_json(operation / "recovery.json", {"status": "restored", "generation": old["generation"]})
+        _recovery_commit_ready(layout, state)
+        atomic_json(target.state_file, old)
         return {"status": "restored", "state": old, "installation": report["installation"]}
+
+
+def _recovery_commit_ready(layout, pending_state):
+    cancel_path = _CANCEL_PATH.get()
+    if cancel_path is not None and cancel_path.exists():
+        raise ControlError("cancelled", "引擎恢复已取消，保留原事务供再次恢复")
+    if _state(layout) != pending_state:
+        raise ControlError("recovery_state_changed", "引擎恢复期间状态已变化，保留现场并重新检查")
 
 
 def probe_execute(request):

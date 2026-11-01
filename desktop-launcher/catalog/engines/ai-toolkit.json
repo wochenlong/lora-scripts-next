@@ -3,8 +3,11 @@
   "platform": "windows-x86_64",
   "provenance": {
     "diffusers_commit": "c943837899b16cbae2f619b8dd4f7bb6f07dd81a",
+    "invisible_watermark_patch": "source setup.py: local version and single headless provider; runtime module unchanged",
+    "invisible_watermark_source_commit": "68d0376d94a4701ed240af0841ec12e00676e325",
     "prebuilt_wheels": "pinned backend builds; fixed sdist/git provenance in evidence; exact binaries embedded",
-    "pylock_sha256": "783d362e4a472227e2c52e135f770b3dcd1fde540e3d3a9f9a92f3d827546754",
+    "publisher_descriptor_sha256": "afff155911e930eea2fa65a41b7e8005a416bba287eb692062c8c3e717bdb911",
+    "pylock_sha256": "bff8b2c871b574f43e5eb6e379a9d23f76884939f7accda92a2e7ed3deb34eb9",
     "upstream_requirements": "full fixed upstream requirements intersected with trainer constraints"
   },
   "python": {
@@ -16410,7 +16413,7 @@
     "strip_prefix": "python/",
     "version": "3.11.15"
   },
-  "recipe_sha256": "8bac8735b1b69abb8ced511090051562f419cf57684704a3097f55549ce08125",
+  "recipe_sha256": "01b5808f17cb66cadbcffa01466cb89730865ffde05765c26be2c66ffd73d947",
   "schema_version": 1,
   "source": {
     "archive": {
@@ -19651,7 +19654,7 @@
   },
   "validation": {
     "gpu": "skip + CR-004",
-    "installation": "not_run",
+    "installation": "not_run_after_provider_fix",
     "training": "skip + CR-004"
   },
   "wheels": [
@@ -20008,12 +20011,12 @@
       "version": "10.1.0"
     },
     {
-      "bytes": 1633253,
-      "filename": "invisible_watermark-0.2.0-py3-none-any.whl",
+      "bytes": 1632289,
+      "filename": "invisible_watermark-0.2.0+nexttrainer.1-py3-none-any.whl",
       "name": "invisible-watermark",
-      "sha256": "644311beed9cfe4a9a5a4a46c740f47800cef184fe2e1297f3f4542e2d992f8b",
-      "url": "https://files.pythonhosted.org/packages/2b/57/18b5a914f6d7994dd349252873169e946dc824328e9a37fd15ed836deedc/invisible_watermark-0.2.0-py3-none-any.whl",
-      "version": "0.2.0"
+      "sha256": "5f376371aa1d93a4d699ab5b2e5b495a6a658d21cb2aef8625a3ad636872a8f2",
+      "url": "embedded:invisible_watermark-0.2.0+nexttrainer.1-py3-none-any.whl",
+      "version": "0.2.0+nexttrainer.1"
     },
     {
       "bytes": 134899,
@@ -20214,14 +20217,6 @@
       "sha256": "c549ad5ed6bfc119cc11105033c0a2b9d7a2a4afeb40a58a09aab3da1a0043ce",
       "url": "https://files.pythonhosted.org/packages/37/b5/41c315ccd94ca332ead3e832e83eee343ab245005c3e43d9d3e75eae34eb/open_clip_torch-3.3.0-py3-none-any.whl",
       "version": "3.3.0"
-    },
-    {
-      "bytes": 44000345,
-      "filename": "opencv_python-5.0.0.93-cp37-abi3-win_amd64.whl",
-      "name": "opencv-python",
-      "sha256": "f90ba04b8f73bc5c3814037699739f0156f597338a98f05956c684e7c3ca10d2",
-      "url": "https://files.pythonhosted.org/packages/21/f0/9fa6e85cb10c8eb36a0222d27e50fe381b86ce49a55446bf39f491727564/opencv_python-5.0.0.93-cp37-abi3-win_amd64.whl",
-      "version": "5.0.0.93"
     },
     {
       "bytes": 43825962,

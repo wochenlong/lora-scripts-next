@@ -58,7 +58,10 @@ def recipe(engine_id: str, repository: Path | None = None) -> dict:
         requirements += [line.strip() for line in path.read_text(encoding="utf-8").splitlines() if line.strip() and not line.lstrip().startswith("#")]
         source_files.append(path)
         if engine_id == "ai-toolkit":
-            data["prebuilt_sources"] = [{"name": "diffusers", "repo": "huggingface/diffusers", "commit": "c943837899b16cbae2f619b8dd4f7bb6f07dd81a", "build_policy": "publisher pinned backend; embedded wheel sha256"}]
+            data["prebuilt_sources"] = [
+                {"name": "diffusers", "repo": "huggingface/diffusers", "commit": "c943837899b16cbae2f619b8dd4f7bb6f07dd81a", "build_policy": "publisher pinned backend; embedded wheel sha256"},
+                {"name": "invisible-watermark", "repo": "ShieldMnt/invisible-watermark", "commit": "68d0376d94a4701ed240af0841ec12e00676e325", "version": "0.2.0+nexttrainer.1", "build_policy": "publisher source patch selects opencv-python-headless; embedded wheel sha256"},
+            ]
     upstream = manifest.get("UPSTREAM", {})
     data.update(schema_version=1, engine_id=engine_id, platform="windows-x86_64", ownership="standalone", gui_environment_fallback=False,
                 upstream=upstream, requirements=requirements, constraints=constraints,

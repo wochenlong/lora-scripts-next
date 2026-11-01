@@ -260,6 +260,131 @@ class ControlSmoke(unittest.TestCase):
             control.repair_apply({**fixture.request, "plan": retry, "plan_sha256": retry["plan_sha256"]})
         self.assertEqual(control.inspect_readonly(fixture.request)["installation"], "ready")
 
+    def _failed_recovery_fixture(self, name, *, snapshot=False):
+        fixture = EngineFixture(self.root / name)
+        old = fixture.install()["state"]
+        old_layout = RuntimeLayout(fixture.root, "fixture-v1", "kohya", old["instance_id"])
+        if snapshot:
+            (control._site_root(old_layout.environment_root) / "fixture_alpha.py").write_text("damage before repair", encoding="utf-8")
+            plan = control.plan(fixture.request)
+        else:
+            plan = control.plan({**fixture.request, "rebuild": True}, installing=True)
+
+        def fail_after_write(*args, **kwargs):
+            fixture.run(*args, **kwargs)
+            raise ControlError("fixture_failure", "interrupted after real candidate writes")
+
+        with patch.object(control, "_run", fail_after_write), self.assertRaises(ControlError):
+            control.repair_apply({**fixture.request, "plan": plan, "plan_sha256": plan["plan_sha256"]})
+        pending_bytes = old_layout.state_file.read_bytes()
+        pending = json.loads(pending_bytes)
+        operation = fixture.root / relative(pending["pending"])
+        self.assertEqual((operation / "snapshot.json").exists(), snapshot)
+        self.assertTrue(pending["dirty"])
+        return fixture, old_layout, old, pending_bytes, operation
+
+    def test_rebuild_recovery_verifies_old_binding_before_publishing_ready(self):
+        fixture, layout, old, pending_bytes, _ = self._failed_recovery_fixture("recover-before-publish")
+        real_tree = control._tree
+        observed = []
+
+        def checking_tree(root, workspace):
+            self.assertEqual(layout.state_file.read_bytes(), pending_bytes)
+            observed.append(root)
+            return real_tree(root, workspace)
+
+        with patch.object(control, "_tree", checking_tree):
+            result = control.recover(fixture.request)
+        self.assertGreaterEqual(len(observed), 2)
+        self.assertEqual(result["status"], "restored_binding")
+        self.assertEqual(result["installation"], "ready")
+        self.assertEqual(json.loads(layout.state_file.read_bytes()), old)
+
+    def test_rebuild_recovery_failed_validation_keeps_pending_and_allows_retry(self):
+        for failure in ("timeout", "damaged", "unknown"):
+            with self.subTest(failure=failure):
+                fixture, layout, _, pending_bytes, operation = self._failed_recovery_fixture("recover-" + failure)
+                source = layout.engine_source_root / "train.py"
+                receipt = layout.state_root / json.loads((operation / "old-binding.json").read_bytes())["receipt_relative"]
+                source_bytes, receipt_bytes = source.read_bytes(), receipt.read_bytes()
+                try:
+                    if failure == "damaged":
+                        source.write_bytes(b"changed old source")
+                    elif failure == "unknown":
+                        receipt.write_bytes(b"changed old receipt")
+                    with patch.object(control, "_tree", side_effect=TimeoutError("worker deadline during content scan")) if failure == "timeout" else patch.object(control, "_tree", wraps=control._tree):
+                        with self.assertRaisesRegex(ControlError, "完整验证"):
+                            control.recover(fixture.request)
+                    self.assertEqual(layout.state_file.read_bytes(), pending_bytes)
+                    self.assertFalse((operation / "recovery.json").exists())
+                finally:
+                    source.write_bytes(source_bytes)
+                    receipt.write_bytes(receipt_bytes)
+                result = control.recover(fixture.request)
+                self.assertEqual(result["installation"], "ready")
+                self.assertEqual(result["status"], "restored_binding")
+
+    def test_snapshot_recovery_unknown_inspection_keeps_pending_before_retry(self):
+        fixture, layout, _, pending_bytes, operation = self._failed_recovery_fixture("recover-snapshot-unknown", snapshot=True)
+        with patch.object(control, "_receipt", side_effect=ControlError("receipt_changed", "receipt changed while verifying restored baseline")):
+            with self.assertRaisesRegex(ControlError, "完整检查"):
+                control.recover(fixture.request)
+        self.assertEqual(layout.state_file.read_bytes(), pending_bytes)
+        self.assertFalse((operation / "recovery.json").exists())
+        package = control._site_root(layout.environment_root) / "fixture_alpha.py"
+        self.assertEqual(package.read_text(encoding="utf-8"), "damage before repair")
+        result = control.recover(fixture.request)
+        self.assertEqual(result["status"], "restored")
+        self.assertEqual(result["installation"], "damaged")
+        self.assertIsNone(json.loads(layout.state_file.read_bytes())["pending"])
+
+    def test_recovery_cancelled_after_validation_keeps_original_pending(self):
+        for snapshot in (False, True):
+            with self.subTest(snapshot=snapshot):
+                fixture, layout, _, pending_bytes, operation = self._failed_recovery_fixture("recover-cancel-" + str(snapshot), snapshot=snapshot)
+                cancel_file = fixture.root / "state" / "cancel-recovery"
+                real_inspect = control._inspect_readonly
+
+                def inspected_then_cancelled(*args, **kwargs):
+                    result = real_inspect(*args, **kwargs)
+                    self.assertEqual(layout.state_file.read_bytes(), pending_bytes)
+                    cancel_file.write_bytes(b"cancel")
+                    return result
+
+                token = control._CANCEL_PATH.set(cancel_file)
+                try:
+                    with patch.object(control, "_inspect_readonly", inspected_then_cancelled):
+                        with self.assertRaises(ControlError) as error:
+                            control.recover(fixture.request)
+                    self.assertEqual(error.exception.code, "cancelled")
+                    self.assertEqual(layout.state_file.read_bytes(), pending_bytes)
+                    self.assertFalse((operation / "recovery.json").exists())
+                finally:
+                    control._CANCEL_PATH.reset(token)
+                    cancel_file.unlink(missing_ok=True)
+                result = control.recover(fixture.request)
+                self.assertEqual(result["status"], "restored" if snapshot else "restored_binding")
+
+    def test_recovery_record_write_failure_keeps_pending_until_retry(self):
+        for snapshot in (False, True):
+            with self.subTest(snapshot=snapshot):
+                fixture, layout, _, pending_bytes, operation = self._failed_recovery_fixture("recover-record-fail-" + str(snapshot), snapshot=snapshot)
+                real_atomic_json = control.atomic_json
+
+                def fail_recovery_record(path, value):
+                    if path == operation / "recovery.json":
+                        self.assertEqual(layout.state_file.read_bytes(), pending_bytes)
+                        raise OSError("simulated recovery record disk write failure")
+                    return real_atomic_json(path, value)
+
+                with patch.object(control, "atomic_json", fail_recovery_record):
+                    with self.assertRaisesRegex(OSError, "record disk write"):
+                        control.recover(fixture.request)
+                self.assertEqual(layout.state_file.read_bytes(), pending_bytes)
+                self.assertFalse((operation / "recovery.json").exists())
+                result = control.recover(fixture.request)
+                self.assertEqual(result["status"], "restored" if snapshot else "restored_binding")
+
     def test_untargeted_modification_remains_dirty(self):
         fixture = EngineFixture(self.root / "untouched")
         state = fixture.install()["state"]

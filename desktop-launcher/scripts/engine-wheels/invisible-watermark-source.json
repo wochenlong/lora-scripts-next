@@ -1,0 +1,29 @@
+{
+  "schema_version": 1,
+  "name": "invisible-watermark",
+  "upstream_version": "0.2.0",
+  "local_version": "0.2.0+nexttrainer.1",
+  "source": {
+    "repository": "https://github.com/ShieldMnt/invisible-watermark",
+    "commit": "68d0376d94a4701ed240af0841ec12e00676e325",
+    "url": "https://codeload.github.com/ShieldMnt/invisible-watermark/tar.gz/68d0376d94a4701ed240af0841ec12e00676e325",
+    "filename": "invisible-watermark-68d0376d94a4701ed240af0841ec12e00676e325.tar.gz",
+    "bytes": 4703095,
+    "sha256": "4de29255f6a37279eda39e2919815d59d0f17bde5f6bc4d0d4d6528925b5537b",
+    "root": "invisible-watermark-68d0376d94a4701ed240af0841ec12e00676e325",
+    "setup_sha256": "af4ac291fc26e8cdc8b28ed78203105fc864b2c04ab2195986748bb73b92afc2",
+    "license_sha256": "fb12dda69d231690bd725fea224fd6016d4492465a9e8dcafadec162b2243474"
+  },
+  "patch": "invisible-watermark-headless.patch",
+  "build_constraints": "build-constraints.txt",
+  "source_date_epoch": "1692949657",
+  "expected_wheel": "invisible_watermark-0.2.0+nexttrainer.1-py3-none-any.whl",
+  "expected_wheel_bytes": 1632289,
+  "expected_wheel_sha256": "5f376371aa1d93a4d699ab5b2e5b495a6a658d21cb2aef8625a3ad636872a8f2",
+  "dependency_change": {
+    "old": "opencv-python>=4.1.0.25",
+    "new": "opencv-python-headless>=4.9.0.80"
+  },
+  "runtime_source_modified": false,
+  "post_install_metadata_editing": false
+}

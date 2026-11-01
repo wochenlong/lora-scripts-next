@@ -1,0 +1,8 @@
+--- a/setup.py
++++ b/setup.py
+@@ -9 +9 @@
+-  version='0.2.0',
++  version='0.2.0+nexttrainer.1',
+@@ -18 +18 @@
+-      'opencv-python>=4.1.0.25',
++      'opencv-python-headless>=4.9.0.80',

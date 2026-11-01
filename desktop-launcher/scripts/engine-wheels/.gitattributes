@@ -1,0 +1,2 @@
+# Fixed source/patch/build digests must survive Windows checkouts unchanged.
+* text eol=lf

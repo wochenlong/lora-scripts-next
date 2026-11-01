@@ -1,0 +1,182 @@
+{
+  "schema_version": 1,
+  "manifest": {
+    "bytes": 1379,
+    "sha256": "3e14b8aecfca2bb74e340c45ce78f3aa6433d323c1eed8eec219412411fa369c"
+  },
+  "build_script": {
+    "bytes": 11777,
+    "sha256": "5c329f52a23ef8c3c442df8602346cc3bf2a0eae54a69ecd17342f557346d9f6"
+  },
+  "source": {
+    "repository": "https://github.com/ShieldMnt/invisible-watermark",
+    "commit": "68d0376d94a4701ed240af0841ec12e00676e325",
+    "url": "https://codeload.github.com/ShieldMnt/invisible-watermark/tar.gz/68d0376d94a4701ed240af0841ec12e00676e325",
+    "filename": "invisible-watermark-68d0376d94a4701ed240af0841ec12e00676e325.tar.gz",
+    "bytes": 4703095,
+    "sha256": "4de29255f6a37279eda39e2919815d59d0f17bde5f6bc4d0d4d6528925b5537b",
+    "root": "invisible-watermark-68d0376d94a4701ed240af0841ec12e00676e325",
+    "setup_sha256": "af4ac291fc26e8cdc8b28ed78203105fc864b2c04ab2195986748bb73b92afc2",
+    "license_sha256": "fb12dda69d231690bd725fea224fd6016d4492465a9e8dcafadec162b2243474"
+  },
+  "patch": {
+    "filename": "invisible-watermark-headless.patch",
+    "bytes": 187,
+    "sha256": "022448a5ab41e352463f3865ba69beeb9d8458d8e5e5c087c9800af8d7f00140"
+  },
+  "setup_before": {
+    "bytes": 922,
+    "sha256": "af4ac291fc26e8cdc8b28ed78203105fc864b2c04ab2195986748bb73b92afc2"
+  },
+  "setup_after": {
+    "bytes": 945,
+    "sha256": "7f08e4e215f3afacfec037e637b8aec7ab08a1955b22b68b0c2ceb9ac3698042"
+  },
+  "build_constraints": {
+    "filename": "build-constraints.txt",
+    "bytes": 33,
+    "sha256": "12d95d3f58681aa8e07423fd2bf2c164f8d41af73508cbc5bf093c3b6e790f4e"
+  },
+  "source_date_epoch": "1692949657",
+  "pythonhashseed": "0",
+  "build_command": [
+    "C:\\Users\\25454\\.local\\bin\\uv.exe",
+    "build",
+    "--wheel",
+    "--python",
+    "C:\\Python314\\python.exe",
+    "--build-constraint",
+    "E:\\OpenSourceTeamWork\\workspace\\branches\\dev\\desktop-launcher\\scripts\\engine-wheels\\build-constraints.txt",
+    "--out-dir",
+    "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-acceptance-20261101\\watermark-publisher-build-02\\wheels",
+    "E:\\OpenSourceTeamWork\\workspace\\tools\\launcher-full-acceptance-20261101\\watermark-publisher-build-02\\source"
+  ],
+  "build_exit": 0,
+  "uv": "uv 0.11.16 (135a36367 2026-05-21 x86_64-pc-windows-msvc)",
+  "python": "Python 3.14.3",
+  "wheel": {
+    "filename": "invisible_watermark-0.2.0+nexttrainer.1-py3-none-any.whl",
+    "bytes": 1632289,
+    "sha256": "5f376371aa1d93a4d699ab5b2e5b495a6a658d21cb2aef8625a3ad636872a8f2"
+  },
+  "inspection": {
+    "name": "invisible-watermark",
+    "version": "0.2.0+nexttrainer.1",
+    "requires_dist": [
+      "opencv-python-headless>=4.9.0.80",
+      "torch",
+      "Pillow>=6.0.0",
+      "PyWavelets>=1.1.1",
+      "numpy>=1.17.0"
+    ],
+    "metadata": {
+      "bytes": 8563,
+      "sha256": "f12ecdf00e533519e40dd09f5d2eeb05020a5719d4047f67c28a2b6a7a809f91"
+    },
+    "license": {
+      "bytes": 1066,
+      "sha256": "fb12dda69d231690bd725fea224fd6016d4492465a9e8dcafadec162b2243474"
+    },
+    "unchanged_upstream_package_files": {
+      "imwatermark/__init__.py": {
+        "bytes": 58,
+        "sha256": "e9026091e1acc4a51d6cf6712746edf555ef5b6a857d33406af8490e55bec7ff"
+      },
+      "imwatermark/dwtDctSvd.py": {
+        "bytes": 3312,
+        "sha256": "221c856e83516892e9217b99e1851097726d8a4a1fc2020c1c8de5d8a03a46d7"
+      },
+      "imwatermark/maxDct.py": {
+        "bytes": 4191,
+        "sha256": "b7f024cd525b793116f6b7ae461ddcb12be0c6004e2ada8a32c7f8fdae398cc3"
+      },
+      "imwatermark/rivaGan.py": {
+        "bytes": 2407,
+        "sha256": "75dc1d33e229a0cad2dba868f05b8f01a68f389abb1a4cf77a4fdadf9b4c1292"
+      },
+      "imwatermark/rivagan_decoder.onnx": {
+        "bytes": 1088816,
+        "sha256": "6b006690cf352fa50a91a0b6d6241dbcded0a9957969e2c0665cf9a7011b3880"
+      },
+      "imwatermark/rivagan_encoder.onnx": {
+        "bytes": 657164,
+        "sha256": "66bc7814fadac7d686105c8ab26c6cf2cc8e40deb83e67bb6ef5b9de9b8ece0d"
+      },
+      "imwatermark/watermark.py": {
+        "bytes": 5629,
+        "sha256": "c7e82535f85c421c23371b71ee5fda815ad5deb32ab09b6feef70f2b006dd1aa"
+      }
+    },
+    "all_runtime_source_and_bundled_data_byte_identical": true,
+    "normal_build_generated_record_validated": true
+  },
+  "source_files": {
+    ".gitignore": {
+      "bytes": 1799,
+      "sha256": "79b6f8054f8ef5e9e78c18174bf57caf29b11410166b9268d6923e87520eb88f"
+    },
+    "LICENSE": {
+      "bytes": 1066,
+      "sha256": "fb12dda69d231690bd725fea224fd6016d4492465a9e8dcafadec162b2243474"
+    },
+    "MANIFEST.in": {
+      "bytes": 82,
+      "sha256": "175453920d22c556a955293e177fce672e348291f4be4c755c79d96de7c312ee"
+    },
+    "README.md": {
+      "bytes": 7499,
+      "sha256": "ad852e7d8eaa72d7f4cefa73a917cce9bc90f929ef1be2eed1aed73ed10d8527"
+    },
+    "export_onnx.py": {
+      "bytes": 2356,
+      "sha256": "b6137f10ff0593482ca05e5540f54ddfa29df74c056f39ba72f66d3c439cfc72"
+    },
+    "imwatermark/__init__.py": {
+      "bytes": 58,
+      "sha256": "e9026091e1acc4a51d6cf6712746edf555ef5b6a857d33406af8490e55bec7ff"
+    },
+    "imwatermark/dwtDctSvd.py": {
+      "bytes": 3312,
+      "sha256": "221c856e83516892e9217b99e1851097726d8a4a1fc2020c1c8de5d8a03a46d7"
+    },
+    "imwatermark/maxDct.py": {
+      "bytes": 4191,
+      "sha256": "b7f024cd525b793116f6b7ae461ddcb12be0c6004e2ada8a32c7f8fdae398cc3"
+    },
+    "imwatermark/rivaGan.py": {
+      "bytes": 2407,
+      "sha256": "75dc1d33e229a0cad2dba868f05b8f01a68f389abb1a4cf77a4fdadf9b4c1292"
+    },
+    "imwatermark/rivagan_decoder.onnx": {
+      "bytes": 1088816,
+      "sha256": "6b006690cf352fa50a91a0b6d6241dbcded0a9957969e2c0665cf9a7011b3880"
+    },
+    "imwatermark/rivagan_encoder.onnx": {
+      "bytes": 657164,
+      "sha256": "66bc7814fadac7d686105c8ab26c6cf2cc8e40deb83e67bb6ef5b9de9b8ece0d"
+    },
+    "imwatermark/watermark.py": {
+      "bytes": 5629,
+      "sha256": "c7e82535f85c421c23371b71ee5fda815ad5deb32ab09b6feef70f2b006dd1aa"
+    },
+    "invisible-watermark": {
+      "bytes": 3766,
+      "sha256": "dc30153e2b9a30a34e17311169bbf0f551ca308cedcdb9303889b5c95dfd8a79"
+    },
+    "setup.py": {
+      "bytes": 922,
+      "sha256": "af4ac291fc26e8cdc8b28ed78203105fc864b2c04ab2195986748bb73b92afc2"
+    },
+    "test_vectors/original.jpg": {
+      "bytes": 2589666,
+      "sha256": "e17a809f2f7629ab821fe3d6159f359fa94f868e22e435d4e782b1090e4cb569"
+    },
+    "test_vectors/peppers.png": {
+      "bytes": 503016,
+      "sha256": "c75365925ba1800eae3fc290dacc26e8f6f46b38c0e17668c42eefc29bdc2a81"
+    }
+  },
+  "installed_environment_modified": false,
+  "training_started": false,
+  "post_build_wheel_metadata_modified": false
+}
