@@ -12,6 +12,7 @@ import sys
 import tempfile
 import unittest
 from unittest.mock import patch
+import warnings
 import zipfile
 
 from mikazuki.launcher import control
@@ -142,6 +143,161 @@ class ControlSmoke(unittest.TestCase):
         self.assertEqual(report["actions"], ["probe_execute", "plan_repair"])
         counts = Counter(Path(call.args[0]) for call in hashes.call_args_list)
         self.assertEqual(counts, Counter({path: 1 for path in expected_paths}))
+
+    def _observation_fixture(self, name):
+        fixture = EngineFixture(self.root / name)
+        state = fixture.install()["state"]
+        target = RuntimeLayout(fixture.root, "fixture-v1", "kohya", state["instance_id"])
+        return fixture, target
+
+    def _replace_observation_wheel(self, fixture, index, additions):
+        wheel = fixture.lock["wheels"][index]
+        path = fixture.root / wheel["filename"]
+        with zipfile.ZipFile(path) as bundle:
+            original = [(info, bundle.read(info)) for info in bundle.infolist()]
+        with warnings.catch_warnings(), zipfile.ZipFile(path, "w", compression=zipfile.ZIP_DEFLATED) as bundle:
+            warnings.simplefilter("ignore", UserWarning)  # 重复 ZIP 成员是有意构造的拒绝样本。
+            for name, payload in [*original, *additions]:
+                bundle.writestr(name, payload)
+        fixture.lock["wheels"][index] = {**wheel, **fixture.asset(path)}
+        fixture.materialize([fixture.lock["wheels"][index]])
+
+    def test_observe_hashes_each_environment_file_once_and_keeps_receipt(self):
+        fixture, target = self._observation_fixture("observe-once")
+        receipt = control._receipt(target, control._state(target))
+        expected = {target.environment_root / name for name in receipt["files"]["environment"]}
+        expected.update(target.engine_source_root / name for name in receipt["files"]["source"])
+        expected.update(target.root / "cache" / "engine-assets" / wheel["sha256"] / wheel["filename"] for wheel in fixture.lock["wheels"])
+        # 仅观察调用次数，所有现场/归档仍使用真实逐字节 SHA。
+        with patch.object(control, "sha_file", wraps=sha_file) as hashes:
+            actual = control._observe(target, fixture.lock)
+        self.assertEqual(actual, {key: receipt[key] for key in ("files", "package_files")})
+        self.assertEqual(Counter(Path(call.args[0]) for call in hashes.call_args_list), Counter({path: 1 for path in expected}))
+
+    def test_observe_rejects_same_metadata_payload_damage_and_missing_files(self):
+        fixture, target = self._observation_fixture("observe-damage")
+        package = control._site_root(target.environment_root) / "fixture_alpha.py"
+        payload, metadata = package.read_bytes(), package.stat()
+        package.write_bytes(bytes([payload[0] ^ 1]) + payload[1:])
+        os.utime(package, ns=(metadata.st_atime_ns, metadata.st_mtime_ns))
+        self.assertEqual(package.stat().st_size, len(payload))
+        self.assertEqual(package.stat().st_mtime_ns, metadata.st_mtime_ns)
+        with self.assertRaises(ControlError) as failure:
+            control._observe(target, fixture.lock)
+        self.assertEqual(failure.exception.code, "wheel_payload_changed")
+        package.write_bytes(payload)
+        for path in (package, target.python, target.environment_root / "pyvenv.cfg"):
+            with self.subTest(path=path.name):
+                original = path.read_bytes()
+                path.unlink()
+                try:
+                    with self.assertRaises(ControlError) as failure:
+                        control._observe(target, fixture.lock)
+                    self.assertEqual(failure.exception.code, "invalid_file")
+                finally:
+                    path.write_bytes(original)
+        unknown = target.environment_root / "unknown-import.py"
+        unknown.write_bytes(b"unexpected but fully observed")
+        actual = control._observe(target, fixture.lock)
+        self.assertEqual(actual["files"]["environment"][unknown.name], control._file(unknown, target.root))
+        self.assertNotIn(unknown.name, actual["package_files"])
+        self.assertIn({"area": "environment", "path": unknown.name, "package": None, "unexpected": True}, control.inspect_readonly(fixture.request)["issues"])
+
+    def test_observe_record_preserves_ownership_empty_hashes_and_managed_scope(self):
+        fixture, target = self._observation_fixture("observe-record")
+        site = control._site_root(target.environment_root)
+        record = site / "fixture_alpha-1.0.dist-info" / "RECORD"
+        original = record.read_text(encoding="utf-8")
+        script = target.environment_root / "Scripts" / "fixture-script.exe"
+        script.parent.mkdir(parents=True, exist_ok=True)
+        script.write_bytes(b"installer rewritten script")
+        record.write_text(original + "\n../../Scripts/fixture-script.exe,,\nmissing-cache.pyc,,\n", encoding="utf-8")
+        actual = control._observe(target, fixture.lock)
+        self.assertEqual(actual["package_files"]["Scripts/fixture-script.exe"], "fixture_alpha")
+        self.assertEqual(actual["files"]["environment"]["Scripts/fixture-script.exe"], control._file(script, target.root))
+        self.assertFalse(any(name.endswith("missing-cache.pyc") for name in actual["files"]["environment"]))
+        for row, code in (("../../../outside.py,,", "outside_workspace"), (",,", "invalid_file"), ("missing.py,,", "invalid_file")):
+            with self.subTest(row=row):
+                record.write_text(original + row + "\n", encoding="utf-8")
+                with self.assertRaises(ControlError) as failure:
+                    control._observe(target, fixture.lock)
+                self.assertEqual(failure.exception.code, code)
+        record.unlink()
+        with self.assertRaises(FileNotFoundError):
+            control._observe(target, fixture.lock)
+
+    def test_observe_checks_each_locked_wheel_even_with_shared_payload_names(self):
+        fixture, target = self._observation_fixture("observe-shared")
+        site = control._site_root(target.environment_root)
+        shared = site / "shared_namespace.py"
+        for index, content in enumerate((b"from alpha", b"from beta")):
+            self._replace_observation_wheel(fixture, index, [(shared.name, content)])
+            record = site / (fixture.lock["wheels"][index]["name"] + "-1.0.dist-info") / "RECORD"
+            with record.open("a", encoding="utf-8") as stream:
+                stream.write(shared.name + ",,\n")
+        shared.write_bytes(b"from beta")
+        with self.assertRaises(ControlError) as failure:
+            control._observe(target, fixture.lock)
+        self.assertEqual(failure.exception.code, "wheel_payload_changed")
+
+    def test_observe_keeps_wheel_schemes_explicit_bytecode_and_archive_safety(self):
+        fixture, target = self._observation_fixture("observe-schemes")
+        site = control._site_root(target.environment_root)
+        members = [("fixture_alpha-1.0.data/" + scheme + "/" + name, b"locked " + scheme.encode()) for scheme, name in (("purelib", "packed.py"), ("platlib", "packed.pyd"), ("data", "share/packed.dat"), ("scripts", "rewritten.py"), ("headers", "rewritten.h"))]
+        members += [("packed.pyc", b"locked bytecode"), ("__pycache__/packed.bin", b"locked cache member")]
+        self._replace_observation_wheel(fixture, 0, members)
+        for member, payload in members:
+            parts = member.split("/")
+            if parts[0].endswith(".data"):
+                if parts[1] in {"scripts", "headers"}:
+                    continue  # 安装器可重写；实际记录由独立 RECORD/整树扫描验证。
+                path = (site if parts[1] in {"purelib", "platlib"} else target.environment_root).joinpath(*parts[2:])
+            else:
+                path = site / member
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(payload)
+        actual = control._observe(target, fixture.lock)
+        self.assertNotIn((site / "packed.pyc").relative_to(target.environment_root).as_posix(), actual["files"]["environment"])
+        (site / "packed.pyc").write_bytes(b"changed bytecode")
+        with self.assertRaises(ControlError) as failure:
+            control._observe(target, fixture.lock)
+        self.assertEqual(failure.exception.code, "wheel_payload_changed")
+        (site / "packed.pyc").write_bytes(b"locked bytecode")
+        # 每种坏归档独立恢复真实原包，避免前一个错误遮住后一个断言。
+        base = (fixture.root / fixture.lock["wheels"][0]["filename"]).read_bytes()
+        linked = zipfile.ZipInfo("linked.py")
+        linked.external_attr = 0o120777 << 16
+        for entry, payload, code in (("../escape.py", b"x", "invalid_relative_path"), ("packed.pyc", b"duplicate", "unsafe_wheel"), (linked, b"target", "unsafe_wheel"), ("fixture_alpha-1.0.data/unsupported/a", b"x", "unsupported_wheel_scheme")):
+            with self.subTest(member=str(entry)):
+                (fixture.root / fixture.lock["wheels"][0]["filename"]).write_bytes(base)
+                self._replace_observation_wheel(fixture, 0, [(entry, payload)])
+                with self.assertRaises(ControlError) as failure:
+                    control._observe(target, fixture.lock)
+                self.assertEqual(failure.exception.code, code)
+
+    def test_observe_targeted_wheels_still_observe_all_packages(self):
+        fixture, target = self._observation_fixture("observe-targeted")
+        beta = fixture.lock["wheels"][1]
+        (target.root / "cache" / "engine-assets" / beta["sha256"] / beta["filename"]).unlink()
+        site = control._site_root(target.environment_root)
+        path = site / "fixture_beta.py"
+        original = path.read_bytes()
+        healthy = control._observe(target, fixture.lock, {"fixture_alpha"})
+        path.write_bytes(bytes([original[0] ^ 1]) + original[1:])
+        changed = control._observe(target, fixture.lock, {"fixture_alpha"})
+        name = path.relative_to(target.environment_root).as_posix()
+        self.assertNotEqual(healthy["files"]["environment"][name], changed["files"]["environment"][name])
+        self.assertEqual(changed["files"]["environment"][name], control._file(path, target.root))
+        self.assertEqual(changed["package_files"][name], "fixture_beta")
+        (site / "fixture_beta-1.0.dist-info" / "RECORD").unlink()
+        with self.assertRaises(FileNotFoundError):
+            control._observe(target, fixture.lock, {"fixture_alpha"})
+
+    def test_observe_preserves_absolute_bytecode_ancestor_contract(self):
+        fixture, target = self._observation_fixture("__pycache__")
+        actual = control._observe(target, fixture.lock)
+        self.assertEqual(set(actual["files"]["environment"]), {target.python.relative_to(target.environment_root).as_posix(), "pyvenv.cfg"})
+        self.assertEqual(control.inspect_readonly(fixture.request)["installation"], "ready")
 
     def test_readonly_preserves_reports_for_missing_extra_and_same_metadata_damage(self):
         for area in ("environment", "source", "base_python"):

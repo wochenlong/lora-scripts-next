@@ -209,10 +209,22 @@ def _site_root(environment):
     return candidates[0] if len(candidates) == 1 else environment / "lib" / "missing-site-packages"
 
 
-def _wheel_inventory(layout, lock, verify_packages=None):
+def _observed_file(path, layout, observed):
+    guard(path, layout.root)
+    name = path.relative_to(layout.environment_root).as_posix()
+    if name not in observed:
+        # 保留旧整树按绝对路径忽略缓存的合同，包括工作区祖先名为 __pycache__。
+        if _derived_bytecode(path.as_posix()):
+            return _file(path, layout.root)
+        raise ControlError("invalid_file", f"不是限额内普通文件：{path}")
+    return observed[name]
+
+
+def _wheel_inventory(layout, lock, verify_packages=None, *, observed):
     site = _site_root(layout.environment_root)
     files = {}
     packages = {}
+    explicit_bytecode = {}
     for wheel in lock["wheels"]:
         normalized = wheel["name"].replace("-", "_").lower()
         candidates = [p for p in site.glob("*.dist-info") if p.name.lower().startswith(normalized + "-")]
@@ -230,6 +242,10 @@ def _wheel_inventory(layout, lock, verify_packages=None):
                     if member in seen or info.file_size > MAX_FILE or ((info.external_attr >> 16) & 0o170000) == 0o120000:
                         raise ControlError("unsafe_wheel", "wheel 包含重复、超限或链接成员")
                     seen.add(member)
+                    digest = hashlib.sha256()
+                    with bundle.open(info) as stream:
+                        for payload in iter(lambda: stream.read(1024 * 1024), b""):
+                            digest.update(payload)
                     if member.endswith(".dist-info/RECORD"):
                         continue
                     parts = member.split("/")
@@ -242,12 +258,16 @@ def _wheel_inventory(layout, lock, verify_packages=None):
                         installed = (site if parts[1] in {"purelib", "platlib"} else layout.environment_root).joinpath(*parts[2:])
                     else:
                         installed = site / relative(member)
-                    digest = hashlib.sha256()
-                    with bundle.open(info) as stream:
-                        for payload in iter(lambda: stream.read(1024 * 1024), b""):
-                            digest.update(payload)
                     expected = {"bytes": info.file_size, "sha256": digest.hexdigest()}
-                    if _file(installed, layout.root) != expected:
+                    if _derived_bytecode(installed.as_posix()):
+                        # 整树忽略运行时缓存，但 wheel 显式打包的原件仍必须验真。
+                        if installed not in explicit_bytecode:
+                            explicit_bytecode[installed] = _file(installed, layout.root)
+                        actual = explicit_bytecode[installed]
+                    else:
+                        actual = _observed_file(installed, layout, observed)
+                    # 每个 wheel 成员均比较，不能让后一个包覆盖同名但不同的原件。
+                    if actual != expected:
                         raise ControlError("wheel_payload_changed", f"安装内容不匹配锁定 wheel：{member}")
         for row in csv.reader(io.StringIO(record.read_text(encoding="utf-8"))):
             if not row:
@@ -257,7 +277,7 @@ def _wheel_inventory(layout, lock, verify_packages=None):
             if path.suffix == ".pyc" or "__pycache__" in path.parts:
                 continue
             name = path.relative_to(layout.environment_root).as_posix()
-            files[name] = _file(path, layout.root)
+            files[name] = _observed_file(path, layout, observed)
             packages[name] = wheel["name"]
     return files, packages
 
@@ -267,11 +287,13 @@ def _source_files(lock):
 
 
 def _observe(layout, lock, verify_packages=None):
-    files, packages = _wheel_inventory(layout, lock, verify_packages)
+    # 同轮唯一完整现场扫描；不跨计划、执行或恢复操作缓存内容摘要。
+    observed = _tree(layout.environment_root, layout.root)
+    files, packages = _wheel_inventory(layout, lock, verify_packages, observed=observed)
     for path in [layout.python, layout.environment_root / "pyvenv.cfg"]:
-        files[path.relative_to(layout.environment_root).as_posix()] = _file(path, layout.root)
+        files[path.relative_to(layout.environment_root).as_posix()] = _observed_file(path, layout, observed)
     # 整棵实例均纳入收据，额外注入文件不能成为未观测的导入路径。
-    files.update(_tree(layout.environment_root, layout.root))
+    files.update(observed)
     source = {}
     for name, value in _source_files(lock).items():
         path = layout.checked(layout.engine_source_root / relative(name))
