@@ -47,17 +47,17 @@
 
 | App 行的交互事实 | 行数 | 含义 |
 | --- | ---: | --- |
-| 已有真实 UI 触发 | 112 | 包含触发后业务成功、正确拒绝和业务失败；后两者不能据此签成功 |
+| 已有真实 UI 触发 | 113 | 包含触发后业务成功、正确拒绝和业务失败；后两者不能据此签成功 |
 | 真实启动或偏好回退行为 | 2 | 此两行属于启动/状态行为，不是额外独立按钮 |
 | 明确预期的 disabled 保护已核 | 2 | 不支持版本安装及当前／上一健康版本删除保护；此类保护不要求派发 enabled 点击 |
-| 未找到真实交互记录 | 1 | `APP-ENV-005`，见下文 |
-| 合计 | 117 | 116 行有 UI 或 disabled 事实；本表已含后续真实日志恢复入口，不覆盖开头 validate04 历史计数 |
+| 未找到真实交互记录 | 0 | MAIN专用高级导航的真实事件已补齐，见下文 |
+| 合计 | 117 | 117 行均有 UI、生命周期或预期 disabled 事实；本表已含 MAIN 专用高级导航和后续真实日志恢复入口，不覆盖开头 validate04 历史计数 |
 
-真正尚未找到交互证据的是主程序失败摘要中的“查看高级选项”`APP-ENV-005`，需要形成真实检查失败摘要后点击，核展开、滚动与错误保留；普通高级展开按钮不能替代它。日志页“查看恢复”`APP-LOG-022` 后来已在真实持久故障和正式完整检查后点击，进入环境管理并展开高级；其同案恢复失败与整体宿主失败单列如下，导航成功不代表恢复成功。
+主程序失败摘要中的“查看高级选项”`APP-ENV-005` 后来已在 MAIN 真实多包缺损案中点击，原 `/button_events/1`、013原图和执行前可见断言共同证明高级区展开并滚动；以专门的独立衍生导航裁定采纳，不修改其父 `/checks/6` 随后普通重装dialog失败的状态。错误/摘要保留依据实际构建一致源码审查，本案没有另外保存导航前后隐藏摘要字符串的运行时快照，边界单列；普通高级展开按钮没有替代该专用入口。日志页“查看恢复”`APP-LOG-022` 后来已在真实持久故障和正式完整检查后点击，进入环境管理并展开高级；其同案恢复失败与整体宿主失败单列如下，导航成功不代表恢复成功。
 
 后来的 `versions-dual-final06-03` 已通过正式 main 安装、健康 main 切换、dev 警告窗取消／确认与真实版本回退，关闭了这四条成功链的缺口；原 main 安装失败及旧 dev disabled-only 前置仍保留历史身份。`APP-VER-008` 的 dev 专属结构损坏／占用拒绝尚未实测，不能由成功切换或损坏 main 拒绝推导通过。
 
-当前8个 App 部分通过项的剩余功能逐项保留，不能用“同名按钮点过一次”代替；源码检查只判断可达性，不授予 UI 通过。
+当前7个 App 部分通过项的剩余功能逐项保留，不能用“同名按钮点过一次”代替；源码检查只判断可达性，不授予 UI 通过。
 
 | 部分通过项 | 仍未取得的实测及可达性 |
 | --- | --- |
@@ -65,7 +65,7 @@
 | `APP-HOME-015` | `stop_failed` 重试只在真实受管 Job 终止或回收失败时出现；未制造操作系统失败或注入假状态，保 not-run |
 | `APP-HOME-020`／`APP-LOG-023` | 保存临界区取消、重复／任务已结束回执依赖短时竞争。真实 UI 在 cancel_requested 后 disabled、任务终态移除按钮；未强行调用隐藏处理函数或伪造 IPC，尚无该窄窗采样 |
 | `APP-VER-008` | 已知结构坏、运行服务或其他变更进行中会禁用切换；真正独立 lease 的后端拒绝需要另构前置。成功切换不替代这些保护观察 |
-| `APP-ENV-001`／`APP-ENV-003` | 半装、绑定目录丢失、单包、基础Python、多包损坏，以及简化主确认／本页停止后修复均为真实业务入口；ENV 专案继续逐分支实测 |
+| `APP-ENV-001` | 简化源码确认/正式修复和本页停止后修改已直接通过；单包精准分类/预览已通过。半装、绑定目录丢失、基础Python仍未测，多包父分支的后续普通重装dialog失败已保留，不能以专用高级导航通过代替 |
 | `APP-BASE-001` | 完整报告与轻量概况先后返回由 epoch 机制防覆盖，是内部异步竞争；实际导航已测，尚未确定采样全部响应先后组合，未注入延迟假响应 |
 
 全启动器的“每按钮一遍”分母单列生产源码不可达项。`GUI-LIFE-07` 依赖 `history.status=rollback_pending`，当前后端只产生 `ready/pending`；[源码交叉审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/inventory-cross-review.json) 的 `/findings/0`（`XR-01`）记录该条件在当前产品不可达，且禁止注入假 IPC 使其显示。因此按 **226 个可达项加 1 个当前不适用／不可达项**呈现。该项是源码审查排除，不是一次 UI disabled 验证；不得混成可测试但漏测，也不得先行声称其余 226 项都已覆盖。严格完整功能与四引擎 52 单元仍按实际状态保留。
@@ -83,7 +83,7 @@
 | AI Toolkit 配方同时安装两个 OpenCV provider，原件不同导致完整性拒绝 | 对固定官方水印源码作正式发行期依赖补丁，构建 `0.2.0+nexttrainer.1`；两个独立构建所得 wheel 字节相同；141 包、273 条活跃依赖及原件冲突离线审查完成。后来 FINAL06 正式首次安装任务 succeeded，写入 generation1=validated1 的 ready 状态 | 后台安装成功与 UI 整案失败分列：原确认分支因 AI 按钮 locator 不在而失败，原图显示版本管理，页面变化来源 unknown；不据后台 ready 签完整 UI、`pip check` 或健康探针通过 |
 | 引擎完整观测重复读取同一文件，增加检查与安装耗时 | FINAL06 同轮完整树内容摘要供 wheel、RECORD 和全树核对复用；保留完整 SHA、路径、CRC 及派生文件合同，未调宽原超时条件 | 差分与源码回归已完成；不宣称未在同环境测得的加速倍数，最终安装/维护仍需真实终态 |
 
-本轮已保留 App 的严格 117 行裁定，以及逐具体 proof 的旧包→FINAL06 适用性审查。dual03／SET06及后续日志专用入口纳入后，App 严格结果为 **108 通过、8 部分通过、1 未测**，共155条精确 proof；其中原133条旧包适用审查及8条不继承记录内容保持不变，新增14条为 FINAL06 直接实测。未继承项包括缺实际构建清单的早期包证据、涉及新 worker 的只读引擎证据、原始安装失败与未匹配的早期原生分支。该增量不把旧 EXE 或截图改名为 FINAL06 实测，也不覆盖 validate04／interim02 的冻结计数。
+本轮已保留 App 的严格 117 行裁定，以及逐具体 proof 的旧包→FINAL06 适用性审查。dual03／SET06、日志专用入口和后续 MAIN 精确分支纳入后，App 严格结果为 **109 通过、7 部分通过、1 失败**，共162条精确 proof；其中原133条旧包适用审查及8条不继承记录内容保持不变，21条为 FINAL06 直接记录，包含明确标识的1条独立衍生导航裁定，不冒称新的运行会话。失败项是 `APP-ENV-004` 本次真实多包场景下普通重装dialog未出现；原干净场景取消通过仍保留。未继承项包括缺实际构建清单的早期包证据、涉及新 worker 的只读引擎证据、原始安装失败与未匹配的早期原生分支。该增量不把旧 EXE 或截图改名为 FINAL06 实测，也不覆盖 validate04／interim02 的冻结计数。
 
 对应原件：[App 严格裁定](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/app-full-adjudication.json)、[App 影响审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/final06-delivery-impact-review-app.json)、[环境影响审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/final06-delivery-impact-review-environment.json)、[原生功能影响审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/final06-delivery-impact-review-native.json)。这些工作文件可以继续增量更新；validate04 自身的输入 SHA 保存在其独立运行记录中。
 
@@ -214,3 +214,29 @@ DiffSynth 单窗维护新案的[原报告](E:/OpenSourceTeamWork/workspace/tools
 该新快照的固定227行为191通过、26部分通过、3失败、2受阻、4未测、1待复核；52引擎单元为3通过、8部分通过、5失败、3受阻、20未测、13待复核。`acceptance_complete=false`，`final_input_freeze=false`。仍在执行、没有完整host终态的ENV用例未隐式计入。它是新的显式输入验证时点，不覆盖 validate04／05／07 或旧 interim02 的历史数字，未创建新导出目录、未执行大复制，也未改写旧冻结证据包。
 
 第08轮后仅对证据工具补了一处导入副作用修复：离线验包器在导入共享纯谓词之前设置 `sys.dont_write_bytecode=True`，避免其新生成的 `tools/__pycache__` 被全目录清单判断为额外文件。该变更不改任何验收谓词、业务裁定或原证据；[NATIVE 增量独立审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/cleanup-verifier-import-native-independent-review-01.json)确认删去唯一新增行后，builder/verifier SHA 精确回到第08轮所用字节；新模板与独立工具同源。最小外部导入夹具实际证实没有 pyc 副作用，并按预期拒绝故意设置的 incomplete 标记；它不是实际交付包。旧08结果与原审计不改，最终冻结时再按新工具身份导出和真实离线验包。
+
+
+## 后续 MAIN 简化入口的真实终态与性能限制
+
+[MAIN 简化入口原案](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/main-variants-final06-cleanroot-01/environment-report.json)于 `2026-11-01T07:59:09.317Z` 结束，原 SHA 为 `9e98aef876b86166679c52f58332c2ecdd229b70681c5569efbced0ee04df1f4`。原案六个通过分支与后续一个失败分支分别记录，`passed=false` 保留；[ENV 独立终态分析](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/mainvariants-cleanroot-final06-terminal-analysis.json)提供精确 Pointer 和边界。
+
+| 精确原始分支 | 实际结果及签收范围 |
+| --- | --- |
+| `/checks/0`：健康简化主检查 | passed；实际环境页主按钮执行只读检查，registry 不变，补入 `APP-ENV-001` 的健康分支 |
+| `/checks/1`：环境摘要停止服务 | passed；真实网页/API200 后才构造本案源码缺损，只读诊断期间仍API200；实际点击本页“停止服务”后 runtime=stopped，服务12751 API明确 `ECONNREFUSED`，普通修复确认恢复可用 |
+| `/checks/2`：普通源码确认取消 | passed；普通检查精确显示1942项主程序文件与源码归档范围，实际取消后缺损仍保持，无写修复 |
+| `/checks/3`：普通确认正式源码修复 | passed；任务 `download-1793516557-236768-0` succeeded，gui.py 恢复原 SHA `9450e21ddb1fa1bbc042662cf0085f7ffd639cdd70dddc57f3aa996fe6ecede1`，当前GUI绑定与generation1未改，摘要回到健康。该分支首次直接证明简化普通确认成功及本页停止后修复，不由高级入口推导 |
+| `/checks/4`：单包简化分类预览 | passed；实际 absl-py 缺损由简化主按钮识别并展示精准范围，仅签分类与预览，不声称该包已由普通确认修复完成 |
+| `/checks/5`：确认后修复范围扩大 | passed；单包确认后新增第二缺损，真实确认拒绝扩大范围，未启动本案新写任务，两份缺损仍保持 |
+| `/checks/6`：多包高级处理及重装计划 | failed；专用“查看高级选项”已经真实点击并进入高级区，随后点击普通“重新安装环境”后30秒未出现dialog。没有保留该时刻plan/error内存，原因仍unknown；不凭源码猜为harness或guard问题 |
+
+源码修复从原 `/checks/3/started_at=07:02:37.130Z` 到 `finished_at=07:57:18.628Z`，实际 **3281.498秒，即54分41.498秒**。该耗时包含真实主修复及验证等待，是本沙盒观测，不能称响应流畅或作为通用时长估计。当时 `07:37 UTC` 的代理 CIM 工具输出曾观察 PID236768 累计 `ReadTransferCount=52,838,576,802` 字节和 `ReadOperationCount=1,513,405`；这是既有工具输出的明确转录，没有另存该时刻原始OS JSON快照，也不是已测得的本次修复增量读取量。当前没有用重用PID或后来的进程值伪补历史。正式源码修复对非目标环境、用户资料及引擎树进行保护核验的性能限制需继续单列，功能成功不消除这一等待问题。
+
+[MAIN host原件](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/main-variants-final06-cleanroot-01/host-status.json)于 `2026-11-01T07:59:10.238311+00:00` 终态，SHA为 `600c458a0c76df1855c7a83c00a6357484456ea9c58ef3a6ed19f4ea60a5922e`：原 hostfalse/node1 保留，启动器exit0、自有Job排空、CDP11759及服务12751回收。[独立终态回收](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/main-variants-final06-cleanroot-01/terminal-readonly-check.json)确认精确PID代次与Job缺席，三份受控缺损均恢复原SHA，没有active intent，`reclaimed=true`、`clean_for_independent_next_case=true`。它不把原多包重装失败改成通过。
+
+APP已按六个原passed分支分别纳证，`APP-ENV-003` 的普通确认成功及本页停止后修改补齐；`APP-ENV-001` 的单包分类/预览与源码分支补证，基础Python和绑定目录丢失仍未测。`APP-ENV-004` 保留原干净场景下普通重装预览/取消通过，并新增本次多包场景重装dialog失败，不能用历史成功擦除该失败。原APP117行只读结果及后续交互更新不改第08轮等历史冻结数字。
+
+
+MAIN 的专用高级导航已有[独立衍生裁定](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/main-variants-final06-cleanroot-01/advanced-navigation-adjudication.json)，其证据角色明确为“从原始事件裁定导航”，不冒充原运行报告。裁定锁定原报告SHA、`/button_events/1` 与其 `/dom_click_returned=true`，真实原图013展示高级标题、维护目标与检查列表，执行的同一harness在记录事件前已明确断言 `#main-advanced` 可见。[NATIVE 独立审查](E:/OpenSourceTeamWork/workspace/tools/launcher-full-acceptance-20261101/main-advanced-navigation-native-independent-review-01.json)实际核原件、图像、执行源码与六个负例，结论为 `pass-specific-derived-navigation-with-boundaries`。展开并滚动已有运行事实；错误/摘要不清空由与实际产品commit一致的 `openMainAdvanced` 函数核对，不伪称运行时隐藏字符串前后值独立断言。`APP-ENV-005` 因此只签专用导航行为，父重装失败和whole hostfalse保持。
+
+APP 的117行现均有至少一次真实UI、生命周期或明确预期disabled事实，**这不等于117行完整业务全通过**。当前严格分支仍有7个部分通过项与1个真实失败项；全启动器227及四引擎52单元尚需后续真实终态和最终输入冻结。MAIN 导航裁定复用既有证据字段和附加原件引用，没有给导出器加入任意布尔值等同业务通过的规则。
