@@ -6,6 +6,9 @@ use crate::recovery;
 use std::io::Write;
 use std::sync::mpsc;
 
+#[path = "reliability_r0_core_probes.rs"]
+mod reliability_r0_core_probes;
+
 fn root(label: &str) -> PathBuf {
     let base = std::env::var_os("NEXT_TRAINER_P6_TEST_ROOT")
         .map(PathBuf::from)

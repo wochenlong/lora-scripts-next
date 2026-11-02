@@ -1,6 +1,28 @@
 # 施工计划产物与门禁清单
 
-**当前追加CR-019：** 全量按钮/功能沙盒验收，用户明确授权、不真实训练。复用既有Full体系及唯一总控，专项阶段A0–A5、证据合同和开工/完成门合并于[本轮任务书](full-acceptance-20261101-task-book.md)；当前A0/A1完成、A2–A4实测中，历史“仅冒烟”不限制本轮功能实测。
+## 当前追加 CR-020：可靠性与性能修复规划
+
+- 日期：2026-11-02；专项Plan ID：`desktop-launcher-reliability-20261102`；版本`0.2-executing`；状态`executing`。用户已激活Goal；R0六探针/资源/影响映射/导航采集完成，RP-EXIT-R0通过；R1受控修复开始。
+- 唯一canonical progress file：[既有总控](00_总控目标索引.md)；专项细节在新任务书，不建立第二套总控。
+- 模式：既有Full体系的`plan system update`，用下表合并产物保留所有硬门，不另复制七套模板。目标/阶段/清单/证据/探针/Goal/复盘皆有唯一归属。
+- 当前文档前基线：本地/远端`91e3d2e62a5b31865f8c56a0f321418aa887ecd3`；FINAL06产品`4e1b4cc78939e8b906252b27dcc20692ad347a08`，EXE SHA`11804c053d8667b1c9b91512d72055481aeb27d58be2ac32d181ede42413cbca`。
+- 阶段：R0 基线与测量 → R1 恢复自阻挡 → R2 可取消引擎检查任务 → R3 重装预览弹窗 → R4 扫描与启停性能 → R5 最终同包定向沙盒回归 → R6 交付。R0 done，R1 in progress，R2–R6 pending。
+
+| 当前产物 | 职责/合并的必需能力 | 状态 |
+| --- | --- | --- |
+| [README.md](README.md)、[00_总控目标索引.md](00_总控目标索引.md) | 当前入口、唯一总控、范围、专项和全局完成口径 | 已更新为执行状态 |
+| [reliability-performance-20261102-task-book.md](reliability-performance-20261102-task-book.md) | 目标T1–T5及验收、R0–R6长程阶段、逐阶段开工清单/退出门、进度与资源/证据/失败治理 | 已授权，R0 done / R1 in progress |
+| [reliability-performance-20261102-acceptance.md](reliability-performance-20261102-acceptance.md) | 精确CASE、旧8行与52单元映射、六类测试适用性、指标、截图/JSON/回收证据合同 | 已授权，产品用例仍not-run |
+| [reliability-performance-20261102-readiness.md](reliability-performance-20261102-readiness.md) | 资料复盘、风险、最小探针、CR-020/GATE-00–14与逐份最终文档复盘 | 六探针完成；RP-EXIT-R0通过，产品修复未验 |
+| [03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md](03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md) | 批准后连续施工/阶段push/同包实测的完整启动词 | 已获执行授权，Goal active |
+| [00_预检证据/change-control-governance.md](00_预检证据/change-control-governance.md) | CR-020及沿用的变更控制；新旧验收不混淆 | 已更新 |
+| [原正式报告](full-acceptance-20261101-report.md)、[历史执行记录](full-acceptance-20261101-execution-history.md)、[原任务书](full-acceptance-20261101-task-book.md) | 固定问题与失败证据；作为输入只读，不授新包通过 | 保留 |
+
+目标到阶段：T1→R1/R5，T2→R2/R5，T3→R3/R5，T4→R0/R4/R5，T5→R5/R6。编号门禁状态以新readiness为准；GATE-11六探针完成，GATE-14放行R1精确恢复修复；资源unknown及逐案限额保留。实际run为`run-20261102T130200Z`，证据和沙盒分别位于`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/`与`F:/NextTrainerLauncherSandbox/reliability-20261102/`下，两根均已有归属标记。
+
+唯一下一步：执行R1精确恢复修复及Core入口正反例；真实GUI恢复前完成精确旧根预备备份，随后按阶段门继续R2–R6。以下M0–M6及v0.6元数据/门禁为历史结构，状态发生冲突时以当前CR-020、CR-019最终报告和唯一总控为准，不据旧清单重开已完成工程。
+
+**CR-019当前状态：incomplete。** 全量验收证据已交付，227行193通过/24部分通过/8失败/1受阻/1待复核；52引擎单元另列。旧“仅冒烟”不限制当前功能实测，未开始训练。专项A0–A5原始过程见[原任务书](full-acceptance-20261101-task-book.md)，不能使用历史执行中快照替代最终结果。
 
 **交付后产品修正 CR-007（2026-10-30）：** 用户要求立即取消强制下载额度，默认允许下载、累计上限改为高级可选项。实现/定向验证/新制品状态以[总控](00_总控目标索引.md)和[补丁记录](download-policy-followup.md)为准；原施工阶段与历史验证不重开。
 

@@ -21,6 +21,10 @@ use std::{
 
 static NEXT: AtomicU64 = AtomicU64::new(0);
 
+#[cfg(all(test, windows))]
+#[path = "reliability_r0_protection_probes.rs"]
+mod reliability_r0_protection_probes;
+
 #[derive(Debug, Serialize)]
 struct Diagnosis {
     schema_version: u32,

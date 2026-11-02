@@ -16,6 +16,10 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 static NEXT: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(all(test, windows))]
+#[path = "reliability_r0_rebuild_fixture.rs"]
+pub(super) mod reliability_r0_rebuild_fixture;
 pub(crate) fn verified_history(
     layout: &Layout,
     release: &Release,
