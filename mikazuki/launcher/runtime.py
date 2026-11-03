@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 import hashlib
 import json
@@ -9,6 +10,7 @@ import os
 from pathlib import Path
 import re
 import stat
+import time
 
 
 ENGINE_LEASE_PROTOCOL = "engine-leases-v1"
@@ -18,6 +20,128 @@ class ControlError(RuntimeError):
     def __init__(self, code: str, message: str):
         super().__init__(message)
         self.code = code
+
+
+class QueryStopped(ControlError):
+    """查询取消/期限不得被完整性或缺资产的普通错误处理吞掉。"""
+
+
+_QUERY_CONTROL = ContextVar("launcher_query_control", default=None)
+QUERY_CHUNK_BYTES = 1024 * 1024
+QUERY_STAGES = frozenset({"worker", "receipt", "environment", "source", "python", "extra_files", "tools"})
+QUERY_MESSAGES = {
+    "worker": "正在准备独立检查", "receipt": "正在核对安装记录", "environment": "正在核对环境文件",
+    "source": "正在核对源码文件", "python": "正在核对基础 Python", "extra_files": "正在核对额外文件",
+    "tools": "正在核对固定资产",
+}
+
+
+class QueryControl:
+    """只读、无文件写入。父Rust是取消/动态期限及Job回收的权威。"""
+
+    def __init__(self, task_id, remaining_ms, scope, *, progress=True, emit=None, clock=None, cancelled=None):
+        self.task_id, self.scope = task_id, scope
+        self.clock = clock or time.monotonic
+        self.deadline = self.clock() + remaining_ms / 1000
+        self.cancelled = cancelled  # 仅可信同进程调用/测试；不从JSON反序列化可执行对象。
+        self.emit = emit if progress else None
+        self.stage = "worker"
+        self.files = self.bytes = self.seq = 0
+        self.last_emitted = None
+        self.last_payload = None
+
+    @classmethod
+    def from_request(cls, request, *, emit=None):
+        if not isinstance(request, dict) or "query_protocol" not in request:
+            return None
+        protocol = request["query_protocol"]
+        if not isinstance(protocol, dict) or type(protocol.get("version")) is not int or protocol["version"] != 1:
+            raise ControlError("query_protocol_invalid", "查询协议版本不支持")
+        task_id = protocol.get("task_id")
+        remaining = protocol.get("remaining_ms")
+        if not isinstance(task_id, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,191}", task_id):
+            raise ControlError("query_protocol_invalid", "查询任务标识无效")
+        if type(remaining) is not int or not 0 <= remaining <= 1800000 or type(protocol.get("progress")) is not bool:
+            raise ControlError("query_protocol_invalid", "查询期限或进度开关无效")
+        if "cancel_file" in request:
+            raise ControlError("query_protocol_invalid", "只读查询不使用取消文件")
+        action, scope = request.get("action"), protocol.get("scope", "full")
+        allowed = {"capabilities": {"full"}, "recipe": {"full"}, "inspect_readonly": {"full", "files_only"},
+                   "plan_install": {"plan"}, "plan_repair": {"plan"}}
+        if not isinstance(action, str) or not isinstance(scope, str) or scope not in allowed.get(action, set()):
+            raise ControlError("query_scope_invalid", "查询动作与范围不匹配")
+        return cls(task_id, remaining, scope, progress=protocol["progress"], emit=emit)
+
+    def check(self):
+        if self.cancelled is not None and self.cancelled():
+            raise QueryStopped("query_cancelled", "独立检查已取消")
+        if self.clock() >= self.deadline:
+            raise QueryStopped("query_timed_out", "独立检查已到入口总期限")
+
+    def publish(self, *, force=False):
+        self.check()
+        if self.emit is None or self.seq >= 8192:
+            return
+        now = self.clock()
+        payload = (self.stage, self.files, self.bytes)
+        if self.last_payload == payload:
+            return
+        if not force and self.last_emitted is not None and now - self.last_emitted < 0.25:
+            return
+        frame = {"schema_version": 1, "type": "progress", "task_id": self.task_id, "seq": self.seq + 1,
+                 "stage": self.stage, "files": self.files, "bytes": self.bytes,
+                 "total_files": None, "total_bytes": None, "message": QUERY_MESSAGES[self.stage]}
+        try:
+            self.emit(frame)
+        except (OSError, ValueError) as error:
+            raise QueryStopped("query_output_closed", "查询进度管道已关闭") from error
+        self.seq += 1
+        self.last_emitted, self.last_payload = now, payload
+
+    def set_stage(self, stage):
+        self.check()
+        if stage not in QUERY_STAGES:
+            raise ControlError("query_stage_invalid", "不支持的查询阶段")
+        if stage != self.stage:
+            self.publish(force=True)
+            self.stage, self.files, self.bytes = stage, 0, 0
+            self.publish(force=True)
+        else:
+            self.publish()
+
+    def checkpoint(self, *, read_bytes=0, file_complete=False):
+        self.bytes += read_bytes
+        self.files += int(file_complete)
+        self.check()
+        self.publish()
+
+
+@contextmanager
+def query_scope(control):
+    token = _QUERY_CONTROL.set(control)
+    try:
+        if control is not None:
+            control.check()
+            control.publish(force=True)
+        yield
+    finally:
+        _QUERY_CONTROL.reset(token)
+
+
+def query_control():
+    return _QUERY_CONTROL.get()
+
+
+def query_checkpoint(*, read_bytes=0, file_complete=False):
+    control = _QUERY_CONTROL.get()
+    if control is not None:
+        control.checkpoint(read_bytes=read_bytes, file_complete=file_complete)
+
+
+def query_stage(stage):
+    control = _QUERY_CONTROL.get()
+    if control is not None:
+        control.set_stage(stage)
 
 
 def component(value: str) -> str:
@@ -37,9 +161,16 @@ def relative(value: str) -> Path:
 
 def sha_file(path: Path) -> str:
     digest = hashlib.sha256()
+    query_checkpoint()
     with path.open("rb") as stream:
-        for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        while True:
+            query_checkpoint()
+            chunk = stream.read(QUERY_CHUNK_BYTES)
+            if not chunk:
+                break
             digest.update(chunk)
+            query_checkpoint(read_bytes=len(chunk))
+    query_checkpoint(file_complete=True)
     return digest.hexdigest()
 
 
@@ -67,8 +198,25 @@ def atomic_json(path: Path, value) -> None:
 
 
 def read_json(path: Path, limit: int = 32 * 1024 * 1024):
+    query_checkpoint()
     if path.stat().st_size > limit:
         raise ControlError("state_too_large", "状态超过读取上限")
+    if query_control() is not None:
+        data = bytearray()
+        with path.open("rb") as stream:
+            while True:
+                query_checkpoint()
+                chunk = stream.read(min(QUERY_CHUNK_BYTES, limit + 1 - len(data)))
+                if not chunk:
+                    break
+                data.extend(chunk)
+                query_checkpoint(read_bytes=len(chunk))
+                if len(data) > limit:
+                    raise ControlError("state_too_large", "状态超过读取上限")
+        query_checkpoint()
+        value = json.loads(data.decode("utf-8"))
+        query_checkpoint()
+        return value
     return json.loads(path.read_text(encoding="utf-8"))
 
 

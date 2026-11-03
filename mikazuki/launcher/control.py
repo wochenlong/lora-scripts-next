@@ -19,7 +19,9 @@ import uuid
 import zipfile
 
 from .recipes import capabilities, recipe
-from .runtime import ControlError, RuntimeLayout, atomic_json, canonical, digest_json, engine_activity, engine_lease, guard, is_reparse, read_json, relative, sha_file
+from .runtime import (ControlError, QueryControl, QueryStopped, RuntimeLayout, atomic_json, canonical,
+                      digest_json, engine_activity, engine_lease, guard, is_reparse, query_checkpoint,
+                      query_control, query_scope, query_stage, read_json, relative, sha_file)
 
 
 MAX_FILE = 8 * 1024 * 1024 * 1024
@@ -32,6 +34,7 @@ def _layout(request, instance_id=""):
 
 
 def _file(path: Path, root: Path) -> dict:
+    query_checkpoint()
     guard(path, root)
     if not path.is_file() or path.stat().st_size > MAX_FILE:
         raise ControlError("invalid_file", f"不是限额内普通文件：{path}")
@@ -43,6 +46,7 @@ def _derived_bytecode(name):
 
 
 def _state(layout):
+    query_checkpoint()
     path = layout.checked(layout.state_file)
     if not path.exists():
         return None
@@ -86,6 +90,7 @@ def _lock(layout, request):
     if lock["python"]["version"].split(".")[:2] != expected["python"].split(".")[:2]:
         raise ControlError("incompatible_python", "资产锁解释器与固定配方 ABI 不符")
     for wheel in lock["wheels"]:
+        query_checkpoint()
         relative(wheel["filename"])
         if not wheel["filename"].endswith(".whl"):
             raise ControlError("incomplete_lock", "不允许运行未锁定的源码构建")
@@ -98,6 +103,7 @@ def _lock(layout, request):
         if len(files) > MAX_STATE_FILES:
             raise ControlError("tree_limit", "锁文件超过文件数上限")
         for name, value in files.items():
+            query_checkpoint()
             relative(name)
             if not isinstance(value.get("bytes"), int) or value["bytes"] < 0 or value["bytes"] > MAX_FILE or not re.fullmatch("[a-f0-9]{64}", value.get("sha256", "")):
                 raise ControlError("incomplete_lock", "固定文件摘要格式无效")
@@ -106,6 +112,7 @@ def _lock(layout, request):
 
 
 def _receipt(layout, state):
+    query_stage("receipt")
     expected_relative = f"instances/{state['instance_id']}/{state['validated_generation']}.json"
     if state.get("receipt_relative") != expected_relative:
         raise ControlError("receipt_identity", "收据必须属于当前实例已验证代次")
@@ -124,6 +131,7 @@ def inspect_readonly(request):
 
 def _inspect_readonly(request, candidate_state=None):
     """内部候选绑定复验；公共请求不能替换持久状态或绕过完整内容检查。"""
+    query_stage("receipt")
     layout = _layout(request)
     fixed = recipe(layout.engine_id)
     report = {"schema_version": 1, "engine_id": layout.engine_id, "layout": layout.as_dict(), "recipe": fixed,
@@ -150,10 +158,13 @@ def _inspect_readonly(request, candidate_state=None):
         broken = []
         missing = object()
         for area, files in receipt["files"].items():
+            query_checkpoint()
+            query_stage("environment" if area == "environment" else "source")
             root = current.environment_root if area == "environment" else current.engine_source_root
             # 一次完整现场扫描同时提供原件核对及额外文件检测，避免每个大文件读两遍。
             observed = _tree(current.checked(root), current.root)
             for name, expected in files.items():
+                query_checkpoint()
                 path = root / relative(name)
                 actual = observed.get(name, missing)
                 if actual is missing and _derived_bytecode(path.as_posix()):
@@ -163,9 +174,14 @@ def _inspect_readonly(request, candidate_state=None):
                         actual = _file(path, current.root)
                 if actual is missing or actual != expected:
                     broken.append({"area": area, "path": name, "package": receipt.get("package_files", {}).get(name) if area == "environment" else None})
+            query_stage("extra_files")
             extras = set(observed) - set(files)
-            broken.extend({"area": area, "path": name, "package": None, "unexpected": True} for name in sorted(extras))
+            for name in sorted(extras):
+                query_checkpoint()
+                broken.append({"area": area, "path": name, "package": None, "unexpected": True})
+        query_stage("python")
         for name, expected in receipt.get("base_python_files", {}).items():
+            query_checkpoint()
             path = current.checked(current.base_python_root / relative(name))
             if not path.is_file() or _file(path, current.root) != expected:
                 broken.append({"area": "base_python", "path": name, "package": None})
@@ -177,6 +193,8 @@ def _inspect_readonly(request, candidate_state=None):
             report["actions"] = ["recover"]
         report["layers"] = {"installed": report["installation"], "import": "not_checked", "gpu": "skip + CR-004", "training": "skip + CR-004"}
         return report
+    except QueryStopped:
+        raise
     except (OSError, ValueError, KeyError, TypeError, ControlError) as error:
         report.update(installation="unknown", actions=[])
         report["issues"].append({"code": getattr(error, "code", "inspection_failed"), "message": str(error)})
@@ -185,9 +203,37 @@ def _inspect_readonly(request, candidate_state=None):
 
 def _tree(root: Path, workspace: Path) -> dict:
     result = {}
+    query_checkpoint()
     if not root.exists():
         return result
     guard(root, workspace)
+    if query_control() is not None:
+        # 查询逐项枚举；避免os.walk在一整个大目录枚举结束前没有检查点。
+        pending, visited = [root], 0
+        while pending:
+            query_checkpoint()
+            directory = pending.pop()
+            with os.scandir(directory) as entries:
+                for entry in entries:
+                    query_checkpoint()
+                    path = Path(entry.path)
+                    if entry.is_dir(follow_symlinks=False):
+                        guard(path, workspace)
+                        pending.append(path)
+                        visited += 1
+                        if visited > MAX_STATE_FILES:
+                            raise ControlError("tree_limit", "引擎闭包超过目录数上限")
+                        continue
+                    # 保持既有派生字节码过滤；链接目录不能借缓存名绕过guard。
+                    if is_reparse(path):
+                        guard(path, workspace)
+                    if path.suffix == ".pyc" or "__pycache__" in path.parts:
+                        continue
+                    guard(path, workspace)
+                    result[path.relative_to(root).as_posix()] = _file(path, workspace)
+                    if len(result) > MAX_STATE_FILES:
+                        raise ControlError("tree_limit", "引擎闭包超过文件数上限")
+        return result
     for directory, directories, files in os.walk(root, followlinks=False):
         for name in directories:
             guard(Path(directory) / name, workspace)
@@ -226,6 +272,7 @@ def _wheel_inventory(layout, lock, verify_packages=None, *, observed):
     packages = {}
     explicit_bytecode = {}
     for wheel in lock["wheels"]:
+        query_checkpoint()
         normalized = wheel["name"].replace("-", "_").lower()
         candidates = [p for p in site.glob("*.dist-info") if p.name.lower().startswith(normalized + "-")]
         if len(candidates) != 1:
@@ -236,6 +283,7 @@ def _wheel_inventory(layout, lock, verify_packages=None, *, observed):
             with zipfile.ZipFile(_asset(layout, wheel)) as bundle:
                 seen = set()
                 for info in bundle.infolist():
+                    query_checkpoint()
                     if info.is_dir():
                         continue
                     member = relative(info.filename).as_posix()
@@ -244,8 +292,14 @@ def _wheel_inventory(layout, lock, verify_packages=None, *, observed):
                     seen.add(member)
                     digest = hashlib.sha256()
                     with bundle.open(info) as stream:
-                        for payload in iter(lambda: stream.read(1024 * 1024), b""):
+                        while True:
+                            query_checkpoint()
+                            payload = stream.read(1024 * 1024)
+                            if not payload:
+                                break
                             digest.update(payload)
+                            query_checkpoint(read_bytes=len(payload))
+                    query_checkpoint(file_complete=True)
                     if member.endswith(".dist-info/RECORD"):
                         continue
                     parts = member.split("/")
@@ -270,6 +324,7 @@ def _wheel_inventory(layout, lock, verify_packages=None, *, observed):
                     if actual != expected:
                         raise ControlError("wheel_payload_changed", f"安装内容不匹配锁定 wheel：{member}")
         for row in csv.reader(io.StringIO(record.read_text(encoding="utf-8"))):
+            query_checkpoint()
             if not row:
                 continue
             path = Path(os.path.abspath(site / row[0]))
@@ -311,6 +366,7 @@ def _assets(lock):
 
 
 def plan(request, installing=False):
+    query_stage("tools")
     layout = _layout(request)
     lock = _lock(layout, request)
     state = _state(layout)
@@ -338,9 +394,13 @@ def plan(request, installing=False):
     next_layout = _layout(request, instance)
     needed = _assets(lock) if installing else [lock["uv"].get("archive", lock["uv"]), *(w for w in lock["wheels"] if w["name"] in packages), *([lock["source"]["archive"]] if source_paths and lock.get("source", {}).get("archive") else [])]
     missing = []
+    query_stage("tools")
     for item in needed:
+        query_checkpoint()
         try:
             _asset(next_layout, item)
+        except QueryStopped:
+            raise
         except ControlError:
             missing.append(item)
     result = {"schema_version": 1, "engine_id": layout.engine_id, "release_id": layout.release_id, "profile_id": layout.profile_id, "kind": "install" if installing else "repair", "rebuild": bool(request.get("rebuild")), "recipe_sha256": lock["recipe_sha256"], "lock_sha256": request["lock_sha256"], "prior_state_sha256": digest_json(state), "instance_id": instance, "expected_generation": state["generation"] if state else 0, "packages": packages, "source_paths": source_paths,
@@ -667,14 +727,33 @@ def probe_execute(request):
         return value
 
 
-def dispatch(request):
+def dispatch(request, *, query=None):
     if not isinstance(request, dict) or request.get("schema_version", 1) != 1:
         raise ControlError("protocol_version", "worker 协议版本不支持")
+    # query只由可信worker传入；普通调用也校验协议并使用同一上下文。
+    validated = QueryControl.from_request(request)
+    if query is None:
+        query = validated
+    elif (not isinstance(query, QueryControl) or validated is None
+          or (query.task_id, query.scope) != (validated.task_id, validated.scope)):
+        raise ControlError("query_protocol_invalid", "查询上下文不属于此请求")
+    token = _CANCEL_PATH.set(None)
+    try:
+        if request.get("cancel_file"):
+            layout = _layout(request)
+            _CANCEL_PATH.set(guard(Path(request["cancel_file"]), layout.root / "state"))
+        with query_scope(query):
+            result = _dispatch(request)
+            query_checkpoint()
+            if query is not None:
+                query.publish(force=True)
+            return result
+    finally:
+        _CANCEL_PATH.reset(token)
+
+
+def _dispatch(request):
     action = request.get("action")
-    _CANCEL_PATH.set(None)
-    if request.get("cancel_file"):
-        layout = _layout(request)
-        _CANCEL_PATH.set(guard(Path(request["cancel_file"]), layout.root / "state"))
     if action == "capabilities":
         return capabilities()
     if action == "recipe":

@@ -72,6 +72,9 @@ mod tests {
                         Err(error) => panic!("accept: {error}"),
                     }
                 };
+                // Windows接受的socket可能继承监听器的非阻塞模式；请求尚未到达
+                // 时应在下面的受限读取期限内等待，不能把WouldBlock当HTTP失败。
+                socket.set_nonblocking(false).unwrap();
                 socket
                     .set_read_timeout(Some(Duration::from_secs(5)))
                     .unwrap();

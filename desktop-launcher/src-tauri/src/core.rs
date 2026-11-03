@@ -31,6 +31,9 @@ mod artifact_downloads;
 mod controlled_download;
 #[path = "engine_bridge.rs"]
 mod engine_bridge;
+#[path = "engine_query_runtime.rs"]
+mod engine_query_runtime;
+pub(crate) use engine_query_runtime::run as run_engine_query;
 
 #[path = "base_python_repair.rs"]
 mod base_python_repair;
@@ -58,6 +61,10 @@ mod safe_extract;
 #[path = "p6_tests.rs"]
 mod p6_tests;
 
+#[cfg(test)]
+#[path = "reliability_r1_commit_tests.rs"]
+mod r1_commit_boundary_tests;
+
 pub type Logger = Arc<dyn Fn(String) + Send + Sync>;
 type ServiceLoggerFactory = Arc<dyn Fn(&Path, &str) -> Logger + Send + Sync>;
 pub(crate) fn embedded_engine_lock(engine: &str) -> Option<&'static [u8]> {
@@ -83,6 +90,40 @@ fn assert_regular_ready(root: &Path) -> Result<()> {
         gui_binding_switch::assert_ready(root, release)?;
     }
     crate::instances::assert_no_preserved_pending(root)
+}
+
+fn complete_gui_lifecycle_success(
+    ctx: &model::WorkspaceMutation,
+    release_id: &str,
+    cancel: &crate::operations::CancelToken,
+) -> Result<()> {
+    // 幂等恢复也必须与最后到达的取消竞争；控制JSON/绑定代次同步属于短收尾，
+    // 不得在已返回Accepted后仍将本次操作报告成功。实际收尾时限另由原生实测。
+    cancel.enter_commit()?;
+    crate::data_import::sync_current_environment(ctx, release_id)
+}
+
+fn finish_gui_lifecycle_result(
+    ctx: &model::WorkspaceMutation,
+    operation: &crate::operations::OperationHandle,
+    result: Result<()>,
+) -> Result<()> {
+    use crate::operations::{Cancelled, OperationError, OperationStatus};
+    let (status, error) = match &result {
+        Ok(()) => (OperationStatus::Succeeded, None),
+        Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
+            (OperationStatus::Cancelled, None)
+        }
+        Err(error) => (
+            OperationStatus::Failed,
+            Some(OperationError {
+                code: "gui_lifecycle_failed".into(),
+                message: format!("{error:#}"),
+            }),
+        ),
+    };
+    operation.finish_and_persist(ctx, status, error)?;
+    result
 }
 const REQUIRED: &[&str] = &[
     "gui.py",
@@ -200,6 +241,31 @@ struct Job(windows_sys::Win32::Foundation::HANDLE);
 unsafe impl Send for Job {}
 #[cfg(windows)]
 impl Job {
+    fn active_processes(&self) -> Result<u32> {
+        use windows_sys::Win32::System::JobObjects::*;
+        unsafe {
+            let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = std::mem::zeroed();
+            if QueryInformationJobObject(
+                self.0,
+                JobObjectBasicAccountingInformation,
+                &mut info as *mut _ as _,
+                std::mem::size_of_val(&info) as u32,
+                std::ptr::null_mut(),
+            ) == 0
+            {
+                return Err(std::io::Error::last_os_error()).context("读取检查 Job 活动进程失败");
+            }
+            Ok(info.ActiveProcesses)
+        }
+    }
+    fn terminate(&self) -> Result<()> {
+        unsafe {
+            if windows_sys::Win32::System::JobObjects::TerminateJobObject(self.0, 1) == 0 {
+                return Err(std::io::Error::last_os_error()).context("终止检查 Job 失败");
+            }
+        }
+        Ok(())
+    }
     fn terminate_and_wait(&self) -> Result<()> {
         use windows_sys::Win32::System::JobObjects::*;
         unsafe {
@@ -286,6 +352,12 @@ impl Drop for Job {
 struct Job;
 #[cfg(not(windows))]
 impl Job {
+    fn active_processes(&self) -> Result<u32> {
+        Ok(0)
+    }
+    fn terminate(&self) -> Result<()> {
+        Ok(())
+    }
     fn terminate_and_wait(&self) -> Result<()> {
         Ok(())
     }
@@ -318,16 +390,42 @@ fn uv(root: &Path) -> PathBuf {
     root.join("tools/uv.exe")
 }
 fn digest(path: &Path) -> Result<String> {
+    digest_with_cancel(path, None)
+}
+fn digest_controlled(path: &Path, cancel: &crate::operations::CancelToken) -> Result<String> {
+    digest_with_cancel(path, Some(cancel))
+}
+fn digest_with_cancel(
+    path: &Path,
+    cancel: Option<&crate::operations::CancelToken>,
+) -> Result<String> {
+    crate::scan_observation::checkpoint(crate::query_tasks::QueryStage::Environment, 0, 0)?;
+    if let Some(cancel) = cancel {
+        cancel.check()?;
+    }
     let mut f = File::open(path)?;
     let mut hash = Sha256::new();
     let mut buffer = [0u8; 65536];
     loop {
+        crate::scan_observation::checkpoint(crate::query_tasks::QueryStage::Environment, 0, 0)?;
+        if let Some(cancel) = cancel {
+            cancel.check()?;
+        }
         let n = f.read(&mut buffer)?;
         if n == 0 {
             break;
         }
         hash.update(&buffer[..n]);
+        crate::scan_observation::checkpoint(
+            crate::query_tasks::QueryStage::Environment,
+            0,
+            n as u64,
+        )?;
+        if let Some(cancel) = cancel {
+            cancel.check()?;
+        }
     }
+    crate::scan_observation::checkpoint(crate::query_tasks::QueryStage::Environment, 1, 0)?;
     Ok(format!("{:x}", hash.finalize()))
 }
 
@@ -454,13 +552,34 @@ fn manifest(directory: &Path) -> Result<BTreeMap<String, String>> {
     Ok(files)
 }
 fn verify_source(layout: &Layout, release: &Release) -> Result<()> {
+    verify_source_with_cancel(layout, release, None)
+}
+fn verify_source_controlled(
+    layout: &Layout,
+    release: &Release,
+    cancel: &crate::operations::CancelToken,
+) -> Result<()> {
+    verify_source_with_cancel(layout, release, Some(cancel))
+}
+fn verify_source_with_cancel(
+    layout: &Layout,
+    release: &Release,
+    cancel: Option<&crate::operations::CancelToken>,
+) -> Result<()> {
+    crate::scan_observation::check()?;
+    if let Some(cancel) = cancel {
+        cancel.check()?;
+    }
     layout.guard_path(&layout.app)?;
     let receipt = ReleaseReceipt::load(&layout.release_dir)?;
     if receipt.release != *release {
         bail!("本地发布清单不匹配");
     }
     if release.environment_recipe == "gui-cp310-win-x64-v1" {
-        return crate::source_integrity::verify(layout, release);
+        return match cancel {
+            Some(cancel) => crate::source_integrity::verify_controlled(layout, release, cancel),
+            None => crate::source_integrity::verify(layout, release),
+        };
     }
     let dir = source(layout);
     let entries: BTreeMap<String, String> =
@@ -482,7 +601,13 @@ fn verify_source(layout: &Layout, release: &Release) -> Result<()> {
             bail!("源码完整性清单含非法路径");
         }
         layout.guard_path(&dir.join(p))?;
-        if digest(&dir.join(p)).ok().as_deref() != Some(expected.as_str()) {
+        let actual = digest_with_cancel(&dir.join(p), cancel);
+        // 取消及查询期限必须先于“损坏”结论返回，不能被旧的ok()吞掉。
+        crate::scan_observation::check()?;
+        if let Some(cancel) = cancel {
+            cancel.check()?;
+        }
+        if actual.ok().as_deref() != Some(expected.as_str()) {
             bail!("源码文件缺失或改变：{rel}");
         }
     }
@@ -579,6 +704,24 @@ fn managed_base_path(layout: &Layout, release: &Release, path: &Path) -> Result<
     Ok(resolved)
 }
 fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
+    check_environment_with_cancel(layout, release, None)
+}
+fn check_environment_controlled(
+    layout: &Layout,
+    release: &Release,
+    cancel: &crate::operations::CancelToken,
+) -> Result<()> {
+    check_environment_with_cancel(layout, release, Some(cancel))
+}
+fn check_environment_with_cancel(
+    layout: &Layout,
+    release: &Release,
+    cancel: Option<&crate::operations::CancelToken>,
+) -> Result<()> {
+    crate::scan_observation::check()?;
+    if let Some(cancel) = cancel {
+        cancel.check()?;
+    }
     assert_regular_ready(&layout.root)?;
     // 版本列表也检查未安装的历史发布，先拒绝缺失环境，避免反复扫描整套基础 Python。
     // 已安装环境仍执行下面全部可信闭包、绑定、配置及运行检查。
@@ -588,7 +731,10 @@ fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
         bail!("主程序环境尚未安装或解释器缺失，请安装或修复此版本");
     }
     if release.environment_recipe == "gui-cp310-win-x64-v1" {
-        crate::python_integrity::verify(layout)?;
+        match cancel {
+            Some(cancel) => crate::python_integrity::verify_controlled(layout, cancel)?,
+            None => crate::python_integrity::verify(layout)?,
+        };
     }
     if let Some(binding) = Registry::load(&layout.root)?.gui_binding(&release.id) {
         let instance = crate::instances::load(layout, &binding.instance_id)?;
@@ -599,7 +745,10 @@ fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
         {
             bail!("环境绑定generation或配方与实例不一致，请重新诊断");
         }
-        crate::instances::assert_usable(&instance)?;
+        match cancel {
+            Some(cancel) => crate::instances::assert_usable_controlled(&instance, cancel)?,
+            None => crate::instances::assert_usable(&instance)?,
+        }
     }
     layout.guard_path(&layout.environment)?;
     layout.guard_path(&env_python(layout))?;
@@ -627,13 +776,16 @@ fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
         }
     }
     let script = "import sys,pathlib,os; expected=pathlib.Path(sys.argv[1]).resolve(); assert sys.version.split()[0] == sys.argv[2]; assert pathlib.Path(sys.base_prefix).resolve().is_relative_to(expected); assert pathlib.Path(sys._base_executable).resolve().is_relative_to(expected); import pip,fastapi,uvicorn,toml,numpy,onnxruntime,psutil,pandas,PIL,cv2,tensorboard,rich,requests,httpx,aiohttp,websockets,multipart,modelscope,cryptography,huggingface_hub,pynvml; from importlib.metadata import version; assert version('numpy') == '1.26.4'";
-    let result = hidden(
-        Command::new(env_python(layout))
-            .args(["-I", "-B", "-c", script])
-            .arg(managed)
-            .arg(&release.python),
-    )
-    .output()?;
+    let mut probe = Command::new(env_python(layout));
+    hidden(&mut probe)
+        .args(["-I", "-B", "-c", script])
+        .arg(managed)
+        .arg(&release.python);
+    if let Some(cancel) = cancel {
+        let log: Logger = Arc::new(|_: String| {});
+        return execute_controlled(probe, &log, cancel);
+    }
+    let result = probe.output()?;
     if !result.status.success() {
         bail!("{}", String::from_utf8_lossy(&result.stderr));
     }
@@ -1205,24 +1357,54 @@ impl Engine {
         instance: Option<&str>,
         operation: &crate::operations::OperationHandle,
     ) -> Result<()> {
-        use crate::operations::{Cancelled, OperationError, OperationPhase, OperationStatus};
+        use crate::operations::OperationPhase;
+        // 参数拒绝早于租约和任务持久化；未知动作不能初始化错误目录。
+        match action {
+            "rebuild" => {
+                plan.context("缺少重建预览摘要")?;
+            }
+            "rollback" => {
+                plan.context("缺少回退预览摘要")?;
+                transaction.context("缺少重建历史")?;
+            }
+            "recover_rebuild" | "recover_rollback" => {
+                model::validate_component(transaction.context("缺少恢复事务")?)?;
+            }
+            "recover_preserved" => {
+                model::validate_component(instance.context("请选择保留实例")?)?;
+            }
+            _ => bail!("未知实例变更动作"),
+        }
+        let release = self.catalog.release(id)?.clone();
         let _network = crate::network_policy::task_policy(root)?;
         self.reap();
         if self.lifecycle.has_process() {
             bail!("请先停止训练器，再变更环境实例");
         }
-        let release = self.catalog.release(id)?.clone();
-        let ctx = model::WorkspaceMutation::acquire(root, id)?;
+        let ctx = if matches!(
+            action,
+            "recover_rebuild" | "recover_rollback" | "recover_preserved"
+        ) {
+            model::WorkspaceMutation::acquire_existing(root, id)?
+        } else {
+            model::WorkspaceMutation::acquire(root, id)?
+        };
         crate::data_import::assert_binding_ready(root)?;
         crate::shell_update_protocol::assert_ready(root)?;
         base_python_repair::assert_ready(root)?;
         assert_registration_ready(root, None)?;
-        for other in self.catalog.releases() {
-            if other.id != id {
-                gui_rebuild::assert_ready(root, other)?;
-                gui_binding_switch::assert_ready(root, other)?;
-            }
+        if action == "recover_rebuild" {
+            gui_rebuild::assert_ready_except_recovery(
+                root,
+                &release,
+                transaction.context("缺少重建事务")?,
+            )?;
+        } else {
+            gui_rebuild::assert_ready(root, &release)?;
         }
+        let rollback_recovery = (action == "recover_rollback")
+            .then(|| (&release, transaction.expect("恢复事务已校验")));
+        gui_binding_switch::assert_all_ready(root, rollback_recovery)?;
         if action != "recover_preserved" {
             instances::assert_no_preserved_pending(root)?;
         }
@@ -1293,10 +1475,15 @@ impl Engine {
                     entry,
                 )
                 .map(|_| ()),
-                "recover_rollback" => {
-                    gui_rebuild::recover_rollback(&ctx, &release, &cancel, validator, entry)
-                        .map(|_| ())
-                }
+                "recover_rollback" => gui_rebuild::recover_rollback(
+                    &ctx,
+                    &release,
+                    transaction.context("缺少回退恢复事务")?,
+                    &cancel,
+                    validator,
+                    entry,
+                )
+                .map(|_| ()),
                 "recover_preserved" => {
                     gui_rebuild::assert_ready(root, &release)?;
                     gui_binding_switch::assert_ready(root, &release)?;
@@ -1326,20 +1513,8 @@ impl Engine {
                 _ => bail!("未知实例变更动作"),
             }
         })()
-        .and_then(|()| crate::data_import::sync_current_environment(&ctx, id));
-        let (status, error) = match &result {
-            Ok(()) => (OperationStatus::Succeeded, None),
-            Err(e) if e.downcast_ref::<Cancelled>().is_some() => (OperationStatus::Cancelled, None),
-            Err(e) => (
-                OperationStatus::Failed,
-                Some(OperationError {
-                    code: "gui_lifecycle_failed".into(),
-                    message: format!("{e:#}"),
-                }),
-            ),
-        };
-        operation.finish_and_persist(&ctx, status, error)?;
-        result
+        .and_then(|()| complete_gui_lifecycle_success(&ctx, id, &cancel));
+        finish_gui_lifecycle_result(&ctx, operation, result)
     }
     pub fn repair_source_operation(
         &mut self,

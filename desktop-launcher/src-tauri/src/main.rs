@@ -13,10 +13,13 @@ mod model;
 mod network_policy;
 mod operations;
 mod python_integrity;
+mod query_ipc;
+mod query_tasks;
 mod recipe;
 #[cfg(test)]
 mod recovery;
 mod runtime_view;
+mod scan_observation;
 #[allow(dead_code)]
 mod shell_update_protocol;
 mod source_integrity;
@@ -35,6 +38,8 @@ struct Runtime {
     lifecycle: Arc<Lifecycle>,
     logs: Arc<log_store::LogStore>,
     operations: Arc<operations::OperationManager>,
+    queries: query_tasks::QueryTaskManager,
+    query_watchdog_stop: std::sync::atomic::AtomicBool,
     default_root: PathBuf,
     workers: Arc<std::sync::atomic::AtomicUsize>,
     shutting_down: std::sync::atomic::AtomicBool,
@@ -1432,11 +1437,14 @@ fn main() {
                 lifecycle,
                 logs,
                 operations: Arc::new(operations::OperationManager::default()),
+                queries: query_tasks::QueryTaskManager::new(query_tasks::QueryLimits::default())?,
+                query_watchdog_stop: std::sync::atomic::AtomicBool::new(false),
                 default_root: root,
                 workers: Arc::new(std::sync::atomic::AtomicUsize::new(0)),
                 shutting_down: std::sync::atomic::AtomicBool::new(false),
                 exit_ready: Arc::new(std::sync::atomic::AtomicBool::new(false)),
             });
+            query_ipc::start_watchdog(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -1458,6 +1466,14 @@ fn main() {
             preview_gui_lifecycle,
             apply_gui_lifecycle,
             query_engine_control,
+            query_ipc::begin_engine_query,
+            query_ipc::begin_gui_rebuild_preview,
+            query_ipc::engine_query_snapshot,
+            query_ipc::engine_query_events,
+            query_ipc::engine_query_result,
+            query_ipc::join_engine_query,
+            query_ipc::leave_engine_query,
+            query_ipc::cancel_engine_query,
             apply_engine_control,
             catalog_control,
             shell_control,
@@ -1498,6 +1514,7 @@ fn main() {
             if let tauri::RunEvent::ExitRequested { api, .. } = &event {
                 if let Some(runtime) = app.try_state::<Runtime>() {
                     runtime.lifecycle.request_stop();
+                    let _ = runtime.queries.request_shutdown();
                     let first = !runtime
                         .shutting_down
                         .swap(true, std::sync::atomic::Ordering::AcqRel);
@@ -1511,12 +1528,13 @@ fn main() {
                         if first {
                             let workers = runtime.workers.clone();
                             let exit_ready = runtime.exit_ready.clone();
+                            let queries = runtime.queries.clone();
                             let app = app.clone();
                             std::thread::spawn(move || {
-                                let deadline =
-                                    std::time::Instant::now() + std::time::Duration::from_secs(5);
+                                // 查询只有真实 Child/Job/管道回收后才释放执行者；
+                                // 不能在固定5秒后丢弃回收归属并强行标正常退出。
                                 while workers.load(std::sync::atomic::Ordering::Acquire) > 0
-                                    && std::time::Instant::now() < deadline
+                                    || queries.active_count().unwrap_or(1) > 0
                                 {
                                     std::thread::sleep(std::time::Duration::from_millis(20));
                                 }
@@ -1530,6 +1548,10 @@ fn main() {
             if matches!(event, tauri::RunEvent::Exit) {
                 if let Some(runtime) = app.try_state::<Runtime>() {
                     let _ = runtime.operations.cancel_running();
+                    let _ = runtime.queries.request_shutdown();
+                    runtime
+                        .query_watchdog_stop
+                        .store(true, std::sync::atomic::Ordering::Release);
                     let _ = runtime.lifecycle.stop();
                 }
             }

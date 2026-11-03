@@ -1,5 +1,6 @@
 //! 候选源码完整清单来自固定摘要的源码ZIP与捆绑前端，绝不信任app内自述清单。
 use crate::model::{self, Layout, Release};
+use crate::{operations::CancelToken, query_tasks::QueryStage, scan_observation};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -91,7 +92,25 @@ fn valid_sha(value: &str) -> bool {
             .bytes()
             .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
 }
-fn fingerprint(layout: &Layout, path: &Path) -> Result<(u64, String)> {
+fn checkpoint(
+    stage: QueryStage,
+    files: u64,
+    bytes: u64,
+    cancel: Option<&CancelToken>,
+) -> Result<()> {
+    // 已有Query取消/期限错误保持优先；修改操作在无Query上下文时仍逐块检查。
+    scan_observation::checkpoint(stage, files, bytes)?;
+    if let Some(cancel) = cancel {
+        cancel.check()?;
+    }
+    Ok(())
+}
+fn fingerprint(
+    layout: &Layout,
+    path: &Path,
+    cancel: Option<&CancelToken>,
+) -> Result<(u64, String)> {
+    checkpoint(QueryStage::Source, 0, 0, cancel)?;
     layout.guard_path(path)?;
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.is_file() || metadata.len() > model::MAX_EXTRACT_BYTES {
@@ -102,16 +121,21 @@ fn fingerprint(layout: &Layout, path: &Path) -> Result<(u64, String)> {
     let mut bytes = 0u64;
     let mut buffer = [0; 65536];
     loop {
+        checkpoint(QueryStage::Source, 0, 0, cancel)?;
         let count = input.read(&mut buffer)?;
         if count == 0 {
             break;
         }
         bytes = bytes.checked_add(count as u64).context("源码长度溢出")?;
+        digest.update(&buffer[..count]);
+        #[cfg(test)]
+        tests::after_read(path, bytes);
+        checkpoint(QueryStage::Source, 0, count as u64, cancel)?;
         if bytes > model::MAX_EXTRACT_BYTES {
             bail!("源码文件读取超限");
         }
-        digest.update(&buffer[..count]);
     }
+    checkpoint(QueryStage::Source, 1, 0, cancel)?;
     Ok((bytes, format!("{:x}", digest.finalize())))
 }
 type EntrySpec<'a> = (BTreeMap<&'a str, &'a Entry>, BTreeSet<String>);
@@ -153,9 +177,18 @@ fn entry_spec(entries: &[Entry]) -> Result<EntrySpec<'_>> {
 }
 
 fn verify_entries(layout: &Layout, entries: &[Entry]) -> Result<()> {
+    verify_entries_controlled(layout, entries, None)
+}
+fn verify_entries_controlled(
+    layout: &Layout,
+    entries: &[Entry],
+    cancel: Option<&CancelToken>,
+) -> Result<()> {
+    checkpoint(QueryStage::Source, 0, 0, cancel)?;
     let (expected, directories) = entry_spec(entries)?;
     for entry in entries {
-        if fingerprint(layout, &layout.app.join(&entry.path))?
+        checkpoint(QueryStage::Source, 0, 0, cancel)?;
+        if fingerprint(layout, &layout.app.join(&entry.path), cancel)?
             != (entry.bytes, entry.sha256.clone())
         {
             bail!("候选源码缺失或改变：{}", entry.path);
@@ -167,9 +200,12 @@ fn verify_entries(layout: &Layout, entries: &[Entry]) -> Result<()> {
         expected: &BTreeMap<&str, &Entry>,
         allowed_dirs: &BTreeSet<String>,
         seen: &mut BTreeSet<String>,
+        cancel: Option<&CancelToken>,
     ) -> Result<()> {
+        checkpoint(QueryStage::ExtraFiles, 0, 0, cancel)?;
         layout.guard_path(directory)?;
         for item in fs::read_dir(directory)? {
+            checkpoint(QueryStage::ExtraFiles, 0, 0, cancel)?;
             let item = item?;
             let path = item.path();
             layout.guard_path(&path)?;
@@ -186,7 +222,7 @@ fn verify_entries(layout: &Layout, entries: &[Entry]) -> Result<()> {
                 if !allowed_dirs.contains(&relative) {
                     bail!("候选源码含额外目录：{relative}");
                 }
-                walk(layout, &path, expected, allowed_dirs, seen)?;
+                walk(layout, &path, expected, allowed_dirs, seen, cancel)?;
             } else if !kind.is_file()
                 || (!expected.contains_key(relative.as_str()) && relative != LEGACY_MANIFEST)
             {
@@ -201,6 +237,7 @@ fn verify_entries(layout: &Layout, entries: &[Entry]) -> Result<()> {
         &expected,
         &directories,
         &mut BTreeSet::new(),
+        cancel,
     )
 }
 
@@ -259,14 +296,50 @@ pub(crate) fn verify(layout: &Layout, release: &Release) -> Result<()> {
     verify_entries(layout, &manifest.files)
 }
 
+pub(crate) fn verify_controlled(
+    layout: &Layout,
+    release: &Release,
+    cancel: &CancelToken,
+) -> Result<()> {
+    checkpoint(QueryStage::Source, 0, 0, Some(cancel))?;
+    let manifest = trusted_manifest(release)?;
+    verify_entries_controlled(layout, &manifest.files, Some(cancel))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::{
+        cell::RefCell,
         path::PathBuf,
+        rc::Rc,
         sync::atomic::{AtomicU64, Ordering},
+        time::Duration,
     };
     static NEXT: AtomicU64 = AtomicU64::new(0);
+    type ReadHook = Box<dyn FnMut(&Path, u64)>;
+    thread_local! {
+        static READ_HOOK: RefCell<Option<ReadHook>> = const { RefCell::new(None) };
+    }
+    pub(super) fn after_read(path: &Path, bytes: u64) {
+        READ_HOOK.with(|slot| {
+            if let Some(hook) = slot.borrow_mut().as_mut() {
+                hook(path, bytes);
+            }
+        });
+    }
+    struct Hook;
+    impl Hook {
+        fn read(hook: impl FnMut(&Path, u64) + 'static) -> Self {
+            READ_HOOK.with(|slot| assert!(slot.replace(Some(Box::new(hook))).is_none()));
+            Self
+        }
+    }
+    impl Drop for Hook {
+        fn drop(&mut self) {
+            READ_HOOK.with(|slot| *slot.borrow_mut() = None);
+        }
+    }
     struct Fixture(PathBuf);
     impl Fixture {
         fn new() -> Self {
@@ -307,6 +380,111 @@ mod tests {
             bytes: bytes.len() as u64,
             sha256: format!("{:x}", Sha256::digest(bytes)),
         }
+    }
+    #[test]
+    fn controlled_source_cancel_without_query_stops_after_actual_first_block() {
+        assert!(scan_observation::observer().is_none());
+        let fixture = Fixture::new();
+        let layout = fixture.layout();
+        let content = vec![b's'; 3 * 65_536];
+        fs::write(layout.app.join("gui.py"), &content).unwrap();
+        let entries = [entry("gui.py", &content)];
+        let cancel = CancelToken::new();
+        let reads = Rc::new(RefCell::new(Vec::new()));
+        let observed = reads.clone();
+        let request = cancel.clone();
+        let hook = Hook::read(move |_, bytes| {
+            observed.borrow_mut().push(bytes);
+            request.request();
+        });
+        let error = verify_entries_controlled(&layout, &entries, Some(&cancel)).unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some());
+        assert_eq!(*reads.borrow(), [65_536]);
+        drop(hook);
+        let release = model::Catalog::embedded().unwrap().releases[0].clone();
+        let error = verify_controlled(&layout, &release, &cancel).unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some());
+    }
+
+    #[test]
+    fn controlled_source_matches_legacy_complete_sha_and_unknown_rejection() {
+        let fixture = Fixture::new();
+        let layout = fixture.layout();
+        let content = vec![b's'; 2 * 65_536 + 17];
+        fs::write(layout.app.join("gui.py"), &content).unwrap();
+        fs::write(layout.app.join("frontend/dist/index.html"), b"bundled").unwrap();
+        let entries = [
+            entry("gui.py", &content),
+            entry("frontend/dist/index.html", b"bundled"),
+        ];
+        let cancel = CancelToken::new();
+        verify_entries(&layout, &entries).unwrap();
+        verify_entries_controlled(&layout, &entries, Some(&cancel)).unwrap();
+        let path = layout.app.join("gui.py");
+        assert_eq!(
+            fingerprint(&layout, &path, None).unwrap(),
+            fingerprint(&layout, &path, Some(&cancel)).unwrap()
+        );
+        let mut changed = content.clone();
+        *changed.last_mut().unwrap() = b'x';
+        fs::write(&path, &changed).unwrap();
+        assert!(verify_entries(&layout, &entries).is_err());
+        assert!(verify_entries_controlled(&layout, &entries, Some(&cancel)).is_err());
+        fs::write(&path, &content).unwrap();
+        fs::write(layout.app.join("unknown.py"), b"extra").unwrap();
+        assert!(verify_entries(&layout, &entries).is_err());
+        assert!(verify_entries_controlled(&layout, &entries, Some(&cancel)).is_err());
+    }
+
+    #[test]
+    fn controlled_source_preserves_real_query_cancel_priority() {
+        use crate::query_tasks::{
+            QueryAction, QueryClock, QueryError, QueryScope, QueryTarget, QueryTaskManager,
+        };
+        let fixture = Fixture::new();
+        let layout = fixture.layout();
+        let content = vec![b's'; 2 * 65_536];
+        fs::write(layout.app.join("gui.py"), &content).unwrap();
+        let entries = [entry("gui.py", &content)];
+        let manager = QueryTaskManager::default();
+        let handle = manager
+            .begin(
+                QueryTarget {
+                    root: fixture.0.to_string_lossy().into_owned(),
+                    release_id: "dev-source-contract".into(),
+                    engine_id: "kohya".into(),
+                    action: QueryAction::InspectReadonly,
+                    rebuild: false,
+                    scope: QueryScope::Full,
+                },
+                QueryClock::start(Duration::from_secs(60)).unwrap(),
+            )
+            .unwrap()
+            .handle;
+        let observer = handle.observer();
+        let task_id = handle.task_id().to_owned();
+        let cancel = CancelToken::new();
+        let request = cancel.clone();
+        let hook = Hook::read(move |_, _| {
+            request.request();
+            manager.cancel(&task_id).unwrap();
+        });
+        let error = scan_observation::with(&observer, || {
+            verify_entries_controlled(&layout, &entries, Some(&cancel))
+        })
+        .unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<QueryError>().unwrap().code,
+            "query_cancelled"
+        );
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_none());
+        drop(hook);
     }
     #[test]
     fn trusted_entries_ignore_local_manifest_but_detect_code_changes_and_omissions() {

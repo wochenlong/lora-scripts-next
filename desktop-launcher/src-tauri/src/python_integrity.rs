@@ -1,5 +1,9 @@
 //! 固定 Python 归档的完整文件闭包；不运行解释器，也不信任安装目录自述摘要。
-use crate::model::{self, Layout};
+use crate::{
+    model::{self, Layout},
+    operations::CancelToken,
+    query_tasks::{QueryObserver, QueryProgress, QueryStage},
+};
 use anyhow::{bail, Context, Result};
 use serde::Deserialize;
 use sha2::{Digest, Sha256};
@@ -8,6 +12,7 @@ use std::{
     fs::{self, File},
     io::Read,
     path::{Component, Path, PathBuf},
+    time::{Duration, Instant},
 };
 
 const VERSION: &str = "3.10.19";
@@ -176,7 +181,61 @@ fn manifest() -> Result<Manifest> {
     Ok(manifest)
 }
 
-fn verify_file(layout: &Layout, path: &Path, expected: &Entry) -> Result<()> {
+/// 同一入口 observer 覆盖目录枚举和每个哈希块；不降低完整性闭包。
+struct VerificationObservation<'a> {
+    observer: Option<&'a QueryObserver>,
+    cancel: Option<&'a CancelToken>,
+    files: u64,
+    bytes: u64,
+    last_event: Instant,
+}
+impl<'a> VerificationObservation<'a> {
+    fn new(observer: Option<&'a QueryObserver>) -> Self {
+        Self {
+            observer,
+            cancel: None,
+            files: 0,
+            bytes: 0,
+            last_event: Instant::now(),
+        }
+    }
+    fn check(&self) -> Result<()> {
+        if let Some(observer) = self.observer {
+            observer.check()?;
+        }
+        if let Some(cancel) = self.cancel {
+            cancel.check()?;
+        }
+        Ok(())
+    }
+    fn publish(&mut self, force: bool) -> Result<()> {
+        self.check()?;
+        if let Some(observer) = self.observer {
+            if force || self.last_event.elapsed() >= Duration::from_millis(250) {
+                observer.progress(
+                    QueryStage::Python,
+                    QueryProgress {
+                        files: Some(self.files),
+                        bytes: Some(self.bytes),
+                        total_files: None,
+                        total_bytes: None,
+                        message: "正在完整核对基础 Python".into(),
+                    },
+                )?;
+                self.last_event = Instant::now();
+            }
+        }
+        Ok(())
+    }
+}
+
+fn verify_file(
+    layout: &Layout,
+    path: &Path,
+    expected: &Entry,
+    observed: &mut VerificationObservation<'_>,
+) -> Result<()> {
+    observed.check()?;
     layout.guard_path(path)?;
     let metadata = fs::symlink_metadata(path)?;
     if !metadata.is_file() || metadata.len() != expected.bytes || expected.bytes > MAX_FILE {
@@ -187,30 +246,48 @@ fn verify_file(layout: &Layout, path: &Path, expected: &Entry) -> Result<()> {
     let mut bytes = 0u64;
     let mut buffer = [0; 65_536];
     loop {
+        observed.check()?;
         let count = input.read(&mut buffer)?;
         if count == 0 {
             break;
         }
         bytes += count as u64;
         digest.update(&buffer[..count]);
+        observed.bytes = observed
+            .bytes
+            .checked_add(count as u64)
+            .context("Python 核验计量溢出")?;
+        #[cfg(test)]
+        tests::after_read(path, bytes);
+        observed.publish(false)?;
     }
     layout.guard_path(path)?;
     if bytes != expected.bytes || format!("{:x}", digest.finalize()) != expected.sha256 {
         bail!("基础 Python 文件内容改变：{}", expected.path);
     }
+    observed.files += 1;
+    observed.publish(false)?;
     Ok(())
 }
 
-fn verify_tree(layout: &Layout, base: &Path, expected: &Spec) -> Result<()> {
+fn verify_tree(
+    layout: &Layout,
+    base: &Path,
+    expected: &Spec,
+    observed: &mut VerificationObservation<'_>,
+) -> Result<()> {
     fn walk(
         layout: &Layout,
         base: &Path,
         directory: &Path,
         expected: &Spec,
         seen: &mut BTreeSet<String>,
+        observed: &mut VerificationObservation<'_>,
     ) -> Result<()> {
+        observed.check()?;
         layout.guard_path(directory)?;
         for item in fs::read_dir(directory)? {
+            observed.check()?;
             let item = item?;
             let path = item.path();
             layout.guard_path(&path)?;
@@ -224,7 +301,7 @@ fn verify_tree(layout: &Layout, base: &Path, expected: &Spec) -> Result<()> {
                 if !expected.directories.contains(&relative) {
                     bail!("基础 Python 含额外目录：{relative}");
                 }
-                walk(layout, base, &path, expected, seen)?;
+                walk(layout, base, &path, expected, seen, observed)?;
             } else if kind.is_file() {
                 let file = expected
                     .files
@@ -233,7 +310,7 @@ fn verify_tree(layout: &Layout, base: &Path, expected: &Spec) -> Result<()> {
                 if !seen.insert(relative.to_ascii_lowercase()) {
                     bail!("基础 Python 含大小写路径别名");
                 }
-                verify_file(layout, &path, file)?;
+                verify_file(layout, &path, file, observed)?;
             } else {
                 bail!("基础 Python 含非普通文件：{relative}");
             }
@@ -242,7 +319,7 @@ fn verify_tree(layout: &Layout, base: &Path, expected: &Spec) -> Result<()> {
     }
     layout.guard_path(base)?;
     let mut seen = BTreeSet::new();
-    walk(layout, base, base, expected, &mut seen)?;
+    walk(layout, base, base, expected, &mut seen, observed)?;
     if seen.len() != expected.files.len() {
         let missing = expected
             .files
@@ -271,7 +348,13 @@ fn verify_alias(layout: &Layout, alias: &Path, target: &Path) -> Result<()> {
     bail!("Python minor junction 只允许在 Windows 使用")
 }
 
-fn verify_root(layout: &Layout, root: &Path, manifest: &Manifest) -> Result<()> {
+fn verify_root(
+    layout: &Layout,
+    root: &Path,
+    manifest: &Manifest,
+    observed: &mut VerificationObservation<'_>,
+) -> Result<()> {
+    observed.check()?;
     layout.guard_path(root)?;
     let target = root.join(TARGET);
     layout.guard_path(&target)?;
@@ -279,6 +362,7 @@ fn verify_root(layout: &Layout, root: &Path, manifest: &Manifest) -> Result<()> 
         bail!("固定基础 Python patch 目录缺失");
     }
     for item in fs::read_dir(root)? {
+        observed.check()?;
         let item = item?;
         let path = item.path();
         let name = item.file_name();
@@ -296,7 +380,7 @@ fn verify_root(layout: &Layout, root: &Path, manifest: &Manifest) -> Result<()> 
             .iter()
             .find(|file| file.path == name)
         {
-            verify_file(layout, &path, file)?;
+            verify_file(layout, &path, file, observed)?;
         } else if manifest
             .optional_empty_root_directories
             .iter()
@@ -319,10 +403,43 @@ pub(crate) fn verify(layout: &Layout) -> Result<PathBuf> {
     verify_at(layout, &root)
 }
 
+pub(crate) fn verify_controlled(layout: &Layout, cancel: &CancelToken) -> Result<PathBuf> {
+    let root = layout.root.join("python").join(VERSION);
+    let observer = crate::scan_observation::observer();
+    verify_at_controlled(layout, &root, observer.as_ref(), Some(cancel))
+}
+
 /// The candidate remains under the same guarded workspace; no interpreter runs.
 pub(crate) fn verify_at(layout: &Layout, root: &Path) -> Result<PathBuf> {
+    let observer = crate::scan_observation::observer();
+    verify_at_observed(layout, root, observer.as_ref())
+}
+
+pub(crate) fn verify_observed(layout: &Layout, observer: &QueryObserver) -> Result<PathBuf> {
+    let root = layout.root.join("python").join(VERSION);
+    verify_at_observed(layout, &root, Some(observer))
+}
+
+fn verify_at_observed(
+    layout: &Layout,
+    root: &Path,
+    observer: Option<&QueryObserver>,
+) -> Result<PathBuf> {
+    verify_at_controlled(layout, root, observer, None)
+}
+
+fn verify_at_controlled(
+    layout: &Layout,
+    root: &Path,
+    observer: Option<&QueryObserver>,
+    cancel: Option<&CancelToken>,
+) -> Result<PathBuf> {
+    let mut observed = VerificationObservation::new(observer);
+    observed.cancel = cancel;
+    observed.publish(true)?;
     let manifest = manifest()?;
-    verify_root(layout, root, &manifest)?;
+    observed.check()?;
+    verify_root(layout, root, &manifest, &mut observed)?;
     let target = root.join(TARGET);
     let expected = spec(
         manifest
@@ -330,7 +447,8 @@ pub(crate) fn verify_at(layout: &Layout, root: &Path) -> Result<PathBuf> {
             .into_iter()
             .chain(manifest.uv_generated_files),
     )?;
-    verify_tree(layout, &target, &expected)?;
+    verify_tree(layout, &target, &expected, &mut observed)?;
+    observed.publish(true)?;
     Ok(target.join("python.exe"))
 }
 
@@ -347,8 +465,35 @@ pub(crate) fn trusted_paths() -> Result<Vec<String>> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::{
+        cell::RefCell,
+        rc::Rc,
+        sync::atomic::{AtomicU64, Ordering},
+    };
     static NEXT: AtomicU64 = AtomicU64::new(0);
+    type ReadHook = Box<dyn FnMut(&Path, u64)>;
+    thread_local! {
+        static READ_HOOK: RefCell<Option<ReadHook>> = const { RefCell::new(None) };
+    }
+    pub(super) fn after_read(path: &Path, bytes: u64) {
+        READ_HOOK.with(|slot| {
+            if let Some(hook) = slot.borrow_mut().as_mut() {
+                hook(path, bytes);
+            }
+        });
+    }
+    struct Hook;
+    impl Hook {
+        fn read(hook: impl FnMut(&Path, u64) + 'static) -> Self {
+            READ_HOOK.with(|slot| assert!(slot.replace(Some(Box::new(hook))).is_none()));
+            Self
+        }
+    }
+    impl Drop for Hook {
+        fn drop(&mut self) {
+            READ_HOOK.with(|slot| *slot.borrow_mut() = None);
+        }
+    }
 
     struct Fixture {
         root: PathBuf,
@@ -396,8 +541,9 @@ mod tests {
             }
         }
         fn verify(&self) -> Result<()> {
-            verify_root(&self.layout, &self.python, &manifest()?)?;
-            verify_tree(&self.layout, &self.target, &self.expected)
+            let mut observed = VerificationObservation::new(None);
+            verify_root(&self.layout, &self.python, &manifest()?, &mut observed)?;
+            verify_tree(&self.layout, &self.target, &self.expected, &mut observed)
         }
     }
     impl Drop for Fixture {
@@ -413,6 +559,152 @@ mod tests {
                 let _ = fs::remove_dir_all(&self.root);
             }
         }
+    }
+
+    #[test]
+    fn controlled_python_cancel_without_query_stops_after_actual_first_block() {
+        assert!(crate::scan_observation::observer().is_none());
+        let fixture = Fixture::new();
+        let content = vec![b'p'; 3 * 65_536];
+        let path = fixture.target.join("python.exe");
+        fs::write(&path, &content).unwrap();
+        let expected = entry("python.exe", &content);
+        let cancel = CancelToken::new();
+        let request = cancel.clone();
+        let reads = Rc::new(RefCell::new(Vec::new()));
+        let observed_reads = reads.clone();
+        let hook = Hook::read(move |_, bytes| {
+            observed_reads.borrow_mut().push(bytes);
+            request.request();
+        });
+        let mut observed = VerificationObservation::new(None);
+        observed.cancel = Some(&cancel);
+        let error = verify_file(&fixture.layout, &path, &expected, &mut observed).unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some());
+        assert_eq!(*reads.borrow(), [65_536]);
+        assert_eq!(observed.bytes, 65_536);
+        assert_eq!(observed.files, 0);
+        drop(hook);
+        let error = verify_controlled(&fixture.layout, &cancel).unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some());
+    }
+
+    #[test]
+    fn controlled_python_matches_legacy_full_tree_and_unknown_rejection() {
+        let mut fixture = Fixture::new();
+        let content = vec![b'p'; 2 * 65_536 + 17];
+        fs::write(fixture.target.join("python.exe"), &content).unwrap();
+        fixture
+            .expected
+            .files
+            .insert("python.exe".into(), entry("python.exe", &content));
+        let cancel = CancelToken::new();
+        let mut legacy = VerificationObservation::new(None);
+        verify_root(
+            &fixture.layout,
+            &fixture.python,
+            &manifest().unwrap(),
+            &mut legacy,
+        )
+        .unwrap();
+        verify_tree(
+            &fixture.layout,
+            &fixture.target,
+            &fixture.expected,
+            &mut legacy,
+        )
+        .unwrap();
+        let mut controlled = VerificationObservation::new(None);
+        controlled.cancel = Some(&cancel);
+        verify_root(
+            &fixture.layout,
+            &fixture.python,
+            &manifest().unwrap(),
+            &mut controlled,
+        )
+        .unwrap();
+        verify_tree(
+            &fixture.layout,
+            &fixture.target,
+            &fixture.expected,
+            &mut controlled,
+        )
+        .unwrap();
+        assert_eq!(
+            (legacy.files, legacy.bytes),
+            (controlled.files, controlled.bytes)
+        );
+        let mut changed = content.clone();
+        *changed.last_mut().unwrap() = b'x';
+        fs::write(fixture.target.join("python.exe"), &changed).unwrap();
+        assert!(fixture.verify().is_err());
+        assert!(verify_tree(
+            &fixture.layout,
+            &fixture.target,
+            &fixture.expected,
+            &mut controlled
+        )
+        .is_err());
+        fs::write(fixture.target.join("python.exe"), &content).unwrap();
+        fs::write(fixture.target.join("unknown.bin"), b"extra").unwrap();
+        assert!(fixture.verify().is_err());
+        assert!(verify_tree(
+            &fixture.layout,
+            &fixture.target,
+            &fixture.expected,
+            &mut controlled
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn controlled_python_preserves_real_query_cancel_priority() {
+        use crate::query_tasks::{
+            QueryAction, QueryClock, QueryError, QueryScope, QueryTarget, QueryTaskManager,
+        };
+        let fixture = Fixture::new();
+        let content = vec![b'p'; 2 * 65_536];
+        let path = fixture.target.join("python.exe");
+        fs::write(&path, &content).unwrap();
+        let expected = entry("python.exe", &content);
+        let manager = QueryTaskManager::default();
+        let handle = manager
+            .begin(
+                QueryTarget {
+                    root: fixture.root.to_string_lossy().into_owned(),
+                    release_id: "dev-python-contract".into(),
+                    engine_id: "kohya".into(),
+                    action: QueryAction::InspectReadonly,
+                    rebuild: false,
+                    scope: QueryScope::Full,
+                },
+                QueryClock::start(Duration::from_secs(60)).unwrap(),
+            )
+            .unwrap()
+            .handle;
+        let observer = handle.observer();
+        let task_id = handle.task_id().to_owned();
+        let cancel = CancelToken::new();
+        let request = cancel.clone();
+        let hook = Hook::read(move |_, _| {
+            request.request();
+            manager.cancel(&task_id).unwrap();
+        });
+        let mut observed = VerificationObservation::new(Some(&observer));
+        observed.cancel = Some(&cancel);
+        let error = verify_file(&fixture.layout, &path, &expected, &mut observed).unwrap_err();
+        assert_eq!(
+            error.downcast_ref::<QueryError>().unwrap().code,
+            "query_cancelled"
+        );
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_none());
+        drop(hook);
     }
 
     #[test]

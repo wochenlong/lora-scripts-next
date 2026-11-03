@@ -2,25 +2,25 @@
 
 ## 当前追加 CR-020：可靠性与性能修复规划
 
-- 日期：2026-11-02；专项Plan ID：`desktop-launcher-reliability-20261102`；版本`0.2-executing`；状态`executing`。用户已激活Goal；R0六探针/资源/影响映射/导航采集完成，RP-EXIT-R0通过；R1受控修复开始。
+- 日期：2026-11-03 12:35；专项Plan ID：`desktop-launcher-reliability-20261102`；版本`0.15-executing`（R1阶段签收增量）。R0/R1 done，RP-EXIT-R1按正式恢复缺陷及保护范围签收；R2可取消引擎检查任务active（in progress），R3必要前置in progress，R4–R6 pending。candidate05下native04真实UI取消留下合法committing事务，新进程正式GUI recover04 succeeded、intent committed并绑定g1208b56f57f3e752，正式IPC重复恢复也succeeded。两原生suite/host均pass，资料/控制保护及自然Job/CDP回收通过。当前full Rust344pass/0fail/15ignored，60份Rust/Cargo输入与当前及candidate05一致。R1-04按参数证据pass-with-boundary，不夸全GUI矩阵；R1-06最终CAS合同及实际命中原生window通过，分块取消/性能时限仍属R2/R4，未外推。Anima Fast停服full单配置实测suite/host通过，首反馈1.9ms、任务ID可见上界17.1ms、完整检查保守285776.1982–285935.7808ms，worker/readers回收及控制/资料保护通过；仅授该配置，取消与余三引擎未验。旧native02/03失败保留，recover03禁止。R2–R4门未签，嵌套Operation取消盲区仍待修。R1阶段Git保存待做，当前增量未提交/未push；整个专项/既有active Goal尚未完成。
 - 唯一canonical progress file：[既有总控](00_总控目标索引.md)；专项细节在新任务书，不建立第二套总控。
 - 模式：既有Full体系的`plan system update`，用下表合并产物保留所有硬门，不另复制七套模板。目标/阶段/清单/证据/探针/Goal/复盘皆有唯一归属。
-- 当前文档前基线：本地/远端`91e3d2e62a5b31865f8c56a0f321418aa887ecd3`；FINAL06产品`4e1b4cc78939e8b906252b27dcc20692ad347a08`，EXE SHA`11804c053d8667b1c9b91512d72055481aeb27d58be2ac32d181ede42413cbca`。
-- 阶段：R0 基线与测量 → R1 恢复自阻挡 → R2 可取消引擎检查任务 → R3 重装预览弹窗 → R4 扫描与启停性能 → R5 最终同包定向沙盒回归 → R6 交付。R0 done，R1 in progress，R2–R6 pending。
+- 最初规划前历史基线：本地/远端`91e3d2e62a5b31865f8c56a0f321418aa887ecd3`；FINAL06产品`4e1b4cc78939e8b906252b27dcc20692ad347a08`，EXE SHA`11804c053d8667b1c9b91512d72055481aeb27d58be2ac32d181ede42413cbca`；当前续接为R0保存基线`9135fad8259cdf8b41efdd79ad37ca0b0b739d83`及未提交R1–R4必要前置增量。
+- 阶段：R0 基线与测量 → R1 恢复自阻挡 → R2 可取消引擎检查任务 → R3 重装预览弹窗 → R4 扫描与启停性能 → R5 最终同包定向沙盒回归 → R6 交付。R0/R1 done，RP-EXIT-R1按正式恢复缺陷及保护范围签收；R2可取消引擎检查任务active（in progress），R3必要前置in progress，R4–R6 pending。candidate05下native04真实UI取消留下合法committing事务，新进程正式GUI recover04 succeeded、intent committed并绑定g1208b56f57f3e752，正式IPC重复恢复也succeeded。两原生suite/host均pass，资料/控制保护及自然Job/CDP回收通过。当前full Rust344pass/0fail/15ignored，60份Rust/Cargo输入与当前及candidate05一致。R1-04按参数证据pass-with-boundary，不夸全GUI矩阵；R1-06最终CAS合同及实际命中原生window通过，分块取消/性能时限仍属R2/R4，未外推。Anima Fast停服full单配置实测suite/host通过，首反馈1.9ms、任务ID可见上界17.1ms、完整检查保守285776.1982–285935.7808ms，worker/readers回收及控制/资料保护通过；仅授该配置，取消与余三引擎未验。旧native02/03失败保留，recover03禁止。R2–R4门未签，嵌套Operation取消盲区仍待修。R1阶段Git保存待做，当前增量未提交/未push；整个专项/既有active Goal尚未完成。
 
 | 当前产物 | 职责/合并的必需能力 | 状态 |
 | --- | --- | --- |
 | [README.md](README.md)、[00_总控目标索引.md](00_总控目标索引.md) | 当前入口、唯一总控、范围、专项和全局完成口径 | 已更新为执行状态 |
-| [reliability-performance-20261102-task-book.md](reliability-performance-20261102-task-book.md) | 目标T1–T5及验收、R0–R6长程阶段、逐阶段开工清单/退出门、进度与资源/证据/失败治理 | 已授权，R0 done / R1 in progress |
-| [reliability-performance-20261102-acceptance.md](reliability-performance-20261102-acceptance.md) | 精确CASE、旧8行与52单元映射、六类测试适用性、指标、截图/JSON/回收证据合同 | 已授权，产品用例仍not-run |
-| [reliability-performance-20261102-readiness.md](reliability-performance-20261102-readiness.md) | 资料复盘、风险、最小探针、CR-020/GATE-00–14与逐份最终文档复盘 | 六探针完成；RP-EXIT-R0通过，产品修复未验 |
+| [reliability-performance-20261102-task-book.md](reliability-performance-20261102-task-book.md) | 目标T1–T5、R0–R6、开工/退出门、进度与资源/证据/失败治理 | v0.15；audit02与completion02签R1 done，真实rollback cancel/recover/repeat通过；R2 active，R2–R4门未签 |
+| [reliability-performance-20261102-acceptance.md](reliability-performance-20261102-acceptance.md) | 精确CASE、旧8行与52单元映射、六类测试适用性、指标、截图/JSON/回收证据合同 | 42模板稳定；R1代码证据与真实恢复主路径分列，R5为4完整＋4取消 |
+| [reliability-performance-20261102-readiness.md](reliability-performance-20261102-readiness.md) | 资料、风险、六探针、GATE-00–14与逐份复盘 | v0.15；保留12:25原稿和更早历史，R1签收仅P1/保护范围，性能与全链取消仍待R2/R4 |
 | [03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md](03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md) | 批准后连续施工/阶段push/同包实测的完整启动词 | 已获执行授权，Goal active |
 | [00_预检证据/change-control-governance.md](00_预检证据/change-control-governance.md) | CR-020及沿用的变更控制；新旧验收不混淆 | 已更新 |
 | [原正式报告](full-acceptance-20261101-report.md)、[历史执行记录](full-acceptance-20261101-execution-history.md)、[原任务书](full-acceptance-20261101-task-book.md) | 固定问题与失败证据；作为输入只读，不授新包通过 | 保留 |
 
 目标到阶段：T1→R1/R5，T2→R2/R5，T3→R3/R5，T4→R0/R4/R5，T5→R5/R6。编号门禁状态以新readiness为准；GATE-11六探针完成，GATE-14放行R1精确恢复修复；资源unknown及逐案限额保留。实际run为`run-20261102T130200Z`，证据和沙盒分别位于`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/`与`F:/NextTrainerLauncherSandbox/reliability-20261102/`下，两根均已有归属标记。
 
-唯一下一步：执行R1精确恢复修复及Core入口正反例；真实GUI恢复前完成精确旧根预备备份，随后按阶段门继续R2–R6。以下M0–M6及v0.6元数据/门禁为历史结构，状态发生冲突时以当前CR-020、CR-019最终报告和唯一总控为准，不据旧清单重开已完成工程。
+唯一下一步：后续续接的唯一下一动作：由Root按原阶段授权核对R1精准变更集并保存commit/普通push及远端SHA回执；本轮文档审核不执行git保存、GUI、构建或新测试。R1业务门通过不等于远端阶段基线已保存，含R2/R3必要前置源码不代表其阶段通过。Anima full原案已结束，不等待exec96794、不重复该案；42CASE、七阶段、4完整＋4取消、原阈值/资源、旧8失败行/10未操作按钮/52单元保持。 以下M0–M6及父计划v0.6仅作历史。
 
 **CR-019当前状态：incomplete。** 全量验收证据已交付，227行193通过/24部分通过/8失败/1受阻/1待复核；52引擎单元另列。旧“仅冒烟”不限制当前功能实测，未开始训练。专项A0–A5原始过程见[原任务书](full-acceptance-20261101-task-book.md)，不能使用历史执行中快照替代最终结果。
 

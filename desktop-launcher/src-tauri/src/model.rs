@@ -326,6 +326,61 @@ impl WorkspaceMutation {
         })
     }
 
+    /// 恢复只接受既有正式工作区，不初始化路径、标记、锁文件或资料目录。
+    pub(crate) fn acquire_existing(root: &Path, release_id: &str) -> Result<Self> {
+        let layout = Layout::new(root, release_id)?;
+        let marker = root.join(MARKER_FILE);
+        layout.guard_path(&marker)?;
+        if !marker.is_file() || fs::read_to_string(&marker)? != WORKSPACE_MARKER {
+            bail!("恢复只可操作既有正式启动器工作区");
+        }
+        let lock_path = root.join(".launcher-lock");
+        layout.guard_path(&lock_path)?;
+        let lease = OpenOptions::new().read(true).write(true).open(lock_path)?;
+        lease
+            .try_lock_exclusive()
+            .context("工作区正由另一个启动器或受管进程使用")?;
+        layout.guard_path(&marker)?;
+        if !marker.is_file() || fs::read_to_string(&marker)? != WORKSPACE_MARKER {
+            bail!("工作区标记发生改变");
+        }
+        // 恢复不能把缺失权威状态当作首次安装默认值，也不能补建资料目录。
+        for directory in [
+            root.join("state"),
+            root.join("backups"),
+            root.join("profiles"),
+            layout.profile.clone(),
+        ]
+        .into_iter()
+        .chain(
+            PROFILE_DIRECTORIES
+                .iter()
+                .map(|name| layout.profile.join(name)),
+        ) {
+            layout.guard_path(&directory)?;
+            if !directory.is_dir() {
+                bail!("恢复工作区缺少必要目录：{}", directory.display());
+            }
+        }
+        let registry = root.join("state/registry.json");
+        layout.guard_path(&registry)?;
+        if !registry.is_file() {
+            bail!("恢复工作区缺少权威 registry");
+        }
+        Registry::load(root)?;
+        Journal::load_all(root)?;
+        let profile = layout.profile.join("profile.json");
+        layout.guard_path(&profile)?;
+        if !profile.is_file() {
+            bail!("恢复工作区缺少正式 profile.json");
+        }
+        Profile::load(&profile)?;
+        Ok(Self {
+            layout,
+            _lease: std::sync::Arc::new(lease),
+        })
+    }
+
     pub fn layout(&self) -> &Layout {
         &self.layout
     }

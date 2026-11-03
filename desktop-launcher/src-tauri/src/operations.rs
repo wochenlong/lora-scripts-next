@@ -8,7 +8,7 @@ use std::{
     fmt, fs,
     path::{Path, PathBuf},
     sync::{
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicU8, Ordering},
         Arc, Mutex,
     },
 };
@@ -18,7 +18,11 @@ const EVENT_LIMIT: usize = 256;
 const RECORD_LIMIT: u64 = 64 * 1024;
 
 #[derive(Clone, Debug, Default)]
-pub struct CancelToken(Arc<AtomicBool>);
+pub struct CancelToken(Arc<AtomicU8>);
+
+const CANCELLABLE: u8 = 0;
+const CANCEL_REQUESTED: u8 = 1;
+const COMMIT_STARTED: u8 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Cancelled;
@@ -36,7 +40,7 @@ impl CancelToken {
     }
 
     pub fn is_cancel_requested(&self) -> bool {
-        self.0.load(Ordering::Acquire)
+        self.0.load(Ordering::Acquire) == CANCEL_REQUESTED
     }
 
     pub fn check(&self) -> std::result::Result<(), Cancelled> {
@@ -47,8 +51,34 @@ impl CancelToken {
         }
     }
 
-    fn request(&self) {
-        self.0.store(true, Ordering::Release);
+    pub(crate) fn request(&self) -> CancelReceipt {
+        match self.0.compare_exchange(
+            CANCELLABLE,
+            CANCEL_REQUESTED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) => CancelReceipt::Accepted,
+            Err(CANCEL_REQUESTED) => CancelReceipt::AlreadyRequested,
+            Err(COMMIT_STARTED) => CancelReceipt::CommitInProgress,
+            Err(_) => unreachable!("无效取消状态"),
+        }
+    }
+
+    /// 与request竞争同一原子状态。耗时复验必须在此门之前完成；一旦进入，
+    /// 不再接受取消，直至真实写入结果和操作终态收口，不以RAII重新开放。
+    /// 同一操作可由registry切换和Core成功收口幂等进入。
+    pub(crate) fn enter_commit(&self) -> std::result::Result<(), Cancelled> {
+        match self.0.compare_exchange(
+            CANCELLABLE,
+            COMMIT_STARTED,
+            Ordering::AcqRel,
+            Ordering::Acquire,
+        ) {
+            Ok(_) | Err(COMMIT_STARTED) => Ok(()),
+            Err(CANCEL_REQUESTED) => Err(Cancelled),
+            Err(_) => unreachable!("无效取消状态"),
+        }
     }
 }
 
@@ -240,13 +270,13 @@ impl OperationManager {
         if state.completing {
             return Ok(CancelReceipt::CommitInProgress);
         }
-        if shared.cancel.is_cancel_requested() {
-            return Ok(CancelReceipt::AlreadyRequested);
+        let receipt = shared.cancel.request();
+        if receipt == CancelReceipt::Accepted {
+            // 先取得真实CAS结果；提交门先胜时不得发布“已接受”或置取消标记。
+            state.snapshot.cancel_requested = true;
+            state.record("已接受取消请求，等待工作线程收尾")?;
         }
-        state.record("已接受取消请求，等待工作线程收尾")?;
-        shared.cancel.request();
-        state.snapshot.cancel_requested = true;
-        Ok(CancelReceipt::Accepted)
+        Ok(receipt)
     }
 
     /// 退出时只请求回收本进程建立的操作，不接管磁盘上其他进程的历史。

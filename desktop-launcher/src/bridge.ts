@@ -241,7 +241,7 @@ export interface GuiLifecyclePreview {
   reason?: string
   transaction?: string
   plan_sha256?: string
-  plan?: { root_absolute?: string; old_binding?: { instance_id: string } | null; estimated_network_bytes?: number }
+  plan?: { root_absolute?: string; old_binding?: { instance_id: string } | null; target_binding?: { instance_id: string }; estimated_network_bytes?: number }
 }
 export interface GuiLifecycleHistory {
   status: string

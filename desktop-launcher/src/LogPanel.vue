@@ -7,6 +7,7 @@ import type { LogEntry, LogLevel, LogSource } from './log-model'
 import { sourceLabels, normalizeLogRoot, fromLogRecord, mergeLogEntries } from './log-model'
 import { readLogs } from './bridge'
 import type { LogPage } from './bridge'
+import EngineQueryActivity from './EngineQueryActivity.vue'
 const props = defineProps<{ entries: LogEntry[]; active: boolean; root: string; focusRequest: { id: string; request: number } | null; fontSize: number; currentSessionId: string }>()
 const source = ref<LogSource | 'all'>('all'), level = ref<LogLevel | 'all'>('all'), search = ref(''), follow = ref(true)
 const mode = ref<'current' | 'history'>('current'), sessionFilter = ref(''), contextFilter = ref('')
@@ -111,6 +112,7 @@ onBeforeUnmount(() => { readEpoch++; observer?.disconnect() })
   <section class="logs-page" :data-log-scope="mode" :data-loaded-count="entries.length" :data-current-session="currentSession" :class="{ 'history-mode': mode === 'history' }" :style="{ '--log-font-size': `${fontSize}px` }" :aria-label="t('集中日志')">
     <header class="page-title"><h1>{{ t("日志") }}</h1><p>{{ t("集中查看启动器、服务和环境操作的记录。") }}</p></header>
     <slot name="operation"></slot>
+    <EngineQueryActivity :root="root" details />
     <div class="log-scope-controls"><div class="scope-tabs" role="group" :aria-label="t('日志范围')"><button :class="{ selected: mode === 'current' }" @click="mode = 'current'">{{ t("本次会话") }}</button><button :class="{ selected: mode === 'history' }" @click="mode = 'history'">{{ t("历史记录") }}</button></div><AcrylicSelect v-if="mode === 'history'" v-model="sessionFilter" :aria-label="t('历史会话')" :options="[{ value: '', label: t('全部已保存会话') }, ...sessions.map(session => ({ value: session.session_id, label: `${sessionLabel(session.session_id)}${session.session_id === currentSession ? t(' · 本次') : ''} · ${t('{count} 行', { count: session.retained_records })}` }))]" /><AcrylicSelect v-model="contextFilter" :aria-label="t('运行或操作分组')" :options="[{ value: '', label: t('所有运行与操作') }, { value: '__none', label: t('未关联运行') }, ...contexts.map(context => ({ value: context, label: context }))]" /><button :disabled="loading" :title="t('重新读取最近保存的日志')" @click="frozenHistory = false; loadArchive()"><Icon name="refresh" />{{ loading ? t('读取中…') : t('刷新最新') }}</button></div>
     <div v-if="readError || partial" class="log-read-warning" role="status"><Icon name="info" /><span>{{ readError || t('部分日志无法读取，当前只显示已成功读取的记录。') }}</span><button :disabled="loading" @click="loadArchive()">{{ t("重试读取") }}</button></div>
     <div class="logs-toolbar"><div class="source-filters" role="group" :aria-label="t('日志来源')"><button v-for="item in (['all', 'launcher', 'service', 'environment', 'unknown'] as const)" :key="item" :class="{ selected: source === item }" @click="source = item">{{ item === 'all' ? t('全部') : t(sourceLabels[item]) }}</button></div><div class="logs-tools"><button class="icon-button" :title="t('复制可见日志')" :aria-label="t('复制可见日志')" @click="copy()"><Icon name="copy" /></button><button @click="exportLogs"><Icon name="down" />{{ t("导出") }}</button></div></div>

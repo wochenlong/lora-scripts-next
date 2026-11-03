@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import AcrylicSelect from './AcrylicSelect.vue'
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, shallowRef, watch } from 'vue'
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { getVersion } from '@tauri-apps/api/app'
 import { invoke } from '@tauri-apps/api/core'
@@ -30,6 +30,9 @@ import EnginePanel from './EnginePanel.vue'
 import TrustPanel from './TrustPanel.vue'
 import ImportPanel from './ImportPanel.vue'
 import ShellPanel from './ShellPanel.vue'
+import MainReinstallDialog from './MainReinstallDialog.vue'
+import { beginEngineQuery, cancelEngineQuery, cancelEngineQueryTarget, invalidateEngineQueryResults, queryStageLabel, sameEngineQueryIdentity, waitEngineQuery } from './engine-query'
+import type { EngineQueryEntry, EngineQueryIdentity, EngineQueryTarget } from './engine-query'
 import { locale, t } from './i18n'
 import type { LauncherLocale } from './i18n'
 
@@ -56,6 +59,22 @@ interface MainRepairPlan {
   source: SourceRepairPreview | null
   base: BasePythonRepairPreview | null
   package: PackageIntegrity | null
+}
+interface MainReinstallRequest {
+  epoch: number
+  root: string
+  releaseId: string
+  version: string
+  selectedInstance: string
+  observedBinding: string
+  phase: 'preparing' | 'ready' | 'blocked' | 'error' | 'cancelled'
+  reason: string
+  invalidated: boolean
+  cancelled: boolean
+  queryTarget: EngineQueryTarget | null
+  query: EngineQueryEntry | null
+  identity: EngineQueryIdentity | null
+  preview: GuiLifecyclePreview | null
 }
 
 const page = ref<Page>('launch')
@@ -137,6 +156,8 @@ const homeInk = ref({ titleDark: true, headingDark: true, controlsDark: true })
 const backgroundInput = ref<HTMLInputElement>()
 const confirmation = ref<Confirmation | null>(null)
 const confirmationCancel = ref<HTMLButtonElement>()
+const mainReinstall = shallowRef<MainReinstallRequest | null>(null)
+let mainReinstallReturnFocus: HTMLElement | null = null
 const operation = ref<OperationSnapshot | null>(null)
 const engineOperationId = ref<string | null>(null)
 const startingEngineOperation = ref(false)
@@ -238,6 +259,18 @@ const visiblePackages = computed(() => showAllPackages.value ? guiDiagnosis.valu
 const guiPlanBlocked = computed(() => Boolean(guiRecoveryNeeded.value || guiDiagnosis.value?.source_error || guiDiagnosis.value?.installed_metadata_error))
 
 watch([path, () => currentVersion.value?.id], clearGuiState, { flush: 'sync' })
+watch([
+  () => registrationRelease.value?.id, registrationInstanceId,
+  () => runtime.value?.instance_id, () => runtime.value?.binding_generation,
+  () => guiDiagnosis.value?.instance_id, () => guiDiagnosis.value?.generation,
+  () => mainReinstall.value?.query?.invalidated,
+  () => mainReinstall.value?.query?.snapshot?.validity,
+  () => mainReinstall.value?.query?.snapshot?.identity,
+  mutationDisabled,
+], () => {
+  const request = mainReinstall.value
+  if (request && (mutationDisabled.value || !mainReinstallContextCurrent(request) || request.query?.invalidated || request.query?.snapshot?.validity === 'stale')) invalidateMainReinstall()
+}, { flush: 'sync' })
 watch(path, () => {
   runtime.value = null; optimisticPhase.value = null; serviceEpoch += 1; serviceAction.value = ''; requestedRunId.value = null
   networkView.value = null; networkInherit.value = []; networkDraft.value = { mode: 'auto', http_proxy: '', https_proxy: '', no_proxy: '' }
@@ -279,6 +312,7 @@ function editNetworkField(key: ProxyField) {
 
 function clearGuiState() {
   guiEpoch += 1
+  invalidateMainReinstall()
   guiDiagnosis.value = null
   guiPreview.value = null
   basePythonPreview.value = null
@@ -857,24 +891,110 @@ function openVersionMaintenance(version: DisplayVersion) {
   openMainAdvanced()
 }
 async function reinstallMainEnvironment(version = currentVersion.value) {
-  if (!version || !maintenanceSupported(version) || mutationDisabled.value) return
-  // The preview disables its initiating button; capture focus before that happens.
+  if (!version || !maintenanceSupported(version) || mutationDisabled.value || mainReinstall.value) return
   const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   registrationReleaseId.value = version.id
   changeRegistrationRelease()
-  await inspectLifecycle('rebuild')
-  const preview = lifecyclePreview.value
-  if (preview?.status !== 'ready' || !preview.plan_sha256) { openMainAdvanced(); return }
-  const root = path.value.trim(), epoch = guiEpoch
-  await ask({
-    scope: 'gui', actionId: 'confirm-reinstall-main', title: t('重新安装主程序环境'),
-    detail: t('将在新目录安装主程序环境，验证通过后再切换。原环境会保留，训练引擎、模型和用户资料不变。这会重新下载缺少的主程序依赖。'),
-    paths: [t('预计下载：{size}', { size: formatFileSize(preview.plan?.estimated_network_bytes ?? 0) })],
-    action: t('确认重新安装'), execute: async () => {
-      if (epoch !== guiEpoch || !samePath(root, path.value) || registrationRelease.value?.id !== version.id) { error.value = t('目录或版本已变化，请重新检查。'); return }
-      await startGuiOperation(t('正在重新安装主程序环境'), () => applyGuiLifecycle(root, version.id, 'rebuild', preview.plan_sha256!, null, null))
-    },
-  }, returnFocus)
+  const request = shallowReactive<MainReinstallRequest>({
+    epoch: guiEpoch, root: path.value.trim(), releaseId: version.id,
+    version: `${version.version} · ${version.commit.slice(0, 8)}`,
+    selectedInstance: registrationInstanceId.value,
+    observedBinding: mainReinstallObservedBinding(path.value.trim(), version.id), phase: 'preparing', reason: '',
+    invalidated: false, cancelled: false, queryTarget: null, query: null, identity: null, preview: null,
+  })
+  mainReinstallReturnFocus = returnFocus
+  // Publish the cancellable dialog before starting any IPC or disk work.
+  mainReinstall.value = request
+  error.value = ''
+  await nextTick()
+  if (disposed || request.cancelled || request.invalidated || mainReinstall.value !== request) return
+  try {
+    request.queryTarget = { root: request.root, release_id: request.releaseId, engine_id: 'gui', action: 'preview_gui_rebuild', rebuild: true, scope: 'plan' }
+    const query = await beginEngineQuery(request.queryTarget)
+    request.query = query
+    // Closing or changing selection during admission still cancels the accepted task.
+    if (disposed || request.cancelled || request.invalidated || mainReinstall.value !== request) { await cancelEngineQuery(query); return }
+    const { result: preview, snapshot } = await waitEngineQuery<GuiLifecyclePreview>(query)
+    if (disposed || request.cancelled || request.invalidated || mainReinstall.value !== request) return
+    if (!mainReinstallContextCurrent(request)) { invalidateMainReinstall(); return }
+    if (preview.plan?.root_absolute && !samePath(request.root, preview.plan.root_absolute)) throw new Error(t('安装计划与当前目录不一致，请重新检查。'))
+    if (preview.status !== 'ready') {
+      request.phase = 'blocked'
+      request.reason = preview.reason || t('当前环境暂时无法重新安装，请先处理提示的问题。')
+      return
+    }
+    if (!preview.plan || !preview.plan_sha256 || !/^[0-9a-f]{64}$/.test(preview.plan_sha256)) throw new Error(t('安装计划不完整，请关闭后重试。'))
+    request.identity = snapshot.identity
+    if (!mainReinstallContextCurrent(request)) { invalidateMainReinstall(); return }
+    request.preview = preview
+    request.phase = 'ready'
+  } catch (reason) {
+    if (!request.query) request.queryTarget = null
+    if (disposed || request.cancelled || request.invalidated || mainReinstall.value !== request) return
+    request.phase = request.query?.snapshot?.status === 'cancelled' ? 'cancelled' : 'error'
+    request.reason = errorText(reason)
+    addLog(t('主程序重装准备未完成：{reason}', { reason: request.reason }), 'environment')
+  }
+}
+
+function mainReinstallContextCurrent(request: MainReinstallRequest) {
+  if (disposed || request.epoch !== guiEpoch || !samePath(request.root, path.value) || request.releaseId !== registrationRelease.value?.id || request.selectedInstance !== registrationInstanceId.value) return false
+  if (request.observedBinding !== mainReinstallObservedBinding(request.root, request.releaseId)) return false
+  return !request.identity || sameEngineQueryIdentity(request.identity, request.query?.snapshot?.identity ?? null)
+}
+function mainReinstallObservedBinding(root: string, releaseId: string) {
+  const runtimeIdentity = runtime.value
+  const diagnosis = guiDiagnosis.value
+  // Cached stopped-runtime/diagnosis records may describe an older instance.
+  // Detect changes to the observations, then use the query's validated identity
+  // and the unchanged backend plan validation as the authority for submission.
+  return JSON.stringify([
+    runtimeIdentity && samePath(runtimeIdentity.root, root) && runtimeIdentity.release_id === releaseId ? [runtimeIdentity.instance_id, runtimeIdentity.binding_generation] : null,
+    diagnosis && samePath(diagnosis.root, root) && diagnosis.release_id === releaseId ? [diagnosis.instance_id, diagnosis.generation] : null,
+  ])
+}
+function cancelMainReinstallQuery(request: MainReinstallRequest) {
+  // Record the intent before admission returns, so an immediate reopen cannot
+  // reuse the closing query or start another scan while it is being cancelled.
+  const cancellation = request.query
+    ? cancelEngineQuery(request.query)
+    : request.queryTarget ? cancelEngineQueryTarget(request.queryTarget) : null
+  void cancellation?.catch(reason => {
+    addLog(t('取消安装准备失败：{reason}', { reason: errorText(reason) }), 'environment')
+  })
+}
+function invalidateMainReinstall() {
+  const request = mainReinstall.value
+  if (!request || request.cancelled || request.invalidated) return
+  request.invalidated = true
+  request.phase = 'blocked'
+  request.preview = null
+  request.reason = t('目录、版本或环境已变化，请关闭后重新准备安装。')
+  cancelMainReinstallQuery(request)
+}
+function closeMainReinstall() {
+  const request = mainReinstall.value
+  if (!request) return
+  request.cancelled = true
+  request.phase = 'cancelled'
+  request.preview = null
+  cancelMainReinstallQuery(request)
+  mainReinstall.value = null
+  const returnFocus = mainReinstallReturnFocus
+  mainReinstallReturnFocus = null
+  void nextTick(() => {
+    if (!mainReinstall.value && !confirmation.value && returnFocus?.isConnected && !returnFocus.matches(':disabled')) returnFocus.focus({ preventScroll: true })
+  })
+}
+async function confirmMainReinstall() {
+  const request = mainReinstall.value
+  const preview = request?.preview
+  if (!request || request.phase !== 'ready' || !preview?.plan_sha256 || mutationDisabled.value) return
+  if (request.invalidated || !mainReinstallContextCurrent(request) || !request.query || request.query.invalidated || request.query.snapshot?.validity !== 'current' || !sameEngineQueryIdentity(request.identity, request.query.snapshot.identity)) { invalidateMainReinstall(); return }
+  // Closing synchronously consumes the confirmation, so double clicks cannot submit twice.
+  closeMainReinstall()
+  invalidateEngineQueryResults(request.root, request.releaseId, 'gui')
+  await startGuiOperation(t('正在重新安装主程序环境'), () => applyGuiLifecycle(request.root, request.releaseId, 'rebuild', preview.plan_sha256!, null, null))
 }
 
 async function diagnoseManagedGui() {
@@ -916,6 +1036,7 @@ async function inspectGuiRegistration() {
 }
 function changeRegistrationRelease() {
   guiEpoch += 1
+  invalidateMainReinstall()
   registrationPreview.value = null
   registrationInstanceId.value = ''
   if (confirmation.value?.scope === 'gui') dismissConfirmation()
@@ -955,7 +1076,7 @@ async function inspectLifecycle(action: 'rebuild' | 'rollback') {
 }
 async function inspectLifecycleHistory() {
   const version = registrationRelease.value
-  if (!version || !maintenanceSupported(version) || mutationDisabled.value) return
+  if (!version || !maintenanceSupported(version) || busy.value || !sameRoot.value) return
   const root = path.value.trim(), epoch = guiEpoch
   await perform(t('读取实例操作记录'), async () => {
     const value = await guiLifecycleHistory(root, version.id)
@@ -1173,8 +1294,8 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
               <button v-if="registrationPreview.status === 'pending'" :disabled="mutationDisabled" @click="confirmGuiRegistration(true)">{{ t('继续未完成登记恢复') }}</button>
             </template>
           </section>
-          <section v-if="sameRoot && registrationRelease && (mainCheckResult === 'advanced' || !startAvailable || lifecycleHistory || lifecyclePreview)" class="gui-diagnostics" aria-labelledby="lifecycle-title">
-            <div class="section-caption"><h2 id="lifecycle-title">{{ t('独立环境重建与回退') }}</h2><button :disabled="mutationDisabled" @click="inspectLifecycleHistory">{{ t('读取实例记录') }}</button></div>
+          <section v-if="sameRoot && registrationRelease" class="gui-diagnostics" aria-labelledby="lifecycle-title" data-action="main-lifecycle">
+            <div class="section-caption"><h2 id="lifecycle-title">{{ t('独立环境重建与回退') }}</h2><button data-action="read-main-instance-history" :disabled="busy || !sameRoot" @click="inspectLifecycleHistory">{{ t('读取实例记录') }}</button></div>
             <p class="hint">{{ t('环境无法精准修复时，可在新路径重建。旧实例保留，切换前会验证依赖和独立入口；同版本回退使用已保存的重建记录。') }}</p>
             <p>{{ t('目标版本：') }}{{ registrationRelease.version }} · {{ registrationRelease.commit.slice(0, 8) }}</p>
             <button :disabled="mutationDisabled" @click="inspectLifecycle('rebuild')">{{ t('预览新实例重建') }}</button>
@@ -1187,7 +1308,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
             </template>
             <template v-if="lifecyclePreview">
               <p v-if="lifecyclePreview.reason" class="gui-issue" role="alert">{{ lifecyclePreview.reason }}</p>
-              <p v-if="lifecyclePreview.plan" class="hint">{{ t('旧实例：') }}{{ lifecyclePreview.plan.old_binding?.instance_id ?? t('尚无绑定') }} {{ t('· 预计下载') }} {{ formatFileSize(lifecyclePreview.plan.estimated_network_bytes ?? 0) }}</p>
+              <p v-if="lifecyclePreview.plan" class="hint">{{ t('旧实例：') }}{{ (lifecycleAction === 'rollback' ? lifecyclePreview.plan.target_binding : lifecyclePreview.plan.old_binding)?.instance_id ?? t('尚无绑定') }} {{ t('· 预计下载') }} {{ formatFileSize(lifecyclePreview.plan.estimated_network_bytes ?? 0) }}</p>
               <button v-if="lifecyclePreview.status === 'ready'" :disabled="mutationDisabled" @click="confirmLifecycle(lifecycleAction, lifecycleAction === 'rollback' ? lifecycleTransaction : null)">{{ lifecycleAction === 'rebuild' ? t('审查并创建新实例') : t('审查并回退旧实例') }}</button>
             </template>
           </section>
@@ -1283,6 +1404,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 
     </main>
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
+        <MainReinstallDialog v-if="mainReinstall" :phase="mainReinstall.phase" :root="mainReinstall.root" :version="mainReinstall.version" :reason="mainReinstall.reason" :progress="mainReinstall.query?.snapshot?.progress.message || queryStageLabel(mainReinstall.query?.snapshot?.stage ?? '')" :shared="mainReinstall.query?.shared ?? false" :connection-error="Boolean(mainReinstall.query?.connectionError)" :download="formatFileSize(mainReinstall.preview?.plan?.estimated_network_bytes ?? 0)" @cancel="closeMainReinstall" @confirm="confirmMainReinstall" />
         <div v-if="confirmation" class="dialog-backdrop" @keydown.esc.prevent="dismissConfirmation" @keydown="trapDialogFocus"><section class="confirmation-dialog" :class="{ 'gui-confirmation': confirmation.paths }" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-detail"><h2 id="confirmation-title">{{ confirmation.title }}</h2><p id="confirmation-detail">{{ confirmation.detail }}</p><pre v-if="confirmation.paths" class="gui-paths" tabindex="0" :aria-label="t('确认修复的完整文件清单')">{{ confirmation.paths.join('\n') }}</pre><div><button ref="confirmationCancel" @click="dismissConfirmation">{{ t('取消') }}</button><button :class="confirmation.destructive ? 'danger' : 'primary'" :data-action="confirmation.actionId" @click="confirmAction">{{ confirmation.action }}</button></div></section></div>
   </div>
 </template>

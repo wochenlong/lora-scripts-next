@@ -4,6 +4,8 @@ use crate::{
     instances,
     model::{self, EnvironmentBinding, Layout, Registry, Release, WorkspaceMutation},
     operations::CancelToken,
+    query_tasks::QueryStage,
+    scan_observation,
 };
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -57,12 +59,13 @@ fn identity(bytes: &[u8]) -> Identity {
     }
 }
 fn read(layout: &Layout, path: &Path) -> Result<Vec<u8>> {
+    scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
     layout.guard_path(path)?;
     let meta = fs::symlink_metadata(path)?;
     if !meta.is_file() || meta.len() > 32 * 1024 * 1024 {
         bail!("实例回退记录不是受限普通文件");
     }
-    let bytes = fs::read(path)?;
+    let bytes = scan_observation::read_file(path, QueryStage::Receipt)?;
     if bytes.len() as u64 != meta.len() {
         bail!("实例回退记录读取变化");
     }
@@ -124,8 +127,63 @@ pub(crate) fn assert_ready(root: &Path, release: &Release) -> Result<()> {
     if intent.status != "committed" {
         bail!("GUI实例回退事务{}待恢复", intent.transaction);
     }
+    validate_history_authority(&layout, release, &intent)?;
     Ok(())
 }
+/// 全根回退门；只有调用者明确给出的合法目标事务可以处于 pending。
+pub(crate) fn assert_all_ready(root: &Path, recovery: Option<(&Release, &str)>) -> Result<()> {
+    let catalog = model::Catalog::embedded()?;
+    let scope = Layout::new(
+        root,
+        &catalog.releases().first().context("发布目录为空")?.id,
+    )?;
+    let mut matched = false;
+    if let Some((_, transaction)) = recovery {
+        model::validate_component(transaction)?;
+        if !transaction.starts_with("gui-rebuild-rollback-") {
+            bail!("实例回退恢复事务类型不符");
+        }
+    }
+    let base = root.join("state/gui-binding-switch");
+    scope.guard_path(&base)?;
+    if base.exists() {
+        for entry in fs::read_dir(&base)? {
+            scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
+            let path = entry?.path();
+            scope.guard_path(&path)?;
+            if path.extension().is_none_or(|value| value != "json") {
+                bail!("实例回退容器含未知文件");
+            }
+            let release_id = path
+                .file_stem()
+                .and_then(|v| v.to_str())
+                .context("实例回退文件名无效")?;
+            let owner = catalog.release(release_id)?;
+            let layout = Layout::new(root, &owner.id)?;
+            let intent: Intent = serde_json::from_slice(&read(&layout, &path)?)?;
+            validate_shape(&layout, owner, &intent)?;
+            let is_target = recovery.is_some_and(|(release, transaction)| {
+                release.id == owner.id && transaction == intent.transaction
+            });
+            if is_target {
+                if matched {
+                    bail!("实例回退恢复目标不唯一");
+                }
+                validate_semantics(&layout, owner, &intent)?;
+                matched = true;
+            } else if intent.status != "committed" {
+                bail!("GUI实例回退事务{}待恢复", intent.transaction);
+            } else {
+                validate_history_authority(&layout, owner, &intent)?;
+            }
+        }
+    }
+    if recovery.is_some() && !matched {
+        bail!("实例回退恢复事务ID或发布版本不符");
+    }
+    Ok(())
+}
+
 pub(crate) fn pending(root: &Path, release: &Release) -> Result<Option<Value>> {
     let layout = Layout::new(root, &release.id)?;
     let path = intent_path(&layout)?;
@@ -158,7 +216,7 @@ fn plan(
         bail!("目标已是当前绑定");
     }
     let state = instances::load(&layout, &target_binding.instance_id)?;
-    instances::assert_usable(&state)?;
+    instances::assert_usable_controlled(&state, cancel)?;
     if state.release_id() != release.id
         || state.storage_version() != target_binding.storage_version
         || state.recipe_id() != target_binding.recipe_id
@@ -167,8 +225,8 @@ fn plan(
     {
         bail!("历史实例已改变generation/配方，不能追认旧健康");
     }
-    crate::source_integrity::verify(&layout, release)?;
-    crate::python_integrity::verify(&layout)?;
+    crate::source_integrity::verify_controlled(&layout, release, cancel)?;
+    crate::python_integrity::verify_controlled(&layout, cancel)?;
     let proof =
         gui_registration_integrity::verify(&layout, release, &instances::path(&state)?, cancel)?;
     Ok(Plan {
@@ -215,13 +273,16 @@ fn validate_shape(layout: &Layout, release: &Release, intent: &Intent) -> Result
     }
     Ok(())
 }
-fn validate_semantics(
+/// 历史授权只校验原始计划、history及备份，不要求当前绑定仍停在历史二态。
+fn validate_history_authority(
     layout: &Layout,
     release: &Release,
     intent: &Intent,
-) -> Result<(Registry, Vec<u8>, instances::InstanceState)> {
+) -> Result<(Registry, Vec<u8>)> {
     validate_shape(layout, release, intent)?;
     let plan = &intent.plan;
+    plan.current_binding.validate()?;
+    plan.target_binding.validate()?;
     let (history_identity, target) = history(layout, release, &plan.history_transaction)?;
     if history_identity != plan.history_identity || target != plan.target_binding {
         bail!("实例回退历史身份变化");
@@ -237,6 +298,42 @@ fn validate_semantics(
     if old.gui_binding(&release.id) != Some(&plan.current_binding) {
         bail!("实例回退旧binding与快照不符");
     }
+    if plan.proof.environment
+        != model::environment_path(
+            &layout.root,
+            &release.id,
+            &target.instance_id,
+            target.storage_version,
+        )?
+        || plan.proof.recipe_sha256 != target.recipe_sha256
+        || plan.proof.trusted_index_sha256 != gui_registration_integrity::trusted_index_sha256()
+    {
+        bail!("实例回退历史证明与目标身份不符");
+    }
+    let desired_bytes = saved(layout, intent, "registry-new.json", &intent.new_registry)?;
+    let desired: Registry = serde_json::from_slice(&desired_bytes)?;
+    desired.validate()?;
+    let mut expected = old;
+    expected.bind_gui(&release.id, target)?;
+    if desired != expected {
+        bail!("实例回退不能修改健康/其它registry字段");
+    }
+    Ok((desired, desired_bytes))
+}
+fn validate_semantics(
+    layout: &Layout,
+    release: &Release,
+    intent: &Intent,
+) -> Result<(Registry, Vec<u8>, instances::InstanceState)> {
+    validate_shape(layout, release, intent)?;
+    if intent.status == "committed"
+        && identity(&read(layout, &layout.root.join("state/registry.json"))?) != intent.new_registry
+    {
+        bail!("实例回退终态与当前 registry 不一致");
+    }
+    let (desired, desired_bytes) = validate_history_authority(layout, release, intent)?;
+    let plan = &intent.plan;
+    let target = &plan.target_binding;
     let state = instances::load(layout, &target.instance_id)?;
     if state.dirty()
         || state.release_id() != release.id
@@ -257,14 +354,6 @@ fn validate_semantics(
     )?) != plan.target_state
     {
         bail!("实例回退目标state变化");
-    }
-    let desired_bytes = saved(layout, intent, "registry-new.json", &intent.new_registry)?;
-    let desired: Registry = serde_json::from_slice(&desired_bytes)?;
-    desired.validate()?;
-    let mut expected = old;
-    expected.bind_gui(&release.id, target)?;
-    if desired != expected {
-        bail!("实例回退不能修改健康/其它registry字段");
     }
     let current = identity(&read(layout, &layout.root.join("state/registry.json"))?);
     if current != plan.old_registry && current != intent.new_registry {
@@ -341,15 +430,15 @@ pub(crate) fn execute(
 fn finish(
     ctx: &WorkspaceMutation,
     release: &Release,
-    mut intent: Intent,
+    intent: Intent,
     cancel: &CancelToken,
     validator: impl Fn(&Path) -> Result<()>,
     entry_probe: impl Fn(&Path, &str) -> Result<()>,
 ) -> Result<Value> {
     let layout = ctx.layout();
-    let (_, bytes, state) = validate_semantics(layout, release, &intent)?;
-    crate::source_integrity::verify(layout, release)?;
-    crate::python_integrity::verify(layout)?;
+    let (_, _, state) = validate_semantics(layout, release, &intent)?;
+    crate::source_integrity::verify_controlled(layout, release, cancel)?;
+    crate::python_integrity::verify_controlled(layout, cancel)?;
     let proof =
         gui_registration_integrity::verify(layout, release, &instances::path(&state)?, cancel)?;
     if proof != intent.plan.proof {
@@ -359,14 +448,28 @@ fn finish(
         validator(environment)?;
         entry_probe(environment, &intent.transaction)
     })?;
+    commit_validated_binding(layout, release, intent, cancel)
+}
+
+// 前面的独立可信闭包与运行探针不可省略；本函数收口门前保护和短原子写入。
+fn commit_validated_binding(
+    layout: &Layout,
+    release: &Release,
+    mut intent: Intent,
+    cancel: &CancelToken,
+) -> Result<Value> {
+    let (_, bytes, state) = validate_semantics(layout, release, &intent)?;
+    // 完整字节保护在仍可取消的门前完成；绑定切换不会修改实例state或generation。
+    instances::assert_usable_controlled(&state, cancel)?;
     validate_semantics(layout, release, &intent)?;
+    // 完整复验与语义检查仍可取消；最终写入门和取消请求共享同一个CAS状态。
+    cancel.enter_commit()?;
     model::write_gui_transaction_bytes(
         &layout.root,
         &intent.transaction,
         &layout.root.join("state/registry.json"),
         &bytes,
     )?;
-    instances::assert_usable(&state)?;
     intent.status = "committed".into();
     model::write_gui_transaction_json(
         &layout.root,
@@ -381,12 +484,16 @@ fn finish(
 pub(crate) fn recover(
     ctx: &WorkspaceMutation,
     release: &Release,
+    transaction: &str,
     cancel: &CancelToken,
     validator: impl Fn(&Path) -> Result<()>,
     entry_probe: impl Fn(&Path, &str) -> Result<()>,
 ) -> Result<Value> {
     let intent: Intent = serde_json::from_slice(&read(ctx.layout(), &intent_path(ctx.layout())?)?)?;
-    validate_shape(ctx.layout(), release, &intent)?;
+    if intent.transaction != transaction {
+        bail!("实例回退恢复事务ID不符");
+    }
+    validate_semantics(ctx.layout(), release, &intent)?;
     if intent.status == "committed" {
         return Ok(
             json!({"status":"rolled_back","transaction":intent.transaction,"network_bytes":0}),
@@ -425,6 +532,11 @@ mod tests {
                 recipe.id(),
                 "00ce9d78bc779f72405c84145ded75e63deca34d5b21afc51f1a78b76a0773ba",
                 &cancel,
+            )
+            .unwrap();
+            fs::write(
+                instances::path(&state).unwrap().join("contract.bin"),
+                b"small real byte scan",
             )
             .unwrap();
             instances::validate_new_controlled(&ctx, &state, &[], &cancel, |_| Ok(())).unwrap()
@@ -550,12 +662,94 @@ mod tests {
             new_registry: identity(&desired_bytes),
         };
         assert!(validate_semantics(layout, &release, &intent).is_ok());
+        // 合成proof只验证收口合同；正式生产finish仍先执行独立验证及真实运行探针。
+        // 在最后一次真实环境hash中取消，必须仍可接受，不能先进入提交门。
+        let cancelled = CancelToken::new();
+        let hook_cancel = cancelled.clone();
+        let target_file = instances::path(&target).unwrap().join("contract.bin");
+        let current_before = fs::read(root.join("state/registry.json")).unwrap();
+        let intent_file = intent_path(layout).unwrap();
+        let result = crate::instances::reliability_r4_scan_tests::with_read_hook(
+            move |path, _| {
+                if path == target_file {
+                    assert_eq!(
+                        hook_cancel.request(),
+                        crate::operations::CancelReceipt::Accepted
+                    );
+                }
+            },
+            || commit_validated_binding(layout, &release, intent.clone(), &cancelled),
+        );
+        assert!(result
+            .unwrap_err()
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some());
+        assert_eq!(
+            fs::read(root.join("state/registry.json")).unwrap(),
+            current_before
+        );
+        assert!(!intent_file.exists());
+        let commit_cancel = CancelToken::new();
+        let committed =
+            commit_validated_binding(layout, &release, intent.clone(), &commit_cancel).unwrap();
+        assert_eq!(committed["status"], "rolled_back");
+        assert_eq!(
+            commit_cancel.request(),
+            crate::operations::CancelReceipt::CommitInProgress
+        );
+        assert_eq!(
+            fs::read(root.join("state/registry.json")).unwrap(),
+            desired_bytes
+        );
+        // 下面原有授权/第三状态拒绝案从未提交的控制状态继续，避免新增history改变门的目标。
+        fs::remove_file(intent_file).unwrap();
         fs::write(root.join("state/registry.json"), &desired_bytes).unwrap();
         assert!(validate_semantics(layout, &release, &intent).is_ok());
         let mut third = desired.clone();
         third.current = Some(release.id.clone());
         third.store(&root).unwrap();
         assert!(validate_semantics(layout, &release, &intent).is_err());
+        // 静态授权允许后续合法 registry 切换；该合成proof仅证明合同，不授健康。
+        let mut historical = intent.clone();
+        historical.status = "committed".into();
+        model::write_gui_transaction_json(&root, tx, &intent_path(layout).unwrap(), &historical)
+            .unwrap();
+        validate_history_authority(layout, &release, &historical).unwrap();
+        assert_all_ready(&root, None).unwrap();
+        assert!(validate_semantics(layout, &release, &historical).is_err());
+        let new_backup = root.join("backups").join(tx).join("registry-new.json");
+        let saved_new = fs::read(&new_backup).unwrap();
+        fs::write(&new_backup, b"corrupt historical backup").unwrap();
+        assert!(assert_all_ready(&root, None).is_err());
+        drop(ctx);
+        let before = fs::read(root.join("state/registry.json")).unwrap();
+        let manager = crate::operations::OperationManager::default();
+        let operation = manager
+            .start(
+                "r1-bad-nontarget-terminal",
+                crate::operations::OperationKind::Repair,
+            )
+            .unwrap();
+        let mut engine = super::super::Engine::new(root.clone(), std::sync::Arc::new(|_| {}));
+        let error = engine
+            .gui_lifecycle_operation(
+                &root,
+                &release.id,
+                "recover_preserved",
+                None,
+                None,
+                Some(target.id()),
+                &operation,
+            )
+            .unwrap_err();
+        assert!(format!("{error:#}").contains("快照身份不符"));
+        assert_eq!(fs::read(root.join("state/registry.json")).unwrap(), before);
+        assert!(!root
+            .join("state/operations/r1-bad-nontarget-terminal.json")
+            .exists());
+        fs::write(new_backup, saved_new).unwrap();
+        let ctx = WorkspaceMutation::acquire_existing(&root, &release.id).unwrap();
+        let layout = ctx.layout();
         fs::write(root.join("state/registry.json"), current_bytes).unwrap();
         let target_path = root
             .join("state/instances")

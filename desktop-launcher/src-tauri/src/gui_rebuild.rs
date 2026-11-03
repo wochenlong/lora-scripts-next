@@ -4,7 +4,9 @@ use crate::{
     instances::{self, RebuildBoundary},
     model::{self, EnvironmentBinding, Layout, Registry, Release, WorkspaceMutation},
     operations::CancelToken,
+    query_tasks::QueryStage,
     recipe::GuiRecipe,
+    scan_observation,
 };
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
@@ -101,11 +103,12 @@ pub(crate) fn rollback(
 pub(crate) fn recover_rollback(
     ctx: &WorkspaceMutation,
     release: &Release,
+    transaction: &str,
     cancel: &CancelToken,
     validator: impl Fn(&Path) -> Result<()>,
     entry_probe: impl Fn(&Path, &str) -> Result<()>,
 ) -> Result<Value> {
-    super::gui_binding_switch::recover(ctx, release, cancel, validator, entry_probe)
+    super::gui_binding_switch::recover(ctx, release, transaction, cancel, validator, entry_probe)
 }
 pub(crate) fn preserved_pending(root: &Path, release: &Release) -> Result<Value> {
     let pending: Vec<_> = instances::preserved_pending(root)?
@@ -172,12 +175,13 @@ fn encode<T: Serialize>(value: &T) -> Result<Vec<u8>> {
     Ok(bytes)
 }
 fn read(layout: &Layout, path: &Path) -> Result<Vec<u8>> {
+    scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
     layout.guard_path(path)?;
     let meta = fs::symlink_metadata(path)?;
     if !meta.is_file() || meta.len() > 32 * 1024 * 1024 {
         bail!("重建状态只接受限额普通文件");
     }
-    let bytes = fs::read(path)?;
+    let bytes = scan_observation::read_file(path, QueryStage::Receipt)?;
     if bytes.len() as u64 != meta.len() {
         bail!("重建状态读取变化");
     }
@@ -231,6 +235,7 @@ fn validate(layout: &Layout, release: &Release, intent: &Intent) -> Result<()> {
     model::validate_environment_storage(&intent.candidate_id, 1)?;
     if intent.schema_version != 1
         || !intent.transaction.starts_with("gui-rebuild-")
+        || intent.transaction.starts_with("gui-rebuild-rollback-")
         || intent.root_absolute != layout.root
         || intent.release_id != release.id
         || layout
@@ -276,11 +281,13 @@ fn validate(layout: &Layout, release: &Release, intent: &Intent) -> Result<()> {
     Ok(())
 }
 fn all(layout: &Layout) -> Result<Vec<Intent>> {
+    scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
     let base = layout.root.join("state/gui-rebuild");
     layout.guard_path(&base)?;
     let mut intents = Vec::new();
     if base.exists() {
         for entry in fs::read_dir(base)? {
+            scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
             let path = entry?.path();
             layout.guard_path(&path)?;
             if path.extension().is_none_or(|e| e != "json") {
@@ -301,11 +308,48 @@ fn all(layout: &Layout) -> Result<Vec<Intent>> {
 pub(crate) fn assert_ready(root: &Path, release: &Release) -> Result<()> {
     let layout = Layout::new(root, &release.id)?;
     for intent in all(&layout)? {
+        scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
         let owner = crate::model::Catalog::embedded()?
             .release(&intent.release_id)?
             .clone();
         validate(&Layout::new(root, &owner.id)?, &owner, &intent)?;
         if !matches!(intent.status.as_str(), "committed" | "orphaned") {
+            bail!("GUI重建事务{}待恢复", intent.transaction);
+        }
+    }
+    Ok(())
+}
+/// 恢复前只豁免完整验证过的精确自身；其他发布和同发布第二事务仍逐项拒绝。
+pub(crate) fn assert_ready_except_recovery(
+    root: &Path,
+    release: &Release,
+    transaction: &str,
+) -> Result<()> {
+    model::validate_component(transaction)?;
+    if !transaction.starts_with("gui-rebuild-") || transaction.starts_with("gui-rebuild-rollback-")
+    {
+        bail!("重建恢复事务类型不符");
+    }
+    let layout = Layout::new(root, &release.id)?;
+    let target: Intent =
+        serde_json::from_slice(&read(&layout, &intent_path(&layout, transaction)?)?)?;
+    if target.transaction != transaction {
+        bail!("重建恢复事务ID不符");
+    }
+    validate(&layout, release, &target)?;
+    if matches!(
+        target.status.as_str(),
+        "committing" | "committed" | "orphaned"
+    ) {
+        instances::validate_rebuild_recovery_authority(&layout, transaction)?;
+    }
+    let catalog = model::Catalog::embedded()?;
+    for intent in all(&layout)? {
+        scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
+        let owner = catalog.release(&intent.release_id)?;
+        validate(&Layout::new(root, &owner.id)?, owner, &intent)?;
+        let is_target = intent.transaction == transaction && intent.release_id == release.id;
+        if !is_target && !matches!(intent.status.as_str(), "committed" | "orphaned") {
             bail!("GUI重建事务{}待恢复", intent.transaction);
         }
     }
@@ -318,6 +362,7 @@ pub(crate) fn history(root: &Path, release: &Release) -> Result<Value> {
     let mut records = Vec::new();
     let mut pending = Vec::new();
     for intent in all(&layout)? {
+        scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
         if intent.release_id != release.id {
             continue;
         }
@@ -341,6 +386,8 @@ pub(crate) fn history(root: &Path, release: &Release) -> Result<Value> {
                     && state.recipe_sha256() == target.recipe_sha256
             })
         });
+        // 可用性谓词可以吞掉普通历史错误，但不能吞掉本次查询取消/期限。
+        scan_observation::check()?;
         records.push(json!({"transaction":intent.transaction,"status":intent.status,"candidate_id":intent.candidate_id,"old_instance_id":intent.plan.old_binding.as_ref().map(|b| &b.instance_id),"rollback_available":rollback_available,"failure":intent.failure}));
     }
     if let Some(value) = super::gui_binding_switch::pending(root, release)? {
@@ -357,6 +404,8 @@ fn plan(
     release: &Release,
     cancel: &CancelToken,
 ) -> Result<(Plan, RebuildBoundary)> {
+    cancel.check()?;
+    scan_observation::check()?;
     assert_ready(&layout.root, release)?;
     super::gui_binding_switch::assert_ready(&layout.root, release)?;
     let registry = Registry::load(&layout.root)?;
@@ -370,9 +419,12 @@ fn plan(
     if crate::model::ReleaseReceipt::load(&layout.release_dir)?.release != *release {
         bail!("重建需要同发布有效receipt；请先补登记");
     }
-    crate::source_integrity::verify(layout, release)?;
-    crate::python_integrity::verify(layout)?;
-    if crate::core::digest(&layout.root.join("tools/uv.exe"))? != recipe.tool_uv.exe_sha256 {
+    crate::source_integrity::verify_controlled(layout, release, cancel)?;
+    crate::python_integrity::verify_controlled(layout, cancel)?;
+    cancel.check()?;
+    if crate::core::digest_controlled(&layout.root.join("tools/uv.exe"), cancel)?
+        != recipe.tool_uv.exe_sha256
+    {
         bail!("uv固定工具损坏，先修复工具");
     }
     let registry_bytes = read(layout, &layout.root.join("state/registry.json"))?;
@@ -380,12 +432,14 @@ fn plan(
     let mut missing = Vec::new();
     let mut network = 0u64;
     for wheel in &recipe.wheels {
+        cancel.check()?;
+        scan_observation::checkpoint(QueryStage::Tools, 0, 0)?;
         let path = layout.root.join("cache/wheelhouse").join(&wheel.filename);
         layout.guard_path(&path)?;
         if path.exists() {
             if !fs::symlink_metadata(&path)?.is_file()
                 || fs::metadata(&path)?.len() != wheel.bytes
-                || crate::core::digest(&path)? != wheel.sha256
+                || crate::core::digest_controlled(&path, cancel)? != wheel.sha256
             {
                 bail!("已有wheelhouse文件损坏，不覆盖");
             }
@@ -409,13 +463,26 @@ fn plan(
     ))
 }
 pub(crate) fn preview(root: &Path, release: &Release) -> Result<Value> {
+    preview_controlled(root, release, &CancelToken::new())
+}
+pub(crate) fn preview_controlled(
+    root: &Path,
+    release: &Release,
+    cancel: &CancelToken,
+) -> Result<Value> {
+    cancel.check()?;
+    scan_observation::check()?;
     let layout = Layout::new(root, &release.id)?;
-    match plan(&layout, release, &CancelToken::new()) {
+    match plan(&layout, release, cancel) {
         Ok((plan, _)) => Ok(
             json!({"status":"ready","plan_sha256":hash(&serde_json::to_vec(&plan)?),"plan":plan,"actions":["create_new_final_environment","offline_locked_sync","full_trusted_integrity","isolated_entry_probe","preserve_old_transactions","switch_binding_last"]}),
         ),
         Err(error) => {
+            cancel.check()?;
+            scan_observation::check()?;
             let records = history(root, release)?;
+            cancel.check()?;
+            scan_observation::check()?;
             let pending = records["pending_transactions"].clone();
             Ok(
                 json!({"status":if pending.as_array().is_some_and(|p| !p.is_empty()) {"pending"} else {"blocked"},"reason":format!("{error:#}"),"pending_transactions":pending}),
@@ -555,8 +622,8 @@ fn verify_candidate(
 ) -> Result<()> {
     let layout = ctx.layout();
     let environment = model::environment_path(&layout.root, &release.id, &intent.candidate_id, 1)?;
-    crate::source_integrity::verify(layout, release)?;
-    crate::python_integrity::verify(layout)?;
+    crate::source_integrity::verify_controlled(layout, release, cancel)?;
+    crate::python_integrity::verify_controlled(layout, cancel)?;
     let proof = gui_registration_integrity::verify(layout, release, &environment, cancel)?;
     instances::rebuild_validate_candidate(
         ctx,
@@ -581,18 +648,28 @@ fn prepare_commit(
     cancel: &CancelToken,
 ) -> Result<()> {
     let layout = ctx.layout();
+    cancel.check()?;
     validate(layout, release, intent)?;
     instances::rebuild_check_boundary(ctx, boundary, &intent.candidate_id, cancel)?;
+    cancel.check()?;
     if !success {
         instances::rebuild_mark_orphan(ctx, &intent.candidate_id, &intent.transaction)?;
     }
+    cancel.check()?;
     let state = instances::load(layout, &intent.candidate_id)?;
     let state_path = layout
         .root
         .join("state/instances")
         .join(format!("{}.json", state.id()));
     intent.candidate_state = Some(identity(&read(layout, &state_path)?));
-    intent.candidate_tree_sha256 = Some(instances::rebuild_candidate_tree_sha(layout, state.id())?);
+    intent.candidate_tree_sha256 = Some(instances::rebuild_candidate_tree_sha_controlled(
+        layout,
+        state.id(),
+        cancel,
+    )?);
+    #[cfg(all(test, windows))]
+    reliability_r0_rebuild_fixture::cancellation_checkpoint(intent, "prepare_candidate_observed");
+    cancel.check()?;
     let preservation =
         instances::rebuild_preservation(ctx, &intent.transaction, boundary, state.id(), cancel)?;
     let preservation_bytes = encode(&preservation)?;
@@ -606,6 +683,7 @@ fn prepare_commit(
     )?;
     intent.preservation_file = Some(preservation_file);
     intent.preservation_sha256 = Some(preservation_sha256);
+    cancel.check()?;
     if success {
         if state.dirty() || intent.proof.is_none() {
             bail!("未完成真实验证不能绑定重建候选");
@@ -635,6 +713,8 @@ fn prepare_commit(
     } else {
         intent.terminal_status = Some("orphaned".into());
     }
+    // 准备期间的扫描和可逆 sidecar 写入尚未授权提交；取消保留原 pending。
+    cancel.check()?;
     intent.status = "committing".into();
     store(layout, intent)
 }
@@ -647,6 +727,7 @@ fn finish(
     entry_probe: &impl Fn(&Path, &str) -> Result<()>,
 ) -> Result<Value> {
     let layout = ctx.layout();
+    cancel.check()?;
     validate(layout, release, intent)?;
     if intent.status != "committing" {
         bail!("重建尚未持久化完整提交许可");
@@ -660,6 +741,7 @@ fn finish(
             .join("boundary.json"),
     )?)?;
     instances::rebuild_check_boundary(ctx, &boundary, &intent.candidate_id, cancel)?;
+    cancel.check()?;
     let state = instances::load(layout, &intent.candidate_id)?;
     let recipe = GuiRecipe::embedded()?;
     if state.release_id() != release.id
@@ -678,11 +760,17 @@ fn finish(
             .join(format!("{}.json", state.id())),
     )?;
     if Some(identity(&state_bytes)) != intent.candidate_state
-        || Some(instances::rebuild_candidate_tree_sha(layout, state.id())?)
-            != intent.candidate_tree_sha256
+        || Some(instances::rebuild_candidate_tree_sha_controlled(
+            layout,
+            state.id(),
+            cancel,
+        )?) != intent.candidate_tree_sha256
     {
         bail!("重建提交候选变化，保留gate");
     }
+    #[cfg(all(test, windows))]
+    reliability_r0_rebuild_fixture::cancellation_checkpoint(intent, "finish_candidate_observed");
+    cancel.check()?;
     let preservation = read(
         layout,
         &layout.root.join("backups").join(&intent.transaction).join(
@@ -695,6 +783,7 @@ fn finish(
     if Some(hash(&preservation)) != intent.preservation_sha256 {
         bail!("重建preservation快照变化");
     }
+    cancel.check()?;
     let target = layout.root.join("state/registry.json");
     let current = identity(&read(layout, &target)?);
     match intent.terminal_status.as_deref() {
@@ -745,14 +834,19 @@ fn finish(
                     .join("state/instances")
                     .join(format!("{}.json", state.id())),
             )?)) != intent.candidate_state
-                || Some(instances::rebuild_candidate_tree_sha(layout, state.id())?)
-                    != intent.candidate_tree_sha256
+                || Some(instances::rebuild_candidate_tree_sha_controlled(
+                    layout,
+                    state.id(),
+                    cancel,
+                )?) != intent.candidate_tree_sha256
             {
                 bail!("真实复验后candidate变化，不提交binding");
             }
             if registry != expected || (current != intent.old_registry && current != *desired_id) {
                 bail!("重建registry语义/二态不符");
             }
+            // 完整许可可重入；耗时复验在门外，写入门与取消共享同一个CAS状态。
+            cancel.enter_commit()?;
             if current != *desired_id {
                 model::write_gui_transaction_bytes(
                     &layout.root,
@@ -766,6 +860,8 @@ fn finish(
             if current != intent.old_registry || intent.new_registry.is_some() {
                 bail!("失败封存不改旧binding/registry");
             }
+            // 无registry切换的终态也不能在已接受取消后再报告成功。
+            cancel.enter_commit()?;
         }
         _ => bail!("重建终态许可无效"),
     }
@@ -783,6 +879,7 @@ pub(crate) fn recover(
     validator: impl Fn(&Path) -> Result<()>,
     entry_probe: impl Fn(&Path, &str) -> Result<()>,
 ) -> Result<Value> {
+    cancel.check()?;
     let layout = ctx.layout();
     let mut intent: Intent =
         serde_json::from_slice(&read(layout, &intent_path(layout, transaction)?)?)?;
@@ -810,7 +907,7 @@ pub(crate) fn recover(
         recipe.id(),
         RECIPE_SHA,
         &intent.transaction,
-        &CancelToken::new(),
+        cancel,
     )?;
     let outcome = verify_candidate(
         ctx,
@@ -822,26 +919,27 @@ pub(crate) fn recover(
         &entry_probe,
     );
     if let Err(error) = &outcome {
+        if error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some()
+        {
+            return Err(outcome.unwrap_err());
+        }
         intent.failure = Some(format!(
             "恢复时未通过完整验证，已精确保留为dirty orphan：{error:#}"
         ));
     }
+    // 进入完整提交许可前仍可取消；保留原 pending，后续可继续恢复。
+    cancel.check()?;
     prepare_commit(
         ctx,
         release,
         &mut intent,
         &boundary,
         outcome.is_ok(),
-        &CancelToken::new(),
+        cancel,
     )?;
-    finish(
-        ctx,
-        release,
-        &mut intent,
-        &CancelToken::new(),
-        &validator,
-        &entry_probe,
-    )
+    finish(ctx, release, &mut intent, cancel, &validator, &entry_probe)
 }
 
 #[cfg(test)]

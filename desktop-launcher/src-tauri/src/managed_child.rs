@@ -7,6 +7,119 @@ use super::Job;
 use anyhow::{Context, Result};
 use std::process::{Child, Command};
 
+/// 查询在恢复初始线程前登记身份；任何失败都将仍持有的资源交给调用者回收。
+pub(super) struct QuerySpawnFailure {
+    pub error: anyhow::Error,
+    pub child: Option<Child>,
+    pub job: Option<Job>,
+    pub never_resumed: bool,
+}
+
+pub(super) fn spawn_query(
+    command: &mut Command,
+    attached: impl FnOnce(&Child, &Job) -> Result<()>,
+) -> std::result::Result<(Child, Job), QuerySpawnFailure> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        use windows_sys::Win32::System::Threading::{CREATE_NO_WINDOW, CREATE_SUSPENDED};
+        command.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
+        let child = command.spawn().map_err(|error| QuerySpawnFailure {
+            error: anyhow::Error::new(error).context("创建挂起查询进程失败"),
+            child: None,
+            job: None,
+            never_resumed: true,
+        })?;
+        let job = match Job::attach(&child) {
+            Ok(job) => job,
+            Err(error) => {
+                return Err(QuerySpawnFailure {
+                    error,
+                    child: Some(child),
+                    job: None,
+                    never_resumed: true,
+                })
+            }
+        };
+        if let Err(error) = attached(&child, &job) {
+            return Err(QuerySpawnFailure {
+                error,
+                child: Some(child),
+                job: Some(job),
+                never_resumed: true,
+            });
+        }
+        if let Err(error) = resume_initial_thread(&child) {
+            // ResumeThread异常可代表此前已被外界恢复，不声称从未运行。
+            return Err(QuerySpawnFailure {
+                error,
+                child: Some(child),
+                job: Some(job),
+                never_resumed: false,
+            });
+        }
+        Ok((child, job))
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (command, attached);
+        Err(QuerySpawnFailure {
+            error: anyhow::anyhow!("完整查询 Job 回收证明当前仅支持 Windows"),
+            child: None,
+            job: None,
+            never_resumed: true,
+        })
+    }
+}
+
+/// 身份来自仍持有的 Child/Job；PID 不能单独证明同一代进程。
+pub(super) fn worker_identity(
+    child: &Child,
+    job: &Job,
+) -> Result<crate::query_tasks::WorkerIdentity> {
+    #[cfg(windows)]
+    {
+        use std::{
+            os::windows::io::AsRawHandle,
+            sync::atomic::{AtomicU64, Ordering},
+        };
+        use windows_sys::Win32::{Foundation::FILETIME, System::Threading::GetProcessTimes};
+        static NEXT_JOB: AtomicU64 = AtomicU64::new(0);
+        let mut created: FILETIME = unsafe { std::mem::zeroed() };
+        let mut exited: FILETIME = unsafe { std::mem::zeroed() };
+        let mut kernel: FILETIME = unsafe { std::mem::zeroed() };
+        let mut user: FILETIME = unsafe { std::mem::zeroed() };
+        if unsafe {
+            GetProcessTimes(
+                child.as_raw_handle() as _,
+                &mut created,
+                &mut exited,
+                &mut kernel,
+                &mut user,
+            )
+        } == 0
+        {
+            return Err(std::io::Error::last_os_error()).context("读取受管查询进程代次失败");
+        }
+        let creation_time =
+            (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime);
+        if creation_time == 0 || !job.contains(child.id()) {
+            anyhow::bail!("受管查询进程代次或 Job 归属无效");
+        }
+        let sequence = NEXT_JOB.fetch_add(1, Ordering::Relaxed);
+        Ok(crate::query_tasks::WorkerIdentity {
+            pid: child.id(),
+            creation_time,
+            job_id: format!("query-job-{}-{creation_time}-{sequence}", child.id()),
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (child, job);
+        anyhow::bail!("完整查询 Job 回收证明当前仅支持 Windows");
+    }
+}
+
 pub(super) fn spawn(command: &mut Command) -> Result<(Child, Job)> {
     #[cfg(windows)]
     {

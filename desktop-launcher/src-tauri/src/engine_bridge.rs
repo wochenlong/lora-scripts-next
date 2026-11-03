@@ -17,6 +17,9 @@ use std::{
     time::{Duration, Instant},
 };
 
+// 查询专用观察与回收；修改任务继续使用原单 JSON worker 协议。
+include!("engine_bridge_query.rs");
+
 include!(concat!(env!("OUT_DIR"), "/engine_assets.rs"));
 pub(crate) fn embedded_lock(engine: &str) -> Option<&'static [u8]> {
     ENGINE_LOCKS

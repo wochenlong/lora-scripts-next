@@ -170,12 +170,15 @@ fn install_inner(
     );
     if let Some(binding) = Registry::load(root)?.gui_binding(&release.id) {
         let instance = instances::load(layout, &binding.instance_id)?;
+        let usable = instances::assert_usable_controlled(&instance, &operation.cancel_token());
+        crate::scan_observation::check()?;
+        operation.cancel_token().check()?;
         if instance.recipe_id() == recipe.id()
             && instance.recipe_sha256() == recipe_sha
-            && instances::assert_usable(&instance).is_ok()
+            && usable.is_ok()
         {
-            super::verify_source(layout, release)?;
-            super::check_environment(layout, release)?;
+            super::verify_source_controlled(layout, release, &operation.cancel_token())?;
+            super::check_environment_controlled(layout, release, &operation.cancel_token())?;
             return Ok(());
         }
         bail!("已绑定环境需诊断修复；不会自动重建并覆盖原实例");
@@ -243,7 +246,7 @@ fn install_inner(
         let destination = wheelhouse.join(&asset.filename);
         layout.guard_path(&destination)?;
         if destination.exists() {
-            if super::digest(&destination)? != asset.sha256 {
+            if super::digest_controlled(&destination, &operation.cancel_token())? != asset.sha256 {
                 bail!("wheelhouse文件摘要不符，原文件保留");
             }
         } else {
@@ -256,7 +259,10 @@ fn install_inner(
         OperationPhase::Executing,
         "离线准备固定基础工具和Python",
     )?;
-    if super::digest(&super::uv(root)).ok().as_deref() != Some(recipe.tool_uv.exe_sha256.as_str()) {
+    let uv_integrity = super::digest_controlled(&super::uv(root), &operation.cancel_token());
+    crate::scan_observation::check()?;
+    operation.cancel_token().check()?;
+    if uv_integrity.ok().as_deref() != Some(recipe.tool_uv.exe_sha256.as_str()) {
         let staging = root.join(format!("staging/locked-uv-{}", super::stamp()));
         layout.ensure_dir(&staging)?;
         super::safe_extract::extract(
@@ -265,7 +271,9 @@ fn install_inner(
             false,
             Some(&operation.cancel_token()),
         )?;
-        if super::digest(&staging.join("uv.exe"))? != recipe.tool_uv.exe_sha256 {
+        if super::digest_controlled(&staging.join("uv.exe"), &operation.cancel_token())?
+            != recipe.tool_uv.exe_sha256
+        {
             bail!("uv可执行文件身份不符");
         }
         if super::uv(root).exists() {
@@ -281,7 +289,9 @@ fn install_inner(
     let mirror_archive = mirror.join(&recipe.python.archive.filename);
     layout.guard_path(&mirror_archive)?;
     if mirror_archive.exists() {
-        if super::digest(&mirror_archive)? != recipe.python.archive.sha256 {
+        if super::digest_controlled(&mirror_archive, &operation.cancel_token())?
+            != recipe.python.archive.sha256
+        {
             bail!("本地Python镜像摘要不符");
         }
     } else {
@@ -303,8 +313,8 @@ fn install_inner(
         mirror_url.as_str(),
     ]);
     super::execute_controlled(python_command, log, &operation.cancel_token())?;
-    let python = super::managed_python(root, release)?;
-    if super::digest(&python)? != recipe.python.exe_sha256 {
+    let python = crate::python_integrity::verify_controlled(layout, &operation.cancel_token())?;
+    if super::digest_controlled(&python, &operation.cancel_token())? != recipe.python.exe_sha256 {
         bail!("基础Python可执行文件摘要不符");
     }
 
@@ -314,7 +324,10 @@ fn install_inner(
         OperationPhase::Executing,
         "准备固定版本源码与捆绑网页资源",
     )?;
-    if super::verify_source(layout, release).is_err() {
+    let source_ready = super::verify_source_controlled(layout, release, &operation.cancel_token());
+    crate::scan_observation::check()?;
+    operation.cancel_token().check()?;
+    if source_ready.is_err() {
         let staging = root.join(format!("staging/locked-source-{}", super::stamp()));
         layout.ensure_dir(&staging.join("app"))?;
         super::safe_extract::extract(
@@ -338,7 +351,10 @@ fn install_inner(
             false,
             Some(&operation.cancel_token()),
         )?;
-        if super::digest(&staging.join("app/requirements.txt"))? != recipe.requirements.input_sha256
+        if super::digest_controlled(
+            &staging.join("app/requirements.txt"),
+            &operation.cancel_token(),
+        )? != recipe.requirements.input_sha256
             || fs::read_to_string(staging.join("app/VERSION"))?.trim() != release.version
         {
             bail!("源码输入与固定配方不符");
@@ -350,10 +366,14 @@ fn install_inner(
         ReleaseReceipt::new(release).store(&staging)?;
         let mut staged_layout = layout.clone();
         staged_layout.app = staging.join("app");
-        crate::source_integrity::verify(&staged_layout, release)?;
+        crate::source_integrity::verify_controlled(
+            &staged_layout,
+            release,
+            &operation.cancel_token(),
+        )?;
         super::gui_recovery::publish_source(ctx, release, &staging)?;
     }
-    super::verify_source(layout, release)?;
+    super::verify_source_controlled(layout, release, &operation.cancel_token())?;
     let mut registry = Registry::load(root)?;
     registry.record_installed(release)?;
     registry.store(root)?;
@@ -393,7 +413,9 @@ fn install_inner(
     let lock = root.join("cache").join(&recipe.requirements.lock_filename);
     layout.guard_path(&lock)?;
     if lock.exists() {
-        if super::digest(&lock)? != recipe.requirements.lock_sha256 {
+        if super::digest_controlled(&lock, &operation.cancel_token())?
+            != recipe.requirements.lock_sha256
+        {
             bail!("本地GUI锁被修改");
         }
     } else {
@@ -427,8 +449,10 @@ fn install_inner(
         &[],
         &operation.cancel_token(),
         |environment| {
-            super::verify_source(layout, release)?;
-            if super::digest(&python)? != recipe.python.exe_sha256 {
+            super::verify_source_controlled(layout, release, &operation.cancel_token())?;
+            if super::digest_controlled(&python, &operation.cancel_token())?
+                != recipe.python.exe_sha256
+            {
                 bail!("验证期间基础Python身份改变");
             }
             validate_environment(layout, recipe, environment, log, &operation.cancel_token())
@@ -440,7 +464,7 @@ fn install_inner(
         OperationPhase::Committing,
         "保存已验证环境绑定",
     )?;
-    instances::assert_usable(&clean)?;
+    instances::assert_usable_controlled(&clean, &operation.cancel_token())?;
     let mut registry = Registry::load(root)?;
     registry.bind_gui(
         &release.id,
@@ -477,9 +501,11 @@ pub(super) fn build_replacement(
     }
     preflight_environment_path(root)?;
     layout.guard_path(environment)?;
-    super::verify_source(layout, release)?;
-    crate::python_integrity::verify(layout)?;
-    if super::digest(&super::uv(root))? != recipe.tool_uv.exe_sha256 {
+    super::verify_source_controlled(layout, release, &operation.cancel_token())?;
+    crate::python_integrity::verify_controlled(layout, &operation.cancel_token())?;
+    if super::digest_controlled(&super::uv(root), &operation.cancel_token())?
+        != recipe.tool_uv.exe_sha256
+    {
         bail!("重建工具身份不符，请先修复基础工具");
     }
     if fs::read_dir(environment)?.next().is_some() {
@@ -513,7 +539,7 @@ pub(super) fn build_replacement(
             let target = wheelhouse.join(&asset.filename);
             layout.guard_path(&target)?;
             if target.exists() {
-                if super::digest(&target)? != asset.sha256 {
+                if super::digest_controlled(&target, &operation.cancel_token())? != asset.sha256 {
                     bail!("重建wheelhouse文件摘要不符：{}", asset.filename);
                 }
             } else {
@@ -523,7 +549,9 @@ pub(super) fn build_replacement(
         let lock = root.join("cache").join(&recipe.requirements.lock_filename);
         layout.guard_path(&lock)?;
         if lock.exists() {
-            if super::digest(&lock)? != recipe.requirements.lock_sha256 {
+            if super::digest_controlled(&lock, &operation.cancel_token())?
+                != recipe.requirements.lock_sha256
+            {
                 bail!("重建固定依赖锁被修改");
             }
         } else {
@@ -535,8 +563,9 @@ pub(super) fn build_replacement(
             OperationPhase::Executing,
             "在新固定路径重建GUI环境，保留旧实例",
         )?;
-        let python = super::managed_python(root, release)?;
-        if super::digest(&python)? != recipe.python.exe_sha256 {
+        let python = crate::python_integrity::verify_controlled(layout, &operation.cancel_token())?;
+        if super::digest_controlled(&python, &operation.cancel_token())? != recipe.python.exe_sha256
+        {
             bail!("重建基础Python身份不符");
         }
         let mut venv = command(root, &recipe);
@@ -588,7 +617,7 @@ pub(super) fn validate_environment(
 ) -> Result<()> {
     cancel.check()?;
     let root = &layout.root;
-    crate::python_integrity::verify(layout)?;
+    crate::python_integrity::verify_controlled(layout, cancel)?;
     let integrity = crate::wheel_integrity::inspect(
         layout,
         environment,
@@ -623,9 +652,9 @@ pub(super) fn validate_environment_runtime(
 ) -> Result<()> {
     cancel.check()?;
     let root = &layout.root;
-    let fixed_python = crate::python_integrity::verify(layout)?;
+    let fixed_python = crate::python_integrity::verify_controlled(layout, cancel)?;
     layout.guard_path(&super::uv(root))?;
-    if super::digest(&super::uv(root))? != recipe.tool_uv.exe_sha256 {
+    if super::digest_controlled(&super::uv(root), cancel)? != recipe.tool_uv.exe_sha256 {
         bail!("GUI实际运行验证所需uv缺失或摘要不符，拒绝执行");
     }
     layout.guard_path(environment)?;

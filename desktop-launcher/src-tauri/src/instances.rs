@@ -1,6 +1,7 @@
 //! 固定路径 GUI 实例事务；修改必须持有同一 workspace lease，dirty 仅由复验清除。
 use crate::model::{self, Layout, WorkspaceMutation};
 use crate::operations::CancelToken;
+use crate::{query_tasks::QueryStage, scan_observation};
 use anyhow::{bail, Context, Result};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -14,12 +15,16 @@ use std::{
 };
 #[path = "engine_namespaces.rs"]
 mod engine_namespaces;
+#[cfg(test)]
+#[path = "reliability_r4_scan_tests.rs"]
+pub(crate) mod reliability_r4_scan_tests;
 pub(crate) fn engine_control_digest(layout: &Layout) -> Result<String> {
     engine_namespaces::digest(layout)
 }
 
 const MAX_FILE: u64 = 1024 * 1024 * 1024;
 const MAX_TREE: u64 = 4 * MAX_FILE;
+const MAX_TREE_NODES: usize = 50_000;
 const MAX_STATE: u64 = 32 * 1024 * 1024;
 const MAX_PROFILE_BYTES: u64 = 8 * 1024 * 1024 * 1024 * 1024;
 const MAX_PROFILE_NODES: u64 = 1_000_000;
@@ -28,6 +33,66 @@ const MAX_PROFILE_DEPTH: usize = 128;
 const MAX_PROFILE_PATH_BYTES: u64 = 256 * 1024 * 1024;
 static NEXT: AtomicU64 = AtomicU64::new(0);
 type Tree = BTreeMap<PathBuf, Node>;
+
+#[derive(Clone, Copy, Default)]
+struct TreeUsage {
+    bytes: u64,
+    nodes: usize,
+}
+#[derive(Clone, Copy)]
+struct TreeLimits {
+    bytes: u64,
+    nodes: usize,
+}
+fn rebuild_tree_limits() -> TreeLimits {
+    #[cfg(test)]
+    if let Some((bytes, nodes)) = reliability_r4_scan_tests::rebuild_limits() {
+        // 仅测试可以收紧限额；任何路径都不能扩大生产上限。
+        return TreeLimits {
+            bytes: bytes.min(MAX_TREE),
+            nodes: nodes.min(MAX_TREE_NODES),
+        };
+    }
+    TreeLimits {
+        bytes: MAX_TREE,
+        nodes: MAX_TREE_NODES,
+    }
+}
+impl TreeUsage {
+    fn combine(self, other: Self) -> Result<Self> {
+        Ok(Self {
+            bytes: self
+                .bytes
+                .checked_add(other.bytes)
+                .context("实例树长度溢出")?,
+            nodes: self
+                .nodes
+                .checked_add(other.nodes)
+                .context("实例树节点数溢出")?,
+        })
+    }
+    fn check(self, limits: TreeLimits) -> Result<()> {
+        if self.bytes > limits.bytes || self.nodes > limits.nodes {
+            bail!("实例树超出验证上限");
+        }
+        Ok(())
+    }
+}
+fn tree_usage(tree: &Tree) -> Result<TreeUsage> {
+    let mut usage = TreeUsage {
+        bytes: 0,
+        nodes: tree.len(),
+    };
+    for node in tree.values() {
+        if let Node::File(file) = node {
+            usage.bytes = usage
+                .bytes
+                .checked_add(file.bytes)
+                .context("实例树长度溢出")?;
+        }
+    }
+    Ok(usage)
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
@@ -121,10 +186,13 @@ pub(crate) fn rebuild_observe_boundary(
     ] {
         components.insert(
             root.strip_prefix(&layout.root)?.to_path_buf(),
-            scan(layout, &root, &[])?,
+            scan_controlled(layout, &root, &[], Some(cancel))?,
         );
     }
-    components.insert(PathBuf::from("python/3.10.19"), python_tree(layout)?);
+    components.insert(
+        PathBuf::from("python/3.10.19"),
+        python_tree_controlled(layout, Some(cancel))?,
+    );
     let mut states = BTreeMap::new();
     let mut snapshots = BTreeMap::new();
     let mut pending = Vec::new();
@@ -132,6 +200,7 @@ pub(crate) fn rebuild_observe_boundary(
     layout.guard_path(&base)?;
     if base.exists() {
         for entry in fs::read_dir(&base)? {
+            scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
             cancel.check()?;
             let path = entry?.path();
             layout.guard_path(&path)?;
@@ -142,14 +211,14 @@ pub(crate) fn rebuild_observe_boundary(
                 .file_stem()
                 .and_then(|s| s.to_str())
                 .context("实例状态非UTF8")?;
-            let bytes = fs::read(&path)?;
+            let bytes = scan_observation::read_file(&path, QueryStage::Receipt)?;
             if bytes.len() as u64 > MAX_STATE {
                 bail!("实例状态超限");
             }
             let state: InstanceState = serde_json::from_slice(&bytes)?;
             let owner = Layout::new(&layout.root, &state.release_id)?;
             validate(&owner, id, &state)?;
-            let fingerprint = fingerprint(layout, &path)?;
+            let fingerprint = fingerprint_controlled(layout, &path, Some(cancel))?;
             states.insert(
                 path.strip_prefix(&layout.root)?.to_path_buf(),
                 fingerprint.clone(),
@@ -161,7 +230,12 @@ pub(crate) fn rebuild_observe_boundary(
                 check_snapshots(&owner, &state)?;
                 snapshots.insert(
                     transaction.directory.clone(),
-                    scan(&owner, &owner.root.join(&transaction.directory), &[])?,
+                    scan_controlled(
+                        &owner,
+                        &owner.root.join(&transaction.directory),
+                        &[],
+                        Some(cancel),
+                    )?,
                 );
                 // 旧事务在重建前必须仍能验证其非目标保护合同。
                 protected(
@@ -203,6 +277,7 @@ pub(crate) fn rebuild_check_boundary(
     cancel: &CancelToken,
 ) -> Result<()> {
     let layout = ctx.layout();
+    scan_control_check(Some(cancel))?;
     model::validate_environment_storage(candidate_id, 1)?;
     if boundary.schema_version != 1
         || boundary.root_absolute != layout.root
@@ -214,20 +289,40 @@ pub(crate) fn rebuild_check_boundary(
         bail!("重建改变生产profiles");
     }
     for (relative, before) in &boundary.components {
-        let mut current = if relative == Path::new("python/3.10.19") {
-            python_tree(layout)?
-        } else {
-            scan(layout, &layout.root.join(relative), &[])?
-        };
-        if relative == Path::new("e") {
+        scan_control_check(Some(cancel))?;
+        let excluded = if relative == Path::new("e") {
             let candidate = Path::new(candidate_id);
             if before.keys().any(|p| p.starts_with(candidate)) {
                 bail!("重建候选原路径非空，禁止追认");
             }
-            current.retain(|path, _| !path.starts_with(candidate));
-            if before.is_empty() && current == Tree::from([(PathBuf::new(), Node::Directory)]) {
-                current.clear();
-            }
+            // 短路径实例的完整环境就在e/<id>，没有可另行隐藏的wrapper。
+            // 只排除本事务精确候选；其完整内容由候选SHA/可信校验独立核对。
+            rebuild_candidate_path(layout, candidate_id)?;
+            vec![candidate.to_path_buf()]
+        } else {
+            vec![]
+        };
+        let mut current = if relative == Path::new("python/3.10.19") {
+            python_tree_controlled(layout, Some(cancel))?
+        } else {
+            scan_controlled(layout, &layout.root.join(relative), &excluded, Some(cancel))?
+        };
+        if relative == Path::new("e") {
+            // e根已在非候选实际内容树中计数；只追加精确候选的节点/长度。
+            // 此遍历不读内容、不生成SHA，不能替代独立候选完整校验。
+            metadata_tree_usage(
+                layout,
+                &rebuild_candidate_path(layout, candidate_id)?,
+                &[],
+                cancel,
+                tree_usage(&current)?,
+            )?;
+        }
+        if relative == Path::new("e")
+            && before.is_empty()
+            && current == Tree::from([(PathBuf::new(), Node::Directory)])
+        {
+            current.clear();
         }
         if *before != current {
             bail!("重建改变非候选保护树：{}", relative.display());
@@ -237,6 +332,8 @@ pub(crate) fn rebuild_check_boundary(
     let mut states = BTreeMap::new();
     if base.exists() {
         for entry in fs::read_dir(&base)? {
+            scan_control_check(Some(cancel))?;
+            scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
             let path = entry?.path();
             layout.guard_path(&path)?;
             if path == base.join(format!("{candidate_id}.json")) {
@@ -244,7 +341,7 @@ pub(crate) fn rebuild_check_boundary(
             }
             states.insert(
                 path.strip_prefix(&layout.root)?.to_path_buf(),
-                fingerprint(layout, &path)?,
+                fingerprint_controlled(layout, &path, Some(cancel))?,
             );
         }
     }
@@ -252,16 +349,59 @@ pub(crate) fn rebuild_check_boundary(
         bail!("重建改变旧实例state或引入未知状态");
     }
     for (relative, before) in &boundary.snapshots {
-        if scan(layout, &layout.root.join(relative), &[])? != *before {
+        if scan_controlled(layout, &layout.root.join(relative), &[], Some(cancel))? != *before {
             bail!("重建改变旧pending独立快照或manifest");
         }
     }
     Ok(())
 }
 
+#[cfg(test)]
 pub(crate) fn rebuild_candidate_tree_sha(layout: &Layout, id: &str) -> Result<String> {
+    rebuild_candidate_tree_sha_controlled(layout, id, &CancelToken::new())
+}
+pub(crate) fn rebuild_candidate_tree_sha_controlled(
+    layout: &Layout,
+    id: &str,
+    cancel: &CancelToken,
+) -> Result<String> {
+    scan_control_check(Some(cancel))?;
+    Ok(hash(&serde_json::to_vec(
+        &rebuild_candidate_tree_controlled(layout, id, cancel)?,
+    )?))
+}
+fn rebuild_candidate_tree_controlled(
+    layout: &Layout,
+    id: &str,
+    cancel: &CancelToken,
+) -> Result<Tree> {
+    let path = rebuild_candidate_path(layout, id)?;
+    let mut excluded = vec![PathBuf::from(id)];
+    excluded.extend(engine_namespaces::capture(layout)?.excluded);
+    // 每次完整候选读取都重新观测非目标容量，不跨写入/probe复用预算。
+    let other = metadata_tree_usage(
+        layout,
+        &layout.root.join("e"),
+        &excluded,
+        cancel,
+        TreeUsage::default(),
+    )?;
+    scan_tree_with_budget(
+        layout,
+        &path,
+        &[],
+        None,
+        Some(cancel),
+        Some((other, rebuild_tree_limits())),
+    )
+}
+fn rebuild_candidate_path(layout: &Layout, id: &str) -> Result<PathBuf> {
     let path = model::environment_path(&layout.root, release(layout)?, id, 1)?;
-    Ok(hash(&serde_json::to_vec(&scan(layout, &path, &[])?)?))
+    layout.guard_path(&path)?;
+    if !fs::symlink_metadata(&path)?.is_dir() {
+        bail!("重建候选路径不是普通目录");
+    }
+    Ok(path)
 }
 
 pub(crate) fn rebuild_create(
@@ -361,9 +501,9 @@ pub(crate) fn rebuild_validate_candidate(
         bail!("重建候选身份不符");
     }
     rebuild_check_boundary(ctx, boundary, id, cancel)?;
-    let before = observe(layout, &state, cancel)?;
+    let before = rebuild_observe_candidate(layout, &state, cancel)?;
     validator(&path(&state)?)?;
-    if observe(layout, &state, cancel)? != before
+    if rebuild_observe_candidate(layout, &state, cancel)? != before
         || load(layout, id)? != state
         || engine_control_digest(layout)? != engine_controls
     {
@@ -380,6 +520,14 @@ pub(crate) fn rebuild_validate_candidate(
         &registration_encoded(layout, &state)?,
     )?;
     Ok(state)
+}
+
+fn rebuild_observe_candidate(
+    layout: &Layout,
+    state: &InstanceState,
+    cancel: &CancelToken,
+) -> Result<Observation> {
+    observe_inner(layout, state, cancel, true)
 }
 pub(crate) fn rebuild_mark_orphan(
     ctx: &WorkspaceMutation,
@@ -414,6 +562,7 @@ pub(crate) fn preserved_pending(root: &Path) -> Result<Vec<serde_json::Value>> {
         return Ok(pending);
     }
     for entry in fs::read_dir(&container)? {
+        scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
         let path = entry?.path();
         scope.guard_path(&path)?;
         let metadata = fs::symlink_metadata(&path)?;
@@ -423,7 +572,8 @@ pub(crate) fn preserved_pending(root: &Path) -> Result<Vec<serde_json::Value>> {
         {
             bail!("重建授权容器含未知或超限文件");
         }
-        let owner_value: StoredRebuildIntent = serde_json::from_slice(&fs::read(&path)?)?;
+        let owner_value: StoredRebuildIntent =
+            serde_json::from_slice(&scan_observation::read_file(&path, QueryStage::Receipt)?)?;
         let layout = Layout::new(root, &owner_value.release_id)?;
         let Some((value, extension, _boundary)) = load_rebuild_extension(&layout, &path)? else {
             continue;
@@ -433,7 +583,7 @@ pub(crate) fn preserved_pending(root: &Path) -> Result<Vec<serde_json::Value>> {
             let state = load(&owner, &reference.instance_id)?;
             let receipt = recovery_receipt(&owner, &value.transaction, &reference)?;
             if receipt.exists() {
-                let bytes = fs::read(&receipt)?;
+                let bytes = scan_observation::read_file(&receipt, QueryStage::Receipt)?;
                 let recovered = registration_decode(&owner, &bytes)?;
                 if recovered.id() != reference.instance_id
                     || recovered.release_id() != reference.release_id
@@ -517,6 +667,7 @@ fn record_preserved_recovery(
     let pending_sha = hash(&serde_json::to_vec(pending)?);
     let bytes = registration_encoded(layout, recovered)?;
     for entry in fs::read_dir(container)? {
+        scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
         let Some((authority, extension, _)) = load_rebuild_extension(layout, &entry?.path())?
         else {
             continue;
@@ -530,7 +681,7 @@ fn record_preserved_recovery(
             {
                 let path = recovery_receipt(layout, &authority.transaction, reference)?;
                 if path.exists() {
-                    if fs::read(&path)? != bytes {
+                    if scan_observation::read_file(&path, QueryStage::Receipt)? != bytes {
                         bail!("恢复侧录重名但内容不同，保留dirty");
                     }
                 } else {
@@ -598,8 +749,8 @@ pub(crate) fn rebuild_preservation(
         release_id: release(layout)?.into(),
         boundary_sha256: rebuild_boundary_sha(boundary)?,
         candidate_id: id.into(),
-        candidate_state: fingerprint(layout, &state_path(layout, id)?)?,
-        candidate_tree: scan(layout, &path(&candidate)?, &[])?,
+        candidate_state: fingerprint_controlled(layout, &state_path(layout, id)?, Some(cancel))?,
+        candidate_tree: rebuild_candidate_tree_controlled(layout, candidate.id(), cancel)?,
         pending: boundary.pending.clone(),
     };
     Ok(serde_json::to_value(extension)?)
@@ -609,11 +760,54 @@ fn load_rebuild_extension(
     layout: &Layout,
     path: &Path,
 ) -> Result<Option<(StoredRebuildIntent, RebuildExtension, RebuildBoundary)>> {
+    load_rebuild_extension_inner(layout, path, false)
+}
+
+/// 只读验证完整提交授权；允许读取 committing，不将其投影或追认为终态。
+pub(crate) fn validate_rebuild_recovery_authority(
+    layout: &Layout,
+    transaction: &str,
+) -> Result<()> {
+    model::validate_component(transaction)?;
+    let path = layout
+        .root
+        .join("state/gui-rebuild")
+        .join(format!("{transaction}.json"));
+    let (authority, _, _) =
+        load_rebuild_extension_inner(layout, &path, true)?.context("重建恢复缺少完整提交授权")?;
+    if authority.transaction != transaction || authority.release_id != release(layout)? {
+        bail!("重建恢复提交授权与目标事务不符");
+    }
+    if authority.status == "committing" {
+        let current = fingerprint(layout, &layout.root.join("state/registry.json"))?;
+        if authority.terminal_status.as_deref() == Some("orphaned") {
+            if current != authority.old_registry {
+                bail!("失败封存恢复的 registry 不匹配旧状态");
+            }
+        } else if current != authority.old_registry && Some(current) != authority.new_registry {
+            bail!("重建恢复的 registry 处于未知第三状态");
+        }
+        let candidate = load(layout, &authority.candidate_id)?;
+        if Some(fingerprint(layout, &state_path(layout, candidate.id())?)?)
+            != authority.candidate_state
+        {
+            bail!("重建恢复候选控制状态变化");
+        }
+    }
+    Ok(())
+}
+
+fn load_rebuild_extension_inner(
+    layout: &Layout,
+    path: &Path,
+    include_committing: bool,
+) -> Result<Option<(StoredRebuildIntent, RebuildExtension, RebuildBoundary)>> {
     layout.guard_path(path)?;
     if path.extension().is_none_or(|e| e != "json") || fs::metadata(path)?.len() > MAX_STATE {
         bail!("重建授权文件格式/限额无效");
     }
-    let authority: StoredRebuildIntent = serde_json::from_slice(&fs::read(path)?)?;
+    let authority: StoredRebuildIntent =
+        serde_json::from_slice(&scan_observation::read_file(path, QueryStage::Receipt)?)?;
     if authority.schema_version != 1
         || authority.plan.schema_version != 1
         || authority.root_absolute != layout.root
@@ -631,10 +825,17 @@ fn load_rebuild_extension(
     ) {
         bail!("重建授权status未知");
     }
-    if !matches!(authority.status.as_str(), "committed" | "orphaned") {
+    let committed_boundary = include_committing && authority.status == "committing";
+    if !matches!(authority.status.as_str(), "committed" | "orphaned") && !committed_boundary {
         return Ok(None);
     }
-    if authority.terminal_status.as_deref() != Some(authority.status.as_str()) {
+    let terminal = authority
+        .terminal_status
+        .as_deref()
+        .context("重建授权缺少终态许可")?;
+    if !matches!(terminal, "committed" | "orphaned")
+        || (!committed_boundary && terminal != authority.status)
+    {
         bail!("重建授权终态断联");
     }
     let transaction = &authority.transaction;
@@ -661,7 +862,7 @@ fn load_rebuild_extension(
         .join(transaction)
         .join(preservation_file);
     layout.guard_path(&extension_path)?;
-    let bytes = fs::read(&extension_path)?;
+    let bytes = scan_observation::read_file(&extension_path, QueryStage::Receipt)?;
     if hash(&bytes) != *expected_sha {
         bail!("重建精确保护侧录损坏");
     }
@@ -687,12 +888,13 @@ fn load_rebuild_extension(
     if fingerprint(layout, &old_path)? != authority.old_registry {
         bail!("重建旧registry快照身份变化");
     }
-    let old: model::Registry = serde_json::from_slice(&fs::read(old_path)?)?;
+    let old: model::Registry =
+        serde_json::from_slice(&scan_observation::read_file(old_path, QueryStage::Receipt)?)?;
     old.validate()?;
     if old.gui_binding(&extension.release_id) != authority.plan.old_binding.as_ref() {
         bail!("重建旧binding与计划断联");
     }
-    match authority.status.as_str() {
+    match terminal {
         "orphaned" => {
             if authority.new_registry.is_some() {
                 bail!("orphan重建不能授权新binding");
@@ -726,7 +928,10 @@ fn load_rebuild_extension(
             if Some(fingerprint(layout, &new_path)?) != authority.new_registry {
                 bail!("重建newregistry快照身份变化");
             }
-            let new: model::Registry = serde_json::from_slice(&fs::read(new_path)?)?;
+            let new: model::Registry = serde_json::from_slice(&scan_observation::read_file(
+                new_path,
+                QueryStage::Receipt,
+            )?)?;
             new.validate()?;
             let release = model::Catalog::embedded()?
                 .release(&extension.release_id)?
@@ -756,7 +961,10 @@ fn load_rebuild_extension(
         .join(transaction)
         .join("boundary.json");
     layout.guard_path(&boundary_path)?;
-    let boundary: RebuildBoundary = serde_json::from_slice(&fs::read(&boundary_path)?)?;
+    let boundary: RebuildBoundary = serde_json::from_slice(&scan_observation::read_file(
+        &boundary_path,
+        QueryStage::Receipt,
+    )?)?;
     if rebuild_boundary_sha(&boundary)? != extension.boundary_sha256
         || boundary.pending != extension.pending
     {
@@ -768,7 +976,9 @@ fn project_rebuild_extensions(
     layout: &Layout,
     state: &InstanceState,
     tree: &mut Tree,
+    cancel: &CancelToken,
 ) -> Result<()> {
+    scan_control_check(Some(cancel))?;
     let Some(pending) = &state.pending else {
         return Ok(());
     };
@@ -777,8 +987,11 @@ fn project_rebuild_extensions(
     if !authority_root.exists() {
         return Ok(());
     }
-    let state_fingerprint = fingerprint(layout, &state_path(layout, state.id())?)?;
+    let state_fingerprint =
+        fingerprint_controlled(layout, &state_path(layout, state.id())?, Some(cancel))?;
     for entry in fs::read_dir(&authority_root)? {
+        scan_control_check(Some(cancel))?;
+        scan_observation::checkpoint(QueryStage::Receipt, 0, 0)?;
         let path = entry?.path();
         layout.guard_path(&path)?;
         if path.extension().is_none_or(|e| e != "json") {
@@ -802,8 +1015,11 @@ fn project_rebuild_extensions(
             continue;
         }
         model::validate_environment_storage(&extension.candidate_id, 1)?;
-        if fingerprint(layout, &state_path(layout, &extension.candidate_id)?)?
-            != extension.candidate_state
+        if fingerprint_controlled(
+            layout,
+            &state_path(layout, &extension.candidate_id)?,
+            Some(cancel),
+        )? != extension.candidate_state
         {
             bail!("重建新增state变化，拒绝放宽旧pending");
         }
@@ -813,7 +1029,8 @@ fn project_rebuild_extensions(
             &extension.candidate_id,
             1,
         )?;
-        if scan(layout, &candidate_path, &[])? != extension.candidate_tree {
+        if scan_controlled(layout, &candidate_path, &[], Some(cancel))? != extension.candidate_tree
+        {
             bail!("重建新增子树变化，拒绝放宽旧pending");
         }
         let candidate = Path::new(&extension.candidate_id);
@@ -1327,6 +1544,7 @@ impl<'a> ProfileBudget<'a> {
     }
     fn check(&self) -> Result<()> {
         self.cancel.check()?;
+        scan_observation::check()?;
         if Instant::now() >= self.deadline {
             bail!("资料内容扫描超过900秒预算，未授权变更");
         }
@@ -1423,6 +1641,7 @@ fn profile_stream_file(
             bail!("资料扫描长度变化或超出独立字节预算");
         }
         digest.update(&buffer[..count]);
+        scan_observation::checkpoint(QueryStage::ExtraFiles, 0, count as u64)?;
     }
     layout.guard_path(path)?;
     let after = fs::symlink_metadata(path)?;
@@ -1444,6 +1663,7 @@ fn profile_stream_file(
         }
     }
     budget.files = budget.files.checked_add(1).context("资料文件数溢出")?;
+    scan_observation::checkpoint(QueryStage::ExtraFiles, 1, 0)?;
     Ok(Fingerprint {
         bytes,
         sha256: format!("{:x}", digest.finalize()),
@@ -1509,6 +1729,7 @@ fn profile_scan(
             let mut entries = Vec::new();
             let mut aliases = BTreeSet::new();
             for entry in fs::read_dir(path)? {
+                scan_observation::checkpoint(QueryStage::ExtraFiles, 0, 0)?;
                 budget.check()?;
                 let entry = entry?;
                 let name = entry
@@ -1785,26 +2006,77 @@ pub(crate) fn path(state: &InstanceState) -> Result<PathBuf> {
     Ok(path)
 }
 fn fingerprint(layout: &Layout, path: &Path) -> Result<Fingerprint> {
+    fingerprint_controlled(layout, path, None)
+}
+fn scan_control_check(cancel: Option<&CancelToken>) -> Result<()> {
+    // Query作用域保持其权威取消/期限错误；修改操作仍返回原Cancelled类型。
+    scan_observation::check()?;
+    if let Some(cancel) = cancel {
+        cancel.check()?;
+    }
+    Ok(())
+}
+fn fingerprint_controlled(
+    layout: &Layout,
+    path: &Path,
+    cancel: Option<&CancelToken>,
+) -> Result<Fingerprint> {
+    fingerprint_with_tree_limit(layout, path, cancel, None)
+}
+fn fingerprint_with_tree_limit(
+    layout: &Layout,
+    path: &Path,
+    cancel: Option<&CancelToken>,
+    tree_remaining: Option<u64>,
+) -> Result<Fingerprint> {
+    scan_control_check(cancel)?;
+    scan_observation::checkpoint(QueryStage::Environment, 0, 0)?;
     layout.guard_path(path)?;
     let meta = fs::symlink_metadata(path)?;
     if !meta.is_file() || meta.len() > MAX_FILE {
         bail!("实例只接受受限普通文件");
+    }
+    if tree_remaining.is_some_and(|remaining| meta.len() > remaining) {
+        bail!("实例树超出验证上限");
     }
     let mut input = File::open(path)?;
     let mut digest = Sha256::new();
     let mut total = 0u64;
     let mut buffer = [0; 65536];
     loop {
-        let count = input.read(&mut buffer)?;
+        scan_control_check(cancel)?;
+        scan_observation::checkpoint(QueryStage::Environment, 0, 0)?;
+        // 允许最多1字节探测增长/EOF，不能在耗尽合计预算后再读整块。
+        let read_size = tree_remaining.map_or(buffer.len(), |remaining| {
+            remaining
+                .saturating_sub(total)
+                .saturating_add(1)
+                .min(buffer.len() as u64) as usize
+        });
+        let count = input.read(&mut buffer[..read_size])?;
+        #[cfg(test)]
+        reliability_r4_scan_tests::after_physical_read(path, count as u64);
+        scan_control_check(cancel)?;
         if count == 0 {
+            scan_control_check(cancel)?;
             break;
         }
-        total += count as u64;
+        total = total
+            .checked_add(count as u64)
+            .context("实例文件长度溢出")?;
         if total > MAX_FILE {
             bail!("实例文件读取超限");
         }
+        if tree_remaining.is_some_and(|remaining| total > remaining) {
+            bail!("实例树超出验证上限");
+        }
         digest.update(&buffer[..count]);
+        scan_observation::checkpoint(QueryStage::Environment, 0, count as u64)?;
+        #[cfg(test)]
+        reliability_r4_scan_tests::after_read(path, total);
+        scan_control_check(cancel)?;
     }
+    scan_observation::checkpoint(QueryStage::Environment, 1, 0)?;
     Ok(Fingerprint {
         bytes: total,
         sha256: format!("{:x}", digest.finalize()),
@@ -1818,13 +2090,97 @@ fn windows_key(path: &Path) -> String {
         .replace('\\', "/")
         .to_ascii_lowercase()
 }
+
+/// 只计资源的遍历。没有文件内容或SHA，绝不能用作完整性凭据。
+fn metadata_tree_usage(
+    layout: &Layout,
+    base: &Path,
+    ignores: &[PathBuf],
+    cancel: &CancelToken,
+    mut usage: TreeUsage,
+) -> Result<TreeUsage> {
+    fn walk(
+        layout: &Layout,
+        base: &Path,
+        current: &Path,
+        ignores: &[PathBuf],
+        cancel: &CancelToken,
+        usage: &mut TreeUsage,
+        aliases: &mut BTreeSet<String>,
+    ) -> Result<()> {
+        #[cfg(test)]
+        reliability_r4_scan_tests::before_visit(current);
+        scan_control_check(Some(cancel))?;
+        scan_observation::checkpoint(QueryStage::Environment, 0, 0)?;
+        layout.guard_path(current)?;
+        let relative = current.strip_prefix(base)?.to_path_buf();
+        if !relative.as_os_str().is_empty() && ignored(ignores, &relative) {
+            return Ok(());
+        }
+        if !aliases.insert(windows_key(&relative)) {
+            bail!("实例树存在大小写别名");
+        }
+        let meta = fs::symlink_metadata(current)?;
+        let bytes = if meta.is_dir() {
+            0
+        } else if meta.is_file() && meta.len() <= MAX_FILE {
+            meta.len()
+        } else {
+            bail!("实例只接受受限普通文件");
+        };
+        *usage = usage.combine(TreeUsage { bytes, nodes: 1 })?;
+        usage.check(rebuild_tree_limits())?;
+        if meta.is_dir() {
+            for entry in fs::read_dir(current)? {
+                scan_control_check(Some(cancel))?;
+                scan_observation::checkpoint(QueryStage::Environment, 0, 0)?;
+                walk(
+                    layout,
+                    base,
+                    &entry?.path(),
+                    ignores,
+                    cancel,
+                    usage,
+                    aliases,
+                )?;
+            }
+        }
+        Ok(())
+    }
+    scan_control_check(Some(cancel))?;
+    usage.check(rebuild_tree_limits())?;
+    layout.guard_path(base)?;
+    if base.exists() {
+        walk(
+            layout,
+            base,
+            base,
+            ignores,
+            cancel,
+            &mut usage,
+            &mut BTreeSet::new(),
+        )?;
+    }
+    scan_control_check(Some(cancel))?;
+    Ok(usage)
+}
 fn scan(layout: &Layout, base: &Path, ignores: &[PathBuf]) -> Result<Tree> {
+    scan_controlled(layout, base, ignores, None)
+}
+fn scan_controlled(
+    layout: &Layout,
+    base: &Path,
+    ignores: &[PathBuf],
+    cancel: Option<&CancelToken>,
+) -> Result<Tree> {
+    scan_control_check(cancel)?;
     if base == layout.root.join("e") {
         let mut excluded = ignores.to_vec();
         excluded.extend(engine_namespaces::capture(layout)?.excluded);
-        scan_tree(layout, base, &excluded, None)
+        scan_control_check(cancel)?;
+        scan_tree(layout, base, &excluded, None, cancel)
     } else {
-        scan_tree(layout, base, ignores, None)
+        scan_tree(layout, base, ignores, None, cancel)
     }
 }
 fn python_alias_node(layout: &Layout, alias: &Path, target: &Path) -> Result<Node> {
@@ -1850,10 +2206,23 @@ fn scan_tree(
     base: &Path,
     ignores: &[PathBuf],
     python_alias: Option<(&Path, &Path)>,
+    cancel: Option<&CancelToken>,
+) -> Result<Tree> {
+    scan_tree_with_budget(layout, base, ignores, python_alias, cancel, None)
+}
+fn scan_tree_with_budget(
+    layout: &Layout,
+    base: &Path,
+    ignores: &[PathBuf],
+    python_alias: Option<(&Path, &Path)>,
+    cancel: Option<&CancelToken>,
+    aggregate: Option<(TreeUsage, TreeLimits)>,
 ) -> Result<Tree> {
     struct Options<'a> {
         ignores: &'a [PathBuf],
         python_alias: Option<(&'a Path, &'a Path)>,
+        cancel: Option<&'a CancelToken>,
+        aggregate: Option<(TreeUsage, TreeLimits)>,
     }
     fn walk(
         layout: &Layout,
@@ -1864,6 +2233,10 @@ fn scan_tree(
         total: &mut u64,
         aliases: &mut BTreeSet<String>,
     ) -> Result<()> {
+        #[cfg(test)]
+        reliability_r4_scan_tests::before_visit(current);
+        scan_control_check(options.cancel)?;
+        scan_observation::checkpoint(QueryStage::Environment, 0, 0)?;
         if let Some((alias, target)) = options.python_alias {
             if current == alias {
                 tree.insert(
@@ -1886,19 +2259,31 @@ fn scan_tree(
             bail!("实例树存在大小写别名");
         }
         let meta = fs::symlink_metadata(current)?;
+        let remaining = if let Some((prior, limits)) = options.aggregate {
+            let usage = prior.combine(TreeUsage {
+                bytes: *total,
+                nodes: tree.len().checked_add(1).context("实例树节点数溢出")?,
+            })?;
+            usage.check(limits)?;
+            Some(limits.bytes - usage.bytes)
+        } else {
+            None
+        };
         let node = if meta.is_dir() {
             Node::Directory
         } else {
-            let digest = fingerprint(layout, current)?;
+            let digest = fingerprint_with_tree_limit(layout, current, options.cancel, remaining)?;
             *total = total.checked_add(digest.bytes).context("实例树长度溢出")?;
             Node::File(digest)
         };
         tree.insert(rel, node);
-        if tree.len() > 50_000 || *total > MAX_TREE {
+        if tree.len() > MAX_TREE_NODES || *total > MAX_TREE {
             bail!("实例树超出验证上限");
         }
         if meta.is_dir() {
             for entry in fs::read_dir(current)? {
+                scan_control_check(options.cancel)?;
+                scan_observation::checkpoint(QueryStage::Environment, 0, 0)?;
                 walk(layout, base, &entry?.path(), options, tree, total, aliases)?;
             }
         }
@@ -1914,6 +2299,8 @@ fn scan_tree(
             &Options {
                 ignores,
                 python_alias,
+                cancel,
+                aggregate,
             },
             &mut tree,
             &mut 0,
@@ -1922,23 +2309,34 @@ fn scan_tree(
     }
     Ok(tree)
 }
-fn python_tree(layout: &Layout) -> Result<Tree> {
+fn python_tree_controlled(layout: &Layout, cancel: Option<&CancelToken>) -> Result<Tree> {
     let python = layout.root.join("python/3.10.19");
     let alias = python.join("cpython-3.10-windows-x86_64-none");
     let target = python.join("cpython-3.10.19-windows-x86_64-none");
-    scan_tree(layout, &python, &[], Some((&alias, &target)))
+    scan_tree(layout, &python, &[], Some((&alias, &target)), cancel)
 }
 fn observe(layout: &Layout, state: &InstanceState, cancel: &CancelToken) -> Result<Observation> {
+    observe_inner(layout, state, cancel, false)
+}
+fn observe_inner(
+    layout: &Layout,
+    state: &InstanceState,
+    cancel: &CancelToken,
+    rebuild_budget: bool,
+) -> Result<Observation> {
     cancel.check()?;
     let current = path(state)?;
     let mut protected = BTreeMap::new();
     for root in [&layout.release_dir, &layout.root.join("tools/uv.exe")] {
         protected.insert(
             root.strip_prefix(&layout.root)?.to_path_buf(),
-            scan(layout, root, &[])?,
+            scan_controlled(layout, root, &[], Some(cancel))?,
         );
     }
-    protected.insert(PathBuf::from("python/3.10.19"), python_tree(layout)?);
+    protected.insert(
+        PathBuf::from("python/3.10.19"),
+        python_tree_controlled(layout, Some(cancel))?,
+    );
     for container in ["environments", "e"] {
         let base = layout.root.join(container);
         let excluded = match state.storage_version {
@@ -1952,9 +2350,14 @@ fn observe(layout: &Layout, state: &InstanceState, cancel: &CancelToken) -> Resu
             1 if container == "e" => Some(current.strip_prefix(&base)?.to_path_buf()),
             _ => None,
         };
-        let mut tree = scan(layout, &base, &excluded.into_iter().collect::<Vec<_>>())?;
+        let mut tree = scan_controlled(
+            layout,
+            &base,
+            &excluded.into_iter().collect::<Vec<_>>(),
+            Some(cancel),
+        )?;
         if container == "e" {
-            project_rebuild_extensions(layout, state, &mut tree)?;
+            project_rebuild_extensions(layout, state, &mut tree, cancel)?;
             if state.pending.is_some()
                 && state
                     .verified
@@ -1991,8 +2394,29 @@ fn observe(layout: &Layout, state: &InstanceState, cancel: &CancelToken) -> Resu
             (Tree::new(), Some(summary))
         };
     cancel.check()?;
+    let environment = if rebuild_budget {
+        if state.storage_version != 1 {
+            bail!("重建只创建新短路径实例");
+        }
+        let other = tree_usage(
+            protected
+                .get(Path::new("e"))
+                .context("重建观测缺少e保护树")?,
+        )?;
+        // 与当前同一次观测中的非目标实际SHA统计组合；不跨validator复用。
+        scan_tree_with_budget(
+            layout,
+            &current,
+            &state.ignored,
+            None,
+            Some(cancel),
+            Some((other, rebuild_tree_limits())),
+        )?
+    } else {
+        scan_controlled(layout, &path(state)?, &state.ignored, Some(cancel))?
+    };
     Ok(Observation {
-        environment: scan(layout, &path(state)?, &state.ignored)?,
+        environment,
         profiles,
         profiles_summary,
         protected,
@@ -2177,7 +2601,8 @@ pub(crate) fn load(layout: &Layout, id: &str) -> Result<InstanceState> {
     if fs::metadata(&target)?.len() > MAX_STATE {
         bail!("实例记录过大");
     }
-    let state: InstanceState = serde_json::from_slice(&fs::read(target)?)?;
+    let state: InstanceState =
+        serde_json::from_slice(&scan_observation::read_file(target, QueryStage::Receipt)?)?;
     validate(layout, id, &state)?;
     Ok(state)
 }
@@ -2264,14 +2689,25 @@ pub(crate) fn create_controlled(
     Ok(state)
 }
 pub(crate) fn assert_usable(state: &InstanceState) -> Result<()> {
+    assert_usable_with_cancel(state, None)
+}
+
+pub(crate) fn assert_usable_controlled(state: &InstanceState, cancel: &CancelToken) -> Result<()> {
+    assert_usable_with_cancel(state, Some(cancel))
+}
+
+fn assert_usable_with_cancel(state: &InstanceState, cancel: Option<&CancelToken>) -> Result<()> {
+    scan_control_check(cancel)?;
     let layout = Layout::new(&state.root_absolute, &state.release_id)?;
     model::Registry::load(&layout.root)?.assert_base_python_ready()?;
     let current = load(&layout, &state.instance_id)?;
     if current != *state
         || state.dirty
         || state.generation != state.validated_generation
-        || state.verified.protected.get(Path::new("python/3.10.19")) != Some(&python_tree(&layout)?)
-        || scan(&layout, &path(state)?, &state.ignored)? != state.verified.environment
+        || state.verified.protected.get(Path::new("python/3.10.19"))
+            != Some(&python_tree_controlled(&layout, cancel)?)
+        || scan_controlled(&layout, &path(state)?, &state.ignored, cancel)?
+            != state.verified.environment
     {
         bail!("实例dirty、过期或不匹配已验证generation，禁止使用");
     }
@@ -2362,7 +2798,7 @@ pub(crate) fn registration_revalidate(
         bail!("dirty/pending实例不能走补登记");
     }
     if !candidate {
-        assert_usable(state)?;
+        assert_usable_controlled(state, cancel)?;
     }
     let before = observe(layout, state, cancel)?;
     if before.environment != state.verified.environment
@@ -2758,7 +3194,8 @@ fn check_snapshots(layout: &Layout, state: &InstanceState) -> Result<()> {
     if fs::metadata(&manifest)?.len() > MAX_STATE {
         bail!("快照清单过大");
     }
-    let stored: Pending = serde_json::from_slice(&fs::read(manifest)?)?;
+    let stored: Pending =
+        serde_json::from_slice(&scan_observation::read_file(manifest, QueryStage::Receipt)?)?;
     if stored != *pending {
         bail!("快照清单与持久事务不一致");
     }
@@ -2767,7 +3204,8 @@ fn check_snapshots(layout: &Layout, state: &InstanceState) -> Result<()> {
         layout.guard_path(&snapshot)?;
         match original {
             Some(expected) if fingerprint(layout, &snapshot)? == *expected => {}
-            None if fs::metadata(&snapshot)?.len() == 8 && fs::read(&snapshot)? == b"missing\n" => {
+            None if fs::metadata(&snapshot)?.len() == 8
+                && scan_observation::read_file(&snapshot, QueryStage::Receipt)? == b"missing\n" => {
             }
             _ => bail!("独立快照损坏，保持dirty"),
         }
