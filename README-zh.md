@@ -15,14 +15,6 @@
 </p>
 
 
-## 项目来源与独立维护
-
-**Next Trainer**（`wochenlong/lora-scripts-next`）最初 fork 自 [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)（社区常称 SD-Trainer / 秋叶一键训练包）。感谢 Akegarasu 及原项目贡献者的开源工作。本仓库现以 Next Trainer 品牌独立发展，由本项目负责维护、发布和支持；并非 Akegarasu/lora-scripts 的官方发行版，也不表示获得其维护者的背书。
-
-解除 GitHub fork 关系不会改变已有代码的来源、版权归属或适用许可证。原作者对其贡献保有相应版权，Next Trainer 贡献者对各自贡献保有相应版权，并遵守适用许可证。
-
-本仓库的 GNU AGPL v3 许可见 [LICENSE](LICENSE)，来源归属和第三方声明见 [NOTICE.md](NOTICE.md)，上游致谢见[开源致谢](docs/credits.md)。修改或再分发源码、整合包时，应遵守适用许可证，保留要求保留的版权与许可声明，按要求标明修改并提供对应源码。训练引擎、依赖、模型权重及第三方图片分别遵循其各自的许可或授权条款。
-
 ## MOSS-Image 训练效果展示
 
 由 [KohakuBlueleaf](https://github.com/KohakuBlueleaf) 使用其训练器 [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 完成的 **100 步风格 LoRA 测试**。上排为基础模型，下排为加载 LoRA 后的效果。经作者同意引用，用于展示 MOSS-Image 的训练效果；本图结果由 KohakuMossTrainer 训练获得（现已作为可选训练引擎接入 Next Trainer）。

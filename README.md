@@ -15,14 +15,6 @@
 </p>
 
 
-## Project origins and independent maintenance
-
-**Next Trainer** (`wochenlong/lora-scripts-next`) originated as a fork of [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts), known in the community as SD-Trainer / 秋叶一键训练包. We thank Akegarasu and the original contributors for their open-source work. This repository now develops independently under the Next Trainer name, with its own maintenance, releases, and support. It is not an official release of Akegarasu/lora-scripts and does not imply endorsement by its maintainers.
-
-Detaching the GitHub fork relationship does not change the origin, copyright ownership, or applicable licenses of inherited code. Original authors retain copyright in their contributions; Next Trainer contributors retain copyright in theirs, subject to the applicable licenses.
-
-See [LICENSE](LICENSE) for this repository's GNU AGPL v3 license, [NOTICE.md](NOTICE.md) for attribution and third-party notices, and [Credits](docs/credits.md) for upstream acknowledgements. When modifying or redistributing source or portable builds, comply with the applicable licenses, retain required copyright and license notices, identify modifications where required, and provide corresponding source as required. Training engines, dependencies, model weights, and third-party artwork remain subject to their respective terms.
-
 ## MOSS-Image training showcase
 
 A **100-step style LoRA test** by [KohakuBlueleaf](https://github.com/KohakuBlueleaf), trained with their [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer). The top row shows the base model; the bottom row shows the LoRA results. Shared with the author's permission as a MOSS-Image training example; these results were produced with KohakuMossTrainer (now integrated into Next Trainer as an optional engine).

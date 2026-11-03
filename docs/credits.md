@@ -9,6 +9,24 @@
 
 ---
 
+## Project origins and independent maintenance
+
+**Next Trainer** (`wochenlong/lora-scripts-next`) originated as a fork of [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts), known in the community as SD-Trainer / 秋叶一键训练包. We thank Akegarasu and the original contributors for their open-source work. This repository now develops independently under the Next Trainer name, with its own maintenance, releases, and support. It is not an official release of Akegarasu/lora-scripts and does not imply endorsement by its maintainers.
+
+Detaching the GitHub fork relationship does not change the origin, copyright ownership, or applicable licenses of inherited code. Original authors retain copyright in their contributions; Next Trainer contributors retain copyright in theirs, subject to the applicable licenses.
+
+See [LICENSE](../LICENSE) for this repository's GNU AGPL v3 license, [NOTICE.md](../NOTICE.md) for attribution and third-party notices, and [Credits](credits.md) for upstream acknowledgements. When modifying or redistributing source or portable builds, comply with the applicable licenses, retain required copyright and license notices, identify modifications where required, and provide corresponding source as required. Training engines, dependencies, model weights, and third-party artwork remain subject to their respective terms.
+
+## 项目来源与独立维护
+
+**Next Trainer**（`wochenlong/lora-scripts-next`）最初 fork 自 [Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)（社区常称 SD-Trainer / 秋叶一键训练包）。感谢 Akegarasu 及原项目贡献者的开源工作。本仓库现以 Next Trainer 品牌独立发展，由本项目负责维护、发布和支持；并非 Akegarasu/lora-scripts 的官方发行版，也不表示获得其维护者的背书。
+
+解除 GitHub fork 关系不会改变已有代码的来源、版权归属或适用许可证。原作者对其贡献保有相应版权，Next Trainer 贡献者对各自贡献保有相应版权，并遵守适用许可证。
+
+本仓库的 GNU AGPL v3 许可见 [LICENSE](../LICENSE)，来源归属和第三方声明见 [NOTICE.md](../NOTICE.md)，上游致谢见[开源致谢](credits.md)。修改或再分发源码、整合包时，应遵守适用许可证，保留要求保留的版权与许可声明，按要求标明修改并提供对应源码。训练引擎、依赖、模型权重及第三方图片分别遵循其各自的许可或授权条款。
+
+---
+
 ## 致谢 Akegarasu
 
 Next Trainer 向 **Akegarasu** 及其开源项目 **[Akegarasu/lora-scripts](https://github.com/Akegarasu/lora-scripts)**（社区常称 **SD-Trainer** / **秋叶一键训练包**）致以感谢。
