@@ -53,6 +53,10 @@ mod gui_registration;
 mod gui_repair;
 #[path = "gui_source_repair.rs"]
 mod gui_source_repair;
+#[path = "legacy_environment_repair.rs"]
+mod legacy_environment_repair;
+#[path = "legacy_install_recovery.rs"]
+mod legacy_install_recovery;
 
 #[path = "safe_extract.rs"]
 mod safe_extract;
@@ -81,15 +85,69 @@ fn assert_registration_ready(root: &Path, except_release: Option<&str>) -> Resul
 }
 
 fn assert_regular_ready(root: &Path) -> Result<()> {
+    assert_regular_ready_with_cancel(root, None)
+}
+
+fn assert_regular_ready_with_cancel(
+    root: &Path,
+    cancel: Option<&crate::operations::CancelToken>,
+) -> Result<()> {
+    assert_regular_ready_except_legacy_environment_repair(root, None, cancel)
+}
+
+fn assert_regular_ready_for_legacy_environment_repair(
+    root: &Path,
+    transaction: &str,
+    cancel: &crate::operations::CancelToken,
+) -> Result<()> {
+    assert_regular_ready_except_legacy_environment_repair(root, Some(transaction), Some(cancel))
+}
+
+fn assert_regular_ready_except_legacy_environment_repair(
+    root: &Path,
+    transaction: Option<&str>,
+    cancel: Option<&crate::operations::CancelToken>,
+) -> Result<()> {
+    assert_regular_ready_with_recovery(root, transaction, None, cancel)
+}
+
+fn assert_regular_ready_for_gui_recovery(
+    root: &Path,
+    release: &Release,
+    cancel: &crate::operations::CancelToken,
+) -> Result<()> {
+    assert_regular_ready_with_recovery(root, None, Some(release), Some(cancel))
+}
+
+fn assert_regular_ready_with_recovery(
+    root: &Path,
+    transaction: Option<&str>,
+    repair_release: Option<&Release>,
+    cancel: Option<&crate::operations::CancelToken>,
+) -> Result<()> {
+    crate::scan_observation::check()?;
+    if let Some(cancel) = cancel {
+        cancel.check()?;
+    }
     crate::data_import::assert_binding_ready(root)?;
     crate::shell_update_protocol::assert_ready(root)?;
     base_python_repair::assert_ready(root)?;
+    legacy_environment_repair::assert_ready_except(root, transaction, cancel)?;
+    match repair_release {
+        Some(release) => gui_repair::assert_worker_reap_ready_for_recovery(root, release)?,
+        None => gui_repair::assert_worker_reap_ready(root)?,
+    }
     assert_registration_ready(root, None)?;
     for release in Catalog::embedded()?.releases() {
-        gui_rebuild::assert_ready(root, release)?;
-        gui_binding_switch::assert_ready(root, release)?;
+        gui_rebuild::assert_ready_with_cancel(root, release, cancel)?;
+        gui_binding_switch::assert_ready_with_cancel(root, release, cancel)?;
     }
-    crate::instances::assert_no_preserved_pending(root)
+    let result = crate::instances::assert_no_preserved_pending(root);
+    crate::scan_observation::check()?;
+    if let Some(cancel) = cancel {
+        cancel.check()?;
+    }
+    result
 }
 
 fn complete_gui_lifecycle_success(
@@ -111,6 +169,19 @@ fn finish_gui_lifecycle_result(
     use crate::operations::{Cancelled, OperationError, OperationStatus};
     let (status, error) = match &result {
         Ok(()) => (OperationStatus::Succeeded, None),
+        Err(error)
+            if error
+                .downcast_ref::<ControlledProcessReapFailed>()
+                .is_some() =>
+        {
+            (
+                OperationStatus::Failed,
+                Some(OperationError {
+                    code: "worker_reap_failed".into(),
+                    message: format!("{error:#}"),
+                }),
+            )
+        }
         Err(error) if error.downcast_ref::<Cancelled>().is_some() => {
             (OperationStatus::Cancelled, None)
         }
@@ -122,8 +193,21 @@ fn finish_gui_lifecycle_result(
             }),
         ),
     };
-    operation.finish_and_persist(ctx, status, error)?;
-    result
+    match operation.finish_and_persist(ctx, status, error) {
+        Ok(()) => result,
+        Err(persist) => match result {
+            Err(failure)
+                if failure
+                    .downcast_ref::<ControlledProcessReapFailed>()
+                    .is_some() =>
+            {
+                Err(failure.context(format!(
+                    "操作终态未能保存；原排空失败与事务现场保持：{persist:#}"
+                )))
+            }
+            _ => Err(persist),
+        },
+    }
 }
 const REQUIRED: &[&str] = &[
     "gui.py",
@@ -172,6 +256,10 @@ pub struct VersionView {
     current: bool,
     known_good: bool,
     managed_recipe: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    legacy_recovery: Option<legacy_install_recovery::LegacyRecoveryCandidate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    legacy_environment_repair: Option<String>,
     #[serde(flatten)]
     support: ReleaseSupport,
 }
@@ -239,8 +327,272 @@ impl Drop for Running {
 struct Job(windows_sys::Win32::Foundation::HANDLE);
 #[cfg(windows)]
 unsafe impl Send for Job {}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum NamedJobReap {
+    Drained,
+    Destroyed,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
+pub(super) struct ControlledHostIdentity {
+    pub pid: u32,
+    pub creation_time: u64,
+}
+
+#[cfg(windows)]
+fn controlled_host_creation(handle: windows_sys::Win32::Foundation::HANDLE) -> Result<u64> {
+    use windows_sys::Win32::{Foundation::FILETIME, System::Threading::GetProcessTimes};
+    let mut created: FILETIME = unsafe { std::mem::zeroed() };
+    let mut exited: FILETIME = unsafe { std::mem::zeroed() };
+    let mut kernel: FILETIME = unsafe { std::mem::zeroed() };
+    let mut user: FILETIME = unsafe { std::mem::zeroed() };
+    if unsafe { GetProcessTimes(handle, &mut created, &mut exited, &mut kernel, &mut user) } == 0 {
+        return Err(std::io::Error::last_os_error()).context("读取受管宿主进程代次失败");
+    }
+    let creation_time =
+        (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime);
+    if creation_time == 0 {
+        bail!("受管宿主进程代次无效");
+    }
+    Ok(creation_time)
+}
+
+fn current_controlled_host_identity() -> Result<ControlledHostIdentity> {
+    #[cfg(windows)]
+    {
+        let handle = unsafe { windows_sys::Win32::System::Threading::GetCurrentProcess() };
+        Ok(ControlledHostIdentity {
+            pid: std::process::id(),
+            creation_time: controlled_host_creation(handle)?,
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        bail!("受管宿主代次当前仅支持 Windows");
+    }
+}
+
+/// 只证明保存的宿主代次已退出，绝不代替随后对每个命名 Job 的排空证明。
+fn assert_controlled_host_exited(identity: &ControlledHostIdentity) -> Result<()> {
+    #[cfg(windows)]
+    {
+        use windows_sys::Win32::{
+            Foundation::{
+                CloseHandle, GetLastError, ERROR_INVALID_PARAMETER, WAIT_OBJECT_0, WAIT_TIMEOUT,
+            },
+            System::Threading::{
+                OpenProcess, WaitForSingleObject, PROCESS_QUERY_LIMITED_INFORMATION,
+                PROCESS_SYNCHRONIZE,
+            },
+        };
+        let result = (|| {
+            if identity.pid == 0 || identity.creation_time == 0 {
+                bail!("持久受管宿主身份无效");
+            }
+            if identity == &current_controlled_host_identity()? {
+                bail!("排空失败需要旧宿主退出后由新宿主恢复");
+            }
+            let handle = unsafe {
+                OpenProcess(
+                    PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+                    0,
+                    identity.pid,
+                )
+            };
+            if handle.is_null() {
+                let error = unsafe { GetLastError() };
+                if error == ERROR_INVALID_PARAMETER {
+                    // 这是已验证为非零的历史PID不存在；不据此判断其worker/Job。
+                    return Ok(());
+                }
+                return Err(std::io::Error::from_raw_os_error(error as i32))
+                    .context("打开旧受管宿主失败，不能证明其退出");
+            }
+            struct Handle(windows_sys::Win32::Foundation::HANDLE);
+            impl Drop for Handle {
+                fn drop(&mut self) {
+                    unsafe {
+                        CloseHandle(self.0);
+                    }
+                }
+            }
+            let handle = Handle(handle);
+            if controlled_host_creation(handle.0)? != identity.creation_time {
+                return Ok(()); // PID已指向新代，保存的旧宿主代次已退出。
+            }
+            match unsafe { WaitForSingleObject(handle.0, 0) } {
+                WAIT_OBJECT_0 => Ok(()),
+                WAIT_TIMEOUT => bail!("旧受管宿主同代仍运行，禁止清除reader排空失败屏障"),
+                _ => Err(std::io::Error::last_os_error()).context("读取旧受管宿主退出信号失败"),
+            }
+        })();
+        result.map_err(|error: anyhow::Error| {
+            let mut failure = ControlledProcessReapFailed::new(format!("{error:#}"), false);
+            failure.requires_new_host = true;
+            failure.into()
+        })
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = identity;
+        bail!("受管宿主代次当前仅支持 Windows");
+    }
+}
+
 #[cfg(windows)]
 impl Job {
+    const LEGACY_REPAIR_PREFIX: &'static str = "Local\\NextTrainerLegacyRepair-";
+
+    fn current_session_id() -> Result<u32> {
+        let mut session = 0;
+        if unsafe {
+            windows_sys::Win32::System::RemoteDesktop::ProcessIdToSessionId(
+                std::process::id(),
+                &mut session,
+            )
+        } == 0
+        {
+            return Err(std::io::Error::last_os_error()).context("读取环境修复 Job 会话失败");
+        }
+        Ok(session)
+    }
+
+    fn generate_legacy_repair_name() -> Result<String> {
+        use ring::rand::{SecureRandom, SystemRandom};
+        let mut nonce = [0u8; 32];
+        SystemRandom::new()
+            .fill(&mut nonce)
+            .map_err(|_| anyhow::anyhow!("生成环境修复 Job 随机身份失败"))?;
+        Ok(format!(
+            "{}{}",
+            Self::LEGACY_REPAIR_PREFIX,
+            nonce
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>()
+        ))
+    }
+
+    fn validate_legacy_repair_name(name: &str) -> Result<()> {
+        let suffix = name
+            .strip_prefix(Self::LEGACY_REPAIR_PREFIX)
+            .context("环境修复 Job 命名空间不匹配")?;
+        if suffix.len() != 64
+            || !suffix
+                .bytes()
+                .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+        {
+            bail!("环境修复 Job 身份必须为32字节随机小写十六进制值");
+        }
+        Ok(())
+    }
+
+    /// 调用方必须先持久化 launching，再创建并只为一个命令使用此 Job。
+    /// 默认 SECURITY_ATTRIBUTES 使 handle 不可继承；不允许打开碰撞对象。
+    fn create_named(name: &str) -> Result<Self> {
+        use windows_sys::Win32::{
+            Foundation::{GetLastError, SetLastError, ERROR_ALREADY_EXISTS},
+            System::JobObjects::CreateJobObjectW,
+        };
+        Self::validate_legacy_repair_name(name)?;
+        let name: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        unsafe {
+            SetLastError(0);
+        }
+        let handle = unsafe { CreateJobObjectW(std::ptr::null(), name.as_ptr()) };
+        let error = unsafe { GetLastError() };
+        if handle.is_null() {
+            return Err(std::io::Error::from_raw_os_error(error as i32))
+                .context("创建环境修复命名 Job 失败");
+        }
+        let job = Self(handle);
+        if error == ERROR_ALREADY_EXISTS {
+            drop(job);
+            bail!("环境修复命名 Job 已存在，拒绝复用或接管");
+        }
+        job.set_kill_on_close()?;
+        Ok(job)
+    }
+
+    /// None 只表示 ERROR_FILE_NOT_FOUND。调用方仍须核可信 intent 的 attached
+    /// 回执；launching 的无对象不能证明 CreateProcess→Assign 窗口没有悬挂进程。
+    fn reopen_named(name: &str) -> Result<Option<Self>> {
+        use windows_sys::Win32::{
+            Foundation::{GetLastError, ERROR_FILE_NOT_FOUND},
+            System::JobObjects::OpenJobObjectW,
+        };
+        Self::validate_legacy_repair_name(name)?;
+        let name: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+        // JOB_OBJECT_QUERY | JOB_OBJECT_TERMINATE；恢复不能再向旧 Job 分配进程。
+        let handle = unsafe { OpenJobObjectW(0x0004 | 0x0008, 0, name.as_ptr()) };
+        if !handle.is_null() {
+            return Ok(Some(Self(handle)));
+        }
+        let error = unsafe { GetLastError() };
+        if error == ERROR_FILE_NOT_FOUND {
+            return Ok(None);
+        }
+        Err(std::io::Error::from_raw_os_error(error as i32))
+            .context("重开环境修复命名 Job 失败，不能证明进程排空")
+    }
+
+    /// 可信 intent 与 ownership 的校验由事务层完成；本层统一把 Windows
+    /// 生命周期证明与有歧义的 launching/跨会话状态区分，绝不新建同名空 Job。
+    fn reap_named_attached(name: &str, session_id: u32, attached: bool) -> Result<NamedJobReap> {
+        let result = (|| {
+            Self::validate_legacy_repair_name(name)?;
+            if !attached || session_id != Self::current_session_id()? {
+                bail!("命名 Job 未持久证明 attached-before-resume 或 Windows 会话不同");
+            }
+            match Self::reopen_named(name)? {
+                Some(job) => {
+                    job.terminate_and_wait()?;
+                    Ok(NamedJobReap::Drained)
+                }
+                // Job 只有最后 handle 关闭且关联进程全退出后才销毁；这里的
+                // None 仅来自精确 ERROR_FILE_NOT_FOUND，权限错误绝不归此分支。
+                None => Ok(NamedJobReap::Destroyed),
+            }
+        })();
+        result.map_err(|error: anyhow::Error| {
+            ControlledProcessReapFailed::new(format!("{error:#}"), false).into()
+        })
+    }
+
+    fn set_kill_on_close(&self) -> Result<()> {
+        use windows_sys::Win32::System::JobObjects::*;
+        let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = unsafe { std::mem::zeroed() };
+        info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+        if unsafe {
+            SetInformationJobObject(
+                self.0,
+                JobObjectExtendedLimitInformation,
+                &info as *const _ as _,
+                std::mem::size_of_val(&info) as u32,
+            )
+        } == 0
+        {
+            return Err(std::io::Error::last_os_error()).context("配置受管 Job 关闭回收失败");
+        }
+        Ok(())
+    }
+
+    fn assign(&self, child: &Child) -> Result<()> {
+        use std::os::windows::io::AsRawHandle;
+        if unsafe {
+            windows_sys::Win32::System::JobObjects::AssignProcessToJobObject(
+                self.0,
+                child.as_raw_handle() as _,
+            )
+        } == 0
+        {
+            return Err(std::io::Error::last_os_error())
+                .context("绑定受管进程失败，已拒绝无归属运行");
+        }
+        Ok(())
+    }
+
     fn active_processes(&self) -> Result<u32> {
         use windows_sys::Win32::System::JobObjects::*;
         unsafe {
@@ -267,12 +619,14 @@ impl Job {
         Ok(())
     }
     fn terminate_and_wait(&self) -> Result<()> {
+        self.terminate_and_wait_until(Instant::now() + Duration::from_secs(5))
+    }
+    fn terminate_and_wait_until(&self, deadline: Instant) -> Result<()> {
         use windows_sys::Win32::System::JobObjects::*;
         unsafe {
             if TerminateJobObject(self.0, 1) == 0 {
                 return Err(std::io::Error::last_os_error()).context("终止本次受管 Job 失败");
             }
-            let deadline = Instant::now() + Duration::from_secs(5);
             loop {
                 let mut info: JOBOBJECT_BASIC_ACCOUNTING_INFORMATION = std::mem::zeroed();
                 if QueryInformationJobObject(
@@ -316,28 +670,19 @@ impl Job {
         }
     }
     fn attach(child: &Child) -> Result<Self> {
-        use std::os::windows::io::AsRawHandle;
-        use windows_sys::Win32::{Foundation::CloseHandle, System::JobObjects::*};
-        unsafe {
-            let handle = CreateJobObjectW(std::ptr::null(), std::ptr::null());
-            if handle.is_null() {
-                bail!("创建受管进程 Job Object 失败");
-            }
-            let mut info: JOBOBJECT_EXTENDED_LIMIT_INFORMATION = std::mem::zeroed();
-            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            if SetInformationJobObject(
-                handle,
-                JobObjectExtendedLimitInformation,
-                &info as *const _ as _,
-                std::mem::size_of_val(&info) as u32,
-            ) == 0
-                || AssignProcessToJobObject(handle, child.as_raw_handle() as _) == 0
-            {
-                CloseHandle(handle);
-                bail!("绑定受管进程失败，已拒绝无归属运行");
-            }
-            Ok(Self(handle))
+        let handle = unsafe {
+            windows_sys::Win32::System::JobObjects::CreateJobObjectW(
+                std::ptr::null(),
+                std::ptr::null(),
+            )
+        };
+        if handle.is_null() {
+            bail!("创建受管进程 Job Object 失败");
         }
+        let job = Self(handle);
+        job.set_kill_on_close()?;
+        job.assign(child)?;
+        Ok(job)
     }
 }
 #[cfg(windows)]
@@ -352,6 +697,24 @@ impl Drop for Job {
 struct Job;
 #[cfg(not(windows))]
 impl Job {
+    fn current_session_id() -> Result<u32> {
+        bail!("命名 Job 环境修复当前仅支持 Windows")
+    }
+    fn generate_legacy_repair_name() -> Result<String> {
+        bail!("命名 Job 环境修复当前仅支持 Windows")
+    }
+    fn validate_legacy_repair_name(_: &str) -> Result<()> {
+        bail!("命名 Job 环境修复当前仅支持 Windows")
+    }
+    fn create_named(_: &str) -> Result<Self> {
+        bail!("命名 Job 环境修复当前仅支持 Windows")
+    }
+    fn reopen_named(_: &str) -> Result<Option<Self>> {
+        bail!("命名 Job 环境修复当前仅支持 Windows")
+    }
+    fn reap_named_attached(_: &str, _: u32, _: bool) -> Result<NamedJobReap> {
+        bail!("命名 Job 环境修复当前仅支持 Windows")
+    }
     fn active_processes(&self) -> Result<u32> {
         Ok(0)
     }
@@ -359,6 +722,9 @@ impl Job {
         Ok(())
     }
     fn terminate_and_wait(&self) -> Result<()> {
+        Ok(())
+    }
+    fn terminate_and_wait_until(&self, _: Instant) -> Result<()> {
         Ok(())
     }
     fn attach(_: &Child) -> Result<Self> {
@@ -704,19 +1070,21 @@ fn managed_base_path(layout: &Layout, release: &Release, path: &Path) -> Result<
     Ok(resolved)
 }
 fn check_environment(layout: &Layout, release: &Release) -> Result<()> {
-    check_environment_with_cancel(layout, release, None)
+    check_environment_with_cancel(layout, release, None, None)
 }
 fn check_environment_controlled(
     layout: &Layout,
     release: &Release,
     cancel: &crate::operations::CancelToken,
+    log: &Logger,
 ) -> Result<()> {
-    check_environment_with_cancel(layout, release, Some(cancel))
+    check_environment_with_cancel(layout, release, Some(cancel), Some(log))
 }
 fn check_environment_with_cancel(
     layout: &Layout,
     release: &Release,
     cancel: Option<&crate::operations::CancelToken>,
+    log: Option<&Logger>,
 ) -> Result<()> {
     crate::scan_observation::check()?;
     if let Some(cancel) = cancel {
@@ -782,8 +1150,8 @@ fn check_environment_with_cancel(
         .arg(managed)
         .arg(&release.python);
     if let Some(cancel) = cancel {
-        let log: Logger = Arc::new(|_: String| {});
-        return execute_controlled(probe, &log, cancel);
+        let log = log.context("受控环境检查缺少日志接收器")?;
+        return execute_controlled(probe, log, cancel);
     }
     let result = probe.output()?;
     if !result.status.success() {
@@ -827,9 +1195,467 @@ fn execute(mut command: Command, log: &Logger) -> Result<()> {
     Ok(())
 }
 
-/// 与Engine长锁无关的受管等待。Job只覆盖本次子进程；取消后先关Job，
-/// 回收整棵所属进程，再join输出线程，避免后代仍占pipe造成收尾挂起。
-// 固定配方安装与P6测试共用同一受管可取消执行入口。
+const CONTROLLED_OUTPUT_LIMIT: usize = 64 * 1024;
+const CONTROLLED_LINE_LIMIT: usize = 8 * 1024;
+// OperationSnapshot整体最多64KiB；为JSON转义、错误头和其他字段预留空间。
+const CONTROLLED_ERROR_JSON_LIMIT: usize = 48 * 1024;
+
+#[derive(Default)]
+struct ControlledOutputTail {
+    stdout: Vec<u8>,
+    stderr: Vec<u8>,
+    truncated: bool,
+}
+
+impl ControlledOutputTail {
+    fn append_bounded(target: &mut Vec<u8>, bytes: &[u8], limit: usize) -> bool {
+        let discarded = target
+            .len()
+            .saturating_add(bytes.len())
+            .saturating_sub(limit);
+        if bytes.len() >= limit {
+            target.clear();
+            target.extend_from_slice(&bytes[bytes.len() - limit..]);
+        } else {
+            target.drain(..discarded);
+            target.extend_from_slice(bytes);
+        }
+        discarded != 0
+    }
+
+    fn append(&mut self, stderr: bool, bytes: &[u8]) {
+        if stderr {
+            self.truncated |=
+                Self::append_bounded(&mut self.stderr, bytes, CONTROLLED_OUTPUT_LIMIT);
+            let remaining = CONTROLLED_OUTPUT_LIMIT - self.stderr.len();
+            if self.stdout.len() > remaining {
+                let discarded = self.stdout.len() - remaining;
+                self.stdout.drain(..discarded);
+                self.truncated = true;
+            }
+        } else {
+            self.truncated |= Self::append_bounded(
+                &mut self.stdout,
+                bytes,
+                CONTROLLED_OUTPUT_LIMIT - self.stderr.len(),
+            );
+        }
+    }
+
+    fn text(bytes: &[u8]) -> String {
+        // 环形尾部可能从UTF-8续字节开始；去掉该字符残片后再解码。
+        let start = bytes
+            .iter()
+            .position(|value| value & 0xc0 != 0x80)
+            .unwrap_or(bytes.len());
+        String::from_utf8_lossy(&bytes[start..]).into_owned()
+    }
+
+    fn failure_detail(&self) -> String {
+        let mut detail = String::new();
+        if !self.stdout.is_empty() {
+            detail.push_str("[stdout]\n");
+            detail.push_str(&crate::log_store::redact_bounded_tail(&Self::text(
+                &self.stdout,
+            )));
+        }
+        if !self.stderr.is_empty() {
+            // stderr放在末尾，最终持久化裁剪优先保留真正的错误原因。
+            detail.push_str("\n[stderr]\n");
+            detail.push_str(&crate::log_store::redact_bounded_tail(&Self::text(
+                &self.stderr,
+            )));
+        }
+        let boundaries: Vec<_> = detail
+            .char_indices()
+            .map(|(index, _)| index)
+            .chain(std::iter::once(detail.len()))
+            .collect();
+        let mut low = 0;
+        let mut high = boundaries.len() - 1;
+        while low < high {
+            let middle = low + (high - low) / 2;
+            let bytes = serde_json::to_vec(&detail[boundaries[middle]..])
+                .expect("字符串JSON序列化不会失败")
+                .len();
+            if bytes > CONTROLLED_ERROR_JSON_LIMIT {
+                low = middle + 1;
+            } else {
+                high = middle;
+            }
+        }
+        let start = boundaries[low];
+        let marker = if self.truncated || start != 0 {
+            "[输出已截断，仅保留有界尾部]\n"
+        } else {
+            ""
+        };
+        format!("{marker}{}", &detail[start..])
+    }
+}
+
+fn read_controlled_pipe(
+    mut pipe: Box<dyn Read + Send>,
+    stderr: bool,
+    log: Logger,
+    tail: Arc<Mutex<ControlledOutputTail>>,
+    stop: Arc<std::sync::atomic::AtomicBool>,
+) -> Result<()> {
+    let mut block = [0; CONTROLLED_LINE_LIMIT];
+    let mut line = Vec::with_capacity(CONTROLLED_LINE_LIMIT);
+    let mut truncated = false;
+    let emit = |line: &[u8], truncated: bool| {
+        let line = line.strip_suffix(b"\r").unwrap_or(line);
+        let line = match std::str::from_utf8(line) {
+            Err(error) if truncated && error.error_len().is_none() => &line[..error.valid_up_to()],
+            _ => line,
+        };
+        let text = String::from_utf8_lossy(line);
+        let marker = if truncated {
+            "[单行输出已截断] "
+        } else {
+            ""
+        };
+        log(crate::log_store::redact(&format!("{marker}{text}")));
+    };
+    loop {
+        if stop.load(std::sync::atomic::Ordering::Acquire) {
+            break;
+        }
+        let read = match pipe.read(&mut block) {
+            Ok(0) => break,
+            Ok(read) => read,
+            Err(error) if error.kind() == std::io::ErrorKind::Interrupted => continue,
+            Err(error) => {
+                log(format!("读取子进程输出失败：{error}"));
+                return Err(error).context("受管输出读取失败");
+            }
+        };
+        tail.lock().unwrap().append(stderr, &block[..read]);
+        for &value in &block[..read] {
+            if value == b'\n' {
+                emit(&line, truncated);
+                line.clear();
+                truncated = false;
+            } else if line.len() < CONTROLLED_LINE_LIMIT {
+                line.push(value);
+            } else {
+                truncated = true;
+            }
+        }
+    }
+    if !line.is_empty() || truncated {
+        emit(&line, truncated);
+    }
+    Ok(())
+}
+
+/// 排空失败是独立安全错误，不能把原 Cancelled 链入 source 而让调用方误报取消。
+#[derive(Debug)]
+pub(super) struct ControlledProcessReapFailed {
+    pub code: &'static str,
+    pub cancel_requested: bool,
+    pub requires_new_host: bool,
+    reason: String,
+}
+
+impl ControlledProcessReapFailed {
+    fn new(reason: String, cancel_requested: bool) -> Self {
+        Self {
+            code: "worker_reap_failed",
+            cancel_requested,
+            requires_new_host: false,
+            reason,
+        }
+    }
+}
+
+impl std::fmt::Display for ControlledProcessReapFailed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            formatter,
+            "{}：{}；cancel_requested={}；requires_new_host={}；尚未证明完整回收，保留事务现场",
+            self.code, self.reason, self.cancel_requested, self.requires_new_host
+        )
+    }
+}
+impl std::error::Error for ControlledProcessReapFailed {}
+
+fn controlled_reap_result(
+    result: Result<std::process::ExitStatus>,
+    reaped: Result<()>,
+    cancel_requested: bool,
+) -> Result<std::process::ExitStatus> {
+    if let Err(error) = reaped {
+        let mut failure = ControlledProcessReapFailed::new(format!("{error:#}"), cancel_requested);
+        failure.requires_new_host = error
+            .downcast_ref::<ControlledReaderReapFailed>()
+            .is_some_and(|error| error.unjoined);
+        return Err(failure.into());
+    }
+    result
+}
+
+#[derive(Debug)]
+struct ControlledReaderReapFailed {
+    message: String,
+    unjoined: bool,
+    read_os_errors: Vec<Option<i32>>,
+}
+impl std::fmt::Display for ControlledReaderReapFailed {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter.write_str(&self.message)
+    }
+}
+impl std::error::Error for ControlledReaderReapFailed {}
+
+fn wait_controlled_child(child: &mut Child, timeout: Duration) -> Result<()> {
+    wait_controlled_child_until(child, Instant::now() + timeout)
+}
+
+fn wait_controlled_child_until(child: &mut Child, deadline: Instant) -> Result<()> {
+    loop {
+        match child.try_wait() {
+            Ok(Some(_)) => {
+                child.wait().context("回收受管 Child handle 失败")?;
+                return Ok(());
+            }
+            Ok(None) if Instant::now() < deadline => thread::sleep(Duration::from_millis(10)),
+            Ok(None) => bail!("受管 Child 未在有界收尾内退出：pid={}", child.id()),
+            Err(error) => return Err(error).context("查询受管 Child 退出状态失败"),
+        }
+    }
+}
+
+struct ControlledReader {
+    worker: thread::JoinHandle<Result<()>>,
+    // Rust的Windows ChildStdout/ChildStderr使用overlapped I/O，必须按pipe取消。
+    // 独立持有duplicate直到join之后，避免reader先drop导致裸handle被系统复用。
+    #[cfg(windows)]
+    pipe: Option<std::os::windows::io::OwnedHandle>,
+}
+
+impl From<thread::JoinHandle<Result<()>>> for ControlledReader {
+    fn from(worker: thread::JoinHandle<Result<()>>) -> Self {
+        Self {
+            worker,
+            #[cfg(windows)]
+            pipe: None,
+        }
+    }
+}
+
+impl ControlledReader {
+    fn is_finished(&self) -> bool {
+        self.worker.is_finished()
+    }
+
+    fn request_io_cancel(&self) -> Option<i32> {
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            // ERROR_NOT_FOUND只说明当前没有pending I/O；read可能尚未提交。
+            // 调用方会在既有deadline内重复取消，并以实际join为完成证明。
+            let error = self.pipe.as_ref().and_then(|pipe| {
+                (unsafe {
+                    windows_sys::Win32::System::IO::CancelIoEx(
+                        pipe.as_raw_handle() as _,
+                        std::ptr::null(),
+                    )
+                } == 0)
+                    .then(|| std::io::Error::last_os_error().raw_os_error())
+                    .flatten()
+            });
+            // 非pipe的同步线程仍沿用同步取消；不能用它替代overlapped取消。
+            unsafe {
+                windows_sys::Win32::System::IO::CancelSynchronousIo(
+                    self.worker.as_raw_handle() as _
+                );
+            }
+            error
+        }
+        #[cfg(not(windows))]
+        None
+    }
+}
+
+#[cfg(test)]
+fn join_controlled_readers(
+    threads: Vec<ControlledReader>,
+    stop: &Arc<std::sync::atomic::AtomicBool>,
+    allow_drain: bool,
+) -> Result<()> {
+    join_controlled_readers_until(
+        threads,
+        stop,
+        allow_drain,
+        Instant::now() + Duration::from_secs(2),
+    )
+}
+
+fn join_controlled_readers_until(
+    threads: Vec<ControlledReader>,
+    stop: &Arc<std::sync::atomic::AtomicBool>,
+    allow_drain: bool,
+    cleanup_deadline: Instant,
+) -> Result<()> {
+    // 即使 Job 已 active=0，也不信任管道一定结束：异常外部 handle 或 logger
+    // 阻塞不能把UI/变更租约无限占住。正常路径先给reader一秒读完有界尾部。
+    if allow_drain {
+        let deadline = cleanup_deadline.min(Instant::now() + Duration::from_secs(1));
+        while threads.iter().any(|reader| !reader.is_finished()) && Instant::now() < deadline {
+            thread::sleep(Duration::from_millis(5));
+        }
+    }
+    let interrupted = threads.iter().any(|reader| !reader.is_finished());
+    let mut cancel_errors = vec![None; threads.len()];
+    if interrupted {
+        stop.store(true, std::sync::atomic::Ordering::Release);
+        let deadline = cleanup_deadline.min(Instant::now() + Duration::from_secs(1));
+        while threads.iter().any(|reader| !reader.is_finished()) && Instant::now() < deadline {
+            for (index, reader) in threads.iter().enumerate() {
+                if !reader.is_finished() {
+                    cancel_errors[index] = reader.request_io_cancel();
+                }
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+    let mut failures = Vec::new();
+    let mut unjoined = false;
+    let mut read_os_errors = Vec::new();
+    if interrupted && allow_drain {
+        failures.push("输出未在正常收尾内结束，已请求停止同步读取".to_string());
+    }
+    for (index, reader) in threads.into_iter().enumerate() {
+        if !reader.is_finished() {
+            // 最后保险只放弃等待本次线程，不能授回收或恢复。stop 已置位，
+            // 线程随后返回仍关闭自己的pipe；typed错误的持久屏障由事务层保存。
+            failures.push(format!(
+                "输出线程未在有界取消后退出，不能证明reader已回收；pipe_cancel_os_error={:?}",
+                cancel_errors[index]
+            ));
+            unjoined = true;
+        } else {
+            match reader.worker.join() {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    read_os_errors.push(
+                        error
+                            .downcast_ref::<std::io::Error>()
+                            .and_then(|e| e.raw_os_error()),
+                    );
+                    failures.push(format!("输出线程读取错误：{error:#}"));
+                }
+                Err(_) => failures.push("输出线程异常退出".to_string()),
+            }
+        }
+    }
+    if failures.is_empty() {
+        Ok(())
+    } else {
+        Err(ControlledReaderReapFailed {
+            message: failures.join("；"),
+            unjoined,
+            read_os_errors,
+        }
+        .into())
+    }
+}
+
+fn combine_controlled_reap_results(first: Result<()>, second: Result<()>) -> Result<()> {
+    match (first, second) {
+        (Ok(()), result) | (result, Ok(())) => result,
+        (Err(first), Err(second)) => {
+            // 两个收尾错误都必须保留；后来的已join错误不能抹掉先前的宿主屏障。
+            let unjoined = [&first, &second].iter().any(|error| {
+                error
+                    .downcast_ref::<ControlledReaderReapFailed>()
+                    .is_some_and(|failure| failure.unjoined)
+            });
+            let read_os_errors = [&first, &second]
+                .iter()
+                .filter_map(|error| error.downcast_ref::<ControlledReaderReapFailed>())
+                .flat_map(|failure| failure.read_os_errors.iter().copied())
+                .collect();
+            Err(ControlledReaderReapFailed {
+                message: format!("{first:#}；{second:#}"),
+                unjoined,
+                read_os_errors,
+            }
+            .into())
+        }
+    }
+}
+
+struct ControlledLogDispatch {
+    logger: Logger,
+    stop: Arc<std::sync::atomic::AtomicBool>,
+    dropped: Arc<std::sync::atomic::AtomicU64>,
+    worker: thread::JoinHandle<Result<()>>,
+}
+
+fn controlled_log_dispatch(log: &Logger) -> ControlledLogDispatch {
+    use std::sync::{atomic::Ordering, mpsc};
+    // 只为本次executor输出隔离回调。固定容量/单条上界，绝不阻塞取消或Job回收。
+    // stderr失败尾部由ControlledOutputTail独立保留，不依赖此可丢弃的展示队列。
+    const CAPACITY: usize = 64;
+    let (send, receive) = mpsc::sync_channel::<String>(CAPACITY);
+    let dropped = Arc::new(std::sync::atomic::AtomicU64::new(0));
+    let count = dropped.clone();
+    let logger: Logger = Arc::new(move |mut line| {
+        if line.len() > CONTROLLED_LINE_LIMIT {
+            let mut end = CONTROLLED_LINE_LIMIT;
+            while !line.is_char_boundary(end) {
+                end -= 1;
+            }
+            line.truncate(end);
+            line.push_str(" [日志正文已截断]");
+        }
+        if send.try_send(line).is_err() {
+            let _ = count.fetch_update(Ordering::Relaxed, Ordering::Relaxed, |value| {
+                Some(value.saturating_add(1))
+            });
+        }
+    });
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let stopped = stop.clone();
+    let count = dropped.clone();
+    let target = log.clone();
+    let worker = thread::spawn(move || {
+        let mut reported = 0;
+        loop {
+            if stopped.load(Ordering::Acquire) {
+                return Ok(());
+            }
+            let line = match receive.recv_timeout(Duration::from_millis(20)) {
+                Ok(line) => Some(line),
+                Err(mpsc::RecvTimeoutError::Timeout) => continue,
+                Err(mpsc::RecvTimeoutError::Disconnected) => None,
+            };
+            let total = count.load(Ordering::Relaxed);
+            if total > reported {
+                target(format!(
+                    "[日志拥堵，累计已省略{total}条展示日志；失败详情保留独立有界尾部]"
+                ));
+                reported = total;
+            }
+            match line {
+                Some(line) => target(line),
+                None => return Ok(()),
+            }
+        }
+    });
+    ControlledLogDispatch {
+        logger,
+        stop,
+        dropped,
+        worker,
+    }
+}
+
+/// 与Engine长锁无关的受管等待。始终仍持有 Job 时终止并确认 active=0，
+/// 再等待 Child 与 reader；正常退出也不能留下没有继承 pipe 的后代。
 fn execute_controlled(
     mut command: Command,
     log: &Logger,
@@ -837,54 +1663,169 @@ fn execute_controlled(
 ) -> Result<()> {
     cancel.check()?;
     command.stdout(Stdio::piped()).stderr(Stdio::piped());
-    let (mut child, job) = managed_child::spawn(&mut command)?;
+    let (child, job) = managed_child::spawn(&mut command)?;
+    execute_controlled_child(child, &job, log, cancel)
+}
+
+fn execute_controlled_in_job(
+    mut command: Command,
+    log: &Logger,
+    cancel: &crate::operations::CancelToken,
+    job: &Job,
+    attached: impl FnOnce(u32) -> Result<()>,
+) -> Result<()> {
+    cancel.check()?;
+    command.stdout(Stdio::piped()).stderr(Stdio::piped());
+    let child = managed_child::spawn_in_job(&mut command, job, attached)?;
+    execute_controlled_child(child, job, log, cancel)
+}
+
+fn execute_controlled_child(
+    mut child: Child,
+    job: &Job,
+    log: &Logger,
+    cancel: &crate::operations::CancelToken,
+) -> Result<()> {
+    let pid = child.id();
+    #[cfg(windows)]
+    let pipe_handles = {
+        use std::os::windows::io::AsHandle;
+        let handles = (|| -> Result<_> {
+            Ok([
+                child
+                    .stdout
+                    .as_ref()
+                    .map(|pipe| pipe.as_handle().try_clone_to_owned())
+                    .transpose()?,
+                child
+                    .stderr
+                    .as_ref()
+                    .map(|pipe| pipe.as_handle().try_clone_to_owned())
+                    .transpose()?,
+            ])
+        })();
+        match handles {
+            Ok(handles) => handles,
+            Err(error) => {
+                // 尚未启动reader/logger；复制handle失败也须先回收已启动的子进程。
+                let deadline = Instant::now() + Duration::from_secs(9);
+                let reaped = combine_controlled_reap_results(
+                    job.terminate_and_wait_until(deadline),
+                    wait_controlled_child_until(&mut child, deadline),
+                );
+                return controlled_reap_result(
+                    Err(error.context("保留受管pipe取消句柄失败")),
+                    reaped,
+                    cancel.is_cancel_requested(),
+                )
+                .map(|_| ());
+            }
+        }
+    };
+    let ControlledLogDispatch {
+        logger: log,
+        stop: logger_stop,
+        dropped,
+        worker: logger_worker,
+    } = controlled_log_dispatch(log);
     log(format!("受管子进程已绑定Job：{}", child.id()));
-    let pipes: Vec<Box<dyn Read + Send>> = [
+    let tail = Arc::new(Mutex::new(ControlledOutputTail::default()));
+    let stop = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let pipes: Vec<(bool, Box<dyn Read + Send>)> = [
         child
             .stdout
             .take()
-            .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+            .map(|pipe| (false, Box::new(pipe) as Box<dyn Read + Send>)),
         child
             .stderr
             .take()
-            .map(|pipe| Box::new(pipe) as Box<dyn Read + Send>),
+            .map(|pipe| (true, Box::new(pipe) as Box<dyn Read + Send>)),
     ]
     .into_iter()
     .flatten()
     .collect();
     let threads: Vec<_> = pipes
         .into_iter()
-        .map(|pipe| {
+        .map(|(stderr, pipe)| {
             let logger = log.clone();
-            thread::spawn(move || {
-                for line in BufReader::new(pipe).lines().map_while(Result::ok) {
-                    logger(line);
-                }
-            })
+            let tail = tail.clone();
+            let stop = stop.clone();
+            ControlledReader::from(thread::spawn(move || {
+                read_controlled_pipe(pipe, stderr, logger, tail, stop)
+            }))
         })
         .collect();
-    let result = loop {
+    #[cfg(windows)]
+    let threads = {
+        let mut handles = pipe_handles.into_iter().flatten();
+        threads
+            .into_iter()
+            .map(|mut reader| {
+                reader.pipe = handles.next();
+                reader
+            })
+            .collect()
+    };
+    let result: Result<std::process::ExitStatus> = loop {
         if cancel.is_cancel_requested() {
-            let _ = child.kill();
-            let _ = child.wait();
-            break cancel.check().map_err(Into::into);
+            break Err(crate::operations::Cancelled.into());
         }
         match child.try_wait() {
-            Ok(Some(status)) if status.success() => break Ok(()),
-            Ok(Some(status)) => break Err(anyhow!("子任务失败（{status}）")),
+            Ok(Some(status)) => break Ok(status),
             Ok(None) => thread::sleep(Duration::from_millis(20)),
             Err(error) => {
-                let _ = child.kill();
-                let _ = child.wait();
                 break Err(error.into());
             }
         }
     };
-    drop(job);
-    for reader in threads {
-        let _ = reader.join();
+    let started = Instant::now();
+    // 所有回收步骤共用一个期限，预留一秒调度余量，不为每个reader/logger叠加10秒。
+    let cleanup_deadline = started + Duration::from_secs(9);
+    let mut reaped =
+        job.terminate_and_wait_until(cleanup_deadline.min(Instant::now() + Duration::from_secs(5)));
+    if reaped.is_ok() {
+        log(format!(
+            "受管Job已排空：pid={pid} active=0 elapsed_ms={}",
+            started.elapsed().as_millis()
+        ));
+    } else {
+        // 排空失败仍尝试回收本次父进程；不以 kill 成功替代整个 Job 的证明。
+        let _ = child.kill();
     }
-    result
+    let child_wait = wait_controlled_child_until(
+        &mut child,
+        cleanup_deadline.min(Instant::now() + Duration::from_secs(1)),
+    );
+    reaped = combine_controlled_reap_results(reaped, child_wait);
+    let readers = join_controlled_readers_until(threads, &stop, reaped.is_ok(), cleanup_deadline);
+    reaped = combine_controlled_reap_results(reaped, readers);
+    if reaped.is_ok() {
+        log(format!(
+            "受管Child与reader已回收：pid={pid} child_wait=true readers_joined=true"
+        ));
+    }
+    // 此时才关闭展示队列；仍活的reader只持非阻塞发送端，不能反向阻住收尾。
+    // logger若卡在用户回调，整个executor仍须有界返回，并要求旧宿主退出后恢复。
+    drop(log);
+    let logger_reaped = join_controlled_readers_until(
+        vec![logger_worker.into()],
+        &logger_stop,
+        reaped.is_ok(),
+        cleanup_deadline,
+    )
+    .context(format!(
+        "受管日志线程回收失败；累计省略展示日志数={}",
+        dropped.load(std::sync::atomic::Ordering::Relaxed),
+    ));
+    reaped = combine_controlled_reap_results(reaped, logger_reaped);
+    // 仅在完整回收后才保留原 Cancelled/进程错误；回收失败具有最高优先级。
+    let status = controlled_reap_result(result, reaped, cancel.is_cancel_requested())?;
+    cancel.check()?;
+    if !status.success() {
+        let detail = tail.lock().unwrap().failure_detail();
+        bail!("子任务失败（{status}）\n{detail}");
+    }
+    Ok(())
 }
 
 impl Engine {
@@ -1013,6 +1954,8 @@ impl Engine {
         let release = self.catalog.release(id)?.clone();
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
         crate::shell_update_protocol::assert_ready(root)?;
+        legacy_environment_repair::assert_ready(root, Some(&operation.cancel_token()))?;
+        gui_repair::assert_worker_reap_ready(root)?;
         if action != "recover_binding" {
             assert_regular_ready(root)?;
         }
@@ -1149,6 +2092,8 @@ impl Engine {
         use crate::operations::{Cancelled, OperationError, OperationStatus};
         self.reap();
         let release = self.catalog.release(id)?.clone();
+        legacy_environment_repair::assert_ready(root, Some(&operation.cancel_token()))?;
+        gui_repair::assert_worker_reap_ready(root)?;
         let result = engine_bridge::apply(
             root,
             &release,
@@ -1194,6 +2139,8 @@ impl Engine {
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
         crate::data_import::assert_binding_ready(root)?;
         crate::shell_update_protocol::assert_ready(root)?;
+        legacy_environment_repair::assert_ready(root, Some(&operation.cancel_token()))?;
+        gui_repair::assert_worker_reap_ready(root)?;
         assert_registration_ready(root, None)?;
         let recipe = crate::recipe::GuiRecipe::embedded()?;
         let log = self.logger.clone();
@@ -1261,6 +2208,8 @@ impl Engine {
         crate::data_import::assert_binding_ready(root)?;
         crate::shell_update_protocol::assert_ready(root)?;
         base_python_repair::assert_ready(root)?;
+        legacy_environment_repair::assert_ready(root, Some(&operation.cancel_token()))?;
+        gui_repair::assert_worker_reap_ready(root)?;
         assert_registration_ready(root, Some(id))?;
         operation.persist(&ctx)?;
         let cancel = operation.cancel_token();
@@ -1389,27 +2338,48 @@ impl Engine {
         } else {
             model::WorkspaceMutation::acquire(root, id)?
         };
-        crate::data_import::assert_binding_ready(root)?;
-        crate::shell_update_protocol::assert_ready(root)?;
-        base_python_repair::assert_ready(root)?;
-        assert_registration_ready(root, None)?;
-        if action == "recover_rebuild" {
-            gui_rebuild::assert_ready_except_recovery(
+        let cancel = operation.cancel_token();
+        let preflight = (|| -> Result<()> {
+            crate::data_import::assert_binding_ready(root)?;
+            crate::shell_update_protocol::assert_ready(root)?;
+            base_python_repair::assert_ready(root)?;
+            legacy_environment_repair::assert_ready(root, Some(&cancel))?;
+            gui_repair::assert_worker_reap_ready(root)?;
+            assert_registration_ready(root, None)?;
+            if action == "recover_rebuild" {
+                gui_rebuild::assert_ready_except_recovery_with_cancel(
+                    root,
+                    &release,
+                    transaction.context("缺少重建事务")?,
+                    Some(&cancel),
+                )?;
+            } else {
+                gui_rebuild::assert_ready_with_cancel(root, &release, Some(&cancel))?;
+            }
+            let rollback_recovery = (action == "recover_rollback")
+                .then(|| (&release, transaction.expect("恢复事务已校验")));
+            gui_binding_switch::assert_all_ready_with_cancel(
                 root,
-                &release,
-                transaction.context("缺少重建事务")?,
+                rollback_recovery,
+                Some(&cancel),
             )?;
-        } else {
-            gui_rebuild::assert_ready(root, &release)?;
-        }
-        let rollback_recovery = (action == "recover_rollback")
-            .then(|| (&release, transaction.expect("恢复事务已校验")));
-        gui_binding_switch::assert_all_ready(root, rollback_recovery)?;
-        if action != "recover_preserved" {
-            instances::assert_no_preserved_pending(root)?;
+            if action != "recover_preserved" {
+                instances::assert_no_preserved_pending(root)?;
+            }
+            cancel.check()?;
+            Ok(())
+        })();
+        if let Err(error) = preflight {
+            if error
+                .downcast_ref::<crate::operations::Cancelled>()
+                .is_some()
+            {
+                operation.persist(&ctx)?;
+                return finish_gui_lifecycle_result(&ctx, operation, Err(error));
+            }
+            return Err(error);
         }
         operation.persist(&ctx)?;
-        let cancel = operation.cancel_token();
         let recipe = crate::recipe::GuiRecipe::embedded()?;
         let validator = |environment: &Path| {
             gui_install::validate_environment_runtime(
@@ -1485,8 +2455,8 @@ impl Engine {
                 )
                 .map(|_| ()),
                 "recover_preserved" => {
-                    gui_rebuild::assert_ready(root, &release)?;
-                    gui_binding_switch::assert_ready(root, &release)?;
+                    gui_rebuild::assert_ready_with_cancel(root, &release, Some(&cancel))?;
+                    gui_binding_switch::assert_ready_with_cancel(root, &release, Some(&cancel))?;
                     instances::recover_preserved_controlled(
                         &ctx,
                         instance.context("请选择保留实例")?,
@@ -1581,7 +2551,7 @@ impl Engine {
         }
         let release = self.catalog.release(id)?;
         let ctx = model::WorkspaceMutation::acquire(root, id)?;
-        assert_regular_ready(root)?;
+        assert_regular_ready_for_gui_recovery(root, release, &operation.cancel_token())?;
         gui_repair::recover(&ctx, release, operation, &self.logger)
     }
     pub fn install_release_operation(
@@ -1599,6 +2569,92 @@ impl Engine {
         let release = self.catalog.release(id)?.clone();
         assert_regular_ready(root)?;
         gui_install::install(root, &release, operation, &self.logger)
+    }
+    /// 只验证并完成一个既有历史安装事务，不下载、不重建、不切换版本。
+    pub fn resume_legacy_install_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        journal_sha256: &str,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        crate::signed_catalog::authorize(root, id, "repair")?;
+        let _network = crate::network_policy::task_policy(root)?;
+        self.reap();
+        if self.lifecycle.has_process() {
+            bail!("请先停止受管训练器，再完成未结束的安装");
+        }
+        let catalog = Catalog::for_workspace(root)?;
+        let release = catalog.release(id)?;
+        let ctx = model::WorkspaceMutation::acquire_existing(root, id)?;
+        assert_regular_ready(root)?;
+        legacy_install_recovery::recover(&ctx, release, journal_sha256, operation, &self.logger)
+    }
+    /// 异步只读预览的正式接缝；不取得Engine互斥锁、不修改原安装事务。
+    pub(crate) fn preview_legacy_environment_repair_controlled(
+        root: &Path,
+        id: &str,
+        cancel: &crate::operations::CancelToken,
+        observer: Option<&crate::query_tasks::QueryObserver>,
+    ) -> Result<serde_json::Value> {
+        cancel.check()?;
+        crate::signed_catalog::authorize(root, id, "repair")?;
+        let catalog = Catalog::for_workspace(root)?;
+        let release = catalog.release(id)?;
+        let original = legacy_install_recovery::candidate(root, release)?
+            .context("没有可独立修复的未完成历史安装")?;
+        let plan = legacy_environment_repair::plan_controlled(
+            root,
+            release,
+            &original.journal_sha256,
+            cancel,
+            observer,
+        )?;
+        Ok(serde_json::to_value(plan)?)
+    }
+    pub fn repair_legacy_environment_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        journal_sha256: &str,
+        plan_sha256: &str,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        crate::signed_catalog::authorize(root, id, "repair")?;
+        self.reap();
+        if self.lifecycle.has_process() {
+            bail!("请先停止主程序，再修复其运行环境");
+        }
+        let catalog = Catalog::for_workspace(root)?;
+        let release = catalog.release(id)?;
+        let ctx = model::WorkspaceMutation::acquire_existing(root, id)?;
+        let cancel = operation.cancel_token();
+        assert_regular_ready_with_cancel(root, Some(&cancel))?;
+        legacy_environment_repair::execute(
+            &ctx,
+            release,
+            journal_sha256,
+            plan_sha256,
+            operation,
+            &self.logger,
+        )
+    }
+    pub fn recover_legacy_environment_operation(
+        &mut self,
+        root: &Path,
+        id: &str,
+        transaction: &str,
+        operation: &crate::operations::OperationHandle,
+    ) -> Result<()> {
+        crate::signed_catalog::authorize(root, id, "repair")?;
+        self.reap();
+        if self.lifecycle.has_process() {
+            bail!("请先停止主程序，再恢复其运行环境");
+        }
+        let catalog = Catalog::for_workspace(root)?;
+        let release = catalog.release(id)?;
+        let ctx = model::WorkspaceMutation::acquire_existing(root, id)?;
+        legacy_environment_repair::recover(&ctx, release, transaction, operation, &self.logger)
     }
     /// 只预取目录中固定身份的归档；成功仅代表缓存完整，不改变安装绑定或健康状态。
     pub fn prefetch_release(
@@ -1822,6 +2878,16 @@ impl Engine {
                     check_environment(&l, release).is_ok()
                 };
             versions.push(VersionView {
+                legacy_environment_repair: legacy_environment_repair::pending_transaction(
+                    root, release,
+                )?,
+                legacy_recovery: if owned {
+                    legacy_install_recovery::candidate(root, release)
+                        .ok()
+                        .flatten()
+                } else {
+                    None
+                },
                 support: release_support(release, &recipe),
                 managed_recipe: release.environment_recipe == "gui-cp310-win-x64-v1",
                 id: release.id.clone(),
@@ -2094,6 +3160,7 @@ impl Engine {
     }
     pub fn install_release(&mut self, root: &Path, id: &str) -> Result<Report> {
         let _network = crate::network_policy::task_policy(root)?;
+        assert_regular_ready(root)?;
         let release = self.catalog.release(id)?.clone();
         if release.environment_recipe == crate::recipe::GuiRecipe::embedded()?.id() {
             self.reap();
@@ -2407,9 +3474,13 @@ impl Engine {
                 .catalog
                 .releases()
                 .iter()
-                .map(|r| {
+                .map(|r| -> Result<VersionView> {
                     let current = r.id == release.id;
-                    VersionView {
+                    Ok(VersionView {
+                        legacy_recovery: legacy_install_recovery::candidate(root, r).ok().flatten(),
+                        legacy_environment_repair: legacy_environment_repair::pending_transaction(
+                            root, r,
+                        )?,
                         support: release_support(r, &recipe),
                         id: r.id.clone(),
                         channel: r.channel.clone(),
@@ -2426,9 +3497,9 @@ impl Engine {
                             .iter()
                             .any(|i| i.release_id == r.id && i.healthy_at.is_some()),
                         managed_recipe: r.environment_recipe == "gui-cp310-win-x64-v1",
-                    }
+                    })
                 })
-                .collect();
+                .collect::<Result<Vec<_>>>()?;
             report = Some(Report {
                 root: root.to_string_lossy().into(),
                 uv: false,

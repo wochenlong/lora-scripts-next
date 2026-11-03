@@ -85,6 +85,37 @@ pub(crate) fn begin_gui_rebuild_preview(
     )
 }
 
+#[tauri::command]
+pub(crate) fn begin_legacy_environment_repair_preview(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    timeout_seconds: Option<u64>,
+) -> Result<QueryAcceptance, String> {
+    let clock = QueryClock::start(Duration::from_secs(timeout_seconds.unwrap_or(360)))
+        .map_err(|e| e.to_string())?;
+    if state.shutting_down.load(Ordering::Acquire) {
+        return Err("启动器正在退出".into());
+    }
+    let root = if root.trim().is_empty() {
+        state.default_root.to_string_lossy().into_owned()
+    } else {
+        root.trim().to_owned()
+    };
+    admit(
+        &state,
+        QueryTarget {
+            root,
+            release_id,
+            engine_id: "gui".into(),
+            action: QueryAction::LegacyEnvironmentRepairPreview,
+            rebuild: false,
+            scope: QueryScope::Plan,
+        },
+        clock,
+    )
+}
+
 fn admit(
     state: &Runtime,
     target: QueryTarget,

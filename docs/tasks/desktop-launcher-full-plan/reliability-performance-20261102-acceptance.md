@@ -1,14 +1,59 @@
-# 启动器可靠性与性能返修：定向沙盒验收设计
+# 启动器可靠性与性能修复：针对性沙盒验收矩阵
+
+## 当前审阅与执行基线（v0.29）
+
+R0/R1 done，R2/R3 in progress，R4–R6 pending；仅 RP-EXIT-R0/R1 已签，专项与全局验收均 incomplete。candidate10 已构建冻结并完成 v7 绑定；定向 7/0/0、完整 Rust 434/0/15、fmt 与严格 Clippy 通过，仅属于对应冻结输入。真实预览 legacy-v7-preview-only-01 在确认前 fail，错误为“恢复候选计划与固定根/编译锁或原文摘要不符”；具体失败字段尚未定位。confirmed=false、无工具写 invoke、未产生 worker；真实关闭/退出、自然 exit0/Job 排空及独立失败保护比较通过，不能授业务、worker/reader 取消或性能通过。
+
+本层为 v0.29 文档归一化，保留既有执行授权和 Goal，不创建、重置或标记工具 Goal 完成。本轮只整理文档。下方 v0.26 历史快照、旧阶段记录及“08 未构建/10 待构建”等描述仅是原时间点事实，不能作为现行操作指令。07/execution-ledger.json 和 continuation-current.md 尚停在 10 构建中；本次保留原件，最新事实以 candidate10 admission、v7 binding、native-report 与 host-status 为准。
+
+当前唯一下一步：先只读拆分 candidate10 预览的组合校验拒绝，逐字段比较历史 plan 自摘要、schema/kind/rebuild、release/engine/profile、固定 recipe/lock、四 write_roots、profile_writes 与 main_env_fallback，定位具体不匹配项并落盘。当前只证实组合校验拒绝，不能预断是摘要、根或锁错误。定位后按原授权最小修复及正反例合同→当前输入质量门→冻结后继候选与显式 supersedes 新批次→正式只读预览；预览真正通过后才续三取消、强杀恢复及 A/B/C，继而完成 R2–R6。禁止删除/隔离保留候选、改历史 plan/journal、伪造 receipt/pending 或直接刷新原失败时钟重跑。
 
 ## 计划元数据
 
-- Plan ID：`desktop-launcher-reliability-20261102`；附件ID：`acceptance`；Version：`0.15-executing`；Last updated：2026-11-03 12:35，Asia/Shanghai。
-- Execution readiness：`executing`；Current active phase：R2 可取消引擎检查任务；R0/R1 done，R3 in progress，R4–R6 pending。RP-EXIT-R1已签；R2–R4门未签，旧文档快照仅历史。
-- Canonical progress file：沿用 [00_总控目标索引.md](00_总控目标索引.md)。本文件是新返修计划的验收附件，不设第二份总进度。
-- Related handoff：none；历史输入为上一轮[正式报告](full-acceptance-20261101-report.md)与[原任务书](full-acceptance-20261101-task-book.md)。本轮依据为[新任务书](reliability-performance-20261102-task-book.md)、[开工门](reliability-performance-20261102-readiness.md)和[新Goal](03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md)。
-- Current branch：计划目标为 `feat/desktop-launcher`；执行者在 R0 记录真实分支、HEAD、脏文件与工具版本，不把本文目标当作现场检查结果。
-- 稳定用例：42个CASE模板；R0四行仅基线pass。Rust10＋13＋33、Python30＋13各有模块证据；前端33/33含31项store＋2项实际Activity SFC，并已统一build-02。terminal-rollback-04仅单合同控制语义pass；原生/四引擎/性能未闭，模板数、模块断言数和实测实例数分别统计。
-- 用户已通过active Goal授权并继续完整R0–R6。本附件保存当前实测合同与已验证/待验证边界，文档更新不替代执行。当前已有一个真实恢复主路径成功及终态回退控制语义合同，尚无全部阶段或训练结论；阈值是执行目标，各CASE取得实际证据后才更新。
+- Plan ID：`desktop-launcher-reliability-20261102`；Version：`0.29`；更新：2026-11-03（Asia/Shanghai；v0.29 文档归一化）。
+- 唯一总控：[00_总控目标索引.md](00_总控目标索引.md)；详细阶段：[任务书](reliability-performance-20261102-task-book.md)；前提/门：[开工复盘](reliability-performance-20261102-readiness.md)；[Goal提示词](03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md)。
+- 分支`feat/desktop-launcher`，HEAD本轮实核`d409b00bac3bcb3e7ef56b424c8946f240e0a38f`；R0/R1 done、R2/R3 in progress、R4–R6 pending，R2–R4门未签。Execution readiness：`executing`；本批同步规划与既有实测证据，不新增产品实测或改变工具Goal。
+- 现行42个CASE原主表及旧8失败/10按钮/52单元映射保留。新legacy环境/Job/可见阶段是参数，不增模板，不授父CASE通过；旧module/candidate05/06各自保留身份。
+- 最新事实：见本文件开篇、RP-CONTROL-IDENTITY-01参数及唯一总控；10 预览业务 fail、失败保护/退出限定 pass；组合校验的具体失败字段待定位。以下v0.26质量及工具段落为历史身份。
+
+### 历史质量结果与仍须补验的工具参数（v0.26）
+
+历史pipe-reader-cancel-03失败保留；reader04/full02/Clippy02沿原输入。`uv-resource-fmt-02` exit0；`uv-resource-full-rust-03` 实际415通过/0失败/15忽略，两者均在本次错误出口修复之前。`legacy-errors-focused-01` 为7通过/2失败/2忽略，两个新增夹具问题已改但未复跑；四文件错误合同修复后的六合同、整树fmt/完整Rust/严格Clippy均待验证，不能沿用旧通过。 07原生not-run，08未构建；新合同不可代原生。
+
+下面四项工具防误判已由v4实现并通过23 Node＋23 Python合同、9条Node语法检查与Python AST；18份源文件前后SHA不变。验证回执为`<run>/R2/execution-resume-20261103-03/native-tool-preparation-v4/verification-01/verification.json`。仍绑定07，待08接入并重新验证/冻结后做真实入口；四行原生状态继续not-run。沿用CASE-R2-12/R6-03，不增加模板或四引擎重型轮次。
+
+| 参数/CASE | 后续正式步骤与通过条件 | 当前状态/证据要求 |
+| --- | --- | --- |
+| legacy-pending-blocks-start / CASE-R2-12 | A独立env修复成功但原安装journal仍待续办时，断言`start_available=false`，首页显示待续办主动作或启动禁用；不以尝试启动服务验证保护 | not-run；A终态快照、首页截图、原journal SHA；A通过不替B续办 |
+| trusted-click-before-close / CASE-R2-12、CASE-R6-03 | C在关闭WebView前冻结正式切换/启动/停止的点击轨迹并逐项断言`isTrusted`；页面销毁后缺失/空数组不能授pass | not-run；可信事件与点击前后UI/IPC/HTML API语义证据，退出证据分列 |
+| resume-prelaunch-protection / CASE-R2-12、CASE-R6-03 | B首次副作用前比host冻结的`prelaunch_state/prelaunch_profiles`及控制身份；启动刷新后的漂移不能被采成新的before | not-run；host→首次快照→续办→退出保护差异；发现漂移fail |
+| recovery-record-protection / CASE-R2-12、CASE-R6-03 | A成功及postclose按精确transaction核`original-journal.json`、`protected-controls.json`、`original-tree.json`，分别匹配plan三个预期SHA；原env仅核精确普通目录存在，不新增全树扫描 | not-run；三小记录路径/预期与实际SHA、普通目录/非链接证明；丢失或漂移fail |
+
+## 历史文档交付快照（v0.26-review）
+
+本轮整理问题、优化方案、针对性实测与Goal提示词；文档工作不追加产品修复、构建、沙盒操作、commit或push。既有修复、执行授权、active Goal及阶段进度保留；已在途外部工具的轻合同收口单列，不冒充产品验收。
+
+- **问题范围：** 恢复自阻挡、检查无反馈且不能取消、重装确认窗迟出、维护与启停慢；补原8失败行、AI Toolkit/Anima Fast共10遗漏按钮。T1–T5、R0–R6、42 CASE、52引擎展开及26条历史未闭项不缩减。
+- **质量事实：** `uv-resource-fmt-02` exit0；`uv-resource-full-rust-03` 实际415通过/0失败/15忽略，两者均在本次错误出口修复之前。`legacy-errors-focused-01` 为7通过/2失败/2忽略，两个新增夹具问题已改但未复跑；四文件错误合同修复后的六合同、整树fmt/完整Rust/严格Clippy均待验证，不能沿用旧通过。
+- **新增P1与方案：** `ControlledProcessReapFailed`在通用终态、deadline/rollback、旧resume watchdog及持久化失败出口曾被改写。四文件已作最小修复，尚待验证；正常落盘保持`Failed/worker_reap_failed`，持久化失败保typed错误并说明未保存、保留旧attached现场，不伪报恢复成功。详任务书RP-REAP-ERROR-01。
+- **候选与工具：** candidate07已构建但固定uv EXE的67,598,848 B超过旧32MiB门，产品原生not-run；candidate08未构建。v4原46项工具合同通过仍绑定07；v5的verification-03已通过31项Node＋67项Python纯合同、14条Node语法及16份Python AST/compile检查，工具源码前后SHA一致、v4原件未变；仅证明外部工具。08身份接入、复验冻结与产品原生均未验，不可直接原生。回执为`<run>/R2/execution-resume-20261103-03/native-tool-preparation-v5/verification-03/verification.json`。
+- **执行边界：** R0/R1 done，R2/R3 in progress，R4–R6 pending；仅RP-EXIT-R0/R1已签。专项和全局验收均incomplete。不训练、不加载/下载训练模型、不恢复产品下载预算；测试资源上界仅约束本次Agent操作。
+
+本次八文档原稿、保护SHA、文档校验及审阅证据：`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/planning/review-plan-v026-20261103T104556Z/`。实际执行台账：`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/run-20261102T130200Z/R2/execution-resume-20261103-06/execution-ledger.json`；原审查及修复回执与测试原件分别保留，不覆盖旧失败。既有远端核验回执为同目录`remote-before.json`：2026-11-03T10:34:46Z的远端/本地均为`d409b00bac3bcb3e7ef56b424c8946f240e0a38f`，本次文档交付未新发起网络Git。
+
+### RP-CONTROL-IDENTITY-01：真实预览失败的修复与针对性补验
+
+归属CASE-R2-12、CASE-R3-01/05及CASE-R6-03，42模板与四引擎重型轮次保持。
+
+| 问题/实现要求 | 针对性验证与证据 | 当前结果 |
+| --- | --- | --- |
+| 产品合法控制记录被误拒 | commands.jsonl/stdout.log/stderr.log、operation snapshot.json数组按精确路径/schema识别，snapshot载荷由清单绑定；不得删日志/隔离原件补绿 | 08真实fail保留；09已通过该采集阶段，非整案通过 |
+| 原文Vec数字数组放大 | 新plan版本2完整读取后保存路径/类型/长度/SHA；旧plan版本1保原算法，未知版本拒绝 | 09定向与完整质量通过；47,658,004 B真实控制已采集，最终保护序列化未达 |
+| 紧凑投影与旧事务兼容 | 同长度篡改/增删/版本/边界与未知/链接拒绝合同；v1不迁移旧intent，v2摘要绑定新格式 | 09输入定向53/0/0、完整428/0/15、fmt/严格Clippy pass；不外推后继兼容改动 |
+| 失败预览与正式退出 | 错误窗真实取消→窗隐藏→精确query终态→设置正式退出；业务、安全、worker/reader证明分列 | 09两真实trusted点击、自然exit0/Job0及独立失败安全pass；业务fail，无worker，不授reader取消验收 |
+| 历史恢复候选的保全所有权 | 精确历史plan自摘要/固定锁recipe/四write_roots/prior_state/old-binding/当前已验证state及receipt/恢复代次全闭合；原记录完整字节纳入保护，受原预算/链接/未知/冲突拒绝约束 | 历史候选最小兼容已进入 10 冻结输入质量验证；真实预览仍被组合校验拒绝，具体字段待查，仅保全认领，不授健康/ready |
+| 历史候选兼容的定向补验 | 正式中断重建→恢复旧绑定保候选；错缺plan/摘要/锁/recipe/旧绑定/恢复代次/路径/owner/链接仍拒绝；漂移改变保护或拒绝；无payload扫描/状态写入/健康授予，正常receipt/pending规则保持 | 10 定向 7/0/0、完整 434/0/15、fmt/Clippy 与构建通过；v7 真包预览 fail。逐字段诊断及后继正反例/原生待做，归 CASE-R2-12，不增模板/重型轮次 |
+| 原案时钟及失败保留 | 原360/1800时钟、配置/报告/journal保持；新实现独立batch明确supersedes，不刷新retry、不复造pending | v6 合同、09 与 10 的独立绑定保留；08/09/10 业务 fail 各自保持，安全 pass 不改变业务结论 |
 
 ## 目标、范围与事实基线
 
@@ -59,6 +104,78 @@ R0 生成 fixture manifest：四引擎健康 receipt/绑定/代次、GUI 健康�
 
 不增加42模板。适用条件相同的同包真实session可以多CASE复用，逐条保留断言、身份和Pointer；4完整＋4取消指独立query实例，不把内部安装校验当query/UI通过。原生可见变化才需要截图，模块工具合同不要求界面图。具体复用、存储和核账规则见[任务书](reliability-performance-20261102-task-book.md#实测精简与复用规则)。
 
+### 旧安装续办的针对性实测参数（保留原attempt身份）
+
+这些是现有CASE的参数展开，42模板不增加。candidate06已有确认取消/验证中取消通过及成功续办失败；只给相应参数授结果，父CASE及服务链仍未闭。
+
+| 参数 | 现有CASE | 正式操作与必须断言 | 证据与当前状态 |
+| --- | --- | --- | --- |
+| legacy-confirm-cancel | CASE-R2-12；R3-05交互共用 | 点“检查并完成安装”→查看目标及说明→取消确认；任务未开始且原journal/state/profiles/receipt集合不变 | candidate06真实GUI取消确认通过；见legacy-resume-cancel-native-01及取消独核；原journal/保护集合保持 |
+| legacy-verify-cancel | CASE-R1-06；R2-07/11/12 | 再确认，在真实复验阶段取消；记录接受/扫描停止/Job回收三段计时；无journal提交或其他控制写入，终态唯一 | candidate06基础Python验证中取消pass-with-scope；受理≤37.8126ms、终态≤97.6737ms，原journal不变、退出保护/自然Job/CDP通过；其他扫描/worker时限未证 |
+| legacy-complete-reopen | CASE-R2-12；R5-05 | 正式复验成功，仅精确原journal转committed；operation succeeded且cancel_requested=false，其他控制/资料/全部installed receipt不变；关闭后复核，重开候选消失且current dev不变 | legacy-resume-success-native-01：确认至失败45925.9555ms，最后为依赖导入exit1，业务fail；原journal/state/profiles/receipt独核保持；成功提交/重开not-run；后续同参数诊断已证实缺pip及依赖未装，须独立修复，不重复诊断 |
+| legacy-service | CASE-R2-12；R4-04；R5-07 | 上一项成功后正式启动，HTML/版本或健康API语义正确，网页按钮可见；停止后按钮、监听及自有进程回收 | HTTP/API响应、单调钟、按钮截图、端口/Job；not-run；之后才补Anima运行态取消 |
+| legacy-refusals | CASE-R1-02/05/06 | 错root/版本/journal SHA、真实lease/其他pending、环境验证失败或晚到取消不能误提交；Core公开入口小夹具证明，原生成功不能替拒绝分支授pass | 原入口/错误/控制差异及源码身份；已有模块合同，新增原生范围按前四行 |
+
+模块360秒watchdog不含全部租约/catalog等前置；本原生案从正式点击计360秒外部门并预留回收，不因此把未知同步OS I/O标为即时可取消。不写journal/receipt制造通过，不直接invoke跳过正式用户入口；不得改用户原根。原Anima取消`query-anima-fast-cancel-ready-01/02`及对应旧检查attempt失败原件（不指成功的pipe-fix-full-rust-02）保留。
+
+### 最新失败补测参数（不新增CASE）
+
+| 参数/归属 | 实测要求 | 当前结论及证据 |
+| --- | --- | --- |
+| probe-error-detail / CASE-R2-07/11/12 | 同解释器/参数受控诊断；真实非零退出时保留有界stderr原因，超大输出有截断标记，排空未证时worker_reap_failed最高优先；完成reader/Job回收后再区分用户取消与期限失败；原journal和保护集合不变。修复后新成功attempt完成正式续办及服务链 | 业务fail保留：同参数诊断已证实缺pip/依赖未装；Logger/有界尾部定向修复通过，真实GUI错误可见性尚未证；见environment-probe-log-readonly-review.md及失败保护独核。模块合同与真实GUI错误可见性分列 |
+| visible-stage / CASE-R2-05/07、R4-05 | 真实两个阶段→日志页/返回页，任务事件到可见阶段≤1s，轻操作3样本；旧task/代次不得覆盖 | not-proven：取消事件已verifying但原截图仍“准备中”；取消功能通过不代表阶段显示及时 |
+| main-preview-two-package / CASE-R3-01/02/05 | 仅修正工具类型识别与精确保全证明，核真实双lease后新attempt；实际两包故障→准备窗/取消/Escape/重开/归焦→精确恢复与退出保护 | r301 attempt fail：helper在备份/删除前误拒旧Intent，无fault receipt；产品预览/交互未测到，不能给产品pass/fail。后继工具不得统一放行无status/running或改历史原件 |
+
+### 旧环境独立修复与Job恢复的针对性参数（v0.20引入，v0.21核对）
+
+当前旧main依赖缺失已实证。设计附件`<run>/R3/legacy-environment-repair-design-20261103.md`已有产品增量，reader04及full02/Clippy02仅原输入通过，uv三个资源合同已通过，修前fmt02/full03已通过，修后完整质量未验；v4合同已过但原生闭环未验；普通legacy install会覆盖原journal，禁止用于补绿。下列参数展开既有CASE，42模板及四引擎4完整＋4取消保持。
+
+| 参数 | 现有CASE | 正式操作/必须断言 | 当前结果 |
+| --- | --- | --- | --- |
+| legacy-offline-resource | R2-07/11/12；R5-05 | 固定release/ZIP requirements与81资源、Python/uv/锁/展开上界；缺资产/错SHA/计划漂移/外来配置及双lease冲突写前拒绝；原env/journal和保护控制逐字不变 | requirements外部锚及外部前检02只读通过；RP-LEGACY-UV-01三个新合同3/3通过，fmt02/full03修前通过，修后六合同/完整质量待验；正式预览与原生not-run |
+| legacy-offline-build | R2-12；R5-05/07 | 正式准备窗→计划→独立修复；最终路径备份/无seed离线构建→可信静态校验→pip check/精确版本/import；registry/current dev、journal原SHA、源/receipt/资料不变；后续原SHA resume独立提交 | not-run；任务受理/阶段/取消采用既有任务系统，不能同步长锁UI |
+| legacy-three-cancel | R1-06；R2-07/11/12 | venv创建、依赖sync、import三个真实阶段分别显式取消；记录受理/扫描停止/Job active0三段；排空后才能恢复原env，原journal不变，终态唯一；无关进程继续活 | not-run；不能拿candidate06基础Python取消代验 |
+| legacy-kill-recover | R1-02/05/06；R2-11/12；R6-03 | 构建中强杀本事务宿主，命名Job或等强持久归属证明后代排空，再新进程正式显式恢复、清单/marker/两端无碰撞、幂等；失败worker_reap_failed→needs_attention且不移动原件 | not-run；双lease可重取/PID不存在不够；无法证明只授安全拒绝，强杀正向仍未通过 |
+| legacy-preserve-collision | R1-02/05/06；R4-05 | 小fixture覆盖每个rename前后、坏marker/未知目录/保护漂移/恢复目标碰撞；仅精确自事务例外，其他pending均挡；未知不删除、不覆盖 | full02原输入八个rename窗口及幂等合同通过；生产拼装、真实碰撞与离线环境未验 |
+| legacy-resume-service-return | R2-12；R4-04；R5-05/07 | 修复成功不提交journal；原SHA既有resume成功→退出保护独核→重开→选main→系统浏览器HTML/API语义200→停止→切回dev；绑定/receipt/原资料保持 | not-run；完成后再补Anima运行态取消01/02后继attempt |
+| worker-reap-failure | R2-07/11；R1-06；R6-03 | 正常exit和取消的helper留下后代时，executor返回时，预先持有的Child/后代进程handle均已SIGNALED，Job的ActiveProcesses=0（不要求Job handle自身SIGNALED）；受控失败契约稳定码优先于Cancelled及普通超时，六出口及未保存边界按任务书RP-REAP-ERROR-01逐项验证；所有旧自动/重开后显式恢复分支均受持久失败屏障保护；管道阻塞reader与阻塞logger分列参数，不能只凭Job0判成功 | GUI屏障14/14等合同保留原身份；blocked-sync-reader原03失败、后继04及full02同名合同通过；错误出口四文件已改但六合同未复跑；持久化失败须保typed、旧记录原文与明确未保存，其余缺口not-run，不能由管道单案授整链通过；故障注入不声称发生真实OS回收故障 |
+| job-lifecycle / persistent-barrier | R1-02/05/06；R2-11；R6-03 | 每命令独立Job，launching→attached-before-resume→reaped均持久，session精确匹配；有额外持柄时强杀后新进程Open成功并排空，无额外持柄且可信attached时精确notfound可按生命周期证明销毁；launching未attached即使notfound仍拒绝。模拟回收失败后重开，正式recover/旧resume保持needs_attention，排空证据齐全后才受控恢复 | full02原输入三个命名Job生命周期合同已通过；持久屏障/会话/宿主代次合同各留身份。生产拼装与真实强杀恢复not-run，不外推全部通过 |
+| legacy-stage-attribution | R1-06；R2-07/11/12 | venv/sync/import以attached worker的PID/FILETIME、Job/session和实际命令行核阶段；不只认phase/log。错过记tool_coverage=unsupported，业务CASE保持blocked或not-run，不能用其他阶段或cancelled终态补绿 | not-run；v5纯工具98项合同及语法检查通过；08接入/冻结未验，不可原生 |
+| legacy-drop-job-before-kill | R1-06；R2-11/12；R6-03 | 强杀前释放工具外部产品Job查询句柄，只保提前获取的精确host/worker进程句柄；≤10秒两者SIGNALED；工具不得TerminateJob。fallback分列fail；额外持柄仅小合同 | not-run；不能由有持柄小合同授真实无持柄强杀通过 |
+| legacy-first-recovery-ui-idempotency | R1-02/05/06；R2-12；R6-03 | 新宿主首次恢复经真实按钮/确认窗；成功后才对同一事务重复正式recover_legacy_environment IPC，补充幂等且write_invoke_used_by_harness=true；前后保护不变 | not-run；首入口不允许直调IPC代验，不能沿v4全局false |
+
+附加边界仍展开上述worker-reap-failure及job-lifecycle参数，不增加CASE：Job active0不等于宿主reader/logger退出。构造受控阻塞reader，核有界返回及requires_new_host持久宿主PID/创建时间；同一活宿主拒恢复，新宿主先证明旧代退出再证明Job排空。跨session、原Intent SHA不匹配、缺侧录的旧匿名dirty及其他事务继续拒绝且零恢复写；命名Job回收不能代替宿主退出证明。既有部分合同已有结果；管道04限定通过不覆盖其他取消执行器，未覆盖的合同及原生分支保持not-run。
+
+每个新参数均保存task/operation/transaction/plan SHA、原journal和保护集合前后原文SHA、EXE/资源身份、阶段时间、截图及Job/监听回收；旧失败不覆盖。独立env修复/取消/强杀恢复各案外部门360s含回收，小合同/最小helper单段120s；不得拆段绕单案外门。原生测试仅在可信资源/状态机/Job最小前提通过后实施，先保唯一失败原件及可恢复备份。
+
+### RP-LEGACY-UV-01：正式资源门与候选接入参数
+
+| 参数/CASE | 实际输入与针对性断言 | 当前状态与后续证据 |
+| --- | --- | --- |
+| trusted-uv-identity / R2-07/12 | 真实固定uv EXE为67,598,848 B，ZIP为23,236,992 B；精确长度与内置SHA均核对。坏SHA、短/长或读取中增长、取消/期限继续拒绝，其他32MiB/总树限制保持 | 07前检01拒绝；uv定向三个合同已编译通过；fmt02/full03修前通过；修后六合同/完整质量未验。新增固定资源合同与已有增长/取消参数按影响补，不把32MiB错误扩散为全局放宽 |
+| missing-archive-zero-write / R2-12 | 正式resources函数缺归档，在intent、env搬移、解释器启动前拒绝；私有树/原journal/资料前后集合SHA不变 | 新增合同已在uv-resource-focused-01通过；原始输出、fixture/源码SHA与完整前后差异 |
+| equal-length-bad-sha / R2-12 | 保持归档长度但更改内容，正式resources拒绝；不能只按存在/大小放行，所有私有树零写 | 新增合同已在uv-resource-focused-01通过；与缺归档分别留断言 |
+| production-resource-preview / R2-12 | 08正式只读计划核81资源、Python/uv/锁、安装生成上界及备份/暂存，绝不写intent或移动env；前检02外部结果仅作输入依据 | product_plan=not-run；前检02为6.185s、81 wheel、压缩378,332,343 B、ZIP展开799,556,886 B/12,974条目及Python4,184文件，不授正式计划pass |
+| candidate-tool-binding / R2-12、R6-03 | uv资源合同及错误出口六合同/修后质量→08构建/冻结→v5全部候选身份接入及专用取消/kill工具核验→复验/冻结→正式计划→三取消/强杀恢复→A成功/B提交/C服务；08 EXE/实际worker/资源身份全链一致 | 07构建pass、原生not-run；08未构建；v4原46合同pass但绑定07，不可运行。每次变更新attempt，禁止混包或伪造08回执 |
+| native-cancel-kill-tools / R1-06、R2-07/11/12 | 历史v4 A仅支持success；核验/补齐已有v5的venv/sync/import三个取消与强杀/新宿主恢复工具，接08后复验冻结。在原journal仍pending时依次执行这些故障案，每案Job/reader排空、原env/journal恢复、保护核对且无未清needs_attention才继续；全部通过才A成功/B提交/C服务。B后不得手改pending复现；截图及身份齐全 | v5纯工具合同98项通过，08接入与原生覆盖not-run；A/B/C成功不能授这些分支通过；仍沿既有legacy-three-cancel/legacy-kill-recover参数 |
+
+上述参数不增加42模板。新小合同≤120s、正式旧env案外门360s含回收；新增重下载0。原失败与07/v4原身份保留。
+
+### RP-PIPE-01：管道取消修复与端到端回收参数
+
+| 项目 | 固定要求 |
+| --- | --- |
+| 归属 | CASE-R2-11 / blocked-sync-reader，关联R2-07、R1-06、R6-03；不新增模板，不扩大四引擎重案 |
+| 已观察失败 | `R2/rust-integration-01/pipe-reader-cancel-03/console.txt`：取消后1008.0771ms，stop已置位、writer仍存活、`unjoined=true`；0/1，exit101，结果fail |
+| 最小输入 | 真实Windows ChildStdout管道；本机Rust1.94实际走重叠I/O（ReadFileEx）。writer持有输出句柄且不发stop；记录reader进入read及取消API真实返回值/错误，不得先杀writer使reader被动EOF |
+| 后继结果 | fix04为1/1、exit0，reader在10.6999ms实际join、Windows995、unjoined=false且writer仍活；该毫秒值只属于04冻结输入。最新full02同名测试通过，04和full02各保留源码SHA |
+| 修复后判定 | 精确原测试reader返回小于2秒，实际join且`unjoined=false`，writer在reader返回时仍活；已join的可解释读取取消错误单列，未知错误失败；随后stop/helper退出及无关进程存活另证 |
+| 已核诊断与方案 | 仅CancelSynchronousIo无法取消当前重叠读取；修复为每pipe保留OwnedHandle副本、重复CancelIoEx并兼容原同步取消，在原期限内真实join。复制失败须排空Child/Job；后续按影响核竞争/logger等未覆盖参数，不重做已证实定位，不放宽时限或detach |
+| 整链回归 | 受影响的正常尾部/非零错误/连续输出/阻塞logger/共用deadline合同；新包至少一次正式取消→两reader退出→Child wait→Job active0→GUI终态，产品回收目标≤10s |
+| 恢复保护 | 未join保持worker_reap_failed/needs_attention，禁止同宿主恢复目录；新宿主先证旧代退出，再证Job排空；强制宿主Job清理仅为测试收尾，不算产品pass |
+| 资源及证据 | 新attempt目录`<run>/R2/pipe-reader-fix-<attempt>/`，单段≤120s，无下载/训练；原失败只读，保存源码SHA、取消API结果、单调钟与回收；无UI合同可无截图，正式GUI必须截图 |
+| 当前门 | 管道合同限定pass；真实IPC、其他执行器、Job/事务前提及RP-EXIT-R2仍未闭。前提有证才继续相关环境变更实测，不由合同通过直接签整门 |
+
 ## 分阶段稳定用例矩阵
 
 测试类型缩写：U=Unit（单元）、C=Contract（契约）、I=Integration（集成）、G=Gray（新旧对照）、R=Real（真实资源）、Z=Zero-Short（新根用户入口）。每行证据按原包/模块/原生身份分列；R0仅基线，R1业务恢复门已签且时延维度仍未验；R2 Anima停服full单配置通过，取消/其他引擎未验；R3原生未闭，R4性能/嵌套取消未验，R5/R6 not-run。
@@ -105,22 +222,24 @@ R1原生验收前置：host已扣除预检/CDP实际耗时并注入`suite_budget
 | CASE-R2-04 | U/C/I/R | 有归属权限的显式取消共享任务；仍可取消且实际停止后，所有订阅收到同一cancelled终态。取消与成功竞争时以权威终态线性化，已成功返回already-terminal；重复取消幂等，错ID不影响他案。只读检查没有安装提交段，不制造commit-in-progress长段；修改操作的原子边界由R1-06独立验证 | 正反/竞争响应、任务终态、回收计时 | not-run |
 | CASE-R2-05 | I/R | 检查中切引擎、切日志/设置页、回到原页；任务继续可观测、无重启扫描，返回页恢复状态；窗口退订与退出策略按实现合同验证 | 页面连拍、事件序列、扫描启动次数 | not-run |
 | CASE-R2-06 | U/C/I/R | 在安全受控边界改变 instance/generation/绑定，再让旧任务完成；旧结果标陈旧，不覆盖新代次、不产生旧计划确认；不同目标不错误单飞 | 代次前后、旧任务终态、UI/计划身份 | not-run |
-| CASE-R2-07 | C/I/R | 在基础Python完整核验、原守卫枚举及控制记录读取中分别取消；≤1s接受、≤5s停止，无worker继续启动、完整guard保持。32MiB边界/metadata后增长/增长中取消或期限按下方参数，Catalog验签段补测 | 屏障/计数、原错误、控制状态SHA与进程审计 | partial（读取层合同pass）；真实整链及时延not-run |
+| CASE-R2-07 | C/I/R | 在基础Python完整核验、原守卫枚举及控制记录读取中分别取消；≤1s接受、≤5s停止，无worker继续启动、完整guard保持。32MiB边界/metadata后增长/增长中取消或期限按下方参数，Catalog验签段补测 | 屏障/计数、原错误、控制状态SHA与进程审计 | partial；读取层合同pass，candidate06旧安装基础Python取消参数真实通过；query及其他阶段/整链时延未证 |
 | CASE-R2-08 | C/I/R | 独立自有进程持有真实工具缓存 lease，让 query 进入等待后取消/期限到；等待原因可见、可取消，不使用无关 token 无限等 | lease 证据、等待/取消事件、零新 worker | not-run |
 | CASE-R2-09 | U/C/I/R | 在完整树遍历以及大文件分块 SHA 两个位置取消；分块循环响应，≤5s停止扫描，所属 Job≤10s回收；只读树保持不变 | 两参数实例、块/文件计数、读差值、Job证据 | not-run |
 | CASE-R2-10 | U/C/I/R | 总期限在启动前/worker运行两路径到达；准确标timeout，不能伪装cancelled或integrity failure；排队/加入共享任务/重订阅不刷新绝对期限。准备/输入/输出/回收都在同一期限；保留最后扫描计数与原因 | deadline事件、两终态、各阶段用时/剩余量、回收结果 | not-run |
-| CASE-R2-11 | C/I/R | 断开本案IPC/事件、关窗或worker异常，坏帧/超大输出/stdin不消费/未关输出管道均有终态与有界缓冲。分别记录产品worker和测试宿主的Child wait、stdin关闭、两reader join、Job前后active、是否强制终止及关闭句柄补清理；实际编译由新宿主承载，保留compile-02回收失败 | 各异常身份、错误图、逐项资源证明；宿主/产品分列 | partial；旧微型桥/宿主及compile-03受控清理原身份保留；Anima停服full正常成功分支的worker wait/stdin关闭/readers join/Job0与宿主自然退出已验，异常/断连等分支及取消回收时限仍未验 |
+| CASE-R2-11 | C/I/R | 断开本案IPC/事件、关窗或worker异常，坏帧/超大输出/stdin不消费/未关输出管道均有终态与有界缓冲。分别记录产品worker和测试宿主的Child wait、stdin关闭、两reader join、Job前后active、是否强制终止及关闭句柄补清理；实际编译由新宿主承载，保留compile-02回收失败 | 各异常身份、错误图、逐项资源证明；宿主/产品分列 | partial；旧微型桥/宿主及compile-03受控清理原身份保留；Anima停服full正常分支已有原件；blocked-sync-reader原03失败保留，后继04及当前full02同名合同通过。full02宿主需强制回收，不能授产品自然退出；其他异常/断连/整链取消时限未闭，R2门未签 |
 | CASE-R2-12 | C/I/R | 网页服务运行时做只读检查；另一目标允许的独立维护进行时仍可查询。跨目标并发按设计限流，等待有原因，真正冲突修改仍拒绝 | HTML/API、目标冲突域、任务和UI状态 | not-run |
 
 旧Rust前置证据：r4-scan-01的8/8及r1-core-regression-05的12pass/1专属lease helper ignored保留原身份；前者Job受控1→0、后者自然0→0。最新final-cancel-green-01的7/7、exit0、源稳定、Job受控1→0已验证真实OperationManager取消/提交竞争、原子写与Core成功收口；不授全部门后工作≤10秒或原生恢复通过。
 
 最新合计资源合同：combined-budget-green-01的19/19、exit0、源稳定、Job自然0→0；boundary本次非目标实际SHA树统计＋候选metadata预检；正式SHA/preservation用fresh非目标metadata统计＋候选实际读取余量；validate前后observe各用本次非目标实际SHA统计，不跨probe，原4GiB/50,000节点不变。修前3案RED保留；只授模块保护，性能/整链待验。
 
-当前v0.15证据边界：R0/R1 done，RP-EXIT-R1按正式恢复缺陷及保护范围签收；R2可取消引擎检查任务active（in progress），R3必要前置in progress，R4–R6 pending。candidate05下native04真实UI取消留下合法committing事务，新进程正式GUI recover04 succeeded、intent committed并绑定g1208b56f57f3e752，正式IPC重复恢复也succeeded。两原生suite/host均pass，资料/控制保护及自然Job/CDP回收通过。当前full Rust344pass/0fail/15ignored，60份Rust/Cargo输入与当前及candidate05一致。R1-04按参数证据pass-with-boundary，不夸全GUI矩阵；R1-06最终CAS合同及实际命中原生window通过，分块取消/性能时限仍属R2/R4，未外推。Anima Fast停服full单配置实测suite/host通过，首反馈1.9ms、任务ID可见上界17.1ms、完整检查保守285776.1982–285935.7808ms，worker/readers回收及控制/资料保护通过；仅授该配置，取消与余三引擎未验。旧native02/03失败保留，recover03禁止。R2–R4门未签，嵌套Operation取消盲区仍待修。R1阶段Git保存待做，当前增量未提交/未push；整个专项/既有active Goal尚未完成。 原生04只授真实命中window；当前R1审计与阶段门见本run audit02/completion02，恢复/幂等已验，R2/R4时限未授pass。
+历史v0.18取消/成功续办attempt保留原candidate06身份：取消受理上界37.8126ms、终态上界97.6737ms；成功续办从确认到失败45925.9555ms，原journal、profiles及receipt保持。后续诊断已查明缺pip/依赖未装；full02原输入为412/0/15、strict Clippy02 exit0，原生错误/阶段显示与成功续办仍未证。R1业务门与原包签收保持，≤5s/≤10s时限留R2/R4，不将旧unknown或旧full03当当前结论。
 
-#### R2/R3 针对性参数与当前证据边界（v0.15）
+#### R2/R3 针对性参数及历史v0.16证据身份
 
-R4嵌套取消与阶段计量追加参数：新发现的R4嵌套取消盲区，尚未修复/实测：gui_registration_integrity普通Python verify、gui_entry_probe原/副本source verify、runtime_view递归复制、Operation控制记录读取（scan_observation目前仅Query TLS）、engine_namespaces控制读取/摘要、instances内存树语义及probe静态文件读取，逐项贯通外层Operation token，并在真实首块/首节点屏障触发取消；清理阶段不中断。计量分plan、before-observe、可信闭包、validator、复制、副本校验、entry probe、after-observe、最终门。暂不删除execute→finish第二validator/probe，before/after完整扫描保留；并入现有CASE-R1-06/R2-07/R2-09/R4-05参数，不新增CASE或重型轮次。这组全链指标继续阻断R4/R5和最终交付。 R1-06业务已验与时延not-run分列，阈值不降；R2 Anima停服full一配置6 checks通过，不授取消/其他引擎。
+同版v0.16增量证据：本run `R2/harness-service-03/tool-delivery-03.json`（11 Node/3 Python及语法pass）；`R2/query-anima-fast-cancel-ready-02/native-report.json#/service_preparation/installation_snapshot`，原始snapshot `0002-installation-snapshot-after-root-refresh.json`、`0003-owned-service-pre-start-diagnostic.json`、`0004-owned-service-pre-start-diagnostic.png`。正式precondition_failed保持fail；无服务/无query，控制/profile全等，宿主正常产品exit0/自然Job0/CDP回收不授业务通过。旧源审计`R2/harness-service-03/legacy-journal-readonly-audit-03.json`引用`launcher-full-acceptance-20261101/versions-01/native-report.json`；原分支pass不再继承为全安装成功，旧原件不改。
+
+R4嵌套取消与阶段计量追加参数：R4嵌套取消第一批已实现并获实际Cargo 355pass/0fail/15ignored：gui_registration_integrity的Python controlled verify、gui_entry_probe两次source controlled verify及64KiB静态读取、runtime_view仅probe副本受控复制、scan_observation显式Option token控制读取、instances私有load_with_cancel在两处纯读取链路接入。Query取消/期限优先，32MiB缓冲硬限及增长块追加前拒绝保持；控制读取最多额外一个64KiB块，静态读取最多额外1字节，勿混称。普通load/save和必须完成的保全不继承旧Operation token；JSON解析/validate暂存结果后检查停止原因，不能中断内部计算。该增量已进入candidate06但未commit，尚无本批原生时延证据；engine_namespaces控制读取/摘要、其他控制记录/Registry读取及instances内存树语义取消仍待后批，清理阶段不中断。计量分plan、before-observe、可信闭包、validator、复制、副本校验、entry probe、after-observe、最终门。暂不删除execute→finish第二validator/probe，before/after完整扫描保留；并入现有CASE-R1-06/R2-07/R2-09/R4-05参数，不新增CASE或重型轮次。这组全链指标继续阻断R4/R5和最终交付。 R1-06业务已验与时延not-run分列，阈值不降；R2 Anima停服full一配置6 checks通过，不授取消/其他引擎。
 
 R2多根宿主29/29、query工具四合同与语法通过；R3 main-preview工具16/16合同/两语法通过。R2当前另有Anima停服full一配置真实通过，证据在本run query-anima-fast-full-01/native-report.json；R3 main-preview真实GUI未跑。工具自测不授业务通过，Anima该配置不覆盖共享/取消/其他引擎。
 
@@ -136,7 +255,7 @@ R2多根宿主29/29、query工具四合同与语法通过；R3 main-preview工�
 | R2-07/10/11 | 上述增长中触发同observer取消/期限，原cancelled/timed_out优先，不被完整性/JSON错误吞掉；Catalog历史验签虽有4MiB/64 receipts上界，须测量并按需补同token检查点 | 增长取消/期限读层合同pass；Catalog段/端到端时延未验；同步OS I/O硬阻塞边界保留 |
 | R0-03、R2-11、R6-03 | Cargo exit0与Job回收分别判定；新宿主持有Job时显式回收并验证active_after0。利用合法源码修改的必要编译验证，禁止清target强造；若调用终止记受控清理，不记自然排空 | compile-02旧回收失败保留；compile-03编译exit0、Job active1→0且termination_requested=true，受控清理通过，不能称自然排空；生产产品链仍待验 |
 
-已有原件：`R2/python-tests-01/query-01`30/30、`legacy-02`13/13；`R2/rust-integration-01/{scan-01,bridge-01,tasks-01}`分别10/13/33通过，7桥进程案已显式include-ignored，微型worker回收不代替生产链。`R2/frontend-tests-03`27/27为旧store身份；当前`R3/cancel-retry-01/after-01`33/33（31 store＋2实际Activity SFC）、`build-02`统一构建与`evidence-verification-01.json`已通过，npm0与外层GBK打印1分列。`frontend-tests-03/build-01`未执行，不再把它当待跑入口。compile-03受控清理通过；terminal-rollback-03长路径失败保留，04单合同仅终态控制语义。各新参数以新attempt留原件，生产IPC/原生/健康及真实提交恢复未授pass。
+已有原件：`R2/python-tests-01/query-01`30/30、`legacy-02`13/13；`R2/rust-integration-01/{scan-01,bridge-01,tasks-01}`分别10/13/33通过，7桥进程案已显式include-ignored，微型worker回收不代替生产链。`R2/frontend-tests-03`27/27为旧store身份；当前`R3/cancel-retry-01/after-01`33/33（31 store＋2实际Activity SFC）、`build-02`统一构建与`evidence-verification-01.json`已通过，npm0与外层GBK打印1分列。`frontend-tests-03/build-01`未执行，不再把它当待跑入口。compile-03受控清理通过；terminal-rollback-03长路径失败保留，04单合同仅终态控制语义。各新参数以新attempt留原件，R1业务恢复保留candidate05已签身份；candidate06生产IPC/原生/健康及全链时延未授pass。
 
 ### R3 重装预览弹窗
 
@@ -159,7 +278,7 @@ R2多根宿主29/29、query工具四合同与语法通过；R3 main-preview工�
 | CASE-R4-01 | U/C/I/G/R | 同 R0 fixture 完整检查 after 1次，记录 Python/receipt/环境/源码/额外文件阶段文件数、逻辑哈希字节与进程 I/O 差值；重复检查数据保持真实，不遗漏异常 | before/after 可比性、阶段指标、完整检查终态 | not-run |
 | CASE-R4-02 | I/G/R | 相同最小 GUI 源码缺损做 after 1次正式修复，≤15min目标；非目标/资料集合 SHA不变，必须修复后正式核验完成 | 缺损清单、修复任务、阶段读量/时间、SHA | not-run |
 | CASE-R4-03 | I/G/R | 同 fixture 保留旧实例重建 after 1次，≤25min目标；新旧实例/绑定/恢复记录正确，不通过删旧目录提速 | 重建任务、保护核验计数、实例与资料manifest | not-run |
-| CASE-R4-04 | C/I/G/R | 同机串行取3次轻概况启动→HTML/API200→停止样本；目标启动≤60s、终态到按钮≤500ms；保留启动前完整验证，停止后端口关闭、按钮恢复 | 点击/首帧/ready/200/stop时间、PID端口、截图 | not-run |
+| CASE-R4-04 | C/I/G/R | 同机串行取3次轻概况启动→HTML/API200→停止样本；目标启动至HTML/API语义200且打开网页入口可见≤60s，终态到按钮≤500ms；保留启动前完整验证，停止后端口关闭、按钮恢复 | 点击/首帧/ready/200/stop时间、PID端口、截图 | not-run |
 | CASE-R4-05 | U/C/I/G/R | 在检查→计划→确认→执行链路测同操作扫描次数；再引入文件/代次/计划变化，必须检出并拒绝旧计划；跨操作缓存不得绕过完整性保护；验证候选＋非目标e树合计MAX_TREE/50k：boundary候选metadata预检、正式SHA实际读取共享余量、fresh observe且不跨probe；覆盖合计超限、刚好边界、增长读、取消优先与未知文件；两层合计预算19/19模块合同已通过，生产链扫描计量/性能未验，不增预算 | scan identity、计数、异常检测与拒绝结果 | partial（19/19仅模块；生产链/性能未验） |
 
 ### R5 最终同包定向沙盒回归
@@ -203,6 +322,21 @@ R5-03优先复用本轮R5-05已保留的合规fixture，但每项记录实际输
 | ENG-04 | 异常事务恢复分支未闭合 | R5-05、R2-06、R5-06 |
 | ENG-09 | 独立重装预览/取消/确认仍有失败 | R3-02…05、R5-03/05；每引擎真实重装完成单列 |
 
+### 旧未闭变体的补充映射（v0.17）
+
+R0/issue-map.json保持原件，不按其中planned_case_ids自动关闭历史条目。下列变体复用现有42模板，但要取得对应业务入口的精确证据；恢复冲突通过不能替代版本切换/删除保护，只读取消通过不能替代提交阶段取消。
+
+| 旧未闭项 | 新CASE参数 | 必须操作与断言 | 当前判定 |
+| --- | --- | --- | --- |
+| APP-VER-008 | CASE-R1-04、R5-06的版本切换参数 | 在自有夹具分别构造目标结构缺损、真实占用，从正式切换按钮触发；拒绝有原因，当前绑定及非目标保持；恢复有效条件后再操作成功 | not-run；不凭恢复入口的冲突合同授通过 |
+| APP-VER-011 | CASE-R5-06的删除保护参数 | 从正式版本删除入口请求删除当前版本，明确拦截且目录/登记/绑定无删除；不为测试解除保护 | not-run |
+| APP-ENV-003 | CASE-R2-12的主程序只读参数 | 真实主服务运行时从主程序检查入口完成只读检查，网页/API继续可用；安装控制与资料保持，无隐式修复 | not-run；引擎只读不能代验主程序 |
+| APP-LOG-023 | CASE-R1-06及R5-07的日志监视区参数 | 从集中日志任务区对修改操作发取消，覆盖可取消阶段与提交收尾；重复取消幂等，已终态控件禁用；按accepted/commit-in-progress/已终态真实响应核pending/receipt/资料及回收，不把只读query取消结果套用 | not-run；可复用同包既有真实修改session，不额外增加重建轮次 |
+| APP-HOME-015 | CASE-R4-04、R5-07的停止失败重试参数 | 用自有服务的安全受控故障点形成stop_failed，从正式重试按钮停止；错误/可重试反馈、权威终态、端口与按钮正确恢复 | not-run；若无法安全构造则blocked，正常停止成功不关闭该分支 |
+| ENV-LEGACY-01…03 | historical-gap（历史缺口） | 非受管旧配方的正向执行不属于本轮受管legacy原journal收尾；保持原包、原状态与原因 | 本专项不授通过，不因新增续办入口自动关闭 |
+
+失败/受阻按具体变体保留，不删旧失败。新增参数采用轻量夹具或既有同包session，不对四引擎扩增重型安装/扫描轮次。
+
 ## 52 引擎单位展开规则
 
 必须生成四个 engine ID：`kohya`、`anima-fast`、`ai-toolkit`、`diffsynth`；每个分别生成 ENG-01 至 ENG-13，主键为 `<candidate_sha>/<engine_id>/<ENG-ID>/<variant>`。不能以当前选择引擎或一个 task_id 复用于四个目标。
@@ -224,6 +358,39 @@ R5-03优先复用本轮R5-05已保留的合规fixture，但每项记录实际输
 | ENG-13 占用复核 | R5-06：计划前/计划后目标占用、其他引擎无冲突；R2-12允许只读 |
 
 每个52单位的 variants 单独给结果及证据；一部分variant通过时单位最多partial，不因主路径通过清空剩余分支。AI Toolkit 与 Anima Fast 原各5个未操作按钮为 ENG-06…10，本次每一个必须有独立实际输入证据；Kohya历史操作与待复核单元也不能移植成新包pass。若 GPU/驱动故障验证不适用，写清用户本轮“不真实训练”的边界，不能顺手声称 GPU能力通过。
+
+## 历史未闭项处置台账（v0.20补齐，v0.21保留）
+
+来源为FINAL06冻结的`evidence-bundle/adjudication/combined-controls-227.json`，以下恰为24条partial、1条blocked和1条pending-review。上方原27条映射及42CASE主表保持，不增加重型测试轮次。表中CASE是后续取证位置，不表示已经通过；共用session必须取得本入口的实际输入、状态与精确报告Pointer。未覆盖variant保持历史结果，`repair_campaign_complete`不自动变成全局`acceptance_complete`。
+
+| 原ID | 原状态 | 本轮处置/可复用CASE | 不能据此关闭的缺口 |
+| --- | --- | --- | --- |
+| APP-HOME-011 | partial | R4-04/R5-07新根启动；旧main链另记 | 旧89合法环境可启动仍为历史缺口 |
+| APP-HOME-015 | partial | R4-04/R5-07的stop_failed重试参数 | 正常停止不能代验失败重试 |
+| APP-HOME-020 | partial | R1-06/R5-07共用修改session，取得首页取消输入 | 日志页取消不能代验首页按钮及其终态 |
+| APP-VER-008 | partial | R1-04/R5-06版本切换拒绝/成功 | 必须从本入口验证结构坏、真实占用 |
+| APP-VER-011 | partial | R5-06当前版本删除保护 | 恢复冲突拒绝不能代验删除保护 |
+| APP-ENV-001 | partial | R3-01多坏包、R4-02源码修复 | 半装无binding、目录丢失、Python坏等未测variant保留 |
+| APP-ENV-003 | partial | R2-12主程序服务运行时只读检查 | 独立引擎只读不能代验主程序 |
+| APP-LOG-023 | partial | R1-06/R5-07修改取消、提交收尾、重复/终态 | 只读检查取消不能代验修改提交 |
+| APP-BASE-001 | partial | R2-05/06慢响应切页/迟到隔离可共用 | 未取得App完整Report早晚到证据则保持partial |
+| ENV-MAIN-04 | partial | R4-02同session观察修复中与终态 | 预览错误不等于修复执行失败；未测失败分支保留 |
+| ENV-ADV-03 | partial | R4-02非目标保护可复用非当前目标变体 | 未取得“非当前修源码且不切版”证据则保留，不另起重案 |
+| ENV-LEGACY-01 | partial | historical-gap（历史缺口）保留 | 非受管旧配方不能由受管legacy journal收尾代验 |
+| ENV-LEGACY-02 | partial | historical-gap（历史缺口）保留 | 同上，保持原包/原因 |
+| ENV-LEGACY-03 | partial | historical-gap（历史缺口）保留 | 同上，保持原包/原因 |
+| ENG-03 | partial | R5-04四目标源码缺损/取消/确认 | 依赖变体仅按实际代表证据授结果，其他目标保留 |
+| ENG-05 | partial | R5-05最少异常/不可恢复代表 | 其他目标未做仍保留具体缺口 |
+| ENG-06 | partial | R5-03四目标收起再打开 | 必须逐目标实际输入 |
+| ENG-07 | partial | R5-03四目标高级选项鼠标/键盘 | 不能以同名控件跨目标代验 |
+| ENG-08 | partial | R5-02/03、R2-12完整/允许并发只读 | 各服务状态按4完整＋4取消及具体variant记录 |
+| ENG-10 | partial | R5-03/04真实import probe取消/确认 | 不授训练、模型、GPU/驱动异常分支通过 |
+| ENG-11 | partial | R5-04/06计划详情展开/收起 | 逐目标核内容与真实计划 |
+| ENG-12 | partial | R3-05/R5-03/06取消/Esc/Tab/归焦 | 未操作的具体弹窗不能由代表目标代验 |
+| ENG-13 | partial | R5-06计划前后真实占用/其他目标无冲突 | 不恢复网页服务全局排斥 |
+| TRUST-01 | partial | historical-gap（历史缺口）保留 | 原测试会话分支不属本专项，不以资源查询代验 |
+| GUI-LIFE-07 | blocked | 当前源码不可达，保持历史blocked | Core rollback合同不能声称对应UI已到达 |
+| APP-HOME-014 | pending-review | R5-07取消启动，显式补旧ID映射 | 必须最终包首页实际取消输入及Child/Job/监听结果 |
 
 ## 测试分层与阶段适用映射
 
@@ -274,23 +441,8 @@ R5-03优先复用本轮R5-05已保留的合规fixture，但每项记录实际输
 
 ## 决策、风险与执行状态
 
-- Verified facts：R0/R1 done，RP-EXIT-R1按正式恢复缺陷及保护范围签收；R2可取消引擎检查任务active（in progress），R3必要前置in progress，R4–R6 pending。candidate05下native04真实UI取消留下合法committing事务，新进程正式GUI recover04 succeeded、intent committed并绑定g1208b56f57f3e752，正式IPC重复恢复也succeeded。两原生suite/host均pass，资料/控制保护及自然Job/CDP回收通过。当前full Rust344pass/0fail/15ignored，60份Rust/Cargo输入与当前及candidate05一致。R1-04按参数证据pass-with-boundary，不夸全GUI矩阵；R1-06最终CAS合同及实际命中原生window通过，分块取消/性能时限仍属R2/R4，未外推。Anima Fast停服full单配置实测suite/host通过，首反馈1.9ms、任务ID可见上界17.1ms、完整检查保守285776.1982–285935.7808ms，worker/readers回收及控制/资料保护通过；仅授该配置，取消与余三引擎未验。旧native02/03失败保留，recover03禁止。R2–R4门未签，嵌套Operation取消盲区仍待修。R1阶段Git保存待做，当前增量未提交/未push；整个专项/既有active Goal尚未完成。 stage-evidence-audit-02核full344的60份Rust/Cargo与当前/candidate05一致、日志SHA一致；Rust全套Job受控1→0，原生04自然回收，勿混称。
-- Active assumptions：新沙盒可供四引擎完整安装与暂存/回滚；正式故障点能安全构造恢复与异常分支；进程读字节有可用采集权限。均在R0验证，不预授pass。
-- Locked decisions：原始报告、失败截图与receipt不篡改；新CASE另记；不训练；不降完整性；不以其他引擎或旧包证据补绿；只在自有范围取消与回收。
-- Open questions：阈值已获执行授权，同机完整检查≤300s、重建≤25min实际可达性仍待测；R2独立查询管理器接口设计已落盘，实现已落，仍须验证共享取消与终态竞争；历史未计流量/峰值仍unknown。
-- P1风险：总期限未覆盖启动前验证；跨generation结果误用；共享取消误伤其他订阅；真实lease被过宽豁免；为提速削弱保护；未达阈值却按日志ready授予通过。任一存在且无明确延期决策，不能签最终验收通过。
-- P2风险：四引擎维护需要较多磁盘和网络；计时受缓存/杀毒/磁盘影响；fault fixture无法安全构造。记录资源和不可比边界，不擅自更换更小配方冒称原目标完成。
+当前事实、阶段台账、已核代码/候选身份统一见[任务书](reliability-performance-20261102-task-book.md)，先读其 v0.29 基线，本附件不建立第二份进度。R0/R1 done，R2/R3 in progress，R4–R6 pending；旧失败和各attempt身份保留，父CASE不能从一个参数通过推成全绿。
 
-| 稳定阶段 | 进度 | 测试状态 | 本文要求的阶段输出 |
-| --- | --- | --- | --- |
-| R0 基线与测量 | done | pass（仅基线） | 六探针、身份/fixture/采集/资源及9次原生导航；R0/stage-completion.json |
-| R1 恢复自阻挡 | done | pass-with-boundary，RP-EXIT-R1已签 | 主恢复旧证据＋当前full344参数/lease/CAS＋native04真实取消/GUI恢复/IPC重复；R1-04不夸全GUI，时限留R2/R4；stage-completion-02.json |
-| R2 可取消引擎检查任务 | in progress | active，Anima停服full单配置suite/host及6 checks通过 | 反馈1.9ms、受理上界17.1ms、完整检查保守≤285.936秒、worker/readers/Job回收与资料控制保护；其余配置及取消未验 |
-| R3 重装预览弹窗 | in progress | 旧33/33/build-02原身份保留；target_binding VNode4/4/frontend-build-01 pass，真实GUI未闭 | main-preview工具16/16合同/两语法仅授工具；主/引擎准备窗/焦点/首反馈仍需原生证据 |
-| R4 扫描与启停性能 | pending | 当前合计预算19/19模块GREEN；自然Job0→0 | 真实同机前后计量/完整性与原生结果待补，不提前签门 |
-| R5 最终同包定向沙盒回归 | pending | not-run | 四引擎52单位分支、新根服务/资料/回收 |
-| R6 交付 | pending | not-run | 差距报告、截图图集、验包与清理记录 |
+P1包括新独立环境事务/Job恢复、未闭全链取消/时延及扫描保护；其最小前提和退回路径见[开工复盘](reliability-performance-20261102-readiness.md)。文档可审阅不等于这些前提通过；缺资源/未知归属/控制漂移/回收失败保现场，不进入依赖它的危险写入。性能未达不得自行删CASE或提高时限。
 
-每阶段验收仅更新主控进度与新证据索引；阶段push基线由主控执行并记录远端SHA，不把“push成功”当作阶段业务通过。若R0测量证明目标不现实，原目标与失败样本保留，提出含原因、影响和替代测法的CR；变更经既有授权/审阅流程落定后才能变更完成门。
-
-下一步动作：后续续接的唯一下一动作：由Root按原阶段授权核对R1精准变更集并保存commit/普通push及远端SHA回执；本轮文档审核不执行git保存、GUI、构建或新测试。R1业务门通过不等于远端阶段基线已保存，含R2/R3必要前置源码不代表其阶段通过。Anima full原案已结束，不等待exec96794、不重复该案；42CASE、七阶段、4完整＋4取消、原阈值/资源、旧8失败行/10未操作按钮/52单元保持。
+本次只同步规划，不运行原生、不改 Goal。唯一后续执行动作见任务书开篇 v0.29 与末尾；10 已构建并预览失败，先逐字段定位组合拒绝，后继候选质量/冻结/正式预览真正通过后，才续原故障/修复链。原 CASE、性能阈值、42 主表及旧映射保持。

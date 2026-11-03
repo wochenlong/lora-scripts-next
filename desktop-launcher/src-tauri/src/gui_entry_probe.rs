@@ -183,15 +183,41 @@ fn hash(bytes: &[u8]) -> String {
     format!("{:x}", Sha256::digest(bytes))
 }
 
-fn read_static(path: &Path) -> Result<Vec<u8>> {
-    let metadata = fs::symlink_metadata(path)?;
+fn read_static(path: &Path, cancel: &CancelToken) -> Result<Vec<u8>> {
+    cancel.check()?;
+    let metadata = fs::symlink_metadata(path);
+    cancel.check()?;
+    let metadata = metadata?;
     if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_HTTP_BYTES {
         bail!("可信静态资源不是16MiB内的普通文件");
     }
+    let input = File::open(path);
+    cancel.check()?;
+    let mut input = input?;
     let mut bytes = Vec::new();
-    File::open(path)?
-        .take(MAX_HTTP_BYTES + 1)
-        .read_to_end(&mut bytes)?;
+    let mut block = [0; 65_536];
+    loop {
+        cancel.check()?;
+        // 即使metadata之后增长，也最多读取16MiB+1，且扩容前拒绝超限。
+        let wanted = ((MAX_HTTP_BYTES - bytes.len() as u64) + 1).min(block.len() as u64);
+        let count = input.read(&mut block[..wanted as usize]);
+        #[cfg(test)]
+        if let Ok(count) = &count {
+            if *count != 0 {
+                tests::after_static_read(path, *count);
+            }
+        }
+        // 保持真实取消优先于同一读取的I/O错误、增长超限或长度变化。
+        cancel.check()?;
+        let count = count?;
+        if count == 0 {
+            break;
+        }
+        if count as u64 > MAX_HTTP_BYTES - bytes.len() as u64 {
+            bail!("可信静态资源读取超过16MiB");
+        }
+        bytes.extend_from_slice(&block[..count]);
+    }
     if bytes.len() as u64 != metadata.len() {
         bail!("静态资源读取期间长度变化");
     }
@@ -467,19 +493,19 @@ pub(super) fn probe_profile(
     }
     let layout = ctx.layout();
     layout.guard_path(environment)?;
-    crate::source_integrity::verify(layout, release)?; // 缺release.json时也直接核固定实体。
+    crate::source_integrity::verify_controlled(layout, release, cancel)?; // 缺release.json时也直接核固定实体。
     let network = OfflineProxy::start()?;
-    let view = crate::runtime_view::prepare_probe(layout, transaction)?;
+    let view = crate::runtime_view::prepare_probe(layout, transaction, cancel)?;
     if let Some(profile) = profile {
-        crate::runtime_view::seed_probe_profile(layout, &view, profile)?;
+        crate::runtime_view::seed_probe_profile(layout, &view, profile, cancel)?;
     }
     let mut copied = layout.clone();
     copied.app = view.run.clone();
-    crate::source_integrity::verify(&copied, release)?;
+    crate::source_integrity::verify_controlled(&copied, release, cancel)?;
     let index_path = view.run.join("frontend/dist/index.html");
-    let index = read_static(&index_path)?;
+    let index = read_static(&index_path, cancel)?;
     let asset_path = asset_from_index(std::str::from_utf8(&index)?)?;
-    let asset = read_static(&view.run.join("frontend/dist").join(&asset_path))?;
+    let asset = read_static(&view.run.join("frontend/dist").join(&asset_path), cancel)?;
     cancel.check()?;
     let listener = TcpListener::bind(("127.0.0.1", 0))?;
     let port = listener.local_addr()?.port();
@@ -575,6 +601,154 @@ pub(super) fn probe_profile(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::operations::{CancelReceipt, Cancelled};
+    use std::{
+        cell::RefCell,
+        rc::Rc,
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    static NEXT_STATIC_FIXTURE: AtomicU64 = AtomicU64::new(0);
+    type StaticReadHook = Box<dyn FnMut(&Path, usize)>;
+    thread_local! {
+        static STATIC_READ_HOOK: RefCell<Option<StaticReadHook>> = const { RefCell::new(None) };
+    }
+    pub(super) fn after_static_read(path: &Path, bytes: usize) {
+        STATIC_READ_HOOK.with(|slot| {
+            if let Some(hook) = slot.borrow_mut().as_mut() {
+                hook(path, bytes);
+            }
+        });
+    }
+    struct StaticHook;
+    impl StaticHook {
+        fn new(hook: impl FnMut(&Path, usize) + 'static) -> Self {
+            STATIC_READ_HOOK.with(|slot| assert!(slot.replace(Some(Box::new(hook))).is_none()));
+            Self
+        }
+    }
+    impl Drop for StaticHook {
+        fn drop(&mut self) {
+            STATIC_READ_HOOK.with(|slot| {
+                slot.borrow_mut().take();
+            });
+        }
+    }
+    fn static_fixture(name: &str) -> PathBuf {
+        let root = std::env::var_os("NEXT_TRAINER_P6_TEST_ROOT")
+            .map(PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+            .join(format!(
+                "nt-static-{name}-{}-{}-{}",
+                std::process::id(),
+                SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_nanos(),
+                NEXT_STATIC_FIXTURE.fetch_add(1, Ordering::Relaxed)
+            ));
+        fs::create_dir(&root).unwrap();
+        root
+    }
+
+    #[test]
+    fn static_precancel_wins_before_metadata_without_creating_or_changing_files() {
+        let root = static_fixture("precancel");
+        let sentinel = root.join("production-sentinel");
+        fs::write(&sentinel, b"unchanged").unwrap();
+        let missing = root.join("missing-static.js");
+        let cancel = CancelToken::new();
+        assert_eq!(cancel.request(), CancelReceipt::Accepted);
+        let error = read_static(&missing, &cancel).unwrap_err();
+        assert!(error.downcast_ref::<Cancelled>().is_some());
+        assert!(!missing.exists());
+        assert_eq!(fs::read(sentinel).unwrap(), b"unchanged");
+    }
+
+    #[test]
+    fn static_cancel_at_first_real_file_block_stops_reading_and_allows_fresh_retry() {
+        let root = static_fixture("first-block-cancel");
+        let path = root.join("asset.js");
+        let original = vec![b'x'; 3 * 65_536 + 7];
+        fs::write(&path, &original).unwrap();
+        let cancel = CancelToken::new();
+        let reads = Rc::new(RefCell::new(Vec::new()));
+        let observed = reads.clone();
+        let expected_path = path.clone();
+        let hook_cancel = cancel.clone();
+        let hook = StaticHook::new(move |actual_path, count| {
+            assert_eq!(actual_path, expected_path);
+            observed.borrow_mut().push(count);
+            assert_eq!(observed.borrow().len(), 1, "取消后不得再读下一块");
+            assert_eq!(hook_cancel.request(), CancelReceipt::Accepted);
+        });
+        let error = read_static(&path, &cancel).unwrap_err();
+        drop(hook);
+        assert!(error.downcast_ref::<Cancelled>().is_some());
+        assert_eq!(*reads.borrow(), vec![65_536]);
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert_eq!(read_static(&path, &CancelToken::new()).unwrap(), original);
+    }
+
+    #[test]
+    fn static_growth_after_metadata_is_bounded_before_buffer_extension() {
+        let root = static_fixture("growth-limit");
+        let path = root.join("asset.js");
+        fs::write(&path, vec![b'x'; 2 * 65_536]).unwrap();
+        let observed_bytes = Rc::new(RefCell::new(0usize));
+        let counts = observed_bytes.clone();
+        let grow_path = path.clone();
+        let hook = StaticHook::new(move |actual_path, count| {
+            assert_eq!(actual_path, grow_path);
+            let mut bytes = counts.borrow_mut();
+            if *bytes == 0 {
+                fs::OpenOptions::new()
+                    .write(true)
+                    .open(actual_path)
+                    .unwrap()
+                    .set_len(MAX_HTTP_BYTES + 65_536)
+                    .unwrap();
+            }
+            *bytes += count;
+        });
+        let error = read_static(&path, &CancelToken::new()).unwrap_err();
+        drop(hook);
+        assert!(error.to_string().contains("读取超过16MiB"));
+        assert_eq!(*observed_bytes.borrow() as u64, MAX_HTTP_BYTES + 1);
+        assert_eq!(fs::metadata(&path).unwrap().len(), MAX_HTTP_BYTES + 65_536);
+    }
+
+    #[test]
+    fn static_cancel_wins_over_same_read_length_change_and_retains_original_rejections() {
+        let root = static_fixture("length-cancel");
+        let path = root.join("asset.js");
+        fs::write(&path, vec![b'x'; 2 * 65_536]).unwrap();
+        let cancel = CancelToken::new();
+        let hook_cancel = cancel.clone();
+        let hook = StaticHook::new(move |actual_path, _| {
+            fs::OpenOptions::new()
+                .write(true)
+                .open(actual_path)
+                .unwrap()
+                .set_len(1)
+                .unwrap();
+            assert_eq!(hook_cancel.request(), CancelReceipt::Accepted);
+        });
+        let error = read_static(&path, &cancel).unwrap_err();
+        drop(hook);
+        assert!(error.downcast_ref::<Cancelled>().is_some());
+        assert_eq!(fs::metadata(&path).unwrap().len(), 1);
+        let empty = root.join("empty.js");
+        fs::write(&empty, b"").unwrap();
+        assert!(read_static(&empty, &CancelToken::new()).is_err());
+        assert!(read_static(&root, &CancelToken::new()).is_err());
+        let oversized = root.join("oversized.js");
+        File::create(&oversized)
+            .unwrap()
+            .set_len(MAX_HTTP_BYTES + 1)
+            .unwrap();
+        assert!(read_static(&oversized, &CancelToken::new()).is_err());
+    }
 
     #[test]
     fn listener_release_requires_successful_empty_snapshot() {

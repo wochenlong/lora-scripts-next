@@ -12,15 +12,16 @@ const props = defineProps<{
   shared: boolean
   connectionError: boolean
   download: string
+  legacyRepair?: boolean
 }>()
 const emit = defineEmits<{ cancel: []; confirm: [] }>()
 const cancelButton = ref<HTMLButtonElement>()
 const preparing = computed(() => props.phase === 'preparing')
 const status = computed(() => ({
-  preparing: t('正在准备重新安装…'),
-  ready: t('安装计划已准备好'),
-  blocked: t('暂时无法重新安装'),
-  error: t('安装计划准备失败'),
+  preparing: props.legacyRepair ? t('正在准备修复运行环境…') : t('正在准备重新安装…'),
+  ready: props.legacyRepair ? t('修复计划已准备好') : t('安装计划已准备好'),
+  blocked: props.legacyRepair ? t('暂时无法修复运行环境') : t('暂时无法重新安装'),
+  error: props.legacyRepair ? t('修复计划准备失败') : t('安装计划准备失败'),
   cancelled: t('已取消'),
 }[props.phase]))
 
@@ -37,8 +38,8 @@ function trapFocus(event: KeyboardEvent) {
 <template>
   <div class="dialog-backdrop" @keydown.esc.prevent.stop="emit('cancel')" @keydown="trapFocus">
     <section class="confirmation-dialog main-reinstall-dialog" role="dialog" aria-modal="true" aria-labelledby="main-reinstall-title" aria-describedby="main-reinstall-detail" :aria-busy="preparing" :data-reinstall-phase="phase">
-      <header><h2 id="main-reinstall-title">{{ t('重新安装主程序环境') }}</h2><button class="icon-button" data-action="close-reinstall-main" :aria-label="t('关闭')" @click="emit('cancel')"><Icon name="close" /></button></header>
-      <p id="main-reinstall-detail">{{ t('将在新目录安装主程序环境，验证通过后再切换。原环境会保留，训练引擎、模型和用户资料不变。这会重新下载缺少的主程序依赖。') }}</p>
+      <header><h2 id="main-reinstall-title">{{ legacyRepair ? t('修复运行环境') : t('重新安装主程序环境') }}</h2><button class="icon-button" data-action="close-reinstall-main" :aria-label="t('关闭')" @click="emit('cancel')"><Icon name="close" /></button></header>
+      <p id="main-reinstall-detail">{{ legacyRepair ? t('使用已验证的离线资源修复此版本的运行环境，并保留原环境。原安装记录、当前版本、训练引擎、模型和用户资料保持不变。修复后仍需检查并完成安装。') : t('将在新目录安装主程序环境，验证通过后再切换。原环境会保留，训练引擎、模型和用户资料不变。这会重新下载缺少的主程序依赖。') }}</p>
       <section class="main-reinstall-status" :class="{ issue: phase === 'blocked' || phase === 'error' }" :role="phase === 'blocked' || phase === 'error' ? 'alert' : 'status'" aria-live="polite" aria-atomic="true">
         <div class="main-reinstall-status-title"><Icon :name="preparing ? 'refresh' : phase === 'ready' ? 'check' : 'info'" :class="{ spin: preparing }" /><strong>{{ status }}</strong></div>
         <p v-if="preparing">{{ progress || t('正在核对主程序环境…') }}</p>
@@ -48,7 +49,7 @@ function trapFocus(event: KeyboardEvent) {
       </section>
       <p v-if="phase === 'ready'" class="main-reinstall-download">{{ t('预计下载：{size}', { size: download }) }}</p>
       <details class="main-reinstall-details"><summary>{{ t('查看安装详情') }}</summary><dl><div><dt>{{ t('目标版本') }}</dt><dd>{{ version }}</dd></div><div><dt>{{ t('安装目录') }}</dt><dd>{{ root }}</dd></div></dl></details>
-      <div class="main-reinstall-actions"><button ref="cancelButton" data-action="cancel-reinstall-main" @click="emit('cancel')">{{ phase === 'blocked' || phase === 'error' ? t('关闭') : t('取消') }}</button><button class="primary" data-action="confirm-reinstall-main" :disabled="phase !== 'ready'" @click="emit('confirm')">{{ t('确认重新安装') }}</button></div>
+      <div class="main-reinstall-actions"><button ref="cancelButton" data-action="cancel-reinstall-main" @click="emit('cancel')">{{ phase === 'blocked' || phase === 'error' ? t('关闭') : t('取消') }}</button><button class="primary" data-action="confirm-reinstall-main" :disabled="phase !== 'ready'" @click="emit('confirm')">{{ legacyRepair ? t('确认修复') : t('确认重新安装') }}</button></div>
     </section>
   </div>
 </template>

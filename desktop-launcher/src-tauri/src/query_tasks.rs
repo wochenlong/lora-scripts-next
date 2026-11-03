@@ -122,6 +122,8 @@ pub(crate) enum QueryAction {
     PlanRepair,
     #[serde(rename = "preview_gui_rebuild")]
     GuiRebuildPreview,
+    #[serde(rename = "preview_legacy_environment_repair")]
+    LegacyEnvironmentRepairPreview,
 }
 impl QueryAction {
     pub(crate) fn as_str(self) -> &'static str {
@@ -132,6 +134,7 @@ impl QueryAction {
             Self::PlanInstall => "plan_install",
             Self::PlanRepair => "plan_repair",
             Self::GuiRebuildPreview => "preview_gui_rebuild",
+            Self::LegacyEnvironmentRepairPreview => "preview_legacy_environment_repair",
         }
     }
 }
@@ -168,8 +171,14 @@ impl QueryTarget {
                 "检查目标不完整或超过长度限制",
             ));
         }
-        if (self.engine_id == "gui") != (self.action == QueryAction::GuiRebuildPreview)
-            || self.engine_id == "gui" && (self.scope != QueryScope::Plan || !self.rebuild)
+        let gui_action = matches!(
+            self.action,
+            QueryAction::GuiRebuildPreview | QueryAction::LegacyEnvironmentRepairPreview
+        );
+        if (self.engine_id == "gui") != gui_action
+            || self.engine_id == "gui"
+                && (self.scope != QueryScope::Plan
+                    || self.rebuild != (self.action == QueryAction::GuiRebuildPreview))
         {
             return Err(QueryError::new(
                 "query_target_invalid",

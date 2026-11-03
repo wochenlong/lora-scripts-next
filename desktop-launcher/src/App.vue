@@ -4,8 +4,8 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, shallowReactive, s
 import { getCurrentWindow } from '@tauri-apps/api/window'
 import { getVersion } from '@tauri-apps/api/app'
 import { invoke } from '@tauri-apps/api/core'
-import { runtimeStatus, listenToRuntime, startTrainer, installationSnapshot } from './bridge'
-import type { InstallationSnapshot, InstallationVersionView, SourceRepairPreview } from './bridge'
+import { runtimeStatus, listenToRuntime, startTrainer, installationSnapshot, resumeLegacyInstall, repairLegacyEnvironment, recoverLegacyEnvironment } from './bridge'
+import type { InstallationSnapshot, InstallationVersionView, SourceRepairPreview, LegacyEnvironmentRepairPlan } from './bridge'
 import type { RuntimePhase, RuntimeSnapshot } from './bridge'
 import LogPanel from './LogPanel.vue'
 import Icon from './LauncherIcon.vue'
@@ -61,6 +61,7 @@ interface MainRepairPlan {
   package: PackageIntegrity | null
 }
 interface MainReinstallRequest {
+  kind: 'rebuild' | 'legacy-repair'
   epoch: number
   root: string
   releaseId: string
@@ -75,6 +76,7 @@ interface MainReinstallRequest {
   query: EngineQueryEntry | null
   identity: EngineQueryIdentity | null
   preview: GuiLifecyclePreview | null
+  legacyPlan: LegacyEnvironmentRepairPlan | null
 }
 
 const page = ref<Page>('launch')
@@ -180,6 +182,7 @@ let guiEpoch = 0
 let operationTimer: ReturnType<typeof setTimeout> | undefined
 let disposed = false
 let operationCursor = 0
+let operationEventRequest: { id: string; root: string } | null = null
 let unlisten: (() => void) | undefined
 let previousFocus: HTMLElement | null = null
 
@@ -189,6 +192,7 @@ const currentReleaseId = computed(() => report.value ? report.value.current_rele
 const previousReleaseId = computed(() => report.value ? report.value.previous_known_good : inventory.value?.previous_known_good)
 const profilePath = computed(() => report.value?.profile_path ?? inventory.value?.profile_path ?? '')
 const currentVersion = computed(() => versions.value.find((version) => version.id === currentReleaseId.value) ?? versions.value.find((version) => version.current))
+const pendingLegacyVersions = computed(() => versions.value.filter(version => version.legacy_recovery))
 const defaultRelease = computed(() => versions.value.find(version => version.channel === 'dev' && installSupported(version)) ?? versions.value.find(installSupported) ?? versions.value[0])
 const installTarget = computed(() => currentVersion.value ?? defaultRelease.value)
 function sourceSupported(version: DisplayVersion) { return version.source_supported !== false }
@@ -454,6 +458,25 @@ async function refreshHistory() {
   const loaded = await operationHistory(root)
   if (!disposed && path.value.trim() === root) history.value = loaded.sort((a, b) => b.started_at - a.started_at).slice(0, 5)
 }
+async function refreshOperationEvents(next: OperationSnapshot, root: string) {
+  if (operationEventRequest?.id === next.id && operationEventRequest.root === root) return
+  const request = { id: next.id, root }
+  operationEventRequest = request
+  const stillCurrent = () => !disposed && operation.value?.id === next.id && path.value.trim() === root
+  try {
+    const events = await operationEvents(next.id, operationCursor)
+    if (!stillCurrent()) return
+    events.forEach((event) => { addLog(event.message, 'environment'); operationCursor = Math.max(operationCursor, event.seq) })
+  } catch (reason) {
+    if (!stillCurrent()) return
+    if (errorText(reason).includes('事件游标已过期')) {
+      operationCursor = Math.max(operationCursor, next.event_seq)
+      addLog(t('部分较早事件已过期，已重新读取完整状态。'))
+    } else if (!operation.value?.error) error.value = errorText(reason)
+  } finally {
+    if (operationEventRequest === request) operationEventRequest = null
+  }
+}
 async function pollOperation() {
   const current = operation.value
   if (!current || disposed) return
@@ -462,20 +485,11 @@ async function pollOperation() {
   try {
     const next = await operationSnapshot(current.id)
     if (!stillCurrent()) return
-    // 游标失效时以快照为准；当前会话的事件随后从新游标继续。
-    try {
-      const events = await operationEvents(current.id, operationCursor)
-      if (!stillCurrent()) return
-      events.forEach((event) => { addLog(event.message, 'environment'); operationCursor = Math.max(operationCursor, event.seq) })
-    } catch (reason) {
-      if (!errorText(reason).includes('事件游标已过期')) throw reason
-      operationCursor = Math.max(operationCursor, next.event_seq)
-      addLog(t('部分较早事件已过期，已重新读取完整状态。'))
-    }
-    if (!stillCurrent()) return
+    // 状态先绘制；日志读取延迟或失败不阻挡阶段变化与终态按钮。
     operation.value = next
     message.value = `${phaseText.value[next.phase]} · ${operationStatusText.value[next.status]}`
     if (next.error) error.value = next.error.message
+    void refreshOperationEvents(next, root)
     if (next.status !== 'running') {
       clearGuiState()
       await refreshHistory()
@@ -485,6 +499,7 @@ async function pollOperation() {
   } catch (reason) { if (stillCurrent()) error.value = errorText(reason) }
   if (stillCurrent() && operation.value?.status === 'running') operationTimer = setTimeout(() => { void pollOperation() }, 250)
 }
+
 async function prefetch(version: DisplayVersion, install = false) {
   if (!installSupported(version)) { notify(t('本启动器未提供此版本的安装配方，请安装受支持的新版本。')); page.value = 'versions'; return }
   if (busy.value) return
@@ -567,6 +582,68 @@ function install(version: DisplayVersion) {
   if (!installSupported(version)) { page.value = 'versions'; notify(t('本启动器未提供此版本的安装配方，请安装受支持的新版本。')); return }
   if (version.managed_recipe) return prefetch(version, true)
   return releaseCommand('install_release', version, t('安装 {value0} {value1}', { value0: channelName(version.channel), value1: version.version }))
+}
+function resumeInstallation(version: DisplayVersion) {
+  const recovery = version.legacy_recovery
+  if (!recovery || mutationDisabled.value) return
+  const root = path.value.trim()
+  const journalSha256 = recovery.journal_sha256
+  return ask({
+    title: t('检查并完成安装'),
+    detail: t('将验证此版本已有的源码、基础 Python 和依赖。全部通过后完成上次安装记录；不会下载、重装或切换版本。检查失败时保留现场，供进一步处理。'),
+    action: t('开始检查'),
+    execute: async () => {
+      if (root !== path.value.trim() || versions.value.find(item => item.id === version.id)?.legacy_recovery?.journal_sha256 !== journalSha256) {
+        error.value = t('安装记录已变化，请刷新后重试。')
+        return
+      }
+      await startGuiOperation(t('正在检查未完成安装'), () => resumeLegacyInstall(root, version.id, journalSha256))
+    },
+  })
+}
+async function prepareLegacyEnvironment(version: DisplayVersion) {
+  if (!version.legacy_recovery || version.legacy_environment_repair || mutationDisabled.value || mainReinstall.value) return
+  const request = shallowReactive<MainReinstallRequest>({
+    kind: 'legacy-repair', epoch: guiEpoch, root: path.value.trim(), releaseId: version.id,
+    version: `${version.version} · ${version.commit.slice(0, 8)}`, selectedInstance: '',
+    observedBinding: version.legacy_recovery.journal_sha256, phase: 'preparing', reason: '',
+    invalidated: false, cancelled: false, queryTarget: null, query: null, identity: null, preview: null, legacyPlan: null,
+  })
+  mainReinstallReturnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
+  mainReinstall.value = request
+  error.value = ''
+  await nextTick()
+  try {
+    if (request.cancelled || request.invalidated || mainReinstall.value !== request) return
+    request.queryTarget = { root: request.root, release_id: request.releaseId, engine_id: 'gui', action: 'preview_legacy_environment_repair', rebuild: false, scope: 'plan' }
+    const query = await beginEngineQuery(request.queryTarget)
+    request.query = query
+    if (disposed || request.cancelled || request.invalidated || mainReinstall.value !== request) { await cancelEngineQuery(query); return }
+    const { result: plan, snapshot } = await waitEngineQuery<LegacyEnvironmentRepairPlan>(query)
+    if (disposed || request.cancelled || request.invalidated || mainReinstall.value !== request) return
+    if (!mainReinstallContextCurrent(request)) { invalidateMainReinstall(); return }
+    if (plan.schema_version !== 1 || plan.operation !== 'independent_legacy_environment_repair' || !samePath(plan.root, request.root) || plan.release_id !== request.releaseId || plan.journal_sha256 !== request.observedBinding || !/^[0-9a-f]{64}$/.test(plan.plan_sha256)) throw Error(t('安装计划不完整，请关闭后重试。'))
+    request.identity = snapshot.identity
+    request.legacyPlan = plan
+    request.phase = plan.ready ? 'ready' : 'blocked'
+    request.reason = plan.blockers.join('\n')
+  } catch (reason) {
+    if (!request.query) request.queryTarget = null
+    if (disposed || request.cancelled || request.invalidated || mainReinstall.value !== request) return
+    request.phase = request.query?.snapshot?.status === 'cancelled' ? 'cancelled' : 'error'
+    request.reason = errorText(reason)
+  }
+}
+function recoverLegacyRepair(version: DisplayVersion) {
+  const transaction = version.legacy_environment_repair
+  if (!transaction || mutationDisabled.value) return
+  const root = path.value.trim()
+  return ask({ title: t('恢复环境修复'), detail: t('先确认上次修复进程已退出，再验证并恢复原环境。原安装记录与当前版本保持不变。'), action: t('确认恢复'),
+    execute: async () => {
+      if (!samePath(root, path.value) || versions.value.find(item => item.id === version.id)?.legacy_environment_repair !== transaction) throw Error(t('安装记录已变化，请刷新后重试。'))
+      await startGuiOperation(t('正在恢复运行环境'), () => recoverLegacyEnvironment(root, version.id, transaction))
+    },
+  })
 }
 function select(version: DisplayVersion) {
   if (version.channel === 'dev') return ask({
@@ -726,6 +803,11 @@ function needsAdvancedMainRepair(summary = t('这次无法只修复损坏部分�
 }
 async function checkAndRepairMain() {
   if (busy.value || transitioning.value || serviceAction.value || !sameRoot.value) return
+  if (pendingLegacyVersions.value.length) {
+    page.value = 'versions'
+    notify(t('有未完成的历史安装，请在版本管理中检查并完成安装。'))
+    return
+  }
   const returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
   if (mainInstallationMissing.value) {
     const target = installTarget.value
@@ -823,8 +905,7 @@ async function runRepairStep(label: string, action: () => Promise<OperationSnaps
     const value = await operationSnapshot(next.id)
     operation.value = value
     message.value = `${label} · ${phaseText.value[value.phase]}`
-    const events = await operationEvents(next.id, operationCursor)
-    events.forEach(event => { addLog(event.message, 'environment'); operationCursor = Math.max(operationCursor, event.seq) })
+    void refreshOperationEvents(value, path.value.trim())
     if (value.status !== 'running') {
       await refreshHistory()
       if (value.status !== 'succeeded') throw new Error(value.error?.message ?? t('修复已停止，请查看日志后重试。'))
@@ -896,11 +977,11 @@ async function reinstallMainEnvironment(version = currentVersion.value) {
   registrationReleaseId.value = version.id
   changeRegistrationRelease()
   const request = shallowReactive<MainReinstallRequest>({
-    epoch: guiEpoch, root: path.value.trim(), releaseId: version.id,
+    kind: 'rebuild', epoch: guiEpoch, root: path.value.trim(), releaseId: version.id,
     version: `${version.version} · ${version.commit.slice(0, 8)}`,
     selectedInstance: registrationInstanceId.value,
     observedBinding: mainReinstallObservedBinding(path.value.trim(), version.id), phase: 'preparing', reason: '',
-    invalidated: false, cancelled: false, queryTarget: null, query: null, identity: null, preview: null,
+    invalidated: false, cancelled: false, queryTarget: null, query: null, identity: null, preview: null, legacyPlan: null,
   })
   mainReinstallReturnFocus = returnFocus
   // Publish the cancellable dialog before starting any IPC or disk work.
@@ -938,6 +1019,10 @@ async function reinstallMainEnvironment(version = currentVersion.value) {
 }
 
 function mainReinstallContextCurrent(request: MainReinstallRequest) {
+  if (request.kind === 'legacy-repair') {
+    const version = versions.value.find(item => item.id === request.releaseId)
+    return !disposed && samePath(request.root, path.value) && version?.legacy_recovery?.journal_sha256 === request.observedBinding && !version.legacy_environment_repair && (!request.identity || sameEngineQueryIdentity(request.identity, request.query?.snapshot?.identity ?? null))
+  }
   if (disposed || request.epoch !== guiEpoch || !samePath(request.root, path.value) || request.releaseId !== registrationRelease.value?.id || request.selectedInstance !== registrationInstanceId.value) return false
   if (request.observedBinding !== mainReinstallObservedBinding(request.root, request.releaseId)) return false
   return !request.identity || sameEngineQueryIdentity(request.identity, request.query?.snapshot?.identity ?? null)
@@ -989,6 +1074,15 @@ function closeMainReinstall() {
 async function confirmMainReinstall() {
   const request = mainReinstall.value
   const preview = request?.preview
+  if (request?.kind === 'legacy-repair') {
+    const plan = request.legacyPlan
+    if (request.phase !== 'ready' || !plan?.ready || mutationDisabled.value) return
+    if (request.invalidated || !mainReinstallContextCurrent(request) || !request.query || request.query.invalidated || request.query.snapshot?.validity !== 'current' || !sameEngineQueryIdentity(request.identity, request.query.snapshot.identity)) { invalidateMainReinstall(); return }
+    closeMainReinstall()
+    invalidateEngineQueryResults(request.root, request.releaseId, 'gui')
+    await startGuiOperation(t('正在修复运行环境'), () => repairLegacyEnvironment(request.root, request.releaseId, plan.journal_sha256, plan.plan_sha256))
+    return
+  }
   if (!request || request.phase !== 'ready' || !preview?.plan_sha256 || mutationDisabled.value) return
   if (request.invalidated || !mainReinstallContextCurrent(request) || !request.query || request.query.invalidated || request.query.snapshot?.validity !== 'current' || !sameEngineQueryIdentity(request.identity, request.query.snapshot.identity)) { invalidateMainReinstall(); return }
   // Closing synchronously consumes the confirmation, so double clicks cannot submit twice.
@@ -1258,6 +1352,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
       <section v-show="page === 'versions'" class="content-page" :aria-label="t('版本管理')">
         <header class="page-title"><h1>{{ t('版本管理') }}</h1><p>{{ t('在本机版本之间切换，资料始终保留。') }}</p></header>
         <div class="section-toolbar"><span class="context-label">{{ versions.filter(version => version.installed).length }} {{ t('个已安装版本') }}</span><button :disabled="busy || inventoryLoading" data-action="refresh-versions" @click="refreshInstallation()"><Icon name="refresh" />{{ t('刷新本机版本') }}</button></div>
+        <p v-if="pendingLegacyVersions.length" class="inline-note" role="note">{{ t('有未完成的历史安装，请在对应版本选择“检查并完成安装”。检查通过前继续保留启动保护。') }}</p>
         <div v-if="currentVersion" class="version-installed"><img src="/assets/home-logo.webp" alt="Next Trainer" /><div><h2>Next Trainer <span>{{ currentVersion.version }}</span></h2><div class="inline-tags"><span class="tag active-tag">{{ t('当前使用') }}</span><span class="tag">{{ channelName(currentVersion.channel) }}</span><code>{{ currentVersion.commit.slice(0, 8) }}</code></div><p>{{ releaseState(currentVersion) }}</p></div></div>
         <section class="rollback-panel"><div><strong>{{ t('上一已健康版本') }}</strong><p v-if="rollbackVersion"><span>{{ channelName(rollbackVersion.channel) }} · {{ rollbackVersion.version }}</span><code>{{ rollbackVersion.commit.slice(0, 8) }}</code></p><p v-else>{{ t('尚无可回退记录。版本成功启动并通过健康检查后会记录。') }}</p></div><button :disabled="mutationDisabled || !rollbackAvailable" @click="rollback">{{ t('回退到此版本') }}</button></section>
         <section v-for="group in channels" :key="group.channel" class="channel-section" :aria-label="channelName(group.channel)">
@@ -1266,7 +1361,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
           <article v-for="version in group.versions" :key="version.id" class="version-card" :aria-label="`${version.channel} ${version.version} ${version.commit.slice(0, 8)}`">
             <div class="version-top"><div><strong>{{ version.version }}</strong><span v-if="version.current || version.id === currentReleaseId" class="current-tag">{{ t('当前使用') }}</span><span v-else-if="version.id === previousReleaseId" class="healthy-tag">{{ t('回退保留') }}</span><span v-else-if="version.known_good" class="healthy-tag">{{ t('曾健康启动') }}</span></div><span class="release-state" :class="{ good: version.source_ok === true && version.environment_ok === true }">{{ releaseState(version) }}</span></div>
             <details class="gui-file-details"><summary>{{ t('版本详情') }}</summary><button v-if="version.installed && maintenanceSupported(version)" :disabled="busy" @click="openVersionMaintenance(version)">{{ t('修复此版本') }}</button><dl class="version-details"><div><dt>{{ t('提交') }}</dt><dd><code>{{ version.commit }}</code></dd></div><div><dt>{{ t('下载') }}</dt><dd><code>{{ formatBytes(version.download_bytes) }}</code><span class="detail-note">{{ t('源码制品') }}</span></dd></div><div><dt>{{ t('磁盘') }}</dt><dd><code>{{ formatBytes(version.source_bytes) }}</code><span class="detail-note">{{ version.installed ? t('源码展开；运行环境另计') : t('预计源码展开；运行环境另计') }}</span></dd></div></dl></details>
-            <div class="version-actions"><button v-if="!version.installed" :disabled="mutationDisabled || !installSupported(version)" :title="!installSupported(version) ? t('本启动器未提供此版本的安装配方，请安装受支持的新版本。') : undefined" @click="install(version)">{{ t('下载安装') }}</button><button :disabled="mutationDisabled || !version.installed || version.source_ok === false || version.environment_ok === false || version.structure === 'attention' || version.current || version.id === currentReleaseId" @click="select(version)">{{ t('切换到此版本') }}</button><button class="delete-button" :disabled="mutationDisabled || !version.installed || protectedRelease(version)" :title="protectedRelease(version) ? t('当前版本及上一已健康版本需保留') : t('删除受管版本目录')" @click="remove(version)">{{ t('删除') }}</button></div>
+            <div class="version-actions"><button v-if="version.legacy_environment_repair" data-action="recover-legacy-environment" :data-release-id="version.id" :disabled="mutationDisabled" @click="recoverLegacyRepair(version)">{{ t('恢复环境修复') }}</button><button v-else-if="version.legacy_recovery" data-action="repair-legacy-environment" :data-release-id="version.id" :disabled="mutationDisabled" @click="prepareLegacyEnvironment(version)">{{ t('修复运行环境') }}</button><button v-if="version.legacy_recovery" data-action="resume-legacy-install" :data-release-id="version.id" :disabled="mutationDisabled || !!version.legacy_environment_repair" @click="resumeInstallation(version)">{{ t('检查并完成安装') }}</button><button v-if="!version.installed" :disabled="mutationDisabled || !installSupported(version)" :title="!installSupported(version) ? t('本启动器未提供此版本的安装配方，请安装受支持的新版本。') : undefined" @click="install(version)">{{ t('下载安装') }}</button><button :disabled="mutationDisabled || !!version.legacy_recovery || !!version.legacy_environment_repair || !version.installed || version.source_ok === false || version.environment_ok === false || version.structure === 'attention' || version.current || version.id === currentReleaseId" @click="select(version)">{{ t('切换到此版本') }}</button><button class="delete-button" :disabled="mutationDisabled || !!version.legacy_recovery || !!version.legacy_environment_repair || !version.installed || protectedRelease(version)" :title="protectedRelease(version) ? t('当前版本及上一已健康版本需保留') : t('删除受管版本目录')" @click="remove(version)">{{ t('删除') }}</button></div>
           </article>
         </section>
         <p class="scope-note">{{ t('版本列表只读取安装信息。切换与启动时会完整校验；修复请前往环境管理。当前版本和上一已健康版本受删除保护。') }}</p>
@@ -1368,7 +1463,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
       <LogPanel v-show="page === 'logs'" :active="page === 'logs'" :entries="logs" :current-session-id="logSessionId" :root="path.trim()" :focus-request="logFocus" :font-size="appearance.logFontSize">
         <template #operation>
           <div v-if="report?.interrupted.length || history.some(item => item.status === 'interrupted')" class="operation-warning" role="region" :aria-label="t('未完成操作')"><Icon name="info" /><span>{{ t('存在未完成操作，请在环境管理中检查并恢复。') }}</span><button @click="page = 'environment'; advanced = true">{{ t('查看恢复') }}</button></div>
-          <div v-if="operation?.status === 'running'" class="operation-monitor" role="region" :aria-label="t('当前安装与修复任务')"><div><strong>{{ t('当前操作') }}</strong><span>{{ phaseText[operation.phase] }} · {{ operation.cancel_requested ? t('正在取消，等待收尾') : message }}</span></div><button data-action="cancel-operation" :disabled="operation.cancel_requested" @click="cancelCurrentOperation">{{ operation.cancel_requested ? t('正在收尾') : t('取消操作') }}</button></div>
+          <div v-if="operation?.status === 'running'" class="operation-monitor" role="region" :aria-label="t('当前安装与修复任务')"><div><strong>{{ t('当前操作') }}</strong><span>{{ phaseText[operation.phase] }} · {{ operation.cancel_requested ? t('正在取消，等待收尾') : operationStatusText[operation.status] }}</span></div><button data-action="cancel-operation" :disabled="operation.cancel_requested" @click="cancelCurrentOperation">{{ operation.cancel_requested ? t('正在收尾') : t('取消操作') }}</button></div>
           <div v-if="error" class="operation-error" role="alert"><span>{{ error }}</span><button class="icon-button" :aria-label="t('关闭错误提示')" @click="error = ''"><Icon name="close" /></button></div>
         </template>
       </LogPanel>
@@ -1404,7 +1499,7 @@ onBeforeUnmount(() => { disposed = true; if (operationTimer) clearTimeout(operat
 
     </main>
     <div v-if="toast" class="toast" role="status">{{ toast }}</div>
-        <MainReinstallDialog v-if="mainReinstall" :phase="mainReinstall.phase" :root="mainReinstall.root" :version="mainReinstall.version" :reason="mainReinstall.reason" :progress="mainReinstall.query?.snapshot?.progress.message || queryStageLabel(mainReinstall.query?.snapshot?.stage ?? '')" :shared="mainReinstall.query?.shared ?? false" :connection-error="Boolean(mainReinstall.query?.connectionError)" :download="formatFileSize(mainReinstall.preview?.plan?.estimated_network_bytes ?? 0)" @cancel="closeMainReinstall" @confirm="confirmMainReinstall" />
+        <MainReinstallDialog v-if="mainReinstall" :legacy-repair="mainReinstall.kind === 'legacy-repair'" :phase="mainReinstall.phase" :root="mainReinstall.root" :version="mainReinstall.version" :reason="mainReinstall.reason" :progress="mainReinstall.query?.snapshot?.progress.message || queryStageLabel(mainReinstall.query?.snapshot?.stage ?? '')" :shared="mainReinstall.query?.shared ?? false" :connection-error="Boolean(mainReinstall.query?.connectionError)" :download="formatFileSize(mainReinstall.preview?.plan?.estimated_network_bytes ?? 0)" @cancel="closeMainReinstall" @confirm="confirmMainReinstall" />
         <div v-if="confirmation" class="dialog-backdrop" @keydown.esc.prevent="dismissConfirmation" @keydown="trapDialogFocus"><section class="confirmation-dialog" :class="{ 'gui-confirmation': confirmation.paths }" role="dialog" aria-modal="true" aria-labelledby="confirmation-title" aria-describedby="confirmation-detail"><h2 id="confirmation-title">{{ confirmation.title }}</h2><p id="confirmation-detail">{{ confirmation.detail }}</p><pre v-if="confirmation.paths" class="gui-paths" tabindex="0" :aria-label="t('确认修复的完整文件清单')">{{ confirmation.paths.join('\n') }}</pre><div><button ref="confirmationCancel" @click="dismissConfirmation">{{ t('取消') }}</button><button :class="confirmation.destructive ? 'danger' : 'primary'" :data-action="confirmation.actionId" @click="confirmAction">{{ confirmation.action }}</button></div></section></div>
   </div>
 </template>

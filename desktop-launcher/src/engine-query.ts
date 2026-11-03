@@ -2,7 +2,7 @@ import { computed, shallowReactive, shallowRef, watch } from 'vue'
 import { invoke } from '@tauri-apps/api/core'
 import { t } from './i18n'
 
-export type EngineQueryAction = 'capabilities' | 'recipe' | 'inspect_readonly' | 'plan_install' | 'plan_repair' | 'preview_gui_rebuild'
+export type EngineQueryAction = 'capabilities' | 'recipe' | 'inspect_readonly' | 'plan_install' | 'plan_repair' | 'preview_gui_rebuild' | 'preview_legacy_environment_repair'
 export type EngineQueryScope = 'full' | 'files_only' | 'plan'
 export interface EngineQueryTarget {
   root: string
@@ -214,6 +214,8 @@ export async function beginEngineQuery(target: EngineQueryTarget): Promise<Engin
     try {
       const accepted = target.action === 'preview_gui_rebuild'
         ? await invoke<QueryAcceptance>('begin_gui_rebuild_preview', { root: target.root, releaseId: target.release_id, timeoutSeconds: 1800 })
+        : target.action === 'preview_legacy_environment_repair'
+        ? await invoke<QueryAcceptance>('begin_legacy_environment_repair_preview', { root: target.root, releaseId: target.release_id, timeoutSeconds: 360 })
         : await invoke<QueryAcceptance>('begin_engine_query', { root: target.root, releaseId: target.release_id, engineId: target.engine_id, action: target.action, rebuild: target.rebuild, scope: target.scope, timeoutSeconds: 1800 })
       entry.taskId = accepted.task_id; entry.shared ||= accepted.shared
       tracking.get(entry.id)!.subscriptionId = accepted.subscription_id

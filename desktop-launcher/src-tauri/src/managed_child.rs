@@ -137,21 +137,84 @@ pub(super) fn spawn(command: &mut Command) -> Result<(Child, Job)> {
         Ok(job) => job,
         Err(error) => {
             let _ = child.kill();
-            let _ = child.wait();
+            if let Err(waited) =
+                super::wait_controlled_child(&mut child, std::time::Duration::from_secs(1))
+            {
+                return Err(super::ControlledProcessReapFailed::new(
+                    format!("子进程绑定Job失败：{error:#}；未附加Child回收失败：{waited:#}"),
+                    false,
+                )
+                .into());
+            }
             return Err(error.context("子进程绑定 Job 失败，已拒绝恢复执行"));
         }
     };
 
     #[cfg(windows)]
     if let Err(error) = resume_initial_thread(&child) {
+        let reaped = job.terminate_and_wait();
         let _ = child.kill();
-        // 即使异常 suspend count 意味着线程已被外部恢复，Job 关闭仍回收其后代。
-        drop(job);
-        let _ = child.wait();
+        let waited = super::wait_controlled_child(&mut child, std::time::Duration::from_secs(1));
+        if reaped.is_err() || waited.is_err() {
+            return Err(super::ControlledProcessReapFailed::new(
+                format!(
+                    "受管线程恢复失败：{error:#}；Job排空={:?}；Child回收={:?}",
+                    reaped.as_ref().map_err(|error| format!("{error:#}")),
+                    waited.as_ref().map_err(|error| format!("{error:#}")),
+                ),
+                false,
+            )
+            .into());
+        }
         return Err(error.context("受管初始线程校验/恢复失败，已回收本次 Job"));
     }
 
     Ok((child, job))
+}
+
+/// 命名 Job 由调用方预创建并持久化 launching 身份。attached 必须在恢复初始
+/// 线程前持久化确认；失败时不会运行该命令。launching 的崩溃窗不能据 Job
+/// 不存在而推断安全，调用方须保留 needs_attention。
+pub(super) fn spawn_in_job(
+    command: &mut Command,
+    job: &Job,
+    attached: impl FnOnce(u32) -> Result<()>,
+) -> Result<Child> {
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        use windows_sys::Win32::System::Threading::{CREATE_NO_WINDOW, CREATE_SUSPENDED};
+        command.creation_flags(CREATE_NO_WINDOW | CREATE_SUSPENDED);
+        let mut child = command.spawn().context("创建环境修复挂起子进程失败")?;
+        let result = job
+            .assign(&child)
+            .and_then(|()| attached(child.id()))
+            .and_then(|()| resume_initial_thread(&child));
+        if let Err(error) = result {
+            let reaped = job.terminate_and_wait();
+            let _ = child.kill();
+            let waited =
+                super::wait_controlled_child(&mut child, std::time::Duration::from_secs(1));
+            if reaped.is_err() || waited.is_err() {
+                return Err(super::ControlledProcessReapFailed::new(
+                    format!(
+                        "挂起命令启动失败：{error:#}；Job排空={:?}；Child回收={:?}",
+                        reaped.as_ref().map_err(|error| format!("{error:#}")),
+                        waited.as_ref().map_err(|error| format!("{error:#}")),
+                    ),
+                    false,
+                )
+                .into());
+            }
+            return Err(error);
+        }
+        Ok(child)
+    }
+    #[cfg(not(windows))]
+    {
+        let _ = (command, job, attached);
+        anyhow::bail!("命名 Job 环境修复当前仅支持 Windows");
+    }
 }
 
 #[cfg(windows)]

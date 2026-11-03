@@ -44,6 +44,9 @@ export interface VersionView {
   source_supported?: boolean
   maintenance_supported?: boolean
   install_supported?: boolean
+  /** An exact pending legacy journal, never proof of a healthy installation. */
+  legacy_recovery?: { phase: 'preparing' | 'verified' | 'committing'; journal_sha256: string }
+  legacy_environment_repair?: string
 }
 
 /** A fast inventory only. No integrity checks or Python execution have run. */
@@ -72,6 +75,22 @@ export interface InstallationSnapshot {
   issues: SnapshotIssue[]
 }
 export const installationSnapshot = (root: string) => invoke<InstallationSnapshot>('installation_snapshot', { root })
+export const resumeLegacyInstall = (root: string, releaseId: string, journalSha256: string) =>
+  invoke<OperationSnapshot>('resume_legacy_install', { root, releaseId, journalSha256 })
+export interface LegacyEnvironmentRepairPlan {
+  schema_version: number
+  root: string
+  release_id: string
+  journal_sha256: string
+  plan_sha256: string
+  ready: boolean
+  blockers: string[]
+  operation: 'independent_legacy_environment_repair'
+}
+export const repairLegacyEnvironment = (root: string, releaseId: string, journalSha256: string, planSha256: string) =>
+  invoke<OperationSnapshot>('repair_legacy_environment', { root, releaseId, journalSha256, planSha256 })
+export const recoverLegacyEnvironment = (root: string, releaseId: string, transaction: string) =>
+  invoke<OperationSnapshot>('recover_legacy_environment', { root, releaseId, transaction })
 
 export type ReportCommand = 'inspect' | 'bootstrap' | 'restore_trainer' | 'install_environment'
 export type ReleaseCommand = 'install_release' | 'select_release' | 'remove_release'

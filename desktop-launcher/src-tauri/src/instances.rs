@@ -2597,13 +2597,41 @@ fn validate(layout: &Layout, id: &str, state: &InstanceState) -> Result<()> {
     Ok(())
 }
 pub(crate) fn load(layout: &Layout, id: &str) -> Result<InstanceState> {
+    load_with_cancel(layout, id, None)
+}
+
+pub(crate) fn load_controlled(
+    layout: &Layout,
+    id: &str,
+    cancel: &CancelToken,
+) -> Result<InstanceState> {
+    load_with_cancel(layout, id, Some(cancel))
+}
+
+fn load_with_cancel(
+    layout: &Layout,
+    id: &str,
+    cancel: Option<&CancelToken>,
+) -> Result<InstanceState> {
+    scan_control_check(cancel)?;
     let target = state_path(layout, id)?;
-    if fs::metadata(&target)?.len() > MAX_STATE {
+    let metadata = fs::metadata(&target);
+    scan_control_check(cancel)?;
+    if metadata?.len() > MAX_STATE {
         bail!("实例记录过大");
     }
-    let state: InstanceState =
-        serde_json::from_slice(&scan_observation::read_file(target, QueryStage::Receipt)?)?;
-    validate(layout, id, &state)?;
+    let bytes = match cancel {
+        Some(cancel) => {
+            scan_observation::read_file_controlled(target, QueryStage::Receipt, cancel)?
+        }
+        None => scan_observation::read_file(target, QueryStage::Receipt)?,
+    };
+    let parsed = serde_json::from_slice(&bytes);
+    scan_control_check(cancel)?;
+    let state: InstanceState = parsed?;
+    let validation = validate(layout, id, &state);
+    scan_control_check(cancel)?;
+    validation?;
     Ok(state)
 }
 fn save(layout: &Layout, state: &InstanceState) -> Result<()> {
@@ -2700,7 +2728,7 @@ fn assert_usable_with_cancel(state: &InstanceState, cancel: Option<&CancelToken>
     scan_control_check(cancel)?;
     let layout = Layout::new(&state.root_absolute, &state.release_id)?;
     model::Registry::load(&layout.root)?.assert_base_python_ready()?;
-    let current = load(&layout, &state.instance_id)?;
+    let current = load_with_cancel(&layout, &state.instance_id, cancel)?;
     if current != *state
         || state.dirty
         || state.generation != state.validated_generation
@@ -2817,7 +2845,7 @@ pub(crate) fn registration_revalidate(
         if state_path(layout, state.id())?.exists() {
             bail!("补登记期间出现了新的实例状态");
         }
-    } else if load(layout, state.id())? != *state {
+    } else if load_with_cancel(layout, state.id(), Some(cancel))? != *state {
         bail!("补登记期间原实例状态变化");
     }
     Ok(())

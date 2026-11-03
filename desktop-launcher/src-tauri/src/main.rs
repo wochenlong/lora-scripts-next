@@ -64,6 +64,16 @@ enum ManagedAction {
         plan_sha256: String,
     },
     Recover,
+    ResumeLegacyInstall {
+        journal_sha256: String,
+    },
+    RepairLegacyEnvironment {
+        journal_sha256: String,
+        plan_sha256: String,
+    },
+    RecoverLegacyEnvironment {
+        transaction: String,
+    },
     RepairSource,
     RepairBasePython {
         plan_sha256: String,
@@ -120,6 +130,9 @@ async fn begin_release_operation(
     if !matches!(
         action,
         ManagedAction::Prefetch
+            | ManagedAction::ResumeLegacyInstall { .. }
+            | ManagedAction::RepairLegacyEnvironment { .. }
+            | ManagedAction::RecoverLegacyEnvironment { .. }
             | ManagedAction::RepairBasePython { .. }
             | ManagedAction::RecoverBasePython
     ) && release.environment_recipe != "gui-cp310-win-x64-v1"
@@ -144,6 +157,9 @@ async fn begin_release_operation(
                 ManagedAction::Prefetch => operations::OperationKind::Download,
                 ManagedAction::Install => operations::OperationKind::Execute,
                 ManagedAction::Repair { .. }
+                | ManagedAction::ResumeLegacyInstall { .. }
+                | ManagedAction::RepairLegacyEnvironment { .. }
+                | ManagedAction::RecoverLegacyEnvironment { .. }
                 | ManagedAction::Recover
                 | ManagedAction::RepairSource
                 | ManagedAction::RepairBasePython { .. }
@@ -193,6 +209,25 @@ async fn begin_release_operation(
                     engine.repair_gui_operation(&root, &release_id, &package, &plan_sha256, &handle)
                 }
                 ManagedAction::Recover => engine.recover_gui_operation(&root, &release_id, &handle),
+                ManagedAction::ResumeLegacyInstall { journal_sha256 } => engine
+                    .resume_legacy_install_operation(&root, &release_id, &journal_sha256, &handle),
+                ManagedAction::RepairLegacyEnvironment {
+                    journal_sha256,
+                    plan_sha256,
+                } => engine.repair_legacy_environment_operation(
+                    &root,
+                    &release_id,
+                    &journal_sha256,
+                    &plan_sha256,
+                    &handle,
+                ),
+                ManagedAction::RecoverLegacyEnvironment { transaction } => engine
+                    .recover_legacy_environment_operation(
+                        &root,
+                        &release_id,
+                        &transaction,
+                        &handle,
+                    ),
                 ManagedAction::RepairSource => {
                     engine.repair_source_operation(&root, &release_id, &handle)
                 }
@@ -961,6 +996,55 @@ async fn version_action(
     .map_err(|e| e.to_string())?
 }
 #[tauri::command]
+async fn resume_legacy_install(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    journal_sha256: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::ResumeLegacyInstall { journal_sha256 },
+    )
+    .await
+}
+#[tauri::command]
+async fn repair_legacy_environment(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    journal_sha256: String,
+    plan_sha256: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::RepairLegacyEnvironment {
+            journal_sha256,
+            plan_sha256,
+        },
+    )
+    .await
+}
+#[tauri::command]
+async fn recover_legacy_environment(
+    state: tauri::State<'_, Runtime>,
+    root: String,
+    release_id: String,
+    transaction: String,
+) -> Result<operations::OperationSnapshot, String> {
+    begin_release_operation(
+        state,
+        root,
+        release_id,
+        ManagedAction::RecoverLegacyEnvironment { transaction },
+    )
+    .await
+}
+#[tauri::command]
 async fn install_release(
     state: tauri::State<'_, Runtime>,
     root: String,
@@ -1496,6 +1580,10 @@ fn main() {
             install_environment,
             start_trainer,
             install_release,
+            resume_legacy_install,
+            repair_legacy_environment,
+            recover_legacy_environment,
+            query_ipc::begin_legacy_environment_repair_preview,
             select_release,
             rollback_release,
             remove_release,

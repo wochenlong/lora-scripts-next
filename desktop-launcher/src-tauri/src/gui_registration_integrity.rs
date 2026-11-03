@@ -25,6 +25,145 @@ pub(crate) fn trusted_index_sha256() -> &'static str {
     INDEX_SHA
 }
 
+/// 从同一固定安装索引和实际最终路径推导静态上界，不按压缩wheel体积估计环境。
+/// RECORD按精确许可路径长度逐行计，其他元数据沿本模块的固定16KiB规则。
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub(crate) struct LegacyResourceUpperBound {
+    pub bytes: u64,
+    pub nodes: usize,
+    pub files: usize,
+    pub trusted_index_sha256: String,
+}
+pub(crate) fn legacy_resource_upper_bound(environment: &Path) -> Result<LegacyResourceUpperBound> {
+    if hash(INDEX) != INDEX_SHA {
+        bail!("离线资源展开索引摘要不符");
+    }
+    let index: Index = serde_json::from_slice(INDEX)?;
+    let recipe = GuiRecipe::embedded()?;
+    if index.schema_version != 1
+        || index.recipe_sha256 != RECIPE_SHA
+        || index.packages.len() != recipe.wheels.len()
+    {
+        bail!("资源上界索引身份不符");
+    }
+    let env = environment.to_str().context("最终路径非UTF8")?;
+    if env.len() > 4096 {
+        bail!("最终环境路径超限");
+    }
+    let python = environment_python_path(environment);
+    let python = python.to_str().context("最终解释器路径非UTF8")?;
+    let mut sizes = BTreeMap::<PathBuf, u64>::new();
+    let mut insert = |path: &str, bytes: u64| -> Result<()> {
+        let path = relative(path)?;
+        if sizes.insert(path, bytes).is_some() {
+            bail!("资源上界展开路径重复");
+        }
+        Ok(())
+    };
+    for control in &index.controls {
+        let generated = match control.kind.as_str() {
+            "fixed" => control.bytes,
+            "template" => control
+                .template
+                .as_ref()
+                .context("控制模板缺失")?
+                .replace("{{ENVIRONMENT}}", env)
+                .replace("{{ENVIRONMENT_SLASH}}", &env.replace('\\', "/"))
+                .replace(
+                    "{{ENVIRONMENT_NAME}}",
+                    environment
+                        .file_name()
+                        .and_then(|s| s.to_str())
+                        .context("最终环境名缺失")?,
+                )
+                .len() as u64,
+            "pyvenv_config" => 4096,
+            _ => bail!("未知资源上界控制规则"),
+        };
+        // managed解释器完整PE不超过64KiB；静态验证仍逐字节重建，不授任意64KiB文件。
+        let generated = if matches!(
+            control.path.as_str(),
+            "Scripts/python.exe" | "Scripts/pythonw.exe"
+        ) {
+            generated.max(65536)
+        } else {
+            generated
+        };
+        insert(&control.path, generated)?;
+    }
+    let pe = decode_hex(&index.entrypoint_pe_template_hex)?;
+    for package in &index.packages {
+        let wheel = recipe.wheel(&package.name).context("资源上界包未知")?;
+        if wheel.version != package.version || wheel.sha256 != package.archive_sha256 {
+            bail!("资源上界包摘要不符");
+        }
+        let mut paths = Vec::new();
+        for original in &package.originals {
+            insert(&original.path, original.bytes)?;
+            paths.push(original.path.clone());
+        }
+        for entry in index
+            .entrypoint_controls
+            .iter()
+            .filter(|e| e.package == package.name)
+        {
+            let script = entry.script_template.replace("{{PYTHON}}", python);
+            let size = entry_executable(&pe, python, script.as_bytes(), entry.kind)?.len() as u64;
+            insert(&entry.path, size)?;
+            paths.push(format!("../../{}", entry.path));
+        }
+        let dist = format!("Lib/site-packages/{}", package.dist_info);
+        // 每个包至多五个已知生成元数据。路径报价按UTF8最坏逐字节转义，固定头/摘要/长度留128B。
+        for name in [
+            "INSTALLER",
+            "REQUESTED",
+            "direct_url.json",
+            "uv_cache.json",
+            "RECORD",
+        ] {
+            paths.push(format!("{dist}/{name}"));
+        }
+        let record_bytes = paths.iter().try_fold(0u64, |n, p| {
+            n.checked_add((p.len() as u64) * 2 + 128)
+                .context("RECORD上界溢出")
+        })?;
+        if record_bytes > 2 * 1024 * 1024 {
+            bail!("固定RECORD生成上界超限");
+        }
+        for (name, size) in [
+            ("INSTALLER", 16),
+            ("REQUESTED", 0),
+            ("direct_url.json", 16384),
+            ("uv_cache.json", 16384),
+            ("RECORD", record_bytes),
+        ] {
+            insert(&format!("{dist}/{name}"), size)?;
+        }
+    }
+    insert(".lock", 0)?;
+    insert(".next-trainer-legacy-repair-owner.json", 4096)?;
+    let bytes = sizes
+        .values()
+        .try_fold(0u64, |n, b| n.checked_add(*b).context("资源展开合计溢出"))?;
+    let mut directories = BTreeSet::new();
+    for path in sizes.keys() {
+        let mut parent = path.parent();
+        while let Some(p) = parent {
+            directories.insert(p.to_owned());
+            parent = p.parent();
+        }
+    }
+    let files = sizes.len();
+    Ok(LegacyResourceUpperBound {
+        bytes,
+        nodes: files
+            .checked_add(directories.len())
+            .context("资源节点上界溢出")?,
+        files,
+        trusted_index_sha256: INDEX_SHA.into(),
+    })
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(deny_unknown_fields)]
 pub(crate) struct TrustedEnvironment {
@@ -408,10 +547,19 @@ fn record_relative(text: &str) -> Result<PathBuf> {
     }
     Ok(parts.iter().collect())
 }
+#[cfg(test)]
 fn validate_record(
     data: &[u8],
     allowed: &BTreeSet<PathBuf>,
     required: &BTreeSet<PathBuf>,
+) -> Result<()> {
+    validate_record_with_limits(data, allowed, required, false)
+}
+fn validate_record_with_limits(
+    data: &[u8],
+    allowed: &BTreeSet<PathBuf>,
+    required: &BTreeSet<PathBuf>,
+    legacy_limits: bool,
 ) -> Result<()> {
     let text = std::str::from_utf8(data)?;
     let mut seen = BTreeSet::new();
@@ -421,8 +569,26 @@ fn validate_record(
             bail!("固定uv RECORD格式无效");
         }
         let path = record_relative(fields[0])?;
-        if !allowed.contains(&path) || !seen.insert(path) {
+        if !allowed.contains(&path) || !seen.insert(path.clone()) {
             bail!("RECORD包含未知或重复路径");
+        }
+        if legacy_limits {
+            let expected = match path.strip_prefix("Lib/site-packages") {
+                Ok(relative) => relative.to_string_lossy().replace('\\', "/"),
+                Err(_) => format!("../../{}", path.to_string_lossy().replace('\\', "/")),
+            };
+            if fields[0] != expected
+                || (!fields[1].is_empty()
+                    && (fields[1].len() != 50
+                        || !fields[1].starts_with("sha256=")
+                        || !fields[1][7..]
+                            .bytes()
+                            .all(|c| c.is_ascii_alphanumeric() || matches!(c, b'-' | b'_'))))
+                || (!fields[2].is_empty()
+                    && (fields[2].len() > 20 || !fields[2].bytes().all(|c| c.is_ascii_digit())))
+            {
+                bail!("legacy固定uv RECORD生成字段或规范路径超出已计算上界");
+            }
         }
     }
     if !required.is_subset(&seen) {
@@ -451,6 +617,46 @@ pub(crate) fn verify(
     environment: &Path,
     cancel: &CancelToken,
 ) -> Result<TrustedEnvironment> {
+    verify_resources(layout, release, environment, cancel, None)
+}
+
+/// 只认证同requirements输入的原始离线资源，不把legacy发布登记为现代实例。
+pub(crate) fn verify_legacy_offline_resources(
+    layout: &Layout,
+    release: &Release,
+    environment: &Path,
+    owner: &[u8],
+    cancel: &CancelToken,
+) -> Result<TrustedEnvironment> {
+    let marker: serde_json::Value = serde_json::from_slice(owner)?;
+    let transaction = marker["transaction"]
+        .as_str()
+        .context("legacy所有权事务缺失")?;
+    model::validate_component(transaction)?;
+    if owner.len() > 4096
+        || marker["schema_version"] != 1
+        || marker["root"].as_str().map(Path::new) != Some(layout.root.as_path())
+        || marker["release_id"] != release.id
+        || marker["plan_sha256"].as_str().is_none_or(|s| s.len() != 64)
+    {
+        bail!("legacy所有权标记身份不符");
+    }
+    let requirements = read(layout, &layout.app.join("requirements.txt"), 1609, cancel)?;
+    if requirements.len() != 1609
+        || hash(&requirements) != "8dc07965d650ee22c0f4f0affa01a97f01550795f79dfed4f3bb780b9c3c3ff6"
+    {
+        bail!("legacy离线资源输入不匹配");
+    }
+    verify_resources(layout, release, environment, cancel, Some(owner))
+}
+
+fn verify_resources(
+    layout: &Layout,
+    release: &Release,
+    environment: &Path,
+    cancel: &CancelToken,
+    legacy_owner: Option<&[u8]>,
+) -> Result<TrustedEnvironment> {
     cancel.check()?;
     release.validate()?;
     let recipe = GuiRecipe::embedded()?;
@@ -465,8 +671,9 @@ pub(crate) fn verify(
         || index.recipe_sha256 != RECIPE_SHA
         || index.uv_exe_sha256 != recipe.tool_uv.exe_sha256
         || index.python_archive_sha256 != recipe.python.archive.sha256
-        || release.commit != recipe.source_commit
-        || !recipe.matches_environment_recipe(&release.environment_recipe)
+        || (legacy_owner.is_none()
+            && (release.commit != recipe.source_commit
+                || !recipe.matches_environment_recipe(&release.environment_recipe)))
         || index.packages.len() != recipe.wheels.len()
     {
         bail!("可信索引与固定配方不符");
@@ -486,7 +693,18 @@ pub(crate) fn verify(
         .strip_prefix(&legacy)
         .ok()
         .is_some_and(|p| p.components().count() == 2 && p.file_name().is_some_and(|n| n == "gui"));
-    if !compact_ok && !legacy_ok {
+    if legacy_owner.is_some() {
+        if environment != layout.environment
+            || release.id != "main-0785419e7dc1a3058bd8710a9aa933fec0aabdee"
+            || release.environment_recipe
+                != "gui-requirements-0785419e7dc1a3058bd8710a9aa933fec0aabdee-python-3.10.19-v1"
+            || recipe.requirements.input_bytes != 1609
+            || recipe.requirements.input_sha256
+                != "8dc07965d650ee22c0f4f0affa01a97f01550795f79dfed4f3bb780b9c3c3ff6"
+        {
+            bail!("legacy静态验证目标或资源身份不符");
+        }
+    } else if !compact_ok && !legacy_ok {
         bail!("登记目标不在固定实例命名空间");
     }
     layout.guard_path(environment)?;
@@ -494,10 +712,17 @@ pub(crate) fn verify(
     let python = environment_python_path(environment);
     let python = python.to_str().context("Python路径非UTF8")?;
     let mut expected = BTreeMap::new();
+    if let Some(owner) = legacy_owner {
+        add(
+            &mut expected,
+            ".next-trainer-legacy-repair-owner.json",
+            Expected::Exact(owner.to_vec()),
+        )?;
+    }
     let mut optional = BTreeSet::new();
     let mut package_sets = Vec::new();
     // 先核完整固定patch与受控minor junction，不能从pyvenv自述授信外来base路径。
-    crate::python_integrity::verify(layout)?;
+    crate::python_integrity::verify_controlled(layout, cancel)?;
     let pyvenv_bytes = read(layout, &environment.join("pyvenv.cfg"), 4096, cancel)?;
     let mode = select_venv_mode(&layout.root, &pyvenv_bytes)?;
     let managed = managed_python_root(&layout.root);
@@ -692,10 +917,11 @@ pub(crate) fn verify(
         }
     }
     for (path, allowed, required) in package_sets {
-        validate_record(
+        validate_record_with_limits(
             &read(layout, &environment.join(path), 2 * 1024 * 1024, cancel)?,
             &allowed,
             &required,
+            legacy_owner.is_some(),
         )?;
     }
     let closure_sha256 = hash(&serde_json::to_vec(&observed)?);
@@ -714,6 +940,50 @@ mod tests {
     use super::*;
     fn index() -> Index {
         serde_json::from_slice(INDEX).unwrap()
+    }
+    #[test]
+    fn legacy_resource_upper_uses_authenticated_expansion_and_bounded_generated_files() {
+        assert_eq!(hash(INDEX), INDEX_SHA);
+        let index = index();
+        assert_eq!(
+            index
+                .packages
+                .iter()
+                .map(|p| p.originals.len())
+                .sum::<usize>(),
+            12_738
+        );
+        assert_eq!(
+            index
+                .packages
+                .iter()
+                .flat_map(|p| &p.originals)
+                .map(|p| p.bytes)
+                .sum::<u64>(),
+            798_325_865
+        );
+        let upper = legacy_resource_upper_bound(Path::new(
+            r"E:\NTLegacyUpper\environments\main-0785419e7dc1a3058bd8710a9aa933fec0aabdee\gui",
+        ))
+        .unwrap();
+        assert_eq!(upper.files, 13_188);
+        assert!(upper.bytes > 798_325_865 && upper.bytes < 1024 * 1024 * 1024);
+        assert!(upper.nodes > upper.files && upper.nodes < 100_000);
+        assert_eq!(upper.trusted_index_sha256, INDEX_SHA);
+    }
+    #[test]
+    fn legacy_record_limits_match_generated_upper_without_relaxing_modern_contract() {
+        let paths = BTreeSet::from([PathBuf::from("Lib/site-packages/a.py")]);
+        let good = format!("a.py,sha256={},1\n", "a".repeat(43));
+        validate_record_with_limits(good.as_bytes(), &paths, &paths, true).unwrap();
+        for line in [
+            format!("a.py,{},1\n", "a".repeat(5000)),
+            "a.py,,111111111111111111111\n".into(),
+            "x/../a.py,,1\n".into(),
+        ] {
+            validate_record(line.as_bytes(), &paths, &paths).unwrap();
+            assert!(validate_record_with_limits(line.as_bytes(), &paths, &paths, true).is_err());
+        }
     }
     #[test]
     fn managed_alias_template_reconstructs_fixed_uv_source_byte_for_byte() {

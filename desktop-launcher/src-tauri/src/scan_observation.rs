@@ -1,4 +1,5 @@
 //! 查询线程的可选扫描观察器；不缓存或省略原有完整性校验。
+use crate::operations::CancelToken;
 use crate::query_tasks::{QueryObserver, QueryProgress, QueryStage};
 use anyhow::{Context, Result};
 use std::{
@@ -147,7 +148,7 @@ impl std::error::Error for ControlRecordLimit {}
 
 // 读取已经发生，先累计真实字节，再检查同一observer的停止原因。
 // 这样取消/期限优先于超限或解析错误，末次读量也不会因取消而丢失。
-fn completed_read(stage: QueryStage, count: usize) -> Result<()> {
+fn completed_read(stage: QueryStage, count: usize, cancel: Option<&CancelToken>) -> Result<()> {
     CURRENT.with(|slot| -> Result<()> {
         if let Some(value) = slot.borrow_mut().as_mut() {
             value.bytes = value
@@ -158,8 +159,18 @@ fn completed_read(stage: QueryStage, count: usize) -> Result<()> {
         }
         Ok(())
     })?;
-    check()?;
+    check_control(cancel)?;
     publish(false)
+}
+
+// Query的权威取消/绝对期限先判定；Operation仅由显式参数传入，
+// 不让旧取消状态污染后续使用新token的必需恢复、保全与资源清理。
+fn check_control(cancel: Option<&CancelToken>) -> Result<()> {
+    check()?;
+    if let Some(cancel) = cancel {
+        cancel.check()?;
+    }
+    Ok(())
 }
 
 fn publish_last_read_on_error() {
@@ -184,26 +195,53 @@ fn publish_last_read_on_error() {
 
 /// 调用者继续负责原guard/普通文件/摘要规则；读取层独立限制32MiB，不能只信metadata。
 pub(crate) fn read_file(path: impl AsRef<Path>, stage: QueryStage) -> Result<Vec<u8>> {
-    checkpoint(stage, 0, 0)?;
-    let input = File::open(path);
-    check()?;
-    read_control_record(input?, stage)
+    read_file_inner(path.as_ref(), stage, None)
 }
 
+pub(crate) fn read_file_controlled(
+    path: impl AsRef<Path>,
+    stage: QueryStage,
+    cancel: &CancelToken,
+) -> Result<Vec<u8>> {
+    read_file_inner(path.as_ref(), stage, Some(cancel))
+}
+
+fn read_file_inner(
+    path: &Path,
+    stage: QueryStage,
+    cancel: Option<&CancelToken>,
+) -> Result<Vec<u8>> {
+    check_control(cancel)?;
+    checkpoint(stage, 0, 0)?;
+    let input = File::open(path);
+    check_control(cancel)?;
+    read_control_record_inner(input?, stage, cancel)
+}
+
+#[cfg(test)]
 fn read_control_record(mut input: impl Read, stage: QueryStage) -> Result<Vec<u8>> {
+    read_control_record_inner(&mut input, stage, None)
+}
+
+fn read_control_record_inner(
+    mut input: impl Read,
+    stage: QueryStage,
+    cancel: Option<&CancelToken>,
+) -> Result<Vec<u8>> {
     let mut bytes = Vec::new();
     let mut block = [0; READ_BLOCK_BYTES];
     let result = (|| {
         loop {
+            check_control(cancel)?;
             checkpoint(stage, 0, 0)?;
             let count = match input.read(&mut block) {
                 Ok(count) => count,
                 Err(error) => {
-                    check()?;
+                    check_control(cancel)?;
                     return Err(error.into());
                 }
             };
-            completed_read(stage, count)?;
+            completed_read(stage, count, cancel)?;
             if count == 0 {
                 break;
             }
@@ -226,6 +264,7 @@ fn read_control_record(mut input: impl Read, stage: QueryStage) -> Result<Vec<u8
             }
             bytes.extend_from_slice(&block[..count]);
         }
+        check_control(cancel)?;
         checkpoint(stage, 1, 0)?;
         Ok(bytes)
     })();
@@ -697,5 +736,102 @@ mod tests {
             QueryStatus::TimedOut,
             "query_timed_out",
         );
+    }
+
+    #[test]
+    fn operation_pre_cancel_wins_before_open_without_affecting_cleanup_reads() {
+        let fixture = FileFixture::new(9);
+        let cancel = CancelToken::new();
+        cancel.request();
+        let error = read_file_controlled(
+            fixture.root.join("missing-record.json"),
+            QueryStage::Receipt,
+            &cancel,
+        )
+        .unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some());
+        // 没有ambient Operation scope；必需保全仍能选择普通入口或全新token。
+        assert_eq!(
+            read_file(&fixture.path, QueryStage::Receipt).unwrap(),
+            b"xxxxxxxxx"
+        );
+        assert_eq!(
+            read_file_controlled(&fixture.path, QueryStage::Receipt, &CancelToken::new()).unwrap(),
+            b"xxxxxxxxx"
+        );
+        fixture.assert_control_unchanged();
+    }
+
+    struct CancelOnCompletedFileRead {
+        file: File,
+        cancel: CancelToken,
+        reads: usize,
+        bytes: usize,
+    }
+    impl Read for CancelOnCompletedFileRead {
+        fn read(&mut self, buffer: &mut [u8]) -> io::Result<usize> {
+            let count = self.file.read(buffer)?;
+            self.reads += 1;
+            self.bytes += count;
+            // 同步屏障就在真实File::read之后；不靠sleep争抢取消窗口。
+            self.cancel.request();
+            Ok(count)
+        }
+    }
+
+    #[test]
+    fn operation_cancel_at_actual_first_file_block_stops_next_read() {
+        let fixture = FileFixture::new(READ_BLOCK_BYTES * 3);
+        let cancel = CancelToken::new();
+        let mut input = CancelOnCompletedFileRead {
+            file: File::open(&fixture.path).unwrap(),
+            cancel: cancel.clone(),
+            reads: 0,
+            bytes: 0,
+        };
+        let error =
+            read_control_record_inner(&mut input, QueryStage::Receipt, Some(&cancel)).unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some());
+        assert_eq!(input.reads, 1);
+        assert_eq!(input.bytes, READ_BLOCK_BYTES);
+        fixture.assert_control_unchanged();
+    }
+
+    #[test]
+    fn operation_first_block_cancel_preserves_query_count_and_query_priority() {
+        let fixture = FileFixture::new(READ_BLOCK_BYTES * 2);
+        let (manager, task) = handle(20, Duration::from_secs(60));
+        let cancel = CancelToken::new();
+        let mut input = CancelOnCompletedFileRead {
+            file: File::open(&fixture.path).unwrap(),
+            cancel: cancel.clone(),
+            reads: 0,
+            bytes: 0,
+        };
+        let error = with(&task.observer(), || {
+            read_control_record_inner(&mut input, QueryStage::Receipt, Some(&cancel))
+        })
+        .unwrap_err();
+        assert!(error
+            .downcast_ref::<crate::operations::Cancelled>()
+            .is_some());
+        let snapshot = manager.snapshot(task.task_id()).unwrap();
+        assert_eq!(snapshot.progress.bytes, Some(READ_BLOCK_BYTES as u64));
+        assert_eq!(snapshot.progress.files, Some(0));
+        assert_eq!(input.reads, 1);
+        let error = with(&task.observer(), || {
+            manager.cancel(task.task_id())?;
+            read_file_controlled(&fixture.path, QueryStage::Receipt, &cancel)
+        })
+        .unwrap_err()
+        .downcast::<QueryError>()
+        .unwrap();
+        assert_eq!(error.code, "query_cancelled");
+        assert!(observer().is_none());
+        fixture.assert_control_unchanged();
     }
 }

@@ -132,6 +132,20 @@ pub(crate) fn identity(target: &QueryTarget, handle: &QueryHandle) -> Result<Que
             None => None,
         };
         let receipt = read_control(&layout, &layout.release_dir.join("release.json"), handle)?;
+        // 历史修复预览还绑定原安装事务，避免旧计划在journal变化后被复用。
+        let state =
+            if target.action == crate::query_tasks::QueryAction::LegacyEnvironmentRepairPreview {
+                let original = super::legacy_install_recovery::candidate(
+                    &root,
+                    &Catalog::for_workspace(&root)?
+                        .release(&target.release_id)?
+                        .clone(),
+                )?
+                .context("没有可修复的未完成历史安装")?;
+                Some(serde_json::to_vec(&(state.as_deref(), original))?)
+            } else {
+                state
+            };
         // 唯一内置配方仍由其正式解码器验证，不能信任工作区自述摘要。
         crate::recipe::GuiRecipe::embedded()?;
         let lock_sha256 = digest(include_bytes!("../../catalog/gui-cp310-win-x64-v1.lock"));
@@ -265,11 +279,22 @@ pub(crate) fn run(mut handle: QueryHandle, target: QueryTarget, log: Logger) {
     if expected.target.engine_id == "gui" {
         let observer = handle.observer();
         let result = crate::scan_observation::with(&observer, || {
-            super::gui_rebuild::preview_controlled(
-                Path::new(&expected.target.root),
-                &release,
-                &handle.cancel_token(),
-            )
+            if expected.target.action
+                == crate::query_tasks::QueryAction::LegacyEnvironmentRepairPreview
+            {
+                super::Engine::preview_legacy_environment_repair_controlled(
+                    Path::new(&expected.target.root),
+                    &release.id,
+                    &handle.cancel_token(),
+                    Some(&observer),
+                )
+            } else {
+                super::gui_rebuild::preview_controlled(
+                    Path::new(&expected.target.root),
+                    &release,
+                    &handle.cancel_token(),
+                )
+            }
         })
         .map_err(query_error);
         let current = if result.is_ok() {

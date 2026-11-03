@@ -1,26 +1,58 @@
 # 施工计划产物与门禁清单
 
+## 当前执行范围（0.31-quick，2026-11-04 用户新授权）
+
+2026-11-04 用户已要求快速任务书、仅针对性测试并立即继续。执行 [快速任务书](reliability-performance-20261102-task-book.md) 的 Q1 修复/出包→Q2 同包针对性实测→Q3 精准 commit/push 与简明交付；不再执行下方历史完整 Rust/42 CASE/四引擎重型矩阵强门。
+已过 focused 10项、fmt、严格 Clippy 复用；两次全 Rust 180秒超时保留而不授通过。candidate10 原失败保留，candidate11 成包及实测以实际回执为准。
+R0/R1 done；R2/R3 在途目标按快速计划完成；未测如实记录。不开真实训练、不下载/加载训练模型、不动用户数据，不恢复下载预算。
+以下旧范围、阶段状态、下一动作和 Goal 字样仅作历史，均不覆盖本层用户新授权；当前进度与单一下一动作见快速任务书，自动继续执行。
+
+## 历史规划与记录（不再作为执行指令）
+
+
+## 当前审阅与执行基线（v0.29）
+
+R0/R1 done，R2/R3 in progress，R4–R6 pending；仅 RP-EXIT-R0/R1 已签，专项与全局验收均 incomplete。candidate10 已构建冻结并完成 v7 绑定；定向 7/0/0、完整 Rust 434/0/15、fmt 与严格 Clippy 通过，仅属于对应冻结输入。真实预览 legacy-v7-preview-only-01 在确认前 fail，错误为“恢复候选计划与固定根/编译锁或原文摘要不符”；具体失败字段尚未定位。confirmed=false、无工具写 invoke、未产生 worker；真实关闭/退出、自然 exit0/Job 排空及独立失败保护比较通过，不能授业务、worker/reader 取消或性能通过。
+
+本层为 v0.29 文档归一化，保留既有执行授权和 Goal，不创建、重置或标记工具 Goal 完成。本轮只整理文档。下方 v0.26 历史快照、旧阶段记录及“08 未构建/10 待构建”等描述仅是原时间点事实，不能作为现行操作指令。07/execution-ledger.json 和 continuation-current.md 尚停在 10 构建中；本次保留原件，最新事实以 candidate10 admission、v7 binding、native-report 与 host-status 为准。
+
+当前唯一下一步：先只读拆分 candidate10 预览的组合校验拒绝，逐字段比较历史 plan 自摘要、schema/kind/rebuild、release/engine/profile、固定 recipe/lock、四 write_roots、profile_writes 与 main_env_fallback，定位具体不匹配项并落盘。当前只证实组合校验拒绝，不能预断是摘要、根或锁错误。定位后按原授权最小修复及正反例合同→当前输入质量门→冻结后继候选与显式 supersedes 新批次→正式只读预览；预览真正通过后才续三取消、强杀恢复及 A/B/C，继而完成 R2–R6。禁止删除/隔离保留候选、改历史 plan/journal、伪造 receipt/pending 或直接刷新原失败时钟重跑。
+
+本次 v0.29 八产物原稿、来源摘要、非文档文件保护及文档检查回执：`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/planning/review-plan-v029-20261103T121203Z`。模式延续既有 Full 体系的 Standard 增量归一化；任务/目标/开工清单仍合并于专项任务书，不增竞争性计划。
+
+## 历史文档交付快照（v0.26-review）
+
+本轮整理问题、优化方案、针对性实测与Goal提示词；文档工作不追加产品修复、构建、沙盒操作、commit或push。既有修复、执行授权、active Goal及阶段进度保留；已在途外部工具的轻合同收口单列，不冒充产品验收。
+
+- **问题范围：** 恢复自阻挡、检查无反馈且不能取消、重装确认窗迟出、维护与启停慢；补原8失败行、AI Toolkit/Anima Fast共10遗漏按钮。T1–T5、R0–R6、42 CASE、52引擎展开及26条历史未闭项不缩减。
+- **质量事实：** `uv-resource-fmt-02` exit0；`uv-resource-full-rust-03` 实际415通过/0失败/15忽略，两者均在本次错误出口修复之前。`legacy-errors-focused-01` 为7通过/2失败/2忽略，两个新增夹具问题已改但未复跑；四文件错误合同修复后的六合同、整树fmt/完整Rust/严格Clippy均待验证，不能沿用旧通过。
+- **新增P1与方案：** `ControlledProcessReapFailed`在通用终态、deadline/rollback、旧resume watchdog及持久化失败出口曾被改写。四文件已作最小修复，尚待验证；正常落盘保持`Failed/worker_reap_failed`，持久化失败保typed错误并说明未保存、保留旧attached现场，不伪报恢复成功。详任务书RP-REAP-ERROR-01。
+- **候选与工具：** candidate07已构建但固定uv EXE的67,598,848 B超过旧32MiB门，产品原生not-run；candidate08未构建。v4原46项工具合同通过仍绑定07；v5的verification-03已通过31项Node＋67项Python纯合同、14条Node语法及16份Python AST/compile检查，工具源码前后SHA一致、v4原件未变；仅证明外部工具。08身份接入、复验冻结与产品原生均未验，不可直接原生。回执为`<run>/R2/execution-resume-20261103-03/native-tool-preparation-v5/verification-03/verification.json`。
+- **执行边界：** R0/R1 done，R2/R3 in progress，R4–R6 pending；仅RP-EXIT-R0/R1已签。专项和全局验收均incomplete。不训练、不加载/下载训练模型、不恢复产品下载预算；测试资源上界仅约束本次Agent操作。
+
+本次八文档原稿、保护SHA、文档校验及审阅证据：`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/planning/review-plan-v026-20261103T104556Z/`。实际执行台账：`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/run-20261102T130200Z/R2/execution-resume-20261103-06/execution-ledger.json`；原审查及修复回执与测试原件分别保留，不覆盖旧失败。既有远端核验回执为同目录`remote-before.json`：2026-11-03T10:34:46Z的远端/本地均为`d409b00bac3bcb3e7ef56b424c8946f240e0a38f`，本次文档交付未新发起网络Git。
+
 ## 当前追加 CR-020：可靠性与性能修复规划
 
-- 日期：2026-11-03 12:35；专项Plan ID：`desktop-launcher-reliability-20261102`；版本`0.15-executing`（R1阶段签收增量）。R0/R1 done，RP-EXIT-R1按正式恢复缺陷及保护范围签收；R2可取消引擎检查任务active（in progress），R3必要前置in progress，R4–R6 pending。candidate05下native04真实UI取消留下合法committing事务，新进程正式GUI recover04 succeeded、intent committed并绑定g1208b56f57f3e752，正式IPC重复恢复也succeeded。两原生suite/host均pass，资料/控制保护及自然Job/CDP回收通过。当前full Rust344pass/0fail/15ignored，60份Rust/Cargo输入与当前及candidate05一致。R1-04按参数证据pass-with-boundary，不夸全GUI矩阵；R1-06最终CAS合同及实际命中原生window通过，分块取消/性能时限仍属R2/R4，未外推。Anima Fast停服full单配置实测suite/host通过，首反馈1.9ms、任务ID可见上界17.1ms、完整检查保守285776.1982–285935.7808ms，worker/readers回收及控制/资料保护通过；仅授该配置，取消与余三引擎未验。旧native02/03失败保留，recover03禁止。R2–R4门未签，嵌套Operation取消盲区仍待修。R1阶段Git保存待做，当前增量未提交/未push；整个专项/既有active Goal尚未完成。
-- 唯一canonical progress file：[既有总控](00_总控目标索引.md)；专项细节在新任务书，不建立第二套总控。
-- 模式：既有Full体系的`plan system update`，用下表合并产物保留所有硬门，不另复制七套模板。目标/阶段/清单/证据/探针/Goal/复盘皆有唯一归属。
-- 最初规划前历史基线：本地/远端`91e3d2e62a5b31865f8c56a0f321418aa887ecd3`；FINAL06产品`4e1b4cc78939e8b906252b27dcc20692ad347a08`，EXE SHA`11804c053d8667b1c9b91512d72055481aeb27d58be2ac32d181ede42413cbca`；当前续接为R0保存基线`9135fad8259cdf8b41efdd79ad37ca0b0b739d83`及未提交R1–R4必要前置增量。
-- 阶段：R0 基线与测量 → R1 恢复自阻挡 → R2 可取消引擎检查任务 → R3 重装预览弹窗 → R4 扫描与启停性能 → R5 最终同包定向沙盒回归 → R6 交付。R0/R1 done，RP-EXIT-R1按正式恢复缺陷及保护范围签收；R2可取消引擎检查任务active（in progress），R3必要前置in progress，R4–R6 pending。candidate05下native04真实UI取消留下合法committing事务，新进程正式GUI recover04 succeeded、intent committed并绑定g1208b56f57f3e752，正式IPC重复恢复也succeeded。两原生suite/host均pass，资料/控制保护及自然Job/CDP回收通过。当前full Rust344pass/0fail/15ignored，60份Rust/Cargo输入与当前及candidate05一致。R1-04按参数证据pass-with-boundary，不夸全GUI矩阵；R1-06最终CAS合同及实际命中原生window通过，分块取消/性能时限仍属R2/R4，未外推。Anima Fast停服full单配置实测suite/host通过，首反馈1.9ms、任务ID可见上界17.1ms、完整检查保守285776.1982–285935.7808ms，worker/readers回收及控制/资料保护通过；仅授该配置，取消与余三引擎未验。旧native02/03失败保留，recover03禁止。R2–R4门未签，嵌套Operation取消盲区仍待修。R1阶段Git保存待做，当前增量未提交/未push；整个专项/既有active Goal尚未完成。
+- 日期：2026-11-03（Asia/Shanghai；v0.29 文档归一化）；Plan ID：`desktop-launcher-reliability-20261102`；Version：`0.29`。
+- 模式：既有Full体系的Standard增量归一化；目标/任务/阶段开工清单合并到task-book，来源/MVP/文档复盘合并到readiness；共用治理沿既有文件。所有硬门保留，不新增平行canonical。
+- 唯一总控：`00_总控目标索引.md`。现状R0/R1 done、R2/R3 in progress、R4–R6 pending；R2–R4未签，专项incomplete。Execution readiness：`executing`；Root继续既有Goal施工，本轮同步规划，不改产品/工具或Goal。
+- 当前HEAD实核`d409b00bac3bcb3e7ef56b424c8946f240e0a38f`，最新产品增量未commit/push；远端沿10:34:46Z同SHA回执，本轮未新联网。
 
-| 当前产物 | 职责/合并的必需能力 | 状态 |
+| 必需产物 | 合并职责 | 当前文档/执行边界 |
 | --- | --- | --- |
-| [README.md](README.md)、[00_总控目标索引.md](00_总控目标索引.md) | 当前入口、唯一总控、范围、专项和全局完成口径 | 已更新为执行状态 |
-| [reliability-performance-20261102-task-book.md](reliability-performance-20261102-task-book.md) | 目标T1–T5、R0–R6、开工/退出门、进度与资源/证据/失败治理 | v0.15；audit02与completion02签R1 done，真实rollback cancel/recover/repeat通过；R2 active，R2–R4门未签 |
-| [reliability-performance-20261102-acceptance.md](reliability-performance-20261102-acceptance.md) | 精确CASE、旧8行与52单元映射、六类测试适用性、指标、截图/JSON/回收证据合同 | 42模板稳定；R1代码证据与真实恢复主路径分列，R5为4完整＋4取消 |
-| [reliability-performance-20261102-readiness.md](reliability-performance-20261102-readiness.md) | 资料、风险、六探针、GATE-00–14与逐份复盘 | v0.15；保留12:25原稿和更早历史，R1签收仅P1/保护范围，性能与全链取消仍待R2/R4 |
-| [03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md](03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md) | 批准后连续施工/阶段push/同包实测的完整启动词 | 已获执行授权，Goal active |
-| [00_预检证据/change-control-governance.md](00_预检证据/change-control-governance.md) | CR-020及沿用的变更控制；新旧验收不混淆 | 已更新 |
-| [原正式报告](full-acceptance-20261101-report.md)、[历史执行记录](full-acceptance-20261101-execution-history.md)、[原任务书](full-acceptance-20261101-task-book.md) | 固定问题与失败证据；作为输入只读，不授新包通过 | 保留 |
+| README.md | 入口 | v0.29当前入口，v0.26历史原稿保留 |
+| plan-manifest.md | 产物/模式/门映射 | 本表；产品门不由文件存在授pass |
+| 00_总控目标索引.md | 唯一总进度 | R0/R1事实保留，R2/R3在途 |
+| reliability-performance-20261102-task-book.md | T1–T5目标、R0–R6任务、开工/完成门、决策/台账/资源 | 10输入质量/构建/v7绑定与预览业务fail/失败保护和退出限定pass分列；组合校验具体字段待查，R2–R6未闭 |
+| reliability-performance-20261102-acceptance.md | 42CASE、旧8行/10按钮/52单元、6类测试及证据schema | 原42主表及旧映射保持；历史候选保全所有权补验归CASE-R2-12，不加模板/重型轮次 |
+| reliability-performance-20261102-readiness.md | 来源、最小探针、GATE00–14及逐份复盘 | GATE-11 conditional；10真实预览fail，逐字段诊断、后继完整保护与生产Job/事务原生待证 |
+| 03_goal提示词/启动器可靠性与性能修复_20261102_goal提示词.md | 完整续执行提示词 | v0.29只读定位10组合校验→最小修复/正反例→后继当前质量/候选/新批次预览；通过后续原链至R6，不改工具Goal |
+| 00_预检证据/change-control-governance.md | CR-020连续性、授权与反漂移 | 原稿已归档，旧失败不改 |
 
-目标到阶段：T1→R1/R5，T2→R2/R5，T3→R3/R5，T4→R0/R4/R5，T5→R5/R6。编号门禁状态以新readiness为准；GATE-11六探针完成，GATE-14放行R1精确恢复修复；资源unknown及逐案限额保留。实际run为`run-20261102T130200Z`，证据和沙盒分别位于`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/`与`F:/NextTrainerLauncherSandbox/reliability-20261102/`下，两根均已有归属标记。
+阶段/目标映射：T1→R1；T2→R2/R5；T3→R3；T4→R4；T5→R5/R6；R0提供基线。10输入质量/构建与v7绑定已有限定通过，10业务fail，组合校验具体字段待定位；产品门R0/R1 signed、R2–R6 unsigned，整体incomplete。唯一下一动作见task-book末尾。
 
-唯一下一步：后续续接的唯一下一动作：由Root按原阶段授权核对R1精准变更集并保存commit/普通push及远端SHA回执；本轮文档审核不执行git保存、GUI、构建或新测试。R1业务门通过不等于远端阶段基线已保存，含R2/R3必要前置源码不代表其阶段通过。Anima full原案已结束，不等待exec96794、不重复该案；42CASE、七阶段、4完整＋4取消、原阈值/资源、旧8失败行/10未操作按钮/52单元保持。 以下M0–M6及父计划v0.6仅作历史。
+证据：现run为`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/run-20261102T130200Z/`；本次原稿/保护SHA/文档校验与续接在`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/planning/review-plan-v026-20261103T104556Z/`。旧candidate05/06、03失败及04/full01/full02/Clippy02均保留各自身份；本轮不运行产品或沙盒。
 
 **CR-019当前状态：incomplete。** 全量验收证据已交付，227行193通过/24部分通过/8失败/1受阻/1待复核；52引擎单元另列。旧“仅冒烟”不限制当前功能实测，未开始训练。专项A0–A5原始过程见[原任务书](full-acceptance-20261101-task-book.md)，不能使用历史执行中快照替代最终结果。
 
@@ -29,6 +61,9 @@
 该增量施工、定向回归、重建安装器/便携包及新 EXE 原生 13 项冒烟已完成。新制品以 `3d892c86d2041662786184bca4370613ed50732e` 构建，最终普通 push/远端完整 SHA 见本 run 的 `changes/CR-007/git-baseline.json`。
 
 **现行执行 v0.6 / CR-006（2026-10-29，用户已要求）。** M1–M5 连续完成施工，阶段之间只核依赖、编译/类型检查和最小冒烟，保存一次开发基线后自动推进；所有综合原生/安装/故障实测集中到 M6 的统一沙盒验证。四引擎仅小夹具冒烟，真实引擎安装/损坏修复、GPU/模型/训练/权重实测仍 `skip + CR-004`。取消候选/成本后暂停、两轮或单包单案停锁、阶段间再次审批、C/S 双重保存和逐阶段真实矩阵。一般失败先诊断修复并补最短受影响检查，不结束 Goal；仅新增必要授权、硬预算或无法隔离的真实资料风险可中断。旧记录保留，未验证不作 pass。
+
+
+## 历史M阶段计划与门禁（保留原时间，现行CR-020见上方）
 
 ## 计划元数据
 
@@ -107,8 +142,8 @@
 
 未来按 CR-006 更新总控并连续施工，阶段快检与最终验收分开。M1–M5 不重复真实安装/故障矩阵，M5 不因缺干净 OS 测试资源停止编码与打包；M6 统一验证对应系统专项，资源不足仅阻断该专项并最终统一说明，不虚报 pass。
 
-## 防漂移和唯一下一动作
+## 历史M阶段防漂移与当时下一动作
 
 阶段名和 ID 保留 M0–M6。CR-006 取代旧候选暂停、单包/单案次数及 C/S 双重保存调度；历史事实保留。每阶段一次精确 commit/普通 push/远端 SHA 核对后继续，最终统一沙盒与报告。当前仅文档变更，实际执行未由本侧聊启动。
 
-唯一下一步：主执行者读取 v0.6 Goal，完成 M1 剩余施工，连续推进 M2–M5，最后统一执行 M6。
+历史当时下一步：读取v0.6 Goal推进M1–M6；该动作已被顶部CR-020及现行任务书替代，不能据此重开M阶段。

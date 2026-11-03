@@ -178,7 +178,7 @@ fn install_inner(
             && usable.is_ok()
         {
             super::verify_source_controlled(layout, release, &operation.cancel_token())?;
-            super::check_environment_controlled(layout, release, &operation.cancel_token())?;
+            super::check_environment_controlled(layout, release, &operation.cancel_token(), log)?;
             return Ok(());
         }
         bail!("已绑定环境需诊断修复；不会自动重建并覆盖原实例");
@@ -615,6 +615,19 @@ pub(super) fn validate_environment(
     log: &super::Logger,
     cancel: &crate::operations::CancelToken,
 ) -> Result<()> {
+    validate_environment_with_runner(layout, recipe, environment, log, cancel, &mut |command| {
+        super::execute_controlled(command, log, cancel)
+    })
+}
+
+pub(super) fn validate_environment_with_runner(
+    layout: &Layout,
+    recipe: &GuiRecipe,
+    environment: &Path,
+    log: &super::Logger,
+    cancel: &crate::operations::CancelToken,
+    run: &mut dyn FnMut(Command) -> Result<()>,
+) -> Result<()> {
     cancel.check()?;
     let root = &layout.root;
     crate::python_integrity::verify_controlled(layout, cancel)?;
@@ -638,7 +651,7 @@ pub(super) fn validate_environment(
     {
         bail!("环境含未验证的派生字节码，拒绝执行；原始wheel自带文件仍按固定摘要验证");
     }
-    validate_environment_runtime(layout, recipe, environment, log, cancel)
+    validate_environment_runtime_with_runner(layout, recipe, environment, log, cancel, run)
 }
 
 /// 调用前必须由登记/重建事务完成整个venv的固定可信索引静态核验。
@@ -649,6 +662,25 @@ pub(super) fn validate_environment_runtime(
     environment: &Path,
     log: &super::Logger,
     cancel: &crate::operations::CancelToken,
+) -> Result<()> {
+    validate_environment_runtime_with_runner(
+        layout,
+        recipe,
+        environment,
+        log,
+        cancel,
+        &mut |command| super::execute_controlled(command, log, cancel),
+    )
+}
+
+/// 独立legacy事务提供持久命名Job执行器；所有实际解释器执行继续走同一验证脚本。
+pub(super) fn validate_environment_runtime_with_runner(
+    layout: &Layout,
+    recipe: &GuiRecipe,
+    environment: &Path,
+    _log: &super::Logger,
+    cancel: &crate::operations::CancelToken,
+    run: &mut dyn FnMut(Command) -> Result<()>,
 ) -> Result<()> {
     cancel.check()?;
     let root = &layout.root;
@@ -665,7 +697,7 @@ pub(super) fn validate_environment_runtime(
         .args(["--no-cache", "pip", "check", "--python"])
         .arg(&executable);
     offline.apply_command(&mut check)?;
-    super::execute_controlled(check, log, cancel)?;
+    run(check)?;
     let mut probe = Command::new(&executable);
     probe
         .args(["-I", "-B", "-c", include_str!("gui_environment_probe.py")])
@@ -679,5 +711,5 @@ pub(super) fn validate_environment_runtime(
                 .collect::<std::collections::BTreeMap<_, _>>(),
         )?);
     offline.apply_command(&mut probe)?;
-    super::execute_controlled(probe, log, cancel)
+    run(probe)
 }

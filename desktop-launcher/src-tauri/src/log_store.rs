@@ -460,6 +460,25 @@ fn same_root(a: &str, b: &str) -> bool {
 /// Network policy removes URL credentials and queries; this additionally covers
 /// standalone config secrets and HTTP headers before anything reaches disk.
 pub fn redact(value: &str) -> String {
+    redact_with_line_limit(value, Some(LINE_BYTES))
+}
+
+/// 受管子进程已有界尾部使用完整脱敏；日志行8KiB的头部截断不适合错误尾部。
+/// 最多接受末尾64KiB的UTF-8文本，持久化的JSON限制由调用方再收口。
+pub(crate) fn redact_bounded_tail(value: &str) -> String {
+    let mut start = value.len().saturating_sub(64 * 1024);
+    while !value.is_char_boundary(start) {
+        start += 1;
+    }
+    let redacted = redact_with_line_limit(&value[start..], None);
+    if start == 0 {
+        redacted
+    } else {
+        format!("[输出已截断，仅保留有界尾部]\n{redacted}")
+    }
+}
+
+fn redact_with_line_limit(value: &str, line_limit: Option<usize>) -> String {
     fn bound(value: &str, bytes: usize) -> &str {
         let mut end = value.len().min(bytes);
         while !value.is_char_boundary(end) {
@@ -596,9 +615,11 @@ pub fn redact(value: &str) -> String {
         result.push(ch);
         index += ch.len_utf8();
     }
-    if result.len() > LINE_BYTES {
-        let bounded = bound(&result, LINE_BYTES - 32).to_owned();
-        result = bounded + " …[日志行已截断]";
+    if let Some(limit) = line_limit {
+        if result.len() > limit {
+            let bounded = bound(&result, limit - 32).to_owned();
+            result = bounded + " …[日志行已截断]";
+        }
     }
     result
 }
@@ -608,6 +629,26 @@ mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
     static SERIAL: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn bounded_tail_redaction_preserves_reason_past_log_line_limit() {
+        let reason = "ModuleNotFoundError: No module named pip";
+        // key跨越8KiB边界；不能把文本分成独立块再脱敏。
+        let key_boundary = format!(
+            "{}\napi_key=fake-private-value\n{reason}\n",
+            "x".repeat(LINE_BYTES - 4)
+        );
+        // value跨越8KiB边界；必须完整隐藏到该字段的真正结束处。
+        let value_boundary = format!("api_key={}\n{reason}\n", "fake-private-value".repeat(1024));
+        for input in [key_boundary, value_boundary] {
+            let output = redact_bounded_tail(&input);
+            assert!(output.contains(reason));
+            assert!(!output.contains("fake-private-value"));
+            assert!(output.contains("[已隐藏]"));
+            assert!(redact(&input).len() <= LINE_BYTES);
+        }
+    }
+
     struct Root(PathBuf);
     impl Root {
         fn new() -> Self {

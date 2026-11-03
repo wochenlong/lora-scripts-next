@@ -44,6 +44,10 @@ struct InstallationVersionView {
     current: bool,
     known_good: bool,
     managed_recipe: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    legacy_recovery: Option<super::legacy_install_recovery::LegacyRecoveryCandidate>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    legacy_environment_repair: Option<String>,
     #[serde(flatten)]
     support: ReleaseSupport,
     structure: &'static str,
@@ -73,6 +77,40 @@ struct Reader<'a> {
     root: &'a Path,
     remaining: u64,
     records: usize,
+}
+
+// 恢复入口只解码共享预算内的小记录身份，绝不在开窗时读取环境树或做完整验证。
+fn legacy_repair_pending(reader: &mut Reader<'_>, release: &Release) -> Result<Option<String>> {
+    let mut pending = None;
+    for path in reader.directory(&reader.root.join("state/legacy-environment-repair"))? {
+        if path.extension().is_none_or(|value| value != "json") {
+            bail!("旧环境修复目录有未知记录，请查看日志");
+        }
+        let value = reader.json(&path)?.context("旧环境修复记录读取期间消失")?;
+        let transaction = path
+            .file_stem()
+            .and_then(|value| value.to_str())
+            .context("修复事务名称无效")?;
+        model::validate_component(transaction)?;
+        if value["schema_version"] != 1
+            || value["root"].as_str().map(Path::new) != Some(reader.root)
+            || value["transaction"].as_str() != Some(transaction)
+        {
+            bail!("旧环境修复记录身份不符");
+        }
+        let recorded_release = value["release_id"].as_str().context("修复记录缺少版本")?;
+        model::validate_release_id(recorded_release)?;
+        if recorded_release != release.id {
+            continue;
+        }
+        let status = value["status"].as_str().context("修复记录缺少状态")?;
+        if !matches!(status, "succeeded" | "rolled_back" | "aborted")
+            && pending.replace(transaction.to_owned()).is_some()
+        {
+            bail!("有多个待恢复运行环境，请查看日志");
+        }
+    }
+    Ok(pending)
 }
 
 impl Reader<'_> {
@@ -319,6 +357,10 @@ fn gates(reader: &mut Reader<'_>, issues: &mut Vec<SnapshotIssue>) {
             ("state/gui-registration", &["committed"][..]),
             ("state/gui-binding-switch", &["committed"][..]),
             ("state/gui-rebuild", &["committed", "orphaned"][..]),
+            (
+                "state/legacy-environment-repair",
+                &["succeeded", "rolled_back", "aborted"][..],
+            ),
         ] {
             for path in reader.directory(&reader.root.join(relative))? {
                 if path.extension().is_none_or(|ext| ext != "json") {
@@ -519,6 +561,14 @@ pub fn read(root: &Path) -> Result<InstallationSnapshot> {
             entry.release_id = Some(release.id.clone());
         }
         versions.push(InstallationVersionView {
+            legacy_environment_repair: legacy_repair_pending(&mut reader, release)?,
+            legacy_recovery: if installed && registration.is_some() {
+                super::legacy_install_recovery::candidate(root, release)
+                    .ok()
+                    .flatten()
+            } else {
+                None
+            },
             id: release.id.clone(),
             channel: release.channel.clone(),
             version: release.version.clone(),
