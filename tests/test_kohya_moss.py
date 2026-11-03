@@ -23,7 +23,7 @@ def test_kohya_moss_submission_uses_vendor_launcher_and_safe_defaults(tmp_path, 
 
     runtime = SimpleNamespace(python=tmp_path / "python.exe")
     monkeypatch.setattr(settings, "runtime", lambda: runtime)
-    monkeypatch.setattr(extension_state, "read_status", lambda _runtime: {"state": "ready"})
+    monkeypatch.setattr(extension_state, "read_status", lambda _runtime: {"state": "ready", "runtime": {"python": str(runtime.python)}, "facts": {"audit": {"transformers": "5.17.0"}}})
     captured = {}
 
     def fake_run_train(config_path, trainer_file, gpu_ids, cpu_threads, **kwargs):
@@ -67,3 +67,28 @@ def test_kohya_moss_submission_uses_vendor_launcher_and_safe_defaults(tmp_path, 
     assert saved["cache_latents_to_disk"] is True
     assert saved["cache_text_encoder_outputs"] is True
     assert saved["cache_text_encoder_outputs_to_disk"] is True
+
+
+
+def test_kohya_moss_rejected_on_legacy_transformers_stack(tmp_path, monkeypatch):
+    import mikazuki.app.application  # noqa: F401 - initialize app modules before the engine hook
+    from mikazuki.engines.kohya import extension_state, run, settings
+
+    runtime = SimpleNamespace(python=tmp_path / "python.exe")
+    monkeypatch.setattr(settings, "runtime", lambda: runtime)
+    monkeypatch.setattr(extension_state, "read_status", lambda _runtime: {
+        "state": "ready",
+        "runtime": {"python": str(runtime.python)},
+        "facts": {"mode": "main_env", "audit": {"transformers": "4.51.3"}},
+    })
+    launched = []
+    monkeypatch.setattr(run.process, "run_train", lambda *a, **k: launched.append(1))
+
+    result = run.handle_run(
+        {"model_train_type": "moss-image-lora"},
+        RunContext(timestamp="moss-legacy", autosave_dir=str(tmp_path), model_train_type="moss-image-lora", gpu_ids=["0"]),
+    )
+
+    assert result.status == "fail"
+    assert "transformers 5.x" in result.message
+    assert not launched

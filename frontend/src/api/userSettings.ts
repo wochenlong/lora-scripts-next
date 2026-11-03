@@ -4,6 +4,7 @@ import type { EnginePrefs } from "../engines/prefs"
 export interface EngineSettingsPatch {
   engine_prefs?: EnginePrefs
   engine_order?: string[]
+  paths?: { diffsynth_cache?: string }
 }
 export interface UserSettings extends EngineSettingsPatch {
   schema_version: 1

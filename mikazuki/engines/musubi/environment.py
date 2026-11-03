@@ -384,12 +384,15 @@ def install_environment(
         plan.cuda_extra,
         default_torch,
     )
-    if plan.download_sources:
-        _append(
-            log,
-            f"[sources] pip={pip_index} pytorch={torch_index} "
-            f"hf={plan.download_sources.hf_endpoint or '(default)'} github_prefix={github_prefix or '(none)'}",
-        )
+    # Reflect the actual install environment: install_process_env() preserves
+    # an operator-provided HF_ENDPOINT, so the payload-or-default fallback
+    # alone can misreport the effective source.
+    effective_hf = process_env.get("HF_ENDPOINT") or f"{DEFAULT_HF_ENDPOINT} (engine default)"
+    _append(
+        log,
+        f"[sources] pip={pip_index} pytorch={torch_index} "
+        f"hf={effective_hf} github_prefix={github_prefix or '(none)'}",
+    )
 
     uv = _uv_command()
     facts["phase"] = "python"

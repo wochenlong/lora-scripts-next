@@ -19,6 +19,7 @@ from mikazuki.app.api import router as api_router
 # from mikazuki.app.ipc import router as ipc_router
 from mikazuki.app.proxy import router as proxy_router
 from mikazuki.utils.devices import check_torch_gpu
+from mikazuki.launch_utils import ensure_frontend_dist
 from mikazuki.spa import (
     should_fallback_to_spa,
 )
@@ -145,6 +146,7 @@ async def app_startup():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await asyncio.to_thread(ensure_frontend_dist)
     await app_startup()
     yield
 
@@ -239,4 +241,4 @@ async def index():
 async def favicon():
     return FileResponse("assets/favicon.ico")
 
-app.mount("/", SPAStaticFiles(directory=str(_FRONTEND_DIST), html=True), name="static")
+app.mount("/", SPAStaticFiles(directory=str(_FRONTEND_DIST), html=True, check_dir=False), name="static")

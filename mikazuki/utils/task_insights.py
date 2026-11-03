@@ -97,7 +97,7 @@ def _is_ai_toolkit(metadata: dict) -> bool:
 def resolve_task_dirs(metadata: dict) -> dict:
     # These engines keep UI configs separate from native runtime arguments.
     # Their run handlers carry the actual output/log directories in metadata.
-    if (metadata or {}).get("backend") in {AI_TOOLKIT_BACKEND, "diffsynth", "moss"}:
+    if (metadata or {}).get("backend") in {AI_TOOLKIT_BACKEND, "diffsynth", "moss", "kohaku-moss"}:
         return {
             "output_dir": _resolve_dir((metadata or {}).get("output_dir")),
             "logging_dir": _resolve_dir((metadata or {}).get("logging_dir")),
@@ -243,7 +243,7 @@ def _moss_preview_paths(metadata: dict) -> list[Path]:
 
 
 def _preview_name(metadata: dict, path: Path) -> str:
-    if metadata.get("backend") == "moss":
+    if metadata.get("backend") in {"moss", "kohaku-moss"}:
         return path.parent.name + "__" + path.name
     return path.name
 
@@ -259,13 +259,16 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
     since = _since(metadata)
     until = _until(metadata)
     ai_toolkit = _is_ai_toolkit(metadata)
+    kohaku = metadata.get("backend") == "kohaku-moss"
     # ai-toolkit samples land in <training_folder>/<name>/samples/ and their
     # filenames start with a gen-time millisecond timestamp, not output_name.
     if ai_toolkit:
         roots = [output_dir / output_name / "samples"] if output_name else [output_dir]
+    elif kohaku:
+        roots = [output_dir / "samples"]
     else:
         roots = [output_dir / "sample", output_dir]
-    cache_key = (str(output_dir), output_name, since, until, ai_toolkit)
+    cache_key = (str(output_dir), output_name, since, until, metadata.get("backend"))
     now = time.monotonic()
     cached = _list_cache.get(cache_key)
     if cached and now - cached[0] < _LIST_CACHE_TTL_SECONDS:
@@ -281,19 +284,22 @@ def _iter_preview_paths(metadata: dict) -> list[Path]:
             # samples/.thumbs/<name>.<ext>.jpg, which would double every entry.
             if any(part.startswith(".") for part in path.relative_to(root).parts):
                 continue
-            if not ai_toolkit and output_name and not path.name.startswith(output_name):
+            if not ai_toolkit and not kohaku and output_name and not path.name.startswith(output_name):
                 continue
             try:
+                if kohaku:
+                    path.resolve().relative_to(output_dir.resolve())
                 mtime = path.stat().st_mtime
-            except OSError:
+            except (OSError, ValueError):
                 continue
             if since and mtime < since:
                 continue
             if until and mtime > until:
                 continue
-            old = found.get(path.name)
+            name = _preview_name(metadata, path)
+            old = found.get(name)
             if old is None or mtime >= old.stat().st_mtime:
-                found[path.name] = path
+                found[name] = path
     result = sorted(found.values(), key=lambda p: p.stat().st_mtime)
     _list_cache[cache_key] = (now, result)
     return result
@@ -311,6 +317,9 @@ def list_preview_images(metadata: dict) -> list[dict]:
         image = {"name": _preview_name(metadata, path), "epoch": parse_epoch(path.name), "step": step, "mtime": mtime}
         if metadata.get("backend") == "moss":
             image["epoch"] = int(path.parent.name.removeprefix("epoch_"))
+        if metadata.get("backend") == "kohaku-moss":
+            match = re.fullmatch(r"step_(\d+)", path.parent.name)
+            image["step"] = int(match[1]) if match else None
         if metadata.get("backend") == "diffsynth":
             step_match = re.search(r"-step-(\d+)-sample-", path.name)
             image["step"] = int(step_match[1]) if step_match else None
@@ -343,6 +352,9 @@ def read_loss_scalars(metadata: dict, limit: int = LOSS_POINT_LIMIT) -> dict:
     # Never fall back to a neighbouring engine's event files.
     if (metadata or {}).get("backend") == "moss":
         return {}
+    if (metadata or {}).get("backend") == "kohaku-moss":
+        from mikazuki.engines.kohaku_moss.progress import read_loss
+        return {tag: downsample(points, limit) for tag, points in read_loss(metadata).items()}
     dirs = resolve_task_dirs(metadata)
     logging_dir = dirs.get("logging_dir")
     if logging_dir is None or not logging_dir.exists():

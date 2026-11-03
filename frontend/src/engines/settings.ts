@@ -79,6 +79,10 @@ export function patchEngineSettings(build: () => EngineSettingsPatch) {
   })
 }
 
+export function writeDiffsynthCacheDir(value: string) {
+  return patchEngineSettings(() => ({ paths: { diffsynth_cache: value.trim() } }))
+}
+
 export function legacyEngineImport(): EngineSettingsPatch {
   const patch: EngineSettingsPatch = {}
   if (!state.ready || !state.settings) return patch

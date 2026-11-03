@@ -9,6 +9,7 @@ import { useTaggerStore } from "../stores/tagger"
 import { taggerApi, type TaggerRequest } from "../api/tagger"
 import ManagedDatasetPicker from "../components/dataset/ManagedDatasetPicker.vue"
 import { createCaptionPresetService, type CaptionPreset } from "../tagger/captionPresets"
+import { presetForTask, TAGGER_TASKS, type TaggerTask } from "../tagger/presets"
 
 const models = [
   "wd14-convnextv2-v2",
@@ -22,11 +23,14 @@ const models = [
   "wd-vit-large-tagger-v3",
   "cl_tagger_1_01",
 ]
+const taggerTask = ref<TaggerTask>("general")
+const modelManual = ref(false)
+const generalPreset = presetForTask("general")
 const form = reactive<TaggerRequest>({
   path: "",
-  interrogator_model: models[0],
-  threshold: 0.35,
-  character_threshold: 0.6,
+  interrogator_model: generalPreset.model,
+  threshold: generalPreset.threshold,
+  character_threshold: generalPreset.characterThreshold,
   add_rating_tag: false,
   add_model_tag: false,
   additional_tags: "",
@@ -161,12 +165,37 @@ function availabilityLabel(model: string) {
 watch(() => status.value.phase, (phase, oldPhase) => {
   if (phase !== oldPhase && oldPhase === "downloading") void refreshModels()
 })
+function applyTaggerTask(task: TaggerTask) {
+  const preset = presetForTask(task)
+  taggerTask.value = task
+  modelManual.value = false
+  form.interrogator_model = preset.model
+  form.threshold = preset.threshold
+  form.character_threshold = preset.characterThreshold
+}
+
+function onModelPicked(model: string) {
+  form.interrogator_model = model
+  const preset = presetForTask(taggerTask.value)
+  modelManual.value = model !== preset.model
+}
+
 function restoreParameters() {
+  const preset = presetForTask(taggerTask.value)
   Object.assign(form, {
-    threshold: 0.35, character_threshold: 0.6, additional_tags: "", exclude_tags: "",
-    batch_output_action_on_conflict: "ignore", batch_input_recursive: false,
-    replace_underscore: true, escape_tag: true, add_rating_tag: false, add_model_tag: false,
+    interrogator_model: preset.model,
+    threshold: preset.threshold,
+    character_threshold: preset.characterThreshold,
+    additional_tags: "",
+    exclude_tags: "",
+    batch_output_action_on_conflict: "ignore",
+    batch_input_recursive: false,
+    replace_underscore: true,
+    escape_tag: true,
+    add_rating_tag: false,
+    add_model_tag: false,
   })
+  modelManual.value = false
 }
 const modelGroups = [
   { name: "WD", models: models.filter(model => model.startsWith("wd")) },
@@ -239,13 +268,32 @@ onBeforeUnmount(stopPolling)
         <span>{{ t("tagger.workspace.method") }}</span>
         <div class="tagger-segments"><button class="selected" aria-pressed="true">Tag</button><button disabled>{{ t("tagger.workspace.caption") }}</button></div>
       </div>
-      <div class="tagger-choice-row">
-        <span>{{ t("tagger.workspace.source") }}</span>
-        <div class="tagger-segments"><button class="selected" aria-pressed="true">{{ t("tagger.workspace.local") }}</button><button disabled>API</button></div>
+      <div class="tagger-choice-row" data-testid="tagger-task">
+        <span>{{ t("tagger.workspace.task") }}</span>
+        <div class="tagger-segments" role="group" :aria-label="t('tagger.workspace.task')">
+          <button
+            v-for="task in TAGGER_TASKS"
+            :key="task"
+            type="button"
+            :class="{ selected: taggerTask === task }"
+            :aria-pressed="taggerTask === task"
+            :disabled="busy"
+            :data-testid="`tagger-task-${task}`"
+            @click="applyTaggerTask(task)"
+          >{{ t(`tagger.workspace.tasks.${task}`) }}</button>
+        </div>
       </div>
-      <div class="tagger-model-row">
+      <p class="tagger-task-hint" data-testid="tagger-task-hint">{{ t(`tagger.workspace.taskHints.${taggerTask}`) }}</p>
+      <div class="tagger-model-row tagger-model-row-secondary">
         <label class="tagger-model-field"><span>{{ t("tagger.modelLabel") }}</span>
-          <ElSelect v-model="form.interrogator_model" filterable :disabled="busy" :aria-label="t('tagger.modelLabel')" data-testid="model-select">
+          <ElSelect
+            :model-value="form.interrogator_model"
+            filterable
+            :disabled="busy"
+            :aria-label="t('tagger.modelLabel')"
+            data-testid="model-select"
+            @update:model-value="onModelPicked"
+          >
             <ElOptionGroup v-for="group in modelGroups" :key="group.name" :label="group.name">
               <ElOption v-for="model in group.models" :key="model" :label="model" :value="model"><span>{{ model }}</span><small class="tagger-option-state">{{ availabilityLabel(model) }}</small></ElOption>
             </ElOptionGroup>
@@ -255,6 +303,7 @@ onBeforeUnmount(stopPolling)
         <button v-if="availabilityError" class="secondary-action" @click="refreshModels">{{ t("datasetManage.retry") }}</button>
         <span v-if="status.phase === 'downloading'">{{ t("tagger.downloadMeter") }} {{ downloadPercent }}% · {{ status.download.filename }}</span>
       </div>
+      <p class="tagger-model-hint">{{ modelManual ? t("tagger.workspace.modelManual") : t("tagger.workspace.modelHint") }}</p>
       <div class="tagger-choice-row">
         <label for="tagger-conflict">{{ t("tagger.conflictLabel") }}</label>
         <select id="tagger-conflict" v-model="form.batch_output_action_on_conflict" :disabled="busy" class="tagger-conflict-select">

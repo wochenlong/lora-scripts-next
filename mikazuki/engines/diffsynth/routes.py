@@ -1,7 +1,7 @@
 import uuid
 
 from mikazuki.app.models import APIResponseSuccess, APIResponseFail
-from mikazuki.download_sources import parse_download_sources, DownloadSources
+from mikazuki.download_sources import resolve_download_sources, DownloadSources
 from .settings import runtime, feature_enabled
 from .extension_state import read_status
 from .diagnose import diagnose as diagnose_runtime
@@ -77,7 +77,7 @@ async def install(payload, force_install=False):
     if not feature_enabled():
         return APIResponseFail(message="DiffSynth 已被禁用。")
     rt = runtime()
-    sources = parse_download_sources(payload) or DownloadSources()
+    sources = resolve_download_sources(payload) or DownloadSources()
     if payload.get("dry_run", True):
         return APIResponseSuccess(data={"plan": installation_plan(rt, sources)})
     if force_install:
@@ -99,7 +99,7 @@ async def repair(payload):
     if not feature_enabled():
         return APIResponseFail(message="DiffSynth 已被禁用。")
     rt = runtime()
-    sources = parse_download_sources(payload) or DownloadSources()
+    sources = resolve_download_sources(payload) or DownloadSources()
     action = (payload or {}).get("action")
     dry_run_flag = bool((payload or {}).get("dry_run", False))
     if action == "full_reinstall" or (payload or {}).get("full_reinstall"):

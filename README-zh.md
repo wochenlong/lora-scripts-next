@@ -17,7 +17,7 @@
 
 ## MOSS-Image 训练效果展示
 
-由 [KohakuBlueleaf](https://github.com/KohakuBlueleaf) 使用其训练器 [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 完成的 **100 步风格 LoRA 测试**。上排为基础模型，下排为加载 LoRA 后的效果。经作者同意引用，用于展示 MOSS-Image 的训练效果；本图结果由 KohakuMossTrainer 训练获得。
+由 [KohakuBlueleaf](https://github.com/KohakuBlueleaf) 使用其训练器 [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 完成的 **100 步风格 LoRA 测试**。上排为基础模型，下排为加载 LoRA 后的效果。经作者同意引用，用于展示 MOSS-Image 的训练效果；本图结果由 KohakuMossTrainer 训练获得（当前源码已将其接入为可选训练引擎）。
 
 [![KohakuBlueleaf 的 MOSS-Image 基础模型与 100 步风格 LoRA 效果对比](assets/readme/kohaku-moss-style-lora.png)](assets/readme/kohaku-moss-style-lora.png)
 
@@ -26,7 +26,7 @@
 - **多引擎工作台**：统一支持 Kohya、Anima Fast、Musubi、AI Toolkit、DiffSynth-Studio 和 MOSS（anima_lora），并补充模型与引擎对应表及训练教程入口。
 - **Kohya 运行环境独立化**：Kohya 使用 `extensions/kohya/` 独立环境；训练器源码更新与引擎环境分离，Kohya 可按需安装、修复和审计。
 - **更新不再丢失 Kohya**：源码更新和整合包更新都会保留用户拥有的训练运行时；整合包更新器排除 `Next-Trainer/extensions/`，不会因更新主程序卸载 Kohya。
-- **MOSS-Image**：新增 MOSS-Image LoRA 训练，默认推荐 Kohya，`anima_lora` 作为次选路径。
+- **MOSS-Image**：默认仍推荐 Kohya；当前源码同时接入可选 [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 和 `anima_lora` 路径，整合包是否包含该入口以具体版本为准。
 - **AI Toolkit 与 Ideogram 4**：加入 AI Toolkit 训练引擎和 Ideogram 4 LoRA 入口，按需安装，不强制下载可选引擎环境。
 - **插件市场调整**：当前没有可用插件内容，已从用户界面和默认构建中隐藏，也不会强制下载空的 marketplace 依赖。
 - **3.3.1-dev 整合包**：提供小于 2 GB 的 lite 包，包含基础运行环境、前端、WD 打标模型和离线 tokenizer，不预装 Kohya。
@@ -66,13 +66,13 @@ lite 包本身不预装 Kohya；首次使用时请在 **设置 → 训练引擎*
 
 ![一个前端，多种训练引擎（概念示意图）](assets/readme/next-trainer-multi-engine.png)
 
-**Kohya · Anima Fast · Musubi · AI Toolkit · DiffSynth-Studio · MOSS (anima_lora)**
+**Kohya · Anima Fast · Musubi · AI Toolkit · DiffSynth-Studio · KohakuMossTrainer · MOSS (anima_lora)**
 
 引擎可在 **设置 → 训练引擎** 中按需安装，再到训练页选择对应引擎。从 3.1.1 或更早版本升级后，首次使用 Kohya 训练前需先安装 Kohya 引擎。可用引擎以所用训练器版本为准；接入引擎不代表已经支持其上游的全部模型和功能。
 
 训练 Qwen-Image-2.1 时，选择 **DiffSynth-Studio → LoRA**，再切换 **文生图 T2I** 或 **Edit 图像编辑**。Edit 当前要求 Batch 1，可通过梯度累积增加有效批量。
 
-训练 MOSS-Image LoRA 时，推荐使用且默认选择 **Kohya**；**MOSS (anima_lora)** 作为次选引擎保留。
+训练 MOSS-Image LoRA 时，推荐使用且默认选择 **Kohya**；也可按需安装并切换 **KohakuMossTrainer**（Kohaku / 龙娘开发的高性能 LyCORIS 训练引擎）或 **MOSS (anima_lora)**。
 
 ## 支持的模型
 
@@ -86,19 +86,19 @@ lite 包本身不预装 Kohya；首次使用时请在 **设置 → 训练引擎*
 
 ✅ 表示已集成的 LoRA 训练入口；— 表示暂无对应入口。此表以当前分支的训练模块为准，不代表上游引擎的全部能力；具体模型版本和硬件要求仍以对应引擎教程为准。
 
-| 模型 | Kohya | Anima Fast | Musubi | AI Toolkit | DiffSynth-Studio | MOSS (anima_lora) |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| MOSS-Image | ✅ | — | — | — | — | ✅ |
-| Qwen-Image-2.1 | — | — | — | ✅ | ✅ | — |
-| Krea 2 | — | — | ✅ | ✅ | — | — |
-| Anima | ✅ | ✅ | — | ✅ | — | — |
-| FLUX.2 Klein | — | — | — | ✅ | — | — |
-| Ideogram 4 | — | — | ✅ | ✅ | — | — |
-| Flux | ✅ | — | — | ✅ | — | — |
-| SDXL | ✅ | — | — | ✅ | — | — |
-| SD 1.5 | ✅ | — | — | ✅ | — | — |
+| 模型 | Kohya | Anima Fast | Musubi | AI Toolkit | DiffSynth-Studio | KohakuMossTrainer | MOSS (anima_lora) |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| MOSS-Image | ✅ | — | — | — | — | ✅ | ✅ |
+| Qwen-Image-2.1 | — | — | — | ✅ | ✅ | — | — |
+| Krea 2 | — | — | ✅ | ✅ | — | — | — |
+| Anima | ✅ | ✅ | — | ✅ | — | — | — |
+| FLUX.2 Klein | — | — | — | ✅ | — | — | — |
+| Ideogram 4 | — | — | ✅ | ✅ | — | — | — |
+| Flux | ✅ | — | — | ✅ | — | — | — |
+| SDXL | ✅ | — | — | ✅ | — | — | — |
+| SD 1.5 | ✅ | — | — | ✅ | — | — | — |
 
-Kohya 还提供 Anima、SDXL、SD 1.5 的全量训练入口。MOSS-Image 默认使用 Kohya，`MOSS (anima_lora)` 为备选。Lumina 保留 Kohya LoRA 入口，可通过 `?model=lumina` 访问，但不在常规模型选择列表中展示。
+Kohya 还提供 Anima、SDXL、SD 1.5 的全量训练入口。MOSS-Image 默认使用 Kohya，并提供 `KohakuMossTrainer` 与 `MOSS (anima_lora)` 可选引擎。Lumina 保留 Kohya LoRA 入口，可通过 `?model=lumina` 访问，但不在常规模型选择列表中展示。
 
 上方配图均为概念示意，其中画面不代表各标注模型的实际生成效果或评测结果。
 

@@ -315,6 +315,13 @@ def normalize_download_endpoint(endpoint: str | None) -> str:
 @contextmanager
 def use_download_endpoint(endpoint: str | None) -> Iterator[None]:
     endpoint_value = normalize_download_endpoint(endpoint)
+    if not endpoint_value:
+        # Fall back to the backend-persisted download-source config so the
+        # settings panel's HF channel covers tagger downloads too.
+        from mikazuki.download_sources import load_download_sources
+
+        saved = load_download_sources()
+        endpoint_value = normalize_download_endpoint(saved.hf_endpoint if saved else None)
     previous = os.environ.get("HF_ENDPOINT")
     try:
         if endpoint_value:

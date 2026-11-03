@@ -126,6 +126,9 @@ $applyRoot = Join-Path $PSScriptRoot "apply_portable_2026_root.ps1"
 if (Test-Path $applyRoot) {
     Write-Log "Applying 2026 root..." "Cyan"
     & $applyRoot -PortableRoot $portableDir
+
+# ---- launcher exe (thin shell over the .bat entries, #435) ----
+& (Join-Path $PSScriptRoot "06-build-launcher.ps1") -PackageRoot $portableDir
 }
 
 $note = Join-Path $portableDir "说明.txt"

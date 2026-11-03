@@ -17,6 +17,37 @@ def resolve(settings=None, argv=(), probe=lambda host, port: True):
     return startup.resolve_startup(settings or {}, gui.parser.parse_args(argv), probe=probe)
 
 
+def _free_port():
+    probe = socket.socket()
+    probe.bind(("127.0.0.1", 0))
+    port = probe.getsockname()[1]
+    probe.close()
+    return port
+
+
+@pytest.mark.skipif(os.name == "nt", reason="SO_REUSEADDR semantics differ on Windows")
+def test_probe_ignores_time_wait_but_not_active_listeners():
+    port = _free_port()
+    server = socket.socket()
+    server.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    server.bind(("0.0.0.0", port))
+    server.listen(1)
+    client = socket.create_connection(("127.0.0.1", port))
+    conn, _ = server.accept()
+    conn.close()
+    client.close()
+    server.close()
+    assert startup.port_available("0.0.0.0", port)
+    blocker = socket.socket()
+    blocker.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    blocker.bind(("127.0.0.1", port))
+    blocker.listen(1)
+    try:
+        assert not startup.port_available("127.0.0.1", port)
+    finally:
+        blocker.close()
+
+
 def test_defaults():
     config = resolve()
     assert (config.gui.host, config.gui.port, config.gui.port_conflict) == ("127.0.0.1", 28000, "error")

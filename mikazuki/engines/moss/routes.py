@@ -1,6 +1,6 @@
 """Native engine endpoints; read-only dry runs never install or launch jobs."""
 from mikazuki.app.models import APIResponseFail, APIResponseSuccess
-from mikazuki.download_sources import DownloadSources, parse_download_sources
+from mikazuki.download_sources import DownloadSources, resolve_download_sources
 from .extension_state import check_runtime, read_status
 from .installer import installation_plan, remove_extension, start_install
 from .settings import feature_enabled, runtime
@@ -15,7 +15,7 @@ async def install(payload, force_install=False):
         return APIResponseFail(message="MOSS 已被禁用。")
     payload = payload or {}
     rt = runtime()
-    sources = parse_download_sources(payload) or DownloadSources()
+    sources = resolve_download_sources(payload) or DownloadSources()
     try:
         if payload.get("dry_run", True):
             return APIResponseSuccess(data={"plan": installation_plan(rt, sources), "repair": force_install})

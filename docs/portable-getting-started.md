@@ -2,6 +2,17 @@
 
 面向 **Next Trainer 便携整合包**（归档名 `Next-Trainer-v*.7z`）用户的进阶说明。快速上手：下载 → 双击 `启动.bat` → 浏览器开练。
 
+## 启动器（NextTrainer.exe）
+
+整合包根目录同时提供一个 **`NextTrainer.exe`**（C# NativeAOT，约 5 MB，无 .NET 运行时依赖）：
+
+- 双击启动 = 等价于 `启动.bat`（启动服务并自动打开浏览器），但会**接管进程树**：关闭窗口或按 `Q` 会真正停掉整个服务，不会留下后台残留
+- 按 `U` 一键更新：先停服 → 运行 `检查更新.bat` → 按 `R` 重启
+- 端口被占用或启动失败时给出中文提示（不是一闪而过）
+- 开发/自检：`NextTrainer.exe --selftest`（启动 → 等端口 → 停服 → 退出码 0/1）
+
+启动器只做壳，不预装任何东西；`启动.bat` 仍是兜底入口。
+
 当前最新正式版：**v3.0.0**（[GitHub Release](https://github.com/wochenlong/lora-scripts-next/releases/tag/v3.0.0) · [魔搭 Next-Lab/next-trainer-releases](https://www.modelscope.cn/datasets/Next-Lab/next-trainer-releases)）。
 
 > **Krea 2**：请用 **musubi** 包（魔搭 `releases/v3.0.0/Next-Trainer-v3.0.0-musubi.7z`），步骤见 **[portable-1.5-krea2-guide.md](portable-1.5-krea2-guide.md)**。

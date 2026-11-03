@@ -148,6 +148,9 @@ def is_preview_enabled(config: dict) -> bool:
 
 
 def ensure_enable_preview_flag(config: dict) -> None:
+    # Kohaku uses its native SAMPLE_* fields, not Kohya's preview switch.
+    if config.get("model_train_type") == "kohaku-moss-image-lora":
+        return
     if has_preview_enable_signal(config):
         config["enable_preview"] = True
 

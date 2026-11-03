@@ -1,108 +1,119 @@
 <script setup lang="ts">
-import { computed, reactive, ref } from "vue"
+import { computed, onMounted, reactive } from "vue"
 import { ElMessage } from "element-plus"
 import { useI18n } from "vue-i18n"
 import {
-  applyPreset,
+  chinaDownloadSources,
   defaultDownloadSources,
-  readDownloadSources,
   resolveGithubPrefix,
   resolveHfEndpoint,
   resolvePipIndexUrl,
   resolvePytorchIndexUrl,
+  resolvedDownloadSourcesPayload,
   type DownloadSourcesPrefs,
   type GithubChoice,
   type HfChoice,
   type PipChoice,
   type PytorchChoice,
-  type SourcePreset,
-  writeDownloadSources,
 } from "../engines/downloadSources"
+import type { SourceCheckChannel } from "../api/downloadSources"
+import { useDownloadSourcesStore } from "../stores/downloadSources"
 
-defineProps<{ compact?: boolean }>()
 const emit = defineEmits<{ saved: [] }>()
 
 const { t } = useI18n()
-const draft = reactive<DownloadSourcesPrefs>(readDownloadSources())
-const advancedOpen = ref(false)
+const dsStore = useDownloadSourcesStore()
+const draft = reactive<DownloadSourcesPrefs>(defaultDownloadSources())
 
-const pipOptions: PipChoice[] = ["official", "tsinghua", "aliyun", "douban", "custom"]
-const pytorchOptions: PytorchChoice[] = ["official", "aliyun", "tsinghua", "bfsu", "custom"]
-const hfOptions: HfChoice[] = ["official", "hf-mirror", "modelscope", "custom"]
-const githubOptions: GithubChoice[] = ["official", "ghfast", "ghproxy", "custom"]
+function clonePrefs(prefs: DownloadSourcesPrefs): DownloadSourcesPrefs {
+  return {
+    ...prefs,
+    pip: { ...prefs.pip },
+    pytorch: { ...prefs.pytorch },
+    huggingface: { ...prefs.huggingface },
+    github: { ...prefs.github },
+    proxy: { ...prefs.proxy },
+  }
+}
+
+function syncDraft() {
+  Object.assign(draft, clonePrefs(dsStore.prefs))
+}
+
+onMounted(async () => {
+  await dsStore.ensureLoaded()
+  syncDraft()
+})
+
+const pipOptions: PipChoice[] = ["auto", "official", "tsinghua", "aliyun", "douban", "custom"]
+const pytorchOptions: PytorchChoice[] = ["auto", "official", "aliyun", "tsinghua", "bfsu", "custom"]
+const hfOptions: HfChoice[] = ["auto", "official", "hf-mirror", "modelscope", "custom"]
+const githubOptions: GithubChoice[] = ["auto", "official", "ghfast", "ghproxy", "custom"]
 
 const resolved = computed(() => ({
-  pip: resolvePipIndexUrl(draft),
-  pytorch: resolvePytorchIndexUrl(draft),
-  huggingface: resolveHfEndpoint(draft),
-  github: resolveGithubPrefix(draft) || t("settings.engines.downloadSources.choices.github.official"),
+  pip: resolvePipIndexUrl(draft) || t("settings.engines.downloadSources.engineDefault"),
+  pytorch: resolvePytorchIndexUrl(draft) || t("settings.engines.downloadSources.engineDefault"),
+  huggingface: resolveHfEndpoint(draft) || t("settings.engines.downloadSources.engineDefault"),
+  github: draft.github.choice === "auto"
+    ? t("settings.engines.downloadSources.engineDefault")
+    : resolveGithubPrefix(draft) || t("settings.engines.downloadSources.choices.github.official"),
 }))
-
-function onPresetSelect(preset: SourcePreset) {
-  Object.assign(draft, applyPreset(preset, draft))
-  writeDownloadSources({ ...draft })
-  emit("saved")
-  ElMessage.success(t("settings.engines.downloadSources.saved"))
-}
 
 function onChannelChange() {
   draft.preset = "custom"
+  dsStore.clearResults()
 }
 
-function saveAdvanced() {
-  writeDownloadSources({
-    ...draft,
-    pip: { ...draft.pip },
-    pytorch: { ...draft.pytorch },
-    huggingface: { ...draft.huggingface },
-    github: { ...draft.github },
-  })
-  advancedOpen.value = false
+async function saveAdvanced() {
+  await dsStore.savePrefs(clonePrefs(draft))
+  void dsStore.checkAll()
   emit("saved")
   ElMessage.success(t("settings.engines.downloadSources.saved"))
 }
 
-function reset() {
-  Object.assign(draft, defaultDownloadSources())
-  writeDownloadSources(defaultDownloadSources())
+async function reset() {
+  await dsStore.savePrefs(defaultDownloadSources())
+  syncDraft()
+  void dsStore.checkAll()
   emit("saved")
   ElMessage.success(t("settings.engines.downloadSources.resetDone"))
 }
 
-function openAdvanced() {
-  Object.assign(draft, readDownloadSources())
-  advancedOpen.value = true
+function applyChinaPreset() {
+  Object.assign(draft, chinaDownloadSources(), { proxy: draft.proxy })
+  dsStore.clearResults()
 }
 
-defineExpose({ openAdvanced, reload: () => Object.assign(draft, readDownloadSources()) })
+async function checkDraft() {
+  await dsStore.checkAll(resolvedDownloadSourcesPayload(draft))
+}
+
+function channelStatus(key: SourceCheckChannel) {
+  return dsStore.statusFor(key)
+}
+
+function channelCheckText(key: SourceCheckChannel) {
+  const result = dsStore.resultFor(key)
+  if (!result) {
+    return dsStore.statusFor(key) === "checking" || dsStore.presumedFail(key)
+      ? t("settings.engines.downloadSources.status.checking")
+      : ""
+  }
+  if (!result.ok) return result.error || `HTTP ${result.status ?? "?"}`
+  return `${result.latency_ms ?? "?"} ms`
+}
+
+defineExpose({ reload: async () => { await dsStore.ensureLoaded(); syncDraft() } })
 </script>
 
 <template>
-  <div v-if="compact" class="ds-compact">
-    <select
-      :value="draft.preset"
-      :aria-label="t('settings.engines.downloadSources.title')"
-      @change="onPresetSelect(($event.target as HTMLSelectElement).value as SourcePreset)"
-    >
-      <option value="official">{{ t("settings.engines.downloadSources.presets.official.title") }}</option>
-      <option value="china">{{ t("settings.engines.downloadSources.presets.china.short") }}</option>
-      <option value="custom">{{ t("settings.engines.downloadSources.presets.custom.title") }}</option>
-    </select>
-    <button type="button" class="ds-link-btn" @click="openAdvanced">
-      {{ t("settings.engines.downloadSources.advancedShort") }}
-    </button>
-  </div>
-
-  <Teleport to="body">
-    <div v-if="advancedOpen" class="ds-modal-backdrop" @click.self="advancedOpen = false">
-      <section class="ds-sheet" role="dialog" :aria-label="t('settings.engines.downloadSources.advanced')">
+  <section class="ds-sheet ds-inline" :aria-label="t('settings.engines.downloadSources.advanced')">
         <header class="ds-sheet-head">
           <div>
             <p class="ds-kicker">{{ t("settings.engines.downloadSources.title") }}</p>
             <h3>{{ t("settings.engines.downloadSources.advanced") }}</h3>
             <p class="ds-sheet-lead">{{ t("settings.engines.downloadSources.leadShort") }}</p>
           </div>
-          <button type="button" class="ds-close" :aria-label="t('settings.engines.downloadSources.close')" @click="advancedOpen = false">×</button>
         </header>
 
         <div class="ds-channels">
@@ -116,6 +127,7 @@ defineExpose({ openAdvanced, reload: () => Object.assign(draft, readDownloadSour
                 </select>
               </div>
               <code>{{ resolved.pip }}</code>
+              <span v-if="channelCheckText('pip')" class="ds-check" :data-status="channelStatus('pip')">{{ channelCheckText("pip") }}</span>
               <input
                 v-if="draft.pip.choice === 'custom'"
                 v-model="draft.pip.customUrl"
@@ -136,6 +148,7 @@ defineExpose({ openAdvanced, reload: () => Object.assign(draft, readDownloadSour
                 </select>
               </div>
               <code>{{ resolved.pytorch }}</code>
+              <span v-if="channelCheckText('pytorch')" class="ds-check" :data-status="channelStatus('pytorch')">{{ channelCheckText("pytorch") }}</span>
               <input
                 v-if="draft.pytorch.choice === 'custom'"
                 v-model="draft.pytorch.customUrl"
@@ -156,6 +169,7 @@ defineExpose({ openAdvanced, reload: () => Object.assign(draft, readDownloadSour
                 </select>
               </div>
               <code>{{ resolved.huggingface }}</code>
+              <span v-if="channelCheckText('huggingface')" class="ds-check" :data-status="channelStatus('huggingface')">{{ channelCheckText("huggingface") }}</span>
               <input
                 v-if="draft.huggingface.choice === 'custom'"
                 v-model="draft.huggingface.customUrl"
@@ -176,6 +190,7 @@ defineExpose({ openAdvanced, reload: () => Object.assign(draft, readDownloadSour
                 </select>
               </div>
               <code>{{ resolved.github }}</code>
+              <span v-if="channelCheckText('github')" class="ds-check" :data-status="channelStatus('github')">{{ channelCheckText("github") }}</span>
               <input
                 v-if="draft.github.choice === 'custom'"
                 v-model="draft.github.customUrl"
@@ -185,18 +200,36 @@ defineExpose({ openAdvanced, reload: () => Object.assign(draft, readDownloadSour
               >
             </div>
           </div>
+
+          <div class="ds-channel">
+            <div class="ds-channel-mark" data-ch="proxy">PX</div>
+            <div class="ds-channel-body">
+              <div class="ds-channel-top">
+                <strong>{{ t("settings.engines.downloadSources.proxy.label") }}</strong>
+              </div>
+              <div class="ds-proxy-row">
+                <input
+                  v-model="draft.proxy.url"
+                  type="url"
+                  :placeholder="t('settings.engines.downloadSources.proxy.placeholder')"
+                >
+              </div>
+              <p class="ds-proxy-hint">{{ t("settings.engines.downloadSources.proxy.hint") }}</p>
+            </div>
+          </div>
         </div>
 
         <p class="ds-footnote">{{ t("settings.engines.downloadSources.advancedNote") }}</p>
 
         <footer class="ds-sheet-foot">
+          <button type="button" class="secondary-action" @click="applyChinaPreset">{{ t("settings.engines.downloadSources.applyChina") }}</button>
           <button type="button" class="ghost-button" @click="reset">{{ t("settings.engines.downloadSources.reset") }}</button>
           <div class="ds-sheet-foot-right">
-            <button type="button" class="secondary-action" @click="advancedOpen = false">{{ t("settings.engines.downloadSources.close") }}</button>
+            <button type="button" class="secondary-action" :disabled="dsStore.checking" @click="checkDraft">
+              {{ dsStore.checking ? t("settings.engines.downloadSources.checking") : t("settings.engines.downloadSources.checkAll") }}
+            </button>
             <button type="button" class="primary-action" @click="saveAdvanced">{{ t("settings.engines.downloadSources.save") }}</button>
           </div>
         </footer>
-      </section>
-    </div>
-  </Teleport>
+  </section>
 </template>

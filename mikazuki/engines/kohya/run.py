@@ -54,6 +54,10 @@ def handle_run(config: dict, ctx: RunContext):
     is_moss_image = model_train_type == "moss-image-lora"
 
     if is_moss_image:
+        from .environment import moss_stack_error
+        stack_error = moss_stack_error(status.get("facts", {}).get("audit"))
+        if stack_error:
+            return APIResponseFail(message=stack_error)
         config.setdefault("network_module", "networks.lora_generic")
         config.setdefault("network_train_unet_only", True)
         config.setdefault("caption_extension", ".txt")
@@ -155,6 +159,6 @@ def handle_run(config: dict, ctx: RunContext):
     result = process.run_train(toml_file, trainer_file, ctx.gpu_ids, suggest_cpu_threads,
                                metadata={"train_type": model_train_type,
                                          "output_name": config.get("output_name")},
-                               python_executable=str(rt.python))
+                               python_executable=status["runtime"]["python"])
 
     return result

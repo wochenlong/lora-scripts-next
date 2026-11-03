@@ -5,8 +5,10 @@ import { useI18n } from "vue-i18n"
 import { Cpu, DataLine, FolderOpened, Menu as MenuIcon, QuestionFilled, Setting } from "@element-plus/icons-vue"
 import { storeToRefs } from "pinia"
 import { useAppStore } from "../stores/app"
+import { useDownloadSourcesStore } from "../stores/downloadSources"
 import { useTasksStore } from "../stores/tasks"
 import GenericFloatingExtensionHost from "../components/extensions/GenericFloatingExtensionHost.vue"
+import DownloadSourcesChips from "../components/DownloadSourcesChips.vue"
 import { DEFAULT_SELECTION, normalizeModel, resolveModule, type TrainingEngine, type TrainingTarget } from "../training/modules"
 import { readRecentTrainingSelection, writeRecentTrainingSelection } from "../training/recent"
 import { ENGINE_PREFS_CHANGED, lastSelectionFor } from "../engines/prefs"
@@ -21,6 +23,7 @@ const { t } = useI18n()
 const mobileOpen = ref(false)
 const appStore = useAppStore()
 const tasksStore = useTasksStore()
+const downloadSourcesStore = useDownloadSourcesStore()
 const { version } = storeToRefs(appStore)
 const { showNavBadge, navBadgeCount, activeCount } = storeToRefs(tasksStore)
 const recentTraining = ref(readRecentTrainingSelection() || DEFAULT_SELECTION)
@@ -83,6 +86,7 @@ onMounted(() => {
   window.addEventListener(ENGINE_PREFS_CHANGED, refreshEnginePrefs)
   window.addEventListener("storage", refreshEnginePrefs)
   appStore.loadVersion()
+  void downloadSourcesStore.checkOnce()
   void tasksStore.refresh({ silent: true })
   tasksPoll = window.setInterval(() => tasksStore.refresh({ silent: true }), 4000)
   clearAttentionIfOnTasks()
@@ -134,6 +138,7 @@ onBeforeUnmount(() => {
         </RouterLink>
       </nav>
       <footer class="sidebar-footer">
+        <DownloadSourcesChips />
         <RouterLink to="/help/guide.html" class="nav-link help-link" @click="mobileOpen = false">
           <el-icon><QuestionFilled /></el-icon><span>{{ t("nav.help") }}</span>
         </RouterLink>

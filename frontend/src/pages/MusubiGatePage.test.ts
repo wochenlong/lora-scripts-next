@@ -74,6 +74,8 @@ describe("MusubiGatePage", () => {
     const bar = wrapper.get('[data-testid="engine-status-bar"]')
     expect(bar.attributes("data-state")).toBe("not_installed")
     expect(wrapper.text()).toContain("安装插件")
+    // Idle install page must not reserve a empty black console panel.
+    expect(wrapper.findAll('[data-testid="install-console"]')).toHaveLength(0)
     wrapper.unmount()
   })
 

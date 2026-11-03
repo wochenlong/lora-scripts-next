@@ -45,6 +45,59 @@ def start_install(runtime, sources=None, repair=False):
     return {"task_id": task_id, "log_stream": f"/api/engines/kohya/install/log/stream/{task_id}", "progress_stream": f"/api/engines/kohya/install/progress/stream/{task_id}"}
 
 
+def _prepare_plan(runtime, plan, job_label):
+    """Create the plan file and task for install_worker; the caller writes the
+    state marker BEFORE executing, so a fast-finishing task can never race the
+    state transition."""
+    import sys
+    from pathlib import Path
+    task_id = f"kohya-install-{uuid.uuid4()}"
+    plan_path = runtime.project_root / "config" / "autosave" / f"{task_id}.json"
+    plan_path.parent.mkdir(parents=True, exist_ok=True)
+    plan_path.write_text(json.dumps(plan, ensure_ascii=False), encoding="utf-8")
+    command = [sys.executable, str(Path(__file__).with_name("install_worker.py")), str(runtime.project_root), str(plan_path), task_id]
+    task = tm.create_task(command, process_env(), metadata={"backend": "kohya", "kind": "kohya_install", "job_label": job_label}, task_id=task_id, lane=LANE_MAINTENANCE)
+    streams = {"task_id": task_id, "log_stream": f"/api/engines/kohya/install/log/stream/{task_id}", "progress_stream": f"/api/engines/kohya/install/progress/stream/{task_id}"}
+    return task_id, task, streams
+
+
+def start_upgrade(runtime, sources, drift):
+    """Incremental standalone upgrade: only drifted pins, no venv recreation."""
+    from .environment import upgrade_commands
+    from .resource import request_lock
+    commands = upgrade_commands(runtime, sources, drift)
+    if not commands:
+        return None
+    with request_lock:
+        assert_idle()
+        task_id, task, streams = _prepare_plan(runtime, {"commands": commands, "repair": False}, "升级 kohya 环境（增量补装）")
+        write_state(runtime, "installing", {"task_id": task_id, "upgrade": True})
+        task.execute()
+        threading.Thread(target=task.wait, daemon=True).start()
+    return streams
+
+
+def start_main_env_upgrade(runtime, python, sources, drift):
+    """Incremental upgrade of a legacy main environment; the standalone state
+    file is left untouched, an in-memory marker tracks the task."""
+    from .environment import main_env_upgrade_commands
+    from .extension_state import note_main_env_upgrade
+    from .resource import request_lock
+    commands = main_env_upgrade_commands(python, sources, drift)
+    if not commands:
+        return None
+    from packaging.utils import canonicalize_name
+    with request_lock:
+        assert_idle()
+        plan = {"commands": commands, "repair": False, "target": "main_env", "python": str(python),
+                "patch_packages": {canonicalize_name(d["name"]): d["spec"] for d in drift}}
+        task_id, task, streams = _prepare_plan(runtime, plan, "升级主环境训练栈（增量补装）")
+        note_main_env_upgrade(python, task_id)
+        task.execute()
+        threading.Thread(target=task.wait, daemon=True).start()
+    return streams
+
+
 def remove_extension(runtime):
     from .resource import request_lock, environment_lock
     with request_lock:

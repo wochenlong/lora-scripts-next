@@ -410,6 +410,76 @@ async def _engine_payload(request: Request) -> dict:
     return json.loads((await request.body()).decode("utf-8") or "{}")
 
 
+def _download_sources_state(sources) -> dict:
+    # Raw values, not the redacted as_dict(): the settings UI round-trips
+    # these fields and redaction would corrupt URL-embedded credentials.
+    return {
+        "configured": sources is not None,
+        "sources": None if sources is None else {
+            "pip_index_url": sources.pip_index_url,
+            "pytorch_index_url": sources.pytorch_index_url,
+            "hf_endpoint": sources.hf_endpoint,
+            "github_url_prefix": sources.github_url_prefix,
+            "proxy_url": sources.proxy_url,
+        },
+    }
+
+
+@router.get("/download-sources")
+async def download_sources_get():
+    from mikazuki.download_sources import load_download_sources
+
+    try:
+        sources = load_download_sources()
+    except ValueError as exc:
+        return APIResponseFail(message=str(exc))
+    return APIResponseSuccess(data=_download_sources_state(sources))
+
+
+@router.put("/download-sources")
+async def download_sources_put(request: Request):
+    from mikazuki.download_sources import parse_download_sources, save_download_sources
+
+    try:
+        payload = json.loads((await request.body()).decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        return APIResponseFail(message="invalid JSON body")
+    try:
+        sources = parse_download_sources(payload)
+    except Exception as exc:
+        return APIResponseFail(message=f"invalid download sources: {exc}")
+    for field, value in (
+        ("pip_index_url", sources and sources.pip_index_url),
+        ("pytorch_index_url", sources and sources.pytorch_index_url),
+        ("hf_endpoint", sources and sources.hf_endpoint),
+        ("github_url_prefix", sources and sources.github_url_prefix),
+        ("proxy_url", sources and sources.proxy_url),
+    ):
+        if value and not value.startswith(("http://", "https://")):
+            return APIResponseFail(message=f"{field} must be an http(s) URL")
+    try:
+        save_download_sources(sources)
+    except OSError as exc:
+        return APIResponseFail(message=f"failed to persist download sources: {exc}")
+    return APIResponseSuccess(data=_download_sources_state(sources))
+
+
+@router.post("/download-sources/check")
+async def download_sources_check(request: Request):
+    from mikazuki.download_sources import resolve_download_sources
+    from mikazuki.download_sources_check import CHANNELS, check_download_sources
+
+    try:
+        payload = json.loads((await request.body()).decode("utf-8") or "{}")
+    except json.JSONDecodeError:
+        payload = {}
+    channel = payload.get("channel") if isinstance(payload, dict) else None
+    if channel is not None and channel not in CHANNELS:
+        return APIResponseFail(message=f"unknown download-source channel: {channel}")
+    sources = resolve_download_sources(payload)
+    return APIResponseSuccess(data=await check_download_sources(sources, [channel] if channel else None))
+
+
 @router.get("/engines/{engine_id}/status")
 async def engine_status(engine_id: str):
     return await _engine_routes_module(engine_id).status()
@@ -471,6 +541,15 @@ async def engine_repair(engine_id: str, request: Request):
     handler = getattr(routes, "repair", None)
     if handler is None:
         return await _engine_install_impl(engine_id, request, force_install=True)
+    return await handler(await _engine_payload(request))
+
+
+@router.post("/engines/{engine_id}/upgrade")
+async def engine_upgrade(engine_id: str, request: Request):
+    routes = _engine_routes_module(engine_id)
+    handler = getattr(routes, "upgrade", None)
+    if handler is None:
+        return APIResponseFail(message=f"{engine_id} 插件未提供升级接口。")
     return await handler(await _engine_payload(request))
 
 
@@ -865,7 +944,7 @@ def _task_train_type(task) -> Optional[str]:
     backend = str(task.metadata.get("backend") or "standard")
     if backend == "anima-lora-fast":
         return ANIMA_FAST_TRAIN_TYPE
-    if backend in {"ai-toolkit", "diffsynth"}:
+    if backend in {"ai-toolkit", "diffsynth", "kohaku-moss"}:
         train_type = task.metadata.get("train_type")
         return str(train_type) if train_type else None
     if backend == "musubi":
@@ -966,6 +1045,10 @@ async def task_previews(task_id: str) -> APIResponse:
     config = task_insights.resolve_task_config(task.metadata)
     preview_key = "sample_enabled" if task.metadata.get("backend") == "diffsynth" else "sample_prompts"
     preview_enabled = bool(config.get(preview_key)) if config else None
+    if task.metadata.get("backend") == "moss":
+        preview_enabled = task_insights.moss_preview_enabled(task.metadata)
+    if task.metadata.get("backend") == "kohaku-moss":
+        preview_enabled = bool(str(config.get("sample_prompts") or "").strip()) and int(config.get("sample_every_n_steps") or 0) > 0
     return APIResponseSuccess(data={"images": images, "preview_enabled": preview_enabled})
 
 
@@ -1168,3 +1251,11 @@ async def check_update(force: bool = False):
 async def get_version():
     from mikazuki.update_check import local_version
     return APIResponseSuccess(data={"version": local_version()})
+
+
+@router.get("/system/resources")
+async def system_resources():
+    """Lightweight GPU VRAM + host RAM snapshot for the Tasks header."""
+    from mikazuki.system_resources import collect_resources
+
+    return APIResponseSuccess(data=await asyncio.to_thread(collect_resources))

@@ -61,3 +61,14 @@ def test_windows_install_plan_cleans_conflicting_uv_preference(tmp_path, monkeyp
     assert venv[-1] == str(rt.root / '.venv')
     assert any(str(rt.python) in command for command in commands if command[:3] == ['uv', 'pip', 'install'])
     assert str(rt.python).replace('\\', '/').endswith('Scripts/python.exe')
+
+
+def test_source_patch_accepts_crlf_but_still_rejects_content_changes(source):
+    source_integrity.apply_source_patch(source)
+    module = source / 'module.py'
+    module.write_bytes(b'value = 2\r\n')
+    runtime = type('Runtime', (), {'source': source})()
+    source_integrity.verify_source(runtime)
+    module.write_bytes(b'value = 3\r\n')
+    with pytest.raises(ValueError, match='fingerprint'):
+        source_integrity.verify_source(runtime)

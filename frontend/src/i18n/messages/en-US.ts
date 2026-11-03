@@ -93,6 +93,7 @@ export default {
         "ai-toolkit": "AI Toolkit",
         diffsynth: "DiffSynth-Studio",
         moss: "MOSS (anima_lora)",
+        "kohaku-moss": "KohakuMossTrainer",
       },
       targets: {
         lora: "LoRA",
@@ -263,6 +264,7 @@ export default {
     schemas: {
       "moss-image-lora": { title: "MOSS-Image LoRA", area: "Kohya (recommended)" },
       "moss-image-anima-lora": { title: "MOSS-Image LoRA", area: "MOSS (anima_lora)" },
+      "kohaku-moss-image-lora": { title: "MOSS-Image LoRA", area: "KohakuMossTrainer · experimental high-performance" },
       "sd3-lora": { title: "Anima LoRA", area: "Anima DiT · Kohya-ss · LoRA" },
       "anima-lora-fast": { title: "Anima LoRA Fast", area: "Anima DiT · Anima Fast · LoRA" },
       "anima-finetune": { title: "Anima Full Fine-tune", area: "Anima DiT · Kohya-ss · Full Fine-tune" },
@@ -781,6 +783,8 @@ export default {
         notInstalled: "Not installed",
         currentDefault: "Current default",
         recommended: "Recommended",
+        mainEnv: "Main env",
+        updateAvailable: "Update advised",
       },
       tags: {
         "moss-image": "MOSS-Image",
@@ -794,6 +798,8 @@ export default {
         klein: "Klein",
         "qwen-image-21": "Qwen-Image-2.1",
         nvidia: "NVIDIA",
+        experimental: "Experimental",
+        "high-performance": "High performance",
       },
       downloadSources: {
         title: "Download source",
@@ -902,6 +908,11 @@ export default {
         },
       },
       catalog: {
+        "kohaku-moss": {
+          name: "KohakuMossTrainer",
+          summary: "Experimental high-performance MOSS-Image / LyCORIS engine by Kohaku (Dragon Girl)",
+          sizeHint: "Several GB for isolated Python 3.12 and CUDA dependencies; model weights are separate",
+        },
         moss: {
           name: "MOSS (anima_lora)",
           summary: "Experimental MOSS-Image Base/SFT LoRA · isolated runtime · native cache then train",
@@ -965,6 +976,7 @@ export default {
         repairHint: "Diagnose and repair only damaged components; avoids a full wipe when possible",
         reinstall: "Reinstall",
         reinstallHint: "Only when the runtime is broken; fully reinstalls and may re-download several GB",
+        upgrade: "Upgrade env",
         uninstall: "Uninstall",
         manage: "Manage",
         more: "More actions",
@@ -976,8 +988,17 @@ export default {
         gpu: "Requires an NVIDIA GPU",
         planned: "Not available yet",
         path: "Runtime path",
+        mainEnvPython: "Main env Python (legacy compat)",
+        drift: "Drift from the pinned versions (current training keeps working; upgrade for new model support):",
+        driftMissing: "missing",
         version: "Version",
         updated: "Updated",
+      },
+      cacheDir: {
+        label: "Model conversion cache directory",
+        placeholder: "Empty = default (extensions/diffsynth/cache)",
+        hint: "ComfyUI model conversion and encoding caches are written to the models / encodings subdirectories under the selected directory. On AutoDL or other small-system-disk hosts, point this to a data disk; leave empty to restore the default.",
+        save: "Save cache directory",
       },
       console: {
         idle: "Install log",
@@ -987,6 +1008,7 @@ export default {
         animaFast: "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
         install: {
           moss: "Download the isolated MOSS (anima_lora) runtime and dependencies? An NVIDIA GPU is required. Model weights are not included.",
+          "kohaku-moss": "Install the experimental high-performance KohakuMossTrainer runtime with isolated Python/CUDA and LyCORIS? Model weights are not included.",
           kohya: "Kohya (sd-scripts) downloads a standalone Python environment and several GB of dependencies (including PyTorch), and requires an NVIDIA GPU. Continue?",
           diffsynth: "Download the isolated DiffSynth Python runtime and several GB of dependencies? An NVIDIA GPU is required.",
           "anima-fast": "Anima Fast downloads a standalone Python environment and several GB of dependencies, and requires an NVIDIA GPU. Continue?",
@@ -995,7 +1017,9 @@ export default {
         },
         repair: "The runtime will be diagnosed and only damaged components will be repaired (for example recreating the venv or source). This does not wipe the whole runtime by default. Continue?",
         reinstall: "Full reinstall deletes the standalone Python, venv, and source, then reinstalls everything (usually several GB). Use only when Repair fails. Continue?",
+        upgrade: "Incrementally installs only the missing or outdated pinned packages; the environment is not rebuilt and Torch is not reinstalled. Continue?",
         uninstall: "Uninstall will remove the standalone runtime. Continue?",
+        uninstallMainEnv: "Currently running on the main environment (legacy compat). Uninstall only removes the standalone runtime directory; the main environment cannot be deleted and stays untouched. Continue?",
       },
       msg: {
         ready: "Engine ready",
@@ -1418,6 +1442,16 @@ export default {
     installWorking: "Installing…",
     install: "Install MOSS runtime",
     consoleIdle: "Install log",
+    consoleWaiting: "Waiting for installation…",
+  },
+  kohakuMoss: {
+    auditTitle: "Environment audit",
+    consoleIdle: "Install log",
+    title: "KohakuMossTrainer",
+    intro: "An experimental high-performance MOSS-Image engine using isolated Python 3.12, the official kogine CLI, and LyCORIS.",
+    credit: "This optional engine integrates Kohaku's (Dragon Girl's) open-source {upstream}. Thanks to the author and LyCORIS community. Follow the upstream KohakuMoss License 1.0; full notices: {notice}.",
+    install: "Install experimental engine",
+    installWorking: "Installing…",
     consoleWaiting: "Waiting for installation…",
   },
   diffsynthGate: {

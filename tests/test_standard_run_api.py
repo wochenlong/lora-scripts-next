@@ -87,7 +87,7 @@ def kohya_ready():
     """kohya handle_run now gates on the managed venv being installed."""
     return mock.patch(
         "mikazuki.engines.kohya.extension_state.read_status",
-        return_value={"state": "ready", "facts": {}},
+        return_value={"state": "ready", "facts": {}, "runtime": {"python": "python"}},
     )
 
 
