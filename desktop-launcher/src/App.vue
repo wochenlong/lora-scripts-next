@@ -696,7 +696,15 @@ async function stop() {
   if (runtimePhase.value === 'stopping' || serviceAction.value === 'stop') return
   const epoch = ++serviceEpoch, root = path.value.trim()
   serviceAction.value = 'stop'; optimisticPhase.value = 'stopping'; error.value = ''; message.value = t('正在停止服务并回收进程…')
-  try { const value = await stopTrainer(requestedRunId.value ?? runtime.value?.run_id ?? null); if (epoch === serviceEpoch && samePath(root, path.value)) acceptRuntime(value) }
+  try {
+    const value = await stopTrainer(requestedRunId.value ?? runtime.value?.run_id ?? null)
+    if (epoch === serviceEpoch && samePath(root, path.value)) {
+      acceptRuntime(value)
+      // The start report only verifies the active version. Restore the lightweight
+      // inventory so inactive versions are not treated as failed checks after stop.
+      void refreshInstallation(root)
+    }
+  }
   catch (reason) { if (epoch === serviceEpoch) { error.value = errorText(reason); optimisticPhase.value = 'stop_failed'; addLog(t('[失败] {value0}', { value0: error.value }), 'launcher'); await syncRuntime() } }
   finally { if (epoch === serviceEpoch) { serviceAction.value = ''; requestedRunId.value = null } }
 }

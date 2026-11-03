@@ -1,25 +1,40 @@
 # 启动器快速修复实测记录
 
-更新：2026-11-04。范围按用户最新授权，只测试本轮问题及直接关联流程；不开启训练、不下载或加载训练模型。
+更新：2026-11-04。按用户授权完成针对性修复和沙盒冒烟；不开启训练、不下载或加载训练模型。
 
-| 项目 | 当前结果 | 证据与说明 |
+| 项目 | 结果 | 实际证据与边界 |
 | --- | --- | --- |
-| Windows 预览路径被误拒 | 已修复，定向通过 | 生产形态红测复现；逐分量构造 `state/engines` 路径后10项定向通过；candidate11真实查询越过原错误并成功生成计划 |
-| 前端误拒第2版修复计划 | 真实复验通过 | candidate12从正式按钮生成计划、显示详情并取消；安装控制和资料零改动，自然退出、Job排空通过；candidate11失败原件保留 |
-| 可见进度与真实取消 | 待测 | 仅代表任务与关联入口 |
-| 实际修复与完成旧安装 | 待测 | 仅自有故障沙盒，保原journal和用户资料 |
-| 服务启停及按钮刷新 | 待测 | 同包、真实HTML/API与监听进程，记录实际时延 |
+| Windows路径误拒、修复计划显示 | 通过 | 逐分量构造路径，前端接受schema1/2；candidate12正式入口显示计划并取消，原资料保持 |
+| 修复准备反馈 | 通过 | preparing DOM约1.8ms出现；资源计划准备期间确认禁用，计划约50秒生成 |
+| 实际修复与取消还原 | 通过功能复核 | 修复约183.4秒succeeded；取消82ms受理、139ms子进程退出，cancelled/rolled_back；旧套件文案和阶段归因失败保留 |
+| 完成原未结束安装 | 通过 | candidate12使用原journal摘要恢复，约5.56秒；正式committed，首页启动入口恢复，资料和回执保持 |
+| 服务启停与状态刷新 | 通过 | candidate13启动约9.69秒；HTML和版本API均200；ready后5ms启用打开网页按钮，停止后21ms恢复启动按钮，端口释放 |
+| 停止后切换版本 | 修复并通过 | 旧启动报告误将其他版本未检查当失败；停止后异步刷新轻量库存，真实按钮已切回dev |
+| 四引擎入口、进度与取消 | 冒烟通过 | 四个入口均响应并取消至cancelled，回收标志通过且无残留；AI Toolkit有逐文件进度并在running取消，另外三个在queued取消。完整扫描主动停止 |
+| 退出与资料保护 | 通过 | 120个资料文件逐字节保持；除registry外状态文件保持，安装回执及引擎记录未变；启动器自然exit0、Job排空、服务和调试端口回收 |
 
-当前候选为 **candidate12**，正式离线构建成功，用时约179秒。前端类型检查与Vite编译通过；175个源码输入、交付清单和便携包内EXE校验一致。构建自有Job已排空，编译辅助进程的强制回收单独记录。
+本轮最后修复仅修改停止服务后的轻量刷新，因此预览、实际修复和续办复用candidate12证据；candidate13补测服务、版本切换与引擎冒烟。
 
-- 便携包：`F:/NextTrainerLauncherSandbox/reliability-20261102/run-20261102T130200Z/build-R2-12/NextTrainerLauncher-0.2.0-windows-x64-portable.zip`。
-- EXE SHA256：`124f5aaefe2a94e421a2a0b853fa615496677e692d38678e40dcb470cd8d1fe1`。
-- 证据根：`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/run-20261102T130200Z`，下称 `<run>`。
-- 构建与冻结：`<run>/R2/build-12/execution.json`、`<run>/R2/candidate-freeze-12/admission.json`。
-- 原预览失败：`<run>/R2/legacy-v8-preview-only-01/native-report.json`；后端succeeded、41.3秒，前端因schema不符拒绝，不计业务通过。
-- 修复后预览：`<run>/R2/legacy-v9-preview-only-01/`；`native-report.json`、`host-status.json`与`v5-chain-result.json`均通过，计划截图为`0004-fault-formal-ready-plan.png`。
-- Q1远端基线：`f6936b56ae50799c479b477590e1d87c19b4791f`，已通过代理push并核远端SHA；后续schema修复尚未提交。
+交付文件：
 
-本轮复用已通过的10项Rust定向测试、fmt及严格Clippy。两次整套Rust180秒超时均保留，按快速范围不再要求重跑，也不计通过。
+- 便携包：`F:/NextTrainerLauncherSandbox/reliability-20261102/run-20261102T130200Z/build-R2-13/NextTrainerLauncher-0.2.0-windows-x64-portable.zip`。
+- EXE SHA256：`5c0e6015e335c0f27092acb0b660da9ac67674132c23510e15bfe0eda417abfe`。
+- 正式离线构建约234秒；前端类型检查、Vite编译、175个源码输入及便携包程序校验通过。构建辅助进程回收单独记录。
+- 分支：`feat/desktop-launcher`。先前阶段已push `f6936b56`、`8a620541`；本次最终commit/push和远端完整SHA见`<run>/R2/quick-final-git.json`。
 
-未测范围：四引擎完整扫描/重建矩阵、三阶段取消与强杀恢复全套、GPU及真实训练、历史227行全量验收。打开外部浏览器按钮以最终实际操作记录为准，不能用“已启用”代替点击通过。
+证据根`<run>`为`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/run-20261102T130200Z`。
+
+| 证据 | 路径（相对`<run>`） |
+| --- | --- |
+| 构建与冻结 | `R2/build-13/execution.json`、`R2/candidate-freeze-13/admission.json` |
+| 正式预览与取消 | `R2/legacy-v9-preview-only-01/0004-fault-formal-ready-plan.png`及同目录report/host/chain |
+| 实际修复、取消、恢复 | `R2/legacy-v9-success-01/0011-repair-operation.json`、`0012-repair-complete-protection.json`；`R2/legacy-v9-cancel-sync-01/0008-fault-cancel-stage-proof.json` |
+| 原安装恢复完成 | `R2/legacy-v9-resume-01/0008-formal-recovery-complete.png`、`0009-home-start-available-without-starting.png` |
+| 服务语义与时延 | `R2/legacy-v9-targeted-candidate13-01/0006-main-ready-html-api-owned-listener.json`、`0008-own-service-stopped.json` |
+| 服务与版本截图 | 同目录`0007-main-service-ready.png`、`0009-main-service-stopped.png`、`0010-returned-to-original-dev.png` |
+| 四引擎冒烟 | 同目录`quick-four-engine-smoke.json`、`quick-*-cancelled.png`、`0011-engine-ai-toolkit-progress.png` |
+| 退出后独立保护复核 | 同目录`quick-scope-review.json`，快速范围`passed=true`，保留原套件结果 |
+
+原`native-report.json`保留`engine progress evidence overflow`失败：长扫描超过工具1024条进度记录上限，完整扫描亦按快速范围取消。未改写原结果。最终快速结论来自真实点击、任务终态、HTML/API和退出后的独立资料比较。
+
+未测：四引擎完整文件扫描/损坏/重建矩阵、三阶段取消和强杀恢复全套、高级破坏性按钮、外部“打开网页”按钮实际点击、GPU与真实训练、历史全量验收。两次完整Rust180秒超时原件保留；复用当前Rust输入已通过的10项定向、fmt、严格Clippy，不计整套通过。
