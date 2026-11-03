@@ -26,9 +26,9 @@
 - 假设：现有自有根和固定离线资源可复用；每次正式写入前核实际状态，资源不足或归属不明只停对应危险动作。
 - 未知：candidate11 实际预览、维护取消与服务链能否通过；以下实际结果才能关闭本次问题。
 
-## Q1 修复收口和 candidate11 出包
+## Q1 修复收口和候选出包
 
-- 状态：`done`。candidate11 已真实离线构建、冻结并完成 v8 身份绑定，耗时约 210 秒。
+- 状态：`done`。candidate11 暴露前端只接受schema1；一行兼容已有schema1/2后出 candidate12，离线构建约179秒，已冻结。
 - 复用当前输入已通过的 focused 10 项、fmt、严格 Clippy；新增改动仅补相关最小检查，不要求完整 Rust。
 - 使用 `R2/run_build_11.py` 构建、`R2/freeze_candidate_11.py` 冻结，核源码、EXE、portable、清单/配方、缓存和受控 Job 实际身份。
 - admission 标注 `validation_scope=targeted-regression; user-approved quick plan 2026-11-04`；全 Rust 超时不计通过。
@@ -37,7 +37,7 @@
 
 ## Q2 针对性同包真实验收
 
-- 状态：`in progress`。同一 EXE 已开始正式预览实测；单 GUI/单重操作，先核自有目标、备份及回收方式。
+- 状态：`in progress`。candidate12 正式预览、计划可见与取消通过，原数据/记录未变；实际修复取消正在测。
 - 预览修复：从正式入口复验原资源预览拒绝；计划可见、身份正确、取消有效；必要时以最短正式修复链解除主程序实际阻塞。
 - 代表引擎：选一个已受影响且归属明确的引擎，完成一次真实检查与一次取消，观察进度、终态和子进程回收。
 - 其余引擎：仅按钮冒烟，覆盖页面进入、检查入口反馈/收起、高级选项与可取消预览；不做四目标完整扫描/损坏/重建矩阵。
@@ -61,20 +61,20 @@
 - `<run>`：`E:/OpenSourceTeamWork/workspace/tools/launcher-reliability-20261102/run-20261102T130200Z`。
 - 自有重资产根：`F:/NextTrainerLauncherSandbox/reliability-20261102/run-20261102T130200Z`；复用故障根需单独核归属。
 - 证据沿用已有 `R2/execution-resume-20261103-08/`、`R2/rust-integration-01/` 及后继候选/原生目录，不另建治理体系。
-- 当前包：`<重资产根>/build-R2-11/NextTrainerLauncher-0.2.0-windows-x64-portable.zip`；EXE SHA256：`72b43a60092639575b053f385dd7c896c6a5c04b0e9175677b076b88671c6e06`。
-- Q1 回执：`<run>/R2/build-11/execution.json`、`candidate-freeze-11/admission.json`；175 个源码输入及便携包 EXE 一致。构建自有 Job 已排空，含明确记录的编译辅助进程回收，不视为产品自然退出证明。
+- 当前包：`<重资产根>/build-R2-12/NextTrainerLauncher-0.2.0-windows-x64-portable.zip`；EXE SHA256：`124f5aaefe2a94e421a2a0b853fa615496677e692d38678e40dcb470cd8d1fe1`。
+- Q1 回执：`<run>/R2/build-12/execution.json`、`candidate-freeze-12/admission.json`；175 个源码输入及便携包 EXE 一致。构建自有 Job 已排空，含明确记录的编译辅助进程回收，不视为产品自然退出证明。
 - 每个定向案例保包身份、实际操作、结论、截图/日志引用和清理结果；失败新增 attempt，旧结果不覆盖。
 
 ## 进度台账
 
 | 阶段 | 当前状态 | 已有/待补 |
 | --- | --- | --- |
-| Q1 修复收口和 candidate11 出包 | done | focused/fmt/严格 Clippy 已过；构建、175 输入、EXE/便携包与冻结通过 |
-| Q2 针对性同包真实验收 | in progress | 原10失败保留；新包正式预览实测中 |
+| Q1 修复收口和候选出包 | done | focused/fmt/严格 Clippy 已过；12构建、175 输入、EXE/便携包与冻结通过 |
+| Q2 针对性同包真实验收 | in progress | 原10/11失败保留；12正式预览通过，实际取消/修复/启停待收口 |
 | Q3 基线保存与交付 | pending | 待针对性结果与精准 push |
 
 现有通过保留原输入身份；任何后继修改按影响补最短验证。风险是未执行全量回归与其他引擎重型分支，报告明确保留该范围。
 
 ## 下一步动作
 
-收取 `legacy-v8-preview-only-01` 的正式操作结果；通过后沿快速顺序完成代表取消、实际修复/续办和启停，未测分支如实列出。
+收取 `legacy-v9-cancel-sync-01` 的正式操作结果；通过后完成实际修复/续办和启停与引擎定向测试，未测分支如实列出。

@@ -622,7 +622,7 @@ async function prepareLegacyEnvironment(version: DisplayVersion) {
     const { result: plan, snapshot } = await waitEngineQuery<LegacyEnvironmentRepairPlan>(query)
     if (disposed || request.cancelled || request.invalidated || mainReinstall.value !== request) return
     if (!mainReinstallContextCurrent(request)) { invalidateMainReinstall(); return }
-    if (plan.schema_version !== 1 || plan.operation !== 'independent_legacy_environment_repair' || !samePath(plan.root, request.root) || plan.release_id !== request.releaseId || plan.journal_sha256 !== request.observedBinding || !/^[0-9a-f]{64}$/.test(plan.plan_sha256)) throw Error(t('安装计划不完整，请关闭后重试。'))
+    if (![1, 2].includes(plan.schema_version) || plan.operation !== 'independent_legacy_environment_repair' || !samePath(plan.root, request.root) || plan.release_id !== request.releaseId || plan.journal_sha256 !== request.observedBinding || !/^[0-9a-f]{64}$/.test(plan.plan_sha256)) throw Error(t('安装计划不完整，请关闭后重试。'))
     request.identity = snapshot.identity
     request.legacyPlan = plan
     request.phase = plan.ready ? 'ready' : 'blocked'
