@@ -24,7 +24,8 @@ def verify_source(runtime):
         raise ValueError('MOSS source drift outside the bundled patch: ' + repr(sorted(changed)))
     for name, expected in PATCHED_FILES.items():
         path = runtime.source/name
-        if not path.is_file() or hashlib.sha256(path.read_bytes()).hexdigest() != expected:
+        contents = path.read_bytes().replace(b"\r\n", b"\n") if path.is_file() else b""
+        if not path.is_file() or hashlib.sha256(contents).hexdigest() != expected:
             raise ValueError('MOSS bundled patch fingerprint mismatch: ' + name)
     return {'local_patch_files': sorted(changed), 'source_commit': UPSTREAM['commit']}
 

@@ -17,21 +17,50 @@
 
 ## MOSS-Image 训练效果展示
 
-由 [KohakuBlueleaf](https://github.com/KohakuBlueleaf) 使用其训练器 [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 完成的 **100 步风格 LoRA 测试**。上排为基础模型，下排为加载 LoRA 后的效果。经作者同意引用，用于展示 MOSS-Image 的训练效果；本图结果由 KohakuMossTrainer 训练获得（现已作为可选训练引擎接入 Next Trainer）。
+由 [KohakuBlueleaf](https://github.com/KohakuBlueleaf) 使用其训练器 [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 完成的 **100 步风格 LoRA 测试**。上排为基础模型，下排为加载 LoRA 后的效果。经作者同意引用，用于展示 MOSS-Image 的训练效果；本图结果由 KohakuMossTrainer 训练获得（当前源码已将其接入为可选训练引擎）。
 
 [![KohakuBlueleaf 的 MOSS-Image 基础模型与 100 步风格 LoRA 效果对比](assets/readme/kohaku-moss-style-lora.png)](assets/readme/kohaku-moss-style-lora.png)
 
-## 3.2.0 更新了什么
+## 3.3.0 更新了什么
 
-- **标签编辑重做**：图片墙优先，选中后才展开编辑面板；提供「标签编辑 / 自由编辑」两种模式、批量操作与历史记录。
-- **离线中文释义**：内置 Danbooru 中文词典（约 33 万条），翻译来源精简为 **词库 / 本地模型 / API**，词库来源完全离线。
-- **设置区重构**：顺序调整为 **UI 设置 → 训练引擎 → API → 插件市场 → 高级设置 → 关于**；新增 **API** 页统一管理接口与本地模型，网络与下载源归入高级设置。
-- **训练任务队列**：训练任务自动排队、服务重启后不丢失，失败 / 已终止任务可按原配置重新排队。
-- **MOSS-Image LoRA**：新增 MOSS-Image 训练，推荐并默认使用 Kohya；同时接入 [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer)（实验性高性能 / LyCORIS 引擎）与 `anima_lora` 备选运行时。
-- **Musubi 新增 Ideogram 4 LoRA**：FP8 量化权重、非商用许可，整合包不预置（上游仍标记 experimental）。
-- **修复**：Anima 页面的 LoKr / LoHa / T-LoRA 参数在刷新或导入配置时被重置为默认值；数据集配置预检拒绝会被静默跳过的子集。
+- **多引擎工作台**：统一支持 Kohya、Anima Fast、Musubi、AI Toolkit、DiffSynth-Studio 和 MOSS（anima_lora），并补充模型与引擎对应表及训练教程入口。
+- **Kohya 运行环境独立化**：Kohya 使用 `extensions/kohya/` 独立环境；训练器源码更新与引擎环境分离，Kohya 可按需安装、修复和审计。
+- **更新不再丢失 Kohya**：源码更新和整合包更新都会保留用户拥有的训练运行时；整合包更新器排除 `Next-Trainer/extensions/`，不会因更新主程序卸载 Kohya。
+- **MOSS-Image**：默认仍推荐 Kohya；当前源码同时接入可选 [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) 和 `anima_lora` 路径，整合包是否包含该入口以具体版本为准。
+- **AI Toolkit 与 Ideogram 4**：加入 AI Toolkit 训练引擎和 Ideogram 4 LoRA 入口，按需安装，不强制下载可选引擎环境。
+- **插件市场调整**：当前没有可用插件内容，已从用户界面和默认构建中隐藏，也不会强制下载空的 marketplace 依赖。
+- **3.3.1-dev 整合包**：提供小于 2 GB 的 lite 包，包含基础运行环境、前端、WD 打标模型和离线 tokenizer，不预装 Kohya。
 
 [完整更新日志](CHANGELOG.md)
+
+## 开始使用
+
+**Windows 用户**：推荐直接下载当前整合包 [Next-Trainer-v3.3.1-dev-lite.7z](https://github.com/wochenlong/lora-scripts-next/releases/download/v3.3.1-dev/Next-Trainer-v3.3.1-dev-lite.7z)，解压后使用包内启动脚本。该包包含基础运行环境、前端、WD 打标模型和离线 tokenizer，不预装 Kohya，也不会下载空的插件市场依赖；首次训练时可在 **设置 → 训练引擎** 按需安装引擎。需要 NVIDIA 显卡，详细步骤和包型区别见[快速开始](docs/getting-started.md)。
+
+**版本说明**：当前推荐整合包版本为 `3.3.1-dev`。预装 Kohya 的大体积包单独发布，不放在 GitHub Release；插件市场当前没有可用内容，已从用户界面和默认构建中隐藏。
+
+想使用最新源码或在 Linux 上运行？请看[从源码运行](docs/getting-started.md#从源码运行)。
+
+### 如何更新
+
+**源码安装：**
+
+1. 关闭 WebUI 和正在运行的训练任务。
+2. 在项目目录执行 `git status`，确认自己的修改已提交或已备份。
+3. 稳定版切换到 `main` 后执行 `git pull --ff-only`；只想跟进下一版本时使用 `git fetch origin` 后再切换到 `dev`。
+4. 重新运行 `run_gui.bat`（Windows）或 `bash run_gui.sh`（Linux）。如果依赖发生变化，按启动器提示重新运行 `install-cn.ps1` / `setup_environment.py`，不要删除整个项目目录里的用户数据。
+
+源码更新只更新仓库代码；已安装的 Kohya 环境位于 `extensions/kohya/`，不要手动删除该目录。升级后如果页面提示 Kohya 环境损坏，再进入 **设置 → 训练引擎 → Kohya → 修复/安装**，由程序按当前版本重新检查或修复。
+
+**整合包安装：**
+
+- 优先双击包根目录的 `Update-Next-Trainer-Release.bat`，它会下载最新 Release 并合并程序文件；无法访问 Release 时可使用 `Update-Next-Trainer.bat` 走 Git 更新。
+- 更新前必须关闭 WebUI。更新器会保留 `Next-Trainer\extensions\`、模型、输出、日志、训练集和配置；其中 `Next-Trainer\extensions\kohya\` 就是 Kohya 独立环境，不会被更新包覆盖。
+- 更新完成后重新双击 `run_gui.bat`。如果启动器提示依赖变化，再运行包内 `update\update_dependencies.bat`；不要先删除 `python_embeded` 或 `extensions\kohya`。
+
+**没有更新脚本的旧整合包：**不要把新版 7z 直接解压到旧目录并选择覆盖。先关闭程序，将旧包中的 `Next-Trainer\extensions\kohya\` 整个目录复制到安全位置，再下载新版并解压到新目录，最后把该目录复制回新版的 `Next-Trainer\extensions\kohya\`；同时迁移 `sd-models`、`output`、`logs`、`train`、`config`、`huggingface` 和 `tagger-models`。复制完成后从新版根目录启动。这个步骤把“程序代码更新”和“Kohya 环境”分开，避免旧版覆盖方式再次丢失引擎。
+
+lite 包本身不预装 Kohya；首次使用时请在 **设置 → 训练引擎** 安装。安装完成后，后续更新只要使用上面的更新器并保留 `Next-Trainer\extensions\kohya\`，就不会因为更新主程序而卸载 Kohya。详细的整合包更新契约见[整合包更新说明](docs/portable-packaging-git-update.md)。
 
 ## 支持的训练引擎
 
@@ -84,14 +113,6 @@ Kohya 还提供 Anima、SDXL、SD 1.5 的全量训练入口。MOSS-Image 默认�
 - [TOML / CLI](docs/cli-args.md)
 
 [界面导览](docs/interface-tour.md) · [打标模型准备](docs/tagger-models.md) · [训练监控](docs/train-monitor.md) · [全部文档](docs/README.md)
-
-## 开始使用
-
-**Windows 用户**：推荐[下载整合包](https://github.com/wochenlong/lora-scripts-next/releases)，解压后使用包内启动脚本。需要 NVIDIA 显卡，详细步骤和包型区别见[快速开始](docs/getting-started.md)。
-
-**版本说明**：3.2.0 源码已进入 `main`。整合包有单独的发布进度，请以 Releases 中的版本号和更新说明为准；旧整合包不一定包含 DiffSynth 与 Qwen-Image-2.1 支持。
-
-想使用 3.2.0 源码版本，或在 Linux 上运行？请看[从源码运行](docs/getting-started.md#从源码运行)。
 
 
 ---

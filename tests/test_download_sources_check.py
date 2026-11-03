@@ -139,12 +139,29 @@ class ProbeTests(unittest.TestCase):
             asyncio.run(check_download_sources(None, ["pip"]))
         self.assertEqual(probe_mock.call_args.args[2], policy)
 
-    def test_policy_proxies_ignores_ambient_env(self):
+    def test_direct_policy_proxies_ignore_ambient_env(self):
         from mikazuki.download_sources_check import _policy_proxies
+        from mikazuki.networking.policy import NetworkPolicy
 
-        with mock.patch.dict("os.environ", {"http_proxy": "http://ambient:1", "https_proxy": "http://ambient:1"}):
+        # Pin the policy: auto mode intentionally accepts operator environment
+        # proxies, whereas direct mode must prevent urllib from inheriting them.
+        with mock.patch.dict("os.environ", {"http_proxy": "http://ambient:1", "https_proxy": "http://ambient:1"}), mock.patch(
+            "mikazuki.networking.resolve_policy", return_value=NetworkPolicy(mode="direct", no_proxy="*"),
+        ):
             proxies = _policy_proxies()
-        self.assertNotEqual(proxies.get("http"), "http://ambient:1")
+        self.assertEqual(proxies, {"no": "*"})
+
+    def test_manual_policy_proxies_replace_ambient_env(self):
+        from mikazuki.download_sources_check import _policy_proxies
+        from mikazuki.networking.policy import NetworkPolicy
+
+        policy = NetworkPolicy(mode="manual", http_proxy="http://policy:8080", https_proxy="http://policy:8080")
+        with mock.patch.dict("os.environ", {"http_proxy": "http://ambient:1", "https_proxy": "http://ambient:1"}), mock.patch(
+            "mikazuki.networking.resolve_policy", return_value=policy,
+        ):
+            proxies = _policy_proxies()
+        self.assertEqual(proxies["http"], "http://policy:8080")
+        self.assertEqual(proxies["https"], "http://policy:8080")
 
 
 class ProbeTargetsEnvTests(unittest.TestCase):
