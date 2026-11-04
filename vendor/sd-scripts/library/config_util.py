@@ -83,6 +83,7 @@ class DreamBoothSubsetParams(BaseSubsetParams):
     is_reg: bool = False
     class_tokens: Optional[str] = None
     caption_extension: str = ".caption"
+    prefer_json_caption: bool = False
     cache_info: bool = False
     alpha_mask: bool = False
 
@@ -210,6 +211,7 @@ class ConfigSanitizer:
     # DB means DreamBooth
     DB_SUBSET_ASCENDABLE_SCHEMA = {
         "caption_extension": str,
+        "prefer_json_caption": bool,
         "class_tokens": str,
         "cache_info": bool,
     }
@@ -577,6 +579,7 @@ def generate_dataset_group_by_blueprint(dataset_group_blueprint: DatasetGroupBlu
                         is_reg: {subset.is_reg}
                         class_tokens: {subset.class_tokens}
                         caption_extension: {subset.caption_extension}
+                        prefer_json_caption: {subset.prefer_json_caption}
                     \n"""), "    ")
                 elif not is_controlnet:
                     info += indent(dedent(f"""\

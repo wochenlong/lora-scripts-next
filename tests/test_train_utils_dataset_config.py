@@ -55,6 +55,33 @@ def test_auto_organize_off_leaves_images_where_the_dataset_config_expects_them(t
     assert ok, message
 
 
+def test_auto_organize_moves_json_captions_beside_images(tmp_path):
+    data_dir = tmp_path / "train"
+    data_dir.mkdir()
+    (data_dir / "image1.png").write_bytes(b"")
+    (data_dir / "image1.json").write_text(
+        '{"character": "character name", "tags": ["smile"]}',
+        encoding="utf-8",
+    )
+    (data_dir / "notes.json").write_text("{}", encoding="utf-8")
+
+    assert train_utils.validate_data_dir(str(data_dir)) is True
+
+    generated = [path for path in data_dir.iterdir() if path.is_dir()]
+    assert len(generated) == 1
+    subset = generated[0]
+    image = subset / "image1.png"
+    assert image.is_file()
+    assert (subset / "image1.json").is_file()
+    assert (data_dir / "notes.json").is_file()
+    assert not (data_dir / "image1.json").exists()
+
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "vendor" / "sd-scripts"))
+    from library.train_util import read_caption  # noqa: E402
+
+    assert read_caption(str(image), ".txt", False, True) == "character name, smile"
+
+
 def test_auto_organize_on_still_builds_the_n_repeat_subdir(tmp_path):
     data_dir = _make_flat_dataset(tmp_path / "train")
 
