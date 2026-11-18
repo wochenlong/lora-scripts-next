@@ -1,4 +1,5 @@
 import os
+import threading
 
 from mikazuki.engines.kohya.extension_state import (
     FINGERPRINT_SCHEME,
@@ -46,6 +47,34 @@ def test_legacy_state_audits_and_migrates(tmp_path):
     assert status["state"] == "ready"
     assert status["facts"]["fingerprint_scheme"] == FINGERPRINT_SCHEME
     assert runtime.state_file.is_file()
+
+
+def test_concurrent_legacy_state_migration_audits_once(tmp_path):
+    runtime = make_runtime(tmp_path)
+    write_state(runtime, "ready", {"fingerprint": "0" * 64})
+    barrier = threading.Barrier(2)
+    audit_calls = 0
+
+    def counted_audit(rt):
+        nonlocal audit_calls
+        audit_calls += 1
+        return successful_audit(rt)
+
+    results = []
+
+    def worker():
+        barrier.wait()
+        results.append(read_status(runtime, audit_fn=counted_audit))
+
+    threads = [threading.Thread(target=worker) for _ in range(2)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert audit_calls == 1
+    assert all(result["state"] == "ready" for result in results)
+    assert all(result["facts"]["fingerprint_scheme"] == FINGERPRINT_SCHEME for result in results)
 
 
 def test_legacy_state_with_failed_audit_is_broken(tmp_path):

@@ -3,6 +3,7 @@ import json
 import os
 import threading
 import time
+import uuid
 
 from .environment import (
     TORCH_PINS,
@@ -20,7 +21,7 @@ _recovery_lock = threading.Lock()
 
 def write_state(runtime, state, facts=None, reason=""):
     runtime.root.mkdir(parents=True, exist_ok=True)
-    temporary = runtime.state_file.with_suffix(".tmp")
+    temporary = runtime.state_file.with_suffix(f".{uuid.uuid4().hex}.tmp")
     temporary.write_text(json.dumps({"state": state, "facts": facts or {}, "reason": reason}, ensure_ascii=False, indent=2), encoding="utf-8")
     temporary.replace(runtime.state_file)
 
@@ -214,6 +215,24 @@ def _recover_missing_state(runtime, audit_fn):
     return {"state": "ready", "facts": facts, "reason": reason}
 
 
+def _migrate_legacy_state(runtime, data, audit_fn):
+    with _recovery_lock:
+        if runtime.state_file.exists():
+            latest = json.loads(runtime.state_file.read_text(encoding="utf-8"))
+            if latest.get("state") != "ready" or latest.get("facts", {}).get("fingerprint_scheme") == FINGERPRINT_SCHEME:
+                return latest
+            data = latest
+        from .environment import audit_environment
+        audit = (audit_fn or audit_environment)(runtime)
+        data["facts"]["audit"] = audit
+        if not audit.get("ok"):
+            data.update(state="broken", reason="; ".join(audit.get("errors") or ["Kohya 环境审计失败。"]))
+        else:
+            data["facts"].update(fingerprint_facts(runtime))
+            write_state(runtime, "ready", data["facts"], "旧版环境状态已通过审计并迁移。")
+        return data
+
+
 def read_status(runtime, *, audit_fn=None):
     upgrading = _main_env_upgrade_status(runtime)
     if upgrading is not None:
@@ -237,14 +256,9 @@ def read_status(runtime, *, audit_fn=None):
         data.update(state="broken", reason="独立 Python 缺失，请修复环境。")
     if data["state"] == "ready":
         if data["facts"].get("fingerprint_scheme") != FINGERPRINT_SCHEME:
-            from .environment import audit_environment
-            audit = (audit_fn or audit_environment)(runtime)
-            data["facts"]["audit"] = audit
-            if not audit.get("ok"):
-                data.update(state="broken", reason="; ".join(audit.get("errors") or ["Kohya 环境审计失败。"]))
-            else:
-                data["facts"].update(fingerprint_facts(runtime))
-                write_state(runtime, "ready", data["facts"], "旧版环境状态已通过审计并迁移。")
+            data = _migrate_legacy_state(runtime, data, audit_fn)
+            if data["state"] == "ready" and data["facts"].get("fingerprint") != fingerprint(runtime):
+                data.update(state="broken", reason="环境已变化，请修复后重新检查。")
         elif data["facts"].get("fingerprint") != fingerprint(runtime):
             data.update(state="broken", reason="环境已变化，请修复后重新检查。")
     if data["state"] == "ready":
