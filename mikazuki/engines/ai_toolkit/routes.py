@@ -145,7 +145,7 @@ async def install(payload: dict, force_install: bool = False):
         data["message"] = "Installer dry-run completed"
         return APIResponseSuccess(data=data)
     try:
-        from mikazuki.download_sources import parse_download_sources
+        from mikazuki.download_sources import resolve_download_sources
 
         task_id, install_data = start_ai_toolkit_install_task(
             project_root,
@@ -154,7 +154,7 @@ async def install(payload: dict, force_install: bool = False):
             dry_run=False,
             source_commit=source_commit,
             cuda_extra=cuda_extra,
-            download_sources=parse_download_sources(payload),
+            download_sources=resolve_download_sources(payload),
         )
     except Exception as exc:
         write_ai_toolkit_install_state(layout, "broken", {"plan": plan.as_dict()}, str(exc))

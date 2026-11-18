@@ -36,5 +36,33 @@ class Runtime:
         return self.root / "install_state.json"
 
 
+def main_env_python_candidates(project_root: Path):
+    """Pre-standalone releases trained in the GUI's own ("main") environment:
+    the portable pack's ``python_embeded`` next to ``Next-Trainer/``, or the
+    interpreter running the GUI for source installs. Either may already hold a
+    working torch stack and can serve as a fallback runtime.
+    """
+    candidates = []
+    portable = project_root.parent / "python_embeded"
+    for relative in ("python.exe", "python", "bin/python"):
+        path = portable / relative
+        if path.is_file():
+            candidates.append(path)
+    executable = Path(sys.executable)
+    if executable.is_file():
+        candidates.append(executable)
+    unique = []
+    seen = set()
+    for path in candidates:
+        try:
+            key = str(path.resolve())
+        except OSError:
+            key = str(path)
+        if key not in seen:
+            seen.add(key)
+            unique.append(path)
+    return unique
+
+
 def runtime():
     return Runtime(Path.cwd().resolve())

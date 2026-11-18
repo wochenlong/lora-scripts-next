@@ -1,6 +1,5 @@
 // @vitest-environment jsdom
 import { beforeEach, expect, it, vi } from "vitest"
-import { DOWNLOAD_SOURCES_KEY, chinaDownloadSources } from "../engines/downloadSources"
 
 const { apiRequest } = vi.hoisted(() => ({ apiRequest: vi.fn() }))
 vi.mock("./client", () => ({
@@ -15,8 +14,7 @@ beforeEach(() => {
   apiRequest.mockReset()
 })
 
-it("uses the Hugging Face endpoint configured in settings for tagger requests", async () => {
-  localStorage.setItem(DOWNLOAD_SOURCES_KEY, JSON.stringify(chinaDownloadSources()))
+it("omits download_endpoint so the backend resolves it from the persisted source config", async () => {
   const request: TaggerRequest = {
     path: "/images",
     interrogator_model: "wd14-convnextv2-v2",
@@ -36,5 +34,5 @@ it("uses the Hugging Face endpoint configured in settings for tagger requests", 
   await taggerApi.start(request)
 
   const body = JSON.parse(apiRequest.mock.calls[0][1].body)
-  expect(body.download_endpoint).toBe("https://hf-mirror.com")
+  expect("download_endpoint" in body).toBe(false)
 })

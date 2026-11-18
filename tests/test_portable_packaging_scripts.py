@@ -262,3 +262,39 @@ def test_installers_bundle_the_tag_dictionary_for_offline_translation():
     assert "prefetch_tag_dictionary.py" in builder
     assert "assets\\tag_translation\\danbooru" in builder
     assert "SkipTagDictionaryPrefetch" in builder
+
+
+def test_launcher_build_script_compiles_and_places_the_exe():
+    script = (ROOT / "build-scripts/06-build-launcher.ps1").read_text(encoding="utf-8")
+    assert "PublishAot=true" in script
+    assert "NextTrainer.exe" in script
+    assert "PackageRoot" in script
+    assert "Copy-Item" in script
+
+
+def test_every_2026_packaging_script_wires_the_launcher():
+    for relative in (
+        "build-scripts/build_portable_2026_full.ps1",
+        "build-scripts/build_portable_musubi_only.ps1",
+        "build-scripts/build_portable_kohya_only.ps1",
+        "build-scripts/resume_portable_2026_full.ps1",
+    ):
+        content = (ROOT / relative).read_text(encoding="utf-8")
+        assert "06-build-launcher.ps1" in content, relative
+
+
+def test_launcher_delegates_to_the_portable_batch_entry():
+    program = (ROOT / "launcher/Program.cs").read_text(encoding="utf-8")
+    csproj = (ROOT / "launcher/NextTrainer.Launcher.csproj").read_text(encoding="utf-8")
+    # The shell must stay a shell: the batch entry owns the environment policy.
+    assert "launch_portable.bat" in program
+    assert "entireProcessTree" in program
+    assert "--selftest" in program
+    assert "win-x64" in csproj
+    assert "PublishSingleFile" in csproj
+
+
+def test_launcher_artifacts_are_ignored_by_git():
+    ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
+    assert "launcher/bin/" in ignore
+    assert "launcher/obj/" in ignore

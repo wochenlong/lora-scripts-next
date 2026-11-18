@@ -4,6 +4,7 @@ import { ElMessage, ElMessageBox } from "element-plus"
 import { useI18n } from "vue-i18n"
 import { RouterLink } from "vue-router"
 import { enginesApi, type EngineStatus } from "../api/engines"
+import { tasksApi } from "../api/tasks"
 import EngineStatusBar from "../components/EngineStatusBar.vue"
 import TrainingPage from "./TrainingPage.vue"
 import type { FormModel } from "../schema/adapter"
@@ -22,6 +23,8 @@ let progressSource: EventSource | undefined
 const { t } = useI18n()
 const ready = computed(() => status.value.state === "ready")
 const working = computed(() => ["installing", "auditing"].includes(status.value.state))
+const statusUnknown = computed(() => status.value.state === "unknown")
+const consoleActive = computed(() => working.value || logs.value.length > 0 || progress.value > 0)
 const label = computed(() => {
   const key = `settings.engines.state.${status.value.state}`
   const translated = t(key)
@@ -127,6 +130,22 @@ async function runAction(kind: "install" | "repair" | "reinstall") {
   }
 }
 
+async function cancelInstall() {
+  const taskId = status.value.facts?.task_id
+  if (!taskId) return
+  try {
+    loading.value = true
+    await tasksApi.terminate(String(taskId))
+    closeStreams()
+    await refresh()
+    ElMessage.success(t("settings.engines.actions.cancelInstallDone"))
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : t("settings.engines.msg.fail"))
+  } finally {
+    loading.value = false
+  }
+}
+
 onMounted(async () => {
   await refresh()
   if (!ready.value) timer = window.setInterval(() => refresh(false), 2000)
@@ -158,7 +177,7 @@ onBeforeUnmount(() => {
     </template>
   </TrainingPage>
 
-  <div v-else class="fast-page" :class="{ bare }">
+  <div v-else class="fast-page" :class="{ bare, 'has-console': consoleActive }">
     <div class="fast-main">
       <slot name="form-top" />
       <EngineStatusBar
@@ -166,23 +185,18 @@ onBeforeUnmount(() => {
         :title="label"
         :hint="hint"
         :loading="loading"
-        :show-install="status.state !== 'broken' && !working"
-        :show-repair="status.state === 'broken'"
-        :show-reinstall="status.state === 'broken'"
-        @install="runAction('install')"
-        @repair="runAction('repair')"
-        @reinstall="runAction('reinstall')"
+        :show-install="false"
+        :show-reinstall="false"
+        :show-refresh="statusUnknown"
+        :show-manage="statusUnknown"
+        @refresh="refresh()"
       />
-      <section class="fast-intro">
+      <section v-if="!statusUnknown || !bare" class="fast-intro">
         <span v-if="!bare" class="eyebrow">KOHYA SD-SCRIPTS RUNTIME</span>
         <h1 v-if="!bare">{{ props.title }}</h1>
         <p v-if="!bare">{{ t("kohyaGate.intro") }}</p>
-        <div class="fast-state" :data-state="status.state">
-          <span>{{ label }}</span>
-          <strong>{{ status.state }}</strong>
-        </div>
-        <div class="fast-actions">
-          <!-- broken: primary Repair; secondary full reinstall. Install only when missing. -->
+        <div v-if="!statusUnknown" class="fast-actions">
+          <!-- broken: primary Repair (fingerprint/deps); secondary full reinstall. Install only when missing. -->
           <button
             v-if="status.state === 'broken'"
             class="primary-action"
@@ -201,6 +215,14 @@ onBeforeUnmount(() => {
             {{ working ? t("kohyaGate.installWorking") : t("kohyaGate.install") }}
           </button>
           <button
+            v-if="working"
+            type="button"
+            class="secondary-action"
+            data-testid="engine-cancel-install"
+            :disabled="loading || !status.facts?.task_id"
+            @click="cancelInstall"
+          >{{ t("settings.engines.actions.cancelInstall") }}</button>
+          <button
             v-if="status.state === 'broken'"
             type="button"
             class="secondary-action"
@@ -214,7 +236,7 @@ onBeforeUnmount(() => {
         </div>
       </section>
     </div>
-    <aside class="install-console">
+    <aside v-if="consoleActive" class="install-console" data-testid="install-console">
       <header>
         <span>{{ phase || t("kohyaGate.consoleIdle") }}</span>
         <b>{{ progress }}%</b>

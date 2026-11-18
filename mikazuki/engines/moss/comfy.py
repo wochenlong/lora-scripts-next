@@ -356,6 +356,49 @@ def materialize_comfy_layout(paths: dict, *, model: str, staging_root: Path) -> 
     return staging_root
 
 
+def materialize_comfy_encoders(paths: dict, *, staging_root: Path) -> Path:
+    """Stage only ``text_encoder``, ``vae``, and ``tokenizer`` under ``staging_root/MOSS-Image-Base``.
+
+    Used by KohakuMossTrainer, which natively loads single-file DiT checkpoints (including
+    Comfy-Org fused-QKV weights) directly without rewriting a 12GB transformer file on disk.
+    """
+    staging_root = Path(staging_root)
+    text_encoder = resolve_weight_file(paths["text_encoder_path"], "text_encoder_path")
+    vae = resolve_weight_file(paths["vae_path"], "vae_path")
+    tokenizer = Path(paths["tokenizer_path"]).resolve()
+    resolved = {
+        "text_encoder_path": str(text_encoder),
+        "vae_path": str(vae),
+        "tokenizer_path": str(tokenizer),
+    }
+    meta_path = staging_root / ".next-moss-encoders.json"
+    te_weight = staging_root / "MOSS-Image-Base" / "text_encoder" / WEIGHT_NAMES["text_encoder"]
+    vae_weight = staging_root / "MOSS-Image-Base" / "vae" / WEIGHT_NAMES["vae"]
+    tok_cfg = staging_root / "MOSS-Image-Base" / "tokenizer" / "tokenizer.json"
+    if meta_path.is_file() and te_weight.is_file() and vae_weight.is_file() and tok_cfg.is_file():
+        try:
+            data = json.loads(meta_path.read_text(encoding="utf-8"))
+            if data.get("paths") == resolved:
+                return staging_root
+        except (OSError, json.JSONDecodeError):
+            pass
+    if staging_root.exists():
+        shutil.rmtree(staging_root)
+    base = staging_root / "MOSS-Image-Base"
+    methods = []
+    methods += _stage_component(base, "text_encoder", text_encoder)
+    methods += _stage_component(base, "vae", vae)
+    methods += _stage_component(base, "tokenizer", None, link_tokenizer=tokenizer)
+    component_headers(base / "text_encoder", text=True)
+    component_headers(base / "vae")
+    meta = {
+        "paths": resolved,
+        "link_methods": methods,
+    }
+    meta_path.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+    return staging_root
+
+
 def comfy_layout_digest(paths: dict, *, model: str) -> str:
     payload = []
     for key in ("dit_path", "text_encoder_path", "vae_path", "tokenizer_path", "sft_dit_path"):

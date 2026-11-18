@@ -183,7 +183,15 @@
 .tagger-grid { margin-top: 10px; gap: 12px 20px; }
 .tagger-grid input[type="number"] { max-width: 160px; }
 .tagger-grid input, .tagger-grid select { background: var(--surface); }
+.tagger-task-hint,
+.tagger-model-hint {
+  margin: 8px 0 0 146px;
+  color: var(--text-faint);
+  font-size: 12px;
+  line-height: 1.45;
+}
 .tagger-model-row { display: flex; align-items: flex-end; gap: 12px; margin-top: 16px; }
+.tagger-model-row-secondary { margin-top: 12px; opacity: 0.96; }
 .tagger-model-field { flex: 1; min-width: 0; display: grid; gap: 7px; font-size: 12px; color: var(--text-soft); }
 .tagger-model-field .el-select__wrapper { min-height: 40px; border-radius: 8px; }
 .tagger-page .check-row { margin: 14px 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; gap: 12px 20px; }
@@ -215,5 +223,7 @@
 @media (max-width: 700px) {
   .tagger-choice-row { grid-template-columns: 1fr; gap: 8px; }
   .tagger-segments button { padding: 10px 12px; }
+  .tagger-task-hint,
+  .tagger-model-hint { margin-left: 0; }
   .tagger-run { margin-top: 32px; }
 }

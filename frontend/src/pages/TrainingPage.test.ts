@@ -42,6 +42,7 @@ vi.mock("../api/training", () => ({
     saveParams: vi.fn(),
     animaFastPreflight: vi.fn(),
     mossPreflight: vi.fn(),
+    kohakuMossPreflight: vi.fn(),
     musubiPreflight: vi.fn(),
     aiToolkitPreflight: vi.fn(),
   },
@@ -401,6 +402,44 @@ describe("MOSS shared training submission", () => {
     vi.mocked(ElMessageBox.confirm).mockResolvedValue("confirm" as MessageBoxData)
     vi.mocked(trainingApi.mossPreflight).mockResolvedValue({ ok: false, errors: ["MOSS cache is incomplete"] })
     const wrapper = mountPage("moss-image-anima-lora")
+    await flushPromises()
+    await wrapper.get(".train-submit").trigger("click")
+    await flushPromises()
+    expect(trainingApi.run).not.toHaveBeenCalled()
+    expect(ElMessage.error).toHaveBeenCalledWith("MOSS cache is incomplete")
+    expect(wrapper.get(".train-submit").attributes("disabled")).toBeUndefined()
+    wrapper.unmount()
+  })
+})
+
+describe("Kohaku MOSS shared training submission", () => {
+  const source = readFileSync(resolve(process.cwd(), "../mikazuki/schema/kohaku-moss-image-lora.ts"), "utf8")
+  const mossSchema = executeSchemaSources([{ name: "kohaku-moss-image-lora", hash: "test", schema: source }], "kohaku-moss-image-lora")
+
+  it("preflights the real serialized schema before submitting the same native config", async () => {
+    vi.mocked(loadTrainingSchema).mockResolvedValue(mossSchema)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue("confirm" as MessageBoxData)
+    vi.mocked(trainingApi.kohakuMossPreflight).mockResolvedValue({ ok: true, warnings: ["Experimental runtime"] })
+    vi.mocked(trainingApi.run).mockResolvedValue({ task_id: "mock-moss-train" })
+    const wrapper = mountPage("kohaku-moss-image-lora")
+    await flushPromises()
+    await wrapper.get(".train-submit").trigger("click")
+    await flushPromises()
+    expect(trainingApi.kohakuMossPreflight).toHaveBeenCalledOnce()
+    const config = vi.mocked(trainingApi.kohakuMossPreflight).mock.calls[0][0]
+    expect(config).toMatchObject({ model_train_type: "kohaku-moss-image-lora", model_variant: "base", network_dim: 32, learning_rate: 0.0001, compile_mode: "off" })
+    expect(config).not.toHaveProperty("network_module")
+    expect(trainingApi.run).toHaveBeenCalledExactlyOnceWith(config)
+    expect(vi.mocked(trainingApi.kohakuMossPreflight).mock.invocationCallOrder[0]).toBeLessThan(vi.mocked(trainingApi.run).mock.invocationCallOrder[0])
+    expect(ElMessage.warning).toHaveBeenCalledWith("Experimental runtime")
+    wrapper.unmount()
+  })
+
+  it("blocks launch when MOSS preflight rejects the model or cache", async () => {
+    vi.mocked(loadTrainingSchema).mockResolvedValue(mossSchema)
+    vi.mocked(ElMessageBox.confirm).mockResolvedValue("confirm" as MessageBoxData)
+    vi.mocked(trainingApi.kohakuMossPreflight).mockResolvedValue({ ok: false, errors: ["MOSS cache is incomplete"] })
+    const wrapper = mountPage("kohaku-moss-image-lora")
     await flushPromises()
     await wrapper.get(".train-submit").trigger("click")
     await flushPromises()

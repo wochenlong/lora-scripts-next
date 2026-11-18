@@ -193,6 +193,66 @@ button {
   color: var(--text-soft);
 }
 
+.ds-chips {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  padding: 0 2px 10px;
+}
+
+.ds-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-soft);
+  text-align: left;
+}
+
+.ds-chip:hover {
+  border-color: var(--text-faint);
+}
+
+.ds-chip-dot {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-faint);
+}
+
+.ds-chip[data-status="ok"] .ds-chip-dot { background: var(--success); }
+.ds-chip[data-status="slow"] .ds-chip-dot { background: var(--warning-text); }
+.ds-chip[data-status="fail"] .ds-chip-dot { background: var(--danger); }
+.ds-chip[data-status="checking"] .ds-chip-dot {
+  background: var(--text-faint);
+  animation: ds-chip-pulse 1s ease-in-out infinite;
+}
+
+@keyframes ds-chip-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.25; }
+}
+
+.ds-chip-label {
+  flex: none;
+  font-weight: 650;
+}
+
+.ds-chip-choice {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-faint);
+}
+
 .icon-button {
   display: grid;
   place-items: center;

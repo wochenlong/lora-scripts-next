@@ -17,7 +17,7 @@
 
 ## MOSS-Image training showcase
 
-A **100-step style LoRA test** by [KohakuBlueleaf](https://github.com/KohakuBlueleaf), trained with their [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer). The top row shows the base model; the bottom row shows the LoRA results. Shared with the author's permission as a MOSS-Image training example; these results were produced with KohakuMossTrainer.
+A **100-step style LoRA test** by [KohakuBlueleaf](https://github.com/KohakuBlueleaf), trained with their [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer). The top row shows the base model; the bottom row shows the LoRA results. Shared with the author's permission as a MOSS-Image training example; these results were produced with KohakuMossTrainer (also available as an optional engine in the current source version).
 
 [![MOSS-Image base model and 100-step style LoRA comparison by KohakuBlueleaf](assets/readme/kohaku-moss-style-lora.png)](assets/readme/kohaku-moss-style-lora.png)
 
@@ -26,7 +26,7 @@ A **100-step style LoRA test** by [KohakuBlueleaf](https://github.com/KohakuBlue
 - **Multi-engine workbench:** Kohya, Anima Fast, Musubi, AI Toolkit, DiffSynth-Studio, and MOSS (`anima_lora`) are presented through one engine workflow, with an updated model/engine matrix and tutorial index.
 - **Independent Kohya runtime:** Kohya uses its own environment under `extensions/kohya/`; trainer source updates are separated from engine installation, repair, and auditing.
 - **Kohya survives updates:** source and portable-package updates preserve user-owned training runtimes; the portable updater excludes `Next-Trainer/extensions/` so updating the main program does not uninstall Kohya.
-- **MOSS-Image:** MOSS-Image LoRA training is available with Kohya as the recommended/default engine and `anima_lora` as an optional secondary path.
+- **MOSS-Image:** Kohya remains the recommended/default engine. The current source also integrates optional [KohakuMossTrainer](https://github.com/KohakuBlueleaf/KohakuMossTrainer) and `anima_lora` paths; availability in portable packages depends on the package version.
 - **AI Toolkit and Ideogram 4:** AI Toolkit training and an Ideogram 4 LoRA entry are available as optional engines and are not force-installed.
 - **Plugin marketplace:** the currently empty marketplace is hidden from users and skipped by default, so its unused dependencies are not downloaded.
 - **3.3.1-dev portable package:** a sub-2 GB lite package includes the base runtime, frontend, WD tagger model, and offline tokenizer assets without preinstalling Kohya.
@@ -66,13 +66,13 @@ The lite package does not include Kohya. Install it from **Settings → Training
 
 ![One interface, multiple training engines — concept illustration](assets/readme/next-trainer-multi-engine.png)
 
-**Kohya · Anima Fast · Musubi · AI Toolkit · DiffSynth-Studio · MOSS (anima_lora)**
+**Kohya · Anima Fast · Musubi · AI Toolkit · DiffSynth-Studio · KohakuMossTrainer · MOSS (anima_lora)**
 
 Install engines from **Settings → Training engines**, then select the appropriate engine on the training page. After upgrading from 3.1.1 or older, install Kohya once before running Kohya training. Available engines depend on your trainer version; not every model or feature supported upstream is integrated here.
 
 For Qwen-Image-2.1, select **DiffSynth-Studio → LoRA**, then choose **Text-to-image** or **Edit**. Edit currently requires batch size 1 and can use gradient accumulation for a larger effective batch.
 
-For MOSS-Image LoRA, use **Kohya** (recommended and selected by default). **MOSS (anima_lora)** remains available as a secondary engine.
+For MOSS-Image LoRA, use **Kohya** (recommended and selected by default); **KohakuMossTrainer** (high-performance LyCORIS trainer by KohakuBlueleaf) and **MOSS (anima_lora)** are also available as optional engines.
 
 ## Supported models
 
@@ -86,19 +86,19 @@ Training targets, hardware requirements, and optional engine installation vary b
 
 ✅ = an integrated LoRA entry; — = no integrated entry. This table follows this branch's training modules, not the full capabilities of upstream engines. Model variants and hardware requirements still depend on the selected engine.
 
-| Model | Kohya | Anima Fast | Musubi | AI Toolkit | DiffSynth-Studio | MOSS (anima_lora) |
-| --- | :---: | :---: | :---: | :---: | :---: | :---: |
-| MOSS-Image | ✅ | — | — | — | — | ✅ |
-| Qwen-Image-2.1 | — | — | — | ✅ | ✅ | — |
-| Krea 2 | — | — | ✅ | ✅ | — | — |
-| Anima | ✅ | ✅ | — | ✅ | — | — |
-| FLUX.2 Klein | — | — | — | ✅ | — | — |
-| Ideogram 4 | — | — | ✅ | ✅ | — | — |
-| Flux | ✅ | — | — | ✅ | — | — |
-| SDXL | ✅ | — | — | ✅ | — | — |
-| SD 1.5 | ✅ | — | — | ✅ | — | — |
+| Model | Kohya | Anima Fast | Musubi | AI Toolkit | DiffSynth-Studio | KohakuMossTrainer | MOSS (anima_lora) |
+| --- | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
+| MOSS-Image | ✅ | — | — | — | — | ✅ | ✅ |
+| Qwen-Image-2.1 | — | — | — | ✅ | ✅ | — | — |
+| Krea 2 | — | — | ✅ | ✅ | — | — | — |
+| Anima | ✅ | ✅ | — | ✅ | — | — | — |
+| FLUX.2 Klein | — | — | — | ✅ | — | — | — |
+| Ideogram 4 | — | — | ✅ | ✅ | — | — | — |
+| Flux | ✅ | — | — | ✅ | — | — | — |
+| SDXL | ✅ | — | — | ✅ | — | — | — |
+| SD 1.5 | ✅ | — | — | ✅ | — | — | — |
 
-Kohya also provides full fine-tuning entries for Anima, SDXL, and SD 1.5. MOSS-Image defaults to Kohya; `MOSS (anima_lora)` is an alternative. Lumina has a Kohya LoRA entry accessible via `?model=lumina`, but is hidden from the normal model picker.
+Kohya also provides full fine-tuning entries for Anima, SDXL, and SD 1.5. MOSS-Image defaults to Kohya, with `KohakuMossTrainer` and `MOSS (anima_lora)` as optional engines. Lumina has a Kohya LoRA entry accessible via `?model=lumina`, but is hidden from the normal model picker.
 
 The illustrations above are conceptual; their artwork is not a benchmark or a sample generated by each labelled model.
 

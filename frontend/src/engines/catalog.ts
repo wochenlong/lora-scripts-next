@@ -104,6 +104,14 @@ export const ENGINE_CATALOG: readonly EngineDefinition[] = [
     requiresGpu: true, managesRuntime: true, mark: "MO", tags: ["lora", "moss-image", "nvidia"],
     version: "alpha", updatedAt: "2026-10",
   },
+  {
+    id: "kohaku-moss", kind: "optional", nameKey: "settings.engines.catalog.kohaku-moss.name",
+    summaryKey: "settings.engines.catalog.kohaku-moss.summary",
+    sizeHintKey: "settings.engines.catalog.kohaku-moss.sizeHint",
+    requiresGpu: true, managesRuntime: true, mark: "KM",
+    tags: ["lora", "moss-image", "nvidia", "experimental", "high-performance"],
+    version: "experimental", updatedAt: "2026-10",
+  },
 ] as const
 
 export function engineDefinition(id: TrainingEngine): EngineDefinition | undefined {

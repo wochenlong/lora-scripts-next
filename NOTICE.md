@@ -60,6 +60,18 @@ Next Trainer ships this engine as an **optional plugin** (`extensions/anima_lora
 
 The referenced repository features per-block or full-model `torch.compile`, static-shape token bucketing, and compile-friendly forward paths. On consumer GPUs this yields substantially faster step times than the default Kohya/sd-scripts path at the cost of higher VRAM and a separate Python/CUDA runtime. See **Performance** in `docs/anima-fast.md` for measured comparisons in this repo.
 
+### KohakuMossTrainer（实验性高性能可选引擎）
+
+The optional **KohakuMossTrainer** engine (`model_train_type: kohaku-moss-image-lora`) integrates, through an isolated Python environment and the upstream `kogine` CLI:
+
+- `KohakuBlueleaf/KohakuMossTrainer`: https://github.com/KohakuBlueleaf/KohakuMossTrainer
+- pinned integration commit: `5bb1a81ed030cc87c540d5e02fe60aab887199b4`
+- integration coordination: https://github.com/KohakuBlueleaf/KohakuMossTrainer/issues/1
+
+KohakuMossTrainer is distributed under **KohakuMoss License 1.0**, described upstream as Apache License 2.0 with an additional naming requirement. Next Trainer exposes the upstream name prominently in the engine name and UI, installs the pinned source into `extensions/kohaku-moss/`, and does not create a MOSS/Kohya fork. Please retain the upstream license and notices when redistributing an installed runtime.
+
+We thank **Kohaku-Blueleaf（Kohaku / 龙娘）** for KohakuMossTrainer and the broader LyCORIS ecosystem. The integration directly depends on `lycoris-lora>=4.1.2`.
+
 ### LyCORIS
 
 LoKr, LoHa, and other advanced LoRA variants are powered by:

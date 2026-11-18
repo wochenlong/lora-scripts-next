@@ -16,3 +16,5 @@ frontend/index.html text eol=lf
 
 # WSL/bash scripts stay LF (see agent-assets/.gitattributes same rule)
 *.sh text eol=lf
+
+mikazuki/engines/moss/patches/*.patch text eol=lf -whitespace

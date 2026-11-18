@@ -3,33 +3,46 @@
 本文件记录 **wochenlong/lora-scripts-next**（产品名 **Next Trainer**）面向镜像与 AutoDL 的发行说明；上游 kohya-ss/sd-scripts 的变更请见其仓库。
 
 ---
-## 未发布
+## 未发布（dev）
 
-### 新增
+（下一个开发周期：AI Toolkit 模型格式与训练体验，详见 docs/roadmap.md）
 
-- **MOSS-Image LoRA（#480 / #483）**：接入 MOSS-Image 训练，Kohya 为推荐及默认引擎，内置原生 trainer、缓存与 ConvRot INT8 支持；`MOSS (anima_lora)` 保留为次选独立运行时。支持原生 Diffusers 与 Comfy 单文件输入，详见 [MOSS-Image 训练指南](docs/MOSS.md)。
-
-### 修复
-
-- **DiffSynth 指纹不再包含 mtime（#410）**：目录拷贝、云镜像打包、解压或启动脚本触碰文件都会改写时间戳，导致可用环境被误报「环境或源码已变化」并要求重装（AutoDL 定制镜像上会反复复发）。指纹改为**内容哈希**（`content-v2`）并持久化方案标记：时间戳变化不再误报，旧状态**一次性迁移**（不要求重装），内容真的被改动、训练入口/独立 Python 缺失时仍会正确报错。
-  - **预装 DiffSynth 的定制镜像需要同步这两个文件后重建镜像才生效**：`mikazuki/engines/diffsynth/extension_state.py`、`mikazuki/engines/diffsynth/install_worker.py`；只更新 `install_state.json` 不算修复（下次时间戳再变还会复发）。
-
-- **Krea2 tokenizer 的 `extra_special_tokens` 为 list 时加载失败（#416）**：探测/下载/启动前会把旧的 list 形态规范化为 transformers 期望的 mapping（`{"additional_special_tokens": [...]}`），手动放置的 tokenizer 同样会被治好；已是 mapping 的配置不动，坏 JSON 安全跳过。
-- **Kohya 加载 Anima 2.9B 前明确拦截（#408）**：`validate_model` 只读 safetensors 头部统计 DiT block 数，超过 28 即拒绝并提示「请改用 Anima Fast（设置 → 训练引擎 安装），或改用 Anima 2B」，不再等到加载时抛一串 `blocks.28.*` 权重名；2B 与 Anima Fast 路径不受影响，坏文件/无法识别不会被误判。
-- **标签编辑的「选择已有数据集」弹窗为空（#440）**：`ManagedDatasetPicker` 现在会监听受控的 `open` 属性（标签编辑隐藏内部按钮、直接控制弹窗），弹窗打开时执行与内部按钮相同的初始化并拉取数据集列表；关闭后重开正常刷新，`browse()` 的 generation 机制继续防止并发响应覆盖
 - **训练引擎下拉显示安装状态（#443）**：每个引擎带状态后缀（已就绪 / 未安装 / 需修复 / 安装中 / 已停用 / 未验证），模型不支持的引擎继续灰显并保留「该模型暂不支持」提示，另加一条可操作提示列出「当前模型支持但未安装/待修复」的引擎；引擎状态接口失败时静默降级为纯引擎名
 - **AI Toolkit 新增 SD 1.5 与 Ideogram 4 LoRA（#446）**：两个模型都直接读取 Comfy 格式单文件，无需用户转换 diffusers 目录
   - **SD 1.5（arch `sd1`）**：`single_file` 模式加载 Comfy/LDM 全量 checkpoint（`model.diffusion_model.*` / `cond_stage_model.*` / `first_stage_model.*`），由驱动层绑定本地 diffusers 配置目录（仅 config 与 tokenizer，不含权重，默认 `sd-models/sd15/config`，可由「训练用模型」面板从 HF / ModelScope 下载），离线启动不访问 Hub
   - **Ideogram 4（arch `ideogram4`）**：`comfyui_files` 模式直接使用 Comfy-Org 单文件（条件 DiT + Flux2 VAE，与 Musubi 同一套下载源），驱动层在内存中整理 FP8 `weight_scale` 形状并剔除 `comfy_quant` 标记后交给上游扩展，不写 diffusers 目录、不产生缓存副本；文本编码器使用本地 Qwen3-VL-8B BF16 目录。沿用**非商用**许可提示，整合包不预置权重
-- **底模已是 FP8 时自动关闭 fp8_base/fp8_scaled（#417）**：只读 safetensors 头部探测 DiT dtype，已是 FP8 权重时自动关闭这两项并提示；非 FP8 底模的成对约束不变
-- **max_train_steps 与 max_train_epochs 同时填写（#418）**：按**步数优先**只保留 max_train_steps 并明确提示（上游以 epoch 优先，会让「steps=100」实跑到按 epoch 推导的步数），表单文案同步写清
-- **AI Toolkit 的 Ideogram 4 文本编码器改为 Comfy FP8 单文件（#446 跟进）**：驱动层把 tokenizer/config 仍指向本地目录、权重走 Comfy 单文件（上游 mixin 原生支持 `comfy_quant` 单文件加载），资源清单改为「TE 单文件 + config/tokenizer 目录（约几 MB）」，用户不再需要 ~16 GB 的 bf16 目录；`model_directory` 分支与 `config/model_assets.toml` 覆盖仍可回退到 bf16 目录
-- **Ideogram 4（AI Toolkit）无条件采样 LoRA 设为可选（#446 跟进）**：新增可选资源 `unconditional_lora`（第三方产物 `ostris/ideogram_4_unconditional_lora`，103.9 MB）与表单可选字段「无条件 LoRA 路径」——填了走非对称 CFG 预览，不填走单 DiT CFG；顺带修掉 `text_encoder_tokenizer_path` 被字段白名单误报「未支持」的噪音警告
-- **DiffSynth 软链权重误报（#390）**：路径规范化不再跟随叶子软链，AutoDL 那类「`*.safetensors` 名字指向无后缀实体」的挂载不再被后缀校验误拒
-- **单条提交的 autosave 快照重名（#334）**：`/api/run` 的配置快照名加入随机后缀，同一秒内连续提交不再互相覆盖（批量提交此前已修）
-- **anima-fast 小数据集丢图提示（#338）**：预检在「图片数偏少 + train_batch_size>1」时预警上游 bucket 采样会整桶丢弃图片（启动日志里只有一条 WARNING 就会被忽略掉），并给出 batch_size=1 / num_repeats / bucket_reso_steps / validation_split_num 的处理建议
-- **Anima TE 缓存固化 caption_dropout_rate（#333）**：文档写明「改动该值需删除 `_anima_te.npz` 再重训」的限制（[开发进度](docs/dev-progress.md)）；上游缓存键的一致性校验待跟进
 
+### 修复（近一个月 issue 第三批）
+
+- **标签编辑的「选择已有数据集」弹窗为空（#440）**：`ManagedDatasetPicker` 现在会监听受控的 `open` 属性（标签编辑隐藏内部按钮、直接控制弹窗），弹窗打开时执行与内部按钮相同的初始化并拉取数据集列表；关闭后重开正常刷新，`browse()` 的 generation 机制继续防止并发响应覆盖
+
+### 修复（近一个月 issue 第四批）
+
+- **底模已是 FP8 时自动关闭 fp8_base/fp8_scaled（#417）**：只读 safetensors 头部探测 DiT 的 dtype，已是 FP8 权重时自动关闭这两项并提示（两个都关本就是合法状态），不再等到上游拒绝；非 FP8 底模的成对约束不变
+- **max_train_steps 与 max_train_epochs 同时填写（#418）**：musubi 侧以 epoch 优先，会让「steps=100」实跑到按 epoch 推导的步数；现在按**步数优先**只保留 max_train_steps 并明确提示，表单两处文案也写清「以步数为准」
+
+### 新增
+- **Ideogram 4（AI Toolkit）无条件采样 LoRA 设为可选（#446 跟进）**：新增可选资源 `unconditional_lora`（第三方产物 `ostris/ideogram_4_unconditional_lora`，103.9 MB）与表单可选字段「无条件 LoRA 路径」——填了走非对称 CFG 预览，不填走单 DiT CFG；顺带修掉 `text_encoder_tokenizer_path` 被字段白名单误报「未支持」的噪音警告
+- **AI Toolkit 的 Ideogram 4 文本编码器改为 Comfy FP8 单文件（#446 跟进）**：不再要求用户准备 ~16 GB 的 bf16 Qwen3-VL-8B 目录——驱动层把 tokenizer/config 仍指向本地目录、权重改走 Comfy 单文件（上游 mixin 原生支持 `comfy_quant` 单文件加载），资源清单同步改为「TE 单文件 + config/tokenizer 目录（约几 MB）」
+
+- **Windows 启动器 `NextTrainer.exe`（#435）**：放在整合包根目录（与 `启动.bat` 并存）。双击启动等价于 `启动.bat`，但接管进程树：关窗 / `Q` 真正停掉服务，端口占用或启动失败给中文提示，`U` 一键更新（先停服 → 运行更新脚本 → `R` 重启）。C# NativeAOT 编译（约 5 MB，无 .NET 运行时依赖）。构建脚本 `build-scripts/06-build-launcher.ps1`，已接入 2026 全量 / musubi-only / kohya-only / resume 的打包流程
+
+### 修复（近一个月 issue 第二批）
+
+- **DiffSynth 软链权重误报（#390）**：路径规范化不再跟随叶子软链，AutoDL 那类「`*.safetensors` 名字指向无后缀实体」的挂载不再被后缀校验拒绝
+- **单条提交的 autosave 快照重名（#334）**：`/api/run` 的配置快照名加入随机后缀，同一秒内连续提交不再互相覆盖（批量提交此前已修）
+- **anima-fast 小数据集丢图提示（#338）**：预检在「图片数偏少 + train_batch_size>1」时明确警告上游 bucket 采样会整桶丢弃图片（及 1 batch 步数远低于预期的原因），并给出 batch_size=1 / num_repeats / bucket_reso_steps / validation_split_num 的处理建议
+- **Anima TE 缓存固化 caption_dropout_rate（#333）**：先在文档中写明「改动该值需删除 `_anima_te.npz` 再重训」的限制；上游缓存键的一致性校验待跟进
+
+### 修复（近一个月 issue 第一批）
+
+- **Krea2 tokenizer 的 `extra_special_tokens` 为 list 时加载失败（#416）**：探测/下载/启动前会把旧的 list 形态规范化为 transformers 期望的 mapping，手动放置的 tokenizer 同样会被治好
+- **Kohya 加载 Anima 2.9B 前明确拦截（#408）**：只读 safetensors 头部统计 block 数，超过 28 即拒绝并提示改用 Anima Fast，不再等到加载时抛一串 `blocks.28.*` 权重名
+- **DiffSynth 指纹不再含 mtime（#410）**：目录拷贝 / 云镜像 / 备份还原导致的时间戳变化不再误报环境异常；旧状态一次性迁移，不要求重装；内容改动仍能识别
+  - 已回移到 `main`（PR #438）。**预装 DiffSynth 的定制镜像需同步 `mikazuki/engines/diffsynth/extension_state.py` 与 `install_worker.py` 后重建镜像**；只改 `install_state.json` 不算修复（时间戳再变仍会复发）——文件到位后，现存实例在下一次状态检查时会自动迁移，无需重装
+
+---
+## v3.2.0 — 2026-10-11
 
 ### 整合包更新修复
 

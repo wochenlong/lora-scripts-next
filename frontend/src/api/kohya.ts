@@ -8,9 +8,20 @@ export interface KohyaAudit {
   errors?: string[]
 }
 
+export interface KohyaDriftEntry {
+  name: string
+  spec: string
+  installed?: string | null
+}
+
 export interface KohyaFacts {
   task_id?: string
   audit?: KohyaAudit
+  mode?: "standalone" | "main_env"
+  main_env_python?: string
+  main_env_rejected?: { python?: string; errors?: string[] }
+  update_available?: boolean
+  drift?: KohyaDriftEntry[]
 }
 
 export interface KohyaStatus {
@@ -34,6 +45,14 @@ export interface KohyaInstallResult {
   status?: KohyaStatus
 }
 
+export interface KohyaUpgradeResult {
+  already_up_to_date?: boolean
+  task_id?: string
+  log_stream?: string
+  progress_stream?: string
+  status?: KohyaStatus
+}
+
 function installBody(downloadSources?: DownloadSourcesPayload) {
   return JSON.stringify({ dry_run: false, ...(downloadSources || {}) })
 }
@@ -45,4 +64,6 @@ export const kohyaApi = {
   repair: (downloadSources?: DownloadSourcesPayload) =>
     apiData<KohyaInstallResult>("/api/engines/kohya/repair", { method: "POST", body: installBody(downloadSources) }),
   uninstall: () => apiData<{ status?: KohyaStatus }>("/api/engines/kohya/uninstall", { method: "POST", body: "{}" }),
+  upgrade: (downloadSources?: DownloadSourcesPayload) =>
+    apiData<KohyaUpgradeResult>("/api/engines/kohya/upgrade", { method: "POST", body: installBody(downloadSources) }),
 }

@@ -63,6 +63,9 @@ if (-not $SkipMusubi) {
 Write-Log "[2/3] Applying 2026 root..." "Cyan"
 & $applyRoot -PortableRoot $portableDir
 
+# ---- launcher exe (thin shell over the .bat entries, #435) ----
+& (Join-Path $PSScriptRoot "06-build-launcher.ps1") -PackageRoot $portableDir
+
 $archiveName = "Next-Trainer-v${Version}-kohya-musubi.7z"
 $archivePath = Join-Path $buildDir $archiveName
 $7zExe = "C:\Program Files\7-Zip\7z.exe"

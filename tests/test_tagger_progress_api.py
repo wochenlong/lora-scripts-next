@@ -55,8 +55,9 @@ def test_legacy_tagger_html_serves_vue_spa_entry():
     assert "/assets/" in r.text
 
 
-def test_tagger_default_download_endpoint_preserves_existing_hf_endpoint(monkeypatch):
+def test_tagger_default_download_endpoint_preserves_existing_hf_endpoint(monkeypatch, tmp_path):
     monkeypatch.setenv("HF_ENDPOINT", "https://hf-mirror.com")
+    monkeypatch.setenv("NEXT_TRAINER_DOWNLOAD_SOURCES_CONFIG", str(tmp_path / "absent.json"))
 
     with use_download_endpoint(""):
         import os
@@ -64,6 +65,34 @@ def test_tagger_default_download_endpoint_preserves_existing_hf_endpoint(monkeyp
         assert os.environ["HF_ENDPOINT"] == "https://hf-mirror.com"
 
     assert os.environ["HF_ENDPOINT"] == "https://hf-mirror.com"
+
+
+def test_tagger_download_endpoint_falls_back_to_persisted_source_config(monkeypatch, tmp_path, ):
+    import json
+    import os
+
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    config = tmp_path / "download-sources.local.json"
+    config.write_text(json.dumps({"hf_endpoint": "https://hf-mirror.com"}), encoding="utf-8")
+    monkeypatch.setenv("NEXT_TRAINER_DOWNLOAD_SOURCES_CONFIG", str(config))
+
+    with use_download_endpoint(""):
+        assert os.environ.get("HF_ENDPOINT") == "https://hf-mirror.com"
+
+    assert "HF_ENDPOINT" not in os.environ
+
+
+def test_tagger_download_endpoint_ignores_persisted_values_outside_allowlist(monkeypatch, tmp_path):
+    import json
+    import os
+
+    monkeypatch.delenv("HF_ENDPOINT", raising=False)
+    config = tmp_path / "download-sources.local.json"
+    config.write_text(json.dumps({"hf_endpoint": "https://hf.example.com"}), encoding="utf-8")
+    monkeypatch.setenv("NEXT_TRAINER_DOWNLOAD_SOURCES_CONFIG", str(config))
+
+    with use_download_endpoint(""):
+        assert "HF_ENDPOINT" not in os.environ
 
 
 def test_tagger_local_model_directory_resolves_by_model_key(tmp_path, monkeypatch):

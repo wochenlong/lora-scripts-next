@@ -62,6 +62,20 @@ it("keeps unavailable modes quietly disabled and uses a searchable grouped model
   wrapper.unmount()
 })
 
+it("applies task-based tagger defaults before model names", async () => {
+  const wrapper = mountPage()
+  expect(wrapper.get('[data-testid="tagger-task-hint"]').text()).toContain("一般用途")
+  expect(wrapper.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("wd14-convnextv2-v2")
+
+  await wrapper.get('[data-testid="tagger-task-character"]').trigger("click")
+  expect(wrapper.get('[data-testid="tagger-task-hint"]').text()).toContain("角色")
+  expect(wrapper.findComponent({ name: "ElSelect" }).props("modelValue")).toBe("wd-swinv2-v3")
+
+  await wrapper.findComponent({ name: "ElSelect" }).vm.$emit("update:modelValue", "wd-eva02-large-tagger-v3")
+  expect(wrapper.text()).toContain("已手动更换模型")
+  wrapper.unmount()
+})
+
 it("provides load, save-as-template and reset actions for natural-language prompts", async () => {
   const wrapper = mountPage()
   await flushPromises()

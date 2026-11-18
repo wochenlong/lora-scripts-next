@@ -134,6 +134,10 @@ if (-not $SkipMusubi) {
 Write-Log "[4/5] Applying 2026 root (启动 / 检查更新 / 说明)..." "Cyan"
 & $applyRoot -PortableRoot $portableDir
 
+# ---- Step 4b: launcher exe (thin shell over 启动.bat, #435) ----
+Write-Log "[4b/5] Building NextTrainer.exe launcher..." "Cyan"
+& (Join-Path $PSScriptRoot "06-build-launcher.ps1") -PackageRoot $portableDir
+
 # ---- Step 5: 7z ----
 $7zExe = "C:\Program Files\7-Zip\7z.exe"
 if (-not (Test-Path $7zExe)) {

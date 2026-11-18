@@ -109,9 +109,22 @@ function explicitDefault(schema: SchemaRecord) {
 
 function conditionsFrom(schema: SchemaRecord): FormCondition[] {
   if (schema.type === "object") {
-    return Object.entries(schema.dict ?? {})
-      .filter(([, field]) => field.type === "const" && !field.meta.hidden)
-      .map(([key, field]) => ({ key, value: field.value }))
+    return Object.entries(schema.dict ?? {}).flatMap(([key, field]) => {
+      if (field.type === "const" && !field.meta.hidden) {
+        return [{ key, value: field.value }]
+      }
+      // A required const-union guards a branch ("this block applies when key is
+      // one of these"); a defaulted one is an ordinary enum dropdown field.
+      if (
+        field.type === "union" &&
+        !field.meta.hidden &&
+        field.meta.required &&
+        field.list?.every((item) => item.type === "const")
+      ) {
+        return [{ key, value: field.list.map((item) => item.value) }]
+      }
+      return []
+    })
   }
   if (schema.type === "intersect") return (schema.list ?? []).flatMap(conditionsFrom)
   return []
@@ -197,7 +210,11 @@ function buildSections(schema: SchemaRecord) {
 }
 
 export function isFieldActive(field: FormField, model: FormModel) {
-  return field.conditions.every((condition) => model[condition.key] === condition.value)
+  return field.conditions.every((condition) =>
+    Array.isArray(condition.value)
+      ? condition.value.includes(model[condition.key])
+      : model[condition.key] === condition.value,
+  )
 }
 
 export function isAnimaFastTorchCompileBlocked(schema: AdaptedSchema, model: FormModel) {

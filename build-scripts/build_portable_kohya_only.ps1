@@ -82,4 +82,7 @@ if (Test-Path $note) {
 "@
 }
 
+# ---- launcher exe (thin shell over the .bat entries, #435) ----
+& (Join-Path $PSScriptRoot "06-build-launcher.ps1") -PackageRoot $portableDir
+
 Write-Host "DONE kohya-only v$Version" -ForegroundColor Green

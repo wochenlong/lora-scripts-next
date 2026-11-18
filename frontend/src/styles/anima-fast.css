@@ -18,25 +18,33 @@
   margin-top: 0;
 }
 
-.fast-page.bare {
-  grid-template-columns: minmax(0, 1fr) clamp(320px, 32%, 460px);
+.fast-page.bare.has-console {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(200px, 36vh);
 }
 
 .fast-page.bare .install-console {
-  align-self: start;
-  height: min(560px, 60vh);
-  min-height: 320px;
-  max-height: calc(100vh - 40px);
+  align-self: stretch;
+  height: min(320px, 36vh);
+  min-height: 180px;
+  max-height: 36vh;
+  margin: 16px 0 0;
 }
 
 .workbench-page .install-console {
-  margin: 0;
+  margin: 16px 0 0;
 }
 
 .fast-page {
   display: grid;
-  grid-template-columns: minmax(380px, 0.8fr) minmax(460px, 1.2fr);
+  grid-template-columns: 1fr;
   min-height: 100vh;
+}
+
+/* Install log sits under the gate content — easier to scan while CTAs stay on top. */
+.fast-page.has-console {
+  grid-template-columns: 1fr;
+  grid-template-rows: auto minmax(240px, 42vh);
 }
 
 .fast-intro {
@@ -224,8 +232,8 @@
   background: rgba(220, 38, 38, 0.06);
 }
 .engine-status-bar[data-state="unknown"] {
-  border-left-color: #d97706;
-  background: rgba(217, 119, 6, 0.08);
+  border-left-color: var(--text-faint);
+  background: transparent;
 }
 .engine-status-bar[data-state="not_installed"] {
   border-left-color: #d97706;
@@ -598,9 +606,15 @@
   background: rgba(220, 38, 38, 0.08);
   border-color: rgba(220, 38, 38, 0.22);
 }
+.engine-badge.is-update {
+  color: #b45309;
+  background: rgba(217, 119, 6, 0.1);
+  border-color: rgba(217, 119, 6, 0.25);
+}
 html.dark .engine-badge.is-default { color: #93b4ff; }
 html.dark .engine-badge.is-ready { color: #6ee7b7; }
 html.dark .engine-badge.is-broken { color: #fca5a5; }
+html.dark .engine-badge.is-update { color: #fbbf24; }
 .engine-meta-cols {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -708,6 +722,24 @@ html.dark .engine-badge.is-broken { color: #fca5a5; }
   color: var(--text);
   font-size: 11px;
 }
+.engine-drift {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: var(--text-soft);
+}
+.engine-drift ul {
+  margin: 6px 0 12px;
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 4px;
+}
+.engine-drift li code {
+  color: var(--text);
+  font-size: 11px;
+}
+.engine-drift .primary-action {
+  margin-top: 4px;
+}
 .engine-console {
   margin-top: 0;
   padding: 14px;
@@ -755,6 +787,11 @@ html.dark .engine-badge.is-broken { color: #fca5a5; }
   border: 1px solid var(--border);
   border-radius: 18px;
   box-shadow: 0 28px 70px rgba(15, 23, 42, 0.24);
+}
+.ds-inline {
+  width: 100%;
+  max-height: none;
+  box-shadow: none;
 }
 .ds-sheet-head {
   display: flex;
@@ -841,6 +878,22 @@ html.dark .engine-badge.is-broken { color: #fca5a5; }
   color: #334155;
   background: rgba(51, 65, 85, 0.12);
 }
+.ds-channel-mark[data-ch="proxy"] {
+  color: #6d28d9;
+  background: rgba(109, 40, 217, 0.12);
+}
+.ds-proxy-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  align-items: center;
+}
+.ds-proxy-hint {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 11px;
+  line-height: 1.5;
+}
 .ds-channel-body {
   display: grid;
   gap: 6px;
@@ -873,6 +926,20 @@ html.dark .engine-badge.is-broken { color: #fca5a5; }
   font: 11px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.ds-check {
+  font-size: 11px;
+  line-height: 1.4;
+  color: var(--text-faint);
+}
+.ds-check[data-status="ok"] {
+  color: var(--success);
+}
+.ds-check[data-status="slow"] {
+  color: var(--warning-text);
+}
+.ds-check[data-status="fail"] {
+  color: var(--danger);
 }
 .ds-footnote {
   margin: 0 0 14px;

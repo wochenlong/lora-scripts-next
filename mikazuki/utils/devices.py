@@ -6,6 +6,8 @@ printable_devices = []
 
 
 def check_torch_gpu():
+    available_devices.clear()
+    printable_devices.clear()
     try:
         import torch
         log.info(f'Torch {torch.__version__}')
@@ -37,5 +39,29 @@ def check_torch_gpu():
             printable_devices.append(f"GPU {pos}: {name} ({round(memory / (1024**3))} GB)")
             log.info(
                 f'Torch detected GPU: {name} VRAM {round(memory / 1024 / 1024)} Arch {torch.cuda.get_device_capability(device)} Cores {torch.cuda.get_device_properties(device).multi_processor_count}')
+    except ModuleNotFoundError as e:
+        if e.name != 'torch':
+            log.error(f'Could not load torch dependency: {e}')
+            return
+        # Training engines own their Torch environments; the GUI only needs labels.
+        initialized = False
+        try:
+            import pynvml
+            pynvml.nvmlInit()
+            initialized = True
+            for pos in range(pynvml.nvmlDeviceGetCount()):
+                handle = pynvml.nvmlDeviceGetHandleByIndex(pos)
+                name = pynvml.nvmlDeviceGetName(handle)
+                if isinstance(name, bytes):
+                    name = name.decode()
+                memory = pynvml.nvmlDeviceGetMemoryInfo(handle).total
+                available_devices.append(pos)
+                printable_devices.append(f"GPU {pos}: {name} ({round(memory / 1024**3)} GB)")
+            log.info('GUI GPU labels detected via NVML; CUDA is audited in each managed training engine.')
+        except Exception as nvml_error:
+            log.error(f'Could not enumerate GPUs via NVML: {nvml_error}')
+        finally:
+            if initialized:
+                pynvml.nvmlShutdown()
     except Exception as e:
         log.error(f'Could not load torch: {e}')
