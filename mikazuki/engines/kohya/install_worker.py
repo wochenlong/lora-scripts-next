@@ -7,7 +7,7 @@ import sys
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
 from mikazuki.engines.kohya.environment import install_env, audit_environment, audit_python
-from mikazuki.engines.kohya.extension_state import write_state, fingerprint
+from mikazuki.engines.kohya.extension_state import write_state, fingerprint_facts
 from mikazuki.engines.kohya.resource import environment_lock
 from mikazuki.engines.kohya.settings import Runtime
 
@@ -60,7 +60,7 @@ def main():
             print(json.dumps(audit, ensure_ascii=False), flush=True)
             if not audit['ok']:
                 raise RuntimeError('; '.join(audit['errors']))
-            write_state(rt, 'ready', {**facts, 'audit': audit, 'fingerprint': fingerprint(rt)})
+            write_state(rt, 'ready', {**facts, 'audit': audit, **fingerprint_facts(rt)})
             print('[mikazuki-progress] ' + json.dumps({'percent': 100, 'message': '环境检查完成'}, ensure_ascii=False), flush=True)
         except Exception as exc:
             if target == 'standalone':

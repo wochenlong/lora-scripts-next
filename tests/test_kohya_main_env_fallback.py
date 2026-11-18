@@ -8,9 +8,13 @@ from pathlib import Path
 
 import pytest
 
-from mikazuki.engines.kohya.settings import Runtime, main_env_python_candidates
 from mikazuki.engines.kohya import extension_state
-from mikazuki.engines.kohya.extension_state import read_status, write_state, fingerprint
+from mikazuki.engines.kohya.extension_state import (
+    fingerprint_facts,
+    read_status,
+    write_state,
+)
+from mikazuki.engines.kohya.settings import Runtime, main_env_python_candidates
 
 
 @pytest.fixture(autouse=True)
@@ -79,7 +83,7 @@ def test_standalone_ready_wins_without_main_env_audit(tmp_path, monkeypatch, mai
     runtime = Runtime(tmp_path / "Next-Trainer")
     runtime.python.parent.mkdir(parents=True)
     runtime.python.write_text("fake", encoding="utf-8")
-    write_state(runtime, "ready", {"fingerprint": fingerprint(runtime)})
+    write_state(runtime, "ready", fingerprint_facts(runtime))
 
     def forbidden_audit(python):
         raise AssertionError("main env audit must not run when standalone is ready")
@@ -198,13 +202,14 @@ def _make_dist_info(runtime, name, version):
 def _make_ready_standalone(runtime):
     runtime.python.parent.mkdir(parents=True, exist_ok=True)
     runtime.python.write_text("fake", encoding="utf-8")
-    write_state(runtime, "ready", {"fingerprint": "whatever"})
+    write_state(runtime, "ready", fingerprint_facts(runtime))
 
 
 def test_standalone_ready_with_drift_reports_update_available(tmp_path):
     runtime = Runtime(tmp_path)
     _make_ready_standalone(runtime)
     _make_dist_info(runtime, "transformers", "4.51.3")
+    write_state(runtime, "ready", fingerprint_facts(runtime))
 
     status = read_status(runtime)
 
@@ -241,8 +246,9 @@ def test_main_env_ready_reports_drift_from_audit_versions(tmp_path, monkeypatch,
 
 
 def test_main_env_upgrade_marker_drives_installing_state(tmp_path, monkeypatch, main_python):
-    from mikazuki.tasks import tm, TaskStatus
     from types import SimpleNamespace
+
+    from mikazuki.tasks import TaskStatus, tm
 
     patch_main_env(monkeypatch, main_python, {"ok": True, "gpu": True, "versions": {}})
     runtime = Runtime(tmp_path / "Next-Trainer")
