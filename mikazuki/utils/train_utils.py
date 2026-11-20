@@ -410,19 +410,28 @@ def validate_data_dir(path, auto_organize=True):
     log.warning(f"No leagal dataset found. Try find avaliable images")
     imgs = get_total_images(path, False)
     captions = glob.glob(path + '/*.txt')
-    log.info(f"{len(imgs)} images found, {len(captions)} captions found")
+    json_captions = []
+    seen_json = set()
+    for image in imgs:
+        sidecar = os.path.splitext(image)[0] + ".json"
+        key = os.path.normcase(os.path.abspath(sidecar))
+        if key in seen_json or not os.path.isfile(sidecar):
+            continue
+        seen_json.add(key)
+        json_captions.append(sidecar)
+    caption_files = captions + json_captions
+    log.info(f"{len(imgs)} images found, {len(caption_files)} captions found")
     if len(imgs) > 0:
         num_repeat = suggest_num_repeat(len(imgs))
         dataset_path = os.path.join(path, f"{num_repeat}_zkz")
         os.makedirs(dataset_path)
         for i in imgs:
             shutil.move(i, dataset_path)
-        if len(captions) > 0:
-            for c in captions:
-                shutil.move(c, dataset_path)
+        for c in caption_files:
+            shutil.move(c, dataset_path)
         log.warning(
-            f"Auto dataset created: moved {len(imgs)} images and {len(captions)} captions "
-            f"into {dataset_path} / 已把 {len(imgs)} 张图片与 {len(captions)} 个标签文件移动到 {dataset_path}"
+            f"Auto dataset created: moved {len(imgs)} images and {len(caption_files)} captions "
+            f"into {dataset_path} / 已把 {len(imgs)} 张图片与 {len(caption_files)} 个标签文件移动到 {dataset_path}"
         )
     else:
         log.error("No image found in data dir")
